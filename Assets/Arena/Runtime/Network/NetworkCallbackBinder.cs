@@ -28,7 +28,13 @@ namespace Arena.Network
             where TRow : class, IStructuralReadWrite, new()
             => (ctx, oldRow, newRow) => NetworkCallbackDelay.Dispatch(() => handler(ctx, oldRow, newRow));
 
-        internal static void BindRuntimeCallbacks(DbConnection conn, EntityRegistry registry, MatchStateCache match, LocalCombatState combat, Identity localIdentity)
+        internal static void BindRuntimeCallbacks(
+            DbConnection conn,
+            EntityRegistry registry,
+            MatchStateCache match,
+            LocalCombatState combat,
+            LocalInteractionState interaction,
+            Identity localIdentity)
         {
             NetcodeReceiveCounters.ResetForNetworkReconnect();
             NetworkCallbackDelay.ResetForNetworkReconnect();
@@ -153,6 +159,21 @@ namespace Arena.Network
             conn.Db.MovementActionState.OnUpdate += Delayed<MovementActionState>(registry.OnMovementActionStateUpdate);
             conn.Db.MovementActionState.OnDelete += Delayed<MovementActionState>(registry.OnMovementActionStateDelete);
 
+            interaction.Bind(localIdentity);
+            conn.Db.ActiveWorldInteraction.OnInsert +=
+                Delayed<ActiveWorldInteraction>(interaction.OnActiveWorldInteractionInsert);
+            conn.Db.ActiveWorldInteraction.OnUpdate +=
+                Delayed<ActiveWorldInteraction>(interaction.OnActiveWorldInteractionUpdate);
+            conn.Db.ActiveWorldInteraction.OnDelete +=
+                Delayed<ActiveWorldInteraction>(interaction.OnActiveWorldInteractionDelete);
+
+            conn.Db.ActiveWorldInteraction.OnInsert +=
+                Delayed<ActiveWorldInteraction>(registry.OnActiveWorldInteractionInsert);
+            conn.Db.ActiveWorldInteraction.OnUpdate +=
+                Delayed<ActiveWorldInteraction>(registry.OnActiveWorldInteractionUpdate);
+            conn.Db.ActiveWorldInteraction.OnDelete +=
+                Delayed<ActiveWorldInteraction>(registry.OnActiveWorldInteractionDelete);
+
             conn.Db.SpecialMovementRuntime.OnInsert += Delayed<SpecialMovementRuntime>(registry.OnSpecialMovementRuntimeInsert);
             conn.Db.SpecialMovementRuntime.OnUpdate += Delayed<SpecialMovementRuntime>(registry.OnSpecialMovementRuntimeUpdate);
             conn.Db.SpecialMovementRuntime.OnDelete += Delayed<SpecialMovementRuntime>(registry.OnSpecialMovementRuntimeDelete);
@@ -218,6 +239,13 @@ namespace Arena.Network
             conn.Db.MovementActionState.OnInsert += (_, _) => NetcodeReceiveCounters.Record("movement_action_state");
             conn.Db.MovementActionState.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("movement_action_state");
             conn.Db.MovementActionState.OnDelete += (_, _) => NetcodeReceiveCounters.Record("movement_action_state");
+
+            conn.Db.ActiveWorldInteraction.OnInsert += (_, _) =>
+                NetcodeReceiveCounters.Record("active_world_interaction");
+            conn.Db.ActiveWorldInteraction.OnUpdate += (_, _, _) =>
+                NetcodeReceiveCounters.Record("active_world_interaction");
+            conn.Db.ActiveWorldInteraction.OnDelete += (_, _) =>
+                NetcodeReceiveCounters.Record("active_world_interaction");
 
             conn.Db.SpecialMovementRuntime.OnInsert += (_, _) => NetcodeReceiveCounters.Record("special_movement_runtime");
             conn.Db.SpecialMovementRuntime.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("special_movement_runtime");

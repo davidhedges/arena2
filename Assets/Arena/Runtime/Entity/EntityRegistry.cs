@@ -56,6 +56,8 @@ namespace Arena.Entity
 
         private readonly Dictionary<Identity, PlayerEntity> _players = new();
         private readonly Dictionary<Identity, NpcEntity> _npcs = new();
+        private readonly Dictionary<Identity, ActiveWorldInteraction>
+            _activeWorldInteractions = new();
         private readonly Dictionary<Identity, long> _lastDefenseStartMicros = new();
         private readonly List<PendingHitReaction> _pendingHitReactions = new();
         private readonly LocalWorldRuntimeCoordinator _localWorldCoordinator = new(new LocalMovementWorldContext());
@@ -214,6 +216,7 @@ namespace Arena.Entity
             _hasLocalIdentity = false;
             _localWorldCoordinator.ClearForNetworkReconnect();
             _lastDefenseStartMicros.Clear();
+            _activeWorldInteractions.Clear();
             ClearAllPlayers();
             ClearAllNpcs();
         }
@@ -785,6 +788,69 @@ namespace Arena.Entity
         public bool TryGetEntity(Identity id, out PlayerEntity entity)
             => TryGetLivePlayer(id, out entity);
 
+        public void OnActiveWorldInteractionInsert(
+            EventContext context,
+            ActiveWorldInteraction row)
+        {
+            _ = context;
+            ApplyActiveWorldInteraction(row);
+        }
+
+        public void OnActiveWorldInteractionUpdate(
+            EventContext context,
+            ActiveWorldInteraction oldRow,
+            ActiveWorldInteraction row)
+        {
+            _ = context;
+            if (!string.Equals(
+                    oldRow.ActionInstanceId,
+                    row.ActionInstanceId,
+                    System.StringComparison.Ordinal)
+                && TryGetLivePlayer(oldRow.Actor, out PlayerEntity oldEntity))
+            {
+                oldEntity.EndWorldInteractionAnimation(
+                    oldRow.ActionInstanceId,
+                    completed: false);
+            }
+            ApplyActiveWorldInteraction(row);
+        }
+
+        public void OnActiveWorldInteractionDelete(
+            EventContext context,
+            ActiveWorldInteraction row)
+        {
+            _ = context;
+            if (_activeWorldInteractions.TryGetValue(
+                    row.Actor,
+                    out ActiveWorldInteraction active)
+                && string.Equals(
+                    active.ActionInstanceId,
+                    row.ActionInstanceId,
+                    System.StringComparison.Ordinal))
+            {
+                _activeWorldInteractions.Remove(row.Actor);
+            }
+
+            if (!TryGetLivePlayer(row.Actor, out PlayerEntity entity))
+                return;
+
+            WorldDoorState? committedDoor =
+                context.Db.WorldDoorState.DoorStateId.Find(row.TargetStateId);
+            bool completed = committedDoor != null
+                && committedDoor.IsOpen == row.DesiredOpen
+                && committedDoor.Revision > row.ObservedRevision;
+            entity.EndWorldInteractionAnimation(
+                row.ActionInstanceId,
+                completed);
+        }
+
+        private void ApplyActiveWorldInteraction(ActiveWorldInteraction row)
+        {
+            _activeWorldInteractions[row.Actor] = row;
+            if (TryGetLivePlayer(row.Actor, out PlayerEntity entity))
+                entity.BeginWorldInteractionAnimation(row);
+        }
+
         public bool TryGetEntityByHex(string identityHex, out PlayerEntity entity)
         {
             foreach (var pair in _players)
@@ -1044,6 +1110,12 @@ namespace Arena.Entity
 
                 ApplyOwnerEquipmentPresentation(row.Identity);
                 ApplyOwnerCombatProfile(row.Identity);
+                if (_activeWorldInteractions.TryGetValue(
+                        row.Identity,
+                        out ActiveWorldInteraction activeInteraction))
+                {
+                    entity.BeginWorldInteractionAnimation(activeInteraction);
+                }
             }
 
             entity.SimState.PushSnapshot(SnapshotFrom(row));

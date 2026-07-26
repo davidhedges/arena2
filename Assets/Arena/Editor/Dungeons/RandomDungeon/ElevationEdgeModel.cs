@@ -4826,8 +4826,8 @@ namespace DungeonLab.Editor
                 Transform right = FindRequiredGatewayDescendant(
                     instance,
                     "MOD_Gateway_Door_01_large_door_R");
-                leaves.Add(OpenStaticGatewayLeaf(left, 100f));
-                leaves.Add(OpenStaticGatewayLeaf(right, -100f));
+                leaves.Add(PrepareInteractiveGatewayLeaf(left, 100f));
+                leaves.Add(PrepareInteractiveGatewayLeaf(right, -100f));
                 foreach (Transform child in instance.GetComponentsInChildren<Transform>(true))
                 {
                     if (child.name.StartsWith(
@@ -4844,7 +4844,7 @@ namespace DungeonLab.Editor
             string leafName = style == GatewayStyle.Metal
                 ? "MOD_Gateway_Door_01_med_01_door"
                 : "MOD_Gateway_Door_01_med_02_door";
-            leaves.Add(OpenStaticGatewayLeaf(
+            leaves.Add(PrepareInteractiveGatewayLeaf(
                 FindRequiredGatewayDescendant(instance, leafName),
                 95f));
             return leaves;
@@ -4855,7 +4855,7 @@ namespace DungeonLab.Editor
             Transform leaf = FindRequiredGatewayDescendant(
                 instance,
                 "SM_PROP_bars_door_01_dungeon");
-            return OpenStaticGatewayLeaf(leaf, -75f);
+            return PrepareInteractiveGatewayLeaf(leaf, -75f);
         }
 
         private static Transform FindRequiredGatewayDescendant(
@@ -4874,7 +4874,7 @@ namespace DungeonLab.Editor
             return child;
         }
 
-        private static GatewayLeafPose OpenStaticGatewayLeaf(
+        private static GatewayLeafPose PrepareInteractiveGatewayLeaf(
             Transform leaf,
             float localYaw)
         {
@@ -4940,7 +4940,7 @@ namespace DungeonLab.Editor
                 $"RANDOM_DUNGEON:GATEWAY:{gateway.edge.x}:{gateway.edge.z}:{gateway.edge.direction}",
                 "RANDOM_DUNGEON",
                 templateOnly: false,
-                productionEnabled: false,
+                productionEnabled: true,
                 defaultOpen: true,
                 definitionVersion: 1,
                 openInteractionProfileId: "WORLD_DOOR_INSTANT",

@@ -307,6 +307,10 @@ namespace Arena.Entity
         }
 
         public void RequestCombatAnimation(in CombatAnimationRequest request) => _animator?.RequestCombatAnimation(request);
+        public void BeginWorldInteractionAnimation(ActiveWorldInteraction row)
+            => _animator?.BeginWorldInteractionAnimation(row);
+        public void EndWorldInteractionAnimation(string actionInstanceId, bool completed)
+            => _animator?.EndWorldInteractionAnimation(actionInstanceId, completed);
         public void PredictSpellCastHold(string spellActionId, long localStartedAtMs, string targetId, Vector3? aimPoint, CastActionToken token)
             => _spellCastPresentation?.PredictLocalCastHold(spellActionId, localStartedAtMs, targetId, aimPoint, token);
         public void CancelLocalSpellCastHold(CastActionToken token)

@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using Arena.Combat;
 using Arena.Entity;
 using Arena.Input;
+using Arena.Network;
+using Arena.Simulation;
 using Arena.UI;
 using UnityEngine;
 
@@ -73,6 +75,18 @@ namespace Arena.Interaction
             {
                 _gesture.Cancel();
                 return;
+            }
+
+            if (input.EscapePressed
+                && LocalInteractionState.Instance.Active != null
+                && SpellInputHandler.Instance?.IsAimActive != true
+                && !RuntimeUiEscapeRouter.EscapeConsumedThisFrame)
+            {
+                if (!RuntimeUiEscapeRouter.TryCloseTopmost()
+                    && DoorInteractionNetworkBridge.TryCancelActiveInteraction())
+                {
+                    RuntimeUiEscapeRouter.ConsumeEscapeThisFrame();
+                }
             }
 
             if (input.RightMousePressed)
@@ -156,8 +170,13 @@ namespace Arena.Interaction
                 if (interactable != null)
                 {
                     Vector3 actorPosition = localPlayer.GetRenderPosition();
-                    if (!interactable.CanInteractLocally(actorPosition, out _))
+                    if (!interactable.CanInteractLocally(
+                            actorPosition,
+                            out string denialReason))
+                    {
+                        LocalInteractionState.ReportDenial(denialReason);
                         return false;
+                    }
 
                     Vector3 interactionPoint = interactable.InteractionPoint;
                     float screenDepth = camera.WorldToScreenPoint(interactionPoint).z;

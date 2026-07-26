@@ -1,6 +1,8 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
+using Arena.Input;
 using UnityEngine;
 
 namespace Arena.Interaction
@@ -263,6 +265,109 @@ namespace Arena.Interaction
         public static IDoorInteractionRequestSink? Sink { get; set; }
     }
 
+    /// <summary>
+    /// Stable-ID lookup for scene-authored door presentations. Replication
+    /// updates this registry; gameplay collision remains in
+    /// <see cref="WorldDoorCollisionRuntime"/>.
+    /// </summary>
+    public static class DoorRuntimeRegistry
+    {
+        private static readonly Dictionary<string, List<DoorInteractable>> Doors =
+            new(StringComparer.Ordinal);
+
+        public static void Register(DoorInteractable door)
+        {
+            string id = door.StableInteractionId;
+            if (string.IsNullOrWhiteSpace(id))
+                return;
+
+            if (!Doors.TryGetValue(id, out List<DoorInteractable>? instances))
+            {
+                instances = new List<DoorInteractable>();
+                Doors.Add(id, instances);
+            }
+            if (!instances.Contains(door))
+                instances.Add(door);
+        }
+
+        public static void Unregister(DoorInteractable door)
+        {
+            string id = door.StableInteractionId;
+            if (string.IsNullOrWhiteSpace(id)
+                || !Doors.TryGetValue(id, out List<DoorInteractable>? instances))
+            {
+                return;
+            }
+
+            instances.Remove(door);
+            if (instances.Count == 0)
+                Doors.Remove(id);
+        }
+
+        public static void Apply(
+            string doorDefinitionId,
+            bool open,
+            ulong revision,
+            bool animate)
+        {
+            string id = NormalizeId(doorDefinitionId);
+            if (!Doors.TryGetValue(id, out List<DoorInteractable>? instances))
+                return;
+
+            for (int i = instances.Count - 1; i >= 0; i--)
+            {
+                DoorInteractable? door = instances[i];
+                if (door == null)
+                {
+                    instances.RemoveAt(i);
+                    continue;
+                }
+                door.ApplyAuthoritativeState(open, revision, animate);
+            }
+
+            if (instances.Count == 0)
+                Doors.Remove(id);
+        }
+
+        public static void ResetToAuthoredDefaults()
+        {
+            foreach (List<DoorInteractable> instances in Doors.Values)
+            {
+                for (int i = instances.Count - 1; i >= 0; i--)
+                {
+                    DoorInteractable? door = instances[i];
+                    if (door == null)
+                        instances.RemoveAt(i);
+                    else
+                        door.ResetToAuthoredDefault();
+                }
+            }
+        }
+
+        public static void ResetToAuthoredDefault(string doorDefinitionId)
+        {
+            string id = NormalizeId(doorDefinitionId);
+            if (!Doors.TryGetValue(id, out List<DoorInteractable>? instances))
+                return;
+
+            for (int i = instances.Count - 1; i >= 0; i--)
+            {
+                DoorInteractable? door = instances[i];
+                if (door == null)
+                    instances.RemoveAt(i);
+                else
+                    door.ResetToAuthoredDefault();
+            }
+        }
+
+        internal static void ClearForTests() => Doors.Clear();
+
+        private static string NormalizeId(string value)
+            => string.IsNullOrWhiteSpace(value)
+                ? string.Empty
+                : value.Trim().ToUpperInvariant();
+    }
+
     [DisallowMultipleComponent]
     [RequireComponent(typeof(DoorAuthoring), typeof(DoorMotor))]
     public sealed class DoorInteractable : MonoBehaviour, IWorldInteractable
@@ -292,6 +397,23 @@ namespace Arena.Interaction
             _authoring ??= GetComponent<DoorAuthoring>();
             _motor ??= GetComponent<DoorMotor>();
             _knownOpen = _authoring?.DefaultOpen ?? true;
+        }
+
+        private void OnEnable()
+        {
+            DoorRuntimeRegistry.Register(this);
+            if (WorldDoorCollisionRuntime.TryGetEffectiveState(
+                    StableInteractionId,
+                    out bool open,
+                    out ulong revision))
+            {
+                ApplyAuthoritativeState(open, revision, animate: false);
+            }
+        }
+
+        private void OnDisable()
+        {
+            DoorRuntimeRegistry.Unregister(this);
         }
 
         public bool CanInteractLocally(Vector3 actorPosition, out string denialReason)
@@ -335,6 +457,14 @@ namespace Arena.Interaction
             _knownOpen = open;
             _knownRevision = revision;
             _motor?.ApplyAuthoritativeState(open, revision, animate);
+        }
+
+        public void ResetToAuthoredDefault()
+        {
+            bool defaultOpen = _authoring?.DefaultOpen ?? true;
+            _knownOpen = defaultOpen;
+            _knownRevision = 0UL;
+            _motor?.SnapToState(defaultOpen, 0UL);
         }
     }
 }

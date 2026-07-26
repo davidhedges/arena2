@@ -2,6 +2,7 @@
 
 using System;
 using Arena.Input;
+using Arena.Interaction;
 using SpacetimeDB;
 using SpacetimeDB.Types;
 using UnityEngine;
@@ -10,7 +11,7 @@ namespace Arena.Network
 {
     /// <summary>
     /// Mirrors scope-filtered authoritative door rows into the local prediction
-    /// cache. Visual door binding is layered onto the same callbacks in Slice 4.
+    /// cache and stable-ID scene presentation registry.
     /// </summary>
     public sealed class WorldDoorStateReplicator : MonoBehaviour
     {
@@ -53,13 +54,31 @@ namespace Arena.Network
             connection.Db.WorldDoorState.OnUpdate += OnUpdate;
             connection.Db.WorldDoorState.OnDelete += OnDelete;
             foreach (WorldDoorState row in connection.Db.WorldDoorState.Iter())
+            {
                 WorldDoorCollisionRuntime.Upsert(row);
+                DoorRuntimeRegistry.Apply(
+                    row.DoorDefinitionId,
+                    row.IsOpen,
+                    row.Revision,
+                    animate: false);
+            }
         }
 
         private static void OnInsert(EventContext context, WorldDoorState row)
         {
-            _ = context;
+            bool animate =
+                ShouldAnimateReplicatedInsert(
+                    context.Event
+                        is SpacetimeDB.Event<SpacetimeDB.Types.Reducer>.SubscribeApplied,
+                    row);
+            ArenaServerClock.RecordObservedServerTimestampMicros(
+                row.UpdatedAt.MicrosecondsSinceUnixEpoch);
             WorldDoorCollisionRuntime.Upsert(row);
+            DoorRuntimeRegistry.Apply(
+                row.DoorDefinitionId,
+                row.IsOpen,
+                row.Revision,
+                animate);
         }
 
         private static void OnUpdate(
@@ -76,12 +95,38 @@ namespace Arena.Network
                 WorldDoorCollisionRuntime.Remove(oldRow);
             }
             WorldDoorCollisionRuntime.Upsert(row);
+            DoorRuntimeRegistry.Apply(
+                row.DoorDefinitionId,
+                row.IsOpen,
+                row.Revision,
+                animate: true);
         }
 
         private static void OnDelete(EventContext context, WorldDoorState row)
         {
             _ = context;
             WorldDoorCollisionRuntime.Remove(row);
+            DoorRuntimeRegistry.ResetToAuthoredDefault(row.DoorDefinitionId);
+        }
+
+        public static bool ShouldAnimateReplicatedInsert(
+            bool subscriptionSnapshot,
+            WorldDoorState row,
+            long? serverNowMs = null)
+        {
+            if (subscriptionSnapshot)
+                return false;
+
+            long updatedMs = row.UpdatedAt.MicrosecondsSinceUnixEpoch / 1000L;
+            if (updatedMs <= 0L)
+                return false;
+
+            long nowMs = serverNowMs
+                ?? (ArenaServerClock.HasEstimate
+                    ? ArenaServerClock.ServerNowMs
+                    : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            long ageMs = nowMs - updatedMs;
+            return ageMs >= -250L && ageMs <= 1000L;
         }
 
         private static void UpdateLocalScope(DbConnection? connection)
@@ -109,6 +154,7 @@ namespace Arena.Network
             }
             _connection = null;
             WorldDoorCollisionRuntime.Clear();
+            DoorRuntimeRegistry.ResetToAuthoredDefaults();
         }
     }
 }

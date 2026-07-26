@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Arena.Combat;
+using Arena.Interaction;
+using Arena.Network;
 using Arena.Simulation;
 using Arena.Input;
 using SpacetimeDB.Types;
@@ -192,6 +194,7 @@ namespace Arena.Presentation
         private const int SpellActionLayerIndex = 4;
         private const int LeftGestureLayerIndex = 5;
         private const string UpperBodyRecoverySlotName = "slot_upper_body_recovery_1";
+        private const string WorldInteractionSlotName = "slot_spell_4";
         private static readonly int MeleeAttackEmptyStateHash = Animator.StringToHash("Empty");
         private static readonly int SpellActionEmptyStateHash = Animator.StringToHash("Empty");
 
@@ -233,6 +236,10 @@ namespace Arena.Presentation
         private readonly CombatAnimationSetBinder _animationSetBinder = new();
         private readonly CombatActionPlaybackController _actionPlayback = new();
         private CombatStatusReactionController? _statusReactionController;
+        private ActiveWorldInteractionPresentation? _worldInteractionPresentation;
+        private AnimationClip? _worldInteractionPriorSlotClip;
+        private AnimationClip? _worldInteractionAppliedClip;
+        private float _worldInteractionReleaseAt;
 
         private CombatStatusReactionController StatusReactionController =>
             _statusReactionController ??= new CombatStatusReactionController(
@@ -261,6 +268,24 @@ namespace Arena.Presentation
             public long ActiveUntilMs { get; }
             public long RecoveryUntilMs { get; }
             public bool IsDodge => string.Equals(Kind, "DODGE", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private enum WorldInteractionPlaybackPhase
+        {
+            Start = 0,
+            Loop = 1,
+            Release = 2,
+        }
+
+        private sealed class ActiveWorldInteractionPresentation
+        {
+            public string ActionInstanceId = string.Empty;
+            public long StartedAtMs;
+            public long CompletesAtMs;
+            public WorldInteractionAnimationProfile Profile = null!;
+            public WorldInteractionPlaybackPhase Phase;
+            public Transform? FacingTransform;
+            public Quaternion PriorFacingLocalRotation;
         }
 
         private enum CombatStanceTransitionBand
@@ -568,6 +593,7 @@ namespace Arena.Presentation
 
         public void RequestCombatAnimation(in CombatAnimationRequest request)
         {
+            ClearWorldInteractionAnimation();
             if (_animator == null || _overrideController == null)
                 return;
 
@@ -609,6 +635,259 @@ namespace Arena.Presentation
                 default:
                     break;
             }
+        }
+
+        public void BeginWorldInteractionAnimation(ActiveWorldInteraction row)
+        {
+            if (_isDead
+                || _animator == null
+                || string.IsNullOrWhiteSpace(row.AnimationProfileId)
+                || !WorldInteractionAnimationProfileCatalog.TryResolve(
+                    row.AnimationProfileId,
+                    out WorldInteractionAnimationProfile profile))
+            {
+                return;
+            }
+
+            if (string.Equals(
+                    _worldInteractionPresentation?.ActionInstanceId,
+                    row.ActionInstanceId,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            ClearWorldInteractionAnimation();
+            EnsureOverrideController();
+            if (_overrideController == null || !CanDriveAnimatorState())
+                return;
+
+            ClearCombatActionPresentation(
+                captureMeleeGhost: false,
+                softSpellHoldClear: false);
+
+            long startedAtMs = row.StartedAt.MicrosecondsSinceUnixEpoch / 1000L;
+            long completesAtMs = row.CompletesAt.MicrosecondsSinceUnixEpoch / 1000L;
+            var active = new ActiveWorldInteractionPresentation
+            {
+                ActionInstanceId = row.ActionInstanceId,
+                StartedAtMs = startedAtMs,
+                CompletesAtMs = completesAtMs,
+                Profile = profile,
+                Phase = WorldInteractionPlaybackPhase.Start,
+            };
+
+            _worldInteractionPriorSlotClip =
+                _overrideController[WorldInteractionSlotName];
+            _worldInteractionPresentation = active;
+
+            if (profile.FaceTarget)
+            {
+                ApplyWorldInteractionFacing(
+                    active,
+                    new Vector3(
+                        row.InteractionAnchorX,
+                        row.InteractionAnchorY,
+                        row.InteractionAnchorZ));
+            }
+
+            long nowMs = ArenaServerClock.HasEstimate
+                ? ArenaServerClock.ServerNowMs
+                : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            PlayWorldInteractionAtAuthoritativePhase(nowMs);
+        }
+
+        public void EndWorldInteractionAnimation(
+            string actionInstanceId,
+            bool completed)
+        {
+            ActiveWorldInteractionPresentation? active =
+                _worldInteractionPresentation;
+            if (active == null
+                || !string.Equals(
+                    active.ActionInstanceId,
+                    actionInstanceId,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            AnimationClip? releaseClip = completed
+                ? active.Profile.EndClip
+                : active.Profile.CancelClip ?? active.Profile.EndClip;
+            if (releaseClip == null || !CanDriveAnimatorState())
+            {
+                ClearWorldInteractionAnimation();
+                return;
+            }
+
+            active.Phase = WorldInteractionPlaybackPhase.Release;
+            PlayWorldInteractionClip(releaseClip, loop: false, normalizedTime: 0f);
+            _worldInteractionReleaseAt =
+                Time.time + Mathf.Max(0.01f, releaseClip.length);
+        }
+
+        private void PlayWorldInteractionAtAuthoritativePhase(long serverNowMs)
+        {
+            ActiveWorldInteractionPresentation? active =
+                _worldInteractionPresentation;
+            if (active == null)
+                return;
+
+            AnimationClip? start = active.Profile.StartClip;
+            long startLengthMs = start != null
+                ? Math.Max(1L, (long)Math.Round(start.length * 1000.0))
+                : 0L;
+            AnimationClip? loop = active.Profile.LoopClip;
+            long loopLengthMs = loop != null
+                ? Math.Max(1L, (long)Math.Round(loop.length * 1000.0))
+                : 0L;
+            WorldInteractionAnimationSample sample =
+                WorldInteractionAnimationTiming.Resolve(
+                    serverNowMs,
+                    active.StartedAtMs,
+                    active.CompletesAtMs,
+                    startLengthMs,
+                    loopLengthMs);
+            if (sample.Phase == WorldInteractionAnimationPhase.Start
+                && start != null)
+            {
+                active.Phase = WorldInteractionPlaybackPhase.Start;
+                PlayWorldInteractionClip(
+                    start,
+                    loop: false,
+                    sample.NormalizedTime);
+                return;
+            }
+
+            if (sample.Phase == WorldInteractionAnimationPhase.Loop
+                && loop != null)
+            {
+                active.Phase = WorldInteractionPlaybackPhase.Loop;
+                PlayWorldInteractionClip(
+                    loop,
+                    loop: true,
+                    sample.NormalizedTime);
+                return;
+            }
+        }
+
+        private void UpdateWorldInteractionAnimation()
+        {
+            ActiveWorldInteractionPresentation? active =
+                _worldInteractionPresentation;
+            if (active == null)
+                return;
+
+            if (active.Phase == WorldInteractionPlaybackPhase.Release)
+            {
+                if (Time.time >= _worldInteractionReleaseAt)
+                    ClearWorldInteractionAnimation();
+                return;
+            }
+
+            if (active.Phase != WorldInteractionPlaybackPhase.Start)
+                return;
+
+            AnimationClip? start = active.Profile.StartClip;
+            if (start == null || active.Profile.LoopClip == null)
+                return;
+
+            long nowMs = ArenaServerClock.HasEstimate
+                ? ArenaServerClock.ServerNowMs
+                : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            long startLengthMs =
+                Math.Max(1L, (long)Math.Round(start.length * 1000.0));
+            if (nowMs - active.StartedAtMs >= startLengthMs)
+                PlayWorldInteractionAtAuthoritativePhase(nowMs);
+        }
+
+        private void PlayWorldInteractionClip(
+            AnimationClip clip,
+            bool loop,
+            float normalizedTime)
+        {
+            if (_animator == null
+                || _overrideController == null
+                || !CanDriveAnimatorState())
+            {
+                return;
+            }
+
+            _overrideController[WorldInteractionSlotName] = clip;
+            _worldInteractionAppliedClip = clip;
+            bool upperBody =
+                _worldInteractionPresentation?.Profile.BodyMode
+                    == InteractionAnimationBodyMode.UpperBody;
+            int layerIndex = upperBody ? UpperBodyLayerIndex : SpellActionLayerIndex;
+            int stateHash = upperBody
+                ? (loop
+                    ? UpperBodySpellCastHoldAction4StateHash
+                    : UpperBodySpellAction4StateHash)
+                : (loop
+                    ? SpellCastHoldAction4StateHash
+                    : SpellAction4StateHash);
+            _animator.SetLayerWeight(layerIndex, 1f);
+            _animator.Play(stateHash, layerIndex, Mathf.Clamp01(normalizedTime));
+        }
+
+        private void ApplyWorldInteractionFacing(
+            ActiveWorldInteractionPresentation active,
+            Vector3 target)
+        {
+            if (_animator == null)
+                return;
+
+            Vector3 direction = target - transform.position;
+            direction.y = 0f;
+            if (direction.sqrMagnitude <= 0.0001f)
+                return;
+
+            Transform facingTransform = _motionSource ?? _animator.transform;
+            active.FacingTransform = facingTransform;
+            active.PriorFacingLocalRotation = facingTransform.localRotation;
+            Quaternion visualOffset =
+                Quaternion.Inverse(transform.rotation) * facingTransform.rotation;
+            Quaternion desiredActorRotation =
+                Quaternion.LookRotation(direction.normalized, Vector3.up);
+            facingTransform.rotation = desiredActorRotation * visualOffset;
+        }
+
+        private void ClearWorldInteractionAnimation()
+        {
+            ActiveWorldInteractionPresentation? active =
+                _worldInteractionPresentation;
+            if (active == null)
+                return;
+
+            if (active.FacingTransform != null)
+                active.FacingTransform.localRotation = active.PriorFacingLocalRotation;
+
+            if (_animator != null && CanDriveAnimatorState())
+            {
+                bool upperBody =
+                    active.Profile.BodyMode == InteractionAnimationBodyMode.UpperBody;
+                int layerIndex =
+                    upperBody ? UpperBodyLayerIndex : SpellActionLayerIndex;
+                _animator.Play(
+                    upperBody ? UpperBodyEmptyStateHash : SpellActionEmptyStateHash,
+                    layerIndex,
+                    0f);
+            }
+
+            if (_overrideController != null
+                && ReferenceEquals(
+                    _overrideController[WorldInteractionSlotName],
+                    _worldInteractionAppliedClip))
+            {
+                _overrideController[WorldInteractionSlotName] =
+                    _worldInteractionPriorSlotClip;
+            }
+
+            _worldInteractionPresentation = null;
+            _worldInteractionPriorSlotClip = null;
+            _worldInteractionAppliedClip = null;
+            _worldInteractionReleaseAt = 0f;
         }
 
         private CombatAnimationDecision DecideCombatAnimationRequest(in CombatAnimationRequest request)
@@ -2184,6 +2463,7 @@ namespace Arena.Presentation
 
         public void TriggerDodge(MovementActionState movementAction)
         {
+            ClearWorldInteractionAnimation();
             _activeMovementPresentation = new ActiveMovementActionPresentation(
                 movementAction.Kind,
                 movementAction.StartedAt.MicrosecondsSinceUnixEpoch / 1000L,
@@ -2586,12 +2866,16 @@ namespace Arena.Presentation
 
         public void SetKnockedDown(bool isKnockedDown)
         {
+            if (isKnockedDown)
+                ClearWorldInteractionAnimation();
             StatusReactionController.Bind(_animator, _overrideController);
             StatusReactionController.SetKnockedDown(isKnockedDown);
         }
 
         public void SetHardCrowdControl(string? statusKind)
         {
+            if (!string.IsNullOrWhiteSpace(statusKind))
+                ClearWorldInteractionAnimation();
             StatusReactionController.Bind(_animator, _overrideController);
             StatusReactionController.SetHardCrowdControl(statusKind);
         }
@@ -2602,6 +2886,7 @@ namespace Arena.Presentation
         /// </summary>
         public void TriggerHit(Vector3 hitDirection, Vector3 characterForward)
         {
+            ClearWorldInteractionAnimation();
             StatusReactionController.Bind(_animator, _overrideController);
             StatusReactionController.TriggerHit(hitDirection, characterForward);
         }
@@ -2611,6 +2896,7 @@ namespace Arena.Presentation
             if (_animator == null)
                 return;
 
+            ClearWorldInteractionAnimation();
             StatusReactionController.Bind(_animator, _overrideController);
             StatusReactionController.ClearForNonDeath();
             ClearCombatActionPresentation(captureMeleeGhost: false, softSpellHoldClear: false);
@@ -2619,6 +2905,7 @@ namespace Arena.Presentation
 
         public void TriggerStagger(Vector3 hitDirection, Vector3 characterForward)
         {
+            ClearWorldInteractionAnimation();
             StatusReactionController.Bind(_animator, _overrideController);
             StatusReactionController.TriggerStagger(hitDirection, characterForward);
         }
@@ -2790,6 +3077,7 @@ namespace Arena.Presentation
             LocomotionSample locomotion = UpdateLocomotion();
             UpdateMovementOneShots(locomotion, presentationGrounded);
             UpdateWeaponVisualHandoff();
+            UpdateWorldInteractionAnimation();
             UpdatePhasedMeleePlayback();
             UpdateSpellCastHoldPlayback();
             UpdateSpellCastHoldFadeOut();

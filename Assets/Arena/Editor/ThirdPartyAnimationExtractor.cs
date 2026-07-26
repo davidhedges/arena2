@@ -17,7 +17,7 @@ namespace Arena.Editor
         private const string HumanoidUseDestination =
             "Assets/Arena/Content/Animation/Extracted/StylizedCharacter/Human/Male/BasePack";
         private const string HumanoidUseProfilePath =
-            "Assets/Arena/Content/Settings/Interaction/HumanoidUseAnimation.asset";
+            "Assets/Arena/Resources/InteractionAnimations/HumanoidUseAnimation.asset";
 
         private static readonly string[] HumanoidUseClipNames =
         {
@@ -52,6 +52,7 @@ namespace Arena.Editor
             }
 
             EnsureFolder(HumanoidUseDestination);
+            EnsureFolder("Assets/Arena/Resources/InteractionAnimations");
             var paths = new List<string>(HumanoidUseClipNames.Length);
             foreach (string clipName in HumanoidUseClipNames)
             {

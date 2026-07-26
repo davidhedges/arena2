@@ -224,7 +224,13 @@ namespace Arena.Network
 
             var registry = EntityRegistry.Instance;
             registry.SetLocalIdentity(identity);
-            NetworkCallbackBinder.BindRuntimeCallbacks(conn, registry, MatchStateCache.Instance, LocalCombatState.Instance, identity);
+            NetworkCallbackBinder.BindRuntimeCallbacks(
+                conn,
+                registry,
+                MatchStateCache.Instance,
+                LocalCombatState.Instance,
+                LocalInteractionState.Instance,
+                identity);
 
             conn.Reducers.OnPingClock += HandlePingClockResult;
             _nextClockPingRealtime = 0f;
@@ -483,6 +489,10 @@ namespace Arena.Network
             ArenaServerClock.Reset();
             Arena.Simulation.ServerTimeDelayBudget.Reset();
             Arena.Debugging.NetworkCallbackDelay.ResetForNetworkReconnect();
+            EntityRegistry.Instance?.ClearForNetworkReconnect();
+            MatchStateCache.Instance.ResetForNetworkReconnect();
+            LocalCombatState.Instance.ResetForNetworkReconnect();
+            LocalInteractionState.Instance.ResetForNetworkReconnect();
             ResetConnectionState();
             Debug.Log($"[NetworkManager] Disconnected: {e?.Message ?? "clean"}");
         }
@@ -515,6 +525,7 @@ namespace Arena.Network
             EntityRegistry.Instance?.ClearForNetworkReconnect();
             MatchStateCache.Instance.ResetForNetworkReconnect();
             LocalCombatState.Instance.ResetForNetworkReconnect();
+            LocalInteractionState.Instance.ResetForNetworkReconnect();
 
             if (conn == null)
                 return;

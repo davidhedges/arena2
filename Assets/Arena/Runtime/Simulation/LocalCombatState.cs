@@ -199,7 +199,7 @@ namespace Arena.Simulation
     ///
     /// INVARIANT: Only written by table event callbacks. Only read by presentation.
     /// </summary>
-    public class LocalCombatState
+    public class LocalCombatState : ITimedActionPresentationSource
     {
         public static LocalCombatState Instance { get; } = new();
         public long GcdStartMs { get; private set; }
@@ -683,6 +683,21 @@ namespace Arena.Simulation
             }
 
             return null;
+        }
+
+        public TimedActionPresentationSnapshot? CurrentTimedAction(long nowMs)
+        {
+            CastBarSnapshot? cast = CurrentCastBar(nowMs);
+            if (!cast.HasValue)
+                return null;
+
+            CastBarSnapshot value = cast.Value;
+            return new TimedActionPresentationSnapshot(
+                value.Kind,
+                value.StartMs,
+                value.EndMs,
+                value.Kind,
+                TimedActionPresentationStyle.CombatCast);
         }
 
         public CastActionToken CreateCastActionToken(string kind)

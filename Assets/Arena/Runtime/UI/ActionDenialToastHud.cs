@@ -96,11 +96,13 @@ namespace Arena.UI
         private void OnEnable()
         {
             LocalCombatState.PredictionRejected += OnPredictionRejected;
+            LocalInteractionState.InteractionDenied += OnInteractionDenied;
         }
 
         private void OnDisable()
         {
             LocalCombatState.PredictionRejected -= OnPredictionRejected;
+            LocalInteractionState.InteractionDenied -= OnInteractionDenied;
         }
 
         private void OnPredictionRejected(string actionKind, string pressedActionId, ActionRejectReason reason)
@@ -108,6 +110,11 @@ namespace Arena.UI
             _ = actionKind;
             _ = pressedActionId;
             _model.TryShow(ActionDenialText.For(reason), Time.unscaledTimeAsDouble);
+        }
+
+        private void OnInteractionDenied(string reason)
+        {
+            _model.TryShow(reason, Time.unscaledTimeAsDouble);
         }
 
         private void Update()

@@ -234,6 +234,7 @@ namespace Arena.UI
         private string     _castKind     = "";
         private string     _castDisplayName = "";
         private bool       _castShowsCharge;
+        private TimedActionPresentationStyle _castStyle;
 
         // --- Respawn ---
         private GameObject _respawnRoot = null!;
@@ -2458,8 +2459,13 @@ namespace Arena.UI
 
         private void UpdateCastBar()
         {
-            long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var cast = LocalCombatState.Instance.CurrentCastBar(nowMs);
+            long nowMs = ArenaServerClock.HasEstimate
+                ? ArenaServerClock.ServerNowMs
+                : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            TimedActionPresentationSnapshot? cast =
+                TimedActionPresentation.Select(
+                    LocalCombatState.Instance.CurrentTimedAction(nowMs),
+                    LocalInteractionState.Instance.CurrentTimedAction(nowMs));
             if (cast is not { } c)
             {
                 SetActiveIfChanged(_castRoot, false);
@@ -2474,15 +2480,32 @@ namespace Arena.UI
             long totalMs = c.EndMs - c.StartMs;
             if (totalMs <= 0) { SetActiveIfChanged(_castRoot, false); return; }
 
-            if (_castKind != c.Kind || _castStartMs != c.StartMs || _castEndMs != c.EndMs)
+            if (_castKind != c.ActionId
+                || _castStartMs != c.StartMs
+                || _castEndMs != c.EndMs
+                || _castStyle != c.Style)
             {
                 _castStartMs = c.StartMs;
                 _castEndMs = c.EndMs;
-                _castKind = c.Kind;
-                var conn = NetworkManager.Instance?.Conn;
-                var spellDef = conn?.Db.SpellDefinition.Kind.Find(c.Kind);
-                _castShowsCharge = SpellDefinitionContracts.ShowsChargePresentation(spellDef);
-                _castDisplayName = ActionPresentation.ResolveDisplayName(conn, conn?.Identity, c.Kind, c.Kind);
+                _castKind = c.ActionId;
+                _castStyle = c.Style;
+                if (c.Style == TimedActionPresentationStyle.CombatCast)
+                {
+                    var conn = NetworkManager.Instance?.Conn;
+                    var spellDef = conn?.Db.SpellDefinition.Kind.Find(c.Label);
+                    _castShowsCharge =
+                        SpellDefinitionContracts.ShowsChargePresentation(spellDef);
+                    _castDisplayName = ActionPresentation.ResolveDisplayName(
+                        conn,
+                        conn?.Identity,
+                        c.Label,
+                        c.Label);
+                }
+                else
+                {
+                    _castShowsCharge = false;
+                    _castDisplayName = c.Label;
+                }
             }
 
             float elapsed = nowMs - _castStartMs;
