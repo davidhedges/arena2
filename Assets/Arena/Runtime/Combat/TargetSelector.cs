@@ -4,6 +4,7 @@ using System.Linq;
 using UnityEngine;
 using Arena.Entity;
 using Arena.Input;
+using Arena.Interaction;
 using Arena.Network;
 using Arena.Presentation;
 using Arena.UI;
@@ -88,9 +89,6 @@ namespace Arena.Combat
             if (!aimActive && input.LeftMousePressed)
                 TrySelectTargetAtCursor(false);
 
-            if (!aimActive && input.RightMouseReleased)
-                TrySelectTargetAtCursor(true);
-
             if (input.TabPressed)
                 CycleTarget();
 
@@ -148,22 +146,56 @@ namespace Arena.Combat
             if (entity == null)
                 return;
 
-            if (armAutoAttack && !PartyRelationship.IsHostileToLocal(entity))
+            if (armAutoAttack)
+            {
+                TrySelectAndArmAutoAttack(entity);
+                return;
+            }
+
+            SelectTarget(entity);
+        }
+
+        public bool TryGetSecondaryWorldCandidate(
+            Camera camera,
+            Vector2 screenPoint,
+            out WorldInteractionCandidate candidate)
+        {
+            candidate = default;
+            ICombatTargetEntity? entity = ResolveTargetAtScreenPoint(camera, screenPoint);
+            if (entity == null || !PartyRelationship.IsHostileToLocal(entity))
+                return false;
+
+            Vector3 interactionPoint = entity.GetRenderPosition()
+                + Vector3.up * Mathf.Max(0.2f, entity.HitHeight * 0.5f);
+            float screenDepth = camera.WorldToScreenPoint(interactionPoint).z;
+            candidate = new WorldInteractionCandidate(
+                WorldInteractionCandidateKind.CombatTarget,
+                entity.TargetIdentity.ToString(),
+                "ATTACK",
+                interactionPoint,
+                screenDepth,
+                WorldInteractionArbitration.CombatTargetPriority,
+                0f,
+                () => TrySelectAndArmAutoAttack(entity));
+            return true;
+        }
+
+        private bool TrySelectAndArmAutoAttack(ICombatTargetEntity entity)
+        {
+            if (!PartyRelationship.IsHostileToLocal(entity))
             {
                 var relation = PartyRelationship.RelationToLocal(entity);
                 Debug.Log(
                     $"[TargetSelector] Auto-attack rejected: target {entity.DisplayName} relation={relation} is not Hostile");
-                return;
+                return false;
             }
 
             if (!SelectTarget(entity))
-                return;
+                return false;
 
-            if (armAutoAttack)
-            {
-                EntityRegistry.Instance?.LocalPlayerEntity?.SetInCombat(true);
-                ArmAutoAttackOnServer(entity);
-            }
+            EntityRegistry.Instance?.LocalPlayerEntity?.SetInCombat(true);
+            ArmAutoAttackOnServer(entity);
+            return true;
         }
 
         private ICombatTargetEntity? ResolveTargetAtCursor()

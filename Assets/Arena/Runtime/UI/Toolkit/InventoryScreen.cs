@@ -5,11 +5,11 @@ using System.Collections.Generic;
 using System.Text;
 using Arena.Combat;
 using Arena.Entity;
+using Arena.Interaction;
 using Arena.Network;
 using SpacetimeDB;
 using SpacetimeDB.Types;
 using UnityEngine;
-using UnityEngine.EventSystems;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -185,9 +185,6 @@ namespace Arena.UI
 
             if (WasInventoryTogglePressed())
                 SetOpen(!_open);
-
-            if (WasRightMousePressed() && !IsPointerOverUi())
-                TryOpenLootUnderCursor();
 
             ResolvePendingLootContainer();
 
@@ -897,15 +894,40 @@ namespace Arena.UI
 
         // ---- loot -------------------------------------------------------------
 
-        private void TryOpenLootUnderCursor()
+        public static bool TryGetLootCandidate(
+            Camera camera,
+            Vector2 screenPosition,
+            out WorldInteractionCandidate candidate)
+        {
+            candidate = default;
+            InventoryScreen? screen = s_instance;
+            if (screen == null)
+                return false;
+
+            NpcEntity? npc = FindDeadNpcUnderCursor(camera, screenPosition);
+            if (npc == null)
+                return false;
+
+            Vector3 interactionPoint = npc.GetRenderPosition()
+                + Vector3.up * Mathf.Clamp(npc.HitHeight * 0.45f, 0.35f, 1.4f);
+            float screenDepth = camera.WorldToScreenPoint(interactionPoint).z;
+            candidate = new WorldInteractionCandidate(
+                WorldInteractionCandidateKind.CorpseLoot,
+                npc.Identity.ToString(),
+                "LOOT",
+                interactionPoint,
+                screenDepth,
+                WorldInteractionArbitration.CorpseLootPriority,
+                0f,
+                () => screen.TryOpenLoot(npc));
+            return true;
+        }
+
+        private bool TryOpenLoot(NpcEntity npc)
         {
             DbConnection? conn = NetworkManager.Instance?.Conn;
-            if (conn == null)
-                return;
-
-            NpcEntity? npc = FindDeadNpcUnderCursor();
-            if (npc == null)
-                return;
+            if (conn == null || npc.IsAlive || npc.IsDestroyed)
+                return false;
 
             if (!_open)
                 SetOpen(true);
@@ -914,16 +936,17 @@ namespace Arena.UI
             conn.Reducers.OpenLootNpc(npc.Identity);
             ResolvePendingLootContainer();
             RefreshAll();
+            return true;
         }
 
-        private NpcEntity? FindDeadNpcUnderCursor()
+        private static NpcEntity? FindDeadNpcUnderCursor(
+            Camera camera,
+            Vector2 mousePosition)
         {
             EntityRegistry? registry = EntityRegistry.Instance;
-            Camera? camera = Camera.main;
-            if (registry == null || camera == null)
+            if (registry == null)
                 return null;
 
-            Vector2 mousePosition = ReadMousePosition();
             NpcEntity? best = null;
             float bestDistance = float.MaxValue;
 
@@ -1415,37 +1438,5 @@ namespace Arena.UI
             return UnityEngine.Input.GetKeyDown(KeyCode.I);
         }
 
-        private static bool WasRightMousePressed()
-        {
-#if ENABLE_INPUT_SYSTEM
-            if (Mouse.current != null)
-                return Mouse.current.rightButton.wasPressedThisFrame;
-#endif
-            return UnityEngine.Input.GetMouseButtonDown(1);
-        }
-
-        private static Vector2 ReadMousePosition()
-        {
-#if ENABLE_INPUT_SYSTEM
-            if (Mouse.current != null)
-                return Mouse.current.position.ReadValue();
-#endif
-            return UnityEngine.Input.mousePosition;
-        }
-
-        private bool IsPointerOverUi()
-        {
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-                return true;
-
-            if (_root?.panel == null || !_open)
-                return false;
-
-            Vector2 mouse = ReadMousePosition();
-            Vector2 panelPoint = RuntimePanelUtils.ScreenToPanel(
-                _root.panel, new Vector2(mouse.x, Screen.height - mouse.y));
-            VisualElement? picked = _root.panel.Pick(panelPoint);
-            return picked != null && picked != _root;
-        }
     }
 }

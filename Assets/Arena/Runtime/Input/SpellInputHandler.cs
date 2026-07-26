@@ -65,6 +65,15 @@ namespace Arena.Input
         /// </summary>
         public bool IsYawLocked => _yawLocked;
 
+        public bool TryCancelAimFromSecondaryWorldAction()
+        {
+            if (_activeAimSpell == null)
+                return false;
+
+            CancelAim();
+            return true;
+        }
+
         public static SpellInputHandler? Instance { get; private set; }
 
         private readonly struct PendingPredictedInstantSpellVisual
@@ -201,13 +210,6 @@ namespace Arena.Input
                 bool hasAimPoint = aim.RefreshFromCursor(input.MousePosition);
                 bool inRange = hasAimPoint && IsAimPointWithinMaxDistance(spellDef, aim.AimPoint);
                 aim.ShowCircle(aimRadius, inRange ? AimCircleColor : AimCircleOutOfRangeColor);
-            }
-
-            // Right click → cancel aim
-            if (input.RightMousePressed)
-            {
-                CancelAim();
-                return;
             }
 
             // Escape → cancel aim
