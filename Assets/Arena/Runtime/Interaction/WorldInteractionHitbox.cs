@@ -11,13 +11,19 @@ namespace Arena.Interaction
         private static readonly List<WorldInteractionHitbox> Registered = new();
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
-        private static readonly Color HoverTint = new(1f, 0.82f, 0.35f, 1f);
+        private static readonly int EmissionColorId =
+            Shader.PropertyToID("_EmissionColor");
+        private static readonly Color HoverTint = new(1f, 0.72f, 0.2f, 1f);
+        private static readonly Color HoverEmission =
+            new(0.16f, 0.085f, 0.015f, 1f);
+        private const string EmissionKeyword = "_EMISSION";
 
         [SerializeField] private MonoBehaviour? _interactableSource;
         [SerializeField] private Collider? _targetCollider;
 
         private readonly List<HighlightMaterialState> _highlightStates = new();
         private bool _hovered;
+        private int _highlightSlotCount;
 
         public IWorldInteractable? Interactable => _interactableSource as IWorldInteractable;
         internal static IReadOnlyList<WorldInteractionHitbox> ActiveHitboxes
@@ -50,7 +56,7 @@ namespace Arena.Interaction
         internal Transform? InteractableRoot =>
             (_interactableSource as Component)?.transform;
         internal bool IsHovered => _hovered;
-        internal int HighlightSlotCount => _highlightStates.Count;
+        internal int HighlightSlotCount => _highlightSlotCount;
 
         public void Configure(MonoBehaviour interactableSource)
         {
@@ -161,6 +167,9 @@ namespace Arena.Interaction
                 }
 
                 Material[] materials = renderer.sharedMaterials;
+                Material[] highlightedMaterials =
+                    (Material[])materials.Clone();
+                var temporaryMaterials = new List<Material>();
                 for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
                 {
                     Material? material = materials[materialIndex];
@@ -172,24 +181,45 @@ namespace Arena.Interaction
                         : material.HasProperty(ColorId)
                             ? ColorId
                             : -1;
-                    if (colorProperty < 0)
+                    bool supportsEmission = material.HasProperty(EmissionColorId);
+                    if (colorProperty < 0 && !supportsEmission)
                         continue;
 
-                    var original = new MaterialPropertyBlock();
-                    var highlighted = new MaterialPropertyBlock();
-                    renderer.GetPropertyBlock(original, materialIndex);
-                    renderer.GetPropertyBlock(highlighted, materialIndex);
-                    Color baseColor = material.GetColor(colorProperty);
-                    Color tint = HoverTint;
-                    tint.a = baseColor.a;
-                    highlighted.SetColor(
-                        colorProperty,
-                        Color.Lerp(baseColor, tint, 0.22f));
-                    renderer.SetPropertyBlock(highlighted, materialIndex);
+                    var highlighted = new Material(material)
+                    {
+                        name = $"{material.name} (Interaction Hover)",
+                        hideFlags = HideFlags.HideAndDontSave,
+                    };
+                    if (colorProperty >= 0)
+                    {
+                        Color baseColor = material.GetColor(colorProperty);
+                        Color tint = HoverTint;
+                        tint.a = baseColor.a;
+                        highlighted.SetColor(
+                            colorProperty,
+                            Color.Lerp(baseColor, tint, 0.38f));
+                    }
+                    if (supportsEmission)
+                    {
+                        Color emission = material.GetColor(EmissionColorId)
+                            + HoverEmission;
+                        emission.a = 1f;
+                        highlighted.SetColor(EmissionColorId, emission);
+                        highlighted.EnableKeyword(EmissionKeyword);
+                    }
+
+                    highlightedMaterials[materialIndex] = highlighted;
+                    temporaryMaterials.Add(highlighted);
+                    _highlightSlotCount++;
+                }
+
+                if (temporaryMaterials.Count > 0)
+                {
+                    renderer.sharedMaterials = highlightedMaterials;
                     _highlightStates.Add(new HighlightMaterialState(
                         renderer,
-                        materialIndex,
-                        original));
+                        materials,
+                        temporaryMaterials.ToArray()));
                 }
             }
         }
@@ -205,30 +235,40 @@ namespace Arena.Interaction
             foreach (HighlightMaterialState state in _highlightStates)
             {
                 if (state.Renderer != null)
-                {
-                    state.Renderer.SetPropertyBlock(
-                        state.Original,
-                        state.MaterialIndex);
-                }
+                    state.Renderer.sharedMaterials = state.OriginalMaterials;
+
+                foreach (Material temporary in state.TemporaryMaterials)
+                    DestroyTemporaryMaterial(temporary);
             }
             _highlightStates.Clear();
+            _highlightSlotCount = 0;
+        }
+
+        private static void DestroyTemporaryMaterial(Material material)
+        {
+            if (material == null)
+                return;
+            if (Application.isPlaying)
+                Destroy(material);
+            else
+                DestroyImmediate(material);
         }
 
         private readonly struct HighlightMaterialState
         {
             public HighlightMaterialState(
                 Renderer renderer,
-                int materialIndex,
-                MaterialPropertyBlock original)
+                Material[] originalMaterials,
+                Material[] temporaryMaterials)
             {
                 Renderer = renderer;
-                MaterialIndex = materialIndex;
-                Original = original;
+                OriginalMaterials = originalMaterials;
+                TemporaryMaterials = temporaryMaterials;
             }
 
             public Renderer Renderer { get; }
-            public int MaterialIndex { get; }
-            public MaterialPropertyBlock Original { get; }
+            public Material[] OriginalMaterials { get; }
+            public Material[] TemporaryMaterials { get; }
         }
     }
 }
