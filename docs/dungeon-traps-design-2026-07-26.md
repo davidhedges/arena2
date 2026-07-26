@@ -23,7 +23,7 @@ straight out of the `.anim` files:
 
 | Kind | Prefab | Clip | Motion | Hazard window | Extent |
 |---|---|---|---|---|---|
-| `SPIKES` | `TFD_Floor_Trap_01A` | 4.667 s | spikes `localPosition.y` −1.27 → +0.06 @0.20 → 0 @0.23 → hold to 2.18 → −1.27 @3.48 | **0.18 – 2.20 s** | ~2×2 u plate |
+| `SPIKES` | `TFD_Floor_Trap_01A` | 4.667 s | spikes `localPosition.y` −1.27 → +0.06 @0.20 → 0 @0.23 → hold to 2.18 → −1.27 @3.48 | **0.18 – 0.23 s** (eruption only; raised hold is safe) | ~2×2 u plate |
 | `SAW_SWEEP` | `TFD_Trap_01A` | 3.833 s | handle rises y −0.8 → 0 @0.25, travels `z` +2 → −2 over 0.25–2.13, sinks @2.35, resets underground | **0.22 – 2.25 s**, hazard centre travels with `z` | ~6 u along travel |
 | `SAW_POST` | `TFD_Trap_02A` | 3.0 s | handle rises y −0.8 → 0 @0.10, spins in place, sinks @1.58 | **0.09 – 1.55 s**, stationary | ~2 u |
 | `SAW_ARM` | `TFD_Trap_03A` | 2.5 s | arm `eulerX` 23.66° → −204.5° @0.75 → 23.66° @1.5 | **0.12 – 1.45 s**, hazard centre follows the arc | ~6 u swept |
@@ -96,7 +96,7 @@ Two profiles shown, because they exercise every field between them.
       "trigger_delay_ms": 350,                               // telegraph, see below
       "cycle_ms": 4667,
       "hazard_start_ms": 180,
-      "hazard_end_ms": 2200,
+      "hazard_end_ms": 230,
       "trigger_volume": { "center": {...}, "size": {...} },  // trap-local
       "hazard_volume":  { "center": {...}, "size": {...} },  // trap-local, at track t=0
       "hazard_track": [],                                    // stationary

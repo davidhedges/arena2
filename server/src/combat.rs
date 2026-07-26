@@ -432,6 +432,7 @@ pub struct CombatEvent {
     pub source_kind: String,
     #[index(btree)]
     pub caster: Identity,
+    #[index(btree)]
     pub hit: Identity,
     pub origin_x: f32,
     pub origin_y: f32,

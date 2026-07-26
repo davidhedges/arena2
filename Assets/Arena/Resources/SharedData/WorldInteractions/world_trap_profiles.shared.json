@@ -370,7 +370,7 @@
       "trigger_delay_ms": 350,
       "cycle_ms": 4667,
       "hazard_start_ms": 180,
-      "hazard_end_ms": 2200,
+      "hazard_end_ms": 230,
       "rearm_ms": 0,
       "trigger_volume": {
         "center": {

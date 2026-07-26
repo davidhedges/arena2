@@ -7,7 +7,8 @@
 //! Authority split, mirroring the world-door foundation:
 //!   * the server owns every trap decision and all damage;
 //!   * the client receives one row per FIRING trap and scrubs a vendor clip to
-//!     the frame that row's `cycle_started_at` implies. Nothing else.
+//!     the frame that row's `cycle_started_at` implies;
+//!   * confirmed trap contacts reuse the shared combat-impact presentation path.
 //!
 //! Traps never block movement, sight, or projectiles: no collider is authored
 //! on a trap, and nothing here participates in the collision or LOS contract.
@@ -22,11 +23,14 @@ use spacetimedb::{table, Identity, ReducerContext, Table, Timestamp};
 use crate::arena::{resolve_player_world_context, ResolvedWorldContext};
 use crate::combat::actor_snapshot::{CombatActorSnapshot, CombatActorSnapshotSet};
 use crate::combat::{
-    queue_effects, timestamp_to_micros, DamageDelivery, DamageType, EffectPacket, StackPolicy,
-    StatusPayload, StatusPolarity, DAMAGE_SOURCE_KIND_TRAP,
+    queue_effects, timestamp_to_micros, CombatEvent, DamageDelivery, DamageType, EffectPacket,
+    StackPolicy, StatusPayload, StatusPolarity, COMBAT_EVENT_IMPACT, COMBAT_METADATA_NONE,
+    COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_TRAP,
 };
 use crate::relations::TargetAudience;
 
+#[allow(unused_imports)]
+use crate::combat::combat_event as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_instance as _;
 #[allow(unused_imports)]
@@ -305,12 +309,82 @@ fn apply_hazard_hits(
             continue;
         }
 
+        emit_trap_impact_event(ctx, state, definition, profile, actor, obb.center);
         push_on_hit_effects(&mut effects, profile, actor.player_id);
     }
 
     if !effects.is_empty() {
         queue_effects(ctx, effects);
     }
+}
+
+fn emit_trap_impact_event(
+    ctx: &ReducerContext,
+    state: &WorldTrapState,
+    definition: &TrapDefinition,
+    profile: &TrapProfileDefinition,
+    target: &CombatActorSnapshot,
+    hazard_center: [f32; 3],
+) {
+    // EntityRegistry's shared hit-reaction path currently presents players;
+    // avoid publishing impact rows that no client can consume for NPC targets.
+    if ctx
+        .db
+        .player_state()
+        .player_id()
+        .find(target.player_id)
+        .is_none()
+    {
+        return;
+    }
+
+    let damage = profile
+        .on_hit
+        .iter()
+        .filter(|entry| entry.effect == EFFECT_KIND_DAMAGE)
+        .fold(0_i32, |total, entry| {
+            total.saturating_add(entry.amount.max(0))
+        });
+    if damage <= 0 {
+        return;
+    }
+
+    ctx.db.combat_event().insert(CombatEvent {
+        event_id: 0,
+        action_instance_id: format!("{}:{}", state.trap_state_id, state.activation),
+        action_kind: profile.profile_id.clone(),
+        ability_id: String::new(),
+        hit_index: 0,
+        event_type: COMBAT_EVENT_IMPACT.to_string(),
+        source_kind: DAMAGE_SOURCE_KIND_TRAP.to_string(),
+        caster: Identity::ZERO,
+        hit: target.player_id,
+        origin_x: definition.origin.x,
+        origin_y: definition.origin.y,
+        origin_z: definition.origin.z,
+        // Floor spikes have no meaningful horizontal travel direction. The
+        // shared client reaction resolver deliberately maps a zero vector to
+        // its existing forward-hit fallback.
+        dir_x: 0.0,
+        dir_y: 1.0,
+        dir_z: 0.0,
+        speed: 0.0,
+        max_distance: 0.0,
+        scalar_kind: COMBAT_SCALAR_NONE.to_string(),
+        scalar_value: 0.0,
+        sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
+        sequence_index: 0,
+        sequence_count: 0,
+        point_x: hazard_center[0],
+        point_y: hazard_center[1],
+        point_z: hazard_center[2],
+        created_at: ctx.timestamp,
+        created_at_micros: timestamp_to_micros(ctx.timestamp),
+        damage,
+        metadata_kind: COMBAT_METADATA_NONE.to_string(),
+        metadata_key: String::new(),
+        metadata_value: String::new(),
+    });
 }
 
 fn push_on_hit_effects(
@@ -468,10 +542,7 @@ fn dungeon_player_identities(ctx: &ReducerContext) -> Vec<Identity> {
 /// Every actor a live hazard may damage: dungeon players plus dungeon NPCs.
 /// The snapshot set is world-agnostic, so this is what keeps a trap in the
 /// dungeon from reaching an actor standing at the same coordinates elsewhere.
-fn dungeon_scope_actor_identities(
-    ctx: &ReducerContext,
-    players: &[Identity],
-) -> HashSet<Identity> {
+fn dungeon_scope_actor_identities(ctx: &ReducerContext, players: &[Identity]) -> HashSet<Identity> {
     let mut actors: HashSet<Identity> = players.iter().copied().collect();
     for npc in ctx.db.npc_instance().iter() {
         if npc.world_kind == WORLD_KIND_OPEN
@@ -498,10 +569,9 @@ fn trap_definitions_in_scope(scope: &TrapScope) -> impl Iterator<Item = &'static
         && scope
             .open_world_scene_name
             .eq_ignore_ascii_case(RANDOM_DUNGEON_SCENE_NAME);
-    trap_manifest()
-        .traps
-        .iter()
-        .filter(move |trap| in_random_dungeon && trap.world_definition_key == RANDOM_DUNGEON_WORLD_KEY)
+    trap_manifest().traps.iter().filter(move |trap| {
+        in_random_dungeon && trap.world_definition_key == RANDOM_DUNGEON_WORLD_KEY
+    })
 }
 
 fn trap_state_id(definition: &TrapDefinition, scope: &TrapScope) -> String {
@@ -953,7 +1023,7 @@ mod tests {
     }
 
     #[test]
-    fn hazard_window_excludes_the_telegraph_and_the_idle_tail() {
+    fn spike_hazard_is_live_only_during_the_eruption() {
         let mut profile = parse_trap_profile_manifest(TRAP_PROFILE_MANIFEST_JSON)
             .expect("trap profiles")
             .profiles
@@ -962,11 +1032,30 @@ mod tests {
             .expect("spike profile");
         profile.one_hit_per_activation = true;
 
-        assert!(!hazard_is_live(clip_time_ms(0, profile.trigger_delay_ms), &profile));
-        assert!(!hazard_is_live(clip_time_ms(529, profile.trigger_delay_ms), &profile));
-        assert!(hazard_is_live(clip_time_ms(530, profile.trigger_delay_ms), &profile));
-        assert!(hazard_is_live(clip_time_ms(2550, profile.trigger_delay_ms), &profile));
-        assert!(!hazard_is_live(clip_time_ms(2551, profile.trigger_delay_ms), &profile));
+        assert!(!hazard_is_live(
+            clip_time_ms(0, profile.trigger_delay_ms),
+            &profile
+        ));
+        assert!(!hazard_is_live(
+            clip_time_ms(529, profile.trigger_delay_ms),
+            &profile
+        ));
+        assert!(hazard_is_live(
+            clip_time_ms(530, profile.trigger_delay_ms),
+            &profile
+        ));
+        assert!(hazard_is_live(
+            clip_time_ms(580, profile.trigger_delay_ms),
+            &profile
+        ));
+        assert!(!hazard_is_live(
+            clip_time_ms(581, profile.trigger_delay_ms),
+            &profile
+        ));
+        assert!(!hazard_is_live(
+            clip_time_ms(2550, profile.trigger_delay_ms),
+            &profile
+        ));
     }
 
     #[test]

@@ -8,6 +8,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 using Stopwatch = System.Diagnostics.Stopwatch;
 
@@ -26,6 +27,8 @@ namespace DungeonLab.Editor
 
         private const string CameraTemplateScenePath =
             "Assets/Arena/Content/Scenes/OpenWorld/Great_Hall_Day.unity";
+        private const string DungeonVolumeProfilePath =
+            "Assets/Arena/Content/Settings/Rendering/OpenWorldProfiles/Arena_RandomDungeon_Profile.asset";
         private const string SeedEnvironmentVariable = "ARENA_RANDOM_DUNGEON_SEED";
         private const string GeneratedRootName = "Generated Dungeon";
         private const string GameplayCollisionLayerName = "GameplayCollision";
@@ -320,8 +323,9 @@ namespace DungeonLab.Editor
                         $"Camera template '{CameraTemplateScenePath}' does not contain the Arena open-world camera rig.");
                 }
 
-                CloneIntoScene(sourceMainCamera, destination);
+                GameObject mainCamera = CloneIntoScene(sourceMainCamera, destination);
                 CloneIntoScene(sourceFollowCamera, destination);
+                ConfigureDungeonCameraRendering(mainCamera);
             }
             finally
             {
@@ -330,31 +334,74 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static void CloneIntoScene(GameObject source, Scene destination)
+        private static GameObject CloneIntoScene(GameObject source, Scene destination)
         {
             GameObject clone = UnityEngine.Object.Instantiate(source);
             clone.name = source.name;
             SceneManager.MoveGameObjectToScene(clone, destination);
+            return clone;
+        }
+
+        private static void ConfigureDungeonCameraRendering(GameObject mainCamera)
+        {
+            VolumeProfile? profile =
+                AssetDatabase.LoadAssetAtPath<VolumeProfile>(DungeonVolumeProfilePath);
+            if (profile == null)
+            {
+                throw new InvalidOperationException(
+                    $"Required random-dungeon Volume profile '{DungeonVolumeProfilePath}' is missing.");
+            }
+
+            Camera camera = mainCamera.GetComponent<Camera>()
+                ?? throw new InvalidOperationException(
+                    "The cloned random-dungeon MainCamera has no Camera component.");
+            camera.clearFlags = CameraClearFlags.Skybox;
+            camera.backgroundColor = new Color(0.04111782f, 0.073195f, 0.11320752f, 1f);
+            camera.allowHDR = true;
+            camera.allowMSAA = true;
+
+            UniversalAdditionalCameraData cameraData =
+                mainCamera.GetComponent<UniversalAdditionalCameraData>()
+                ?? throw new InvalidOperationException(
+                    "The cloned random-dungeon MainCamera has no URP camera data.");
+            cameraData.renderPostProcessing = true;
+            cameraData.antialiasing = AntialiasingMode.None;
+
+            Volume volume = mainCamera.GetComponent<Volume>() ?? mainCamera.AddComponent<Volume>();
+            volume.enabled = true;
+            volume.isGlobal = true;
+            volume.priority = 0f;
+            volume.blendDistance = 0f;
+            volume.weight = 1f;
+            volume.sharedProfile = profile;
         }
 
         private static void CreateLighting()
         {
             GameObject lightObject = new("Directional Light");
-            lightObject.transform.rotation = Quaternion.Euler(42f, -32f, 0f);
+            lightObject.transform.position = new Vector3(0f, 3f, 0f);
+            lightObject.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
             Light light = lightObject.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.color = new Color(1f, 0.78f, 0.58f);
-            light.intensity = 1.35f;
+            light.color = new Color(0.77265036f, 0.9150943f, 0.9032317f);
+            light.intensity = 0.25f;
             light.shadows = LightShadows.Soft;
+            light.shadowStrength = 0.278f;
+            light.bounceIntensity = 0f;
+            light.shadowAngle = 10f;
 
-            RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.12f, 0.13f, 0.18f);
-            RenderSettings.ambientEquatorColor = new Color(0.07f, 0.065f, 0.08f);
-            RenderSettings.ambientGroundColor = new Color(0.025f, 0.02f, 0.025f);
+            RenderSettings.skybox = null;
+            RenderSettings.ambientMode = AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.41295835f, 0.51094455f, 0.6037736f);
+            RenderSettings.ambientIntensity = 1f;
+            RenderSettings.ambientEquatorColor = Color.black;
+            RenderSettings.ambientGroundColor = Color.black;
             RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogColor = new Color(0.025f, 0.028f, 0.04f);
-            RenderSettings.fogDensity = 0.008f;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = new Color(0.28635636f, 0.35730952f, 0.4245283f);
+            RenderSettings.fogDensity = 0.01f;
+            RenderSettings.fogStartDistance = 18f;
+            RenderSettings.fogEndDistance = 39.6f;
         }
 
         private static void EnsureDestinationFolder()

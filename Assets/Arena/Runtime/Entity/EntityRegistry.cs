@@ -1636,7 +1636,11 @@ namespace Arena.Entity
             // Negate travel dir to get the direction from which the hit arrived.
             var hitDir = new Vector3(-dirX, 0f, -dirZ);
             if (hitDir.sqrMagnitude > 0.001f)
-                _pendingHitReactions.Add(new PendingHitReaction(target, hitDir.normalized, Time.frameCount));
+                hitDir.Normalize();
+
+            // Directionless impacts (notably floor traps) use the existing
+            // reaction controller's forward-hit fallback.
+            _pendingHitReactions.Add(new PendingHitReaction(target, hitDir, Time.frameCount));
         }
 
         private void ApplyState(PlayerState row)

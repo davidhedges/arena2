@@ -221,7 +221,7 @@ namespace Arena.EditModeTests
                 triggerDelayMs: 350,
                 cycleMs: 4667,
                 hazardStartMs: 180,
-                hazardEndMs: 2200,
+                hazardEndMs: 230,
                 rearmMs: 0,
                 triggerVolume: new TrapVolume(new Vector3(0f, 1f, 0f), new Vector3(4f, 2f, 4f)),
                 hazardVolume: new TrapVolume(new Vector3(0f, 0.6f, 0f), new Vector3(4f, 1.2f, 4f)),

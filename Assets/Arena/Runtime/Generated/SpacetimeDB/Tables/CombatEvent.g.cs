@@ -44,11 +44,21 @@ namespace SpacetimeDB.Types
 
             public readonly EventIdUniqueIndex EventId;
 
+            public sealed class HitIndex : BTreeIndexBase<SpacetimeDB.Identity>
+            {
+                protected override SpacetimeDB.Identity GetKey(CombatEvent row) => row.Hit;
+
+                public HitIndex(CombatEventHandle table) : base(table) { }
+            }
+
+            public readonly HitIndex Hit;
+
             internal CombatEventHandle(DbConnection conn) : base(conn)
             {
                 Caster = new(this);
                 CreatedAtMicros = new(this);
                 EventId = new(this);
+                Hit = new(this);
             }
 
             protected override object GetPrimaryKey(CombatEvent row) => row.EventId;
@@ -131,12 +141,14 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.IxCol<CombatEvent, ulong> EventId { get; }
         public global::SpacetimeDB.IxCol<CombatEvent, SpacetimeDB.Identity> Caster { get; }
+        public global::SpacetimeDB.IxCol<CombatEvent, SpacetimeDB.Identity> Hit { get; }
         public global::SpacetimeDB.IxCol<CombatEvent, long> CreatedAtMicros { get; }
 
         public CombatEventIxCols(string tableName)
         {
             EventId = new global::SpacetimeDB.IxCol<CombatEvent, ulong>(tableName, "event_id");
             Caster = new global::SpacetimeDB.IxCol<CombatEvent, SpacetimeDB.Identity>(tableName, "caster");
+            Hit = new global::SpacetimeDB.IxCol<CombatEvent, SpacetimeDB.Identity>(tableName, "hit");
             CreatedAtMicros = new global::SpacetimeDB.IxCol<CombatEvent, long>(tableName, "created_at_micros");
         }
     }

@@ -141,6 +141,7 @@ namespace Arena.Network
                 BuildScopedNpcTargetCombatEffectEventQuery(new QueryBuilder(), scope),
                 BuildScopedCombatEventQuery(new QueryBuilder(), scope),
                 BuildScopedNpcCombatEventQuery(new QueryBuilder(), scope),
+                BuildScopedPlayerTargetCombatEventQuery(new QueryBuilder(), scope),
                 BuildScopedProjectilePresentationEventQuery(new QueryBuilder(), scope),
                 BuildScopedNpcProjectilePresentationEventQuery(new QueryBuilder(), scope),
                 BuildScopedPlayerEventQuery(new QueryBuilder(), scope),
@@ -860,6 +861,35 @@ namespace Arena.Network
                     .RightSemijoin(qb.From.CombatEvent(), (npc, combatEvent) => npc.Identity.Eq(combatEvent.Caster))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped NPC combat-event query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedPlayerTargetCombatEventQuery(
+            QueryBuilder qb,
+            NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .PlayerWorld()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(
+                        qb.From.CombatEvent(),
+                        (world, combatEvent) => world.Identity.Eq(combatEvent.Hit))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .PlayerWorld()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(
+                        qb.From.CombatEvent(),
+                        (world, combatEvent) => world.Identity.Eq(combatEvent.Hit))
+                    .ToSql(),
+                _ => throw new InvalidOperationException(
+                    "Scoped player-target combat-event query requested for GameplayScope.None"),
             };
         }
 
