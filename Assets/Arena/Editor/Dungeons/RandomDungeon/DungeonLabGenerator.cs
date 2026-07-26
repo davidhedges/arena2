@@ -3668,7 +3668,6 @@ namespace DungeonLab.Editor
                             path[index + 1],
                             connectionIndex),
                         endIndex,
-                        roomId,
                         outwardPath));
                 return;
             }

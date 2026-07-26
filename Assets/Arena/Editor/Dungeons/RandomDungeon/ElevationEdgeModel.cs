@@ -239,20 +239,6 @@ namespace DungeonLab.Editor
                 roomBoundaryContext,
                 rawOuterShellPlan.largeWallRooms,
                 ref stats);
-            GatewayWallPlan gatewayWallPlan = BuildGatewayWallPlan(
-                wallEdges,
-                rawOuterShellPlan);
-            GatewaySocketPlan gatewaySocketPlan = BuildGatewaySocketPlan(
-                levels,
-                roomBoundaryContext,
-                gatewayWallPlan,
-                BuildGatewayBlockedCells(reservedCells, transitions),
-                BuildGatewayBlockedPathEdgeKeys(
-                    roomBoundaryContext,
-                    transitionKeys,
-                    transitionOpenEdges,
-                    bridgeSpanEdges),
-                contracts.gateways.socketWidth);
 
             // Round tier corners (step 9, decision 36): eligible cliff corners
             // swap their two straight wall faces for the gallery-approved
@@ -264,8 +250,7 @@ namespace DungeonLab.Editor
             List<RoundTierCorner> roundTierCorners = FindRoundTierCorners(
                 wallEdges,
                 levels,
-                reservedCells,
-                gatewaySocketPlan.reservedFlankEdges);
+                reservedCells);
             ValidateTierCornerCompatibility(roundTierCorners, transitions);
             var roundCornerFloorSwap = new Dictionary<Vector2Int, RoundTierCorner>();
             if (roundTierCorners.Count > 0)
@@ -287,6 +272,49 @@ namespace DungeonLab.Editor
                 }
 
                 wallEdges.RemoveAll(edge => replacedEdges.Contains((edge.edge.x, edge.edge.z, edge.edge.direction)));
+            }
+
+            // Gateway sockets are derived from the surviving straight-wall
+            // architecture, and a corner-owned face is NOT a candidate flank.
+            // A chamfer does not stand on the two faces it claims: it deletes
+            // them and spans a diagonal between their far endpoints, so those
+            // two edges are exactly where no wall remains. Treating them as
+            // flanks plants a free-standing arch on open floor (measured
+            // 2026-07-26: gateway_wood_35_16_8 had 0 of 2 real flanks,
+            // gateway_wood_36_18_1 had 1 of 2).
+            //
+            // An entrance framed by chamfers therefore stays BARE, on purpose.
+            // Both alternatives were built and rejected on looks by the owner
+            // (2026-07-26): squaring the corner to make a jamb, and moving the
+            // door out to the corridor mouth the chamfer opens onto. Doors
+            // beside angled walls and doors in hallways both look wrong. Do not
+            // re-litigate this — the missing gateway is the desired outcome.
+            GatewayWallPlan gatewayWallPlan = BuildGatewayWallPlan(
+                wallEdges,
+                rawOuterShellPlan);
+            var unresolvedGatewayEnds = new List<string>();
+            GatewaySocketPlan gatewaySocketPlan = BuildGatewaySocketPlan(
+                levels,
+                roomBoundaryContext,
+                gatewayWallPlan,
+                BuildGatewayBlockedCells(reservedCells, transitions),
+                BuildGatewayBlockedPathEdgeKeys(
+                    roomBoundaryContext,
+                    transitionKeys,
+                    transitionOpenEdges,
+                    bridgeSpanEdges),
+                contracts.gateways.socketWidth,
+                unresolvedGatewayEnds);
+            ValidateGatewayCornerPlanDisjoint(
+                gatewaySocketPlan,
+                roundTierCorners);
+            if (unresolvedGatewayEnds.Count > 0 && !Application.isBatchMode)
+            {
+                // Interactive only: the 200-seed batch would drown in this, and
+                // an unresolved end is a design outcome, not an error.
+                Debug.Log(
+                    $"[GATEWAY] {unresolvedGatewayEnds.Count} room entrance(s) took no gateway:\n  " +
+                    string.Join("\n  ", unresolvedGatewayEnds));
             }
 
             foreach (var item in SortedCells(levels))
@@ -4161,9 +4189,10 @@ namespace DungeonLab.Editor
             GatewayWallPlan gatewayWallPlan,
             ISet<Vector2Int> blockedCells,
             ISet<string> blockedPathEdges,
-            float requiredSocketWidth)
+            float requiredSocketWidth,
+            List<string> unresolvedEnds)
         {
-            var validByConnection =
+            var validByEnd =
                 new Dictionary<string, GatewaySocket>(StringComparer.Ordinal);
             if (roomBoundaryContext?.gatewayConnectionEnds == null ||
                 roomBoundaryContext.gatewayConnectionEnds.Count == 0)
@@ -4184,24 +4213,22 @@ namespace DungeonLab.Editor
             });
             foreach (GatewayConnectionEnd connectionEnd in orderedEnds)
             {
-                if (!IsEnclosedRoom(
-                        roomBoundaryContext,
-                        connectionEnd.roomId) ||
-                    !TryResolveGatewaySocket(
+                if (!TryResolveGatewaySocket(
                         connectionEnd.outwardPath,
                         levels,
                         gatewayWallPlan.supportHeights,
                         blockedCells,
                         blockedPathEdges,
                         requiredSocketWidth,
-                        out GatewaySocketCandidate candidate))
+                        out GatewaySocketCandidate candidate,
+                        out string rejection))
                 {
+                    unresolvedEnds?.Add(
+                        $"{GatewaySelectionGroup(connectionEnd)} @{new EdgeKey(connectionEnd.roomThreshold.firstCell, connectionEnd.roomThreshold.secondCell)}: {rejection}");
                     continue;
                 }
 
-                string groupKey = connectionEnd.roomThreshold.connectionIndex >= 0
-                    ? $"connection:{connectionEnd.roomThreshold.connectionIndex}"
-                    : $"edge:{candidate.edgeKey}";
+                string groupKey = GatewaySelectionGroup(connectionEnd);
                 int selectionScore = StairForge.StableHash(
                         $"{roomBoundaryContext.gatewaySelectionSalt}:gateway-end:{groupKey}:{candidate.edgeKey}") &
                     int.MaxValue;
@@ -4221,16 +4248,16 @@ namespace DungeonLab.Editor
                     secondSupport.edge,
                     groupKey,
                     selectionScore);
-                if (!validByConnection.TryGetValue(
+                if (!validByEnd.TryGetValue(
                         groupKey,
                         out GatewaySocket existing) ||
                     IsPreferredGatewaySocket(socket, existing))
                 {
-                    validByConnection[groupKey] = socket;
+                    validByEnd[groupKey] = socket;
                 }
             }
 
-            var groupKeys = new List<string>(validByConnection.Keys);
+            var groupKeys = new List<string>(validByEnd.Keys);
             groupKeys.Sort(StringComparer.Ordinal);
             var selected = new List<GatewaySocket>();
             GatewaySocket guaranteedSocket = default;
@@ -4241,7 +4268,7 @@ namespace DungeonLab.Editor
                 new HashSet<string>(StringComparer.Ordinal);
             foreach (string groupKey in groupKeys)
             {
-                GatewaySocket socket = validByConnection[groupKey];
+                GatewaySocket socket = validByEnd[groupKey];
                 if (claimedSocketEdges.Contains(socket.edgeKey) ||
                     claimedFlankEdges.Contains(socket.edgeKey) ||
                     claimedSocketEdges.Contains(socket.firstFlankKey) ||
@@ -4281,6 +4308,16 @@ namespace DungeonLab.Editor
             return new GatewaySocketPlan(selected);
         }
 
+        private static string GatewaySelectionGroup(
+            GatewayConnectionEnd connectionEnd)
+        {
+            DoorwayEdge threshold = connectionEnd.roomThreshold;
+            string connectionKey = threshold.connectionIndex >= 0
+                ? $"connection:{threshold.connectionIndex}"
+                : $"threshold:{new EdgeKey(threshold.firstCell, threshold.secondCell)}";
+            return $"{connectionKey}:end:{connectionEnd.endIndex}";
+        }
+
         private static bool IsPreferredGatewaySocket(
             GatewaySocket candidate,
             GatewaySocket existing)
@@ -4307,22 +4344,30 @@ namespace DungeonLab.Editor
             ISet<Vector2Int> blockedCells,
             ISet<string> blockedPathEdges,
             float requiredSocketWidth,
-            out GatewaySocketCandidate candidate)
+            out GatewaySocketCandidate candidate,
+            out string rejection)
         {
             candidate = default;
+            rejection = null;
             if (outwardPath == null ||
                 outwardPath.Count < 3 ||
                 levels == null ||
                 wallSupports == null ||
                 Mathf.Abs(requiredSocketWidth - CellSize) > 0.08f)
             {
+                rejection = $"outward path too short ({outwardPath?.Count ?? 0} cells)";
                 return false;
             }
 
+            // Why each candidate edge along the outward path was refused. A
+            // gateway that never appears is otherwise indistinguishable from a
+            // gateway the seed simply did not roll.
+            var reasons = new List<string>();
             for (int index = 0; index + 1 < outwardPath.Count; index++)
             {
                 Vector2Int firstCell = outwardPath[index];
                 Vector2Int secondCell = outwardPath[index + 1];
+                string step = $"[{index}]{firstCell}->{secondCell}";
                 if (!AreCardinalNeighbors(firstCell, secondCell) ||
                     !levels.TryGetValue(firstCell, out int firstLevel) ||
                     !levels.TryGetValue(secondCell, out int secondLevel) ||
@@ -4331,6 +4376,7 @@ namespace DungeonLab.Editor
                     (blockedCells.Contains(firstCell) ||
                      blockedCells.Contains(secondCell)))
                 {
+                    reasons.Add($"{step} not a clear same-level step");
                     continue;
                 }
 
@@ -4340,6 +4386,7 @@ namespace DungeonLab.Editor
                 if (blockedPathEdges != null &&
                     blockedPathEdges.Contains(edgeKey))
                 {
+                    reasons.Add($"{step} edge owned by a stair/bridge");
                     continue;
                 }
 
@@ -4349,6 +4396,7 @@ namespace DungeonLab.Editor
                     (index + 2 < outwardPath.Count &&
                      outwardPath[index + 2] - secondCell != outward))
                 {
+                    reasons.Add($"{step} not part of a straight run");
                     continue;
                 }
 
@@ -4420,23 +4468,36 @@ namespace DungeonLab.Editor
                         index);
                     return true;
                 }
+
+                reasons.Add(
+                    $"{step} no usable flank pair " +
+                    $"(transverse {DescribeGatewayFlank(firstTransverseFlank, firstLevel, wallSupports)}" +
+                    $"/{DescribeGatewayFlank(secondTransverseFlank, firstLevel, wallSupports)}; " +
+                    $"corridor {DescribeGatewayFlank(firstCorridorFlank, firstLevel, wallSupports)}" +
+                    $"/{DescribeGatewayFlank(secondCorridorFlank, firstLevel, wallSupports)})");
             }
 
+            rejection = string.Join(", ", reasons);
             return false;
         }
 
-        private static bool IsGatewayFlankPairClear(
-            Vector2Int firstFlankStart,
-            Vector2Int firstFlankEnd,
-            Vector2Int secondFlankStart,
-            Vector2Int secondFlankEnd,
-            ISet<Vector2Int> blockedCells)
+        private static string DescribeGatewayFlank(
+            string flankKey,
+            int floorLevel,
+            IReadOnlyDictionary<
+                string,
+                (int baseLevel, int heightUnits)> wallSupports)
         {
-            return blockedCells == null ||
-                (!blockedCells.Contains(firstFlankStart) &&
-                 !blockedCells.Contains(firstFlankEnd) &&
-                 !blockedCells.Contains(secondFlankStart) &&
-                 !blockedCells.Contains(secondFlankEnd));
+            if (!wallSupports.TryGetValue(
+                    flankKey,
+                    out (int baseLevel, int heightUnits) support))
+            {
+                return "none";
+            }
+
+            return support.baseLevel != floorLevel
+                ? $"base{support.baseLevel}!={floorLevel}"
+                : $"{support.heightUnits}u";
         }
 
         private static bool TryResolveGatewayFlankPair(
@@ -4467,6 +4528,20 @@ namespace DungeonLab.Editor
                 true,
                 second.heightUnits,
                 out wallHeight);
+        }
+
+        private static bool IsGatewayFlankPairClear(
+            Vector2Int firstFlankStart,
+            Vector2Int firstFlankEnd,
+            Vector2Int secondFlankStart,
+            Vector2Int secondFlankEnd,
+            ISet<Vector2Int> blockedCells)
+        {
+            return blockedCells == null ||
+                (!blockedCells.Contains(firstFlankStart) &&
+                 !blockedCells.Contains(firstFlankEnd) &&
+                 !blockedCells.Contains(secondFlankStart) &&
+                 !blockedCells.Contains(secondFlankEnd));
         }
 
         private static List<GatewayPlacement> BuildGatewayPlacements(
@@ -4589,6 +4664,11 @@ namespace DungeonLab.Editor
             return placements;
         }
 
+        // Both flanks must exist — a gateway never spans open floor — but they
+        // need not match. When the shell course planner gives the two sides of
+        // one wall line different heights, the SHORTER side sets the opening
+        // (owner ruling 2026-07-26): the door and its header then fit inside the
+        // lower flank, and the taller side simply continues above them.
         private static bool TryResolveGatewayWallHeight(
             bool hasFirstFlank,
             int firstHeight,
@@ -4598,13 +4678,12 @@ namespace DungeonLab.Editor
         {
             wallHeight = 0;
             if (!hasFirstFlank ||
-                !hasSecondFlank ||
-                firstHeight != secondHeight)
+                !hasSecondFlank)
             {
                 return false;
             }
 
-            wallHeight = firstHeight;
+            wallHeight = Mathf.Min(firstHeight, secondHeight);
             if (wallHeight != 4 &&
                 wallHeight != 6 &&
                 wallHeight != 8 &&
@@ -7611,8 +7690,7 @@ namespace DungeonLab.Editor
         private static List<RoundTierCorner> FindRoundTierCorners(
             List<WallEdge> wallEdges,
             IReadOnlyDictionary<Vector2Int, int> levels,
-            HashSet<Vector2Int> reservedCells,
-            ISet<(int x, int z, int direction)> reservedGatewayFlanks = null)
+            HashSet<Vector2Int> reservedCells)
         {
             var corners = new List<RoundTierCorner>();
             var concaveCandidates = new List<RoundTierCorner>();
@@ -7671,11 +7749,7 @@ namespace DungeonLab.Editor
                         var keyA = (edgeA.edge.x, edgeA.edge.z, edgeA.edge.direction);
                         var keyB = (edgeB.edge.x, edgeB.edge.z, edgeB.edge.direction);
                         if (claimedEdges.Contains(keyA) ||
-                            claimedEdges.Contains(keyB) ||
-                            ConsumesReservedGatewayFlank(
-                                keyA,
-                                keyB,
-                                reservedGatewayFlanks))
+                            claimedEdges.Contains(keyB))
                         {
                             continue;
                         }
@@ -7733,11 +7807,7 @@ namespace DungeonLab.Editor
                         var keyA = (edgeA.edge.x, edgeA.edge.z, edgeA.edge.direction);
                         var keyB = (edgeB.edge.x, edgeB.edge.z, edgeB.edge.direction);
                         if (claimedEdges.Contains(keyA) ||
-                            claimedEdges.Contains(keyB) ||
-                            ConsumesReservedGatewayFlank(
-                                keyA,
-                                keyB,
-                                reservedGatewayFlanks))
+                            claimedEdges.Contains(keyB))
                         {
                             continue;
                         }
@@ -7792,10 +7862,6 @@ namespace DungeonLab.Editor
                     {
                         if (claimedEdges.Contains(member.edgeA) ||
                             claimedEdges.Contains(member.edgeB) ||
-                            ConsumesReservedGatewayFlank(
-                                member.edgeA,
-                                member.edgeB,
-                                reservedGatewayFlanks) ||
                             member.angleStyle != group[0].angleStyle)
                         {
                             fullRing = false;
@@ -7819,11 +7885,7 @@ namespace DungeonLab.Editor
                 foreach (RoundTierCorner member in group)
                 {
                     if (claimedEdges.Contains(member.edgeA) ||
-                        claimedEdges.Contains(member.edgeB) ||
-                        ConsumesReservedGatewayFlank(
-                            member.edgeA,
-                            member.edgeB,
-                            reservedGatewayFlanks))
+                        claimedEdges.Contains(member.edgeB))
                     {
                         continue;
                     }
@@ -7838,14 +7900,54 @@ namespace DungeonLab.Editor
             return corners;
         }
 
-        private static bool ConsumesReservedGatewayFlank(
-            (int x, int z, int direction) firstEdge,
-            (int x, int z, int direction) secondEdge,
-            ISet<(int x, int z, int direction)> reservedGatewayFlanks)
+        private static void ValidateGatewayCornerPlanDisjoint(
+            GatewaySocketPlan gatewaySocketPlan,
+            IReadOnlyList<RoundTierCorner> roundTierCorners)
         {
-            return reservedGatewayFlanks != null &&
-                (reservedGatewayFlanks.Contains(firstEdge) ||
-                 reservedGatewayFlanks.Contains(secondEdge));
+            if (gatewaySocketPlan == null ||
+                gatewaySocketPlan.sockets.Count == 0 ||
+                roundTierCorners == null ||
+                roundTierCorners.Count == 0)
+            {
+                return;
+            }
+
+            var cornerEdges =
+                new HashSet<(int x, int z, int direction)>();
+            foreach (RoundTierCorner corner in roundTierCorners)
+            {
+                cornerEdges.Add(corner.edgeA);
+                cornerEdges.Add(corner.edgeB);
+            }
+
+            // A corner edge may be neither the opening NOR a flank. The opening
+            // would steal a face from the frozen corner plan; a flank would be a
+            // jamb that does not exist, because the chamfer spans a diagonal
+            // between the far endpoints of the two faces it deleted rather than
+            // standing on either of them. This is the guard that catches a
+            // gateway about to be planted free-standing on open floor.
+            foreach (GatewaySocket socket in gatewaySocketPlan.sockets)
+            {
+                // Neither the opening NOR a flank may be a corner-owned edge.
+                // The opening would steal a face from the frozen corner plan; a
+                // flank would be a jamb that does not exist, because the chamfer
+                // spans a diagonal between the far endpoints of the two faces it
+                // deleted rather than standing on either of them. This is the
+                // guard that catches a gateway about to be planted on open floor
+                // — it was weakened once, on 2026-07-26, and three free-standing
+                // arches shipped before the next regen caught them.
+                var openingEdge = (
+                    socket.edge.x,
+                    socket.edge.z,
+                    socket.edge.direction);
+                if (cornerEdges.Contains(openingEdge) ||
+                    cornerEdges.Contains(socket.firstFlankEdge) ||
+                    cornerEdges.Contains(socket.secondFlankEdge))
+                {
+                    throw new InvalidOperationException(
+                        $"Gateway socket {socket.edgeKey} uses an edge owned by the frozen corner plan.");
+                }
+            }
         }
 
         private static void ValidateTierCornerCompatibility(
@@ -10089,18 +10191,15 @@ namespace DungeonLab.Editor
         {
             public readonly DoorwayEdge roomThreshold;
             public readonly int endIndex;
-            public readonly int roomId;
             public readonly IReadOnlyList<Vector2Int> outwardPath;
 
             public GatewayConnectionEnd(
                 DoorwayEdge roomThreshold,
                 int endIndex,
-                int roomId,
                 IReadOnlyList<Vector2Int> outwardPath)
             {
                 this.roomThreshold = roomThreshold;
                 this.endIndex = endIndex;
-                this.roomId = roomId;
                 if (outwardPath == null)
                 {
                     this.outwardPath = Array.Empty<Vector2Int>();
@@ -10740,8 +10839,6 @@ namespace DungeonLab.Editor
         private sealed class GatewaySocketPlan
         {
             public readonly IReadOnlyList<GatewaySocket> sockets;
-            public readonly HashSet<
-                (int x, int z, int direction)> reservedFlankEdges;
 
             public GatewaySocketPlan(
                 IReadOnlyList<GatewaySocket> sockets)
@@ -10750,13 +10847,6 @@ namespace DungeonLab.Editor
                     ? new List<GatewaySocket>(sockets)
                     : new List<GatewaySocket>();
                 this.sockets = socketCopy.AsReadOnly();
-                reservedFlankEdges =
-                    new HashSet<(int x, int z, int direction)>();
-                foreach (GatewaySocket socket in socketCopy)
-                {
-                    reservedFlankEdges.Add(socket.firstFlankEdge);
-                    reservedFlankEdges.Add(socket.secondFlankEdge);
-                }
             }
         }
 

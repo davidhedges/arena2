@@ -588,8 +588,7 @@ namespace Arena.Tests.Editor
         [TestCase(false, 0, false, 0)]
         [TestCase(true, 4, false, 0)]
         [TestCase(false, 0, true, 4)]
-        [TestCase(true, 4, true, 6)]
-        public void GatewayFlankInvariant_RejectsMissingOrUnequalWallPairs(
+        public void GatewayFlankInvariant_RejectsMissingWallPairs(
             bool hasFirstFlank,
             int firstHeight,
             bool hasSecondFlank,
@@ -677,8 +676,10 @@ namespace Arena.Tests.Editor
             Assert.That(socketEdge, Is.Not.EqualTo(roomThreshold));
         }
 
+        // Owner ruling 2026-07-26: unequal flanks are allowed, and the SHORTER
+        // side sets the opening so the door fits inside the lower wall.
         [Test]
-        public void GatewaySocketResolver_RejectsUnequalFlankHeights()
+        public void GatewaySocketResolver_TakesTheShorterOfUnequalFlankHeights()
         {
             List<Vector2Int> path = StraightPath(0, 3);
             Dictionary<Vector2Int, int> levels = LevelPath(path, 4);
@@ -691,9 +692,11 @@ namespace Arena.Tests.Editor
                         (4, 6)
                 };
 
-            Assert.That(
-                ResolveGatewaySocket(path, levels, supports).accepted,
-                Is.False);
+            (bool accepted, _, _, _, _, int wallHeight) =
+                ResolveGatewaySocket(path, levels, supports);
+
+            Assert.That(accepted, Is.True);
+            Assert.That(wallHeight, Is.EqualTo(4));
         }
 
         [Test]
@@ -807,7 +810,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void GatewaySocketReservation_PreventsAngledCornerFromConsumingFlank()
+        public void GatewayPlanning_DoesNotSuppressAnEligibleAngledCorner()
         {
             Type platformEdgeType = ElevationEdgeModelType.GetNestedType(
                 "PlatformEdge",
@@ -861,33 +864,19 @@ namespace Arena.Tests.Editor
                 "FindRoundTierCorners",
                 BindingFlags.Static | BindingFlags.NonPublic)!;
 
-            object unreserved = findCorners.Invoke(
+            object corners = findCorners.Invoke(
                 null,
                 new object[]
                 {
                     wallEdges,
                     levels,
-                    new HashSet<Vector2Int>(),
-                    new HashSet<(int x, int z, int direction)>()
-                })!;
-            object reserved = findCorners.Invoke(
-                null,
-                new object[]
-                {
-                    wallEdges,
-                    levels,
-                    new HashSet<Vector2Int>(),
-                    new HashSet<(int x, int z, int direction)>
-                    {
-                        (cell.x, cell.y, North)
-                    }
+                    new HashSet<Vector2Int>()
                 })!;
 
-            Assert.That(CollectionCount(unreserved), Is.GreaterThan(0));
             Assert.That(
-                CollectionCount(reserved),
-                Is.Zero,
-                "A corner substitution must keep both raw straight faces when either one is a reserved GatewaySocket flank.");
+                CollectionCount(corners),
+                Is.GreaterThan(0),
+                "Normal corner selection must remain authoritative; gateway planning cannot reserve raw faces and turn this eligible corner square.");
         }
 
         [Test]
@@ -1009,6 +998,7 @@ namespace Arena.Tests.Editor
                 blockedCells ?? new HashSet<Vector2Int>(),
                 blockedEdges ?? new HashSet<string>(StringComparer.Ordinal),
                 socketWidth,
+                null,
                 null
             };
             bool accepted = (bool)method.Invoke(null, arguments)!;
