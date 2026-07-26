@@ -332,6 +332,9 @@ namespace Arena.Interaction
                         out float boundsDepth))
                 {
                     diagnostics.ProjectionFailed++;
+                    diagnostics.RecordProjectionFailure(
+                        interactable.StableInteractionId,
+                        collider.bounds);
                     continue;
                 }
                 if (!WorldInteractionScreenTargeting.TryScore(
@@ -342,6 +345,10 @@ namespace Arena.Interaction
                         out float score))
                 {
                     diagnostics.ScreenMiss++;
+                    diagnostics.RecordScreenMiss(
+                        interactable.StableInteractionId,
+                        DistanceOutside(screenBounds, screenPosition),
+                        screenBounds);
                     continue;
                 }
                 if (IsOccluded(
@@ -358,11 +365,18 @@ namespace Arena.Interaction
                 float hoverRange = interactable.MaxInteractionDistance > 0f
                     ? interactable.MaxInteractionDistance + HoverRangeSlackMeters
                     : 0f;
-                if (hoverRange > 0f
-                    && (interactable.InteractionPoint - actorPosition).sqrMagnitude
-                    > hoverRange * hoverRange)
+                float actorDistance =
+                    Vector3.Distance(interactable.InteractionPoint, actorPosition);
+                if (hoverRange > 0f && actorDistance > hoverRange)
                 {
                     diagnostics.BeyondHoverRange++;
+                    diagnostics.RecordRangeReject(
+                        interactable.StableInteractionId,
+                        actorDistance,
+                        interactable.MaxInteractionDistance,
+                        hoverRange,
+                        actorPosition,
+                        interactable.InteractionPoint);
                     continue;
                 }
 
@@ -377,6 +391,10 @@ namespace Arena.Interaction
                         bestDeniedHitbox = hitbox;
                     }
                     diagnostics.Denied++;
+                    diagnostics.RecordDenial(
+                        interactable.StableInteractionId,
+                        localDenialReason,
+                        actorDistance);
                     continue;
                 }
 
@@ -454,6 +472,19 @@ namespace Arena.Interaction
 
         private static string Format(Vector2 position)
             => $"({position.x:F0},{position.y:F0})";
+
+        private static float DistanceOutside(Rect bounds, Vector2 position)
+        {
+            float outsideX = Mathf.Max(
+                bounds.xMin - position.x,
+                position.x - bounds.xMax,
+                0f);
+            float outsideY = Mathf.Max(
+                bounds.yMin - position.y,
+                position.y - bounds.yMax,
+                0f);
+            return Mathf.Sqrt(outsideX * outsideX + outsideY * outsideY);
+        }
 
         private static bool TryProjectBounds(
             Camera camera,
@@ -564,6 +595,65 @@ namespace Arena.Interaction
             public int BeyondHoverRange;
             public int Denied;
             public int Viable;
+            private string? _closestScreenMiss;
+            private float _closestScreenMissPixels;
+            private string? _projectionFailure;
+            private string? _closestRangeReject;
+            private float _closestRangeExcess;
+            private string? _denial;
+
+            public void RecordScreenMiss(
+                string stableId,
+                float distancePixels,
+                Rect screenBounds)
+            {
+                if (_closestScreenMiss != null
+                    && distancePixels >= _closestScreenMissPixels)
+                {
+                    return;
+                }
+
+                _closestScreenMissPixels = distancePixels;
+                _closestScreenMiss =
+                    $"closestScreenMiss=id:'{stableId}', outside:{distancePixels:F1}px, "
+                    + $"bounds:({screenBounds.xMin:F0},{screenBounds.yMin:F0})"
+                    + $"-({screenBounds.xMax:F0},{screenBounds.yMax:F0})";
+            }
+
+            public void RecordProjectionFailure(string stableId, Bounds bounds)
+            {
+                _projectionFailure ??=
+                    $"projectionFailure=id:'{stableId}', center:{Format(bounds.center)}";
+            }
+
+            public void RecordRangeReject(
+                string stableId,
+                float actorDistance,
+                float interactionRange,
+                float hoverRange,
+                Vector3 actorPosition,
+                Vector3 interactionPoint)
+            {
+                float excess = actorDistance - hoverRange;
+                if (_closestRangeReject != null && excess >= _closestRangeExcess)
+                    return;
+
+                _closestRangeExcess = excess;
+                _closestRangeReject =
+                    $"rangeReject=id:'{stableId}', distance:{actorDistance:F2}m, "
+                    + $"interactionRange:{interactionRange:F2}m, hoverRange:{hoverRange:F2}m, "
+                    + $"actor:{Format(actorPosition)}, anchor:{Format(interactionPoint)}";
+            }
+
+            public void RecordDenial(
+                string stableId,
+                string reason,
+                float actorDistance)
+            {
+                _denial ??=
+                    $"denial=id:'{stableId}', distance:{actorDistance:F2}m, "
+                    + $"reason:'{reason}'";
+            }
 
             public override readonly string ToString()
                 => $"props registered={Registered}, inactive={Inactive}, "
@@ -571,7 +661,14 @@ namespace Arena.Interaction
                     + $"self={Self}, projectionFailed={ProjectionFailed}, "
                     + $"screenMiss={ScreenMiss}, occluded={Occluded}, "
                     + $"beyondHoverRange={BeyondHoverRange}, denied={Denied}, "
-                    + $"viable={Viable}";
+                    + $"viable={Viable}; "
+                    + $"{_closestRangeReject ?? "rangeReject:<none>"}; "
+                    + $"{_closestScreenMiss ?? "closestScreenMiss:<none>"}; "
+                    + $"{_projectionFailure ?? "projectionFailure:<none>"}; "
+                    + $"{_denial ?? "denial:<none>"}";
+
+            private static string Format(Vector3 position)
+                => $"({position.x:F2},{position.y:F2},{position.z:F2})";
         }
     }
 }
