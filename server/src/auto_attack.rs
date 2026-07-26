@@ -194,6 +194,7 @@ pub fn arm_auto_attack_target(ctx: &ReducerContext, target_id: String) -> Result
         );
         return Ok(());
     };
+    crate::world_interactions::cancel_active_world_interaction_for_actor(ctx, owner);
 
     if let (Some(existing), Some(runtime)) = (
         ctx.db.auto_attack_state().owner().find(owner),

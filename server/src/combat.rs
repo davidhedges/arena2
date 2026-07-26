@@ -4306,6 +4306,13 @@ fn apply_damage_to_player_state(
         state.hp = 0;
         defeated_instance_id = handle_death(ctx, &mut state);
     }
+    if hp_damage > 0 {
+        crate::world_interactions::cancel_active_world_interaction_for_damage(
+            ctx,
+            target,
+            !state.alive,
+        );
+    }
 
     ctx.db.player_state().player_id().update(state);
     if let Some(instance_id) = defeated_instance_id {

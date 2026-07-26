@@ -206,11 +206,38 @@ pub(crate) fn resolve_active_world_obstacle_movement(
         out_x = start_x + (out_x - start_x) * safe_t;
         out_z = start_z + (out_z - start_z) * safe_t;
     }
-    (out_x, out_z)
+    crate::world_interactions::resolve_closed_door_movement(
+        ctx, actor, start_x, start_z, out_x, out_z, radius, foot_y, height,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn first_active_world_obstacle_hit(
+    ctx: &ReducerContext,
+    actor: Identity,
+    start_x: f32,
+    start_y: f32,
+    start_z: f32,
+    end_x: f32,
+    end_y: f32,
+    end_z: f32,
+    radius: f32,
+) -> Option<WorldRayHit> {
+    let obstacle_hit = first_active_spell_world_obstacle_hit(
+        ctx, actor, start_x, start_y, start_z, end_x, end_y, end_z, radius,
+    );
+    let door_hit = crate::world_interactions::first_closed_door_hit(
+        ctx, actor, start_x, start_y, start_z, end_x, end_y, end_z, radius,
+    );
+    match (obstacle_hit, door_hit) {
+        (Some(obstacle), Some(door)) => Some(if door.t < obstacle.t { door } else { obstacle }),
+        (Some(hit), None) | (None, Some(hit)) => Some(hit),
+        (None, None) => None,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn first_active_spell_world_obstacle_hit(
     ctx: &ReducerContext,
     actor: Identity,
     start_x: f32,

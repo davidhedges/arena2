@@ -51,7 +51,14 @@ namespace Arena.Input
                 outX = Mathf.Lerp(startX, outX, safeFraction);
                 outZ = Mathf.Lerp(startZ, outZ, safeFraction);
             }
-            return new Vector2(outX, outZ);
+            return WorldDoorCollisionRuntime.ResolveHorizontalCollision(
+                startX,
+                startZ,
+                outX,
+                outZ,
+                playerRadius,
+                playerHeight,
+                footY);
         }
 
         public static bool TryFindFirstLineHitDistance(
@@ -97,13 +104,22 @@ namespace Arena.Input
                 }
             }
 
-            if (float.IsPositiveInfinity(bestFraction))
+            bool hasDoorHit = WorldDoorCollisionRuntime.TryFindFirstLineHitDistance(
+                start,
+                end,
+                radius,
+                out float doorHitDistance);
+            if (float.IsPositiveInfinity(bestFraction) && !hasDoorHit)
             {
                 hitDistance = 0f;
                 return false;
             }
 
-            hitDistance = distance * bestFraction;
+            hitDistance = float.IsPositiveInfinity(bestFraction)
+                ? doorHitDistance
+                : distance * bestFraction;
+            if (hasDoorHit)
+                hitDistance = Mathf.Min(hitDistance, doorHitDistance);
             return true;
         }
 

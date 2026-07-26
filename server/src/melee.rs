@@ -3996,6 +3996,7 @@ pub fn melee_attack(
     // S8: stamp the press's attacker-view claim for this transaction; 0 means
     // no report and the whole validation stays present-time.
     record_press_view_delay(ctx, ctx.sender(), view_server_time_ms);
+    crate::world_interactions::cancel_active_world_interaction_for_actor(ctx, ctx.sender());
     let Some(token) = ActionPredictionToken::new(predicted_action_id, client_action_seq) else {
         return perform_unpredicted_melee_attack_for(
             ctx,

@@ -348,6 +348,40 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void GameplaySubscriptionPlanner_ScopesDoorAndInteractionRowsToTheVisibleWorld()
+        {
+            Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
+            Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
+            Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
+            object row = Activator.CreateInstance(
+                playerWorldType,
+                CreateIdentity(1),
+                "OPEN",
+                null,
+                "RandomDungeon")!;
+            object scope = RequireMethod(
+                    gameplayScopeType,
+                    "FromPlayerWorld",
+                    playerWorldType,
+                    typeof(string))
+                .Invoke(null, new[] { row, null })!;
+
+            string[] scopedSql = (string[])RequireMethod(
+                    plannerType,
+                    "BuildScopedQuerySqls",
+                    gameplayScopeType)
+                .Invoke(null, new[] { scope })!;
+            string scopedSqlText = string.Join("\n", scopedSql);
+
+            Assert.That(scopedSqlText, Does.Contain("\"world_door_state\""));
+            Assert.That(scopedSqlText, Does.Contain(
+                "\"world_door_state\".\"open_world_scene_name\" = 'RandomDungeon'"));
+            Assert.That(scopedSqlText, Does.Contain("\"active_world_interaction\""));
+            Assert.That(scopedSqlText, Does.Contain(
+                "\"active_world_interaction\".\"open_world_scene_name\" = 'RandomDungeon'"));
+        }
+
+        [Test]
         public void ActiveWorldObstacleRuntime_BlocksPredictedMovementAndSight()
         {
             Type runtimeType = RequireRuntimeType("Arena.Input.ActiveWorldObstacleRuntime");

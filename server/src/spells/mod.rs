@@ -443,6 +443,7 @@ pub fn cast_request(
                 ability.ability_id
             ));
         };
+        crate::world_interactions::cancel_active_world_interaction_for_actor(ctx, ctx.sender());
         return crate::movement_actions::start_movement_delivery_request(
             ctx,
             &ability,
@@ -473,6 +474,7 @@ pub fn cast_request(
             kind.as_str()
         ));
     }
+    crate::world_interactions::cancel_active_world_interaction_for_actor(ctx, ctx.sender());
     if cast_request_executes_immediately(definition.behavior, definition.cast_time) {
         return casting::cast_spell(
             ctx,

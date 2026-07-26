@@ -35,6 +35,7 @@ namespace SpacetimeDB.Types
             AddTable(ActiveCombatMode = new(conn));
             AddTable(ActiveDiceRoll = new(conn));
             AddTable(ActiveRadialEffect = new(conn));
+            AddTable(ActiveWorldInteraction = new(conn));
             AddTable(ActiveWorldObstacle = new(conn));
             AddTable(ArenaInstance = new(conn));
             AddTable(AutoAttackCatalog = new(conn));
@@ -99,6 +100,7 @@ namespace SpacetimeDB.Types
             AddTable(SpellDefinition = new(conn));
             AddTable(StatScalingCatalog = new(conn));
             AddTable(StatusEffect = new(conn));
+            AddTable(WorldDoorState = new(conn));
         }
     }
 
@@ -603,6 +605,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.ActiveCombatMode().ToSql(),
             new QueryBuilder().From.ActiveDiceRoll().ToSql(),
             new QueryBuilder().From.ActiveRadialEffect().ToSql(),
+            new QueryBuilder().From.ActiveWorldInteraction().ToSql(),
             new QueryBuilder().From.ActiveWorldObstacle().ToSql(),
             new QueryBuilder().From.ArenaInstance().ToSql(),
             new QueryBuilder().From.AutoAttackCatalog().ToSql(),
@@ -667,6 +670,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.SpellDefinition().ToSql(),
             new QueryBuilder().From.StatScalingCatalog().ToSql(),
             new QueryBuilder().From.StatusEffect().ToSql(),
+            new QueryBuilder().From.WorldDoorState().ToSql(),
         }
         ;
     }
@@ -681,6 +685,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<ActiveCombatMode, ActiveCombatModeCols, ActiveCombatModeIxCols> ActiveCombatMode() => new("active_combat_mode", new ActiveCombatModeCols("active_combat_mode"), new ActiveCombatModeIxCols("active_combat_mode"));
         public global::SpacetimeDB.Table<ActiveDiceRoll, ActiveDiceRollCols, ActiveDiceRollIxCols> ActiveDiceRoll() => new("active_dice_roll", new ActiveDiceRollCols("active_dice_roll"), new ActiveDiceRollIxCols("active_dice_roll"));
         public global::SpacetimeDB.Table<ActiveRadialEffect, ActiveRadialEffectCols, ActiveRadialEffectIxCols> ActiveRadialEffect() => new("active_radial_effect", new ActiveRadialEffectCols("active_radial_effect"), new ActiveRadialEffectIxCols("active_radial_effect"));
+        public global::SpacetimeDB.Table<ActiveWorldInteraction, ActiveWorldInteractionCols, ActiveWorldInteractionIxCols> ActiveWorldInteraction() => new("active_world_interaction", new ActiveWorldInteractionCols("active_world_interaction"), new ActiveWorldInteractionIxCols("active_world_interaction"));
         public global::SpacetimeDB.Table<ActiveWorldObstacle, ActiveWorldObstacleCols, ActiveWorldObstacleIxCols> ActiveWorldObstacle() => new("active_world_obstacle", new ActiveWorldObstacleCols("active_world_obstacle"), new ActiveWorldObstacleIxCols("active_world_obstacle"));
         public global::SpacetimeDB.Table<ArenaInstance, ArenaInstanceCols, ArenaInstanceIxCols> ArenaInstance() => new("arena_instance", new ArenaInstanceCols("arena_instance"), new ArenaInstanceIxCols("arena_instance"));
         public global::SpacetimeDB.Table<AutoAttackCatalog, AutoAttackCatalogCols, AutoAttackCatalogIxCols> AutoAttackCatalog() => new("auto_attack_catalog", new AutoAttackCatalogCols("auto_attack_catalog"), new AutoAttackCatalogIxCols("auto_attack_catalog"));
@@ -745,6 +750,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<SpellDefinition, SpellDefinitionCols, SpellDefinitionIxCols> SpellDefinition() => new("spell_definition", new SpellDefinitionCols("spell_definition"), new SpellDefinitionIxCols("spell_definition"));
         public global::SpacetimeDB.Table<StatScalingCatalog, StatScalingCatalogCols, StatScalingCatalogIxCols> StatScalingCatalog() => new("stat_scaling_catalog", new StatScalingCatalogCols("stat_scaling_catalog"), new StatScalingCatalogIxCols("stat_scaling_catalog"));
         public global::SpacetimeDB.Table<StatusEffect, StatusEffectCols, StatusEffectIxCols> StatusEffect() => new("status_effect", new StatusEffectCols("status_effect"), new StatusEffectIxCols("status_effect"));
+        public global::SpacetimeDB.Table<WorldDoorState, WorldDoorStateCols, WorldDoorStateIxCols> WorldDoorState() => new("world_door_state", new WorldDoorStateCols("world_door_state"), new WorldDoorStateIxCols("world_door_state"));
     }
 
     public sealed class TypedSubscriptionBuilder
@@ -833,7 +839,9 @@ namespace SpacetimeDB.Types
                 Reducer.AssignCharacterActionBarSlot args => Reducers.InvokeAssignCharacterActionBarSlot(eventContext, args),
                 Reducer.AssignCombatDisciplineWeaponLoadout args => Reducers.InvokeAssignCombatDisciplineWeaponLoadout(eventContext, args),
                 Reducer.AssignEquippedSpellbookSpell args => Reducers.InvokeAssignEquippedSpellbookSpell(eventContext, args),
+                Reducer.BeginWorldDoorAction args => Reducers.InvokeBeginWorldDoorAction(eventContext, args),
                 Reducer.CancelActiveCastRequest args => Reducers.InvokeCancelActiveCastRequest(eventContext, args),
+                Reducer.CancelWorldInteraction args => Reducers.InvokeCancelWorldInteraction(eventContext, args),
                 Reducer.CastRequest args => Reducers.InvokeCastRequest(eventContext, args),
                 Reducer.CleanupProjectileLoadHarness args => Reducers.InvokeCleanupProjectileLoadHarness(eventContext, args),
                 Reducer.ClearAutoAttackTarget args => Reducers.InvokeClearAutoAttackTarget(eventContext, args),

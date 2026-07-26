@@ -126,8 +126,10 @@ namespace Arena.Network
                 BuildScopedPlayerResourceQuery(new QueryBuilder(), scope),
                 BuildScopedDefenseStateQuery(new QueryBuilder(), scope),
                 BuildScopedActiveCastQuery(new QueryBuilder(), scope),
+                BuildScopedActiveWorldInteractionQuery(new QueryBuilder(), scope),
                 BuildScopedActiveRadialEffectQuery(new QueryBuilder(), scope),
                 BuildScopedActiveWorldObstacleQuery(new QueryBuilder(), scope),
+                BuildScopedWorldDoorStateQuery(new QueryBuilder(), scope),
                 BuildScopedMovementActionStateQuery(new QueryBuilder(), scope),
                 BuildScopedSpecialMovementRuntimeQuery(new QueryBuilder(), scope),
                 BuildScopedStatusEffectQuery(new QueryBuilder(), scope),
@@ -529,6 +531,29 @@ namespace Arena.Network
             };
         }
 
+        private static string BuildScopedActiveWorldInteractionQuery(
+            QueryBuilder qb,
+            NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .ActiveWorldInteraction()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .ActiveWorldInteraction()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .ToSql(),
+                _ => throw new InvalidOperationException(
+                    "Scoped active-world-interaction query requested for GameplayScope.None"),
+            };
+        }
+
         private static string BuildScopedActiveWorldObstacleQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
         {
             return scope.Kind switch
@@ -546,6 +571,29 @@ namespace Arena.Network
                     .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped active-world-obstacle query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedWorldDoorStateQuery(
+            QueryBuilder qb,
+            NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .WorldDoorState()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .WorldDoorState()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .ToSql(),
+                _ => throw new InvalidOperationException(
+                    "Scoped world-door-state query requested for GameplayScope.None"),
             };
         }
 

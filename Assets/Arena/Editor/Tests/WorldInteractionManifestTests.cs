@@ -2,8 +2,10 @@
 
 using System.Collections.Generic;
 using Arena.Editor;
+using Arena.Input;
 using Arena.Interaction;
 using NUnit.Framework;
+using SpacetimeDB.Types;
 using UnityEngine;
 using Unity.Plastic.Newtonsoft.Json.Linq;
 
@@ -127,6 +129,71 @@ namespace Arena.EditModeTests
             {
                 Object.DestroyImmediate(first);
                 Object.DestroyImmediate(second);
+            }
+        }
+
+        [Test]
+        public void ReplicatedClosedDoor_BlocksPredictionAndLineQueries()
+        {
+            const string doorId = "RANDOM_DUNGEON:GATEWAY:15:26:4";
+            WorldDoorCollisionRuntime.Clear();
+            WorldDoorCollisionRuntime.SetScope("OPEN", "RandomDungeon");
+            try
+            {
+                Assert.That(
+                    WorldDoorCollisionRuntime.TryGetEffectiveState(
+                        doorId,
+                        out bool defaultOpen,
+                        out ulong defaultRevision),
+                    Is.True);
+                Assert.That(defaultOpen, Is.True);
+                Assert.That(defaultRevision, Is.Zero);
+
+                var closed = new WorldDoorState(
+                    $"OPEN:RandomDungeon:{doorId}",
+                    doorId,
+                    "OPEN",
+                    null,
+                    "RandomDungeon",
+                    false,
+                    1,
+                    new SpacetimeDB.Timestamp(0));
+                WorldDoorCollisionRuntime.Upsert(closed);
+
+                Vector2 blocked = WorldDoorCollisionRuntime.ResolveHorizontalCollision(
+                    -24f,
+                    12f,
+                    -24f,
+                    16f,
+                    0.25f,
+                    1.8f,
+                    20f);
+                Assert.That(blocked.y, Is.LessThan(14f));
+                Assert.That(
+                    WorldDoorCollisionRuntime.TryFindFirstLineHitDistance(
+                        new Vector3(-24f, 21.2f, 12f),
+                        new Vector3(-24f, 21.2f, 16f),
+                        0.05f,
+                        out float hitDistance),
+                    Is.True);
+                Assert.That(hitDistance, Is.LessThan(2f));
+
+                closed.IsOpen = true;
+                closed.Revision = 2;
+                WorldDoorCollisionRuntime.Upsert(closed);
+                Vector2 open = WorldDoorCollisionRuntime.ResolveHorizontalCollision(
+                    -24f,
+                    12f,
+                    -24f,
+                    16f,
+                    0.25f,
+                    1.8f,
+                    20f);
+                Assert.That(open, Is.EqualTo(new Vector2(-24f, 16f)));
+            }
+            finally
+            {
+                WorldDoorCollisionRuntime.Clear();
             }
         }
 
