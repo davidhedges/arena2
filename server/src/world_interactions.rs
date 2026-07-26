@@ -11,8 +11,6 @@ use crate::arena::{
 use crate::world_collision::raycast_world_with_layout_for_scene;
 
 #[allow(unused_imports)]
-use crate::npcs::{npc_instance as _, npc_physics as _, npc_state as _};
-#[allow(unused_imports)]
 use crate::player_intent::player_intent as _;
 #[allow(unused_imports)]
 use crate::player_physics::player_physics as _;
@@ -231,9 +229,6 @@ pub fn begin_world_door_action(
     validate_profile_start(ctx, actor, &physics, profile)?;
 
     if interaction_commits_immediately(profile.duration_ms) {
-        if !desired_open {
-            validate_doorway_unoccupied(ctx, door, &scope)?;
-        }
         commit_door_state(ctx, state, desired_open, ctx.timestamp);
         return Ok(());
     }
@@ -354,14 +349,13 @@ pub(crate) fn tick_world_interactions(ctx: &ReducerContext, now: Timestamp) {
             continue;
         }
 
-        let Some(door) = door_definition(active.target_definition_id.as_str()) else {
+        if door_definition(active.target_definition_id.as_str()).is_none() {
             ctx.db
                 .active_world_interaction()
                 .actor()
                 .delete(active.actor);
             continue;
-        };
-        let scope = scope_from_active(&active);
+        }
         let Some(state) = ctx
             .db
             .world_door_state()
@@ -374,14 +368,6 @@ pub(crate) fn tick_world_interactions(ctx: &ReducerContext, now: Timestamp) {
                 .delete(active.actor);
             continue;
         };
-
-        if !active.desired_open && validate_doorway_unoccupied(ctx, door, &scope).is_err() {
-            ctx.db
-                .active_world_interaction()
-                .actor()
-                .delete(active.actor);
-            continue;
-        }
 
         commit_door_state(ctx, state, active.desired_open, now);
         ctx.db
@@ -725,68 +711,6 @@ fn line_of_access_to_door(
         Some(door.door_definition_id.as_str()),
     )
     .is_none()
-}
-
-fn validate_doorway_unoccupied(
-    ctx: &ReducerContext,
-    door: &DoorDefinition,
-    scope: &DoorScope,
-) -> Result<(), String> {
-    let obb = door_obb(door);
-    for physics in ctx.db.player_physics().iter() {
-        if !active_scope_values_match_actor(
-            ctx,
-            scope.world_kind.as_str(),
-            scope.instance_id,
-            scope.open_world_scene_name.as_str(),
-            physics.identity,
-        ) {
-            continue;
-        }
-        let Some(state) = ctx.db.player_state().player_id().find(physics.identity) else {
-            continue;
-        };
-        if state.alive
-            && capsule_overlaps_door(
-                obb,
-                physics.pos_x,
-                physics.pos_y,
-                physics.pos_z,
-                state.hit_radius,
-                state.hit_height,
-            )
-        {
-            return Err("Cannot close the door while a player occupies it".to_string());
-        }
-    }
-
-    for physics in ctx.db.npc_physics().iter() {
-        if !active_scope_values_match_actor(
-            ctx,
-            scope.world_kind.as_str(),
-            scope.instance_id,
-            scope.open_world_scene_name.as_str(),
-            physics.identity,
-        ) {
-            continue;
-        }
-        let Some(state) = ctx.db.npc_state().identity().find(physics.identity) else {
-            continue;
-        };
-        if state.alive
-            && capsule_overlaps_door(
-                obb,
-                physics.pos_x,
-                physics.pos_y,
-                physics.pos_z,
-                state.hit_radius,
-                state.hit_height,
-            )
-        {
-            return Err("Cannot close the door while an NPC occupies it".to_string());
-        }
-    }
-    Ok(())
 }
 
 fn require_live_player_rows(
@@ -1306,28 +1230,6 @@ fn segment_aabb_fraction<const N: usize>(
     (enter <= 1.0 && exit >= 0.0).then_some(enter.max(0.0))
 }
 
-fn capsule_overlaps_door(
-    door: DoorObb,
-    x: f32,
-    foot_y: f32,
-    z: f32,
-    radius: f32,
-    height: f32,
-) -> bool {
-    let radius = radius.max(0.0);
-    let height = height.max(0.0);
-    let actor_min_y = foot_y;
-    let actor_max_y = foot_y + height;
-    let door_min_y = door.center[1] - door.half_extents[1];
-    let door_max_y = door.center[1] + door.half_extents[1];
-    if actor_max_y < door_min_y || actor_min_y > door_max_y {
-        return false;
-    }
-    let local = door_local_point(door, [x, door.center[1], z]);
-    local[0].abs() <= door.half_extents[0] + radius
-        && local[2].abs() <= door.half_extents[2] + radius
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1399,23 +1301,33 @@ mod tests {
     }
 
     #[test]
-    fn doorway_occupancy_accounts_for_capsule_radius_and_height() {
-        assert!(capsule_overlaps_door(
+    fn movement_starting_inside_closed_door_is_allowed_to_escape() {
+        assert!(segment_door_movement_hit_fraction(
             test_door_obb(),
             0.0,
+            0.0,
+            0.0,
+            2.0,
+            0.25,
+            0.0,
+            1.8,
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn closed_door_blocks_reentry_after_capsule_is_clear() {
+        assert!(segment_door_movement_hit_fraction(
+            test_door_obb(),
             0.0,
             0.5,
-            0.35,
-            1.8,
-        ));
-        assert!(!capsule_overlaps_door(
-            test_door_obb(),
             0.0,
-            5.0,
             0.0,
-            0.35,
+            0.25,
+            0.0,
             1.8,
-        ));
+        )
+        .is_some());
     }
 
     #[test]
