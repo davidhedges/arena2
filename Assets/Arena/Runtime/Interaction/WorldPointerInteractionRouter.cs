@@ -185,7 +185,7 @@ namespace Arena.Interaction
                 this);
             if (WorldInteractionArbitration.TrySelectBest(
                     _candidates,
-                    localPlayer.GetRenderPosition(),
+                    ResolveLocalActorPosition(localPlayer),
                     out WorldInteractionCandidate selected))
             {
                 bool dispatched = selected.Dispatch();
@@ -231,7 +231,7 @@ namespace Arena.Interaction
                 out _);
             bool hasSelectedCandidate = WorldInteractionArbitration.TrySelectBest(
                 _candidates,
-                localPlayer.GetRenderPosition(),
+                ResolveLocalActorPosition(localPlayer),
                 out WorldInteractionCandidate selected);
             if (propHitbox != null
                 && (!hasSelectedCandidate
@@ -295,7 +295,7 @@ namespace Arena.Interaction
             string bestDenialReason = string.Empty;
             float bestDenialScore = float.PositiveInfinity;
             WorldInteractionHitbox? bestDeniedHitbox = null;
-            Vector3 actorPosition = localPlayer.GetRenderPosition();
+            Vector3 actorPosition = ResolveLocalActorPosition(localPlayer);
 
             IReadOnlyList<WorldInteractionHitbox> hitboxes =
                 WorldInteractionHitbox.ActiveHitboxes;
@@ -472,6 +472,16 @@ namespace Arena.Interaction
 
         private static string Format(Vector2 position)
             => $"({position.x:F0},{position.y:F0})";
+
+        private static Vector3 ResolveLocalActorPosition(PlayerEntity localPlayer)
+        {
+            LocalPlayerStateProvider? stateProvider =
+                localPlayer.GetLocalStateProvider();
+            if (stateProvider != null && stateProvider.HasPredictedState)
+                return stateProvider.PredictedPosition;
+
+            return localPlayer.GameObject.transform.position;
+        }
 
         private static float DistanceOutside(Rect bounds, Vector2 position)
         {
