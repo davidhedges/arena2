@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "profile_id": "TIMED_HUMANOID_USE",
+      "progress_label_key": "USING",
+      "duration_ms": 1500,
+      "animation_profile_id": "HUMANOID_USE",
+      "requires_grounded": true,
+      "requires_stationary": true,
+      "cancel_conditions": 255
+    },
+    {
+      "profile_id": "WORLD_DOOR_INSTANT",
+      "progress_label_key": "USE_DOOR",
+      "duration_ms": 0,
+      "animation_profile_id": "",
+      "requires_grounded": false,
+      "requires_stationary": false,
+      "cancel_conditions": 255
+    }
+  ]
+}

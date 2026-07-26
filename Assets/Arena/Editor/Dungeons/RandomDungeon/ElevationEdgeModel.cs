@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using Arena.Interaction;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -4728,7 +4730,8 @@ namespace DungeonLab.Editor
                 outwardNormal,
                 ref bounds,
                 ref hasBounds);
-            ConfigureGatewayInstance(instance, gateway.contract.style);
+            List<GatewayLeafPose> leafPoses =
+                ConfigureGatewayInstance(instance, gateway.contract.style);
             EncapsulateInstance(instance, ref bounds, ref hasBounds);
             ValidatePlacedEdgePrefab(
                 instance,
@@ -4770,9 +4773,20 @@ namespace DungeonLab.Editor
                     instance.transform,
                     worldMidpoint,
                     instance.transform.eulerAngles.y);
-                ConfigureBarredGatewayInstance(bars);
+                leafPoses.Add(ConfigureBarredGatewayInstance(bars));
                 EncapsulateInstance(bars, ref bounds, ref hasBounds);
                 stats.barredGateways++;
+            }
+
+            if (gateway.contract.style != GatewayStyle.OpenArch)
+            {
+                ConfigureInteractiveGateway(
+                    instance,
+                    gateway,
+                    edgeA,
+                    edgeB,
+                    outwardNormal,
+                    leafPoses);
             }
 
             stats.gateways++;
@@ -4782,8 +4796,11 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static void ConfigureGatewayInstance(GameObject instance, GatewayStyle style)
+        private static List<GatewayLeafPose> ConfigureGatewayInstance(
+            GameObject instance,
+            GatewayStyle style)
         {
+            var leaves = new List<GatewayLeafPose>(2);
             if (style == GatewayStyle.OpenArch || style == GatewayStyle.Barred)
             {
                 Transform doorAssembly = FindFirstDescendant(
@@ -4798,7 +4815,7 @@ namespace DungeonLab.Editor
                 }
 
                 doorAssembly.gameObject.SetActive(false);
-                return;
+                return leaves;
             }
 
             if (style == GatewayStyle.LargeWood)
@@ -4809,8 +4826,8 @@ namespace DungeonLab.Editor
                 Transform right = FindRequiredGatewayDescendant(
                     instance,
                     "MOD_Gateway_Door_01_large_door_R");
-                OpenStaticGatewayLeaf(left, 100f);
-                OpenStaticGatewayLeaf(right, -100f);
+                leaves.Add(OpenStaticGatewayLeaf(left, 100f));
+                leaves.Add(OpenStaticGatewayLeaf(right, -100f));
                 foreach (Transform child in instance.GetComponentsInChildren<Transform>(true))
                 {
                     if (child.name.StartsWith(
@@ -4821,23 +4838,24 @@ namespace DungeonLab.Editor
                     }
                 }
 
-                return;
+                return leaves;
             }
 
             string leafName = style == GatewayStyle.Metal
                 ? "MOD_Gateway_Door_01_med_01_door"
                 : "MOD_Gateway_Door_01_med_02_door";
-            OpenStaticGatewayLeaf(
+            leaves.Add(OpenStaticGatewayLeaf(
                 FindRequiredGatewayDescendant(instance, leafName),
-                95f);
+                95f));
+            return leaves;
         }
 
-        private static void ConfigureBarredGatewayInstance(GameObject instance)
+        private static GatewayLeafPose ConfigureBarredGatewayInstance(GameObject instance)
         {
             Transform leaf = FindRequiredGatewayDescendant(
                 instance,
                 "SM_PROP_bars_door_01_dungeon");
-            OpenStaticGatewayLeaf(leaf, -75f);
+            return OpenStaticGatewayLeaf(leaf, -75f);
         }
 
         private static Transform FindRequiredGatewayDescendant(
@@ -4856,13 +4874,108 @@ namespace DungeonLab.Editor
             return child;
         }
 
-        private static void OpenStaticGatewayLeaf(Transform leaf, float localYaw)
+        private static GatewayLeafPose OpenStaticGatewayLeaf(
+            Transform leaf,
+            float localYaw)
         {
-            leaf.localRotation = Quaternion.Euler(0f, localYaw, 0f);
+            Quaternion closedRotation = leaf.localRotation;
+            Quaternion openRotation = Quaternion.Euler(0f, localYaw, 0f);
+            leaf.localRotation = openRotation;
             foreach (Collider collider in leaf.GetComponentsInChildren<Collider>(true))
             {
                 collider.enabled = false;
             }
+
+            foreach (Transform child in leaf.GetComponentsInChildren<Transform>(true))
+            {
+                GameObjectUtility.SetStaticEditorFlags(child.gameObject, 0);
+            }
+
+            return new GatewayLeafPose(leaf, closedRotation, openRotation);
+        }
+
+        private static void ConfigureInteractiveGateway(
+            GameObject instance,
+            GatewayPlacement gateway,
+            Vector3 edgeA,
+            Vector3 edgeB,
+            Vector2 outwardNormal,
+            IReadOnlyList<GatewayLeafPose> leafPoses)
+        {
+            if (leafPoses == null || leafPoses.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Interactive gateway '{instance.name}' has no animated leaf.");
+            }
+
+            Vector3 edgeMidpoint = (edgeA + edgeB) * 0.5f;
+            float blockerHeight = Mathf.Max(
+                1f,
+                Mathf.Min(3.5f, gateway.contract.wallHeightUnits - 0.25f));
+            Vector3 blockerCenter = edgeMidpoint + Vector3.up * (blockerHeight * 0.5f);
+            Vector3 blockerForward = new Vector3(outwardNormal.x, 0f, outwardNormal.y);
+            Quaternion blockerRotation = Quaternion.LookRotation(
+                blockerForward.sqrMagnitude > 0.001f ? blockerForward : Vector3.forward,
+                Vector3.up);
+            Vector3 blockerSize = new(
+                Mathf.Max(0.5f, Vector3.Distance(edgeA, edgeB) - 0.45f),
+                blockerHeight,
+                0.35f);
+            Vector3 localBlockerCenter =
+                instance.transform.InverseTransformPoint(blockerCenter);
+            float localBlockerYaw = Mathf.DeltaAngle(
+                instance.transform.eulerAngles.y,
+                blockerRotation.eulerAngles.y);
+            DoorAuthoring.LeafPose[] leaves = leafPoses
+                .Select(pose => new DoorAuthoring.LeafPose(
+                    pose.leaf,
+                    pose.closedLocalRotation,
+                    pose.openLocalRotation))
+                .ToArray();
+
+            DoorAuthoring authoring =
+                instance.GetComponent<DoorAuthoring>()
+                ?? instance.AddComponent<DoorAuthoring>();
+            authoring.Configure(
+                $"RANDOM_DUNGEON:GATEWAY:{gateway.edge.x}:{gateway.edge.z}:{gateway.edge.direction}",
+                "RANDOM_DUNGEON",
+                templateOnly: false,
+                productionEnabled: false,
+                defaultOpen: true,
+                definitionVersion: 1,
+                openInteractionProfileId: "WORLD_DOOR_INSTANT",
+                closeInteractionProfileId: "WORLD_DOOR_INSTANT",
+                interactionAnchorLocal: instance.transform.InverseTransformPoint(
+                    edgeMidpoint + Vector3.up * 1.25f),
+                maxInteractionDistance: 3.25f,
+                closedBlockerCenterLocal: localBlockerCenter,
+                closedBlockerSize: blockerSize,
+                closedBlockerLocalYaw: localBlockerYaw,
+                leaves);
+
+            DoorMotor motor =
+                instance.GetComponent<DoorMotor>()
+                ?? instance.AddComponent<DoorMotor>();
+            motor.Configure(authoring);
+            DoorInteractable interactable =
+                instance.GetComponent<DoorInteractable>()
+                ?? instance.AddComponent<DoorInteractable>();
+            interactable.Configure(authoring, motor);
+
+            var hitboxObject = new GameObject("InteractionHitbox");
+            hitboxObject.transform.SetParent(instance.transform, worldPositionStays: true);
+            hitboxObject.transform.SetPositionAndRotation(blockerCenter, blockerRotation);
+            BoxCollider collider = hitboxObject.AddComponent<BoxCollider>();
+            collider.isTrigger = true;
+            collider.size = new Vector3(blockerSize.x, blockerSize.y, 0.6f);
+            WorldInteractionHitbox hitbox =
+                hitboxObject.AddComponent<WorldInteractionHitbox>();
+            hitbox.Configure(interactable);
+
+            EditorUtility.SetDirty(authoring);
+            EditorUtility.SetDirty(motor);
+            EditorUtility.SetDirty(interactable);
+            EditorUtility.SetDirty(hitboxObject);
         }
 
         private static float CalculateOuterShellCornerYaw(
@@ -10882,6 +10995,23 @@ namespace DungeonLab.Editor
                 this.contract = contract;
                 this.headerPrefab = headerPrefab;
                 this.headerHeightUnits = headerHeightUnits;
+            }
+        }
+
+        private readonly struct GatewayLeafPose
+        {
+            public readonly Transform leaf;
+            public readonly Quaternion closedLocalRotation;
+            public readonly Quaternion openLocalRotation;
+
+            public GatewayLeafPose(
+                Transform leaf,
+                Quaternion closedLocalRotation,
+                Quaternion openLocalRotation)
+            {
+                this.leaf = leaf;
+                this.closedLocalRotation = closedLocalRotation;
+                this.openLocalRotation = openLocalRotation;
             }
         }
 

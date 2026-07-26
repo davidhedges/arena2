@@ -132,6 +132,8 @@ namespace DungeonLab.Editor
 
             CenterDungeonSpawn(dungeonRoot);
             RecordValidationStage(stageRecorder, "centerDungeonSpawn", ref stageStart);
+            WorldInteractionManifestExporter.ExportActiveScene(dataKey);
+            RecordValidationStage(stageRecorder, "exportWorldInteractions", ref stageStart);
             EnsureCollisionMeshesReadable(dungeonRoot, beforeModelImporterMutation);
             RecordValidationStage(stageRecorder, "normalizeCollisionMeshImporters", ref stageStart);
             MarkDungeonCollision(dungeonRoot);
