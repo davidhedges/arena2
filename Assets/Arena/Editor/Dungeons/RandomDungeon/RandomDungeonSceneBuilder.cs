@@ -134,6 +134,10 @@ namespace DungeonLab.Editor
             RecordValidationStage(stageRecorder, "centerDungeonSpawn", ref stageStart);
             WorldInteractionManifestExporter.ExportActiveScene(dataKey);
             RecordValidationStage(stageRecorder, "exportWorldInteractions", ref stageStart);
+            // After CenterDungeonSpawn, so exported trap coordinates are final
+            // world space — the same ordering the door manifest depends on.
+            WorldTrapManifestExporter.ExportActiveScene(dataKey);
+            RecordValidationStage(stageRecorder, "exportWorldTraps", ref stageStart);
             EnsureCollisionMeshesReadable(dungeonRoot, beforeModelImporterMutation);
             RecordValidationStage(stageRecorder, "normalizeCollisionMeshImporters", ref stageStart);
             MarkDungeonCollision(dungeonRoot);

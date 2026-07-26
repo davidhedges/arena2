@@ -288,6 +288,39 @@ namespace DungeonLab.Editor
             return settings;
         }
 
+        /// <summary>
+        /// Trap placement is read from the same profile asset but deliberately
+        /// kept out of <see cref="DungeonGenerationSettings"/>: that struct is
+        /// reflected into the per-seed settings digest, and a render-stage
+        /// density knob must not move a plan hash.
+        /// </summary>
+        private static ElevationEdgeModel.TrapPlacementSettings LoadActiveTrapPlacementSettings(
+            int seed,
+            string profileId)
+        {
+            string normalizedProfileId = string.IsNullOrWhiteSpace(profileId)
+                ? throw new InvalidOperationException("[GENERATION_PROFILE] profile id is required.")
+                : profileId.Trim().ToLowerInvariant();
+            DungeonGenerationProfile profile = AssetDatabase.LoadAssetAtPath<DungeonGenerationProfile>(
+                ResolveGenerationProfilePath(normalizedProfileId));
+            if (profile == null)
+            {
+                return ElevationEdgeModel.TrapPlacementSettings.Disabled;
+            }
+
+            return new ElevationEdgeModel.TrapPlacementSettings(
+                seed,
+                profile.trapsEnabled,
+                profile.trapFloorCellsPerTrap,
+                profile.trapCorridorWeight,
+                profile.trapRoomWeight,
+                profile.trapSpawnClearanceCells,
+                profile.trapSpikesWeight,
+                profile.trapSawPostWeight,
+                profile.trapSawSweepWeight,
+                profile.trapSawArmWeight);
+        }
+
         private void GenerateRandomDungeonLayout()
         {
             var rejectionHistogram = new Dictionary<string, int>();
@@ -347,6 +380,7 @@ namespace DungeonLab.Editor
                     CollectRenderedPromontoryCells(
                         levelPlan.namedPromontories,
                         levelPlan.externalConnectors),
+                    LoadActiveTrapPlacementSettings(seed, CurrentGenerationSettings.profileName),
                     GeneratedRootName,
                     out report,
                     out bounds);

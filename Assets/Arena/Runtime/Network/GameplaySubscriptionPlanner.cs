@@ -130,6 +130,7 @@ namespace Arena.Network
                 BuildScopedActiveRadialEffectQuery(new QueryBuilder(), scope),
                 BuildScopedActiveWorldObstacleQuery(new QueryBuilder(), scope),
                 BuildScopedWorldDoorStateQuery(new QueryBuilder(), scope),
+                BuildScopedWorldTrapStateQuery(new QueryBuilder(), scope),
                 BuildScopedMovementActionStateQuery(new QueryBuilder(), scope),
                 BuildScopedSpecialMovementRuntimeQuery(new QueryBuilder(), scope),
                 BuildScopedStatusEffectQuery(new QueryBuilder(), scope),
@@ -594,6 +595,29 @@ namespace Arena.Network
                     .ToSql(),
                 _ => throw new InvalidOperationException(
                     "Scoped world-door-state query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedWorldTrapStateQuery(
+            QueryBuilder qb,
+            NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .WorldTrapState()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .WorldTrapState()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .ToSql(),
+                _ => throw new InvalidOperationException(
+                    "Scoped world-trap-state query requested for GameplayScope.None"),
             };
         }
 

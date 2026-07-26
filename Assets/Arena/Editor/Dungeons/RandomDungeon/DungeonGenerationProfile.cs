@@ -205,6 +205,46 @@ namespace DungeonLab.Editor
                 new DungeonRoomSizeRange(5, 5, 5, 6),
                 new DungeonRoomSizeRange(4, 5, 5, 5));
 
+        // Render-stage only, and deliberately absent from DungeonGenerationSettings:
+        // that struct is reflected field-by-field into the per-seed settings
+        // digest, so a trap-density tweak there would move every plan hash for a
+        // decision the plan never sees.
+        [Header("Traps (render stage)")]
+        [Tooltip("Place proximity traps during the render pass. Disabling reproduces the pre-trap scene exactly.")]
+        public bool trapsEnabled = true;
+
+        [Min(1)]
+        [Tooltip("Floor cells per trap. 25 gives roughly 18 traps on a ~450-cell plan.")]
+        public int trapFloorCellsPerTrap = 25;
+
+        [Min(1)]
+        [Tooltip("Selection weight for corridor cells (cells outside any room). Traps read best in circulation.")]
+        public int trapCorridorWeight = 3;
+
+        [Min(1)]
+        [Tooltip("Selection weight for room cells.")]
+        public int trapRoomWeight = 1;
+
+        [Min(0)]
+        [Tooltip("Grid cells around the spawn floor kept clear of traps. The whole arrival room is cleared regardless.")]
+        public int trapSpawnClearanceCells = 3;
+
+        [Min(0)]
+        [Tooltip("Kind mix weight: full-cell spike field.")]
+        public int trapSpikesWeight = 5;
+
+        [Min(0)]
+        [Tooltip("Kind mix weight: saw rising through a floor slit and spinning in place.")]
+        public int trapSawPostWeight = 2;
+
+        [Min(0)]
+        [Tooltip("Kind mix weight: saw travelling along a two-cell lane. Needs two collinear free cells.")]
+        public int trapSawSweepWeight = 2;
+
+        [Min(0)]
+        [Tooltip("Kind mix weight: wall-mounted sweeping arm. Needs a proven wall and a 2x3 clear block.")]
+        public int trapSawArmWeight = 1;
+
         [Header("Room Size Vocabulary")]
         [Tooltip("Every route node role a topology may declare, mapped to a generic room size class. A role missing from this list is rejected at generation rather than silently sized as a hall.")]
         public DungeonRoleSizeClass[] roleSizeClasses = DefaultRoleSizeClasses();

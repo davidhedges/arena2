@@ -4145,6 +4145,7 @@ namespace DungeonLab.Editor
                 CollectRenderedPromontoryCells(
                     plan.namedPromontories,
                     plan.externalConnectors),
+                LoadActiveTrapPlacementSettings(seed, CurrentGenerationSettings.profileName),
                 "DungeonLab Renderer Probe",
                 out buildReport,
                 out bounds);

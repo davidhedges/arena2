@@ -51,3 +51,4 @@ mod vfx_generation;
 mod world_collision;
 mod world_interactions;
 mod world_obstacles;
+mod world_traps;

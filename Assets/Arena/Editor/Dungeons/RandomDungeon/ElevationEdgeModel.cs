@@ -10,7 +10,7 @@ using Unity.Plastic.Newtonsoft.Json.Linq;
 
 namespace DungeonLab.Editor
 {
-    public static class ElevationEdgeModel
+    public static partial class ElevationEdgeModel
     {
         private const string PackageInventoryPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/package_inventory.json";
         private const string StairProofContractsPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/stair_proof_contracts.json";
@@ -185,6 +185,36 @@ namespace DungeonLab.Editor
             out BuildReport report,
             out Bounds bounds)
         {
+            return BuildLevelField(
+                origin,
+                levels,
+                transitions,
+                reservedSetPieceCells,
+                plannedOpenEdges,
+                roomBoundaryContext,
+                promontoryCells,
+                TrapPlacementSettings.Disabled,
+                rootName,
+                out report,
+                out bounds);
+        }
+
+        // Traps (design 2026-07-26) are an ADDITIVE pass: they read the finished
+        // plan through subject-keyed streams and add one `Traps` root. Passing
+        // TrapPlacementSettings.Disabled reproduces the pre-trap output exactly.
+        public static GameObject BuildLevelField(
+            Vector3 origin,
+            IReadOnlyDictionary<Vector2Int, int> levels,
+            IReadOnlyList<TransitionEdge> transitions,
+            IReadOnlyCollection<Vector2Int> reservedSetPieceCells,
+            IReadOnlyCollection<OpenFloorEdge> plannedOpenEdges,
+            RoomBoundaryContext roomBoundaryContext,
+            IReadOnlyCollection<Vector2Int> promontoryCells,
+            TrapPlacementSettings trapPlacement,
+            string rootName,
+            out BuildReport report,
+            out Bounds bounds)
+        {
             if (levels == null || levels.Count == 0)
             {
                 throw new InvalidOperationException("Elevation edge model needs at least one floor cell.");
@@ -225,6 +255,7 @@ namespace DungeonLab.Editor
             var piersRoot = CreateChild(root.transform, "Promontory Piers");
             var shellRoot = CreateChild(root.transform, "Outer Shell Walls");
             var gatewaysRoot = CreateChild(root.transform, "Gateways");
+            var trapsRoot = CreateChild(root.transform, "Traps");
 
             bounds = new Bounds(origin, Vector3.zero);
             bool hasBounds = false;
@@ -399,6 +430,22 @@ namespace DungeonLab.Editor
                     ref hasBounds,
                     ref stats);
             }
+
+            stats.traps = PlaceTraps(
+                trapPlacement,
+                trapsRoot.transform,
+                origin,
+                contracts.levelHeight,
+                levels,
+                reservedCells,
+                stairReservations,
+                aerialDeckCellLevels,
+                transitions,
+                roomBoundaryContext,
+                gatewaySocketPlan,
+                promontorySet,
+                ref bounds,
+                ref hasBounds);
 
             foreach (WallEdge wallEdge in wallEdges)
             {
@@ -820,6 +867,7 @@ namespace DungeonLab.Editor
                 stats.gateways,
                 stats.largeGateways,
                 stats.barredGateways,
+                stats.traps,
                 stats.largePerimeterRooms,
                 stats.largePartitionWalls,
                 stats.partitionWallChecks,
@@ -9993,6 +10041,7 @@ namespace DungeonLab.Editor
             public int gateways;
             public int largeGateways;
             public int barredGateways;
+            public int traps;
             public int largePerimeterRooms;
             public int largePartitionWalls;
             public int partitionWallChecks;
@@ -10357,6 +10406,7 @@ namespace DungeonLab.Editor
             public readonly int gateways;
             public readonly int largeGateways;
             public readonly int barredGateways;
+            public readonly int traps;
             public readonly int largePerimeterRooms;
             public readonly int largePartitionWalls;
             public readonly int partitionWallChecks;
@@ -10373,7 +10423,7 @@ namespace DungeonLab.Editor
             public readonly string unsupportedContractReasons;
             public readonly string stairSummary;
             public string Summary =>
-                $"levelHeight {levelHeight:0.###}u; cells {floorCells}; interior {interiorEdges}; cliffs {cliffEdges}; retaining {retainingEdges}; transitions {transitionEdges}; enclosed rooms {enclosedRooms}/{totalRooms}, partition walls {partitionWalls} ({largePartitionWalls} large), large-perimeter rooms {largePerimeterRooms}, railings {railings}, internal path edges {internalPathEdges}, internal path railings {internalPathRailings}, internal path bare edges {internalPathBareEdges}, bare boundary edges {bareBoundaryEdges}, doorways {doorways}, static gateways {gateways} ({largeGateways} at 6u, {barredGateways} barred), partitionWallChecks {partitionWallChecks} passed; stairFootprintChecks {stairFootprintChecks} passed; multiRiseStairChecks {multiRiseStairChecks} passed; corners {corners}; REJECTED {rejected}; {stairSummary}";
+                $"levelHeight {levelHeight:0.###}u; cells {floorCells}; interior {interiorEdges}; cliffs {cliffEdges}; retaining {retainingEdges}; transitions {transitionEdges}; enclosed rooms {enclosedRooms}/{totalRooms}, partition walls {partitionWalls} ({largePartitionWalls} large), large-perimeter rooms {largePerimeterRooms}, railings {railings}, internal path edges {internalPathEdges}, internal path railings {internalPathRailings}, internal path bare edges {internalPathBareEdges}, bare boundary edges {bareBoundaryEdges}, doorways {doorways}, static gateways {gateways} ({largeGateways} at 6u, {barredGateways} barred), traps {traps}, partitionWallChecks {partitionWallChecks} passed; stairFootprintChecks {stairFootprintChecks} passed; multiRiseStairChecks {multiRiseStairChecks} passed; corners {corners}; REJECTED {rejected}; {stairSummary}";
 
             public BuildReport(
                 float levelHeight,
@@ -10391,6 +10441,7 @@ namespace DungeonLab.Editor
                 int gateways,
                 int largeGateways,
                 int barredGateways,
+                int traps,
                 int largePerimeterRooms,
                 int largePartitionWalls,
                 int partitionWallChecks,
@@ -10422,6 +10473,7 @@ namespace DungeonLab.Editor
                 this.gateways = gateways;
                 this.largeGateways = largeGateways;
                 this.barredGateways = barredGateways;
+                this.traps = traps;
                 this.largePerimeterRooms = largePerimeterRooms;
                 this.largePartitionWalls = largePartitionWalls;
                 this.partitionWallChecks = partitionWallChecks;

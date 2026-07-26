@@ -139,6 +139,7 @@ pub(crate) const DAMAGE_SOURCE_KIND_MELEE: &str = "MELEE";
 pub(crate) const DAMAGE_SOURCE_KIND_SPELL: &str = "SPELL";
 pub(crate) const DAMAGE_SOURCE_KIND_PROJECTILE: &str = "PROJECTILE";
 pub(crate) const DAMAGE_SOURCE_KIND_PERIODIC: &str = "PERIODIC";
+pub(crate) const DAMAGE_SOURCE_KIND_TRAP: &str = "TRAP";
 const DEFAULT_COMBAT_ENGAGEMENT_DURATION: Duration = Duration::from_secs(5);
 const COMBAT_REASON_DAMAGE: &str = "DAMAGE";
 const COMBAT_REASON_DEBUFF: &str = "DEBUFF";

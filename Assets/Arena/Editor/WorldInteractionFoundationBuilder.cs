@@ -23,10 +23,14 @@ namespace Arena.Editor
             int seed = ReadCheckedInRandomDungeonSeed();
             ThirdPartyAnimationExtractor.ExtractHumanoidUseProfile();
             InteractiveGatewayPrefabBuilder.BuildAll();
+            // Traps must exist as prefabs before the rebuild: the generator's
+            // placement pass instantiates them by path.
+            TrapPrefabBuilder.BuildAll();
             RandomDungeonSceneBuilder.RebuildWithSeed(seed);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             WorldInteractionFoundationValidator.ValidateCheckedInFoundation();
+            WorldTrapFoundationValidator.ValidateCheckedInTraps();
 
             Debug.Log(
                 $"[{nameof(WorldInteractionFoundationBuilder)}] Rebuilt interaction assets and RandomDungeon seed {seed}.");

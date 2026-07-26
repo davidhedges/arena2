@@ -101,6 +101,7 @@ namespace SpacetimeDB.Types
             AddTable(StatScalingCatalog = new(conn));
             AddTable(StatusEffect = new(conn));
             AddTable(WorldDoorState = new(conn));
+            AddTable(WorldTrapState = new(conn));
         }
     }
 
@@ -671,6 +672,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.StatScalingCatalog().ToSql(),
             new QueryBuilder().From.StatusEffect().ToSql(),
             new QueryBuilder().From.WorldDoorState().ToSql(),
+            new QueryBuilder().From.WorldTrapState().ToSql(),
         }
         ;
     }
@@ -751,6 +753,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<StatScalingCatalog, StatScalingCatalogCols, StatScalingCatalogIxCols> StatScalingCatalog() => new("stat_scaling_catalog", new StatScalingCatalogCols("stat_scaling_catalog"), new StatScalingCatalogIxCols("stat_scaling_catalog"));
         public global::SpacetimeDB.Table<StatusEffect, StatusEffectCols, StatusEffectIxCols> StatusEffect() => new("status_effect", new StatusEffectCols("status_effect"), new StatusEffectIxCols("status_effect"));
         public global::SpacetimeDB.Table<WorldDoorState, WorldDoorStateCols, WorldDoorStateIxCols> WorldDoorState() => new("world_door_state", new WorldDoorStateCols("world_door_state"), new WorldDoorStateIxCols("world_door_state"));
+        public global::SpacetimeDB.Table<WorldTrapState, WorldTrapStateCols, WorldTrapStateIxCols> WorldTrapState() => new("world_trap_state", new WorldTrapStateCols("world_trap_state"), new WorldTrapStateIxCols("world_trap_state"));
     }
 
     public sealed class TypedSubscriptionBuilder

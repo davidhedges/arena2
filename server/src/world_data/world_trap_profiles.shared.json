@@ -1,0 +1,416 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "profile_id": "TRAP_SAW_ARM",
+      "trigger_kind": "PROXIMITY",
+      "trigger_delay_ms": 0,
+      "cycle_ms": 2500,
+      "hazard_start_ms": 120,
+      "hazard_end_ms": 1450,
+      "rearm_ms": 0,
+      "trigger_volume": {
+        "center": {
+          "x": -0.5,
+          "y": 1.0,
+          "z": 0.0
+        },
+        "size": {
+          "x": 5.0,
+          "y": 2.0,
+          "z": 6.0
+        }
+      },
+      "hazard_volume": {
+        "center": {
+          "x": 0.0,
+          "y": 1.39,
+          "z": 0.0
+        },
+        "size": {
+          "x": 2.2,
+          "y": 0.9,
+          "z": 2.2
+        }
+      },
+      "hazard_track": [
+        {
+          "t_ms": 0,
+          "offset": {
+            "x": 0.802617,
+            "y": 0.0,
+            "z": 1.831886
+          }
+        },
+        {
+          "t_ms": 75,
+          "offset": {
+            "x": 0.029586,
+            "y": 0.0,
+            "z": 1.999781
+          }
+        },
+        {
+          "t_ms": 150,
+          "offset": {
+            "x": -0.748074,
+            "y": 0.0,
+            "z": 1.854828
+          }
+        },
+        {
+          "t_ms": 225,
+          "offset": {
+            "x": -1.408704,
+            "y": 0.0,
+            "z": 1.419702
+          }
+        },
+        {
+          "t_ms": 300,
+          "offset": {
+            "x": -1.848954,
+            "y": 0.0,
+            "z": 0.762476
+          }
+        },
+        {
+          "t_ms": 375,
+          "offset": {
+            "x": -1.999951,
+            "y": 0.0,
+            "z": -0.014032
+          }
+        },
+        {
+          "t_ms": 450,
+          "offset": {
+            "x": -1.838073,
+            "y": 0.0,
+            "z": -0.788346
+          }
+        },
+        {
+          "t_ms": 525,
+          "offset": {
+            "x": -1.388644,
+            "y": 0.0,
+            "z": -1.439329
+          }
+        },
+        {
+          "t_ms": 600,
+          "offset": {
+            "x": -0.721973,
+            "y": 0.0,
+            "z": -1.865142
+          }
+        },
+        {
+          "t_ms": 675,
+          "offset": {
+            "x": 0.057644,
+            "y": 0.0,
+            "z": -1.999169
+          }
+        },
+        {
+          "t_ms": 750,
+          "offset": {
+            "x": 0.828243,
+            "y": 0.0,
+            "z": -1.820443
+          }
+        },
+        {
+          "t_ms": 825,
+          "offset": {
+            "x": 0.057644,
+            "y": 0.0,
+            "z": -1.999169
+          }
+        },
+        {
+          "t_ms": 900,
+          "offset": {
+            "x": -0.721973,
+            "y": 0.0,
+            "z": -1.865142
+          }
+        },
+        {
+          "t_ms": 975,
+          "offset": {
+            "x": -1.388644,
+            "y": 0.0,
+            "z": -1.439329
+          }
+        },
+        {
+          "t_ms": 1050,
+          "offset": {
+            "x": -1.838073,
+            "y": 0.0,
+            "z": -0.788346
+          }
+        },
+        {
+          "t_ms": 1125,
+          "offset": {
+            "x": -1.999951,
+            "y": 0.0,
+            "z": -0.014032
+          }
+        },
+        {
+          "t_ms": 1200,
+          "offset": {
+            "x": -1.848954,
+            "y": 0.0,
+            "z": 0.762476
+          }
+        },
+        {
+          "t_ms": 1275,
+          "offset": {
+            "x": -1.408704,
+            "y": 0.0,
+            "z": 1.419702
+          }
+        },
+        {
+          "t_ms": 1350,
+          "offset": {
+            "x": -0.748074,
+            "y": 0.0,
+            "z": 1.854828
+          }
+        },
+        {
+          "t_ms": 1425,
+          "offset": {
+            "x": 0.029586,
+            "y": 0.0,
+            "z": 1.999781
+          }
+        },
+        {
+          "t_ms": 1500,
+          "offset": {
+            "x": 0.802617,
+            "y": 0.0,
+            "z": 1.831886
+          }
+        }
+      ],
+      "on_hit": [
+        {
+          "effect": "DAMAGE",
+          "amount": 22,
+          "damage_type": "PHYSICAL",
+          "tick_amount": 0,
+          "tick_interval_ms": 0,
+          "duration_ms": 0,
+          "stack_group": "",
+          "max_stacks": 1,
+          "stack_policy": "REFRESH"
+        },
+        {
+          "effect": "DOT",
+          "amount": 0,
+          "damage_type": "PHYSICAL",
+          "tick_amount": 4,
+          "tick_interval_ms": 1000,
+          "duration_ms": 6000,
+          "stack_group": "TRAP_BLEED",
+          "max_stacks": 5,
+          "stack_policy": "ADD_STACK_REFRESH"
+        }
+      ],
+      "one_hit_per_activation": true
+    },
+    {
+      "profile_id": "TRAP_SAW_POST",
+      "trigger_kind": "PROXIMITY",
+      "trigger_delay_ms": 0,
+      "cycle_ms": 3000,
+      "hazard_start_ms": 90,
+      "hazard_end_ms": 1550,
+      "rearm_ms": 0,
+      "trigger_volume": {
+        "center": {
+          "x": 0.0,
+          "y": 1.0,
+          "z": 0.0
+        },
+        "size": {
+          "x": 4.0,
+          "y": 2.0,
+          "z": 4.0
+        }
+      },
+      "hazard_volume": {
+        "center": {
+          "x": 0.0,
+          "y": 0.7,
+          "z": 0.0
+        },
+        "size": {
+          "x": 0.9,
+          "y": 1.4,
+          "z": 2.0
+        }
+      },
+      "hazard_track": [],
+      "on_hit": [
+        {
+          "effect": "DAMAGE",
+          "amount": 22,
+          "damage_type": "PHYSICAL",
+          "tick_amount": 0,
+          "tick_interval_ms": 0,
+          "duration_ms": 0,
+          "stack_group": "",
+          "max_stacks": 1,
+          "stack_policy": "REFRESH"
+        },
+        {
+          "effect": "DOT",
+          "amount": 0,
+          "damage_type": "PHYSICAL",
+          "tick_amount": 4,
+          "tick_interval_ms": 1000,
+          "duration_ms": 6000,
+          "stack_group": "TRAP_BLEED",
+          "max_stacks": 5,
+          "stack_policy": "ADD_STACK_REFRESH"
+        }
+      ],
+      "one_hit_per_activation": true
+    },
+    {
+      "profile_id": "TRAP_SAW_SWEEP",
+      "trigger_kind": "PROXIMITY",
+      "trigger_delay_ms": 0,
+      "cycle_ms": 2617,
+      "hazard_start_ms": 220,
+      "hazard_end_ms": 1033,
+      "rearm_ms": 0,
+      "trigger_volume": {
+        "center": {
+          "x": 0.0,
+          "y": 1.0,
+          "z": 0.0
+        },
+        "size": {
+          "x": 1.2,
+          "y": 2.0,
+          "z": 6.0
+        }
+      },
+      "hazard_volume": {
+        "center": {
+          "x": 0.0,
+          "y": 0.7,
+          "z": 0.0
+        },
+        "size": {
+          "x": 0.9,
+          "y": 1.4,
+          "z": 2.0
+        }
+      },
+      "hazard_track": [
+        {
+          "t_ms": 250,
+          "offset": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 2.0
+          }
+        },
+        {
+          "t_ms": 917,
+          "offset": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": -2.0
+          }
+        }
+      ],
+      "on_hit": [
+        {
+          "effect": "DAMAGE",
+          "amount": 22,
+          "damage_type": "PHYSICAL",
+          "tick_amount": 0,
+          "tick_interval_ms": 0,
+          "duration_ms": 0,
+          "stack_group": "",
+          "max_stacks": 1,
+          "stack_policy": "REFRESH"
+        },
+        {
+          "effect": "DOT",
+          "amount": 0,
+          "damage_type": "PHYSICAL",
+          "tick_amount": 4,
+          "tick_interval_ms": 1000,
+          "duration_ms": 6000,
+          "stack_group": "TRAP_BLEED",
+          "max_stacks": 5,
+          "stack_policy": "ADD_STACK_REFRESH"
+        }
+      ],
+      "one_hit_per_activation": true
+    },
+    {
+      "profile_id": "TRAP_SPIKES",
+      "trigger_kind": "PROXIMITY",
+      "trigger_delay_ms": 350,
+      "cycle_ms": 4667,
+      "hazard_start_ms": 180,
+      "hazard_end_ms": 2200,
+      "rearm_ms": 0,
+      "trigger_volume": {
+        "center": {
+          "x": 0.0,
+          "y": 1.0,
+          "z": 0.0
+        },
+        "size": {
+          "x": 4.0,
+          "y": 2.0,
+          "z": 4.0
+        }
+      },
+      "hazard_volume": {
+        "center": {
+          "x": 0.0,
+          "y": 0.6,
+          "z": 0.0
+        },
+        "size": {
+          "x": 4.0,
+          "y": 1.2,
+          "z": 4.0
+        }
+      },
+      "hazard_track": [],
+      "on_hit": [
+        {
+          "effect": "DAMAGE",
+          "amount": 45,
+          "damage_type": "PHYSICAL",
+          "tick_amount": 0,
+          "tick_interval_ms": 0,
+          "duration_ms": 0,
+          "stack_group": "",
+          "max_stacks": 1,
+          "stack_policy": "REFRESH"
+        }
+      ],
+      "one_hit_per_activation": true
+    }
+  ]
+}
