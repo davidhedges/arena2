@@ -6,6 +6,7 @@ using Arena.Interaction;
 using SpacetimeDB;
 using SpacetimeDB.Types;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Arena.Network
 {
@@ -21,7 +22,12 @@ namespace Arena.Network
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (_instance != null || !ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+            bool gateOpen = ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene();
+            Debug.Log(
+                $"[WorldInteraction] state replicator bootstrap scene="
+                + $"'{SceneManager.GetActiveScene().path}' gate={gateOpen} "
+                + $"existing={_instance != null}.");
+            if (_instance != null || !gateOpen)
                 return;
 
             var gameObject = new GameObject(nameof(WorldDoorStateReplicator));
@@ -53,8 +59,10 @@ namespace Arena.Network
             connection.Db.WorldDoorState.OnInsert += OnInsert;
             connection.Db.WorldDoorState.OnUpdate += OnUpdate;
             connection.Db.WorldDoorState.OnDelete += OnDelete;
+            int snapshotCount = 0;
             foreach (WorldDoorState row in connection.Db.WorldDoorState.Iter())
             {
+                snapshotCount++;
                 WorldDoorCollisionRuntime.Upsert(row);
                 DoorRuntimeRegistry.Apply(
                     row.DoorDefinitionId,
@@ -62,6 +70,10 @@ namespace Arena.Network
                     row.Revision,
                     animate: false);
             }
+            Debug.Log(
+                $"[WorldInteraction] state replicator subscribed; "
+                + $"snapshotRows={snapshotCount}.",
+                this);
         }
 
         private static void OnInsert(EventContext context, WorldDoorState row)
@@ -79,6 +91,9 @@ namespace Arena.Network
                 row.IsOpen,
                 row.Revision,
                 animate);
+            Debug.Log(
+                $"[WorldInteraction] state insert id='{row.DoorDefinitionId}' "
+                + $"open={row.IsOpen} revision={row.Revision} animate={animate}.");
         }
 
         private static void OnUpdate(
@@ -100,6 +115,10 @@ namespace Arena.Network
                 row.IsOpen,
                 row.Revision,
                 animate: true);
+            Debug.Log(
+                $"[WorldInteraction] state update id='{row.DoorDefinitionId}' "
+                + $"open={oldRow.IsOpen}->{row.IsOpen} "
+                + $"revision={oldRow.Revision}->{row.Revision}.");
         }
 
         private static void OnDelete(EventContext context, WorldDoorState row)

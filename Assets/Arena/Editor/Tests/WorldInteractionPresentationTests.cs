@@ -6,12 +6,32 @@ using Arena.Simulation;
 using NUnit.Framework;
 using SpacetimeDB;
 using SpacetimeDB.Types;
+using UnityEditor;
 using UnityEngine;
 
 namespace Arena.EditModeTests
 {
     public sealed class WorldInteractionPresentationTests
     {
+        [TestCase(
+            "Assets/Arena/Runtime/Interaction/DoorMotor.cs",
+            typeof(DoorMotor))]
+        [TestCase(
+            "Assets/Arena/Runtime/Interaction/DoorInteractable.cs",
+            typeof(DoorInteractable))]
+        [TestCase(
+            "Assets/Arena/Runtime/Interaction/WorldInteractionHitbox.cs",
+            typeof(WorldInteractionHitbox))]
+        public void RuntimeComponents_HaveStableUnityScriptAssets(
+            string assetPath,
+            System.Type expectedType)
+        {
+            MonoScript script = AssetDatabase.LoadAssetAtPath<MonoScript>(assetPath);
+
+            Assert.That(script, Is.Not.Null, $"Missing MonoScript asset: {assetPath}");
+            Assert.That(script.GetClass(), Is.EqualTo(expectedType));
+        }
+
         [Test]
         public void LocalInteractionState_UsesAuthoritativeTimingAndNeverShowsInstantRows()
         {

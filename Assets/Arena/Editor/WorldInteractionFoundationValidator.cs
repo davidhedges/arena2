@@ -219,17 +219,30 @@ namespace Arena.Editor
                     throw new InvalidOperationException($"Missing Arena gateway variant: {path}");
 
                 DoorAuthoring? authoring = prefab.GetComponent<DoorAuthoring>();
-                if (authoring == null
-                    || !authoring.TemplateOnly
-                    || authoring.ProductionEnabled
-                    || prefab.GetComponent<DoorMotor>() == null
-                    || prefab.GetComponent<DoorInteractable>() == null)
+                DoorMotor? motor = prefab.GetComponent<DoorMotor>();
+                DoorInteractable? interactable = prefab.GetComponent<DoorInteractable>();
+                var violations = new List<string>();
+                if (authoring == null)
+                    violations.Add("missing DoorAuthoring");
+                else
+                {
+                    if (!authoring.TemplateOnly)
+                        violations.Add("TemplateOnly=false");
+                    if (authoring.ProductionEnabled)
+                        violations.Add("ProductionEnabled=true");
+                }
+                if (motor == null)
+                    violations.Add("missing DoorMotor (check missing script reference)");
+                if (interactable == null)
+                    violations.Add("missing DoorInteractable (check missing script reference)");
+                if (violations.Count > 0)
                 {
                     throw new InvalidOperationException(
-                        $"Gateway variant has an invalid template/component contract: {path}");
+                        $"Gateway variant has an invalid template/component contract: {path}. "
+                        + string.Join("; ", violations));
                 }
-                ValidateLeaves(authoring);
-                ValidateHitbox(prefab, authoring.DoorDefinitionId);
+                ValidateLeaves(authoring!);
+                ValidateHitbox(prefab, authoring!.DoorDefinitionId);
             }
             return RequiredGatewayVariants.Length;
         }

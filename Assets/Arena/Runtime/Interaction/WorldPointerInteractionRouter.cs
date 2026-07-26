@@ -9,6 +9,7 @@ using Arena.Network;
 using Arena.Simulation;
 using Arena.UI;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Arena.Interaction
 {
@@ -28,14 +29,22 @@ namespace Arena.Interaction
         private readonly List<WorldInteractionCandidate> _candidates = new(3);
         private WorldPointerGestureClassifier _gesture = null!;
         private WorldInteractionHitbox? _hoveredHitbox;
+        private string _lastRuntimeState = string.Empty;
+        private int _lastHitboxCount = -1;
 
         public static WorldPointerInteractionRouter? Instance { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene()
-                || FindAnyObjectByType<WorldPointerInteractionRouter>() != null)
+            bool gateOpen = ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene();
+            WorldPointerInteractionRouter? existing =
+                FindAnyObjectByType<WorldPointerInteractionRouter>();
+            Debug.Log(
+                $"[WorldInteraction] router bootstrap scene="
+                + $"'{SceneManager.GetActiveScene().path}' gate={gateOpen} "
+                + $"existing={existing != null}.");
+            if (!gateOpen || existing != null)
             {
                 return;
             }
@@ -57,6 +66,9 @@ namespace Arena.Interaction
             _gesture = new WorldPointerGestureClassifier(
                 MaxClickDurationSeconds,
                 MaxClickDistancePixels);
+            Debug.Log(
+                $"[WorldInteraction] router awake object='{name}'.",
+                this);
         }
 
         private void OnDestroy()
@@ -70,6 +82,7 @@ namespace Arena.Interaction
         {
             if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
             {
+                TraceRuntimeState("scene gate disabled");
                 _gesture.Cancel();
                 SetHoveredHitbox(null);
                 return;
@@ -79,9 +92,24 @@ namespace Arena.Interaction
             LocalPlayerInputSource? input = localPlayer?.GetLocalInputSource();
             if (localPlayer == null || input == null)
             {
+                TraceRuntimeState(
+                    $"waiting for runtime context: player={localPlayer != null}, "
+                    + $"input={input != null}");
                 _gesture.Cancel();
                 SetHoveredHitbox(null);
                 return;
+            }
+
+            TraceRuntimeState(
+                $"ready: scene='{SceneManager.GetActiveScene().path}', "
+                + $"camera={Camera.main != null}, cursorLocked={input.CursorLocked}");
+            int hitboxCount = WorldInteractionHitbox.ActiveHitboxes.Count;
+            if (_lastHitboxCount != hitboxCount)
+            {
+                _lastHitboxCount = hitboxCount;
+                Debug.Log(
+                    $"[WorldInteraction] active hitbox count={hitboxCount}.",
+                    this);
             }
 
             if (!input.CursorLocked)
@@ -107,6 +135,10 @@ namespace Arena.Interaction
                 if (!consumed)
                     consumed = SpellInputHandler.Instance?.TryCancelAimFromSecondaryWorldAction() == true;
 
+                Debug.Log(
+                    $"[WorldInteraction] right press pointer={Format(input.MousePosition)} "
+                    + $"consumed={consumed} cursorLocked={input.CursorLocked}.",
+                    this);
                 _gesture.Begin(input.MousePosition, Time.unscaledTime, consumed);
             }
 
@@ -121,6 +153,10 @@ namespace Arena.Interaction
                 input.MousePosition,
                 Time.unscaledTime,
                 blockedOnRelease);
+            Debug.Log(
+                $"[WorldInteraction] right release pointer={Format(input.MousePosition)} "
+                + $"blockedByUi={blockedOnRelease} result={result}.",
+                this);
             if (result == WorldPointerGestureResult.Click)
                 DispatchAtPointer(localPlayer, input.MousePosition);
         }
@@ -129,23 +165,49 @@ namespace Arena.Interaction
         {
             Camera? camera = Camera.main;
             if (camera == null)
+            {
+                Debug.LogWarning(
+                    "[WorldInteraction] click rejected: Camera.main is null.",
+                    this);
                 return;
+            }
 
             CollectCandidates(
                 camera,
                 screenPosition,
                 localPlayer,
                 out _,
-                out string propDenialReason);
-            if (_candidates.Count > 0)
-            {
-                WorldInteractionArbitration.TryDispatchBest(
+                out string propDenialReason,
+                out PropScanDiagnostics diagnostics);
+            Debug.Log(
+                $"[WorldInteraction] click scan pointer={Format(screenPosition)} "
+                + $"candidates={_candidates.Count}; {diagnostics}.",
+                this);
+            if (WorldInteractionArbitration.TrySelectBest(
                     _candidates,
-                    localPlayer.GetRenderPosition());
+                    localPlayer.GetRenderPosition(),
+                    out WorldInteractionCandidate selected))
+            {
+                bool dispatched = selected.Dispatch();
+                Debug.Log(
+                    $"[WorldInteraction] dispatch kind={selected.Kind} "
+                    + $"id='{selected.StableId}' verb='{selected.Verb}' "
+                    + $"maxRange={selected.MaxInteractionDistance:F2} "
+                    + $"accepted={dispatched}.",
+                    this);
             }
             else if (!string.IsNullOrWhiteSpace(propDenialReason))
             {
+                Debug.Log(
+                    $"[WorldInteraction] click denied: {propDenialReason}",
+                    this);
                 LocalInteractionState.ReportDenial(propDenialReason);
+            }
+            else
+            {
+                Debug.Log(
+                    "[WorldInteraction] click produced no selectable candidate.",
+                    this);
             }
         }
 
@@ -165,6 +227,7 @@ namespace Arena.Interaction
                 screenPosition,
                 localPlayer,
                 out WorldInteractionHitbox? propHitbox,
+                out _,
                 out _);
             bool hasSelectedCandidate = WorldInteractionArbitration.TrySelectBest(
                 _candidates,
@@ -187,7 +250,8 @@ namespace Arena.Interaction
             Vector2 screenPosition,
             PlayerEntity localPlayer,
             out WorldInteractionHitbox? propHitbox,
-            out string propDenialReason)
+            out string propDenialReason,
+            out PropScanDiagnostics propDiagnostics)
         {
             _candidates.Clear();
             if (InventoryScreen.TryGetLootCandidate(camera, screenPosition, out WorldInteractionCandidate loot))
@@ -206,7 +270,8 @@ namespace Arena.Interaction
                     localPlayer,
                     out WorldInteractionCandidate prop,
                     out propHitbox,
-                    out propDenialReason))
+                    out propDenialReason,
+                    out propDiagnostics))
             {
                 _candidates.Add(prop);
             }
@@ -218,11 +283,13 @@ namespace Arena.Interaction
             PlayerEntity localPlayer,
             out WorldInteractionCandidate candidate,
             out WorldInteractionHitbox? selectedHitbox,
-            out string denialReason)
+            out string denialReason,
+            out PropScanDiagnostics diagnostics)
         {
             candidate = default;
             selectedHitbox = null;
             denialReason = string.Empty;
+            diagnostics = default;
             IWorldInteractable? selectedInteractable = null;
             float bestScore = float.PositiveInfinity;
             string bestDenialReason = string.Empty;
@@ -232,35 +299,59 @@ namespace Arena.Interaction
 
             IReadOnlyList<WorldInteractionHitbox> hitboxes =
                 WorldInteractionHitbox.ActiveHitboxes;
+            diagnostics.Registered = hitboxes.Count;
             for (int i = 0; i < hitboxes.Count; i++)
             {
                 WorldInteractionHitbox hitbox = hitboxes[i];
                 if (hitbox == null || !hitbox.isActiveAndEnabled)
+                {
+                    diagnostics.Inactive++;
                     continue;
+                }
                 Collider? collider = hitbox.TargetCollider;
                 IWorldInteractable? interactable = hitbox.Interactable;
-                if (collider == null
-                    || !collider.enabled
-                    || interactable == null
-                    || collider.transform.IsChildOf(localPlayer.GameObject.transform)
-                    || !TryProjectBounds(
+                if (collider == null || !collider.enabled)
+                {
+                    diagnostics.MissingCollider++;
+                    continue;
+                }
+                if (interactable == null)
+                {
+                    diagnostics.MissingSource++;
+                    continue;
+                }
+                if (collider.transform.IsChildOf(localPlayer.GameObject.transform))
+                {
+                    diagnostics.Self++;
+                    continue;
+                }
+                if (!TryProjectBounds(
                         camera,
                         collider.bounds,
                         out Rect screenBounds,
-                        out float boundsDepth)
-                    || !WorldInteractionScreenTargeting.TryScore(
+                        out float boundsDepth))
+                {
+                    diagnostics.ProjectionFailed++;
+                    continue;
+                }
+                if (!WorldInteractionScreenTargeting.TryScore(
                         screenBounds,
                         screenPosition,
                         PropScreenPaddingPixels,
                         boundsDepth,
-                        out float score)
-                    || IsOccluded(
+                        out float score))
+                {
+                    diagnostics.ScreenMiss++;
+                    continue;
+                }
+                if (IsOccluded(
                         camera,
                         screenPosition,
                         localPlayer,
                         hitbox,
                         collider.bounds))
                 {
+                    diagnostics.Occluded++;
                     continue;
                 }
 
@@ -271,6 +362,7 @@ namespace Arena.Interaction
                     && (interactable.InteractionPoint - actorPosition).sqrMagnitude
                     > hoverRange * hoverRange)
                 {
+                    diagnostics.BeyondHoverRange++;
                     continue;
                 }
 
@@ -284,9 +376,11 @@ namespace Arena.Interaction
                         bestDenialReason = localDenialReason;
                         bestDeniedHitbox = hitbox;
                     }
+                    diagnostics.Denied++;
                     continue;
                 }
 
+                diagnostics.Viable++;
                 if (score > bestScore
                     || Mathf.Approximately(score, bestScore)
                     && selectedInteractable != null
@@ -328,10 +422,38 @@ namespace Arena.Interaction
             if (_hoveredHitbox == hitbox)
                 return;
 
+            string previous = Describe(_hoveredHitbox);
             _hoveredHitbox?.SetHovered(false);
             _hoveredHitbox = hitbox;
             _hoveredHitbox?.SetHovered(true);
+            Debug.Log(
+                $"[WorldInteraction] hover {previous} -> {Describe(_hoveredHitbox)}; "
+                + $"highlightSlots={_hoveredHitbox?.HighlightSlotCount ?? 0}.",
+                this);
         }
+
+        private void TraceRuntimeState(string state)
+        {
+            if (string.Equals(_lastRuntimeState, state, StringComparison.Ordinal))
+                return;
+
+            _lastRuntimeState = state;
+            Debug.Log($"[WorldInteraction] router state: {state}.", this);
+        }
+
+        private static string Describe(WorldInteractionHitbox? hitbox)
+        {
+            if (hitbox == null)
+                return "<none>";
+
+            IWorldInteractable? interactable = hitbox.Interactable;
+            return interactable == null
+                ? $"'{hitbox.name}'(missing source)"
+                : $"'{interactable.StableInteractionId}'";
+        }
+
+        private static string Format(Vector2 position)
+            => $"({position.x:F0},{position.y:F0})";
 
         private static bool TryProjectBounds(
             Camera camera,
@@ -427,6 +549,29 @@ namespace Arena.Interaction
         {
             public int Compare(RaycastHit x, RaycastHit y)
                 => x.distance.CompareTo(y.distance);
+        }
+
+        private struct PropScanDiagnostics
+        {
+            public int Registered;
+            public int Inactive;
+            public int MissingCollider;
+            public int MissingSource;
+            public int Self;
+            public int ProjectionFailed;
+            public int ScreenMiss;
+            public int Occluded;
+            public int BeyondHoverRange;
+            public int Denied;
+            public int Viable;
+
+            public override readonly string ToString()
+                => $"props registered={Registered}, inactive={Inactive}, "
+                    + $"missingCollider={MissingCollider}, missingSource={MissingSource}, "
+                    + $"self={Self}, projectionFailed={ProjectionFailed}, "
+                    + $"screenMiss={ScreenMiss}, occluded={Occluded}, "
+                    + $"beyondHoverRange={BeyondHoverRange}, denied={Denied}, "
+                    + $"viable={Viable}";
         }
     }
 }

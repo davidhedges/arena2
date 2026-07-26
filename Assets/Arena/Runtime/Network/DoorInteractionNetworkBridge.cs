@@ -6,6 +6,7 @@ using Arena.Simulation;
 using SpacetimeDB;
 using SpacetimeDB.Types;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Arena.Network
 {
@@ -23,8 +24,13 @@ namespace Arena.Network
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            bool gateOpen = ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene();
+            Debug.Log(
+                $"[WorldInteraction] network bridge bootstrap scene="
+                + $"'{SceneManager.GetActiveScene().path}' gate={gateOpen} "
+                + $"existing={_instance != null}.");
             if (_instance != null
-                || !ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
+                || !gateOpen)
             {
                 return;
             }
@@ -37,6 +43,7 @@ namespace Arena.Network
         private void OnEnable()
         {
             DoorInteractionRequests.Sink = this;
+            Debug.Log("[WorldInteraction] network bridge enabled; request sink assigned.", this);
         }
 
         private void Update()
@@ -72,6 +79,10 @@ namespace Arena.Network
             DbConnection? connection = NetworkManager.Instance?.Conn;
             if (connection == null || !connection.Identity.HasValue)
             {
+                Debug.LogWarning(
+                    $"[WorldInteraction] network request rejected id="
+                    + $"'{door.StableInteractionId}': no connected identity.",
+                    this);
                 LocalInteractionState.ReportDenial("Not connected");
                 return false;
             }
@@ -86,6 +97,11 @@ namespace Arena.Network
                 door.StableInteractionId,
                 desiredOpen,
                 observedRevision);
+            Debug.Log(
+                $"[WorldInteraction] reducer sent BeginWorldDoorAction "
+                + $"id='{door.StableInteractionId}' desiredOpen={desiredOpen} "
+                + $"observedRevision={observedRevision}.",
+                this);
             return true;
         }
 
@@ -105,6 +121,10 @@ namespace Arena.Network
             _connection = connection;
             connection.Reducers.OnBeginWorldDoorAction += OnBeginWorldDoorAction;
             connection.Reducers.OnCancelWorldInteraction += OnCancelWorldInteraction;
+            Debug.Log(
+                $"[WorldInteraction] network bridge attached "
+                + $"identity={connection.Identity.HasValue}.",
+                this);
         }
 
         private void Detach()
@@ -123,9 +143,11 @@ namespace Arena.Network
             bool desiredOpen,
             ulong observedRevision)
         {
-            _ = doorDefinitionId;
-            _ = desiredOpen;
-            _ = observedRevision;
+            Debug.Log(
+                $"[WorldInteraction] reducer result BeginWorldDoorAction "
+                + $"id='{doorDefinitionId}' desiredOpen={desiredOpen} "
+                + $"observedRevision={observedRevision} status={context.Event.Status}.",
+                this);
             ReportLocalFailure(context);
         }
 
