@@ -26,6 +26,7 @@ namespace Arena.Editor
             RandomDungeonSceneBuilder.RebuildWithSeed(seed);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
+            WorldInteractionFoundationValidator.ValidateCheckedInFoundation();
 
             Debug.Log(
                 $"[{nameof(WorldInteractionFoundationBuilder)}] Rebuilt interaction assets and RandomDungeon seed {seed}.");

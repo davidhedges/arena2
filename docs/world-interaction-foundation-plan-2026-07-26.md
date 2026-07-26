@@ -2,8 +2,9 @@
 
 Date: 2026-07-26
 
-Status: proposed implementation plan; no implementation is authorized by this
-document
+Status: approved and implemented through the five planned slices; interactive
+Unity asset generation and the two-client visual matrix remain operator gates.
+See `docs/world-interaction-setup-and-validation.md`.
 
 ## Goal
 

@@ -180,6 +180,11 @@ namespace Arena.Editor
                 throw new InvalidOperationException($"Door '{door.name}' has no stable definition ID.");
             if (!seen.Add(id))
                 throw new InvalidOperationException($"Duplicate door definition ID '{id}'.");
+            if (!door.ProductionEnabled)
+            {
+                throw new InvalidOperationException(
+                    $"Production door '{id}' is not interaction-enabled.");
+            }
             if (!string.Equals(
                     door.WorldDefinitionKey,
                     dataKey,

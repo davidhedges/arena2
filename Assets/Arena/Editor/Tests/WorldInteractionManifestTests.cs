@@ -69,7 +69,7 @@ namespace Arena.EditModeTests
                     "RANDOM_DUNGEON:GATEWAY:1:2:3",
                     "RANDOM_DUNGEON",
                     templateOnly: false,
-                    productionEnabled: false,
+                    productionEnabled: true,
                     defaultOpen: true,
                     definitionVersion: 1,
                     openInteractionProfileId: "WORLD_DOOR_INSTANT",
@@ -129,6 +129,31 @@ namespace Arena.EditModeTests
             {
                 Object.DestroyImmediate(first);
                 Object.DestroyImmediate(second);
+            }
+        }
+
+        [Test]
+        public void DoorManifest_RejectsProductionDoorThatIsNotEnabled()
+        {
+            GameObject door = CreateDoor("Disabled");
+            try
+            {
+                door.GetComponent<DoorAuthoring>().SetProductionEnabled(false);
+
+                System.InvalidOperationException exception =
+                    Assert.Throws<System.InvalidOperationException>(() =>
+                        WorldInteractionManifestExporter.BuildDoorManifestJson(
+                            "random_dungeon",
+                            new[] { door.GetComponent<DoorAuthoring>() },
+                            new HashSet<string> { "WORLD_DOOR_INSTANT" }))!;
+
+                Assert.That(
+                    exception.Message,
+                    Does.Contain("is not interaction-enabled"));
+            }
+            finally
+            {
+                Object.DestroyImmediate(door);
             }
         }
 
@@ -207,7 +232,7 @@ namespace Arena.EditModeTests
                 "RANDOM_DUNGEON:GATEWAY:DUPLICATE",
                 "RANDOM_DUNGEON",
                 templateOnly: false,
-                productionEnabled: false,
+                productionEnabled: true,
                 defaultOpen: true,
                 definitionVersion: 1,
                 openInteractionProfileId: "WORLD_DOOR_INSTANT",
