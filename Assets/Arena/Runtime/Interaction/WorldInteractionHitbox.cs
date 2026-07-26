@@ -15,7 +15,7 @@ namespace Arena.Interaction
             Shader.PropertyToID("_EmissionColor");
         private static readonly Color HoverTint = new(1f, 0.72f, 0.2f, 1f);
         private static readonly Color HoverEmission =
-            new(0.16f, 0.085f, 0.015f, 1f);
+            new(0.05f, 0.027f, 0.005f, 1f);
         private const string EmissionKeyword = "_EMISSION";
 
         [SerializeField] private MonoBehaviour? _interactableSource;
@@ -197,7 +197,7 @@ namespace Arena.Interaction
                         tint.a = baseColor.a;
                         highlighted.SetColor(
                             colorProperty,
-                            Color.Lerp(baseColor, tint, 0.38f));
+                            Color.Lerp(baseColor, tint, 0.24f));
                     }
                     if (supportsEmission)
                     {
