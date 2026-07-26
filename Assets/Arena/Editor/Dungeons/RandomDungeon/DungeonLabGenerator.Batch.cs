@@ -411,6 +411,7 @@ namespace DungeonLab.Editor
             var lines = new List<string>
             {
                 $"policy.version={ExternalConnectorPromontoryPolicyVersion}",
+                $"policy.rejectsConcavity={!IsOnExternalConnectorOuterFace(new RectInt(-3, -3, 7, 7), Vector2Int.zero, Direction.North)}",
                 $"versions.summary={ActiveDiagnosticSummaryVersion}",
                 $"versions.generator={ActiveDiagnosticGeneratorVersion}"
             };
@@ -435,13 +436,38 @@ namespace DungeonLab.Editor
                     out int afterCells,
                     out string error);
                 var directions = new HashSet<int>();
+                bool allLongAndStraight = true;
+                bool allOuter = true;
+                var probeExtent = new RectInt(-3, -3, 7, 7);
                 foreach (ExternalConnectorPromontoryResolution resolution in resolutions)
+                {
                     directions.Add(resolution.direction);
+                    allOuter &=
+                        IsOnExternalConnectorOuterFace(
+                            probeExtent,
+                            resolution.anchorCell,
+                            resolution.direction);
+                    Vector2Int outward = CardinalVector(resolution.direction);
+                    allLongAndStraight &= outward != Vector2Int.zero &&
+                        resolution.occupiedCells.Length == ExternalConnectorAppendageCells + 1;
+                    for (int index = 0; index < resolution.occupiedCells.Length; index++)
+                    {
+                        allLongAndStraight &=
+                            resolution.occupiedCells[index] ==
+                            resolution.anchorCell + outward * index;
+                    }
+
+                    allLongAndStraight &=
+                        resolution.terminalCell ==
+                        resolution.anchorCell + outward * ExternalConnectorAppendageCells;
+                }
                 lines.Add($"resolver.{count}.seed={seed}");
                 lines.Add($"resolver.{count}.resolved={resolved}");
                 lines.Add($"resolver.{count}.count={resolutions.Length}");
                 lines.Add($"resolver.{count}.uniqueDirections={directions.Count}");
                 lines.Add($"resolver.{count}.addedCells={afterCells - beforeCells}");
+                lines.Add($"resolver.{count}.allLongAndStraight={allLongAndStraight}");
+                lines.Add($"resolver.{count}.allOuter={allOuter}");
                 lines.Add($"resolver.{count}.error={error}");
             }
 
@@ -480,6 +506,8 @@ namespace DungeonLab.Editor
             JObject renderer = JObject.Parse(BuildRendererProbeJson(2026072100));
             lines.Add($"renderer.accepted={renderer.Value<bool?>("accepted") == true}");
             lines.Add($"renderer.passed={renderer["renderer"]?.Value<bool?>("passed") == true}");
+            lines.Add($"renderer.promontoryDeckCells={renderer["renderer"]?.Value<int?>("promontoryDeckCells") ?? -1}");
+            lines.Add($"renderer.expectedPromontoryDeckCells={renderer["renderer"]?.Value<int?>("expectedPromontoryDeckCells") ?? -1}");
             lines.Add($"renderer.rejected={renderer["renderer"]?.Value<int?>("rejectedPlacements") ?? -1}");
             return string.Join("\n", lines);
         }
@@ -2817,10 +2845,15 @@ namespace DungeonLab.Editor
                     }
                 }
 
+                int expectedPromontoryDeckCells =
+                    seedReport["tieredLevelPlan"]?.Value<int?>("promontoryCells") ?? 0;
+                expectedPromontoryDeckCells +=
+                    seedReport["tieredLevelPlan"]?.Value<int?>("externalConnectorPierCells") ?? 0;
                 bool rendererPassed =
                     buildReport.rejected == 0 &&
                     buildReport.floorCells > 0 &&
                     buildReport.transitionEdges > 0 &&
+                    buildReport.promontoryDeckCells == expectedPromontoryDeckCells &&
                     visualRecipe?.Value<bool?>("atomicAndValid") == true &&
                     selectedShowpieceCount == 1 &&
                     bounds.size.sqrMagnitude > 0.01f;
@@ -2846,6 +2879,8 @@ namespace DungeonLab.Editor
                         ["stairFootprintChecks"] = buildReport.stairFootprintChecks,
                         ["multiRiseStairChecks"] = buildReport.multiRiseStairChecks,
                         ["selectedShowpieces"] = selectedShowpieceCount,
+                        ["promontoryDeckCells"] = buildReport.promontoryDeckCells,
+                        ["expectedPromontoryDeckCells"] = expectedPromontoryDeckCells,
                         ["rejectedPlacements"] = buildReport.rejected,
                         ["boundsSize"] = Vector3Token(bounds.size),
                         ["summary"] = buildReport.Summary
@@ -3898,6 +3933,7 @@ namespace DungeonLab.Editor
 
             var directions = new HashSet<int>();
             var occupied = new HashSet<Vector2Int>();
+            RectInt finalExtent = GetCellRect(new HashSet<Vector2Int>(plan.cellLevels.Keys));
             foreach (ExternalConnectorPromontoryResolution resolution in resolutions)
             {
                 Vector2Int outward = CardinalVector(resolution.direction);
@@ -3910,22 +3946,27 @@ namespace DungeonLab.Editor
                     resolution.occupiedCells == null ||
                     resolution.occupiedCells.Length != ExternalConnectorAppendageCells + 1 ||
                     resolution.occupiedCells[0] != resolution.anchorCell ||
-                    resolution.occupiedCells[1] != resolution.anchorCell + outward ||
-                    resolution.occupiedCells[2] != resolution.anchorCell + outward * 2 ||
-                    resolution.terminalCell != resolution.occupiedCells[2] ||
+                    resolution.terminalCell !=
+                        resolution.anchorCell + outward * ExternalConnectorAppendageCells ||
+                    !IsOnExternalConnectorOuterFace(
+                        finalExtent,
+                        resolution.terminalCell,
+                        resolution.direction) ||
                     plan.cellLevels.ContainsKey(resolution.terminalCell + outward))
                 {
                     message = $"external connector '{resolution.id}' had invalid identity, direction, geometry, or terminal throat";
                     return false;
                 }
 
-                foreach (Vector2Int cell in resolution.occupiedCells)
+                for (int index = 0; index < resolution.occupiedCells.Length; index++)
                 {
+                    Vector2Int cell = resolution.occupiedCells[index];
                     if (!occupied.Add(cell) ||
+                        cell != resolution.anchorCell + outward * index ||
                         !plan.cellLevels.TryGetValue(cell, out int level) ||
                         level != resolution.level)
                     {
-                        message = $"external connector '{resolution.id}' overlapped another connector or changed level";
+                        message = $"external connector '{resolution.id}' bent, overlapped another connector, or changed level";
                         return false;
                     }
                 }
@@ -3937,7 +3978,7 @@ namespace DungeonLab.Editor
                 occupied.Count == desiredCount * (ExternalConnectorAppendageCells + 1) &&
                 openEdges.Count == desiredCount * 2;
             message = passed
-                ? $"resolved exact deterministic count {desiredCount} with unique directions, clear terminal throats, and {openEdges.Count} renderer openings"
+                ? $"resolved exact deterministic count {desiredCount} as {ExternalConnectorAppendageCells}-cell straight runs with unique directions, clear terminal throats, and {openEdges.Count} renderer openings"
                 : "external connector set was incomplete";
             return passed;
         }
@@ -4030,6 +4071,25 @@ namespace DungeonLab.Editor
             {
                 message = "renderer input had no leveled floor cells";
                 return false;
+            }
+
+            var renderedPromontoryCells = new HashSet<Vector2Int>(
+                CollectRenderedPromontoryCells(
+                    plan.namedPromontories,
+                    plan.externalConnectors));
+            foreach (ExternalConnectorPromontoryResolution resolution in
+                     plan.externalConnectors ?? Array.Empty<ExternalConnectorPromontoryResolution>())
+            {
+                for (int index = 1; index < resolution.occupiedCells.Length; index++)
+                {
+                    if (!renderedPromontoryCells.Contains(resolution.occupiedCells[index]))
+                    {
+                        message =
+                            $"renderer input omitted external promontory '{resolution.id}' cell " +
+                            $"{resolution.occupiedCells[index]}";
+                        return false;
+                    }
+                }
             }
 
             var prefabPaths = new HashSet<string>(StringComparer.Ordinal);
@@ -4149,6 +4209,7 @@ namespace DungeonLab.Editor
                 "DungeonLab Renderer Probe",
                 out buildReport,
                 out bounds);
+            RequireRenderedPromontoryDecks(plan, buildReport);
             if (plan.daisShowpieces != null && plan.daisShowpieces.Count > 0)
             {
                 PlaceDaisShowpieces(root.transform, plan.daisShowpieces, levelFieldOrigin, buildReport.levelHeight, ref bounds);

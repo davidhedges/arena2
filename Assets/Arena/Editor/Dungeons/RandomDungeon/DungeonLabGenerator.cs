@@ -390,6 +390,9 @@ namespace DungeonLab.Editor
                 Debug.LogError($"Dungeon Lab: shared elevation edge model failed. {exception.Message}");
                 return;
             }
+            // Unlike best-effort visual diagnostics, the requested 1-4 rendered
+            // outer promontories are a save-blocking production invariant.
+            RequireRenderedPromontoryDecks(levelPlan, report);
 
             if (levelPlan.daisShowpieces != null && levelPlan.daisShowpieces.Count > 0)
             {
@@ -1954,8 +1957,8 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            // Bounded corrective item: mandatory external connection stubs are
-            // the final plan mutation. Their hash-isolated policy consumes no
+            // Mandatory long, straight external promontories are the final plan
+            // mutation. Their hash-isolated policy consumes no
             // shared random and cannot change existing bridge, stair, recipe,
             // sweep, or scenic placement.
             if (!TryResolveExternalConnectorPromontories(
@@ -8334,8 +8337,8 @@ namespace DungeonLab.Editor
             // Phase 6e target-aware promontories. Canonical identity stays here;
             // renderer/abyss consumers receive only the derived cell projection.
             public readonly NamedVistaPromontoryResolution[] namedPromontories;
-            // Mandatory production-facing connection stubs remain canonical and
-            // separate from the optional scenic vista promontory.
+            // Mandatory production-facing long promontories remain canonical,
+            // cardinal, and separate from the optional scenic vista promontory.
             public readonly ExternalConnectorPromontoryResolution[] externalConnectors;
             public readonly RecipeResolution[] recipeResolutions;
             public readonly RouteRequirementResolution routeRequirementResolution;

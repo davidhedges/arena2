@@ -16,17 +16,22 @@ namespace Arena.Tests.Editor
             new Lazy<Dictionary<string, string>>(BuildSnapshot);
 
         [Test]
-        public void Policy_RealizesEveryExactCountWithUniqueDirections()
+        public void Policy_RealizesEveryExactCountAsLongStraightRunsWithUniqueDirections()
         {
             Dictionary<string, string> values = Snapshot.Value;
 
-            Assert.That(values["policy.version"], Is.EqualTo("external-connector-promontory-v1"));
+            Assert.That(
+                values["policy.version"],
+                Is.EqualTo("external-connector-promontory-v3-outer-long-straight"));
+            Assert.That(values["policy.rejectsConcavity"], Is.EqualTo("True"));
             for (int count = 1; count <= 4; count++)
             {
                 Assert.That(values[$"resolver.{count}.resolved"], Is.EqualTo("True"));
                 Assert.That(values[$"resolver.{count}.count"], Is.EqualTo(count.ToString()));
                 Assert.That(values[$"resolver.{count}.uniqueDirections"], Is.EqualTo(count.ToString()));
-                Assert.That(values[$"resolver.{count}.addedCells"], Is.EqualTo((count * 2).ToString()));
+                Assert.That(values[$"resolver.{count}.addedCells"], Is.EqualTo((count * 8).ToString()));
+                Assert.That(values[$"resolver.{count}.allLongAndStraight"], Is.EqualTo("True"));
+                Assert.That(values[$"resolver.{count}.allOuter"], Is.EqualTo("True"));
                 Assert.That(values[$"resolver.{count}.error"], Is.Empty);
             }
         }
@@ -70,6 +75,10 @@ namespace Arena.Tests.Editor
 
             Assert.That(values["renderer.accepted"], Is.EqualTo("True"));
             Assert.That(values["renderer.passed"], Is.EqualTo("True"));
+            Assert.That(
+                values["renderer.promontoryDeckCells"],
+                Is.EqualTo(values["renderer.expectedPromontoryDeckCells"]));
+            Assert.That(int.Parse(values["renderer.promontoryDeckCells"]), Is.GreaterThanOrEqualTo(8));
             Assert.That(values["renderer.rejected"], Is.EqualTo("0"));
         }
 

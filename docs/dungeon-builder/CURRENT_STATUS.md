@@ -41,7 +41,10 @@ Always publish/restart the server module after regenerating, so server movement 
 - Seven route topologies, one drawn per seed by weight: processional spine, atrium ring, twin-wing keep, cataract shaft (descending), sunken basin, terraced cascade, ridge and ravine. Each is one JSON file under `Assets/Arena/Editor/Dungeons/RandomDungeon/Topologies/`; adding one costs no C#.
 - Three required recipe slots (`required-compression`, `required-landmark`, `required-return`) filled from an explicit catalog; four enabled recipes currently.
 - Vertical traversal from reviewed stair contracts, forged contracts, online synthesis, stairwell towers, and bridges — in that fallback order.
-- One planned vista with a reserved sight corridor, plus 1–4 external connector promontories.
+- One planned vista with a reserved sight corridor, plus 1–4 external connector
+  promontories. Each external promontory is a straight eight-cell (32u) run,
+  with at most one per cardinal direction. Its first added cell crosses the
+  core dungeon's global outer face; exterior-connected concavities do not count.
 - Everything rises from a shared abyss datum.
 
 ## Where the work stands

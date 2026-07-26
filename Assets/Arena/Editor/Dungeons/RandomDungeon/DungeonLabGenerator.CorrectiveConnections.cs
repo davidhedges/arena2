@@ -4,15 +4,18 @@ using UnityEngine;
 
 namespace DungeonLab.Editor
 {
-    // Bounded production correction: every accepted tier plan receives one to
-    // four explicit, outward-facing connection stubs. Selection is isolated
+    // Every accepted tier plan receives one to four long, straight,
+    // outward-facing promontories, with at most one per cardinal direction.
+    // Selection is isolated
     // from every existing random stream and runs only after the established
     // route, recipe/showpiece, stair, bridge, sweep, and scenic work is complete.
     internal sealed partial class DungeonLabGenerator
     {
         private const string ExternalConnectorPromontoryPolicyVersion =
-            "external-connector-promontory-v1";
-        private const int ExternalConnectorAppendageCells = 2;
+            "external-connector-promontory-v3-outer-long-straight";
+        // Eight 4u grid cells make each promontory project 32 world units beyond
+        // its core-floor anchor. The next cell remains a clear terminal throat.
+        private const int ExternalConnectorAppendageCells = 8;
         private const string ExternalConnectorRejectionCode =
             "EXTERNAL_CONNECTOR_PROMONTORY";
 
@@ -34,7 +37,7 @@ namespace DungeonLab.Editor
             public readonly Vector2Int anchorCell;
             public readonly Vector2Int terminalCell;
             public readonly int level;
-            // Canonical order is anchor, appendage cell, terminal cell.
+            // Canonical order is anchor followed by each straight outward cell.
             public readonly Vector2Int[] occupiedCells;
 
             public ExternalConnectorPromontoryResolution(
@@ -102,12 +105,14 @@ namespace DungeonLab.Editor
             }
 
             HashSet<Vector2Int> exteriorVoid = BuildExternalConnectorExteriorVoid(cellLevels);
+            RectInt coreExtent = GetCellRect(new HashSet<Vector2Int>(layout.floorCells));
             var candidatesByDirection = new Dictionary<int, List<ExternalConnectorCandidate>>();
             foreach (int direction in Direction.Cardinals)
             {
                 candidatesByDirection[direction] = BuildExternalConnectorCandidates(
                     dungeonSeed,
                     direction,
+                    coreExtent,
                     layout.floorCells,
                     cellLevels,
                     exteriorVoid,
@@ -166,6 +171,7 @@ namespace DungeonLab.Editor
         private static List<ExternalConnectorCandidate> BuildExternalConnectorCandidates(
             int dungeonSeed,
             int direction,
+            RectInt coreExtent,
             IReadOnlyCollection<Vector2Int> coreFloorCells,
             IReadOnlyDictionary<Vector2Int, int> cellLevels,
             HashSet<Vector2Int> exteriorVoid,
@@ -176,27 +182,37 @@ namespace DungeonLab.Editor
             foreach (Vector2Int anchor in coreFloorCells)
             {
                 if (excluded.Contains(anchor) ||
+                    !IsOnExternalConnectorOuterFace(coreExtent, anchor, direction) ||
                     !cellLevels.TryGetValue(anchor, out int level))
                 {
                     continue;
                 }
 
-                Vector2Int appendage = anchor + outward;
-                Vector2Int terminal = appendage + outward;
-                Vector2Int throat = terminal + outward;
-                if (cellLevels.ContainsKey(appendage) ||
-                    cellLevels.ContainsKey(terminal) ||
-                    cellLevels.ContainsKey(throat) ||
-                    excluded.Contains(appendage) ||
-                    excluded.Contains(terminal) ||
-                    excluded.Contains(throat) ||
-                    !exteriorVoid.Contains(appendage) ||
-                    !exteriorVoid.Contains(terminal) ||
-                    !exteriorVoid.Contains(throat))
+                var occupiedCells = new Vector2Int[ExternalConnectorAppendageCells + 1];
+                occupiedCells[0] = anchor;
+                bool runIsClear = true;
+                for (int distance = 1;
+                     distance <= ExternalConnectorAppendageCells + 1;
+                     distance++)
                 {
-                    continue;
+                    Vector2Int cell = anchor + outward * distance;
+                    if (cellLevels.ContainsKey(cell) ||
+                        excluded.Contains(cell) ||
+                        !exteriorVoid.Contains(cell))
+                    {
+                        runIsClear = false;
+                        break;
+                    }
+
+                    if (distance <= ExternalConnectorAppendageCells)
+                        occupiedCells[distance] = cell;
                 }
 
+                if (!runIsClear)
+                    continue;
+
+                Vector2Int terminal = occupiedCells[ExternalConnectorAppendageCells];
+                Vector2Int throat = anchor + outward * (ExternalConnectorAppendageCells + 1);
                 candidates.Add(new ExternalConnectorCandidate
                 {
                     direction = direction,
@@ -204,7 +220,7 @@ namespace DungeonLab.Editor
                     terminalCell = terminal,
                     throatCell = throat,
                     level = level,
-                    occupiedCells = new[] { anchor, appendage, terminal },
+                    occupiedCells = occupiedCells,
                     priority = ExternalConnectorStableHash(
                         dungeonSeed,
                         $"anchor:{direction}:{anchor.x}:{anchor.y}")
@@ -219,6 +235,20 @@ namespace DungeonLab.Editor
                     : CompareCells(first.anchorCell, second.anchorCell);
             });
             return candidates;
+        }
+
+        private static bool IsOnExternalConnectorOuterFace(
+            RectInt extent,
+            Vector2Int cell,
+            int direction)
+        {
+            return direction == Direction.North
+                ? cell.y == extent.yMax - 1
+                : direction == Direction.East
+                    ? cell.x == extent.xMax - 1
+                    : direction == Direction.South
+                        ? cell.y == extent.yMin
+                        : direction == Direction.West && cell.x == extent.xMin;
         }
 
         private static HashSet<Vector2Int> BuildExternalConnectorExteriorVoid(
@@ -449,6 +479,28 @@ namespace DungeonLab.Editor
             }
 
             return result;
+        }
+
+        private static void RequireRenderedPromontoryDecks(
+            TieredLevelPlan plan,
+            ElevationEdgeModel.BuildReport report)
+        {
+            int externalCount = plan.externalConnectors?.Length ?? 0;
+            if (externalCount < 1 || externalCount > 4)
+            {
+                throw new InvalidOperationException(
+                    $"Rendered dungeon required 1-4 external promontories; plan carried {externalCount}.");
+            }
+
+            int expectedDeckCells = CollectRenderedPromontoryCells(
+                plan.namedPromontories,
+                plan.externalConnectors).Count;
+            if (report.promontoryDeckCells != expectedDeckCells)
+            {
+                throw new InvalidOperationException(
+                    $"Rendered dungeon produced {report.promontoryDeckCells} of " +
+                    $"{expectedDeckCells} required promontory deck cells.");
+            }
         }
     }
 }

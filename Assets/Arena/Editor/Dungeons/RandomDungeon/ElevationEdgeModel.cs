@@ -877,6 +877,7 @@ namespace DungeonLab.Editor
                 stats.internalPathRailings,
                 stats.internalPathBareEdges,
                 stats.bareBoundaryEdges,
+                stats.promontoryDeckCells,
                 stats.rejected,
                 contracts.rejectedContracts,
                 contracts.rejectedContractReasons,
@@ -5153,6 +5154,7 @@ namespace DungeonLab.Editor
             {
                 stats.stairSummaries.Add($"promontory deck slabs: {slabs}");
             }
+            stats.promontoryDeckCells = pillars + slabs;
 
             // Deck thickness (the gold deck is a thick slab, not a flat plane):
             // a wall-cover fascia runs every void-facing deck edge at the deck
@@ -10049,6 +10051,7 @@ namespace DungeonLab.Editor
             public int internalPathRailings;
             public int internalPathBareEdges;
             public int bareBoundaryEdges;
+            public int promontoryDeckCells;
             public int stairOpenings;
             public int stairFootprintChecks;
             public int multiRiseStairChecks;
@@ -10416,6 +10419,7 @@ namespace DungeonLab.Editor
             public readonly int internalPathRailings;
             public readonly int internalPathBareEdges;
             public readonly int bareBoundaryEdges;
+            public readonly int promontoryDeckCells;
             public readonly int rejected;
             public readonly int rejectedContracts;
             public readonly string rejectedContractReasons;
@@ -10423,7 +10427,7 @@ namespace DungeonLab.Editor
             public readonly string unsupportedContractReasons;
             public readonly string stairSummary;
             public string Summary =>
-                $"levelHeight {levelHeight:0.###}u; cells {floorCells}; interior {interiorEdges}; cliffs {cliffEdges}; retaining {retainingEdges}; transitions {transitionEdges}; enclosed rooms {enclosedRooms}/{totalRooms}, partition walls {partitionWalls} ({largePartitionWalls} large), large-perimeter rooms {largePerimeterRooms}, railings {railings}, internal path edges {internalPathEdges}, internal path railings {internalPathRailings}, internal path bare edges {internalPathBareEdges}, bare boundary edges {bareBoundaryEdges}, doorways {doorways}, static gateways {gateways} ({largeGateways} at 6u, {barredGateways} barred), traps {traps}, partitionWallChecks {partitionWallChecks} passed; stairFootprintChecks {stairFootprintChecks} passed; multiRiseStairChecks {multiRiseStairChecks} passed; corners {corners}; REJECTED {rejected}; {stairSummary}";
+                $"levelHeight {levelHeight:0.###}u; cells {floorCells}; interior {interiorEdges}; cliffs {cliffEdges}; retaining {retainingEdges}; transitions {transitionEdges}; enclosed rooms {enclosedRooms}/{totalRooms}, partition walls {partitionWalls} ({largePartitionWalls} large), large-perimeter rooms {largePerimeterRooms}, railings {railings}, internal path edges {internalPathEdges}, internal path railings {internalPathRailings}, internal path bare edges {internalPathBareEdges}, bare boundary edges {bareBoundaryEdges}, promontory deck cells {promontoryDeckCells}, doorways {doorways}, static gateways {gateways} ({largeGateways} at 6u, {barredGateways} barred), traps {traps}, partitionWallChecks {partitionWallChecks} passed; stairFootprintChecks {stairFootprintChecks} passed; multiRiseStairChecks {multiRiseStairChecks} passed; corners {corners}; REJECTED {rejected}; {stairSummary}";
 
             public BuildReport(
                 float levelHeight,
@@ -10451,6 +10455,7 @@ namespace DungeonLab.Editor
                 int internalPathRailings,
                 int internalPathBareEdges,
                 int bareBoundaryEdges,
+                int promontoryDeckCells,
                 int rejected,
                 int rejectedContracts,
                 string rejectedContractReasons,
@@ -10483,6 +10488,7 @@ namespace DungeonLab.Editor
                 this.internalPathRailings = internalPathRailings;
                 this.internalPathBareEdges = internalPathBareEdges;
                 this.bareBoundaryEdges = bareBoundaryEdges;
+                this.promontoryDeckCells = promontoryDeckCells;
                 this.rejected = rejected;
                 this.rejectedContracts = rejectedContracts;
                 this.rejectedContractReasons = rejectedContractReasons ?? "[]";
