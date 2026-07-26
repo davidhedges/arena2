@@ -131,6 +131,7 @@ namespace DungeonLab.Editor
             public HashSet<Vector2Int> excluded;
             public HashSet<Vector2Int> corridorCells;
             public HashSet<Vector2Int> taken;
+            public HashSet<Vector2Int> partialFloorCells;
         }
 
         private static int PlaceTraps(
@@ -146,6 +147,7 @@ namespace DungeonLab.Editor
             RoomBoundaryContext roomBoundaryContext,
             GatewaySocketPlan gatewaySocketPlan,
             IReadOnlyCollection<Vector2Int> promontoryCells,
+            IReadOnlyCollection<Vector2Int> partialFloorCells,
             ref Bounds bounds,
             ref bool hasBounds)
         {
@@ -183,6 +185,9 @@ namespace DungeonLab.Editor
                 excluded = excluded,
                 corridorCells = BuildCorridorCellSet(levels, roomBoundaryContext),
                 taken = new HashSet<Vector2Int>(),
+                partialFloorCells = partialFloorCells != null
+                    ? new HashSet<Vector2Int>(partialFloorCells)
+                    : new HashSet<Vector2Int>(),
             };
 
             List<Vector2Int> candidates = levels.Keys
@@ -283,6 +288,16 @@ namespace DungeonLab.Editor
             switch (spec.kind)
             {
                 case TrapKind.Spikes:
+                    // Rounded and chamfered corner meshes cover only part of their
+                    // logical plan cell. A full-cell spike field would hang over
+                    // the cut edge even though the cell remains walkable.
+                    if (context.partialFloorCells.Contains(cell))
+                    {
+                        return false;
+                    }
+                    placement = new TrapPlacement(spec, cell, level, cellCenter, 0f, new[] { cell });
+                    return true;
+
                 case TrapKind.SawPost:
                     placement = new TrapPlacement(spec, cell, level, cellCenter, 0f, new[] { cell });
                     return true;

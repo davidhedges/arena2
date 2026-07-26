@@ -306,6 +306,7 @@ namespace DungeonLab.Editor
 
                 wallEdges.RemoveAll(edge => replacedEdges.Contains((edge.edge.x, edge.edge.z, edge.edge.direction)));
             }
+            var partialFloorCells = new HashSet<Vector2Int>();
 
             // Gateway sockets are derived from the surviving straight-wall
             // architecture, and a corner-owned face is NOT a candidate flank.
@@ -374,6 +375,7 @@ namespace DungeonLab.Editor
                         DaisFullCellPivotWorld(item.Key, cornerSwap.yaw, origin) + Vector3.up * (item.Value * contracts.levelHeight),
                         cornerSwap.yaw);
                     EncapsulateInstance(roundFloorInstance, ref bounds, ref hasBounds);
+                    partialFloorCells.Add(item.Key);
                     continue;
                 }
 
@@ -444,6 +446,7 @@ namespace DungeonLab.Editor
                 roomBoundaryContext,
                 gatewaySocketPlan,
                 promontorySet,
+                partialFloorCells,
                 ref bounds,
                 ref hasBounds);
 
@@ -4852,18 +4855,10 @@ namespace DungeonLab.Editor
             var leaves = new List<GatewayLeafPose>(2);
             if (style == GatewayStyle.OpenArch || style == GatewayStyle.Barred)
             {
-                Transform doorAssembly = FindFirstDescendant(
-                    instance.transform,
-                    name => name.StartsWith(
-                        "P_MOD_Gateway_Door_01_med",
-                        StringComparison.Ordinal));
-                if (doorAssembly == null)
-                {
-                    throw new InvalidOperationException(
-                        $"Gateway '{instance.name}' had no medium door assembly to remove for {style}.");
-                }
-
-                doorAssembly.gameObject.SetActive(false);
+                Transform doorLeaf = FindRequiredGatewayDescendant(
+                    instance,
+                    "MOD_Gateway_Door_01_med_01_door");
+                doorLeaf.gameObject.SetActive(false);
                 return leaves;
             }
 

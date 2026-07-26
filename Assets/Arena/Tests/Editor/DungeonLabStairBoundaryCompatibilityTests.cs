@@ -585,6 +585,39 @@ namespace Arena.Tests.Editor
                 "The bare treatment must remain scoped to the exact orphan landing edge.");
         }
 
+        [Test]
+        public void BarredGateway_DisablesOnlyMetalDoorLeaf()
+        {
+            Transform[] barredGateways = AllTransforms()
+                .Where(transform => transform.name.StartsWith(
+                    "gateway_barred_",
+                    StringComparison.Ordinal))
+                .ToArray();
+
+            Assert.That(
+                barredGateways,
+                Is.Not.Empty,
+                $"Seed {RegressionSeed} did not produce a barred gateway.");
+            foreach (Transform gateway in barredGateways)
+            {
+                Transform[] descendants =
+                    gateway.GetComponentsInChildren<Transform>(includeInactive: true);
+                Transform doorAssembly = descendants.Single(transform =>
+                    transform.name == "P_MOD_Gateway_Door_01_med_01");
+                Transform doorLeaf = descendants.Single(transform =>
+                    transform.name == "MOD_Gateway_Door_01_med_01_door");
+
+                Assert.That(
+                    doorAssembly.gameObject.activeSelf,
+                    Is.True,
+                    $"{gateway.name} must preserve the authored metal doorway assembly.");
+                Assert.That(
+                    doorLeaf.gameObject.activeSelf,
+                    Is.False,
+                    $"{gateway.name} must suppress only the metal door leaf behind its bars.");
+            }
+        }
+
         [TestCase(false, 0, false, 0)]
         [TestCase(true, 4, false, 0)]
         [TestCase(false, 0, true, 4)]
@@ -1103,6 +1136,110 @@ namespace Arena.Tests.Editor
         {
             Vector3 size = Vector3.Min(first.max, second.max) - Vector3.Max(first.min, second.min);
             return size.x > 0.01f && size.y > 0.01f && size.z > 0.01f;
+        }
+    }
+
+    public sealed class DungeonTrapPlacementTests
+    {
+        private static readonly Type ElevationEdgeModelType = AppDomain.CurrentDomain
+            .Load("Assembly-CSharp-Editor")
+            .GetType("DungeonLab.Editor.ElevationEdgeModel", throwOnError: true)!;
+
+        [Test]
+        public void PartialFloorCell_RejectsSpikesWithoutRejectingSawPost()
+        {
+            var cell = new Vector2Int(4, 7);
+            object context = CreateContext(cell, partial: true);
+
+            Assert.That(
+                TryResolvePlacement(CreateSettings(spikesWeight: 1, sawPostWeight: 0), context, cell),
+                Is.False,
+                "A full-cell spike field must not overhang a rounded or chamfered floor tile.");
+            Assert.That(
+                TryResolvePlacement(CreateSettings(spikesWeight: 0, sawPostWeight: 1), context, cell),
+                Is.True,
+                "The partial-floor restriction is specific to the full-cell spike field.");
+        }
+
+        [Test]
+        public void CompleteFloorCell_AcceptsSpikes()
+        {
+            var cell = new Vector2Int(4, 7);
+
+            Assert.That(
+                TryResolvePlacement(
+                    CreateSettings(spikesWeight: 1, sawPostWeight: 0),
+                    CreateContext(cell, partial: false),
+                    cell),
+                Is.True);
+        }
+
+        private static object CreateSettings(int spikesWeight, int sawPostWeight)
+        {
+            Type settingsType = ElevationEdgeModelType.GetNestedType(
+                "TrapPlacementSettings",
+                BindingFlags.Public)!;
+            return Activator.CreateInstance(
+                settingsType,
+                new object[]
+                {
+                    1234,
+                    true,
+                    1,
+                    1,
+                    1,
+                    0,
+                    spikesWeight,
+                    sawPostWeight,
+                    0,
+                    0
+                })!;
+        }
+
+        private static object CreateContext(Vector2Int cell, bool partial)
+        {
+            Type contextType = ElevationEdgeModelType.GetNestedType(
+                "TrapPlacementContext",
+                BindingFlags.NonPublic)!;
+            object context = Activator.CreateInstance(contextType, nonPublic: true)!;
+            SetField(context, "levels", new Dictionary<Vector2Int, int> { [cell] = 4 });
+            SetField(context, "excluded", new HashSet<Vector2Int>());
+            SetField(context, "corridorCells", new HashSet<Vector2Int>());
+            SetField(context, "taken", new HashSet<Vector2Int>());
+            SetField(
+                context,
+                "partialFloorCells",
+                partial
+                    ? new HashSet<Vector2Int> { cell }
+                    : new HashSet<Vector2Int>());
+            return context;
+        }
+
+        private static bool TryResolvePlacement(object settings, object context, Vector2Int cell)
+        {
+            MethodInfo method = ElevationEdgeModelType.GetMethod(
+                "TryResolveTrapPlacement",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            Type placementType = ElevationEdgeModelType.GetNestedType(
+                "TrapPlacement",
+                BindingFlags.NonPublic)!;
+            object?[] arguments =
+            {
+                settings,
+                context,
+                cell,
+                Vector3.zero,
+                4f,
+                Activator.CreateInstance(placementType)
+            };
+            return (bool)method.Invoke(null, arguments)!;
+        }
+
+        private static void SetField(object target, string fieldName, object value)
+        {
+            target.GetType()
+                .GetField(fieldName, BindingFlags.Instance | BindingFlags.Public)!
+                .SetValue(target, value);
         }
     }
 }
