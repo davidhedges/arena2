@@ -370,7 +370,10 @@ namespace Arena.Interaction
 
     [DisallowMultipleComponent]
     [RequireComponent(typeof(DoorAuthoring), typeof(DoorMotor))]
-    public sealed class DoorInteractable : MonoBehaviour, IWorldInteractable
+    public sealed class DoorInteractable :
+        MonoBehaviour,
+        IWorldInteractable,
+        IWorldInteractionHighlightSource
     {
         [SerializeField] private DoorAuthoring? _authoring;
         [SerializeField] private DoorMotor? _motor;
@@ -465,6 +468,30 @@ namespace Arena.Interaction
             _knownOpen = defaultOpen;
             _knownRevision = 0UL;
             _motor?.SnapToState(defaultOpen, 0UL);
+        }
+
+        public void CollectHighlightRenderers(List<Renderer> renderers)
+        {
+            if (renderers == null)
+                throw new ArgumentNullException(nameof(renderers));
+
+            _authoring ??= GetComponent<DoorAuthoring>();
+            if (_authoring == null)
+                return;
+
+            var seen = new HashSet<Renderer>();
+            foreach (DoorAuthoring.LeafPose pose in _authoring.Leaves)
+            {
+                Transform? leaf = pose.Leaf;
+                if (leaf == null)
+                    continue;
+
+                foreach (Renderer renderer in leaf.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (renderer != null && seen.Add(renderer))
+                        renderers.Add(renderer);
+                }
+            }
         }
     }
 }

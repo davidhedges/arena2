@@ -107,6 +107,33 @@ namespace Arena.EditModeTests
             Assert.That(dispatches, Is.Zero);
         }
 
+        [Test]
+        public void ScreenTargeting_AcceptsForgivingNearMissWithinPadding()
+        {
+            bool selected = WorldInteractionScreenTargeting.TryScore(
+                new Rect(100f, 100f, 80f, 160f),
+                new Vector2(207f, 180f),
+                32f,
+                8f,
+                out float score);
+
+            Assert.That(selected, Is.True);
+            Assert.That(score, Is.GreaterThanOrEqualTo(0f));
+        }
+
+        [Test]
+        public void ScreenTargeting_RejectsPointerOutsideForgivingPadding()
+        {
+            bool selected = WorldInteractionScreenTargeting.TryScore(
+                new Rect(100f, 100f, 80f, 160f),
+                new Vector2(213f, 180f),
+                32f,
+                8f,
+                out _);
+
+            Assert.That(selected, Is.False);
+        }
+
         private static WorldInteractionCandidate Candidate(
             string stableId,
             float depth,

@@ -4947,7 +4947,7 @@ namespace DungeonLab.Editor
                 closeInteractionProfileId: "WORLD_DOOR_INSTANT",
                 interactionAnchorLocal: instance.transform.InverseTransformPoint(
                     edgeMidpoint + Vector3.up * 1.25f),
-                maxInteractionDistance: 3.25f,
+                maxInteractionDistance: 4.25f,
                 closedBlockerCenterLocal: localBlockerCenter,
                 closedBlockerSize: blockerSize,
                 closedBlockerLocalYaw: localBlockerYaw,

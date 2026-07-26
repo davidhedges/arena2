@@ -145,7 +145,7 @@ namespace Arena.Editor
                     openInteractionProfileId: "WORLD_DOOR_INSTANT",
                     closeInteractionProfileId: "WORLD_DOOR_INSTANT",
                     interactionAnchorLocal: localBounds.center,
-                    maxInteractionDistance: 3.25f,
+                    maxInteractionDistance: 4.25f,
                     closedBlockerCenterLocal: localBounds.center,
                     closedBlockerSize: blockerSize,
                     closedBlockerLocalYaw: blockerYaw,
