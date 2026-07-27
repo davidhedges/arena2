@@ -153,6 +153,31 @@ namespace DungeonLab.Editor
         }
     }
 
+    // One row of the dial. Everything is relative to the profile's authored
+    // values, so row 0 is the identity and the sparse end of the dial is
+    // whatever the profile says rather than a special case in code.
+    internal readonly struct DungeonDensityRow
+    {
+        public readonly int pitchDeltaCells;
+        public readonly int latticeSlackMaxCells;
+        // How much of density 0's channel around a room survives. 0 means rooms
+        // meet their neighbours; 1 means the profile's own airiness.
+        public readonly float roomGapScale;
+        public readonly float enclosedRoomChance;
+
+        public DungeonDensityRow(
+            int pitchDeltaCells,
+            int latticeSlackMaxCells,
+            float roomGapScale,
+            float enclosedRoomChance)
+        {
+            this.pitchDeltaCells = pitchDeltaCells;
+            this.latticeSlackMaxCells = latticeSlackMaxCells;
+            this.roomGapScale = roomGapScale;
+            this.enclosedRoomChance = enclosedRoomChance;
+        }
+    }
+
     // The density dial: one integer, chosen at generation time, that says how
     // much incidental void the dungeon keeps. It replaced the spacious/dense
     // profile pair on 2026-07-27 (docs/dungeon-builder/density-scale-design-2026-07-27.md).
@@ -167,9 +192,30 @@ namespace DungeonLab.Editor
         public const int MinLevel = 0;
         public const int MaxLevel = 5;
 
+        // The §4.3 tuning table. It is a table on purpose: phase 6 retunes the
+        // dial by looking at sentinels and editing these six rows, not by
+        // rebuilding anything. The fill and max-void-component columns of §4.3
+        // are TARGETS to measure against, not inputs — they are not here because
+        // nothing reads them.
+        private static readonly DungeonDensityRow[] Rows =
+        {
+            //                    pitchDelta  slack  gapScale  enclosure
+            new DungeonDensityRow(         0,     8,     1.00f,     0.5f),
+            new DungeonDensityRow(         0,     6,     0.80f,     0.6f),
+            new DungeonDensityRow(         0,     4,     0.60f,     0.7f),
+            new DungeonDensityRow(         0,     2,     0.40f,     0.8f),
+            new DungeonDensityRow(         0,     1,     0.20f,     0.9f),
+            new DungeonDensityRow(         0,     0,     0.00f,     1.0f)
+        };
+
         public static int Clamp(int level)
         {
             return Mathf.Clamp(level, MinLevel, MaxLevel);
+        }
+
+        public static DungeonDensityRow Row(int level)
+        {
+            return Rows[Clamp(level)];
         }
     }
 
@@ -305,6 +351,9 @@ namespace DungeonLab.Editor
                 loopConnectionFraction = loopConnectionFraction,
                 maxLoopCandidateDistanceCells = maxLoopCandidateDistanceCells,
                 roomZoneSplitChance = roomZoneSplitChance,
+                // Not a spatial setting, but it is on the same dial: once rooms
+                // abut, an unenclosed pair merges into one open field.
+                enclosedRoomChance = DungeonDensity.Row(level).enclosedRoomChance,
                 // The dial becomes geometry HERE and nowhere else. Applied on
                 // the load path rather than inside Validated(), because
                 // Validated() is called repeatedly on an already-resolved value
@@ -318,34 +367,100 @@ namespace DungeonLab.Editor
         /// The one seam where <c>densityLevel</c> turns into spatial settings.
         /// </summary>
         /// <remarks>
-        /// Phase 1 of the density-scale design is the flag-to-dial refactor: it
-        /// makes the dial the thing the editor, the environment and the batch
-        /// tools choose, and deletes the spacious/dense profile pair. It
-        /// deliberately does NOT move geometry — density 0 has to be identical
-        /// to the old <c>spacious</c> profile, gated on the per-seed canonical
-        /// hash vector — and the phases that give the other five levels meaning
-        /// are scheduled after it:
-        /// <list type="bullet">
-        /// <item>phase 2 (M1): a measured transition reservation replaces the
-        /// <c>BaselineRoomSizeRangeForRole</c> axis cap, and the stairwell shaft
-        /// becomes an explicit reservation.</item>
-        /// <item>phase 3 (M2): lane pitch, room size, lattice slack, envelope
-        /// radius and enclosure chance become functions of the dial, per the
-        /// tuning table in §4.3 of the design.</item>
-        /// <item>phase 4 (M3): vacant lattice cells are annexed by a neighbour.</item>
-        /// <item>phase 5 (M4): mop-up and chamber subdivision.</item>
-        /// </list>
-        /// Until phase 3 edits this method, every level returns the profile's
-        /// authored settings, so levels 1-5 produce density 0's geometry. That
-        /// is this phase's intended state, and
-        /// <c>DungeonLabGenerator.ResolveRequestedDensityLevel</c> says so out
-        /// loud whenever a level above 0 is selected.
+        /// M2 of the density-scale design (§4.2): lane pitch shrinks toward room
+        /// size, lattice slack toward 0, room size grows toward the pitch, and
+        /// enclosure chance rises to 1.0. Density 0 is the identity by
+        /// construction — every row below is expressed as a delta or a scale
+        /// against the profile's authored values, and row 0 is (0, authored,
+        /// 1.0), so the sparse end of the dial is exactly what the profile says
+        /// and not a special case in the code.
+        /// <para>
+        /// <c>roomEnvelopeRadiusCells</c> deliberately does NOT move. It is
+        /// floored at 4 by the reviewed landmark recipe's authored footprint, and
+        /// with the pitch shrinking underneath it the 9x9 envelope stops binding
+        /// on its own — so making it density-driven would only inflate the fill
+        /// denominator, which is the opposite of what §3 wanted from it.
+        /// </para>
+        /// <para>
+        /// Vacant lattice cells (M3) and mop-up (M4) are phases 4 and 5 and are
+        /// not here; this method only packs what is already occupied.
+        /// </para>
         /// </remarks>
         internal static DungeonPatternSpatialSettings ResolveDensitySpatialSettings(
             DungeonPatternSpatialSettings authored,
             int densityLevel)
         {
-            return authored;
+            DungeonDensityRow row = DungeonDensity.Row(densityLevel);
+            var value = authored;
+            value.horizontalPitchCells = Mathf.Max(1, authored.horizontalPitchCells + row.pitchDeltaCells);
+            value.verticalPitchCells = Mathf.Max(1, authored.verticalPitchCells + row.pitchDeltaCells);
+            value.latticeSlackMaxCells = row.latticeSlackMaxCells;
+            value.terminalRoomSize = PackRoomSize(
+                authored.terminalRoomSize,
+                authored,
+                value,
+                row.roomGapScale);
+            value.hallRoomSize = PackRoomSize(authored.hallRoomSize, authored, value, row.roomGapScale);
+            value.connectorRoomSize = PackRoomSize(
+                authored.connectorRoomSize,
+                authored,
+                value,
+                row.roomGapScale);
+            return value;
+        }
+
+        /// <summary>
+        /// Grows a room toward its lane by shrinking the CHANNEL around it.
+        /// </summary>
+        /// <remarks>
+        /// The gap between two rooms centred one pitch apart is
+        /// <c>pitch - width</c>, so a room size is really a statement about the
+        /// channel beside it. Reading the authored channel off density 0 and
+        /// scaling it keeps each size class's authored character — a connector
+        /// stays the tightest, a terminal the most generous — instead of
+        /// collapsing every class onto one number at the packed end.
+        /// </remarks>
+        private static DungeonRoomSizeRange PackRoomSize(
+            DungeonRoomSizeRange authoredSize,
+            DungeonPatternSpatialSettings authoredSpatial,
+            DungeonPatternSpatialSettings packedSpatial,
+            float gapScale)
+        {
+            return new DungeonRoomSizeRange(
+                PackRoomExtent(
+                    authoredSize.minWidthCells,
+                    authoredSpatial.horizontalPitchCells,
+                    packedSpatial.horizontalPitchCells,
+                    gapScale),
+                PackRoomExtent(
+                    authoredSize.maxWidthCells,
+                    authoredSpatial.horizontalPitchCells,
+                    packedSpatial.horizontalPitchCells,
+                    gapScale),
+                PackRoomExtent(
+                    authoredSize.minDepthCells,
+                    authoredSpatial.verticalPitchCells,
+                    packedSpatial.verticalPitchCells,
+                    gapScale),
+                PackRoomExtent(
+                    authoredSize.maxDepthCells,
+                    authoredSpatial.verticalPitchCells,
+                    packedSpatial.verticalPitchCells,
+                    gapScale)).Validated();
+        }
+
+        // Each bound keeps its role: the narrower extent leaves the wider
+        // channel, and scaling the channel scales both ends of the range toward
+        // the pitch together.
+        private static int PackRoomExtent(
+            int authoredExtent,
+            int authoredPitch,
+            int packedPitch,
+            float gapScale)
+        {
+            int authoredGap = authoredPitch - authoredExtent;
+            int packedGap = Mathf.RoundToInt(authoredGap * gapScale);
+            return packedPitch - packedGap;
         }
     }
 
@@ -360,6 +475,7 @@ namespace DungeonLab.Editor
         public float loopConnectionFraction;
         public int maxLoopCandidateDistanceCells;
         public float roomZoneSplitChance;
+        public float enclosedRoomChance;
         public DungeonPatternSpatialSettings processionalSpatial;
         public DungeonRoleSizeClass[] roleSizeClasses;
 
@@ -375,6 +491,7 @@ namespace DungeonLab.Editor
             value.loopConnectionFraction = Mathf.Clamp01(value.loopConnectionFraction);
             value.maxLoopCandidateDistanceCells = Mathf.Max(1, value.maxLoopCandidateDistanceCells);
             value.roomZoneSplitChance = Mathf.Clamp01(value.roomZoneSplitChance);
+            value.enclosedRoomChance = Mathf.Clamp01(value.enclosedRoomChance);
             value.processionalSpatial = value.processionalSpatial.Validated();
             // An asset saved before the map existed deserializes an empty array.
             // Falling back to the shipped vocabulary keeps that asset loadable;

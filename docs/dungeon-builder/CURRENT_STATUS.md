@@ -124,6 +124,56 @@ left alone rather than folded into a density change.
 
 **Still open in phase 2: the explicit stairwell shaft.** See "Next, in order".
 
+### Landed 2026-07-27 — density scale, phase 3: corridor ownership and M2
+
+**The dial moves geometry now.** `DungeonGenerationProfile.ResolveDensitySpatialSettings`
+is no longer the identity: it reads a six-row table and packs lattice slack, room
+size and enclosure chance. Density 0 is still the identity *by construction* —
+every column is a delta or a scale against the profile's authored values and row
+0 is (0, authored, 1.0) — so sparse is what the profile says, not a special case.
+
+| density | accepted | hardValid | fill p50 | max void component p50 |
+|---|---|---|---|---|
+| 0 | 199/200 | 199 | 26% | 763 |
+| 1 | **200/200** | 200 | 28% | 729 |
+| 2 | **200/200** | 200 | 31% | 609 |
+| 3 | **200/200** | 200 | 32% | 564 |
+| 4 | 187/200 | 187 | 34% | 517 |
+| 5 | 139/200 | 139 | 32% | 544 |
+
+**Phase 3's gate — corpus hard-valid at densities 0–3 — is met.** Fill rises and
+the max void component falls monotonically through density 4. Density 0 is
+unchanged from the committed baseline on every number.
+
+**§4.3's assumption that lane pitch falls to ~6–7 is measurably wrong, and the
+table now holds pitch at the profile's own value.** Shrinking it was tried first
+and cost most of the corpus: at pitch 7 density 3 fell to 117/200 and density 5 to
+0/200. The binding constraint is authored recipe footprints, which cannot shrink
+(design §9 residual risk 2) and reach four cells from their anchor — the same
+reach that floors `roomEnvelopeRadiusCells` at 4. Below a 9-cell pitch they
+overlap their neighbours (19 seeds at density 5 failed with two recipe rooms
+overlapping each other), and where a recipe room is a vista endpoint it eats the
+sight lane (`vista reserved 0/1/2 void cells; required 3`). So density comes from
+**closing the channel around generic rooms**, not from moving the lattice — and
+the rest has to come from M3 annexing vacant lattice cells, which is phase 4 and
+is where the gap to §4.3's 80/95% fill targets lives. §2 already said so: ~45% of
+the lattice box is not inside any envelope.
+
+`roomEnvelopeRadiusCells` deliberately does not move either. It is floored at 4
+by the same recipe footprint, and with the pitch fixed the 9x9 envelope is exactly
+one lattice cell, so making it density-driven would only inflate the fill
+denominator — the opposite of what §3 wanted from it.
+
+Densities 4 and 5 fail on `ROUTE_ROOM_INFLATION_EXHAUSTED`, which is precisely
+what §3.2's route-shape attempt exists for: *"at densities 4–5 the thing that has
+to move is often the room, not the path."* That retry transaction is the next
+piece of work.
+
+The enclosure clamp is retired from density 4 up, as §4.3 requires: "at least one
+open room" was a variety guarantee for a floorplan where rooms never touched, and
+once they abut it conflicts with "no two rooms silently merge", because
+`IsPartitionWallEdge` returns false when neither room is enclosed.
+
 ### Measured 2026-07-27 — the corridor reroute spike passed (§3.1 candidate 3)
 
 §9 named this the one unproven step in the whole density design: *"if a

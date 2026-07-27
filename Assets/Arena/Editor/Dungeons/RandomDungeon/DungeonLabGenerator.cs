@@ -116,7 +116,10 @@ namespace DungeonLab.Editor
         // How many tier attempts the accepted plan actually needed. Recorded so the
         // ceiling above can be sized from measurement instead of guessed at.
         private static int lastTierPlacementAttempts;
-        private const float EnclosedRoomChance = 0.5f;
+        // The density at which "at least one open room" stops being a variety
+        // guarantee and starts being a hole in the wall grammar. See
+        // ChooseEnclosedRooms.
+        private const int OpenRoomGuaranteeMaxDensityLevel = 4;
 
         private int seed;
         private bool createPlayCamera = true;
@@ -3818,10 +3821,11 @@ namespace DungeonLab.Editor
 
         private static bool[] ChooseEnclosedRooms(int roomCount, System.Random random)
         {
+            DungeonGenerationSettings settings = CurrentGenerationSettings.Validated();
             var enclosed = new bool[roomCount];
             for (int i = 0; i < roomCount; i++)
             {
-                enclosed[i] = random.NextDouble() < EnclosedRoomChance;
+                enclosed[i] = random.NextDouble() < settings.enclosedRoomChance;
             }
 
             if (roomCount <= 1)
@@ -3835,7 +3839,14 @@ namespace DungeonLab.Editor
                 enclosed[random.Next(roomCount)] = true;
             }
 
-            if (!Any(enclosed, expected: false))
+            // "At least one open room" was a variety guarantee for a floorplan
+            // where rooms never touched. Once rooms abut it is in direct conflict
+            // with "no two rooms silently merge": IsPartitionWallEdge returns
+            // false when neither room is enclosed, so an unenclosed room beside
+            // an unenclosed neighbour becomes one open field with no wall between
+            // them. From density 4 up, the second guarantee wins (design §4.3).
+            if (settings.densityLevel < OpenRoomGuaranteeMaxDensityLevel &&
+                !Any(enclosed, expected: false))
             {
                 enclosed[random.Next(roomCount)] = false;
             }
