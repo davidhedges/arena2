@@ -3481,6 +3481,7 @@ namespace DungeonLab.Editor
             {
                 ["layoutAttempt"] = lastLayoutAttempt,
                 ["mainEmbeddingAttempts"] = lastMainEmbeddingAttempts,
+                ["corridorLadderRungs"] = HistogramToken(lastCorridorRungCounts),
                 ["latticeSlackSpentCells"] = lastLatticeSlackSpentCells,
                 ["latticeSlackAvailableCells"] = lastLatticeSlackAvailableCells,
                 ["roomInflationAttempts"] = lastRoomInflationAttempts,

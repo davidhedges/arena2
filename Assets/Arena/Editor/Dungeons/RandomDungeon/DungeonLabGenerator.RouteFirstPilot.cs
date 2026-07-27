@@ -48,6 +48,11 @@ namespace DungeonLab.Editor
         private static int lastLatticeSlackAvailableCells;
         private static int lastRoomInflationAttempts;
         private static string lastRouteFailureCode = string.Empty;
+        // Which rung of the corridor ladder each edge landed on. Evidence, not
+        // policy: it is how phase 3 sees whether the reroute is carrying the
+        // packed densities or whether the straight path is still doing the work.
+        private static readonly SortedDictionary<string, int> lastCorridorRungCounts =
+            new SortedDictionary<string, int>(StringComparer.Ordinal);
 
         private sealed class RouteIntent
         {
@@ -323,6 +328,7 @@ namespace DungeonLab.Editor
             lastLatticeSlackAvailableCells = 0;
             lastRoomInflationAttempts = 0;
             lastRouteFailureCode = string.Empty;
+            lastCorridorRungCounts.Clear();
         }
 
         private static bool TryBuildRouteFirstDungeonLayout(
@@ -2087,6 +2093,15 @@ namespace DungeonLab.Editor
             floorCells = new HashSet<Vector2Int>();
             connections = new List<RoomConnection>(intent.traversalEdges.Length);
             rejectionReason = string.Empty;
+            // A corridor cell is owned by exactly one connection: two connections
+            // sharing a cell would both try to level it, and one of them climbs.
+            // That invariant is true at every density (design §3.1). Keeping the
+            // claim set SEPARATE from floorCells is what makes it enforceable by
+            // construction — the old rule tested the path against floorCells,
+            // which meant it could only say "something is already here" and had
+            // to abort the whole layout attempt to say it.
+            var claimedCorridorCells = new HashSet<Vector2Int>();
+            lastCorridorRungCounts.Clear();
             foreach (RoomFootprint room in rooms)
             {
                 floorCells.UnionWith(room.cells);
@@ -2128,30 +2143,55 @@ namespace DungeonLab.Editor
                     }
                 }
 
-                List<Vector2Int> path = fromAuthored || toAuthored
-                    ? BuildRecipePortPath(pathStart, pathEnd, delta, fromAuthored)
-                    : BuildStraightCardinalPath(pathStart, pathEnd);
-                if (!ValidatePathCardinality(path, out string pathError) ||
-                    PathCrossesThirdRoom(path, rooms, edge.fromNode, edge.toNode) ||
-                    PathTouchesExistingFloorOutsideEndpointRooms(path, floorCells, fromRoom, toRoom))
+                List<Vector2Int> accepted = null;
+                string lastCandidateFailure = "no candidate was produced";
+                foreach ((string rung, List<Vector2Int> candidate) in EnumerateCorridorCandidates(
+                             edge,
+                             fromRoom,
+                             toRoom,
+                             pathStart,
+                             pathEnd,
+                             delta,
+                             fromAuthored || toAuthored,
+                             fromAuthored))
                 {
-                    rejectionReason = $"edge '{edge.id}' could not reserve its corridor: {pathError}";
+                    if (!TryClaimCorridor(
+                            candidate,
+                            rooms,
+                            edge,
+                            fromRoom,
+                            toRoom,
+                            claimedCorridorCells,
+                            reservedVistaCells,
+                            out string candidateFailure))
+                    {
+                        lastCandidateFailure = $"{rung}: {candidateFailure}";
+                        continue;
+                    }
+
+                    accepted = candidate;
+                    lastCorridorRungCounts.TryGetValue(rung, out int rungCount);
+                    lastCorridorRungCounts[rung] = rungCount + 1;
+                    break;
+                }
+
+                if (accepted == null)
+                {
+                    rejectionReason =
+                        $"edge '{edge.id}' exhausted its corridor candidates ({lastCandidateFailure})";
                     return false;
                 }
 
-                foreach (Vector2Int cell in path)
+                AddPathCells(floorCells, accepted);
+                foreach (Vector2Int cell in accepted)
                 {
-                    if (reservedVistaCells.Contains(cell) &&
-                        !fromRoom.Contains(cell) &&
-                        !toRoom.Contains(cell))
+                    if (!fromRoom.Contains(cell) && !toRoom.Contains(cell))
                     {
-                        rejectionReason = $"edge '{edge.id}' entered vista-reserved void at {cell}";
-                        return false;
+                        claimedCorridorCells.Add(cell);
                     }
                 }
 
-                AddPathCells(floorCells, path);
-                connections.Add(new RoomConnection(edge.fromNode, edge.toNode, path));
+                connections.Add(new RoomConnection(edge.fromNode, edge.toNode, accepted));
             }
 
             foreach (Vector2Int cell in reservedVistaCells)
@@ -2164,6 +2204,210 @@ namespace DungeonLab.Editor
             }
 
             return true;
+        }
+
+        // Tried in this order, and deterministically: no stream is drawn, so
+        // which rung an edge lands on is a property of the geometry alone.
+        private static readonly int[] CorridorLateralOffsets = { 1, -1, 2, -2 };
+
+        /// <summary>
+        /// The candidate ladder for one edge's corridor (design §3.1).
+        /// </summary>
+        /// <remarks>
+        /// The invariant being protected is corridor ownership, and the old
+        /// mechanism enforced it by rejection: one grazing corridor aborted the
+        /// entire layout attempt. That is rare enough not to matter at density 0
+        /// and becomes the dominant failure mode from density 2, because short
+        /// corridors in a packed lattice collide constantly. So each edge now
+        /// gets alternatives before anything is abandoned.
+        /// </remarks>
+        private static IEnumerable<(string rung, List<Vector2Int> path)> EnumerateCorridorCandidates(
+            RouteTraversalIntent edge,
+            RoomFootprint fromRoom,
+            RoomFootprint toRoom,
+            Vector2Int pathStart,
+            Vector2Int pathEnd,
+            Vector2Int delta,
+            bool authoredPort,
+            bool fromAuthored)
+        {
+            var axis = new Vector2Int(Math.Sign(delta.x), Math.Sign(delta.y));
+
+            // Rung 1: abutting rooms take a DOORWAY, not a corridor — zero
+            // exterior cells, the connection is the two facing cells. Only a
+            // level edge may: a stair needs its run plus a landing at each end
+            // and cannot fit inside a shared wall, and the transition placer
+            // requires three path cells before it will even look.
+            if (!authoredPort &&
+                edge.transitionKind == RouteTransitionKind.LevelCorridor &&
+                TryFindAbuttingDoorway(fromRoom, toRoom, axis, pathStart, out List<Vector2Int> doorway))
+            {
+                yield return ("doorway", doorway);
+            }
+
+            // Rung 2: the straight centre-to-centre path — today's behaviour,
+            // and still the first thing tried for every edge that is not already
+            // touching its neighbour.
+            yield return (
+                "straight",
+                authoredPort
+                    ? BuildRecipePortPath(pathStart, pathEnd, delta, fromAuthored)
+                    : BuildStraightCardinalPath(pathStart, pathEnd));
+
+            // Rung 3: the same path offset laterally. Both rooms still contain
+            // their node centre, so the anchor rule holds and only the derived
+            // threshold moves. Recipe-port edges are excluded — their approach
+            // depth is authored, and offsetting them fails by contract
+            // (RECIPE_PORT_APPROACH), which is measured, not assumed.
+            if (authoredPort)
+            {
+                yield break;
+            }
+
+            foreach (int offset in CorridorLateralOffsets)
+            {
+                yield return (
+                    offset > 0 ? $"offset+{offset}" : $"offset{offset}",
+                    BuildLaterallyOffsetCardinalPath(pathStart, pathEnd, offset));
+            }
+        }
+
+        // Everything that makes a candidate unusable, as a reroute reason rather
+        // than an attempt-abort. PathCrossesThirdRoom keeps its meaning exactly
+        // — a corridor must not punch through an unrelated room, creating an
+        // undeclared doorway and an unowned threshold — it just no longer kills
+        // the layout when a different route around exists.
+        private static bool TryClaimCorridor(
+            IReadOnlyList<Vector2Int> path,
+            IReadOnlyList<RoomFootprint> rooms,
+            RouteTraversalIntent edge,
+            RoomFootprint fromRoom,
+            RoomFootprint toRoom,
+            HashSet<Vector2Int> claimedCorridorCells,
+            HashSet<Vector2Int> reservedVistaCells,
+            out string failure)
+        {
+            if (!ValidatePathCardinality(path, out failure))
+            {
+                return false;
+            }
+
+            if (PathCrossesThirdRoom(path, rooms, edge.fromNode, edge.toNode))
+            {
+                failure = "crossed a third room";
+                return false;
+            }
+
+            foreach (Vector2Int cell in path)
+            {
+                if (fromRoom.Contains(cell) || toRoom.Contains(cell))
+                {
+                    continue;
+                }
+
+                if (claimedCorridorCells.Contains(cell))
+                {
+                    failure = $"another connection already owns {cell}";
+                    return false;
+                }
+
+                if (reservedVistaCells.Contains(cell))
+                {
+                    failure = $"entered vista-reserved void at {cell}";
+                    return false;
+                }
+            }
+
+            failure = string.Empty;
+            return true;
+        }
+
+        // Two rooms abut when a cell of one is face-adjacent to a cell of the
+        // other along the route axis. The doorway is placed on the pair nearest
+        // the route line, so a packed floorplan still reads as a processional
+        // route rather than as a door in an arbitrary corner.
+        private static bool TryFindAbuttingDoorway(
+            RoomFootprint fromRoom,
+            RoomFootprint toRoom,
+            Vector2Int axis,
+            Vector2Int pathStart,
+            out List<Vector2Int> doorway)
+        {
+            doorway = null;
+            if (axis == Vector2Int.zero)
+            {
+                return false;
+            }
+
+            bool alongX = axis.x != 0;
+            int preferredTransverse = alongX ? pathStart.y : pathStart.x;
+            Vector2Int best = default;
+            int bestDistance = int.MaxValue;
+            foreach (Vector2Int cell in fromRoom.CellsRowMajor())
+            {
+                Vector2Int facing = cell + axis;
+                if (!toRoom.Contains(facing))
+                {
+                    continue;
+                }
+
+                int transverse = alongX ? cell.y : cell.x;
+                int distance = Mathf.Abs(transverse - preferredTransverse);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = cell;
+                }
+            }
+
+            if (bestDistance == int.MaxValue)
+            {
+                return false;
+            }
+
+            doorway = new List<Vector2Int> { best, best + axis };
+            return true;
+        }
+
+        // Proven by the phase 3 spike (design §3.1 candidate 3, §9): forcing this
+        // on every generic corridor left the 200-seed corpus at 199/200 accepted
+        // and 199 hard-valid, indistinguishable from straight corridors.
+        private static List<Vector2Int> BuildLaterallyOffsetCardinalPath(
+            Vector2Int start,
+            Vector2Int end,
+            int offset)
+        {
+            Vector2Int delta = end - start;
+            var axis = new Vector2Int(Math.Sign(delta.x), Math.Sign(delta.y));
+            if (axis == Vector2Int.zero || (delta.x != 0 && delta.y != 0))
+            {
+                return BuildStraightCardinalPath(start, end);
+            }
+
+            var lateral = new Vector2Int(-axis.y, axis.x) * (offset > 0 ? 1 : -1);
+            int reach = Mathf.Abs(offset);
+            var path = new List<Vector2Int> { start };
+            Vector2Int cursor = start;
+            for (int step = 0; step < reach; step++)
+            {
+                cursor += lateral;
+                path.Add(cursor);
+            }
+
+            Vector2Int alignedEnd = end + lateral * reach;
+            while (cursor != alignedEnd)
+            {
+                cursor += axis;
+                path.Add(cursor);
+            }
+
+            for (int step = 0; step < reach; step++)
+            {
+                cursor -= lateral;
+                path.Add(cursor);
+            }
+
+            return path;
         }
 
         private static RecipePlacement FindRecipePlacement(
