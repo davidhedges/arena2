@@ -283,29 +283,7 @@ namespace DungeonLab.Editor
 
         private static DungeonGenerationSettings LoadActiveGenerationSettings(int densityLevel)
         {
-            WarnOnceAboutUnimplementedDensity(densityLevel);
             return LoadGenerationProfileAsset().ToSettings(densityLevel);
-        }
-
-        // Phase 1 of the density-scale design wires the dial through without
-        // moving geometry; the packing mechanisms land in phases 2-5. Saying so
-        // is cheaper than a bug report about a dial that appears to do nothing.
-        // Once per level rather than once per seed, and this whole method
-        // deletes itself when phase 3 fills in ResolveDensitySpatialSettings.
-        private static int lastWarnedDensityLevel = DungeonDensity.MinLevel;
-
-        private static void WarnOnceAboutUnimplementedDensity(int densityLevel)
-        {
-            if (densityLevel <= DungeonDensity.MinLevel || densityLevel == lastWarnedDensityLevel)
-            {
-                return;
-            }
-
-            lastWarnedDensityLevel = densityLevel;
-            Debug.LogWarning(
-                $"[DUNGEON_DENSITY] density {densityLevel} selected, but the packing mechanisms land " +
-                "in phases 2-5 of the density-scale design; levels 1-5 currently resolve to " +
-                "density 0's geometry.");
         }
 
         /// <summary>
