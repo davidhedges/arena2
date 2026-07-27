@@ -46,6 +46,7 @@ Backups/**/*.bak
 # Imported package archives are local source artifacts, not project content
 Assets/**/*.unitypackage
 Assets/**/*.unitypackage.meta
+UnityPackages-Inbox/
 
 # Imported local character packages
 Assets/ThirdParty/AssetStore/Characters/KoboldPack/
@@ -56,6 +57,28 @@ Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle2/
 Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle2.meta
 Assets/ThirdParty/AssetStore/Characters/StylizedUndeadBundle/
 Assets/ThirdParty/AssetStore/Characters/StylizedUndeadBundle.meta
+
+# Imported local Fab character, human outfit, and weapon packages
+# Existing tracked StylizedCharacter assets remain tracked; new local additions are ignored.
+Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/
+Assets/ThirdParty/AssetStore/Characters/FireRevenant/
+Assets/ThirdParty/AssetStore/Characters/FireRevenant.meta
+Assets/ThirdParty/AssetStore/Characters/DemonBoss/
+Assets/ThirdParty/AssetStore/Characters/DemonBoss.meta
+Assets/ThirdParty/AssetStore/Characters/DemonMinions/
+Assets/ThirdParty/AssetStore/Characters/DemonMinions.meta
+Assets/ThirdParty/AssetStore/Characters/StylizedDragonPack/
+Assets/ThirdParty/AssetStore/Characters/StylizedDragonPack.meta
+Assets/ThirdParty/AssetStore/Characters/StylizedMimic/
+Assets/ThirdParty/AssetStore/Characters/StylizedMimic.meta
+Assets/ThirdParty/AssetStore/Characters/OgreTrollPack/
+Assets/ThirdParty/AssetStore/Characters/OgreTrollPack.meta
+Assets/ThirdParty/AssetStore/Characters/RatBrute/
+Assets/ThirdParty/AssetStore/Characters/RatBrute.meta
+Assets/ThirdParty/AssetStore/Characters/Succubus2/
+Assets/ThirdParty/AssetStore/Characters/Succubus2.meta
+Assets/ThirdParty/AssetStore/Characters/StylizedUndeadHound/
+Assets/ThirdParty/AssetStore/Characters/StylizedUndeadHound.meta
 
 # Imported local environment material package
 Assets/ThirdParty/AssetStore/Environments/StylizedMaterialsBundle/
