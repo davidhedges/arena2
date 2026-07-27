@@ -6,7 +6,10 @@ review: retry transaction named (§3.2), M4's boundary-room state corrected
 (§4.2), the A/B gate redefined (§7.1), the enclosure clamp accounted for (§4.3).
 
 **Phases 0 and 1 landed 2026-07-27**, both gated on the redefined §7.1 A/B.
-Phase 2 (M1) is next. Live status: `CURRENT_STATUS.md`; baseline numbers:
+**Phase 2 is two thirds landed** the same day: the measured transition
+reservation and the vista ordering fix are in (density 0 went 184/200 to 196/200
+accepted, with `ROUTE_TRANSITION_RESERVATION` at zero); the explicit stairwell
+shaft is still open and is specified in `CURRENT_STATUS.md`. Live status: `CURRENT_STATUS.md`; baseline numbers:
 `DungeonLabReports/void_baseline_2026-07-27.md`. Note that the dial is wired but
 inert — `DungeonGenerationProfile.ResolveDensitySpatialSettings` is the identity
 until phase 3 (M2) edits it, so levels 1-5 currently produce density 0.
@@ -305,8 +308,8 @@ prediction to check in phase 4, not a plan to special-case it in advance.
 |---|---|---|---|
 | **0** ✅ | **Instrumentation.** `voidComponents` + `latticeEnvelopeFillPercent`; ASCII floorplan per seed; top-down PNG per sentinel. **Redefine the A/B gate first (§7.2).** Write the `voidComponents` baseline for the current tree into `DungeonLabReports/` before anything changes, so phases 3–5 have a real before-number. | Per-seed `hashes.canonical` vector unchanged across all 200 seeds. | ~0.5 d |
 | **1** ✅ | **Flag → dial.** One profile asset with `densityLevel`; `Arena > Dungeons > Density > 0..5`; `ARENA_DUNGEON_DENSITY`. Delete `generation_profile_dense.asset`, the Spacious/Dense menu pair, `ARENA_DUNGEON_GENERATION_PROFILE`. Update `ops/dungeon-port-ab.sh`, `ops/dungeon-step2-verify.sh`, `DungeonLabStairLaneContinuityTests.cs:32`. Topology overrides become density-relative. | **Identity-preserving: density 0's geometry is identical to today's `spacious`** — per-seed `hashes.canonical` vector unchanged, same accepted set, same failure codes. This is the one phase where a hash gate is the right tool. | ~1 d |
-| **2** ← next | **M1** — measured transition reservation, including the explicit stairwell shaft; retire the `BaselineRoomSizeRangeForRole` cap. Fix the vista ordering. | Corpus hard-valid at densities 0–1; transition reservation success rate ≥ today's; the three known stairwell-retry seeds resolve on attempt 1. | ~1–2 d |
-| **3** | **Corridor ownership + reroute spike, then M2 — pack.** Pitch, room size, slack, envelope radius, enclosure chance become functions of the dial. | Corpus hard-valid at 0–3; run-twice determinism; sentinels eyeballed at each level. | ~2–3 d |
+| **2** ◐ | **M1** — measured transition reservation, including the explicit stairwell shaft; retire the `BaselineRoomSizeRangeForRole` cap. Fix the vista ordering. | Corpus hard-valid at densities 0–1; transition reservation success rate ≥ today's; the three known stairwell-retry seeds resolve on attempt 1. | ~1–2 d |
+| **3** ← next | **Corridor ownership + reroute spike, then M2 — pack.** Pitch, room size, slack, envelope radius, enclosure chance become functions of the dial. | Corpus hard-valid at 0–3; run-twice determinism; sentinels eyeballed at each level. | ~2–3 d |
 | **4** | **M3 — annex vacant lattice cells.** | Corpus hard-valid at 0–5; `voidComponents` max falls monotonically across the dial. | ~2–4 d |
 | **5** | **M4 — mop-up and chamber subdivision.** | Density 5 meets the §5 acceptance. | ~2–3 d |
 | **6** | **Tune and look.** Sentinels at all six levels; retune the §4.3 table; measure collision-export size, scene object count and trap count at density 5. | Owner sentinel review. | ~1–2 d |

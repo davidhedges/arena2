@@ -55,6 +55,60 @@ removed. The per-phase log lives in
 if you ever need to reconstruct why a decision was made. Treat it as history,
 not as current constraints.
 
+### Landed 2026-07-27 — density scale, phase 2 (M1), partial
+
+Two of phase 2's three items. Design flux, so no hash gate: hard validity every
+build, and the numbers below are the evidence.
+
+- **The measured transition reservation replaces the room-size axis cap.**
+  `BaselineRoomSizeRangeForRole` capped a room to a fixed 4–5 cells on any axis
+  carrying a Stair/Stairwell/Bridge edge, to leave room for a stair chosen later.
+  `DungeonLabGenerator.TransitionReservation.cs` now measures that requirement
+  from the shipped contract set — shortest compatible run plus a landing at each
+  end — and caps the room against the actual lane distance instead, splitting
+  the reservation evenly between the two endpoint rooms so it is independent of
+  inflation order. Contract *data* is read early; stair *selection* still happens
+  where it always did.
+- **The vista lane is reserved before inflation, not after it.** It used to be
+  derived from the two rooms' faces after they had grown, which worked only
+  because inflation happened to leave void lying around. The lane is now claimed
+  from node centres first: rooms outside the vista pair may not enter it at all,
+  and the pair is capped against the lane's own required clear run.
+  `TryReserveProcessionalVista` still derives the exact reservation — same rule,
+  guaranteed rather than lucky. **No observable change at density 0**, which is
+  the point: there is plenty of void there.
+
+Measured over `2026072100..2026072299` at density 0:
+
+| | before | after |
+|---|---|---|
+| accepted | 184/200 | **196/200** |
+| `ROUTE_TRANSITION_RESERVATION` | 12 | **0** |
+| `ROUTE_DENSITY_PRECONDITION` | 38 | 16 |
+| `latticeEnvelopeFillPercent` p50 | 25% | 26% |
+| EditMode `DungeonLab*` | 94 pass / 31 fail | **100 pass / 25 fail** |
+
+The three known stairwell-retry seeds (`2026072219`, `2026072257`, `2026072135`)
+no longer retry for a transition reservation at all. Six previously-red tests
+went green, none went red — including both `atrium-ring` density tests, which is
+the §3 prediction landing.
+
+**Two seeds regressed, both on stale gates §3 already names, not on the new
+reservation:**
+
+- `2026072231` now fails `ROUTE_DENSITY_PRECONDITION` at 25.6% against the 26%
+  floor. Rooms grew, so the floor bounding box grew slightly faster than the
+  floor did. That gate is `denseFloorplanMinFillPercent` over the floor bounding
+  box — the stale metric §3 marks for replacement, and phase 0 already shipped
+  its replacement (`latticeEnvelopeFillPercent`). **Swapping the gate over is the
+  first thing phase 3 should do.**
+- `2026072187` now fails `EXTERNAL_CONNECTOR_PROMONTORY`: it wants exactly four
+  connectors on distinct cardinals and the grown core no longer offers four
+  anchors that fit. The exact-count, all-or-nothing requirement is pre-existing
+  brittleness; `2026072198` hits it too and recovers on the second layout attempt.
+
+**Still open in phase 2: the explicit stairwell shaft.** See "Next, in order".
+
 ### Landed 2026-07-27 — density scale, phases 0 and 1
 
 Phases 0 and 1 of
@@ -486,9 +540,31 @@ doing the graph-as-data work as the vehicle.
    Items 3, 4 and 5 below are folded into it (the stairwell shaft becomes an
    explicit reservation in phase 2, `atrium-ring`'s density failure dies with the
    bounding-box fill gate, and the tier void is what the whole dial exists to
-   remove). See the landed block below for what phases 0 and 1 did and did not
-   change; **phase 2 (M1 — measured transition reservation, and the vista
-   ordering fix) is the next piece of work.**
+   remove). Phases 0, 1 and two thirds of phase 2 have landed — see the blocks
+   below. What is left, in order:
+
+   a. **The explicit stairwell shaft** (the rest of phase 2). A stairwell tower
+      stands on void beside the path, and that requirement is still implicit:
+      the placer searches for void at tier time rather than the plan reserving it.
+      M1 dropped the symptom to zero (no `ROUTE_TRANSITION_RESERVATION` retries
+      in 200 seeds), so this is now about surviving packing, not about a live
+      defect. The measurement that specifies it, taken over 254 towers in the
+      density-0 corpus: **the footprint is always exactly 2 cells along the path,
+      and 1–3 cells lateral to it** (histogram 2×2:129, 2×3:54, 3×2:43, 1×2:12,
+      2×1:16). Note that a reservation alone is only a probabilistic help —
+      `AddValidStairwellTransitionCandidates` searches both sides and every path
+      position, so making it a *guarantee* means constraining the placer to the
+      reserved shaft, with a fallback to the other side. That is the real shape
+      of this item and why it was not folded into the M1 change.
+   b. **Swap `denseFloorplanMinFillPercent` onto the new metric** (§3 + §5).
+      It gates on floor over the floor bounding box, which grows when a
+      promontory reaches outward and when rooms grow. It cost `2026072231` its
+      acceptance in phase 2 and it is the whole reason `atrium-ring` used to fail
+      most of its seeds. `latticeEnvelopeFillPercent` shipped in phase 0.
+   c. **Phase 3 (M2 — pack)**, starting with the corridor ownership + reroute
+      spike (§3.1 candidate 3), then pitch/room size/slack/envelope radius/
+      enclosure as functions of the dial in
+      `DungeonGenerationProfile.ResolveDensitySpatialSettings`.
 1. **Look at the dungeons.** **Arena > Dungeons > Rebuild Random Dungeon** on a few
    seeds. No hash tells you whether a dungeon reads well. One rendered shot per
    new topology is in `DungeonLabReports/step3_topology_shots/` (dense, seeds

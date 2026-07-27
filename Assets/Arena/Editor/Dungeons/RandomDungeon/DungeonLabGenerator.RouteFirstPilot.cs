@@ -384,6 +384,14 @@ namespace DungeonLab.Editor
                 roomEnvelopes[node] = RoomEnvelope(nodeCenters[node], spatial);
             }
 
+            // The sight lane is claimed from node centres BEFORE inflation, so
+            // rooms grow around it instead of it surviving on whatever void
+            // inflation happened to leave (design §3).
+            if (!TryPlanVistaLane(intent, nodeCenters, out HashSet<Vector2Int> vistaLaneCells, out rejectionReason))
+            {
+                return RejectRoute("ROUTE_VISTA_RESERVATION_BLOCKED", rejectionReason, out rejectionReason);
+            }
+
             if (!TryInflateProcessionalRooms(
                     dungeonSeed,
                     layoutAttempt,
@@ -391,6 +399,7 @@ namespace DungeonLab.Editor
                     spatial,
                     nodeCenters,
                     roomEnvelopes,
+                    vistaLaneCells,
                     out List<RoomFootprint> rooms,
                     out rejectionReason))
             {
@@ -1236,6 +1245,7 @@ namespace DungeonLab.Editor
             DungeonPatternSpatialSettings spatial,
             IReadOnlyList<Vector2Int> nodeCenters,
             IReadOnlyList<RectInt> envelopes,
+            HashSet<Vector2Int> vistaLaneCells,
             out List<RoomFootprint> rooms,
             out string rejectionReason)
         {
@@ -1284,6 +1294,12 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
+                if (IntrudesOnVistaLane(intent, nodeIndex, candidate, vistaLaneCells))
+                {
+                    rejectionReason = $"fixed recipe room node '{node.id}' occupied the reserved vista lane";
+                    return false;
+                }
+
                 placedRooms[nodeIndex] = candidate;
             }
 
@@ -1328,6 +1344,11 @@ namespace DungeonLab.Editor
                         continue;
                     }
 
+                    if (IntrudesOnVistaLane(intent, nodeIndex, candidate, vistaLaneCells))
+                    {
+                        continue;
+                    }
+
                     placedRooms[nodeIndex] = candidate;
                     placed = true;
                     break;
@@ -1346,6 +1367,7 @@ namespace DungeonLab.Editor
                 spatial,
                 nodeCenters,
                 envelopes,
+                vistaLaneCells,
                 rooms);
             return true;
         }
@@ -1383,6 +1405,7 @@ namespace DungeonLab.Editor
             DungeonPatternSpatialSettings spatial,
             IReadOnlyList<Vector2Int> nodeCenters,
             IReadOnlyList<RectInt> envelopes,
+            HashSet<Vector2Int> vistaLaneCells,
             List<RoomFootprint> rooms)
         {
             int strength = spatial.neighborBiasStrengthCells;
@@ -1453,10 +1476,12 @@ namespace DungeonLab.Editor
                 for (int step = 0; step < strength; step++)
                 {
                     if (!TryApplyProcessionalRoomInflation(
+                            intent,
                             nodeIndex,
                             new Vector2Int(desired.x, 0),
                             nodeCenters,
                             envelopes,
+                            vistaLaneCells,
                             rooms))
                     {
                         break;
@@ -1466,10 +1491,12 @@ namespace DungeonLab.Editor
                 for (int step = 0; step < strength; step++)
                 {
                     if (!TryApplyProcessionalRoomInflation(
+                            intent,
                             nodeIndex,
                             new Vector2Int(0, desired.y),
                             nodeCenters,
                             envelopes,
+                            vistaLaneCells,
                             rooms))
                     {
                         break;
@@ -1479,10 +1506,12 @@ namespace DungeonLab.Editor
         }
 
         private static bool TryApplyProcessionalRoomInflation(
+            RouteIntent intent,
             int nodeIndex,
             Vector2Int direction,
             IReadOnlyList<Vector2Int> nodeCenters,
             IReadOnlyList<RectInt> envelopes,
+            HashSet<Vector2Int> vistaLaneCells,
             List<RoomFootprint> rooms)
         {
             if (direction == Vector2Int.zero)
@@ -1554,6 +1583,13 @@ namespace DungeonLab.Editor
                 {
                     return false;
                 }
+            }
+
+            // The bias only ever grows along a level-corridor direction, but the
+            // sight lane is not an edge and would otherwise be invisible to it.
+            if (IntrudesOnVistaLane(intent, nodeIndex, candidate, vistaLaneCells))
+            {
+                return false;
             }
 
             rooms[nodeIndex] = candidate;
@@ -1660,25 +1696,19 @@ namespace DungeonLab.Editor
             out int width,
             out int depth)
         {
-            // The baseline is the spacious-profile size for this role. It stays
-            // load-bearing as the stair-clearance cap below, so it is sampled even
-            // when the active profile is wider. What was removed on 2026-07-25 is
-            // the draw-REUSE that used to fold the baseline roll into the
-            // configured roll whenever a range happened to span exactly two
-            // values — that existed only to keep the spacious profile
-            // byte-compatible with an older hash, and it made the number of random
-            // draws depend on configuration.
-            DungeonRoomSizeRange baselineRange = BaselineRoomSizeRangeForRole(node.role).Validated();
             DungeonRoomSizeRange configuredRange = RoomSizeRangeForRole(spatial, node.role).Validated();
-            int baselineWidth = SampleRoomDimension(baselineRange.minWidthCells, baselineRange.maxWidthCells, random);
-            int baselineDepth = SampleRoomDimension(baselineRange.minDepthCells, baselineRange.maxDepthCells, random);
             width = SampleRoomDimension(configuredRange.minWidthCells, configuredRange.maxWidthCells, random);
             depth = SampleRoomDimension(configuredRange.minDepthCells, configuredRange.maxDepthCells, random);
 
-            // The concrete stair prefab is selected later. Preserve the known-
-            // sufficient face position now: any non-level incident edge caps
-            // growth on its route axis to the spacious baseline. The orthogonal
-            // axis may still use the profile range.
+            // The concrete stair prefab is selected later, so the room has to
+            // leave enough corridor for whichever one wins. That reservation is
+            // now MEASURED from the static contract set per edge kind and rise
+            // (M1) rather than approximated by a fixed room-size table: the old
+            // rule gave up four or five cells on this axis to protect a run that
+            // is one cell at rise 4 and two at rise 8. Measuring it against the
+            // actual lane distance is also what lets the reservation survive the
+            // density dial — the corridor requirement is constant, so rooms give
+            // back exactly what a tighter pitch takes away and no more.
             foreach (RouteTraversalIntent edge in intent.traversalEdges)
             {
                 if (edge.transitionKind == RouteTransitionKind.LevelCorridor ||
@@ -1689,14 +1719,47 @@ namespace DungeonLab.Editor
 
                 int otherNode = edge.fromNode == nodeIndex ? edge.toNode : edge.fromNode;
                 Vector2Int delta = nodeCenters[otherNode] - center;
+                int required = RequiredTransitionCorridorCells(
+                    edge.transitionKind,
+                    edge.requiredRiseLevels);
                 if (delta.x != 0)
                 {
-                    width = Mathf.Min(width, baselineWidth);
+                    width = Mathf.Min(
+                        width,
+                        MaxRoomExtentForTransition(Mathf.Abs(delta.x), required));
                 }
 
                 if (delta.y != 0)
                 {
-                    depth = Mathf.Min(depth, baselineDepth);
+                    depth = Mathf.Min(
+                        depth,
+                        MaxRoomExtentForTransition(Mathf.Abs(delta.y), required));
+                }
+            }
+
+            // The vista pair is capped the same way, against the sight lane's own
+            // required clear run. Rooms other than the pair are kept out of the
+            // lane entirely by TryInflateProcessionalRooms; this is what keeps
+            // the pair itself from closing the gap between them.
+            if (nodeIndex == intent.vista.sourceNode || nodeIndex == intent.vista.targetNode)
+            {
+                int otherNode = nodeIndex == intent.vista.sourceNode
+                    ? intent.vista.targetNode
+                    : intent.vista.sourceNode;
+                Vector2Int vistaDelta = nodeCenters[otherNode] - center;
+                int requiredVoid = intent.vista.minimumReservedVoidCells;
+                if (vistaDelta.x != 0)
+                {
+                    width = Mathf.Min(
+                        width,
+                        MaxRoomExtentForTransition(Mathf.Abs(vistaDelta.x), requiredVoid));
+                }
+
+                if (vistaDelta.y != 0)
+                {
+                    depth = Mathf.Min(
+                        depth,
+                        MaxRoomExtentForTransition(Mathf.Abs(vistaDelta.y), requiredVoid));
                 }
             }
         }
@@ -1723,22 +1786,6 @@ namespace DungeonLab.Editor
             string role)
         {
             return spatial.RoomSizeForClass(RequireRoomSizeClass(role));
-        }
-
-        // The spacious baseline, kept as the stair-clearance cap in
-        // ResolveGenericRoomDimensions. It is a fixed table on purpose: it is a
-        // known-sufficient face position, not a tunable.
-        private static DungeonRoomSizeRange BaselineRoomSizeRangeForRole(string role)
-        {
-            switch (RequireRoomSizeClass(role))
-            {
-                case DungeonRoomSizeClass.Terminal:
-                    return new DungeonRoomSizeRange(5, 5, 7, 7);
-                case DungeonRoomSizeClass.Connector:
-                    return new DungeonRoomSizeRange(4, 5, 5, 5);
-                default:
-                    return new DungeonRoomSizeRange(5, 5, 5, 6);
-            }
         }
 
         private static int SampleRoomDimension(int minimum, int maximum, System.Random random)
@@ -1869,6 +1916,69 @@ namespace DungeonLab.Editor
                 center.y - height / 2,
                 width,
                 height);
+        }
+
+        /// <summary>
+        /// The vista lane, taken from node centres BEFORE any room is inflated.
+        /// </summary>
+        /// <remarks>
+        /// Vista reservation used to run after inflation and derive its lane from
+        /// the two rooms' faces, which worked only because inflation happened to
+        /// leave void lying around it (density-scale design §3). At any real
+        /// density there is none, so the lane is now claimed first and rooms
+        /// inflate around it: no room outside the vista pair may enter the lane
+        /// at all, and the pair itself is capped so it leaves the required clear
+        /// run between them. <see cref="TryReserveProcessionalVista"/> still
+        /// derives the exact reservation from the resulting faces — it is the
+        /// same rule, now guaranteed rather than lucky.
+        /// </remarks>
+        private static bool TryPlanVistaLane(
+            RouteIntent intent,
+            IReadOnlyList<Vector2Int> nodeCenters,
+            out HashSet<Vector2Int> laneCells,
+            out string rejectionReason)
+        {
+            laneCells = new HashSet<Vector2Int>();
+            rejectionReason = string.Empty;
+            Vector2Int sourceCenter = nodeCenters[intent.vista.sourceNode];
+            Vector2Int targetCenter = nodeCenters[intent.vista.targetNode];
+            Vector2Int delta = targetCenter - sourceCenter;
+            if (delta.x != 0 && delta.y != 0 || delta == Vector2Int.zero)
+            {
+                rejectionReason = $"vista endpoints were not cardinally aligned ({sourceCenter}->{targetCenter})";
+                return false;
+            }
+
+            var step = new Vector2Int(Math.Sign(delta.x), Math.Sign(delta.y));
+            for (Vector2Int cursor = sourceCenter + step; cursor != targetCenter; cursor += step)
+            {
+                laneCells.Add(cursor);
+            }
+
+            return true;
+        }
+
+        // The vista pair own their own ends of the lane; everyone else is out.
+        private static bool IntrudesOnVistaLane(
+            RouteIntent intent,
+            int nodeIndex,
+            RoomFootprint candidate,
+            HashSet<Vector2Int> vistaLaneCells)
+        {
+            if (nodeIndex == intent.vista.sourceNode || nodeIndex == intent.vista.targetNode)
+            {
+                return false;
+            }
+
+            foreach (Vector2Int cell in candidate.cells)
+            {
+                if (vistaLaneCells.Contains(cell))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool TryReserveProcessionalVista(
