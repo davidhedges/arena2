@@ -2064,6 +2064,10 @@ namespace DungeonLab.Editor
                     if (!TryPlaceRecipe(
                             seed,
                             attempt,
+                            // This probe sweeps the recipe's own alternatives via
+                            // the layout-attempt index; the route-shape attempt is
+                            // not what it varies.
+                            shapeAttempt: 0,
                             routeIntent,
                             slot,
                             rooms,
@@ -3485,6 +3489,9 @@ namespace DungeonLab.Editor
                 ["latticeSlackSpentCells"] = lastLatticeSlackSpentCells,
                 ["latticeSlackAvailableCells"] = lastLatticeSlackAvailableCells,
                 ["roomInflationAttempts"] = lastRoomInflationAttempts,
+                // §3.2 wants this ceiling sized from the observed maximum rather
+                // than guessed, so the observation has to be in the report.
+                ["routeShapeAttempts"] = lastRouteShapeAttempts,
                 ["nodeCenters"] = centers,
                 ["pinnedApproaches"] = approaches,
                 ["vista"] = new JObject

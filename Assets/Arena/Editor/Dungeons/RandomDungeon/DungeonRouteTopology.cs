@@ -1495,6 +1495,44 @@ namespace DungeonLab.Editor
                 Mathf.Min(totalHeadroomCells, Mathf.Min(envelopeSlack, spatial.latticeSlackMaxCells)));
         }
 
+        private static DungeonPatternSpatialSettings ClampRoomSizesToTightestLane(
+            DungeonPatternSpatialSettings spatial,
+            DungeonRouteTopology topology)
+        {
+            int widest = TightestLaneGap(topology.columnGaps, spatial.horizontalPitchCells);
+            int deepest = TightestLaneGap(topology.rowGaps, spatial.verticalPitchCells);
+            spatial.terminalRoomSize = ClampRoomSize(spatial.terminalRoomSize, widest, deepest);
+            spatial.hallRoomSize = ClampRoomSize(spatial.hallRoomSize, widest, deepest);
+            spatial.connectorRoomSize = ClampRoomSize(spatial.connectorRoomSize, widest, deepest);
+            return spatial;
+        }
+
+        // The rubber sheet only ever moves lanes APART, so the authored minimum
+        // is the worst case a room has to fit inside.
+        private static int TightestLaneGap(RouteLaneGap[] gaps, int pitchCells)
+        {
+            int tightest = pitchCells;
+            foreach (RouteLaneGap gap in gaps ?? Array.Empty<RouteLaneGap>())
+            {
+                tightest = Mathf.Min(tightest, gap.ResolvedMinimum(pitchCells));
+            }
+
+            return tightest;
+        }
+
+        private static DungeonRoomSizeRange ClampRoomSize(
+            DungeonRoomSizeRange size,
+            int widestCells,
+            int deepestCells)
+        {
+            var value = size;
+            value.maxWidthCells = Mathf.Min(value.maxWidthCells, widestCells);
+            value.minWidthCells = Mathf.Min(value.minWidthCells, value.maxWidthCells);
+            value.maxDepthCells = Mathf.Min(value.maxDepthCells, deepestCells);
+            value.minDepthCells = Mathf.Min(value.minDepthCells, value.maxDepthCells);
+            return value;
+        }
+
         // One profile default plus per-topology overrides. There is no second
         // settings table, so a widened profile cannot reach only some topologies.
         private static DungeonPatternSpatialSettings ResolveTopologySpatialSettings(
@@ -1558,6 +1596,16 @@ namespace DungeonLab.Editor
                     spatial.verticalPitchCells);
             }
 
+            // A room may never be wider than the tightest lane it has to sit in.
+            // Two rooms centred one lane apart overlap the moment either exceeds
+            // that gap, and inflation then burns its six re-rolls and fails the
+            // attempt — which is how sunken-basin and terraced-cascade lost every
+            // one of their density-5 seeds before this clamp existed. The
+            // authoring guide has always told authors this rule; resolving it
+            // here makes it true by construction instead of by vigilance, and it
+            // is what lets a topology keep authored lanes narrower than the pitch
+            // without having to re-declare its room sizes at every density.
+            spatial = ClampRoomSizesToTightestLane(spatial, topology);
             return spatial.Validated();
         }
     }

@@ -137,13 +137,41 @@ every column is a delta or a scale against the profile's authored values and row
 | 0 | 199/200 | 199 | 26% | 763 |
 | 1 | **200/200** | 200 | 28% | 729 |
 | 2 | **200/200** | 200 | 31% | 609 |
-| 3 | **200/200** | 200 | 32% | 564 |
-| 4 | 187/200 | 187 | 34% | 517 |
-| 5 | 139/200 | 139 | 32% | 544 |
+| 3 | **200/200** | 200 | 32% | 566 |
+| 4 | **200/200** | 200 | 34% | 498 |
+| 5 | **200/200** | 200 | 34% | 389 |
 
-**Phase 3's gate — corpus hard-valid at densities 0–3 — is met.** Fill rises and
-the max void component falls monotonically through density 4. Density 0 is
-unchanged from the committed baseline on every number.
+**Phase 3's gate asked for hard-valid at densities 0–3; every level 0–5 is
+hard-valid.** Fill rises and the max void component falls monotonically across
+the whole dial. Density 0 is unchanged from the committed baseline on every
+number, and density 3 is byte-identical across two independent runs
+(`ops/dungeon-step2-verify.sh 3`). Sentinels for densities 0, 3 and 5 are in
+`DungeonLabReports/sentinels_d{0,3,5}/`, three-quarter and top-down.
+
+Getting 4 and 5 there took two more things beyond the table:
+
+- **The route-shape attempt (§3.2).** Inflation, vista, promontory, recipes and
+  corridors retry as one unit, keyed by attempt index into the RNG streams so
+  attempt *k* draws a genuinely different shape rather than re-running an
+  impossible one. Attempt 0 keeps the unsuffixed stream, so a retry that never
+  happens does not re-phase the generator. Density 4 went 187 → 200 on this
+  alone. The ceiling was sized the way §3.2 asks — started at 4, probed at 16,
+  observed maximum 13, set to **26**.
+- **Room sizes are clamped to a topology's tightest lane.** `sunken-basin` and
+  `terraced-cascade` were losing *every* density-5 seed: both author lanes one
+  cell under the pitch, so once rooms grew to the pitch they overlapped their
+  neighbours. The authoring guide has always told authors "a lane gap must be at
+  least the largest room extent on that axis"; resolving it in
+  `ResolveTopologySpatialSettings` makes it true by construction instead of by
+  vigilance, and it is what lets a topology keep narrow authored lanes without
+  re-declaring its room sizes at every density. No clamping happens at density 0,
+  so it is identity there.
+
+**The gap to §4.3's fill targets (45/60/80/95%) is M3, and that is phase 4.**
+34% at density 5 is rooms filling their own lattice cells and nothing more; §2
+already measured that ~45% of the lattice box is not inside any envelope at all.
+The sentinels show it plainly — the mass is denser and the *craters* are
+untouched.
 
 **§4.3's assumption that lane pitch falls to ~6–7 is measurably wrong, and the
 table now holds pitch at the profile's own value.** Shrinking it was tried first
@@ -164,10 +192,10 @@ by the same recipe footprint, and with the pitch fixed the 9x9 envelope is exact
 one lattice cell, so making it density-driven would only inflate the fill
 denominator — the opposite of what §3 wanted from it.
 
-Densities 4 and 5 fail on `ROUTE_ROOM_INFLATION_EXHAUSTED`, which is precisely
-what §3.2's route-shape attempt exists for: *"at densities 4–5 the thing that has
-to move is often the room, not the path."* That retry transaction is the next
-piece of work.
+The corridor ladder earns its keep as soon as rooms touch: the doorway rung is
+taken 14 times at density 2, 41 at density 3 and 101 at density 4. The lateral
+offset rung has still never been needed, which is the right order of events — it
+is the rung below a re-roll, not above it.
 
 The enclosure clamp is retired from density 4 up, as §4.3 requires: "at least one
 open room" was a variety guarantee for a floorplan where rooms never touched, and

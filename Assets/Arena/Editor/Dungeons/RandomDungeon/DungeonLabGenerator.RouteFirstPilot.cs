@@ -28,6 +28,14 @@ namespace DungeonLab.Editor
         private const int MinRouteNodeCount = 9;
         private const int MaxRouteNodeCount = 20;
         private const int RoomInflationAttemptLimit = 6;
+        // The route-shape attempt ceiling (design §3.2), sized from measurement
+        // rather than guessed — the habit that took TierPlacementAttempts from 32
+        // to 4. Started at 4, probed at 16, and the observed maximum over the
+        // 200-seed corpus at density 4 was 13, so the ceiling is twice that.
+        // Retries are not repetitions: the attempt index joins the stream key, so
+        // attempt k draws a genuinely different shape rather than re-running an
+        // impossible one. lastRouteShapeAttempts keeps the observation live.
+        private const int RouteShapeAttemptLimit = 26;
         private const int MaxMainRouteRoleOccurrences = 2;
         private const int MinimumMainRouteNodesBetweenRecipeSlots = 2;
         private const int MaximumNamedVistaPromontoryCells = 4;
@@ -47,6 +55,7 @@ namespace DungeonLab.Editor
         private static int lastLatticeSlackSpentCells;
         private static int lastLatticeSlackAvailableCells;
         private static int lastRoomInflationAttempts;
+        private static int lastRouteShapeAttempts;
         private static string lastRouteFailureCode = string.Empty;
         // Which rung of the corridor ladder each edge landed on. Evidence, not
         // policy: it is how phase 3 sees whether the reroute is carrying the
@@ -327,6 +336,7 @@ namespace DungeonLab.Editor
             lastLatticeSlackSpentCells = 0;
             lastLatticeSlackAvailableCells = 0;
             lastRoomInflationAttempts = 0;
+            lastRouteShapeAttempts = 0;
             lastRouteFailureCode = string.Empty;
             lastCorridorRungCounts.Clear();
         }
@@ -404,78 +414,122 @@ namespace DungeonLab.Editor
                 return RejectRoute("ROUTE_VISTA_RESERVATION_BLOCKED", rejectionReason, out rejectionReason);
             }
 
-            if (!TryInflateProcessionalRooms(
-                    dungeonSeed,
-                    layoutAttempt,
-                    intent,
-                    spatial,
-                    nodeCenters,
-                    roomEnvelopes,
-                    vistaLaneCells,
-                    out List<RoomFootprint> rooms,
-                    out rejectionReason))
+            // THE ROUTE-SHAPE ATTEMPT (design §3.2). Inflation, vista, promontory,
+            // recipes and corridors are retried as ONE unit, because there is no
+            // smaller honest boundary: re-rolling a single room's inflation after
+            // a corridor failure would invalidate the vista lane reserved from it,
+            // the recipe ports placed against it, and every corridor an earlier
+            // edge already claimed. All five stages are pure functions of
+            // (intent, spatial, nodeCenters) plus their own RNG stream, so
+            // re-running the suffix is a re-call rather than a rollback — nothing
+            // outside it is mutated, since the layout is only published at the end.
+            //
+            // It nests: the corridor candidate ladder (§3.1) is the inner retry,
+            // this is the middle one, and today's layout attempt — which re-runs
+            // from embedding with a fresh orientation — stays the outer one.
+            List<RoomFootprint> rooms = null;
+            HashSet<Vector2Int> reservedVistaCells = null;
+            HashSet<Vector2Int> protectedVistaCells = null;
+            Vector2Int sourceVistaCell = default;
+            Vector2Int targetVistaCell = default;
+            Vector2Int sourceFacing = default;
+            Vector2Int targetFacing = default;
+            Vector2Int[] namedPromontoryCells = null;
+            RecipePlacement[] recipePlacements = null;
+            HashSet<Vector2Int> floorCells = null;
+            List<RoomConnection> connections = null;
+            string shapeFailureCode = "ROUTE_ROOM_INFLATION_EXHAUSTED";
+            bool shapeCompiled = false;
+            for (int shapeAttempt = 0; shapeAttempt < RouteShapeAttemptLimit && !shapeCompiled; shapeAttempt++)
             {
-                return RejectRoute("ROUTE_ROOM_INFLATION_EXHAUSTED", rejectionReason, out rejectionReason);
+                lastRouteShapeAttempts = shapeAttempt + 1;
+                if (!TryInflateProcessionalRooms(
+                        dungeonSeed,
+                        layoutAttempt,
+                        shapeAttempt,
+                        intent,
+                        spatial,
+                        nodeCenters,
+                        roomEnvelopes,
+                        vistaLaneCells,
+                        out rooms,
+                        out rejectionReason))
+                {
+                    shapeFailureCode = "ROUTE_ROOM_INFLATION_EXHAUSTED";
+                    continue;
+                }
+
+                if (!TryReserveProcessionalVista(
+                        intent,
+                        rooms,
+                        nodeCenters,
+                        out reservedVistaCells,
+                        out sourceVistaCell,
+                        out targetVistaCell,
+                        out sourceFacing,
+                        out targetFacing,
+                        out rejectionReason))
+                {
+                    shapeFailureCode = "ROUTE_VISTA_RESERVATION_BLOCKED";
+                    continue;
+                }
+
+                protectedVistaCells = new HashSet<Vector2Int>(reservedVistaCells);
+                if (!TryPlanNamedVistaPromontory(
+                        intent,
+                        reservedVistaCells,
+                        sourceVistaCell,
+                        targetVistaCell,
+                        sourceFacing,
+                        targetFacing,
+                        out namedPromontoryCells,
+                        out rejectionReason))
+                {
+                    shapeFailureCode = "ROUTE_PROMONTORY_RESERVATION_INVALID";
+                    continue;
+                }
+
+                if (!TryPlaceRouteRecipes(
+                        dungeonSeed,
+                        layoutAttempt,
+                        shapeAttempt,
+                        intent,
+                        rooms,
+                        nodeCenters,
+                        sourceFacing,
+                        targetFacing,
+                        out recipePlacements,
+                        out rejectionReason))
+                {
+                    shapeFailureCode = "RECIPE_PLACEMENT";
+                    continue;
+                }
+
+                if (!TryConnectProcessionalRooms(
+                        intent,
+                        rooms,
+                        nodeCenters,
+                        protectedVistaCells,
+                        recipePlacements,
+                        out floorCells,
+                        out connections,
+                        out rejectionReason))
+                {
+                    shapeFailureCode = "ROUTE_CORRIDOR_EMBEDDING_EXHAUSTED";
+                    continue;
+                }
+
+                shapeCompiled = true;
             }
 
-            if (!TryReserveProcessionalVista(
-                    intent,
-                    rooms,
-                    nodeCenters,
-                    out HashSet<Vector2Int> reservedVistaCells,
-                    out Vector2Int sourceVistaCell,
-                    out Vector2Int targetVistaCell,
-                    out Vector2Int sourceFacing,
-                    out Vector2Int targetFacing,
-                    out rejectionReason))
+            if (!shapeCompiled)
             {
-                return RejectRoute("ROUTE_VISTA_RESERVATION_BLOCKED", rejectionReason, out rejectionReason);
-            }
-
-            var protectedVistaCells = new HashSet<Vector2Int>(reservedVistaCells);
-            if (!TryPlanNamedVistaPromontory(
-                    intent,
-                    reservedVistaCells,
-                    sourceVistaCell,
-                    targetVistaCell,
-                    sourceFacing,
-                    targetFacing,
-                    out Vector2Int[] namedPromontoryCells,
-                    out rejectionReason))
-            {
-                return RejectRoute("ROUTE_PROMONTORY_RESERVATION_INVALID", rejectionReason, out rejectionReason);
+                return RejectRoute(shapeFailureCode, rejectionReason, out rejectionReason);
             }
 
             lastVistaCells = SortedCells(reservedVistaCells).ToArray();
             lastVistaSourceFacing = sourceFacing;
             lastVistaTargetFacing = targetFacing;
-
-            if (!TryPlaceRouteRecipes(
-                    dungeonSeed,
-                    layoutAttempt,
-                    intent,
-                    rooms,
-                    nodeCenters,
-                    sourceFacing,
-                    targetFacing,
-                    out RecipePlacement[] recipePlacements,
-                    out rejectionReason))
-            {
-                return RejectRoute("RECIPE_PLACEMENT", rejectionReason, out rejectionReason);
-            }
-
-            if (!TryConnectProcessionalRooms(
-                    intent,
-                    rooms,
-                    nodeCenters,
-                    protectedVistaCells,
-                    recipePlacements,
-                    out HashSet<Vector2Int> floorCells,
-                    out List<RoomConnection> connections,
-                    out rejectionReason))
-            {
-                return RejectRoute("ROUTE_CORRIDOR_EMBEDDING_EXHAUSTED", rejectionReason, out rejectionReason);
-            }
 
             if (!IsConnected(floorCells))
             {
@@ -1262,6 +1316,7 @@ namespace DungeonLab.Editor
         private static bool TryInflateProcessionalRooms(
             int dungeonSeed,
             int layoutAttempt,
+            int shapeAttempt,
             RouteIntent intent,
             DungeonPatternSpatialSettings spatial,
             IReadOnlyList<Vector2Int> nodeCenters,
@@ -1292,7 +1347,7 @@ namespace DungeonLab.Editor
                     dungeonSeed,
                     layoutAttempt,
                     node.id,
-                    "room-shape-0");
+                    ShapeAttemptPurpose("room-shape-0", shapeAttempt));
                 var candidate = new RoomFootprint(BuildProcessionalRoomParts(
                     intent,
                     node,
@@ -1340,7 +1395,7 @@ namespace DungeonLab.Editor
                         dungeonSeed,
                         layoutAttempt,
                         node.id,
-                        $"room-shape-{attempt}");
+                        ShapeAttemptPurpose($"room-shape-{attempt}", shapeAttempt));
                     List<RectInt> parts = BuildProcessionalRoomParts(
                         intent,
                         node,
@@ -2490,6 +2545,15 @@ namespace DungeonLab.Editor
             lastRouteFailureCode = code;
             rejectionReason = $"[{code}] {detail}";
             return false;
+        }
+
+        // The shape attempt joins the stream key the way the tier attempt does,
+        // so attempt k cannot be perturbed by how many attempts preceded it.
+        // Attempt 0 keeps the unsuffixed purpose on purpose: a retry that never
+        // happens must not re-phase every stream in the generator.
+        private static string ShapeAttemptPurpose(string purpose, int shapeAttempt)
+        {
+            return shapeAttempt == 0 ? purpose : $"{purpose}#shape{shapeAttempt}";
         }
 
         private static System.Random DerivedRandom(

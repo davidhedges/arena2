@@ -885,6 +885,7 @@ namespace DungeonLab.Editor
         private static bool TryPlaceRouteRecipes(
             int dungeonSeed,
             int layoutAttempt,
+            int shapeAttempt,
             RouteIntent routeIntent,
             IReadOnlyList<RoomFootprint> rooms,
             IReadOnlyList<Vector2Int> nodeCenters,
@@ -907,6 +908,7 @@ namespace DungeonLab.Editor
                 if (!TryPlaceRecipe(
                         dungeonSeed,
                         layoutAttempt,
+                        shapeAttempt,
                         routeIntent,
                         slot,
                         rooms,
@@ -929,6 +931,7 @@ namespace DungeonLab.Editor
         private static bool TryPlaceRecipe(
             int dungeonSeed,
             int layoutAttempt,
+            int shapeAttempt,
             RouteIntent routeIntent,
             RecipeSlotIntent slot,
             IReadOnlyList<RoomFootprint> rooms,
@@ -987,7 +990,11 @@ namespace DungeonLab.Editor
 
             Vector2Int transverseAxis = new Vector2Int(-primaryAxis.y, primaryAxis.x);
             bool firstMirror = slot.recipe.allowMirror &&
-                DerivedRandom(dungeonSeed, layoutAttempt, slot.recipe.recipeId, "mirror").Next(2) == 1;
+                DerivedRandom(
+                    dungeonSeed,
+                    layoutAttempt,
+                    slot.recipe.recipeId,
+                    ShapeAttemptPurpose("mirror", shapeAttempt)).Next(2) == 1;
             bool mirrorMatched = false;
             bool mirrored = false;
             int mirrorAttempts = slot.recipe.allowMirror ? 2 : 1;
@@ -1105,7 +1112,11 @@ namespace DungeonLab.Editor
             {
                 DungeonRecipeVariation variation = SelectRecipeVariation(
                     slot.recipe,
-                    DerivedRandom(dungeonSeed, layoutAttempt, slot.recipe.recipeId, "variation"));
+                    DerivedRandom(
+                        dungeonSeed,
+                        layoutAttempt,
+                        slot.recipe.recipeId,
+                        ShapeAttemptPurpose("variation", shapeAttempt)));
                 DungeonRecipeMotif motif = FindRecipeMotif(slot.recipe, variation.motifId);
                 variationId = variation.id;
                 visualImplementationId = motif.implementationId;
