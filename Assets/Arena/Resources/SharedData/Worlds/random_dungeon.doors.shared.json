@@ -3,126 +3,18 @@
   "world_definition_key": "RANDOM_DUNGEON",
   "doors": [
     {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:25:14:8",
+      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:15:34:4",
       "world_definition_key": "RANDOM_DUNGEON",
       "interaction_anchor": {
-        "x": -2.0,
-        "y": 5.25,
-        "z": -44.0
-      },
-      "max_interaction_distance": 4.25,
-      "closed_blocker": {
-        "center": {
-          "x": -2.0,
-          "y": 5.75,
-          "z": -44.0
-        },
-        "size": {
-          "x": 3.550001,
-          "y": 3.5,
-          "z": 0.35
-        },
-        "yaw_degrees": 270.0
-      },
-      "default_open": true,
-      "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "close_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "definition_version": 1
-    },
-    {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:25:5:8",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "interaction_anchor": {
-        "x": -2.0,
-        "y": 1.25,
-        "z": -80.0
-      },
-      "max_interaction_distance": 4.25,
-      "closed_blocker": {
-        "center": {
-          "x": -2.0,
-          "y": 1.75,
-          "z": -80.0
-        },
-        "size": {
-          "x": 3.550001,
-          "y": 3.5,
-          "z": 0.35
-        },
-        "yaw_degrees": 270.0
-      },
-      "default_open": true,
-      "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "close_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "definition_version": 1
-    },
-    {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:34:5:8",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "interaction_anchor": {
-        "x": 34.0,
-        "y": -2.75,
-        "z": -80.0
-      },
-      "max_interaction_distance": 4.25,
-      "closed_blocker": {
-        "center": {
-          "x": 34.0,
-          "y": -2.25,
-          "z": -80.0
-        },
-        "size": {
-          "x": 3.550001,
-          "y": 3.5,
-          "z": 0.35
-        },
-        "yaw_degrees": 270.0
-      },
-      "default_open": true,
-      "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "close_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "definition_version": 1
-    },
-    {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:45:27:1",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "interaction_anchor": {
-        "x": 80.0,
-        "y": -6.75,
-        "z": 10.0
-      },
-      "max_interaction_distance": 4.25,
-      "closed_blocker": {
-        "center": {
-          "x": 80.0,
-          "y": -6.25,
-          "z": 10.0
-        },
-        "size": {
-          "x": 3.55,
-          "y": 3.5,
-          "z": 0.35
-        },
-        "yaw_degrees": 0.0
-      },
-      "default_open": true,
-      "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "close_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "definition_version": 1
-    },
-    {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:45:33:4",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "interaction_anchor": {
-        "x": 80.0,
-        "y": -6.75,
+        "x": 0.0,
+        "y": -7.75,
         "z": 30.0
       },
       "max_interaction_distance": 4.25,
       "closed_blocker": {
         "center": {
-          "x": 80.0,
-          "y": -6.25,
+          "x": 0.0,
+          "y": -7.25,
           "z": 30.0
         },
         "size": {
@@ -138,46 +30,19 @@
       "definition_version": 1
     },
     {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:5:12:4",
+      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:5:24:1",
       "world_definition_key": "RANDOM_DUNGEON",
       "interaction_anchor": {
-        "x": -80.0,
-        "y": 9.25,
-        "z": -54.0
+        "x": -40.0,
+        "y": 0.25,
+        "z": -6.0
       },
       "max_interaction_distance": 4.25,
       "closed_blocker": {
         "center": {
-          "x": -80.0,
-          "y": 9.75,
-          "z": -54.0
-        },
-        "size": {
-          "x": 3.55,
-          "y": 3.5,
-          "z": 0.35
-        },
-        "yaw_degrees": 180.0
-      },
-      "default_open": true,
-      "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "close_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "definition_version": 1
-    },
-    {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:5:16:1",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "interaction_anchor": {
-        "x": -80.0,
-        "y": 9.25,
-        "z": -34.0
-      },
-      "max_interaction_distance": 4.25,
-      "closed_blocker": {
-        "center": {
-          "x": -80.0,
-          "y": 9.75,
-          "z": -34.0
+          "x": -40.0,
+          "y": 0.75,
+          "z": -6.0
         },
         "size": {
           "x": 3.55,
@@ -185,168 +50,6 @@
           "z": 0.35
         },
         "yaw_degrees": 0.0
-      },
-      "default_open": true,
-      "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "close_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "definition_version": 1
-    },
-    {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:5:22:4",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "interaction_anchor": {
-        "x": -80.0,
-        "y": 9.25,
-        "z": -14.0
-      },
-      "max_interaction_distance": 4.25,
-      "closed_blocker": {
-        "center": {
-          "x": -80.0,
-          "y": 9.75,
-          "z": -14.0
-        },
-        "size": {
-          "x": 3.55,
-          "y": 3.5,
-          "z": 0.35
-        },
-        "yaw_degrees": 180.0
-      },
-      "default_open": true,
-      "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "close_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "definition_version": 1
-    },
-    {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:5:34:4",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "interaction_anchor": {
-        "x": -80.0,
-        "y": 13.25,
-        "z": 34.0
-      },
-      "max_interaction_distance": 4.25,
-      "closed_blocker": {
-        "center": {
-          "x": -80.0,
-          "y": 13.75,
-          "z": 34.0
-        },
-        "size": {
-          "x": 3.55,
-          "y": 3.5,
-          "z": 0.35
-        },
-        "yaw_degrees": 180.0
-      },
-      "default_open": true,
-      "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "close_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "definition_version": 1
-    },
-    {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:5:38:1",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "interaction_anchor": {
-        "x": -80.0,
-        "y": 13.25,
-        "z": 54.0
-      },
-      "max_interaction_distance": 4.25,
-      "closed_blocker": {
-        "center": {
-          "x": -80.0,
-          "y": 13.75,
-          "z": 54.0
-        },
-        "size": {
-          "x": 3.55,
-          "y": 3.5,
-          "z": 0.35
-        },
-        "yaw_degrees": 0.0
-      },
-      "default_open": true,
-      "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "close_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "definition_version": 1
-    },
-    {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:5:42:4",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "interaction_anchor": {
-        "x": -80.0,
-        "y": 13.25,
-        "z": 66.0
-      },
-      "max_interaction_distance": 4.25,
-      "closed_blocker": {
-        "center": {
-          "x": -80.0,
-          "y": 13.75,
-          "z": 66.0
-        },
-        "size": {
-          "x": 3.55,
-          "y": 3.5,
-          "z": 0.35
-        },
-        "yaw_degrees": 180.0
-      },
-      "default_open": true,
-      "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "close_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "definition_version": 1
-    },
-    {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:5:8:1",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "interaction_anchor": {
-        "x": -80.0,
-        "y": 9.25,
-        "z": -66.0
-      },
-      "max_interaction_distance": 4.25,
-      "closed_blocker": {
-        "center": {
-          "x": -80.0,
-          "y": 9.75,
-          "z": -66.0
-        },
-        "size": {
-          "x": 3.55,
-          "y": 3.5,
-          "z": 0.35
-        },
-        "yaw_degrees": 0.0
-      },
-      "default_open": true,
-      "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "close_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "definition_version": 1
-    },
-    {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:7:14:2",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "interaction_anchor": {
-        "x": -70.0,
-        "y": 9.25,
-        "z": -44.0
-      },
-      "max_interaction_distance": 4.25,
-      "closed_blocker": {
-        "center": {
-          "x": -70.0,
-          "y": 9.75,
-          "z": -44.0
-        },
-        "size": {
-          "x": 3.550001,
-          "y": 3.5,
-          "z": 0.35
-        },
-        "yaw_degrees": 90.0
       },
       "default_open": true,
       "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
