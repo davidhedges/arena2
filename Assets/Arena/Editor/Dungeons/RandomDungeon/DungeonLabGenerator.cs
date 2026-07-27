@@ -1365,6 +1365,7 @@ namespace DungeonLab.Editor
                 loopedLayout,
                 cellLevels,
                 transitions,
+                routeRequirements?.recipes,
                 rng.Stream("enclosed-rooms"),
                 out boundaryContext,
                 out string boundaryMessage);
@@ -1468,7 +1469,10 @@ namespace DungeonLab.Editor
                         floorCells,
                         layout.rooms[candidate.firstRoom],
                         layout.rooms[candidate.secondRoom]) ||
-                    PathTouchesProtectedCells(path, routeRequirements?.reservedVistaCells))
+                    PathTouchesProtectedCells(path, routeRequirements?.reservedVistaCells) ||
+                    // A loop corridor through a reserved shaft would take away the
+                    // one place its edge's stairwell tower is guaranteed to fit.
+                    PathTouchesProtectedCells(path, layout.reservedShaftCells))
                 {
                     continue;
                 }
@@ -1506,21 +1510,24 @@ namespace DungeonLab.Editor
                 layout.rooms,
                 connections,
                 layout.roomZones,
-                layout.connectorCandidateCount);
+                layout.connectorCandidateCount,
+                layout.reservedShaftCells);
         }
 
         private static bool PathTouchesProtectedCells(
             IReadOnlyList<Vector2Int> path,
-            HashSet<Vector2Int> protectedCells)
+            IReadOnlyCollection<Vector2Int> protectedCells)
         {
             if (path == null || protectedCells == null || protectedCells.Count == 0)
             {
                 return false;
             }
 
+            var lookup = protectedCells as HashSet<Vector2Int> ??
+                new HashSet<Vector2Int>(protectedCells);
             foreach (Vector2Int cell in path)
             {
-                if (protectedCells.Contains(cell))
+                if (lookup.Contains(cell))
                 {
                     return true;
                 }
@@ -3313,6 +3320,7 @@ namespace DungeonLab.Editor
             DungeonLayout layout,
             IReadOnlyDictionary<Vector2Int, int> cellLevels,
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
+            IReadOnlyList<RecipePlacement> recipePlacements,
             System.Random random,
             out ElevationEdgeModel.RoomBoundaryContext context,
             out string rejectionReason)
@@ -3331,6 +3339,15 @@ namespace DungeonLab.Editor
                 BuildGatewayConnectionEnds(layout, cellLevels);
             List<ElevationEdgeModel.InternalPathEdge> internalPathEdges = BuildInternalPathEdges(layout, cellLevels, cellRoomIds, transitions);
             bool[] enclosedRooms = ChooseEnclosedRooms(layout.rooms.Count, random);
+            // M4b. It runs AFTER BuildInternalPathEdges, which only asks whether
+            // a cell is in some room, and BEFORE the two sealed-room passes, so
+            // the chambers it adds are validated rather than exempt.
+            SubdivideOversizeRoomsIntoChambers(
+                layout,
+                recipePlacements,
+                cellRoomIds,
+                doorways,
+                ref enclosedRooms);
             DemoteSealedEnclosedRooms(enclosedRooms, doorways, cellRoomIds);
             if (!ValidateEnclosedRoomDoorways(enclosedRooms, doorways, cellRoomIds, out rejectionReason))
             {
@@ -7687,6 +7704,11 @@ namespace DungeonLab.Editor
             public readonly List<RoomConnection> connections;
             public readonly IReadOnlyList<RoomZonePlan> roomZones;
             public readonly int connectorCandidateCount;
+            // The shaft windows the annex pass kept clear beside each transition
+            // corridor, so a stairwell tower has somewhere to stand. Authored
+            // void by design §4.1, and carried here rather than recomputed
+            // because it depends on what was free at the moment it was taken.
+            public readonly IReadOnlyCollection<Vector2Int> reservedShaftCells;
 
             public DungeonLayout(HashSet<Vector2Int> floorCells, List<RoomFootprint> rooms, List<RoomConnection> connections)
                 : this(floorCells, rooms, connections, Array.Empty<RoomZonePlan>(), 0)
@@ -7698,13 +7720,15 @@ namespace DungeonLab.Editor
                 List<RoomFootprint> rooms,
                 List<RoomConnection> connections,
                 IReadOnlyList<RoomZonePlan> roomZones,
-                int connectorCandidateCount)
+                int connectorCandidateCount,
+                IReadOnlyCollection<Vector2Int> reservedShaftCells = null)
             {
                 this.floorCells = floorCells;
                 this.rooms = rooms;
                 this.connections = connections;
                 this.roomZones = roomZones ?? Array.Empty<RoomZonePlan>();
                 this.connectorCandidateCount = connectorCandidateCount;
+                this.reservedShaftCells = reservedShaftCells ?? Array.Empty<Vector2Int>();
             }
         }
 

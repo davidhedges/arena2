@@ -30,10 +30,13 @@
     // The tightest column lane here is four under the pitch, and it cannot host
     // a room of the profile's own width: adjacent rooms would overlap on every
     // draw and exhaust room inflation. This topology therefore declares its own,
-    // narrower sizes - four to five under the pitch, so they stay inside those
-    // lanes at every density. The override is the point of the mechanism: it is
-    // visible in the data, with a reason, rather than hidden in a second
-    // settings table the profile never reaches.
+    // narrower sizes - four to five under the pitch. Declared at density 0 and
+    // PACKED BY THE DIAL like the profile's own sizes, so the channel they leave
+    // shrinks as density rises rather than the number staying put; the per-node
+    // lane clamp then holds each room to its OWN lane, so the wide east columns
+    // are not paid for by the tight west ones. The override is the point of the
+    // mechanism: it is visible in the data, with a reason, rather than hidden in
+    // a second settings table the profile never reaches.
     "roomSizeDeltaCells": {
       "terminal":  [-4, -4, -2, -2],
       "hall":      [-4, -4, -4, -3],

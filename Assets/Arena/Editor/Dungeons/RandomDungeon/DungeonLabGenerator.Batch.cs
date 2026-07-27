@@ -119,11 +119,109 @@ namespace DungeonLab.Editor
             CaptureVisualSentinels("visual_sentinels");
         }
 
+        /// <summary>
+        /// Renders a seed range and reports which seeds the RENDERER refuses.
+        /// </summary>
+        /// <remarks>
+        /// Batch Validate answers a question about the PLAN — it never builds a
+        /// GameObject, so a plan that is hard-valid and a plan that renders are
+        /// two different claims and only the first was ever measured over the
+        /// corpus. Phase 4 of the density work found the gap the hard way: at
+        /// densities 4 and 5 a sentinel seed threw `STAIR_BOUNDARY_CONFLICT`
+        /// from a tier corner overlapping a stairwell footprint while every one
+        /// of the 200 plans passed validation. This is slow — a full scene build
+        /// per seed — so it is a separate sweep rather than part of the batch.
+        /// </remarks>
+        [MenuItem("Tools/Dungeon Lab/Render Sweep (50 Fixed Seeds)")]
+        public static void RenderSweep50Seeds()
+        {
+            RunRenderSweep(BaselineFirstSeed, 50);
+        }
+
+        [MenuItem("Tools/Dungeon Lab/Render Sweep (200 Fixed Seeds)")]
+        public static void RenderSweep200Seeds()
+        {
+            RunRenderSweep(BaselineFirstSeed, BaselineSeedCount);
+        }
+
+        private static string RunRenderSweep(int firstSeed, int seedCount)
+        {
+            Directory.CreateDirectory(BatchReportDirectory);
+            var failures = new JArray();
+            var codes = new SortedDictionary<string, int>(StringComparer.Ordinal);
+            int rendered = 0;
+            try
+            {
+                for (int index = 0; index < seedCount; index++)
+                {
+                    int seed = firstSeed + index;
+                    if (!Application.isBatchMode && EditorUtility.DisplayCancelableProgressBar(
+                            "Dungeon Lab Render Sweep",
+                            $"Seed {seed} ({index + 1}/{seedCount})",
+                            (float)index / seedCount))
+                    {
+                        break;
+                    }
+
+                    GameObject root = null;
+                    try
+                    {
+                        root = BuildRenderedSeed(seed, out _, out _, out _);
+                        rendered++;
+                    }
+                    catch (Exception failure)
+                    {
+                        string code = NormalizedRejectionCode(failure.Message, failure);
+                        codes.TryGetValue(code, out int count);
+                        codes[code] = count + 1;
+                        failures.Add(new JObject
+                        {
+                            ["seed"] = seed,
+                            ["code"] = code,
+                            ["message"] = failure.Message
+                        });
+                    }
+                    finally
+                    {
+                        if (root != null)
+                        {
+                            DestroyImmediate(root);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+
+            var report = new JObject
+            {
+                ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
+                ["generatorVersion"] = ActiveDiagnosticGeneratorVersion,
+                ["firstSeed"] = firstSeed,
+                ["seedCount"] = seedCount,
+                ["rendered"] = rendered,
+                ["failureCodes"] = HistogramToken(codes),
+                ["failures"] = failures
+            };
+            AddGenerationSettingsIdentity(report);
+            string path = Path.Combine(
+                BatchReportDirectory,
+                $"render_sweep_{firstSeed}_{firstSeed + seedCount - 1}.json");
+            File.WriteAllText(path, report.ToString(Formatting.Indented));
+            Debug.Log(
+                $"Dungeon Lab RENDER_SWEEP range={firstSeed}..{firstSeed + seedCount - 1}; " +
+                $"rendered={rendered}/{seedCount}; failureCodes={FormatCountSummary(codes)}; report={path}");
+            return path;
+        }
+
         private static void CaptureVisualSentinels(string directoryName)
         {
             string directory = Path.Combine(BatchReportDirectory, directoryName);
             Directory.CreateDirectory(directory);
             var manifestEntries = new JArray();
+            var failures = new List<string>();
 
             try
             {
@@ -156,6 +254,24 @@ namespace DungeonLab.Editor
                             ["rendererSummary"] = buildReport.Summary
                         });
                     }
+                    catch (Exception failure)
+                    {
+                        // One sentinel that will not render used to destroy the
+                        // whole capture, so the five that DID render were never
+                        // written and the comparison the sentinels exist for was
+                        // unavailable exactly when something had gone wrong. The
+                        // failure is recorded per sentinel and rethrown below,
+                        // after every other image is on disk — louder, not
+                        // quieter.
+                        failures.Add($"{sentinel.seed} ({sentinel.category}): {failure.Message}");
+                        manifestEntries.Add(new JObject
+                        {
+                            ["seed"] = sentinel.seed,
+                            ["category"] = sentinel.category,
+                            ["annotation"] = sentinel.annotation,
+                            ["renderFailure"] = failure.Message
+                        });
+                    }
                     finally
                     {
                         if (root != null)
@@ -177,12 +293,19 @@ namespace DungeonLab.Editor
                 ["captureWidth"] = SentinelImageWidth,
                 ["captureHeight"] = SentinelImageHeight,
                 ["topDownCaptureSize"] = SentinelTopDownImageSize,
+                ["renderFailures"] = new JArray(failures),
                 ["sentinels"] = manifestEntries
             };
             AddGenerationSettingsIdentity(manifest);
             string manifestPath = Path.Combine(directory, "manifest.json");
             File.WriteAllText(manifestPath, manifest.ToString(Formatting.Indented));
             Debug.Log($"Dungeon Lab: visual sentinels written to {directory} (manifest {manifestPath}).");
+            if (failures.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"{failures.Count} of {VisualSentinels.Length} sentinels did not render: " +
+                    string.Join("; ", failures));
+            }
         }
 
         private static string RunBatchValidation(
@@ -213,6 +336,8 @@ namespace DungeonLab.Editor
             var routeClimbCounts = new List<int>();
             var latticeEnvelopeFillPercents = new List<int>();
             var maxVoidComponentCells = new List<int>();
+            var channelVoidCells = new List<int>();
+            var vacantVoidCells = new List<int>();
             int successCount = 0;
             int hardValidCount = 0;
             int routeRequirementsValidCount = 0;
@@ -312,6 +437,10 @@ namespace DungeonLab.Editor
                             Mathf.RoundToInt(density.Value<float>("latticeEnvelopeFillPercent")));
                         maxVoidComponentCells.Add(
                             density["voidComponents"]?.Value<int?>("maxComponentCells") ?? 0);
+                        channelVoidCells.Add(
+                            density["voidDecomposition"]?.Value<int?>("channelVoidCells") ?? 0);
+                        vacantVoidCells.Add(
+                            density["voidDecomposition"]?.Value<int?>("vacantVoidCells") ?? 0);
                     }
                 }
             }
@@ -351,7 +480,9 @@ namespace DungeonLab.Editor
                 $"latticeEnvelopeFillPercent min={fillDistribution.Value<int>("min")} " +
                 $"p50={fillDistribution.Value<int>("p50")} max={fillDistribution.Value<int>("max")}; " +
                 $"maxVoidComponentCells min={voidDistribution.Value<int>("min")} " +
-                $"p50={voidDistribution.Value<int>("p50")} max={voidDistribution.Value<int>("max")}");
+                $"p50={voidDistribution.Value<int>("p50")} max={voidDistribution.Value<int>("max")}; " +
+                $"channelVoidCells p50={BuildIntDistribution(channelVoidCells).Value<int>("p50")}; " +
+                $"vacantVoidCells p50={BuildIntDistribution(vacantVoidCells).Value<int>("p50")}");
 
             string reportPath = WriteBatchReport(
                 firstSeed,
@@ -1056,6 +1187,7 @@ namespace DungeonLab.Editor
                 intent,
                 ResolveTopologySpatialSettings(intent.topology),
                 out Vector2Int[] nodeCenters,
+                out Vector2Int[] _,
                 out string embeddingFailureCode,
                 out string embeddingError);
             Vector2Int vistaDelta = embedded
@@ -1136,6 +1268,7 @@ namespace DungeonLab.Editor
                 intent,
                 ResolveTopologySpatialSettings(intent.topology),
                 out Vector2Int[] nodeCenters,
+                out Vector2Int[] _,
                 out string embeddingFailureCode,
                 out string embeddingError);
             Vector2Int vistaDelta = embedded
@@ -3489,6 +3622,15 @@ namespace DungeonLab.Editor
                 ["latticeSlackSpentCells"] = lastLatticeSlackSpentCells,
                 ["latticeSlackAvailableCells"] = lastLatticeSlackAvailableCells,
                 ["roomInflationAttempts"] = lastRoomInflationAttempts,
+                ["annex"] = new JObject
+                {
+                    ["vacantLatticeCells"] = lastVacantLatticeCellCount,
+                    ["annexedRects"] = lastAnnexedRectCount,
+                    ["annexedFloorCells"] = lastAnnexedFloorCells,
+                    ["moppedRects"] = lastMoppedRectCount,
+                    ["moppedFloorCells"] = lastMoppedFloorCells,
+                    ["boundaryChambers"] = lastChamberCount
+                },
                 // §3.2 wants this ceiling sized from the observed maximum rather
                 // than guessed, so the observation has to be in the report.
                 ["routeShapeAttempts"] = lastRouteShapeAttempts,

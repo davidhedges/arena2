@@ -107,7 +107,15 @@ namespace DungeonLab.Editor
         // overload above with the embedding they hold.
         private static bool TryResolveLatticeEnvelope(out RectInt envelope)
         {
+            return TryResolveLatticeEnvelope(out envelope, out _);
+        }
+
+        private static bool TryResolveLatticeEnvelope(
+            out RectInt envelope,
+            out RectInt[] nodeEnvelopes)
+        {
             envelope = default;
+            nodeEnvelopes = System.Array.Empty<RectInt>();
             if (lastRouteIntent == null ||
                 lastNodeCenters == null ||
                 lastNodeCenters.Length == 0 ||
@@ -116,9 +124,15 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            envelope = LatticeEnvelopeFor(
-                lastNodeCenters,
-                ResolveTopologySpatialSettings(lastRouteIntent.topology));
+            DungeonPatternSpatialSettings spatial =
+                ResolveTopologySpatialSettings(lastRouteIntent.topology);
+            envelope = LatticeEnvelopeFor(lastNodeCenters, spatial);
+            nodeEnvelopes = new RectInt[lastNodeCenters.Length];
+            for (int node = 0; node < lastNodeCenters.Length; node++)
+            {
+                nodeEnvelopes[node] = RoomEnvelope(lastNodeCenters[node], spatial);
+            }
+
             return true;
         }
 
@@ -140,6 +154,7 @@ namespace DungeonLab.Editor
         // aerial deck is still counted today, and gets revisited in phase 4/6
         // when the number actually binds.
         private static HashSet<Vector2Int> CollectAuthoredVoidCells(
+            DungeonLayout layout,
             TieredLevelPlan plan,
             out int vistaLaneCells,
             out int shaftAndSpanCells,
@@ -152,6 +167,18 @@ namespace DungeonLab.Editor
             }
 
             vistaLaneCells = authored.Count;
+
+            // The shaft window the layout kept clear beside each transition
+            // corridor. §4.1 calls a stairwell shaft authored void, and it is
+            // authored whether or not a tower ended up standing in it — the
+            // whole point of the reservation is that the placer has somewhere to
+            // go. Counting only the placed footprint (below) measured the ones
+            // that were USED and called the rest a hole.
+            foreach (Vector2Int cell in
+                     layout.reservedShaftCells ?? System.Array.Empty<Vector2Int>())
+            {
+                authored.Add(cell);
+            }
 
             foreach (ElevationEdgeModel.TransitionEdge transition in
                      plan.transitions ?? new List<ElevationEdgeModel.TransitionEdge>())
@@ -169,6 +196,42 @@ namespace DungeonLab.Editor
                 }
 
                 foreach (Vector2Int cell in transition.footprintCells)
+                {
+                    authored.Add(cell);
+                }
+
+                // The gap an aerial span CROSSES, not just the piece that sits
+                // on it. Fork F2 keeps that void on purpose — a bridge over
+                // filled floor is a walkway — and the deck is added by the tier
+                // stage, so the layout floor mask the metric reads is empty
+                // underneath it by construction. Counting only footprintCells
+                // measured a deliberate hole as a defect: it was the single
+                // 7-cell component left in all 200 seeds at density 5, and the
+                // reason §5's tolerance appeared unreachable.
+                if (string.Equals(
+                        transition.placementClass,
+                        ExternalSpanStairPlacementClass,
+                        System.StringComparison.Ordinal))
+                {
+                    AddSpanCrossingCells(transition, authored);
+                }
+            }
+
+            // A dais reads as backed against an exterior wall only while the
+            // cells behind it are empty, and TryValidateAcceptedRecipes enforces
+            // that — so the backdrop is authored void in exactly the sense §4.1
+            // means, and filling it fails the seed. It was the LAST hole left at
+            // density 5: one 7-cell strip in all 200 seeds, which is the width
+            // of the reviewed landmark's dais.
+            foreach (RecipeResolution resolution in
+                     plan.recipeResolutions ?? System.Array.Empty<RecipeResolution>())
+            {
+                // A resolution with no showpiece carries a DEFAULT reservation,
+                // whose arrays are null — the constructor's null-coalescing only
+                // runs when one is actually built.
+                foreach (Vector2Int cell in
+                         resolution.showpieceReservation.backdropVoidCells ??
+                         System.Array.Empty<Vector2Int>())
                 {
                     authored.Add(cell);
                 }
@@ -190,11 +253,145 @@ namespace DungeonLab.Editor
             return authored;
         }
 
+        /// <summary>
+        /// What the void IS, cell by cell — as opposed to how big its holes are.
+        /// </summary>
+        /// <remarks>
+        /// <c>voidComponents</c> says a seed has a 600-cell hole; it cannot say
+        /// whether that hole is channel around rooms or craters between them,
+        /// and those are removed by different mechanisms. This splits every
+        /// non-floor cell of the lattice envelope three ways:
+        /// <list type="bullet">
+        /// <item><b>channel</b> — inside some node's placement envelope. The
+        /// ring of open air around a room, which M2 (pack) closes.</item>
+        /// <item><b>vacant</b> — outside every node envelope. The ~9x9 craters
+        /// at lattice cells no node occupies, which is M3's (annex) target and
+        /// the half of §2's measurement that packing cannot reach.</item>
+        /// <item><b>authored</b> — vista lane, stairwell shafts, aerial span
+        /// footprints, promontory piers: void that survives at every density by
+        /// design (§4.1), already excluded from <c>voidComponents</c>.</item>
+        /// </list>
+        /// The three partition the envelope's non-floor cells exactly, so
+        /// channel + vacant is the void the dial is allowed to remove. Floor is
+        /// split on the same boundary, because floor outside every node
+        /// envelope is exactly the corridors plus whatever M3 annexed — which
+        /// is how you tell annexation from a room simply growing.
+        /// </remarks>
+        // The span's own extent: the box its two ends and its footprint span.
+        // A span is straight and cardinal, so the box is the run and nothing
+        // else — this cannot quietly grow into the rooms either side.
+        private static void AddSpanCrossingCells(
+            ElevationEdgeModel.TransitionEdge transition,
+            HashSet<Vector2Int> authored)
+        {
+            int minX = Mathf.Min(transition.firstCell.x, transition.secondCell.x);
+            int maxX = Mathf.Max(transition.firstCell.x, transition.secondCell.x);
+            int minY = Mathf.Min(transition.firstCell.y, transition.secondCell.y);
+            int maxY = Mathf.Max(transition.firstCell.y, transition.secondCell.y);
+            foreach (Vector2Int cell in transition.footprintCells)
+            {
+                minX = Mathf.Min(minX, cell.x);
+                maxX = Mathf.Max(maxX, cell.x);
+                minY = Mathf.Min(minY, cell.y);
+                maxY = Mathf.Max(maxY, cell.y);
+            }
+
+            for (int y = minY; y <= maxY; y++)
+            {
+                for (int x = minX; x <= maxX; x++)
+                {
+                    authored.Add(new Vector2Int(x, y));
+                }
+            }
+        }
+
+        private static JObject BuildVoidDecomposition(
+            HashSet<Vector2Int> floorCells,
+            HashSet<Vector2Int> authoredVoidCells,
+            RectInt envelope,
+            IReadOnlyList<RectInt> nodeEnvelopes)
+        {
+            int channelVoid = 0;
+            int vacantVoid = 0;
+            int authoredVoid = 0;
+            int envelopeFloor = 0;
+            int vacantFloor = 0;
+            int insideNodeEnvelopes = 0;
+            for (int y = envelope.yMin; y < envelope.yMax; y++)
+            {
+                for (int x = envelope.xMin; x < envelope.xMax; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    bool insideNodeEnvelope = false;
+                    foreach (RectInt nodeEnvelope in nodeEnvelopes)
+                    {
+                        if (nodeEnvelope.Contains(cell))
+                        {
+                            insideNodeEnvelope = true;
+                            break;
+                        }
+                    }
+
+                    if (insideNodeEnvelope)
+                    {
+                        insideNodeEnvelopes++;
+                    }
+
+                    if (floorCells.Contains(cell))
+                    {
+                        envelopeFloor++;
+                        if (!insideNodeEnvelope)
+                        {
+                            vacantFloor++;
+                        }
+
+                        continue;
+                    }
+
+                    if (authoredVoidCells.Contains(cell))
+                    {
+                        authoredVoid++;
+                    }
+                    else if (insideNodeEnvelope)
+                    {
+                        channelVoid++;
+                    }
+                    else
+                    {
+                        vacantVoid++;
+                    }
+                }
+            }
+
+            int envelopeArea = Mathf.Max(1, envelope.width * envelope.height);
+            int outsideNodeEnvelopes = envelopeArea - insideNodeEnvelopes;
+            return new JObject
+            {
+                ["nodeEnvelopeCells"] = insideNodeEnvelopes,
+                ["outsideNodeEnvelopeCells"] = outsideNodeEnvelopes,
+                ["channelVoidCells"] = channelVoid,
+                ["vacantVoidCells"] = vacantVoid,
+                ["authoredVoidCells"] = authoredVoid,
+                ["floorCellsInsideNodeEnvelopes"] = envelopeFloor - vacantFloor,
+                ["floorCellsOutsideNodeEnvelopes"] = vacantFloor,
+                ["channelVoidPercentOfNodeEnvelopes"] =
+                    channelVoid / (float)Mathf.Max(1, insideNodeEnvelopes) * 100f,
+                ["vacantVoidPercentOutsideNodeEnvelopes"] =
+                    vacantVoid / (float)Mathf.Max(1, outsideNodeEnvelopes) * 100f,
+                ["measurement"] =
+                    "every non-floor cell of the lattice envelope attributed to channel (inside a node's " +
+                    "9x9 placement envelope — M2's target), vacant (outside every node envelope, the lattice " +
+                    "craters — M3's target) or authored (vista lane, stairwell shaft, aerial span, pier — " +
+                    "kept at every density). Floor is split on the same boundary, so " +
+                    "floorCellsOutsideNodeEnvelopes is corridor plus annexed area."
+            };
+        }
+
         private static JObject BuildVoidDensityMeasurements(
             DungeonLayout layout,
             TieredLevelPlan plan)
         {
-            if (!TryResolveLatticeEnvelope(out RectInt envelope))
+            if (!TryResolveLatticeEnvelope(out RectInt envelope, out RectInt[] nodeEnvelopes))
             {
                 return new JObject
                 {
@@ -204,6 +401,7 @@ namespace DungeonLab.Editor
             }
 
             HashSet<Vector2Int> authoredVoid = CollectAuthoredVoidCells(
+                layout,
                 plan,
                 out int vistaLaneCells,
                 out int shaftAndSpanCells,
@@ -243,9 +441,15 @@ namespace DungeonLab.Editor
                 {
                     ["cellCount"] = authoredVoid.Count,
                     ["vistaLaneCells"] = vistaLaneCells,
+                    ["reservedShaftCells"] = layout.reservedShaftCells?.Count ?? 0,
                     ["stairwellShaftAndAerialSpanCells"] = shaftAndSpanCells,
                     ["promontoryAndPierCells"] = promontoryCells
                 },
+                ["voidDecomposition"] = BuildVoidDecomposition(
+                    layout.floorCells,
+                    authoredVoid,
+                    envelope,
+                    nodeEnvelopes),
                 ["voidComponents"] = new JObject
                 {
                     ["componentCount"] = componentSizes.Count,
@@ -379,7 +583,7 @@ namespace DungeonLab.Editor
 
             var vistaCells = new HashSet<Vector2Int>(
                 plan.routeRequirementResolution.reservedVistaCells);
-            HashSet<Vector2Int> authoredVoid = CollectAuthoredVoidCells(plan, out _, out _, out _);
+            HashSet<Vector2Int> authoredVoid = CollectAuthoredVoidCells(layout, plan, out _, out _, out _);
             var promontoryCells = new HashSet<Vector2Int>(
                 CollectNamedPromontoryCells(plan.namedPromontories));
             promontoryCells.UnionWith(CollectExternalConnectorPierCells(plan.externalConnectors));
@@ -479,6 +683,11 @@ namespace DungeonLab.Editor
             public readonly List<int> componentsLargerThanOneCellPerSeed = new List<int>();
             public readonly List<int> totalVoidCellsPerSeed = new List<int>();
             public readonly List<int> largestEnclosedComponentPerSeed = new List<int>();
+            public readonly List<int> channelVoidCellsPerSeed = new List<int>();
+            public readonly List<int> vacantVoidCellsPerSeed = new List<int>();
+            public readonly List<int> annexedFloorCellsPerSeed = new List<int>();
+            public readonly List<int> channelVoidPercentPerSeed = new List<int>();
+            public readonly List<int> vacantVoidPercentPerSeed = new List<int>();
         }
 
         private static void AccumulateVoidDensity(JObject density, VoidDensityAccumulator accumulator)
@@ -497,6 +706,19 @@ namespace DungeonLab.Editor
             accumulator.totalVoidCellsPerSeed.Add(components.Value<int?>("totalVoidCells") ?? 0);
             accumulator.largestEnclosedComponentPerSeed.Add(
                 components.Value<int?>("largestEnclosedComponentCells") ?? 0);
+
+            JObject decomposition = density["voidDecomposition"] as JObject ?? new JObject();
+            accumulator.channelVoidCellsPerSeed.Add(
+                decomposition.Value<int?>("channelVoidCells") ?? 0);
+            accumulator.vacantVoidCellsPerSeed.Add(
+                decomposition.Value<int?>("vacantVoidCells") ?? 0);
+            accumulator.annexedFloorCellsPerSeed.Add(
+                decomposition.Value<int?>("floorCellsOutsideNodeEnvelopes") ?? 0);
+            accumulator.channelVoidPercentPerSeed.Add(
+                Mathf.RoundToInt(decomposition.Value<float?>("channelVoidPercentOfNodeEnvelopes") ?? 0f));
+            accumulator.vacantVoidPercentPerSeed.Add(
+                Mathf.RoundToInt(
+                    decomposition.Value<float?>("vacantVoidPercentOutsideNodeEnvelopes") ?? 0f));
         }
 
         private static JObject BuildVoidDensitySummary(VoidDensityAccumulator accumulator)
@@ -515,6 +737,16 @@ namespace DungeonLab.Editor
                     BuildIntDistribution(accumulator.totalVoidCellsPerSeed),
                 ["largestEnclosedVoidComponentCellsPerSeed"] =
                     BuildIntDistribution(accumulator.largestEnclosedComponentPerSeed),
+                ["channelVoidCellsPerSeed"] =
+                    BuildIntDistribution(accumulator.channelVoidCellsPerSeed),
+                ["vacantVoidCellsPerSeed"] =
+                    BuildIntDistribution(accumulator.vacantVoidCellsPerSeed),
+                ["floorCellsOutsideNodeEnvelopesPerSeed"] =
+                    BuildIntDistribution(accumulator.annexedFloorCellsPerSeed),
+                ["channelVoidPercentOfNodeEnvelopesPerSeed"] =
+                    BuildIntDistribution(accumulator.channelVoidPercentPerSeed),
+                ["vacantVoidPercentOutsideNodeEnvelopesPerSeed"] =
+                    BuildIntDistribution(accumulator.vacantVoidPercentPerSeed),
                 ["measurement"] =
                     "fill percentages are rounded to whole percent so they share the integer distribution shape; " +
                     "per-seed exact values live in each seed report's measurements.density"

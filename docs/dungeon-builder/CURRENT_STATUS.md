@@ -1,6 +1,6 @@
 # Dungeon generator: current status
 
-Last updated: 2026-07-27
+Last updated: 2026-07-28
 
 No phased plan is in progress. This page describes what the generator is and where the work stands. Keep it short — if it starts growing per-phase evidence sections again, that evidence belongs in `DungeonLabReports/` or `docs/archive/`, not here.
 
@@ -32,6 +32,7 @@ seed + density + generation profile + recipe catalog
 | Switch density | **Arena > Dungeons > Density > 0..5** (per-user pref; `ARENA_DUNGEON_DENSITY` overrides; with neither, the profile asset's own `densityLevel`) |
 | Plan only, no scene | **Tools > Dungeon Lab > Generate** |
 | Batch evidence | **Tools > Dungeon Lab > Batch Validate (50 / 200 / 100 Locked Seeds)** |
+| Prove the corpus RENDERS, not just plans | **Tools > Dungeon Lab > Render Sweep (50 / 200 Fixed Seeds)** — a full scene build per seed, so it is slow and separate |
 | Command line | `-executeMethod DungeonLab.Editor.RandomDungeonSceneBuilder.RebuildRandomDungeonBatch`, with `ARENA_RANDOM_DUNGEON_SEED` set |
 
 Always publish/restart the server module after regenerating, so server movement and spawning use the same geometry as the client scene.
@@ -54,6 +55,210 @@ removed. The per-phase log lives in
 [`docs/archive/2026-07-dungeon-phase-log/`](../archive/2026-07-dungeon-phase-log/)
 if you ever need to reconstruct why a decision was made. Treat it as history,
 not as current constraints.
+
+### Landed 2026-07-28 — density scale, phase 5 (M4 — mop up, and chambers)
+
+**Density 5 meets §5's acceptance on all 200 seeds**: max void component ≤4
+cells and at most two components larger than one cell. Measured: max component
+0 p50 / 2 p95 / 2 max, components larger than one cell 0 p50 / 1 max, at **93%
+lattice-envelope fill**.
+
+| density | accepted | hardValid | fill p50 | max void p50/p95/max | components >1 cell p50/max | boundary chambers p50 |
+|---|---|---|---|---|---|---|
+| 0 | 199/200 | 199 | 26% | 742 / 1106 / 1229 | 6 / 10 | 13 |
+| 1 | 200/200 | 200 | 29% | 698 / 993 / 1097 | 6 / 9 | 13 |
+| 2 | 200/200 | 200 | 32% | 583 / 872 / 1066 | 6 / 13 | 13 |
+| 3 | 200/200 | 200 | 41% | 332 / 657 / 826 | 10 / 20 | 16 |
+| 4 | 200/200 | 200 | 74% | 84 / 225 / 456 | 12 / 20 | 25 |
+| 5 | 200/200 | 200 | **93%** | **0 / 2 / 2** | **0 / 1** | 30 |
+
+Density 5 is byte-identical across two independent runs, the EditMode
+`DungeonLab*` filter is 100 pass / 25 fail on this tree and on HEAD (same 25),
+and **the whole 200-seed corpus now RENDERS at every density measured** — see
+the tier-corner fix below.
+
+**M4a — mop-up is M3 with two parameters moved.** It sweeps every lattice band
+rather than only the vacant ones, and takes rects down to a single cell. What
+M3 leaves is the channel around each room — ragged, wrapping a room on two or
+three sides — so the sweep repeats until a pass claims nothing: a hole two bands
+from any room is out of reach on the first pass and adjacent to a grown room on
+the second. One pass left a 128-cell corner on `ridge-ravine`.
+
+**M4b — chambers.** A room over 64 cells (8x8, the largest a generic room
+reaches at density 0) is cut by recursive straight guillotine cuts until every
+chamber fits, each cut checked for both sides staying connected and for a seam
+long enough to hold a flanked doorway. Density 5 runs ~30 chambers over 13
+rooms. It is a boundary-stage refinement: `layout.rooms` keeps its 1:1 mapping
+to route nodes, and §4.2's trap is respected — `cellRoomIds`, `enclosedRooms`
+**and** one `DoorwayEdge` per seam expand together, before the two sealed-room
+passes rather than after them. Gated on the annex dial, so densities 0–2 are
+untouched by construction.
+
+**Phase 2's last item is closed: the stairwell shaft is explicit now.** Phase 4
+bought the tower its void with a blanket two-cell band around every transition
+corridor. That cost ~200 cells a seed and was most of the void left at density
+5. It is now ONE 3x3 window per transition corridor, on whichever side is
+actually free — which is only knowable after rooms, recipes and corridors are
+compiled, and is the opposite ordering to the pre-inflation reservation that
+failed on 2026-07-27. The window is carried on the layout, loop corridors route
+around it, and it counts as authored void because that is what §4.1 says a
+stairwell shaft is.
+
+**Two things the metric was calling holes that the design calls authored void.**
+Both were found by measurement, not by reading:
+
+- **A dais showpiece's backdrop.** `TryValidateAcceptedRecipes` requires the
+  cells behind a dais to stay empty so it reads as backed against an exterior
+  wall. It was the LAST hole at density 5 — one 7-cell strip in all 200 seeds,
+  the width of the reviewed landmark's dais.
+- **The gap an aerial span crosses**, not just the piece sitting on it. Fork F2
+  keeps that void on purpose, and the deck is added by the tier stage, so the
+  layout floor mask the metric reads is empty underneath it by construction.
+
+**And a renderer defect that phase 4 flagged is fixed.** `STAIR_BOUNDARY_CONFLICT`
+— a rounded tier corner sweeping into a stairwell tower's footprint — was 2/200
+at density 5 in phase 4 and packing took it to **27/200**. The cause was that
+the corner SELECTOR and its VALIDATOR disagreed about what a stair owns: the
+selector skipped `reservedCells` (a stair's floor-blocked cells) while the
+validator threw on the wider footprint and landing-port set. They share one set
+now, the selector keeps those corners square — the same decision it already
+makes for a reserved cell or a diagonally touching mass — and the validator
+stays as the assertion that it worked. **Render sweep: 200/200 at densities 4
+and 5, 199/200 at density 0** (the one failure is the known plan failure
+`2026072187`). One test needed updating: `GatewayPlanning_DoesNotSuppressAnEligibleAngledCorner`
+invokes `FindRoundTierCorners` reflectively and pins its signature.
+
+**Still open for phase 6.** Densities 3 and 4 are where the dial now reads
+unevenly — 41% and 74% fill against §4.3's 60% and 80% — because mop-up is off
+at 3 and half on at 4. That is a table value, not a mechanism, and phase 6 is
+where the table gets retuned by looking. §4.3's other columns (`lane gap beyond
+room`, `lattice slack`) are also worth revisiting now that fill actually spans
+26–93%.
+
+### Landed 2026-07-28 — density scale, phase 4 (M3 — annex the craters)
+
+**The dial now removes both halves of the void §2 measured.** M2 closed the
+channel around each room; M3 claims the vacant lattice cells — the map positions
+no node occupies, which at a 9-cell pitch are 9x9 craters outside every room's
+placement envelope, and which packing cannot reach by construction.
+
+| density | accepted | hardValid | fill p50 | max void component p50 | channel void p50 | vacant void p50 |
+|---|---|---|---|---|---|---|
+| 0 | 199/200 | 199 | 26% | 763 | 552 | 849 |
+| 1 | 200/200 | 200 | 28% | 717 | 507 | 831 |
+| 2 | 200/200 | 200 | 31% | 591 | 469 | 683 |
+| 3 | 200/200 | 200 | **39%** | **377** | 462 | 474 |
+| 4 | 200/200 | 200 | **54%** | **189** | 413 | 200 |
+| 5 | 200/200 | 200 | **62%** | **156** | 395 | 143 |
+
+**Phase 4's gate is met: hard-valid at every level 0–5, and the max void
+component falls monotonically across the dial.** Density 5 is byte-identical
+across two independent runs (`ops/dungeon-step2-verify.sh 5`), and the EditMode
+`DungeonLab*` filter is 100 pass / 25 fail on both this tree and HEAD — the same
+25 tests, none moved either way.
+
+Per-topology fill, p50, densities 0→5:
+
+```text
+atrium-ring         23.9  27.6  32.6  38.1  56.9  63.3
+descent-shaft       26.3  27.8  29.1  42.4  71.6  75.1
+processional-spine  25.8  29.5  33.4  36.0  46.7  56.0
+ridge-ravine        27.2  28.8  30.8  40.9  56.6  67.5
+sunken-basin        26.0  29.4  31.8  39.0  50.1  49.7
+terraced-cascade    27.5  31.6  38.2  46.6  67.6  68.8
+twin-wing-keep      24.2  27.7  31.1  36.4  51.8  57.1
+```
+
+§6 predicted `descent-shaft` would lean hardest on M3 (48% of its lattice is
+vacant). It does: 26% → 75%, the largest gain in the set.
+
+**How M3 works, and the one thing it is not.** `DungeonLabGenerator.Annex.cs`
+runs *after* rooms, recipes and corridors are compiled, finds the largest free
+rect inside each vacant lattice cell's band, and hands it to the adjacent room
+that owns the longest face on it as an extra rect part. It adds no rooms — room
+index stays 1:1 with route node index — and an annexed part is never `parts[0]`,
+because `Dominant`/`Center` is the node anchor. It cannot fail an attempt: worst
+case it annexes nothing and the seed is exactly what M2 produced, which is what
+densities 0–2 ask for. That ordering is the whole design, and it is the lesson
+from the blind pre-inflation stairwell reservation that cost 61 density-0 seeds.
+
+**Three prerequisites had to be fixed first, and two of them were not on the
+plan. All three are behaviour changes:**
+
+1. **The room clamp is per node now, not per axis.** `ResolveTopologySpatialSettings`
+   clamped every room to the *tightest lane anywhere on its axis*, so
+   `twin-wing-keep` (lanes 6,5,6,8,8,9) pinned every room to five cells at every
+   density. The clamp moved to inflation time (`ResolveAdjacentLaneGaps`), where
+   the node's embedded position is known and the binding gap is its own.
+   **This moves density 0**: 17 of 200 seeds, all `twin-wing-keep`, same accepted
+   set and same failure codes (`ops/dungeon-port-ab.sh 0`, 199/200 both legs).
+   That is the fix working — those rooms sit beside 8- and 9-cell lanes and were
+   being held to 5 — but it is the first density-0 geometry change since phase 1.
+2. **A topology's room-size override was deaf to the dial.** `roomSizeDeltaCells`
+   resolves against the pitch, and phase 3 measured §4.3's expected pitch drop as
+   wrong and holds the pitch fixed — so the override is numerically constant, and
+   the three topologies that declare one (`twin-wing-keep`, `descent-shaft`,
+   `ridge-ravine`) stopped packing at all. They were the three lowest-fill
+   topologies at density 5 by a wide margin, with `channelVoidCells` flat across
+   the entire dial. The override is now read as the topology's density-0 size and
+   packed by the same rule as the profile's own (`PackAuthoredRoomSize`), which
+   is identity at density 0. **This was not in the phase-4 brief**; it was found
+   by the sentinel evidence the brief asked to check, and phase 4's gate cannot
+   be read on a corpus where three of seven topologies ignore the dial.
+3. **A generic room is clamped against already-placed recipe rooms.** A centred
+   rect and an authored recipe footprint do not meet the same way: two generic
+   rooms one lane apart abut exactly, but a recipe reaches symmetrically from its
+   anchor and a lane-width neighbour lands one cell inside it.
+   `ridge-ravine`'s `ridge-walk` sits one 8-cell lane from its landmark recipe
+   and lost every seed at densities 4 and 5 to `ROUTE_ROOM_INFLATION_EXHAUSTED`
+   without this.
+
+**Two things M3 must not take, both found by measurement:**
+
+- **A showpiece's backdrop is authored void.** `TryValidateAcceptedRecipes`
+  requires the cells behind a dais to stay empty so it reads as backed against an
+  exterior wall. Annexing them cost 96 `RECIPE_SHOWPIECE_FIT` rejections and 14
+  seeds across densities 4 and 5.
+- **The band beside a stair, bridge or stairwell corridor.** A stairwell tower
+  stands on void beside its path and that requirement is still implicit — the
+  placer searches at tier time rather than the plan reserving it. Declining a
+  2-cell band around those corridors is worth two points of fill:
+
+  | | clearance 2 (shipped) | clearance 0 |
+  |---|---|---|
+  | density 4 | 200/200, 0 `ROUTE_TRANSITION_RESERVATION` | 198/200, 52 |
+  | density 5 | 200/200, 0 | 197/200, 48 |
+
+**Open, and found by this phase: a hard-valid plan is not the same claim as a
+plan that renders.** Batch Validate never builds a GameObject, so nothing in the
+corpus evidence has ever covered the renderer. `Tools > Dungeon Lab > Render
+Sweep (200 Fixed Seeds)` now does, and it says:
+
+| density | rendered | failure |
+|---|---|---|
+| 0 | 199/200 | the known plan failure `2026072187`; no renderer failure |
+| 3 | 200/200 | — |
+| 4 | 197/200 | 3 × `STAIR_BOUNDARY_CONFLICT` |
+| 5 | 198/200 | 2 × `STAIR_BOUNDARY_CONFLICT` |
+
+Every one is a **tier corner kit placed on a cell inside a stairwell tower's
+footprint** (`2026072223`, `2026072298`, `2026072161`). This is the same defect
+class as the two `DungeonLabStairBoundaryCompatibilityTests.CurvedBridgeRegression_*`
+tests that are red on `main` and have been for some time; packing produces more
+tier corners, so it hits more often. It is **not** a phase-4 mechanism failing —
+M3 adds no transitions and no corners — and fixing it belongs with the tier
+corner / stair boundary work, not inside the density dial. Worth doing before
+density 4–5 is shipped to a player, because `RandomDungeonSceneBuilder` will
+throw on those seeds.
+
+**§4.3's ≥95% target is arithmetically reachable, and the worry that it was not
+is resolved — but not by M3.** Measured per seed, the ceiling if every remaining
+non-authored void cell became floor is **99% at every density**: the lattice
+envelope's 4-cell margin is covered by the rooms on its rim, not wasted. M3's own
+ceiling — every vacant cell claimed, channel untouched — is **~72%**, and it
+achieves 62%. The remaining ten points of vacant are the declined bands above,
+remnants under 2x2, and craters with no adjacent room face. **The 27 points
+between 72% and 99% are channel, and that is M4's mop-up in phase 5.**
 
 ### Landed 2026-07-27 — density scale, phase 2 (M1), partial
 
@@ -664,57 +869,27 @@ doing the graph-as-data work as the vehicle.
 
 ### Next, in order
 
-0. **The density scale — phases 0 and 1 landed 2026-07-27, phase 2 is next.**
-   Design in
+0. **The density scale — phases 0 through 5 have landed; phase 6 (tune and
+   look) is all that is left.** Design in
    [`density-scale-design-2026-07-27.md`](density-scale-design-2026-07-27.md).
-   Items 3, 4 and 5 below are folded into it (the stairwell shaft becomes an
-   explicit reservation in phase 2, `atrium-ring`'s density failure dies with the
-   bounding-box fill gate, and the tier void is what the whole dial exists to
-   remove). Phases 0, 1 and two thirds of phase 2 have landed — see the blocks
-   below. What is left, in order:
+   Items 3, 4 and 5 below are closed by it: the stairwell shaft is an explicit
+   reservation, `atrium-ring`'s density failure died with the bounding-box fill
+   gate, and the tier void is what the whole dial removes. What is left:
 
-   a. **The explicit stairwell shaft** (the rest of phase 2). A stairwell tower
-      stands on void beside the path, and that requirement is still implicit:
-      the placer searches for void at tier time rather than the plan reserving
-      it. M1 dropped the symptom to zero (no `ROUTE_TRANSITION_RESERVATION`
-      retries in 200 seeds), so this is about surviving packing, not a live
-      defect.
+   a. **Phase 6 — tune and look.** The mechanisms are all in; §4.3's table is
+      what phase 6 moves. Fill now runs 26/29/32/41/74/93% across the dial,
+      which is uneven in the middle — densities 3 and 4 sit under §4.3's 60%
+      and 80% because mop-up is off at 3 and half on at 4. Also on the list:
+      measure collision-export size, scene object count and trap count at
+      density 5 (§7 phase 6), and decide whether density 5's ~2x floor is the
+      dungeon you want to play.
 
-      **The obvious implementation was tried on 2026-07-27 and measured as
-      wrong; do not repeat it.** Reserving a fixed window — the widest measured
-      footprint (2 cells along the path × 3 lateral, from 254 towers: 2×2:129,
-      2×3:54, 3×2:43, 1×2:12, 2×1:16) at the lane midpoint, on a side drawn per
-      edge — and closing it to rooms and corridors took density 0 from
-      **199/200 to 138/200**: 53 `ROUTE_ROOM_INFLATION_EXHAUSTED` and 82
-      `ROUTE_CORRIDOR_EMBEDDING_EXHAUSTED`. The two causes are structural, not
-      tuning:
+   b. **Retune `minLatticeEnvelopeFillPercent`.** It is a flat 0.20 backstop,
+      two points under the observed density-0 minimum, so it rejects nothing —
+      and fill now spans 26% to 93% across the dial, so one flat number cannot
+      mean anything at both ends. Make it density-relative in phase 6, where the
+      §4.3 table is retuned anyway.
 
-      - **Authored recipe footprints cannot move.** `keep-landmark` and
-        `hanging-shrine` overlapped the reserved window on 27 seeds, and a
-        recipe room has no re-roll (design §9 residual risk 2).
-      - **Other edges' corridors legitimately cross it.** `E-F` and `B-C` paths
-        ran through shafts reserved beside `F-G`.
-
-      The lesson is about ordering: a shaft location cannot be chosen before the
-      things it competes with exist. The sound design is the opposite ordering —
-      choose the shaft **after** rooms and corridors are compiled, from the
-      sides and positions that are actually free, and protect that choice
-      through the tier stage. Note also that the reservation does not need to
-      dictate where the tower goes: `AddValidStairwellTransitionCandidates`
-      searching every position and both sides is fine, because all the
-      reservation has to guarantee is that its candidate list is not empty.
-   b. **Phase 3 (M2 — pack).** The corridor reroute spike (§3.1 candidate 3,
-      and §9's only unproven step) was **run on 2026-07-27 and it passed** — see
-      below — so the fallback §9 reserved is not needed. What is left is the
-      corridor-ownership rewrite (`claimedCorridorCells` + the per-edge candidate
-      ladder replacing the attempt-abort), then pitch / room size / slack /
-      envelope radius / enclosure as functions of the dial in
-      `DungeonGenerationProfile.ResolveDensitySpatialSettings`.
-   c. **Retune `minLatticeEnvelopeFillPercent` when the dial moves.** It is a
-      flat 0.20 backstop today, two points under the observed density-0 minimum,
-      so it rejects nothing. §4.3 targets 28% at density 0 rising to 95% at
-      density 5, so once phase 3 makes fill move this should become
-      density-relative or it stops meaning anything.
 1. **Look at the dungeons.** **Arena > Dungeons > Rebuild Random Dungeon** on a few
    seeds. No hash tells you whether a dungeon reads well. One rendered shot per
    new topology is in `DungeonLabReports/step3_topology_shots/` (dense, seeds
@@ -724,11 +899,9 @@ doing the graph-as-data work as the vehicle.
    authoring rule with real teeth that nothing checks, and it cost two of the
    four step 3 drafts a redraw. See "Slot geometry" in
    [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md).
-3. **The stairwell reservation defect is still open**, and step 3's 200/200 hides
-   it: a stairwell tower needs void cells beside its corridor and `dense` leaves
-   fewer, so an interior stairwell in a dense cluster is structurally
-   impossible. It now shows up as recovered retries (`2026072219`, `2026072257`,
-   `2026072135`) rather than as a failed seed.
+3. ~~**The stairwell reservation defect**~~ — **closed 2026-07-28.** The plan
+   reserves one 3x3 shaft window per transition corridor, chosen after rooms and
+   corridors are compiled from the sides that are actually free.
 4. **`atrium-ring` fails 16 of its 19 spacious seeds for density** — pre-existing,
    see the step 3 block above for the one-line fix and why it was not folded in.
 5. **The tier-void ratio** the owner called out is still untouched and still its

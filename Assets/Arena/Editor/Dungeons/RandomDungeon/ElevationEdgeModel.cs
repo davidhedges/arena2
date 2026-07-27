@@ -280,11 +280,28 @@ namespace DungeonLab.Editor
             // railings, corner columns and square corner stacks all suppress by
             // construction. Convex corner cells also swap their floor for the
             // rounded variant (handled in the floor loop below).
+            // The stair's own cells and landing port edges, built once: the
+            // corner SELECTOR keeps those corners square, and the validator
+            // below stays as the assertion that it did. Before this the two
+            // disagreed — the selector skipped `reservedCells` (stair
+            // floor-blocked cells) while the validator tested the wider
+            // footprint set, so a corner on a tower's folded footprint threw at
+            // render time. Rare while dungeons were airy; at density 5 packing
+            // makes tier corners common and it hit 27 of 200 seeds.
+            BuildTierCornerStairClaims(
+                transitions,
+                out Dictionary<Vector2Int, TransitionEdge> tierCornerFootprintOwners,
+                out Dictionary<(int x, int z, int direction), TransitionEdge> tierCornerPortEdgeOwners);
             List<RoundTierCorner> roundTierCorners = FindRoundTierCorners(
                 wallEdges,
                 levels,
-                reservedCells);
-            ValidateTierCornerCompatibility(roundTierCorners, transitions);
+                reservedCells,
+                tierCornerFootprintOwners,
+                tierCornerPortEdgeOwners);
+            ValidateTierCornerCompatibility(
+                roundTierCorners,
+                tierCornerFootprintOwners,
+                tierCornerPortEdgeOwners);
             var roundCornerFloorSwap = new Dictionary<Vector2Int, RoundTierCorner>();
             if (roundTierCorners.Count > 0)
             {
@@ -7848,7 +7865,9 @@ namespace DungeonLab.Editor
         private static List<RoundTierCorner> FindRoundTierCorners(
             List<WallEdge> wallEdges,
             IReadOnlyDictionary<Vector2Int, int> levels,
-            HashSet<Vector2Int> reservedCells)
+            HashSet<Vector2Int> reservedCells,
+            IReadOnlyDictionary<Vector2Int, TransitionEdge> stairFootprintOwners,
+            IReadOnlyDictionary<(int x, int z, int direction), TransitionEdge> stairPortEdgeOwners)
         {
             var corners = new List<RoundTierCorner>();
             var concaveCandidates = new List<RoundTierCorner>();
@@ -7912,6 +7931,16 @@ namespace DungeonLab.Editor
                             continue;
                         }
 
+                        if (TierCornerBelongsToStair(
+                                cell,
+                                keyA,
+                                keyB,
+                                stairFootprintOwners,
+                                stairPortEdgeOwners))
+                        {
+                            continue;
+                        }
+
                         // A diagonally-touching mass at the same level would be
                         // clipped by the sweep — keep that corner square.
                         var diagonal = new Vector2Int(cell.x + sx, cell.y + sz);
@@ -7966,6 +7995,16 @@ namespace DungeonLab.Editor
                         var keyB = (edgeB.edge.x, edgeB.edge.z, edgeB.edge.direction);
                         if (claimedEdges.Contains(keyA) ||
                             claimedEdges.Contains(keyB))
+                        {
+                            continue;
+                        }
+
+                        if (TierCornerBelongsToStair(
+                                notch,
+                                keyA,
+                                keyB,
+                                stairFootprintOwners,
+                                stairPortEdgeOwners))
                         {
                             continue;
                         }
@@ -8108,48 +8147,77 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static void ValidateTierCornerCompatibility(
-            IReadOnlyList<RoundTierCorner> corners,
-            IReadOnlyList<TransitionEdge> transitions)
+        // Everything a stair owns that a rounded tier corner would sweep into:
+        // its footprint cells, and the floor-side edge of each landing.
+        private static void BuildTierCornerStairClaims(
+            IReadOnlyList<TransitionEdge> transitions,
+            out Dictionary<Vector2Int, TransitionEdge> footprintOwners,
+            out Dictionary<(int x, int z, int direction), TransitionEdge> portEdgeOwners)
         {
-            if (corners == null || corners.Count == 0)
+            footprintOwners = new Dictionary<Vector2Int, TransitionEdge>();
+            portEdgeOwners = new Dictionary<(int x, int z, int direction), TransitionEdge>();
+            if (transitions == null)
             {
                 return;
             }
 
-            var footprintOwners = new Dictionary<Vector2Int, TransitionEdge>();
-            var portEdgeOwners = new Dictionary<(int x, int z, int direction), TransitionEdge>();
-            if (transitions != null)
+            foreach (TransitionEdge transition in transitions)
             {
-                foreach (TransitionEdge transition in transitions)
+                if (transition.footprintCells != null)
                 {
-                    if (transition.footprintCells != null)
+                    foreach (Vector2Int cell in transition.footprintCells)
                     {
-                        foreach (Vector2Int cell in transition.footprintCells)
+                        if (!footprintOwners.ContainsKey(cell))
                         {
-                            if (!footprintOwners.ContainsKey(cell))
-                            {
-                                footprintOwners.Add(cell, transition);
-                            }
+                            footprintOwners.Add(cell, transition);
                         }
                     }
-
-                    if (!transition.hasPortDirections)
-                    {
-                        continue;
-                    }
-
-                    AddTierCornerPortClaims(
-                        transition.lowerLandingCells,
-                        OppositeDirection(transition.lowerPortDirection),
-                        transition,
-                        portEdgeOwners);
-                    AddTierCornerPortClaims(
-                        transition.upperLandingCells,
-                        OppositeDirection(transition.upperPortDirection),
-                        transition,
-                        portEdgeOwners);
                 }
+
+                if (!transition.hasPortDirections)
+                {
+                    continue;
+                }
+
+                AddTierCornerPortClaims(
+                    transition.lowerLandingCells,
+                    OppositeDirection(transition.lowerPortDirection),
+                    transition,
+                    portEdgeOwners);
+                AddTierCornerPortClaims(
+                    transition.upperLandingCells,
+                    OppositeDirection(transition.upperPortDirection),
+                    transition,
+                    portEdgeOwners);
+            }
+        }
+
+        // The three conditions ValidateTierCornerCompatibility throws on, asked
+        // BEFORE the corner is taken. Keeping it square is a style decision the
+        // selector already makes for reserved cells and for a diagonally
+        // touching mass; this is the same decision for the same reason.
+        private static bool TierCornerBelongsToStair(
+            Vector2Int cell,
+            (int x, int z, int direction) edgeA,
+            (int x, int z, int direction) edgeB,
+            IReadOnlyDictionary<Vector2Int, TransitionEdge> footprintOwners,
+            IReadOnlyDictionary<(int x, int z, int direction), TransitionEdge> portEdgeOwners)
+        {
+            return footprintOwners.ContainsKey(cell) ||
+                footprintOwners.ContainsKey(new Vector2Int(edgeA.x, edgeA.z)) ||
+                footprintOwners.ContainsKey(new Vector2Int(edgeB.x, edgeB.z)) ||
+                portEdgeOwners.ContainsKey(edgeA) ||
+                portEdgeOwners.ContainsKey(edgeB);
+        }
+
+        private static void ValidateTierCornerCompatibility(
+            IReadOnlyList<RoundTierCorner> corners,
+            IReadOnlyDictionary<Vector2Int, TransitionEdge> footprintOwners,
+            IReadOnlyDictionary<(int x, int z, int direction), TransitionEdge> portEdgeOwners)
+        {
+            if (corners == null || corners.Count == 0)
+            {
+                return;
             }
 
             foreach (RoundTierCorner corner in corners)

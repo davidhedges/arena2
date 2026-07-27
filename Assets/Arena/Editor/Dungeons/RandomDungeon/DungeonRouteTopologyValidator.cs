@@ -771,9 +771,10 @@ namespace DungeonLab.Editor
                 }
             }
 
-            // Lane gap vs room extent is a pressure reading, not a rule: room
-            // inflation retries six alternatives and rejects overlaps, so a tight
-            // lane costs attempts rather than failing. Reported so an author can
+            // Lane gap vs room extent is a pressure reading, not a rule: a room
+            // is clamped to its own adjacent lanes at inflation time, so a tight
+            // lane costs the rooms beside it a cell or two rather than failing —
+            // and costs the rest of the axis nothing. Reported so an author can
             // see which lane is doing the squeezing.
             int tightestGap = int.MaxValue;
             string tightestLane = string.Empty;
@@ -803,7 +804,7 @@ namespace DungeonLab.Editor
                     $"{densityLabel}: tightest lane gap {tightestGap} cells ({tightestLane}) against a " +
                     $"largest generic room extent of {largestExtent}" +
                     (largestExtent >= tightestGap
-                        ? " — rooms there can end up wall to wall, so expect inflation retries"
+                        ? $" — the rooms on that lane are clamped to {tightestGap} there, and only there"
                         : string.Empty));
             }
         }

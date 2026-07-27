@@ -897,13 +897,29 @@ namespace Arena.Tests.Editor
                 "FindRoundTierCorners",
                 BindingFlags.Static | BindingFlags.NonPublic)!;
 
+            // The last two arguments are the stair's own claims — corner
+            // selection keeps a corner square where a stair owns the cell or one
+            // of the edges it would replace, which is the condition
+            // ValidateTierCornerCompatibility used to throw on. This fixture has
+            // no stairs, so both are empty and the corner stays eligible.
+            Type transitionEdgeType = ElevationEdgeModelType.GetNestedType(
+                "TransitionEdge",
+                BindingFlags.Public | BindingFlags.NonPublic)!;
+            object footprintOwners = Activator.CreateInstance(
+                typeof(Dictionary<,>).MakeGenericType(typeof(Vector2Int), transitionEdgeType))!;
+            object portEdgeOwners = Activator.CreateInstance(
+                typeof(Dictionary<,>).MakeGenericType(
+                    typeof(ValueTuple<int, int, int>),
+                    transitionEdgeType))!;
             object corners = findCorners.Invoke(
                 null,
                 new object[]
                 {
                     wallEdges,
                     levels,
-                    new HashSet<Vector2Int>()
+                    new HashSet<Vector2Int>(),
+                    footprintOwners,
+                    portEdgeOwners
                 })!;
 
             Assert.That(

@@ -164,17 +164,30 @@ namespace DungeonLab.Editor
         // meet their neighbours; 1 means the profile's own airiness.
         public readonly float roomGapScale;
         public readonly float enclosedRoomChance;
+        // How many of the vacant lattice cells — the craters at map positions no
+        // node occupies — M3 hands to an adjacent room. Packing cannot touch
+        // them: they are outside every room's placement envelope by definition.
+        public readonly float annexVacantFraction;
+        // How many lattice bands M4 mops up — the channel M2 left around every
+        // room, taken down to single cells. Separate from the annex column
+        // because it removes a different thing: the crater is space the packer
+        // could never reach, the channel is space it left behind.
+        public readonly float mopUpVoidFraction;
 
         public DungeonDensityRow(
             int pitchDeltaCells,
             int latticeSlackMaxCells,
             float roomGapScale,
-            float enclosedRoomChance)
+            float enclosedRoomChance,
+            float annexVacantFraction,
+            float mopUpVoidFraction)
         {
             this.pitchDeltaCells = pitchDeltaCells;
             this.latticeSlackMaxCells = latticeSlackMaxCells;
             this.roomGapScale = roomGapScale;
             this.enclosedRoomChance = enclosedRoomChance;
+            this.annexVacantFraction = annexVacantFraction;
+            this.mopUpVoidFraction = mopUpVoidFraction;
         }
     }
 
@@ -199,13 +212,17 @@ namespace DungeonLab.Editor
         // nothing reads them.
         private static readonly DungeonDensityRow[] Rows =
         {
-            //                    pitchDelta  slack  gapScale  enclosure
-            new DungeonDensityRow(         0,     8,     1.00f,     0.5f),
-            new DungeonDensityRow(         0,     6,     0.80f,     0.6f),
-            new DungeonDensityRow(         0,     4,     0.60f,     0.7f),
-            new DungeonDensityRow(         0,     2,     0.40f,     0.8f),
-            new DungeonDensityRow(         0,     1,     0.20f,     0.9f),
-            new DungeonDensityRow(         0,     0,     0.00f,     1.0f)
+            //                    pitchDelta  slack  gapScale  enclosure  annex  mopUp
+            new DungeonDensityRow(         0,     8,     1.00f,     0.5f,  0.00f, 0.00f),
+            new DungeonDensityRow(         0,     6,     0.80f,     0.6f,  0.00f, 0.00f),
+            new DungeonDensityRow(         0,     4,     0.60f,     0.7f,  0.00f, 0.00f),
+            new DungeonDensityRow(         0,     2,     0.40f,     0.8f,  0.50f, 0.00f),
+            // §4.3 puts mop-up at density 5 only, but it also targets 80% fill
+            // at density 4 — and M3's own ceiling is ~72%, measured. Density 4
+            // therefore mops half its bands: the mechanism is the table's, the
+            // split across the last two rows is what the fill column asks for.
+            new DungeonDensityRow(         0,     1,     0.20f,     0.9f,  1.00f, 0.50f),
+            new DungeonDensityRow(         0,     0,     0.00f,     1.0f,  1.00f, 1.00f)
         };
 
         public static int Clamp(int level)
@@ -354,6 +371,11 @@ namespace DungeonLab.Editor
                 // Not a spatial setting, but it is on the same dial: once rooms
                 // abut, an unenclosed pair merges into one open field.
                 enclosedRoomChance = DungeonDensity.Row(level).enclosedRoomChance,
+                // Also not a spatial setting: M3 runs after corridors, on cells
+                // the packer never had a chance at, so it is a pass rather than
+                // a parameter of the packing.
+                annexVacantFraction = DungeonDensity.Row(level).annexVacantFraction,
+                mopUpVoidFraction = DungeonDensity.Row(level).mopUpVoidFraction,
                 // The dial becomes geometry HERE and nowhere else. Applied on
                 // the load path rather than inside Validated(), because
                 // Validated() is called repeatedly on an already-resolved value
@@ -407,6 +429,33 @@ namespace DungeonLab.Editor
                 value,
                 row.roomGapScale);
             return value;
+        }
+
+        /// <summary>
+        /// Puts a topology's own room-size override on the same dial.
+        /// </summary>
+        /// <remarks>
+        /// A topology declares its sizes as offsets from the pitch, and §6's
+        /// rule is that such an override states the topology's CHARACTER rather
+        /// than pinning it to one density. That worked while §4.3 expected the
+        /// pitch to fall from 9 to 6-7; phase 3 measured that assumption wrong
+        /// and holds the pitch fixed, at which point a pitch-relative override
+        /// is numerically constant and the three topologies that declare one
+        /// (twin-wing-keep, descent-shaft, ridge-ravine) stopped packing at all
+        /// — they were the three lowest-fill topologies at density 5 by a wide
+        /// margin. So the override is read as the topology's density-0 size and
+        /// packed by the same rule as the profile's own.
+        /// </remarks>
+        internal static DungeonRoomSizeRange PackAuthoredRoomSize(
+            DungeonRoomSizeRange authoredSize,
+            DungeonPatternSpatialSettings spatial,
+            int densityLevel)
+        {
+            return PackRoomSize(
+                authoredSize,
+                spatial,
+                spatial,
+                DungeonDensity.Row(densityLevel).roomGapScale);
         }
 
         /// <summary>
@@ -476,6 +525,8 @@ namespace DungeonLab.Editor
         public int maxLoopCandidateDistanceCells;
         public float roomZoneSplitChance;
         public float enclosedRoomChance;
+        public float annexVacantFraction;
+        public float mopUpVoidFraction;
         public DungeonPatternSpatialSettings processionalSpatial;
         public DungeonRoleSizeClass[] roleSizeClasses;
 
@@ -492,6 +543,8 @@ namespace DungeonLab.Editor
             value.maxLoopCandidateDistanceCells = Mathf.Max(1, value.maxLoopCandidateDistanceCells);
             value.roomZoneSplitChance = Mathf.Clamp01(value.roomZoneSplitChance);
             value.enclosedRoomChance = Mathf.Clamp01(value.enclosedRoomChance);
+            value.annexVacantFraction = Mathf.Clamp01(value.annexVacantFraction);
+            value.mopUpVoidFraction = Mathf.Clamp01(value.mopUpVoidFraction);
             value.processionalSpatial = value.processionalSpatial.Validated();
             // An asset saved before the map existed deserializes an empty array.
             // Falling back to the shipped vocabulary keeps that asset loadable;

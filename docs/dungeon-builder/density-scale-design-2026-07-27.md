@@ -5,14 +5,11 @@ Status: **finalized**, 2026-07-27. Forks resolved in §8 under the owner's
 review: retry transaction named (§3.2), M4's boundary-room state corrected
 (§4.2), the A/B gate redefined (§7.1), the enclosure clamp accounted for (§4.3).
 
-**Phases 0 and 1 landed 2026-07-27**, both gated on the redefined §7.1 A/B.
-**Phase 2 is two thirds landed** the same day: the measured transition
-reservation and the vista ordering fix are in (density 0 went 184/200 to 196/200
-accepted, with `ROUTE_TRANSITION_RESERVATION` at zero); the explicit stairwell
-shaft is still open and is specified in `CURRENT_STATUS.md`. Live status: `CURRENT_STATUS.md`; baseline numbers:
-`DungeonLabReports/void_baseline_2026-07-27.md`. Note that the dial is wired but
-inert — `DungeonGenerationProfile.ResolveDensitySpatialSettings` is the identity
-until phase 3 (M2) edits it, so levels 1-5 currently produce density 0.
+**Phases 0 through 5 have landed. Only phase 6 — tune and look — is left.**
+Fill across the dial measures 26/29/32/41/74/93%, and **density 5 meets §5's
+acceptance on all 200 seeds**. Live status and the full evidence:
+`CURRENT_STATUS.md`; baseline numbers:
+`DungeonLabReports/void_baseline_2026-07-27.md`.
 Supersedes: `docs/archive/2026-07-dungeon-phase-log/DENSITY_ADJACENCY_PLAN.md` (closed 2026-07-23)
 
 ## 1. What this delivers
@@ -242,11 +239,22 @@ retired, because "at least one open room" and "no two rooms silently merge" are
 in direct conflict once rooms abut. The paired `if (!Any(enclosed, true))` clamp
 above it stays at every density — it is guarding the opposite, harmless case.
 
-**The density-5 arithmetic**, as a projection to be checked in phase 6: pitch
-falls from ~10 to ~6–7, so a 20-cell lattice envelope shrinks from ~1950 to ~840
-cells; annexing ~6 vacant cells adds ~250 floor cells to the ~537 we have. That
-lands **~790 floor cells in an ~840-cell envelope — ~94% fill, ~1.5x today's play
-space in ~45% of today's footprint.**
+**The density-5 arithmetic — superseded by measurement, 2026-07-28.** The
+projection here assumed the pitch falls from ~10 to ~6–7. Phase 3 measured that
+as wrong (authored recipe footprints reach four cells and cannot shrink, so below
+a 9-cell pitch they overlap their neighbours) and the table holds the pitch
+fixed, which makes every number in the original paragraph unreachable as written.
+What replaces it, measured per seed over the 200-seed corpus:
+
+- the lattice envelope at density 5 is **~1430 cells**, down from ~2010 at
+  density 0 — the rubber sheet closing, not the pitch;
+- floor at density 5 is **62% of it** after M3;
+- the ceiling if every remaining non-authored void cell became floor is **99%**,
+  so **the ≥95% target is arithmetically reachable** — the worry that the
+  envelope's 4-cell margin made it impossible is disproved, because the rim
+  rooms cover that margin;
+- M3's own ceiling — every vacant cell claimed, channel untouched — is **~72%**.
+  So the last 27 points are channel, and they belong to M4.
 
 Density is therefore *packing*, not scale: the dungeon gets denser and somewhat
 smaller, not three times larger. Filling today's bounding box instead would take
@@ -303,17 +311,27 @@ M3, and `twin-wing-keep` (7x3 lattice at a 9-cell pitch inside a 52-cell
 envelope) to be the one most likely to need an authored exception. That is a
 prediction to check in phase 4, not a plan to special-case it in advance.
 
+**Checked in phase 4, 2026-07-28.** `descent-shaft` leans hardest and gains most:
+26% → 75% fill across the dial, the largest movement in the set.
+`twin-wing-keep` needed no authored exception — but the *mechanism* here had a
+defect that this rule created. A topology's `roomSizeDeltaCells` is declared
+against the pitch, and the dial holds the pitch fixed, so the override was
+numerically constant and the three topologies declaring one were deaf to the dial
+entirely. Overrides are now packed by the same rule as the profile's own sizes.
+The lesson generalises: **pitch-relative is only density-relative while the pitch
+moves.** A future spatial override should be checked against that.
+
 ## 7. Work, in dependency order
 
 | Phase | Work | Gate | Size |
 |---|---|---|---|
 | **0** ✅ | **Instrumentation.** `voidComponents` + `latticeEnvelopeFillPercent`; ASCII floorplan per seed; top-down PNG per sentinel. **Redefine the A/B gate first (§7.2).** Write the `voidComponents` baseline for the current tree into `DungeonLabReports/` before anything changes, so phases 3–5 have a real before-number. | Per-seed `hashes.canonical` vector unchanged across all 200 seeds. | ~0.5 d |
 | **1** ✅ | **Flag → dial.** One profile asset with `densityLevel`; `Arena > Dungeons > Density > 0..5`; `ARENA_DUNGEON_DENSITY`. Delete `generation_profile_dense.asset`, the Spacious/Dense menu pair, `ARENA_DUNGEON_GENERATION_PROFILE`. Update `ops/dungeon-port-ab.sh`, `ops/dungeon-step2-verify.sh`, `DungeonLabStairLaneContinuityTests.cs:32`. Topology overrides become density-relative. | **Identity-preserving: density 0's geometry is identical to today's `spacious`** — per-seed `hashes.canonical` vector unchanged, same accepted set, same failure codes. This is the one phase where a hash gate is the right tool. | ~1 d |
-| **2** ◐ | **M1** — measured transition reservation, including the explicit stairwell shaft; retire the `BaselineRoomSizeRangeForRole` cap. Fix the vista ordering. | Corpus hard-valid at densities 0–1; transition reservation success rate ≥ today's; the three known stairwell-retry seeds resolve on attempt 1. | ~1–2 d |
-| **3** ← next | **Corridor ownership + reroute spike, then M2 — pack.** Pitch, room size, slack, envelope radius, enclosure chance become functions of the dial. | Corpus hard-valid at 0–3; run-twice determinism; sentinels eyeballed at each level. | ~2–3 d |
-| **4** | **M3 — annex vacant lattice cells.** | Corpus hard-valid at 0–5; `voidComponents` max falls monotonically across the dial. | ~2–4 d |
-| **5** | **M4 — mop-up and chamber subdivision.** | Density 5 meets the §5 acceptance. | ~2–3 d |
-| **6** | **Tune and look.** Sentinels at all six levels; retune the §4.3 table; measure collision-export size, scene object count and trap count at density 5. | Owner sentinel review. | ~1–2 d |
+| **2** ✅ | **M1** — measured transition reservation; the explicit stairwell shaft landed with phase 5, from the other end (choose the window after corridors are compiled, not before inflation); retire the `BaselineRoomSizeRangeForRole` cap. Fix the vista ordering. | Corpus hard-valid at densities 0–1; transition reservation success rate ≥ today's; the three known stairwell-retry seeds resolve on attempt 1. | ~1–2 d |
+| **3** ✅ | **Corridor ownership + reroute spike, then M2 — pack.** Pitch, room size, slack, envelope radius, enclosure chance become functions of the dial. | Corpus hard-valid at 0–3; run-twice determinism; sentinels eyeballed at each level. | ~2–3 d |
+| **4** ✅ | **M3 — annex vacant lattice cells.** | Corpus hard-valid at 0–5; `voidComponents` max falls monotonically across the dial. | ~2–4 d |
+| **5** ✅ | **M4 — mop-up and chamber subdivision.** | Density 5 meets the §5 acceptance. | ~2–3 d |
+| **6** ← next | **Tune and look.** Sentinels at all six levels; retune the §4.3 table; measure collision-export size, scene object count and trap count at density 5. | Owner sentinel review. | ~1–2 d |
 
 Roughly **9–15 focused days**. Large, but all of it sits inside the existing
 route-first seam: no second planner, no new renderer concept, no change to the
@@ -366,11 +384,15 @@ Recorded in §4.3 as a tuning table so phase 6 can move it by looking.
 
 **F2 — bridge spans keep their void.** A bridge over filled floor is a walkway.
 This means density 5 has a few deliberate holes larger than 2x2; they are
-excluded from the `voidComponents` metric as authored void.
+excluded from the `voidComponents` metric as authored void. *(The exclusion was
+only covering the transition's own footprint, not the gap it crosses — fixed
+2026-07-28 when density 5 got packed enough for the difference to show.)*
 
 **F3 — yes, subdivide over-large annexed rooms into chambers** (M4). Without it
 density 5 reads as a warehouse. It is the one part of the plan that is polish
 rather than structure, so it is the correct thing to cut if the schedule bites.
+*(Landed 2026-07-28, and it stopped being optional: at density 5 the annexed
+mass is most of the floor. ~30 chambers over 13 rooms.)*
 
 **F4 — filler is walkable floor, not solid rock.** Rejected the rock option:
 it hides holes without adding play space and needs a genuinely new render concept
@@ -392,11 +414,24 @@ footprint, wall, doorway, level and collision machinery that already exists.
 2. **Recipe rooms cannot grow.** Authored footprints are fixed and their ports
    declare approach depth; at high density they end up ringed by annexed
    neighbour space and their port approach must stay reserved.
-3. **Cost at density 5.** ~1.5x floor cells, and a larger increase in wall
+   **Phase 4 found two more claims a recipe makes on the space around it**, both
+   by measurement rather than by reading: a *showpiece backdrop* is authored void
+   (a dais reads as backed against an exterior wall only while the cells behind
+   it are empty), and an authored footprint reaches symmetrically from its anchor
+   rather than by the centred-rect rule every generic room follows, so a
+   neighbour sized to the lane lands one cell inside it.
+3. **A hard-valid plan is not a plan that renders** — added 2026-07-28, because
+   phase 4 found it the hard way. `Validation.cs` has twelve checks and none of
+   them builds a GameObject, so the renderer was never covered by any corpus
+   evidence. `Tools > Dungeon Lab > Render Sweep` closes that, and reports 2–3
+   seeds per 200 throwing `STAIR_BOUNDARY_CONFLICT` at densities 4–5 (a tier
+   corner kit inside a stairwell footprint) against zero at 0 and 3. Every phase
+   gate stated in terms of "hard-valid" should be read as covering the plan only.
+4. **Cost at density 5.** ~1.5x floor cells, and a larger increase in wall
    segments — every packed seam is now a partition or retaining wall where it was
    a cliff face. Collision export size, scene object count and trap count
    (`trapFloorCellsPerTrap: 25` scales automatically, 18 → ~28) get measured in
    phase 6, not assumed.
-4. **`descent-shaft` and `ridge-ravine` lean hardest on M3**, and
+5. **`descent-shaft` and `ridge-ravine` lean hardest on M3**, and
    `twin-wing-keep` is the likeliest to need an authored exception. Checked in
    phase 4 by the per-topology validator run, not pre-empted.

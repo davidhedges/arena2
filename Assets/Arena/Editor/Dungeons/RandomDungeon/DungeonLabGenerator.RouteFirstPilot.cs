@@ -392,6 +392,7 @@ namespace DungeonLab.Editor
                     intent,
                     spatial,
                     out Vector2Int[] nodeCenters,
+                    out Vector2Int[] latticeCellCenters,
                     out string embeddingFailureCode,
                     out rejectionReason))
             {
@@ -527,6 +528,26 @@ namespace DungeonLab.Editor
                 return RejectRoute(shapeFailureCode, rejectionReason, out rejectionReason);
             }
 
+            // M3 — annex the vacant lattice cells (design §4.2). It runs HERE,
+            // after every claim on space has been compiled, and takes only cells
+            // that are provably free. That ordering is the whole design: the
+            // blind pre-inflation reservation this replaces could not know what
+            // it was competing with and cost 61 seeds at density 0. It cannot
+            // fail an attempt — at worst it annexes nothing and the seed is
+            // exactly what M2 produced, which is what densities 0-2 ask for.
+            AnnexAndMopUpLatticeVoid(
+                dungeonSeed,
+                layoutAttempt,
+                intent,
+                spatial,
+                nodeCenters,
+                latticeCellCenters,
+                protectedVistaCells,
+                recipePlacements,
+                connections,
+                rooms,
+                floorCells);
+
             lastVistaCells = SortedCells(reservedVistaCells).ToArray();
             lastVistaSourceFacing = sourceFacing;
             lastVistaTargetFacing = targetFacing;
@@ -584,7 +605,8 @@ namespace DungeonLab.Editor
                 rooms,
                 connections,
                 roomZones,
-                connectorCandidateCount);
+                connectorCandidateCount,
+                lastReservedShaftCells);
             routeRequirements = new RouteTierRequirements(
                 intent,
                 latticeEnvelope,
@@ -1189,11 +1211,13 @@ namespace DungeonLab.Editor
             RouteIntent intent,
             DungeonPatternSpatialSettings spatial,
             out Vector2Int[] nodeCenters,
+            out Vector2Int[] latticeCellCenters,
             out string failureCode,
             out string rejectionReason)
         {
             DungeonRouteTopology topology = intent.topology;
             nodeCenters = Array.Empty<Vector2Int>();
+            latticeCellCenters = Array.Empty<Vector2Int>();
             failureCode = RouteEmbeddingFailureCode;
             rejectionReason = string.Empty;
             int[] columnOffsets = ResolveLatticeLaneOffsets(
@@ -1227,13 +1251,29 @@ namespace DungeonLab.Editor
                 embedding[node] = new Vector2Int(columnOffsets[lattice.x], rowOffsets[lattice.y]);
             }
 
+            // Every lattice cell, occupied or not, carried through the SAME
+            // transform as the nodes. The vacant ones are M3's craters, and
+            // there is no other way to know where one is: a lattice cell with
+            // no node contributes no node centre to reason back from.
+            var latticeCells = new Vector2Int[topology.latticeColumnCount * topology.latticeRowCount];
+            for (int row = 0; row < topology.latticeRowCount; row++)
+            {
+                for (int column = 0; column < topology.latticeColumnCount; column++)
+                {
+                    latticeCells[row * topology.latticeColumnCount + column] =
+                        new Vector2Int(columnOffsets[column], rowOffsets[row]);
+                }
+            }
+
             return TryTransformCoarseEmbedding(
                 dungeonSeed,
                 layoutAttempt,
                 topology.id,
                 embedding,
+                latticeCells,
                 spatial,
                 out nodeCenters,
+                out latticeCellCenters,
                 out rejectionReason);
         }
 
@@ -1242,11 +1282,14 @@ namespace DungeonLab.Editor
             int layoutAttempt,
             string stablePatternId,
             IReadOnlyList<Vector2Int> cellEmbedding,
+            IReadOnlyList<Vector2Int> latticeCellEmbedding,
             DungeonPatternSpatialSettings spatial,
             out Vector2Int[] nodeCenters,
+            out Vector2Int[] latticeCellCenters,
             out string rejectionReason)
         {
             nodeCenters = Array.Empty<Vector2Int>();
+            latticeCellCenters = Array.Empty<Vector2Int>();
             rejectionReason = string.Empty;
             System.Random placementRandom = DerivedRandom(
                 dungeonSeed,
@@ -1294,6 +1337,24 @@ namespace DungeonLab.Editor
                 }
 
                 nodeCenters = centers;
+
+                // The lattice grid rides along on the accepted orientation. It
+                // takes no part in choosing one: minX/minY and the envelope test
+                // above are the node bounding box exactly as before, so a vacant
+                // cell reaching past the nodes cannot move or reject a layout.
+                var latticeCenters = new Vector2Int[latticeCellEmbedding?.Count ?? 0];
+                for (int cell = 0; cell < latticeCenters.Length; cell++)
+                {
+                    Vector2Int mapped = TransformCoarseCell(
+                        latticeCellEmbedding[cell],
+                        quarterTurns,
+                        mirror);
+                    latticeCenters[cell] = new Vector2Int(
+                        spatial.roomEnvelopeRadiusCells + 1 + mapped.x - minX,
+                        spatial.roomEnvelopeRadiusCells + 1 + mapped.y - minY);
+                }
+
+                latticeCellCenters = latticeCenters;
                 return true;
             }
 
@@ -1355,6 +1416,7 @@ namespace DungeonLab.Editor
                     spatial,
                     nodeCenters[nodeIndex],
                     nodeCenters,
+                    placedRooms,
                     intent.recipeSlots,
                     roomRandom,
                     allowWing: false));
@@ -1403,6 +1465,7 @@ namespace DungeonLab.Editor
                         spatial,
                         nodeCenters[nodeIndex],
                         nodeCenters,
+                        placedRooms,
                         intent.recipeSlots,
                         roomRandom,
                         allowWing: intent.allowGenericRoomWings &&
@@ -1679,6 +1742,7 @@ namespace DungeonLab.Editor
             DungeonPatternSpatialSettings spatial,
             Vector2Int center,
             IReadOnlyList<Vector2Int> nodeCenters,
+            IReadOnlyList<RoomFootprint> placedRooms,
             IReadOnlyList<RecipeSlotIntent> recipeSlots,
             System.Random random,
             bool allowWing)
@@ -1710,6 +1774,7 @@ namespace DungeonLab.Editor
                 spatial,
                 center,
                 nodeCenters,
+                placedRooms,
                 random,
                 out int width,
                 out int depth);
@@ -1768,11 +1833,48 @@ namespace DungeonLab.Editor
             DungeonPatternSpatialSettings spatial,
             Vector2Int center,
             IReadOnlyList<Vector2Int> nodeCenters,
+            IReadOnlyList<RoomFootprint> placedRooms,
             System.Random random,
             out int width,
             out int depth)
         {
-            DungeonRoomSizeRange configuredRange = RoomSizeRangeForRole(spatial, node.role).Validated();
+            // A room may never be wider than the lane gap it has to sit in: two
+            // rooms centred one lane apart overlap the moment either exceeds
+            // that gap, and inflation then burns its re-rolls and fails the
+            // attempt — which is how sunken-basin and terraced-cascade lost
+            // every density-5 seed before any clamp existed. The binding gap is
+            // this node's OWN, measured from the embedding, not the tightest
+            // lane anywhere on the axis: on twin-wing-keep (lanes 6,5,6,8,8,9)
+            // the global form pinned every room to five cells at every density.
+            ResolveAdjacentLaneGaps(
+                nodeCenters,
+                nodeIndex,
+                spatial,
+                out int laneWidthCells,
+                out int laneDepthCells);
+
+            // The lane gap is the right bound against another GENERIC room,
+            // because both are centred the same way and two of them one gap
+            // apart meet without overlapping. A recipe room is not: its
+            // authored footprint reaches symmetrically from its anchor, up to
+            // the full envelope radius, so a generic room the width of the lane
+            // lands one cell inside it. Those rooms are already placed here —
+            // fixed footprints are reserved first, precisely because they cannot
+            // re-roll — so the bound is measured off the real rect rather than
+            // assumed. ridge-ravine's `ridge-walk` sits one 8-cell lane from its
+            // landmark recipe and lost every seed at densities 4 and 5 without
+            // this.
+            ClampRoomSizeToPlacedRooms(
+                placedRooms,
+                nodeIndex,
+                center,
+                spatial,
+                ref laneWidthCells,
+                ref laneDepthCells);
+            DungeonRoomSizeRange configuredRange = ClampRoomSize(
+                RoomSizeRangeForRole(spatial, node.role).Validated(),
+                laneWidthCells,
+                laneDepthCells);
             width = SampleRoomDimension(configuredRange.minWidthCells, configuredRange.maxWidthCells, random);
             depth = SampleRoomDimension(configuredRange.minDepthCells, configuredRange.maxDepthCells, random);
 
@@ -1837,6 +1939,123 @@ namespace DungeonLab.Editor
                         depth,
                         MaxRoomExtentForTransition(Mathf.Abs(vistaDelta.y), requiredVoid));
                 }
+            }
+        }
+
+        /// <summary>
+        /// Tightens a node's lane bounds against rooms already on the board.
+        /// </summary>
+        /// <remarks>
+        /// A centred rect of width <c>w</c> at <c>c</c> covers
+        /// <c>[c - w/2, c + ceil(w/2) - 1]</c>, so the bound differs by a cell
+        /// depending on which side the obstacle is. An axis is only constrained
+        /// when the other axis could overlap at all: two rooms whose centres are
+        /// a full envelope span apart on one axis can never meet, whatever they
+        /// do on the other, so a distant placement clamps nothing.
+        /// </remarks>
+        private static void ClampRoomSizeToPlacedRooms(
+            IReadOnlyList<RoomFootprint> placedRooms,
+            int nodeIndex,
+            Vector2Int center,
+            DungeonPatternSpatialSettings spatial,
+            ref int widthCells,
+            ref int depthCells)
+        {
+            if (placedRooms == null)
+            {
+                return;
+            }
+
+            int radius = spatial.roomEnvelopeRadiusCells;
+            for (int room = 0; room < placedRooms.Count; room++)
+            {
+                RoomFootprint placed = placedRooms[room];
+                if (room == nodeIndex || placed == null)
+                {
+                    continue;
+                }
+
+                // This room cannot leave its own envelope, so an obstacle
+                // beyond that reach on an axis cannot meet it on that axis.
+                RectInt bounds = placed.bounds;
+                bool couldMeetOnY = bounds.yMin <= center.y + radius &&
+                    bounds.yMax - 1 >= center.y - radius;
+                bool couldMeetOnX = bounds.xMin <= center.x + radius &&
+                    bounds.xMax - 1 >= center.x - radius;
+                if (couldMeetOnY)
+                {
+                    if (bounds.xMin > center.x)
+                    {
+                        // ceil(w/2) <= bounds.xMin - center.x
+                        widthCells = Mathf.Min(widthCells, (bounds.xMin - center.x) * 2);
+                    }
+                    else if (bounds.xMax <= center.x)
+                    {
+                        // floor(w/2) <= center.x - bounds.xMax
+                        widthCells = Mathf.Min(widthCells, (center.x - bounds.xMax) * 2 + 1);
+                    }
+                }
+
+                if (couldMeetOnX)
+                {
+                    if (bounds.yMin > center.y)
+                    {
+                        depthCells = Mathf.Min(depthCells, (bounds.yMin - center.y) * 2);
+                    }
+                    else if (bounds.yMax <= center.y)
+                    {
+                        depthCells = Mathf.Min(depthCells, (center.y - bounds.yMax) * 2 + 1);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// The lane gaps immediately either side of a node, on each axis.
+        /// </summary>
+        /// <remarks>
+        /// Every node in one lattice lane shares an embedded coordinate, so the
+        /// nearest DIFFERENT coordinate on an axis is exactly the distance to
+        /// the adjacent occupied lane. Any other node is either in this node's
+        /// own lane — where the other axis has to do the separating — or at
+        /// least that far away, so clamping each room to its own adjacent gap
+        /// keeps every pair apart while letting a room beside a wide lane
+        /// actually use it. An axis with no other lane is unconstrained by a
+        /// neighbour and falls back to the pitch.
+        /// </remarks>
+        private static void ResolveAdjacentLaneGaps(
+            IReadOnlyList<Vector2Int> nodeCenters,
+            int nodeIndex,
+            DungeonPatternSpatialSettings spatial,
+            out int widthCells,
+            out int depthCells)
+        {
+            Vector2Int center = nodeCenters[nodeIndex];
+            widthCells = int.MaxValue;
+            depthCells = int.MaxValue;
+            foreach (Vector2Int other in nodeCenters)
+            {
+                int dx = Mathf.Abs(other.x - center.x);
+                int dy = Mathf.Abs(other.y - center.y);
+                if (dx > 0)
+                {
+                    widthCells = Mathf.Min(widthCells, dx);
+                }
+
+                if (dy > 0)
+                {
+                    depthCells = Mathf.Min(depthCells, dy);
+                }
+            }
+
+            if (widthCells == int.MaxValue)
+            {
+                widthCells = spatial.horizontalPitchCells;
+            }
+
+            if (depthCells == int.MaxValue)
+            {
+                depthCells = spatial.verticalPitchCells;
             }
         }
 

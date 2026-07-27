@@ -65,6 +65,11 @@ Design background and the drafted topology set:
     "tierSeamMaxRiseLevels": 8,                      // a graph property, so absolute
     // [minWidthDelta, maxWidthDelta, minDepthDelta, maxDepthDelta] from the
     // pitch: width against the horizontal pitch, depth against the vertical.
+    // These state the topology's DENSITY-0 sizes; the dial then packs them by
+    // the same rule as the profile's own, so the channel they leave closes as
+    // density rises. You do NOT need to declare narrower rooms to fit a tight
+    // lane - every room is clamped to its own adjacent lanes at inflation time,
+    // per node, so a tight lane costs the two rooms beside it and nothing else.
     "roomSizeDeltaCells": {
       "terminal":  [-4, -4, -2, -2],
       "hall":      [-4, -4, -4, -3],

@@ -1495,32 +1495,9 @@ namespace DungeonLab.Editor
                 Mathf.Min(totalHeadroomCells, Mathf.Min(envelopeSlack, spatial.latticeSlackMaxCells)));
         }
 
-        private static DungeonPatternSpatialSettings ClampRoomSizesToTightestLane(
-            DungeonPatternSpatialSettings spatial,
-            DungeonRouteTopology topology)
-        {
-            int widest = TightestLaneGap(topology.columnGaps, spatial.horizontalPitchCells);
-            int deepest = TightestLaneGap(topology.rowGaps, spatial.verticalPitchCells);
-            spatial.terminalRoomSize = ClampRoomSize(spatial.terminalRoomSize, widest, deepest);
-            spatial.hallRoomSize = ClampRoomSize(spatial.hallRoomSize, widest, deepest);
-            spatial.connectorRoomSize = ClampRoomSize(spatial.connectorRoomSize, widest, deepest);
-            return spatial;
-        }
-
-        // The rubber sheet only ever moves lanes APART, so the authored minimum
-        // is the worst case a room has to fit inside.
-        private static int TightestLaneGap(RouteLaneGap[] gaps, int pitchCells)
-        {
-            int tightest = pitchCells;
-            foreach (RouteLaneGap gap in gaps ?? Array.Empty<RouteLaneGap>())
-            {
-                tightest = Mathf.Min(tightest, gap.ResolvedMinimum(pitchCells));
-            }
-
-            return tightest;
-        }
-
-        private static DungeonRoomSizeRange ClampRoomSize(
+        // Applied per node at inflation time (ResolveAdjacentLaneGaps), against
+        // that node's own adjacent lanes rather than the axis's tightest.
+        internal static DungeonRoomSizeRange ClampRoomSize(
             DungeonRoomSizeRange size,
             int widestCells,
             int deepestCells)
@@ -1574,38 +1551,49 @@ namespace DungeonLab.Editor
             }
 
             // Room size deltas resolve against the pitch AFTER any pitch override
-            // above, so a topology that moves both stays self-consistent.
+            // above, so a topology that moves both stays self-consistent — and
+            // are then PACKED BY THE DIAL, exactly as the profile's own sizes
+            // are. Without that last step a pitch-relative override is a
+            // constant, because the dial holds the pitch fixed, and a topology
+            // that declares one silently opts out of density altogether.
+            int densityLevel = CurrentGenerationSettings.Validated().densityLevel;
             if (overrides.terminalRoomSizeDelta.HasValue)
             {
-                spatial.terminalRoomSize = overrides.terminalRoomSizeDelta.Value.Resolve(
-                    spatial.horizontalPitchCells,
-                    spatial.verticalPitchCells);
+                spatial.terminalRoomSize = DungeonGenerationProfile.PackAuthoredRoomSize(
+                    overrides.terminalRoomSizeDelta.Value.Resolve(
+                        spatial.horizontalPitchCells,
+                        spatial.verticalPitchCells),
+                    spatial,
+                    densityLevel);
             }
 
             if (overrides.hallRoomSizeDelta.HasValue)
             {
-                spatial.hallRoomSize = overrides.hallRoomSizeDelta.Value.Resolve(
-                    spatial.horizontalPitchCells,
-                    spatial.verticalPitchCells);
+                spatial.hallRoomSize = DungeonGenerationProfile.PackAuthoredRoomSize(
+                    overrides.hallRoomSizeDelta.Value.Resolve(
+                        spatial.horizontalPitchCells,
+                        spatial.verticalPitchCells),
+                    spatial,
+                    densityLevel);
             }
 
             if (overrides.connectorRoomSizeDelta.HasValue)
             {
-                spatial.connectorRoomSize = overrides.connectorRoomSizeDelta.Value.Resolve(
-                    spatial.horizontalPitchCells,
-                    spatial.verticalPitchCells);
+                spatial.connectorRoomSize = DungeonGenerationProfile.PackAuthoredRoomSize(
+                    overrides.connectorRoomSizeDelta.Value.Resolve(
+                        spatial.horizontalPitchCells,
+                        spatial.verticalPitchCells),
+                    spatial,
+                    densityLevel);
             }
 
-            // A room may never be wider than the tightest lane it has to sit in.
-            // Two rooms centred one lane apart overlap the moment either exceeds
-            // that gap, and inflation then burns its six re-rolls and fails the
-            // attempt — which is how sunken-basin and terraced-cascade lost every
-            // one of their density-5 seeds before this clamp existed. The
-            // authoring guide has always told authors this rule; resolving it
-            // here makes it true by construction instead of by vigilance, and it
-            // is what lets a topology keep authored lanes narrower than the pitch
-            // without having to re-declare its room sizes at every density.
-            spatial = ClampRoomSizesToTightestLane(spatial, topology);
+            // A room may never be wider than the lane gap it sits in — but that
+            // gap is a property of the NODE, not of the topology, so the clamp
+            // lives at inflation time in ResolveAdjacentLaneGaps where the
+            // node's embedded position is known. Clamping here instead pinned
+            // every room on an axis to the tightest lane anywhere on it, which
+            // cost twin-wing-keep (lanes 6,5,6,8,8,9) three cells on every room
+            // at every density.
             return spatial.Validated();
         }
     }
