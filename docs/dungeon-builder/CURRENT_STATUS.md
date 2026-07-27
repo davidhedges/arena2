@@ -560,17 +560,34 @@ doing the graph-as-data work as the vehicle.
 
    a. **The explicit stairwell shaft** (the rest of phase 2). A stairwell tower
       stands on void beside the path, and that requirement is still implicit:
-      the placer searches for void at tier time rather than the plan reserving it.
-      M1 dropped the symptom to zero (no `ROUTE_TRANSITION_RESERVATION` retries
-      in 200 seeds), so this is now about surviving packing, not about a live
-      defect. The measurement that specifies it, taken over 254 towers in the
-      density-0 corpus: **the footprint is always exactly 2 cells along the path,
-      and 1–3 cells lateral to it** (histogram 2×2:129, 2×3:54, 3×2:43, 1×2:12,
-      2×1:16). Note that a reservation alone is only a probabilistic help —
-      `AddValidStairwellTransitionCandidates` searches both sides and every path
-      position, so making it a *guarantee* means constraining the placer to the
-      reserved shaft, with a fallback to the other side. That is the real shape
-      of this item and why it was not folded into the M1 change.
+      the placer searches for void at tier time rather than the plan reserving
+      it. M1 dropped the symptom to zero (no `ROUTE_TRANSITION_RESERVATION`
+      retries in 200 seeds), so this is about surviving packing, not a live
+      defect.
+
+      **The obvious implementation was tried on 2026-07-27 and measured as
+      wrong; do not repeat it.** Reserving a fixed window — the widest measured
+      footprint (2 cells along the path × 3 lateral, from 254 towers: 2×2:129,
+      2×3:54, 3×2:43, 1×2:12, 2×1:16) at the lane midpoint, on a side drawn per
+      edge — and closing it to rooms and corridors took density 0 from
+      **199/200 to 138/200**: 53 `ROUTE_ROOM_INFLATION_EXHAUSTED` and 82
+      `ROUTE_CORRIDOR_EMBEDDING_EXHAUSTED`. The two causes are structural, not
+      tuning:
+
+      - **Authored recipe footprints cannot move.** `keep-landmark` and
+        `hanging-shrine` overlapped the reserved window on 27 seeds, and a
+        recipe room has no re-roll (design §9 residual risk 2).
+      - **Other edges' corridors legitimately cross it.** `E-F` and `B-C` paths
+        ran through shafts reserved beside `F-G`.
+
+      The lesson is about ordering: a shaft location cannot be chosen before the
+      things it competes with exist. The sound design is the opposite ordering —
+      choose the shaft **after** rooms and corridors are compiled, from the
+      sides and positions that are actually free, and protect that choice
+      through the tier stage. Note also that the reservation does not need to
+      dictate where the tower goes: `AddValidStairwellTransitionCandidates`
+      searching every position and both sides is fine, because all the
+      reservation has to guarantee is that its candidate list is not empty.
    b. **Phase 3 (M2 — pack)**, starting with the corridor ownership + reroute
       spike (§3.1 candidate 3), then pitch/room size/slack/envelope radius/
       enclosure as functions of the dial in
