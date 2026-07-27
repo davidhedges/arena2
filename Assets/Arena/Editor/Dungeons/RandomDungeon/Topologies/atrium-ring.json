@@ -19,10 +19,10 @@
   "spatial": {
     // Was a fixed 7-cell column pitch under the old baseline settings, which
     // only worked because that path also forced small rooms. On the profile's
-    // own room sizes a 7-cell lane puts adjacent rooms wall to wall, so the
-    // minimum is now the profile pitch.
-    "columnGapCells": { "max": 13 },
-    "rowGapCells": { "max": 13 },
+    // own room sizes a lane two under the pitch puts adjacent rooms wall to
+    // wall, so the minimum is the pitch itself and only the maximum moves.
+    "columnGapDeltaCells": { "maxDelta": 4 },
+    "rowGapDeltaCells": { "maxDelta": 4 },
 
     // This graph declares no overlook pairs, so it asks for no tier seams.
     // The profile's default of 2 would throw for want of eligible candidates.

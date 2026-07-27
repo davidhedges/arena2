@@ -10,19 +10,19 @@
 # Both legs run the same code on the same tree; ops/dungeon-port-ab.sh (which
 # stashes the working tree) is the wrong tool here and is deliberately not used.
 #
-# Usage:  ops/dungeon-step2-verify.sh [profile]     # profile defaults to dense
+# Usage:  ops/dungeon-step2-verify.sh [density]     # density defaults to 0
 # Needs:  Unity closed. The shared batch preflight rejects a live editor,
 #         clears orphaned project batch state, and moves an unowned lockfile.
 # Exit:   0 = deterministic and >= 199/200, 1 = a real problem, 2 = could not run.
 
 set -uo pipefail
 cd "${ARENA_REPO:-$(cd "$(dirname "$0")/.." && pwd)}" || exit 2
-PROFILE="${1:-dense}"
+DENSITY="${1:-0}"
 UNITY="${UNITY_PATH:-/Applications/Unity/Hub/Editor/6000.4.0f1/Unity.app/Contents/MacOS/Unity}"
 REPORTS="DungeonLabReports"
 LIVE="$REPORTS/dungeon_plan_2026072100_2026072299.json"
-RUN1="$REPORTS/step2_run1_$PROFILE.json"
-RUN2="$REPORTS/step2_run2_$PROFILE.json"
+RUN1="$REPORTS/step2_run1_density$DENSITY.json"
+RUN2="$REPORTS/step2_run2_density$DENSITY.json"
 LOGS="$REPORTS/step2_logs"
 PREFLIGHT="${UNITY_BATCH_PREFLIGHT:-$PWD/ops/unity-batch-preflight.sh}"
 
@@ -39,9 +39,9 @@ fi
 mkdir -p "$LOGS"
 
 run_batch() {           # $1 = label, $2 = destination report
-  echo "== batch validate 200 seeds ($PROFILE) — $1"
+  echo "== batch validate 200 seeds (density $DENSITY) — $1"
   rm -f "$LIVE"
-  ARENA_DUNGEON_GENERATION_PROFILE="$PROFILE" "$UNITY" \
+  ARENA_DUNGEON_DENSITY="$DENSITY" "$UNITY" \
     -batchmode -quit \
     -projectPath "$PWD" \
     -executeMethod DungeonLab.Editor.DungeonLabGenerator.BatchValidate200Seeds \

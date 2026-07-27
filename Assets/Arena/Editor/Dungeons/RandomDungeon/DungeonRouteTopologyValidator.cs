@@ -24,7 +24,12 @@ namespace DungeonLab.Editor
     {
         private const string RouteTopologyValidationReportPath =
             "DungeonLabReports/route_topology_validation.txt";
-        private static readonly string[] RouteTopologyValidationProfileIds = { "spacious", "dense" };
+        // Every topology is checked at every density (design §6): a topology that
+        // cannot take a setting is then a data problem this report names by file,
+        // fixable without generator C#. Achieved fill and max void component per
+        // topology per level are a generation measurement, not an authoring rule,
+        // and live in the batch report's measurements.byTopology.density.
+        private static readonly int[] RouteTopologyValidationDensityLevels = { 0, 1, 2, 3, 4, 5 };
 
         [MenuItem("Tools/Dungeon Lab/Validate Topologies")]
         private static void ValidateRouteTopologiesMenuItem()
@@ -95,10 +100,25 @@ namespace DungeonLab.Editor
                     AppendRouteTopologyGraphRules(topology, violations);
                     AppendRouteTopologyLatticeRules(topology, violations);
                     AppendRouteTopologyRhythmRules(topology, violations);
-                    foreach (string profileId in RouteTopologyValidationProfileIds)
+                    // Densities that resolve to the same spatial settings would
+                    // print the same block twice, so the first one to produce a
+                    // given resolution is checked and the rest say who they
+                    // match. Until phase 3 of the density-scale design fills in
+                    // ResolveDensitySpatialSettings, that is all six of them.
+                    var checkedDensitiesByResolution = new Dictionary<string, int>(StringComparer.Ordinal);
+                    foreach (int densityLevel in RouteTopologyValidationDensityLevels)
                     {
-                        CurrentGenerationSettings = LoadActiveGenerationSettings(profileId);
-                        AppendRouteTopologyProfileRules(topology, profileId, violations, notes);
+                        CurrentGenerationSettings = LoadActiveGenerationSettings(densityLevel);
+                        string label = $"density {densityLevel}";
+                        string resolution = DescribeResolvedSpatialSettings(topology);
+                        if (checkedDensitiesByResolution.TryGetValue(resolution, out int firstLevel))
+                        {
+                            notes.Add($"{label}: resolves identically to density {firstLevel}");
+                            continue;
+                        }
+
+                        checkedDensitiesByResolution[resolution] = densityLevel;
+                        AppendRouteTopologyProfileRules(topology, label, violations, notes);
                     }
 
                     passed &= violations.Count == 0;
@@ -561,11 +581,38 @@ namespace DungeonLab.Editor
             }
         }
 
-        // ---- per-profile rules --------------------------------------------
+        // ---- per-density rules --------------------------------------------
+
+        // Everything the per-density rules below actually read. Two densities
+        // with the same description produce the same report block.
+        private static string DescribeResolvedSpatialSettings(DungeonRouteTopology topology)
+        {
+            DungeonGenerationSettings settings = CurrentGenerationSettings.Validated();
+            DungeonPatternSpatialSettings spatial = ResolveTopologySpatialSettings(topology);
+            return string.Join(
+                "|",
+                settings.mapWidthMaxCells,
+                settings.mapDepthMaxCells,
+                spatial.horizontalPitchCells,
+                spatial.verticalPitchCells,
+                spatial.roomEnvelopeRadiusCells,
+                spatial.neighborBiasStrengthCells,
+                spatial.latticeSlackMaxCells,
+                spatial.tierSeamAdjacency.requestedCount,
+                spatial.tierSeamAdjacency.maximumRiseLevels,
+                DescribeRoomSizeRange(spatial.terminalRoomSize),
+                DescribeRoomSizeRange(spatial.hallRoomSize),
+                DescribeRoomSizeRange(spatial.connectorRoomSize));
+        }
+
+        private static string DescribeRoomSizeRange(DungeonRoomSizeRange range)
+        {
+            return $"{range.minWidthCells},{range.maxWidthCells},{range.minDepthCells},{range.maxDepthCells}";
+        }
 
         private static void AppendRouteTopologyProfileRules(
             DungeonRouteTopology topology,
-            string profileId,
+            string densityLabel,
             List<string> violations,
             List<string> notes)
         {
@@ -583,8 +630,8 @@ namespace DungeonLab.Editor
                 topology.rowGaps,
                 spatial.verticalPitchCells,
                 topology.latticeRowCount);
-            AppendRouteTopologyRubberSheetNotes(topology, profileId, spatial, columnOffsets, rowOffsets, notes);
-            AppendRouteTopologyRoleSizeClassRules(topology, profileId, settings, violations);
+            AppendRouteTopologyRubberSheetNotes(topology, densityLabel, spatial, columnOffsets, rowOffsets, notes);
+            AppendRouteTopologyRoleSizeClassRules(topology, densityLabel, settings, violations);
 
             // Across the 8 orientations a quarter turn swaps the two spans, so
             // the worst case on each axis is simply the wider of them — plus
@@ -596,23 +643,23 @@ namespace DungeonLab.Editor
                 LatticeSlackBudget(topology.rowGaps, spatial.verticalPitchCells, spatial);
             int worstAxis = Mathf.Max(columnSpan, rowSpan) + envelopeSpan;
             notes.Add(
-                $"{profileId}: envelope worst case {worstAxis}x{worstAxis} of " +
+                $"{densityLabel}: envelope worst case {worstAxis}x{worstAxis} of " +
                 $"{settings.mapWidthMaxCells}x{settings.mapDepthMaxCells} across all 8 orientations " +
                 $"at the widest lattice; minimum lane offsets x[{string.Join(",", columnOffsets)}] " +
                 $"y[{string.Join(",", rowOffsets)}]");
             if (worstAxis > settings.mapWidthMaxCells || worstAxis > settings.mapDepthMaxCells)
             {
                 violations.Add(
-                    $"{profileId}: plan reaches {worstAxis} cells against " +
+                    $"{densityLabel}: plan reaches {worstAxis} cells against " +
                     $"{settings.mapWidthMaxCells}x{settings.mapDepthMaxCells}; " +
                     "TryTransformCoarseEmbedding only tries 4 quarter-turns against one mirror choice, " +
                     "so an overflow here can reject the whole layout attempt");
             }
 
-            AppendRouteTopologyOverlookRules(topology, profileId, spatial, violations, notes);
+            AppendRouteTopologyOverlookRules(topology, densityLabel, spatial, violations, notes);
             AppendRouteTopologyRoomSizeRules(
                 topology,
-                profileId,
+                densityLabel,
                 spatial,
                 columnOffsets,
                 rowOffsets,
@@ -620,7 +667,7 @@ namespace DungeonLab.Editor
                 notes);
             AppendRouteTopologyVistaLaneRules(
                 topology,
-                profileId,
+                densityLabel,
                 spatial,
                 columnOffsets,
                 rowOffsets,
@@ -633,7 +680,7 @@ namespace DungeonLab.Editor
         // envelope and the profile cap both bite before the authored range does.
         private static void AppendRouteTopologyRubberSheetNotes(
             DungeonRouteTopology topology,
-            string profileId,
+            string densityLabel,
             DungeonPatternSpatialSettings spatial,
             int[] columnOffsets,
             int[] rowOffsets,
@@ -647,7 +694,7 @@ namespace DungeonLab.Editor
             int columnHeadroom = LatticeAuthoredHeadroom(topology.columnGaps, spatial.horizontalPitchCells);
             int rowHeadroom = LatticeAuthoredHeadroom(topology.rowGaps, spatial.verticalPitchCells);
             notes.Add(
-                $"{profileId}: rubber sheet may add {columnSlack} cells across the columns and " +
+                $"{densityLabel}: rubber sheet may add {columnSlack} cells across the columns and " +
                 $"{rowSlack} across the rows (authored headroom {columnHeadroom}/{rowHeadroom}, " +
                 $"profile cap {spatial.latticeSlackMaxCells}); " +
                 (columnSlack == 0 && rowSlack == 0
@@ -656,7 +703,7 @@ namespace DungeonLab.Editor
             if (columnSlack < columnHeadroom || rowSlack < rowHeadroom)
             {
                 notes.Add(
-                    $"{profileId}: the authored gap ranges are wider than the budget — the map envelope " +
+                    $"{densityLabel}: the authored gap ranges are wider than the budget — the map envelope " +
                     $"({columnOffsets[columnOffsets.Length - 1]}/{rowOffsets[rowOffsets.Length - 1]} " +
                     $"minimum span) or latticeSlackMaxCells is the binding constraint, not the ranges");
             }
@@ -667,7 +714,7 @@ namespace DungeonLab.Editor
         // the map is a profile field.
         private static void AppendRouteTopologyRoleSizeClassRules(
             DungeonRouteTopology topology,
-            string profileId,
+            string densityLabel,
             DungeonGenerationSettings settings,
             List<string> violations)
         {
@@ -682,7 +729,7 @@ namespace DungeonLab.Editor
                 if (!settings.TryResolveRoomSizeClass(node.role, out _))
                 {
                     violations.Add(
-                        $"{profileId}: node '{node.key}' ({node.id}) declares role '{node.role}', which the " +
+                        $"{densityLabel}: node '{node.key}' ({node.id}) declares role '{node.role}', which the " +
                         "profile's roleSizeClasses map does not cover; add it there with a size class");
                 }
             }
@@ -690,7 +737,7 @@ namespace DungeonLab.Editor
 
         private static void AppendRouteTopologyRoomSizeRules(
             DungeonRouteTopology topology,
-            string profileId,
+            string densityLabel,
             DungeonPatternSpatialSettings spatial,
             int[] columnOffsets,
             int[] rowOffsets,
@@ -718,7 +765,7 @@ namespace DungeonLab.Editor
                 if (range.maxWidthCells > envelopeSpan || range.maxDepthCells > envelopeSpan)
                 {
                     violations.Add(
-                        $"{profileId}: role '{node.role}' may reach " +
+                        $"{densityLabel}: role '{node.role}' may reach " +
                         $"{range.maxWidthCells}x{range.maxDepthCells}, outside the {envelopeSpan}-cell " +
                         "placement envelope");
                 }
@@ -753,7 +800,7 @@ namespace DungeonLab.Editor
             if (tightestGap != int.MaxValue)
             {
                 notes.Add(
-                    $"{profileId}: tightest lane gap {tightestGap} cells ({tightestLane}) against a " +
+                    $"{densityLabel}: tightest lane gap {tightestGap} cells ({tightestLane}) against a " +
                     $"largest generic room extent of {largestExtent}" +
                     (largestExtent >= tightestGap
                         ? " — rooms there can end up wall to wall, so expect inflation retries"
@@ -763,7 +810,7 @@ namespace DungeonLab.Editor
 
         private static void AppendRouteTopologyVistaLaneRules(
             DungeonRouteTopology topology,
-            string profileId,
+            string densityLabel,
             DungeonPatternSpatialSettings spatial,
             int[] columnOffsets,
             int[] rowOffsets,
@@ -787,14 +834,14 @@ namespace DungeonLab.Editor
             int clearCells = laneCells - sourceReach - targetReach - 1;
             int steps = Mathf.Abs(targetCell.x - sourceCell.x) + Mathf.Abs(targetCell.y - sourceCell.y);
             notes.Add(
-                $"{profileId}: vista '{topology.vistaId}' {steps} lattice step(s), {laneCells} cells " +
+                $"{densityLabel}: vista '{topology.vistaId}' {steps} lattice step(s), {laneCells} cells " +
                 $"centre to centre, worst-case reach {sourceReach}+{targetReach} => " +
                 $"{clearCells} clear cell(s), required {topology.vistaMinimumVoidCells}" +
                 (clearCells == topology.vistaMinimumVoidCells ? " (zero margin)" : string.Empty));
             if (clearCells < topology.vistaMinimumVoidCells)
             {
                 violations.Add(
-                    $"{profileId}: vista '{topology.vistaId}' can shrink to {clearCells} clear cell(s), " +
+                    $"{densityLabel}: vista '{topology.vistaId}' can shrink to {clearCells} clear cell(s), " +
                     $"below the required {topology.vistaMinimumVoidCells}; move the pair at least one more " +
                     "lattice step apart");
             }
@@ -937,7 +984,7 @@ namespace DungeonLab.Editor
 
         private static void AppendRouteTopologyOverlookRules(
             DungeonRouteTopology topology,
-            string profileId,
+            string densityLabel,
             DungeonPatternSpatialSettings spatial,
             List<string> violations,
             List<string> notes)
@@ -947,7 +994,7 @@ namespace DungeonLab.Editor
             if (selected.Count != seams.requestedCount)
             {
                 violations.Add(
-                    $"{profileId}: the profile requests {seams.requestedCount} tier-seam adjacencies but " +
+                    $"{densityLabel}: the profile requests {seams.requestedCount} tier-seam adjacencies but " +
                     $"only {selected.Count} of the {topology.overlooks.Length} declared 'overlooks' pairs " +
                     $"are eligible (non-traversal, rise a multiple of {MajorRiseLevels} up to " +
                     $"{seams.maximumRiseLevels}u); generation throws on this");
@@ -967,7 +1014,7 @@ namespace DungeonLab.Editor
                     $"({Mathf.Abs(topology.nodes[pair.firstNode].level - topology.nodes[pair.secondNode].level)}u)");
             }
 
-            notes.Add($"{profileId}: tier seams {string.Join(", ", described)} (these rooms shrink to 4x5)");
+            notes.Add($"{densityLabel}: tier seams {string.Join(", ", described)} (these rooms shrink to 4x5)");
         }
 
         private static bool RouteTopologyHasOverlookAppendage(DungeonRouteTopology topology, int node)

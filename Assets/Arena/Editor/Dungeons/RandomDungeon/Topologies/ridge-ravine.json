@@ -24,26 +24,25 @@
 
   "spatial": {
     // Twelve rooms is the fewest in the set, so this graph has the least floor
-    // to fill its bounding box with: the lanes start one cell under the profile
-    // pitch (8 is still >= the largest room extent on either axis in either
-    // profile, so adjacent rooms touch at worst, they never overlap) and the
-    // rubber sheet is capped at 6 rather than the profile's 8. Measured rather
-    // than guessed - see the step 3 block in CURRENT_STATUS.md. This is the
-    // horizontal knob only; it does not touch the tier-void ratio, which lives
-    // in CellSize vs StairForge.LevelHeight.
-    "columnGapCells": { "min": 8, "max": 11 },
-    "rowGapCells": { "min": 8, "max": 11 },
+    // to fill its bounding box with: the lanes run one cell UNDER the profile
+    // pitch (rooms below still fit that lane, so adjacent rooms touch at worst,
+    // they never overlap) and the rubber sheet is clamped to 6 cells. Measured
+    // rather than guessed - see the step 3 block in CURRENT_STATUS.md. This is
+    // the horizontal knob only; it does not touch the tier-void ratio, which
+    // lives in CellSize vs StairForge.LevelHeight.
+    "columnGapDeltaCells": { "minDelta": -1, "maxDelta": 2 },
+    "rowGapDeltaCells": { "minDelta": -1, "maxDelta": 2 },
     "latticeSlackMaxCells": 6,
 
-    // Same reason again, on the other axis of the same trade: the spacious
-    // profile's rooms are smaller, and twelve of them measured 26.9% fill there
-    // - on the floor. This topology therefore declares the LARGER (dense) room
-    // sizes for both profiles rather than giving up more of its rubber sheet.
-    // On dense the override is a no-op.
-    "roomSizes": {
-      "terminal":  [7, 8, 6, 7],
-      "hall":      [6, 8, 6, 7],
-      "connector": [6, 8, 5, 7]
+    // Same reason again, on the other axis of the same trade: twelve of the
+    // profile's own rooms measured 26.9% fill - on the floor. This topology
+    // therefore runs rooms one to two cells larger than the profile does rather
+    // than giving up more of its rubber sheet. Declared against the pitch, so it
+    // is [7,8,6,7] / [6,8,6,7] / [6,8,5,7] at pitch 9 and shrinks with the dial.
+    "roomSizeDeltaCells": {
+      "terminal":  [-2, -1, -3, -2],
+      "hall":      [-3, -1, -3, -2],
+      "connector": [-3, -1, -4, -2]
     },
 
     // This graph declares no overlook pairs, so it asks for no tier seams.

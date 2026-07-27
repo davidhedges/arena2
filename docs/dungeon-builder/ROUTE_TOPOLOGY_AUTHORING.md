@@ -7,7 +7,7 @@ places every node. Adding one costs no C#.
 
 Check a draft with **Tools > Dungeon Lab > Validate Topologies**. It reports every
 rule below by node/edge key with the offending value, re-renders the map with its
-edges drawn, computes the vista lane's clear-cell count at both profiles, and says
+edges drawn, computes the vista lane's clear-cell count at every density, and says
 how much the rubber sheet can move each axis. A report is also written to
 `DungeonLabReports/route_topology_validation.txt`.
 
@@ -37,26 +37,38 @@ Design background and the drafted topology set:
 
   // Every field is optional. Anything absent comes from the generation
   // profile's `processionalSpatial`. There is no second settings table.
+  //
+  // SPATIAL OVERRIDES ARE OFFSETS FROM THE RESOLVED PITCH, not absolute cells.
+  // Density is a dial (0-5) that moves the pitch, and an absolute value would
+  // pin a topology to one setting: "8 to 11 cells" is a sparse lattice forever.
+  // "one under the pitch, up to two over" is the same lattice at every density.
+  // The retired names `columnGapCells`, `rowGapCells` and `roomSizes` are
+  // rejected by the loader with a message rather than reinterpreted, because a
+  // bare number is legal in both vocabularies and means something different in
+  // each.
   "spatial": {
-    // A lane gap is a number (fixed), an object { min, max } (a rubber-sheet
-    // range), or an array with one such entry per gap between adjacent lanes
-    // (so length == lanes - 1). Either bound may be omitted and falls back to
-    // the profile's pitch on that axis.
-    "columnGapCells": { "max": 13 },                 // [profile pitch, 13]
-    "rowGapCells": [9, { "min": 10, "max": 15 }],    // first lane fixed at 9
+    // A lane gap is a number (a fixed lane at pitch + that offset), an object
+    // { minDelta, maxDelta } (a rubber-sheet range around the pitch), or an
+    // array with one such entry per gap between adjacent lanes (so
+    // length == lanes - 1). Either bound may be omitted and falls back to the
+    // pitch itself.
+    "columnGapDeltaCells": { "maxDelta": 4 },        // [pitch, pitch + 4]
+    "rowGapDeltaCells": [0, { "minDelta": 1, "maxDelta": 6 }],  // first lane fixed at the pitch
 
     // Overrides of the profile's spatial settings, for a topology whose shape
     // genuinely cannot take the profile's defaults. State the reason in a
     // comment - an override that is not explained is a bug waiting to happen.
-    "roomEnvelopeRadiusCells": 4,
-    "neighborBiasStrengthCells": 1,
-    "latticeSlackMaxCells": 8,
-    "tierSeamCount": 0,
-    "tierSeamMaxRiseLevels": 8,
-    "roomSizes": {                                   // [minW, maxW, minD, maxD]
-      "terminal":  [5, 5, 7, 7],
-      "hall":      [5, 5, 5, 6],
-      "connector": [4, 5, 5, 5]
+    "roomEnvelopeRadiusCells": 4,                    // absolute; see the note below
+    "neighborBiasStrengthCells": 1,                  // absolute; see the note below
+    "latticeSlackMaxCells": 8,                       // a CLAMP on the profile's, not a replacement
+    "tierSeamCount": 0,                              // a graph property, so absolute
+    "tierSeamMaxRiseLevels": 8,                      // a graph property, so absolute
+    // [minWidthDelta, maxWidthDelta, minDepthDelta, maxDepthDelta] from the
+    // pitch: width against the horizontal pitch, depth against the vertical.
+    "roomSizeDeltaCells": {
+      "terminal":  [-4, -4, -2, -2],
+      "hall":      [-4, -4, -4, -3],
+      "connector": [-5, -4, -4, -4]
     }
   },
 
@@ -183,7 +195,8 @@ Things worth knowing:
   that is an authoring problem, and the validator says so.
 - **Bigger gaps grow the floor bounding box without growing rooms**, so
   `denseFloorplanMinFillPercent` (0.26) is the thing that bites, and it bites
-  suddenly. Measured over `2026072100..2026072299` at `dense`:
+  suddenly. Measured over `2026072100..2026072299` (on the `dense` profile that
+  the density dial replaced; density 0 sits a couple of points lower):
 
   | `latticeSlackMaxCells` | accepted | floor fill min / median | `ROUTE_DENSITY_PRECONDITION` |
   | --- | --- | --- | --- |
@@ -198,16 +211,16 @@ Things worth knowing:
 - **The sheet always spends its whole budget.** `ResolveLatticeLaneOffsets`
   hands out every available cell; only *which lane* gets each one is drawn. So
   the total span, and therefore the floor bounding box, is effectively a
-  constant per topology per profile — and so is floor fill, to within the ±2
+  constant per topology per density — and so is floor fill, to within the ±2
   points that room-size jitter contributes. A topology that misses the fill
   floor misses it on **every** seed, not on an unlucky few.
 - **A wide lattice is the thing that misses it.** Five lanes at the 9-cell pitch
   span 36 cells before rooms; add the 8-cell sheet and the box is ~50 cells wide
   with the same rooms to fill it. The knob is the lane *minimum*: authoring
-  `{ "min": 8 }` is safe on either axis in either profile — 8 is ≥ the largest
-  room extent anywhere in the two profiles, so adjacent rooms touch at worst and
-  never overlap — and it buys about four points of fill per axis. Reach for that
-  before giving up rubber sheet with `latticeSlackMaxCells`.
+  `{ "minDelta": -1 }` is safe on either axis — one under the pitch is still ≥
+  the largest room extent, so adjacent rooms touch at worst and never overlap —
+  and it buys about four points of fill per axis. Reach for that before clamping
+  the rubber sheet with `latticeSlackMaxCells`.
 
 ## Things that bite
 
@@ -219,9 +232,10 @@ Things worth knowing:
   from 24 to 0 and returns at ~6 nodes. A shape whose whole rim sits at 20–24
   cannot close inside 13.
 - **Put Stairwell edges where the plan is open** — rims, shaft heads, plan edges.
-  A stairwell tower needs void cells beside its corridor, and the `dense` profile
+  A stairwell tower needs void cells beside its corridor, and a packed density
   leaves fewer; seed 2026072295's failure is exactly this, in the interior of a
-  dense cluster.
+  tight cluster. Phase 2 of the density-scale design makes the shaft an explicit
+  reservation, which is what stops this being an authoring hazard.
 - **A lane gap must be at least the largest room extent on that axis.** Two
   adjacent centred rooms of width `w` need `w ≤ gap` not to overlap. Under-sizing
   a lane does not fail loudly — it burns the six room-inflation retries and then
@@ -229,5 +243,6 @@ Things worth knowing:
 - **The profile's `tierSeamCount` is a request, and `BuildPlannedOverlooks`
   throws when a topology cannot meet it.** A topology with no `overlooks` pairs
   must override `tierSeamCount` to 0.
-- **New role strings must be added to the profile's `roleSizeClasses`** — in both
-  `generation_profile.asset` and `generation_profile_dense.asset`.
+- **New role strings must be added to the profile's `roleSizeClasses`** in
+  `generation_profile.asset`. There is one profile asset; how packed the dungeon
+  is, is the `densityLevel` dial, not a second file.

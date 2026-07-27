@@ -12,13 +12,22 @@ namespace DungeonLab.Editor
     {
         private const string PackageInventoryPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/package_inventory.json";
         private const string StairProofContractsPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/stair_proof_contracts.json";
-        private const string SpaciousGenerationProfilePath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/generation_profile.asset";
-        private const string DenseGenerationProfilePath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/generation_profile_dense.asset";
-        private const string DefaultGenerationProfileId = "spacious";
-        private const string GenerationProfileEnvironmentVariable = "ARENA_DUNGEON_GENERATION_PROFILE";
-        private const string GenerationProfileEditorPreferenceKey = "Arena.DungeonLab.GenerationProfileId";
-        private const string SpaciousGenerationProfileMenuPath = "Arena/Dungeons/Generation Profile/Spacious";
-        private const string DenseGenerationProfileMenuPath = "Arena/Dungeons/Generation Profile/Dense";
+        private const string GenerationProfilePath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/generation_profile.asset";
+        // The density dial replaced the spacious/dense profile pair on
+        // 2026-07-27. There is one profile asset; how packed the dungeon is, is
+        // a number chosen per run. -1 in the editor preference means "no per-user
+        // choice yet, take the asset's own densityLevel", which keeps the asset
+        // the reproducible default for batch mode too.
+        private const int UnsetDensityLevel = -1;
+        private const string DensityEnvironmentVariable = "ARENA_DUNGEON_DENSITY";
+        private const string DensityEditorPreferenceKey = "Arena.DungeonLab.DensityLevel";
+        private const string DensityMenuRoot = "Arena/Dungeons/Density/";
+        private const string Density0MenuPath = DensityMenuRoot + "0 (sparse)";
+        private const string Density1MenuPath = DensityMenuRoot + "1";
+        private const string Density2MenuPath = DensityMenuRoot + "2";
+        private const string Density3MenuPath = DensityMenuRoot + "3";
+        private const string Density4MenuPath = DensityMenuRoot + "4";
+        private const string Density5MenuPath = DensityMenuRoot + "5 (packed)";
         // Forge output (design step 6): same contract shape, separate file; entries
         // join planning only with reviewStatus "reviewed" (human review gate).
         private const string ForgedStairContractsPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/forged_stair_contracts.json";
@@ -123,67 +132,59 @@ namespace DungeonLab.Editor
         [MenuItem("Tools/Dungeon Lab/Open Generation Profile")]
         public static void OpenGenerationProfile()
         {
-            string profileId = ResolveRequestedGenerationProfileId();
-            string profilePath = ResolveGenerationProfilePath(profileId);
-            DungeonGenerationProfile profile = AssetDatabase.LoadAssetAtPath<DungeonGenerationProfile>(profilePath);
-            if (profile == null)
-            {
-                throw new InvalidOperationException(
-                    $"[GENERATION_PROFILE] missing required '{profileId}' profile at {profilePath}");
-            }
-
+            DungeonGenerationProfile profile = LoadGenerationProfileAsset();
             Selection.activeObject = profile;
             EditorGUIUtility.PingObject(profile);
             EditorUtility.FocusProjectWindow();
         }
 
-        [MenuItem(SpaciousGenerationProfileMenuPath, false, 80)]
-        private static void SelectSpaciousGenerationProfile()
+        [MenuItem(Density0MenuPath, false, 80)]
+        private static void SelectDensity0() => SelectEditorDensityLevel(0);
+
+        [MenuItem(Density0MenuPath, true)]
+        private static bool ValidateDensity0() => UpdateDensityMenuItem(Density0MenuPath, 0);
+
+        [MenuItem(Density1MenuPath, false, 81)]
+        private static void SelectDensity1() => SelectEditorDensityLevel(1);
+
+        [MenuItem(Density1MenuPath, true)]
+        private static bool ValidateDensity1() => UpdateDensityMenuItem(Density1MenuPath, 1);
+
+        [MenuItem(Density2MenuPath, false, 82)]
+        private static void SelectDensity2() => SelectEditorDensityLevel(2);
+
+        [MenuItem(Density2MenuPath, true)]
+        private static bool ValidateDensity2() => UpdateDensityMenuItem(Density2MenuPath, 2);
+
+        [MenuItem(Density3MenuPath, false, 83)]
+        private static void SelectDensity3() => SelectEditorDensityLevel(3);
+
+        [MenuItem(Density3MenuPath, true)]
+        private static bool ValidateDensity3() => UpdateDensityMenuItem(Density3MenuPath, 3);
+
+        [MenuItem(Density4MenuPath, false, 84)]
+        private static void SelectDensity4() => SelectEditorDensityLevel(4);
+
+        [MenuItem(Density4MenuPath, true)]
+        private static bool ValidateDensity4() => UpdateDensityMenuItem(Density4MenuPath, 4);
+
+        [MenuItem(Density5MenuPath, false, 85)]
+        private static void SelectDensity5() => SelectEditorDensityLevel(5);
+
+        [MenuItem(Density5MenuPath, true)]
+        private static bool ValidateDensity5() => UpdateDensityMenuItem(Density5MenuPath, 5);
+
+        private static void SelectEditorDensityLevel(int densityLevel)
         {
-            SelectEditorGenerationProfile("spacious");
+            int level = DungeonDensity.Clamp(densityLevel);
+            EditorPrefs.SetInt(DensityEditorPreferenceKey, level);
+            Debug.Log($"[DUNGEON_DENSITY] Unity editor selection is now density {level}.");
         }
 
-        [MenuItem(SpaciousGenerationProfileMenuPath, true)]
-        private static bool ValidateSpaciousGenerationProfile()
+        private static bool UpdateDensityMenuItem(string menuPath, int densityLevel)
         {
-            return UpdateGenerationProfileMenuItem(
-                SpaciousGenerationProfileMenuPath,
-                "spacious");
-        }
-
-        [MenuItem(DenseGenerationProfileMenuPath, false, 81)]
-        private static void SelectDenseGenerationProfile()
-        {
-            SelectEditorGenerationProfile("dense");
-        }
-
-        [MenuItem(DenseGenerationProfileMenuPath, true)]
-        private static bool ValidateDenseGenerationProfile()
-        {
-            return UpdateGenerationProfileMenuItem(
-                DenseGenerationProfileMenuPath,
-                "dense");
-        }
-
-        private static void SelectEditorGenerationProfile(string profileId)
-        {
-            string normalizedProfileId = string.IsNullOrWhiteSpace(profileId)
-                ? throw new InvalidOperationException("[GENERATION_PROFILE] profile id is required.")
-                : profileId.Trim().ToLowerInvariant();
-            ResolveGenerationProfilePath(normalizedProfileId);
-            EditorPrefs.SetString(GenerationProfileEditorPreferenceKey, normalizedProfileId);
-            Debug.Log($"[GENERATION_PROFILE] Unity editor selection is now '{normalizedProfileId}'.");
-        }
-
-        private static bool UpdateGenerationProfileMenuItem(string menuPath, string profileId)
-        {
-            Menu.SetChecked(
-                menuPath,
-                string.Equals(
-                    ResolveRequestedGenerationProfileId(),
-                    profileId,
-                    StringComparison.Ordinal));
-            return !HasGenerationProfileEnvironmentOverride();
+            Menu.SetChecked(menuPath, ResolveRequestedDensityLevel() == densityLevel);
+            return !HasDensityEnvironmentOverride();
         }
 
         // Review tool: regenerate a specific dungeon — a seed the harness reports
@@ -213,7 +214,7 @@ namespace DungeonLab.Editor
                 generator.seed = seed;
                 generator.createPlayCamera = false;
                 generator.origin = Vector3.zero;
-                CurrentGenerationSettings = LoadActiveGenerationSettings(ResolveRequestedGenerationProfileId());
+                CurrentGenerationSettings = LoadActiveGenerationSettings(ResolveRequestedDensityLevel());
                 generator.GenerateRandomDungeonLayout();
             }
             finally
@@ -222,70 +223,86 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static string ResolveRequestedGenerationProfileId()
+        // Environment beats the per-user editor choice, which beats the asset's
+        // own default. Batch mode has no per-user choice, so with no environment
+        // override it is the asset — which is what makes a command-line run
+        // reproducible from the repo alone.
+        //
+        // Kept free of side effects: Unity calls this from every Density menu
+        // validate, which is every time the menu is painted.
+        private static int ResolveRequestedDensityLevel()
         {
-            string configured = Environment.GetEnvironmentVariable(GenerationProfileEnvironmentVariable);
+            string configured = Environment.GetEnvironmentVariable(DensityEnvironmentVariable);
             if (!string.IsNullOrWhiteSpace(configured))
             {
-                return configured.Trim().ToLowerInvariant();
+                if (!int.TryParse(configured.Trim(), out int parsed) ||
+                    parsed < DungeonDensity.MinLevel ||
+                    parsed > DungeonDensity.MaxLevel)
+                {
+                    throw new InvalidOperationException(
+                        $"[DUNGEON_DENSITY] {DensityEnvironmentVariable}='{configured}' is not a density " +
+                        $"level. Expected an integer {DungeonDensity.MinLevel}..{DungeonDensity.MaxLevel}.");
+                }
+
+                return parsed;
             }
 
-            return Application.isBatchMode
-                ? DefaultGenerationProfileId
-                : ResolveEditorGenerationProfileId();
+            if (!Application.isBatchMode)
+            {
+                int selected = EditorPrefs.GetInt(DensityEditorPreferenceKey, UnsetDensityLevel);
+                if (selected != UnsetDensityLevel)
+                {
+                    return DungeonDensity.Clamp(selected);
+                }
+            }
+
+            return DungeonDensity.Clamp(LoadGenerationProfileAsset().densityLevel);
         }
 
-        private static string ResolveEditorGenerationProfileId()
-        {
-            string selected = EditorPrefs.GetString(
-                GenerationProfileEditorPreferenceKey,
-                DefaultGenerationProfileId);
-            return string.IsNullOrWhiteSpace(selected)
-                ? DefaultGenerationProfileId
-                : selected.Trim().ToLowerInvariant();
-        }
-
-        private static bool HasGenerationProfileEnvironmentOverride()
+        private static bool HasDensityEnvironmentOverride()
         {
             return !string.IsNullOrWhiteSpace(
-                Environment.GetEnvironmentVariable(GenerationProfileEnvironmentVariable));
+                Environment.GetEnvironmentVariable(DensityEnvironmentVariable));
         }
 
-        private static string ResolveGenerationProfilePath(string profileId)
+        private static DungeonGenerationProfile LoadGenerationProfileAsset()
         {
-            switch (profileId)
-            {
-                case "spacious":
-                    return SpaciousGenerationProfilePath;
-                case "dense":
-                    return DenseGenerationProfilePath;
-                default:
-                    throw new InvalidOperationException(
-                        $"[GENERATION_PROFILE] unknown profile id '{profileId}'. Expected 'spacious' or 'dense'.");
-            }
-        }
-
-        private static DungeonGenerationSettings LoadActiveGenerationSettings(string profileId)
-        {
-            string normalizedProfileId = string.IsNullOrWhiteSpace(profileId)
-                ? throw new InvalidOperationException("[GENERATION_PROFILE] profile id is required.")
-                : profileId.Trim().ToLowerInvariant();
-            string profilePath = ResolveGenerationProfilePath(normalizedProfileId);
-            DungeonGenerationProfile profile = AssetDatabase.LoadAssetAtPath<DungeonGenerationProfile>(profilePath);
+            DungeonGenerationProfile profile =
+                AssetDatabase.LoadAssetAtPath<DungeonGenerationProfile>(GenerationProfilePath);
             if (profile == null)
             {
                 throw new InvalidOperationException(
-                    $"[GENERATION_PROFILE] missing required '{normalizedProfileId}' profile at {profilePath}");
+                    $"[GENERATION_PROFILE] missing required profile at {GenerationProfilePath}");
             }
 
-            DungeonGenerationSettings settings = profile.ToSettings();
-            if (!string.Equals(settings.profileName, normalizedProfileId, StringComparison.Ordinal))
+            return profile;
+        }
+
+        private static DungeonGenerationSettings LoadActiveGenerationSettings(int densityLevel)
+        {
+            WarnOnceAboutUnimplementedDensity(densityLevel);
+            return LoadGenerationProfileAsset().ToSettings(densityLevel);
+        }
+
+        // Phase 1 of the density-scale design wires the dial through without
+        // moving geometry; the packing mechanisms land in phases 2-5. Saying so
+        // is cheaper than a bug report about a dial that appears to do nothing.
+        // Once per level rather than once per seed, and this whole method
+        // deletes itself when phase 3 fills in ResolveDensitySpatialSettings.
+        private static int lastWarnedDensityLevel = DungeonDensity.MinLevel;
+
+        private static void WarnOnceAboutUnimplementedDensity(int densityLevel)
+        {
+            if (densityLevel <= DungeonDensity.MinLevel || densityLevel == lastWarnedDensityLevel)
             {
-                throw new InvalidOperationException(
-                    $"[GENERATION_PROFILE] profile at {profilePath} declares id '{settings.profileName}', expected '{normalizedProfileId}'.");
+                return;
             }
 
-            return settings;
+            lastWarnedDensityLevel = densityLevel;
+            Debug.LogWarning(
+                $"[DUNGEON_DENSITY] density {densityLevel} selected, but the packing mechanisms land " +
+                "in phases 2-5 of the density-scale design; levels 1-5 currently resolve to " +
+                "density 0's geometry.");
         }
 
         /// <summary>
@@ -294,15 +311,10 @@ namespace DungeonLab.Editor
         /// reflected into the per-seed settings digest, and a render-stage
         /// density knob must not move a plan hash.
         /// </summary>
-        private static ElevationEdgeModel.TrapPlacementSettings LoadActiveTrapPlacementSettings(
-            int seed,
-            string profileId)
+        private static ElevationEdgeModel.TrapPlacementSettings LoadActiveTrapPlacementSettings(int seed)
         {
-            string normalizedProfileId = string.IsNullOrWhiteSpace(profileId)
-                ? throw new InvalidOperationException("[GENERATION_PROFILE] profile id is required.")
-                : profileId.Trim().ToLowerInvariant();
-            DungeonGenerationProfile profile = AssetDatabase.LoadAssetAtPath<DungeonGenerationProfile>(
-                ResolveGenerationProfilePath(normalizedProfileId));
+            DungeonGenerationProfile profile =
+                AssetDatabase.LoadAssetAtPath<DungeonGenerationProfile>(GenerationProfilePath);
             if (profile == null)
             {
                 return ElevationEdgeModel.TrapPlacementSettings.Disabled;
@@ -380,7 +392,7 @@ namespace DungeonLab.Editor
                     CollectRenderedPromontoryCells(
                         levelPlan.namedPromontories,
                         levelPlan.externalConnectors),
-                    LoadActiveTrapPlacementSettings(seed, CurrentGenerationSettings.profileName),
+                    LoadActiveTrapPlacementSettings(seed),
                     GeneratedRootName,
                     out report,
                     out bounds);

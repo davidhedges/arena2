@@ -30,6 +30,10 @@ namespace DungeonLab.Editor
         private const int LockedSeedCount = 100;
         private const int SentinelImageWidth = 1600;
         private const int SentinelImageHeight = 900;
+        // The three-quarter view reads elevation; it cannot read void, because a
+        // near tier hides the hole behind it. The density work is judged on
+        // holes, so every sentinel also gets a square orthographic plan view.
+        private const int SentinelTopDownImageSize = 1200;
 
         // Six and only six visual sentinels. Their lightweight annotations are
         // characterization notes, not an aesthetic taxonomy or acceptance gate.
@@ -75,6 +79,7 @@ namespace DungeonLab.Editor
             return new JObject
             {
                 ["profileId"] = settings.profileName,
+                ["densityLevel"] = settings.densityLevel,
                 ["digestAlgorithm"] = "SHA-256 over settings.values with ordinal field ordering",
                 ["digest"] = ComputeSha256(values.ToString(Formatting.None)),
                 ["values"] = values
@@ -85,6 +90,7 @@ namespace DungeonLab.Editor
         {
             JObject identity = BuildGenerationSettingsIdentity(CurrentGenerationSettings);
             report["profile"] = identity.Value<string>("profileId");
+            report["density"] = identity.Value<int>("densityLevel");
             report["settingsDigest"] = identity.Value<string>("digest");
             report["settings"] = identity;
         }
@@ -134,14 +140,19 @@ namespace DungeonLab.Editor
                         string fileName = $"{sentinel.seed}_{sentinel.category}.png";
                         string path = Path.Combine(directory, fileName);
                         CaptureSentinelImage(bounds, path);
+                        string topDownFileName = $"{sentinel.seed}_{sentinel.category}_topdown.png";
+                        string topDownPath = Path.Combine(directory, topDownFileName);
+                        CaptureTopDownSentinelImage(bounds, topDownPath);
                         manifestEntries.Add(new JObject
                         {
                             ["seed"] = sentinel.seed,
                             ["category"] = sentinel.category,
                             ["annotation"] = sentinel.annotation,
                             ["image"] = path.Replace('\\', '/'),
+                            ["topDownImage"] = topDownPath.Replace('\\', '/'),
                             ["canonicalHash"] = seedReport["hashes"]?["canonical"],
                             ["measurements"] = seedReport["measurements"]?.DeepClone(),
+                            ["floorplan"] = seedReport["floorplan"]?.DeepClone(),
                             ["rendererSummary"] = buildReport.Summary
                         });
                     }
@@ -165,6 +176,7 @@ namespace DungeonLab.Editor
                 ["generatorVersion"] = ActiveDiagnosticGeneratorVersion,
                 ["captureWidth"] = SentinelImageWidth,
                 ["captureHeight"] = SentinelImageHeight,
+                ["topDownCaptureSize"] = SentinelTopDownImageSize,
                 ["sentinels"] = manifestEntries
             };
             AddGenerationSettingsIdentity(manifest);
@@ -177,8 +189,8 @@ namespace DungeonLab.Editor
             int firstSeed,
             int requestedSeedCount)
         {
-            string profileId = ResolveRequestedGenerationProfileId();
-            CurrentGenerationSettings = LoadActiveGenerationSettings(profileId);
+            int densityLevel = ResolveRequestedDensityLevel();
+            CurrentGenerationSettings = LoadActiveGenerationSettings(densityLevel);
             var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             var rejectionCodeHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             var validationFailureCodeHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -199,6 +211,8 @@ namespace DungeonLab.Editor
             var transitionCounts = new List<int>();
             var visibleDistantRoomProxyCounts = new List<int>();
             var routeClimbCounts = new List<int>();
+            var latticeEnvelopeFillPercents = new List<int>();
+            var maxVoidComponentCells = new List<int>();
             int successCount = 0;
             int hardValidCount = 0;
             int routeRequirementsValidCount = 0;
@@ -222,7 +236,7 @@ namespace DungeonLab.Editor
                         break;
                     }
 
-                    JObject seedReport = BuildSeedReport(seed, profileId);
+                    JObject seedReport = BuildSeedReport(seed, densityLevel);
                     seedReports.Add(seedReport);
                     completedSeedCount++;
                     int layoutAttempts = seedReport.Value<int?>("layoutAttempts") ?? 0;
@@ -290,6 +304,15 @@ namespace DungeonLab.Editor
                     {
                         correlations.Add(correlationToken.Value<float>());
                     }
+
+                    if (seedReport["measurements"]?["density"] is JObject density &&
+                        density.Value<bool?>("available") == true)
+                    {
+                        latticeEnvelopeFillPercents.Add(
+                            Mathf.RoundToInt(density.Value<float>("latticeEnvelopeFillPercent")));
+                        maxVoidComponentCells.Add(
+                            density["voidComponents"]?.Value<int?>("maxComponentCells") ?? 0);
+                    }
                 }
             }
             finally
@@ -319,6 +342,16 @@ namespace DungeonLab.Editor
                 $"depthLevelCorrelation={correlationSummary}; failedSeeds={failedSummary}; " +
                 $"rejectionCodes={FormatRejectionHistogram(rejectionCodeHistogram)}; " +
                 $"validationFailureCodes={FormatRejectionHistogram(validationFailureCodeHistogram)}");
+
+            JObject fillDistribution = BuildIntDistribution(latticeEnvelopeFillPercents);
+            JObject voidDistribution = BuildIntDistribution(maxVoidComponentCells);
+            Debug.Log(
+                "Dungeon Lab BATCH_DENSITY " +
+                $"measurement={DensityMeasurementVersion}; seeds={latticeEnvelopeFillPercents.Count}; " +
+                $"latticeEnvelopeFillPercent min={fillDistribution.Value<int>("min")} " +
+                $"p50={fillDistribution.Value<int>("p50")} max={fillDistribution.Value<int>("max")}; " +
+                $"maxVoidComponentCells min={voidDistribution.Value<int>("min")} " +
+                $"p50={voidDistribution.Value<int>("p50")} max={voidDistribution.Value<int>("max")}");
 
             string reportPath = WriteBatchReport(
                 firstSeed,
@@ -352,12 +385,12 @@ namespace DungeonLab.Editor
 
         private static JObject BuildSeedReport(int seed)
         {
-            return BuildSeedReport(seed, ResolveRequestedGenerationProfileId());
+            return BuildSeedReport(seed, ResolveRequestedDensityLevel());
         }
 
-        private static JObject BuildSeedReport(int seed, string profileId)
+        private static JObject BuildSeedReport(int seed, int densityLevel)
         {
-            CurrentGenerationSettings = LoadActiveGenerationSettings(profileId);
+            CurrentGenerationSettings = LoadActiveGenerationSettings(densityLevel);
             var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             try
             {
@@ -991,7 +1024,7 @@ namespace DungeonLab.Editor
 
         private static string BuildAtriumRingSnapshot(int seed)
         {
-            CurrentGenerationSettings = LoadActiveGenerationSettings(ResolveRequestedGenerationProfileId());
+            CurrentGenerationSettings = LoadActiveGenerationSettings(ResolveRequestedDensityLevel());
             RouteIntent intent = BuildDiagnosticAtriumRingIntent(seed);
             RouteIntent processional = BuildDiagnosticRouteIntent(seed - 1);
             bool valid = TryValidateRouteIntent(intent, out string validationError);
@@ -1060,7 +1093,7 @@ namespace DungeonLab.Editor
 
         private static string BuildTwinWingSnapshot(int seed)
         {
-            CurrentGenerationSettings = LoadActiveGenerationSettings(ResolveRequestedGenerationProfileId());
+            CurrentGenerationSettings = LoadActiveGenerationSettings(ResolveRequestedDensityLevel());
             RouteIntent intent = BuildDiagnosticTwinWingIntent(seed);
             RouteIntent processional = BuildDiagnosticRouteIntent(seed - 3);
             RouteIntent atrium = BuildDiagnosticAtriumRingIntent(seed - 2);
@@ -1821,8 +1854,10 @@ namespace DungeonLab.Editor
                 $"contract.pinnedEdgeIdRejected={RouteTopologyProbeRejects("[\"A\", \"B\", \"Stair\"]", "[\"A\", \"B\", \"Stair\", \"main-0-1\"]")}",
                 $"contract.legacyBlockRejected={RouteTopologyProbeRejects("\"plannerVersion\": \"probe-v1\",", "\"plannerVersion\": \"probe-v1\",\n  \"legacy\": { \"orientationStreamId\": \"route\" },")}",
                 $"contract.spatialSettingsTokenRejected={RouteTopologyProbeRejects("\"spatial\": {", "\"spatial\": { \"settings\": \"baseline\",")}",
-                $"contract.invertedLaneGapRejected={RouteTopologyProbeRejects("\"columnGapCells\": 9", "\"columnGapCells\": { \"min\": 12, \"max\": 9 }")}",
-                $"contract.unknownRoomSizeClassRejected={RouteTopologyProbeRejects("\"rowGapCells\": 9", "\"rowGapCells\": 9, \"roomSizes\": { \"gallery\": [5, 5, 5, 5] }")}",
+                $"contract.invertedLaneGapRejected={RouteTopologyProbeRejects("\"columnGapDeltaCells\": 0", "\"columnGapDeltaCells\": { \"minDelta\": 3, \"maxDelta\": 0 }")}",
+                $"contract.absoluteLaneGapRejected={RouteTopologyProbeRejects("\"columnGapDeltaCells\": 0", "\"columnGapCells\": 9")}",
+                $"contract.absoluteRoomSizesRejected={RouteTopologyProbeRejects("\"rowGapDeltaCells\": 0", "\"rowGapDeltaCells\": 0, \"roomSizes\": { \"hall\": [5, 5, 5, 5] }")}",
+                $"contract.unknownRoomSizeClassRejected={RouteTopologyProbeRejects("\"rowGapDeltaCells\": 0", "\"rowGapDeltaCells\": 0, \"roomSizeDeltaCells\": { \"gallery\": [-4, -4, -4, -4] }")}",
                 $"contract.negativeWeightRejected={RouteTopologyProbeRejects("\"plannerVersion\": \"probe-v1\",", "\"plannerVersion\": \"probe-v1\",\n  \"weight\": -1,")}",
                 $"contract.unknownEndpointRejected={RouteTopologyProbeRejects("[\"A\", \"B\", \"Stair\"]", "[\"A\", \"Z\", \"Stair\"]")}",
                 $"contract.selfEdgeRejected={RouteTopologyProbeRejects("[\"A\", \"B\", \"Stair\"]", "[\"A\", \"A\", \"Stair\"]")}",
@@ -1834,7 +1869,7 @@ namespace DungeonLab.Editor
                 $"contract.repeatedMainOrderRejected={RouteTopologyProbeRejects("8, { \"main\": 2 }]", "8, { \"main\": 1 }]")}",
                 $"contract.unknownAnchorRejected={RouteTopologyProbeRejects("\"top\": \"C\"", "\"top\": \"Z\"")}",
                 // Three gaps for three lanes: a per-lane array needs lanes - 1.
-                $"contract.laneGapCountRejected={RouteTopologyProbeRejects("\"columnGapCells\": 9", "\"columnGapCells\": [9, 9, 9]")}",
+                $"contract.laneGapCountRejected={RouteTopologyProbeRejects("\"columnGapDeltaCells\": 0", "\"columnGapDeltaCells\": [0, 0, 0]")}",
                 $"contract.idMustMatchFileNameRejected={RouteTopologyProbeRejects("\"id\": \"probe\"", "\"id\": \"not-probe\"")}"
             });
         }
@@ -1846,7 +1881,7 @@ namespace DungeonLab.Editor
   ""displayName"": ""Loader Probe"",
   ""plannerVersion"": ""probe-v1"",
   ""map"": [""A  B  C""],
-  ""spatial"": { ""columnGapCells"": 9, ""rowGapCells"": 9 },
+  ""spatial"": { ""columnGapDeltaCells"": 0, ""rowGapDeltaCells"": 0 },
   ""nodes"": {
     ""A"": [""probe-a"", ""arrival"", ""arrival"", 0, { ""main"": 0 }],
     ""B"": [""probe-b"", ""connector"", ""compression"", 4, { ""main"": 1 }],
@@ -2902,7 +2937,7 @@ namespace DungeonLab.Editor
                 {
                     ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
                     ["seed"] = seed,
-                    ["profile"] = ResolveRequestedGenerationProfileId(),
+                    ["density"] = ResolveRequestedDensityLevel(),
                     ["settingsDigest"] = JValue.CreateNull(),
                     ["settings"] = JValue.CreateNull(),
                     ["accepted"] = false,
@@ -3074,6 +3109,7 @@ namespace DungeonLab.Editor
             JObject routePlacement = BuildRoutePlacementProjection(layout);
             JObject densityAdjacencyMeasurements = BuildDensityAdjacencyMeasurements(
                 layout,
+                plan,
                 graphSummary,
                 routePlacement,
                 routeIntentProjection.Value<string>("patternId") ?? string.Empty);
@@ -3147,6 +3183,7 @@ namespace DungeonLab.Editor
             report["routePlacement"] = routePlacement;
             report["measurements"] = densityAdjacencyMeasurements;
             report["routeResolution"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution);
+            report["floorplan"] = BuildFloorplanProjection(layout, plan);
             report["recipeResolutions"] = recipeResolutions;
             report["namedPromontories"] = BuildNamedPromontoryProjection(plan.namedPromontories);
             report["externalConnectors"] = BuildExternalConnectorProjection(plan.externalConnectors);
@@ -4164,7 +4201,7 @@ namespace DungeonLab.Editor
             out Vector3 levelFieldOrigin,
             out TieredLevelPlan renderedPlan)
         {
-            CurrentGenerationSettings = LoadActiveGenerationSettings(ResolveRequestedGenerationProfileId());
+            CurrentGenerationSettings = LoadActiveGenerationSettings(ResolveRequestedDensityLevel());
             var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             if (!TryBuildAcceptedPlan(
                     seed,
@@ -4205,7 +4242,7 @@ namespace DungeonLab.Editor
                 CollectRenderedPromontoryCells(
                     plan.namedPromontories,
                     plan.externalConnectors),
-                LoadActiveTrapPlacementSettings(seed, CurrentGenerationSettings.profileName),
+                LoadActiveTrapPlacementSettings(seed),
                 "DungeonLab Renderer Probe",
                 out buildReport,
                 out bounds);
@@ -4291,6 +4328,7 @@ namespace DungeonLab.Editor
 
         private static JObject BuildDensityAdjacencyMeasurements(
             DungeonLayout layout,
+            TieredLevelPlan plan,
             JObject graphSummary,
             JObject routePlacement,
             string patternId)
@@ -4354,7 +4392,11 @@ namespace DungeonLab.Editor
                         ? new JValue(CountLargestEnclosedVoidCells(layout.floorCells))
                         : JValue.CreateNull(),
                     ["atriumMeasurement"] = "largest enclosed non-floor component in the projected atrium floor mask; null for other topologies"
-                }
+                },
+                // The density metric proper. floorFillPercent above stays for
+                // continuity with the corpus already measured; this is what the
+                // density dial is steered and accepted on.
+                ["density"] = BuildVoidDensityMeasurements(layout, plan)
             };
         }
 
@@ -5162,6 +5204,8 @@ namespace DungeonLab.Editor
         private static JObject BuildDensityAdjacencyBatchMeasurements(JArray seedReports)
         {
             var byTopology = new SortedDictionary<string, DensityAdjacencyBatchAccumulator>(StringComparer.Ordinal);
+            var voidByTopology = new SortedDictionary<string, VoidDensityAccumulator>(StringComparer.Ordinal);
+            var voidCorpus = new VoidDensityAccumulator();
             foreach (JToken seedReport in seedReports ?? new JArray())
             {
                 JObject measurements = seedReport["measurements"] as JObject;
@@ -5177,6 +5221,16 @@ namespace DungeonLab.Editor
                     accumulator = new DensityAdjacencyBatchAccumulator();
                     byTopology[topology] = accumulator;
                 }
+
+                if (!voidByTopology.TryGetValue(topology, out VoidDensityAccumulator voidAccumulator))
+                {
+                    voidAccumulator = new VoidDensityAccumulator();
+                    voidByTopology[topology] = voidAccumulator;
+                }
+
+                var density = measurements["density"] as JObject;
+                AccumulateVoidDensity(density, voidAccumulator);
+                AccumulateVoidDensity(density, voidCorpus);
 
                 accumulator.acceptedSeeds++;
                 AppendDistributionValues(
@@ -5225,13 +5279,19 @@ namespace DungeonLab.Editor
                         ["reservedVistaCellsPerSeed"] = BuildIntDistribution(accumulator.reservedVistaCellsPerSeed),
                         ["reservedVistaPreservedSeeds"] = accumulator.reservedVistaPreservedSeeds,
                         ["atriumCenterVoidCellsPerSeed"] = BuildIntDistribution(accumulator.atriumCenterVoidCellsPerSeed)
-                    }
+                    },
+                    ["density"] = voidByTopology.TryGetValue(
+                        entry.Key,
+                        out VoidDensityAccumulator topologyVoid)
+                        ? BuildVoidDensitySummary(topologyVoid)
+                        : BuildVoidDensitySummary(new VoidDensityAccumulator())
                 };
             }
 
             return new JObject
             {
                 ["measurementVersion"] = "density-adjacency-v1",
+                ["density"] = BuildVoidDensitySummary(voidCorpus),
                 ["byTopology"] = topologyReports
             };
         }
@@ -5507,7 +5567,7 @@ namespace DungeonLab.Editor
 
             string[] paths =
             {
-                ResolveGenerationProfilePath(CurrentGenerationSettings.profileName),
+                GenerationProfilePath,
                 PackageInventoryPath,
                 StairProofContractsPath,
                 ForgedStairContractsPath,
@@ -5563,6 +5623,32 @@ namespace DungeonLab.Editor
             }
         }
 
+        // Straight down, orthographic, square: void reads as void from here and
+        // from nowhere else. Deliberately the SAME lighting and clear colour as
+        // the three-quarter capture, so the pair can be compared side by side.
+        private static void CaptureTopDownSentinelImage(Bounds bounds, string path)
+        {
+            CaptureDiagnosticReviewImage(
+                path,
+                SentinelTopDownImageSize,
+                SentinelTopDownImageSize,
+                camera =>
+                {
+                    float halfExtent = Mathf.Max(
+                        8f,
+                        Mathf.Max(bounds.extents.x, bounds.extents.z));
+                    float height = bounds.extents.y + halfExtent * 4f + 32f;
+                    camera.orthographic = true;
+                    // A little margin so the outermost promontory is not clipped
+                    // against the frame, which is exactly where they live.
+                    camera.orthographicSize = halfExtent * 1.08f + 2f;
+                    camera.transform.position = bounds.center + Vector3.up * height;
+                    camera.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+                    camera.nearClipPlane = 0.1f;
+                    camera.farClipPlane = height + bounds.size.magnitude + 64f;
+                });
+        }
+
         private static void CaptureSentinelImage(Bounds bounds, string path)
         {
             CaptureDiagnosticReviewImage(path, camera =>
@@ -5582,6 +5668,19 @@ namespace DungeonLab.Editor
 
         private static void CaptureDiagnosticReviewImage(string path, Action<Camera> configureCamera)
         {
+            CaptureDiagnosticReviewImage(
+                path,
+                SentinelImageWidth,
+                SentinelImageHeight,
+                configureCamera);
+        }
+
+        private static void CaptureDiagnosticReviewImage(
+            string path,
+            int width,
+            int height,
+            Action<Camera> configureCamera)
+        {
             var cameraObject = new GameObject("DungeonLab Sentinel Camera")
             {
                 hideFlags = HideFlags.HideAndDontSave
@@ -5598,8 +5697,8 @@ namespace DungeonLab.Editor
             Color previousAmbientEquator = RenderSettings.ambientEquatorColor;
             Color previousAmbientGround = RenderSettings.ambientGroundColor;
             bool previousFog = RenderSettings.fog;
-            var renderTexture = new RenderTexture(SentinelImageWidth, SentinelImageHeight, 24);
-            var texture = new Texture2D(SentinelImageWidth, SentinelImageHeight, TextureFormat.RGB24, false);
+            var renderTexture = new RenderTexture(width, height, 24);
+            var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
             RenderTexture previousActive = RenderTexture.active;
             try
             {
@@ -5619,7 +5718,7 @@ namespace DungeonLab.Editor
                 RenderTexture.active = renderTexture;
                 camera.Render();
                 texture.ReadPixels(
-                    new Rect(0, 0, SentinelImageWidth, SentinelImageHeight),
+                    new Rect(0, 0, width, height),
                     0,
                     0);
                 texture.Apply();

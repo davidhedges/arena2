@@ -22,15 +22,14 @@
 
   "spatial": {
     // Five columns and four rows is the same lattice as atrium-ring. At the
-    // profile's own pitch that measured 26.8% floor fill on spacious against a
-    // 26% floor - the same knife edge atrium-ring sits on, where half the seeds
-    // are rejected for density. So the lanes start one cell under the pitch (8
-    // is still >= the largest room extent on either axis in either profile, so
-    // adjacent rooms touch at worst, they never overlap), which buys ~4 points
-    // of fill and costs nothing else. The rubber sheet keeps the profile's full
-    // 8 cells per axis.
-    "columnGapCells": { "min": 8, "max": 11 },
-    "rowGapCells": { "min": 8, "max": 11 },
+    // profile's own pitch that measured 26.8% floor fill against a 26% floor -
+    // the same knife edge atrium-ring sits on, where half the seeds are rejected
+    // for density. So the lanes run one cell UNDER the pitch (rooms still fit
+    // that lane, so adjacent rooms touch at worst, they never overlap), which
+    // buys ~4 points of fill and costs nothing else. The rubber sheet keeps the
+    // profile's whole budget.
+    "columnGapDeltaCells": { "minDelta": -1, "maxDelta": 2 },
+    "rowGapDeltaCells": { "minDelta": -1, "maxDelta": 2 },
 
     // This graph declares no overlook pairs, so it asks for no tier seams.
     "tierSeamCount": 0

@@ -26,13 +26,13 @@
   ],
 
   "spatial": {
-    // Five lanes on both axes. The lanes start one cell under the profile
-    // pitch (8 is still >= the largest room extent on either axis in either
-    // profile, so adjacent rooms touch at worst, they never overlap), which
-    // buys back the floor fill that a 5x5 lattice would otherwise lose, and
-    // lets this topology keep the profile's whole 8-cell rubber sheet.
-    "columnGapCells": { "min": 8, "max": 11 },
-    "rowGapCells": { "min": 8, "max": 11 },
+    // Five lanes on both axes. The lanes run one cell UNDER the profile pitch
+    // (rooms still fit that lane, so adjacent rooms touch at worst, they never
+    // overlap), which buys back the floor fill that a 5x5 lattice would
+    // otherwise lose, and lets this topology keep the profile's whole rubber
+    // sheet.
+    "columnGapDeltaCells": { "minDelta": -1, "maxDelta": 2 },
+    "rowGapDeltaCells": { "minDelta": -1, "maxDelta": 2 },
 
     // This graph declares no overlook pairs, so it asks for no tier seams.
     "tierSeamCount": 0

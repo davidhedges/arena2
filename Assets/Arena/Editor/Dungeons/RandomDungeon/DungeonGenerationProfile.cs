@@ -153,12 +153,37 @@ namespace DungeonLab.Editor
         }
     }
 
+    // The density dial: one integer, chosen at generation time, that says how
+    // much incidental void the dungeon keeps. It replaced the spacious/dense
+    // profile pair on 2026-07-27 (docs/dungeon-builder/density-scale-design-2026-07-27.md).
+    //
+    // 0 is a first-class setting, not a legacy mode: it is today's airy dungeon,
+    // large voids and all. 5 is the packed end — void minimal, at most two
+    // components larger than one cell. There is no density-0 special case
+    // anywhere in the generator; sparse and packed are the two ends of one
+    // parameter table.
+    internal static class DungeonDensity
+    {
+        public const int MinLevel = 0;
+        public const int MaxLevel = 5;
+
+        public static int Clamp(int level)
+        {
+            return Mathf.Clamp(level, MinLevel, MaxLevel);
+        }
+    }
+
     [CreateAssetMenu(fileName = "generation_profile", menuName = "Dungeon Lab/Generation Profile")]
     public sealed class DungeonGenerationProfile : ScriptableObject
     {
         [Header("Identity")]
         [Tooltip("Short label written into generation logs so profile-driven results can be compared across seeds.")]
         public string profileName = "default";
+
+        [Header("Density")]
+        [Range(DungeonDensity.MinLevel, DungeonDensity.MaxLevel)]
+        [Tooltip("Default density for this project: 0 keeps today's large voids, 5 packs them out. Arena > Dungeons > Density and ARENA_DUNGEON_DENSITY override it per run without touching this asset.")]
+        public int densityLevel = DungeonDensity.MinLevel;
 
         [Header("Map Envelope")]
         [Min(12)]
@@ -266,11 +291,13 @@ namespace DungeonLab.Editor
             };
         }
 
-        internal DungeonGenerationSettings ToSettings()
+        internal DungeonGenerationSettings ToSettings(int requestedDensityLevel)
         {
+            int level = DungeonDensity.Clamp(requestedDensityLevel);
             return new DungeonGenerationSettings
             {
                 profileName = profileName,
+                densityLevel = level,
                 mapWidthMaxCells = mapWidthMaxCells,
                 mapDepthMaxCells = mapDepthMaxCells,
                 denseFloorplanMinRooms = denseFloorplanMinRooms,
@@ -278,15 +305,54 @@ namespace DungeonLab.Editor
                 loopConnectionFraction = loopConnectionFraction,
                 maxLoopCandidateDistanceCells = maxLoopCandidateDistanceCells,
                 roomZoneSplitChance = roomZoneSplitChance,
-                processionalSpatial = processionalSpatial,
+                // The dial becomes geometry HERE and nowhere else. Applied on
+                // the load path rather than inside Validated(), because
+                // Validated() is called repeatedly on an already-resolved value
+                // and has to stay idempotent.
+                processionalSpatial = ResolveDensitySpatialSettings(processionalSpatial, level),
                 roleSizeClasses = roleSizeClasses
             }.Validated();
+        }
+
+        /// <summary>
+        /// The one seam where <c>densityLevel</c> turns into spatial settings.
+        /// </summary>
+        /// <remarks>
+        /// Phase 1 of the density-scale design is the flag-to-dial refactor: it
+        /// makes the dial the thing the editor, the environment and the batch
+        /// tools choose, and deletes the spacious/dense profile pair. It
+        /// deliberately does NOT move geometry — density 0 has to be identical
+        /// to the old <c>spacious</c> profile, gated on the per-seed canonical
+        /// hash vector — and the phases that give the other five levels meaning
+        /// are scheduled after it:
+        /// <list type="bullet">
+        /// <item>phase 2 (M1): a measured transition reservation replaces the
+        /// <c>BaselineRoomSizeRangeForRole</c> axis cap, and the stairwell shaft
+        /// becomes an explicit reservation.</item>
+        /// <item>phase 3 (M2): lane pitch, room size, lattice slack, envelope
+        /// radius and enclosure chance become functions of the dial, per the
+        /// tuning table in §4.3 of the design.</item>
+        /// <item>phase 4 (M3): vacant lattice cells are annexed by a neighbour.</item>
+        /// <item>phase 5 (M4): mop-up and chamber subdivision.</item>
+        /// </list>
+        /// Until phase 3 edits this method, every level returns the profile's
+        /// authored settings, so levels 1-5 produce density 0's geometry. That
+        /// is this phase's intended state, and
+        /// <c>DungeonLabGenerator.ResolveRequestedDensityLevel</c> says so out
+        /// loud whenever a level above 0 is selected.
+        /// </remarks>
+        internal static DungeonPatternSpatialSettings ResolveDensitySpatialSettings(
+            DungeonPatternSpatialSettings authored,
+            int densityLevel)
+        {
+            return authored;
         }
     }
 
     internal struct DungeonGenerationSettings
     {
         public string profileName;
+        public int densityLevel;
         public int mapWidthMaxCells;
         public int mapDepthMaxCells;
         public int denseFloorplanMinRooms;
@@ -301,6 +367,7 @@ namespace DungeonLab.Editor
         {
             var value = this;
             value.profileName = string.IsNullOrWhiteSpace(value.profileName) ? "unnamed" : value.profileName.Trim();
+            value.densityLevel = DungeonDensity.Clamp(value.densityLevel);
             value.mapWidthMaxCells = Mathf.Max(12, value.mapWidthMaxCells);
             value.mapDepthMaxCells = Mathf.Max(12, value.mapDepthMaxCells);
             value.denseFloorplanMinRooms = Mathf.Max(1, value.denseFloorplanMinRooms);

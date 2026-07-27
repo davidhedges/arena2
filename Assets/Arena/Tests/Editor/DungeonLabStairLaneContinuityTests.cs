@@ -27,9 +27,12 @@ namespace Arena.Tests.Editor
                 "BuildSeedReport",
                 BindingFlags.Static | BindingFlags.NonPublic,
                 binder: null,
-                new[] { typeof(int), typeof(string) },
+                new[] { typeof(int), typeof(int) },
                 modifiers: null)!;
-            object report = method.Invoke(null, new object[] { ScreenshotRegressionSeed, "dense" })!;
+            // Density 0 — the setting the spacious/dense flag became on
+            // 2026-07-27. This seed is a stair-lane regression fixture, not a
+            // density fixture, so it wants the reproducible default.
+            object report = method.Invoke(null, new object[] { ScreenshotRegressionSeed, 0 })!;
 
             Assert.That(
                 report.ToString(),

@@ -24,31 +24,31 @@
 
   "spatial": {
     // Five lattice lanes on BOTH axes - the widest lattice in the set - with
-    // only 13 rooms to fill it. At the profile's own pitch and its full 8-cell
-    // rubber sheet the floor bounding box works out at ~50x47 cells, which puts
-    // 13 rooms around 25% fill, under denseFloorplanMinFillPercent - and since
-    // the sheet always spends its whole budget, that is every seed and not an
-    // unlucky few. So the lanes start one cell under the pitch (8 is still >=
-    // the largest room extent on either axis in either profile, so adjacent
-    // rooms touch at worst, they never overlap) and the sheet spends at most 4
-    // cells per axis. Measured that way: 27.0% minimum / 29.3% median on dense.
-    // That still leaves 35 lattices per axis, and it is the horizontal knob
-    // only - it does not touch the tier-void ratio, which lives in CellSize vs
-    // StairForge.LevelHeight.
-    "columnGapCells": { "min": 8, "max": 10 },
-    "rowGapCells": { "min": 8, "max": 10 },
+    // only 13 rooms to fill it. At the profile's own pitch and its full rubber
+    // sheet the floor bounding box works out at ~50x47 cells, which puts 13
+    // rooms around 25% fill, under denseFloorplanMinFillPercent - and since the
+    // sheet always spends its whole budget, that is every seed and not an
+    // unlucky few. So the lanes run one cell UNDER the pitch (rooms below still
+    // fit that lane, so adjacent rooms touch at worst, they never overlap) and
+    // the sheet is clamped to 4 cells per axis. Measured that way at density 0:
+    // 27.0% minimum / 29.3% median floor fill. That still leaves 35 lattices per
+    // axis, and it is the horizontal knob only - it does not touch the tier-void
+    // ratio, which lives in CellSize vs StairForge.LevelHeight.
+    "columnGapDeltaCells": { "minDelta": -1, "maxDelta": 1 },
+    "rowGapDeltaCells": { "minDelta": -1, "maxDelta": 1 },
     "latticeSlackMaxCells": 4,
 
-    // Same argument, second half: the spacious profile's rooms are smaller than
-    // dense's, and a 5x5 lattice cannot afford them - it measured 26.3% fill on
-    // spacious, right on the floor. This topology therefore declares the LARGER
-    // (dense) room sizes for both profiles rather than shrinking its lattice
-    // further. On dense the override is a no-op; on spacious it trades some of
-    // that profile's airiness for the floor this shape needs.
-    "roomSizes": {
-      "terminal":  [7, 8, 6, 7],
-      "hall":      [6, 8, 6, 7],
-      "connector": [6, 8, 5, 7]
+    // Same argument, second half: the profile's own rooms are too small for a
+    // 5x5 lattice - they measured 26.3% fill, right on the floor. This topology
+    // therefore runs rooms one to two cells LARGER than the profile does rather
+    // than shrinking its lattice further, trading some airiness for the floor
+    // this shape needs. Declared against the pitch, so the trade survives the
+    // whole density dial: at pitch 9 these are [7,8,6,7] / [6,8,6,7] / [6,8,5,7],
+    // and at a packed pitch they shrink with everything else.
+    "roomSizeDeltaCells": {
+      "terminal":  [-2, -1, -3, -2],
+      "hall":      [-3, -1, -3, -2],
+      "connector": [-3, -1, -4, -2]
     },
 
     // This graph declares no overlook pairs, so it asks for no tier seams.

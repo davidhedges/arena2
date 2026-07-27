@@ -92,6 +92,13 @@ namespace Arena.Tests.Editor
                          "contract.legacyBlockRejected",
                          "contract.spatialSettingsTokenRejected",
                          "contract.invertedLaneGapRejected",
+                         // The absolute-cell spatial vocabulary retired when
+                         // density became a dial. A bare number is legal in both
+                         // vocabularies and means something different in each,
+                         // so the loader has to refuse the old names by name
+                         // rather than reinterpret them.
+                         "contract.absoluteLaneGapRejected",
+                         "contract.absoluteRoomSizesRejected",
                          "contract.unknownRoomSizeClassRejected",
                          "contract.negativeWeightRejected",
                          "contract.unknownEndpointRejected",

@@ -26,13 +26,18 @@ locked hashes as current constraints.
 
 ## Regenerating the destination
 
-For interactive Unity testing, choose the active profile under
-**Arena > Dungeons > Generation Profile > Spacious/Dense**. The checked choice is
-stored in per-user editor preferences, applies to generation, rebuild, batch, and
-sentinel menu commands, and does not modify either profile asset. A non-empty
-`ARENA_DUNGEON_GENERATION_PROFILE` environment variable overrides the editor
-choice; command-line batch mode otherwise keeps the reproducible `spacious`
-default.
+For interactive Unity testing, choose how packed the dungeon is under
+**Arena > Dungeons > Density > 0..5**. 0 keeps today's large voids; 5 packs them
+out. The checked choice is stored in per-user editor preferences, applies to
+generation, rebuild, batch, and sentinel menu commands, and does not modify the
+profile asset. An `ARENA_DUNGEON_DENSITY` environment variable set to an integer
+0-5 overrides the editor choice; with neither, the dial is the profile asset's
+own `densityLevel`, which is what makes a command-line batch reproducible from
+the repo alone.
+
+The packing mechanisms land in phases 2-5 of
+[`density-scale-design-2026-07-27.md`](density-scale-design-2026-07-27.md);
+until then levels 1-5 resolve to density 0's geometry and say so in the log.
 
 In Unity, use **Arena > Dungeons > Rebuild Random Dungeon**. Use the specific-seed command when reproducing a layout. For command-line builds, invoke:
 

@@ -26,36 +26,115 @@ namespace DungeonLab.Editor
         private static Dictionary<string, DungeonRouteTopology> routeTopologyCache;
         private static string routeTopologyCacheSignature = string.Empty;
 
-        // One lattice lane gap. A gap that names no minimum takes the profile's
-        // pitch, so a topology only has to say what it wants to be different.
-        // minCells == maxCells is a fixed, authored gap: the rubber sheet cannot
-        // move it and draws no random number for it.
+        // One lattice lane gap, declared as an OFFSET from the resolved pitch
+        // rather than an absolute cell count.
+        //
+        // Absolute values fight a dial that moves pitch: a topology pinned to
+        // "8 to 11 cells" keeps a density-0 lattice at density 5 while the
+        // profile's rooms shrink around it. Declaring "one under the pitch, up
+        // to two over" instead preserves the topology's authored character —
+        // twin-wing's tight columns, descent-shaft's narrow lanes — across the
+        // whole dial (density-scale design §6).
+        //
+        // A gap that declares no minimum sits AT the pitch, so a topology only
+        // says what it wants to be different. Equal minimum and maximum is a
+        // fixed lane: the rubber sheet cannot move it and draws no random number
+        // for it.
         private readonly struct RouteLaneGap
         {
-            public readonly int minCells;
-            public readonly int maxCells;
+            public readonly bool hasMinDelta;
+            public readonly int minDeltaCells;
+            public readonly bool hasMaxDelta;
+            public readonly int maxDeltaCells;
 
-            public RouteLaneGap(int minCells, int maxCells)
+            private RouteLaneGap(bool hasMinDelta, int minDeltaCells, bool hasMaxDelta, int maxDeltaCells)
             {
-                this.minCells = minCells;
-                this.maxCells = maxCells;
+                this.hasMinDelta = hasMinDelta;
+                this.minDeltaCells = minDeltaCells;
+                this.hasMaxDelta = hasMaxDelta;
+                this.maxDeltaCells = maxDeltaCells;
             }
 
+            public static RouteLaneGap AtPitch()
+            {
+                return new RouteLaneGap(false, 0, false, 0);
+            }
+
+            public static RouteLaneGap Fixed(int deltaCells)
+            {
+                return new RouteLaneGap(true, deltaCells, true, deltaCells);
+            }
+
+            public static RouteLaneGap Range(bool hasMinDelta, int minDeltaCells, bool hasMaxDelta, int maxDeltaCells)
+            {
+                return new RouteLaneGap(hasMinDelta, minDeltaCells, hasMaxDelta, maxDeltaCells);
+            }
+
+            // A lane is at least one cell however far the dial drives the pitch
+            // down: two node centres in the same cell is not a lattice.
             public int ResolvedMinimum(int pitchCells)
             {
-                return minCells >= 0 ? minCells : pitchCells;
+                return Mathf.Max(1, pitchCells + (hasMinDelta ? minDeltaCells : 0));
             }
 
             public int ResolvedMaximum(int pitchCells)
             {
                 int minimum = ResolvedMinimum(pitchCells);
-                return maxCells >= 0 ? Mathf.Max(minimum, maxCells) : minimum;
+                return hasMaxDelta
+                    ? Mathf.Max(minimum, pitchCells + maxDeltaCells)
+                    : minimum;
+            }
+        }
+
+        // A topology's room size class, as offsets from the resolved pitch.
+        //
+        // Room extent and lane pitch are the same quantity seen twice — the gap
+        // between two rooms is pitch minus room — so a room declared relative to
+        // pitch keeps its relationship to its neighbours at every density, which
+        // an absolute cell count cannot. Width is measured against the
+        // horizontal pitch and depth against the vertical one.
+        private readonly struct RouteTopologyRoomSizeDelta
+        {
+            public readonly int minWidthDeltaCells;
+            public readonly int maxWidthDeltaCells;
+            public readonly int minDepthDeltaCells;
+            public readonly int maxDepthDeltaCells;
+
+            public RouteTopologyRoomSizeDelta(
+                int minWidthDeltaCells,
+                int maxWidthDeltaCells,
+                int minDepthDeltaCells,
+                int maxDepthDeltaCells)
+            {
+                this.minWidthDeltaCells = minWidthDeltaCells;
+                this.maxWidthDeltaCells = maxWidthDeltaCells;
+                this.minDepthDeltaCells = minDepthDeltaCells;
+                this.maxDepthDeltaCells = maxDepthDeltaCells;
+            }
+
+            // DungeonRoomSizeRange.Validated() floors every bound at 3 and keeps
+            // each max at or above its min, so a dial that drives the pitch far
+            // down degrades to the smallest legal room rather than an invalid one.
+            public DungeonRoomSizeRange Resolve(int horizontalPitchCells, int verticalPitchCells)
+            {
+                return new DungeonRoomSizeRange(
+                    horizontalPitchCells + minWidthDeltaCells,
+                    horizontalPitchCells + maxWidthDeltaCells,
+                    verticalPitchCells + minDepthDeltaCells,
+                    verticalPitchCells + maxDepthDeltaCells);
             }
         }
 
         // Per-topology spatial overrides. Every field is "unset" by default and
         // falls back to the profile, so there is one code path and no second
         // hardcoded settings table to forget to update.
+        //
+        // The spatial ones are density-relative (design §6): room sizes are
+        // offsets from the resolved pitch, and the lattice slack cap CLAMPS the
+        // profile's rather than replacing it, so a topology that wants a tighter
+        // rubber sheet keeps wanting one as the dial drives the profile's own
+        // budget to zero. tierSeamCount / tierSeamMaxRiseLevels are graph
+        // properties, not spatial ones, and stay absolute.
         private sealed class RouteTopologySpatialOverrides
         {
             public int roomEnvelopeRadiusCells = -1;
@@ -63,9 +142,9 @@ namespace DungeonLab.Editor
             public int latticeSlackMaxCells = -1;
             public int tierSeamCount = -1;
             public int tierSeamMaxRiseLevels = -1;
-            public DungeonRoomSizeRange? terminalRoomSize;
-            public DungeonRoomSizeRange? hallRoomSize;
-            public DungeonRoomSizeRange? connectorRoomSize;
+            public RouteTopologyRoomSizeDelta? terminalRoomSizeDelta;
+            public RouteTopologyRoomSizeDelta? hallRoomSizeDelta;
+            public RouteTopologyRoomSizeDelta? connectorRoomSizeDelta;
 
             public bool DeclaresAnything =>
                 roomEnvelopeRadiusCells >= 0 ||
@@ -73,9 +152,9 @@ namespace DungeonLab.Editor
                 latticeSlackMaxCells >= 0 ||
                 tierSeamCount >= 0 ||
                 tierSeamMaxRiseLevels >= 0 ||
-                terminalRoomSize.HasValue ||
-                hallRoomSize.HasValue ||
-                connectorRoomSize.HasValue;
+                terminalRoomSizeDelta.HasValue ||
+                hallRoomSizeDelta.HasValue ||
+                connectorRoomSizeDelta.HasValue;
         }
 
         private sealed class RouteTopologyNode
@@ -981,15 +1060,32 @@ namespace DungeonLab.Editor
                 return false;
             }
 
+            // The absolute-cell spatial vocabulary was replaced by pitch-relative
+            // offsets when density became a dial (2026-07-27). Rejecting the old
+            // names by name matters more than usual here: a bare number is legal
+            // in both vocabularies and means something different in each, so a
+            // silent reinterpretation would move geometry without an error.
+            foreach ((string legacy, string replacement) in RetiredAbsoluteSpatialFields)
+            {
+                if (declared[legacy] != null)
+                {
+                    errors.Add(
+                        $"'spatial.{legacy}' declared absolute cells; topology spatial overrides are " +
+                        $"offsets from the resolved pitch since density became a dial (2026-07-27). " +
+                        $"Use '{replacement}' — see docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md");
+                    return false;
+                }
+            }
+
             if (!TryParseRouteTopologyLaneGaps(
-                    declared["columnGapCells"],
-                    "columnGapCells",
+                    declared["columnGapDeltaCells"],
+                    "columnGapDeltaCells",
                     columnCount,
                     errors,
                     out columnGaps) ||
                 !TryParseRouteTopologyLaneGaps(
-                    declared["rowGapCells"],
-                    "rowGapCells",
+                    declared["rowGapDeltaCells"],
+                    "rowGapDeltaCells",
                     rowCount,
                     errors,
                     out rowGaps))
@@ -1027,8 +1123,15 @@ namespace DungeonLab.Editor
                        4,
                        errors,
                        out overrides.tierSeamMaxRiseLevels) &&
-                   TryParseRouteTopologyRoomSizes(declared["roomSizes"], errors, overrides);
+                   TryParseRouteTopologyRoomSizeDeltas(declared["roomSizeDeltaCells"], errors, overrides);
         }
+
+        private static readonly (string legacy, string replacement)[] RetiredAbsoluteSpatialFields =
+        {
+            ("columnGapCells", "columnGapDeltaCells"),
+            ("rowGapCells", "rowGapDeltaCells"),
+            ("roomSizes", "roomSizeDeltaCells")
+        };
 
         private static bool TryParseRouteTopologySpatialOverride(
             JObject declared,
@@ -1060,7 +1163,7 @@ namespace DungeonLab.Editor
             return true;
         }
 
-        private static bool TryParseRouteTopologyRoomSizes(
+        private static bool TryParseRouteTopologyRoomSizeDeltas(
             JToken declared,
             List<string> errors,
             RouteTopologySpatialOverrides overrides)
@@ -1072,7 +1175,7 @@ namespace DungeonLab.Editor
 
             if (!(declared is JObject sizes))
             {
-                errors.Add("'spatial.roomSizes' must be an object keyed by size class");
+                errors.Add("'spatial.roomSizeDeltaCells' must be an object keyed by size class");
                 return false;
             }
 
@@ -1081,30 +1184,41 @@ namespace DungeonLab.Editor
                 if (!(property.Value is JArray range) || range.Count != 4)
                 {
                     errors.Add(
-                        $"'spatial.roomSizes.{property.Name}' must be " +
-                        "[minWidth, maxWidth, minDepth, maxDepth]");
+                        $"'spatial.roomSizeDeltaCells.{property.Name}' must be " +
+                        "[minWidthDelta, maxWidthDelta, minDepthDelta, maxDepthDelta], each an " +
+                        "offset from the resolved pitch");
                     return false;
                 }
 
-                var parsed = new DungeonRoomSizeRange(
+                var parsed = new RouteTopologyRoomSizeDelta(
                     range[0].Value<int>(),
                     range[1].Value<int>(),
                     range[2].Value<int>(),
                     range[3].Value<int>());
+                if (parsed.maxWidthDeltaCells < parsed.minWidthDeltaCells ||
+                    parsed.maxDepthDeltaCells < parsed.minDepthDeltaCells)
+                {
+                    errors.Add(
+                        $"'spatial.roomSizeDeltaCells.{property.Name}' has a maximum below its " +
+                        "minimum; both bounds are offsets from the same pitch, so an inverted " +
+                        "range is inverted at every density");
+                    return false;
+                }
+
                 switch (property.Name)
                 {
                     case "terminal":
-                        overrides.terminalRoomSize = parsed;
+                        overrides.terminalRoomSizeDelta = parsed;
                         break;
                     case "hall":
-                        overrides.hallRoomSize = parsed;
+                        overrides.hallRoomSizeDelta = parsed;
                         break;
                     case "connector":
-                        overrides.connectorRoomSize = parsed;
+                        overrides.connectorRoomSizeDelta = parsed;
                         break;
                     default:
                         errors.Add(
-                            $"'spatial.roomSizes' declared unknown size class '{property.Name}'; " +
+                            $"'spatial.roomSizeDeltaCells' declared unknown size class '{property.Name}'; " +
                             "expected terminal, hall or connector");
                         return false;
                 }
@@ -1113,9 +1227,9 @@ namespace DungeonLab.Editor
             return true;
         }
 
-        // A lane gap is a number (fixed), an object {min?, max?} (a rubber-sheet
-        // range, either bound falling back to the profile pitch), or an array of
-        // one such entry per gap between adjacent lanes.
+        // A lane gap is a number (a fixed lane at pitch + that offset), an object
+        // {minDelta?, maxDelta?} (a rubber-sheet range around the pitch), or an
+        // array of one such entry per gap between adjacent lanes.
         private static bool TryParseRouteTopologyLaneGaps(
             JToken declared,
             string field,
@@ -1127,8 +1241,8 @@ namespace DungeonLab.Editor
             gaps = new RouteLaneGap[gapCount];
             for (int index = 0; index < gapCount; index++)
             {
-                // Unset on both bounds means "the profile's pitch, fixed".
-                gaps[index] = new RouteLaneGap(-1, -1);
+                // Unset on both bounds means "at the pitch, fixed".
+                gaps[index] = RouteLaneGap.AtPitch();
             }
 
             if (declared == null || declared.Type == JTokenType.Null)
@@ -1180,42 +1294,63 @@ namespace DungeonLab.Editor
             List<string> errors,
             out RouteLaneGap gap)
         {
-            gap = new RouteLaneGap(-1, -1);
+            gap = RouteLaneGap.AtPitch();
             if (declared.Type == JTokenType.Integer)
             {
-                int fixedCells = declared.Value<int>();
-                if (fixedCells < 1)
-                {
-                    errors.Add($"'spatial.{field}' must be at least 1 (declared {fixedCells})");
-                    return false;
-                }
-
-                gap = new RouteLaneGap(fixedCells, fixedCells);
+                gap = RouteLaneGap.Fixed(declared.Value<int>());
                 return true;
             }
 
             if (!(declared is JObject range))
             {
                 errors.Add(
-                    $"'spatial.{field}' must be a number, an object {{ min, max }}, or an array of those");
+                    $"'spatial.{field}' must be a number (a fixed lane, pitch + that offset), " +
+                    "an object { minDelta, maxDelta }, or an array of those");
                 return false;
             }
 
-            int minimum = range.Value<int?>("min") ?? -1;
-            int maximum = range.Value<int?>("max") ?? -1;
-            if (minimum == 0 || maximum == 0 || minimum < -1 || maximum < -1)
+            foreach (JProperty property in range.Properties())
             {
-                errors.Add($"'spatial.{field}' bounds must be at least 1");
-                return false;
+                if (!string.Equals(property.Name, "minDelta", StringComparison.Ordinal) &&
+                    !string.Equals(property.Name, "maxDelta", StringComparison.Ordinal))
+                {
+                    errors.Add(
+                        $"'spatial.{field}' declared unknown bound '{property.Name}'; expected " +
+                        "minDelta / maxDelta. Absolute 'min' / 'max' cell counts were replaced by " +
+                        "pitch-relative offsets when density became a dial (2026-07-27): a lane at " +
+                        "8 cells against a 9-cell pitch is now { \"minDelta\": -1 }");
+                    return false;
+                }
             }
 
-            if (minimum > 0 && maximum > 0 && maximum < minimum)
+            bool hasMinDelta = range["minDelta"] != null && range["minDelta"].Type != JTokenType.Null;
+            bool hasMaxDelta = range["maxDelta"] != null && range["maxDelta"].Type != JTokenType.Null;
+            if (hasMinDelta && range["minDelta"].Type != JTokenType.Integer ||
+                hasMaxDelta && range["maxDelta"].Type != JTokenType.Integer)
             {
-                errors.Add($"'spatial.{field}' has max {maximum} below min {minimum}");
+                errors.Add($"'spatial.{field}' bounds must be whole numbers");
                 return false;
             }
 
-            gap = new RouteLaneGap(minimum, maximum);
+            int minDelta = hasMinDelta ? range.Value<int>("minDelta") : 0;
+            int maxDelta = hasMaxDelta ? range.Value<int>("maxDelta") : 0;
+            // Both bounds are offsets from the same pitch, so comparing them
+            // needs no pitch: an inverted range is inverted at every density.
+            if (hasMinDelta && hasMaxDelta && maxDelta < minDelta)
+            {
+                errors.Add($"'spatial.{field}' has maxDelta {maxDelta} below minDelta {minDelta}");
+                return false;
+            }
+
+            if (hasMaxDelta && !hasMinDelta && maxDelta < 0)
+            {
+                errors.Add(
+                    $"'spatial.{field}' has maxDelta {maxDelta} below its implied minDelta of 0; " +
+                    "a gap that declares no minimum sits at the pitch");
+                return false;
+            }
+
+            gap = RouteLaneGap.Range(hasMinDelta, minDelta, hasMaxDelta, maxDelta);
             return true;
         }
 
@@ -1378,9 +1513,16 @@ namespace DungeonLab.Editor
                 spatial.neighborBiasStrengthCells = overrides.neighborBiasStrengthCells;
             }
 
+            // A CLAMP, not a replacement. A topology that wants a tighter rubber
+            // sheet than the profile still wants one when the dial has driven
+            // the profile's own budget below the topology's number; raising the
+            // profile's budget above it would be a topology quietly opting out
+            // of the dial.
             if (overrides.latticeSlackMaxCells >= 0)
             {
-                spatial.latticeSlackMaxCells = overrides.latticeSlackMaxCells;
+                spatial.latticeSlackMaxCells = Mathf.Min(
+                    spatial.latticeSlackMaxCells,
+                    overrides.latticeSlackMaxCells);
             }
 
             if (overrides.tierSeamCount >= 0)
@@ -1393,19 +1535,27 @@ namespace DungeonLab.Editor
                 spatial.tierSeamAdjacency.maximumRiseLevels = overrides.tierSeamMaxRiseLevels;
             }
 
-            if (overrides.terminalRoomSize.HasValue)
+            // Room size deltas resolve against the pitch AFTER any pitch override
+            // above, so a topology that moves both stays self-consistent.
+            if (overrides.terminalRoomSizeDelta.HasValue)
             {
-                spatial.terminalRoomSize = overrides.terminalRoomSize.Value;
+                spatial.terminalRoomSize = overrides.terminalRoomSizeDelta.Value.Resolve(
+                    spatial.horizontalPitchCells,
+                    spatial.verticalPitchCells);
             }
 
-            if (overrides.hallRoomSize.HasValue)
+            if (overrides.hallRoomSizeDelta.HasValue)
             {
-                spatial.hallRoomSize = overrides.hallRoomSize.Value;
+                spatial.hallRoomSize = overrides.hallRoomSizeDelta.Value.Resolve(
+                    spatial.horizontalPitchCells,
+                    spatial.verticalPitchCells);
             }
 
-            if (overrides.connectorRoomSize.HasValue)
+            if (overrides.connectorRoomSizeDelta.HasValue)
             {
-                spatial.connectorRoomSize = overrides.connectorRoomSize.Value;
+                spatial.connectorRoomSize = overrides.connectorRoomSizeDelta.Value.Resolve(
+                    spatial.horizontalPitchCells,
+                    spatial.verticalPitchCells);
             }
 
             return spatial.Validated();

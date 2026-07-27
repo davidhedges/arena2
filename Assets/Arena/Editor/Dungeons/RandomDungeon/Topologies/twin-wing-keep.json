@@ -18,22 +18,26 @@
   "spatial": {
     // Seven lattice columns is the constraint that shapes everything else here.
     // At the profile's 9-cell pitch the six gaps alone would span 54 cells and
-    // the plan would not fit 52 in any orientation, so the columns keep their
-    // authored, deliberately tight spacing and are FIXED: no rubber sheet.
-    "columnGapCells": [6, 5, 6, 8, 8, 9],
+    // the plan would not fit 52 in any orientation, so the columns run three to
+    // four cells under it and are FIXED: no rubber sheet. Written as offsets, so
+    // the wings stay tight relative to whatever pitch the density dial resolves
+    // rather than pinning this topology to one setting.
+    "columnGapDeltaCells": [-3, -4, -3, -1, -1, 0],
 
     // Three rows, on the other hand, leave the depth axis plenty of room.
-    "rowGapCells": [{ "min": 9, "max": 14 }, { "min": 10, "max": 15 }],
+    "rowGapDeltaCells": [{ "minDelta": 0, "maxDelta": 5 }, { "minDelta": 1, "maxDelta": 6 }],
 
-    // A 5-cell column lane cannot host the profile's 6-8 cell rooms: adjacent
-    // rooms would overlap on every draw and exhaust room inflation. This
-    // topology therefore declares its own, narrower sizes. The override is the
-    // point of the mechanism - it is visible in the data, with a reason, rather
-    // than hidden in a second settings table the profile never reaches.
-    "roomSizes": {
-      "terminal":  [5, 5, 7, 7],
-      "hall":      [5, 5, 5, 6],
-      "connector": [4, 5, 5, 5]
+    // The tightest column lane here is four under the pitch, and it cannot host
+    // a room of the profile's own width: adjacent rooms would overlap on every
+    // draw and exhaust room inflation. This topology therefore declares its own,
+    // narrower sizes - four to five under the pitch, so they stay inside those
+    // lanes at every density. The override is the point of the mechanism: it is
+    // visible in the data, with a reason, rather than hidden in a second
+    // settings table the profile never reaches.
+    "roomSizeDeltaCells": {
+      "terminal":  [-4, -4, -2, -2],
+      "hall":      [-4, -4, -4, -3],
+      "connector": [-5, -4, -4, -4]
     },
 
     // No overlook pairs are declared, so no tier seams are requested.

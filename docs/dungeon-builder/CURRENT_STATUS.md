@@ -1,6 +1,6 @@
 # Dungeon generator: current status
 
-Last updated: 2026-07-25
+Last updated: 2026-07-27
 
 No phased plan is in progress. This page describes what the generator is and where the work stands. Keep it short — if it starts growing per-phase evidence sections again, that evidence belongs in `DungeonLabReports/` or `docs/archive/`, not here.
 
@@ -13,7 +13,7 @@ Generation is editor-time only, on purpose: a client-only runtime layout would d
 Pipeline, in execution order:
 
 ```text
-seed + generation profile + recipe catalog
+seed + density + generation profile + recipe catalog
   -> RouteIntent            semantic graph, no coordinates
   -> embedding              node centers
   -> room footprints        + recipe placements
@@ -29,7 +29,7 @@ seed + generation profile + recipe catalog
 |---|---|
 | Rebuild the playtest scene | **Arena > Dungeons > Rebuild Random Dungeon** |
 | Reproduce a specific layout | **Arena > Dungeons > Rebuild Random Dungeon (Specific Seed)** |
-| Switch density | **Arena > Dungeons > Generation Profile > Spacious / Dense** (per-user pref; `ARENA_DUNGEON_GENERATION_PROFILE` overrides; batch mode defaults to `spacious`) |
+| Switch density | **Arena > Dungeons > Density > 0..5** (per-user pref; `ARENA_DUNGEON_DENSITY` overrides; with neither, the profile asset's own `densityLevel`) |
 | Plan only, no scene | **Tools > Dungeon Lab > Generate** |
 | Batch evidence | **Tools > Dungeon Lab > Batch Validate (50 / 200 / 100 Locked Seeds)** |
 | Command line | `-executeMethod DungeonLab.Editor.RandomDungeonSceneBuilder.RebuildRandomDungeonBatch`, with `ARENA_RANDOM_DUNGEON_SEED` set |
@@ -54,6 +54,54 @@ removed. The per-phase log lives in
 [`docs/archive/2026-07-dungeon-phase-log/`](../archive/2026-07-dungeon-phase-log/)
 if you ever need to reconstruct why a decision was made. Treat it as history,
 not as current constraints.
+
+### Landed 2026-07-27 — density scale, phases 0 and 1
+
+Phases 0 and 1 of
+[`density-scale-design-2026-07-27.md`](density-scale-design-2026-07-27.md). Both
+are geometry-neutral by design and both were gated on it.
+
+- **The A/B tool was redefined first (§7.1).** `ops/dungeon-port-ab.sh` compared
+  `resultHash`, which is SHA-256 over the whole seed-report array — and every
+  seed report embeds the reflected `settings` struct. Adding a report field or a
+  settings field moved it with no geometry change, so a whole-report identity
+  gate was unachievable by construction for exactly the two phases that needed
+  one. It now compares the per-seed **`hashes.canonical`** vector plus `accepted`
+  plus the failure codes, and narrows a mismatch to `routeIntent` / `layout` /
+  `tieredLevelPlan`. `resultHash` stays as a cheap change-detector and is not a
+  gate. Both phases then passed that gate on all 200 seeds while `resultHash`
+  moved — which is the defect demonstrating itself.
+- **The density metric replaced the fill metric.** `latticeEnvelopeFillPercent`
+  (floor over the lattice envelope — the box the embedder measures against, so a
+  promontory reaching outward no longer lowers the score) and `voidComponents`
+  (4-connected non-floor components inside that envelope, minus authored void,
+  as a histogram with a max). Both per seed under `measurements.density`, rolled
+  up per topology and per corpus in the batch report.
+  `DungeonLabGenerator.DensityMetrics.cs` owns them.
+- **The floorplan is readable without Unity.** An ASCII projection per seed in
+  the batch report, and a square top-down orthographic PNG per visual sentinel
+  alongside the existing three-quarter shot. The previous density attempt's
+  failure mode was optimising a scalar nobody could see.
+- **Baseline written** to `DungeonLabReports/void_baseline_2026-07-27.md` and the
+  two 200-seed reports beside it. Density 0 today: **25% fill p50, max void
+  component 749 cells p50**, 184/200 accepted.
+- **The dial replaced the flag.** `densityLevel` 0–5 on the one profile asset,
+  **Arena > Dungeons > Density > 0..5**, `ARENA_DUNGEON_DENSITY`.
+  `generation_profile_dense.asset`, the Spacious/Dense menu pair and
+  `ARENA_DUNGEON_GENERATION_PROFILE` are gone.
+- **Topology spatial overrides are pitch-relative** (`columnGapDeltaCells`,
+  `rowGapDeltaCells`, `roomSizeDeltaCells`; `latticeSlackMaxCells` now clamps the
+  profile's value rather than replacing it). The retired absolute names are
+  rejected by the loader with a migration message rather than reinterpreted,
+  because a bare number is legal in both vocabularies and means something
+  different in each. `Validate Topologies` runs every topology at all six
+  densities.
+- **What phase 1 deliberately did NOT do:** move geometry. Every level resolves
+  through `DungeonGenerationProfile.ResolveDensitySpatialSettings`, which is
+  currently the identity — so **levels 1–5 produce density 0's geometry today**
+  and log a warning saying so. Pitch, room size, slack, envelope radius and
+  enclosure chance become functions of the dial in phase 3 (M2); that method is
+  the single seam to edit.
 
 ### Landed 2026-07-25 (see [`ARCHITECTURE_REVIEW_2026-07-25.md`](ARCHITECTURE_REVIEW_2026-07-25.md) §12)
 
@@ -432,6 +480,15 @@ doing the graph-as-data work as the vehicle.
 
 ### Next, in order
 
+0. **The density scale — phases 0 and 1 landed 2026-07-27, phase 2 is next.**
+   Design in
+   [`density-scale-design-2026-07-27.md`](density-scale-design-2026-07-27.md).
+   Items 3, 4 and 5 below are folded into it (the stairwell shaft becomes an
+   explicit reservation in phase 2, `atrium-ring`'s density failure dies with the
+   bounding-box fill gate, and the tier void is what the whole dial exists to
+   remove). See the landed block below for what phases 0 and 1 did and did not
+   change; **phase 2 (M1 — measured transition reservation, and the vista
+   ordering fix) is the next piece of work.**
 1. **Look at the dungeons.** **Arena > Dungeons > Rebuild Random Dungeon** on a few
    seeds. No hash tells you whether a dungeon reads well. One rendered shot per
    new topology is in `DungeonLabReports/step3_topology_shots/` (dense, seeds

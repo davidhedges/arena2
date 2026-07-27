@@ -22,8 +22,8 @@
     // Both bounds default to the profile's pitch, so the minimum lane gap is
     // whatever the active profile calls one step and the rubber sheet spends
     // up to four more cells per lane on top of it.
-    "columnGapCells": { "max": 13 },
-    "rowGapCells": { "max": 13 }
+    "columnGapDeltaCells": { "maxDelta": 4 },
+    "rowGapDeltaCells": { "maxDelta": 4 }
   },
 
   // key: [ id, role, beat, level, order ]. Level is absolute in 4u units.
