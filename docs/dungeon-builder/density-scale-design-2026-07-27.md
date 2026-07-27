@@ -116,10 +116,11 @@ set, distinct from `floorCells`, and a deterministic candidate ladder per edge:
    (`ThresholdCell`), not stored.
 4. Exhausted → the whole **route-shape attempt** re-rolls (§3.2).
 
-Candidate 3 is the one piece needing a spike before it is trusted, run the way
-slice 2 was run: does `TryResolveConnectionTransition` accept a laterally offset
-corridor, and does the boundary builder derive the right threshold? That spike is
-the first thing in phase 3.
+Candidate 3 was the one piece needing a spike before it could be trusted: does
+`TryResolveConnectionTransition` accept a laterally offset corridor, and does the
+boundary builder derive the right threshold? **Both yes, measured 2026-07-27** —
+see §9.1 and `CURRENT_STATUS.md`. Recipe-port edges are excluded from the rung,
+because their approach depth is authored.
 
 ### 3.2 The retry transaction
 
@@ -378,11 +379,16 @@ footprint, wall, doorway, level and collision machinery that already exists.
 
 ## 9. Residual risks
 
-1. **The corridor reroute spike (§3.1 candidate 3) is the one unproven step.**
-   Everything else in phase 3 is parameter movement over proven machinery. Run it
-   first; if a laterally offset corridor does not survive
-   `TryResolveConnectionTransition`, fall back to doorway-or-straight-only and
-   accept a higher inflation-retry rate at densities 4–5.
+1. ~~**The corridor reroute spike (§3.1 candidate 3) is the one unproven step.**~~
+   **RESOLVED 2026-07-27: the spike passed and the fallback is not needed.**
+   Forcing a ±1 lateral offset on every generic corridor left the 200-seed corpus
+   at 199/200 accepted and 199 hard-valid — indistinguishable from straight
+   corridors, with the transition contracts resolving and the boundary builder
+   deriving the right threshold. ±2 fits less often (186/200) but everything that
+   fits is equally valid, and as the ladder's third rung it is only reached when
+   the straight path already failed. Recipe-port edges are excluded: their
+   approach depth is authored and candidate 3 never proposed moving them.
+   Evidence in `CURRENT_STATUS.md`.
 2. **Recipe rooms cannot grow.** Authored footprints are fixed and their ports
    declare approach depth; at high density they end up ringed by annexed
    neighbour space and their port approach must stay reserved.

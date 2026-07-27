@@ -124,6 +124,43 @@ left alone rather than folded into a density change.
 
 **Still open in phase 2: the explicit stairwell shaft.** See "Next, in order".
 
+### Measured 2026-07-27 — the corridor reroute spike passed (§3.1 candidate 3)
+
+§9 named this the one unproven step in the whole density design: *"if a
+laterally offset corridor does not survive `TryResolveConnectionTransition`,
+fall back to doorway-or-straight-only and accept a higher inflation-retry rate at
+densities 4–5."* It does survive. **The fallback is not needed.**
+
+The spike forced EVERY generic corridor off its centre line — a Z path that jogs
+laterally inside the source room, runs the axis, and jogs back inside the target
+room, so both rooms still contain their node centre and only the derived
+threshold moves. Recipe-port edges were excluded, because their approach depth is
+authored and candidate 3 never proposed moving them. (Forcing those too fails
+immediately with `RECIPE_PORT_APPROACH` — worth knowing, and not a finding about
+candidate 3.) 200 seeds at density 0:
+
+| offset | accepted | hardValid | routeRequirements | finalVistas | recipeSets |
+|---|---|---|---|---|---|
+| none (baseline) | 199/200 | 199 | 199 | 199 | 199 |
+| **±1, every edge** | **199/200** | **199** | **199** | **199** | **199** |
+| ±2, every edge | 186/200 | 186 | 186 | 186 | 186 |
+
+At ±1 the corpus is indistinguishable from straight corridors — zero validation
+failures, the transition contracts resolve, and the boundary builder derives the
+right threshold. At ±2 the only new code is `ROUTE_CORRIDOR_EMBEDDING_EXHAUSTED`
+(64×): the offset path *collides* with other geometry, which is a fit problem,
+not a rejection by the transition or boundary machinery — every seed that fits is
+fully hard-valid.
+
+And this was the worst case by construction: as the ladder's third rung it is
+only reached when the straight path already failed, on a small minority of edges,
+so its real fit rate will be far better than the ±2 row suggests.
+
+The spike code was reverted — it was a spike. The path shape it proved: from the
+source centre, step `k` cells laterally; run the route axis until aligned with
+the target centre; step `k` cells back. All unit steps, so
+`ValidatePathCardinality` holds.
+
 ### Landed 2026-07-27 — density scale, phases 0 and 1
 
 Phases 0 and 1 of
@@ -588,9 +625,12 @@ doing the graph-as-data work as the vehicle.
       dictate where the tower goes: `AddValidStairwellTransitionCandidates`
       searching every position and both sides is fine, because all the
       reservation has to guarantee is that its candidate list is not empty.
-   b. **Phase 3 (M2 — pack)**, starting with the corridor ownership + reroute
-      spike (§3.1 candidate 3), then pitch/room size/slack/envelope radius/
-      enclosure as functions of the dial in
+   b. **Phase 3 (M2 — pack).** The corridor reroute spike (§3.1 candidate 3,
+      and §9's only unproven step) was **run on 2026-07-27 and it passed** — see
+      below — so the fallback §9 reserved is not needed. What is left is the
+      corridor-ownership rewrite (`claimedCorridorCells` + the per-edge candidate
+      ladder replacing the attempt-abort), then pitch / room size / slack /
+      envelope radius / enclosure as functions of the dial in
       `DungeonGenerationProfile.ResolveDensitySpatialSettings`.
    c. **Retune `minLatticeEnvelopeFillPercent` when the dial moves.** It is a
       flat 0.20 backstop today, two points under the observed density-0 minimum,
