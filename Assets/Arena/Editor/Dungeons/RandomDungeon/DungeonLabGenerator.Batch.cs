@@ -144,6 +144,132 @@ namespace DungeonLab.Editor
             RunRenderSweep(BaselineFirstSeed, BaselineSeedCount);
         }
 
+        /// <summary>
+        /// What one density level costs: scene objects, colliders, traps, bytes.
+        /// </summary>
+        /// <remarks>
+        /// Design §9 residual risk 3 says the packed end buys ~1.5x floor cells
+        /// and a larger increase in WALL segments — every packed seam is a
+        /// partition or retaining wall where it used to be a cliff face — and
+        /// that the cost gets measured in phase 6 rather than assumed. This is
+        /// that measurement.
+        /// <para>
+        /// It counts colliders rather than exported bytes. The collision payload
+        /// is one entry per collision source, so the collider count IS the size
+        /// to within a constant; running the exporter here would measure nothing
+        /// anyway, because the authoring components it walks are added by
+        /// <c>RandomDungeonSceneBuilder</c> after the render pass, not by the
+        /// renderer.
+        /// </para>
+        /// </remarks>
+        [MenuItem("Tools/Dungeon Lab/Measure Density Cost (12 Seeds)")]
+        public static void MeasureDensityCost()
+        {
+            RunDensityCostProbe(BaselineFirstSeed, 12);
+        }
+
+        private static string RunDensityCostProbe(int firstSeed, int seedCount)
+        {
+            Directory.CreateDirectory(BatchReportDirectory);
+            int densityLevel = ResolveRequestedDensityLevel();
+            var seeds = new JArray();
+            try
+            {
+                for (int index = 0; index < seedCount; index++)
+                {
+                    int seed = firstSeed + index;
+                    GameObject root = null;
+                    try
+                    {
+                        root = BuildRenderedSeed(
+                            seed,
+                            out _,
+                            out JObject seedReport,
+                            out ElevationEdgeModel.BuildReport buildReport);
+                        seeds.Add(BuildDensityCostEntry(seed, root, seedReport, buildReport));
+                    }
+                    catch (Exception failure)
+                    {
+                        seeds.Add(new JObject
+                        {
+                            ["seed"] = seed,
+                            ["failure"] = failure.Message
+                        });
+                    }
+                    finally
+                    {
+                        if (root != null)
+                        {
+                            DestroyImmediate(root);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+
+            var report = new JObject
+            {
+                ["summaryVersion"] = ActiveDiagnosticSummaryVersion,
+                ["densityLevel"] = densityLevel,
+                ["firstSeed"] = firstSeed,
+                ["seedCount"] = seedCount,
+                ["seeds"] = seeds,
+                ["measurement"] =
+                    "per seed: the rendered root's object/collider/renderer counts and the renderer's own " +
+                    "wall and feature tallies. Collider count stands in for collision payload size — the " +
+                    "payload is one entry per collision source."
+            };
+            AddGenerationSettingsIdentity(report);
+            string path = Path.Combine(
+                BatchReportDirectory,
+                $"density_cost_d{densityLevel}.json");
+            File.WriteAllText(path, report.ToString(Formatting.Indented));
+            Debug.Log($"Dungeon Lab DENSITY_COST density={densityLevel}; seeds={seedCount}; report={path}");
+            return path;
+        }
+
+        private static JObject BuildDensityCostEntry(
+            int seed,
+            GameObject root,
+            JObject seedReport,
+            ElevationEdgeModel.BuildReport buildReport)
+        {
+            int gameObjects = root.GetComponentsInChildren<Transform>(includeInactive: true).Length;
+            int renderers = root.GetComponentsInChildren<Renderer>(includeInactive: true).Length;
+            Collider[] colliders = root.GetComponentsInChildren<Collider>(includeInactive: true);
+            int meshColliders = 0;
+            foreach (Collider collider in colliders)
+            {
+                if (collider is MeshCollider)
+                {
+                    meshColliders++;
+                }
+            }
+
+            JObject density = seedReport["measurements"]?["density"] as JObject;
+            return new JObject
+            {
+                ["seed"] = seed,
+                ["floorCells"] = buildReport.floorCells,
+                ["latticeEnvelopeFillPercent"] = density?.Value<float?>("latticeEnvelopeFillPercent") ?? 0f,
+                ["gameObjects"] = gameObjects,
+                ["renderers"] = renderers,
+                ["colliders"] = colliders.Length,
+                ["meshColliders"] = meshColliders,
+                ["partitionWalls"] = buildReport.partitionWalls,
+                ["cliffEdges"] = buildReport.cliffEdges,
+                ["retainingEdges"] = buildReport.retainingEdges,
+                ["railings"] = buildReport.railings,
+                ["doorways"] = buildReport.doorways,
+                ["gateways"] = buildReport.gateways,
+                ["traps"] = buildReport.traps
+            };
+        }
+
+
         private static string RunRenderSweep(int firstSeed, int seedCount)
         {
             Directory.CreateDirectory(BatchReportDirectory);

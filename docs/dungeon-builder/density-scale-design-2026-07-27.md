@@ -5,9 +5,9 @@ Status: **finalized**, 2026-07-27. Forks resolved in §8 under the owner's
 review: retry transaction named (§3.2), M4's boundary-room state corrected
 (§4.2), the A/B gate redefined (§7.1), the enclosure clamp accounted for (§4.3).
 
-**Phases 0 through 5 have landed. Only phase 6 — tune and look — is left.**
-Fill across the dial measures 26/29/32/41/74/93%, and **density 5 meets §5's
-acceptance on all 200 seeds**. Live status and the full evidence:
+**COMPLETE — all six phases landed 2026-07-27/28.** Fill across the dial
+measures 26/33/47/65/80/93%, density 5 meets §5's acceptance on all 200 seeds,
+and the whole corpus renders at every level. Live status and the full evidence:
 `CURRENT_STATUS.md`; baseline numbers:
 `DungeonLabReports/void_baseline_2026-07-27.md`.
 Supersedes: `docs/archive/2026-07-dungeon-phase-log/DENSITY_ADJACENCY_PLAN.md` (closed 2026-07-23)
@@ -221,14 +221,28 @@ trap distribution slightly and is a phase-5 measurement, not a surprise.
 
 Targets to be measured and retuned in phase 6 — not asserted:
 
-| density | lane gap beyond room | lattice slack | vacant cells | enclosure | target lattice-envelope fill | max void component |
-|---|---|---|---|---|---|---|
-| 0 | today (2–6) | 8 | untouched | 0.5 | ~28% | unbounded |
-| 1 | ≤4 | 6 | untouched | 0.6 | ~35% | ≤30 |
-| 2 | ≤3 | 4 | untouched | 0.7 | ~45% | ≤20 |
-| 3 | ≤2 | 2 | half annexed | 0.8 | ~60% | ≤12 |
-| 4 | ≤1 | 1 | all annexed | 0.9 | ~80% | ≤6 |
-| 5 | 0 | 0 | all + mop-up | 1.0 | ≥95% | **≤4** |
+Retuned by measurement in phase 6, 2026-07-28. The `vacant cells` column as
+first written could not deliver the `fill` column beside it — packing alone tops
+out near 34%, so "untouched" at densities 1 and 2 could never reach 35% and 45%,
+and mop-up at density 5 only could not reach 80% at density 4. **Where the two
+disagreed, the fill column won**, because it is the one anybody can see. What
+shipped, and what it achieves:
+
+| density | lattice slack | annex | mop-up | enclosure | target fill | ACHIEVED fill | max void component |
+|---|---|---|---|---|---|---|---|
+| 0 | 8 | 0.00 | 0.00 | 0.5 | ~28% | **26%** | unbounded |
+| 1 | 6 | 0.25 | 0.10 | 0.6 | ~35% | **33%** | 554 p50 |
+| 2 | 4 | 1.00 | 0.15 | 0.7 | ~45% | **47%** | 314 p50 |
+| 3 | 2 | 1.00 | 0.40 | 0.8 | ~60% | **65%** | 138 p50 |
+| 4 | 1 | 1.00 | 0.60 | 0.9 | ~80% | **80%** | 66 p50 |
+| 5 | 0 | 1.00 | 1.00 | 1.0 | ≥95% | **93%** | **0 p50, 2 max** |
+
+The `max void component` column was aspirational per level and only ever
+binding at density 5, where §5's acceptance is met on 200/200 seeds. The middle
+rows keep large components because their holes are *supposed* to be there — the
+dial is a ramp, not six copies of density 5. `lane gap beyond room` is not a
+column any more: it is `roomGapScale` in `DungeonDensity.Rows`, which scales the
+authored channel rather than naming an absolute.
 
 Enclosure 1.0 does not currently mean what it says: `ChooseEnclosedRooms`
 (`cs:3821-3824`) forces one room unenclosed whenever every draw came up true, so
@@ -331,7 +345,7 @@ moves.** A future spatial override should be checked against that.
 | **3** ✅ | **Corridor ownership + reroute spike, then M2 — pack.** Pitch, room size, slack, envelope radius, enclosure chance become functions of the dial. | Corpus hard-valid at 0–3; run-twice determinism; sentinels eyeballed at each level. | ~2–3 d |
 | **4** ✅ | **M3 — annex vacant lattice cells.** | Corpus hard-valid at 0–5; `voidComponents` max falls monotonically across the dial. | ~2–4 d |
 | **5** ✅ | **M4 — mop-up and chamber subdivision.** | Density 5 meets the §5 acceptance. | ~2–3 d |
-| **6** ← next | **Tune and look.** Sentinels at all six levels; retune the §4.3 table; measure collision-export size, scene object count and trap count at density 5. | Owner sentinel review. | ~1–2 d |
+| **6** ✅ | **Tune and look.** Sentinels at all six levels; retune the §4.3 table; measure collision-export size, scene object count and trap count at density 5. | Owner sentinel review. | ~1–2 d |
 
 Roughly **9–15 focused days**. Large, but all of it sits inside the existing
 route-first seam: no second planner, no new renderer concept, no change to the

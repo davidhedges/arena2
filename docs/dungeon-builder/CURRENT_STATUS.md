@@ -56,6 +56,66 @@ removed. The per-phase log lives in
 if you ever need to reconstruct why a decision was made. Treat it as history,
 not as current constraints.
 
+### Landed 2026-07-28 — density scale, phase 6 (tune and look). The dial is done.
+
+**The dial steps evenly now.** §4.3's fill column and its mechanism column
+disagreed with each other, and the fill column is the one anybody can see:
+packing alone tops out near 34% (measured), so densities 1 and 2 could never
+reach 35% and 45% with "vacant cells untouched", and density 4 could not reach
+80% with mop-up off. The mechanism columns moved to serve the fill column.
+
+| density | fill min/p50 | §4.3 target | annex | mop-up | accepted | hardValid | renders |
+|---|---|---|---|---|---|---|---|
+| 0 | 21 / **26%** | 28 | 0.00 | 0.00 | 199/200 | 199 | 199/200 |
+| 1 | 26 / **33%** | 35 | 0.25 | 0.10 | 200/200 | 200 | 200/200 |
+| 2 | 30 / **47%** | 45 | 1.00 | 0.15 | 200/200 | 200 | 200/200 |
+| 3 | 42 / **65%** | 60 | 1.00 | 0.40 | 200/200 | 200 | 200/200 |
+| 4 | 62 / **80%** | 80 | 1.00 | 0.60 | 200/200 | 200 | 200/200 |
+| 5 | 92 / **93%** | 95 | 1.00 | 1.00 | 200/200 | 200 | 200/200 |
+
+Steps of +7/+14/+18/+15/+13 points, against the shipped-yesterday
++3/+3/+9/+33/+19 — the cliff between 3 and 4 is gone. Density 0 is unchanged on
+all 200 canonical hashes, density 3 is byte-identical across two independent
+runs, and density 5 still meets §5 on 200/200.
+
+**`minLatticeEnvelopeFillPercent` is density-relative.** One flat 0.20 could not
+mean anything across a dial spanning 26% to 93%, so it is a column now — set a
+few points under each level's observed minimum, where it stays a backstop
+against a degenerate layout rather than a shaper of room size. The profile
+asset's field is gone; the table is the only source.
+
+**What density 5 costs (§9 residual risk 3, measured not assumed).** Twelve
+seeds per level, medians:
+
+| | density 0 | density 3 | density 5 |
+|---|---|---|---|
+| floor cells | 527 | 1108 | **1308** (2.5x) |
+| scene objects | 10615 | 13437 | **12645** (1.2x) |
+| colliders | 9640 | 11690 | **10650** (1.1x) |
+| partition walls | 27 | 92 | 204 |
+| cliff edges | 398 | 420 | **297** |
+| railings | 46 | 6 | 2 |
+| doorways | 26 | 44 | 52 |
+| gateways | 12 | 4 | **2** |
+| traps | 21 | 44 | 53 (2.5x) |
+
+Three things worth knowing:
+
+- **The cost does not scale with the floor.** 2.5x the play space costs 1.2x the
+  objects and 1.1x the colliders, because a packed seam becomes ONE partition
+  wall where an open cliff face was a wall plus a railing plus corner kits. §9
+  expected the opposite. Collision payload is one entry per collision source, so
+  the collider count is the payload size to within a constant.
+- **The peak is in the middle, not at the packed end.** Density 3 renders more
+  objects than density 5: a half-packed floorplan has the most boundary, and
+  boundary is what costs.
+- **Doors nearly vanish as density rises** — 12 gateways at density 0, 2 at
+  density 5, while doorways double. The gateway rules require a real wall on
+  both flanks and leave chamfer-framed entrances bare on purpose
+  (`docs`, 2026-07-26), and a packed floorplan produces fewer qualifying
+  frames. That is a look question for the owner rather than a defect: a packed
+  keep with two doors may or may not be what you want.
+
 ### Landed 2026-07-28 — density scale, phase 5 (M4 — mop up, and chambers)
 
 **Density 5 meets §5's acceptance on all 200 seeds**: max void component ≤4
@@ -869,26 +929,23 @@ doing the graph-as-data work as the vehicle.
 
 ### Next, in order
 
-0. **The density scale — phases 0 through 5 have landed; phase 6 (tune and
-   look) is all that is left.** Design in
+0. **The density scale is DONE — phases 0 through 6 have all landed.** Design in
    [`density-scale-design-2026-07-27.md`](density-scale-design-2026-07-27.md).
    Items 3, 4 and 5 below are closed by it: the stairwell shaft is an explicit
    reservation, `atrium-ring`'s density failure died with the bounding-box fill
-   gate, and the tier void is what the whole dial removes. What is left:
+   gate, and the tier void is what the whole dial removes. Two things it
+   surfaced and deliberately did not fix, both look questions rather than
+   defects:
 
-   a. **Phase 6 — tune and look.** The mechanisms are all in; §4.3's table is
-      what phase 6 moves. Fill now runs 26/29/32/41/74/93% across the dial,
-      which is uneven in the middle — densities 3 and 4 sit under §4.3's 60%
-      and 80% because mop-up is off at 3 and half on at 4. Also on the list:
-      measure collision-export size, scene object count and trap count at
-      density 5 (§7 phase 6), and decide whether density 5's ~2x floor is the
-      dungeon you want to play.
+   a. **Doors nearly vanish at high density** — 12 gateways at density 0, 2 at
+      density 5, while doorways double. The gateway rules want a real wall on
+      both flanks and leave chamfer-framed entrances bare on purpose, and a
+      packed floorplan produces fewer qualifying frames. Worth an owner call on
+      whether a packed keep should have more doors.
 
-   b. **Retune `minLatticeEnvelopeFillPercent`.** It is a flat 0.20 backstop,
-      two points under the observed density-0 minimum, so it rejects nothing —
-      and fill now spans 26% to 93% across the dial, so one flat number cannot
-      mean anything at both ends. Make it density-relative in phase 6, where the
-      §4.3 table is retuned anyway.
+   b. **The tier-void ratio is untouched** (item 5 below). It is the one thing
+      the dial cannot reach: 4-8u of rise across a 36u+ gap lives in `CellSize`
+      vs `StairForge.LevelHeight`, not in any topology or density row.
 
 1. **Look at the dungeons.** **Arena > Dungeons > Rebuild Random Dungeon** on a few
    seeds. No hash tells you whether a dungeon reads well. One rendered shot per

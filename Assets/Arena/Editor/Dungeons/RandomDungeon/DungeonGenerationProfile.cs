@@ -173,6 +173,11 @@ namespace DungeonLab.Editor
         // because it removes a different thing: the crater is space the packer
         // could never reach, the channel is space it left behind.
         public readonly float mopUpVoidFraction;
+        // The backstop against a degenerate layout at THIS level. It is not the
+        // thing that makes a dungeon dense — the columns above are — so it sits
+        // a few points under the level's observed minimum and normally rejects
+        // nothing. One flat number could not do that once fill spanned 26-93%.
+        public readonly float minLatticeEnvelopeFillPercent;
 
         public DungeonDensityRow(
             int pitchDeltaCells,
@@ -180,7 +185,8 @@ namespace DungeonLab.Editor
             float roomGapScale,
             float enclosedRoomChance,
             float annexVacantFraction,
-            float mopUpVoidFraction)
+            float mopUpVoidFraction,
+            float minLatticeEnvelopeFillPercent)
         {
             this.pitchDeltaCells = pitchDeltaCells;
             this.latticeSlackMaxCells = latticeSlackMaxCells;
@@ -188,6 +194,7 @@ namespace DungeonLab.Editor
             this.enclosedRoomChance = enclosedRoomChance;
             this.annexVacantFraction = annexVacantFraction;
             this.mopUpVoidFraction = mopUpVoidFraction;
+            this.minLatticeEnvelopeFillPercent = minLatticeEnvelopeFillPercent;
         }
     }
 
@@ -205,24 +212,27 @@ namespace DungeonLab.Editor
         public const int MinLevel = 0;
         public const int MaxLevel = 5;
 
-        // The §4.3 tuning table. It is a table on purpose: phase 6 retunes the
-        // dial by looking at sentinels and editing these six rows, not by
-        // rebuilding anything. The fill and max-void-component columns of §4.3
-        // are TARGETS to measure against, not inputs — they are not here because
-        // nothing reads them.
+        // The §4.3 tuning table, retuned by measurement in phase 6 (2026-07-28).
+        // It is a table on purpose: the dial is moved by editing these six rows,
+        // not by rebuilding anything.
+        //
+        // §4.3's fill column (28/35/45/60/80/95%) and its mechanism columns
+        // disagreed, and the fill column is the one anybody can see. Packing
+        // alone tops out near 34% — measured — so densities 1 and 2 could not
+        // reach 35% and 45% with "vacant cells untouched", and density 4 could
+        // not reach 80% with mop-up off. The mechanism columns moved to hit the
+        // fill column; where they still disagree, the fill column wins.
+        //
+        // Achieved, 200 seeds: 26 / 34 / 45 / 61 / 80 / 93%.
         private static readonly DungeonDensityRow[] Rows =
         {
-            //                    pitchDelta  slack  gapScale  enclosure  annex  mopUp
-            new DungeonDensityRow(         0,     8,     1.00f,     0.5f,  0.00f, 0.00f),
-            new DungeonDensityRow(         0,     6,     0.80f,     0.6f,  0.00f, 0.00f),
-            new DungeonDensityRow(         0,     4,     0.60f,     0.7f,  0.00f, 0.00f),
-            new DungeonDensityRow(         0,     2,     0.40f,     0.8f,  0.50f, 0.00f),
-            // §4.3 puts mop-up at density 5 only, but it also targets 80% fill
-            // at density 4 — and M3's own ceiling is ~72%, measured. Density 4
-            // therefore mops half its bands: the mechanism is the table's, the
-            // split across the last two rows is what the fill column asks for.
-            new DungeonDensityRow(         0,     1,     0.20f,     0.9f,  1.00f, 0.50f),
-            new DungeonDensityRow(         0,     0,     0.00f,     1.0f,  1.00f, 1.00f)
+            //                    pitchDelta  slack  gapScale  enclosure  annex  mopUp  minFill
+            new DungeonDensityRow(         0,     8,     1.00f,     0.5f,  0.00f, 0.00f,  0.18f),
+            new DungeonDensityRow(         0,     6,     0.80f,     0.6f,  0.25f, 0.10f,  0.22f),
+            new DungeonDensityRow(         0,     4,     0.60f,     0.7f,  1.00f, 0.15f,  0.26f),
+            new DungeonDensityRow(         0,     2,     0.40f,     0.8f,  1.00f, 0.40f,  0.34f),
+            new DungeonDensityRow(         0,     1,     0.20f,     0.9f,  1.00f, 0.60f,  0.48f),
+            new DungeonDensityRow(         0,     0,     0.00f,     1.0f,  1.00f, 1.00f,  0.85f)
         };
 
         public static int Clamp(int level)
@@ -261,10 +271,6 @@ namespace DungeonLab.Editor
         [Min(1)]
         [Tooltip("Minimum accepted room count. Layouts below this are rejected before rendering.")]
         public int denseFloorplanMinRooms = 9;
-
-        [Range(0f, 1f)]
-        [Tooltip("Minimum accepted floor fill over the LATTICE envelope. A backstop against a degenerate layout, not the thing that makes a dungeon dense - that is densityLevel.")]
-        public float minLatticeEnvelopeFillPercent = 0.2f;
 
         [Range(0f, 1f)]
         [Tooltip("Target loop-edge fraction relative to the room tree. Loops are still gated by level grammar and path validation.")]
@@ -364,13 +370,16 @@ namespace DungeonLab.Editor
                 mapWidthMaxCells = mapWidthMaxCells,
                 mapDepthMaxCells = mapDepthMaxCells,
                 denseFloorplanMinRooms = denseFloorplanMinRooms,
-                minLatticeEnvelopeFillPercent = minLatticeEnvelopeFillPercent,
                 loopConnectionFraction = loopConnectionFraction,
                 maxLoopCandidateDistanceCells = maxLoopCandidateDistanceCells,
                 roomZoneSplitChance = roomZoneSplitChance,
                 // Not a spatial setting, but it is on the same dial: once rooms
                 // abut, an unenclosed pair merges into one open field.
                 enclosedRoomChance = DungeonDensity.Row(level).enclosedRoomChance,
+                // Density-relative from phase 6: a flat backstop could not mean
+                // anything at both ends of a dial spanning 26% to 93% fill.
+                minLatticeEnvelopeFillPercent =
+                    DungeonDensity.Row(level).minLatticeEnvelopeFillPercent,
                 // Also not a spatial setting: M3 runs after corridors, on cells
                 // the packer never had a chance at, so it is a pass rather than
                 // a parameter of the packing.
