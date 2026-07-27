@@ -193,18 +193,23 @@ Things worth knowing:
   minimum span means less slack. A seven-column lattice at a 9-cell pitch spans
   54 cells before rooms, does not fit 52, and cannot be widened into fitting —
   that is an authoring problem, and the validator says so.
-- **Bigger gaps grow the floor bounding box without growing rooms**, so
-  `denseFloorplanMinFillPercent` (0.26) is the thing that bites, and it bites
-  suddenly. Measured over `2026072100..2026072299` (on the `dense` profile that
-  the density dial replaced; density 0 sits a couple of points lower):
+- **Bigger gaps spread the same rooms over a bigger lattice**, so the fill gate
+  is what bites, and it bites suddenly rather than gradually. It used to be
+  `denseFloorplanMinFillPercent` (0.26) measured over the FLOOR bounding box,
+  and on that metric a wider rubber sheet was catastrophic — measured over
+  `2026072100..2026072299` on the `dense` profile the density dial replaced:
 
   | `latticeSlackMaxCells` | accepted | floor fill min / median | `ROUTE_DENSITY_PRECONDITION` |
   | --- | --- | --- | --- |
   | 8 (shipped) | 199/200 | 27.1% / 30.7% | 0 |
   | 14 | 154/200 | 26.0% / 27.4% | 117 |
 
-  So 8 is not an arbitrary constant — it is most of the available room, with
-  about one point of fill to spare. Raise it and re-measure, or don't raise it.
+  Since 2026-07-27 the gate is `minLatticeEnvelopeFillPercent` (0.20) over the
+  lattice envelope, which is the box the embedder measures against, and it is
+  deliberately a backstop rather than a shaper: how packed a dungeon is, is
+  `densityLevel`. So slack no longer trades against acceptance the way that
+  table shows — but it still trades against fill, and the fill number is what
+  the density dial is steered on. Raise it and re-measure.
 - The minimum lattice is the worst case for **every other rule** — a shorter
   vista lane, tighter rooms — so that is what the validator checks against. The
   widest lattice is the worst case for the envelope only.

@@ -93,19 +93,34 @@ no longer retry for a transition reservation at all. Six previously-red tests
 went green, none went red — including both `atrium-ring` density tests, which is
 the §3 prediction landing.
 
-**Two seeds regressed, both on stale gates §3 already names, not on the new
-reservation:**
+**Then the fill gate moved onto the new metric** (§3 + §5), which is the other
+half of the same change: `denseFloorplanMinFillPercent` measured floor over the
+FLOOR bounding box, so it rejected layouts for exactly the two things this work
+wants — a promontory reaching outward, and rooms growing. It is now
+`minLatticeEnvelopeFillPercent` over the lattice envelope, the box the embedder
+itself measures against, carried onto `RouteTierRequirements` so both gate sites
+(layout stage and post-loop) use the same denominator.
 
-- `2026072231` now fails `ROUTE_DENSITY_PRECONDITION` at 25.6% against the 26%
-  floor. Rooms grew, so the floor bounding box grew slightly faster than the
-  floor did. That gate is `denseFloorplanMinFillPercent` over the floor bounding
-  box — the stale metric §3 marks for replacement, and phase 0 already shipped
-  its replacement (`latticeEnvelopeFillPercent`). **Swapping the gate over is the
-  first thing phase 3 should do.**
-- `2026072187` now fails `EXTERNAL_CONNECTOR_PROMONTORY`: it wants exactly four
-  connectors on distinct cardinals and the grown core no longer offers four
-  anchors that fit. The exact-count, all-or-nothing requirement is pre-existing
-  brittleness; `2026072198` hits it too and recovers on the second layout attempt.
+| | baseline | after M1 | after the gate swap |
+|---|---|---|---|
+| accepted | 184/200 | 196/200 | **199/200** |
+| `ROUTE_TRANSITION_RESERVATION` | 12 | 0 | 0 |
+| `ROUTE_DENSITY_PRECONDITION` | 38 | 16 | **0** |
+| mean layout attempts | 1.13 | 1.08 | **1.01** |
+
+The threshold is a flat **0.20**, two points under the observed density-0 minimum
+of 22%, so it currently rejects nothing. That is deliberate: §3's finding is that
+this gate can reject sparse output but cannot create floor, so it is a backstop
+against a degenerate layout and `densityLevel` is the thing that makes a dungeon
+dense. It needs retuning when phase 3 makes fill actually move.
+
+**One seed still fails, and it is not the density work:** `2026072187` wants
+exactly four external connectors on distinct cardinals and the grown core no
+longer offers four anchors that fit. `TryResolveExternalConnectorPromontories`
+is atomic on an exact per-seed count, which is pre-existing brittleness —
+`2026072198` hits it too and recovers on a second layout attempt. Relaxing that
+count is a change to a shipped contract ("1–4 external promontories"), so it was
+left alone rather than folded into a density change.
 
 **Still open in phase 2: the explicit stairwell shaft.** See "Next, in order".
 
@@ -556,15 +571,15 @@ doing the graph-as-data work as the vehicle.
       position, so making it a *guarantee* means constraining the placer to the
       reserved shaft, with a fallback to the other side. That is the real shape
       of this item and why it was not folded into the M1 change.
-   b. **Swap `denseFloorplanMinFillPercent` onto the new metric** (§3 + §5).
-      It gates on floor over the floor bounding box, which grows when a
-      promontory reaches outward and when rooms grow. It cost `2026072231` its
-      acceptance in phase 2 and it is the whole reason `atrium-ring` used to fail
-      most of its seeds. `latticeEnvelopeFillPercent` shipped in phase 0.
-   c. **Phase 3 (M2 — pack)**, starting with the corridor ownership + reroute
+   b. **Phase 3 (M2 — pack)**, starting with the corridor ownership + reroute
       spike (§3.1 candidate 3), then pitch/room size/slack/envelope radius/
       enclosure as functions of the dial in
       `DungeonGenerationProfile.ResolveDensitySpatialSettings`.
+   c. **Retune `minLatticeEnvelopeFillPercent` when the dial moves.** It is a
+      flat 0.20 backstop today, two points under the observed density-0 minimum,
+      so it rejects nothing. §4.3 targets 28% at density 0 rising to 95% at
+      density 5, so once phase 3 makes fill move this should become
+      density-relative or it stops meaning anything.
 1. **Look at the dungeons.** **Arena > Dungeons > Rebuild Random Dungeon** on a few
    seeds. No hash tells you whether a dungeon reads well. One rendered shot per
    new topology is in `DungeonLabReports/step3_topology_shots/` (dense, seeds

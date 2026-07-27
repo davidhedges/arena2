@@ -1249,7 +1249,9 @@ namespace DungeonLab.Editor
                 rng,
                 CurrentGenerationSettings);
             int loopEdges = CountLoopEdges(loopedLayout);
-            float floorFillPercent = CalculateFloorFillPercent(loopedLayout.floorCells);
+            float latticeFillPercent = LatticeEnvelopeFillPercent(
+                loopedLayout.floorCells,
+                routeRequirements.latticeEnvelope);
             if (loopEdges <= 0)
             {
                 rejectionReason = "floorplan had no loop edges";
@@ -1262,9 +1264,12 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            if (floorFillPercent < CurrentGenerationSettings.denseFloorplanMinFillPercent)
+            // Loop connections only ever ADD corridor cells, so this can only
+            // rise above what the layout stage already accepted. It stays as the
+            // post-loop restatement of the same backstop.
+            if (latticeFillPercent < CurrentGenerationSettings.minLatticeEnvelopeFillPercent)
             {
-                rejectionReason = $"floor-fill {floorFillPercent * 100f:0.#}% was below dense gate {CurrentGenerationSettings.denseFloorplanMinFillPercent * 100f:0.#}%";
+                rejectionReason = $"lattice-envelope fill {latticeFillPercent * 100f:0.#}% was below the {CurrentGenerationSettings.minLatticeEnvelopeFillPercent * 100f:0.#}% gate";
                 return false;
             }
 

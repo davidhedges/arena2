@@ -1726,6 +1726,9 @@ namespace DungeonLab.Editor
         {
             return new RouteTierRequirements(
                 intent,
+                // A promontory probe never reaches the fill gate, so the envelope
+                // it would measure against is not part of what this fixture tests.
+                new RectInt(0, 0, 1, 1),
                 reservedCells,
                 sourceCell,
                 targetCell,

@@ -259,6 +259,10 @@ namespace DungeonLab.Editor
         private sealed class RouteTierRequirements
         {
             public readonly RouteIntent intent;
+            // The box this dungeon was given, fixed by the embedding. Carried
+            // rather than recomputed so the tier stage's fill gate measures the
+            // same denominator the layout stage did.
+            public readonly RectInt latticeEnvelope;
             public readonly HashSet<Vector2Int> reservedVistaCells;
             public readonly Vector2Int vistaSourceCell;
             public readonly Vector2Int vistaTargetCell;
@@ -269,6 +273,7 @@ namespace DungeonLab.Editor
 
             public RouteTierRequirements(
                 RouteIntent intent,
+                RectInt latticeEnvelope,
                 IEnumerable<Vector2Int> reservedVistaCells,
                 Vector2Int vistaSourceCell,
                 Vector2Int vistaTargetCell,
@@ -278,6 +283,7 @@ namespace DungeonLab.Editor
                 RecipePlacement[] recipes)
             {
                 this.intent = intent;
+                this.latticeEnvelope = latticeEnvelope;
                 this.reservedVistaCells = new HashSet<Vector2Int>(reservedVistaCells);
                 this.vistaSourceCell = vistaSourceCell;
                 this.vistaTargetCell = vistaTargetCell;
@@ -473,13 +479,21 @@ namespace DungeonLab.Editor
                     out rejectionReason);
             }
 
+            // Measured over the LATTICE envelope, not the floor bounding box.
+            // The old denominator grew whenever a promontory reached outward or a
+            // room grew, so it rejected layouts for doing the two things the
+            // density work wants (design §3, §5). This one is fixed by the
+            // embedding, which makes it a backstop against a degenerate layout
+            // rather than a hidden shaper of room size.
+            RectInt latticeEnvelope = LatticeEnvelopeFor(nodeCenters, spatial);
+            float latticeFill = LatticeEnvelopeFillPercent(floorCells, latticeEnvelope);
             if (rooms.Count < settings.denseFloorplanMinRooms ||
-                CalculateFloorFillPercent(floorCells) < settings.denseFloorplanMinFillPercent)
+                latticeFill < settings.minLatticeEnvelopeFillPercent)
             {
                 return RejectRoute(
                     "ROUTE_DENSITY_PRECONDITION",
-                    $"compiled {rooms.Count} rooms at {CalculateFloorFillPercent(floorCells) * 100f:0.#}% fill; " +
-                    $"profile requires {settings.denseFloorplanMinRooms} rooms and {settings.denseFloorplanMinFillPercent * 100f:0.#}% fill",
+                    $"compiled {rooms.Count} rooms at {latticeFill * 100f:0.#}% lattice-envelope fill; " +
+                    $"profile requires {settings.denseFloorplanMinRooms} rooms and {settings.minLatticeEnvelopeFillPercent * 100f:0.#}% fill",
                     out rejectionReason);
             }
 
@@ -513,6 +527,7 @@ namespace DungeonLab.Editor
                 connectorCandidateCount);
             routeRequirements = new RouteTierRequirements(
                 intent,
+                latticeEnvelope,
                 reservedVistaCells,
                 sourceVistaCell,
                 targetVistaCell,

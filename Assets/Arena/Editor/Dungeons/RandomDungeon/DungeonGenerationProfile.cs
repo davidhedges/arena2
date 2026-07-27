@@ -200,8 +200,8 @@ namespace DungeonLab.Editor
         public int denseFloorplanMinRooms = 9;
 
         [Range(0f, 1f)]
-        [Tooltip("Minimum accepted floor-fill percentage inside the generated floor bounding box. Lower values allow more open, spread-out dungeons.")]
-        public float denseFloorplanMinFillPercent = 0.34f;
+        [Tooltip("Minimum accepted floor fill over the LATTICE envelope. A backstop against a degenerate layout, not the thing that makes a dungeon dense - that is densityLevel.")]
+        public float minLatticeEnvelopeFillPercent = 0.2f;
 
         [Range(0f, 1f)]
         [Tooltip("Target loop-edge fraction relative to the room tree. Loops are still gated by level grammar and path validation.")]
@@ -301,7 +301,7 @@ namespace DungeonLab.Editor
                 mapWidthMaxCells = mapWidthMaxCells,
                 mapDepthMaxCells = mapDepthMaxCells,
                 denseFloorplanMinRooms = denseFloorplanMinRooms,
-                denseFloorplanMinFillPercent = denseFloorplanMinFillPercent,
+                minLatticeEnvelopeFillPercent = minLatticeEnvelopeFillPercent,
                 loopConnectionFraction = loopConnectionFraction,
                 maxLoopCandidateDistanceCells = maxLoopCandidateDistanceCells,
                 roomZoneSplitChance = roomZoneSplitChance,
@@ -356,7 +356,7 @@ namespace DungeonLab.Editor
         public int mapWidthMaxCells;
         public int mapDepthMaxCells;
         public int denseFloorplanMinRooms;
-        public float denseFloorplanMinFillPercent;
+        public float minLatticeEnvelopeFillPercent;
         public float loopConnectionFraction;
         public int maxLoopCandidateDistanceCells;
         public float roomZoneSplitChance;
@@ -371,7 +371,7 @@ namespace DungeonLab.Editor
             value.mapWidthMaxCells = Mathf.Max(12, value.mapWidthMaxCells);
             value.mapDepthMaxCells = Mathf.Max(12, value.mapDepthMaxCells);
             value.denseFloorplanMinRooms = Mathf.Max(1, value.denseFloorplanMinRooms);
-            value.denseFloorplanMinFillPercent = Mathf.Clamp01(value.denseFloorplanMinFillPercent);
+            value.minLatticeEnvelopeFillPercent = Mathf.Clamp01(value.minLatticeEnvelopeFillPercent);
             value.loopConnectionFraction = Mathf.Clamp01(value.loopConnectionFraction);
             value.maxLoopCandidateDistanceCells = Mathf.Max(1, value.maxLoopCandidateDistanceCells);
             value.roomZoneSplitChance = Mathf.Clamp01(value.roomZoneSplitChance);

@@ -50,6 +50,61 @@ namespace DungeonLab.Editor
         // box TryTransformCoarseEmbedding measures against mapWidth/DepthMaxCells,
         // so it is the generator's own idea of "the space this dungeon was given"
         // rather than a bounding box derived from what came out.
+        internal static RectInt LatticeEnvelopeFor(
+            IReadOnlyList<Vector2Int> nodeCenters,
+            DungeonPatternSpatialSettings spatial)
+        {
+            int radius = spatial.roomEnvelopeRadiusCells;
+            int minX = int.MaxValue;
+            int minY = int.MaxValue;
+            int maxX = int.MinValue;
+            int maxY = int.MinValue;
+            foreach (Vector2Int center in nodeCenters)
+            {
+                minX = Mathf.Min(minX, center.x);
+                minY = Mathf.Min(minY, center.y);
+                maxX = Mathf.Max(maxX, center.x);
+                maxY = Mathf.Max(maxY, center.y);
+            }
+
+            return new RectInt(
+                minX - radius,
+                minY - radius,
+                maxX - minX + radius * 2 + 1,
+                maxY - minY + radius * 2 + 1);
+        }
+
+        /// <summary>
+        /// Floor inside the lattice envelope, over that envelope's area.
+        /// </summary>
+        /// <remarks>
+        /// This is the acceptance metric that replaced
+        /// <see cref="CalculateFloorFillPercent"/>, which measured floor over the
+        /// FLOOR bounding box and therefore fell whenever a promontory reached
+        /// outward or a room grew — penalising two things the density work wants
+        /// (design §3, §5). The denominator here is fixed by the embedding, so
+        /// the number only moves when the amount of floor does.
+        /// </remarks>
+        internal static float LatticeEnvelopeFillPercent(
+            HashSet<Vector2Int> floorCells,
+            RectInt envelope)
+        {
+            int area = Mathf.Max(1, envelope.width * envelope.height);
+            int inside = 0;
+            foreach (Vector2Int cell in floorCells)
+            {
+                if (envelope.Contains(cell))
+                {
+                    inside++;
+                }
+            }
+
+            return inside / (float)area;
+        }
+
+        // The diagnostic entry point, which reads the ephemeral route embedding
+        // the report path already depends on. Generation gates use the pure
+        // overload above with the embedding they hold.
         private static bool TryResolveLatticeEnvelope(out RectInt envelope)
         {
             envelope = default;
@@ -61,26 +116,9 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            DungeonPatternSpatialSettings spatial =
-                ResolveTopologySpatialSettings(lastRouteIntent.topology);
-            int radius = spatial.roomEnvelopeRadiusCells;
-            int minX = int.MaxValue;
-            int minY = int.MaxValue;
-            int maxX = int.MinValue;
-            int maxY = int.MinValue;
-            foreach (Vector2Int center in lastNodeCenters)
-            {
-                minX = Mathf.Min(minX, center.x);
-                minY = Mathf.Min(minY, center.y);
-                maxX = Mathf.Max(maxX, center.x);
-                maxY = Mathf.Max(maxY, center.y);
-            }
-
-            envelope = new RectInt(
-                minX - radius,
-                minY - radius,
-                maxX - minX + radius * 2 + 1,
-                maxY - minY + radius * 2 + 1);
+            envelope = LatticeEnvelopeFor(
+                lastNodeCenters,
+                ResolveTopologySpatialSettings(lastRouteIntent.topology));
             return true;
         }
 
