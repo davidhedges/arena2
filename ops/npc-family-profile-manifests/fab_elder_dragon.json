@@ -1,0 +1,106 @@
+{
+  "source_family_name": "FabElderDragon",
+  "prefab_glob": "Assets/ThirdParty/AssetStore/Characters/StylizedDragonPack/Prefabs/URP/ElderDragon/ElderDragon_*.prefab",
+  "acknowledge_static_prefab_review": true,
+  "expected_appearance_count": 6,
+  "primary_animator_path": ".",
+  "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/StylizedDragonPack/Meshes/ElderDragon_Controller.controller",
+  "prefab_file_ids": {
+    "ELDER_DRAGON_BK": 4689088830600661543,
+    "ELDER_DRAGON_BL": 2871848283852414076,
+    "ELDER_DRAGON_GN": 5647106691912564080,
+    "ELDER_DRAGON_GO": 3147807572183756994,
+    "ELDER_DRAGON_PE": 2606170514624909199,
+    "ELDER_DRAGON_RD": 1465087054457241370
+  },
+  "animations": {
+    "idle": [
+      "Idle_Ground"
+    ],
+    "ready": [
+      "Combat_Ground_Ready"
+    ],
+    "walk": [
+      "Walk_Ground_Forward"
+    ],
+    "run": [
+      "Run_Ground_Forward"
+    ],
+    "basicAttack": [
+      "Combat_Ground_Attack"
+    ],
+    "spellCastStart": [
+      "Combat_Ground_Spell_Start"
+    ],
+    "spellRelease": [
+      "Combat_Ground_Spell_End"
+    ],
+    "spellCancel": [
+
+    ],
+    "hit": [
+      "Combat_Ground_Hit"
+    ],
+    "death": [
+      "Death_Ground"
+    ]
+  },
+  "action_animations": [
+    {
+      "ability_id": "NPC_FAB_DRAGON_SPECIAL_STRIKE",
+      "states": [
+        "Combat_Ground_AttackSpecial"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_DRAGON_STRIKE_4",
+      "states": [
+        "Combat_Ground_Attack03"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_DRAGON_STRIKE_3",
+      "states": [
+        "Combat_Ground_Attack02"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_DRAGON_STRIKE_2",
+      "states": [
+        "Combat_Ground_Attack01"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_DRAGON_STRIKE",
+      "states": [
+        "Combat_Ground_Attack"
+      ]
+    }
+  ],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": ".",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+    {
+      "status_kind": "STUN",
+      "clip_file_id": 5792537106913136455,
+      "clip_guid": "97bf5849c1f38994d870d6481197e83f",
+      "require_humanoid_avatar": false
+    }
+  ]
+}

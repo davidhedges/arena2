@@ -1,0 +1,99 @@
+{
+  "source_family_name": "FabFireRevenant",
+  "prefab_glob": "Assets/ThirdParty/AssetStore/Characters/FireRevenant/Prefabs/FireRevenant_*.prefab",
+  "acknowledge_static_prefab_review": true,
+  "expected_appearance_count": 5,
+  "primary_animator_path": ".",
+  "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/FireRevenant/Meshes/FireRevenant.controller",
+  "prefab_file_ids": {
+    "FIRE_REVENANT_BL": 635070511714888428,
+    "FIRE_REVENANT_GN": 193232939381345848,
+    "FIRE_REVENANT_PE": 611926694836003732,
+    "FIRE_REVENANT_RD": 8109494047043288998,
+    "FIRE_REVENANT_YE": 304567268899524173
+  },
+  "animations": {
+    "idle": [
+      "idle"
+    ],
+    "ready": [
+      "Combat_1H_Ready"
+    ],
+    "walk": [
+      "Walk_Forward"
+    ],
+    "run": [
+      "Run_Forward"
+    ],
+    "basicAttack": [
+      "Combat_1H_Attack"
+    ],
+    "spellCastStart": [
+      "Spell_1H_Forward_Start"
+    ],
+    "spellRelease": [
+      "Spell_1H_Forward_End"
+    ],
+    "spellCancel": [
+
+    ],
+    "hit": [
+      "Combat_1H_Hit"
+    ],
+    "death": [
+      "Death"
+    ]
+  },
+  "action_animations": [
+    {
+      "ability_id": "NPC_FAB_MEDIUM_SPECIAL_STRIKE",
+      "states": [
+        "Combat_1H_AttackSpecial"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_MEDIUM_STRIKE_3",
+      "states": [
+        "Combat_1H_Attack02"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_MEDIUM_STRIKE_2",
+      "states": [
+        "Combat_1H_Attack01"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_MEDIUM_STRIKE",
+      "states": [
+        "Combat_1H_Attack"
+      ]
+    }
+  ],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": ".",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+    {
+      "status_kind": "STUN",
+      "clip_file_id": -8767420384561272259,
+      "clip_guid": "38dd1b9695f7d6342b5e27033fc498ea",
+      "require_humanoid_avatar": false
+    }
+  ]
+}

@@ -2947,6 +2947,8 @@ mod tests {
                 "LICH_CASTER_SHADOW_BOLT",
                 "SKELETAL_DRAGON_BONE_BREATH",
                 "SKELETON_CULTIST_SHADOW_BOLT",
+                "FAB_SHADOW_BOLT",
+                "FAB_DRAGON_BREATH",
             ]
         );
     }

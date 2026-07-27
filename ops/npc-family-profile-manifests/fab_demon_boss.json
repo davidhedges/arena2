@@ -1,0 +1,93 @@
+{
+  "source_family_name": "FabDemonBoss",
+  "prefab_glob": "Assets/ThirdParty/AssetStore/Characters/DemonBoss/Prefabs/DemonBoss_*.prefab",
+  "acknowledge_static_prefab_review": true,
+  "expected_appearance_count": 5,
+  "primary_animator_path": ".",
+  "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/DemonBoss/Meshes/DemonBoss.controller",
+  "prefab_file_ids": {
+    "DEMON_BOSS_BL": 4840253434095515474,
+    "DEMON_BOSS_BR": 385995580343729572,
+    "DEMON_BOSS_PE": 9122172562597574519,
+    "DEMON_BOSS_RD": 2936313408203824105,
+    "DEMON_BOSS_VT": 673775762295873699
+  },
+  "animations": {
+    "idle": [
+      "idle"
+    ],
+    "ready": [
+      "Combat_Unarmed_Ready"
+    ],
+    "walk": [
+      "Walk_Forward"
+    ],
+    "run": [
+      "Run_Forward"
+    ],
+    "basicAttack": [
+      "Combat_Unarmed_Attack"
+    ],
+    "spellCastStart": [
+      "Spell_Unarmed_Forward_Start"
+    ],
+    "spellRelease": [
+      "Spell_Unarmed_Forward_Loop"
+    ],
+    "spellCancel": [
+
+    ],
+    "hit": [
+      "Combat_Unarmed_Hit"
+    ],
+    "death": [
+      "Death"
+    ]
+  },
+  "action_animations": [
+    {
+      "ability_id": "NPC_FAB_MEDIUM_SPECIAL_STRIKE",
+      "states": [
+        "Combat_Unarmed_AttackSpecial"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_MEDIUM_STRIKE_2",
+      "states": [
+        "Combat_Unarmed_Attack01"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_MEDIUM_STRIKE",
+      "states": [
+        "Combat_Unarmed_Attack"
+      ]
+    }
+  ],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": ".",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+    {
+      "status_kind": "STUN",
+      "clip_file_id": -8767420384561272259,
+      "clip_guid": "d6ed4ae920d5cbd4c8bb81b2a441f3c9",
+      "require_humanoid_avatar": false
+    }
+  ]
+}

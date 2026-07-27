@@ -12,7 +12,7 @@ namespace Arena.Editor
     internal sealed class NpcAppearanceInventoryDocument
     {
         public string schema = "ARENA_NPC_APPEARANCE_INVENTORY_DRAFT_V1";
-        public int expected_appearance_count = 204;
+        public int expected_appearance_count = 329;
         public int appearance_count;
         public int family_count;
         public List<string> global_warnings = new();
@@ -74,14 +74,50 @@ namespace Arena.Editor
 
         private readonly struct PackageRoot
         {
-            public PackageRoot(string packageId, string assetPath)
+            public PackageRoot(
+                string packageId,
+                string assetPath,
+                string fixedFamilyName = "",
+                bool familyFromPrefabPrefix = false,
+                string excludedPrefabPrefix = "")
             {
                 PackageId = packageId;
                 AssetPath = assetPath;
+                FixedFamilyName = fixedFamilyName;
+                FamilyFromPrefabPrefix = familyFromPrefabPrefix;
+                ExcludedPrefabPrefix = excludedPrefabPrefix;
             }
 
             public string PackageId { get; }
             public string AssetPath { get; }
+            public string FixedFamilyName { get; }
+            public bool FamilyFromPrefabPrefix { get; }
+            public string ExcludedPrefabPrefix { get; }
+
+            public bool IncludesPrefab(string path)
+            {
+                if (string.IsNullOrEmpty(ExcludedPrefabPrefix))
+                    return true;
+                string prefabName = Path.GetFileNameWithoutExtension(path);
+                return !prefabName.StartsWith(ExcludedPrefabPrefix, StringComparison.Ordinal);
+            }
+
+            public string ResolveFamilyName(string path)
+            {
+                if (!string.IsNullOrEmpty(FixedFamilyName))
+                    return FixedFamilyName;
+
+                string prefabName = Path.GetFileNameWithoutExtension(path);
+                if (FamilyFromPrefabPrefix)
+                {
+                    int underscore = prefabName.IndexOf('_');
+                    return underscore > 0 ? prefabName.Substring(0, underscore) : prefabName;
+                }
+
+                string relative = path.Substring(AssetPath.Length + 1);
+                int slash = relative.IndexOf('/');
+                return slash > 0 ? relative.Substring(0, slash) : prefabName;
+            }
         }
 
         private static readonly PackageRoot[] PackageRoots =
@@ -98,6 +134,41 @@ namespace Arena.Editor
             new(
                 "STYLIZED_UNDEAD_BUNDLE",
                 "Assets/ThirdParty/AssetStore/Characters/StylizedUndeadBundle/Prefabs"),
+            new(
+                "FAB_FIRE_REVENANT",
+                "Assets/ThirdParty/AssetStore/Characters/FireRevenant/Prefabs",
+                fixedFamilyName: "FireRevenant"),
+            new(
+                "FAB_DEMON_BOSS",
+                "Assets/ThirdParty/AssetStore/Characters/DemonBoss/Prefabs",
+                fixedFamilyName: "DemonBoss"),
+            new(
+                "FAB_DEMON_MINIONS",
+                "Assets/ThirdParty/AssetStore/Characters/DemonMinions/Prefabs",
+                familyFromPrefabPrefix: true),
+            new(
+                "FAB_STYLIZED_DRAGONS",
+                "Assets/ThirdParty/AssetStore/Characters/StylizedDragonPack/Prefabs/URP"),
+            new(
+                "FAB_STYLIZED_MIMIC",
+                "Assets/ThirdParty/AssetStore/Characters/StylizedMimic/Prefabs",
+                fixedFamilyName: "Mimic",
+                excludedPrefabPrefix: "TreasureChest_"),
+            new(
+                "FAB_OGRE_TROLL_PACK",
+                "Assets/ThirdParty/AssetStore/Characters/OgreTrollPack/Prefabs"),
+            new(
+                "FAB_RAT_BRUTE",
+                "Assets/ThirdParty/AssetStore/Characters/RatBrute/Prefabs",
+                fixedFamilyName: "RatBrute"),
+            new(
+                "FAB_SUCCUBUS",
+                "Assets/ThirdParty/AssetStore/Characters/Succubus2/Prefabs",
+                fixedFamilyName: "Succubus"),
+            new(
+                "FAB_UNDEAD_HOUND",
+                "Assets/ThirdParty/AssetStore/Characters/StylizedUndeadHound/Prefabs",
+                fixedFamilyName: "UndeadHound"),
         };
 
         private NpcAppearanceInventoryDocument? _document;
@@ -215,7 +286,8 @@ namespace Arena.Editor
                 {
                     string path = AssetDatabase.GUIDToAssetPath(guid);
                     if (path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)
-                        && path.StartsWith(package.AssetPath + "/", StringComparison.Ordinal))
+                        && path.StartsWith(package.AssetPath + "/", StringComparison.Ordinal)
+                        && package.IncludesPrefab(path))
                     {
                         paths.Add(path);
                     }
@@ -289,9 +361,7 @@ namespace Arena.Editor
 
         private static NpcAppearanceInventoryEntry InspectPrefab(PackageRoot package, string path)
         {
-            string relative = path.Substring(package.AssetPath.Length + 1);
-            int slash = relative.IndexOf('/');
-            string familyName = slash > 0 ? relative.Substring(0, slash) : Path.GetFileNameWithoutExtension(path);
+            string familyName = package.ResolveFamilyName(path);
             string prefabName = Path.GetFileNameWithoutExtension(path);
             var entry = new NpcAppearanceInventoryEntry
             {

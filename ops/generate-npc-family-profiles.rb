@@ -26,15 +26,59 @@ end.parse!
 abort("--manifest is required") unless options[:manifest]
 manifest_path = ROOT.join(options[:manifest]).expand_path
 abort("Missing manifest: #{manifest_path}") unless manifest_path.file?
-abort("Missing inventory: #{INVENTORY_PATH}") unless INVENTORY_PATH.file?
 abort("Missing visual catalog: #{CATALOG_PATH}") unless CATALOG_PATH.file?
 
 manifest = JSON.parse(manifest_path.read)
-inventory = JSON.parse(INVENTORY_PATH.read)
 family_name = manifest.fetch("source_family_name")
-appearances = inventory.fetch("appearances")
-  .select { |entry| entry.fetch("family_name") == family_name }
-  .sort_by { |entry| entry.fetch("appearance_id_candidate") }
+
+def candidate_id(value)
+  output = +""
+  previous_source = nil
+  value.strip.each_char do |current|
+    unless current.match?(/[[:alnum:]]/)
+      output << "_" unless output.empty? || output.end_with?("_")
+      previous_source = current
+      next
+    end
+
+    camel_boundary = !output.empty? &&
+      current.match?(/[[:upper:]]/) &&
+      previous_source&.match?(/[[:lower:]]/)
+    numeric_suffix_boundary = !output.empty? &&
+      current.match?(/[[:digit:]]/) &&
+      previous_source&.match?(/[[:alpha:]]/)
+    output << "_" if (camel_boundary || numeric_suffix_boundary) && !output.end_with?("_")
+    output << current.upcase
+    previous_source = current
+  end
+  output.gsub(/\A_+|_+\z/, "")
+end
+
+appearances = if manifest["prefab_glob"]
+  unless manifest["acknowledge_static_prefab_review"] == true
+    abort("#{family_name}: prefab_glob requires acknowledge_static_prefab_review=true")
+  end
+  prefab_paths = Dir.glob(ROOT.join(manifest.fetch("prefab_glob")).to_s).sort
+  prefab_paths.map do |prefab_path|
+    relative_path = Pathname.new(prefab_path).relative_path_from(ROOT).to_s
+    {
+      "family_name" => family_name,
+      "appearance_id_candidate" => candidate_id(File.basename(prefab_path, ".prefab")),
+      "prefab_path" => relative_path,
+      "animator_count" => Integer(manifest.fetch("expected_animator_count", 1)),
+      "primary_animator_path_candidate" => manifest.fetch("primary_animator_path", "."),
+      "controller_states" => [],
+      "root_motion_enabled" => false,
+      "review_warnings" => []
+    }
+  end
+else
+  abort("Missing inventory: #{INVENTORY_PATH}") unless INVENTORY_PATH.file?
+  inventory = JSON.parse(INVENTORY_PATH.read)
+  inventory.fetch("appearances")
+    .select { |entry| entry.fetch("family_name") == family_name }
+    .sort_by { |entry| entry.fetch("appearance_id_candidate") }
+end
 if manifest["appearance_ids"]
   requested_appearance_ids = manifest.fetch("appearance_ids").to_set
   available_appearance_ids = appearances.map { |entry| entry.fetch("appearance_id_candidate") }.to_set

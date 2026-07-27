@@ -1,7 +1,7 @@
 # NPC System Design
 
 Date: 2026-07-11
-Status: package rollout complete for all 204 imported appearances. The original 146-appearance rollout landed through `e513a871` plus its prefab-variant/sweep slice; the subsequent Stylized Undead package extension reuses the same inventory, profile, catalog, shared-combat, exact-spawn, and sequential runtime-sweep contracts. Summon/mobility execution, deeper navigation, and explicitly deferred threat expansion remain future system work.
+Status: catalog integration complete for all 329 imported NPC appearances. The original 146-appearance rollout and 58-appearance Stylized Undead extension retain their recorded runtime sweeps. The July 28 Fab extension adds 125 appearances through the same inventory, profile, catalog, shared-combat, and exact-spawn contracts; its non-Unity validation is complete and its interactive appearance sweep remains to be recorded. Summon/mobility execution, deeper navigation, and explicitly deferred threat expansion remain future system work.
 
 ## Outcome
 
@@ -9,16 +9,16 @@ Arena should support every imported NPC appearance through one authored NPC pipe
 
 The design has four central decisions:
 
-1. **Separate gameplay identity from appearance identity.** A Skeleton Wizard is a gameplay template; `SkeletonWizard_Gn`, `SkeletonWizard_Pe`, and `SkeletonWizard_Rd` are appearance variants of that template. We should not create 204 copies of the same gameplay data merely to expose every prefab.
+1. **Separate gameplay identity from appearance identity.** A Skeleton Wizard is a gameplay template; `SkeletonWizard_Gn`, `SkeletonWizard_Pe`, and `SkeletonWizard_Rd` are appearance variants of that template. We should not create 329 copies of the same gameplay data merely to expose every prefab.
 2. **Reuse the authoritative combat pipeline.** NPC actions should execute the same authored abilities, projectiles, effects, statuses, cooldowns, defenses, VFX cues, and combat events as player actions. NPC AI is another source of action intent, not a second combat implementation.
 3. **Use utility-based action selection.** A utility scorer naturally handles “heal the injured ally, otherwise buff an ally, otherwise cast at range, otherwise use melee, otherwise reposition” without a large hard-coded behavior tree for every creature.
 4. **Extend the existing combat-presentation contract.** NPC actions use the existing `CombatEvent` source/event vocabulary, `CombatAnimationRequest` lifecycle, and `CombatVfxCueResolver`/`CombatVFXDispatcher` triggers. The server adds only the deterministic presentation variant needed to keep native creature attacks synchronized. Unity visual profiles adapt the shared animation request to native controller states; they do not create a competing cue language.
 
 This is a substantial engineering project. The existing kobold implementation is a useful vertical slice, but it is not a general NPC system yet.
 
-## Implementation progress (updated 2026-07-16)
+## Implementation progress (updated 2026-07-28)
 
-The original imported-package rollout was implemented in coherent slices through `e513a871` (`Enable complete authored NPC attack sets`) plus its prefab-variant/sweep slice. The Stylized Undead extension uses those same authored/runtime seams without adding a package-specific execution path. Player combat semantics remain an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, action-bar behavior, and keybind semantics were not redesigned as part of the NPC rollout.
+The original imported-package rollout was implemented in coherent slices through `e513a871` (`Enable complete authored NPC attack sets`) plus its prefab-variant/sweep slice. The Stylized Undead and July 28 Fab extensions use those same authored/runtime seams without adding package-specific execution paths. Player combat semantics remain an explicit guardrail: actor-generic seams were extended where required, but player damage, healing arithmetic, authorization, animation fallback, input, prediction, rewind, action-bar behavior, and keybind semantics were not redesigned as part of the NPC rollout.
 
 ### Landed foundations
 
@@ -53,7 +53,7 @@ The original imported-package rollout was implemented in coherent slices through
 - Kobold melee now commits into the shared `PendingMeleeImpact` schedule and resolves through the same actor-generic defense, combat-event, effect, damage, death, and cleanup machinery as player/practice melee. `NpcPendingSwing` and its generated binding are removed. Server-actor audience, current-facing, and current-LOS impact gates are opt-in pending-impact fields; every player row explicitly leaves them disabled, preserving existing player prediction and rewind semantics.
 - The playground target panel already provides the catalog-driven searchable NPC browser landed in `267ccc57`. It reads the synchronized template/visual catalogs and calls the existing exact-visual `spawn_npc` reducer; no family-specific spawn path was added.
 - `NpcHeadlessAcceptanceRunner` now also supports `ARENA_NPC_ACCEPTANCE_MODE=APPEARANCE_SWEEP`. It deterministically orders every synchronized visual, spawns one exact appearance at a time through `spawn_npc`, resolves the Unity catalog prefab and primary Animator/controller, drives locomotion, ready, hit, and visible death through the existing `NpcAnimationController`, then requires authoritative `despawn_npc` row removal and `EntityRegistry` cleanup before advancing.
-- The read-only NPC appearance inventory scans all 204 relocated vendor prefabs across 51 families and exports deterministic review JSON without writing runtime mappings. It records candidate IDs, nested-prefab GameObject IDs, Animator/controller choices, native states, clip lengths, renderer bounds, ground offsets, root-motion flags, and review warnings. The current inventory exposes 33 appearances with multiple Animators, 40 with root motion enabled, and 34 whose death mapping remains unresolved until a primary Animator is reviewed.
+- The read-only NPC appearance inventory scans all 329 selected vendor prefabs across 67 source families and exports deterministic review JSON without writing runtime mappings. It records candidate IDs, nested-prefab GameObject IDs, Animator/controller choices, native states, clip lengths, renderer bounds, ground offsets, root-motion flags, and review warnings. The five closed `TreasureChest_*` props in the Mimic pack are deliberately excluded; Mimic and Gremlin profiles explicitly select the root Animator instead of child chest/equipment Animators.
 - Generic-rig profiles can explicitly select `FreezeCurrentPose` when no native hard-crowd-control clip exists. The NPC animation adapter freezes and restores the authored Animator speed without changing player animation fallback behavior.
 - Abomination is the first post-exemplar family batch: one gameplay template, three exact appearances, a shared authored melee ability/brain contract, explicit Generic visual profiles, native locomotion/attack/hit/death states, reviewed sockets, and frozen-pose hard-CC policy all use the existing shared pipelines.
 - Humanoid Scarab is the second post-exemplar family batch: one gameplay template, four exact appearances, a shared authored melee ability/brain contract, explicit Generic visual profiles, native locomotion/attack/hit/death states, reviewed sockets and near-ground renderer bounds, and frozen-pose hard-CC policy all use the existing shared pipelines. The running Unity editor imported all four new profiles successfully without requiring the project to close.
@@ -62,13 +62,14 @@ The original imported-package rollout was implemented in coherent slices through
 - All three Skeleton Wizard appearances now share the proven ranged/debuff/interrupt gameplay template and each has an exact prefab/profile/catalog mapping. Their common Generic controller, cast phases, sockets, near-ground bounds, and native `Stun` clip are explicitly authored; the original GN profile was upgraded to the same native stun contract.
 - All three Skeleton Archer appearances now share the proven ranged projectile gameplay template and each has an exact prefab/profile/catalog mapping. Their deliberate root Animator selection resolves the package's three-Animator prefab structure, and their load/release phases, arrow socket, bounds, and native `Stun` clip are explicitly authored. The family remains ranged-only.
 - The Stylized Undead package adds 58 exact appearances across 16 source families and 12 gameplay templates. The five Banshee source families share one gameplay identity; the other source families each retain a distinct template. Every selected native attack is ability-keyed and reachable, all profiles explicitly select their primary Animator and suppress root motion, and every family uses a native stun clip. Six caster kits reuse the shared hostile-projectile executor and existing Arcane cast/projectile/impact cues. Skeletal Dragon is deliberately ground-only until the separately deferred flight/mobility capability exists.
+- The nine July 28 Fab NPC packs add 125 exact appearances across 16 source families and 27 gameplay templates. Equipment/caster stances are separate templates where their compatible controller states differ. Twenty shared size-tier melee abilities and two shared hostile-projectile abilities make every selected native attack reachable without duplicating gameplay rows for color variants. Native stun clips are authored where the imports expose stable clip IDs; Mimic, Gremlin, and Undead Hound use the explicit frozen-pose hard-CC fallback. Dragon Whelp deliberately uses its flying controller states while server movement remains authoritative.
 - Skeleton Wizard Frostbite proves hostile debuff utility through the existing targeted shared spell/status executor. It applies the authored `SLOW` payload, status stack/refresh rules, LOS/audience gates, cast lifecycle, cooldown, events, and VFX cues without an NPC-only status path.
 - Skeleton Wizard Ice Lock proves interrupt utility independently of execution. The planner selects it only while the chosen hostile target has an authoritative shared `ActiveCast`; the action then applies an authored short `STUN` through the existing targeted spell/status path, whose actor-generic crowd-control lifecycle owns cast cancellation.
-- All 204 inventory appearances across all 51 imported families now have canonical synchronized visual IDs, explicit first-party `NpcVisualProfile` assets, reviewed gameplay-template ownership, and searchable exact-appearance spawning. The catalog contains exactly 204 unique entries and the server template catalog owns exactly the same 204 canonical IDs.
+- All 329 inventory appearances across all 67 imported source families now have canonical synchronized visual IDs, explicit first-party `NpcVisualProfile` assets, reviewed gameplay-template ownership, and searchable exact-appearance spawning. The Unity catalog contains exactly 329 unique entries and the 92 server templates own exactly the same 329 canonical IDs.
 - Every stance-appropriate native attack clip is reachable through the authored NPC action kit. Distinct timings/counterplay use NPC-scoped abilities and independent cooldowns; equipment-dependent Demon Warrior, Skeleton Warrior, Zombie, Hellguard, and Kobold appearances use separate stance templates so they cannot select incompatible controller states. Slime Man, Lich, and Skeleton Wizard all use both native melee attacks; Skeleton Archer remains deliberately ranged-only because the imported asset has no melee weapon or melee attack clip.
 - Native action lookup is keyed by the authoritative `CombatEvent.ability_id`. The remaining kobold template switch/state-name fallback was removed, so package-specific runtime animation switches are no longer required.
 - Presentation profiles support reviewed vertical offsets, explicit primary Animator selection, forced root-motion suppression, and an optional reviewed controller override. The generator validates controller states, sockets, warnings, nested-prefab GameObject IDs, deterministic profile GUIDs, and idempotent output.
-- The current `APPEARANCE_SWEEP` passed all 204 appearances against isolated database `npcundeadsweep`: every exact visual resolved its authored profile and prefab, primary Animator/controller, locomotion, ready, hit animation or explicit hit suppression, visible death, authoritative despawn, and `EntityRegistry` cleanup.
+- The recorded `APPEARANCE_SWEEP` passed the original 204 appearances against isolated database `npcundeadsweep`: every exact visual resolved its authored profile and prefab, primary Animator/controller, locomotion, ready, hit animation or explicit hit suppression, visible death, authoritative despawn, and `EntityRegistry` cleanup. The 125 Fab appearances still require the same interactive sweep; Unity batch mode was not used for this extension.
 
 ### Still incomplete
 
@@ -80,16 +81,16 @@ The original imported-package rollout was implemented in coherent slices through
 
 ### Current verification
 
-- NPC-focused Rust catalog, progression, authored-combat-graph, and derived-spell-order tests: passed. The current full `cargo test --quiet` result is 492 passed and 2 failed; both failures are in the separate pre-existing staff/greatsword melee-authoring work (`combo_successor_strikes_reachable_from_melee_roots_have_gameplay_rows` and `greatsword_whirlwind_authored_strike_maps_to_finisher_slot`).
+- Focused Rust NPC-catalog and derived-spell-order tests pass with 92 templates and 329 unique visual IDs.
 - `spacetime build -p server`: succeeded; the local optional `wasm-opt` binary is absent, so SpacetimeDB emitted an unoptimized module after a successful release build.
-- `dotnet build Assembly-CSharp.csproj`: succeeded with 0 errors and 12 existing warnings in third-party/current Unity code.
-- `dotnet build Assembly-CSharp-Editor.csproj`: succeeded with 0 errors and 29 existing warnings after a full rebuild.
-- Focused Unity edit-mode inventory/profile validation: 12 passed, 0 failed. The tests validate the 204-appearance/51-family inventory, explicit Animator/state/socket mappings and fallback policies, and all catalog entries.
+- `dotnet build Assembly-CSharp.csproj`: succeeds with 0 errors and existing warnings in third-party/current Unity code.
+- `dotnet build Assembly-CSharp-Editor.csproj`: succeeds with 0 errors and existing warnings after a full rebuild.
+- All 27 Fab profile manifests pass idempotent generator dry runs. Static validation proves one-to-one coverage across 125 new profiles, their deterministic profile/prefab GUID references, every template melee action mapping, the 329-row Unity catalog, and the server's 329 visual IDs.
 - `ops/npc-support-decision-probe.py`: passed against fresh isolated database `npcinterruptprobe`. At full health the Lich applied Bone Ward to a 125/125 Kobold; after one real player auto-attack reduced it to 103/125, Lich Mend raised it to 121/125. The Skeleton Wizard then applied Frostbite's shared slow and selected Ice Lock only during an authoritative player Icicle cast; Ice Lock's shared stun impact caused the existing crowd-control lifecycle to emit the Icicle `COMBAT_FIZZLE`.
 - Static catalog and planner coverage pins Frostbite's `SLOW` payload, Ice Lock's `STUN` payload, deterministic Wizard action order, and the inspector's `TARGET_CASTING` rejection.
 - Shared Kobold telegraph parity remains covered through the actor-generic pending-melee path; the legacy single-attack kobold abilities were replaced in active kits by the complete stance-specific authored sets.
 - Two-client mixed-exemplar acceptance: passed after the shared melee migration against isolated database `npcmixedprobe`. The observer materialized four NPCs owned by the separate websocket client; Kobold entered `Combat_1H_Attack`, Archer entered `attack`, Wizard entered `SpellCast`, and Lich entered `SpellA`. All four emitted CAST/IMPACT, Archer and Wizard emitted RELEASE plus projectile RELEASE/IMPACT, three shared projectile visuals started, four shared VFX instances spawned, and no projectile/VFX template was missing.
-- Catalog-driven appearance sweep: all 204 synchronized appearances passed against isolated database `npcundeadsweep`. The result recorded 204 catalog appearances, 204 authored profiles, and 204 authoritative cleanup completions; the new package's 58 appearances each passed Animator, locomotion, visible-death, and cleanup gates.
+- Catalog-driven appearance sweep: the recorded `npcundeadsweep` result covers the original 204 synchronized appearances, profiles, and authoritative cleanup completions. The 125 Fab appearances are catalog-spawnable but do not yet have a recorded interactive Animator/locomotion/death/cleanup sweep.
 - Generated C# bindings are current for the landed runtime schema.
 - The working tree contains separate user-owned melee animation/authoring changes; preserve them and keep them outside NPC-package fixes.
 
@@ -100,12 +101,12 @@ The imported-package coverage milestone is complete. Future work should be chose
 1. Keep threat-model expansion—including taunts, assist/call-for-help, support threat, and richer decay—deferred until explicitly resumed.
 2. Add summon or mobility execution only when an exemplar requires it, through the existing authored/shared action executor rather than an NPC-only path.
 3. Add authoritative navigation, unreachable-target recovery, and local avoidance before relying on these NPCs in complex layouts.
-4. Tune family stats, cooldowns, utility weights, loot, sockets, offsets, and visual polish from encounter playtests while retaining the 204-appearance sweep as a regression gate.
+4. Record the 329-appearance interactive sweep, then tune family stats, cooldowns, utility weights, loot, sockets, offsets, and visual polish from encounter playtests while retaining it as a regression gate.
 5. Keep Skeleton Archer ranged-only until suitable melee weapon and animation assets are deliberately authored.
 
 ## Asset relocation completed
 
-The four imported packages now follow the repository convention documented in `docs/project-structure.md`:
+The original four packages and the nine Fab NPC packs now follow the repository convention documented in `docs/project-structure.md`:
 
 ```text
 Assets/ThirdParty/AssetStore/Characters/
@@ -113,22 +114,31 @@ Assets/ThirdParty/AssetStore/Characters/
   StylizedFantasyEnemyNPCBundle/
   StylizedFantasyEnemyNPCBundle2/
   StylizedUndeadBundle/
+  FireRevenant/
+  DemonBoss/
+  DemonMinions/
+  StylizedDragonPack/
+  StylizedMimic/
+  OgreTrollPack/
+  RatBrute/
+  Succubus2/
+  StylizedUndeadHound/
   StylizedCharacter/
 ```
 
-The package folders and their `.meta` files were moved together, preserving Unity GUIDs. Embedded `assetPath` provenance was updated, and the four existing kobold paths in `Assets/Arena/Resources/NpcVisualCatalog.asset` were updated. These large local Asset Store packages remain ignored by Git.
+The package folders and their `.meta` files were moved together, preserving Unity GUIDs. Embedded `assetPath` provenance was updated for the original relocation, and the Fab package imports retain their own provenance. These large local Asset Store packages remain ignored by Git.
 
 First-party profiles, catalogs, wrapper assets, tests, and gameplay code belong under `Assets/Arena`; vendor source assets do not.
 
 ## What was imported
 
-The four packages contain:
+The selected NPC packages contain:
 
-- 51 creature families: 3 kobold families, 32 across the two fantasy-enemy bundles, and 16 in the undead bundle.
-- 204 prefab appearances: 9 kobolds, 85 in bundle 1, 52 in bundle 2, and 58 in the undead bundle.
+- 67 source families: the original 51 plus 16 across the nine Fab NPC packs.
+- 329 NPC prefab appearances: the original 204 plus 125 Fab creatures/characters. Five closed treasure-chest props are not counted as NPCs.
 - Native Animator controllers and embedded FBX animation clips.
 - No gameplay AI or Arena integration scripts.
-- Humanoid rigs for the kobolds (`ModelImporter.animationType = 3`) and 5 undead families, plus Generic rigs for the 32 fantasy-enemy families and the other 11 undead families (`animationType = 2`).
+- Humanoid rigs for the kobolds (`ModelImporter.animationType = 3`) and 5 undead families, plus Generic rigs for the 32 fantasy-enemy families, the other 11 undead families, and all 16 Fab source families (`animationType = 2`).
 
 The last point matters: the humanoid Mixamo stun/fear override used by the earlier kobold work cannot be assumed to retarget onto Generic creatures. Rig-specific profiles use reviewed native clips or an explicitly authored fallback policy; the undead profiles all use their native stun clips.
 
@@ -284,7 +294,7 @@ visual_id   = DEEP_SEA_LIZARD_RD_2
 
 An authored visual set lists the allowed appearances and a default selection policy. Debug spawning can request an exact `visual_id`; normal encounters can choose deterministically from the set.
 
-This gives access to all 204 prefabs without duplicating stats, AI, loot, and ability kits for color variants.
+This gives access to all 329 NPC prefabs without duplicating stats, AI, loot, and ability kits for color variants.
 
 ### 3. Unity visual profile
 
@@ -631,7 +641,7 @@ Filters should include:
 
 The spawn reducer accepts a validated `template_id`, optional exact `visual_id`, and debug team/relation. It rejects invalid template/appearance combinations.
 
-“Spawn any NPC” means every one of the 204 imported appearances has an explicit appearance entry and belongs to a fully authored gameplay template. There should be no silent generic-template fallback.
+“Spawn any NPC” means every one of the 329 imported appearances has an explicit appearance entry and belongs to a fully authored gameplay template. There should be no silent generic-template fallback.
 
 ## Movement and navigation
 
@@ -726,7 +736,7 @@ Acceptance: the mixed exemplar group makes sensible choices under controlled hea
 ### Phase 4: full package authoring
 
 - explicitly author all remaining gameplay families
-- map all 204 appearances
+- map all 329 appearances
 - classify attack variants versus distinct abilities
 - author missing reaction policies, sockets, VFX/audio cues, timing, stats, kits, brains, and loot
 - add automated spawn/presentation sweeps
@@ -771,7 +781,7 @@ Acceptance: representative encounters remain correct and performant under multip
 
 ### Unity play mode
 
-- automated sequential spawn sweep for all 204 appearances
+- automated sequential spawn sweep for all 329 appearances
 - batch-mode execution through a dedicated NPC runner modeled on `S7HeadlessAbRunner`
 - primary Animator and native animation-role states
 - no unexpected root motion or facing flips
@@ -803,7 +813,7 @@ Manual play remains valuable for judging feel, but it is exploratory evidence ra
 - **Root motion:** authoritative movement must remain on the server; imported root motion cannot move gameplay independently.
 - **Navigation:** direct chase will look broken around complex obstacles even if action selection is correct.
 - **Geometry drift:** movement collision and LOS query geometry are intentionally different; using either for the other's job creates pathing or visibility defects.
-- **Authoring volume:** 204 appearances are manageable only through shared family profiles, generated draft data, and strict validation.
+- **Authoring volume:** 329 appearances are manageable only through shared family profiles, generated draft data, and strict validation.
 - **Package availability:** the vendor packages are ignored and total several gigabytes. A clean checkout/CI machine needs a documented licensed import procedure or an approved asset distribution strategy.
 - **Performance:** support targeting and threat can turn into NPC-by-actor scans unless they use the shared spatial index and staggered decisions.
 - **Probe regressions:** S7–S9 currently depend on nearest-wins fixture control and must migrate alongside threat selection.
@@ -812,7 +822,7 @@ Manual play remains valuable for judging feel, but it is exploratory evidence ra
 
 The NPC system is complete for these packages when:
 
-- all 204 appearances are discoverable and spawnable through catalog data
+- all 329 appearances are discoverable and spawnable through catalog data
 - each appearance belongs to an explicitly authored gameplay family
 - every family has valid idle/locomotion/action/hit-or-impact/death/status presentation policies
 - melee, ranged, caster, and support archetypes use the shared combat pipeline

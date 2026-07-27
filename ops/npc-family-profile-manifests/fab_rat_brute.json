@@ -1,0 +1,93 @@
+{
+  "source_family_name": "FabRatBrute",
+  "prefab_glob": "Assets/ThirdParty/AssetStore/Characters/RatBrute/Prefabs/RatBrute_*.prefab",
+  "acknowledge_static_prefab_review": true,
+  "expected_appearance_count": 5,
+  "primary_animator_path": ".",
+  "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/RatBrute/Meshes/RatBrute_Controller.controller",
+  "prefab_file_ids": {
+    "RAT_BRUTE_BK": 2217910063420764490,
+    "RAT_BRUTE_BR": 3038497123206957791,
+    "RAT_BRUTE_RD": 2548692294021721028,
+    "RAT_BRUTE_WH": 3142124995898663172,
+    "RAT_BRUTE_YE": 461777579786935073
+  },
+  "animations": {
+    "idle": [
+      "idle"
+    ],
+    "ready": [
+      "Combat_1H_Ready"
+    ],
+    "walk": [
+      "Walk_Forward"
+    ],
+    "run": [
+      "Run_Forward"
+    ],
+    "basicAttack": [
+      "Combat_1H_Attack"
+    ],
+    "spellCastStart": [
+
+    ],
+    "spellRelease": [
+
+    ],
+    "spellCancel": [
+
+    ],
+    "hit": [
+      "Combat_1H_Hit"
+    ],
+    "death": [
+      "Death"
+    ]
+  },
+  "action_animations": [
+    {
+      "ability_id": "NPC_FAB_MEDIUM_STRIKE_3",
+      "states": [
+        "Combat_1H_Attack02"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_MEDIUM_STRIKE_2",
+      "states": [
+        "Combat_1H_Attack01"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_MEDIUM_STRIKE",
+      "states": [
+        "Combat_1H_Attack"
+      ]
+    }
+  ],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": ".",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+    {
+      "status_kind": "STUN",
+      "clip_file_id": -8767420384561272259,
+      "clip_guid": "df8e94400f84e9749b1ff4593a1a7697",
+      "require_humanoid_avatar": false
+    }
+  ]
+}

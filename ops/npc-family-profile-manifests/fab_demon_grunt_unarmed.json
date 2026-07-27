@@ -1,0 +1,99 @@
+{
+  "source_family_name": "FabDemonGruntUnarmed",
+  "prefab_glob": "Assets/ThirdParty/AssetStore/Characters/DemonMinions/Prefabs/DemonGrunt_01_*.prefab",
+  "acknowledge_static_prefab_review": true,
+  "expected_appearance_count": 5,
+  "primary_animator_path": ".",
+  "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/DemonMinions/Meshes/DemonGrunt_Controller.controller",
+  "prefab_file_ids": {
+    "DEMON_GRUNT_01_BR": 8162126684611348841,
+    "DEMON_GRUNT_01_PE": 8429056142195449865,
+    "DEMON_GRUNT_01_RD": 946616845717056774,
+    "DEMON_GRUNT_01_VT": 6725411618415329855,
+    "DEMON_GRUNT_01_YE": 3508651320920686460
+  },
+  "animations": {
+    "idle": [
+      "idle"
+    ],
+    "ready": [
+      "Combat_Unarmed_Ready"
+    ],
+    "walk": [
+      "Walk_Forward"
+    ],
+    "run": [
+      "Run_Forward"
+    ],
+    "basicAttack": [
+      "Combat_Unarmed_Attack"
+    ],
+    "spellCastStart": [
+
+    ],
+    "spellRelease": [
+
+    ],
+    "spellCancel": [
+
+    ],
+    "hit": [
+      "Combat_Unarmed_Hit"
+    ],
+    "death": [
+      "Death"
+    ]
+  },
+  "action_animations": [
+    {
+      "ability_id": "NPC_FAB_SMALL_SPECIAL_STRIKE",
+      "states": [
+        "Combat_Unarmed_AttackSpecial"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_SMALL_STRIKE_3",
+      "states": [
+        "Combat_Unarmed_Attack02"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_SMALL_STRIKE_2",
+      "states": [
+        "Combat_Unarmed_Attack01"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_SMALL_STRIKE",
+      "states": [
+        "Combat_Unarmed_Attack"
+      ]
+    }
+  ],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": ".",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+    {
+      "status_kind": "STUN",
+      "clip_file_id": -8767420384561272259,
+      "clip_guid": "10e61b1a626c84b4f886e4454e2ce29e",
+      "require_humanoid_avatar": false
+    }
+  ]
+}

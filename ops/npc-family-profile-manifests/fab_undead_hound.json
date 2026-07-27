@@ -1,0 +1,81 @@
+{
+  "source_family_name": "FabUndeadHound",
+  "prefab_glob": "Assets/ThirdParty/AssetStore/Characters/StylizedUndeadHound/Prefabs/UndeadHound_*.prefab",
+  "acknowledge_static_prefab_review": true,
+  "expected_appearance_count": 4,
+  "primary_animator_path": ".",
+  "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/StylizedUndeadHound/Meshes/UndeadHound.controller",
+  "prefab_file_ids": {
+    "UNDEAD_HOUND_BR": 6115537946468445026,
+    "UNDEAD_HOUND_GN": 3935679153137572362,
+    "UNDEAD_HOUND_PE": 514634186722514135,
+    "UNDEAD_HOUND_RD": 6503567618689667826
+  },
+  "animations": {
+    "idle": [
+      "idle"
+    ],
+    "ready": [
+      "Idle01"
+    ],
+    "walk": [
+      "walk"
+    ],
+    "run": [
+      "run"
+    ],
+    "basicAttack": [
+      "attack"
+    ],
+    "spellCastStart": [
+
+    ],
+    "spellRelease": [
+
+    ],
+    "spellCancel": [
+
+    ],
+    "hit": [
+      "hit"
+    ],
+    "death": [
+      "Death"
+    ]
+  },
+  "action_animations": [
+    {
+      "ability_id": "NPC_FAB_SMALL_STRIKE_2",
+      "states": [
+        "Attack01"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_SMALL_STRIKE",
+      "states": [
+        "attack"
+      ]
+    }
+  ],
+  "hard_crowd_control_fallback_policy": 1,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": ".",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+
+  ]
+}

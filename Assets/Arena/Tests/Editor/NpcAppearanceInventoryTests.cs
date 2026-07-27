@@ -17,6 +17,15 @@ namespace Arena.Tests.Editor
             "Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle/Prefabs",
             "Assets/ThirdParty/AssetStore/Characters/StylizedFantasyEnemyNPCBundle2/Prefabs",
             "Assets/ThirdParty/AssetStore/Characters/StylizedUndeadBundle/Prefabs",
+            "Assets/ThirdParty/AssetStore/Characters/FireRevenant/Prefabs",
+            "Assets/ThirdParty/AssetStore/Characters/DemonBoss/Prefabs",
+            "Assets/ThirdParty/AssetStore/Characters/DemonMinions/Prefabs",
+            "Assets/ThirdParty/AssetStore/Characters/StylizedDragonPack/Prefabs/URP",
+            "Assets/ThirdParty/AssetStore/Characters/StylizedMimic/Prefabs",
+            "Assets/ThirdParty/AssetStore/Characters/OgreTrollPack/Prefabs",
+            "Assets/ThirdParty/AssetStore/Characters/RatBrute/Prefabs",
+            "Assets/ThirdParty/AssetStore/Characters/Succubus2/Prefabs",
+            "Assets/ThirdParty/AssetStore/Characters/StylizedUndeadHound/Prefabs",
         };
 
         [TestCase("DeepSeaLizard_Rd2", "DEEP_SEA_LIZARD_RD_2")]
@@ -49,17 +58,18 @@ namespace Arena.Tests.Editor
             object first = scan.Invoke(null, null)!;
             object second = scan.Invoke(null, null)!;
             Type documentType = first.GetType();
-            Assert.That(ReadInt(documentType, first, "appearance_count"), Is.EqualTo(204));
-            Assert.That(ReadInt(documentType, first, "family_count"), Is.EqualTo(51));
+            Assert.That(ReadInt(documentType, first, "appearance_count"), Is.EqualTo(329));
+            Assert.That(ReadInt(documentType, first, "family_count"), Is.EqualTo(67));
 
             List<string> firstPaths = ReadAppearanceField(documentType, first, "prefab_path");
             List<string> secondPaths = ReadAppearanceField(documentType, second, "prefab_path");
             List<string> appearanceIds = ReadAppearanceField(documentType, first, "appearance_id_candidate");
             Assert.That(firstPaths, Is.EqualTo(secondPaths));
-            Assert.That(firstPaths, Has.Count.EqualTo(204));
-            Assert.That(firstPaths.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(204));
+            Assert.That(firstPaths, Has.Count.EqualTo(329));
+            Assert.That(firstPaths.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(329));
             Assert.That(appearanceIds.All(value => !string.IsNullOrWhiteSpace(value)), Is.True);
-            Assert.That(appearanceIds.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(204));
+            Assert.That(appearanceIds.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(329));
+            Assert.That(firstPaths.Any(path => path.Contains("/TreasureChest_", StringComparison.Ordinal)), Is.False);
         }
 
         private static int ReadInt(Type type, object instance, string fieldName)

@@ -3646,15 +3646,15 @@ mod tests {
     #[test]
     fn authored_npc_catalog_is_valid_and_complete_for_current_templates() {
         let parsed = parse_npc_catalog(NPC_CATALOG_JSON).unwrap();
-        assert_eq!(parsed.templates.len(), 65);
-        assert_eq!(npc_catalog().templates.len(), 65);
+        assert_eq!(parsed.templates.len(), 92);
+        assert_eq!(npc_catalog().templates.len(), 92);
         assert_eq!(
             parsed
                 .templates
                 .iter()
                 .map(|template| template.visual_ids.len())
                 .sum::<usize>(),
-            204
+            329
         );
         assert!(parsed
             .templates
@@ -3680,6 +3680,45 @@ mod tests {
             assert_eq!(template.visual_ids.len(), visual_count, "{template_id}");
             assert_eq!(template.action_kit.len(), action_count, "{template_id}");
         }
+        let fab_expectations = [
+            ("FIRE_REVENANT", 5, 5),
+            ("DEMON_BOSS", 5, 4),
+            ("DEMON_GRUNT_UNARMED", 5, 4),
+            ("DEMON_GRUNT_ONE_HANDED", 5, 5),
+            ("DEMON_MINION_UNARMED", 5, 4),
+            ("DEMON_MINION_ONE_HANDED", 5, 5),
+            ("DRAGON", 6, 5),
+            ("DRAGON_WHELP", 6, 3),
+            ("DRAKE", 6, 6),
+            ("ELDER_DRAGON", 6, 6),
+            ("MIMIC", 5, 4),
+            ("GREMLIN_NAKED", 4, 3),
+            ("GREMLIN_SHAMAN", 4, 3),
+            ("GREMLIN_THIEF", 4, 3),
+            ("GREMLIN_WARRIOR", 4, 2),
+            ("MOUNTAIN_TROLL_CHIEF", 4, 3),
+            ("MOUNTAIN_TROLL_NAKED", 4, 3),
+            ("MOUNTAIN_TROLL_WARRIOR", 4, 2),
+            ("OGRE_KING", 4, 5),
+            ("OGRE_NAKED", 4, 2),
+            ("OGRE_SHAMAN", 4, 3),
+            ("OGRE_WARRIOR", 4, 5),
+            ("TROLL_NAKED", 4, 2),
+            ("TROLL_WARRIOR", 4, 2),
+            ("RAT_BRUTE", 5, 3),
+            ("SUCCUBUS", 5, 3),
+            ("UNDEAD_HOUND", 4, 2),
+        ];
+        for (template_id, visual_count, action_count) in fab_expectations {
+            let template = npc_template(template_id)
+                .unwrap_or_else(|| panic!("{template_id} should be authored"));
+            assert_eq!(template.visual_ids.len(), visual_count, "{template_id}");
+            assert_eq!(template.action_kit.len(), action_count, "{template_id}");
+        }
+        assert_eq!(
+            npc_template("DRAGON_WHELP").unwrap().action_kit[0].ability_id,
+            "NPC_FAB_DRAGON_BREATH"
+        );
         assert_eq!(
             npc_template("SKELETAL_DRAGON").unwrap().action_kit[0].ability_id,
             "NPC_SKELETAL_DRAGON_BONE_BREATH"

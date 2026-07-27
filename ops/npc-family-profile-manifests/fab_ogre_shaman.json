@@ -1,0 +1,86 @@
+{
+  "source_family_name": "FabOgreShaman",
+  "prefab_glob": "Assets/ThirdParty/AssetStore/Characters/OgreTrollPack/Prefabs/Ogre/Ogre_Shaman_*.prefab",
+  "acknowledge_static_prefab_review": true,
+  "expected_appearance_count": 4,
+  "primary_animator_path": ".",
+  "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/OgreTrollPack/Meshes/Ogre/Ogre_Controller.controller",
+  "prefab_file_ids": {
+    "OGRE_SHAMAN_BL": 1904269546143665156,
+    "OGRE_SHAMAN_GR": 6159657576475058728,
+    "OGRE_SHAMAN_RD": 7832607760145567515,
+    "OGRE_SHAMAN_YE": 4079401929757757962
+  },
+  "animations": {
+    "idle": [
+      "idle"
+    ],
+    "ready": [
+      "Spell_Unarmed_Forward_Ready"
+    ],
+    "walk": [
+      "Walk_Forward"
+    ],
+    "run": [
+      "Run_Forward"
+    ],
+    "basicAttack": [
+      "Combat_Unarmed_Attack"
+    ],
+    "spellCastStart": [
+      "Spell_Unarmed_Forward_Ready"
+    ],
+    "spellRelease": [
+      "Spell_Unarmed_Forward_Loop"
+    ],
+    "spellCancel": [
+
+    ],
+    "hit": [
+      "Combat_Unarmed_Hit"
+    ],
+    "death": [
+      "Death"
+    ]
+  },
+  "action_animations": [
+    {
+      "ability_id": "NPC_FAB_LARGE_STRIKE_2",
+      "states": [
+        "Combat_Unarmed_Attack01"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_LARGE_STRIKE",
+      "states": [
+        "Combat_Unarmed_Attack"
+      ]
+    }
+  ],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": ".",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+    {
+      "status_kind": "STUN",
+      "clip_file_id": -8767420384561272259,
+      "clip_guid": "c7bcdea1bc4da66479457f38e06cb77f",
+      "require_humanoid_avatar": false
+    }
+  ]
+}

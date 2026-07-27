@@ -1,0 +1,86 @@
+{
+  "source_family_name": "FabOgreNaked",
+  "prefab_glob": "Assets/ThirdParty/AssetStore/Characters/OgreTrollPack/Prefabs/Ogre/Ogre_Naked_*.prefab",
+  "acknowledge_static_prefab_review": true,
+  "expected_appearance_count": 4,
+  "primary_animator_path": ".",
+  "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/OgreTrollPack/Meshes/Ogre/Ogre_Controller.controller",
+  "prefab_file_ids": {
+    "OGRE_NAKED_BL": 7471316123275793895,
+    "OGRE_NAKED_GR": 276352425896554988,
+    "OGRE_NAKED_RD": 2654815608965550967,
+    "OGRE_NAKED_YE": 5212750899297424235
+  },
+  "animations": {
+    "idle": [
+      "idle"
+    ],
+    "ready": [
+      "Combat_Unarmed_Ready"
+    ],
+    "walk": [
+      "Walk_Forward"
+    ],
+    "run": [
+      "Run_Forward"
+    ],
+    "basicAttack": [
+      "Combat_Unarmed_Attack"
+    ],
+    "spellCastStart": [
+
+    ],
+    "spellRelease": [
+
+    ],
+    "spellCancel": [
+
+    ],
+    "hit": [
+      "Combat_Unarmed_Hit"
+    ],
+    "death": [
+      "Death"
+    ]
+  },
+  "action_animations": [
+    {
+      "ability_id": "NPC_FAB_LARGE_STRIKE_2",
+      "states": [
+        "Combat_Unarmed_Attack01"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_LARGE_STRIKE",
+      "states": [
+        "Combat_Unarmed_Attack"
+      ]
+    }
+  ],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": ".",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+    {
+      "status_kind": "STUN",
+      "clip_file_id": -8767420384561272259,
+      "clip_guid": "c7bcdea1bc4da66479457f38e06cb77f",
+      "require_humanoid_avatar": false
+    }
+  ]
+}

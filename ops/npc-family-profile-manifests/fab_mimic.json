@@ -1,0 +1,94 @@
+{
+  "source_family_name": "FabMimic",
+  "prefab_glob": "Assets/ThirdParty/AssetStore/Characters/StylizedMimic/Prefabs/Mimic_*.prefab",
+  "acknowledge_static_prefab_review": true,
+  "expected_appearance_count": 5,
+  "primary_animator_path": ".",
+  "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/StylizedMimic/Meshes/Mimic.controller",
+  "prefab_file_ids": {
+    "MIMIC_BL": 6502823805140820775,
+    "MIMIC_GN": 6966871953346711188,
+    "MIMIC_OR": 6681174349274433006,
+    "MIMIC_PE": 2923071119281280886,
+    "MIMIC_RD": 5228542069463286657
+  },
+  "animations": {
+    "idle": [
+      "idle"
+    ],
+    "ready": [
+      "Idle01"
+    ],
+    "walk": [
+      "Walk_Forward"
+    ],
+    "run": [
+      "Run_Forward"
+    ],
+    "basicAttack": [
+      "Combat_Unarmed_Attack"
+    ],
+    "spellCastStart": [
+
+    ],
+    "spellRelease": [
+
+    ],
+    "spellCancel": [
+
+    ],
+    "hit": [
+      "Combat_Unarmed_Hit"
+    ],
+    "death": [
+      "Death"
+    ]
+  },
+  "action_animations": [
+    {
+      "ability_id": "NPC_FAB_SMALL_SPECIAL_STRIKE",
+      "states": [
+        "Combat_Unarmed_AttackOpen"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_SMALL_STRIKE_3",
+      "states": [
+        "Combat_Unarmed_Attack02"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_SMALL_STRIKE_2",
+      "states": [
+        "Combat_Unarmed_Attack01"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_SMALL_STRIKE",
+      "states": [
+        "Combat_Unarmed_Attack"
+      ]
+    }
+  ],
+  "hard_crowd_control_fallback_policy": 1,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": ".",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "source_family_name": "FabDragonWhelp",
+  "prefab_glob": "Assets/ThirdParty/AssetStore/Characters/StylizedDragonPack/Prefabs/URP/DragonWhelp/DragonWhelp_*.prefab",
+  "acknowledge_static_prefab_review": true,
+  "expected_appearance_count": 6,
+  "primary_animator_path": ".",
+  "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/StylizedDragonPack/Meshes/DragonWhelp_Controller.controller",
+  "prefab_file_ids": {
+    "DRAGON_WHELP_BK": 8330478372064499359,
+    "DRAGON_WHELP_BL": 513635180460536762,
+    "DRAGON_WHELP_GN": 6111240544508482759,
+    "DRAGON_WHELP_GO": 1353334068787843261,
+    "DRAGON_WHELP_PE": 5204407874032122256,
+    "DRAGON_WHELP_RD": 8492183283982203165
+  },
+  "animations": {
+    "idle": [
+      "Fly_Idle"
+    ],
+    "ready": [
+      "Fly_Idle01"
+    ],
+    "walk": [
+      "Walk_Fly_Forward"
+    ],
+    "run": [
+      "Run_Fly_Forward"
+    ],
+    "basicAttack": [
+      "Combat_Fly_Attack"
+    ],
+    "spellCastStart": [
+      "Combat_Fly_Spell_Start"
+    ],
+    "spellRelease": [
+      "Combat_Fly_Spell_End"
+    ],
+    "spellCancel": [
+
+    ],
+    "hit": [
+      "Combat_Fly_Hit"
+    ],
+    "death": [
+      "Fly_Death"
+    ]
+  },
+  "action_animations": [
+    {
+      "ability_id": "NPC_FAB_SMALL_STRIKE_2",
+      "states": [
+        "Combat_Fly_Attack01"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_SMALL_STRIKE",
+      "states": [
+        "Combat_Fly_Attack"
+      ]
+    }
+  ],
+  "hard_crowd_control_fallback_policy": 0,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": ".",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+    {
+      "status_kind": "STUN",
+      "clip_file_id": 8647883232474959489,
+      "clip_guid": "cabcde7955fcb904e9577912e2e176a1",
+      "require_humanoid_avatar": false
+    }
+  ]
+}

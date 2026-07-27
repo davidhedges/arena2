@@ -1,0 +1,81 @@
+{
+  "source_family_name": "FabGremlinShaman",
+  "prefab_glob": "Assets/ThirdParty/AssetStore/Characters/OgreTrollPack/Prefabs/Gremlin/Gremlin_Shaman_*.prefab",
+  "acknowledge_static_prefab_review": true,
+  "expected_appearance_count": 4,
+  "primary_animator_path": ".",
+  "animator_controller_path": "Assets/ThirdParty/AssetStore/Characters/OgreTrollPack/Meshes/Gremlin/Gremlin_Control.controller",
+  "prefab_file_ids": {
+    "GREMLIN_SHAMAN_BL": 1660903118515359462,
+    "GREMLIN_SHAMAN_GR": 1660903118515359462,
+    "GREMLIN_SHAMAN_RD": 1660903118515359462,
+    "GREMLIN_SHAMAN_YE": 1660903118515359462
+  },
+  "animations": {
+    "idle": [
+      "idle"
+    ],
+    "ready": [
+      "Spell_Staff_Ready"
+    ],
+    "walk": [
+      "Walk_Forward"
+    ],
+    "run": [
+      "Run_Forward"
+    ],
+    "basicAttack": [
+      "Combat_Unarmed_Attack"
+    ],
+    "spellCastStart": [
+      "Spell_Staff_Forward_Channel"
+    ],
+    "spellRelease": [
+      "Spell_Staff_Forward_Impact"
+    ],
+    "spellCancel": [
+
+    ],
+    "hit": [
+      "Combat_Unarmed_Hit"
+    ],
+    "death": [
+      "Death"
+    ]
+  },
+  "action_animations": [
+    {
+      "ability_id": "NPC_FAB_SMALL_STRIKE_2",
+      "states": [
+        "Combat_Unarmed_Attack01"
+      ]
+    },
+    {
+      "ability_id": "NPC_FAB_SMALL_STRIKE",
+      "states": [
+        "Combat_Unarmed_Attack"
+      ]
+    }
+  ],
+  "hard_crowd_control_fallback_policy": 1,
+  "vfx_sockets": [
+    {
+      "anchor": "LEFT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "RIGHT_HAND",
+      "transform_path": ".",
+      "fallback_policy": 1
+    },
+    {
+      "anchor": "TARGET",
+      "transform_path": ".",
+      "fallback_policy": 1
+    }
+  ],
+  "status_reactions": [
+
+  ]
+}
