@@ -28,11 +28,9 @@ Use `docs/project-structure.md` as the canonical folder map before adding new to
 
 ## Animation Ownership
 
-`PlayerAnimator` is the central low-level adapter for the shared player-combat Animator states, override banks, layers, and weights. It may own Animator parameter/state hashes and thin coordination needed to apply controller decisions. Focused components may own a disjoint Animator property when that ownership is explicit and exclusive (for example, `MeleeContactHitstop` owns `Animator.speed`). `PlayerAnimator` must not become the source of animation selection, timing, lifecycle, preemption, or gameplay policy; put those responsibilities in `CombatAnimationSet` data or focused controllers. New public APIs or durable state require an explicit ownership reason, not a ceremonial one-field-for-one-extraction trade.
+`PlayerAnimator` is the low-level Animator adapter, not the source of animation selection, timing, lifecycle, preemption, or gameplay policy. Hit reactions, stagger, knockdown and hard CC belong to `CombatStatusReactionController`; melee/spell/phased playback belongs to `CombatActionPlaybackController`. Extend those instead of adding a parallel playback path to `PlayerAnimator`.
 
-Hit reactions, stagger, knockdown, and hard crowd-control presentation belong in `CombatStatusReactionController`. `PlayerAnimator` may coordinate cross-system cancellation for those reactions, but it should not own their Animator parameter names, trigger selection, or loop override policy.
-
-`CombatActionPlaybackController` is the shared substrate for melee, spell, and phased bank slots, layer recovery, lower-body unlock, visual interrupts, preemption, and spell-hold lifecycle. Extend that substrate or another coherent controller instead of adding a parallel playback state machine to `PlayerAnimator`. Extract only at a real ownership boundary; do not create pass-through classes merely to satisfy a file-size or field-count proxy.
+Read `docs/animation-ownership.md` before adding durable state, a public API, or a playback path to `PlayerAnimator`.
 
 Combat actions must dispatch through loadout/action-bar resolution or an explicitly owned fixed-action dispatcher. Do not add hidden combat keybinds that bypass the action bar.
 
