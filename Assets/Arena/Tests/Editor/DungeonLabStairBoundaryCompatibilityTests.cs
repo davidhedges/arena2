@@ -20,8 +20,6 @@ namespace Arena.Tests.Editor
         private const int East = 2;
         private const int South = 4;
         private const int West = 8;
-        private const string TargetStairName =
-            "transition_stair_curved_stair_180_R_bridge_d4_18_14_to_19_14";
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
             .Load("Assembly-CSharp-Editor")
             .GetType("DungeonLab.Editor.DungeonLabGenerator", throwOnError: true)!;
@@ -68,69 +66,6 @@ namespace Arena.Tests.Editor
             {
                 UnityEngine.Object.DestroyImmediate(roundedCornerRoot);
             }
-        }
-
-        [Test]
-        public void CurvedBridgeRegression_DoesNotPlaceTierCornerKitInsideItsFootprint()
-        {
-            Transform[] transforms = AllTransforms();
-
-            Assert.That(
-                transforms.Any(transform => transform.name == TargetStairName),
-                Is.True,
-                "The regression must keep the valid curved bridge stair rather than hiding the conflict by dropping it.");
-            Assert.That(
-                transforms.Any(transform =>
-                    transform.name.StartsWith("tier_corner_18_13_c", StringComparison.Ordinal)),
-                Is.False,
-                "A round/angle tier corner must not replace the stair-owned square wall faces.");
-            Assert.That(
-                ReportInt("rejected"),
-                Is.Zero,
-                "The corrected boundary composition should render without rejecting a valid stair.");
-        }
-
-        [Test]
-        public void CurvedBridgeRegression_PreservesSquareStructuralWallsAtTheFormerCorner()
-        {
-            Transform walls = root!.transform.Find("Elevation Edge Walls");
-            Assert.That(walls, Is.Not.Null);
-
-            string[] wallNames = walls.GetComponentsInChildren<Transform>(includeInactive: true)
-                .Select(transform => transform.name)
-                .ToArray();
-            Assert.That(
-                wallNames.Any(name =>
-                    name.StartsWith("cliff_", StringComparison.Ordinal) &&
-                    (name.Contains("_18_14_", StringComparison.Ordinal) ||
-                     name.Contains("_17_13_", StringComparison.Ordinal))),
-                Is.True,
-                "The fix must retain the square support faces instead of carving away the bridge landing wall.");
-        }
-
-        [Test]
-        public void CurvedBridgeRegression_SquareSupportDoesNotOverlapTheStair()
-        {
-            Transform stair = AllTransforms().Single(transform => transform.name == TargetStairName);
-            Transform walls = root!.transform.Find("Elevation Edge Walls");
-            Collider[] stairColliders = stair.GetComponentsInChildren<Collider>(includeInactive: true);
-            Collider[] formerCornerWalls = walls.GetComponentsInChildren<Collider>(includeInactive: true)
-                .Where(collider =>
-                    collider.transform.name.Contains("_18_14_", StringComparison.Ordinal) ||
-                    collider.transform.name.Contains("_17_13_", StringComparison.Ordinal))
-                .ToArray();
-
-            Assert.That(formerCornerWalls.Length, Is.GreaterThan(0));
-            string[] overlaps =
-                (from stairCollider in stairColliders
-                 from wallCollider in formerCornerWalls
-                 where BoundsOverlapWithPositiveVolume(stairCollider.bounds, wallCollider.bounds)
-                 select $"{stairCollider.transform.name}/{wallCollider.transform.name}")
-                .ToArray();
-            Assert.That(
-                overlaps,
-                Is.Empty,
-                $"The restored square support walls overlap the curved bridge: {string.Join(", ", overlaps)}");
         }
 
         [Test]

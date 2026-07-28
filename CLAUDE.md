@@ -1,5 +1,25 @@
 # Repository Standards
 
+## Tests
+
+Do not write tests unless explicitly asked. This project is in design flux; a
+test written today is a refactor tax tomorrow.
+
+When an existing test fails during a change, the default is to **delete or
+loosen the assertion, not to repin it.** Stop and investigate only if the
+assertion names a runtime invariant — something that would break the game, the
+server contract, or a hard validation gate. Report the rest as a list and move
+on; do not fix them unless asked.
+
+Never assert on:
+
+- **seed-derived values** — coordinates, cell counts, node indices, edge ids,
+  planner-version strings. The generator rebaselines by design.
+- **third-party asset state** — imported prefabs, FBX sub-asset ids, collider
+  components on art packages.
+- **counts that are properties of content, not code** — recipe totals, topology
+  counts, catalog sizes.
+
 ## Directory Structure
 
 First-party Unity code and content live under `Assets/Arena`. Imported packages live under `Assets/ThirdParty`. Runtime-loaded first-party assets live under `Assets/Arena/Resources`; only place assets there when code uses `Resources.Load` or `Resources.LoadAll`. Editor-only generator inputs and their ScriptableObject types belong under `Assets/Arena/Editor`, even when they reference runtime assets.
