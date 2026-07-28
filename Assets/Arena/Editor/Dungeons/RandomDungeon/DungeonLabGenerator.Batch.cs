@@ -3240,9 +3240,16 @@ namespace DungeonLab.Editor
                     visualRecipe?.Value<bool?>("atomicAndValid") == true &&
                     selectedShowpieceCount == 1 &&
                     bounds.size.sqrMagnitude > 0.01f;
-                bool collisionPreconditionsPassed =
-                    enabledCollisionSources > 0 &&
-                    missingMeshCount == 0;
+                // `missingMeshCount` used to gate this and it measured the wrong
+                // thing: a MeshCollider with no mesh is INERT — the exporter
+                // filters on `sharedMesh != null` before it builds anything, so
+                // such a component never reached the payload. The ~20 in every
+                // dungeon are all on the third-party `P_MOD_Gateway_Door_01_*`
+                // prefab, and door blocking is manifest-driven anyway
+                // (`WorldDoorCollisionRuntime.closed_blocker`), so the count was
+                // a property of an FBX import failing a dungeon probe. Still
+                // reported below, just not a gate.
+                bool collisionPreconditionsPassed = enabledCollisionSources > 0;
                 var report = new JObject
                 {
                     ["summaryVersion"] = ActiveDiagnosticSummaryVersion,

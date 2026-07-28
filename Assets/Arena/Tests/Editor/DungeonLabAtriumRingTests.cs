@@ -122,7 +122,6 @@ namespace Arena.Tests.Editor
             Assert.That(report["renderer.passed"], Is.EqualTo("true"), snapshotText);
             Assert.That(int.Parse(report["renderer.rejectedPlacements"]), Is.Zero);
             Assert.That(report["collision.passed"], Is.EqualTo("true"), snapshotText);
-            Assert.That(int.Parse(report["collision.missingMeshes"]), Is.Zero);
         }
 
         // A weighted draw means no seed is guaranteed to be an atrium seed, so

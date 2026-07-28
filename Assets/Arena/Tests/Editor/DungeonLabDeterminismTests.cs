@@ -84,7 +84,6 @@ namespace Arena.Tests.Editor
             Assert.That(int.Parse(report["renderer.stairFootprintChecks"]), Is.GreaterThan(0));
             Assert.That(report["collision.passed"], Is.EqualTo("true"), snapshot);
             Assert.That(int.Parse(report["collision.enabledNonTriggerColliders"]), Is.GreaterThan(0));
-            Assert.That(int.Parse(report["collision.missingMeshes"]), Is.Zero);
         }
 
         private static void AssertCheckPassed(Dictionary<string, string> report, string check)
