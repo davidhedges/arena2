@@ -19,6 +19,10 @@ namespace DungeonLab.Editor
         private const string ExternalConnectorRejectionCode =
             "EXTERNAL_CONNECTOR_PROMONTORY";
 
+        // The shipped contract is 1-4 external promontories. The seed draws a
+        // preferred count; this is the floor it may be walked down to.
+        private const int MinimumExternalConnectorCount = 1;
+
         private sealed class ExternalConnectorCandidate
         {
             public int direction;
@@ -120,51 +124,61 @@ namespace DungeonLab.Editor
             }
 
             List<int> directionPriority = BuildExternalDirectionPriority(dungeonSeed);
-            foreach (int[] directionSubset in EnumerateExternalDirectionSubsets(
-                         directionPriority,
-                         desiredCount))
+            // The seed's count is a PREFERENCE, tried first and then walked down.
+            // The shipped contract is "1-4 external promontories"; requiring the
+            // exact drawn number atomically made a seed fail outright when the
+            // core no longer offered that many anchors — which is what cost
+            // `2026072187` at density 0 and `2026072198` a whole layout attempt.
+            // Fewer connectors is a smaller dungeon mouth, not an invalid one.
+            for (int count = desiredCount; count >= MinimumExternalConnectorCount; count--)
             {
-                var chosen = new List<ExternalConnectorCandidate>(desiredCount);
-                var claimed = new HashSet<Vector2Int>();
-                if (!TryChooseExternalConnectorCandidates(
-                        directionSubset,
-                        0,
-                        candidatesByDirection,
-                        claimed,
-                        chosen))
+                foreach (int[] directionSubset in EnumerateExternalDirectionSubsets(
+                             directionPriority,
+                             count))
                 {
-                    continue;
-                }
-
-                var planned = new ExternalConnectorPromontoryResolution[chosen.Count];
-                for (int index = 0; index < chosen.Count; index++)
-                {
-                    ExternalConnectorCandidate candidate = chosen[index];
-                    planned[index] = new ExternalConnectorPromontoryResolution(
-                        ExternalConnectorId(candidate.direction),
-                        candidate.direction,
-                        candidate.anchorCell,
-                        candidate.terminalCell,
-                        candidate.level,
-                        candidate.occupiedCells);
-                }
-
-                // The full set is selected and conflict-checked before the first
-                // mutation, so a failed subset can never leave a partial result.
-                foreach (ExternalConnectorPromontoryResolution resolution in planned)
-                {
-                    for (int index = 1; index < resolution.occupiedCells.Length; index++)
+                    var chosen = new List<ExternalConnectorCandidate>(count);
+                    var claimed = new HashSet<Vector2Int>();
+                    if (!TryChooseExternalConnectorCandidates(
+                            directionSubset,
+                            0,
+                            candidatesByDirection,
+                            claimed,
+                            chosen))
                     {
-                        cellLevels.Add(resolution.occupiedCells[index], resolution.level);
+                        continue;
                     }
-                }
 
-                resolutions = planned;
-                return true;
+                    var planned = new ExternalConnectorPromontoryResolution[chosen.Count];
+                    for (int index = 0; index < chosen.Count; index++)
+                    {
+                        ExternalConnectorCandidate candidate = chosen[index];
+                        planned[index] = new ExternalConnectorPromontoryResolution(
+                            ExternalConnectorId(candidate.direction),
+                            candidate.direction,
+                            candidate.anchorCell,
+                            candidate.terminalCell,
+                            candidate.level,
+                            candidate.occupiedCells);
+                    }
+
+                    // The full set is selected and conflict-checked before the first
+                    // mutation, so a failed subset can never leave a partial result.
+                    foreach (ExternalConnectorPromontoryResolution resolution in planned)
+                    {
+                        for (int index = 1; index < resolution.occupiedCells.Length; index++)
+                        {
+                            cellLevels.Add(resolution.occupiedCells[index], resolution.level);
+                        }
+                    }
+
+                    resolutions = planned;
+                    return true;
+                }
             }
 
             return RejectExternalConnectors(
-                $"could not realize exact count {desiredCount} with distinct directions on the final core extent",
+                $"could not realize even {MinimumExternalConnectorCount} connector " +
+                $"(preferred {desiredCount}) with distinct directions on the final core extent",
                 out rejectionReason);
         }
 

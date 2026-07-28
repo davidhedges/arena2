@@ -28,9 +28,16 @@ namespace DungeonLab.Editor
     internal sealed partial class DungeonLabGenerator
     {
         // Above this a room reads as a hall rather than a room. 64 cells is 8x8,
-        // which is the largest a generic room can be inflated to at density 0 —
-        // so a chamber is never bigger than the biggest room the sparse end of
-        // the dial produces, and the packed end reads as a suite of them.
+        // the largest a generic room can be inflated to at density 0 — so a
+        // chamber is never bigger than the biggest room the sparse end of the
+        // dial produces, and the packed end reads as a suite of them.
+        //
+        // Swept at density 5 rather than assumed; density 0's own rooms average
+        // ~40 cells, which is the family a chamber should land in:
+        //
+        //   threshold 48 -> 39 chambers/seed, mean 34 cells   (below the family)
+        //   threshold 64 -> 30 chambers/seed, mean 45 cells   (shipped)
+        //   threshold 96 -> 22 chambers/seed, mean 60 cells   (above it)
         private const int ChamberMaximumCells = 64;
 
         // A cut has to leave a wall on both sides of its doorway, or the gateway

@@ -241,11 +241,23 @@ namespace DungeonLab.Editor
             int renderers = root.GetComponentsInChildren<Renderer>(includeInactive: true).Length;
             Collider[] colliders = root.GetComponentsInChildren<Collider>(includeInactive: true);
             int meshColliders = 0;
+            int meshCollidersMissingMesh = 0;
             foreach (Collider collider in colliders)
             {
-                if (collider is MeshCollider)
+                if (!(collider is MeshCollider meshCollider))
                 {
-                    meshColliders++;
+                    continue;
+                }
+
+                meshColliders++;
+                // A mesh collider with no mesh is a hole in the exported server
+                // collision, not a cosmetic problem. Seven EditMode tests have
+                // been red on `main` for a while asserting this is zero
+                // (`collision.missingMeshes`), so the count belongs somewhere a
+                // fresh build reports it rather than only a test fixture.
+                if (meshCollider.sharedMesh == null)
+                {
+                    meshCollidersMissingMesh++;
                 }
             }
 
@@ -259,6 +271,7 @@ namespace DungeonLab.Editor
                 ["renderers"] = renderers,
                 ["colliders"] = colliders.Length,
                 ["meshColliders"] = meshColliders,
+                ["meshCollidersMissingMesh"] = meshCollidersMissingMesh,
                 ["partitionWalls"] = buildReport.partitionWalls,
                 ["cliffEdges"] = buildReport.cliffEdges,
                 ["retainingEdges"] = buildReport.retainingEdges,
@@ -4240,10 +4253,19 @@ namespace DungeonLab.Editor
         {
             ExternalConnectorPromontoryResolution[] resolutions =
                 plan.externalConnectors ?? Array.Empty<ExternalConnectorPromontoryResolution>();
+            // The contract is "1-4 external promontories, at most one per
+            // cardinal". The seed's drawn count is the PREFERENCE the resolver
+            // starts from and may walk down when the grown core stops offering
+            // that many anchors, so this validates the contract rather than the
+            // preference — asserting the exact number here is what turned a
+            // smaller dungeon mouth into a failed seed.
             int desiredCount = ExternalConnectorDesiredCount(seed);
-            if (resolutions.Length != desiredCount || desiredCount < 1 || desiredCount > 4)
+            if (resolutions.Length < 1 ||
+                resolutions.Length > desiredCount ||
+                desiredCount < 1 ||
+                desiredCount > 4)
             {
-                message = $"desired {desiredCount} external connectors; resolved {resolutions.Length}";
+                message = $"preferred up to {desiredCount} external connectors; resolved {resolutions.Length}";
                 return false;
             }
 
@@ -4290,11 +4312,16 @@ namespace DungeonLab.Editor
 
             List<ElevationEdgeModel.OpenFloorEdge> openEdges =
                 BuildExternalConnectorOpenEdges(resolutions);
-            bool passed = directions.Count == desiredCount &&
-                occupied.Count == desiredCount * (ExternalConnectorAppendageCells + 1) &&
-                openEdges.Count == desiredCount * 2;
+            // Against the RESOLVED count, not the preferred one: the resolver may
+            // have walked down when the grown core stopped offering anchors, and
+            // what this has to prove is that every connector it did resolve is a
+            // complete, unique, straight run.
+            int resolvedCount = resolutions.Length;
+            bool passed = directions.Count == resolvedCount &&
+                occupied.Count == resolvedCount * (ExternalConnectorAppendageCells + 1) &&
+                openEdges.Count == resolvedCount * 2;
             message = passed
-                ? $"resolved exact deterministic count {desiredCount} as {ExternalConnectorAppendageCells}-cell straight runs with unique directions, clear terminal throats, and {openEdges.Count} renderer openings"
+                ? $"resolved {resolvedCount} of a preferred {desiredCount} as {ExternalConnectorAppendageCells}-cell straight runs with unique directions, clear terminal throats, and {openEdges.Count} renderer openings"
                 : "external connector set was incomplete";
             return passed;
         }

@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
-
+using System.Globalization;
 using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using Unity.Plastic.Newtonsoft.Json.Linq;
 
 namespace DungeonLab.Editor
 {
@@ -27,12 +28,15 @@ namespace DungeonLab.Editor
         // Every topology is checked at every density (design §6): a topology that
         // cannot take a setting is then a data problem this report names by file,
         // fixable without generator C#. Achieved fill and max void component per
-        // topology per level are a generation measurement, not an authoring rule,
-        // and live in the batch report's measurements.byTopology.density.
+        // level are reported alongside the rules — they are a measurement rather
+        // than a rule, but §6 asks this tool to answer "which topology cannot
+        // reach density 5", and a rule check alone cannot.
         private static readonly int[] RouteTopologyValidationDensityLevels = { 0, 1, 2, 3, 4, 5 };
 
+        // Public so -executeMethod can reach it: the report is now part of the
+        // evidence a batch run produces, not only something clicked in-editor.
         [MenuItem("Tools/Dungeon Lab/Validate Topologies")]
-        private static void ValidateRouteTopologiesMenuItem()
+        public static void ValidateTopologies()
         {
             string report;
             bool passed;
@@ -103,8 +107,7 @@ namespace DungeonLab.Editor
                     // Densities that resolve to the same spatial settings would
                     // print the same block twice, so the first one to produce a
                     // given resolution is checked and the rest say who they
-                    // match. Until phase 3 of the density-scale design fills in
-                    // ResolveDensitySpatialSettings, that is all six of them.
+                    // match.
                     var checkedDensitiesByResolution = new Dictionary<string, int>(StringComparer.Ordinal);
                     foreach (int densityLevel in RouteTopologyValidationDensityLevels)
                     {
@@ -120,6 +123,14 @@ namespace DungeonLab.Editor
                         checkedDensitiesByResolution[resolution] = densityLevel;
                         AppendRouteTopologyProfileRules(topology, label, violations, notes);
                     }
+
+                    // Rules are static; the dial's effect is not. §6 wants this
+                    // tool to name the FILE when a topology cannot reach a
+                    // density, and that needs achieved numbers — so a few of
+                    // this topology's own seeds are generated at every level.
+                    // Outside the resolution dedup above, because annex and
+                    // mop-up move fill without moving the spatial settings.
+                    AppendRouteTopologyAchievedDensity(topology, notes);
 
                     passed &= violations.Count == 0;
                     report.AppendLine()
@@ -153,6 +164,107 @@ namespace DungeonLab.Editor
                     ? "RESULT: every topology satisfies every authoring rule."
                     : "RESULT: at least one topology violates an authoring rule.");
             return report.ToString();
+        }
+
+        // Enough seeds to see whether a topology reaches a level, few enough
+        // that the whole tool stays a thing you run while thinking. The seeds
+        // are this topology's own: SelectRouteTopologyId is a pure function of
+        // the seed, so they are found by scanning rather than by generating.
+        private const int RouteTopologyAchievedDensitySeeds = 3;
+
+        private static void AppendRouteTopologyAchievedDensity(
+            DungeonRouteTopology topology,
+            List<string> notes)
+        {
+            int[] seeds = FindSeedsForTopology(topology.id, RouteTopologyAchievedDensitySeeds);
+            if (seeds.Length == 0)
+            {
+                notes.Add(
+                    "achieved density: no seed in the baseline window draws this topology, so there is " +
+                    "nothing to measure — check its registry weight");
+                return;
+            }
+
+            var line = new StringBuilder("achieved fill / max void component, ")
+                .Append(seeds.Length)
+                .Append(" seeds: ");
+            for (int densityLevel = DungeonDensity.MinLevel;
+                 densityLevel <= DungeonDensity.MaxLevel;
+                 densityLevel++)
+            {
+                var fills = new List<float>();
+                var maxVoids = new List<int>();
+                int rejected = 0;
+                foreach (int seed in seeds)
+                {
+                    JObject report = BuildSeedReport(seed, densityLevel);
+                    if (report.Value<bool?>("accepted") != true)
+                    {
+                        rejected++;
+                        continue;
+                    }
+
+                    if (report["measurements"]?["density"] is JObject density &&
+                        density.Value<bool?>("available") == true)
+                    {
+                        fills.Add(density.Value<float>("latticeEnvelopeFillPercent"));
+                        maxVoids.Add(density["voidComponents"].Value<int>("maxComponentCells"));
+                    }
+                }
+
+                if (densityLevel > DungeonDensity.MinLevel)
+                {
+                    line.Append("  ");
+                }
+
+                line.Append('d').Append(densityLevel).Append(' ');
+                if (fills.Count == 0)
+                {
+                    line.Append("none accepted");
+                    continue;
+                }
+
+                line.Append(MedianOf(fills).ToString("0", CultureInfo.InvariantCulture))
+                    .Append("%/")
+                    .Append(MedianOf(maxVoids).ToString("0", CultureInfo.InvariantCulture));
+                if (rejected > 0)
+                {
+                    line.Append(" (").Append(rejected).Append(" rejected)");
+                }
+            }
+
+            notes.Add(line.ToString());
+        }
+
+        private static int[] FindSeedsForTopology(string topologyId, int wanted)
+        {
+            var seeds = new List<int>(wanted);
+            for (int seed = BaselineFirstSeed;
+                 seeds.Count < wanted && seed < BaselineFirstSeed + BaselineSeedCount;
+                 seed++)
+            {
+                if (string.Equals(SelectRouteTopologyId(seed), topologyId, StringComparison.Ordinal))
+                {
+                    seeds.Add(seed);
+                }
+            }
+
+            return seeds.ToArray();
+        }
+
+        private static double MedianOf<T>(List<T> values) where T : IConvertible
+        {
+            var ordered = new List<double>(values.Count);
+            foreach (T value in values)
+            {
+                ordered.Add(value.ToDouble(CultureInfo.InvariantCulture));
+            }
+
+            ordered.Sort();
+            int middle = ordered.Count / 2;
+            return ordered.Count % 2 == 1
+                ? ordered[middle]
+                : (ordered[middle - 1] + ordered[middle]) / 2d;
         }
 
         // ---- rules --------------------------------------------------------
@@ -828,8 +940,23 @@ namespace DungeonLab.Editor
             int laneCells = sourceCell.x == targetCell.x
                 ? Mathf.Abs(rowOffsets[targetCell.y] - rowOffsets[sourceCell.y])
                 : Mathf.Abs(columnOffsets[targetCell.x] - columnOffsets[sourceCell.x]);
-            int sourceReach = RouteTopologyWorstCaseHalfExtent(topology, topology.vistaSourceNode, spatial);
-            int targetReach = RouteTopologyWorstCaseHalfExtent(topology, topology.vistaTargetNode, spatial);
+            // Both ends are capped against the lane's own required clear run by
+            // ResolveGenericRoomDimensions before they are ever drawn, so the
+            // worst case is the capped extent rather than the range maximum.
+            // Modelling only the range made the rule fire on twin-wing-keep at
+            // densities 3-5 for a lane the generator was already protecting —
+            // the corpus generates 200/200 there. A rule that does not model the
+            // generator reports the generator's caps as violations.
+            int sourceReach = RouteTopologyVistaHalfExtent(
+                topology,
+                topology.vistaSourceNode,
+                spatial,
+                laneCells);
+            int targetReach = RouteTopologyVistaHalfExtent(
+                topology,
+                topology.vistaTargetNode,
+                spatial,
+                laneCells);
             // TryReserveProcessionalVista walks from the source room's boundary
             // cell to the target's, so the clear count is the gap between faces.
             int clearCells = laneCells - sourceReach - targetReach - 1;
@@ -846,6 +973,27 @@ namespace DungeonLab.Editor
                     $"below the required {topology.vistaMinimumVoidCells}; move the pair at least one more " +
                     "lattice step apart");
             }
+        }
+
+        // A vista endpoint as the GENERATOR will actually size it: the role
+        // range, then capped against the lane's own required clear run exactly
+        // as ResolveGenericRoomDimensions caps it. A recipe room is authored and
+        // takes no cap, which is why a recipe on a vista endpoint is still worth
+        // flagging.
+        private static int RouteTopologyVistaHalfExtent(
+            DungeonRouteTopology topology,
+            int node,
+            DungeonPatternSpatialSettings spatial,
+            int laneCells)
+        {
+            int reach = RouteTopologyWorstCaseHalfExtent(topology, node, spatial);
+            if (!string.IsNullOrEmpty(topology.nodes[node].recipeSlotId))
+            {
+                return reach;
+            }
+
+            int capped = MaxRoomExtentForTransition(laneCells, topology.vistaMinimumVoidCells);
+            return Mathf.Min(reach, capped / 2);
         }
 
         // The largest number of cells a room at this node can put between its
