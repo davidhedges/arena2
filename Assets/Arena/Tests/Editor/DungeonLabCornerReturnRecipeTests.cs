@@ -22,7 +22,7 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> values = Snapshot.Value;
 
             Assert.That(values["catalog.valid"], Is.EqualTo("True"));
-            Assert.That(values["catalog.activeCount"], Is.EqualTo("4"));
+            Assert.That(values["catalog.activeCount"], Is.EqualTo("5"));
             Assert.That(values["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(values["recipe.id"], Is.EqualTo("connector_corner_return_01"));
             Assert.That(values["recipe.schema"], Is.EqualTo("1"));
@@ -73,9 +73,9 @@ namespace Arena.Tests.Editor
             Assert.That(values["gallery.collision"], Is.EqualTo("True"));
         }
 
-        [TestCase("processional", "processional-spine-v6", "branch-11-12", "rejoin-12-7")]
-        [TestCase("atrium", "atrium-ring-v3", "branch-11-12", "rejoin-12-6")]
-        [TestCase("twinWing", "twin-wing-keep-v3", "wing-b-11-12", "wing-b-rejoin-12-5")]
+        [TestCase("processional", "processional-spine-v7", "L-M", "M-H")]
+        [TestCase("atrium", "atrium-ring-v4", "L-M", "M-G")]
+        [TestCase("twinWing", "twin-wing-keep-v4", "L-M", "M-F")]
         public void EveryTopology_BindsAndResolvesTheSharedCornerReturn(
             string prefix,
             string plannerVersion,

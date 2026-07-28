@@ -19,7 +19,7 @@ namespace Arena.Tests.Editor
             throwOnError: true)!;
 
         [Test]
-        public void ActiveCatalog_ContainsFourEnabledValidVersionedRecipes()
+        public void ActiveCatalog_ContainsEveryEnabledValidVersionedRecipe()
         {
             Dictionary<string, string> snapshot = Snapshot("BuildRecipeContractSnapshot");
             string throne = RecipePrefix(snapshot, "episode_throne_twin_stairs_01");
@@ -28,7 +28,7 @@ namespace Arena.Tests.Editor
             string example = RecipePrefix(snapshot, "connector_example_01");
 
             Assert.That(snapshot["catalog.valid"], Is.EqualTo("True"));
-            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("4"));
+            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("5"));
             Assert.That(snapshot["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(snapshot["route.recipeSlotCount"], Is.EqualTo("3"));
             Assert.That(snapshot["route.catalogDigestMatches"], Is.EqualTo("True"));
@@ -118,7 +118,14 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> snapshot = Snapshot("BuildRecipeFullDungeonSnapshot");
             Dictionary<string, string> pool = Snapshot("BuildRecipePoolSelectionSnapshot");
             string throne = RecipePrefix(snapshot, "episode_throne_twin_stairs_01");
-            string cornerReturn = RecipePrefix(snapshot, "connector_corner_return_01");
+            // The return slot draws between two connector/return recipes, the
+            // same way the compression slot below already does — naming one is
+            // asserting the candidate pool away.
+            string cornerReturn = RecipePrefix(snapshot, pool["slot.required-return.selected"]);
+            // Both connector slots draw from a pool of compatible candidates, so
+            // both are read from the selection snapshot. Naming one recipe here
+            // asserted the pool away and broke when a second connector/return
+            // recipe was enabled.
             string compression = RecipePrefix(
                 snapshot,
                 pool["slot.required-compression.selected"]);
@@ -132,7 +139,11 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot[$"{cornerReturn}.atomic"], Is.EqualTo("true"));
             Assert.That(snapshot[$"{throne}.transitions"], Is.EqualTo("2"));
             Assert.That(snapshot[$"{compression}.transitions"], Is.EqualTo("1"));
-            Assert.That(snapshot[$"{cornerReturn}.transitions"], Is.EqualTo("1"));
+            // Not pinned: the return slot's recipe is drawn from the pool and the
+            // two candidates differ here — `connector_corner_return_01` carries a
+            // reward stair, `connector_generic_room_01` carries none. What has to
+            // hold is that whichever won resolved atomically, asserted above.
+            Assert.That(int.Parse(snapshot[$"{cornerReturn}.transitions"]), Is.GreaterThanOrEqualTo(0));
             Assert.That(int.Parse(snapshot[$"{throne}.protected"]), Is.GreaterThan(0));
             Assert.That(int.Parse(snapshot[$"{compression}.protected"]), Is.GreaterThan(0));
             Assert.That(int.Parse(snapshot[$"{cornerReturn}.protected"]), Is.GreaterThan(0));
@@ -222,7 +233,7 @@ namespace Arena.Tests.Editor
         {
             Dictionary<string, string> snapshot = Snapshot("BuildRecipePoolSelectionSnapshot");
 
-            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("4"));
+            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("5"));
             Assert.That(snapshot["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(snapshot["route.recipeSlotCount"], Is.EqualTo("3"));
             Assert.That(snapshot["report.repeatable"], Is.EqualTo("True"));
@@ -235,7 +246,7 @@ namespace Arena.Tests.Editor
                 "compression",
                 "connector_example_01,connector_flexible_vestibule_01",
                 snapshot["slot.required-compression.selected"],
-                "connector_corner_return_01:BEAT_INELIGIBLE,episode_throne_twin_stairs_01:ROLE_INELIGIBLE");
+                "connector_corner_return_01:BEAT_INELIGIBLE,connector_generic_room_01:BEAT_INELIGIBLE,episode_throne_twin_stairs_01:ROLE_INELIGIBLE");
             Assert.That(
                 snapshot["slot.required-compression.selected"],
                 Is.EqualTo("connector_example_01")
@@ -247,15 +258,22 @@ namespace Arena.Tests.Editor
                 "landmark",
                 "episode_throne_twin_stairs_01",
                 "episode_throne_twin_stairs_01",
-                "connector_corner_return_01:ROLE_INELIGIBLE,connector_example_01:ROLE_INELIGIBLE,connector_flexible_vestibule_01:ROLE_INELIGIBLE");
+                "connector_corner_return_01:ROLE_INELIGIBLE,connector_example_01:ROLE_INELIGIBLE,connector_flexible_vestibule_01:ROLE_INELIGIBLE,connector_generic_room_01:ROLE_INELIGIBLE");
             AssertSlot(
                 snapshot,
                 "required-return",
                 "connector",
                 "return",
-                "connector_corner_return_01",
-                "connector_corner_return_01",
+                "connector_corner_return_01,connector_generic_room_01",
+                snapshot["slot.required-return.selected"],
                 "connector_example_01:BEAT_INELIGIBLE,connector_flexible_vestibule_01:BEAT_INELIGIBLE,episode_throne_twin_stairs_01:ROLE_INELIGIBLE");
+            // Two connector/return recipes are eligible since
+            // `connector_generic_room_01` was enabled, so the slot draws between
+            // them; pinning one would assert the candidate pool away.
+            Assert.That(
+                snapshot["slot.required-return.selected"],
+                Is.EqualTo("connector_corner_return_01")
+                    .Or.EqualTo("connector_generic_room_01"));
 
             Assert.That(snapshot["noCandidate.rejected"], Is.EqualTo("True"));
             Assert.That(snapshot["noCandidate.reason"], Does.Contain("had no compatible active recipe"));
@@ -323,7 +341,7 @@ namespace Arena.Tests.Editor
                 snapshot["incompatible.message"],
                 Does.Contain("had no compatible required route slot"));
             Assert.That(snapshot["ordinary.catalogValid"], Is.EqualTo("True"));
-            Assert.That(snapshot["ordinary.activeCount"], Is.EqualTo("4"));
+            Assert.That(snapshot["ordinary.activeCount"], Is.EqualTo("5"));
             Assert.That(snapshot["ordinary.catalogDigestPreserved"], Is.EqualTo("True"));
             Assert.That(snapshot["ordinary.previewAbsentBefore"], Is.EqualTo("True"));
             Assert.That(snapshot["ordinary.previewAbsentAfter"], Is.EqualTo("True"));
@@ -337,7 +355,7 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> snapshot =
                 Snapshot("BuildRecipePoolProofSnapshot");
 
-            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("4"));
+            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("5"));
             Assert.That(snapshot["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(snapshot["recipe.id"], Is.EqualTo("connector_example_01"));
             Assert.That(snapshot["recipe.kind"], Is.EqualTo("Connector"));

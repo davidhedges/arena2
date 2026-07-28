@@ -231,6 +231,23 @@ namespace DungeonLab.Editor
             return path;
         }
 
+        // Enough of the path to find the prefab, without the seed-specific
+        // coordinates every generated name carries.
+        private static string DescribeHierarchyPath(Transform transform)
+        {
+            var parts = new List<string>();
+            for (Transform current = transform; current != null; current = current.parent)
+            {
+                parts.Insert(0, current.name);
+                if (parts.Count >= 3)
+                {
+                    break;
+                }
+            }
+
+            return string.Join("/", parts);
+        }
+
         private static JObject BuildDensityCostEntry(
             int seed,
             GameObject root,
@@ -242,6 +259,7 @@ namespace DungeonLab.Editor
             Collider[] colliders = root.GetComponentsInChildren<Collider>(includeInactive: true);
             int meshColliders = 0;
             int meshCollidersMissingMesh = 0;
+            var missingMeshOwners = new SortedSet<string>(StringComparer.Ordinal);
             foreach (Collider collider in colliders)
             {
                 if (!(collider is MeshCollider meshCollider))
@@ -253,11 +271,16 @@ namespace DungeonLab.Editor
                 // A mesh collider with no mesh is a hole in the exported server
                 // collision, not a cosmetic problem. Seven EditMode tests have
                 // been red on `main` for a while asserting this is zero
-                // (`collision.missingMeshes`), so the count belongs somewhere a
-                // fresh build reports it rather than only a test fixture.
+                // (`collision.missingMeshes`), so the count — and enough of a
+                // name to find the prefab — belongs somewhere a fresh build
+                // reports it rather than only a test fixture.
                 if (meshCollider.sharedMesh == null)
                 {
                     meshCollidersMissingMesh++;
+                    if (missingMeshOwners.Count < 12)
+                    {
+                        missingMeshOwners.Add(DescribeHierarchyPath(meshCollider.transform));
+                    }
                 }
             }
 
@@ -272,6 +295,7 @@ namespace DungeonLab.Editor
                 ["colliders"] = colliders.Length,
                 ["meshColliders"] = meshColliders,
                 ["meshCollidersMissingMesh"] = meshCollidersMissingMesh,
+                ["meshCollidersMissingMeshOwners"] = new JArray(missingMeshOwners),
                 ["partitionWalls"] = buildReport.partitionWalls,
                 ["cliffEdges"] = buildReport.cliffEdges,
                 ["retainingEdges"] = buildReport.retainingEdges,
@@ -1167,6 +1191,47 @@ namespace DungeonLab.Editor
                 "check its weight");
         }
 
+        /// <summary>
+        /// The first seed on a topology whose route actually binds one recipe.
+        /// </summary>
+        /// <remarks>
+        /// Slot selection draws from every compatible candidate, so "the first
+        /// seed on this topology" stopped being "a seed that binds the corner
+        /// return" the moment a second connector/return recipe was enabled
+        /// (`connector_generic_room_01`, 2026-07-24). The fixture wants a seed
+        /// where the recipe under test IS selected — asserting that one
+        /// particular candidate always wins the draw would be asserting the pool
+        /// away.
+        /// </remarks>
+        private static int FirstSeedBindingRecipe(
+            string topologyId,
+            string recipeId,
+            int firstSeed,
+            int seedLimit)
+        {
+            for (int index = 0; index < seedLimit; index++)
+            {
+                int seed = firstSeed + index;
+                if (!string.Equals(SelectRouteTopologyId(seed), topologyId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                JObject report = BuildSeedReport(seed);
+                if (report.Value<bool?>("accepted") == true &&
+                    FindRecipeProjection(
+                        report["routeIntent"]?["recipeSlots"] as JArray,
+                        recipeId) != null)
+                {
+                    return seed;
+                }
+            }
+
+            throw new InvalidOperationException(
+                $"[RECIPE_POOL] no seed in {firstSeed}..{firstSeed + seedLimit - 1} put '{recipeId}' " +
+                $"on '{topologyId}'; check the recipe's eligibility and the candidate pool");
+        }
+
         private static string TopologyWeightSummary()
         {
             var weights = new List<string>();
@@ -1830,7 +1895,11 @@ namespace DungeonLab.Editor
                      })
             {
                 JObject report = BuildSeedReport(
-                    FirstSeedSelectingTopology(sample.topologyId, 2026072100, 2000));
+                    FirstSeedBindingRecipe(
+                        sample.topologyId,
+                        CornerReturnRecipeFixtureId,
+                        2026072100,
+                        2000));
                 JObject slot = FindRecipeProjection(
                     report["routeIntent"]?["recipeSlots"] as JArray,
                     CornerReturnRecipeFixtureId);
