@@ -6037,6 +6037,31 @@ mod tests {
     }
 
     #[test]
+    fn dagger_downward_slash_is_a_direct_root_strike() {
+        let profile = melee_manifest()
+            .profiles
+            .iter()
+            .find(|profile| profile.combat_profile == "DAGGERS")
+            .expect("DAGGERS melee profile must exist");
+        let strike = profile
+            .strikes
+            .iter()
+            .find(|strike| strike.id == "DAGGER_DOWNWARD_SLASH")
+            .expect("DAGGER_DOWNWARD_SLASH strike must exist");
+
+        assert_eq!(canonical_slot_id(strike), "dagger_downward_slash_slot");
+        assert!(
+            strike
+                .combo_from
+                .as_deref()
+                .unwrap_or("")
+                .trim()
+                .is_empty(),
+            "Downward Slash must be directly castable rather than requiring the auto-attack opener"
+        );
+    }
+
+    #[test]
     fn combo_successor_strikes_reachable_from_melee_roots_have_gameplay_rows() {
         let catalog: Value =
             serde_json::from_str(PROGRESSION_CATALOG_JSON).expect("catalog json must parse");

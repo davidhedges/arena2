@@ -2504,8 +2504,8 @@ namespace Arena.Presentation
             AnimationClip? applied = _overrideController?[$"slot_strike_{bankSlot}"];
             TraceCombatAnimation(
                 $"strike-bind action={_combatAnimationTraceActionId} strike={strikeIndex} bank={bankSlot} " +
-                $"bound={bound} desired={desired?.name ?? "<controller-default>"} " +
-                $"applied={applied?.name ?? "<null>"}");
+                $"bound={bound} desired={(desired != null ? desired.name : "<controller-default>")} " +
+                $"applied={(applied != null ? applied.name : "<null>")}");
         }
 
         [System.Diagnostics.Conditional("UNITY_EDITOR")]
@@ -2541,7 +2541,7 @@ namespace Arena.Presentation
             TraceCombatAnimation(
                 $"melee-resolved action={request.ActionId} category={request.Category} strike={strikeIndex} " +
                 $"bank={bankSlot} expected={DescribeStateHash(_combatAnimationTraceExpectedStateHash)} " +
-                $"clip={clip?.name ?? "<null>"}");
+                $"clip={(clip != null ? clip.name : "<phased-or-null>")}");
         }
 
         [System.Diagnostics.Conditional("UNITY_EDITOR")]

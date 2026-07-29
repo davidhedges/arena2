@@ -3889,7 +3889,7 @@
       "ability_id": "DAGGER_DOWNWARD_SLASH",
       "actor_scope": "PLAYER",
       "combat_profile_id": "DAGGERS",
-      "action_id": "DAGGER_COMBO_ATTACK_01_02",
+      "action_id": "DAGGER_DOWNWARD_SLASH",
       "display_name": "Downward Slash",
       "resource_kind": "STAMINA",
       "resource_cost": 20,

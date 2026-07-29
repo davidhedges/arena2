@@ -8099,7 +8099,7 @@ mod tests {
             ("DAGGER_BLADE_FLURRY", "DAGGER_COMBO_ATTACK_02_02"),
             ("DAGGER_DEADLY_FLOURISH", "DAGGER_COMBO_ATTACK_02_01"),
             ("DAGGER_PURSUE", "DAGGER_COMBO_ATTACK_01_04"),
-            ("DAGGER_DOWNWARD_SLASH", "DAGGER_COMBO_ATTACK_01_02"),
+            ("DAGGER_DOWNWARD_SLASH", "DAGGER_DOWNWARD_SLASH"),
             ("DAGGER_COUP_DE_GRACE", "DAGGER_COUP_DE_GRACE"),
         ] {
             let ability = catalog
