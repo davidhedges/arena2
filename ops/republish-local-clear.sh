@@ -67,6 +67,9 @@ spacetime call "$ARENA_DATABASE" publish_spell_definitions
 echo "Re-syncing progression catalogs..."
 spacetime call "$ARENA_DATABASE" publish_progression_catalogs
 
+echo "Re-syncing melee definitions..."
+spacetime call "$ARENA_DATABASE" publish_melee_definitions
+
 echo "Re-syncing item definitions and affixes..."
 spacetime call "$ARENA_DATABASE" publish_item_definitions
 

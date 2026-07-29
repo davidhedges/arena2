@@ -875,6 +875,7 @@ namespace SpacetimeDB.Types
                 Reducer.PromotePartyLeader args => Reducers.InvokePromotePartyLeader(eventContext, args),
                 Reducer.PublishItemAffixDefinitions args => Reducers.InvokePublishItemAffixDefinitions(eventContext, args),
                 Reducer.PublishItemDefinitions args => Reducers.InvokePublishItemDefinitions(eventContext, args),
+                Reducer.PublishMeleeDefinitions args => Reducers.InvokePublishMeleeDefinitions(eventContext, args),
                 Reducer.PublishProgressionCatalogs args => Reducers.InvokePublishProgressionCatalogs(eventContext, args),
                 Reducer.PublishSpellDefinitions args => Reducers.InvokePublishSpellDefinitions(eventContext, args),
                 Reducer.QuickLoot args => Reducers.InvokeQuickLoot(eventContext, args),

@@ -1488,6 +1488,12 @@ fn combo_release_allowed(
     }
 }
 
+#[reducer]
+pub fn publish_melee_definitions(ctx: &ReducerContext) -> Result<(), String> {
+    sync_melee_definitions(ctx);
+    Ok(())
+}
+
 pub(crate) fn sync_melee_definitions(ctx: &ReducerContext) {
     let manifest = melee_manifest();
     let mut expected_keys = std::collections::HashSet::new();
@@ -6051,14 +6057,28 @@ mod tests {
 
         assert_eq!(canonical_slot_id(strike), "dagger_downward_slash_slot");
         assert!(
-            strike
-                .combo_from
-                .as_deref()
-                .unwrap_or("")
-                .trim()
-                .is_empty(),
+            strike.combo_from.as_deref().unwrap_or("").trim().is_empty(),
             "Downward Slash must be directly castable rather than requiring the auto-attack opener"
         );
+    }
+
+    #[test]
+    fn data_preserving_republish_workflows_publish_melee_definitions() {
+        for (relative_path, source) in [
+            (
+                "ops/republish-local-clear.sh",
+                include_str!("../../ops/republish-local-clear.sh"),
+            ),
+            (
+                "ops/republish-catalog.sh",
+                include_str!("../../ops/republish-catalog.sh"),
+            ),
+        ] {
+            assert!(
+                source.contains("spacetime call \"$ARENA_DATABASE\" publish_melee_definitions"),
+                "{relative_path} must publish melee definitions after a data-preserving publish"
+            );
+        }
     }
 
     #[test]
