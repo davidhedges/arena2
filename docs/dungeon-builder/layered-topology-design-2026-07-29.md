@@ -115,6 +115,60 @@ movement collision would also let sight pass straight through it (§7.2).
 
 ---
 
+## 0.1 Measured 2026-07-29 — the deck-underside art question, settled
+
+The one external dependency that could invalidate Phase C. Measured from the
+**shipped collision payload** (`server/src/world_data/random_dungeon.collision.shared.json`),
+which carries the exact triangles the server consumes — no Unity, no guessing.
+
+**The answer: the kit already ships solid floor tiles. The generator just is not
+using them.**
+
+| Finding | Measured value |
+|---|---|
+| The generator's floor, `MOD_Floor_01_O_straight_med`, is a **zero-thickness one-sided plane** | 4 verts, 2 tris, both `normal_y = +1.000`, bounds **4u × 0 × 4u** |
+| Its `_E_` counterpart, `MOD_Floor_01_E_straight_med`, is a **closed solid slab** | 8 verts, bounds **4u × 0.5u × 4u**, `Ymin = −0.5, Ymax = 0` |
+| **The whole family pairs up 2:1.** Every `_E_` shape has exactly twice the vertices of its `_O_` twin — the same top surface plus a bottom | 13 matched shapes: straight 4↔8, convex_med 8↔16, convex_med_2 13↔26, angle_med 3↔6 … |
+| **The slab hangs entirely BELOW the walk surface** | `Ymax = 0` on every `_E_` piece measured |
+| `_M_` walls are likewise closed boxes with a real bottom face | `MOD_Wall_01_M_straight_med`, bottom face `normal_y = −1.000` |
+| Floors use a non-convex `MeshCollider` sharing the render mesh | `P_MOD_Floor_01_O_straight_med.prefab` |
+
+> **`slabThickness = 0.5 world units = 0.5 levels`, measured, hanging below the
+> walk surface.** §7.1's suspended band is therefore `[level − 0.5, level)`,
+> which is exactly the convention the band model assumed — it now has a number
+> instead of a placeholder.
+
+**Consequences.**
+
+1. **Phase C's art risk is retired, and no new art is needed.** Any surface whose
+   underside is visible — deck, gallery, balcony, bridge — uses the **`_E_`
+   family** instead of `_O_`. `FloorName` is currently pinned to
+   `P_MOD_Floor_01_O_straight_med`, and the round-corner swap likewise uses
+   `_O_convex_med` / `_O_angle_med`; those become a per-surface choice rather
+   than a constant.
+2. **No flipped quads, no render-only hack, no box-collider rule.** An `_E_`
+   slab's bottom face is genuine geometry with a genuine collider, so it blocks
+   sight and movement correctly — which matters because the dungeon exports
+   movement collision *as* query collision (§7.2) and a render-only soffit would
+   have let sight pass straight through a floor.
+3. **Usable clearance is headroom − 0.5u.** With `MinHeadroomLevels = 3` a deck
+   leaves **2.5u** of true clear space, not 3u, against a 1.8u player. Still
+   ample at the 4u major rise (3.5u clear), but the 0.5u must be carried in the
+   clearance derivation rather than discovered later.
+4. **The `_E_` bottom face is not a ground hazard.** At any legal headroom it
+   sits far outside the 1.2u capture window of the surface below it, so `max`
+   selection never reaches it. The round-three absolute-normal correction stands,
+   but it turns out not to bite here.
+
+**Method note, recorded because it cost a wrong answer.** The first pass measured
+the *exported collision payload*, which contains only geometry the generator
+currently **uses** — so it showed nothing but `_O_` planes and concluded no solid
+floor existed. The payload answers "what is shipped", never "what is available";
+the pack itself is the only source for the second question. Owner correction,
+2026-07-29.
+
+---
+
 ## 1. What exists today
 
 ### 1.1 Units — confirmed
@@ -817,7 +871,7 @@ partitions, traps and promontories all iterate the same dictionary.
    | Band source | Extent | When |
    |---|---|---|
    | **Ground** | `[abyssBase, level)` | `IsGroundBacked(s)` — the surface rests on fill |
-   | **Slab** | `[level − slabThickness, level)` | otherwise — a suspended deck, gallery or ledge implies only its own depth |
+   | **Slab** | `[level − 0.5, level)` | otherwise — a suspended deck, gallery or ledge implies only its own depth. **0.5u is measured** from the `_E_` floor family (§0.1), not a placeholder |
    | **Support** | authored prism | piers, columns, buttresses, a stairwell tower's shaft — declared, never implied |
    | **Wall** | authored prism | partitions and enclosure walls, which keep their own grammar |
 
@@ -1738,15 +1792,11 @@ own bridge.
    railing suppression. This is most of Phase C and it is where a subtle railing
    or flank regression will hide. Render Sweep, not Batch Validate, is the only
    thing that catches it. **Re-estimate this phase before committing to it.**
-2. **Soffit art may not exist, and its collider shape matters as much as its
-   look.** The pack has no measured flat under-deck cap family. §7.2's analysis
-   says a soffit emitted as a **box** collider is safe under both capture
-   windows and `max` selection, and that a **mesh** soffit is the hazard —
-   because the server's normal test is on an absolute value and filters nothing
-   by direction. That analysis is a prediction, not a measurement. Measure the
-   art *before* committing Phase C; if no usable family exists, Phase C's exit
-   criterion is unreachable and the phase should be re-scoped around a bridge
-   over a corridor in an open room rather than a full gallery.
+2. ~~**Soffit art may not exist.**~~ **RETIRED, measured 2026-07-29 (§0.1).**
+   The kit ships a solid-slab floor family (`_E_`, 0.5u thick, bottom face
+   included) that the generator simply is not using. No new art, no flipped
+   quads, no collider trick. The residual work is a per-surface prefab choice
+   plus carrying 0.5u in the clearance derivation.
 3. **Silent atrium fill.** The density passes will claim any plan cell. If
    `OpenVolume` is not wired into all four mechanisms, density 5 packs the
    atrium and no gate fires.

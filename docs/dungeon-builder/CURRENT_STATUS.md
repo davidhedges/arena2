@@ -152,10 +152,12 @@ investigation is in the design doc's §1 and §2.
 1. **Decide the three sizing questions** in the design doc §14: the vertical
    envelope (40u vs 80u), per-topology ceiling vs a global constant, and the
    stacking pitch (4u vs 8u). They size everything downstream.
-2. **Measure the deck-underside art.** The pack has no measured flat under-deck
-   cap family, and a closed-solid soffit is an active movement hazard inside the
-   server's 1.2u ground-capture window. This is the one external dependency that
-   can invalidate the design's first proof phase.
+2. ~~**Measure the deck-underside art.**~~ **Done 2026-07-29 — see the design
+   doc §0.1.** The kit already ships solid floor tiles: the `_E_` family is the
+   `_O_` family plus a bottom face, 0.5u thick, hanging below the walk surface.
+   The generator pins `FloorName` to the one-sided `_O_` plane, which is why
+   deck undersides read open from below. Fix is a per-surface prefab choice, not
+   new art. Phase C's only external dependency is retired.
 3. **Look at the dungeons.** **Arena > Dungeons > Rebuild Random Dungeon** on a
    few seeds. No hash tells you whether a dungeon reads well. One rendered shot
    per topology is in `DungeonLabReports/step3_topology_shots/`.
