@@ -139,6 +139,7 @@ const GAP_CLOSE_KIND_LINEAR: &str = "LINEAR";
 const GAP_CLOSE_KIND_LEAP: &str = "LEAP";
 const GAP_CLOSE_KIND_TELEPORT: &str = "TELEPORT";
 const GAP_CLOSE_KIND_TELEPORT_BEHIND: &str = "TELEPORT_BEHIND";
+const GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED: &str = "TELEPORT_BEHIND_TARGET_DISABLED";
 const GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT: &str = "NEAREST_CONTACT_POINT";
 const GAP_CLOSE_DESTINATION_BEHIND_TARGET: &str = "BEHIND_TARGET";
 const GAP_CLOSE_DESTINATION_TARGET_SIDE_LEFT: &str = "TARGET_SIDE_LEFT";
@@ -1946,6 +1947,20 @@ fn melee_gap_close_for_ability(
         .find(ability_id.to_string())
 }
 
+fn gap_close_activation_satisfied(
+    gap_close: &MeleeGapCloseCatalog,
+    target_is_disabled: bool,
+) -> bool {
+    gap_close.kind.as_str() != GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED || target_is_disabled
+}
+
+fn inactive_conditional_gap_close_range(
+    effective_range: f32,
+    gap_close: &MeleeGapCloseCatalog,
+) -> f32 {
+    effective_range.min(gap_close.impact_range.max(0.0))
+}
+
 fn actor_contact_distance(
     caster: GapCloseActorSnapshot,
     target: GapCloseActorSnapshot,
@@ -1972,7 +1987,10 @@ fn resolve_gap_close_destination(
     caster: GapCloseActorSnapshot,
     target: GapCloseActorSnapshot,
 ) -> Option<SpellVec3> {
-    let destination = if gap_close.kind.as_str() == GAP_CLOSE_KIND_TELEPORT_BEHIND {
+    let destination = if matches!(
+        gap_close.kind.as_str(),
+        GAP_CLOSE_KIND_TELEPORT_BEHIND | GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED
+    ) {
         GAP_CLOSE_DESTINATION_BEHIND_TARGET
     } else {
         gap_close.destination.as_str()
@@ -2132,6 +2150,7 @@ fn resolve_melee_gap_close(
             | GAP_CLOSE_KIND_LEAP
             | GAP_CLOSE_KIND_TELEPORT
             | GAP_CLOSE_KIND_TELEPORT_BEHIND
+            | GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED
     ) {
         return Err(GapCloseResolveFailure::UnsupportedKind {
             kind: gap_close.kind.clone(),
@@ -2151,7 +2170,9 @@ fn resolve_melee_gap_close(
     let start = SpellVec3::new(caster.pos_x, caster.pos_y, caster.pos_z);
     let is_teleport = matches!(
         gap_close.kind.as_str(),
-        GAP_CLOSE_KIND_TELEPORT | GAP_CLOSE_KIND_TELEPORT_BEHIND
+        GAP_CLOSE_KIND_TELEPORT
+            | GAP_CLOSE_KIND_TELEPORT_BEHIND
+            | GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED
     );
     let collision_policy = SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK;
     let end = if is_teleport {
@@ -3288,7 +3309,9 @@ fn perform_melee_attack_for_internal(
     let (consumed_modifier_status_kind, consumed_modifier_stack_group) =
         consumed_melee_modifier_event_fields(&melee_modifiers);
     let effective_range = melee_modifiers.effective_range(gameplay.range);
+    let mut resolved_effective_range = effective_range;
     let gap_close = melee_gap_close_for_ability(ctx, gameplay.ability_id.as_deref());
+    let mut gap_close_active = gap_close.is_some();
     let applies_stagger = gameplay.applies_stagger || melee_modifiers.force_stagger;
 
     let combo_decision = if allow_queue {
@@ -3428,6 +3451,16 @@ fn perform_melee_attack_for_internal(
                 ActionRejectReason::InvalidTarget,
             ));
         }
+        if let Some(gap_close) = gap_close.as_ref() {
+            gap_close_active = gap_close_activation_satisfied(
+                gap_close,
+                has_active_disabling_status(ctx, target, now),
+            );
+            if !gap_close_active {
+                resolved_effective_range =
+                    inactive_conditional_gap_close_range(effective_range, gap_close);
+            }
+        }
         if !gameplay
             .airborne_targeting_mode
             .allows_target(caster_phys.grounded, target_snapshot.grounded)
@@ -3470,7 +3503,7 @@ fn perform_melee_attack_for_internal(
                 check_x: target_snapshot.pos_x,
                 check_y: target_snapshot.pos_y,
                 check_z: target_snapshot.pos_z,
-                effective_range,
+                effective_range: resolved_effective_range,
                 minimum_range: gameplay.minimum_range,
                 requires_target_los: gameplay.requires_target_los,
                 log_detail: !use_rewound,
@@ -3488,7 +3521,7 @@ fn perform_melee_attack_for_internal(
                     check_x: pose.pos_x,
                     check_y: pose.pos_y,
                     check_z: pose.pos_z,
-                    effective_range,
+                    effective_range: resolved_effective_range,
                     minimum_range: gameplay.minimum_range,
                     requires_target_los: gameplay.requires_target_los,
                     log_detail: use_rewound,
@@ -3572,8 +3605,9 @@ fn perform_melee_attack_for_internal(
         }
     }
 
+    let active_gap_close = gap_close.as_ref().filter(|_| gap_close_active);
     let mut gap_close_failure: Option<GapCloseResolveFailure> = None;
-    let resolved_gap_close = if let Some(gap_close) = gap_close.as_ref() {
+    let resolved_gap_close = if let Some(gap_close) = active_gap_close {
         let Some((_, target_snapshot, _, _, _)) = target_context.as_ref() else {
             return Ok(MeleeAttackDispatch::Rejected(
                 ActionRejectReason::InvalidTarget,
@@ -3609,10 +3643,10 @@ fn perform_melee_attack_for_internal(
     } else {
         None
     };
-    if gap_close_pre_commit_decision(gap_close.as_ref(), resolved_gap_close)
+    if gap_close_pre_commit_decision(active_gap_close, resolved_gap_close)
         == GapClosePreCommitDecision::RejectBeforeCommit
     {
-        if let Some(gap_close) = gap_close.as_ref() {
+        if let Some(gap_close) = active_gap_close {
             let failure_reason = gap_close_failure
                 .as_ref()
                 .map(|failure| failure.reason())
@@ -3767,7 +3801,7 @@ fn perform_melee_attack_for_internal(
         dir_y: 0.0,
         dir_z,
         speed: 0.0,
-        max_distance: effective_range,
+        max_distance: resolved_effective_range,
         scalar_kind: COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS.to_string(),
         scalar_value: strike
             .hit_windows
@@ -3809,7 +3843,7 @@ fn perform_melee_attack_for_internal(
         if let Some(projectile) = projectile_delivery.as_ref() {
             let projectile_max_distance = projectile_max_distance_for_policy(
                 projectile.max_distance,
-                effective_range,
+                resolved_effective_range,
                 policy.authorization,
             );
             ctx.db
@@ -3856,8 +3890,11 @@ fn perform_melee_attack_for_internal(
         let impact_area = gameplay
             .impact_area
             .filter(|area| area.applies_to_hit_index(hit_index as u32));
-        let target_impact_range =
-            pending_melee_impact_range(effective_range, gap_close.as_ref(), resolved_gap_close);
+        let target_impact_range = pending_melee_impact_range(
+            resolved_effective_range,
+            active_gap_close,
+            resolved_gap_close,
+        );
         let impact_range = gameplay.targeting.pending_range(target_impact_range);
         ctx.db.pending_melee_impact().insert(PendingMeleeImpact {
             impact_id: 0,
@@ -5718,8 +5755,9 @@ mod tests {
         auto_attack_catalog_resolution_keys, auto_attack_reference_for_profile,
         auto_attack_sequence_step_for_profile, canonical_slot_id, combo_input_decision,
         default_aerial_execution_mode, find_combo_root_for_authorization,
-        gap_close_destination_within_epsilon, gap_close_has_horizontal_travel,
-        gap_close_pre_commit_decision, gap_close_target_facing_satisfied,
+        gap_close_activation_satisfied, gap_close_destination_within_epsilon,
+        gap_close_has_horizontal_travel, gap_close_pre_commit_decision,
+        gap_close_target_facing_satisfied, inactive_conditional_gap_close_range,
         melee_hit_volume_contains_player, melee_manifest, melee_target_impact_point_y,
         pending_melee_impact_range, positive_projectile_override,
         projectile_max_distance_for_policy, push_melee_impact_status_effects,
@@ -5733,7 +5771,8 @@ mod tests {
         ResolvedMeleeGapClose, ResolvedMeleeTargeting, SpellVec3, StaggerDirection, StrikeData,
         StrikeHitWindowData, GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH,
         GAP_CLOSE_DESTINATION_BEHIND_TARGET, GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT,
-        GAP_CLOSE_KIND_LINEAR, MELEE_MANIFEST_JSON, MELEE_TARGET_FACING_ARC_RADIANS,
+        GAP_CLOSE_KIND_LINEAR, GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED, MELEE_MANIFEST_JSON,
+        MELEE_TARGET_FACING_ARC_RADIANS,
     };
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
     use crate::animation_set_test_utils::animation_set_assets_by_combat_profile;
@@ -7073,6 +7112,24 @@ mod tests {
             hit_radius,
             hit_height: 2.0,
         }
+    }
+
+    #[test]
+    fn conditional_gap_close_only_activates_for_a_disabled_target() {
+        let mut gap = test_gap_close(GAP_CLOSE_DESTINATION_BEHIND_TARGET);
+        gap.kind = GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED.to_string();
+
+        assert!(!gap_close_activation_satisfied(&gap, false));
+        assert!(gap_close_activation_satisfied(&gap, true));
+        assert_eq!(inactive_conditional_gap_close_range(12.0, &gap), 2.5);
+    }
+
+    #[test]
+    fn unconditional_gap_close_preserves_existing_activation() {
+        let gap = test_gap_close(GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT);
+
+        assert!(gap_close_activation_satisfied(&gap, false));
+        assert!(gap_close_activation_satisfied(&gap, true));
     }
 
     #[test]

@@ -7808,7 +7808,13 @@ mod tests {
     #[test]
     fn authored_gap_closers_are_valid_melee_gameplay() {
         let catalog = progression_catalog();
-        let supported_kinds = ["LINEAR", "LEAP", "TELEPORT", "TELEPORT_BEHIND"];
+        let supported_kinds = [
+            "LINEAR",
+            "LEAP",
+            "TELEPORT",
+            "TELEPORT_BEHIND",
+            "TELEPORT_BEHIND_TARGET_DISABLED",
+        ];
         let supported_destinations = [
             "NEAREST_CONTACT_POINT",
             "BEHIND_TARGET",
@@ -7856,7 +7862,10 @@ mod tests {
                 ability.ability_id,
                 gap_close.collision_policy
             );
-            if !matches!(kind.as_str(), "TELEPORT" | "TELEPORT_BEHIND") {
+            if !matches!(
+                kind.as_str(),
+                "TELEPORT" | "TELEPORT_BEHIND" | "TELEPORT_BEHIND_TARGET_DISABLED"
+            ) {
                 assert!(
                     gap_close.speed.unwrap_or(0.0) > 0.0,
                     "{} non-teleport gap closer must define positive speed",
@@ -8083,6 +8092,15 @@ mod tests {
             ("DAGGER_QUICK_CUT", "DAGGER_QUICK_CUT"),
             ("DAGGER_RIPOSTE", "DAGGER_RIPOSTE"),
             ("DAGGER_DASHING_CUT", "DAGGER_DASHING_CUT"),
+            ("DAGGER_ROUNDHOUSE", "DAGGER_ROUNDHOUSE"),
+            ("DAGGER_GUT_RIPPER", "DAGGER_COMBO_ATTACK_04_01"),
+            ("DAGGER_SPINNING_SLASH", "DAGGER_COMBO_ATTACK_03_01"),
+            ("DAGGER_CROSSCUT", "DAGGER_COMBO_ATTACK_02_04"),
+            ("DAGGER_BLADE_FLURRY", "DAGGER_COMBO_ATTACK_02_02"),
+            ("DAGGER_DEADLY_FLOURISH", "DAGGER_COMBO_ATTACK_02_01"),
+            ("DAGGER_PURSUE", "DAGGER_COMBO_ATTACK_01_04"),
+            ("DAGGER_DOWNWARD_SLASH", "DAGGER_COMBO_ATTACK_01_02"),
+            ("DAGGER_COUP_DE_GRACE", "DAGGER_COUP_DE_GRACE"),
         ] {
             let ability = catalog
                 .abilities
@@ -8101,6 +8119,160 @@ mod tests {
                 &AuthoredActionId::new(action_id)
             ));
         }
+    }
+
+    #[test]
+    fn dagger_roundhouse_staggers_without_knockback() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_ROUNDHOUSE")
+            .expect("DAGGER_ROUNDHOUSE must exist");
+
+        assert_eq!(ability.action_id, "DAGGER_ROUNDHOUSE");
+        assert_eq!(ability_gameplay_kind(ability), "MELEE");
+        assert_eq!(ability.gameplay.applies_stagger, Some(true));
+        assert!(melee_impact_effects_for_ability_id("DAGGER_ROUNDHOUSE").is_empty());
+        assert!(catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                normalize_identifier(assignment.combat_profile_id.as_str())
+                    == COMBAT_PROFILE_DAGGERS
+                    && canonical_action_bar_slot_id(assignment.slot_id.as_str()) == "SLOT_0_3"
+                    && normalize_identifier(assignment.ability_id.as_str()) == "DAGGER_ROUNDHOUSE"
+            }));
+    }
+
+    #[test]
+    fn dagger_session_abilities_have_default_action_bar_slots() {
+        let catalog = progression_catalog();
+        for (ability_id, slot_id) in [
+            ("DAGGER_ROUNDHOUSE", "SLOT_0_3"),
+            ("DAGGER_GUT_RIPPER", "SLOT_0_4"),
+            ("DAGGER_SPINNING_SLASH", "SLOT_0_5"),
+            ("DAGGER_CROSSCUT", "SLOT_0_6"),
+            ("DAGGER_BLADE_FLURRY", "SLOT_0_7"),
+            ("DAGGER_DEADLY_FLOURISH", "SLOT_0_8"),
+            ("DAGGER_PURSUE", "SLOT_1_0"),
+            ("DAGGER_DOWNWARD_SLASH", "SLOT_1_2"),
+            ("DAGGER_COUP_DE_GRACE", "SLOT_1_3"),
+        ] {
+            assert!(catalog
+                .combat_profile_action_bar_defaults
+                .iter()
+                .any(|assignment| {
+                    normalize_identifier(assignment.combat_profile_id.as_str())
+                        == COMBAT_PROFILE_DAGGERS
+                        && canonical_action_bar_slot_id(assignment.slot_id.as_str()) == slot_id
+                        && normalize_identifier(assignment.ability_id.as_str()) == ability_id
+                }));
+        }
+    }
+
+    #[test]
+    fn dagger_gut_ripper_applies_physical_bleed() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_GUT_RIPPER")
+            .expect("DAGGER_GUT_RIPPER must exist");
+
+        assert_eq!(ability.action_id, "DAGGER_COMBO_ATTACK_04_01");
+        assert_eq!(ability.gameplay.applies_stagger, Some(false));
+        assert_eq!(
+            melee_impact_effects_for_ability_id("DAGGER_GUT_RIPPER"),
+            vec![MeleeImpactEffectRuntime::ApplyStatus {
+                status: StatusApplication::new(
+                    StatusPayload::Dot {
+                        tick_damage: 3,
+                        damage_type: crate::combat::DamageType::Physical,
+                        tick_interval: Duration::from_secs(1),
+                    },
+                    Duration::from_millis(6000),
+                    Some("DAGGER_GUT_RIPPER_BLEED".to_string()),
+                    StatusStackGroupDefault::InstanceScopedActionSuffix("DOT"),
+                    1,
+                    StackPolicy::Refresh,
+                )
+                .with_dispel_types(vec![StatusDispelType::Bleed]),
+            }]
+        );
+    }
+
+    #[test]
+    fn dagger_spinning_slash_authors_targetless_radius_melee() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_SPINNING_SLASH")
+            .expect("DAGGER_SPINNING_SLASH must exist");
+
+        assert_eq!(ability.action_id, "DAGGER_COMBO_ATTACK_03_01");
+        let targeting = resolved_melee_targeting_for_catalog(&ability.gameplay);
+        assert_eq!(targeting.kind, "CASTER_RADIUS");
+        assert!(!targeting.requires_target);
+        assert_eq!(targeting.radius, 3.25);
+        assert_eq!(targeting.range, 3.25);
+    }
+
+    #[test]
+    fn dagger_pursue_authors_existing_linear_gap_close() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_PURSUE")
+            .expect("DAGGER_PURSUE must exist");
+        let gap_close = ability
+            .gameplay
+            .gap_close
+            .as_ref()
+            .expect("DAGGER_PURSUE must author gap_close");
+
+        assert_eq!(ability.action_id, "DAGGER_COMBO_ATTACK_01_04");
+        assert_eq!(normalize_identifier(gap_close.kind.as_str()), "LINEAR");
+        assert_eq!(
+            normalize_identifier(gap_close.destination.as_str()),
+            "NEAREST_CONTACT_POINT"
+        );
+        assert_eq!(gap_close.speed, Some(24.0));
+        assert_eq!(
+            normalize_identifier(gap_close.collision_policy.as_str()),
+            "STOP_AT_BLOCK"
+        );
+        assert!(gap_close.require_arrival_for_swing);
+    }
+
+    #[test]
+    fn dagger_coup_de_grace_authors_conditional_instant_behind_teleport() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_COUP_DE_GRACE")
+            .expect("DAGGER_COUP_DE_GRACE must exist");
+        let gap_close = ability
+            .gameplay
+            .gap_close
+            .as_ref()
+            .expect("DAGGER_COUP_DE_GRACE must author gap_close");
+
+        assert_eq!(ability.action_id, "DAGGER_COUP_DE_GRACE");
+        assert_eq!(
+            normalize_identifier(gap_close.kind.as_str()),
+            "TELEPORT_BEHIND_TARGET_DISABLED"
+        );
+        assert_eq!(
+            normalize_identifier(gap_close.destination.as_str()),
+            "BEHIND_TARGET"
+        );
+        assert_eq!(gap_close.impact_range, 2.5);
+        assert_eq!(
+            normalize_identifier(gap_close.collision_policy.as_str()),
+            "REQUIRE_CLEAR_PATH"
+        );
+        assert!(gap_close.require_arrival_for_swing);
+        assert!(!gap_close.requires_target_facing);
     }
 
     #[test]

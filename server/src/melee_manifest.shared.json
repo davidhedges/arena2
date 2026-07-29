@@ -1060,16 +1060,16 @@
                     "slot_id": "dagger_combo_attack_02_02_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 30
+                            "impact_delay_ms": 26
                         },
                         {
-                            "impact_delay_ms": 190
+                            "impact_delay_ms": 186
                         },
                         {
-                            "impact_delay_ms": 401
+                            "impact_delay_ms": 397
                         },
                         {
-                            "impact_delay_ms": 520
+                            "impact_delay_ms": 505
                         }
                     ],
                     "recovery_ms": 250,
@@ -1101,6 +1101,12 @@
                     "id": "DAGGER_COMBO_ATTACK_02_04",
                     "slot_id": "dagger_combo_attack_02_04_slot",
                     "hit_windows": [
+                        {
+                            "impact_delay_ms": 58
+                        },
+                        {
+                            "impact_delay_ms": 58
+                        },
                         {
                             "impact_delay_ms": 99
                         },
@@ -1247,6 +1253,42 @@
                         }
                     ],
                     "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_COUP_DE_GRACE",
+                    "slot_id": "dagger_coup_de_grace_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 627
+                        },
+                        {
+                            "impact_delay_ms": 627
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_OR_AIRBORNE"
+                },
+                {
+                    "id": "DAGGER_ROUNDHOUSE",
+                    "slot_id": "dagger_roundhouse_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 507
+                        },
+                        {
+                            "impact_delay_ms": 974
+                        }
+                    ],
+                    "recovery_ms": 350,
                     "is_gap_closer": false,
                     "combo_from": "",
                     "combo_open_ms": 0,
