@@ -240,6 +240,14 @@ namespace Arena.Presentation
         private AnimationClip? _worldInteractionPriorSlotClip;
         private AnimationClip? _worldInteractionAppliedClip;
         private float _worldInteractionReleaseAt;
+        private bool _combatAnimationTraceAwaitingMeleeEntry;
+        private string _combatAnimationTraceActionId = string.Empty;
+        private CombatAnimationCategory _combatAnimationTraceCategory;
+        private int _combatAnimationTraceRequestedFrame = -1;
+        private int _combatAnimationTraceExpectedStateHash;
+        private int _combatAnimationTraceObservationUntilFrame = -1;
+        private int _combatAnimationTraceLastCurrentStateHash = int.MinValue;
+        private int _combatAnimationTraceLastNextStateHash = int.MinValue;
 
         private CombatStatusReactionController StatusReactionController =>
             _statusReactionController ??= new CombatStatusReactionController(
@@ -407,6 +415,8 @@ namespace Arena.Presentation
             _actionPlayback.ResetBanks(set);
             CancelPhasedMeleePlayback();
             _animatedAutoAttackGhostLayer?.InvalidateVisualClone();
+            TraceCombatAnimation(
+                $"animation-set-applied id={set.AnimationSetIdOrDefault} strikes={set.MeleeAttackCount}");
         }
 
         internal void ApplyCombatLocomotionMode(string? modeId)
@@ -595,9 +605,18 @@ namespace Arena.Presentation
         {
             ClearWorldInteractionAnimation();
             if (_animator == null || _overrideController == null)
+            {
+                TraceCombatAnimation(
+                    $"request-dropped action={request.ActionId} category={request.Category} " +
+                    $"reason=animator-or-override-missing");
                 return;
+            }
 
             CombatAnimationDecision decision = DecideCombatAnimationRequest(request);
+            TraceCombatAnimation(
+                $"request action={request.ActionId} category={request.Category} authority={request.Authority} " +
+                $"source={request.Source ?? "<none>"} decision={decision} " +
+                $"tracked={DescribeTrackedMeleePresentation()} layer={DescribeMeleeLayer()}");
             if (decision == CombatAnimationDecision.IgnoreAsDuplicate)
                 return;
 
@@ -612,9 +631,13 @@ namespace Arena.Presentation
                     return;
                 case CombatPreemptionMode.InterruptWithGhost:
                     PreemptLowerPriorityPresentationFor(captureGhost: true);
+                    TraceCombatAnimation(
+                        $"preempt action={request.ActionId} mode={preemptionMode} layer-after={DescribeMeleeLayer()}");
                     break;
                 case CombatPreemptionMode.InterruptWithoutGhost:
                     PreemptLowerPriorityPresentationFor(captureGhost: false);
+                    TraceCombatAnimation(
+                        $"preempt action={request.ActionId} mode={preemptionMode} layer-after={DescribeMeleeLayer()}");
                     break;
                 case CombatPreemptionMode.HandoffComboFollowUp:
                     break;
@@ -635,6 +658,10 @@ namespace Arena.Presentation
                 default:
                     break;
             }
+
+            TraceCombatAnimation(
+                $"request-complete action={request.ActionId} category={request.Category} " +
+                $"tracked={DescribeTrackedMeleePresentation()} layer={DescribeMeleeLayer()}");
         }
 
         public void BeginWorldInteractionAnimation(ActiveWorldInteraction row)
@@ -1947,14 +1974,29 @@ namespace Arena.Presentation
         /// </summary>
         private bool TriggerStrike(int strikeIndex)
         {
-            if (_animator == null || _overrideController == null) return false;
+            if (_animator == null || _overrideController == null)
+            {
+                TraceCombatAnimation(
+                    $"strike-trigger-failed action={_combatAnimationTraceActionId} strike={strikeIndex} " +
+                    "reason=animator-or-override-missing");
+                return false;
+            }
+
             int bankSlot = ResolveStrikeBankSlot(strikeIndex);
             if (!TryBindStrikeClip(strikeIndex, bankSlot))
+            {
+                TraceCombatAnimation(
+                    $"strike-trigger-failed action={_combatAnimationTraceActionId} strike={strikeIndex} " +
+                    $"bank={bankSlot} reason=clip-bind-failed");
                 return false;
+            }
 
             ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: true);
             int hash = ResolveStrikeTriggerHash(bankSlot);
             CombatActionPlaybackController.TriggerMeleeStrike(_animator, hash);
+            TraceCombatAnimation(
+                $"strike-trigger-sent action={_combatAnimationTraceActionId} strike={strikeIndex} " +
+                $"bank={bankSlot} trigger={DescribeTriggerHash(hash)} layer={DescribeMeleeLayer()}");
             return true;
         }
 
@@ -1989,16 +2031,23 @@ namespace Arena.Presentation
 
             string actionId = request.ActionId;
             int strikeIndex = _animationSet?.GetStrikeIndexForActionId(actionId) ?? 0;
+            ArmMeleeEntryTrace(request, strikeIndex);
 
             if (TryTriggerPhasedMeleeAction(request, grounded))
             {
                 TriggerWeaponPresentationEffects(request, strikeIndex);
                 SetActiveMeleePresentation(request, strikeIndex, isPhased: true, grounded: grounded);
+                TraceCombatAnimation(
+                    $"melee-play-started action={actionId} strike={strikeIndex} phased=true " +
+                    $"tracked={DescribeTrackedMeleePresentation()} layer={DescribeMeleeLayer()}");
                 return;
             }
 
             if (strikeIndex <= 0)
+            {
+                FailMeleeEntryTrace("action-not-found-in-animation-set");
                 return;
+            }
 
             float startupTrimSeconds = _animationSet?.GetStrikeStartupTrimSeconds(strikeIndex) ?? 0f;
             float appliedCatchupSeconds = 0f;
@@ -2015,7 +2064,10 @@ namespace Arena.Presentation
                         _animationSet?.GetStrikeStartupTrimNormalized(strikeIndex) ?? 0f)
                     : TriggerStrike(strikeIndex);
                 if (!playedFromAuthoredStart)
+                {
+                    FailMeleeEntryTrace("animator-playback-dispatch-failed");
                     return;
+                }
             }
 
             TriggerWeaponPresentationEffects(request, strikeIndex);
@@ -2025,6 +2077,10 @@ namespace Arena.Presentation
                 isPhased: false,
                 grounded: grounded,
                 appliedCatchupSeconds: appliedCatchupSeconds);
+            TraceCombatAnimation(
+                $"melee-play-started action={actionId} strike={strikeIndex} phased=false " +
+                $"remoteCatchup={playedWithRemoteCatchup} tracked={DescribeTrackedMeleePresentation()} " +
+                $"layer={DescribeMeleeLayer()}");
         }
 
         private bool IsSpecialMovementDrivenPhasedMeleeRequest(in CombatAnimationRequest request, bool grounded)
@@ -2358,7 +2414,188 @@ namespace Arena.Presentation
 
         private bool TryBindStrikeClip(int strikeIndex, int bankSlot)
         {
-            return _actionPlayback.TryBindStrikeClip(_overrideController, _animationSet, strikeIndex, bankSlot);
+            bool bound = _actionPlayback.TryBindStrikeClip(
+                _overrideController,
+                _animationSet,
+                strikeIndex,
+                bankSlot);
+            TraceStrikeBinding(strikeIndex, bankSlot, bound);
+            return bound;
+        }
+
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+        private void TraceStrikeBinding(int strikeIndex, int bankSlot, bool bound)
+        {
+            if (!_isLocalPlayer)
+                return;
+
+            AnimationClip? desired = _animationSet?.GetStrikeClip(strikeIndex);
+            AnimationClip? applied = _overrideController?[$"slot_strike_{bankSlot}"];
+            TraceCombatAnimation(
+                $"strike-bind action={_combatAnimationTraceActionId} strike={strikeIndex} bank={bankSlot} " +
+                $"bound={bound} desired={desired?.name ?? "<controller-default>"} " +
+                $"applied={applied?.name ?? "<null>"}");
+        }
+
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+        private void ArmMeleeEntryTrace(in CombatAnimationRequest request, int strikeIndex)
+        {
+            if (!_isLocalPlayer)
+                return;
+
+            if (_combatAnimationTraceAwaitingMeleeEntry)
+            {
+                TraceCombatAnimation(
+                    $"entry-superseded previousAction={_combatAnimationTraceActionId} " +
+                    $"previousCategory={_combatAnimationTraceCategory} beforeStateEntry=true " +
+                    $"newAction={request.ActionId} newCategory={request.Category}");
+            }
+
+            int bankSlot = strikeIndex > 0 ? ResolveStrikeBankSlot(strikeIndex) : 0;
+            _combatAnimationTraceAwaitingMeleeEntry = strikeIndex > 0;
+            _combatAnimationTraceActionId = request.ActionId;
+            _combatAnimationTraceCategory = request.Category;
+            _combatAnimationTraceRequestedFrame = Time.frameCount;
+            _combatAnimationTraceExpectedStateHash = bankSlot > 0
+                ? ResolveStrikeStateHash(bankSlot)
+                : 0;
+            _combatAnimationTraceObservationUntilFrame = Time.frameCount + 8;
+            _combatAnimationTraceLastCurrentStateHash = int.MinValue;
+            _combatAnimationTraceLastNextStateHash = int.MinValue;
+
+            AnimationClip? clip = strikeIndex > 0
+                ? _animationSet?.GetStrikeClip(strikeIndex)
+                : null;
+            TraceCombatAnimation(
+                $"melee-resolved action={request.ActionId} category={request.Category} strike={strikeIndex} " +
+                $"bank={bankSlot} expected={DescribeStateHash(_combatAnimationTraceExpectedStateHash)} " +
+                $"clip={clip?.name ?? "<null>"}");
+        }
+
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+        private void FailMeleeEntryTrace(string reason)
+        {
+            if (!_isLocalPlayer)
+                return;
+
+            TraceCombatAnimation(
+                $"melee-play-failed action={_combatAnimationTraceActionId} " +
+                $"category={_combatAnimationTraceCategory} reason={reason} layer={DescribeMeleeLayer()}");
+            _combatAnimationTraceAwaitingMeleeEntry = false;
+        }
+
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+        private void TracePendingMeleeEntry()
+        {
+            if (!_isLocalPlayer || !_combatAnimationTraceAwaitingMeleeEntry || _animator == null)
+                return;
+
+            AnimatorStateInfo current = _animator.GetCurrentAnimatorStateInfo(MeleeAttackLayerIndex);
+            bool inTransition = _animator.IsInTransition(MeleeAttackLayerIndex);
+            AnimatorStateInfo next = inTransition
+                ? _animator.GetNextAnimatorStateInfo(MeleeAttackLayerIndex)
+                : default;
+            int currentHash = current.shortNameHash;
+            int nextHash = inTransition ? next.shortNameHash : 0;
+            bool enteredExpectedState =
+                currentHash == _combatAnimationTraceExpectedStateHash
+                || (inTransition && nextHash == _combatAnimationTraceExpectedStateHash);
+            bool stateChanged =
+                currentHash != _combatAnimationTraceLastCurrentStateHash
+                || nextHash != _combatAnimationTraceLastNextStateHash;
+            bool observationExpired = Time.frameCount >= _combatAnimationTraceObservationUntilFrame;
+
+            if (stateChanged || enteredExpectedState || observationExpired)
+            {
+                TraceCombatAnimation(
+                    $"entry-observation action={_combatAnimationTraceActionId} " +
+                    $"category={_combatAnimationTraceCategory} requestedFrame={_combatAnimationTraceRequestedFrame} " +
+                    $"expected={DescribeStateHash(_combatAnimationTraceExpectedStateHash)} " +
+                    $"entered={enteredExpectedState} expired={observationExpired} layer={DescribeMeleeLayer()} " +
+                    $"tracked={DescribeTrackedMeleePresentation()}");
+            }
+
+            _combatAnimationTraceLastCurrentStateHash = currentHash;
+            _combatAnimationTraceLastNextStateHash = nextHash;
+            if (enteredExpectedState || observationExpired)
+                _combatAnimationTraceAwaitingMeleeEntry = false;
+        }
+
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+        private void TraceCombatAnimation(string message)
+        {
+            if (!_isLocalPlayer)
+                return;
+
+            Debug.Log($"[CombatAnimTrace] frame={Time.frameCount} {message}", this);
+        }
+
+        private string DescribeTrackedMeleePresentation()
+        {
+            if (!_actionPlayback.ActiveMeleePresentation.HasValue)
+                return "<none>";
+
+            ActiveMeleePresentation active =
+                _actionPlayback.ActiveMeleePresentation.GetValueOrDefault();
+            return $"{active.ActionId}:{active.Category}:strike={active.StrikeIndex}:" +
+                   $"entered={_actionPlayback.ActiveMeleePresentationEntered}";
+        }
+
+        private string DescribeMeleeLayer()
+        {
+            if (_animator == null)
+                return "<animator-null>";
+
+            AnimatorStateInfo current =
+                _animator.GetCurrentAnimatorStateInfo(MeleeAttackLayerIndex);
+            if (!_animator.IsInTransition(MeleeAttackLayerIndex))
+            {
+                return $"current={DescribeStateHash(current.shortNameHash)}@{current.normalizedTime:F3} " +
+                       $"transition=false weight={_animator.GetLayerWeight(MeleeAttackLayerIndex):F2}";
+            }
+
+            AnimatorStateInfo next =
+                _animator.GetNextAnimatorStateInfo(MeleeAttackLayerIndex);
+            return $"current={DescribeStateHash(current.shortNameHash)}@{current.normalizedTime:F3} " +
+                   $"next={DescribeStateHash(next.shortNameHash)}@{next.normalizedTime:F3} " +
+                   $"transition=true weight={_animator.GetLayerWeight(MeleeAttackLayerIndex):F2}";
+        }
+
+        private static string DescribeStateHash(int stateHash)
+        {
+            if (stateHash == 0)
+                return "<none>";
+            if (stateHash == MeleeAttackEmptyStateHash)
+                return "Empty";
+            if (stateHash == Strike1StateHash)
+                return "Strike1";
+            if (stateHash == Strike2StateHash)
+                return "Strike2";
+            if (stateHash == Strike3StateHash)
+                return "Strike3";
+            if (stateHash == Strike4StateHash)
+                return "Strike4";
+            if (stateHash == UpperBodyRecoveryAction1StateHash)
+                return "UpperBodyRecoveryAction1";
+            return stateHash.ToString();
+        }
+
+        private static string DescribeTriggerHash(int triggerHash)
+        {
+            if (triggerHash == TriggerStrike1Hash)
+                return "TriggerStrike1";
+            if (triggerHash == TriggerStrike2Hash)
+                return "TriggerStrike2";
+            if (triggerHash == TriggerStrike3Hash)
+                return "TriggerStrike3";
+            if (triggerHash == TriggerStrike4Hash)
+                return "TriggerStrike4";
+            return triggerHash.ToString();
         }
 
         private int ResolveNextSpellBankSlot()
@@ -3096,6 +3333,7 @@ namespace Arena.Presentation
             UpdateSpellCastHoldFadeOut();
             UpdateMeleeLowerBodyUnlock();
             UpdateSpellLowerBodyUnlock();
+            TracePendingMeleeEntry();
             // Latch the "entered animator state" flag the first frame after a presentation
             // is set. Without this latch the cleanup below races the animator: SetTrigger
             // is called during another script's Update, but the animator doesn't process
