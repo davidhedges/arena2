@@ -306,6 +306,7 @@ Ordered by how hard they block the goal.
 | **L10** | **Bridges over rooms are rejected by rule.** | cs:4550 | Scenario 2 and 5 as literally stated (§12). |
 | **L10b** | **Corridor cells are exclusively owned.** `TryClaimCorridor` rejects any cell another connection already claimed — *"another connection already owns {cell}"*. | RouteFirstPilot.cs:2582 | **The deepest block on overlapping traversal.** Two corridors can never share a plan coordinate at any elevation, so bridge-over-corridor dies in the *layout* stage, before the bridge pass runs. Also: corridors are claimed **pre-elevation**, so the fix cannot use levels (§8.1). |
 | **L10c** | **`PathCrossesThirdRoom` forbids a corridor crossing an unrelated room's footprint**, and the topology validator forbids a third node on an edge's lattice lane. | RouteFirstPilot.cs:2569; `ROUTE_TOPOLOGY_AUTHORING.md` rule table | A route edge can never be drawn over another room. Its *stated* reason — "an undeclared doorway and an unowned threshold" — is 2-D and does not apply to a crossing at a different elevation, so this is a well-founded relaxation rather than a rule to fight. |
+| **L10f** | **Every route graph must be PLANAR.** Corridor exclusivity (L10b) means two edges can never share a plan cell, so no two routes may cross. **Measured 2026-07-29: all seven shipped topologies have exactly zero edge crossings** — that is the rule, not a coincidence of authoring. | RouteFirstPilot.cs:2582; crossing test over `Topologies/*.json` | The capability this whole design exists to add. A route passing over another route is currently inexpressible at the *graph* level, before any geometry is considered. |
 | **L10e** | **Loop bridges connect ROOM PAIRS only.** `AddAerialBridges` iterates `roomA`/`roomB` and takes landings from room boundary edge cells. | cs:4412, cs:4450 | A bridge cannot start or end on a corridor, a ledge or a landing. *(Route edges of kind `Bridge` are unaffected — they realize as an `externalSpan` transition on the corridor path, `cs:2153`, so a **route** bridge is already corridor-based.)* |
 | **L10d** | **A recipe-slot node must have degree 2** ("a two-port recipe room"), and a topology declares **exactly 3 slots**. | `ROUTE_TOPOLOGY_AUTHORING.md` rule table | A vertical hub with entrances at several elevations is degree 3–4, so **an atrium can never be a required recipe slot.** Scenario 5 has nowhere to live in the current slot vocabulary. |
 | **L11** | **Connectivity checks are 2-D.** `IsConnected(layout.floorCells)` operates on a plan-cell set. | Validation.cs:138 | Two disjoint stacked surfaces read as connected. The check becomes a lie rather than a check. |
@@ -1382,10 +1383,56 @@ grammars whose railing and corner rules drift.
 | **`MaxGeneratedLevel` 24 → 40** | **Not** output-neutral, and it breaks all seven topology files: `anchors.top` must equal `MaxGeneratedLevel` exactly (`DungeonRouteTopologyValidator.cs:366`). **[Proposed]** relax that rule to "the top anchor is at the topology's declared ceiling" and add an optional per-topology `ceiling` (default 24, capped at the global 40). Existing dungeons then keep their shape and a *new* topology opts into depth. Raising the constant alone would stretch every shipped dungeon and is the wrong lever. |
 | **Density dial** | Fill passes must query the prism ledger; `OpenVolume` joins the authored-void exclusion list. `floorFillPercent` becomes ambiguous under stacking — **[Proposed]** keep it as *plan-cell* fill (unchanged meaning, unchanged tuning) and add `surfacesPerPlanCell` as a separate reported metric. Do not redefine the number the dial was tuned against. |
 | **Recipes** | Additive fields, empty `layerId` = today's behaviour. The four enabled recipes need no edit. |
+| **The seven topologies** | **Leave all seven untouched through A1, B and C** — they are the corpus that proves output-neutrality, and redrawing one destroys the baseline. They stay structurally valid because layers do not move lattice positions or footprints (§8.1). Add layered topologies as *new* files in Phase D; that is the cheap path the topology-as-data work already bought. **Measured 2026-07-29** (§10.1): the corpus is far more uniform than authorship would explain, and three of the seven are workarounds for the capability this design adds. |
 | **The three required slots** | **Unresolved, not unchanged.** A two-layer *episode* is a new recipe and needs no slot change, but a vertical hub cannot be a slot at all: a slot node must have degree 2 and a topology declares exactly three slots (L10d). Owner decision 9 (§14) settles it; until then, treat an atrium as a generic multi-layer room outside the slot system. The silent slot-geometry rule ([`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) "Slot geometry") still applies and still is not machine-checked. |
 | **Existing tests** | Per `CLAUDE.md`, do not repin. `DungeonLabStackedCrossingTests` asserts `transitionCount == 1` and `stackedCoordinateCount == 1` on a hand-built fixture — extend the *fixture*, and loosen or delete assertions that pin seed-derived counts. Report the rest; do not fix unasked. |
 | **`H2` (two floor representations)** | Closed by the **shadow-agreement invariant** (§3.1), *not* by deriving `floorCells` from `SurfaceField` — the dependency runs the other way, since `floorCells` is the domain the level field is computed over. A1 detects and reports the disagreement; **A2 repairs it and moves the hash**, because `floorCells` feeds `canonicalHash` (`Batch.cs:4864` → `:3437`). Do not attempt both in one gate. |
 | **Server / collision** | **Hypothesis, not a finding, and the mechanism has been misstated twice** (§7.2). No change is *expected*: soffits emitted as box colliders should be safe under both the 0.35u box window and the `max` selection rule. But the server's ground-normal test is on an **absolute** Y normal, so direction filters nothing, and only Phase C's live probe settles it. Remedy order if it fails: collider shape → exporter → server last. Republish with `ops/republish-local-clear.sh` after each rebuild so server geometry matches the scene. |
+
+---
+
+### 10.1 Measured 2026-07-29 — what the rule table did to the topology corpus
+
+All seven shipped topologies, measured from `Topologies/*.json`:
+
+| Property | Result | Forced by |
+|---|---|---|
+| Vertical span | **0→24 in every one** | `anchors.top` must equal `MaxGeneratedLevel` (`DungeonRouteTopologyValidator.cs:366`) |
+| Bridges per topology | **exactly 1**, except `twin-wing-keep` with 2 | "at least one Stair, one Bridge, one Stairwell" |
+| Edge crossings | **zero across all seven** | corridor exclusivity, L10f |
+| Nodes | 12–16 | the 9–20 rule with the fill floor binding |
+
+**None of that is authorship.** Every dungeon is exactly 24u tall because a rule
+says so, bridges are quota-filled rather than characteristic, and no topology can
+express two routes crossing because the claim rule forbids it.
+
+**Three of the seven are workarounds for the missing capability**, and the vacant
+lattice count gives them away — they spend plan area to express verticality
+horizontally:
+
+| Topology | Vacant lattice | What it is approximating |
+|---|---|---|
+| `descent-shaft` | **48%** (12 cells) | a shaft, spread horizontally. Under layering a shaft is *one* footprint with N layers |
+| `ridge-ravine` | 40% | a ridge "over" a ravine that is actually beside it |
+| `atrium-ring` | 35% | an atrium: a vacant lattice column ringed by 13 separate rooms. A real atrium is **one room** with an `OpenVolume` and layered galleries |
+
+This is the owner's "too much void between tiers" complaint counted differently.
+The corpus buys vertical variety with plan area, and layering is the structural
+answer rather than a tuning knob — it is the only thing that adds play space
+without growing the 52×52 envelope.
+
+**Three rules should become per-topology in Phase D**, all currently global:
+
+1. **Ceiling** — already proposed above, so a dungeon can be 8u and densely
+   layered or 40u and sprawling instead of always exactly 24u.
+2. **The transition-kind quota** — "have one of each" becomes "declare your
+   character". A bridge-heavy canopy dungeon and a bridgeless warren are both
+   legitimate; today neither is expressible.
+3. **Planarity** — relaxes only for layer-bound edges (L10f, §8.1).
+
+**[Deferred]** whether the three workaround topologies get redrawn or retired
+once layered ones exist. Note a naming hazard: a topology called `atrium-ring`
+that contains no atrium in the new sense will confuse every future reader.
 
 ---
 
