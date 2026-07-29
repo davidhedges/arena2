@@ -12,7 +12,7 @@ namespace Arena.Presentation
     {
         private const string GhostRootName = "InterruptedMeleeGhost";
         private const float DefaultFadeSeconds = 0.75f;
-        private const float DefaultStartAlpha = 0.72f;
+        private const float DefaultStartAlpha = 0.60f;
         private const int DefaultMaxGhosts = 3;
 
         [SerializeField] private bool enabledForInterruptedMelee = true;
