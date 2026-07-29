@@ -680,6 +680,40 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void DaggerCoupDeGrace_UsesOnlyAirToFloorEndAsSingleClip()
+        {
+            Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
+            Type phasedEntryType = RequireType("Arena.Presentation.WeaponPhasedActionEntry");
+            UnityEngine.Object instance = Resources.Load("CombatAnimationSets/Daggers", combatAnimationSetType);
+            Assert.That(instance, Is.Not.Null);
+
+            int strikeIndex = (int)InvokeInstanceMethod(
+                instance,
+                "GetStrikeIndexForActionId",
+                "DAGGER_COUP_DE_GRACE");
+            AnimationClip clip = (AnimationClip)InvokeInstanceMethod(
+                instance,
+                "GetStrikeClip",
+                strikeIndex);
+            Assert.That(clip.name, Is.EqualTo("Attack_Air_to_Floor_01_End"));
+
+            object?[] phasedArgs = { "DAGGER_COUP_DE_GRACE", null };
+            bool hasPhasedEntry = (bool)RequireMethod(
+                    combatAnimationSetType,
+                    "TryGetPhasedMeleeEntry",
+                    typeof(string),
+                    phasedEntryType.MakeByRefType())
+                .Invoke(instance, phasedArgs)!;
+            Assert.That(hasPhasedEntry, Is.False);
+
+            object export = InvokeInstanceMethod(instance, "BuildMeleeExport");
+            object strike = FindExportedStrike(
+                GetExportedStrikes(export),
+                "DAGGER_COUP_DE_GRACE");
+            Assert.That(GetImpactDelayMs(strike), Is.EqualTo(new[] { 43, 43 }));
+        }
+
+        [Test]
         public void ArcherAnimationSet_ExportsStandardArrowProjectilesExceptRainShot()
         {
             Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
