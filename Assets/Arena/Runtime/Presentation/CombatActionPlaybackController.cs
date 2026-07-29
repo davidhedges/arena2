@@ -229,6 +229,25 @@ namespace Arena.Presentation
             return ((strikeIndex - 1) % CombatAnimationSet.AnimatorStrikeBankCount) + 1;
         }
 
+        public static bool HasEnteredExpectedAnimatorState(
+            int dispatchedFrame,
+            int currentFrame,
+            int expectedStateHash,
+            int currentStateHash,
+            bool isInTransition,
+            int nextStateHash)
+        {
+            // Animator triggers are evaluated after script Update. During the dispatch
+            // frame Unity can still report the outgoing presentation, including the same
+            // banked state reused by the incoming action. Never attribute that state to
+            // the new presentation until at least the following frame.
+            if (currentFrame <= dispatchedFrame || expectedStateHash == 0)
+                return false;
+
+            return currentStateHash == expectedStateHash
+                || (isInTransition && nextStateHash == expectedStateHash);
+        }
+
         public int ResolveNextSpellBankSlot()
         {
             if (_nextSpellBankSlot < 1 || _nextSpellBankSlot > CombatAnimationSet.AnimatorSpellBankCount)

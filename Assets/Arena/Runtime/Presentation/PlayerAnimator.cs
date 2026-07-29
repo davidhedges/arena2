@@ -240,6 +240,8 @@ namespace Arena.Presentation
         private AnimationClip? _worldInteractionPriorSlotClip;
         private AnimationClip? _worldInteractionAppliedClip;
         private float _worldInteractionReleaseAt;
+        private int _activeMeleePresentationDispatchedFrame = -1;
+        private int _activeSpellPresentationDispatchedFrame = -1;
         private bool _combatAnimationTraceAwaitingMeleeEntry;
         private string _combatAnimationTraceActionId = string.Empty;
         private CombatAnimationCategory _combatAnimationTraceCategory;
@@ -1034,9 +1036,13 @@ namespace Arena.Presentation
             out CombatVisualInterruptDecision decision)
         {
             decision = CombatVisualInterruptDecision.PreserveExistingBehavior;
-            if (_actionPlayback.ActiveMeleePresentation.HasValue && IsMeleePresentationStateActive())
+            if (_actionPlayback.ActiveMeleePresentation.HasValue
+                && _actionPlayback.ActiveMeleePresentationEntered
+                && IsMeleePresentationStateActive())
                 return TryDecideVisualInterruptForActiveMelee(incomingCategory, out decision);
-            if (_actionPlayback.ActiveSpellPresentation.HasValue && IsActiveSpellPresentationStateActive())
+            if (_actionPlayback.ActiveSpellPresentation.HasValue
+                && _actionPlayback.ActiveSpellPresentationEntered
+                && IsActiveSpellPresentationStateActive())
                 return TryDecideVisualInterruptForActiveSpell(incomingCategory, out decision);
             if (_actionPlayback.ActiveSpellCastHoldPresentation.HasValue && IsActiveSpellCastHoldStateActive())
             {
@@ -1130,7 +1136,7 @@ namespace Arena.Presentation
 
             int layerIndex = MeleeAttackLayerIndex;
             AnimatorStateInfo current = _animator.GetCurrentAnimatorStateInfo(layerIndex);
-            if (IsAnimatorStateForActiveMeleePresentation(current, active.IsPhased))
+            if (IsAnimatorStateForActiveMeleePresentation(current, active))
             {
                 normalizedTime = Mathf.Max(0f, current.normalizedTime);
                 stateLengthSeconds = ResolveActiveMeleePlayedLength(active, current.length);
@@ -1141,7 +1147,7 @@ namespace Arena.Presentation
             if (_animator.IsInTransition(layerIndex))
             {
                 AnimatorStateInfo next = _animator.GetNextAnimatorStateInfo(layerIndex);
-                if (IsAnimatorStateForActiveMeleePresentation(next, active.IsPhased))
+                if (IsAnimatorStateForActiveMeleePresentation(next, active))
                 {
                     normalizedTime = Mathf.Max(0f, next.normalizedTime);
                     stateLengthSeconds = ResolveActiveMeleePlayedLength(active, next.length);
@@ -1162,11 +1168,23 @@ namespace Arena.Presentation
                 : Mathf.Max(0f, fallbackStateLengthSeconds);
         }
 
-        private static bool IsAnimatorStateForActiveMeleePresentation(AnimatorStateInfo state, bool activeIsPhased)
+        private bool IsAnimatorStateForActiveMeleePresentation(
+            AnimatorStateInfo state,
+            ActiveMeleePresentation active)
         {
-            return activeIsPhased
-                ? IsStrikeState(state.shortNameHash) || state.shortNameHash == UpperBodyRecoveryAction1StateHash
-                : IsStrikeState(state.shortNameHash);
+            int expectedStateHash = ResolveActiveMeleeStateHash(active);
+            return expectedStateHash != 0 && state.shortNameHash == expectedStateHash;
+        }
+
+        private int ResolveActiveMeleeStateHash(ActiveMeleePresentation active)
+        {
+            if (active.IsPhased)
+                return _actionPlayback.PhasedMeleeStateHash;
+
+            if (active.StrikeIndex <= 0)
+                return 0;
+
+            return ResolveStrikeStateHash(ResolveStrikeBankSlot(active.StrikeIndex));
         }
 
         private void UpdateMeleeLowerBodyUnlock()
@@ -1256,6 +1274,7 @@ namespace Arena.Presentation
                 bankSlot,
                 spellEntry,
                 grounded);
+            _activeSpellPresentationDispatchedFrame = Time.frameCount;
             ResetSpellLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodySpell: false);
         }
 
@@ -1373,6 +1392,54 @@ namespace Arena.Presentation
             return false;
         }
 
+        private bool HasActiveMeleePresentationEnteredExpectedState()
+        {
+            if (!_actionPlayback.ActiveMeleePresentation.HasValue)
+                return false;
+
+            ActiveMeleePresentation active =
+                _actionPlayback.ActiveMeleePresentation.GetValueOrDefault();
+            return HasEnteredExpectedStateOnLayer(
+                _activeMeleePresentationDispatchedFrame,
+                MeleeAttackLayerIndex,
+                ResolveActiveMeleeStateHash(active));
+        }
+
+        private bool HasActiveSpellPresentationEnteredExpectedState()
+        {
+            if (!_actionPlayback.ActiveSpellPresentation.HasValue)
+                return false;
+
+            ActiveSpellPresentation active =
+                _actionPlayback.ActiveSpellPresentation.GetValueOrDefault();
+            return HasEnteredExpectedStateOnLayer(
+                _activeSpellPresentationDispatchedFrame,
+                SpellActionLayerIndex,
+                ResolveSpellActionStateHash(active.BankSlot));
+        }
+
+        private bool HasEnteredExpectedStateOnLayer(
+            int dispatchedFrame,
+            int layerIndex,
+            int expectedStateHash)
+        {
+            if (_animator == null)
+                return false;
+
+            AnimatorStateInfo current = _animator.GetCurrentAnimatorStateInfo(layerIndex);
+            bool isInTransition = _animator.IsInTransition(layerIndex);
+            int nextStateHash = isInTransition
+                ? _animator.GetNextAnimatorStateInfo(layerIndex).shortNameHash
+                : 0;
+            return CombatActionPlaybackController.HasEnteredExpectedAnimatorState(
+                dispatchedFrame,
+                Time.frameCount,
+                expectedStateHash,
+                current.shortNameHash,
+                isInTransition,
+                nextStateHash);
+        }
+
         private bool IsAnySpellPresentationStateActive()
         {
             return IsActiveSpellPresentationStateActive() || IsActiveSpellCastHoldStateActive();
@@ -1406,6 +1473,7 @@ namespace Arena.Presentation
         {
             ResetPendingSpellActionTriggers();
             _actionPlayback.ClearActiveSpellPresentation();
+            _activeSpellPresentationDispatchedFrame = -1;
             ResetSpellLowerBodyUnlockState(resetLayerWeight, clearUpperBodySpell);
             if (clearUpperBodySpell)
                 ClearLeftGestureSpellPresentation();
@@ -2161,6 +2229,7 @@ namespace Arena.Presentation
                 _animationSet,
                 grounded,
                 appliedCatchupSeconds);
+            _activeMeleePresentationDispatchedFrame = Time.frameCount;
             ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: false);
         }
 
@@ -2168,6 +2237,7 @@ namespace Arena.Presentation
         {
             ResetPendingMeleeActionTriggers();
             bool wasPhased = _actionPlayback.ClearActiveMeleePresentation();
+            _activeMeleePresentationDispatchedFrame = -1;
             if (wasPhased)
                 CancelPhasedMeleePlayback(clearActivePresentation: false);
             ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: true);
@@ -3342,13 +3412,13 @@ namespace Arena.Presentation
             // before the strike ever begins.
             if (_actionPlayback.ActiveMeleePresentation.HasValue
                 && !_actionPlayback.ActiveMeleePresentationEntered
-                && IsMeleePresentationStateActive())
+                && HasActiveMeleePresentationEnteredExpectedState())
             {
                 _actionPlayback.MarkActiveMeleePresentationEntered();
             }
             if (_actionPlayback.ActiveSpellPresentation.HasValue
                 && !_actionPlayback.ActiveSpellPresentationEntered
-                && IsActiveSpellPresentationStateActive())
+                && HasActiveSpellPresentationEnteredExpectedState())
             {
                 _actionPlayback.MarkActiveSpellPresentationEntered();
             }

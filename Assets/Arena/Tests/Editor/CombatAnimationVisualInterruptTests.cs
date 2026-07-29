@@ -546,6 +546,74 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void HasEnteredExpectedAnimatorState_RejectsOutgoingAndDispatchFrameStates()
+        {
+            const int emptyState = 10;
+            const int outgoingStrikeState = 20;
+            const int expectedStrikeState = 40;
+            const int dispatchedFrame = 100;
+
+            Assert.That(
+                InvokeHasEnteredExpectedAnimatorState(
+                    dispatchedFrame,
+                    currentFrame: dispatchedFrame,
+                    expectedStateHash: expectedStrikeState,
+                    currentStateHash: expectedStrikeState,
+                    isInTransition: false,
+                    nextStateHash: 0),
+                Is.False,
+                "A same-bank outgoing state must not count during the incoming presentation's dispatch frame.");
+            Assert.That(
+                InvokeHasEnteredExpectedAnimatorState(
+                    dispatchedFrame,
+                    currentFrame: dispatchedFrame + 1,
+                    expectedStateHash: expectedStrikeState,
+                    currentStateHash: outgoingStrikeState,
+                    isInTransition: false,
+                    nextStateHash: 0),
+                Is.False,
+                "A different outgoing strike must not count as entry for the incoming presentation.");
+            Assert.That(
+                InvokeHasEnteredExpectedAnimatorState(
+                    dispatchedFrame,
+                    currentFrame: dispatchedFrame + 1,
+                    expectedStateHash: expectedStrikeState,
+                    currentStateHash: emptyState,
+                    isInTransition: false,
+                    nextStateHash: 0),
+                Is.False,
+                "The intermediate Empty frame must preserve the pending presentation.");
+            Assert.That(
+                InvokeHasEnteredExpectedAnimatorState(
+                    dispatchedFrame,
+                    currentFrame: dispatchedFrame + 2,
+                    expectedStateHash: expectedStrikeState,
+                    currentStateHash: emptyState,
+                    isInTransition: true,
+                    nextStateHash: expectedStrikeState),
+                Is.True,
+                "The incoming transition is the first valid entry observation.");
+            Assert.That(
+                InvokeHasEnteredExpectedAnimatorState(
+                    dispatchedFrame,
+                    currentFrame: dispatchedFrame + 2,
+                    expectedStateHash: expectedStrikeState,
+                    currentStateHash: expectedStrikeState,
+                    isInTransition: false,
+                    nextStateHash: 0),
+                Is.True);
+            Assert.That(
+                InvokeHasEnteredExpectedAnimatorState(
+                    dispatchedFrame,
+                    currentFrame: dispatchedFrame + 2,
+                    expectedStateHash: 0,
+                    currentStateHash: 0,
+                    isInTransition: false,
+                    nextStateHash: 0),
+                Is.False);
+        }
+
+        [Test]
         public void ResolvePreemptionMode_MapsDecisionsToExecutionModes()
         {
             Assert.That(
@@ -1099,6 +1167,38 @@ namespace Arena.Tests.Editor
                     Enum.Parse(categoryType, activeMeleeCategory),
                     hasActiveSpellPresentation,
                     hasActiveSpellCastHoldPresentation,
+                })!;
+        }
+
+        private static bool InvokeHasEnteredExpectedAnimatorState(
+            int dispatchedFrame,
+            int currentFrame,
+            int expectedStateHash,
+            int currentStateHash,
+            bool isInTransition,
+            int nextStateHash)
+        {
+            Type playbackControllerType = RequireRuntimeType("Arena.Presentation.CombatActionPlaybackController");
+            MethodInfo method = RequireMethod(
+                playbackControllerType,
+                "HasEnteredExpectedAnimatorState",
+                typeof(int),
+                typeof(int),
+                typeof(int),
+                typeof(int),
+                typeof(bool),
+                typeof(int));
+
+            return (bool)method.Invoke(
+                null,
+                new object[]
+                {
+                    dispatchedFrame,
+                    currentFrame,
+                    expectedStateHash,
+                    currentStateHash,
+                    isInTransition,
+                    nextStateHash,
                 })!;
         }
 
