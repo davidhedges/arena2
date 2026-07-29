@@ -135,6 +135,7 @@ const SERRATED_BLADES_BLEED_TICK_INTERVAL_MS: u64 = 1000;
 const PALADIN_BRANDED_STATUS_GROUP: &str = "PALADIN_BRANDED";
 const PALADIN_HALLOWED_THRUST_ABILITY_ID: &str = "PALADIN_HALLOWED_THRUST";
 const PALADIN_HALLOWED_THRUST_MANA_GAIN: f32 = 20.0;
+const DAGGER_COUP_DE_GRACE_ABILITY_ID: &str = "DAGGER_COUP_DE_GRACE";
 const GAP_CLOSE_KIND_LINEAR: &str = "LINEAR";
 const GAP_CLOSE_KIND_LEAP: &str = "LEAP";
 const GAP_CLOSE_KIND_TELEPORT: &str = "TELEPORT";
@@ -1940,6 +1941,16 @@ fn yaw_direction(yaw: f32) -> (f32, f32) {
 
 fn right_direction(yaw: f32) -> (f32, f32) {
     (yaw.cos(), -yaw.sin())
+}
+
+fn yaw_toward_xz(from_x: f32, from_z: f32, to_x: f32, to_z: f32, fallback_yaw: f32) -> f32 {
+    let dx = to_x - from_x;
+    let dz = to_z - from_z;
+    if dx * dx + dz * dz <= 0.0001 {
+        fallback_yaw
+    } else {
+        dx.atan2(dz)
+    }
 }
 
 fn melee_gap_close_for_ability(
@@ -3751,6 +3762,18 @@ fn perform_melee_attack_for_internal(
         let movement_start =
             SpellVec3::new(caster_phys.pos_x, caster_phys.pos_y, caster_phys.pos_z);
         if gap_close_has_horizontal_travel(movement_start, gap_close.end) {
+            let movement_facing_yaw =
+                if gameplay.ability_id.as_deref() == Some(DAGGER_COUP_DE_GRACE_ABILITY_ID) {
+                    yaw_toward_xz(
+                        gap_close.end.x,
+                        gap_close.end.z,
+                        target_point_x,
+                        target_point_z,
+                        caster_phys.yaw,
+                    )
+                } else {
+                    caster_phys.yaw
+                };
             begin_special_movement(
                 ctx,
                 caster,
@@ -3763,7 +3786,7 @@ fn perform_melee_attack_for_internal(
                 gap_close.duration_ms,
                 movement_start,
                 gap_close.end,
-                caster_phys.yaw,
+                movement_facing_yaw,
                 SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
             );
         }
@@ -5771,7 +5794,7 @@ mod tests {
         resolve_melee_action_reference, resolve_melee_action_reference_in_strikes,
         resolved_hit_window_damages, scaled_auto_attack_cadence_ms, scaled_impact_area_damage,
         scheduled_melee_impact_at, strike_total_duration_ms, timed_melee_movement_destination,
-        AerialExecutionMode, AirborneTargetingMode, ComboInputDecision,
+        yaw_toward_xz, AerialExecutionMode, AirborneTargetingMode, ComboInputDecision,
         ConsumedMeleeAttackModifier, GapCloseActorSnapshot, GapClosePreCommitDecision,
         MeleeAuthorization, PendingMeleeImpact, ResolvedMeleeAttackModifiers,
         ResolvedMeleeGapClose, ResolvedMeleeTargeting, SpellVec3, StaggerDirection, StrikeData,
@@ -7237,6 +7260,25 @@ mod tests {
 
         assert!((destination.x + 1.35).abs() < 0.001);
         assert!((destination.z - 10.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn coup_de_grace_destination_facing_points_back_to_target() {
+        let target = gap_actor(4.0, 10.0, std::f32::consts::FRAC_PI_2, 0.5);
+        let gap = test_gap_close(GAP_CLOSE_DESTINATION_BEHIND_TARGET);
+        let destination =
+            resolve_gap_close_destination(&gap, gap_actor(0.0, 0.0, 0.0, 0.5), target)
+                .expect("destination should resolve");
+
+        let facing_yaw = yaw_toward_xz(
+            destination.x,
+            destination.z,
+            target.pos_x,
+            target.pos_z,
+            0.0,
+        );
+
+        assert!((facing_yaw - target.yaw).abs() < 0.001);
     }
 
     #[test]

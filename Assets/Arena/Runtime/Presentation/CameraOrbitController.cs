@@ -57,6 +57,23 @@ namespace Arena.Presentation
             RefreshCameraReference();
         }
 
+        public void AlignBehind(float facingYawRadians)
+        {
+            if (float.IsNaN(facingYawRadians) || float.IsInfinity(facingYawRadians))
+                return;
+
+            _yaw = ClampAngle(facingYawRadians * Mathf.Rad2Deg, float.MinValue, float.MaxValue);
+            _stateProvider?.SetCameraYaw(_yaw * Mathf.Deg2Rad);
+
+            if (_cameraTarget != null)
+            {
+                _cameraTarget.rotation = Quaternion.Euler(
+                    _pitch + CameraAngleOverride,
+                    _yaw,
+                    0f);
+            }
+        }
+
         void LateUpdate()
         {
             if (_cameraTarget == null || _input == null) return;

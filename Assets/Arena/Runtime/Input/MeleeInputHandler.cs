@@ -30,6 +30,7 @@ namespace Arena.Input
         private const long PendingMeleePredictionTtlMs = 5000L;
         private const long PendingLocalMeleeEventHoldMs = 250L;
         private const string ConditionalTeleportBehindKind = "TELEPORT_BEHIND_TARGET_DISABLED";
+        private const string CoupDeGraceAbilityId = "DAGGER_COUP_DE_GRACE";
         private readonly Dictionary<string, long> _predictedStrikeVisualUntilMs = new();
         private readonly Dictionary<string, PendingPredictedMeleeVisual> _pendingPredictedMeleeByToken = new();
         private readonly Dictionary<string, AcceptedPredictedMeleeAction> _acceptedPredictedMeleeByActionInstance = new();
@@ -275,6 +276,9 @@ namespace Arena.Input
                 }
             }
 
+            if (requiresTarget)
+                AlignCoupDeGraceFacing(entity, target!, gameplay.AbilityId);
+
             // Send to server for authoritative validation, damage, and remote sync.
             ActionBarTrace.Trace(
                 strikeChoice.shouldQueue
@@ -360,6 +364,42 @@ namespace Arena.Input
                     nowMs);
             }
             return true;
+        }
+
+        private static void AlignCoupDeGraceFacing(
+            PlayerEntity entity,
+            ICombatTargetEntity target,
+            string abilityId)
+        {
+            if (!string.Equals(
+                    WireIdentifier.Normalize(abilityId),
+                    CoupDeGraceAbilityId,
+                    System.StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            Vector3 toTarget =
+                target.GetPresentationRoot().position - entity.GameObject.transform.position;
+            toTarget.y = 0f;
+            if (toTarget.sqrMagnitude <= 0.0001f)
+                return;
+
+            float targetYaw = Mathf.Atan2(toTarget.x, toTarget.z);
+            LocalMovementPredictionDriver? predictionDriver =
+                entity.GameObject.GetComponent<LocalMovementPredictionDriver>();
+            if (predictionDriver != null)
+            {
+                predictionDriver.FaceYawImmediately(targetYaw);
+            }
+            else
+            {
+                entity.GameObject.GetComponent<LocalPlayerMotor>()?.FaceYawImmediately(targetYaw);
+                entity.GameObject.transform.rotation =
+                    Quaternion.Euler(0f, targetYaw * Mathf.Rad2Deg, 0f);
+            }
+
+            entity.GameObject.GetComponent<CameraOrbitController>()?.AlignBehind(targetYaw);
         }
 
         private static MeleeGapCloseCatalog? ResolveGapCloseForAction(

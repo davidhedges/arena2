@@ -159,6 +159,33 @@ namespace Arena.Input
             PrimeInitialPredictionLead();
         }
 
+        public void FaceYawImmediately(float yawRadians)
+        {
+            if (float.IsNaN(yawRadians) || float.IsInfinity(yawRadians))
+                return;
+
+            float normalizedYaw = Mathf.Repeat(yawRadians + Mathf.PI, Mathf.PI * 2.0f) - Mathf.PI;
+            _motor?.FaceYawImmediately(normalizedYaw);
+
+            if (!_hasCurrentPredictedState)
+            {
+                transform.rotation = Quaternion.Euler(0.0f, normalizedYaw * Mathf.Rad2Deg, 0.0f);
+                return;
+            }
+
+            _currentPredictedState = new PredictedMovementState(
+                _currentPredictedState.Position,
+                _currentPredictedState.Velocity,
+                normalizedYaw,
+                _currentPredictedState.Grounded,
+                _currentPredictedState.LastProcessedTick);
+            _stateProvider?.SetPredictedState(_currentPredictedState);
+            RecordPredictedState(_currentPredictedState);
+            ClearRenderHistory();
+            PushRenderSample(_currentPredictedState);
+            ApplyTransform(_currentPredictedState.Position, normalizedYaw);
+        }
+
         private void LateUpdate()
         {
             if (_simState == null || _motor == null || _worldContext == null || _stateProvider == null || _commandHistory == null)
