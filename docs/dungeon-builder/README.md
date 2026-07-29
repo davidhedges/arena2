@@ -8,8 +8,9 @@ The former `dungeon_builder` Unity project is integrated as an Arena feature ins
 2. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — hard geometry, traversal, and placement rules. Read before changing generator, measurement, contract, or placement code.
 3. [`GLOSSARY.md`](GLOSSARY.md) — authoritative vocabulary (role vs. beat, room vs. recipe, zone, port, transition, reservation).
 4. [`ARCHITECTURE_REVIEW_2026-07-25.md`](ARCHITECTURE_REVIEW_2026-07-25.md) — current system model, findings, and recommended work.
-5. [`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md) and [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — adding content.
-6. [`stair_forge_design.md`](stair_forge_design.md) — vertical-traversal design decisions and implementation history.
+5. [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md) — **draft** proposal for the next direction: multiple traversable surfaces overlapping in plan space. Not accepted; read it as a proposal, not as rules.
+6. [`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md), [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) and [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) — adding content.
+7. [`stair_forge_design.md`](stair_forge_design.md) — vertical-traversal design decisions and implementation history.
 
 The completed phase plans and their evidence log live in
 [`docs/archive/2026-07-dungeon-phase-log/`](../archive/2026-07-dungeon-phase-log/).
@@ -35,9 +36,10 @@ profile asset. An `ARENA_DUNGEON_DENSITY` environment variable set to an integer
 own `densityLevel`, which is what makes a command-line batch reproducible from
 the repo alone.
 
-The packing mechanisms land in phases 2-5 of
-[`density-scale-design-2026-07-27.md`](density-scale-design-2026-07-27.md);
-until then levels 1-5 resolve to density 0's geometry and say so in the log.
+The dial is complete — all six phases of
+[`density-scale-design-2026-07-27.md`](density-scale-design-2026-07-27.md)
+landed 2026-07-28, and every level resolves to its own geometry. Measured floor
+fill runs 26/33/47/65/80/93% across levels 0-5.
 
 In Unity, use **Arena > Dungeons > Rebuild Random Dungeon**. Use the specific-seed command when reproducing a layout. For command-line builds, invoke:
 

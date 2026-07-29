@@ -1,8 +1,13 @@
 # Dungeon generator: current status
 
-Last updated: 2026-07-28
+Last updated: 2026-07-29
 
-No phased plan is in progress. This page describes what the generator is and where the work stands. Keep it short — if it starts growing per-phase evidence sections again, that evidence belongs in `DungeonLabReports/` or `docs/archive/`, not here.
+This page describes what the generator is, the rules worth knowing before you
+change it, and where the work stands. Keep it short — if it starts growing
+per-phase evidence sections again, that evidence belongs in `DungeonLabReports/`
+or `docs/archive/`, not here. *(It did grow them back, and was trimmed again on
+2026-07-29; the July route-topology, RNG and rebaseline evidence is in
+[`docs/archive/2026-07-dungeon-phase-log/ROUTE_TOPOLOGY_AND_RNG_LOG.md`](../archive/2026-07-dungeon-phase-log/ROUTE_TOPOLOGY_AND_RNG_LOG.md).)*
 
 ## What it does
 
@@ -33,9 +38,12 @@ seed + density + generation profile + recipe catalog
 | Plan only, no scene | **Tools > Dungeon Lab > Generate** |
 | Batch evidence | **Tools > Dungeon Lab > Batch Validate (50 / 200 / 100 Locked Seeds)** |
 | Prove the corpus RENDERS, not just plans | **Tools > Dungeon Lab > Render Sweep (50 / 200 Fixed Seeds)** — a full scene build per seed, so it is slow and separate |
+| Check a topology draft | **Tools > Dungeon Lab > Validate Topologies** |
 | Command line | `-executeMethod DungeonLab.Editor.RandomDungeonSceneBuilder.RebuildRandomDungeonBatch`, with `ARENA_RANDOM_DUNGEON_SEED` set |
 
-Always publish/restart the server module after regenerating, so server movement and spawning use the same geometry as the client scene.
+Always publish/restart the server module after regenerating, so server movement
+and spawning use the same geometry as the client scene
+(`ops/republish-local-clear.sh`).
 
 ## Current shape
 
@@ -46,570 +54,136 @@ Always publish/restart the server module after regenerating, so server movement 
   promontories. Each external promontory is a straight eight-cell (32u) run,
   with at most one per cardinal direction. Its first added cell crosses the
   core dungeon's global outer face; exterior-connected concavities do not count.
-- Everything rises from a shared abyss datum.
+- Density is a 0–5 dial. Design of record:
+  [`density-scale-design-2026-07-27.md`](density-scale-design-2026-07-27.md).
+
+**Three items in this list describe today's behaviour, not a rule, and the
+layered-topology direction changes all three** — see "Where the work stands":
+
+- **Everything rises from a shared abyss datum.** One global base level; every
+  floor edge facing void drops to it. Becomes a per-face support base.
+- **One plan coordinate carries one walkable surface.** The canonical elevation
+  model is a heightfield (`Dictionary<Vector2Int,int>`).
+- **Bridges are capped at 2 per dungeon and may not cross room interiors.**
+
+## The rules worth knowing before you change it
+
+These earned their place by measurement. None is ceremony.
+
+1. **Batch Validate never builds a GameObject**, so "hard-valid" is a claim about
+   the PLAN. **Render Sweep** is what proves the corpus renders; it exists
+   because a renderer defect hid behind 200/200.
+2. **A recorded hash is a transient comparison value, never a gate.** Do not
+   assert one in a test and do not re-baseline it per change — that ritual is
+   what left three tests permanently red. Unrelated content drift is
+   indistinguishable from a regression, because `ActiveContentDigest()` hashes
+   the profile asset's bytes into every report. Compare against **the current
+   commit** with `ops/dungeon-port-ab.sh`, which runs the same batch with the
+   working tree stashed and restored and diffs the two reports seed by seed.
+   Run-twice determinism (`ops/dungeon-step2-verify.sh`) is the other half.
+3. **Every random decision draws from a stream keyed by
+   `(seed, layout attempt, tier attempt, purpose, subject)`** via
+   `DungeonRandomScope`. Nothing is threaded sequentially between stages, so a
+   change to one decision provably cannot perturb another. Do not reintroduce a
+   shared stream; it is what made stored hashes rot.
+4. **The density dial is ONE table**, `DungeonDensity.Rows` in
+   `DungeonGenerationProfile.cs`: slack, room-gap scale, enclosure, annex,
+   mop-up and the fill backstop per level. Retune by editing six rows. Do not
+   add a second seam. **Authored void is excluded from the void metric** — vista
+   lane, reserved shaft windows, the gap an aerial span crosses, and a dais
+   showpiece's backdrop.
+5. **Two approaches were measured as wrong and reverted.** A blind pre-inflation
+   stairwell-shaft reservation, and shrinking the lane pitch. Both are written
+   up in the archived phase log; check before redoing either.
+6. **The renderer consumes an already-valid plan and does not repair it.** One
+   validation gate, `DungeonLabGenerator.Validation.cs`, runs inside the
+   tier-attempt loop; renderer skips throw. A plan that fails validation cannot
+   be rendered, saved or exported.
+7. **`ops/dungeon-compile-gate.sh`** compile-checks both assemblies without
+   Unity, so work continues while the editor holds `Temp/UnityLockfile`.
+
+Measured cost of the dial, same seed built and exported at both ends: 2.5x the
+play space (527 → 1308 floor cells) costs **2%** of the collision payload
+(5.99 → 6.11 MB). A packed seam is one partition wall where an open cliff face
+was a wall plus a railing plus corner kits, so boxes double while mesh instances
+fall. **Tools > Dungeon Lab > Measure Density Cost** reports it; the peak is at
+density 3, not 5, because a half-packed floorplan has the most boundary.
 
 ## Where the work stands
 
-All previously planned phases are closed and their evidence machinery has been
-removed. The per-phase log lives in
-[`docs/archive/2026-07-dungeon-phase-log/`](../archive/2026-07-dungeon-phase-log/)
-if you ever need to reconstruct why a decision was made. Treat it as history,
-not as current constraints.
-
-### The density scale — 0-5 dial, completed 2026-07-28
-
-`densityLevel` 0-5 replaced the spacious/dense profile pair. Design of record:
-[`density-scale-design-2026-07-27.md`](density-scale-design-2026-07-27.md).
-Per-phase history: [`docs/archive/2026-07-dungeon-phase-log/DENSITY_SCALE_PHASE_LOG.md`](../archive/2026-07-dungeon-phase-log/DENSITY_SCALE_PHASE_LOG.md).
-Reproducible evidence: `DungeonLabReports/phase4/README.md`.
-
-| density | fill min/p50 | max void p50/max | accepted | hardValid | renders |
-|---|---|---|---|---|---|
-| 0 | 21 / 26% | 742 / 1229 | 199/200 | 199 | 199/200 |
-| 1 | 26 / 33% | 554 / 1061 | 200/200 | 200 | 200/200 |
-| 2 | 30 / 47% | 314 / 901 | 200/200 | 200 | 200/200 |
-| 3 | 42 / 65% | 138 / 641 | 200/200 | 200 | 200/200 |
-| 4 | 62 / 80% | 66 / 331 | 200/200 | 200 | 200/200 |
-| 5 | 92 / 93% | **0 / 2** | 200/200 | 200 | 200/200 |
-
-Density 5 meets the design's §5 acceptance — max void component <=4 cells, at
-most two components larger than one cell — on 200/200 seeds. Density 0 is the
-identity by construction, so sparse is what the profile says rather than a
-preserved legacy branch.
-
-Five things to know before touching it:
-
-1. **The dial is ONE table**, `DungeonDensity.Rows` in
-   `DungeonGenerationProfile.cs`: slack, room-gap scale, enclosure, annex,
-   mop-up and the fill backstop per level. Retune by editing six rows. Do not
-   add a second seam.
-2. **Batch Validate never builds a GameObject**, so "hard-valid" is a claim
-   about the PLAN. **Tools > Dungeon Lab > Render Sweep** is what proves the
-   corpus renders; it exists because a renderer defect hid behind 200/200.
-3. **Mop-up is the lever at the sparse end, annex at the packed end.** A crater
-   can only be claimed by a room it touches, and at density 1 the room is still
-   a lane away.
-4. **Authored void is excluded from the void metric**, and the list is longer
-   than the design's §4.1: vista lane, reserved shaft windows, the gap an aerial
-   span crosses, and a dais showpiece's backdrop.
-5. **Two approaches were measured as wrong and reverted** — a blind
-   pre-inflation stairwell-shaft reservation, and shrinking the lane pitch. Both
-   are written up in the archived phase log.
-
-**Cost, measured end to end** — same seed (`2026072186`) built, exported and
-published at both ends of the dial:
-
-| | density 0 | density 5 |
-|---|---|---|
-| collision payload | 5.99 MB | **6.11 MB** (+2%) |
-| collision boxes | 1369 | 2723 |
-| collision mesh instances | 7978 | **7062** (fewer) |
-| floor cells | 527 | 1308 (2.5x) |
-| scene objects | 10615 | 12645 (1.2x) |
-| traps | 20 | 48 |
-| doors | 8 | **1** |
-
-**2.5x the play space costs 2% of the collision payload.** A packed seam is one
-partition wall where an open cliff face was a wall plus a railing plus corner
-kits, so boxes double while mesh instances actually fall. `Tools > Dungeon Lab >
-Measure Density Cost` reports the per-level object and collider counts; the peak
-is at density 3, not 5, because a half-packed floorplan has the most boundary.
-
-Both ends publish to the server module cleanly (`ops/republish-local-clear.sh`).
-A real built scene has **zero** mesh colliders with a null mesh, so the
-`collision.missingMeshes = 20` that seven EditMode tests assert on is a fixture
-artifact rather than a hole in shipped collision.
-
-**Open look question, deliberately not addressed:** doors thin out sharply as
-density rises — 8 in the shipped door manifest at density 0, **1** at density 5 —
-because the gateway rules want a real wall on both flanks and leave
-chamfer-framed entrances bare on purpose. Owner call, deferred.
-
-### Landed 2026-07-25 (see [`ARCHITECTURE_REVIEW_2026-07-25.md`](ARCHITECTURE_REVIEW_2026-07-25.md) §12)
-
-- **Closed-phase archive deleted.** `Phase7`, `Phase7Collision`, `Phase7Gallery`,
-  the corrective batch/collision-floor harness, the density/adjacency slice
-  snapshots, and the per-phase acceptance-budget report blocks are gone.
-  ~5,400 lines out of the generator, ~1,100 out of the tests.
-- **59 diagnostic stage timers removed** from the production planning path.
-- **One validation gate.** The twelve hard checks moved out of the batch report
-  into `DungeonLabGenerator.Validation.cs` and now run inside the tier-attempt
-  loop, where a failure is an ordinary retry reason. The batch report projects
-  the same result instead of recomputing it. A plan that fails validation can no
-  longer be rendered, saved, or exported.
-- **Renderer skips are fatal.** The four sites that logged an error and continued
-  (two of which did not even increment `stats.rejected`) now throw.
-- **No more double generation.** The accepted plan carries the room boundary
-  context that was validated with it, so the sentinel/render path no longer
-  regenerates the whole dungeon to recover it.
-- **Phase vocabulary gone** from type, method, and test names. Stale hardcoded
-  plan hashes and planner-version equality assertions deleted from tests.
-- **`ops/dungeon-compile-gate.sh`** compile-checks both assemblies without Unity,
-  so work can continue while the editor holds `Temp/UnityLockfile`.
-
-### Measured 2026-07-25 — `dense` profile, seeds 2026072100..2026072299
-
-```text
-accepted 198/200   hardValid 198/198   validationFailureCodes none
-layoutAttempts   mean 1.07  p95 2  max 2   histogram {1: 186, 2: 14}
-tierAttempts     mean 1.02  p95 1  max 2   histogram {1: 194, 2: 4}
-failed seeds     2026072231, 2026072295 — both 64x ROUTE_TRANSITION_RESERVATION
-                 "edge 'main-4-5' could not reserve its required Stairwell for rise 8u"
-```
-
-Two conclusions:
-
-- **The validation gate rejects nothing.** Every accepted plan is hard-valid, so
-  the gate is a pure safety net rather than a behaviour change. The "~1.5% of
-  seeds are invalid" figure that circulated from the old phase log is dead.
-- **`TierPlacementAttempts = 32` is 16x the observed maximum of 2.** It should be
-  4, but lowering it changes output today, because failed tier attempts advance
-  the shared draw stream and 14 seeds take a second layout attempt. Do the
-  derived-RNG work first and the reduction becomes free.
-
-### Derived RNG — landed 2026-07-25 (review §12, 2.2 + 2.3)
-
-The shared sequential `System.Random` is gone. Every random decision now draws
-from a stream keyed by `(seed, layout attempt, tier attempt, purpose, subject)`,
-via `DungeonRandomScope` in `DungeonLabGenerator.Validation.cs`:
-
-| Stream | Keyed per | Was |
-| --- | --- | --- |
-| `loop-corridor` | room pair | shared stream, order-dependent on rejected candidates |
-| `stair-choice` | connection | shared stream, order-dependent on neighbouring corridors |
-| `aerial-bridges` | whole plan | shared stream |
-| `enclosed-rooms` | whole plan | shared stream, depended on how many attempts had failed |
-
-Every RNG construction site in the generator is now hash-derived. Nothing is
-threaded sequentially between stages, so a change to one decision cannot perturb
-another — which is what made stored hashes rot and the suite run red.
-
-Also removed: the room-dimension draw-**reuse** hack, which existed only to keep
-the spacious profile byte-compatible with an older hash and made the number of
-random draws depend on configuration. The spacious baseline itself is retained —
-it is load-bearing as the stair-clearance cap.
-
-`TierPlacementAttempts` dropped 32 -> 4 (2x the measured maximum). With
-attempt-keyed streams this is output-neutral: an accepted plan no longer depends
-on how many attempts preceded it.
-
-**This is a deliberate one-time rebaseline. Every seed's output changes once.**
-
-## Open: variation regression from the route-first cutover
-
-Owner reported 2026-07-25 that dungeons all read the same. Traced to
-**`6657465f floorplan refactor phase 2` (2026-07-21)**, which made route-first
-the sole path. Not a subjective impression — measured over 200 seeds:
-
-| Symptom | Evidence | Cause |
-| --- | --- | --- |
-| One topography | `elevationSpan` and `routeClimbLevels` are 24 for 199/199 seeds; `archetypes = AscendingSpine: 199` | `ElevationArchetype` had **11** members (Basin, Mesa, Ridge, Canyon, AscendingSpine, Descent, SplitPlateau, Crater, Helix, Terraces, Atrium) chosen per seed by `ElevationArchetypePlanner.Choose(random)`. It is now `enum RouteElevationPolicy { AscendingSpine }` — one member |
-| Same connectivity | 3 fixed graphs on `seed % 4` (processional 50%, atrium 25%, twin-wing 25%) | All three `Build*RouteIntent` factories hardcode every node id, role, beat, edge **and elevation** as literals |
-| Always 13 rooms *(closed by step 3)* | `rooms` min 13, p50 13, max 13 | All three route graphs happened to have 13 nodes. Step 2 removed the 13-node *lock* (the range is 9–20); step 3 added graphs that differ, and the same 200 seeds now measure 12/13/14/16 rooms |
-| Identical room shapes | — | The same commit cut `DungeonGenerationProfile` 68 -> 24 settings, deleting the room size-class vocabulary (`largeRoom/midRoom/smallRoom` area ranges *and* counts, `nonRectChanceGrand`, `nonRectChanceMid`, `wingMinDimCells`, `wingMaxDepthCells`, `roomMaxSideCells`, `roomMaxAspectRatio`, `floorBudgetCells`) |
-
-The archived plan listed "multiple elevation archetypes" under *pieces worth
-preserving*, so this was preservation that did not happen, not a considered trade.
-
-**Item 1 — room size ranges (done, measured 2026-07-25, and it cost a seed).**
-Both profiles widened. `dense` was pinned at exactly 7x7 for every role because 7
-is its vertical ceiling; it now spreads 6-8 x 5-7. `spacious` now spreads
-4-7 x 4-8.
-
-Measured over `2026072100..2026072299` at `dense`: **198/200 accepted**, down from
-199/200 before the widening. The new failure is **2026072246**, a
-`processional-spine` seed whose `branch-2-9` Bridge cannot reserve its 8u rise —
-the same void-starvation failure mode as 2026072295's stairwell, and exactly what
-larger rooms cause. Consistent with Finding A: only `processional-spine` reads the
-widened profile, and only a processional seed regressed. `atrium-ring` is 50/50
-with zero retries because it still uses `BaselinePatternSpatialSettings`.
-
-**Resolved by step 2, 2026-07-25.** Closing Finding A gave `atrium-ring` the
-widened profile sizes too, and `2026072246` generates again — so the widened
-`dense` range is kept as authored and no narrowing was needed. `twin-wing-keep`
-is the exception: seven lattice columns at a 9-cell pitch do not fit the 52-cell
-envelope, so its lanes stay tight and it declares its own narrower room sizes as
-a per-topology override. That override is visible in its topology file, with the
-reason, rather than hidden in a settings table.
-
-Hard constraints when tuning these: room size <= `pitch - 1` on each axis (the
-gap between adjacent rooms is `pitch - size`), and <= `roomEnvelopeRadiusCells
-* 2 + 1`. Spacious pitch 9/9 -> ceiling 8x8. Dense pitch 9/8 -> ceiling 8x7.
-
-**Items 2 and 3 merged — owner ruling 2026-07-25: an archetype is a different
-graph entirely**, not a different elevation profile over the same graph. That
-makes "turn node elevations into data" not worth doing on its own: elevations
-are fields of a graph, so they become data when graphs do.
-
-The slice is therefore **make a topology cheap to author**. It is not cheap now.
-Adding one costs roughly 180-230 lines of hand-written C#:
-
-| Per topology, today | Size |
-| --- | --- |
-| `Build*RouteIntent` — nodes, roles, beats, elevations, edge ids, transition kinds, all literals | ~130 lines |
-| `TryEmbed*Route` — including a **hand-drawn coarse coordinate array**, one `Vector2Int` per node | 45-98 lines |
-| branches in `TryEmbedRoute`, `ResolvePatternSpatialSettings`, `SelectRoutePattern` | 3 switches |
-
-The layout is not procedural. Each pattern is one hand-drawn diagram — the
-processional main route is literally `(0,0)(1,0)(2,0)(3,0)(3,1)(3,2)(2,2)(1,2)
-(1,3)`, an S on a 4x4 grid — fed to `TryTransformCoarseEmbedding`, which tries
-at most 4 quarter-turns against one mirror choice. **So each topology has <= 8
-spatial arrangements, ever.** That, more than room size, is why plans read alike.
-*(Step 2's rubber-sheet lattice is the fix: per-lane gaps drawn per seed, so a
-topology now has hundreds of lattices x 8 orientations rather than 8 in total.)*
-
-`SelectRoutePattern` is `seed % 4` mapped to 3 patterns, so it also needs
-redesigning to scale past four. *(Done in step 2: a weighted draw over the
-registry, keyed on the seed alone.)*
-
-**Answered 2026-07-25 — the authoring model is agreed:**
-[`route-topology-authoring-2026-07-25.md`](route-topology-authoring-2026-07-25.md).
-JSON topology files (ASCII lattice map + node/edge/slot tables), derived graph
-metrics, a rubber-sheet lattice, weighted selection, and four hand-verified new
-topologies (descent 13, basin 14, terraces 16, ridge/ravine 12 rooms). All three
-forks ruled by the owner in its §8.
-
-**Step 1 landed 2026-07-25 — data cutover, output-neutral.** The three existing
-topologies are now files under
-`Assets/Arena/Editor/Dungeons/RandomDungeon/Topologies/`; see
-[`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) for the format and
-the rule list. Deleted: the three `Build*RouteIntent` factories, the three
-`TryEmbed*Route` embedders, `TryFindBoundedCoarsePath`, `RouteGraphComposer`, the
-switch arms in `TryEmbedRoute`/`ResolvePatternSpatialSettings`/`SelectRoutePattern`,
-the `Recipes.cs` pattern ternaries, and every self-declared graph metric
-(`requiredCycleRank`, `requiredCycleCoreNodeCount`, `requiredJunctionDegree`,
-`branchAttach`/`RejoinNode`, per-edge `requiredRiseLevels`, edge ids) — all now
-derived. New: **Tools > Dungeon Lab > Validate Topologies**, which checks a draft
-against the whole rule list, redraws its map with edges, and computes the vista
-lane's clear-cell count.
-
-The win is per topology, not in total lines. Adding a topology cost 180–230 lines
-of hand-written C#; it now costs one data file of ~55 significant lines. Paying for
-that: 1,285 lines of generator C# deleted, 350 added back as the generic builder
-and embedder, 1,070 added as the loader, 1,080 added as the validator — so the tree
-is ~1,220 lines of editor C# heavier. Roughly 1,080 of that is the validator, which
-is new capability rather than a port; the port itself is about line-neutral and
-buys the per-topology cost.
-
-Step 1 was verified output-neutral **before** the batch run: node centres are
-byte-identical to the old embedders across all 8 orientations and both profiles,
-and the ported graph tables match the old C# literals field for field. The
-processional's four BFS-placed branch nodes are the constant `(2,1) (1,1) (0,1)
-(0,2)` at 7 search expansions, confirmed by running the pre-port BFS rather than
-by assumption.
-
-**Gate: PASSED, verified 2026-07-25.** `ops/dungeon-port-ab.sh` ran the 200-seed
-`dense` batch twice on the same tree — once with the port stashed, once with it
-restored — and both legs produced the byte-identical
-`resultHash e3fb0480892978f107b31b50b0535e8feccb1f8ee83438e8f689dd3350143db2`,
-198/200, with the same two failed seeds. Each leg was proved to be the leg it
-claimed: the pre-port log mentions neither `Topologies/` nor
-`DungeonRouteTopology`, and the post-port assembly
-(`Library/ScriptAssemblies/Assembly-CSharp-Editor.dll`, rebuilt 31s before its
-report) contains `DungeonRouteTopology` / `RouteTopologyNode` /
-`BuildTopologyRouteIntent` and no longer contains `RouteGraphComposer`.
-
-The `3092863a…` hash the plan named cannot be reproduced by any run after commit
-`3123a06d` — see the box further down. Both failures are accounted for: 2026072295
-is the known stairwell defect, 2026072246 is item 1's widening.
-
-**Step 2 landed 2026-07-25 — the deliberate rebaseline. Every seed moved once.**
-
-Shipped in one commit: weighted selection over the registry, the rubber-sheet
-lattice, per-topology spatial overrides (which close Finding A by deleting the
-second settings table), the ±4/±8 rise sign, a node-count range in place of the
-13-node lock, a role→size-class map in the profile, and the deletion of the
-step 1 `legacy` blocks and pinned edge ids. The full deviation list is in the
-commit message; the format is in
-[`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md).
-
-**Gate: PASSED.** `ops/dungeon-step2-verify.sh` ran the 200-seed `dense` batch
-twice on the same tree — two independent runs, byte-identical `resultHash`
-`09b04b4e32aa4e74c3cf6cebcded94582b9394dee5e918749f7d7e2095795856`, **199/200
-accepted**, `hardValid 199/199`, `validationFailureCodes none`. The one failure
-is `2026072228`, a `twin-wing-keep` seed whose `E-F` Stairwell cannot reserve its
-8u rise: the same structural defect as the old `2026072295`, at a different seed
-because the topology mix moved. Item 1's casualty `2026072246` and the old
-`2026072295` both generate again.
-
-That hash is a **transient comparison value, not a lock.** Do not assert it in a
-test; the very next content edit moves it.
-
-```text
-                        before (step 1)   after (step 2)
-accepted                198/200           199/200
-topology mix            100/50/50         70/55/75   (processional/atrium/twin-wing)
-                        seed % 4          weighted draw, equal weights
-room counts             13 x 200          13 x 200   (the three graphs still have 13 nodes)
-layoutAttempts          mean 1.07 max 2   mean 1.03 max 2
-lattice slack spent     n/a               16 processional, 15 atrium, 8 twin-wing (cells/plan)
-floor fill, median      42.1%             30.7%
-floor fill, minimum     33.3%             27.1%   against a 26% floor
-```
-
-**The measured cost of the rubber sheet is floor fill, exactly as §4 predicted.**
-Wider lane gaps grow the floor bounding box without growing rooms, so fill fell
-~11 points and the margin over `denseFloorplanMinFillPercent` (0.26) fell from
-7.3 points to 1.1. Nothing was rejected for density — `rejectionCodes` has no
-`ROUTE_DENSITY_PRECONDITION` at all — but that margin is thin, so the cap was
-measured rather than guessed:
-
-| `latticeSlackMaxCells` | accepted | floor fill min / median | `ROUTE_DENSITY_PRECONDITION` |
-| --- | --- | --- | --- |
-| 8 (shipped) | 199/200 | 27.1% / 30.7% | 0 |
-| 14 | 154/200 | 26.0% / 27.4% | 117 |
-
-That is the whole trade: the cap is a per-profile knob rather than a lowered fill
-floor, and 8 is most of the room the floor allows. **Step 3 must re-measure
-fill** — a sparser new topology is the thing most likely to cross it.
-
-Also verified rather than assumed: **Tools > Dungeon Lab > Validate Topologies**
-passes all three at both profiles (report in
-`DungeonLabReports/route_topology_validation.txt`), and six seeds covering all
-three topologies rebuild end to end — plan, renderer, collision export — into a
-throwaway scene.
-
-**Looked at, 2026-07-25: too much void between tiers.** Owner verdict on the
-rebaselined output. Not "the corridors are long" — the complaint is the empty
-space between platforms at different elevations.
-
-The measurement behind it is an axis ratio, and none of its terms is topology
-data:
-
-| | constant | value |
-| --- | --- | --- |
-| horizontal | `CellSize` | 4 units per grid cell |
-| vertical | `StairForge.LevelHeight` | **1 unit per level** |
-| rise per edge | `MajorRiseLevels` / `DoubleMajorRiseLevels` | 4 or 8 levels, so 4 or 8 units |
-| total climb | `MaxGeneratedLevel` | 24 units |
-| abyss skirt | `AbyssDepthLevels` | 20 units below the lowest floor |
-
-A tier change is 4–8 units of height across a lane gap of 36–52 units. Two
-adjacent platforms that used to have roughly 8 units of void between them now
-have up to ~24, while the drop between them is unchanged — and that gap is open
-air down to the shared abyss base, not floor. The rubber sheet widened the
-horizontal term only, so it made the ratio worse; the fill drop from 42% to 31%
-is the same fact counted differently.
-
-**Deliberately not addressed here — owner ruling: it is part of a larger
-problem.** Two things follow:
-
-- **Do not spot-fix it by lowering `latticeSlackMaxCells`.** That knob only
-  trades variety against density along the horizontal axis; it cannot change the
-  ratio, and turning it down just gives back step 2's variety.
-- **Step 3 neither fixes it nor is blocked by it.** New topologies redistribute
-  elevation — `terraced-cascade` steps 4u across eleven nodes, `descent-shaft`
-  runs 24 -> 0 — but every graph still lands 4–8 unit rises across 36+ unit gaps,
-  because the ratio lives in the constants above, not in a topology file.
-
-**Step 3 landed 2026-07-25 — the four drafted topologies. Every seed moves again.**
-
-Seven topologies now, drawn with equal weight. Four new files, no generator C#;
-the only code-side change is three new role strings in both profile assets'
-`roleSizeClasses`.
-
-| topology | rooms | lattice | shape |
-| --- | --- | --- | --- |
-| `descent-shaft` | 13 | 5×5 | arrive on a rim, turn down a shaft, end in a flooded vault at the abyss datum — levels run **24 → 0** |
-| `sunken-basin` | 14 | 5×4 | two rims at 24, the island shrine at 0 on the basin floor, a bridge across the north lip, two loops |
-| `terraced-cascade` | 16 | 5×5 | eleven main-route nodes stepping 4u across a terrace field, plus a cascade spur that falls back to the arrival |
-| `ridge-ravine` | 12 | 5×4 | a ridge climbing to 24 over a ravine floor at 0; the overlook is a deliberate degree-1 dead end |
-
-**Gate: PASSED.** `ops/dungeon-step2-verify.sh dense` (it is generic) ran the
-200-seed batch twice on the same tree: byte-identical `resultHash`
-`eb3ffd0c0df09586a2f50c0f20dab9ad7d652433f7c47b9dd9c786e126e78af8`, **200/200
-accepted**, `hardValid 200/200`, `validationFailureCodes none`. That hash is a
-**transient comparison value, not a lock** — do not assert it in a test.
-`Tools > Dungeon Lab > Validate Topologies` passes all seven at both profiles.
-
-```text
-                        step 2            step 3
-accepted (dense)        199/200           200/200
-topologies              3                 7
-room counts             13 × 200          12 × 33, 13 × 106, 14 × 33, 16 × 28
-floor fill, median      30.7%             30.6%
-floor fill, minimum     27.1%             27.0%   against a 26% floor
-layoutAttempts          mean 1.03 max 2   mean 1.015 max 2
-```
-
-Per topology, `dense`, floor fill min / median: `processional-spine` 30.1/31.4 ·
-`sunken-basin` 29.5/32.5 · `terraced-cascade` 29.6/31.8 · `atrium-ring`
-28.4/30.1 · `descent-shaft` 27.0/29.3 · `ridge-ravine` 27.1/28.3 ·
-`twin-wing-keep` 27.1/30.3.
-
-Four things worth carrying forward:
-
-- **200/200 does not mean the stairwell defect is fixed.** Step 2's failure
-  `2026072228` now draws `terraced-cascade` instead of `twin-wing-keep`, so no
-  seed in this window lands on the broken combination. The defect is still
-  visible as recovered `ROUTE_TRANSITION_RESERVATION` retries on `2026072219`
-  and `2026072257` (both twin-wing) and `2026072135` (descent-shaft).
-- **The rubber sheet always spends its whole budget**, so a topology's floor
-  bounding box — and therefore its floor fill — is effectively a constant, and a
-  topology that misses the 26% floor misses it on *every* seed rather than a few.
-  Two of the four needed their lane minimums authored one cell under the profile
-  pitch, and two needed a `roomSizes` or `latticeSlackMaxCells` override, all
-  measured rather than guessed. Details and the reason live in each file.
-- **The `±4/±8` rise sign is now exercised**: 20 descending edges across the four
-  new graphs, on 119 of 200 seeds. `descent-shaft` descends for eight of its
-  thirteen edges.
-- **Recipe port geometry is an authoring rule that nothing checks.** The
-  compression slot's node must be straight through, the landmark's must be
-  straight through *and* perpendicular to the vista, and the return's must be a
-  corner — see the new section in
-  [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md). Two of the four
-  §6 drafts broke this and were redrawn. Teaching `Validate Topologies` to check
-  it is the first follow-up.
-
-**Spacious got better, and what is left there is not new.** Measured over the
-same 200 seeds at `spacious`: **184/200**, and every one of the 16 failures is
-`atrium-ring` (3/19 accepted) rejected for `ROUTE_DENSITY_PRECONDITION`. The four
-new topologies accept all 119 of their spacious seeds. For comparison, `main`
-before step 3 accepted 40/50 spacious seeds with `atrium-ring` at 6/16 — so
-`atrium-ring`'s spacious density failure is a **pre-existing step 2 defect**, not
-something step 3 introduced. The same one-line fix the new topologies use would
-very likely close it (`"columnGapCells": { "min": 8, … }`, `rowGapCells` the
-same), but that changes a shipped topology's dense output too, so it is left for
-an owner call rather than folded in here.
-
-**The editor suite came out one test better than it went in**: `main` runs the
-`DungeonLab*` filter at 78 passed / 29 failed, this tree at 79 / 28. Two tests
-were updated because step 3 invalidated what they pinned — the registry weight
-list in `Selector_DrawsEveryTopologyByWeightRatherThanBySeedResidue`, and an
-absolute `baseLevel` in `TwinStairs_Landings…`, whose seed now draws
-`sunken-basin` and so hands the episode a landmark at level 0 (that assertion now
-pins the *coupling*, `elevatedLevel == baseLevel + 1`, instead of the absolute).
-The one test that is red here and green on `main`,
-`HallwayEndRegression_RendererAndCollisionConsumeOnlyTheValidatedPlan`, fails on
-`collision.missingMeshes=2` with the plan and renderer both passing — the same
-signature nine tests already carry on `main`, on a seed that moved into it while
-two others moved out.
-
-The question below is settled in favour of authoring-as-data; kept for the
-reasoning: **author more diagrams as data, or replace the hand-drawn diagram with
-a general graph embedder?** Authoring keeps
-authorial control and suits "designed places"; a general embedder unlocks more
-variety but risks legibility and is real work. Per the archived plan's decision
-11 ("abstractions are earned by a working slice"), authoring two or three new
-topologies first — and only then extracting — is the lower-risk order.
-
-Encouragingly, the vocabulary for the owner's eventual goal already exists:
-`RouteTransitionKind` covers `LevelCorridor`, `Stair`, `Bridge`, `Stairwell`,
-and `RouteVistaIntent` / `RouteOverlookIntent` cover sightlines. Bridges,
-balconies and overlooks are mostly a matter of *authoring* those edge kinds in
-new graphs rather than building new systems — which is a further argument for
-doing the graph-as-data work as the vehicle.
+**No phased plan is in progress.** All previously planned workstreams are closed
+— the route-first cutover, the topology-as-data port, the derived-RNG
+rebaseline, and the density scale. Their evidence is archived:
+
+- [`ROUTE_TOPOLOGY_AND_RNG_LOG.md`](../archive/2026-07-dungeon-phase-log/ROUTE_TOPOLOGY_AND_RNG_LOG.md)
+- [`DENSITY_SCALE_PHASE_LOG.md`](../archive/2026-07-dungeon-phase-log/DENSITY_SCALE_PHASE_LOG.md)
+
+Treat both as history, not as current constraints.
+
+### The next direction: layered 3-D topology
+
+Proposal, **draft, not yet accepted**:
+[`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md).
+
+The generator makes rooms at different elevations but behaves like a single
+surface: one plan coordinate, one floor. The direction is multiple independently
+traversable surfaces that may overlap in plan — pits that drop to a lower route,
+bridges over playable geometry, and rooms owning several layers — with the
+identity of a walkable place moving from `cell` to `(cell, level)`.
+
+**This absorbs the tier-void ratio**, which used to be listed here as its own
+slice. The complaint — 4–8u of rise across 36u+ lane gaps — is that the vertical
+axis is trivial next to the horizontal. Stacking traversable surfaces is the
+direct answer, and it is the only thing that adds play space without growing the
+52x52 envelope. It is no longer a competing item.
+
+**A correction worth recording, because the old page said the opposite.** This
+page previously claimed that "bridges, balconies and overlooks are mostly a
+matter of *authoring* those edge kinds in new graphs rather than building new
+systems", on the grounds that `RouteTransitionKind` already has a `Bridge`
+member. That is wrong, and it misled at least one design pass. `Bridge` is
+vocabulary, not capability: bridges are capped at two per dungeon, are rejected
+over room interiors, and are not walkable surfaces at all — they are transition
+edges carrying a set piece. Balconies need a canonical model change. The
+investigation is in the design doc's §1 and §2.
 
 ### Next, in order
 
-0. **The density scale is DONE — phases 0 through 6 have all landed.** Design in
-   [`density-scale-design-2026-07-27.md`](density-scale-design-2026-07-27.md).
-   Items 3, 4 and 5 below are closed by it: the stairwell shaft is an explicit
-   reservation, `atrium-ring`'s density failure died with the bounding-box fill
-   gate, and the tier void is what the whole dial removes. Two things it
-   surfaced and deliberately did not fix, both look questions rather than
-   defects:
-
-   a. **Doors nearly vanish at high density** — 12 gateways at density 0, 2 at
-      density 5, while doorways double. The gateway rules want a real wall on
-      both flanks and leave chamfer-framed entrances bare on purpose, and a
-      packed floorplan produces fewer qualifying frames. Worth an owner call on
-      whether a packed keep should have more doors.
-
-   b. **The tier-void ratio is untouched** (item 5 below). It is the one thing
-      the dial cannot reach: 4-8u of rise across a 36u+ gap lives in `CellSize`
-      vs `StairForge.LevelHeight`, not in any topology or density row.
-
-1. **Look at the dungeons.** **Arena > Dungeons > Rebuild Random Dungeon** on a few
-   seeds. No hash tells you whether a dungeon reads well. One rendered shot per
-   new topology is in `DungeonLabReports/step3_topology_shots/` (dense, seeds
-   2026072104 / 2026072100 / 2026072101 / 2026072105); the four also rebuild end
-   to end — plan, renderer, collision export, scene save — into throwaway scenes.
-2. **Teach `Validate Topologies` the slot-geometry rule.** It is the one
-   authoring rule with real teeth that nothing checks, and it cost two of the
-   four step 3 drafts a redraw. See "Slot geometry" in
+1. **Decide the three sizing questions** in the design doc §14: the vertical
+   envelope (40u vs 80u), per-topology ceiling vs a global constant, and the
+   stacking pitch (4u vs 8u). They size everything downstream.
+2. **Measure the deck-underside art.** The pack has no measured flat under-deck
+   cap family, and a closed-solid soffit is an active movement hazard inside the
+   server's 1.2u ground-capture window. This is the one external dependency that
+   can invalidate the design's first proof phase.
+3. **Look at the dungeons.** **Arena > Dungeons > Rebuild Random Dungeon** on a
+   few seeds. No hash tells you whether a dungeon reads well. One rendered shot
+   per topology is in `DungeonLabReports/step3_topology_shots/`.
+4. **Teach `Validate Topologies` the slot-geometry rule.** It is the one
+   authoring rule with real teeth that nothing checks, and it cost two of four
+   topology drafts a redraw. See "Slot geometry" in
    [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md).
-3. ~~**The stairwell reservation defect**~~ — **closed 2026-07-28.** The plan
-   reserves one 3x3 shaft window per transition corridor, chosen after rooms and
-   corridors are compiled from the sides that are actually free.
-4. **`atrium-ring` fails 16 of its 19 spacious seeds for density** — pre-existing,
-   see the step 3 block above for the one-line fix and why it was not folded in.
-5. **The tier-void ratio** the owner called out is still untouched and still its
-   own slice. New topologies redistribute elevation; they cannot change 4u of
-   rise across a 36u+ gap.
-6. **Remaining review items**, none urgent: unify the two floor representations
-   (§12, 2.5), move the headroom gate after the late passes and delete the
-   duplicated deck formula (2.4), carry `RouteIntent` into the plan to remove the
-   `lastRouteIntent` static (2.7), and take the display strings out of
+5. **`atrium-ring` fails 16 of its 19 spacious seeds for density** —
+   pre-existing; the one-line fix and why it was not folded in are in the
+   archived route-topology log.
+6. **Doors thin out sharply as density rises** — 12 gateways at density 0, 2 at
+   density 5, while doorways double. The gateway rules want a real wall on both
+   flanks and leave chamfer-framed entrances bare on purpose. Owner call on
+   whether a packed keep should have more doors; a look question, not a defect.
+7. **Remaining architecture-review items**, none urgent: unify the two floor
+   representations (§12, 2.5), move the headroom gate after the late passes and
+   delete the duplicated deck formula (2.4), carry `RouteIntent` into the plan to
+   remove the `lastRouteIntent` static (2.7), and take the display strings out of
    `TieredLevelPlan` (2.9). The typed test API (2.6) is blocked on an asmdef
    migration of `Assets/Arena/Editor` as a whole — see the review's H4 note.
-
-### Post-rebaseline measurement, same 200 seeds, `dense`
-
-```text
-                        before          after
-accepted                198/200         199/200
-hardValid               198/198         199/199
-validationFailureCodes  none            none
-layoutAttempts          mean 1.07       mean 1.06   max 2
-tierAttempts            max 2           max 2       histogram {1: 197, 2: 2}
-wasted rejections       512 + 4         52 + 2
-failed seeds            ...231, ...295  ...295
-```
-
-Seed 2026072231 now succeeds: with independently keyed streams its stairwell
-found a placement the old order-dependent draw never offered. Wasted work fell
-10x, which is the `TierPlacementAttempts` 32 -> 4 reduction showing up directly.
-`tierAttempts` still maxes at 2, so the new ceiling of 4 keeps 2x headroom.
-
-**Determinism verified.** Two independent 200-seed runs produced the byte-identical
-`resultHash` `3092863af94919fa2f77705014ec62b37e6bf13f8ef4e6cc1db23d0845a1bef6`
-(catalog `8c0f30b2`, profile `dense`), 199/199 both times, and the scene plus
-collision payloads rebuilt end to end.
-
-That hash is a **transient comparison value, not a lock.** Do not assert it in a
-test or re-baseline it per change — that ritual is what left three tests
-permanently red. Any intentional change to generation is expected to move it.
-
-> **`3092863a…` is dead. Do not use it as a gate — it belongs to commit `90feceb3`
-> only.** The very next commit, `3123a06d` (widen room sizes), edited
-> `generation_profile_dense.asset`, and `ActiveContentDigest()` hashes that file's
-> bytes into every seed report's `catalogDigest`. Recomputing that digest from git
-> proves it: `8c0f30b2` at `90feceb3`, `3389fba8` at `3123a06d` and every commit
-> since. So from `3123a06d` onward no run could reproduce `3092863a`, whatever the
-> generator did.
->
-> This is the trap in comparing against a *recorded* hash: unrelated content drift
-> is indistinguishable from a regression. Compare against **the current commit**
-> instead — `ops/dungeon-port-ab.sh` runs the same batch with the working tree
-> stashed and restored and diffs the two reports seed by seed. Current value, for
-> reference only: `e3fb0480…` (catalog `3389fba8`, profile `dense`, 198/200).
-
-### `TryBuildCellLevelField` split — landed 2026-07-25 (review §12, 1.2)
-
-660 -> 268 lines of orchestration. Two blocks became named steps:
-
-- `TryResolveConnectionTransition` — the 385-line per-connection body: level the
-  corridor, then reserve its transition via reviewed stair contract, then online
-  synthesis, then a stairwell tower.
-- `AddZoneSeamStepStrips` — the zone-seam rise-1 strips.
-
-Both were verified statement-for-statement identical to the code they replaced
-before compiling, so this is an identity-preserving refactor.
-
-**Verification: this was gated on `3092863a…`, which is now unreachable — see the
-box above.** The split was verified statement-for-statement against the code it
-replaced, so treat it as confirmed; re-check identity-preserving work with
-`ops/dungeon-port-ab.sh`, which compares against the current commit instead of a
-recorded value.
-
-Also worth doing at some point: **Arena > Dungeons > Rebuild Random Dungeon** and
-look at the result. No hash can tell you whether the dungeon still reads well.
+   *(2.5 and 2.7 stop being optional under the layered direction — the design
+   doc makes both prerequisites.)*
 
 ## Read next
 
 1. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — non-negotiable geometry and placement rules. Read before changing generator, measurement, contract, or placement code.
 2. [`GLOSSARY.md`](GLOSSARY.md) — authoritative vocabulary (role vs. beat, room vs. recipe, zone, port, transition, reservation).
 3. [`ARCHITECTURE_REVIEW_2026-07-25.md`](ARCHITECTURE_REVIEW_2026-07-25.md) — current system model and recommended work.
-4. [`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md) and [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) — adding content.
-5. [`stair_forge_design.md`](stair_forge_design.md) — vertical traversal decision history.
+4. [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md) — the proposed next direction (draft).
+5. [`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md), [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) and [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) — adding content.
+6. [`stair_forge_design.md`](stair_forge_design.md) — vertical traversal decision history.

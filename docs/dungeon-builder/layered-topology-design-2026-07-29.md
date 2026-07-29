@@ -1,10 +1,10 @@
 # Layered 3D topology for the random dungeon generator
 
-Status: design of record for evolving the generator from a single-surface
-heightfield to multiple independently traversable surfaces that may overlap in
-plan space. Not yet implemented; no phase is in progress.
+Status: **DRAFT — not design of record.** A proposal for evolving the generator
+from a single-surface heightfield to multiple independently traversable surfaces
+that may overlap in plan space. Not yet implemented; no phase is in progress.
 
-Date: 2026-07-29
+Date: 2026-07-29 · Revised 2026-07-29 after owner review (§0)
 
 Scope of the investigation behind it: `Assets/Arena/Editor/Dungeons/RandomDungeon`
 (28 files, ~51k lines), the seven topology JSON files, the recipe schema and
@@ -18,6 +18,100 @@ Labels used throughout: **[Fact]** verified in the repository with a citation ·
 Read [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) and
 [`GLOSSARY.md`](GLOSSARY.md) first; this document extends that vocabulary rather
 than replacing it.
+
+---
+
+## 0. Review findings, and what changed
+
+Owner review of the first draft raised seven material defects. All seven were
+verified against the code and all seven are accepted. Five were outright errors;
+two of those invalidated claims the draft stated as fact. What follows is the
+record, so a later reader can see which parts were reasoned through and which
+were repaired.
+
+| # | Finding | Verdict | Where it is fixed |
+|---|---|---|---|
+| 1 | Deriving `floorCells` from `SurfaceField` inverts the pipeline, and `RoomConnection` loses corridor layer identity | **Correct.** `floorCells` is the *domain* the level field is computed over (`cs:1907`, `cs:2127`). Worse than reported: a connection resolves to its route edge **by room pair** (`cs:2700`), so two layer-distinct corridors between one room pair are indistinguishable at the lookup, not merely at the path | §3.1 (PlanShadow vs SurfaceField; H2 reframed as an invariant), §8.1 (`RoomConnection` gains `edgeId` + layer binding) |
+| 2 | `Opening` cannot represent the pit: `TraversalEdge` needs two `SurfaceKey`s but an aperture is a hole, and one `catchSurface` cannot serve a multi-cell opening | **Correct** | §5 — falls are emitted **per opening cell**, rim surface → catch surface; catch surfaces are **derived and validated**, never authored |
+| 3 | The prism ledger has no owner, its blanket conflict rule contradicts "landings may share landings", and closed bands reject valid clearance at the endpoint | **Correct on all three** | §6 — `ownerId`, half-open `[min, max)`, an explicit kind×kind compatibility matrix, and authorized penetrations for `OpenVolume` |
+| 4 | Phase C needs layered-recipe schema that the draft deferred to Phase D | **Correct** | §13 — the minimum recipe layer schema moves into Phase C; `OpenVolume`, sunken zones, topology layer bindings and generic multi-layer rooms stay in D |
+| 5 | The stated collision safety control does not exist: exported boxes carry no `walkable_top` | **Correct.** `GameplayCollisionBoxFile` is `{shape, center, size, rotation}` (`world_collision.rs:120`); the flag belongs to the hardcoded procedural `Collider` (`:106`). The claim "collision export — no structural change" was unproven | §7.2 rewritten around the real mechanism, and downgraded from a claim to a hypothesis that Phase C's live probe must test |
+| 6 | "Nearest surface in the neighbouring column" is not a sufficient renderer algorithm, and `supportBase` is a scalar in one place and a function in another | **Correct.** Columns `{0,8}` and `{4,12}` have no unique symmetric pairing | §3.1 (scalar removed), §7.1 (directional edge-band decomposition; the "~30 lines" estimate retracted) |
+| 7 | Strong connectivity does not prove the non-fall return rule: `U --Fall→ L1 --Fall→ L2 --Stair↔ U` is strongly connected but L1 cannot return without falling. A single `returnRouteId` also cannot describe a multi-edge return | **Correct** | §3.3 — the invariant becomes **the fall-free subgraph must be connected**, which is strictly stronger and implies both. `returnRouteId` is dropped as authored data and becomes a validation witness |
+
+**On finding 7, one refinement.** The review's proposed fix — validate each `Fall`
+independently after removing all `Fall`/`Drop` edges — is correct. Requiring the
+**fall-free subgraph to be connected** is simpler and strictly stronger: it
+implies full strong connectivity *and* per-fall reversibility, and it is the
+literal statement of "pits primarily create optional branches." It is adopted in
+that form, with the one case it forbids raised as an owner decision (§14).
+
+**What survived round one unchanged:** canonical surface identity keyed on
+`(cell, level)`, surface-scoped room ownership, explicit typed openings,
+per-topology ceilings, and keeping plan-cell fill as a separate metric from
+surface count.
+
+### Round two
+
+A second review of the revision found seven more, concentrated in exactly the
+places round one had just rewritten. All verified, all accepted.
+
+| # | Finding | Verdict | Where it is fixed |
+|---|---|---|---|
+| 8 | Phase A's "every connection resolves to exactly one route edge" would reject synthesized loop corridors | **Correct.** `AddLevelSafeLoopConnections` builds `RoomConnection`s with no route intent (`cs:1503`), and the elevation path treats the route requirement as **optional** by design (`cs:2097`) | §8.1 — `RoomConnection` gains a `source` discriminator; §13 Phase A's invariant is restated |
+| 9 | `(cell, layerId)` is not a global vertical identity — `layerId` is room-local, an edge's two ends may differ, and `pathLayerOrdinal` contradicts §3.1's rule that ordinals are never identity | **Correct on all three** | §8.1 — corridor exclusivity keys on a **planned elevation band** derived from the topology's declared absolute node levels, which *is* known pre-elevation |
+| 10 | The renderer's occupied band "from a surface's level down to whatever supports it" fills stacked space with solid mass, walling off the chamber under a gallery | **Correct, and it breaks C1 specifically**, which has no `OpenVolume` producer to subtract that mass | §7.1 — bands become **structural** (slab + declared supports), not implied |
+| 11 | The collision explanation is still wrong: the server tests an **absolute** Y normal, so down-facing triangles pass; and the sampler takes the **highest** eligible surface, so a soffit under a deck cannot snap a player down | **Correct.** `triangle_normal_y_abs` returns `(cross[1]/length).abs()` (`world_collision.rs:2820`); selection is `max` (`:1557`) | §7.2 rewritten a second time, with a remedy derived from both code paths rather than guessed |
+| 12 | The prism matrix does not reproduce the ledger: the two clearance kinds are distinct, landing–clearance and mouth–clearance do **not** conflict today, and the relation is asymmetric. A runtime `int ownerId` also cannot appear in an authored allow-list | **Correct on all counts** (`cs:6477`) | §6 — five kinds kept distinct, an asymmetric **blocks-policy**, and a typed owner key |
+| 13 | Shadow agreement and Phase A's byte-identical hash gate are mutually exclusive: `floorCells` feeds the canonical hash | **Correct.** `BuildCanonicalLayoutProjection` (`Batch.cs:4864`) → `layoutHash` → `canonicalHash` (`:3437`) | §13 — Phase A splits into **A1 (detect, byte-identical)** and **A2 (repair, explicitly rebaselined)** |
+| 14 | Rim guarding is per edge but `OpeningKind` is per opening — a pit railed on three sides and bare on one is unrepresentable | **Correct** | §5, §8.3 — guard and fall emission move to `(rimSurface, direction)` |
+| — | §10's compatibility table still asserts the superseded H2 derivation, "no collision change", and an unchanged slot contract | **Correct** | §10 rows corrected |
+
+### Round three
+
+Six more, all verified, all accepted. Three were internal contradictions
+introduced *by* the round-two fixes — a pattern worth noting: each repair pass
+has created new inconsistencies in the sections adjacent to the ones it touched.
+
+| # | Finding | Verdict | Where it is fixed |
+|---|---|---|---|
+| 15 | Phase A's corridor re-key is **not** output-neutral. Today rejection is unconditional (`RouteFirstPilot.cs:2582`); allowing disjoint `plannedBand`s to share a cell accepts embeddings currently rejected — and `atrium-ring` spans levels 0–24, so disjoint bands are common, not hypothetical | **Correct**, and it also contradicted Phase A's own "no second surface anywhere" | §8.1 and §13 — Phase A carries the **data** (`edgeId`, `connectionId`, `plannedBand`); the **relaxation** moves to Phase D behind layer binding |
+| 16 | The structural-band rule and `supportBase` prescribe different geometry for the document's own `{0,8}` vs `{0}` example — bands give a slab fascia, `supportBase` walls off the chamber 8→0 | **Correct** | §7.1 — structural intervals are authoritative; `supportBase` is demoted to naming where a **plinth** band bottoms out, not an independent mechanism |
+| 17 | `OpenVolume` is stated to block `Wall`, but `Wall` is not a `PrismKind`; and "same owner never conflicts" lets a room's own solids bypass its penetration allow-list | **Correct on both** | §6 — `Wall` added; the allow-list governs `OpenVolume` **even for same-owner** solids |
+| 18 | A1 cannot promise a byte-identical `resultHash` while adding a diagnostic to seed reports — `resultHash = ComputeSha256(seedReports…)` (`Batch.cs:5748`) | **Correct** | §13 — A1 gates on the **canonical/plan hash**, and the disagreement report is emitted **out-of-band** |
+| 19 | `Window` is still in the authored `OpeningKind` enum while the corrected rule makes it derived | **Correct** | §5 — removed from the enum |
+| 20 | Recipe anchoring on "the base layer's first port" fails for a base layer with no external port, and keeps an ordering dependence | **Correct** | §8.2 — every bound port yields a candidate base; all must agree; an explicit anchor covers the no-bound-port case |
+
+Plus four stale summaries that had not caught up with the body: §9.2's
+"per-surface iteration", the smallest-slice claim, major risk 2's soffit
+description, and the bottom-line `Opening` schema. All corrected.
+
+### Round four
+
+| # | Finding | Verdict | Where it is fixed |
+|---|---|---|---|
+| 21 | The plinth rule cannot reproduce an ordinary single-layer elevation change. Making it conditional on *the neighbour being void* emits nothing for two adjacent ground floors at 0 and 4 — the commonest case in the corpus — where today a retaining face 0→4 is emitted unconditionally (`ElevationEdgeModel.cs:2389`) | **Correct, and it invalidated the byte-identical claim outright** | §7.1 — the band is keyed on **`IsGroundBacked`** (`kind == Floor` **and** lowest in column), not on the neighbour |
+| 22 | Layer names are room-local, yet the Phase D relaxation permitted crossings on "different declared layers". Local names cannot establish vertical separation between unrelated rooms | **Correct** | §8.1 — **layer binding authorizes; the absolute band decides.** Both corridor sharing and third-room crossing compare layer-offset-adjusted absolute bands |
+| 23 | Three passages defined three different headroom blocker sets | **Correct** | §6 — one named **`BlocksHeadroom`** predicate, referenced by name at every site |
+| 24 | *(owner question)* Does the design allow elevation change **between/outside rooms**? | **It must, and an earlier revision would have narrowed it.** Openings hung off `RoomLayer` and `Surface` carried an `int roomId`, both assuming walkable space belongs to a room — when **[Fact]** almost every elevation change here is on a **corridor** (`cs:2163-2200`) and `BuildCellRoomIds` (`:3568`) maps room cells only | **§4.1 (new)** — surfaces and openings are owned by a `SurfaceRegion`, which is a room layer *or* a corridor run. Also L10e, and C1's aperture moved into a corridor |
+
+Finding 21 is the sharpest so far: it would have deleted every retaining wall in
+every dungeon, and it was introduced *by* round two's fix for the opposite defect
+(filling stacked space with solid mass). The corrected rule has to thread both —
+ground-backed surfaces carry mass to the abyss, suspended ones carry only a slab
+— and §7.1 now shows all three configurations resolving from one decomposition.
+
+**One place the review is extended rather than accepted.** On finding 11 it
+offers three remedies — exclude soffit faces from movement collision, change the
+exported geometry, or make the server require a *signed* upward normal. Tracing
+both sampler paths gives a cheaper and safer fourth: **emit soffits as box
+colliders, not mesh colliders.** Boxes are not normal-tested at all; they use a
+0.35u capture window and the same `max` selection. A soffit box under a deck 3+
+levels up is outside a lower player's 0.35u window, and for a player on the deck
+its top is below the deck's own, so `max` keeps the deck. Safe under both rules,
+no server change, and no LOS side effect — which matters, because the dungeon
+exports movement collision *as* its query collision, so excluding a soffit from
+movement collision would also let sight pass straight through it (§7.2).
 
 ---
 
@@ -123,7 +217,9 @@ at or below `current_y + step-up`* (`server/src/world_collision.rs:1464`);
 walking off a ledge transitions to airborne and lands on whatever surface it
 crosses (`server/src/game_loop.rs:1480-1530`). The dungeon exports boxes + mesh
 instances, **not** a heightfield (no `random_dungeon.heightfield.shared.json`
-exists). **Collision and runtime movement need no structural change.** Falling
+exists). **Collision and runtime movement are expected to need no structural
+change** — a hypothesis Phase C's live probe must settle, not a finding; §7.2
+has misstated the mechanism twice and states the current reasoning. Falling
 into a pit and landing on a lower layer is a geometry problem, not a physics
 problem.
 
@@ -150,9 +246,14 @@ Ordered by how hard they block the goal.
 | **L5** | **No underside.** Nothing emits a soffit; the design notes deck undersides "may read open from below". | `stair_forge_design.md` decision 31 | Standing under a bridge inside a room shows a hole in the sky. |
 | **L6** | **Recipe zones are a heightfield too.** A recipe cell's level is `max` over overlapping zones; `Elevated` requires `relativeLevel > 0`; base level is derived from the *first* port. | DungeonRecipeValidation.cs:363, :633; Recipes.cs:1791 | Multi-layer authored rooms. No sunken zone is authorable at all. Ports at multiple elevations exist in schema but all resolve against one base. |
 | **L7** | **A route node has exactly one elevation.** `RouteTopologyNode.level` is one `int`. | DungeonRouteTopology.cs:166 | Two routes cannot enter the same room at different heights. |
+| **L7b** | **A corridor has no layer identity, and is matched to its route edge by room pair.** `RoomConnection` is `{fromRoom, toRoom, path}`; `TryGetTransition(fromRoom, toRoom, …)` is the lookup. | cs:7899, cs:2700 | Two corridors between one room pair at different elevations are indistinguishable *before* their paths are compared. Any authored layer binding is discarded here. |
 | **L8** | **"Void" is undifferentiated.** Void = absence from `cellLevels`. Every floor edge facing absence drops to the abyss base. There is no pit, hole, aperture, or opening object. | ElevationEdgeModel.cs:2430 | No way to distinguish an opening to a lower layer from the lethal exterior. |
 | **L9** | **Bridge decks are not surfaces.** They exist as transition footprints + a side table dropped before the plan is published. | cs:4805, cs:8343 | A bridge cannot host traps, encounters, nav nodes, its own railings-by-room, or a second bridge below it. |
 | **L10** | **Bridges over rooms are rejected by rule.** | cs:4550 | Scenario 2 and 5 as literally stated (§12). |
+| **L10b** | **Corridor cells are exclusively owned.** `TryClaimCorridor` rejects any cell another connection already claimed — *"another connection already owns {cell}"*. | RouteFirstPilot.cs:2582 | **The deepest block on overlapping traversal.** Two corridors can never share a plan coordinate at any elevation, so bridge-over-corridor dies in the *layout* stage, before the bridge pass runs. Also: corridors are claimed **pre-elevation**, so the fix cannot use levels (§8.1). |
+| **L10c** | **`PathCrossesThirdRoom` forbids a corridor crossing an unrelated room's footprint**, and the topology validator forbids a third node on an edge's lattice lane. | RouteFirstPilot.cs:2569; `ROUTE_TOPOLOGY_AUTHORING.md` rule table | A route edge can never be drawn over another room. Its *stated* reason — "an undeclared doorway and an unowned threshold" — is 2-D and does not apply to a crossing at a different elevation, so this is a well-founded relaxation rather than a rule to fight. |
+| **L10e** | **Loop bridges connect ROOM PAIRS only.** `AddAerialBridges` iterates `roomA`/`roomB` and takes landings from room boundary edge cells. | cs:4412, cs:4450 | A bridge cannot start or end on a corridor, a ledge or a landing. *(Route edges of kind `Bridge` are unaffected — they realize as an `externalSpan` transition on the corridor path, `cs:2153`, so a **route** bridge is already corridor-based.)* |
+| **L10d** | **A recipe-slot node must have degree 2** ("a two-port recipe room"), and a topology declares **exactly 3 slots**. | `ROUTE_TOPOLOGY_AUTHORING.md` rule table | A vertical hub with entrances at several elevations is degree 3–4, so **an atrium can never be a required recipe slot.** Scenario 5 has nowhere to live in the current slot vocabulary. |
 | **L11** | **Connectivity checks are 2-D.** `IsConnected(layout.floorCells)` operates on a plan-cell set. | Validation.cs:138 | Two disjoint stacked surfaces read as connected. The check becomes a lie rather than a check. |
 | **L12** | **Fill/density metrics count plan cells.** `floorFillPercent` = floor ÷ bounding box. | [`density-scale-design-2026-07-27.md`](density-scale-design-2026-07-27.md) §2 | A cell with two surfaces counts once; the density dial's meaning drifts silently. |
 | **L13** | **The canonical hash is `cell → level`.** | Batch.cs:4937 | Cannot express a second surface; hashing must rebaseline. |
@@ -178,17 +279,30 @@ one.
 
 ### 3.1 The data model
 
+**Two structures, not one.** The draft collapsed these and inverted the
+pipeline; they are distinct and they live at different stages.
+
 ```csharp
-// [Proposed]
+// [Proposed] PRE-elevation. The 2-D domain the layout occupies.
+// This is what room packing, corridor routing, density, fill and the
+// connectivity precondition consume, and it must exist BEFORE elevation.
+sealed class PlanShadow {
+    HashSet<Vector2Int> cells;          // today's DungeonLayout.floorCells, renamed in role
+}
+
+// [Proposed] POST-elevation. The canonical walkable surfaces.
 readonly struct SurfaceKey { Vector2Int cell; int level; }        // canonical identity
 
 sealed class Surface {
     SurfaceKey key;
-    int roomId;                 // which architectural room owns this surface
+    OwnerKey owner;             // Room | Corridor | Transition — NOT an int room id.
+                                // Most walkable space in this generator is CORRIDOR, and
+                                // BuildCellRoomIds (cs:3568) maps room cells only, so a
+                                // room-only owner would leave the majority of surfaces
+                                // unattributable. See §4.1.
     int layerOrdinal;           // 0-based rank among surfaces at this cell, ascending level.
                                 // A LOCAL disambiguator for reports and hashing. NEVER a storey.
     SurfaceKind kind;           // Floor | Deck | Landing | Ledge | Stair (occupied)
-    int supportBase;            // the level this surface's cliff faces drop to (§7)
 }
 
 sealed class SurfaceField {                   // replaces Dictionary<Vector2Int,int>
@@ -196,18 +310,40 @@ sealed class SurfaceField {                   // replaces Dictionary<Vector2Int,
     IReadOnlyDictionary<Vector2Int, int[]> byCell;          // ascending level
     bool IsSingleLayer { get; }                             // every cell has exactly one surface
     IReadOnlyDictionary<Vector2Int,int> AsHeightField();    // valid iff IsSingleLayer
+    HashSet<Vector2Int> PlanCells();                        // the shadow this field actually occupies
 }
 ```
+
+**[Fact]** `floorCells` is the *domain over which the level field is computed*,
+not a product of it: `FillUnassignedFloorCells(layout.floorCells, cellLevels, …)`
+(`DungeonLabGenerator.cs:1907`), `CleanPath(connection.path, layout.floorCells)`
+(`:2127`), plus the density precondition at `:1154` and the fill metric at `:410`.
+It cannot be derived from `SurfaceField`.
+
+**Note the `supportBase` field is gone.** The draft stored it as a scalar on
+`Surface` and then used it as `supportBase(surface, direction)` in §7. It is a
+**per-(surface, direction) query over the neighbouring column**, not a stored
+value, because a surface's four faces can drop to four different things.
 
 `AsHeightField()` is the migration lever: while `IsSingleLayer`, every existing
 consumer keeps working byte-identically, and the canonical hash keeps its
 current shape. That makes the model change output-neutral, which is what makes
-it safe to land before anything interesting is built on it (§9 Phase A).
+it safe to land before anything interesting is built on it (§13 Phase A).
 
-**One floor truth.** `DungeonLayout.floorCells` becomes
-`SurfaceField.PlanCells()` — derived, not stored. This deliberately closes the
-architecture review's **H2** ("two divergent representations of where the floor
-is") rather than adding a third.
+**On the architecture review's H2, corrected.** The draft claimed deriving
+`floorCells` from `SurfaceField` closes H2. It does not, and it could not — the
+dependency runs the other way. H2 is specifically that
+`TryResolveExternalConnectorPromontories` adds cells to `cellLevels` and never to
+`floorCells` (`.CorrectiveConnections.cs:153`), so every metric computed from
+`floorCells` describes a dungeon missing its piers. The right closure is an
+**invariant**, not a derivation:
+
+> **Shadow agreement.** At the end of planning,
+> `surfaceField.PlanCells()` must equal `planShadow.cells`. Any pass that adds a
+> surface must add its plan cell to the shadow in the same step.
+
+Checkable, cheap, and it catches the whole class rather than the one instance.
+Rejection code `PLAN_SHADOW_DISAGREEMENT`.
 
 ### 3.2 The traversal graph
 
@@ -228,8 +364,14 @@ readonly struct TraversalEdge {
   Bidirectional.
 - `Step` — the existing rise-1 seam strip. Bidirectional.
 - `Stair` / `Bridge` — an existing `TransitionEdge`. Bidirectional.
-- **`Fall` — directed, downward only.** From a surface with an `Aperture`
-  opening (§5) to the catch surface beneath it.
+- **`Fall` — directed, downward only.** From a **rim surface** — a real surface
+  on the upper layer, cardinally adjacent to an opening cell — to the catch
+  surface beneath *that* opening cell. **An aperture is not a graph node.** The
+  draft treated it as one, which `TraversalEdge`'s two-`SurfaceKey` signature
+  cannot express, because the opening's own cells are removed from the layer and
+  therefore have no `SurfaceKey`. One `Fall` edge is emitted per
+  (rim surface, opening cell) pair, so a multi-cell aperture over a stepped
+  lower chamber lands correctly per cell (§5).
 - **`Drop`** — an optional one-way step-down over a ledge the player can walk
   off. **[Deferred]** — the runtime already permits it
   (`server/src/game_loop.rs:1486`), but modelling every ledge as an edge
@@ -251,17 +393,38 @@ confused with a connectivity failure.
 
 ### 3.3 The one new invariant that carries the pit design
 
-> **The traversable surface graph must be strongly connected.**
+> **The fall-free subgraph must be connected.**
+> That is: delete every directed edge (`Fall`, and `Drop` if adopted), treat the
+> rest as undirected, and require one component.
 
-Treat `Lateral`/`Step`/`Stair`/`Bridge` as bidirectional and `Fall` as one-way,
-then require that every surface reaches every other. That single condition
-subsumes:
+**This replaces the draft's "the full graph must be strongly connected", which
+was too weak.** Strong connectivity permits `U --Fall→ L1 --Fall→ L2 --Stair↔ U`:
+the graph is strongly connected, yet `L1` cannot leave without taking a second
+fall — which contradicts the aperture rule that the return route be a stair or
+another **reversible** connector.
 
-- "every reachable lower pit area must provide a route back up",
-- "a fall may be directed while the branch remains reversible",
-- today's `IsGloballyConnected` check (`DungeonLabGenerator.cs:8150`), which
-  becomes the degenerate single-layer case,
-- and it makes a one-way trap a *rejection* rather than a playtest discovery.
+Fall-free connectivity implies both of the properties that matter:
+
+- **it implies full strong connectivity** — adding edges to a connected
+  undirected graph cannot break reachability — so it subsumes today's
+  `IsGloballyConnected` check (`DungeonLabGenerator.cs:8150`) as the degenerate
+  single-layer case;
+- **it implies per-fall reversibility** — for every `Fall` edge `u → v`, `v`
+  reaches `u` without falling, because they are in one fall-free component.
+
+And it is the literal statement of the design intent: *pits primarily create
+optional branches*. Every surface is reachable without ever taking a fall, so no
+fall is ever mandatory.
+
+**The one case it forbids** is a region whose only entrance is a fall, with a
+stair back out. That case is rarer than it sounds — a *bidirectional* return
+stair is also an entrance, so it only arises with a genuinely one-way upward
+connector. It is raised as an owner decision (§14) rather than silently allowed.
+
+Validation reports the **witness**: for each `Fall`, the fall-free path from its
+target back to its source. That is what a diagnosis needs, and it is why a single
+authored `returnRouteId` is the wrong shape (§5) — the return is a path, and it
+is derived, not declared.
 
 Lethal void is **not** an edge. It is a sink, outside the traversal graph
 entirely, so it can neither satisfy nor violate connectivity.
@@ -278,15 +441,58 @@ sealed class RoomFootprint {
     HashSet<Vector2Int> planCells;        // derived union — the room's plan shadow
     RoomVolume volume;                    // optional; see §6
 }
-sealed class RoomLayer {
+sealed class RoomLayer : SurfaceRegion {
     string layerId;                       // authored, room-local ("lower", "gallery", "catwalk")
     int relativeLevel;                    // from the room's base
     IReadOnlyList<RectInt> parts;         // today's multi-rect footprint, per layer
-    IReadOnlyList<Opening> openings;      // §5
 }
 ```
 
-- `cellRoomIds : Vector2Int → int` becomes `surfaceRoomIds : SurfaceKey → int`.
+### 4.1 Corridors own surfaces too — openings are not a room-only feature
+
+**This nearly became an accidental restriction, and it would have been a bad
+one.** An earlier revision hung `openings` off `RoomLayer` and typed
+`Surface.roomId` as an `int`. Both assume walkable space belongs to a room.
+
+**[Fact] it mostly does not.** Almost every elevation change in this generator
+happens *between* rooms, not inside them: `TryResolveConnectionTransition` levels
+the corridor and places the transition on the corridor path — a rise-1 step strip
+at `delta == 1`, and a reviewed stair, synthesized stair, stairwell tower or
+external span at `delta > 1` (`DungeonLabGenerator.cs:2163-2200`). Intra-room
+change (zone seams, 1u sweeps) is the minority case. And `BuildCellRoomIds`
+(`:3568`) maps room cells **only** — corridor cells are absent from it entirely.
+
+So the owning concept is a **surface region**, of which a room layer is one kind:
+
+```csharp
+abstract class SurfaceRegion {
+    OwnerKey owner;                       // Room:great-atrium#gallery | Corridor:main-4-5 | ...
+    int level;                            // absolute, resolved
+    IReadOnlyList<Opening> openings;      // §5 — ANY region may have one
+}
+sealed class CorridorRun : SurfaceRegion {
+    string connectionId;                  // §8.1
+    IReadOnlyList<Vector2Int> path;
+}
+```
+
+What this buys, all of which the design would otherwise have forbidden:
+
+- **a pit in a corridor** — an `Aperture` on a `CorridorRun`, dropping to a route
+  below. This is the cheapest possible version of scenario 1 and it needs no
+  multi-layer room at all;
+- **a ledge or balcony along a passage** rather than only inside a chamber;
+- **a corridor crossing over another corridor**, which is the plainest form of
+  overlapping traversal and does not involve a room in any way;
+- **attributable walls and railings on corridor surfaces** — otherwise the
+  boundary grammar has nothing to hang a guard on when a corridor gains an edge.
+
+**Openings, guards and layers are properties of a surface region, never of a room
+specifically.** Any rule in this document phrased in terms of rooms should be
+read as applying to regions unless it is explicitly architectural.
+
+- `cellRoomIds : Vector2Int → int` becomes `surfaceOwners : SurfaceKey → OwnerKey`
+  — an owner, not a room id, because corridor surfaces need one too (§4.1).
   That is the change that lets partitions, gateways, railings and enclosure
   decisions belong to the right room when two rooms occupy one coordinate.
 - **A room is architectural, not navigational.** A lower chamber, upper gallery,
@@ -314,29 +520,79 @@ Today the two are literally the same thing: an absent key in `cellLevels`.
 **[Proposed]** Introduce an explicit `Opening` owned by a surface layer:
 
 ```csharp
+// AUTHORED: declares only what lies BELOW the opening. Passability is decided
+// per rim edge (below), so `Window` is NOT a member — it is a derived
+// classification of an opening whose rim is fully guarded or whose drop is too
+// shallow.
 enum OpeningKind {
-    Aperture,   // passable downward; a catch surface is DECLARED and PROVEN
-    Void,       // lethal exterior; nothing may exist in its fall column
-    Window      // visible, not passable (railing, grille, or clearance too small)
+    Aperture,   // a catch surface exists under every cell
+    Void        // lethal exterior; nothing may exist in any cell's fall column
 }
 sealed class Opening {
-    OpeningKind kind;
-    Vector2Int[] cells;         // removed from the owning layer's walkable set
-    SurfaceKey? catchSurface;   // required for Aperture, forbidden for Void
-    string returnRouteId;       // required for Aperture — the edge that climbs back
+    OpeningKind kind;                    // AUTHORED — the only authored field besides cells
+    Vector2Int[] cells;                  // AUTHORED — removed from the owning region's walkable set
+    OwnerKey owningRegion;               // a room LAYER or a CORRIDOR RUN — see §4.1.
+                                         // A pit in a corridor is a first-class case.
+
+    // DERIVED at validation, never authored. Parallel to `cells`.
+    // catchSurfaces[i] = the highest surface strictly below the owning layer in column cells[i],
+    // or none. `kind` is then CHECKED against what was derived.
+    SurfaceKey?[] catchSurfaces;
+    SurfaceKey[] rimSurfaces;            // DERIVED — layer surfaces cardinally adjacent to the opening
 }
 ```
+
+**Two corrections to the draft, both from review finding 2.**
+
+1. **Catch surfaces are per cell, and there are as many as there are cells.** The
+   draft carried a single `SurfaceKey? catchSurface` while the rule demanded a
+   catch under *every* cell — which only works for a one-cell aperture. A pit
+   over a stepped lower chamber needs a different catch per column.
+2. **Catch surfaces are derived, not authored.** Authoring them duplicates
+   information the surface field already holds, and any authored value can
+   disagree with the geometry. Derive "the highest surface strictly below" per
+   column, then validate `kind` against the result. This also removes the
+   draft's `returnRouteId`: a return is a *path*, often multi-edge, and is
+   produced as a validation witness (§3.3) rather than declared.
 
 ### The rules
 
 | | `Aperture` | `Void` |
 |---|---|---|
-| Catch surface | **required**, and must underlie *every* cell of the opening | **forbidden** — no surface anywhere in the fall column |
-| Graph effect | one `Fall` edge per opening → catch surface | none; a sink outside the graph |
-| Reversibility | strong connectivity must hold with the fall directed — the catch surface's component must reach the opening's component by non-fall edges | n/a |
-| Fall height | ≥ `MinHeadroomLevels`, ≤ a `MaxSurvivableFallLevels` cap | unbounded |
-| Renderer | interior cliff faces drop to `catchSurface.level`; soffit under the opening's rim | cliff faces drop to `abyssBase`, as today |
-| Rejection codes | `APERTURE_NO_CATCH_SURFACE`, `APERTURE_FALL_TOO_SHALLOW`, `APERTURE_NO_RETURN_ROUTE` | `VOID_OPENING_OBSTRUCTED` |
+| Derived catch | **every** cell must resolve one | **no** cell may resolve one |
+| Graph effect | one `Fall` edge per (rim surface, opening cell) pair → that cell's catch surface | none; a sink outside the graph |
+| Reversibility | the fall-free subgraph must be connected (§3.3); the witness path is reported | n/a |
+| Fall height | ≥ `MinHeadroomLevels` per cell, ≤ a `MaxSurvivableFallLevels` cap | unbounded |
+| Renderer | interior cliff faces drop to that column's catch level; soffit under the opening's rim | cliff faces drop to `abyssBase`, as today |
+| Rejection codes | `APERTURE_NO_CATCH_SURFACE` (names the offending cell), `APERTURE_FALL_TOO_SHALLOW`, `APERTURE_UNREACHABLE_RETURN` | `VOID_OPENING_OBSTRUCTED` (names the offending cell) |
+
+**Guarding is per rim edge, not per opening** — corrected in round two. The
+draft made `Window` an opening-level kind, which cannot express a pit railed on
+three sides and bare on one, and that is an entirely ordinary piece of
+architecture. Guard state and fall emission both live on the **rim edge**:
+
+```csharp
+readonly struct RimEdge {
+    SurfaceKey rimSurface;
+    int direction;              // toward the opening cell
+    Vector2Int openingCell;
+    RimGuard guard;             // Bare | Railing | Wall — AUTHORED per edge
+}
+```
+
+- **A `Fall` edge is emitted only from a `Bare` rim edge.** Railed and walled rim
+  edges emit none.
+- `OpeningKind` keeps its meaning as the **declaration of what is below**
+  (`Aperture` = a catch surface, `Void` = lethal exterior). It no longer doubles
+  as a passability flag.
+- `Window` becomes the **derived** state of an opening whose every rim edge is
+  guarded, or whose drop is below `MinHeadroomLevels`: it contributes `Sees`
+  relations and no `Fall` edges. A partly-railed `Aperture` is neither — it is an
+  aperture with fewer entrances, which is exactly what the architecture means.
+
+That is the one place where "visible from another layer" and "reachable from
+another layer" are decided, and it is decided per edge by declaration plus
+geometry, never by inference alone.
 
 ### Backwards compatibility, stated precisely
 
@@ -366,7 +622,9 @@ aperture       --Fall---->   lower-chamber-surface        (directed, one-way)
 lower-chamber  --Lateral-->  lower-corridor  --Stair-->   upper-surface
 ```
 
-Strong connectivity holds. The fall is one-way. The branch is reversible.
+Delete the `Fall` edge and the remaining graph is still connected, so the
+invariant holds. The fall is one-way. The branch is reversible *without
+falling*, which is the property strong connectivity alone would not have proved.
 Nothing about this requires the fall to be bidirectional, and nothing about it
 requires a global floor number.
 
@@ -378,12 +636,100 @@ requires a global floor number.
 prism ledger:
 
 ```csharp
-readonly struct Prism { Vector2Int cell; int minLevel; int maxLevel; PrismKind kind; }
-enum PrismKind { Footprint, Landing, Mouth, Clearance, OpenVolume, Support }
+readonly struct Prism {
+    Vector2Int cell;
+    int minLevel;                // INCLUSIVE
+    int maxLevel;                // EXCLUSIVE — the band is half-open [minLevel, maxLevel)
+    PrismKind kind;
+    OwnerKey owner;              // TYPED and stable — see below
+}
+
+// Stable, authored-nameable, and unique across owner families. NOT a runtime int:
+// an OpenVolume's penetration allow-list is authored content and must be able to
+// name its members.
+readonly struct OwnerKey { OwnerFamily family; string id; }
+enum OwnerFamily { Transition, Recipe, Room, Opening, Corridor, Vista, Promontory }
+
+// The five kinds the current ledger keeps, plus three the layered model adds.
+enum PrismKind {
+    // --- the five that exist today ---
+    Footprint, Landing, Mouth,
+    FootprintClearance,          // was `requiredClearance`  — tests against footprints
+    TransitionClearance,         // was `requiredTransitionClearance` — tests against mouths
+    // --- added by this design ---
+    Support,                     // piers, columns, buttresses, stairwell shafts (§7.1)
+    Wall,                        // partitions and enclosure walls (§7.1)
+    OpenVolume                   // reserved vertical void
+}
 ```
 
-Two prisms conflict iff they share a cell **and** their level bands intersect.
-Today's semantics are the special case where every band is `[-∞, +∞]`.
+**Three corrections to the draft, all from review finding 3.**
+
+**(a) Half-open bands.** The draft wrote closed `[level, level + 3]` against an
+upper footprint starting at `level + 3`, which intersects at the endpoint and
+would reject a clearance of exactly 3 — the value today's gate accepts
+(`clearance < MinHeadroomLevels` rejects, so `== 3` passes,
+`DungeonLabGenerator.cs:2992`). Every band is `[min, max)`; two bands intersect
+iff `a.min < b.max && b.min < a.max`.
+
+**(b) Prisms carry an owner.** The clearance rule is stated in terms of "another
+surface", so the ledger has to know whose a prism is. Without `ownerId` a
+transition's own footprint blocks its own clearance.
+
+**(c) Conflict is an asymmetric per-kind policy, not a symmetric matrix.** Round
+one replaced the blanket rule with a symmetric table; round two showed that table
+is also wrong, because the real relation is directional and uses five sets, not
+four. **[Fact]** `ConflictsWithReservation` (`DungeonLabGenerator.cs:6477`) tests
+each *incoming* kind against a specific subset of what is already registered:
+
+| Incoming kind | Tests against the registered… | Note |
+|---|---|---|
+| `Footprint` | `footprint` ∪ `landing` ∪ `footprintClearance` | this union is `BlocksFootprint` |
+| `Landing` | `footprint` **only** | so landing–landing and landing–clearance are **legal** |
+| `Mouth` | `transitionClearance` **only** | |
+| `FootprintClearance` | `footprint` **only** | so clearance–landing is **legal** |
+| `TransitionClearance` | `mouth` **only** | |
+
+Two consequences the symmetric table got wrong: **landing–clearance does not
+conflict today, and neither does mouth–clearance.** And the two clearance
+concepts are genuinely distinct — one guards footprints, the other guards
+transition mouths — so merging them into one `Clearance` kind loses behaviour.
+
+The model is therefore a **`blocksKinds` policy per kind**, seeded verbatim from
+the table above, plus:
+
+- **same `owner` never conflicts** — this is what makes clearance expressible at
+  all, since a transition's own footprint would otherwise violate its own
+  clearance. **`OpenVolume` is the one exception** (below);
+- **`Support` and `Wall` block like `Footprint`**;
+- **one named predicate owns headroom**, because three passages of an earlier
+  revision defined three different blocker sets:
+
+  > **`BlocksHeadroom(kind)` = `kind ∈ { Footprint, Support, Wall }`** — the
+  > solid structural kinds.
+
+  `Landing` is deliberately excluded: a landing is itself a walkable surface, and
+  surface-to-surface vertical separation is `SURFACE_STACK_CLEARANCE`, a
+  different rule. Counting it here would double-report the same conflict. Every
+  site that talks about headroom refers to this predicate by name rather than
+  restating a set;
+- **`OpenVolume` blocks every solid kind — `Footprint`, `Landing`, `Support`,
+  `Wall` — except owners on its penetration allow-list, and this holds for
+  same-owner solids too.** An atrium that forbade everything would forbid its
+  own balconies, stairs and bridges; but the plain same-owner exemption would
+  let the atrium's *own* floor fill its own void, which is worse. So
+  `OpenVolume` is exempt from the same-owner rule: a room's solids must appear
+  on its allow-list explicitly, exactly like anyone else's.
+
+  The allow-list is authored beside the room and names `OwnerKey`s
+  (`Transition:atrium-stair-a`, `Room:great-atrium#gallery`), which is why the
+  owner key must be a stable authored name and not a runtime integer. It is
+  validated against what the room actually declares — an entry naming something
+  the room does not own is `OPEN_VOLUME_PENETRATION_UNDECLARED` — so it cannot
+  become a blanket exemption.
+
+Today's semantics are the special case where every band is `[-∞, +∞)`, every
+owner is distinct, and no `OpenVolume` or `Support` prism exists.
 
 Payoffs, in order of importance:
 
@@ -399,10 +745,11 @@ Payoffs, in order of importance:
 3. **Headroom generalizes.** `TryValidateSpanHeadroom` + the `spanDeckLevels`
    side table (and its duplicate formula in `Batch.cs`, review finding **M4**)
    both delete. The rule becomes one sentence over the ledger: *for every
-   surface S, the prism `(S.cell, S.level, S.level + MinHeadroomLevels)` must
-   not intersect any `Support` or `Footprint` prism belonging to another
-   surface.* One rule, one call site, no side table dropped before the plan is
-   published.
+   surface S, the half-open prism `(S.cell, S.level, S.level + MinHeadroomLevels)`
+   must not intersect any prism satisfying `BlocksHeadroom` that is owned by
+   anything other than S.* One rule, one predicate, one call site, no side table
+   dropped before the plan is published. Half-open is what makes a clearance of
+   exactly `MinHeadroomLevels` pass, matching today's gate.
 4. **The existing authored-void vocabulary extends cleanly.** The density design
    already names "authored void" that survives every density setting — vista
    lane, bridge spans, stairwell shafts
@@ -429,18 +776,96 @@ partitions, traps and promontories all iterate the same dictionary.
 
 **[Proposed]** Three changes, in dependency order:
 
-1. **Iterate surfaces, not cells.** `foreach (var item in levels)` →
-   `foreach (Surface s in field.surfaces)`. A surface's lateral neighbour is
-   *the surface at the neighbouring cell whose level is nearest to its own*,
-   subject to a compatibility rule (same level → interior/partition; small |Δ| →
-   retaining wall; otherwise → not a lateral neighbour and the edge is a cliff).
-   This is a local rewrite of a well-understood loop, not a new renderer.
-2. **`abyssBase` becomes `supportBase(surface, direction)`.** Instead of one
-   global value: the drop target of a cliff face is *the highest surface
-   strictly below it in the adjacent column*, or the abyss base if none. This is
-   what stops a gallery's cliff from spearing 20u through the chamber
-   underneath it. It is the single most important renderer change and it is
-   ~30 lines at one site.
+1. **Iterate boundaries, not cells — and decompose each boundary into bands.**
+   The draft proposed "a surface's lateral neighbour is the surface at the
+   neighbouring cell whose level is nearest to its own". **That is not a
+   sufficient algorithm**, and review finding 6 is right to reject it: with
+   several surfaces in both columns, nearest-matching can tie, can be
+   asymmetric, and can be one-to-many. Columns `{0, 8}` and `{4, 12}` have no
+   unique symmetric pairing — 4 is equidistant from 0 and 8, and 8 is
+   equidistant from 4 and 12.
+
+   **A second error, caught in round two: an occupied band is *structural*, not
+   "down to whatever supports it".** Defining a surface's band as level →
+   support fills stacked space with solid mass. Column A with surfaces at 0 and
+   8, beside column B with a surface at 0, would give A's upper surface the band
+   `[0, 8]` and emit a face across the whole 0–8 range on the A/B boundary —
+   **walling off the very chamber the gallery is supposed to overlook.** That is
+   the heightfield assumption reappearing one level down, and it would break C1
+   in particular, which has no `OpenVolume` producer available to subtract the
+   mass again.
+
+   **Round four corrected the correction.** The first repair made the plinth
+   conditional on *the neighbour being void*, which produces nothing at all for
+   the commonest case in the corpus: two adjacent ground floors at levels 0 and
+   4, where neither neighbour is void. **[Fact]** today that emits a retaining
+   face from 0 to 4 unconditionally (`ElevationEdgeModel.cs:2389-2394`), so the
+   rule as written would have deleted every retaining wall in every dungeon and
+   falsified the byte-identical claim outright.
+
+   The distinction is not "is the neighbour void" but **"is the mass under this
+   surface earth, or open air"**:
+
+   > **`IsGroundBacked(s)` = `s.kind == Floor` **and** `s` is the lowest surface
+   > in its column.**
+
+   Both conditions are needed. A bridge deck over a true gap *is* lowest in its
+   column but must not become a solid pillar, which the `kind` test excludes. A
+   gallery slab over its room's own lower chamber *is* a `Floor` but is not
+   lowest, which the column test excludes.
+
+   | Band source | Extent | When |
+   |---|---|---|
+   | **Ground** | `[abyssBase, level)` | `IsGroundBacked(s)` — the surface rests on fill |
+   | **Slab** | `[level − slabThickness, level)` | otherwise — a suspended deck, gallery or ledge implies only its own depth |
+   | **Support** | authored prism | piers, columns, buttresses, a stairwell tower's shaft — declared, never implied |
+   | **Wall** | authored prism | partitions and enclosure walls, which keep their own grammar |
+
+   The three cases that matter, all falling out of one decomposition:
+
+   | Configuration | Result |
+   |---|---|
+   | floors at 0 and 4, both ground-backed | `[abyss,0)` both solid → interior; `[0,4)` one solid → **retaining face 0→4** ✓ today's behaviour |
+   | floor at 0, neighbour void | `[abyss,0)` one solid → **cliff to the abyss** ✓ today's behaviour |
+   | gallery at 8 over a chamber at 0, neighbour floor at 0 | `[abyss,0)` both solid → interior; `[0, 8−t)` **neither solid → open air**; `[8−t,8)` one solid → fascia ✓ the chamber stays open |
+
+   **Single-layer output is unaffected because every surface is a lowest-in-column
+   `Floor`**, so every band is `[abyssBase, level)` and the decomposition
+   reproduces today's retaining walls and abyss cliffs exactly. The change bites
+   only where surfaces stack — which is the point.
+
+   The construction then operates on the **boundary between two columns**, not
+   on a surface:
+
+   - take the two columns' *structural* bands per the table above;
+   - merge the two columns' band endpoints into one sorted set of cut levels;
+   - walk consecutive cut intervals bottom to top. Each interval is classified
+     by which side is solid: **both solid** → interior (no face); **one solid**
+     → a face on that side, typed by what sits at the interval's top on the
+     open side (retaining wall if a surface is level with it, cliff otherwise);
+     **neither** → open air, no geometry;
+   - a face's *guard* (railing, partition, bare) is then decided per interval by
+     the existing rules, scoped to the surface that owns the interval's top.
+
+   This is a genuine algorithm with its own tests and its own failure modes, not
+   a loop edit. It is the technical heart of the phase.
+
+2. **`abyssBase` is subsumed by the plinth band — it is not a second
+   mechanism.** Round three caught this prescribing geometry that contradicts
+   step 1: for the `{0,8}` vs `{0}` example, the band decomposition emits only
+   the upper slab's fascia, while an independent "drop to the highest surface
+   below" rule would emit a face from 8 down to 0 and wall off the chamber —
+   reintroducing exactly the defect step 1 removed.
+
+   **Structural intervals are authoritative.** Face extents come from the band
+   decomposition and nothing else. Full-height geometry appears only where a
+   **ground**, **wall** or **support** band exists. `supportBase(surface,
+   direction)` survives only as the name for *where a ground band bottoms out* —
+   the abyss base, since a ground band exists only when `IsGroundBacked` holds.
+   It never extends a suspended slab downward.
+
+   **The draft's "~30 lines at one site" estimate is retracted.** It was
+   predicated on the nearest-neighbour shortcut, which does not work.
 3. **A soffit pass.** Every surface that is not the lowest in its column needs
    an underside. **[Fact]** this is a known open item — "the pack has no flat
    under-deck cap family measured yet — deck undersides may read open from
@@ -460,25 +885,90 @@ global abyss base and the surface loop degenerates to today's cell loop. Every
 existing seed renders byte-identically. That is the property to gate Phases A
 and B on.
 
-### 7.2 Collision export — no structural change
+### 7.2 Collision export — probably no structural change, and here is the actual mechanism
 
-**[Fact]** `GameplayCollisionExporter` scrapes scene colliders into boxes + mesh
-instances; the dungeon has no exported heightfield; the server resolves the
-highest walkable top ≤ `current_y + step-up` and integrates gravity on a ledge
-walk-off. **Stacked surfaces work at runtime today**, which the existing
-stacked-crossing fixture already demonstrates by probing colliders at both
-heights over one plan coordinate.
+**The draft was wrong here and its central claim was unproven.** It required
+that "soffits, columns and deck undersides must not be marked `walkable_top`".
+**[Fact]** exported dungeon geometry carries no such field:
+`GameplayCollisionBoxFile` is `{shape, center, size, rotation, rotation_y_deg}`
+(`server/src/world_collision.rs:120`), and `walkable_top` belongs to the
+hardcoded procedural `Collider` used by authored open-world scene profiles
+(`:106`, set at `:3606`/`:3670`). Every exported box top under the step ceiling
+is a ground candidate with no flag consulted (`:1522`).
 
-Three requirements rather than changes:
+**The real controls, measured.** Ground sampling in
+`try_open_world_surface_height_at_y` (`:1464`) admits a surface through three
+gates, and these are the numbers this whole design should be derived against:
 
-- Soffits, columns and deck undersides must **not** be marked `walkable_top`, or
-  a player under a bridge will be snapped onto its underside.
-- The lower surface under a deck must still emit its floor — already handled for
-  aerial decks via `bridgeFloorBlockedCells` (`ElevationEdgeModel.cs:377`);
+| Control | Value | Applies to |
+|---|---|---|
+| Mesh capture window | `SURFACE_SNAP_UP = 1.2` (`server/src/arena.rs:932`) | mesh hulls + procedural colliders |
+| Box capture window | `GAMEPLAY_BOX_STEP_UP_HEIGHT = 0.35` (`world_collision.rs:72`) | exported boxes |
+| Ground-normal filter | `GAMEPLAY_MESH_GROUND_MIN_NORMAL_Y = 0.35` (`:67`) | mesh hulls only |
+
+**[Fact]** the dungeon's floors are prefab mesh colliders, so the live capture
+window is **1.2u**.
+
+**Correction, round two — the normal filter is NOT a direction filter.** A
+previous revision of this section claimed a soffit's downward-facing geometry
+cannot become ground "because its normal points down". That is wrong. The server
+computes `triangle_normal_y_abs` as `(cross[1] / length).abs()`
+(`world_collision.rs:2820`) and the gate reads `hull.ground_normal_y_abs`
+(`:2826`). **The test is on the absolute Y normal, so a down-facing triangle
+passes exactly like an up-facing one.** The filter rejects *near-vertical*
+surfaces, not *inverted* ones.
+
+Four consequences, replacing the previous three:
+
+- **Two walk surfaces closer than 1.2u are ambiguous to the ground sampler.**
+  This is the missing derivation for `MinHeadroomLevels`: 3u clears 1.2u with
+  margin, so the constant is defensible rather than merely inherited. Any
+  proposal to lower it must clear 1.2u first. *(Unaffected by the correction —
+  it comes from the window, not the normal.)*
+- **The soffit hazard is narrower than previously stated, in the other
+  direction.** Selection takes the **highest** eligible surface (`:1557`), so a
+  soffit whose top lies below a deck that covers the same point can never win
+  over the deck. And a player on the *lower* floor is 3+ levels beneath the
+  soffit, far outside their 1.2u window. The previously stated failure — "a
+  player on the deck could snap down to the soffit top" — does not occur.
+- **The real remedy is the collider *shape*, and it is cheaper than any of the
+  obvious three.** Rather than excluding soffit faces from movement collision,
+  editing exported geometry, or making the server require a signed normal:
+  **emit soffits as box colliders.** Boxes are not normal-tested at all, use the
+  0.35u window, and obey the same `max` selection. A soffit box under a deck 3+
+  levels up sits outside a lower player's 0.35u window, and for a player on the
+  deck its top is below the deck's own, so `max` keeps the deck. Safe under both
+  rules, with no server change.
+
+  **Excluding the soffit from movement collision would be the wrong fix**, and
+  this is why: the dungeon exports with `reuseMovementCollisionForQueries: true`,
+  so its movement geometry *is* its query geometry. Dropping the soffit from
+  movement collision would also drop it from LOS, and sight would pass straight
+  up through a solid floor. **With that flag set, geometry cannot block sight
+  without also blocking movement** — which is an argument for revisiting the flag
+  for the dungeon, tracked as a deferred item below.
+- **The lower surface under a deck must still emit its floor** — already handled
+  for aerial decks via `bridgeFloorBlockedCells` (`ElevationEdgeModel.cs:377`);
   generalize it to all stacked surfaces.
-- **[Fact]** the dungeon collision bake is not byte-stable across rebuilds, so
-  it can never serve as the output-neutrality diff. Neutrality must be proved on
-  the plan hash and the scene, not the payload.
+
+**Status of the claim.** "Collision export needs no structural change" is a
+**hypothesis, not a finding**, and it has now been wrong twice about the
+mechanism. The existing stacked-crossing fixture inspects Unity collider bounds
+in the editor (`DungeonLabGenerator.StackedCrossingFixture.cs:190`); it
+demonstrates nothing about server movement. Phase C's live probe is what tests
+it, and it must explicitly assert: a player standing on the deck stays on the
+deck, a player under the deck is not captured by the soffit, and a fall through
+an aperture lands on the catch surface. **Treat the reasoning above as a
+prediction the probe falsifies or confirms, not as established behaviour.**
+
+If the probe fails, the remedy order is: collider shape (box soffits) →
+exporter change → **server change last**, because `triangle_normal_y_abs` is
+shared with every other scene and some content may rely on inverted winding
+being walkable.
+
+**[Fact]** the dungeon collision bake is not byte-stable across rebuilds, so it
+can never serve as the output-neutrality diff. Neutrality must be proved on the
+plan hash and the scene, not the payload.
 
 **[Fact]** the dungeon exports with `reuseMovementCollisionForQueries: true`, so
 its query geometry *is* its (deliberately oversized) movement geometry — the
@@ -517,6 +1007,142 @@ it. **[Deferred]** — flagged because it interacts, not proposed for change her
   its plan footprint. **This is the property that keeps the rubber sheet,
   lane-gap and fill machinery working**
   (see [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md)).
+
+**But the layer binding cannot reach the surface field as the pipeline stands —
+this is review finding 1, and it is a prerequisite, not a detail.**
+
+**[Fact]** `RoomConnection` is `{ int fromRoom, int toRoom, List<Vector2Int> path }`
+and nothing else (`DungeonLabGenerator.cs:7899`). Worse, a connection is matched
+to its route edge **by room pair**:
+`requirements.TryGetTransition(connection.fromRoom, connection.toRoom, out _)`
+(`:2700`). So two corridors between the same two rooms at different elevations
+are indistinguishable at the lookup, before their paths are ever compared. A
+`fromLayer`/`toLayer` binding authored in the topology would be discarded at
+exactly this point.
+
+**[Proposed]** `RoomConnection` gains the identity it is missing. **Round two
+corrected this twice over** — the first attempt keyed on a room-local layer name
+and carried a layer *ordinal*, both of which are unusable:
+
+```csharp
+readonly struct RoomConnection {
+    int fromRoom, toRoom;
+    ConnectionSource source;    // NEW — RouteEdge | SynthesizedLoop
+    string edgeId;              // NEW — the route edge, when source == RouteEdge
+    string connectionId;        // NEW — stable synthetic id, ALWAYS present
+    LevelBand plannedBand;      // NEW — the corridor's planned vertical extent (below)
+    List<Vector2Int> path;      // unchanged: the plan shadow of the corridor
+}
+enum ConnectionSource { RouteEdge, SynthesizedLoop }
+```
+
+Three things this fixes:
+
+- **`source` admits synthesized loops.** **[Fact]** `AddLevelSafeLoopConnections`
+  creates `RoomConnection`s carrying no route intent at all
+  (`DungeonLabGenerator.cs:1503`), and the elevation path deliberately treats the
+  route requirement as *optional* — `bool hasRouteRequirement = routeRequirements
+  != null && routeRequirements.TryGetTransition(…)` (`:2097`). An invariant
+  demanding every connection resolve to a route edge would reject every loop
+  corridor in the corpus. The invariant is instead: **a `RouteEdge` connection
+  resolves to exactly one route edge; a `SynthesizedLoop` resolves to none; every
+  connection has a unique `connectionId`.**
+- **`connectionId` is always present**, so a loop corridor is nameable in
+  diagnostics and reservations even though it has no edge.
+- **`plannedBand` replaces the room-local layer key.** A `layerId` is
+  room-local — one room's "gallery" is not another's — so `(cell, layerId)` is
+  not a vertical identity, and an edge's two ends may bind to differently-named
+  layers. A layer *ordinal* is worse: §3.1 states ordinals are local, unstable
+  and never identity.
+
+**What is globally meaningful pre-elevation is the topology's declared absolute
+level.** `RouteTopologyNode.level` is authored and absolute, and `TryAssignRoomLevels`
+is a deterministic copy of it — so an edge's endpoint elevations are known before
+embedding, let alone before the level field. `plannedBand` is
+`[min(fromLevel, toLevel), max(fromLevel, toLevel) + MinHeadroomLevels)` over
+those declared levels, for a route edge; for a synthesized loop it is the band of
+the two rooms it joins.
+
+Corridor exclusivity then becomes: **two connections may share a plan cell iff
+their `plannedBand`s do not intersect.** That is a global, half-open comparison
+available at claim time, it degenerates to today's rule when every node sits in
+one band, and it needs no room-local naming. The prism ledger later proves the
+*resolved* elevations actually clear (§6); `plannedBand` is the pre-elevation
+approximation that lets the claim happen at all.
+
+`TryGetTransition` keys on `edgeId` instead of the room pair.
+
+**Corridor exclusivity is the deeper block, and it cannot be fixed with levels.**
+
+**[Fact]** `TryClaimCorridor` rejects any cell another connection already owns
+(`RouteFirstPilot.cs:2582`), and `PathCrossesThirdRoom` rejects a path crossing
+an unrelated room (`:2569`). Both run in the **layout** stage — *before*
+elevation exists. There is no level to compare at claim time, so band-aware
+exclusivity is not available here.
+
+**[Proposed]** exclusivity keys on `(cell, plannedBand)` — the band derived from
+the topology's declared absolute node levels, as defined above. Two corridors may
+share a plan cell iff their bands are disjoint.
+
+**This relaxation is NOT output-neutral, and it does not belong in Phase A.**
+Round three caught a claim to the contrary. **[Fact]** today's rejection is
+unconditional — `if (claimedCorridorCells.Contains(cell))` → fail
+(`RouteFirstPilot.cs:2582`) — and existing topologies already carry widely
+separated levels: `atrium-ring` spans 0 to 24, so two of its edges routinely have
+disjoint bands. Relaxing the rule would therefore accept embeddings that are
+rejected today, move the layout hash, and — worse — could produce two corridor
+surfaces over one cell during a phase whose stated non-goal is "no second surface
+anywhere".
+
+The split is therefore:
+
+- **Phase A carries the data only** — `source`, `edgeId`, `connectionId` and
+  `plannedBand` are recorded on every connection, and `TryGetTransition` re-keys
+  on `edgeId`. The exclusivity **rule stays unconditional**, so the pass is
+  output-neutral and provable.
+- **Phase D authorizes the relaxation** — and the distinction between
+  *authorizing* and *testing* is load-bearing:
+
+  > **Layer binding authorizes an attempt. The absolute band decides.**
+
+  A layer name is room-local (§8.1's own warning), so "they are on different
+  declared layers" can never establish vertical separation between two
+  *unrelated* rooms — one room's `gallery` and another's `floor` may sit at the
+  same absolute level. Any earlier phrasing to the contrary is superseded.
+
+  The test, for both corridor sharing **and** third-room crossing, is the
+  absolute, layer-offset-adjusted band:
+
+  ```
+  plannedBand = [ min(endpointAbsoluteLevels),
+                  max(endpointAbsoluteLevels) + MinHeadroomLevels )
+      where endpointAbsoluteLevel = node.level + layer.relativeLevel
+  ```
+
+  Two connections may share a cell only when **both** are layer-bound (the
+  authorization) **and** their absolute bands are disjoint (the test). A
+  connection with no declared layer keeps today's unconditional exclusivity
+  forever. `PathCrossesThirdRoom` relaxes the same way and on the same absolute
+  comparison — never on layer names.
+
+`PathCrossesThirdRoom` becomes *"must not cross a third room **on the same
+layer**"*. Its own justification licenses this: the harm it names is "an
+undeclared doorway and an unowned threshold", and a corridor passing *over* a
+room at a different elevation creates neither. The matching topology rule — no
+third node on an edge's lattice lane — relaxes the same way, and only for edges
+whose declared layers differ.
+
+Two further things worth stating plainly:
+
+- **`RouteTransitionResolution` already carries `edgeId`** (`:8229`), so edge
+  identity partly survives today — for *transitions*, not for *corridors*. This
+  is the narrower half of the architecture review's **H5** ("the semantic model
+  does not survive the pipeline"), and closing it is **a prerequisite of Phase D**
+  rather than the opportunistic item review 2.7 called it. Multi-layer routing
+  is the feature that makes H5 load-bearing.
+- Two corridors sharing a plan cell at different layers is exactly the case
+  `PlanShadow` (§3.1) exists to keep coherent: they contribute the same shadow
+  cell once and two distinct surfaces.
 - `RequiredTransitionCorridorCells`
   (`DungeonLabGenerator.TransitionReservation.cs:50`) already keys on
   `(kind, rise)` and prices larger rises without change — but the reviewed
@@ -528,7 +1154,11 @@ it. **[Deferred]** — flagged because it interacts, not proposed for change her
 ### 8.2 Recipes — multi-layer authored rooms
 
 **[Proposed]** three schema additions, all additive and defaulting to today's
-behaviour:
+behaviour. **Phase split, corrected per review finding 4:** the layer fields,
+layer-scoped `RelativeLevelAt`, per-layer base derivation and
+`RECIPE_LAYER_CONNECTIVITY` land in **Phase C**, because they are what a
+two-layer authored episode is made of. `OpenVolume`, sunken zones, and
+entrance-elevation binding across several route edges stay in **Phase D**.
 
 ```csharp
 class DungeonRecipeZone {
@@ -549,14 +1179,24 @@ enum DungeonRecipeZoneKind {
 
 Consequences to design around, all of which follow from L6:
 
-- **`baseLevel` derivation must change.** Today it is
-  `firstPortLevel - firstPortContract.relativeLevel`
-  (`DungeonLabGenerator.Recipes.cs:1791`) — the whole room is anchored off port
-  zero. **[Proposed]** anchor off the *base layer's* first port; other layers
-  derive from their declared offsets; every bound port is then validated at
-  `baseLevel + layer.relativeLevel + port.relativeLevel`. This is what makes "a
-  route may bind to any compatible declared entrance elevation" true rather than
-  aspirational.
+- **`baseLevel` derivation must change — and not to "the base layer's first
+  port".** Today it is `firstPortLevel - firstPortContract.relativeLevel`
+  (`DungeonLabGenerator.Recipes.cs:1791`), anchoring the whole room off port
+  zero. Round three rejected the first replacement for keeping that ordering
+  dependence and for failing outright on a valid room whose base layer has no
+  external port — a lower chamber reachable only by falling, for instance.
+
+  **[Proposed]** every bound port yields a candidate base:
+
+  ```
+  candidate = absolutePortLevel − layer.relativeLevel − port.relativeLevel
+  ```
+
+  **All candidates must agree**, and disagreement is a rejection
+  (`RECIPE_BASE_LEVEL_CONFLICT`) naming the two ports — which is a far better
+  diagnostic than silently anchoring on whichever port sorted first. A recipe
+  with no bound ports declares an explicit `anchorLayerId` + `anchorLevel`
+  instead. Order no longer affects the result.
 - **`RelativeLevelAt` must become layer-scoped.** Today it is `max` over
   overlapping zones (`DungeonRecipeValidation.cs:633`); that `max` *is* the
   heightfield assumption inside the recipe schema.
@@ -580,11 +1220,11 @@ Consequences to design around, all of which follow from L6:
 |---|---|---|
 | Stair body | its `TransitionEdge` | unchanged; footprint prism now has a level band |
 | Landing | the transition, shared per the ledger's existing rule ("landings may share other landings but never a footprint") | unchanged, prism-scoped |
-| Gateway | the **surface** on the entering side | `surfaceRoomIds` replaces `cellRoomIds`. The existing both-flanks rule applies **within a layer**; do not let a wall on another layer count as a flank. Do not re-litigate the chamfer ruling |
+| Gateway | the **surface** on the entering side | `surfaceOwners` replaces `cellRoomIds`. The existing both-flanks rule applies **within a layer**; do not let a wall on another layer count as a flank. Do not re-litigate the chamfer ruling |
 | Partition wall | the two surfaces it separates, same layer | unchanged grammar, level-banded key |
 | Cliff wall | the higher surface | drop target = `supportBase` (§7), not the global abyss |
 | Railing | the surface whose edge it guards | unchanged; existing suppression rules (deck-even edges, bridge ports, stair mouths) extend per layer |
-| **Aperture rim** | the layer that owns the opening | railing or bare, **authored** — a bare rim is how a fall becomes discoverable; a railed rim makes it a `Window`, not an `Aperture` |
+| **Aperture rim** | the layer that owns the opening, **per rim edge** | `Bare` \| `Railing` \| `Wall`, authored per edge (§5). Only a `Bare` edge emits a `Fall`. A pit railed on three sides and bare on one is an ordinary and representable case; it is still an `Aperture`, with one entrance |
 | Soffit / underside | the surface *above* | new; the surface below never emits a ceiling |
 | Bridge deck | **the room it belongs to**, if any, else the connector | new — today a deck belongs to nobody, which is why bridges over rooms are banned |
 
@@ -592,7 +1232,7 @@ Consequences to design around, all of which follow from L6:
 
 **[Proposed]** export the surface graph as a data artifact beside the collision
 payload — `random_dungeon.navsurfaces.shared.json` — containing nodes
-`(cell, level, roomId, surfaceId, kind)` and typed edges
+`(cell, level, owner, surfaceId, kind)` and typed edges
 `(from, to, kind, directed, riseLevels, cost)`.
 
 Three rules that keep this honest without designing the NPC system:
@@ -622,7 +1262,7 @@ any NPC decision to take a fall.
   exactly the defect the 2026-07-25 derived-RNG work fixed.
 - **The canonical projection changes shape once.**
   `BuildCanonicalTieredLevelPlanProjection` emits sorted `cell → level`; it
-  becomes sorted `(cell, level) → {layerOrdinal, roomId, kind}`. **[Proposed]**
+  becomes sorted `(cell, level) → {layerOrdinal, owner, kind}`. **[Proposed]**
   keep the *old* shape whenever `IsSingleLayer`, so Phases A and B are provably
   output-neutral and only the phase that introduces real overlap rebaselines.
 - **Never gate on a recorded hash.** Compare against the current commit with
@@ -659,13 +1299,14 @@ two sheets and its walls and railings belong to neither.
 
 ### 9.2 Renderer strategy
 
-| | Per-surface iteration ★ | Per-sheet re-invocation | Separate overlay renderer for upper layers |
+| | Column-boundary band decomposition ★ | Per-sheet re-invocation | Separate overlay renderer for upper layers |
 |---|---|---|---|
 | Grammar preserved | yes | yes | **no** — a second grammar to keep in sync |
 | Cross-layer support base | one function | needs cross-sheet query anyway | needs it anyway |
 | Cost | wide, mechanical, one pass | needs §9.1 option C | least up-front, highest long-run |
 
-**Recommend per-surface iteration.** The overlay approach is the trap: it looks
+**Recommend the column-boundary band decomposition** (§7.1). The overlay
+approach is the trap: it looks
 cheap because it leaves the existing renderer alone, and it ends with two wall
 grammars whose railing and corner rules drift.
 
@@ -683,14 +1324,14 @@ grammars whose railing and corner rules drift.
 
 | Concern | Assessment |
 |---|---|
-| **Single-surface generation** | Preserved exactly while `IsSingleLayer`. `AsHeightField()`, the degenerate `supportBase`, and the old canonical projection shape make Phases A and B output-neutral by construction — provable with `ops/dungeon-port-ab.sh`. |
+| **Single-surface generation** | Preserved exactly while `IsSingleLayer`. `AsHeightField()`, `IsGroundBacked` making every single-layer band `[abyssBase, level)` so retaining walls *and* abyss cliffs reproduce exactly (§7.1), and the old canonical projection shape make **A1 and B** output-neutral by construction — provable with `ops/dungeon-port-ab.sh`. **A2 is not**, and is deliberately rebaselined on its own. |
 | **`MaxGeneratedLevel` 24 → 40** | **Not** output-neutral, and it breaks all seven topology files: `anchors.top` must equal `MaxGeneratedLevel` exactly (`DungeonRouteTopologyValidator.cs:366`). **[Proposed]** relax that rule to "the top anchor is at the topology's declared ceiling" and add an optional per-topology `ceiling` (default 24, capped at the global 40). Existing dungeons then keep their shape and a *new* topology opts into depth. Raising the constant alone would stretch every shipped dungeon and is the wrong lever. |
 | **Density dial** | Fill passes must query the prism ledger; `OpenVolume` joins the authored-void exclusion list. `floorFillPercent` becomes ambiguous under stacking — **[Proposed]** keep it as *plan-cell* fill (unchanged meaning, unchanged tuning) and add `surfacesPerPlanCell` as a separate reported metric. Do not redefine the number the dial was tuned against. |
 | **Recipes** | Additive fields, empty `layerId` = today's behaviour. The four enabled recipes need no edit. |
-| **The three required slots** | Unchanged. A multi-layer room is a new recipe, not a change to the slot contract. The silent slot-geometry rule ([`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) "Slot geometry") still applies and still is not machine-checked. |
+| **The three required slots** | **Unresolved, not unchanged.** A two-layer *episode* is a new recipe and needs no slot change, but a vertical hub cannot be a slot at all: a slot node must have degree 2 and a topology declares exactly three slots (L10d). Owner decision 9 (§14) settles it; until then, treat an atrium as a generic multi-layer room outside the slot system. The silent slot-geometry rule ([`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) "Slot geometry") still applies and still is not machine-checked. |
 | **Existing tests** | Per `CLAUDE.md`, do not repin. `DungeonLabStackedCrossingTests` asserts `transitionCount == 1` and `stackedCoordinateCount == 1` on a hand-built fixture — extend the *fixture*, and loosen or delete assertions that pin seed-derived counts. Report the rest; do not fix unasked. |
-| **`H2` (two floor representations)** | This work should *close* it by deriving `floorCells` from `SurfaceField`, not add a third representation. Treat that as a hard constraint on Phase A. |
-| **Server / collision** | No change required (§7.2). Republish with `ops/republish-local-clear.sh` after each rebuild so server geometry matches the scene. |
+| **`H2` (two floor representations)** | Closed by the **shadow-agreement invariant** (§3.1), *not* by deriving `floorCells` from `SurfaceField` — the dependency runs the other way, since `floorCells` is the domain the level field is computed over. A1 detects and reports the disagreement; **A2 repairs it and moves the hash**, because `floorCells` feeds `canonicalHash` (`Batch.cs:4864` → `:3437`). Do not attempt both in one gate. |
+| **Server / collision** | **Hypothesis, not a finding, and the mechanism has been misstated twice** (§7.2). No change is *expected*: soffits emitted as box colliders should be safe under both the 0.35u box window and the `max` selection rule. But the server's ground-normal test is on an **absolute** Y normal, so direction filters nothing, and only Phase C's live probe settles it. Remedy order if it fails: collider shape → exporter → server last. Republish with `ops/republish-local-clear.sh` after each rebuild so server geometry matches the scene. |
 
 ---
 
@@ -700,17 +1341,23 @@ New rejection codes, each with a named owner phase:
 
 | Code | Condition | Phase |
 |---|---|---|
-| `SURFACE_STACK_CLEARANCE` | two surfaces in one column closer than `MinHeadroomLevels` | A |
-| `SURFACE_GRAPH_NOT_STRONGLY_CONNECTED` | some surface cannot be reached, or cannot reach the rest | A |
-| `PRISM_CONFLICT` | two reservations share a cell and an intersecting level band | B |
-| `OPEN_VOLUME_VIOLATION` | floor, wall, fill, annex, dressing or set piece emitted inside a reserved volume | B |
-| `APERTURE_NO_CATCH_SURFACE` | declared pit with no surface under some cell of its footprint | C |
-| `APERTURE_NO_RETURN_ROUTE` | catch component cannot reach the opening's component without a fall | C |
-| `APERTURE_FALL_TOO_SHALLOW` | fall < `MinHeadroomLevels` — that is a ledge, not a pit | C |
-| `VOID_OPENING_OBSTRUCTED` | declared lethal void with any surface in its fall column | C |
-| `SUPPORT_BASE_UNDEFINED` | a cliff face whose drop target cannot be resolved | C |
+| `PLAN_SHADOW_DISAGREEMENT` | `surfaceField.PlanCells()` ≠ `planShadow.cells` at the end of planning (§3.1). **Reported in A1, enforced in A2** — repairing it moves the canonical hash | A1 report / A2 gate |
+| `SURFACE_STACK_CLEARANCE` | two surfaces in one column closer than `MinHeadroomLevels` | A1 |
+| `SURFACE_GRAPH_DISCONNECTED` | the **fall-free subgraph** is not connected (§3.3) — replaces the draft's strong-connectivity code | A1 |
+| `CONNECTION_IDENTITY` | a duplicate `connectionId`, two `RouteEdge` connections resolving to one edge, a `RouteEdge` connection resolving to none, or a `SynthesizedLoop` resolving to one (§8.1). **Not** "every connection has an edge" — loops legitimately have none | A1 |
+| `CORRIDOR_BAND_OVERLAP` | two **layer-bound** connections share a plan cell with intersecting `plannedBand`s (§8.1). Phase D only — until then corridor exclusivity stays unconditional and this cannot fire | D |
+| `PRISM_CONFLICT` | an incoming prism intersects a registered prism of a different owner, with overlapping half-open bands, whose kind its `blocksKinds` policy names (§6) | B |
+| `OPEN_VOLUME_VIOLATION` | geometry emitted inside a reserved volume by an owner not on its penetration allow-list | B |
+| `OPEN_VOLUME_PENETRATION_UNDECLARED` | a penetration allow-list names an owner the room does not declare | D |
+| `APERTURE_NO_CATCH_SURFACE` | declared pit where some cell resolves no catch surface — names the cell | C |
+| `APERTURE_UNREACHABLE_RETURN` | a fall's target cannot reach its source in the fall-free subgraph | C |
+| `APERTURE_FALL_TOO_SHALLOW` | fall < `MinHeadroomLevels` in some column — that is a ledge, not a pit | C |
+| `VOID_OPENING_OBSTRUCTED` | declared lethal void with a surface in some cell's fall column — names the cell | C |
+| `BOUNDARY_BAND_UNRESOLVED` | a column-pair boundary interval cannot be classified (§7.1) — replaces the draft's `SUPPORT_BASE_UNDEFINED` | C |
 | `SOFFIT_MISSING` | a non-lowest surface with no underside geometry over a reachable surface | C |
-| `ROOM_LAYER_CONNECTIVITY` | a room claims to connect layers it does not | D |
+| `RECIPE_LAYER_CONNECTIVITY` | a recipe claims to connect layers its own transitions do not | C |
+| `RECIPE_BASE_LEVEL_CONFLICT` | two bound ports imply different base levels (§8.2) — names both ports | C |
+| `ROOM_LAYER_CONNECTIVITY` | a placed room claims to connect layers it does not | D |
 | `ENTRANCE_LAYER_BINDING` | a route edge bound to an entrance elevation the route cannot supply | D |
 | `NAV_COLLISION_DISAGREEMENT` | a nav node's level ≠ the sampled collision surface at that cell | E |
 
@@ -721,8 +1368,12 @@ New rejection codes, each with a named owner phase:
   fires.
 - **Wrong-layer flank.** A gateway taking a flank from a wall on a different
   layer produces a floating arch. The both-flanks rule must be layer-scoped.
-- **Soffit-as-floor.** A soffit exported with `walkable_top` snaps players onto
-  the underside of a bridge.
+- **Soffit-as-floor.** Not via a flag — exported geometry has none — and **not**
+  prevented by normal direction either: the server tests an *absolute* Y normal,
+  so a down-facing triangle is as eligible as an up-facing one (§7.2). The
+  controls that do work are the capture windows (0.35u for boxes, 1.2u for
+  meshes) and `max` selection, which is why the design rule is **emit soffits as
+  box colliders**. A mesh soffit is the hazard.
 - **Ordinal drift.** If `layerOrdinal` leaks into a stable identity (a hash key,
   a nav id), adding a surface below renumbers everything above it. Ordinals are
   for reports; `(cell, level)` is the identity.
@@ -743,7 +1394,7 @@ New rejection codes, each with a named owner phase:
 
 | # | Scenario | How it is represented |
 |---|---|---|
-| 1 | Upper floor with a pit; lower chamber with its own corridors; separate return stair | One room, two `RoomLayer`s. An `Aperture` on the upper layer with a `Fall` edge to the lower layer's catch surface; the return is an ordinary `Stair` edge. Strong connectivity proves the branch reversible. |
+| 1 | Upper floor with a pit; lower chamber with its own corridors; separate return stair | One room, two `RoomLayer`s. An `Aperture` on the upper layer emitting one `Fall` edge per (rim surface, opening cell) to that column's derived catch surface; the return is an ordinary `Stair` edge. Fall-free connectivity proves the branch reversible without falling, and reports the witness path. |
 | 2 | A bridge between two elevated rooms with independently traversable rooms/corridors below | The deck's cells are `Deck` surfaces at the bridge level; the cells below carry `Floor` surfaces. A `Support` prism under the deck and a `Clearance` prism above the lower surface prove ≥3u separation. |
 | 3 | One room owning a lower chamber, upper gallery, bridge, openings and internal connections as one atomic composition | One recipe with three `DungeonRecipeLayer`s, its own transitions, and `RECIPE_LAYER_CONNECTIVITY` proving the claimed connections before catalog admission. |
 | 4 | Multiple local layers overlapping without being one global storey | `layerOrdinal` is per-cell and room-local; no API names a storey. Two rooms' "gallery" layers can be at different absolute levels in the same dungeon. |
@@ -765,10 +1416,45 @@ yet *produces* two surfaces.
 `DungeonLabGenerator.Validation.cs`, the canonical projections in `.Batch.cs`.
 `AsHeightField()` shim at every existing consumer.
 
-**Invariants.** `IsSingleLayer` holds for every seed. `floorCells` becomes
-derived from `SurfaceField`. Strong connectivity replaces `IsGloballyConnected`
-and agrees with it on every seed. RNG subjects that were cell tokens become
-surface tokens.
+Two things pulled forward from the draft's Phase D, both output-neutral on
+single-layer seeds and both prerequisites for everything later:
+
+- **`RoomConnection` gains `edgeId`** and `TryGetTransition` keys on it instead
+  of the room pair (§8.1) — a *correctness* fix for edge lookup, not just
+  plumbing.
+- **`plannedBand` is recorded on every connection**, derived from the topology's
+  declared absolute node levels, so it is available pre-elevation and is globally
+  meaningful — unlike a room-local layer name. **The exclusivity rule itself does
+  NOT change here.** `TryClaimCorridor` and `PathCrossesThirdRoom` keep their
+  current unconditional behaviour, because relaxing them is not output-neutral
+  (§8.1) — `atrium-ring` alone spans levels 0–24, so disjoint bands are common
+  and the relaxation would accept embeddings rejected today. The **data** lands
+  in A1 because corridors are claimed pre-elevation and no later phase can
+  retrofit it; the **relaxation** lands in Phase D behind layer binding.
+
+**Split A1 / A2, per review finding 13 — the draft's gate was self-contradictory.**
+**[Fact]** `BuildCanonicalLayoutProjection` serializes `layout.floorCells`
+(`Batch.cs:4864`), that becomes `layoutHash`, and `layoutHash` is mixed into
+`canonicalHash` (`:3437`). Repairing H2 means adding the external-promontory
+cells to the shadow, which *necessarily* moves the hash. A single phase cannot
+both fix H2 and gate on a byte-identical `resultHash`.
+
+- **A1 — container migration, output-neutral.** Everything below, with shadow
+  agreement **detected and reported, not repaired.** Byte-identical hash.
+- **A2 — the H2 repair, explicitly rebaselined.** Add the promontory cells to the
+  shadow, accept a one-time hash move, and record it as deliberate. Small,
+  isolated, and diffable seed by seed against A1.
+
+**Invariants (A1).** `IsSingleLayer` holds for every seed. **Fall-free
+connectivity** replaces `IsGloballyConnected` and agrees with it on every seed
+(with no falls present, the two are identical). **Every connection has a unique
+`connectionId`; every `RouteEdge` connection resolves to exactly one route edge;
+every `SynthesizedLoop` resolves to none** — the draft's "every connection
+resolves to a route edge" would have rejected every loop corridor
+(`cs:1503`, `:2097`). RNG subjects that were cell tokens become surface tokens.
+
+**Invariants (A2).** Shadow agreement holds:
+`surfaceField.PlanCells() == planShadow.cells`.
 
 **Evidence.** `ops/dungeon-port-ab.sh` on 200 seeds: byte-identical `resultHash`,
 stashed vs restored. Two independent runs identical
@@ -777,8 +1463,22 @@ builds a GameObject, so it cannot prove the renderer survived the shim.
 
 **Non-goals.** No renderer change. No second surface anywhere. No prism ledger.
 
-**Exit.** 200/200 accepted, `hardValid 200/200`, byte-identical plan hash against
-the current commit, Render Sweep 200/200.
+**Exit (A1).** 200/200 accepted, `hardValid 200/200`, **byte-identical
+`canonicalHash` per seed** against the current commit, Render Sweep 200/200, and
+`PLAN_SHADOW_DISAGREEMENT` **reported out-of-band** on the known
+external-connector seeds — proving the check has teeth without moving anything
+hashed.
+
+**[Fact] the gate must be the canonical hash, not `resultHash`.**
+`resultHash = ComputeSha256(seedReports.ToString(…))` (`Batch.cs:5748`) covers
+the entire seed-report array, so adding *any* diagnostic field to a seed report
+changes it. A1's disagreement report therefore goes to its own file under
+`DungeonLabReports/`, outside the hashed array — after which `resultHash` is
+stable too, and both can be asserted.
+
+**Exit (A2).** Shadow agreement clean on 200/200; the hash moves **once**, and
+every seed whose report changed differs only in `floorCells`, fill percent and
+the graph summary. Anything else changing means the repair was not isolated.
 
 ---
 
@@ -792,20 +1492,35 @@ the general rule; `TryValidateAcceptedPlanHeadroom` in `.Batch.cs` deleted in
 favour of the shared one; density fill passes read the ledger; the late-pass
 ordering (review 2.4) fixed so the gate guards the final state.
 
-**Invariants.** For every surface, `[level, level + 3]` is free of another
-surface's support. Every reservation carries a level band. No validation runs
-before a mutation it must see.
+**Invariants.** For every surface, the half-open band
+`[level, level + MinHeadroomLevels)` is free of any *other owner's* prism
+satisfying **`BlocksHeadroom`** (§6) — the one named predicate, not a restated
+set. Every reservation carries a half-open level band and a typed `OwnerKey`.
+Conflict follows the asymmetric per-kind `blocksKinds` policy (§6), seeded
+verbatim from `ConflictsWithReservation`, and reproduces today's behaviour
+exactly — including that landing–landing, landing–clearance and mouth–clearance
+all remain legal. No validation runs before a mutation it must see.
 
-**Evidence.** Output-neutral 200-seed A/B. A negative fixture: an artificially
-lowered stacked cell must still be rejected — the existing
-`negativeHeadroomRejected` probe in `BuildStackedCrossingFixture` is exactly
-this and should be retargeted at the new rule rather than duplicated.
+**Evidence.** Output-neutral 200-seed A/B. Three negative fixtures, because the
+draft's blanket rule got each of these wrong:
 
-**Non-goals.** No `OpenVolume` *producer* yet — only the reservation kind and its
-enforcement.
+1. an artificially lowered stacked cell is still rejected — retarget the existing
+   `negativeHeadroomRejected` probe in `BuildStackedCrossingFixture` rather than
+   duplicating it;
+2. clearance of **exactly** `MinHeadroomLevels` still **passes** — the half-open
+   endpoint case, which a closed band would wrongly reject;
+3. the three pairs a symmetric matrix got wrong all still **pass** —
+   landing–landing, landing–clearance, and mouth–clearance across different
+   owners — while a landing over another owner's **footprint** still **fails**,
+   and a `TransitionClearance` over another owner's **mouth** still **fails**.
+   These five cases are the whole content of the `blocksKinds` policy; if any
+   flips, the port is not faithful.
+
+**Non-goals.** No `OpenVolume` *producer* yet — only the reservation kind, its
+penetration allow-list mechanism, and enforcement.
 
 **Exit.** Byte-identical 200-seed hash; `spanDeckLevels` and the duplicated deck
-formula gone; the ledger's conflict rule proven level-band-aware by fixture.
+formula gone; all three negative fixtures behave as listed.
 
 ---
 
@@ -820,15 +1535,41 @@ This is deliberately an **authored deterministic episode**, not a
 generic-generation feature — the same order the project used for topologies
 ("abstractions are earned by a working slice").
 
-**Systems.** Renderer per-surface iteration; `supportBase`; soffit pass;
-level-banded `EdgeKey`/`OpenEdgeKey`/`WallEdge`; `surfaceRoomIds`; `Opening` +
-`Fall` edge; one new Episode recipe with two layers; the aerial-bridge path
-promoted so a deck's cells become surfaces.
+**Split into two steps, per review finding 4.** The draft required "one new
+Episode recipe with two layers" while deferring every layer-aware recipe field to
+Phase D, so its first real proof could not actually be authored. C1 proves the
+renderer without the schema; C2 adds the minimum schema and authors the episode
+properly.
 
-**Invariants.** Strong connectivity holds with the fall directed. Every aperture
-has a proven catch surface and return route. Every non-lowest surface has an
-underside. No cliff drops through a surface below it. Both surfaces at the
-stacked coordinate carry collision; the volume between them is clear.
+**C1 — renderer proof, code-built fixture.** No recipe schema change. Extend
+`BuildStackedCrossingFixture` into a hand-constructed two-layer field: upper
+route, aperture, lower chamber, return stair, bridge over the lower route. This
+is a *fixture*, and the document says so rather than calling it authored.
+
+**The aperture in C1 should sit in a CORRIDOR, not in a room** (§4.1). It is the
+cheaper proof — it needs no multi-layer room, no recipe schema, and no room
+ownership work — and it exercises the case that matters most, since almost every
+elevation change in this generator already happens between rooms rather than
+inside them. A room-owned pit follows in C2 with the recipe schema.
+
+**C2 — the authored episode.** The minimum recipe layer schema — pulled forward
+from the draft's Phase D: `DungeonRecipeLayer`, `layerId` on zones and ports,
+layer-scoped `RelativeLevelAt`, per-layer base derivation, and the
+`RECIPE_LAYER_CONNECTIVITY` validation layer. Then the same episode as a real
+catalog recipe, plus one hand-authored topology file that places it.
+
+**Systems.** Renderer boundary-band decomposition (§7.1); `supportBase` as a
+per-face query; soffit pass and its collider discipline (§7.2); band-scoped
+`EdgeKey`/`OpenEdgeKey`/`WallEdge`; `surfaceOwners`; `Opening` + per-cell `Fall`
+edges; the aerial-bridge path promoted so a deck's cells become surfaces; the
+minimum recipe layer schema (C2 only).
+
+**Invariants.** The fall-free subgraph is connected. Every aperture cell resolves
+a catch surface, and every fall's witness return path is reported. Every
+non-lowest surface has an underside whose collider cannot become ground. Every
+column-pair boundary interval classifies. No cliff drops through a surface below
+it. Both surfaces at the stacked coordinate carry collision; the volume between
+them is clear.
 
 **Evidence.**
 
@@ -837,22 +1578,31 @@ stacked coordinate carry collision; the volume between them is clear.
    deck).
 2. **Render Sweep** on the fixture seed set — the episode must build, save, and
    export.
-3. **Live**, not post hoc: a headless player probe (modelled on the committed
-   `ops/s4-los-probe.py` … `ops/s9-auto-rewind-probe.py` family) that walks a
-   player off the aperture, confirms the server lands them on the chamber
-   surface and not the abyss, walks the return stair, and crosses the bridge
-   over the chamber. Publish first with `ops/republish-local-clear.sh` and prove
-   the change is live on the target DB before the leg runs.
+3. **Live**, not post hoc — and this is the leg that tests §7.2's hypothesis, so
+   it must assert all four behaviours, not just the fall. A headless player probe
+   (modelled on the committed `ops/s4-los-probe.py` …
+   `ops/s9-auto-rewind-probe.py` family) that:
+   - walks a player off the aperture and confirms the server lands them on the
+     **chamber surface**, not the abyss;
+   - walks the return stair back to the upper layer;
+   - crosses the bridge and confirms the player stays on the **deck** and is not
+     captured by the soffit beneath it (the 1.2u window case);
+   - walks under the bridge on the chamber floor and confirms the player is
+     **not** snapped up onto the soffit.
+
+   Publish first with `ops/republish-local-clear.sh` and prove the change is live
+   on the target DB before the leg runs.
 4. Owner eyeball on the built scene. No hash tells you whether a two-layer room
    reads well.
 
-**Non-goals.** No generic multi-layer rooms. No lethal void mechanic. No
-envelope raise. No NPC nav export. Bridges over rooms only inside this authored
-episode.
+**Non-goals.** No generic multi-layer rooms. No `OpenVolume` producer. No sunken
+zones. No topology-level layer bindings. No lethal void mechanic. No envelope
+raise. No NPC nav export. Bridges over rooms only inside this episode.
 
 **Exit.** The episode generates deterministically across two independent runs;
-the probe demonstrates fall → lower route → return stair → bridge on a live
-server; Render Sweep clean; owner accepts the look.
+the probe demonstrates all four live behaviours above; Render Sweep clean; owner
+accepts the look. **If the soffit assertions fail, §7.2's hypothesis is falsified
+and the phase does not exit until collider discipline or the exporter closes it.**
 
 ---
 
@@ -863,14 +1613,28 @@ declared entrance elevations; `OpenVolume` reserves an atrium; the atrium
 archetype (scenario 5) generates.
 
 **Systems.** Topology schema (`layers` on nodes, `fromLayer`/`toLayer` on edges)
-+ `Validate Topologies`; recipe schema (`layerId`, `OpenVolume`, negative
-elevated zones) + `DungeonRecipeValidator`; recipe base-level derivation per
-layer; `RoomFootprint.Overlaps` volumetric; `ChooseEnclosedRooms` moved into the
-plan so bridges may legally cross rooms.
++ `Validate Topologies`; `RoomConnection` layer binding consumed end to end
+(its `edgeId` landed in Phase A); the remaining recipe schema — `OpenVolume`
+zones with penetration allow-lists, and sunken/negative elevated zones;
+`RoomFootprint.Overlaps` volumetric; `ChooseEnclosedRooms` moved into the plan so
+bridges may legally cross rooms.
+
+**Also in D — the slot vocabulary.** `ROUTE_TOPOLOGY_AUTHORING.md`'s rule
+*"every slot node has degree 2"* means a vertical hub can never be a required
+recipe slot (L10d), and a topology declares exactly three slots. An atrium is
+degree 3–4 by definition, so scenario 5 needs either a degree-N slot kind or an
+atrium that is a *generic* multi-layer room rather than a slot-bearing one. The
+recipe schema already supports the former through `IncidentCardinalSockets`
+(`connector_generic_room_01` binds one to four sockets by incidence), so the
+constraint is in the **topology rule table**, not the recipe system. Raised as
+owner decision 9 (§14).
 
 **Invariants.** No global storey concept anywhere. A room's declared layer
 connectivity is proven before catalog admission. `OpenVolume` survives every
-density level. Room stacking requires a declared reason.
+density level. Room stacking requires a declared reason. Corridor exclusivity
+and third-room crossing relax only for layer-bound connections, and the test is
+always **disjoint absolute bands** — never a layer-name comparison, which is
+room-local and cannot establish separation between unrelated rooms (§8.1).
 
 **Evidence.** 200-seed batch at every density 0–5 on a new atrium topology;
 Render Sweep; the fill metric split into plan-cell fill (tuning-stable) and
@@ -922,13 +1686,22 @@ The four-line version:
 
 1. `Dictionary<Vector2Int,int> cellLevels` → `SurfaceField` keyed on
    `(cell, level)`, with a single-layer projection for compatibility.
-2. `HashSet<Vector2Int>` reservations → prisms
-   `(cell, minLevel, maxLevel, kind)`, with `OpenVolume` as a first-class kind.
-3. `abyssBase` (one global int) → `supportBase(surface, direction)`, plus a
-   soffit pass.
-4. `Opening { Aperture | Void | Window }` on a layer, `Fall` as the one directed
-   traversal edge, and **strong connectivity** as the invariant that makes
-   optional pit branches provably reversible.
+2. `HashSet<Vector2Int>` reservations → half-open prisms with a typed owner and
+   an asymmetric `blocksKinds` policy, adding `Support`, `Wall` and `OpenVolume`
+   to the five kinds the ledger already keeps.
+3. `abyssBase` (one global int) → a **column-boundary band decomposition**, where
+   a **ground-backed** surface carries mass to the abyss while a suspended one
+   implies only its own slab, and full-height geometry comes solely from ground,
+   wall and support bands — plus a soffit pass emitted as **box** colliders.
+4. `Opening { Aperture | Void }` on a layer with **derived per-cell** catch
+   surfaces and **per-rim-edge** guards, `Fall` emitted only from a bare rim
+   edge, and **fall-free connectivity** as the invariant that makes optional pit
+   branches provably reversible.
+
+And one prerequisite the draft missed: **`RoomConnection` must carry a `source`
+discriminator, `edgeId`, `connectionId` and `plannedBand`**, because a corridor
+is currently matched to its route edge by room pair and synthesized loops carry
+no edge at all (§8.1).
 
 No rewrite. `ElevationEdgeModel`'s wall/railing/corner/gateway grammar,
 `StairForge`, the contract data, the recipe system, the route planner, the
@@ -938,36 +1711,50 @@ reached for its own scope, for the same reason.
 
 ### Smallest credible implementation slice
 
-**Phase A alone** — `SurfaceField` + surface graph + strong connectivity, with
-`IsSingleLayer` true on every seed and a byte-identical 200-seed hash against
-the current commit. It ships no new capability and is the only slice that makes
-every later one safe, because it is the one that can be *proved* to have changed
-nothing.
+**Phase A1 alone** — the `PlanShadow`/`SurfaceField` split, the surface graph,
+fall-free connectivity, connection identity (`source`, `edgeId`, `connectionId`,
+`plannedBand`), and shadow disagreement **detected and reported out-of-band** —
+with `IsSingleLayer` true on every seed and a byte-identical canonical hash
+against the current commit. It ships no new capability and is the only slice that
+can be *proved* to have changed nothing, which is what makes every later one
+safe.
 
-If a slice with something to look at is wanted, **Phase A + C**, skipping B's
-generalization by keeping `spanDeckLevels` one phase longer. Not recommended —
-the prism ledger is what stops two transitions at one coordinate from
-conflicting, and without it the authored episode has to special-case its own
-bridge.
+**A2 — the shadow repair — is deliberately not in that slice**, because fixing
+H2 moves the hash (`floorCells` feeds `canonicalHash`) and a single gate cannot
+both repair and prove neutrality.
+
+If a slice with something to look at is wanted, **Phase A + C1** — the code-built
+fixture — which proves the renderer without touching the recipe schema. Skipping
+B is not recommended: the prism ledger is what stops two transitions at one
+coordinate from conflicting, and without it the fixture has to special-case its
+own bridge.
 
 ### Major risks
 
-1. **The renderer edge-key widening is wide.** `EdgeKey`/`OpenEdgeKey`/
-   `(x,z,direction)` thread through corner selection, gateway sockets, shell
-   placement, trap placement and railing suppression. Mechanical, but it is most
-   of Phase C and it is where a subtle railing or flank regression will hide.
-   Render Sweep, not Batch Validate, is the only thing that catches it.
-2. **Soffit art may not exist.** The pack has no measured flat under-deck cap
-   family. Measure this *before* committing Phase C; if it is missing, Phase C's
-   exit criterion is unreachable and the phase should be re-scoped around a
-   bridge over a corridor in an open room rather than a full gallery.
+1. **The boundary-band decomposition is the real work, and the draft
+   underestimated it.** It is a new algorithm with its own failure modes, not a
+   loop edit — and `EdgeKey`/`OpenEdgeKey`/`(x,z,direction)` still have to widen
+   across corner selection, gateway sockets, shell placement, trap placement and
+   railing suppression. This is most of Phase C and it is where a subtle railing
+   or flank regression will hide. Render Sweep, not Batch Validate, is the only
+   thing that catches it. **Re-estimate this phase before committing to it.**
+2. **Soffit art may not exist, and its collider shape matters as much as its
+   look.** The pack has no measured flat under-deck cap family. §7.2's analysis
+   says a soffit emitted as a **box** collider is safe under both capture
+   windows and `max` selection, and that a **mesh** soffit is the hazard —
+   because the server's normal test is on an absolute value and filters nothing
+   by direction. That analysis is a prediction, not a measurement. Measure the
+   art *before* committing Phase C; if no usable family exists, Phase C's exit
+   criterion is unreachable and the phase should be re-scoped around a bridge
+   over a corridor in an open room rather than a full gallery.
 3. **Silent atrium fill.** The density passes will claim any plan cell. If
    `OpenVolume` is not wired into all four mechanisms, density 5 packs the
    atrium and no gate fires.
-4. **Two clearance numbers.** `MinHeadroomLevels = 3` against a 1.8u player and a
-   4u major rise leaves ~2.2u. Comfortable stacking wants 8u, which halves the
-   number of layers a 40u envelope supports. Expect to re-derive this from the
-   capsule rather than inherit it.
+4. **Clearance is now derived, and the derivation is tight.** `MinHeadroomLevels
+   = 3` must clear the **1.2u** ground-sampler capture window (§7.2) *and* a
+   1.8u player. It does, with margin. But a 4u major rise leaves only ~2.2u of
+   true clearance, so comfortable stacking wants 8u — which halves the number of
+   layers a 40u envelope supports. This is the number to re-derive, not inherit.
 5. **Hash rebaseline discipline.** Phase C moves every seed once. Compare against
    the current commit with `ops/dungeon-port-ab.sh`; never against a recorded
    value, and never assert one in a test.
@@ -975,6 +1762,10 @@ bridge.
    collision, so a bridge deck will block sight to the chamber below it using
    deliberately oversized geometry. This contradicts the project LOS rule and
    gets worse as stacking increases.
+7. **H5 is now on the critical path.** Multi-layer routing needs route identity
+   to survive into the plan (§8.1). The architecture review treated that as
+   opportunistic; here it is a prerequisite, which makes Phase A slightly wider
+   than "just a container change".
 
 ### Remaining owner decisions
 
@@ -995,6 +1786,17 @@ bridge.
    (deferred in 2026-06). Confirm that is in scope for Phase D.
 7. **Aperture rim guard.** Is a bare rim (discoverable fall) the default, or
    railed-unless-declared? A look-and-feel call with real gameplay consequence.
+8. **Fall-only entrances.** Fall-free connectivity (§3.3) forbids a region whose
+   *only* way in is a fall, even when it has a stair back out. Is that
+   acceptable? Forbidding it is recommended — it guarantees no dungeon is ever
+   gated behind a fall the player may not find — but it is a real expressive
+   restriction and it should be a decision, not a side effect of the invariant.
+9. **The slot vocabulary for a vertical hub** (L10d). A required recipe slot must
+   be a degree-2 node and a topology declares exactly three slots, so an atrium
+   cannot be one. Add a degree-N slot kind, or let the atrium be a generic
+   multi-layer room outside the slot system? The recipe side already supports
+   degree-N through `IncidentCardinalSockets`, so this is a topology-rule
+   decision.
 
 ---
 
