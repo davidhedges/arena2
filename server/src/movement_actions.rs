@@ -46,7 +46,7 @@ const ACTION_KIND_DASH_TO_TARGET: &str = "DASH_TO_TARGET";
 const DODGE_MAX_CHARGES: u32 = 5;
 const DODGE_RECHARGE_MS: u64 = 10_000;
 const DODGE_DISTANCE_METERS: f32 = 6.0;
-const DODGE_SPEED_METERS_PER_SECOND: f32 = 18.0;
+const DODGE_SPEED_METERS_PER_SECOND: f32 = 24.0;
 const DODGE_RECOVERY_MS: u64 = 220;
 
 #[table(accessor = movement_action_state, public)]
