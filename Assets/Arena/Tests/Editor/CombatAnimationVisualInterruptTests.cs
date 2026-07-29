@@ -385,6 +385,126 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void CombatActionPlaybackController_PhasedMeleeStartUsesPhaseLoopReadyMarker()
+        {
+            Type playbackControllerType = RequireRuntimeType("Arena.Presentation.CombatActionPlaybackController");
+            Type phaseType = RequireRuntimeType("Arena.Presentation.PhasedMeleePlaybackPhase");
+            object controller = Activator.CreateInstance(playbackControllerType)!;
+            AnimationClip start = CreateOneSecondClip();
+            AnimationClip loop = CreateOneSecondClip();
+            AnimationClip end = CreateOneSecondClip();
+
+            try
+            {
+                SetClipEvents(start, ("OnPhaseLoopReady", 0.25f));
+                RequireMethod(
+                        playbackControllerType,
+                        "BeginPhasedMelee",
+                        typeof(int),
+                        typeof(AnimationClip),
+                        typeof(AnimationClip),
+                        typeof(AnimationClip),
+                        typeof(bool),
+                        typeof(bool))
+                    .Invoke(controller, new object[] { 1, start, loop, end, false, false });
+
+                Assert.That(
+                    (float)RequireProperty(
+                            playbackControllerType,
+                            "PhasedMeleeTotalLengthSeconds")
+                        .GetValue(controller)!,
+                    Is.EqualTo(2.25f).Within(0.001f));
+                Assert.That(
+                    (float)RequireMethod(
+                            playbackControllerType,
+                            "ResolvePhasedMeleeStartExitNormalizedTime",
+                            typeof(float),
+                            typeof(float))
+                        .Invoke(controller, new object[] { 0.55f, 0.65f })!,
+                    Is.EqualTo(0.25f).Within(0.001f));
+
+                object startPhase = Enum.Parse(phaseType, "Start");
+                RequireMethod(
+                        playbackControllerType,
+                        "SetPhasedMeleeSegment",
+                        phaseType,
+                        typeof(int),
+                        typeof(float))
+                    .Invoke(controller, new object[] { startPhase, 123, 1f });
+
+                MethodInfo transition = RequireMethod(
+                    playbackControllerType,
+                    "TryResolvePhasedMeleeTransition",
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    phaseType.MakeByRefType(),
+                    typeof(bool).MakeByRefType());
+                object nonePhase = Enum.Parse(phaseType, "None");
+                object?[] beforeMarker = { 0.24f, 0.55f, 0.65f, 0.95f, nonePhase, false };
+                Assert.That((bool)transition.Invoke(controller, beforeMarker)!, Is.False);
+
+                object?[] atMarker = { 0.25f, 0.55f, 0.65f, 0.95f, nonePhase, false };
+                Assert.That((bool)transition.Invoke(controller, atMarker)!, Is.True);
+                Assert.That(atMarker[4]!.ToString(), Is.EqualTo("Loop"));
+                Assert.That((bool)atMarker[5]!, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(start);
+                UnityEngine.Object.DestroyImmediate(loop);
+                UnityEngine.Object.DestroyImmediate(end);
+            }
+        }
+
+        [Test]
+        public void CombatActionPlaybackController_PhaseLoopReadyCannotOutrunStrikeStateSafetyExit()
+        {
+            Type playbackControllerType = RequireRuntimeType("Arena.Presentation.CombatActionPlaybackController");
+            object controller = Activator.CreateInstance(playbackControllerType)!;
+            AnimationClip start = CreateOneSecondClip();
+            AnimationClip loop = CreateOneSecondClip();
+            AnimationClip end = CreateOneSecondClip();
+
+            try
+            {
+                SetClipEvents(start, ("OnPhaseLoopReady", 0.95f));
+                RequireMethod(
+                        playbackControllerType,
+                        "BeginPhasedMelee",
+                        typeof(int),
+                        typeof(AnimationClip),
+                        typeof(AnimationClip),
+                        typeof(AnimationClip),
+                        typeof(bool),
+                        typeof(bool))
+                    .Invoke(controller, new object[] { 1, start, loop, end, false, false });
+
+                Assert.That(
+                    (float)RequireProperty(
+                            playbackControllerType,
+                            "PhasedMeleeTotalLengthSeconds")
+                        .GetValue(controller)!,
+                    Is.EqualTo(2.84f).Within(0.001f));
+                Assert.That(
+                    (float)RequireMethod(
+                            playbackControllerType,
+                            "ResolvePhasedMeleeStartExitNormalizedTime",
+                            typeof(float),
+                            typeof(float))
+                        .Invoke(controller, new object[] { 0.82f, 0.84f })!,
+                    Is.EqualTo(0.84f).Within(0.001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(start);
+                UnityEngine.Object.DestroyImmediate(loop);
+                UnityEngine.Object.DestroyImmediate(end);
+            }
+        }
+
+        [Test]
         public void DecideCombatAnimationRequest_NeverLetsAutoAttackPreemptAbilities()
         {
             Assert.That(

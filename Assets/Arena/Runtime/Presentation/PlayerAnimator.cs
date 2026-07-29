@@ -183,8 +183,10 @@ namespace Arena.Presentation
         // Strike bank states transition back to Empty at 0.9 normalized time.
         // Segmented/phased melee advances slightly before that so start/loop/end
         // segments never fall through to Empty between runtime-controlled plays.
-        private const float PhasedMeleeStartOnlyEndTriggerNormalizedTime = 0.82f;
-        private const float PhasedMeleeSegmentTransitionNormalizedTime = 0.84f;
+        private const float PhasedMeleeStartOnlyEndTriggerNormalizedTime =
+            CombatAnimationEvents.PhasedMeleeStartOnlyEndSafetyNormalizedTime;
+        private const float PhasedMeleeSegmentTransitionNormalizedTime =
+            CombatAnimationEvents.PhasedMeleeStartToLoopSafetyNormalizedTime;
         private const float PhasedMeleeEndCompleteNormalizedTime = 0.88f;
         private const float LandingRecoveryMinNormalizedTime = 0.16f;
         private const float WeaponTransitionRecoveryMinNormalizedTime = 0.18f;
@@ -2993,13 +2995,16 @@ namespace Arena.Presentation
 
         private void UpdateSpecialMovementDrivenPhasedMeleePlayback(float normalizedTime)
         {
+            float startExitNormalizedTime = _actionPlayback.ResolvePhasedMeleeStartExitNormalizedTime(
+                PhasedMeleeStartOnlyEndTriggerNormalizedTime,
+                PhasedMeleeSegmentTransitionNormalizedTime);
             if (!CombatActionPlaybackController.TryResolveSpecialMovementDrivenPhasedTransition(
                     _actionPlayback.PhasedMeleePhase,
                     normalizedTime,
                     _actionPlayback.PhasedMeleeReleaseAfterStart,
                     _actionPlayback.IsPhasedMeleeSpecialMovementEndRequested,
-                    PhasedMeleeStartOnlyEndTriggerNormalizedTime,
-                    PhasedMeleeSegmentTransitionNormalizedTime,
+                    startExitNormalizedTime,
+                    startExitNormalizedTime,
                     PhasedMeleeEndCompleteNormalizedTime,
                     out PhasedMeleePlaybackPhase nextPhase,
                     out bool shouldCancel))

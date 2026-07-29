@@ -475,6 +475,16 @@ namespace Arena.Tests.Editor
             try
             {
                 AnimationUtility.SetAnimationEvents(
+                    start,
+                    new[]
+                    {
+                        new AnimationEvent
+                        {
+                            functionName = "OnPhaseLoopReady",
+                            time = 0.4f,
+                        },
+                    });
+                AnimationUtility.SetAnimationEvents(
                     end,
                     new[]
                     {
@@ -501,7 +511,7 @@ namespace Arena.Tests.Editor
                 object export = InvokeInstanceMethod(set, "BuildMeleeExport");
                 object strike = FindExportedStrike(GetExportedStrikes(export), "MELEE_ATTACK_1");
 
-                Assert.That(GetFirstImpactDelayMs(strike), Is.EqualTo(3250));
+                Assert.That(GetFirstImpactDelayMs(strike), Is.EqualTo(2650));
             }
             finally
             {
@@ -680,22 +690,13 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void DaggerCoupDeGrace_UsesOnlyAirToFloorEndAsSingleClip()
+        public void DaggerCoupDeGrace_UsesFastLoopThenAirToFloorEnd()
         {
             Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
             Type phasedEntryType = RequireType("Arena.Presentation.WeaponPhasedActionEntry");
+            Type resolvedPhaseSetType = RequireType("Arena.Presentation.ResolvedWeaponPhasedActionClipSet");
             UnityEngine.Object instance = Resources.Load("CombatAnimationSets/Daggers", combatAnimationSetType);
             Assert.That(instance, Is.Not.Null);
-
-            int strikeIndex = (int)InvokeInstanceMethod(
-                instance,
-                "GetStrikeIndexForActionId",
-                "DAGGER_COUP_DE_GRACE");
-            AnimationClip clip = (AnimationClip)InvokeInstanceMethod(
-                instance,
-                "GetStrikeClip",
-                strikeIndex);
-            Assert.That(clip.name, Is.EqualTo("Attack_Air_to_Floor_01_End"));
 
             object?[] phasedArgs = { "DAGGER_COUP_DE_GRACE", null };
             bool hasPhasedEntry = (bool)RequireMethod(
@@ -704,13 +705,42 @@ namespace Arena.Tests.Editor
                     typeof(string),
                     phasedEntryType.MakeByRefType())
                 .Invoke(instance, phasedArgs)!;
-            Assert.That(hasPhasedEntry, Is.False);
+            Assert.That(hasPhasedEntry, Is.True);
+
+            object phasedEntry = phasedArgs[1]!;
+            Assert.That(
+                (bool)phasedEntryType.GetField("drivePhasesFromSpecialMovement")!.GetValue(phasedEntry)!,
+                Is.True);
+
+            object?[] clipSetArgs = { true, null };
+            bool resolved = (bool)RequireMethod(
+                    phasedEntryType,
+                    "TryResolveClipSet",
+                    typeof(bool),
+                    resolvedPhaseSetType.MakeByRefType())
+                .Invoke(phasedEntry, clipSetArgs)!;
+            Assert.That(resolved, Is.True);
+
+            object clipSet = clipSetArgs[1]!;
+            AnimationClip openingClip =
+                (AnimationClip)resolvedPhaseSetType.GetProperty("Start")!.GetValue(clipSet)!;
+            Assert.That(
+                openingClip.name,
+                Is.EqualTo("Attack_Air_to_Floor_01_Loop"));
+            Assert.That(openingClip.length, Is.LessThan(0.35f));
+            Assert.That(
+                ((AnimationClip)resolvedPhaseSetType.GetProperty("End")!.GetValue(clipSet)!).name,
+                Is.EqualTo("Attack_Air_to_Floor_01_End"));
+            Assert.That(
+                (bool)resolvedPhaseSetType.GetProperty("ReleaseAfterStart")!.GetValue(clipSet)!,
+                Is.True,
+                "Loop is authored as the one-shot opening segment so it does not repeat before End");
 
             object export = InvokeInstanceMethod(instance, "BuildMeleeExport");
             object strike = FindExportedStrike(
                 GetExportedStrikes(export),
                 "DAGGER_COUP_DE_GRACE");
-            Assert.That(GetImpactDelayMs(strike), Is.EqualTo(new[] { 43, 43 }));
+            Assert.That(GetImpactDelayMs(strike), Is.EqualTo(new[] { 60, 60 }));
         }
 
         [Test]
