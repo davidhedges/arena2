@@ -2155,6 +2155,19 @@ namespace Arena.Presentation
 
         private bool IsHigherPriorityCombatPresentationActive()
         {
+            bool hasActiveMeleePresentation = _actionPlayback.ActiveMeleePresentation.HasValue;
+            CombatAnimationCategory activeMeleeCategory = hasActiveMeleePresentation
+                ? _actionPlayback.ActiveMeleePresentation.GetValueOrDefault().Category
+                : CombatAnimationCategory.AutoAttack;
+            if (CombatActionPlaybackController.HasTrackedHigherPriorityPresentation(
+                    hasActiveMeleePresentation,
+                    activeMeleeCategory,
+                    _actionPlayback.ActiveSpellPresentation.HasValue,
+                    _actionPlayback.ActiveSpellCastHoldPresentation.HasValue))
+            {
+                return true;
+            }
+
             if (_animator == null)
             {
                 return false;

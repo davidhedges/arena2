@@ -712,6 +712,22 @@ namespace Arena.Presentation
             return CombatAnimationDecision.PlayNow;
         }
 
+        public static bool HasTrackedHigherPriorityPresentation(
+            bool hasActiveMeleePresentation,
+            CombatAnimationCategory activeMeleeCategory,
+            bool hasActiveSpellPresentation,
+            bool hasActiveSpellCastHoldPresentation)
+        {
+            // Animator triggers are consumed after script Update. The tracked
+            // presentation exists immediately, so it closes the one-frame
+            // window where a due auto-attack could otherwise replace a skill
+            // before the Animator reports that skill's state as active.
+            return (hasActiveMeleePresentation
+                    && activeMeleeCategory != CombatAnimationCategory.AutoAttack)
+                || hasActiveSpellPresentation
+                || hasActiveSpellCastHoldPresentation;
+        }
+
         public static CombatPreemptionMode ResolvePreemptionMode(
             CombatAnimationDecision decision,
             CombatAnimationCategory incomingCategory)

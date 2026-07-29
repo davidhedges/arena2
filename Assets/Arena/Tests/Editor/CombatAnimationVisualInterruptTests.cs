@@ -506,6 +506,46 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void HasTrackedHigherPriorityPresentation_ClosesPreAnimatorAutoAttackWindow()
+        {
+            Assert.That(
+                InvokeHasTrackedHigherPriorityPresentation(
+                    hasActiveMeleePresentation: true,
+                    activeMeleeCategory: "MeleeSkill",
+                    hasActiveSpellPresentation: false,
+                    hasActiveSpellCastHoldPresentation: false),
+                Is.True);
+            Assert.That(
+                InvokeHasTrackedHigherPriorityPresentation(
+                    hasActiveMeleePresentation: true,
+                    activeMeleeCategory: "AutoAttack",
+                    hasActiveSpellPresentation: false,
+                    hasActiveSpellCastHoldPresentation: false),
+                Is.False);
+            Assert.That(
+                InvokeHasTrackedHigherPriorityPresentation(
+                    hasActiveMeleePresentation: false,
+                    activeMeleeCategory: "AutoAttack",
+                    hasActiveSpellPresentation: true,
+                    hasActiveSpellCastHoldPresentation: false),
+                Is.True);
+            Assert.That(
+                InvokeHasTrackedHigherPriorityPresentation(
+                    hasActiveMeleePresentation: false,
+                    activeMeleeCategory: "AutoAttack",
+                    hasActiveSpellPresentation: false,
+                    hasActiveSpellCastHoldPresentation: true),
+                Is.True);
+            Assert.That(
+                InvokeHasTrackedHigherPriorityPresentation(
+                    hasActiveMeleePresentation: false,
+                    activeMeleeCategory: "AutoAttack",
+                    hasActiveSpellPresentation: false,
+                    hasActiveSpellCastHoldPresentation: false),
+                Is.False);
+        }
+
+        [Test]
         public void ResolvePreemptionMode_MapsDecisionsToExecutionModes()
         {
             Assert.That(
@@ -1032,6 +1072,33 @@ namespace Arena.Tests.Editor
                 {
                     Enum.Parse(decisionType, decision),
                     Enum.Parse(categoryType, incomingCategory),
+                })!;
+        }
+
+        private static bool InvokeHasTrackedHigherPriorityPresentation(
+            bool hasActiveMeleePresentation,
+            string activeMeleeCategory,
+            bool hasActiveSpellPresentation,
+            bool hasActiveSpellCastHoldPresentation)
+        {
+            Type playbackControllerType = RequireRuntimeType("Arena.Presentation.CombatActionPlaybackController");
+            Type categoryType = RequireRuntimeType("Arena.Presentation.CombatAnimationCategory");
+            MethodInfo method = RequireMethod(
+                playbackControllerType,
+                "HasTrackedHigherPriorityPresentation",
+                typeof(bool),
+                categoryType,
+                typeof(bool),
+                typeof(bool));
+
+            return (bool)method.Invoke(
+                null,
+                new[]
+                {
+                    (object)hasActiveMeleePresentation,
+                    Enum.Parse(categoryType, activeMeleeCategory),
+                    hasActiveSpellPresentation,
+                    hasActiveSpellCastHoldPresentation,
                 })!;
         }
 
