@@ -66,6 +66,10 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, int> ImpactAreaHitIndex { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, bool> ImpactAreaIncludePrimaryTarget { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, float> TargetingWidth { get; }
+        public global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong> ChannelDurationMs { get; }
+        public global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong> ChannelFirstTickDelayMs { get; }
+        public global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong> ChannelTickIntervalMs { get; }
+        public global::SpacetimeDB.Col<MeleeAbilityCatalog, bool> ChannelCancelOnMovement { get; }
 
         public MeleeAbilityCatalogCols(string tableName)
         {
@@ -96,6 +100,10 @@ namespace SpacetimeDB.Types
             ImpactAreaHitIndex = new global::SpacetimeDB.Col<MeleeAbilityCatalog, int>(tableName, "impact_area_hit_index");
             ImpactAreaIncludePrimaryTarget = new global::SpacetimeDB.Col<MeleeAbilityCatalog, bool>(tableName, "impact_area_include_primary_target");
             TargetingWidth = new global::SpacetimeDB.Col<MeleeAbilityCatalog, float>(tableName, "targeting_width");
+            ChannelDurationMs = new global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong>(tableName, "channel_duration_ms");
+            ChannelFirstTickDelayMs = new global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong>(tableName, "channel_first_tick_delay_ms");
+            ChannelTickIntervalMs = new global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong>(tableName, "channel_tick_interval_ms");
+            ChannelCancelOnMovement = new global::SpacetimeDB.Col<MeleeAbilityCatalog, bool>(tableName, "channel_cancel_on_movement");
         }
     }
 

@@ -744,6 +744,104 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void DaggerSessionAttacks_ResolveAuthoredClipsAndLifecycleDrivers()
+        {
+            Type setType = RequireType("Arena.Presentation.CombatAnimationSet");
+            Type phasedEntryType = RequireType("Arena.Presentation.WeaponPhasedActionEntry");
+            Type resolvedPhaseSetType = RequireType("Arena.Presentation.ResolvedWeaponPhasedActionClipSet");
+            UnityEngine.Object instance = Resources.Load("CombatAnimationSets/Daggers", setType);
+            Assert.That(instance, Is.Not.Null);
+
+            foreach ((string actionId, string clipName) in new[]
+            {
+                ("DAGGER_ROUNDHOUSE", "Combo_Attack_04_02"),
+                ("DAGGER_PRECISION_STRIKE", "Combo_Attack_05_01"),
+                ("DAGGER_EVISCERATE", "Combo_Attack_05_02"),
+                ("DAGGER_VITAL_STRIKE", "Execution_03"),
+                ("DAGGER_DEATH_CROSS", "Attack_Air_to_Floor_02_End"),
+                ("DAGGER_DISEMBOWEL", "Attack_Up_01"),
+            })
+            {
+                int strikeIndex = (int)InvokeInstanceMethod(instance, "GetStrikeIndexForActionId", actionId);
+                AnimationClip clip = (AnimationClip)InvokeInstanceMethod(instance, "GetStrikeClip", strikeIndex);
+                Assert.That(clip.name, Is.EqualTo(clipName), actionId);
+            }
+
+            AssertPhasedEntry(
+                "DAGGER_DIVING_STRIKE",
+                "Attack_Air_to_Floor_03_Start",
+                "Attack_Air_to_Floor_03_Loop",
+                "Attack_Air_to_Floor_03_End",
+                specialMovementDriven: true,
+                combatLifecycleDriven: false);
+            AssertPhasedEntry(
+                "DAGGER_FLAY",
+                "Skill_04_Start",
+                "Skill_04_Loop",
+                "Skill_04_End",
+                specialMovementDriven: false,
+                combatLifecycleDriven: true);
+            AssertPhasedEntry(
+                "DAGGER_FLURRY",
+                "Speed_Attack_Start",
+                "Speed_Attack_Loop",
+                "Speed_Attack_End",
+                specialMovementDriven: false,
+                combatLifecycleDriven: true);
+
+            void AssertPhasedEntry(
+                string actionId,
+                string expectedStart,
+                string expectedLoop,
+                string expectedEnd,
+                bool specialMovementDriven,
+                bool combatLifecycleDriven)
+            {
+                object?[] phasedArgs = { actionId, null };
+                bool found = (bool)RequireMethod(
+                        setType,
+                        "TryGetPhasedMeleeEntry",
+                        typeof(string),
+                        phasedEntryType.MakeByRefType())
+                    .Invoke(instance, phasedArgs)!;
+                Assert.That(found, Is.True, actionId);
+
+                object entry = phasedArgs[1]!;
+                Assert.That(
+                    (bool)phasedEntryType.GetField("drivePhasesFromSpecialMovement")!.GetValue(entry)!,
+                    Is.EqualTo(specialMovementDriven),
+                    actionId);
+                Assert.That(
+                    (bool)phasedEntryType.GetField("drivePhasesFromCombatLifecycle")!.GetValue(entry)!,
+                    Is.EqualTo(combatLifecycleDriven),
+                    actionId);
+
+                object?[] clipSetArgs = { true, null };
+                bool resolved = (bool)RequireMethod(
+                        phasedEntryType,
+                        "TryResolveClipSet",
+                        typeof(bool),
+                        resolvedPhaseSetType.MakeByRefType())
+                    .Invoke(entry, clipSetArgs)!;
+                Assert.That(resolved, Is.True, actionId);
+
+                object clipSet = clipSetArgs[1]!;
+                Assert.That(
+                    ((AnimationClip)resolvedPhaseSetType.GetProperty("Start")!.GetValue(clipSet)!).name,
+                    Is.EqualTo(expectedStart),
+                    actionId);
+                Assert.That(
+                    ((AnimationClip)resolvedPhaseSetType.GetProperty("Loop")!.GetValue(clipSet)!).name,
+                    Is.EqualTo(expectedLoop),
+                    actionId);
+                Assert.That(
+                    ((AnimationClip)resolvedPhaseSetType.GetProperty("End")!.GetValue(clipSet)!).name,
+                    Is.EqualTo(expectedEnd),
+                    actionId);
+            }
+        }
+
+        [Test]
         public void ArcherAnimationSet_ExportsStandardArrowProjectilesExceptRainShot()
         {
             Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");

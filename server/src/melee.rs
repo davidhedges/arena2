@@ -54,11 +54,11 @@ use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::practice::is_training_instance;
 use crate::progression::{
     active_action_bar_assignment_debug_summary, active_selectable_ability_for_authored_action,
-    derived_combat_profile_id_for_owner, melee_impact_effects_for_ability_id,
-    melee_timed_movement_for_ability_id, primary_resource_gain_on_action_accept,
-    resolved_auto_attack_mode_for_owner, AbilityCatalog, AutoAttackCatalog,
-    AutoAttackReplacementCatalog, MeleeAbilityCatalog, MeleeGapCloseCatalog,
-    MeleeTimedMovementRuntime,
+    derived_combat_profile_id_for_owner, melee_channel_for_ability_id,
+    melee_impact_effects_for_ability_id, melee_timed_movement_for_ability_id,
+    primary_resource_gain_on_action_accept, resolved_auto_attack_mode_for_owner, AbilityCatalog,
+    AutoAttackCatalog, AutoAttackReplacementCatalog, MeleeAbilityCatalog, MeleeChannelRuntime,
+    MeleeGapCloseCatalog, MeleeTimedMovementRuntime,
 };
 use crate::relations::{can_harm, combat_relation, target_audience_allows, TargetAudience};
 use crate::resources::{
@@ -85,6 +85,8 @@ use crate::combat::active_combat_projectile as _;
 use crate::combat::combat_event as _;
 #[allow(unused_imports)]
 use crate::combat::projectile_presentation_event as _;
+#[allow(unused_imports)]
+use crate::melee::active_melee_channel as _;
 #[allow(unused_imports)]
 use crate::melee::melee_attack_modifier_catalog as _;
 #[allow(unused_imports)]
@@ -118,6 +120,7 @@ use crate::progression::melee_gap_close_catalog as _;
 use crate::spells::global_cooldown as _;
 
 const EVENT_CAST: &str = COMBAT_EVENT_CAST;
+const EVENT_RELEASE: &str = COMBAT_EVENT_RELEASE;
 const EVENT_IMPACT: &str = COMBAT_EVENT_IMPACT;
 const EVENT_AREA_IMPACT: &str = COMBAT_EVENT_AREA_IMPACT;
 const EVENT_FIZZLE: &str = COMBAT_EVENT_FIZZLE;
@@ -846,6 +849,31 @@ pub struct PendingMeleeImpact {
     pub targeting_width: f32,
 }
 
+#[derive(Clone)]
+#[table(accessor = active_melee_channel)]
+pub struct ActiveMeleeChannel {
+    #[primary_key]
+    pub owner: Identity,
+    pub action_instance_id: String,
+    pub action_kind: String,
+    pub ability_id: String,
+    pub source_kind: String,
+    pub target: Identity,
+    pub started_voluntary_move_epoch: u64,
+    pub cancel_on_movement: bool,
+    pub origin_x: f32,
+    pub origin_y: f32,
+    pub origin_z: f32,
+    pub dir_x: f32,
+    pub dir_z: f32,
+    pub point_x: f32,
+    pub point_y: f32,
+    pub point_z: f32,
+    pub ends_at: Timestamp,
+    #[index(btree)]
+    pub ends_at_micros: i64,
+}
+
 /// Actor-generic server-side melee commitment used below player input and NPC
 /// utility adapters. It owns authoritative present-time target validation,
 /// the shared CAST event, and scheduling into `PendingMeleeImpact`; it does
@@ -1015,6 +1043,123 @@ pub(crate) fn clear_pending_melee_impacts_for_source(ctx: &ReducerContext, sourc
         .collect();
     for impact_id in impact_ids {
         ctx.db.pending_melee_impact().impact_id().delete(impact_id);
+    }
+}
+
+fn melee_channel_movement_canceled(
+    cancel_on_movement: bool,
+    started_voluntary_move_epoch: u64,
+    current_voluntary_move_epoch: u64,
+) -> bool {
+    cancel_on_movement && current_voluntary_move_epoch != started_voluntary_move_epoch
+}
+
+fn finish_active_melee_channel(
+    ctx: &ReducerContext,
+    row: ActiveMeleeChannel,
+    now: Timestamp,
+    canceled: bool,
+) {
+    if canceled {
+        let pending_impact_ids: Vec<u64> = ctx
+            .db
+            .pending_melee_impact()
+            .source()
+            .filter(row.owner)
+            .filter(|impact| impact.spell_id == row.action_instance_id)
+            .map(|impact| impact.impact_id)
+            .collect();
+        for impact_id in pending_impact_ids {
+            ctx.db.pending_melee_impact().impact_id().delete(impact_id);
+        }
+    }
+
+    ctx.db.active_melee_channel().owner().delete(row.owner);
+    ctx.db.combat_event().insert(CombatEvent {
+        event_id: 0,
+        action_instance_id: row.action_instance_id,
+        action_kind: row.action_kind,
+        ability_id: row.ability_id,
+        hit_index: -1,
+        event_type: if canceled {
+            EVENT_FIZZLE
+        } else {
+            EVENT_RELEASE
+        }
+        .to_string(),
+        source_kind: row.source_kind,
+        caster: row.owner,
+        hit: row.target,
+        origin_x: row.origin_x,
+        origin_y: row.origin_y,
+        origin_z: row.origin_z,
+        dir_x: row.dir_x,
+        dir_y: 0.0,
+        dir_z: row.dir_z,
+        speed: 0.0,
+        max_distance: 0.0,
+        scalar_kind: COMBAT_SCALAR_NONE.to_string(),
+        scalar_value: 0.0,
+        sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
+        sequence_index: 0,
+        sequence_count: 0,
+        point_x: row.point_x,
+        point_y: row.point_y,
+        point_z: row.point_z,
+        created_at: now,
+        created_at_micros: timestamp_to_micros(now),
+        damage: 0,
+        metadata_kind: COMBAT_METADATA_NONE.to_string(),
+        metadata_key: String::new(),
+        metadata_value: String::new(),
+    });
+}
+
+pub(crate) fn cancel_active_melee_channel_for_interrupt(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) -> bool {
+    let Some(row) = ctx.db.active_melee_channel().owner().find(owner) else {
+        return false;
+    };
+    finish_active_melee_channel(ctx, row, now, true);
+    true
+}
+
+pub(crate) fn tick_active_melee_channels(ctx: &ReducerContext, now: Timestamp) {
+    let now_micros = timestamp_to_micros(now);
+    let rows: Vec<ActiveMeleeChannel> = ctx.db.active_melee_channel().iter().collect();
+    for row in rows {
+        if ctx
+            .db
+            .active_melee_channel()
+            .owner()
+            .find(row.owner)
+            .is_none()
+        {
+            continue;
+        }
+
+        let canceled = ctx
+            .db
+            .player_state()
+            .player_id()
+            .find(row.owner)
+            .is_none_or(|state| {
+                !state.alive
+                    || melee_channel_movement_canceled(
+                        row.cancel_on_movement,
+                        row.started_voluntary_move_epoch,
+                        state.voluntary_move_epoch,
+                    )
+            })
+            || has_active_disabling_status(ctx, row.owner, now);
+        if canceled {
+            finish_active_melee_channel(ctx, row, now, true);
+        } else if now_micros >= row.ends_at_micros {
+            finish_active_melee_channel(ctx, row, now, false);
+        }
     }
 }
 
@@ -1209,6 +1354,7 @@ struct ResolvedMeleeGameplay {
     applies_stagger: bool,
     impact_area: Option<ResolvedMeleeImpactArea>,
     timed_movement: Option<MeleeTimedMovementRuntime>,
+    channel: Option<MeleeChannelRuntime>,
 }
 
 #[derive(Clone, Copy)]
@@ -1676,6 +1822,7 @@ fn melee_gameplay_from_catalog_rows(
         applies_stagger: melee.applies_stagger,
         impact_area: resolved_melee_impact_area_from_catalog(&melee),
         timed_movement: melee_timed_movement_for_ability_id(ability.ability_id.as_str()),
+        channel: melee_channel_for_ability_id(ability.ability_id.as_str()),
     })
 }
 
@@ -1863,6 +2010,7 @@ fn auto_attack_melee_gameplay_from_catalog(
         applies_stagger: row.applies_stagger,
         impact_area: None,
         timed_movement: None,
+        channel: None,
     })
 }
 
@@ -1889,6 +2037,7 @@ fn auto_attack_replacement_melee_gameplay_from_catalog(
         applies_stagger: row.applies_stagger,
         impact_area: None,
         timed_movement: None,
+        channel: None,
     })
 }
 
@@ -1915,24 +2064,37 @@ fn resolved_melee_impact_area_from_catalog(
     })
 }
 
+#[cfg(test)]
 fn resolved_hit_window_damages(strike: &StrikeData, total_damage: i32) -> Vec<i32> {
-    if strike.hit_windows.is_empty() {
+    evenly_split_damage(total_damage, strike.hit_windows.len())
+}
+
+fn evenly_split_damage(total_damage: i32, count: usize) -> Vec<i32> {
+    if count == 0 {
         return Vec::new();
     }
-
-    if strike.hit_windows.len() == 1 {
-        return vec![total_damage.max(0)];
-    }
-
     let total_override = total_damage.max(0);
-    let count = strike.hit_windows.len() as i32;
-    let base = total_override / count;
-    let remainder = total_override % count;
-    let mut resolved = vec![base; strike.hit_windows.len()];
+    let count_i32 = count as i32;
+    let base = total_override / count_i32;
+    let remainder = total_override % count_i32;
+    let mut resolved = vec![base; count];
     for damage in resolved.iter_mut().take(remainder as usize) {
         *damage += 1;
     }
     resolved
+}
+
+fn melee_channel_tick_delays(channel: MeleeChannelRuntime) -> Vec<u64> {
+    let mut delays = Vec::new();
+    let mut delay_ms = channel.first_tick_delay_ms;
+    while delay_ms <= channel.duration_ms {
+        delays.push(delay_ms);
+        let Some(next_delay_ms) = delay_ms.checked_add(channel.tick_interval_ms) else {
+            break;
+        };
+        delay_ms = next_delay_ms;
+    }
+    delays
 }
 
 fn yaw_direction(yaw: f32) -> (f32, f32) {
@@ -3296,6 +3458,9 @@ fn perform_melee_attack_for_internal(
     if has_active_disabling_status(ctx, caster, ctx.timestamp) {
         return Ok(MeleeAttackDispatch::Rejected(ActionRejectReason::Disabled));
     }
+    if ctx.db.active_melee_channel().owner().find(caster).is_some() {
+        return Ok(MeleeAttackDispatch::Rejected(ActionRejectReason::Busy));
+    }
 
     let now = ctx.timestamp;
     log_melee_resource_resolution(
@@ -3321,7 +3486,24 @@ fn perform_melee_attack_for_internal(
         }
     }
 
-    let hit_window_damages = resolved_hit_window_damages(&strike, gameplay.base_damage);
+    let impact_delays_ms = gameplay.channel.map_or_else(
+        || {
+            strike
+                .hit_windows
+                .iter()
+                .map(|hit_window| hit_window.impact_delay_ms)
+                .collect()
+        },
+        melee_channel_tick_delays,
+    );
+    if impact_delays_ms.is_empty() {
+        return Err(format!(
+            "Melee strike has no resolved impact schedule: {}:{}",
+            combat_profile,
+            authored_action_id.as_str()
+        ));
+    }
+    let hit_window_damages = evenly_split_damage(gameplay.base_damage, impact_delays_ms.len());
     let melee_modifiers = resolve_melee_attack_modifiers(ctx, caster, now);
     let (consumed_modifier_status_kind, consumed_modifier_stack_group) =
         consumed_melee_modifier_event_fields(&melee_modifiers);
@@ -3813,6 +3995,30 @@ fn perform_melee_attack_for_internal(
         );
     }
 
+    if let Some(channel) = gameplay.channel {
+        let ends_at = now + Duration::from_millis(channel.duration_ms);
+        ctx.db.active_melee_channel().insert(ActiveMeleeChannel {
+            owner: caster,
+            action_instance_id: spell_id.clone(),
+            action_kind: strike.id.clone(),
+            ability_id: gameplay.ability_id.clone().unwrap_or_default(),
+            source_kind: policy.source_label().to_string(),
+            target,
+            started_voluntary_move_epoch: caster_state.voluntary_move_epoch,
+            cancel_on_movement: channel.cancel_on_movement,
+            origin_x: caster_phys.pos_x,
+            origin_y: caster_phys.pos_y,
+            origin_z: caster_phys.pos_z,
+            dir_x,
+            dir_z,
+            point_x: target_point_x,
+            point_y: target_point_y,
+            point_z: target_point_z,
+            ends_at,
+            ends_at_micros: timestamp_to_micros(ends_at),
+        });
+    }
+
     ctx.db.combat_event().insert(CombatEvent {
         event_id: 0,
         action_instance_id: spell_id.clone(),
@@ -3832,11 +4038,10 @@ fn perform_melee_attack_for_internal(
         speed: 0.0,
         max_distance: resolved_effective_range,
         scalar_kind: COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS.to_string(),
-        scalar_value: strike
-            .hit_windows
-            .last()
-            .map(|hit_window| hit_window.impact_delay_ms as f32 / 1000.0)
-            .unwrap_or(0.0),
+        scalar_value: gameplay.channel.map_or_else(
+            || impact_delays_ms.last().copied().unwrap_or(0) as f32 / 1000.0,
+            |channel| channel.duration_ms as f32 / 1000.0,
+        ),
         sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
         sequence_index: 0,
         sequence_count: 0,
@@ -3858,9 +4063,8 @@ fn perform_melee_attack_for_internal(
         metadata_value: consumed_modifier_stack_group.to_string(),
     });
 
-    for (hit_index, hit_window) in strike.hit_windows.iter().enumerate() {
-        let impact_at =
-            scheduled_melee_impact_at(now, hit_window.impact_delay_ms, resolved_gap_close);
+    for (hit_index, impact_delay_ms) in impact_delays_ms.iter().copied().enumerate() {
+        let impact_at = scheduled_melee_impact_at(now, impact_delay_ms, resolved_gap_close);
         let active_until = impact_at;
         let recovery_until = active_until + Duration::from_millis(strike.recovery_ms);
         let Some(damage) = hit_window_damages.get(hit_index).copied() else {
@@ -5787,6 +5991,7 @@ mod tests {
         gap_close_activation_satisfied, gap_close_destination_within_epsilon,
         gap_close_has_horizontal_travel, gap_close_pre_commit_decision,
         gap_close_target_facing_satisfied, inactive_conditional_gap_close_range,
+        melee_channel_movement_canceled, melee_channel_tick_delays,
         melee_hit_volume_contains_player, melee_manifest, melee_target_impact_point_y,
         pending_melee_impact_range, positive_projectile_override,
         projectile_max_distance_for_policy, push_melee_impact_status_effects,
@@ -5813,7 +6018,7 @@ mod tests {
     };
     use crate::player::{DEFAULT_COMBAT_PROFILE, TWO_HANDED_SWORD_COMBAT_PROFILE};
     use crate::player_state::PlayerState;
-    use crate::progression::MeleeGapCloseCatalog;
+    use crate::progression::{MeleeChannelRuntime, MeleeGapCloseCatalog};
 
     const TEST_GAP_CLOSE_DESTINATION_EPSILON_METERS: f32 = 0.10;
 
@@ -6771,6 +6976,35 @@ mod tests {
         assert_eq!(resolved.len(), strike.hit_windows.len());
         assert_eq!(resolved.iter().sum::<i32>(), 31);
         assert_eq!(resolved, vec![16, 15]);
+    }
+
+    #[test]
+    fn melee_channel_ticks_repeat_through_authored_duration() {
+        assert_eq!(
+            melee_channel_tick_delays(MeleeChannelRuntime {
+                duration_ms: 2500,
+                first_tick_delay_ms: 44,
+                tick_interval_ms: 333,
+                cancel_on_movement: true,
+            }),
+            vec![44, 377, 710, 1043, 1376, 1709, 2042, 2375]
+        );
+        assert_eq!(
+            melee_channel_tick_delays(MeleeChannelRuntime {
+                duration_ms: 3000,
+                first_tick_delay_ms: 107,
+                tick_interval_ms: 667,
+                cancel_on_movement: true,
+            }),
+            vec![107, 774, 1441, 2108, 2775]
+        );
+    }
+
+    #[test]
+    fn melee_channel_movement_cancel_requires_a_voluntary_epoch_change() {
+        assert!(!melee_channel_movement_canceled(true, 7, 7));
+        assert!(melee_channel_movement_canceled(true, 7, 8));
+        assert!(!melee_channel_movement_canceled(false, 7, 8));
     }
 
     #[test]

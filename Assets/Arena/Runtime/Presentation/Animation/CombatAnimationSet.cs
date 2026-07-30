@@ -948,6 +948,8 @@ namespace Arena.Presentation
         public string authoredActionId;
         [Tooltip("When true, this phased melee action holds its loop segment until the matching authoritative special movement ends.")]
         public bool drivePhasesFromSpecialMovement;
+        [Tooltip("When true, this phased melee action holds its loop segment until the matching authoritative combat action releases or fizzles.")]
+        public bool drivePhasesFromCombatLifecycle;
         [Tooltip("Grounded phased clips for this authored strike. Leave empty to fall back to Air if that set is complete.")]
         public WeaponPhasedActionClipSet ground;
         [Tooltip("Airborne phased clips for this authored strike. Leave empty to fall back to Ground if that set is complete.")]
@@ -1004,6 +1006,8 @@ namespace Arena.Presentation
         public WeaponPhasedActionClipSet phasedAir;
         [Tooltip("Only for phased movement-coupled attacks. When enabled, Start plays once, Loop holds while special movement is active, and End plays when special movement ends.")]
         public bool drivePhasesFromSpecialMovement;
+        [Tooltip("Only for phased channeled attacks. When enabled, Start plays once, Loop holds while the authoritative combat action is active, and End plays when that action releases or fizzles.")]
+        public bool drivePhasesFromCombatLifecycle;
 
         public bool UsesPhasedPresentation => presentationMode == WeaponMeleePresentationMode.Phased;
 
@@ -1041,6 +1045,7 @@ namespace Arena.Presentation
             {
                 authoredActionId = combat.AuthoredStrikeIdOrDefault,
                 drivePhasesFromSpecialMovement = drivePhasesFromSpecialMovement,
+                drivePhasesFromCombatLifecycle = drivePhasesFromCombatLifecycle,
                 ground = phasedGround,
                 air = phasedAir,
             };

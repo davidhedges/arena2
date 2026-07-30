@@ -1282,10 +1282,7 @@
                     "slot_id": "dagger_roundhouse_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 507
-                        },
-                        {
-                            "impact_delay_ms": 974
+                            "impact_delay_ms": 298
                         }
                     ],
                     "recovery_ms": 350,
@@ -1304,6 +1301,192 @@
                         }
                     ],
                     "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_PRECISION_STRIKE",
+                    "slot_id": "dagger_precision_strike_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 342
+                        },
+                        {
+                            "impact_delay_ms": 564
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_EVISCERATE",
+                    "slot_id": "dagger_eviscerate_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 334
+                        },
+                        {
+                            "impact_delay_ms": 334
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_VITAL_STRIKE",
+                    "slot_id": "dagger_vital_strike_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 231
+                        },
+                        {
+                            "impact_delay_ms": 235
+                        },
+                        {
+                            "impact_delay_ms": 282
+                        },
+                        {
+                            "impact_delay_ms": 724
+                        },
+                        {
+                            "impact_delay_ms": 747
+                        },
+                        {
+                            "impact_delay_ms": 791
+                        }
+                    ],
+                    "recovery_ms": 400,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_DEATH_CROSS",
+                    "slot_id": "dagger_death_cross_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 238
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_DIVING_STRIKE",
+                    "slot_id": "dagger_diving_strike_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 737
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": true,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_OR_AIRBORNE"
+                },
+                {
+                    "id": "DAGGER_DISEMBOWEL",
+                    "slot_id": "dagger_disembowel_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 240
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_FLAY",
+                    "slot_id": "dagger_flay_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 44
+                        },
+                        {
+                            "impact_delay_ms": 204
+                        },
+                        {
+                            "impact_delay_ms": 352
+                        },
+                        {
+                            "impact_delay_ms": 412
+                        },
+                        {
+                            "impact_delay_ms": 412
+                        },
+                        {
+                            "impact_delay_ms": 412
+                        },
+                        {
+                            "impact_delay_ms": 412
+                        },
+                        {
+                            "impact_delay_ms": 528
+                        },
+                        {
+                            "impact_delay_ms": 746
+                        }
+                    ],
+                    "recovery_ms": 350,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_FLURRY",
+                    "slot_id": "dagger_flurry_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 107
+                        },
+                        {
+                            "impact_delay_ms": 269
+                        },
+                        {
+                            "impact_delay_ms": 431
+                        },
+                        {
+                            "impact_delay_ms": 574
+                        },
+                        {
+                            "impact_delay_ms": 749
+                        },
+                        {
+                            "impact_delay_ms": 829
+                        },
+                        {
+                            "impact_delay_ms": 829
+                        },
+                        {
+                            "impact_delay_ms": 1103
+                        }
+                    ],
+                    "recovery_ms": 400,
                     "is_gap_closer": false,
                     "combo_from": "",
                     "combo_open_ms": 0,

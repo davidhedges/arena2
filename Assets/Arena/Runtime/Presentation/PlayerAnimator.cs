@@ -2989,8 +2989,9 @@ namespace Arena.Presentation
                 clipSet.Loop,
                 clipSet.End,
                 clipSet.ReleaseAfterStart,
-                specialMovementDriven: phasedMeleeEntry.drivePhasesFromSpecialMovement
-                    && request.DrivePhasesFromSpecialMovement);
+                specialMovementDriven: (phasedMeleeEntry.drivePhasesFromSpecialMovement
+                    && request.DrivePhasesFromSpecialMovement)
+                    || phasedMeleeEntry.drivePhasesFromCombatLifecycle);
             PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
             ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: true);
             return PlayPhasedMeleeSegment(PhasedMeleePlaybackPhase.Start, 0f);
@@ -3059,6 +3060,32 @@ namespace Arena.Presentation
 
             if (_actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.Loop)
                 AdvancePhasedMeleeSegment(PhasedMeleePlaybackPhase.End);
+        }
+
+        public bool RequestCombatLifecycleDrivenPhasedMeleeEnd(string actionId)
+        {
+            if (_animator == null
+                || _animationSet == null
+                || !_actionPlayback.ActiveMeleePresentation.HasValue)
+            {
+                return false;
+            }
+
+            ActiveMeleePresentation active = _actionPlayback.ActiveMeleePresentation.GetValueOrDefault();
+            if (!string.Equals(
+                    WireIdentifier.Normalize(active.ActionId),
+                    WireIdentifier.Normalize(actionId),
+                    StringComparison.Ordinal)
+                || !_animationSet.TryGetPhasedMeleeEntry(actionId, out WeaponPhasedActionEntry entry)
+                || !entry.drivePhasesFromCombatLifecycle
+                || !_actionPlayback.RequestPhasedMeleeSpecialMovementEnd())
+            {
+                return false;
+            }
+
+            if (_actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.Loop)
+                AdvancePhasedMeleeSegment(PhasedMeleePlaybackPhase.End);
+            return true;
         }
 
         private void UpdateSpecialMovementDrivenPhasedMeleePlayback(float normalizedTime)

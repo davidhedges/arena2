@@ -377,6 +377,11 @@ namespace Arena.Entity
             _animator?.RequestSpecialMovementDrivenPhasedMeleeEnd();
         }
 
+        public bool RequestCombatLifecycleDrivenPhasedMeleeEnd(string actionId)
+        {
+            return _animator?.RequestCombatLifecycleDrivenPhasedMeleeEnd(actionId) == true;
+        }
+
         /// <summary>
         /// Cuts the predicted presentation of a server-rejected action
         /// (netcode design review S2) via the shared preemption primitives —

@@ -58,7 +58,7 @@ use crate::inventory::{
 use crate::melee::{
     has_due_pending_melee_impacts, has_due_pending_projectile_releases,
     resolve_pending_melee_impacts, resolve_pending_projectile_releases, sync_melee_definitions,
-    tick_pending_melee_timed_movements, tick_queued_melee_followups,
+    tick_active_melee_channels, tick_pending_melee_timed_movements, tick_queued_melee_followups,
 };
 use crate::movement::{
     velocity_from_intent, FIXED_TICK_MILLIS, FIXED_TICK_SECONDS, GRAVITY, JUMP_VELOCITY,
@@ -1722,14 +1722,24 @@ fn reset_player_intent_after_special_movement(
         return;
     };
 
-    intent.forward = 0.0;
-    intent.strafe = 0.0;
+    apply_special_movement_handoff_intent(&mut intent, input_tick, yaw, now);
+    record_table_write(TableWriteKind::PlayerIntent);
+    ctx.db.player_intent().identity().update(intent);
+}
+
+fn apply_special_movement_handoff_intent(
+    intent: &mut PlayerIntent,
+    input_tick: u32,
+    yaw: f32,
+    now: Timestamp,
+) {
+    // Forward and strafe are continuous state, so retain the latest values
+    // consumed during the special movement. Jump is an edge and must remain
+    // cleared along with the queued commands to prevent a delayed launch.
     intent.yaw = yaw;
     intent.jump = false;
     intent.input_tick = input_tick;
     intent.updated_at = now;
-    record_table_write(TableWriteKind::PlayerIntent);
-    ctx.db.player_intent().identity().update(intent);
 }
 
 fn special_movement_grounded_state(collision_policy: &str, current_grounded: bool) -> bool {
@@ -2170,6 +2180,7 @@ pub fn game_tick(ctx: &ReducerContext, timer: GameLoopTimer) -> Result<(), Strin
         &temporary_modifiers,
         &player_contexts,
     );
+    tick_active_melee_channels(ctx, now);
     resolve_pending_casts(ctx, now)?;
     let player_sim_micros = player_sim_timer.elapsed_micros();
     drop(player_sim_stopwatch);
@@ -2235,9 +2246,9 @@ fn tick_countdowns(ctx: &ReducerContext, now: Timestamp) {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_player_intent_fallback_if_changed, fresh_game_tick_schedule,
-        game_loop_timer_is_overdue, next_game_tick_schedule, percentile_sorted,
-        settle_stationary_dummy, settle_stationary_playground_target,
+        apply_player_intent_fallback_if_changed, apply_special_movement_handoff_intent,
+        fresh_game_tick_schedule, game_loop_timer_is_overdue, next_game_tick_schedule,
+        percentile_sorted, settle_stationary_dummy, settle_stationary_playground_target,
         special_movement_grounded_state, sync_player_voluntary_move_epoch, PlayerIntent,
         PlayerPhysics, TickProfileSample, TickProfileWindowState,
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
@@ -2366,6 +2377,21 @@ mod tests {
         ));
         assert!(!current.jump);
         assert_eq!(current.input_tick, 1);
+    }
+
+    #[test]
+    fn special_movement_handoff_preserves_axes_and_clears_jump() {
+        let now = Timestamp::from_micros_since_unix_epoch(123_000);
+        let mut current = intent(0.75, -0.25, true);
+
+        apply_special_movement_handoff_intent(&mut current, 42, -1.5, now);
+
+        assert_eq!(current.forward, 0.75);
+        assert_eq!(current.strafe, -0.25);
+        assert_eq!(current.yaw, -1.5);
+        assert!(!current.jump);
+        assert_eq!(current.input_tick, 42);
+        assert_eq!(current.updated_at, now);
     }
 
     #[test]

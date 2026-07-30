@@ -1501,6 +1501,16 @@ namespace Arena.Entity
                 return;
             }
 
+            bool meleeLifecycleEnd = row.EventType == CombatEventTypes.Release
+                || row.EventType == CombatEventTypes.Fizzle;
+            if (meleeLifecycleEnd
+                && !string.Equals(row.SourceKind, CombatEventSources.Spell, System.StringComparison.Ordinal)
+                && TryGetLivePlayer(row.Caster, out var meleeLifecycleCaster)
+                && meleeLifecycleCaster.RequestCombatLifecycleDrivenPhasedMeleeEnd(row.ActionKind))
+            {
+                return;
+            }
+
             if (TryGetLiveNpc(row.Caster, out var npcCaster))
             {
                 bool npcMeleeCast = row.EventType == CombatEventTypes.Cast
