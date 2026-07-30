@@ -120,10 +120,48 @@ rebaseline, and the density scale. Their evidence is archived:
 
 Treat both as history, not as current constraints.
 
-### The next direction: layered 3-D topology
+### In progress: layered 3-D topology — Phase A landed
 
-Proposal, **draft, not yet accepted**:
+Design of record, **still a draft beyond Phase A**:
 [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md).
+Branch `dungeon/layered-topology`.
+
+**Phase A is complete (2026-07-31).** The plan can express surface identity;
+nothing yet produces a second surface.
+
+- **A1 — container migration, output-neutral.** `DungeonLabGenerator.Surfaces.cs`
+  introduces `SurfaceKey` (cell, level), `LevelBand`, `PlanShadow` (pre-elevation
+  domain) and `SurfaceField` (post-elevation surfaces), plus the shadow-agreement
+  and connection-identity checks. `RoomConnection` gained `edgeId` — a
+  correctness fix for edge lookup — and `plannedBand`, which is data only.
+  Gate: per-seed `hashes.canonical` moved on **0/200** seeds against the parent
+  commit; `resultHash 2731146954f3e57d` identical both legs.
+- **A2 — the shadow repair, deliberately rebaselined.** Closes the architecture
+  review's H2: promontory passes added cells to the level field and never to
+  `floorCells`, so every shadow-derived metric described a dungeon missing its
+  piers. `planShadowDisagreementSeeds` 200 → **0**; `resultHash` moved once, to
+  `f387ca04df49d8a7`.
+
+Two rulings worth carrying forward, both settled by measurement rather than by
+the draft:
+
+1. **Shadow agreement is one-directional: surfaces ⊆ shadow.** A shadow cell
+   with no surface is legitimate — the gap under an external span deck stays a
+   gap — and the shadow is the DOMAIN the level field floods within, so removing
+   those cells would change what `FillUnassignedFloorCells` and `CleanPath`
+   operate over. That side is counted and reported, not gated.
+2. **The repair belongs at the end of planning, not at each producer**, which is
+   where the draft's prose put it. `BuildExternalConnectorCandidates` derives
+   `coreExtent` from `layout.floorCells`, so adding a promontory at its own
+   producer moves the core's outer face and re-picks connector anchors.
+
+A2's isolation, per-seed: only `hashes.layout` and `hashes.canonical` moved.
+`routeIntent`, `tieredLevelPlan`, `existingTransitions`, `preservedCorePlan`,
+`preCorrectivePlan` and `recipeResolutions` are byte-identical on all 200, as are
+the accepted set, every validation result and every attempt count. The plan did
+not move; only the shadow and what is computed from it did.
+
+**Phase B is next** — volumetric reservation and one clearance rule (design §13).
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently

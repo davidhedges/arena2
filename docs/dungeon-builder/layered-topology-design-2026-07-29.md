@@ -393,12 +393,18 @@ dependency runs the other way. H2 is specifically that
 `floorCells` describes a dungeon missing its piers. The right closure is an
 **invariant**, not a derivation:
 
-> **Shadow agreement.** At the end of planning,
-> `surfaceField.PlanCells()` must equal `planShadow.cells`. Any pass that adds a
-> surface must add its plan cell to the shadow in the same step.
+> **Shadow agreement.** At the end of planning, every surfaced plan cell must be
+> in the shadow: `surfaceField.PlanCells() ⊆ planShadow.cells`.
 
 Checkable, cheap, and it catches the whole class rather than the one instance.
 Rejection code `PLAN_SHADOW_DISAGREEMENT`.
+
+**Amended in A2 (2026-07-31), on measurement.** This paragraph originally
+demanded equality, and demanded it "in the same step" at each producer. Both were
+wrong: a shadow cell with no surface is legitimate (the gap under an external span
+deck), and repairing at the producer moves `coreExtent` and re-picks external
+connector anchors. The rule is one-directional and applied once at the end of
+planning. Reasoning in §13, "Corrected in implementation".
 
 ### 3.2 The traversal graph
 
@@ -1507,7 +1513,18 @@ New rejection codes, each with a named owner phase:
 
 Bounded, not a rewrite. Each phase ends in a state that is safe to sit in.
 
-### Phase A — Surface identity in the plan
+### Phase A — Surface identity in the plan — **LANDED 2026-07-31**
+
+> **Status.** A1 = `e710d39d`, A2 = `cacc0518`, on `dungeon/layered-topology`.
+> A1's exit met as written: `hashes.canonical` moved on **0/200** seeds,
+> `resultHash 2731146954f3e57d` identical both legs. A2 met its exit with the
+> hash moving once, to `f387ca04df49d8a7`; `planShadowDisagreementSeeds` 200 → 0;
+> per-seed, only `hashes.layout` and `hashes.canonical` moved, while
+> `routeIntent`, `tieredLevelPlan`, `existingTransitions`, `preservedCorePlan`,
+> `preCorrectivePlan` and `recipeResolutions` were byte-identical on all 200, as
+> were the accepted set, every validation result and every attempt count.
+> Determinism re-verified; Render Sweep 200/200. **Two rulings below corrected
+> this section as written — see "Corrected in implementation".**
 
 **Capability.** The canonical plan can express more than one walkable surface at
 a plan coordinate, and the traversal graph is promoted to first-class. Nothing
@@ -1554,8 +1571,9 @@ every `SynthesizedLoop` resolves to none** — the draft's "every connection
 resolves to a route edge" would have rejected every loop corridor
 (`cs:1503`, `:2097`). RNG subjects that were cell tokens become surface tokens.
 
-**Invariants (A2).** Shadow agreement holds:
-`surfaceField.PlanCells() == planShadow.cells`.
+**Invariants (A2).** Shadow agreement holds **one-directionally**:
+`surfaceField.PlanCells() ⊆ planShadow.cells`. See below for why equality is the
+wrong rule.
 
 **Evidence.** `ops/dungeon-port-ab.sh` on 200 seeds: byte-identical `resultHash`,
 stashed vs restored. Two independent runs identical
@@ -1580,6 +1598,33 @@ stable too, and both can be asserted.
 **Exit (A2).** Shadow agreement clean on 200/200; the hash moves **once**, and
 every seed whose report changed differs only in `floorCells`, fill percent and
 the graph summary. Anything else changing means the repair was not isolated.
+
+#### Corrected in implementation
+
+Two things this section got wrong, both settled by measurement:
+
+1. **Agreement is one-directional, not equality.** The invariant above originally
+   read `surfaceField.PlanCells() == planShadow.cells`. A shadow cell with no
+   surface is legitimate — the gap under an external span deck stays a gap — and
+   the shadow is the **domain** the level field floods within, so deleting those
+   cells would change what `FillUnassignedFloorCells` and `CleanPath` operate
+   over, which is a behaviour change A2 has no business making. `Agrees` is
+   therefore `surfacedCellsOutsideShadow.Length == 0`. The other side is still
+   counted and reported (`IsTwoSided`) so a **new** producer of unsurfaced shadow
+   stays visible; it is not a defect.
+2. **The repair belongs at the end of planning, not at each producer.** §3.1's
+   prose said "any pass that adds a surface must add its plan cell to the shadow
+   in the same step". That is not safe here:
+   `BuildExternalConnectorCandidates` derives `coreExtent` and its outer-face
+   test from `layout.floorCells`, so a named vista promontory added at its own
+   producer moves the core's outer face and re-picks the connector anchors —
+   geometry moving well beyond the shadow, which A2's isolation exit forbids.
+   `ReconcilePlanShadowWithSurfaces` runs once in `TryBuildCellLevelField`,
+   immediately after `TryResolveExternalConnectorPromontories` — the final plan
+   mutation, hence "the end of planning", with no reader of the shadow
+   downstream of the write. Sweeping every surface rather than enumerating the
+   two known producers also makes the invariant true by construction instead of
+   true by a list somebody has to remember to extend.
 
 ---
 
