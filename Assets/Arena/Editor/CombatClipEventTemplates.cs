@@ -41,6 +41,7 @@ namespace Arena.Editor
             {
                 [CombatClipRole.Unknown] = System.Array.Empty<CombatClipEventTemplate>(),
                 [CombatClipRole.Locomotion] = System.Array.Empty<CombatClipEventTemplate>(),
+                [CombatClipRole.Dodge] = System.Array.Empty<CombatClipEventTemplate>(),
 
                 [CombatClipRole.SpellCastHoldEnter] = new[]
                 {

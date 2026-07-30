@@ -126,6 +126,68 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void AnimatorController_DodgeUsesAuthoritativePhaseParameter()
+        {
+            AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(
+                "Assets/Arena/Content/Animation/Arena_Character.controller");
+
+            Assert.That(controller, Is.Not.Null);
+            AnimatorControllerParameter phaseParameter = controller.parameters.Single(
+                parameter => parameter.name == "DodgePhase");
+            AnimatorState dodge = RequireBaseState(controller, "Dodge");
+
+            Assert.That(phaseParameter.type, Is.EqualTo(AnimatorControllerParameterType.Float));
+            Assert.That(dodge.timeParameterActive, Is.True);
+            Assert.That(dodge.timeParameter, Is.EqualTo("DodgePhase"));
+        }
+
+        [TestCase(900L, 1000L, 1250L, 1470L, 0f, -1f, 0f)]
+        [TestCase(1000L, 1000L, 1250L, 1470L, 0f, -1f, 0f)]
+        [TestCase(1125L, 1000L, 1250L, 1470L, 0f, -1f, 0.26595745f)]
+        [TestCase(1250L, 1000L, 1250L, 1470L, 0f, -1f, 0.5319149f)]
+        [TestCase(1360L, 1000L, 1250L, 1470L, 0f, -1f, 0.76595745f)]
+        [TestCase(1470L, 1000L, 1250L, 1470L, 0f, -1f, 1f)]
+        [TestCase(1000L, 1000L, 1000L, 1000L, 0f, -1f, 1f)]
+        [TestCase(1000L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 0.1f)]
+        [TestCase(1125L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 0.375f)]
+        [TestCase(1250L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 0.65f)]
+        [TestCase(1360L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 0.825f)]
+        [TestCase(1470L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f)]
+        public void PlayerAnimator_DodgePhaseTracksAuthoritativeTravelAndRecovery(
+            long nowMs,
+            long startedAtMs,
+            long activeUntilMs,
+            long recoveryUntilMs,
+            float startNormalized,
+            float travelEndNormalized,
+            float expectedPhase)
+        {
+            MethodInfo method = RequireMethod(
+                RequireRuntimeType("Arena.Presentation.PlayerAnimator"),
+                "ResolveMovementActionPhase",
+                typeof(long),
+                typeof(long),
+                typeof(long),
+                typeof(long),
+                typeof(float),
+                typeof(float));
+
+            float phase = (float)method.Invoke(
+                null,
+                new object[]
+                {
+                    nowMs,
+                    startedAtMs,
+                    activeUntilMs,
+                    recoveryUntilMs,
+                    startNormalized,
+                    travelEndNormalized,
+                })!;
+
+            Assert.That(phase, Is.EqualTo(expectedPhase).Within(0.0001f));
+        }
+
+        [Test]
         public void PlayerAnimator_ForcedActionClearCancelsPendingActionTriggersBeforeAnimatorEvaluation()
         {
             (GameObject root, Animator animator, Component playerAnimator) = CreatePlayerAnimatorHarness();

@@ -29,6 +29,8 @@ namespace Arena.Presentation
 
         public void OnReleaseFrame() { }
         public void OnInstantCastStart() { }
+        public void OnDodgeStart() { }
+        public void OnDodgeTravelEnd() { }
         public void OnEnterComplete() { }
         public void OnHoldFadeStart() { }
         public void OnHoldFadeEnd() { }
@@ -97,6 +99,7 @@ namespace Arena.Presentation
         private static readonly int TriggerDodgeHash     = Animator.StringToHash("TriggerDodge");
         private static readonly int DodgeXHash           = Animator.StringToHash("DodgeX");
         private static readonly int DodgeZHash           = Animator.StringToHash("DodgeZ");
+        private static readonly int DodgePhaseHash       = Animator.StringToHash("DodgePhase");
         private static readonly int TriggerWalkStopHash  = Animator.StringToHash("TriggerWalkStop");
         private static readonly int TriggerRunStopHash   = Animator.StringToHash("TriggerRunStop");
         private static readonly int TriggerTurnHash      = Animator.StringToHash("TriggerTurn");
@@ -230,6 +233,8 @@ namespace Arena.Presentation
         private bool _blockingPresentationActive;
         private bool _parryArmedPresentationActive;
         private ActiveMovementActionPresentation? _activeMovementPresentation;
+        private float _activeDodgeStartNormalized;
+        private float _activeDodgeTravelEndNormalized = -1f;
         private int _pendingWeaponHandoffLayerIndex = -1;
         private int _pendingWeaponHandoffStateHash;
         private bool _pendingWeaponHandoffTargetInCombat;
@@ -2798,7 +2803,7 @@ namespace Arena.Presentation
         {
             if (_animator == null || _overrideController == null) return;
             EnsureSharedActionProfileLoaded();
-            ApplyDodgeClipOverrides(_wasGrounded, force: true);
+            DirectionalClipSet dodgeClips = ApplyDodgeClipOverrides(_wasGrounded, force: true);
 
             float forwardX = Mathf.Sin(facingYawRadians);
             float forwardZ = Mathf.Cos(facingYawRadians);
@@ -2832,16 +2837,18 @@ namespace Arena.Presentation
                 localZ = -1f;
             }
 
+            ResolveActiveDodgeTiming(dodgeClips, localX, localZ);
             _animator.SetFloat(DodgeXHash, Mathf.Clamp(localX, -1f, 1f));
             _animator.SetFloat(DodgeZHash, Mathf.Clamp(localZ, -1f, 1f));
+            UpdateDodgePlaybackPhase();
             _animator.ResetTrigger(TriggerDodgeHash);
             _animator.SetTrigger(TriggerDodgeHash);
         }
 
-        private void ApplyDodgeClipOverrides(bool grounded, bool force = false)
+        private DirectionalClipSet ApplyDodgeClipOverrides(bool grounded, bool force = false)
         {
             if (_overrideController == null)
-                return;
+                return default;
 
             EnsureSharedActionProfileLoaded();
             bool useCombatVariant = _inCombat;
@@ -2854,9 +2861,65 @@ namespace Arena.Presentation
                     : (_animationSet?.airDodge.HasAny == true ? _animationSet.airDodge : _sharedActionProfile?.airDodge ?? _animationSet?.dodge ?? _animationSet?.airDodgeCombat ?? default));
 
             if (!force && !desired.HasAny)
-                return;
+                return desired;
 
             _animationSetBinder.ApplyDirectionalOverrideSet(_overrideController, "slot_dodge", desired);
+            return desired;
+        }
+
+        private void ResolveActiveDodgeTiming(
+            DirectionalClipSet dodgeClips,
+            float localX,
+            float localZ)
+        {
+            AnimationClip? clip = ResolveDirectionalDodgeClip(dodgeClips, localX, localZ);
+            _activeDodgeStartNormalized =
+                CombatAnimationEvents.TryGetEventNormalizedTime(
+                    clip,
+                    CombatAnimationEvents.OnDodgeStart,
+                    out float startNormalized)
+                    ? startNormalized
+                    : 0f;
+
+            _activeDodgeTravelEndNormalized =
+                CombatAnimationEvents.TryGetEventNormalizedTime(
+                    clip,
+                    CombatAnimationEvents.OnDodgeTravelEnd,
+                    out float travelEndNormalized)
+                    ? Mathf.Clamp(travelEndNormalized, _activeDodgeStartNormalized, 1f)
+                    : -1f;
+        }
+
+        private static AnimationClip? ResolveDirectionalDodgeClip(
+            DirectionalClipSet clips,
+            float localX,
+            float localZ)
+        {
+            int octant = Mathf.RoundToInt(
+                Mathf.Atan2(localX, localZ) * Mathf.Rad2Deg / 45f);
+            octant = (octant % 8 + 8) % 8;
+
+            AnimationClip? selected = octant switch
+            {
+                0 => clips.n,
+                1 => clips.ne,
+                2 => clips.e,
+                3 => clips.se,
+                4 => clips.s,
+                5 => clips.sw,
+                6 => clips.w,
+                _ => clips.nw,
+            };
+
+            return selected
+                ?? clips.n
+                ?? clips.ne
+                ?? clips.e
+                ?? clips.se
+                ?? clips.s
+                ?? clips.sw
+                ?? clips.w
+                ?? clips.nw;
         }
 
         private bool IsCurrentlyGrounded()
@@ -3392,6 +3455,7 @@ namespace Arena.Presentation
         {
             if (_animator == null || _simState == null || !_simState.HasState) return;
             Animator animator = _animator;
+            UpdateDodgePlaybackPhase();
 
             bool grounded = _simState.IsGrounded;
             LocalPlayerMotor? motor = ResolveLocalPlayerMotor();
@@ -3686,12 +3750,104 @@ namespace Arena.Presentation
             if (!_activeMovementPresentation.HasValue || !_activeMovementPresentation.Value.IsDodge)
                 return 1.01f;
 
-            long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            long nowMs = ResolveAuthoritativePresentationNowMs();
             ActiveMovementActionPresentation active = _activeMovementPresentation.Value;
-            if (nowMs < active.ActiveUntilMs)
+            if (nowMs < active.RecoveryUntilMs)
                 return 1.01f;
 
             return 0f;
+        }
+
+        private void UpdateDodgePlaybackPhase()
+        {
+            if (_animator == null
+                || !_activeMovementPresentation.HasValue
+                || !_activeMovementPresentation.Value.IsDodge)
+            {
+                return;
+            }
+
+            ActiveMovementActionPresentation active = _activeMovementPresentation.Value;
+            _animator.SetFloat(
+                DodgePhaseHash,
+                ResolveMovementActionPhase(
+                    ResolveAuthoritativePresentationNowMs(),
+                    active.StartedAtMs,
+                    active.ActiveUntilMs,
+                    active.RecoveryUntilMs,
+                    _activeDodgeStartNormalized,
+                    _activeDodgeTravelEndNormalized));
+        }
+
+        private static long ResolveAuthoritativePresentationNowMs()
+        {
+            return ArenaServerClock.HasEstimate
+                ? ArenaServerClock.ServerNowMs
+                : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        }
+
+        private static float ResolveMovementActionPhase(
+            long nowMs,
+            long startedAtMs,
+            long activeUntilMs,
+            long recoveryUntilMs,
+            float startNormalized,
+            float authoredTravelEndNormalized)
+        {
+            long resolvedActiveUntilMs = Math.Max(startedAtMs, activeUntilMs);
+            long resolvedRecoveryUntilMs = Math.Max(resolvedActiveUntilMs, recoveryUntilMs);
+            if (resolvedRecoveryUntilMs <= startedAtMs)
+                return 1f;
+
+            float resolvedStart = Mathf.Clamp01(startNormalized);
+            bool hasRecovery = resolvedRecoveryUntilMs > resolvedActiveUntilMs;
+            float resolvedTravelEnd;
+            if (!hasRecovery)
+            {
+                resolvedTravelEnd = 1f;
+            }
+            else if (!float.IsNaN(authoredTravelEndNormalized)
+                     && !float.IsInfinity(authoredTravelEndNormalized)
+                     && authoredTravelEndNormalized >= 0f)
+            {
+                resolvedTravelEnd = Mathf.Clamp(
+                    authoredTravelEndNormalized,
+                    resolvedStart,
+                    1f);
+            }
+            else
+            {
+                double activeDurationMs = resolvedActiveUntilMs - startedAtMs;
+                double totalDurationMs = resolvedRecoveryUntilMs - startedAtMs;
+                float activeShare = totalDurationMs > 0d
+                    ? Mathf.Clamp01((float)(activeDurationMs / totalDurationMs))
+                    : 1f;
+                resolvedTravelEnd = Mathf.Lerp(resolvedStart, 1f, activeShare);
+            }
+
+            if (nowMs <= startedAtMs)
+                return resolvedStart;
+            if (nowMs >= resolvedRecoveryUntilMs)
+                return 1f;
+
+            if (nowMs <= resolvedActiveUntilMs)
+            {
+                long activeDurationMs = resolvedActiveUntilMs - startedAtMs;
+                if (activeDurationMs <= 0L)
+                    return resolvedTravelEnd;
+
+                float activeProgress = Mathf.Clamp01(
+                    (float)((double)(nowMs - startedAtMs) / activeDurationMs));
+                return Mathf.Lerp(resolvedStart, resolvedTravelEnd, activeProgress);
+            }
+
+            long recoveryDurationMs = resolvedRecoveryUntilMs - resolvedActiveUntilMs;
+            if (recoveryDurationMs <= 0L)
+                return 1f;
+
+            float recoveryProgress = Mathf.Clamp01(
+                (float)((double)(nowMs - resolvedActiveUntilMs) / recoveryDurationMs));
+            return Mathf.Lerp(resolvedTravelEnd, 1f, recoveryProgress);
         }
 
         private LocomotionSample UpdateLocomotion()

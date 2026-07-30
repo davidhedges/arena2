@@ -11,6 +11,8 @@ namespace Arena.Presentation
     {
         public const string OnReleaseFrame = "OnReleaseFrame";
         public const string OnInstantCastStart = "OnInstantCastStart";
+        public const string OnDodgeStart = "OnDodgeStart";
+        public const string OnDodgeTravelEnd = "OnDodgeTravelEnd";
         public const string OnEnterComplete = "OnEnterComplete";
         public const string OnHoldFadeStart = "OnHoldFadeStart";
         public const string OnHoldFadeEnd = "OnHoldFadeEnd";
