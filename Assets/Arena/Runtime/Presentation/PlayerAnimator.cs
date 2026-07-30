@@ -175,6 +175,7 @@ namespace Arena.Presentation
         private const float StopTriggerCooldownSeconds = 0.2f;
         private const float RejumpCrossFadeDurationSeconds = 0.04f;
         private const float LocomotionRecoveryCrossFadeDurationSeconds = 0.32f;
+        private const float DodgeRecoveryPlaybackSpeed = 1f;
         private const float SpellCastHoldEnterToIdleNormalizedTime = 0.85f;
         private const float SpellCastHoldEnterCrossFadeDurationSeconds = 0.22f;
         private const float SpellCastHoldPhaseCrossFadeDurationSeconds = 0.15f;
@@ -235,6 +236,7 @@ namespace Arena.Presentation
         private ActiveMovementActionPresentation? _activeMovementPresentation;
         private float _activeDodgeStartNormalized;
         private float _activeDodgeTravelEndNormalized = -1f;
+        private float _activeDodgeClipLengthSeconds;
         private int _pendingWeaponHandoffLayerIndex = -1;
         private int _pendingWeaponHandoffStateHash;
         private bool _pendingWeaponHandoffTargetInCombat;
@@ -2873,6 +2875,9 @@ namespace Arena.Presentation
             float localZ)
         {
             AnimationClip? clip = ResolveDirectionalDodgeClip(dodgeClips, localX, localZ);
+            _activeDodgeClipLengthSeconds = clip != null
+                ? Mathf.Max(0f, clip.length)
+                : 0f;
             _activeDodgeStartNormalized =
                 CombatAnimationEvents.TryGetEventNormalizedTime(
                     clip,
@@ -3776,7 +3781,8 @@ namespace Arena.Presentation
                     active.ActiveUntilMs,
                     active.RecoveryUntilMs,
                     _activeDodgeStartNormalized,
-                    _activeDodgeTravelEndNormalized));
+                    _activeDodgeTravelEndNormalized,
+                    _activeDodgeClipLengthSeconds));
         }
 
         private static long ResolveAuthoritativePresentationNowMs()
@@ -3792,7 +3798,8 @@ namespace Arena.Presentation
             long activeUntilMs,
             long recoveryUntilMs,
             float startNormalized,
-            float authoredTravelEndNormalized)
+            float authoredTravelEndNormalized,
+            float clipLengthSeconds)
         {
             long resolvedActiveUntilMs = Math.Max(startedAtMs, activeUntilMs);
             long resolvedRecoveryUntilMs = Math.Max(resolvedActiveUntilMs, recoveryUntilMs);
@@ -3827,8 +3834,6 @@ namespace Arena.Presentation
 
             if (nowMs <= startedAtMs)
                 return resolvedStart;
-            if (nowMs >= resolvedRecoveryUntilMs)
-                return 1f;
 
             if (nowMs <= resolvedActiveUntilMs)
             {
@@ -3841,13 +3846,21 @@ namespace Arena.Presentation
                 return Mathf.Lerp(resolvedStart, resolvedTravelEnd, activeProgress);
             }
 
-            long recoveryDurationMs = resolvedRecoveryUntilMs - resolvedActiveUntilMs;
-            if (recoveryDurationMs <= 0L)
+            float resolvedClipLengthSeconds =
+                !float.IsNaN(clipLengthSeconds) && !float.IsInfinity(clipLengthSeconds)
+                    ? Mathf.Max(0f, clipLengthSeconds)
+                    : 0f;
+            if (resolvedClipLengthSeconds <= 0.0001f)
                 return 1f;
 
-            float recoveryProgress = Mathf.Clamp01(
-                (float)((double)(nowMs - resolvedActiveUntilMs) / recoveryDurationMs));
-            return Mathf.Lerp(resolvedTravelEnd, 1f, recoveryProgress);
+            double recoveryElapsedSeconds =
+                (nowMs - resolvedActiveUntilMs) / 1000d;
+            float normalizedRecoveryAdvance = (float)(
+                recoveryElapsedSeconds
+                * DodgeRecoveryPlaybackSpeed
+                / resolvedClipLengthSeconds);
+            return Mathf.Clamp01(
+                resolvedTravelEnd + normalizedRecoveryAdvance);
         }
 
         private LocomotionSample UpdateLocomotion()

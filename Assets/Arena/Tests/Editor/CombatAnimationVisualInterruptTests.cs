@@ -141,25 +141,29 @@ namespace Arena.Tests.Editor
             Assert.That(dodge.timeParameter, Is.EqualTo("DodgePhase"));
         }
 
-        [TestCase(900L, 1000L, 1250L, 1470L, 0f, -1f, 0f)]
-        [TestCase(1000L, 1000L, 1250L, 1470L, 0f, -1f, 0f)]
-        [TestCase(1125L, 1000L, 1250L, 1470L, 0f, -1f, 0.26595745f)]
-        [TestCase(1250L, 1000L, 1250L, 1470L, 0f, -1f, 0.5319149f)]
-        [TestCase(1360L, 1000L, 1250L, 1470L, 0f, -1f, 0.76595745f)]
-        [TestCase(1470L, 1000L, 1250L, 1470L, 0f, -1f, 1f)]
-        [TestCase(1000L, 1000L, 1000L, 1000L, 0f, -1f, 1f)]
-        [TestCase(1000L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 0.1f)]
-        [TestCase(1125L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 0.375f)]
-        [TestCase(1250L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 0.65f)]
-        [TestCase(1360L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 0.825f)]
-        [TestCase(1470L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f)]
-        public void PlayerAnimator_DodgePhaseTracksAuthoritativeTravelAndRecovery(
+        [TestCase(900L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 0f)]
+        [TestCase(1000L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 0f)]
+        [TestCase(1125L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 0.26595745f)]
+        [TestCase(1250L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 0.5319149f)]
+        [TestCase(1360L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 0.6419149f)]
+        [TestCase(1470L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 0.7519149f)]
+        [TestCase(1719L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 1f)]
+        [TestCase(1000L, 1000L, 1000L, 1000L, 0f, -1f, 1f, 1f)]
+        [TestCase(1000L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f, 0.1f)]
+        [TestCase(1125L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f, 0.375f)]
+        [TestCase(1250L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f, 0.65f)]
+        [TestCase(1360L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f, 0.76f)]
+        [TestCase(1470L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f, 0.87f)]
+        [TestCase(1600L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f, 1f)]
+        [TestCase(1470L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 2f, 0.76f)]
+        public void PlayerAnimator_DodgePhaseSynchronizesTravelThenPlaysRecoveryAtAuthoredSpeed(
             long nowMs,
             long startedAtMs,
             long activeUntilMs,
             long recoveryUntilMs,
             float startNormalized,
             float travelEndNormalized,
+            float clipLengthSeconds,
             float expectedPhase)
         {
             MethodInfo method = RequireMethod(
@@ -169,6 +173,7 @@ namespace Arena.Tests.Editor
                 typeof(long),
                 typeof(long),
                 typeof(long),
+                typeof(float),
                 typeof(float),
                 typeof(float));
 
@@ -182,6 +187,7 @@ namespace Arena.Tests.Editor
                     recoveryUntilMs,
                     startNormalized,
                     travelEndNormalized,
+                    clipLengthSeconds,
                 })!;
 
             Assert.That(phase, Is.EqualTo(expectedPhase).Within(0.0001f));

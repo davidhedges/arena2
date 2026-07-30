@@ -849,7 +849,7 @@ namespace Arena.Editor
             using EditorGUILayout.VerticalScope section = new(EditorStyles.helpBox);
             EditorGUILayout.LabelField("Dodge timing", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "Startup trim skips the opening windup without deleting frames. The optional travel-end marker identifies the pose reached when dodge movement stops; the remaining clip plays through authoritative recovery. Each directional clip keeps its own markers.",
+                "Startup trim skips the opening windup without deleting frames. The optional travel-end marker identifies the pose reached when dodge movement stops; the remaining recovery/settle tail plays at authored speed. Movement may crossfade to locomotion once authoritative recovery ends. Each directional clip keeps its own markers.",
                 MessageType.Info);
 
             if (startEvents.Length > 1 || travelEndEvents.Length > 1)
@@ -972,7 +972,7 @@ namespace Arena.Editor
                 $"Playback starts at {startSeconds:0.000}s. " +
                 (hasTravelEnd
                     ? $"Travel reaches its authored end pose at {travelEndSeconds:0.000}s; the remaining {Mathf.Max(0f, clipLength - travelEndSeconds):0.000}s is the recovery/settle portion."
-                    : "Without a travel-end marker, the runtime preserves the clip's proportions across travel plus recovery."),
+                    : "Without a travel-end marker, the runtime estimates the travel boundary from authoritative travel/recovery proportions, then plays the recovery/settle tail at authored speed."),
                 EditorStyles.wordWrappedMiniLabel);
         }
 
