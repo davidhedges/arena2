@@ -477,6 +477,7 @@ namespace DungeonLab.Editor
         {
             int densityLevel = ResolveRequestedDensityLevel();
             CurrentGenerationSettings = LoadActiveGenerationSettings(densityLevel);
+            BeginPlanIdentityRecording();
             var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             var rejectionCodeHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
             var validationFailureCodeHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -614,9 +615,18 @@ namespace DungeonLab.Editor
 
             if (completedSeedCount <= 0)
             {
+                recordingPlanIdentityDiagnostics = false;
                 Debug.Log("Dungeon Lab: batch validation cancelled before any seeds ran.");
                 return string.Empty;
             }
+
+            string planIdentityPath = WritePlanIdentityReport(firstSeed, completedSeedCount);
+            Debug.Log(
+                "Dungeon Lab PLAN_IDENTITY " +
+                $"version={PlanIdentityReportVersion}; acceptedSeedsExamined={planIdentitySeedsExamined}; " +
+                $"planShadowDisagreementSeeds={planIdentityShadowDisagreementSeeds}; " +
+                $"connectionIdentityViolationSeeds={planIdentityConnectionViolationSeeds}; " +
+                $"report={planIdentityPath}");
 
             string archetypeSummary = FormatCountSummary(archetypeCounts);
             string tierSpanSummary = FormatTierSpanSummary(tierSpanCounts);
@@ -677,6 +687,122 @@ namespace DungeonLab.Editor
             return reportPath;
         }
 
+        // ------------------------------------------------------------------
+        // Plan identity diagnostics — OUT OF BAND, on purpose.
+        //
+        // `resultHash` is SHA-256 over the ordered seed-report array
+        // (WriteBatchReport), so a diagnostic added to a seed report moves the
+        // hash with no geometry change at all. A1's whole claim is that the hash
+        // holds, so these findings get their own file and the hashed array never
+        // learns they exist. That is the only arrangement in which "the check has
+        // teeth" and "nothing moved" are both provable in one run.
+        // ------------------------------------------------------------------
+        private const string PlanIdentityReportVersion = "plan-identity-v1";
+        private static bool recordingPlanIdentityDiagnostics;
+        private static readonly JArray PlanIdentityFindings = new JArray();
+        private static int planIdentitySeedsExamined;
+        private static int planIdentityShadowDisagreementSeeds;
+        private static int planIdentityConnectionViolationSeeds;
+
+        private static void BeginPlanIdentityRecording()
+        {
+            PlanIdentityFindings.Clear();
+            planIdentitySeedsExamined = 0;
+            planIdentityShadowDisagreementSeeds = 0;
+            planIdentityConnectionViolationSeeds = 0;
+            recordingPlanIdentityDiagnostics = true;
+        }
+
+        // Only the first few cells are named. The point is to identify the
+        // producer, not to serialize a second copy of the plan.
+        private const int PlanIdentitySampleCells = 8;
+
+        private static void RecordPlanIdentityDiagnostics(
+            int seed,
+            DungeonLayout layout,
+            TieredLevelPlan plan)
+        {
+            if (!recordingPlanIdentityDiagnostics)
+            {
+                return;
+            }
+
+            planIdentitySeedsExamined++;
+            PlanShadowDisagreement disagreement = DetectPlanShadowDisagreement(layout, plan);
+            List<string> connectionViolations =
+                lastConnectionIdentityViolations ?? new List<string>();
+            if (disagreement.Agrees && connectionViolations.Count == 0)
+            {
+                return;
+            }
+
+            var finding = new JObject { ["seed"] = seed };
+            if (!disagreement.Agrees)
+            {
+                planIdentityShadowDisagreementSeeds++;
+                finding["code"] = "PLAN_SHADOW_DISAGREEMENT";
+                finding["planShadowCells"] = layout.floorCells?.Count ?? 0;
+                finding["surfaceCells"] = plan.surfaces?.Count ?? 0;
+                finding["surfacedCellsOutsideShadow"] = new JObject
+                {
+                    ["count"] = disagreement.surfacedCellsOutsideShadow.Length,
+                    ["sample"] = SampleCellsToken(disagreement.surfacedCellsOutsideShadow)
+                };
+                finding["shadowCellsWithoutSurface"] = new JObject
+                {
+                    ["count"] = disagreement.shadowCellsWithoutSurface.Length,
+                    ["sample"] = SampleCellsToken(disagreement.shadowCellsWithoutSurface)
+                };
+            }
+
+            if (connectionViolations.Count > 0)
+            {
+                planIdentityConnectionViolationSeeds++;
+                finding["connectionIdentityViolations"] = new JArray(connectionViolations);
+            }
+
+            PlanIdentityFindings.Add(finding);
+        }
+
+        private static JArray SampleCellsToken(IReadOnlyList<Vector2Int> cells)
+        {
+            var token = new JArray();
+            for (int index = 0; index < cells.Count && index < PlanIdentitySampleCells; index++)
+            {
+                token.Add(CellToken(cells[index]));
+            }
+
+            return token;
+        }
+
+        private static string WritePlanIdentityReport(int firstSeed, int seedCount)
+        {
+            recordingPlanIdentityDiagnostics = false;
+            var report = new JObject
+            {
+                ["reportVersion"] = PlanIdentityReportVersion,
+                ["generatedAtUtc"] = DateTime.UtcNow.ToString("o"),
+                ["purpose"] =
+                    "Phase A1 detects the plan-shadow disagreement and the connection-identity " +
+                    "invariant and reports them HERE rather than in a seed report, because " +
+                    "resultHash is SHA-256 over the seed-report array and A1 gates on that hash " +
+                    "holding. Repairing the shadow is A2's job and moves the hash once.",
+                ["firstSeed"] = firstSeed,
+                ["seedCount"] = seedCount,
+                ["acceptedSeedsExamined"] = planIdentitySeedsExamined,
+                ["planShadowDisagreementSeeds"] = planIdentityShadowDisagreementSeeds,
+                ["connectionIdentityViolationSeeds"] = planIdentityConnectionViolationSeeds,
+                ["findings"] = PlanIdentityFindings
+            };
+
+            Directory.CreateDirectory(BatchReportDirectory);
+            string path = Path.Combine(
+                BatchReportDirectory,
+                $"plan_identity_{firstSeed}_{firstSeed + seedCount - 1}.json");
+            File.WriteAllText(path, report.ToString(Formatting.Indented));
+            return path;
+        }
+
         private static JObject BuildSeedReport(int seed)
         {
             return BuildSeedReport(seed, ResolveRequestedDensityLevel());
@@ -699,6 +825,7 @@ namespace DungeonLab.Editor
                     out string rejectionReason);
                 if (accepted)
                 {
+                    RecordPlanIdentityDiagnostics(seed, layout, plan);
                     JObject acceptedReport = CreateAcceptedSeedReport(
                         seed,
                         layoutAttemptsUsed,

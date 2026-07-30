@@ -1099,6 +1099,13 @@ namespace DungeonLab.Editor
         [ThreadStatic]
         private static ReviewedStairPlacementGeometryCache activeReviewedStairPlacementGeometryCache;
 
+        // The connection-identity violations found on the most recently accepted
+        // tier attempt (design §8.1). A diagnostic carried the way the route
+        // planner already carries its `last*` diagnostics, so the batch reporter
+        // can read it without threading `RouteTierRequirements` through
+        // TryBuildAcceptedPlan's whole call graph. Nothing in generation reads it.
+        private static List<string> lastConnectionIdentityViolations = new List<string>();
+
         private static bool TryBuildTieredLevelPlan(
             DungeonLayout layout,
             RouteTierRequirements routeRequirements,
@@ -1308,7 +1315,7 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            if (!portGraph.IsGloballyConnected(out string portGraphReachability))
+            if (!portGraph.IsFallFreeConnected(out string portGraphReachability))
             {
                 rejectionReason = portGraphReachability;
                 return false;
@@ -1382,6 +1389,11 @@ namespace DungeonLab.Editor
                 return false;
             }
 
+            // A1 diagnostic, computed here because this is the only place the
+            // final connection list and the route requirements are both in
+            // scope. Deliberately NOT a gate: see FindConnectionIdentityViolations.
+            lastConnectionIdentityViolations =
+                FindConnectionIdentityViolations(loopedLayout, routeRequirements);
             acceptedLayout = loopedLayout;
             return true;
         }
@@ -1461,7 +1473,9 @@ namespace DungeonLab.Editor
                 List<Vector2Int> path = BuildCorridorPath(
                     layout.rooms[candidate.firstRoom].Center,
                     layout.rooms[candidate.secondRoom].Center,
-                    rng.Stream("loop-corridor", $"{candidate.firstRoom}:{candidate.secondRoom}"));
+                    rng.Stream(
+                        "loop-corridor",
+                        RoomConnection.RngSubjectFor(candidate.firstRoom, candidate.secondRoom)));
                 if (!ValidatePathCardinality(path, out _) ||
                     PathCrossesThirdRoom(path, layout.rooms, candidate.firstRoom, candidate.secondRoom) ||
                     PathTouchesExistingFloorOutsideEndpointRooms(
@@ -1500,7 +1514,14 @@ namespace DungeonLab.Editor
                     floorCells.Add(cell);
                 }
 
-                connections.Add(new RoomConnection(candidate.firstRoom, candidate.secondRoom, path));
+                // A synthesized loop has no route edge, so its band comes from
+                // the two zone levels it actually joins — the same thresholds
+                // its level-delta gate above was checked against.
+                connections.Add(RoomConnection.ForSynthesizedLoop(
+                    candidate.firstRoom,
+                    candidate.secondRoom,
+                    LevelBand.SpanningEndpoints(zoneLevels[firstNode], zoneLevels[secondNode]),
+                    path));
                 connectedPairs.Add(RoomPairKey(candidate.firstRoom, candidate.secondRoom));
                 loopCount++;
             }
@@ -2095,10 +2116,14 @@ namespace DungeonLab.Editor
             int toLevel = zoneLevels[toNode];
             int delta = Mathf.Abs(fromLevel - toLevel);
             RouteTraversalIntent routeTransitionRequirement = default;
+            // Optional BY DESIGN: a synthesized loop corridor carries no route
+            // intent, and demanding one here would reject every loop in the
+            // corpus. The lookup is now by edge id, so it resolves this
+            // connection's own edge rather than whichever edge happened to share
+            // its room pair.
             bool hasRouteRequirement = routeRequirements != null &&
                 routeRequirements.TryGetTransition(
-                    connection.fromRoom,
-                    connection.toRoom,
+                    connection.edgeId,
                     out routeTransitionRequirement);
             if (hasRouteRequirement)
             {
@@ -2193,7 +2218,7 @@ namespace DungeonLab.Editor
                     toLevel,
                     // One stream per connection: a neighbouring corridor's
                     // candidate count can no longer change this stair.
-                    rng.Stream("stair-choice", $"{connection.fromRoom}:{connection.toRoom}"),
+                    rng.Stream("stair-choice", connection.RngSubject),
                     allowExternalSpan: true,
                     requiredPlacementClass,
                     stairCandidateCounts,
@@ -2696,10 +2721,7 @@ namespace DungeonLab.Editor
         {
             foreach (RoomConnection connection in layout.connections)
             {
-                if (!requirements.TryGetTransition(
-                        connection.fromRoom,
-                        connection.toRoom,
-                        out _) ||
+                if (!requirements.TryGetTransition(connection.edgeId, out _) ||
                     connection.fromRoom != node && connection.toRoom != node)
                 {
                     continue;
@@ -6868,7 +6890,7 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                graph.EnsureNode(PortGraphNode.Floor(item.Key, item.Value));
+                graph.EnsureNode(PortGraphNode.Floor(new SurfaceKey(item.Key, item.Value)));
             }
 
             foreach (var item in cellLevels)
@@ -6878,7 +6900,7 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                PortGraphNode floorNode = PortGraphNode.Floor(item.Key, item.Value);
+                PortGraphNode floorNode = PortGraphNode.Floor(new SurfaceKey(item.Key, item.Value));
                 foreach (Vector2Int neighbor in CardinalNeighbors(item.Key))
                 {
                     if (stairFootprintCells.Contains(neighbor) ||
@@ -6888,7 +6910,10 @@ namespace DungeonLab.Editor
                         continue;
                     }
 
-                    graph.AddEdge(floorNode, PortGraphNode.Floor(neighbor, neighborLevel), PortGraphEdgeKind.FloorAdjacency);
+                    graph.AddEdge(
+                        floorNode,
+                        PortGraphNode.Floor(new SurfaceKey(neighbor, neighborLevel)),
+                        PortGraphEdgeKind.FloorAdjacency);
                 }
             }
 
@@ -6967,12 +6992,18 @@ namespace DungeonLab.Editor
             graph.AddEdge(lowerPort, upperPort, PortGraphEdgeKind.StairInternal);
             foreach (Vector2Int cell in lowerLandingCells)
             {
-                graph.AddEdge(lowerPort, PortGraphNode.Floor(cell, lowerLevel), PortGraphEdgeKind.PortLanding);
+                graph.AddEdge(
+                    lowerPort,
+                    PortGraphNode.Floor(new SurfaceKey(cell, lowerLevel)),
+                    PortGraphEdgeKind.PortLanding);
             }
 
             foreach (Vector2Int cell in upperLandingCells)
             {
-                graph.AddEdge(upperPort, PortGraphNode.Floor(cell, upperLevel), PortGraphEdgeKind.PortLanding);
+                graph.AddEdge(
+                    upperPort,
+                    PortGraphNode.Floor(new SurfaceKey(cell, upperLevel)),
+                    PortGraphEdgeKind.PortLanding);
             }
 
             return true;
@@ -7699,7 +7730,13 @@ namespace DungeonLab.Editor
 
         private readonly struct DungeonLayout
         {
-            public readonly HashSet<Vector2Int> floorCells;
+            // The PRE-elevation plan shadow (design §3.1). `floorCells` is the
+            // same set it always was and is still the domain the level field is
+            // computed over; A1 gives it a name for the role it plays, so that
+            // the post-elevation surface field can be a separate thing rather
+            // than a redefinition of this one.
+            public readonly PlanShadow shadow;
+            public HashSet<Vector2Int> floorCells => shadow?.Cells;
             public readonly List<RoomFootprint> rooms;
             public readonly List<RoomConnection> connections;
             public readonly IReadOnlyList<RoomZonePlan> roomZones;
@@ -7723,7 +7760,7 @@ namespace DungeonLab.Editor
                 int connectorCandidateCount,
                 IReadOnlyCollection<Vector2Int> reservedShaftCells = null)
             {
-                this.floorCells = floorCells;
+                shadow = new PlanShadow(floorCells);
                 this.rooms = rooms;
                 this.connections = connections;
                 this.roomZones = roomZones ?? Array.Empty<RoomZonePlan>();
@@ -7896,17 +7933,112 @@ namespace DungeonLab.Editor
             }
         }
 
+        // A corridor, and — as of A1 — a corridor that can be NAMED.
+        //
+        // It used to be `{fromRoom, toRoom, path}`, and a connection was matched
+        // to its route edge by ROOM PAIR. That is the defect design review
+        // finding 1 named: two corridors between one room pair are
+        // indistinguishable at the lookup, before their paths are ever compared,
+        // so any authored layer binding would be discarded exactly there. The
+        // identity has to exist before it can be bound to anything, and corridors
+        // are claimed pre-elevation, so no later phase can retrofit it.
+        //
+        // `plannedBand` is DATA in A1 and nothing reads it as a rule. Corridor
+        // exclusivity stays unconditional until Phase D: relaxing it to "may
+        // share a cell iff the bands are disjoint" would accept embeddings that
+        // are rejected today — `atrium-ring` alone spans levels 0..24, so disjoint
+        // bands are common rather than hypothetical — and that is not an
+        // output-neutral change.
         private readonly struct RoomConnection
         {
             public readonly int fromRoom;
             public readonly int toRoom;
+            // Whether this corridor realizes a declared route edge or was
+            // synthesized as a loop. A loop legitimately has no edge.
+            public readonly ConnectionSource source;
+            // The route edge this corridor realizes; empty for a SynthesizedLoop.
+            public readonly string edgeId;
+            // Stable, unique, ALWAYS present — so a loop corridor is nameable in
+            // diagnostics and reservations even though it has no edge.
+            public readonly string connectionId;
+            // The corridor's planned vertical extent, from the topology's
+            // DECLARED ABSOLUTE node levels (design §8.1). Absolute on purpose: a
+            // layer name is room-local, so `(cell, layerId)` is not a vertical
+            // identity and cannot separate two unrelated rooms.
+            public readonly LevelBand plannedBand;
             public readonly List<Vector2Int> path;
 
-            public RoomConnection(int fromRoom, int toRoom, List<Vector2Int> path)
+            private RoomConnection(
+                int fromRoom,
+                int toRoom,
+                ConnectionSource source,
+                string edgeId,
+                string connectionId,
+                LevelBand plannedBand,
+                List<Vector2Int> path)
             {
                 this.fromRoom = fromRoom;
                 this.toRoom = toRoom;
+                this.source = source;
+                this.edgeId = edgeId ?? string.Empty;
+                this.connectionId = connectionId ?? string.Empty;
+                this.plannedBand = plannedBand;
                 this.path = path;
+            }
+
+            public static RoomConnection ForRouteEdge(
+                int fromRoom,
+                int toRoom,
+                string edgeId,
+                LevelBand plannedBand,
+                List<Vector2Int> path)
+            {
+                return new RoomConnection(
+                    fromRoom,
+                    toRoom,
+                    ConnectionSource.RouteEdge,
+                    edgeId,
+                    $"edge:{edgeId}",
+                    plannedBand,
+                    path);
+            }
+
+            public static RoomConnection ForSynthesizedLoop(
+                int firstRoom,
+                int secondRoom,
+                LevelBand plannedBand,
+                List<Vector2Int> path)
+            {
+                return new RoomConnection(
+                    firstRoom,
+                    secondRoom,
+                    ConnectionSource.SynthesizedLoop,
+                    string.Empty,
+                    $"loop:{firstRoom}:{secondRoom}",
+                    plannedBand,
+                    path);
+            }
+
+            /// <summary>
+            /// The per-connection RNG subject.
+            /// </summary>
+            /// <remarks>
+            /// Renders the room pair, which is what the two subject-keyed streams
+            /// have always used. It is deliberately NOT `connectionId` yet:
+            /// changing a stream's subject re-phases its draws and moves every
+            /// affected seed, and A1's claim is that nothing moves. Routing both
+            /// sites through one accessor makes that widening a one-line change
+            /// in the phase that is allowed to rebaseline.
+            /// </remarks>
+            public string RngSubject => RngSubjectFor(fromRoom, toRoom);
+
+            /// <summary>
+            /// The same subject for a corridor that does not exist yet — the
+            /// loop pass draws its path before it has a connection to name.
+            /// </summary>
+            public static string RngSubjectFor(int firstRoom, int secondRoom)
+            {
+                return $"{firstRoom}:{secondRoom}";
             }
         }
 
@@ -8057,9 +8189,13 @@ namespace DungeonLab.Editor
                 this.kind = kind;
             }
 
-            public static PortGraphNode Floor(Vector2Int cell, int level)
+            // The traversal graph has always been keyed on (cell, level) — this
+            // is where the design's canonical surface identity already lived
+            // (§1.3 finding 1). A1 gives it the type; SurfaceKey.Token renders
+            // the historical string verbatim, so no node key moves.
+            public static PortGraphNode Floor(SurfaceKey surface)
             {
-                return new PortGraphNode($"F:{cell.x},{cell.y},L{level}", PortGraphNodeKind.Floor);
+                return new PortGraphNode($"F:{surface.Token}", PortGraphNodeKind.Floor);
             }
 
             public static PortGraphNode StairPort(int transitionIndex, string label, int level)
@@ -8073,12 +8209,19 @@ namespace DungeonLab.Editor
             public readonly string first;
             public readonly string second;
             public readonly PortGraphEdgeKind kind;
+            // True only for a one-way descent (design §3.2's `Fall`, and `Drop`
+            // if it is ever adopted). Nothing produces one in A1 — there are no
+            // openings and therefore no falls — but the connectivity rule that
+            // carries the pit design has to be stated in terms of it, so the
+            // flag exists and the rule reads correctly the day a fall appears.
+            public readonly bool directed;
 
-            public PortGraphEdge(string first, string second, PortGraphEdgeKind kind)
+            public PortGraphEdge(string first, string second, PortGraphEdgeKind kind, bool directed = false)
             {
                 this.first = first;
                 this.second = second;
                 this.kind = kind;
+                this.directed = directed;
             }
         }
 
@@ -8147,7 +8290,28 @@ namespace DungeonLab.Editor
                 edges.Add(new PortGraphEdge(a, b, kind));
             }
 
-            public bool IsGloballyConnected(out string message)
+            /// <summary>
+            /// The fall-free subgraph must be connected (design §3.3).
+            /// </summary>
+            /// <remarks>
+            /// Delete every directed edge, treat the rest as undirected, and
+            /// require one component. This REPLACES the old
+            /// `IsGloballyConnected` rather than sitting beside it, and it is
+            /// strictly stronger than the strong connectivity an earlier draft
+            /// proposed: strong connectivity permits a region that can only be
+            /// left by taking a second fall, which contradicts the rule that a
+            /// pit's return route be reversible. Fall-free connectivity implies
+            /// full strong connectivity AND per-fall reversibility, and it is
+            /// the literal statement of "pits create optional branches".
+            /// <para>
+            /// With no fall edges in existence it is arithmetically identical to
+            /// the check it replaces, which is why it can land in an
+            /// output-neutral phase. The messages are the old ones verbatim:
+            /// they are projected into the seed report, and the report array is
+            /// what `resultHash` is computed over.
+            /// </para>
+            /// </remarks>
+            public bool IsFallFreeConnected(out string message)
             {
                 Dictionary<string, List<string>> adjacency = BuildAdjacency();
                 if (adjacency.Count == 0)
@@ -8197,7 +8361,11 @@ namespace DungeonLab.Editor
 
                 foreach (PortGraphEdge edge in edges)
                 {
-                    if (!adjacency.ContainsKey(edge.first) || !adjacency.ContainsKey(edge.second))
+                    // A directed edge is a one-way descent and contributes
+                    // nothing to fall-free reachability in either direction:
+                    // deleting it is the point of the rule, not an omission.
+                    if (edge.directed ||
+                        !adjacency.ContainsKey(edge.first) || !adjacency.ContainsKey(edge.second))
                     {
                         continue;
                     }
@@ -8342,7 +8510,13 @@ namespace DungeonLab.Editor
 
         private readonly struct TieredLevelPlan
         {
-            public readonly Dictionary<Vector2Int, int> cellLevels;
+            // The POST-elevation canonical surfaces (design §3.1). The plan now
+            // STORES surfaces and DERIVES the heightfield, which is the whole of
+            // the A1 model change; `cellLevels` is the compatibility view that
+            // keeps every existing consumer byte-identical while the field
+            // carries at most one surface per cell.
+            public readonly SurfaceField surfaces;
+            public Dictionary<Vector2Int, int> cellLevels => surfaces?.AsHeightField();
             public readonly List<ElevationEdgeModel.TransitionEdge> transitions;
             public readonly int levelCount;
             public readonly int minLevel;
@@ -8398,7 +8572,7 @@ namespace DungeonLab.Editor
                 RouteRequirementResolution routeRequirementResolution)
             {
                 this.archetypeName = archetypeName;
-                this.cellLevels = cellLevels;
+                surfaces = new SurfaceField(cellLevels);
                 this.transitions = transitions;
                 this.levelCount = levelCount;
                 this.minLevel = minLevel;

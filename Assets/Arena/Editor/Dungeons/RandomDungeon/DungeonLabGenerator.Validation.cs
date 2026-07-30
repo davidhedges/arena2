@@ -63,6 +63,25 @@ namespace DungeonLab.Editor
                     $"{purpose}:{subject}",
                     $"tier-{tierAttempt.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
             }
+
+            /// <summary>
+            /// One independent stream per SURFACE, keyed on the canonical
+            /// (cell, level) identity rather than on a plan coordinate.
+            /// </summary>
+            /// <remarks>
+            /// The design's Phase A invariant reads "RNG subjects that were cell
+            /// tokens become surface tokens". Measured against this commit, no
+            /// such subject exists: every keyed stream in the generator is
+            /// subjected on a room pair, a node id, a recipe id or a topology id,
+            /// and not one is a `Vector2Int`. So the migration is a no-op and
+            /// this is the entry point that keeps it one — a per-place decision
+            /// added later takes a surface here and cannot silently reintroduce
+            /// a plan coordinate as an identity.
+            /// </remarks>
+            public System.Random Stream(string purpose, SurfaceKey surface)
+            {
+                return Stream(purpose, surface.Token);
+            }
         }
 
         internal readonly struct DungeonPlanCheck
@@ -151,7 +170,7 @@ namespace DungeonLab.Editor
             string portGraphConnectedMessage = portGraphBuildMessage;
             if (portGraphBuilt)
             {
-                portGraphConnected = portGraph.IsGloballyConnected(out portGraphConnectedMessage);
+                portGraphConnected = portGraph.IsFallFreeConnected(out portGraphConnectedMessage);
             }
 
             bool bottomToTop = portGraphConnected && plan.minLevel < plan.maxLevel;

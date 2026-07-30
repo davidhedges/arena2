@@ -307,15 +307,33 @@ namespace DungeonLab.Editor
                 this.recipes = recipes ?? Array.Empty<RecipePlacement>();
             }
 
-            public bool TryGetTransition(int firstRoom, int secondRoom, out RouteTraversalIntent requirement)
+            /// <summary>
+            /// Resolve a corridor's route edge BY EDGE ID.
+            /// </summary>
+            /// <remarks>
+            /// This used to key on the room pair, which is a correctness defect
+            /// and not merely plumbing (design §8.1): a room pair does not
+            /// identify an edge once two corridors may join the same two rooms at
+            /// different elevations, and the lookup would silently hand back
+            /// whichever edge it found first. Edge id is the identity the route
+            /// intent actually has; `RouteTransitionResolution` already carried
+            /// it, so this closes the gap on the corridor side.
+            /// <para>
+            /// A `SynthesizedLoop` connection carries no edge id and resolves
+            /// nothing — by design, not by omission.
+            /// </para>
+            /// </remarks>
+            public bool TryGetTransition(string edgeId, out RouteTraversalIntent requirement)
             {
-                foreach (RouteTraversalIntent edge in intent.traversalEdges)
+                if (!string.IsNullOrEmpty(edgeId))
                 {
-                    if (edge.fromNode == firstRoom && edge.toNode == secondRoom ||
-                        edge.fromNode == secondRoom && edge.toNode == firstRoom)
+                    foreach (RouteTraversalIntent edge in intent.traversalEdges)
                     {
-                        requirement = edge;
-                        return true;
+                        if (string.Equals(edge.id, edgeId, StringComparison.Ordinal))
+                        {
+                            requirement = edge;
+                            return true;
+                        }
                     }
                 }
 
@@ -2465,7 +2483,20 @@ namespace DungeonLab.Editor
                     }
                 }
 
-                connections.Add(new RoomConnection(edge.fromNode, edge.toNode, accepted));
+                // The declared node levels are absolute and are known here, at
+                // claim time, long before the level field exists — which is the
+                // property that makes the band usable by the exclusivity rule
+                // Phase D relaxes. `relativeElevationLevels` is absolute despite
+                // its name: TryAssignRoomLevels copies it straight into
+                // zoneLevels after checking it against [0, MaxGeneratedLevel].
+                connections.Add(RoomConnection.ForRouteEdge(
+                    edge.fromNode,
+                    edge.toNode,
+                    edge.id,
+                    LevelBand.SpanningEndpoints(
+                        intent.nodes[edge.fromNode].relativeElevationLevels,
+                        intent.nodes[edge.toNode].relativeElevationLevels),
+                    accepted));
             }
 
             foreach (Vector2Int cell in reservedVistaCells)

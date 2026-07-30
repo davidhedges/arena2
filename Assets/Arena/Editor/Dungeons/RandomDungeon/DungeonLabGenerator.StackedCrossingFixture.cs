@@ -143,7 +143,7 @@ namespace DungeonLab.Editor
                 transitions,
                 out FloorStairPortGraph upperGraph,
                 out _);
-            bool upperTraversable = upperGraphBuilt && upperGraph.IsGloballyConnected(out _);
+            bool upperTraversable = upperGraphBuilt && upperGraph.IsFallFreeConnected(out _);
 
             GameObject root = ElevationEdgeModel.BuildLevelField(
                 Vector3.zero,
