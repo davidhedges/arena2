@@ -241,7 +241,13 @@ namespace DungeonLab.Editor
         private sealed class LatticeVoidClaim
         {
             private readonly RectInt latticeEnvelope;
-            private readonly HashSet<Vector2Int> blocked;
+            // The prism ledger, not a bare cell set (design §6 invariant): a
+            // fill pass that reads plan cells alone will happily pack a reserved
+            // volume, and §11 names that as the most likely first-implementation
+            // failure. Everything a claim must not take is registered here, so a
+            // future OpenVolume is honoured by construction rather than by
+            // somebody remembering to extend a second exclusion list.
+            private readonly PrismLedger reservations;
             private readonly Dictionary<Vector2Int, int> roomIdByCell;
             private readonly bool[] canClaim;
             private readonly int[] claimScratch;
@@ -266,7 +272,7 @@ namespace DungeonLab.Editor
                 this.floorCells = floorCells;
                 envelopeRadiusCells = spatial.roomEnvelopeRadiusCells;
                 latticeEnvelope = LatticeEnvelopeFor(nodeCenters, spatial);
-                blocked = CollectAnnexBlockedCells(
+                reservations = CollectAnnexBlockedCells(
                     intent,
                     protectedVistaCells,
                     recipePlacements,
@@ -320,7 +326,7 @@ namespace DungeonLab.Editor
                                 region,
                                 minimumRectCells,
                                 floorCells,
-                                blocked,
+                                reservations,
                                 roomIdByCell,
                                 canClaim,
                                 claimScratch,
@@ -352,9 +358,9 @@ namespace DungeonLab.Editor
             }
         }
 
-        // Everything a claim must not take. Floor is excluded separately,
-        // because it grows as the sweeps proceed.
-        private static HashSet<Vector2Int> CollectAnnexBlockedCells(
+        // Everything a claim must not take, as prisms. Floor is excluded
+        // separately, because it grows as the sweeps proceed.
+        private static PrismLedger CollectAnnexBlockedCells(
             RouteIntent intent,
             HashSet<Vector2Int> protectedVistaCells,
             IReadOnlyList<RecipePlacement> recipePlacements,
@@ -362,15 +368,23 @@ namespace DungeonLab.Editor
             IReadOnlyList<RoomFootprint> rooms,
             HashSet<Vector2Int> floorCells)
         {
-            var blocked = new HashSet<Vector2Int>(
-                protectedVistaCells ?? new HashSet<Vector2Int>());
+            var blocked = new PrismLedger();
+            blocked.Register(
+                new OwnerKey(OwnerFamily.Vista, "reserved-lane"),
+                SortedCells(protectedVistaCells ?? new HashSet<Vector2Int>()),
+                Array.Empty<Vector2Int>(),
+                Array.Empty<Vector2Int>());
             foreach (RecipePlacement placement in
                      recipePlacements ?? Array.Empty<RecipePlacement>())
             {
-                foreach (Vector2Int cell in placement?.protectedCells ?? Array.Empty<Vector2Int>())
-                {
-                    blocked.Add(cell);
-                }
+                var recipeOwner = new OwnerKey(
+                    OwnerFamily.Recipe,
+                    placement?.RecipeId ?? string.Empty);
+                blocked.Register(
+                    recipeOwner,
+                    placement?.protectedCells ?? Array.Empty<Vector2Int>(),
+                    Array.Empty<Vector2Int>(),
+                    Array.Empty<Vector2Int>());
 
                 // A showpiece's backdrop is AUTHORED VOID: the dais reads as
                 // backed against an exterior wall only while the cells behind it
@@ -378,11 +392,11 @@ namespace DungeonLab.Editor
                 // tier stage. Annexing them fails the seed rather than the
                 // annexation — measured as 96 RECIPE_SHOWPIECE_FIT rejections
                 // across densities 4 and 5 before this was here.
-                foreach (Vector2Int cell in
-                         placement?.showpieceReservation.backdropVoidCells ?? Array.Empty<Vector2Int>())
-                {
-                    blocked.Add(cell);
-                }
+                blocked.Register(
+                    recipeOwner,
+                    placement?.showpieceReservation.backdropVoidCells ?? Array.Empty<Vector2Int>(),
+                    Array.Empty<Vector2Int>(),
+                    Array.Empty<Vector2Int>());
             }
 
             ReserveStairwellShafts(intent, connections, rooms, floorCells, blocked);
@@ -417,7 +431,7 @@ namespace DungeonLab.Editor
             IReadOnlyList<RoomConnection> connections,
             IReadOnlyList<RoomFootprint> rooms,
             HashSet<Vector2Int> floorCells,
-            HashSet<Vector2Int> blocked)
+            PrismLedger blocked)
         {
             foreach (RoomConnection connection in connections ?? Array.Empty<RoomConnection>())
             {
@@ -461,12 +475,19 @@ namespace DungeonLab.Editor
                 var lateral = new Vector2Int(axis.y, -axis.x);
                 if (TryChooseShaftWindow(exterior, axis, lateral, floorCells, blocked, out RectInt window))
                 {
+                    var shaftOwner = new OwnerKey(
+                        OwnerFamily.Corridor,
+                        $"stairwell-shaft:{connection.fromRoom}-{connection.toRoom}");
                     for (int y = window.yMin; y < window.yMax; y++)
                     {
                         for (int x = window.xMin; x < window.xMax; x++)
                         {
                             var cell = new Vector2Int(x, y);
-                            blocked.Add(cell);
+                            blocked.Register(
+                                shaftOwner,
+                                new[] { cell },
+                                Array.Empty<Vector2Int>(),
+                                Array.Empty<Vector2Int>());
                             lastReservedShaftCells.Add(cell);
                         }
                     }
@@ -485,7 +506,7 @@ namespace DungeonLab.Editor
             Vector2Int axis,
             Vector2Int lateral,
             HashSet<Vector2Int> floorCells,
-            HashSet<Vector2Int> blocked,
+            PrismLedger blocked,
             out RectInt window)
         {
             window = default;
@@ -527,7 +548,7 @@ namespace DungeonLab.Editor
             Vector2Int axis,
             Vector2Int outward,
             HashSet<Vector2Int> floorCells,
-            HashSet<Vector2Int> blocked,
+            PrismLedger blocked,
             out RectInt window)
         {
             window = default;
@@ -540,7 +561,7 @@ namespace DungeonLab.Editor
                 for (int out_ = 1; out_ <= StairwellShaftWindowCells; out_++)
                 {
                     Vector2Int cell = anchor + axis * along + outward * out_;
-                    if (floorCells.Contains(cell) || blocked.Contains(cell))
+                    if (floorCells.Contains(cell) || blocked.BlocksFill(cell))
                     {
                         return false;
                     }
@@ -655,7 +676,7 @@ namespace DungeonLab.Editor
             RectInt region,
             int minimumRectCells,
             HashSet<Vector2Int> floorCells,
-            HashSet<Vector2Int> blockedCells,
+            PrismLedger blockedCells,
             Dictionary<Vector2Int, int> roomIdByCell,
             bool[] canClaim,
             int[] claimScratch,
@@ -676,7 +697,7 @@ namespace DungeonLab.Editor
                 for (int x = 0; x < width; x++)
                 {
                     var cell = new Vector2Int(region.xMin + x, region.yMin + y);
-                    int taken = floorCells.Contains(cell) || blockedCells.Contains(cell) ? 1 : 0;
+                    int taken = floorCells.Contains(cell) || blockedCells.BlocksFill(cell) ? 1 : 0;
                     blockedPrefix[x + 1, y + 1] = taken +
                         blockedPrefix[x, y + 1] +
                         blockedPrefix[x + 1, y] -

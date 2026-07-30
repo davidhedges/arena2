@@ -707,7 +707,7 @@ namespace DungeonLab.Editor
             RoomFootprint fromRoom,
             RoomFootprint toRoom,
             HashSet<Vector2Int> doorwayCells,
-            StairPlacementLedger plannedStairLedger,
+            PrismLedger plannedStairLedger,
             bool fromSideIsLower,
             out int transitionIndex)
         {
@@ -1291,6 +1291,7 @@ namespace DungeonLab.Editor
                     out NamedVistaPromontoryResolution[] namedPromontories,
                     out ExternalConnectorPromontoryResolution[] externalConnectors,
                     out RecipeResolution[] recipeResolutions,
+                    out PrismLedger prisms,
                     out rejectionReason);
             if (!cellLevelFieldBuilt)
             {
@@ -1360,7 +1361,8 @@ namespace DungeonLab.Editor
                 namedPromontories,
                 externalConnectors,
                 recipeResolutions,
-                routeRequirementResolution);
+                routeRequirementResolution,
+                prisms);
 
             // The single acceptance gate. The boundary context is built here (not
             // after acceptance) so it is constructed exactly once: it is both a
@@ -1773,10 +1775,12 @@ namespace DungeonLab.Editor
             out NamedVistaPromontoryResolution[] namedPromontories,
             out ExternalConnectorPromontoryResolution[] externalConnectors,
             out RecipeResolution[] recipeResolutions,
+            out PrismLedger prisms,
             out string rejectionReason)
         {
             cellLevels = new Dictionary<Vector2Int, int>();
             transitions = new List<ElevationEdgeModel.TransitionEdge>();
+            prisms = new PrismLedger();
             routeTransitionResolutions = Array.Empty<RouteTransitionResolution>();
             stairCandidateSummary = "[]";
             synthesizedStairs = new List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)>();
@@ -1799,7 +1803,11 @@ namespace DungeonLab.Editor
 
             var transitionKeys = new HashSet<string>();
             var stairCandidateCounts = new SortedDictionary<string, int>(StringComparer.Ordinal);
-            var plannedStairLedger = new StairPlacementLedger();
+            // The accepted plan carries this same ledger, so the acceptance gate
+            // runs the SAME headroom rule over the SAME reservations the planner
+            // enforced (design §13 Phase B) rather than re-deriving them from the
+            // finished transition list.
+            PrismLedger plannedStairLedger = prisms;
             var protectedStructuralCells = new HashSet<Vector2Int>();
             if (routeRequirements?.reservedVistaCells != null)
             {
@@ -1809,6 +1817,7 @@ namespace DungeonLab.Editor
                 // owns footprint/landing conflict rules, so this adds no parallel
                 // geometry implementation.
                 plannedStairLedger.Register(
+                    new OwnerKey(OwnerFamily.Vista, "reserved-lane"),
                     SortedCells(routeRequirements.reservedVistaCells).ToArray(),
                     Array.Empty<Vector2Int>(),
                     Array.Empty<Vector2Int>());
@@ -1818,6 +1827,7 @@ namespace DungeonLab.Editor
                 // stair bodies and later structural passes cannot consume or re-level
                 // either endpoint.
                 plannedStairLedger.Register(
+                    new OwnerKey(OwnerFamily.Vista, "final-view-anchors"),
                     Array.Empty<Vector2Int>(),
                     new[] { routeRequirements.vistaSourceCell },
                     new[] { routeRequirements.vistaTargetCell });
@@ -1828,6 +1838,7 @@ namespace DungeonLab.Editor
             {
                 protectedStructuralCells.UnionWith(routeRequirements.namedPromontoryCells);
                 plannedStairLedger.Register(
+                    new OwnerKey(OwnerFamily.Promontory, "named-vista"),
                     routeRequirements.namedPromontoryCells,
                     Array.Empty<Vector2Int>(),
                     Array.Empty<Vector2Int>());
@@ -1835,7 +1846,6 @@ namespace DungeonLab.Editor
 
             var resolvedRouteTransitions = new List<RouteTransitionResolution>();
             var externalSpanGapCells = new HashSet<Vector2Int>();
-            var spanDeckLevels = new Dictionary<Vector2Int, int>();
 
             // New rule (user review 2026-06-11): a 1u step strip must never sit in
             // a doorway cell — a step half-blocking a room entrance disrupts flow
@@ -1896,7 +1906,6 @@ namespace DungeonLab.Editor
                         stairCandidateCounts,
                         doorwayCells,
                         externalSpanGapCells,
-                        spanDeckLevels,
                         synthesizedStairs,
                         resolvedRouteTransitions,
                         seamStairPrefabPath,
@@ -1920,7 +1929,6 @@ namespace DungeonLab.Editor
                 transitions,
                 transitionKeys,
                 plannedStairLedger,
-                spanDeckLevels,
                 synthesizedStairs,
                 protectedStructuralCells);
 
@@ -1938,10 +1946,6 @@ namespace DungeonLab.Editor
                 LogPlanningWarning(
                     $"[LEVEL_FIELD_UNREACHED] {unreachedFilledCells} floor cell(s) had no leveled cardinal " +
                     "neighbour and fell back to level 0. Their elevation is a guess, not a plan.");
-            }
-            if (!TryValidateSpanHeadroom(cellLevels, spanDeckLevels, out rejectionReason))
-            {
-                return false;
             }
 
             // Decision 43(a): runs after every other level-field feature so
@@ -2009,6 +2013,25 @@ namespace DungeonLab.Editor
             // for why the repair cannot live at the individual producers.
             ReconcilePlanShadowWithSurfaces(layout, cellLevels);
 
+            // Phase B, review finding H3 — THE LATE-PASS ORDERING HAZARD.
+            //
+            // This gate used to run immediately after FillUnassignedFloorCells,
+            // with THREE passes still to come that mutate the level field:
+            // SweepIntraRoom1uDrops, TryResolveNamedVistaPromontory and
+            // TryResolveExternalConnectorPromontories. A promontory pier landing
+            // under a deck therefore arrived after its own clearance had been
+            // checked, and the only thing that caught it was a SECOND, separately
+            // written headroom check over the accepted plan in `.Batch.cs` —
+            // a duplicate formula guarding a gate that had run too early.
+            //
+            // It now runs where a gate belongs: after the last mutation it must
+            // see. The accepted-plan check is the same call over the same ledger,
+            // so the two cannot drift apart again.
+            if (!plannedStairLedger.TryValidateSurfaceHeadroom(cellLevels, out rejectionReason))
+            {
+                return false;
+            }
+
             stairCandidateSummary = FormatStairCandidateHistogram(stairCandidateCounts);
 
             if (namedPromontories.Length > 0)
@@ -2041,7 +2064,7 @@ namespace DungeonLab.Editor
         private static void AddZoneSeamStepStrips(
             DungeonLayout layout,
             HashSet<Vector2Int> doorwayCells,
-            StairPlacementLedger plannedStairLedger,
+            PrismLedger plannedStairLedger,
             HashSet<string> transitionKeys,
             List<ElevationEdgeModel.TransitionEdge> transitions,
             string seamStairPrefabPath)
@@ -2081,6 +2104,7 @@ namespace DungeonLab.Editor
                         seamStairPrefabPath,
                         SeamStairPlacementClass));
                     plannedStairLedger.Register(
+                        new OwnerKey(OwnerFamily.Transition, $"zone-seam-strip:{key}"),
                         new[] { lowerCell },
                         Array.Empty<Vector2Int>(),
                         new[] { raisedCell },
@@ -2107,11 +2131,10 @@ namespace DungeonLab.Editor
             Dictionary<Vector2Int, int> cellLevels,
             List<ElevationEdgeModel.TransitionEdge> transitions,
             HashSet<string> transitionKeys,
-            StairPlacementLedger plannedStairLedger,
+            PrismLedger plannedStairLedger,
             SortedDictionary<string, int> stairCandidateCounts,
             HashSet<Vector2Int> doorwayCells,
             HashSet<Vector2Int> externalSpanGapCells,
-            Dictionary<Vector2Int, int> spanDeckLevels,
             List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
             List<RouteTransitionResolution> resolvedRouteTransitions,
             string seamStairPrefabPath,
@@ -2352,12 +2375,19 @@ namespace DungeonLab.Editor
                 // leave the corridor line (an L-shaped bridge folds off it) —
                 // headroom validated against the path cells missed a deck
                 // crossing a room at head height (in-editor find 2026-06-11).
-                // Register the footprint as gap cells with a conservative
-                // floored-linear deck height for the final pass-under gate;
-                // Manhattan distance equals deck-walk distance on an L. The
-                // replaced corridor cells below stay gaps but carry no deck.
+                // Register the footprint as gap cells and as DECK PRISMS with a
+                // conservative floored-linear base level, so the ledger's one
+                // headroom rule sees them; Manhattan distance equals deck-walk
+                // distance on an L. The replaced corridor cells below stay gaps
+                // but carry no deck.
                 int spanLength = Mathf.Abs(upperLandingCell.x - lowerLandingCell.x) +
                     Mathf.Abs(upperLandingCell.y - lowerLandingCell.y);
+                // The same owner the footprint registers under below: one
+                // transition, one owner. The distinction that matters is the
+                // BAND — the deck declares where it sits, the footprint does not.
+                var deckOwner = new OwnerKey(
+                    OwnerFamily.Transition,
+                    $"connection-stair:{TransitionKey(stairOptionPlannedTransitionFirstCell, stairOptionPlannedTransitionSecondCell)}");
                 foreach (Vector2Int deckCell in stairOptionPlannedFootprintCells)
                 {
                     externalSpanGapCells.Add(deckCell);
@@ -2367,10 +2397,7 @@ namespace DungeonLab.Editor
                         Mathf.Min(fromLevel, toLevel),
                         Mathf.Max(fromLevel, toLevel),
                         spanLength > 0 ? (float)deckDistance / spanLength : 0f));
-                    if (!spanDeckLevels.TryGetValue(deckCell, out int existingDeck) || deckLevel < existingDeck)
-                    {
-                        spanDeckLevels[deckCell] = deckLevel;
-                    }
+                    plannedStairLedger.RegisterSpanDeck(new[] { deckCell }, deckLevel, deckOwner);
                 }
             }
 
@@ -2413,6 +2440,7 @@ namespace DungeonLab.Editor
                         seamStairPrefabPath,
                         SeamStairPlacementClass));
                     plannedStairLedger.Register(
+                        new OwnerKey(OwnerFamily.Transition, $"corridor-step-strip:{stripKey}"),
                         new[] { stripLowerCell },
                         Array.Empty<Vector2Int>(),
                         new[] { stripRaisedCell },
@@ -2440,6 +2468,9 @@ namespace DungeonLab.Editor
                 }
 
                 plannedStairLedger.Register(
+                    new OwnerKey(
+                        OwnerFamily.Transition,
+                        $"connection-stair:{TransitionKey(stairOptionPlannedTransitionFirstCell, stairOptionPlannedTransitionSecondCell)}"),
                     stairOptionPlannedFootprintCells,
                     stairOptionPlannedLowerLandingCells,
                     stairOptionPlannedUpperLandingCells,
@@ -2896,7 +2927,7 @@ namespace DungeonLab.Editor
             Dictionary<Vector2Int, int> cellLevels,
             List<ElevationEdgeModel.TransitionEdge> transitions,
             HashSet<string> transitionKeys,
-            StairPlacementLedger plannedStairLedger,
+            PrismLedger plannedStairLedger,
             HashSet<Vector2Int> doorwayCells,
             string seamStairPrefabPath)
         {
@@ -2954,6 +2985,9 @@ namespace DungeonLab.Editor
                                 seamStairPrefabPath,
                                 DaisStairPlacementClass));
                             plannedStairLedger.Register(
+                                new OwnerKey(
+                                    OwnerFamily.Transition,
+                                    $"intra-room-1u-sweep:{TransitionKey(upperCell, lowerCell)}"),
                                 new[] { lowerCell },
                                 Array.Empty<Vector2Int>(),
                                 new[] { upperCell },
@@ -3013,42 +3047,15 @@ namespace DungeonLab.Editor
             }
         }
 
-        // Headroom gate (design decision 2): at least MinHeadroomLevels u of clearance
-        // between any walkable surface and geometry above it. Today the only stacked
-        // geometry the planner produces is a bridge deck over a pass-under cell;
-        // embedded stairs own their cells outright. Forge candidates and overhangs
-        // get the same gate when they exist.
-        private static bool TryValidateSpanHeadroom(
-            IReadOnlyDictionary<Vector2Int, int> cellLevels,
-            Dictionary<Vector2Int, int> spanDeckLevels,
-            out string rejectionReason)
-        {
-            rejectionReason = string.Empty;
-            if (spanDeckLevels.Count == 0)
-            {
-                return true;
-            }
-
-            var spanCells = new List<Vector2Int>(spanDeckLevels.Keys);
-            spanCells.Sort(CompareCells);
-            foreach (Vector2Int cell in spanCells)
-            {
-                if (!cellLevels.TryGetValue(cell, out int floorLevel))
-                {
-                    continue;
-                }
-
-                int clearance = spanDeckLevels[cell] - floorLevel;
-                if (clearance < MinHeadroomLevels)
-                {
-                    rejectionReason =
-                        $"bridge span over cell ({cell.x}, {cell.y}) left only {clearance}u headroom above the walkable floor (minimum {MinHeadroomLevels}u)";
-                    return false;
-                }
-            }
-
-            return true;
-        }
+        // Headroom gate (design decision 2): at least MinHeadroomLevels u of
+        // clearance between any walkable surface and geometry above it.
+        //
+        // Phase B replaced this with PrismLedger.TryValidateSurfaceHeadroom —
+        // one rule over the ledger, stated once and called from both the
+        // planning path and the accepted-plan validation. The `spanDeckLevels`
+        // side table it read is gone: a deck registers its own prism with a
+        // declared base, so nothing has to carry a parallel dictionary of
+        // heights to the gate and nothing can drop it on the way.
 
         private static IReadOnlyList<ReviewedActiveStairOption> LoadReviewedActiveStairOptions()
         {
@@ -3978,7 +3985,7 @@ namespace DungeonLab.Editor
             bool allowExternalSpan,
             string requiredPlacementClass,
             SortedDictionary<string, int> stairCandidateCounts,
-            StairPlacementLedger plannedStairLedger,
+            PrismLedger plannedStairLedger,
             out int transitionIndex,
             out Vector2Int lowerLandingCell,
             out Vector2Int upperLandingCell,
@@ -4151,7 +4158,7 @@ namespace DungeonLab.Editor
             int toLevel,
             string requiredPlacementClass,
             SortedDictionary<string, int> stairCandidateCounts,
-            StairPlacementLedger plannedStairLedger,
+            PrismLedger plannedStairLedger,
             out int transitionIndex,
             out Vector2Int lowerLandingCell,
             out Vector2Int upperLandingCell,
@@ -4422,8 +4429,7 @@ namespace DungeonLab.Editor
             System.Random random,
             List<ElevationEdgeModel.TransitionEdge> transitions,
             HashSet<string> transitionKeys,
-            StairPlacementLedger plannedStairLedger,
-            Dictionary<Vector2Int, int> spanDeckLevels,
+            PrismLedger plannedStairLedger,
             List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
             HashSet<Vector2Int> protectedCells)
         {
@@ -4468,7 +4474,7 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                if (TryPlaceAerialBridge(candidate, transitions, transitionKeys, plannedStairLedger, spanDeckLevels, synthesizedStairs, cellLevels))
+                if (TryPlaceAerialBridge(candidate, transitions, transitionKeys, plannedStairLedger, synthesizedStairs, cellLevels))
                 {
                     bridgedPairs.Add((candidate.roomA, candidate.roomB));
                     placed++;
@@ -4696,8 +4702,7 @@ namespace DungeonLab.Editor
             AerialBridgeCandidate candidate,
             List<ElevationEdgeModel.TransitionEdge> transitions,
             HashSet<string> transitionKeys,
-            StairPlacementLedger plannedStairLedger,
-            Dictionary<Vector2Int, int> spanDeckLevels,
+            PrismLedger plannedStairLedger,
             List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
             Dictionary<Vector2Int, int> cellLevels)
         {
@@ -4820,7 +4825,11 @@ namespace DungeonLab.Editor
                 exitPortDirection,
                 ExternalSpanStairPlacementClass,
                 setPiece));
+            var bridgeOwner = new OwnerKey(
+                OwnerFamily.Transition,
+                $"aerial-bridge:{TransitionKey(lowerLanding, upperLanding)}");
             plannedStairLedger.Register(
+                bridgeOwner,
                 footprint,
                 new[] { lowerLanding },
                 new[] { upperLanding },
@@ -4829,13 +4838,7 @@ namespace DungeonLab.Editor
                 Array.Empty<Vector2Int>());
             // Conservative MIN landing level over every span cell (decision 34):
             // a sloped deck is never lower than this anywhere along its run.
-            foreach (Vector2Int cell in footprint)
-            {
-                if (!spanDeckLevels.TryGetValue(cell, out int existingDeck) || deckClearanceLevel < existingDeck)
-                {
-                    spanDeckLevels[cell] = deckClearanceLevel;
-                }
-            }
+            plannedStairLedger.RegisterSpanDeck(footprint, deckClearanceLevel, bridgeOwner);
 
             synthesizedStairs.Add(($"aerial:{candidate.roomA}<->{candidate.roomB}", setPiece));
             return true;
@@ -4858,7 +4861,7 @@ namespace DungeonLab.Editor
             int fromLevel,
             int toLevel,
             SortedDictionary<string, int> stairCandidateCounts,
-            StairPlacementLedger plannedStairLedger,
+            PrismLedger plannedStairLedger,
             out int transitionIndex,
             out Vector2Int lowerLandingCell,
             out Vector2Int upperLandingCell,
@@ -5139,7 +5142,7 @@ namespace DungeonLab.Editor
 
         private static void RemovePlannedStairConflicts(
             List<StairTransitionCandidate> candidates,
-            StairPlacementLedger plannedStairLedger)
+            PrismLedger plannedStairLedger)
         {
             if (plannedStairLedger == null)
             {
@@ -6426,175 +6429,9 @@ namespace DungeonLab.Editor
             return false;
         }
 
-        // Canonical occupancy for every planned elevation transition. Footprints,
-        // landings and transition mouths retain their existing sharing rules; recipe
-        // features can additionally reserve cells that must remain clear of a body or
-        // transition mouth. All producers consult this ledger before acceptance.
-        private sealed class StairPlacementLedger
-        {
-            public readonly HashSet<Vector2Int> footprintCells = new HashSet<Vector2Int>();
-            public readonly HashSet<Vector2Int> landingCells = new HashSet<Vector2Int>();
-            public readonly HashSet<Vector2Int> transitionCells = new HashSet<Vector2Int>();
-            public readonly HashSet<Vector2Int> clearanceCells = new HashSet<Vector2Int>();
-            public readonly HashSet<Vector2Int> transitionClearanceCells = new HashSet<Vector2Int>();
-
-            public void Register(
-                IReadOnlyList<Vector2Int> footprint,
-                IReadOnlyList<Vector2Int> lowerLandings,
-                IReadOnlyList<Vector2Int> upperLandings)
-            {
-                Register(
-                    footprint,
-                    lowerLandings,
-                    upperLandings,
-                    Array.Empty<Vector2Int>(),
-                    Array.Empty<Vector2Int>(),
-                    Array.Empty<Vector2Int>());
-            }
-
-            public void Register(
-                IReadOnlyList<Vector2Int> footprint,
-                IReadOnlyList<Vector2Int> lowerLandings,
-                IReadOnlyList<Vector2Int> upperLandings,
-                IReadOnlyList<Vector2Int> transitionMouths,
-                IReadOnlyList<Vector2Int> requiredClearance,
-                IReadOnlyList<Vector2Int> requiredTransitionClearance)
-            {
-                foreach (Vector2Int cell in footprint)
-                {
-                    footprintCells.Add(cell);
-                }
-
-                foreach (Vector2Int cell in lowerLandings)
-                {
-                    landingCells.Add(cell);
-                }
-
-                foreach (Vector2Int cell in upperLandings)
-                {
-                    landingCells.Add(cell);
-                }
-
-                foreach (Vector2Int cell in transitionMouths)
-                {
-                    transitionCells.Add(cell);
-                }
-
-                foreach (Vector2Int cell in requiredClearance)
-                {
-                    clearanceCells.Add(cell);
-                }
-
-                foreach (Vector2Int cell in requiredTransitionClearance)
-                {
-                    transitionClearanceCells.Add(cell);
-                }
-            }
-
-            public bool BlocksFootprint(Vector2Int cell)
-            {
-                return footprintCells.Contains(cell) ||
-                    landingCells.Contains(cell) ||
-                    clearanceCells.Contains(cell);
-            }
-
-            public bool BlocksTransitionMouth(Vector2Int cell)
-            {
-                return transitionClearanceCells.Contains(cell);
-            }
-
-            public bool ConflictsWithReservation(
-                IEnumerable<Vector2Int> footprint,
-                IEnumerable<Vector2Int> landings,
-                IEnumerable<Vector2Int> transitionMouths,
-                IEnumerable<Vector2Int> requiredClearance,
-                IEnumerable<Vector2Int> requiredTransitionClearance,
-                out Vector2Int conflictCell)
-            {
-                foreach (Vector2Int cell in footprint)
-                {
-                    if (BlocksFootprint(cell))
-                    {
-                        conflictCell = cell;
-                        return true;
-                    }
-                }
-
-                foreach (Vector2Int cell in landings)
-                {
-                    if (footprintCells.Contains(cell))
-                    {
-                        conflictCell = cell;
-                        return true;
-                    }
-                }
-
-                foreach (Vector2Int cell in transitionMouths)
-                {
-                    if (transitionClearanceCells.Contains(cell))
-                    {
-                        conflictCell = cell;
-                        return true;
-                    }
-                }
-
-                foreach (Vector2Int cell in requiredClearance)
-                {
-                    if (footprintCells.Contains(cell))
-                    {
-                        conflictCell = cell;
-                        return true;
-                    }
-                }
-
-                foreach (Vector2Int cell in requiredTransitionClearance)
-                {
-                    if (transitionCells.Contains(cell))
-                    {
-                        conflictCell = cell;
-                        return true;
-                    }
-                }
-
-                conflictCell = default;
-                return false;
-            }
-
-            public bool ConflictsWith(StairTransitionCandidate candidate)
-            {
-                foreach (Vector2Int cell in candidate.footprintCells)
-                {
-                    if (BlocksFootprint(cell))
-                    {
-                        return true;
-                    }
-                }
-
-                foreach (Vector2Int cell in candidate.lowerLandingCells)
-                {
-                    if (footprintCells.Contains(cell))
-                    {
-                        return true;
-                    }
-                }
-
-                foreach (Vector2Int cell in candidate.upperLandingCells)
-                {
-                    if (footprintCells.Contains(cell))
-                    {
-                        return true;
-                    }
-                }
-
-                if (transitionClearanceCells.Contains(candidate.transitionFirstCell) ||
-                    transitionClearanceCells.Contains(candidate.transitionSecondCell))
-                {
-                    return true;
-                }
-
-                return false;
-            }
-        }
+        // The ledger moved to DungeonLabGenerator.Prisms.cs in Phase B of the
+        // layered 3D topology design: its five flat cell sets are now prisms
+        // carrying a half-open level band and a typed owner (design §6).
 
         private readonly struct StairTransitionCandidate
         {
@@ -8553,6 +8390,12 @@ namespace DungeonLab.Editor
             public readonly ExternalConnectorPromontoryResolution[] externalConnectors;
             public readonly RecipeResolution[] recipeResolutions;
             public readonly RouteRequirementResolution routeRequirementResolution;
+            // Phase B: the volumetric reservations the planner enforced (design
+            // §6). Carried on the plan so the acceptance gate can run the one
+            // headroom rule over the very same ledger instead of reconstructing
+            // deck heights from the transition list with a second copy of the
+            // formula — which is how the gate and its post-hoc twin drifted.
+            public readonly PrismLedger prisms;
 
             public TieredLevelPlan(
                 Dictionary<Vector2Int, int> cellLevels,
@@ -8576,9 +8419,11 @@ namespace DungeonLab.Editor
                 NamedVistaPromontoryResolution[] namedPromontories,
                 ExternalConnectorPromontoryResolution[] externalConnectors,
                 RecipeResolution[] recipeResolutions,
-                RouteRequirementResolution routeRequirementResolution)
+                RouteRequirementResolution routeRequirementResolution,
+                PrismLedger prisms)
             {
                 this.archetypeName = archetypeName;
+                this.prisms = prisms ?? new PrismLedger();
                 surfaces = new SurfaceField(cellLevels);
                 this.transitions = transitions;
                 this.levelCount = levelCount;

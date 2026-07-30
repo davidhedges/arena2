@@ -1628,15 +1628,30 @@ Two things this section got wrong, both settled by measurement:
 
 ---
 
-### Phase B — Volumetric reservation and one clearance rule
+### Phase B — Volumetric reservation and one clearance rule — **LANDED 2026-07-31**
+
+> **Status.** On `dungeon/layered-topology`, parent `ad9fbb33`. Exit met:
+> `ops/dungeon-port-ab.sh 0` reports **identical geometry on all 200 seeds** —
+> same `hashes.canonical`, same accepted set, same failure codes — and a
+> field-level diff of the two 200-seed reports shows the **only** difference
+> anywhere, on any seed, is one documentation string
+> (`schemaUsage.fields[16].consumer`, which names the ledger class that was
+> renamed). Every validation message is byte-identical, including the headroom
+> gate's deck-cell count. `resultHash` therefore moved once,
+> `f387ca04df49d8a7` → `991d86e1bb577144`, for that string alone.
+> Determinism re-verified (two independent runs byte-identical, 200/200
+> accepted, `PORT_GRAPH: 5`, all distributions unchanged); Render Sweep 200.
+> All three negative fixtures behave as listed. **One ruling below corrected
+> this section as written — see "Corrected in implementation".**
 
 **Capability.** Reservations and clearance are volumes. `spanDeckLevels` and the
 duplicated deck formula die.
 
-**Systems.** `StairPlacementLedger` → prism ledger; `TryValidateSpanHeadroom` →
-the general rule; `TryValidateAcceptedPlanHeadroom` in `.Batch.cs` deleted in
-favour of the shared one; density fill passes read the ledger; the late-pass
-ordering (review 2.4) fixed so the gate guards the final state.
+**Systems.** `StairPlacementLedger` → prism ledger (landed as `PrismLedger` in
+`DungeonLabGenerator.Prisms.cs`); `TryValidateSpanHeadroom` → the general rule;
+`TryValidateAcceptedPlanHeadroom` in `.Batch.cs` deleted in favour of the shared
+one; density fill passes read the ledger; the late-pass ordering (review 2.4)
+fixed so the gate guards the final state.
 
 **Invariants.** For every surface, the half-open band
 `[level, level + MinHeadroomLevels)` is free of any *other owner's* prism
@@ -1667,6 +1682,47 @@ penetration allow-list mechanism, and enforcement.
 
 **Exit.** Byte-identical 200-seed hash; `spanDeckLevels` and the duplicated deck
 formula gone; all three negative fixtures behave as listed.
+
+#### Corrected in implementation
+
+Two things this section and §6 got wrong, both settled by measurement. Neither
+touches the architecture; both are the mechanism-level detail §0 warns about.
+
+1. **The headroom rule needs a third qualifier: the prism must declare where it
+   sits.** §6 states the rule as "no prism satisfying `BlocksHeadroom` *owned by
+   anything other than S*", and that is not sufficient. Today **every**
+   reservation is registered with an unbounded band — §6 says so itself — and an
+   unbounded band intersects every headroom band. A stair footprint and the
+   surface it carries have different owners (the surface is plain floor; the
+   footprint is the transition), so the rule as written has every embedded stair
+   violate the headroom of its own treads, and the corpus collapses. The missing
+   piece is that `[-∞, +∞)` is not "solid from the abyss upward" — it is *"this
+   reservation has never been asked for a height"*. The rule therefore reads:
+   a prism obstructs only if it satisfies `BlocksHeadroom`, belongs to another
+   owner, **and declares a base** (`LevelBand.DeclaresBase`). Today exactly one
+   producer declares one — the external-span deck — which is why the port is
+   output-neutral, and a phase that gives a producer a real band opts it into the
+   rule with no further plumbing.
+2. **There are two ledgers, not one, because the density fill passes run before
+   elevation.** §6's invariant says "the density dial's fill passes (annex,
+   mop-up, backstop) must query the prism ledger", implying the ledger the
+   transitions use. They cannot: `AnnexAndMopUpLatticeVoid` runs inside
+   `TryCompileRouteFirstLayout`, and the transition ledger is created in
+   `TryBuildCellLevelField`, a stage later — and the two cannot be merged into
+   one instance, because layout attempts and tier attempts retry independently,
+   so a shared ledger would leak a failed tier attempt's reservations into the
+   next. What landed is the same *type* at both stages:
+   `CollectAnnexBlockedCells` now returns a `PrismLedger` and the sweeps ask
+   `BlocksFill`, so a reserved volume is honoured by the same policy in both
+   places. "Backstop" in that sentence is also not a fill pass — it is the
+   min-fill rejection gate, which claims no cells.
+
+Also worth recording, because it confirms rather than corrects: **§11's
+late-pass hazard was real and the count was exact.** Three passes ran after the
+gate — `SweepIntraRoom1uDrops`, `TryResolveNamedVistaPromontory`,
+`TryResolveExternalConnectorPromontories` — and the duplicate in `.Batch.cs`
+existed precisely to catch what they moved. The gate now runs after the last of
+them, which is what let the duplicate go.
 
 ---
 

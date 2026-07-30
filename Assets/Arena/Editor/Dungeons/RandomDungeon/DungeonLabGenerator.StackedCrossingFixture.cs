@@ -20,7 +20,8 @@ namespace DungeonLab.Editor
         {
             public Dictionary<Vector2Int, int> levels;
             public List<ElevationEdgeModel.TransitionEdge> transitions;
-            public Dictionary<Vector2Int, int> spanDeckLevels;
+            public PrismLedger prisms;
+            public int stackedDeckLevel;
             public Vector2Int stackedCell;
             public Vector2Int lowerStart;
             public Vector2Int lowerEnd;
@@ -31,9 +32,43 @@ namespace DungeonLab.Editor
             public bool upperBridgeTraversable;
             public bool positiveHeadroomPassed;
             public bool negativeHeadroomRejected;
+            // Design §13 Phase B, negative fixture 2: half-open bands mean a
+            // clearance of EXACTLY MinHeadroomLevels passes and one less fails.
+            // A closed band gets the first of these wrong.
+            public bool exactHeadroomPassed;
+            public bool oneShortOfExactRejected;
+            // Design §13 Phase B, negative fixture 3: the five cases that ARE the
+            // blocksKinds policy. A symmetric conflict matrix flips the first
+            // three; merging the two clearance kinds flips the last.
+            public bool landingOverLandingLegal;
+            public bool landingOverClearanceLegal;
+            public bool mouthOverClearanceLegal;
+            public bool landingOverFootprintRejected;
+            public bool transitionClearanceOverMouthRejected;
+            public bool sameOwnerFootprintUnderOwnClearanceLegal;
+            public bool openVolumeBlocksForeignFloor;
+            public bool openVolumeAdmitsAllowListedFloor;
+            public bool openVolumeBlocksItsOwnFloor;
             public bool lowerClearanceOpen;
             public List<string> lowerSurfaceColliderNames = new List<string>();
             public List<string> upperSurfaceColliderNames = new List<string>();
+        }
+
+        /// <summary>
+        /// Print the stacked-crossing fixture, including the Phase B negative
+        /// fixtures, to the editor log.
+        /// </summary>
+        /// <remarks>
+        /// The snapshot was previously reachable only by reflection from an
+        /// EditMode test, which meant the three negative fixtures the design
+        /// asks for (§13 Phase B) could not be read off a headless run. This is
+        /// a diagnostic entry point in the same shape as `BatchValidate200Seeds`,
+        /// not a test: it reports, it does not assert.
+        /// </remarks>
+        [MenuItem("Tools/Dungeon Lab/Print Stacked Crossing Fixture")]
+        public static void PrintStackedCrossingSnapshot()
+        {
+            Debug.Log($"[STACKED_CROSSING_FIXTURE]\n{BuildStackedCrossingSnapshot()}");
         }
 
         private static string BuildStackedCrossingSnapshot()
@@ -51,6 +86,17 @@ namespace DungeonLab.Editor
                     $"fixture.upperTraversable={fixture.upperBridgeTraversable}",
                     $"fixture.positiveHeadroom={fixture.positiveHeadroomPassed}",
                     $"fixture.negativeHeadroomRejected={fixture.negativeHeadroomRejected}",
+                    $"fixture.exactHeadroomPassed={fixture.exactHeadroomPassed}",
+                    $"fixture.oneShortOfExactRejected={fixture.oneShortOfExactRejected}",
+                    $"fixture.landingOverLandingLegal={fixture.landingOverLandingLegal}",
+                    $"fixture.landingOverClearanceLegal={fixture.landingOverClearanceLegal}",
+                    $"fixture.mouthOverClearanceLegal={fixture.mouthOverClearanceLegal}",
+                    $"fixture.landingOverFootprintRejected={fixture.landingOverFootprintRejected}",
+                    $"fixture.transitionClearanceOverMouthRejected={fixture.transitionClearanceOverMouthRejected}",
+                    $"fixture.sameOwnerFootprintUnderOwnClearanceLegal={fixture.sameOwnerFootprintUnderOwnClearanceLegal}",
+                    $"fixture.openVolumeBlocksForeignFloor={fixture.openVolumeBlocksForeignFloor}",
+                    $"fixture.openVolumeAdmitsAllowListedFloor={fixture.openVolumeAdmitsAllowListedFloor}",
+                    $"fixture.openVolumeBlocksItsOwnFloor={fixture.openVolumeBlocksItsOwnFloor}",
                     $"fixture.rendererRejected={fixture.buildReport.rejected}",
                     $"fixture.lowerClearanceOpen={fixture.lowerClearanceOpen}",
                     $"fixture.lowerSurfaceColliders={fixture.lowerSurfaceColliderNames.Count}",
@@ -89,15 +135,14 @@ namespace DungeonLab.Editor
                 new List<RoomFootprint> { west, east },
                 new List<RoomConnection>());
             var transitions = new List<ElevationEdgeModel.TransitionEdge>();
-            var spanDeckLevels = new Dictionary<Vector2Int, int>();
+            var prisms = new PrismLedger();
             AddAerialBridges(
                 layout,
                 levels,
                 new System.Random(7),
                 transitions,
                 new HashSet<string>(),
-                new StairPlacementLedger(),
-                spanDeckLevels,
+                prisms,
                 new List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)>(),
                 new HashSet<Vector2Int>());
             ElevationEdgeModel.TransitionEdge bridge = transitions.Single(transition =>
@@ -105,9 +150,12 @@ namespace DungeonLab.Editor
                     transition.placementClass,
                     ExternalSpanStairPlacementClass,
                     StringComparison.Ordinal));
+            // The deck level is no longer a side table the fixture is handed —
+            // the ledger holds it, and the probe reads it back the same way the
+            // headroom rule does.
+            int deckLevel = DeckLevelOf(prisms, bridge.footprintCells);
             List<Vector2Int> stackedCells = bridge.footprintCells
                 .Where(cell => levels.TryGetValue(cell, out int lowerLevel) &&
-                    spanDeckLevels.TryGetValue(cell, out int deckLevel) &&
                     deckLevel - lowerLevel >= MinHeadroomLevels)
                 .ToList();
             if (stackedCells.Count != 1)
@@ -116,18 +164,15 @@ namespace DungeonLab.Editor
                     $"Focused fixture expected one exact stacked coordinate; found {stackedCells.Count}.");
             }
 
-            bool positiveHeadroom = TryValidateSpanHeadroom(
-                levels,
-                spanDeckLevels,
-                out _);
+            // Negative fixture 1 (design §13 Phase B): the SAME probe as before,
+            // retargeted at the general ledger rule rather than duplicated. An
+            // artificially raised floor under the deck is still rejected.
+            bool positiveHeadroom = prisms.TryValidateSurfaceHeadroom(levels, out _);
             var negativeLevels = new Dictionary<Vector2Int, int>(levels)
             {
-                [stackedCells[0]] = spanDeckLevels[stackedCells[0]] - 2
+                [stackedCells[0]] = deckLevel - 2
             };
-            bool negativeRejected = !TryValidateSpanHeadroom(
-                negativeLevels,
-                spanDeckLevels,
-                out _);
+            bool negativeRejected = !prisms.TryValidateSurfaceHeadroom(negativeLevels, out _);
             bool lowerTraversable = EqualLevelPathExists(
                 levels,
                 lowerStart,
@@ -160,17 +205,33 @@ namespace DungeonLab.Editor
             CollectStackedSurfaceEvidence(
                 root,
                 stackedCells[0],
-                spanDeckLevels[stackedCells[0]],
+                deckLevel,
                 buildReport.levelHeight,
                 out bool lowerClearanceOpen,
                 out List<string> lowerSurfaceColliders,
                 out List<string> upperSurfaceColliders);
 
+            ProbeHalfOpenHeadroomEndpoint(
+                out bool exactPassed,
+                out bool oneShortRejected);
+            ProbeConflictPolicy(
+                out bool landingOverLanding,
+                out bool landingOverClearance,
+                out bool mouthOverClearance,
+                out bool landingOverFootprint,
+                out bool transitionClearanceOverMouth,
+                out bool sameOwnerLegal);
+            ProbeOpenVolumePenetration(
+                out bool volumeBlocksForeign,
+                out bool volumeAdmitsAllowListed,
+                out bool volumeBlocksItsOwn);
+
             return new StackedCrossingFixture
             {
                 levels = levels,
                 transitions = transitions,
-                spanDeckLevels = spanDeckLevels,
+                prisms = prisms,
+                stackedDeckLevel = deckLevel,
                 stackedCell = stackedCells[0],
                 lowerStart = lowerStart,
                 lowerEnd = lowerEnd,
@@ -181,10 +242,159 @@ namespace DungeonLab.Editor
                 upperBridgeTraversable = upperTraversable,
                 positiveHeadroomPassed = positiveHeadroom,
                 negativeHeadroomRejected = negativeRejected,
+                exactHeadroomPassed = exactPassed,
+                oneShortOfExactRejected = oneShortRejected,
+                landingOverLandingLegal = landingOverLanding,
+                landingOverClearanceLegal = landingOverClearance,
+                mouthOverClearanceLegal = mouthOverClearance,
+                landingOverFootprintRejected = landingOverFootprint,
+                transitionClearanceOverMouthRejected = transitionClearanceOverMouth,
+                sameOwnerFootprintUnderOwnClearanceLegal = sameOwnerLegal,
+                openVolumeBlocksForeignFloor = volumeBlocksForeign,
+                openVolumeAdmitsAllowListedFloor = volumeAdmitsAllowListed,
+                openVolumeBlocksItsOwnFloor = volumeBlocksItsOwn,
                 lowerClearanceOpen = lowerClearanceOpen,
                 lowerSurfaceColliderNames = lowerSurfaceColliders,
                 upperSurfaceColliderNames = upperSurfaceColliders
             };
+        }
+
+        /// <summary>The base level of the deck the ledger recorded for these cells.</summary>
+        private static int DeckLevelOf(PrismLedger prisms, IReadOnlyList<Vector2Int> deckCells)
+        {
+            foreach (Vector2Int cell in deckCells)
+            {
+                if (prisms.TryGetLowestStructureBase(cell, out int deckLevel))
+                {
+                    return deckLevel;
+                }
+            }
+
+            throw new InvalidOperationException(
+                "Focused fixture expected the ledger to hold a deck over the bridge footprint.");
+        }
+
+        /// <summary>
+        /// Negative fixture 2 (design §13 Phase B): the half-open endpoint.
+        /// </summary>
+        /// <remarks>
+        /// A clearance of EXACTLY <c>MinHeadroomLevels</c> passes and one less
+        /// fails. This is the case the draft's closed `[level, level + 3]` band
+        /// would have wrongly rejected, and it is the value the arithmetic gate
+        /// (`clearance &lt; MinHeadroomLevels`) accepted, so getting it wrong
+        /// silently narrows what the generator will build.
+        /// </remarks>
+        private static void ProbeHalfOpenHeadroomEndpoint(
+            out bool exactPassed,
+            out bool oneShortRejected)
+        {
+            var cell = new Vector2Int(0, 0);
+            var owner = new OwnerKey(OwnerFamily.Transition, "half-open-probe");
+            var ledger = new PrismLedger();
+            ledger.RegisterSpanDeck(new[] { cell }, MinHeadroomLevels, owner);
+
+            exactPassed = ledger.TryValidateSurfaceHeadroom(
+                new Dictionary<Vector2Int, int> { [cell] = 0 },
+                out _);
+            oneShortRejected = !ledger.TryValidateSurfaceHeadroom(
+                new Dictionary<Vector2Int, int> { [cell] = 1 },
+                out _);
+        }
+
+        /// <summary>
+        /// Negative fixture 3 (design §13 Phase B): the whole content of the
+        /// asymmetric `blocksKinds` policy, in five cases plus the same-owner rule.
+        /// </summary>
+        /// <remarks>
+        /// Landing-landing, landing-clearance and mouth-clearance are LEGAL
+        /// today, and a symmetric conflict matrix rejects all three. A landing
+        /// over another owner's footprint and a transition clearance over
+        /// another owner's mouth are REJECTED, and merging the two clearance
+        /// kinds into one loses the second. If any of the five flips, the port
+        /// is not faithful.
+        /// </remarks>
+        private static void ProbeConflictPolicy(
+            out bool landingOverLandingLegal,
+            out bool landingOverClearanceLegal,
+            out bool mouthOverClearanceLegal,
+            out bool landingOverFootprintRejected,
+            out bool transitionClearanceOverMouthRejected,
+            out bool sameOwnerFootprintUnderOwnClearanceLegal)
+        {
+            var cell = new Vector2Int(0, 0);
+            var incoming = new OwnerKey(OwnerFamily.Transition, "incoming");
+            Vector2Int[] one = { cell };
+            Vector2Int[] none = Array.Empty<Vector2Int>();
+
+            bool Legal(Action<PrismLedger> register, PrismKind kind)
+            {
+                var ledger = new PrismLedger();
+                register(ledger);
+                return !ledger.Blocks(cell, LevelBand.Unbounded, kind, incoming);
+            }
+
+            void RegisterAs(PrismLedger ledger, PrismKind kind)
+            {
+                ledger.Register(
+                    new OwnerKey(OwnerFamily.Transition, "registered"),
+                    kind == PrismKind.Footprint ? one : none,
+                    kind == PrismKind.Landing ? one : none,
+                    none,
+                    kind == PrismKind.Mouth ? one : none,
+                    kind == PrismKind.FootprintClearance ? one : none,
+                    kind == PrismKind.TransitionClearance ? one : none);
+            }
+
+            landingOverLandingLegal = Legal(l => RegisterAs(l, PrismKind.Landing), PrismKind.Landing);
+            landingOverClearanceLegal =
+                Legal(l => RegisterAs(l, PrismKind.FootprintClearance), PrismKind.Landing);
+            mouthOverClearanceLegal =
+                Legal(l => RegisterAs(l, PrismKind.FootprintClearance), PrismKind.Mouth);
+            landingOverFootprintRejected =
+                !Legal(l => RegisterAs(l, PrismKind.Footprint), PrismKind.Landing);
+            transitionClearanceOverMouthRejected =
+                !Legal(l => RegisterAs(l, PrismKind.Mouth), PrismKind.TransitionClearance);
+
+            // Correction (b): without an owner a transition's own footprint
+            // violates its own clearance, and clearance stops being expressible.
+            var sameOwner = new PrismLedger();
+            sameOwner.Register(incoming, one, none, none, none, one, none);
+            sameOwnerFootprintUnderOwnClearanceLegal =
+                !sameOwner.Blocks(cell, LevelBand.Unbounded, PrismKind.Footprint, incoming);
+        }
+
+        /// <summary>
+        /// The <see cref="PrismKind.OpenVolume"/> mechanism (design §6): a
+        /// reserved void blocks every solid kind except the owners its authored
+        /// allow-list names — including its OWN.
+        /// </summary>
+        /// <remarks>
+        /// Phase B ships the kind, the allow-list and the enforcement, and no
+        /// producer. This probe is what keeps the mechanism honest until one
+        /// exists: an atrium that forbade everything would forbid its own
+        /// balconies, and the plain same-owner exemption would let the atrium's
+        /// own floor fill its own void, which is worse.
+        /// </remarks>
+        private static void ProbeOpenVolumePenetration(
+            out bool blocksForeignFloor,
+            out bool admitsAllowListedFloor,
+            out bool blocksItsOwnFloor)
+        {
+            var cell = new Vector2Int(0, 0);
+            var atrium = new OwnerKey(OwnerFamily.Room, "great-atrium");
+            var balcony = new OwnerKey(OwnerFamily.Room, "great-atrium#gallery");
+            var stranger = new OwnerKey(OwnerFamily.Transition, "unrelated-stair");
+
+            var ledger = new PrismLedger();
+            ledger.RegisterOpenVolume(
+                new[] { cell },
+                new LevelBand(0, 12),
+                atrium,
+                new[] { balcony });
+
+            blocksForeignFloor = ledger.Blocks(cell, LevelBand.From(4), PrismKind.Footprint, stranger);
+            admitsAllowListedFloor = !ledger.Blocks(cell, LevelBand.From(4), PrismKind.Footprint, balcony);
+            blocksItsOwnFloor = ledger.Blocks(cell, LevelBand.From(4), PrismKind.Footprint, atrium);
         }
 
         private static void CollectStackedSurfaceEvidence(

@@ -120,9 +120,9 @@ rebaseline, and the density scale. Their evidence is archived:
 
 Treat both as history, not as current constraints.
 
-### In progress: layered 3-D topology — Phase A landed
+### In progress: layered 3-D topology — Phases A and B landed
 
-Design of record, **still a draft beyond Phase A**:
+Design of record, **still a draft beyond Phase B**:
 [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md).
 Branch `dungeon/layered-topology`.
 
@@ -161,7 +161,46 @@ A2's isolation, per-seed: only `hashes.layout` and `hashes.canonical` moved.
 the accepted set, every validation result and every attempt count. The plan did
 not move; only the shadow and what is computed from it did.
 
-**Phase B is next** — volumetric reservation and one clearance rule (design §13).
+**Phase B is complete (2026-07-31).** Reservations and clearance are volumes.
+
+`DungeonLabGenerator.Prisms.cs` replaces `StairPlacementLedger`'s five flat cell
+sets with one `PrismLedger` of prisms, each carrying a half-open `LevelBand` and
+a typed `OwnerKey`. Conflict is an asymmetric per-kind `blocksKinds` policy
+seeded verbatim from the old `ConflictsWithReservation` — five kinds kept
+distinct, so landing–landing, landing–clearance and mouth–clearance stay legal.
+One named `BlocksHeadroom` predicate owns headroom, and `Landing` is excluded
+from it on purpose. `TryValidateSpanHeadroom`, the `spanDeckLevels` side table
+(16 references) and the duplicated deck formula in `.Batch.cs` are all gone: the
+plan carries the ledger, so the acceptance gate re-runs the identical rule over
+the identical reservations. The density annex/mop-up sweeps query a ledger
+instead of a bare cell set. `OpenVolume` and its penetration allow-list exist and
+are enforced, with no producer, per the phase's non-goal.
+
+Gate: **identical geometry on all 200 seeds** against the parent commit — same
+`hashes.canonical`, same accepted set, same failure codes. A field-level diff of
+the two reports found the only difference anywhere to be one documentation
+string naming the renamed class, so `resultHash` moved once,
+`f387ca04df49d8a7` → `991d86e1bb577144`, and every validation message —
+including the headroom gate's deck-cell count — is byte-identical.
+
+Two rulings worth carrying forward:
+
+1. **The headroom rule needs a third qualifier the design omits: the prism must
+   declare a base.** "Another owner's `BlocksHeadroom` prism" alone is not
+   enough, because today every reservation carries an unbounded band and an
+   unbounded band intersects everything — so a stair footprint would violate the
+   headroom of its own treads. `[-∞, +∞)` means "never asked for a height", not
+   "solid from the abyss up". Exactly one producer declares a base today (the
+   external-span deck), which is what makes the port output-neutral.
+2. **There are two ledgers, because the density fill passes run a stage earlier
+   than the transitions.** `AnnexAndMopUpLatticeVoid` runs during layout
+   compilation; the transition ledger is built during elevation. They cannot
+   share an instance — layout and tier attempts retry independently, so a shared
+   one would leak a failed tier attempt's reservations forward. Same type, same
+   policy, two instances.
+
+**Phase C is next** — the two-layer authored episode, the first real proof
+(design §13).
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently

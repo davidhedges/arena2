@@ -998,7 +998,7 @@ namespace DungeonLab.Editor
                 new List<ElevationEdgeModel.TransitionEdge>(),
                 protectedCells,
                 new HashSet<Vector2Int>(),
-                new StairPlacementLedger(),
+                new PrismLedger(),
                 Array.Empty<NamedVistaPromontoryResolution>(),
                 out resolutions,
                 out error);
@@ -4232,7 +4232,7 @@ namespace DungeonLab.Editor
             Add("placement.primaryAxis/mirror", "TryPlaceRecipe", "orientation, variations, symmetry validation");
             Add("placement.protectedCells", "TryPlaceRecipe", "generic feature exclusions and final validation");
             Add("placement.zoneCells", "TryPlaceRecipe", "canonical levels and structural validation");
-            Add("transition.cells/landings/footprint/climb", "TryPlaceRecipe", "StairPlacementLedger, TransitionEdge, headroom, port graph");
+            Add("transition.cells/landings/footprint/climb", "TryPlaceRecipe", "PrismLedger, TransitionEdge, headroom, port graph");
             Add("selected variation/visual", "TryPlaceRecipe", "StairForge footprint contract, DaisShowpiece, and renderer");
             Add("disabledForGeneration", "recipe asset", "active catalog admission");
             return new JObject
@@ -4560,55 +4560,26 @@ namespace DungeonLab.Editor
             return visited.Count == layout.rooms.Count;
         }
 
+        // Phase B of the layered-topology design (§6 payoff 3, §13, review M4).
+        //
+        // This used to rebuild the deck heights from the accepted transition
+        // list with its OWN copy of the floored-linear span formula — a second
+        // implementation of the planner's arithmetic, written because the
+        // planning gate ran before three passes that could still move the level
+        // field (review H3). Two copies of a formula guarding two different
+        // moments is exactly how a rule drifts from itself.
+        //
+        // The planning gate now runs after the last mutation it must see, and
+        // the plan carries the ledger, so acceptance re-runs the identical rule
+        // over the identical reservations. Nothing is re-derived and there is
+        // one formula left in the generator.
         private static bool TryValidateAcceptedPlanHeadroom(TieredLevelPlan plan, out string rejectionReason)
         {
-            var spanDeckLevels = new Dictionary<Vector2Int, int>();
-            foreach (ElevationEdgeModel.TransitionEdge transition in plan.transitions)
-            {
-                if (!string.Equals(
-                        transition.placementClass,
-                        ExternalSpanStairPlacementClass,
-                        StringComparison.Ordinal) ||
-                    transition.footprintCells == null ||
-                    transition.footprintCells.Length == 0 ||
-                    transition.lowerLandingCells == null ||
-                    transition.lowerLandingCells.Length == 0 ||
-                    transition.upperLandingCells == null ||
-                    transition.upperLandingCells.Length == 0)
-                {
-                    continue;
-                }
-
-                Vector2Int lowerLanding = transition.lowerLandingCells[0];
-                Vector2Int upperLanding = transition.upperLandingCells[0];
-                if (!plan.cellLevels.TryGetValue(lowerLanding, out int lowerLevel) ||
-                    !plan.cellLevels.TryGetValue(upperLanding, out int upperLevel))
-                {
-                    rejectionReason = $"external span {lowerLanding}->{upperLanding} referenced a missing landing";
-                    return false;
-                }
-
-                int spanLength = Mathf.Abs(upperLanding.x - lowerLanding.x) +
-                    Mathf.Abs(upperLanding.y - lowerLanding.y);
-                foreach (Vector2Int deckCell in transition.footprintCells)
-                {
-                    int deckDistance = Mathf.Abs(deckCell.x - lowerLanding.x) +
-                        Mathf.Abs(deckCell.y - lowerLanding.y);
-                    int deckLevel = Mathf.FloorToInt(Mathf.Lerp(
-                        Mathf.Min(lowerLevel, upperLevel),
-                        Mathf.Max(lowerLevel, upperLevel),
-                        spanLength > 0 ? (float)deckDistance / spanLength : 0f));
-                    if (!spanDeckLevels.TryGetValue(deckCell, out int existing) || deckLevel < existing)
-                    {
-                        spanDeckLevels[deckCell] = deckLevel;
-                    }
-                }
-            }
-
-            bool passed = TryValidateSpanHeadroom(plan.cellLevels, spanDeckLevels, out rejectionReason);
+            bool passed = plan.prisms.TryValidateSurfaceHeadroom(plan.cellLevels, out rejectionReason);
             if (passed)
             {
-                rejectionReason = $"headroom gate passed for {spanDeckLevels.Count} external-span deck cells";
+                rejectionReason =
+                    $"headroom gate passed for {plan.prisms.HeadroomBearingCellCount} external-span deck cells";
             }
 
             return passed;

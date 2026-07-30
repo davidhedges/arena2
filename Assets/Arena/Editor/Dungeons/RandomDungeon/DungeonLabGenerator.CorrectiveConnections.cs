@@ -68,7 +68,7 @@ namespace DungeonLab.Editor
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
             IReadOnlyCollection<Vector2Int> protectedStructuralCells,
             IReadOnlyCollection<Vector2Int> doorwayCells,
-            StairPlacementLedger plannedStairLedger,
+            PrismLedger plannedStairLedger,
             IReadOnlyList<NamedVistaPromontoryResolution> namedPromontories,
             out ExternalConnectorPromontoryResolution[] resolutions,
             out string rejectionReason)
@@ -90,8 +90,8 @@ namespace DungeonLab.Editor
                 excluded.UnionWith(doorwayCells);
             if (plannedStairLedger != null)
             {
-                excluded.UnionWith(plannedStairLedger.footprintCells);
-                excluded.UnionWith(plannedStairLedger.landingCells);
+                excluded.UnionWith(plannedStairLedger.CellsOfKind(PrismKind.Footprint));
+                excluded.UnionWith(plannedStairLedger.CellsOfKind(PrismKind.Landing));
             }
 
             foreach (ElevationEdgeModel.TransitionEdge transition in

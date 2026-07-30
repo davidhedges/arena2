@@ -107,7 +107,46 @@ namespace DungeonLab.Editor
                 this.maxLevelExclusive = maxLevelExclusive;
             }
 
+            /// <summary>
+            /// A reservation that carries no elevation information at all.
+            /// </summary>
+            /// <remarks>
+            /// This is what every reservation the generator makes today amounts
+            /// to: the ledger's five cell sets constrain PLAN space and say
+            /// nothing about height. Design §6 states today's semantics as
+            /// exactly this special case — "every band is `[-∞, +∞)`" — and that
+            /// is why Phase B is output-neutral: two bands that are both
+            /// unbounded always intersect, so conflict behaves as it always has.
+            /// A phase that gives a producer a real band opts that prism into
+            /// the vertical rules with no further plumbing.
+            /// </remarks>
+            public static LevelBand Unbounded => new LevelBand(int.MinValue, int.MaxValue);
+
+            /// <summary>A band with a known base that continues upward without limit.</summary>
+            public static LevelBand From(int minLevel)
+            {
+                return new LevelBand(minLevel, int.MaxValue);
+            }
+
+            /// <summary>
+            /// True when the band's base is a real level rather than "unknown".
+            /// </summary>
+            /// <remarks>
+            /// The headroom rule can only judge a prism that says where it sits.
+            /// An unbounded reservation is not "solid from the abyss upward" —
+            /// it is a plan-space claim that has never been asked to declare a
+            /// height, and treating its `int.MinValue` base as geometry would
+            /// have every stair footprint violate the headroom of the very
+            /// surface it carries.
+            /// </remarks>
+            public bool DeclaresBase => minLevel != int.MinValue;
+
             public bool IsEmpty => maxLevelExclusive <= minLevel;
+
+            public bool Contains(int level)
+            {
+                return !IsEmpty && level >= minLevel && level < maxLevelExclusive;
+            }
 
             public bool Intersects(LevelBand other)
             {

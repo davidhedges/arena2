@@ -1743,7 +1743,7 @@ namespace DungeonLab.Editor
             Dictionary<Vector2Int, int> cellLevels,
             List<ElevationEdgeModel.TransitionEdge> transitions,
             HashSet<string> transitionKeys,
-            StairPlacementLedger stairLedger,
+            PrismLedger stairLedger,
             string seamStairPrefabPath,
             List<DaisShowpiece> showpieces,
             out Dictionary<string, int> baseLevels,
@@ -1901,7 +1901,9 @@ namespace DungeonLab.Editor
                     }
                 }
 
+                var recipeOwner = new OwnerKey(OwnerFamily.Recipe, placement.RecipeId);
                 if (stairLedger.ConflictsWithReservation(
+                        recipeOwner,
                         recipeFootprints,
                         recipeLandings,
                         recipeTransitionCells,
@@ -1915,6 +1917,7 @@ namespace DungeonLab.Editor
                 }
 
                 stairLedger.Register(
+                    recipeOwner,
                     SortedCells(recipeFootprints).ToArray(),
                     SortedCells(recipeLandings).ToArray(),
                     Array.Empty<Vector2Int>(),
@@ -1983,6 +1986,7 @@ namespace DungeonLab.Editor
                 }
 
                 stairLedger.Register(
+                    recipeOwner,
                     Array.Empty<Vector2Int>(),
                     placement.roomCells,
                     Array.Empty<Vector2Int>());
