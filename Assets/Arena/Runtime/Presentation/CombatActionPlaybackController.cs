@@ -175,6 +175,7 @@ namespace Arena.Presentation
         private AnimationClip? _phasedMeleeLoopClip;
         private AnimationClip? _phasedMeleeEndClip;
         private PhasedMeleePlaybackPhase _phasedMeleePhase = PhasedMeleePlaybackPhase.None;
+        private float _phasedMeleeAuthoredStartExitNormalizedTime = -1f;
         private float _phasedMeleeElapsedBeforePhase;
         private float _phasedMeleeCurrentPhaseLengthSeconds;
         private float _phasedMeleeTotalLengthSeconds;
@@ -227,6 +228,25 @@ namespace Arena.Presentation
                 return 1;
 
             return ((strikeIndex - 1) % CombatAnimationSet.AnimatorStrikeBankCount) + 1;
+        }
+
+        public static bool HasEnteredExpectedAnimatorState(
+            int dispatchedFrame,
+            int currentFrame,
+            int expectedStateHash,
+            int currentStateHash,
+            bool isInTransition,
+            int nextStateHash)
+        {
+            // Animator triggers are evaluated after script Update. During the dispatch
+            // frame Unity can still report the outgoing presentation, including the same
+            // banked state reused by the incoming action. Never attribute that state to
+            // the new presentation until at least the following frame.
+            if (currentFrame <= dispatchedFrame || expectedStateHash == 0)
+                return false;
+
+            return currentStateHash == expectedStateHash
+                || (isInTransition && nextStateHash == expectedStateHash);
         }
 
         public int ResolveNextSpellBankSlot()
@@ -435,9 +455,30 @@ namespace Arena.Presentation
             _phasedMeleeStartClip = startClip;
             _phasedMeleeLoopClip = loopClip;
             _phasedMeleeEndClip = endClip;
+            bool hasAuthoredStartExit = CombatAnimationEvents.TryGetEventNormalizedTime(
+                startClip,
+                CombatAnimationEvents.OnPhaseLoopReady,
+                out _phasedMeleeAuthoredStartExitNormalizedTime);
+            if (!hasAuthoredStartExit)
+            {
+                _phasedMeleeAuthoredStartExitNormalizedTime = -1f;
+            }
+            else
+            {
+                float safetyNormalizedTime = releaseAfterStart
+                    ? CombatAnimationEvents.PhasedMeleeStartOnlyEndSafetyNormalizedTime
+                    : CombatAnimationEvents.PhasedMeleeStartToLoopSafetyNormalizedTime;
+                _phasedMeleeAuthoredStartExitNormalizedTime = Mathf.Min(
+                    _phasedMeleeAuthoredStartExitNormalizedTime,
+                    safetyNormalizedTime);
+            }
+
+            float startTimelineLengthSeconds = hasAuthoredStartExit
+                ? Mathf.Max(0f, startClip.length) * _phasedMeleeAuthoredStartExitNormalizedTime
+                : Mathf.Max(0f, startClip.length);
             _phasedMeleeElapsedBeforePhase = 0f;
             _phasedMeleeCurrentPhaseLengthSeconds = 0f;
-            _phasedMeleeTotalLengthSeconds = Mathf.Max(0f, startClip.length)
+            _phasedMeleeTotalLengthSeconds = startTimelineLengthSeconds
                 + (releaseAfterStart ? 0f : Mathf.Max(0f, loopClip.length))
                 + Mathf.Max(0f, endClip.length);
             _phasedMeleeSpecialMovementDriven = specialMovementDriven;
@@ -469,6 +510,7 @@ namespace Arena.Presentation
             _phasedMeleeLoopClip = null;
             _phasedMeleeEndClip = null;
             _phasedMeleePhase = PhasedMeleePlaybackPhase.None;
+            _phasedMeleeAuthoredStartExitNormalizedTime = -1f;
             _phasedMeleeElapsedBeforePhase = 0f;
             _phasedMeleeCurrentPhaseLengthSeconds = 0f;
             _phasedMeleeTotalLengthSeconds = 0f;
@@ -509,6 +551,27 @@ namespace Arena.Presentation
         {
             _phasedMeleeElapsedBeforePhase +=
                 Mathf.Max(0f, _phasedMeleeCurrentPhaseLengthSeconds) * Mathf.Clamp01(normalizedTime);
+        }
+
+        public float ResolvePhasedMeleeStartExitNormalizedTime(
+            float startOnlyEndTriggerNormalizedTime,
+            float segmentTransitionNormalizedTime)
+        {
+            if (_phasedMeleeAuthoredStartExitNormalizedTime >= 0f)
+            {
+                float safetyNormalizedTime = Mathf.Clamp01(
+                    _phasedMeleeReleaseAfterStart
+                        ? startOnlyEndTriggerNormalizedTime
+                        : segmentTransitionNormalizedTime);
+                return Mathf.Min(
+                    Mathf.Clamp01(_phasedMeleeAuthoredStartExitNormalizedTime),
+                    safetyNormalizedTime);
+            }
+
+            return Mathf.Clamp01(
+                _phasedMeleeReleaseAfterStart
+                    ? startOnlyEndTriggerNormalizedTime
+                    : segmentTransitionNormalizedTime);
         }
 
         public bool TryGetPhasedMeleePresentationTiming(
@@ -619,16 +682,19 @@ namespace Arena.Presentation
 
             if (_phasedMeleePhase == PhasedMeleePlaybackPhase.Start)
             {
+                float startExitNormalizedTime = ResolvePhasedMeleeStartExitNormalizedTime(
+                    startOnlyEndTriggerNormalizedTime,
+                    segmentTransitionNormalizedTime);
                 if (_phasedMeleeReleaseAfterStart)
                 {
-                    if (normalizedTime < startOnlyEndTriggerNormalizedTime)
+                    if (normalizedTime < startExitNormalizedTime)
                         return false;
 
                     nextPhase = PhasedMeleePlaybackPhase.End;
                     return true;
                 }
 
-                if (normalizedTime < segmentTransitionNormalizedTime)
+                if (normalizedTime < startExitNormalizedTime)
                     return false;
 
                 nextPhase = PhasedMeleePlaybackPhase.Loop;
@@ -710,6 +776,22 @@ namespace Arena.Presentation
             }
 
             return CombatAnimationDecision.PlayNow;
+        }
+
+        public static bool HasTrackedHigherPriorityPresentation(
+            bool hasActiveMeleePresentation,
+            CombatAnimationCategory activeMeleeCategory,
+            bool hasActiveSpellPresentation,
+            bool hasActiveSpellCastHoldPresentation)
+        {
+            // Animator triggers are consumed after script Update. The tracked
+            // presentation exists immediately, so it closes the one-frame
+            // window where a due auto-attack could otherwise replace a skill
+            // before the Animator reports that skill's state as active.
+            return (hasActiveMeleePresentation
+                    && activeMeleeCategory != CombatAnimationCategory.AutoAttack)
+                || hasActiveSpellPresentation
+                || hasActiveSpellCastHoldPresentation;
         }
 
         public static CombatPreemptionMode ResolvePreemptionMode(

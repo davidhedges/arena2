@@ -159,6 +159,33 @@ namespace Arena.Input
             PrimeInitialPredictionLead();
         }
 
+        public void FaceYawImmediately(float yawRadians)
+        {
+            if (float.IsNaN(yawRadians) || float.IsInfinity(yawRadians))
+                return;
+
+            float normalizedYaw = Mathf.Repeat(yawRadians + Mathf.PI, Mathf.PI * 2.0f) - Mathf.PI;
+            _motor?.FaceYawImmediately(normalizedYaw);
+
+            if (!_hasCurrentPredictedState)
+            {
+                transform.rotation = Quaternion.Euler(0.0f, normalizedYaw * Mathf.Rad2Deg, 0.0f);
+                return;
+            }
+
+            _currentPredictedState = new PredictedMovementState(
+                _currentPredictedState.Position,
+                _currentPredictedState.Velocity,
+                normalizedYaw,
+                _currentPredictedState.Grounded,
+                _currentPredictedState.LastProcessedTick);
+            _stateProvider?.SetPredictedState(_currentPredictedState);
+            RecordPredictedState(_currentPredictedState);
+            ClearRenderHistory();
+            PushRenderSample(_currentPredictedState);
+            ApplyTransform(_currentPredictedState.Position, normalizedYaw);
+        }
+
         private void LateUpdate()
         {
             if (_simState == null || _motor == null || _worldContext == null || _stateProvider == null || _commandHistory == null)
@@ -623,10 +650,18 @@ namespace Arena.Input
         {
             if (_renderHistoryCount > 0)
             {
-                PredictedMovementState previous = GetRenderHistorySample(_renderHistoryCount - 1);
-                float positionDelta = Vector3.Distance(previous.Position, predicted.Position);
+                int newestIndex = _renderHistoryCount - 1;
+                PredictedMovementState newest = GetRenderHistorySample(newestIndex);
+                float positionDelta = Vector3.Distance(newest.Position, predicted.Position);
                 if (positionDelta >= LocalRenderHardSnapDistance)
+                {
                     ClearRenderHistory();
+                }
+                else if (newest.LastProcessedTick == predicted.LastProcessedTick)
+                {
+                    SetRenderHistorySample(newestIndex, predicted);
+                    return;
+                }
             }
 
             AppendRenderHistory(predicted);
@@ -899,6 +934,12 @@ namespace Arena.Input
         {
             int arrayIndex = (_renderHistoryStart + index) % RenderHistoryCapacity;
             return _renderHistory[arrayIndex];
+        }
+
+        private void SetRenderHistorySample(int index, in PredictedMovementState state)
+        {
+            int arrayIndex = (_renderHistoryStart + index) % RenderHistoryCapacity;
+            _renderHistory[arrayIndex] = state;
         }
 
         private void AppendPredictedStateHistory(in PredictedMovementState state)

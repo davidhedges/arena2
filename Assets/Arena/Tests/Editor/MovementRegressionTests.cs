@@ -475,6 +475,16 @@ namespace Arena.Tests.Editor
             try
             {
                 AnimationUtility.SetAnimationEvents(
+                    start,
+                    new[]
+                    {
+                        new AnimationEvent
+                        {
+                            functionName = "OnPhaseLoopReady",
+                            time = 0.4f,
+                        },
+                    });
+                AnimationUtility.SetAnimationEvents(
                     end,
                     new[]
                     {
@@ -501,7 +511,7 @@ namespace Arena.Tests.Editor
                 object export = InvokeInstanceMethod(set, "BuildMeleeExport");
                 object strike = FindExportedStrike(GetExportedStrikes(export), "MELEE_ATTACK_1");
 
-                Assert.That(GetFirstImpactDelayMs(strike), Is.EqualTo(3250));
+                Assert.That(GetFirstImpactDelayMs(strike), Is.EqualTo(2650));
             }
             finally
             {
@@ -676,6 +686,158 @@ namespace Arena.Tests.Editor
                 UnityEngine.Object.DestroyImmediate(end);
                 UnityEngine.Object.DestroyImmediate(loop);
                 UnityEngine.Object.DestroyImmediate(set);
+            }
+        }
+
+        [Test]
+        public void DaggerCoupDeGrace_UsesFastLoopThenAirToFloorEnd()
+        {
+            Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
+            Type phasedEntryType = RequireType("Arena.Presentation.WeaponPhasedActionEntry");
+            Type resolvedPhaseSetType = RequireType("Arena.Presentation.ResolvedWeaponPhasedActionClipSet");
+            UnityEngine.Object instance = Resources.Load("CombatAnimationSets/Daggers", combatAnimationSetType);
+            Assert.That(instance, Is.Not.Null);
+
+            object?[] phasedArgs = { "DAGGER_COUP_DE_GRACE", null };
+            bool hasPhasedEntry = (bool)RequireMethod(
+                    combatAnimationSetType,
+                    "TryGetPhasedMeleeEntry",
+                    typeof(string),
+                    phasedEntryType.MakeByRefType())
+                .Invoke(instance, phasedArgs)!;
+            Assert.That(hasPhasedEntry, Is.True);
+
+            object phasedEntry = phasedArgs[1]!;
+            Assert.That(
+                (bool)phasedEntryType.GetField("drivePhasesFromSpecialMovement")!.GetValue(phasedEntry)!,
+                Is.True);
+
+            object?[] clipSetArgs = { true, null };
+            bool resolved = (bool)RequireMethod(
+                    phasedEntryType,
+                    "TryResolveClipSet",
+                    typeof(bool),
+                    resolvedPhaseSetType.MakeByRefType())
+                .Invoke(phasedEntry, clipSetArgs)!;
+            Assert.That(resolved, Is.True);
+
+            object clipSet = clipSetArgs[1]!;
+            AnimationClip openingClip =
+                (AnimationClip)resolvedPhaseSetType.GetProperty("Start")!.GetValue(clipSet)!;
+            Assert.That(
+                openingClip.name,
+                Is.EqualTo("Attack_Air_to_Floor_01_Loop"));
+            Assert.That(openingClip.length, Is.LessThan(0.35f));
+            Assert.That(
+                ((AnimationClip)resolvedPhaseSetType.GetProperty("End")!.GetValue(clipSet)!).name,
+                Is.EqualTo("Attack_Air_to_Floor_01_End"));
+            Assert.That(
+                (bool)resolvedPhaseSetType.GetProperty("ReleaseAfterStart")!.GetValue(clipSet)!,
+                Is.True,
+                "Loop is authored as the one-shot opening segment so it does not repeat before End");
+
+            object export = InvokeInstanceMethod(instance, "BuildMeleeExport");
+            object strike = FindExportedStrike(
+                GetExportedStrikes(export),
+                "DAGGER_COUP_DE_GRACE");
+            Assert.That(GetImpactDelayMs(strike), Is.EqualTo(new[] { 60, 60 }));
+        }
+
+        [Test]
+        public void DaggerSessionAttacks_ResolveAuthoredClipsAndLifecycleDrivers()
+        {
+            Type setType = RequireType("Arena.Presentation.CombatAnimationSet");
+            Type phasedEntryType = RequireType("Arena.Presentation.WeaponPhasedActionEntry");
+            Type resolvedPhaseSetType = RequireType("Arena.Presentation.ResolvedWeaponPhasedActionClipSet");
+            UnityEngine.Object instance = Resources.Load("CombatAnimationSets/Daggers", setType);
+            Assert.That(instance, Is.Not.Null);
+
+            foreach ((string actionId, string clipName) in new[]
+            {
+                ("DAGGER_ROUNDHOUSE", "Combo_Attack_04_02"),
+                ("DAGGER_PRECISION_STRIKE", "Combo_Attack_05_01"),
+                ("DAGGER_EVISCERATE", "Combo_Attack_05_02"),
+                ("DAGGER_VITAL_STRIKE", "Execution_03"),
+                ("DAGGER_DEATH_CROSS", "Attack_Air_to_Floor_02_End"),
+                ("DAGGER_DISEMBOWEL", "Attack_Up_01"),
+            })
+            {
+                int strikeIndex = (int)InvokeInstanceMethod(instance, "GetStrikeIndexForActionId", actionId);
+                AnimationClip clip = (AnimationClip)InvokeInstanceMethod(instance, "GetStrikeClip", strikeIndex);
+                Assert.That(clip.name, Is.EqualTo(clipName), actionId);
+            }
+
+            AssertPhasedEntry(
+                "DAGGER_DIVING_STRIKE",
+                "Attack_Air_to_Floor_03_Start",
+                "Attack_Air_to_Floor_03_Loop",
+                "Attack_Air_to_Floor_03_End",
+                specialMovementDriven: true,
+                combatLifecycleDriven: false);
+            AssertPhasedEntry(
+                "DAGGER_FLAY",
+                "Skill_04_Start",
+                "Skill_04_Loop",
+                "Skill_04_End",
+                specialMovementDriven: false,
+                combatLifecycleDriven: true);
+            AssertPhasedEntry(
+                "DAGGER_FLURRY",
+                "Speed_Attack_Start",
+                "Speed_Attack_Loop",
+                "Speed_Attack_End",
+                specialMovementDriven: false,
+                combatLifecycleDriven: true);
+
+            void AssertPhasedEntry(
+                string actionId,
+                string expectedStart,
+                string expectedLoop,
+                string expectedEnd,
+                bool specialMovementDriven,
+                bool combatLifecycleDriven)
+            {
+                object?[] phasedArgs = { actionId, null };
+                bool found = (bool)RequireMethod(
+                        setType,
+                        "TryGetPhasedMeleeEntry",
+                        typeof(string),
+                        phasedEntryType.MakeByRefType())
+                    .Invoke(instance, phasedArgs)!;
+                Assert.That(found, Is.True, actionId);
+
+                object entry = phasedArgs[1]!;
+                Assert.That(
+                    (bool)phasedEntryType.GetField("drivePhasesFromSpecialMovement")!.GetValue(entry)!,
+                    Is.EqualTo(specialMovementDriven),
+                    actionId);
+                Assert.That(
+                    (bool)phasedEntryType.GetField("drivePhasesFromCombatLifecycle")!.GetValue(entry)!,
+                    Is.EqualTo(combatLifecycleDriven),
+                    actionId);
+
+                object?[] clipSetArgs = { true, null };
+                bool resolved = (bool)RequireMethod(
+                        phasedEntryType,
+                        "TryResolveClipSet",
+                        typeof(bool),
+                        resolvedPhaseSetType.MakeByRefType())
+                    .Invoke(entry, clipSetArgs)!;
+                Assert.That(resolved, Is.True, actionId);
+
+                object clipSet = clipSetArgs[1]!;
+                Assert.That(
+                    ((AnimationClip)resolvedPhaseSetType.GetProperty("Start")!.GetValue(clipSet)!).name,
+                    Is.EqualTo(expectedStart),
+                    actionId);
+                Assert.That(
+                    ((AnimationClip)resolvedPhaseSetType.GetProperty("Loop")!.GetValue(clipSet)!).name,
+                    Is.EqualTo(expectedLoop),
+                    actionId);
+                Assert.That(
+                    ((AnimationClip)resolvedPhaseSetType.GetProperty("End")!.GetValue(clipSet)!).name,
+                    Is.EqualTo(expectedEnd),
+                    actionId);
             }
         }
 
@@ -1404,6 +1566,66 @@ namespace Arena.Tests.Editor
             Assert.That(GetStaticField<int>(configType, "MaxLocalPredictionTicksPerFrame"), Is.EqualTo(5));
             Assert.That(GetStaticField<int>(configType, "MaxTicksToSendPerFrame"), Is.EqualTo(5));
             Assert.That(GetStaticField<int>(configType, "MaxPendingCommands"), Is.EqualTo(96));
+        }
+
+        [Test]
+        public void LocalRenderHistory_ZeroErrorSameTickReconcileDoesNotAdvanceRenderedPose()
+        {
+            Type driverType = RequireType("Arena.Input.LocalMovementPredictionDriver");
+            Type stateType = RequireType("Arena.Input.PredictedMovementState");
+            MethodInfo pushRenderSample = RequireMethod(
+                driverType,
+                "PushRenderSample",
+                stateType.MakeByRefType());
+            MethodInfo applyRenderedTransform = RequireMethod(
+                driverType,
+                "ApplyRenderedTransform",
+                typeof(float));
+            FieldInfo renderHistoryCount = driverType.GetField(
+                "_renderHistoryCount",
+                BindingFlags.NonPublic | BindingFlags.Instance)
+                ?? throw new InvalidOperationException(
+                    $"Field {driverType.FullName}._renderHistoryCount not found.");
+
+            var root = new GameObject("LocalRenderHistoryTest");
+            try
+            {
+                Component driver = root.AddComponent(driverType);
+                object previousTick = Activator.CreateInstance(
+                    stateType,
+                    Vector3.zero,
+                    Vector3.zero,
+                    0f,
+                    true,
+                    9u)!;
+                object newestTick = Activator.CreateInstance(
+                    stateType,
+                    Vector3.right,
+                    Vector3.zero,
+                    0f,
+                    true,
+                    10u)!;
+
+                pushRenderSample.Invoke(driver, new[] { previousTick });
+                pushRenderSample.Invoke(driver, new[] { newestTick });
+                applyRenderedTransform.Invoke(driver, new object[] { 0.5f });
+                Vector3 beforeReconcile = root.transform.position;
+
+                // A zero-error reconcile rebuilds the same prediction tick at
+                // the same position. It must replace that tick's endpoint,
+                // not append a duplicate that collapses interpolation N-1→N
+                // into N→N and visibly advances the model.
+                pushRenderSample.Invoke(driver, new[] { newestTick });
+                applyRenderedTransform.Invoke(driver, new object[] { 0.5f });
+
+                Assert.That((int)renderHistoryCount.GetValue(driver)!, Is.EqualTo(2));
+                AssertVector3(root.transform.position, beforeReconcile);
+                AssertVector3(root.transform.position, Vector3.right * 0.5f);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
         }
 
         [TestCase(-1f)]

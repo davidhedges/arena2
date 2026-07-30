@@ -67,6 +67,14 @@ namespace SpacetimeDB.Types
         public bool ImpactAreaIncludePrimaryTarget;
         [DataMember(Name = "targeting_width")]
         public float TargetingWidth;
+        [DataMember(Name = "channel_duration_ms")]
+        public ulong ChannelDurationMs;
+        [DataMember(Name = "channel_first_tick_delay_ms")]
+        public ulong ChannelFirstTickDelayMs;
+        [DataMember(Name = "channel_tick_interval_ms")]
+        public ulong ChannelTickIntervalMs;
+        [DataMember(Name = "channel_cancel_on_movement")]
+        public bool ChannelCancelOnMovement;
 
         public MeleeAbilityCatalog(
             string AbilityId,
@@ -95,7 +103,11 @@ namespace SpacetimeDB.Types
             float ImpactAreaDamageMultiplier,
             int ImpactAreaHitIndex,
             bool ImpactAreaIncludePrimaryTarget,
-            float TargetingWidth
+            float TargetingWidth,
+            ulong ChannelDurationMs,
+            ulong ChannelFirstTickDelayMs,
+            ulong ChannelTickIntervalMs,
+            bool ChannelCancelOnMovement
         )
         {
             this.AbilityId = AbilityId;
@@ -125,6 +137,10 @@ namespace SpacetimeDB.Types
             this.ImpactAreaHitIndex = ImpactAreaHitIndex;
             this.ImpactAreaIncludePrimaryTarget = ImpactAreaIncludePrimaryTarget;
             this.TargetingWidth = TargetingWidth;
+            this.ChannelDurationMs = ChannelDurationMs;
+            this.ChannelFirstTickDelayMs = ChannelFirstTickDelayMs;
+            this.ChannelTickIntervalMs = ChannelTickIntervalMs;
+            this.ChannelCancelOnMovement = ChannelCancelOnMovement;
         }
 
         public MeleeAbilityCatalog()

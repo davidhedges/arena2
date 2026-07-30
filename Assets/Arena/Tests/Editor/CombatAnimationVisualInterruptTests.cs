@@ -126,6 +126,74 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void AnimatorController_DodgeUsesAuthoritativePhaseParameter()
+        {
+            AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(
+                "Assets/Arena/Content/Animation/Arena_Character.controller");
+
+            Assert.That(controller, Is.Not.Null);
+            AnimatorControllerParameter phaseParameter = controller.parameters.Single(
+                parameter => parameter.name == "DodgePhase");
+            AnimatorState dodge = RequireBaseState(controller, "Dodge");
+
+            Assert.That(phaseParameter.type, Is.EqualTo(AnimatorControllerParameterType.Float));
+            Assert.That(dodge.timeParameterActive, Is.True);
+            Assert.That(dodge.timeParameter, Is.EqualTo("DodgePhase"));
+        }
+
+        [TestCase(900L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 0f)]
+        [TestCase(1000L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 0f)]
+        [TestCase(1125L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 0.26595745f)]
+        [TestCase(1250L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 0.5319149f)]
+        [TestCase(1360L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 0.6419149f)]
+        [TestCase(1470L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 0.7519149f)]
+        [TestCase(1719L, 1000L, 1250L, 1470L, 0f, -1f, 1f, 1f)]
+        [TestCase(1000L, 1000L, 1000L, 1000L, 0f, -1f, 1f, 1f)]
+        [TestCase(1000L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f, 0.1f)]
+        [TestCase(1125L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f, 0.375f)]
+        [TestCase(1250L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f, 0.65f)]
+        [TestCase(1360L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f, 0.76f)]
+        [TestCase(1470L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f, 0.87f)]
+        [TestCase(1600L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 1f, 1f)]
+        [TestCase(1470L, 1000L, 1250L, 1470L, 0.1f, 0.65f, 2f, 0.76f)]
+        public void PlayerAnimator_DodgePhaseSynchronizesTravelThenPlaysRecoveryAtAuthoredSpeed(
+            long nowMs,
+            long startedAtMs,
+            long activeUntilMs,
+            long recoveryUntilMs,
+            float startNormalized,
+            float travelEndNormalized,
+            float clipLengthSeconds,
+            float expectedPhase)
+        {
+            MethodInfo method = RequireMethod(
+                RequireRuntimeType("Arena.Presentation.PlayerAnimator"),
+                "ResolveMovementActionPhase",
+                typeof(long),
+                typeof(long),
+                typeof(long),
+                typeof(long),
+                typeof(float),
+                typeof(float),
+                typeof(float));
+
+            float phase = (float)method.Invoke(
+                null,
+                new object[]
+                {
+                    nowMs,
+                    startedAtMs,
+                    activeUntilMs,
+                    recoveryUntilMs,
+                    startNormalized,
+                    travelEndNormalized,
+                    clipLengthSeconds,
+                })!;
+
+            Assert.That(phase, Is.EqualTo(expectedPhase).Within(0.0001f));
+        }
+
+        [Test]
         public void PlayerAnimator_ForcedActionClearCancelsPendingActionTriggersBeforeAnimatorEvaluation()
         {
             (GameObject root, Animator animator, Component playerAnimator) = CreatePlayerAnimatorHarness();
@@ -385,6 +453,126 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void CombatActionPlaybackController_PhasedMeleeStartUsesPhaseLoopReadyMarker()
+        {
+            Type playbackControllerType = RequireRuntimeType("Arena.Presentation.CombatActionPlaybackController");
+            Type phaseType = RequireRuntimeType("Arena.Presentation.PhasedMeleePlaybackPhase");
+            object controller = Activator.CreateInstance(playbackControllerType)!;
+            AnimationClip start = CreateOneSecondClip();
+            AnimationClip loop = CreateOneSecondClip();
+            AnimationClip end = CreateOneSecondClip();
+
+            try
+            {
+                SetClipEvents(start, ("OnPhaseLoopReady", 0.25f));
+                RequireMethod(
+                        playbackControllerType,
+                        "BeginPhasedMelee",
+                        typeof(int),
+                        typeof(AnimationClip),
+                        typeof(AnimationClip),
+                        typeof(AnimationClip),
+                        typeof(bool),
+                        typeof(bool))
+                    .Invoke(controller, new object[] { 1, start, loop, end, false, false });
+
+                Assert.That(
+                    (float)RequireProperty(
+                            playbackControllerType,
+                            "PhasedMeleeTotalLengthSeconds")
+                        .GetValue(controller)!,
+                    Is.EqualTo(2.25f).Within(0.001f));
+                Assert.That(
+                    (float)RequireMethod(
+                            playbackControllerType,
+                            "ResolvePhasedMeleeStartExitNormalizedTime",
+                            typeof(float),
+                            typeof(float))
+                        .Invoke(controller, new object[] { 0.55f, 0.65f })!,
+                    Is.EqualTo(0.25f).Within(0.001f));
+
+                object startPhase = Enum.Parse(phaseType, "Start");
+                RequireMethod(
+                        playbackControllerType,
+                        "SetPhasedMeleeSegment",
+                        phaseType,
+                        typeof(int),
+                        typeof(float))
+                    .Invoke(controller, new object[] { startPhase, 123, 1f });
+
+                MethodInfo transition = RequireMethod(
+                    playbackControllerType,
+                    "TryResolvePhasedMeleeTransition",
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    typeof(float),
+                    phaseType.MakeByRefType(),
+                    typeof(bool).MakeByRefType());
+                object nonePhase = Enum.Parse(phaseType, "None");
+                object?[] beforeMarker = { 0.24f, 0.55f, 0.65f, 0.95f, nonePhase, false };
+                Assert.That((bool)transition.Invoke(controller, beforeMarker)!, Is.False);
+
+                object?[] atMarker = { 0.25f, 0.55f, 0.65f, 0.95f, nonePhase, false };
+                Assert.That((bool)transition.Invoke(controller, atMarker)!, Is.True);
+                Assert.That(atMarker[4]!.ToString(), Is.EqualTo("Loop"));
+                Assert.That((bool)atMarker[5]!, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(start);
+                UnityEngine.Object.DestroyImmediate(loop);
+                UnityEngine.Object.DestroyImmediate(end);
+            }
+        }
+
+        [Test]
+        public void CombatActionPlaybackController_PhaseLoopReadyCannotOutrunStrikeStateSafetyExit()
+        {
+            Type playbackControllerType = RequireRuntimeType("Arena.Presentation.CombatActionPlaybackController");
+            object controller = Activator.CreateInstance(playbackControllerType)!;
+            AnimationClip start = CreateOneSecondClip();
+            AnimationClip loop = CreateOneSecondClip();
+            AnimationClip end = CreateOneSecondClip();
+
+            try
+            {
+                SetClipEvents(start, ("OnPhaseLoopReady", 0.95f));
+                RequireMethod(
+                        playbackControllerType,
+                        "BeginPhasedMelee",
+                        typeof(int),
+                        typeof(AnimationClip),
+                        typeof(AnimationClip),
+                        typeof(AnimationClip),
+                        typeof(bool),
+                        typeof(bool))
+                    .Invoke(controller, new object[] { 1, start, loop, end, false, false });
+
+                Assert.That(
+                    (float)RequireProperty(
+                            playbackControllerType,
+                            "PhasedMeleeTotalLengthSeconds")
+                        .GetValue(controller)!,
+                    Is.EqualTo(2.84f).Within(0.001f));
+                Assert.That(
+                    (float)RequireMethod(
+                            playbackControllerType,
+                            "ResolvePhasedMeleeStartExitNormalizedTime",
+                            typeof(float),
+                            typeof(float))
+                        .Invoke(controller, new object[] { 0.82f, 0.84f })!,
+                    Is.EqualTo(0.84f).Within(0.001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(start);
+                UnityEngine.Object.DestroyImmediate(loop);
+                UnityEngine.Object.DestroyImmediate(end);
+            }
+        }
+
+        [Test]
         public void DecideCombatAnimationRequest_NeverLetsAutoAttackPreemptAbilities()
         {
             Assert.That(
@@ -503,6 +691,114 @@ namespace Arena.Tests.Editor
                     visualGateEvaluated: true,
                     visualDecision: "InterruptCurrentWithoutGhost").ToString(),
                 Is.EqualTo("InterruptCurrentWithoutGhostAndPlay"));
+        }
+
+        [Test]
+        public void HasTrackedHigherPriorityPresentation_ClosesPreAnimatorAutoAttackWindow()
+        {
+            Assert.That(
+                InvokeHasTrackedHigherPriorityPresentation(
+                    hasActiveMeleePresentation: true,
+                    activeMeleeCategory: "MeleeSkill",
+                    hasActiveSpellPresentation: false,
+                    hasActiveSpellCastHoldPresentation: false),
+                Is.True);
+            Assert.That(
+                InvokeHasTrackedHigherPriorityPresentation(
+                    hasActiveMeleePresentation: true,
+                    activeMeleeCategory: "AutoAttack",
+                    hasActiveSpellPresentation: false,
+                    hasActiveSpellCastHoldPresentation: false),
+                Is.False);
+            Assert.That(
+                InvokeHasTrackedHigherPriorityPresentation(
+                    hasActiveMeleePresentation: false,
+                    activeMeleeCategory: "AutoAttack",
+                    hasActiveSpellPresentation: true,
+                    hasActiveSpellCastHoldPresentation: false),
+                Is.True);
+            Assert.That(
+                InvokeHasTrackedHigherPriorityPresentation(
+                    hasActiveMeleePresentation: false,
+                    activeMeleeCategory: "AutoAttack",
+                    hasActiveSpellPresentation: false,
+                    hasActiveSpellCastHoldPresentation: true),
+                Is.True);
+            Assert.That(
+                InvokeHasTrackedHigherPriorityPresentation(
+                    hasActiveMeleePresentation: false,
+                    activeMeleeCategory: "AutoAttack",
+                    hasActiveSpellPresentation: false,
+                    hasActiveSpellCastHoldPresentation: false),
+                Is.False);
+        }
+
+        [Test]
+        public void HasEnteredExpectedAnimatorState_RejectsOutgoingAndDispatchFrameStates()
+        {
+            const int emptyState = 10;
+            const int outgoingStrikeState = 20;
+            const int expectedStrikeState = 40;
+            const int dispatchedFrame = 100;
+
+            Assert.That(
+                InvokeHasEnteredExpectedAnimatorState(
+                    dispatchedFrame,
+                    currentFrame: dispatchedFrame,
+                    expectedStateHash: expectedStrikeState,
+                    currentStateHash: expectedStrikeState,
+                    isInTransition: false,
+                    nextStateHash: 0),
+                Is.False,
+                "A same-bank outgoing state must not count during the incoming presentation's dispatch frame.");
+            Assert.That(
+                InvokeHasEnteredExpectedAnimatorState(
+                    dispatchedFrame,
+                    currentFrame: dispatchedFrame + 1,
+                    expectedStateHash: expectedStrikeState,
+                    currentStateHash: outgoingStrikeState,
+                    isInTransition: false,
+                    nextStateHash: 0),
+                Is.False,
+                "A different outgoing strike must not count as entry for the incoming presentation.");
+            Assert.That(
+                InvokeHasEnteredExpectedAnimatorState(
+                    dispatchedFrame,
+                    currentFrame: dispatchedFrame + 1,
+                    expectedStateHash: expectedStrikeState,
+                    currentStateHash: emptyState,
+                    isInTransition: false,
+                    nextStateHash: 0),
+                Is.False,
+                "The intermediate Empty frame must preserve the pending presentation.");
+            Assert.That(
+                InvokeHasEnteredExpectedAnimatorState(
+                    dispatchedFrame,
+                    currentFrame: dispatchedFrame + 2,
+                    expectedStateHash: expectedStrikeState,
+                    currentStateHash: emptyState,
+                    isInTransition: true,
+                    nextStateHash: expectedStrikeState),
+                Is.True,
+                "The incoming transition is the first valid entry observation.");
+            Assert.That(
+                InvokeHasEnteredExpectedAnimatorState(
+                    dispatchedFrame,
+                    currentFrame: dispatchedFrame + 2,
+                    expectedStateHash: expectedStrikeState,
+                    currentStateHash: expectedStrikeState,
+                    isInTransition: false,
+                    nextStateHash: 0),
+                Is.True);
+            Assert.That(
+                InvokeHasEnteredExpectedAnimatorState(
+                    dispatchedFrame,
+                    currentFrame: dispatchedFrame + 2,
+                    expectedStateHash: 0,
+                    currentStateHash: 0,
+                    isInTransition: false,
+                    nextStateHash: 0),
+                Is.False);
         }
 
         [Test]
@@ -1032,6 +1328,65 @@ namespace Arena.Tests.Editor
                 {
                     Enum.Parse(decisionType, decision),
                     Enum.Parse(categoryType, incomingCategory),
+                })!;
+        }
+
+        private static bool InvokeHasTrackedHigherPriorityPresentation(
+            bool hasActiveMeleePresentation,
+            string activeMeleeCategory,
+            bool hasActiveSpellPresentation,
+            bool hasActiveSpellCastHoldPresentation)
+        {
+            Type playbackControllerType = RequireRuntimeType("Arena.Presentation.CombatActionPlaybackController");
+            Type categoryType = RequireRuntimeType("Arena.Presentation.CombatAnimationCategory");
+            MethodInfo method = RequireMethod(
+                playbackControllerType,
+                "HasTrackedHigherPriorityPresentation",
+                typeof(bool),
+                categoryType,
+                typeof(bool),
+                typeof(bool));
+
+            return (bool)method.Invoke(
+                null,
+                new[]
+                {
+                    (object)hasActiveMeleePresentation,
+                    Enum.Parse(categoryType, activeMeleeCategory),
+                    hasActiveSpellPresentation,
+                    hasActiveSpellCastHoldPresentation,
+                })!;
+        }
+
+        private static bool InvokeHasEnteredExpectedAnimatorState(
+            int dispatchedFrame,
+            int currentFrame,
+            int expectedStateHash,
+            int currentStateHash,
+            bool isInTransition,
+            int nextStateHash)
+        {
+            Type playbackControllerType = RequireRuntimeType("Arena.Presentation.CombatActionPlaybackController");
+            MethodInfo method = RequireMethod(
+                playbackControllerType,
+                "HasEnteredExpectedAnimatorState",
+                typeof(int),
+                typeof(int),
+                typeof(int),
+                typeof(int),
+                typeof(bool),
+                typeof(int));
+
+            return (bool)method.Invoke(
+                null,
+                new object[]
+                {
+                    dispatchedFrame,
+                    currentFrame,
+                    expectedStateHash,
+                    currentStateHash,
+                    isInTransition,
+                    nextStateHash,
                 })!;
         }
 

@@ -77,6 +77,14 @@ namespace Arena.Input
             return _intentYaw;
         }
 
+        public void FaceYawImmediately(float yawRadians)
+        {
+            if (float.IsNaN(yawRadians) || float.IsInfinity(yawRadians))
+                return;
+
+            _intentYaw = NormalizeRadians(yawRadians);
+        }
+
         public void EnablePredictedAuthority(LocalPlayerStateProvider stateProvider)
         {
             _stateProvider = stateProvider;

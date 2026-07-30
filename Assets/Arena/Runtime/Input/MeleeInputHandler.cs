@@ -29,6 +29,8 @@ namespace Arena.Input
         private const long PredictedStrikeVisualRetentionMs = 400L;
         private const long PendingMeleePredictionTtlMs = 5000L;
         private const long PendingLocalMeleeEventHoldMs = 250L;
+        private const string ConditionalTeleportBehindKind = "TELEPORT_BEHIND_TARGET_DISABLED";
+        private const string CoupDeGraceAbilityId = "DAGGER_COUP_DE_GRACE";
         private readonly Dictionary<string, long> _predictedStrikeVisualUntilMs = new();
         private readonly Dictionary<string, PendingPredictedMeleeVisual> _pendingPredictedMeleeByToken = new();
         private readonly Dictionary<string, AcceptedPredictedMeleeAction> _acceptedPredictedMeleeByActionInstance = new();
@@ -156,7 +158,9 @@ namespace Arena.Input
                 ActionBarTrace.Trace($"melee rejected: {slotId} has no melee gameplay row");
                 return false;
             }
-            MeleeGapCloseCatalog? gapClose = ResolveGapCloseForAction(conn, entity.Identity, combatProfile, slotId);
+            MeleeGapCloseCatalog? configuredGapClose =
+                ResolveGapCloseForAction(conn, entity.Identity, combatProfile, slotId);
+            MeleeGapCloseCatalog? gapClose = configuredGapClose;
             if (!HasResourceForMeleeAction(conn, entity, slotId))
                 return false;
 
@@ -182,6 +186,13 @@ namespace Arena.Input
                     ActionBarTrace.Trace(
                         $"melee rejected: {slotId} target audience {TraceAudience(gameplay.TargetAudience)} rejects relation={relation} target={target.DisplayName}");
                     return false;
+                }
+                if (configuredGapClose != null
+                    && !GapCloseActivationSatisfied(conn, configuredGapClose, target.TargetIdentity, nowMs))
+                {
+                    gapClose = null;
+                    ActionBarTrace.Trace(
+                        $"melee conditional gap close inactive: {slotId} kind={configuredGapClose.Kind}");
                 }
             }
 
@@ -223,6 +234,8 @@ namespace Arena.Input
                     entity.Identity,
                     gameplay.Range,
                     nowMs);
+                if (configuredGapClose != null && gapClose == null)
+                    strikeRange = Mathf.Min(strikeRange, Mathf.Max(0f, configuredGapClose.ImpactRange));
                 var targetPos = target!.GetPresentationRoot().position;
                 float horizDist = MeleeStrikeGeometry.HorizontalDistance(localPos, targetPos);
                 float targetRadius = Mathf.Max(0f, target.HitRadius);
@@ -262,6 +275,9 @@ namespace Arena.Input
                     return false;
                 }
             }
+
+            if (requiresTarget)
+                AlignCoupDeGraceFacing(entity, target!, gameplay.AbilityId);
 
             // Send to server for authoritative validation, damage, and remote sync.
             ActionBarTrace.Trace(
@@ -350,6 +366,42 @@ namespace Arena.Input
             return true;
         }
 
+        private static void AlignCoupDeGraceFacing(
+            PlayerEntity entity,
+            ICombatTargetEntity target,
+            string abilityId)
+        {
+            if (!string.Equals(
+                    WireIdentifier.Normalize(abilityId),
+                    CoupDeGraceAbilityId,
+                    System.StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            Vector3 toTarget =
+                target.GetPresentationRoot().position - entity.GameObject.transform.position;
+            toTarget.y = 0f;
+            if (toTarget.sqrMagnitude <= 0.0001f)
+                return;
+
+            float targetYaw = Mathf.Atan2(toTarget.x, toTarget.z);
+            LocalMovementPredictionDriver? predictionDriver =
+                entity.GameObject.GetComponent<LocalMovementPredictionDriver>();
+            if (predictionDriver != null)
+            {
+                predictionDriver.FaceYawImmediately(targetYaw);
+            }
+            else
+            {
+                entity.GameObject.GetComponent<LocalPlayerMotor>()?.FaceYawImmediately(targetYaw);
+                entity.GameObject.transform.rotation =
+                    Quaternion.Euler(0f, targetYaw * Mathf.Rad2Deg, 0f);
+            }
+
+            entity.GameObject.GetComponent<CameraOrbitController>()?.AlignBehind(targetYaw);
+        }
+
         private static MeleeGapCloseCatalog? ResolveGapCloseForAction(
             DbConnection conn,
             SpacetimeDB.Identity owner,
@@ -398,6 +450,50 @@ namespace Arena.Input
             }
 
             return null;
+        }
+
+        private static bool GapCloseActivationSatisfied(
+            DbConnection conn,
+            MeleeGapCloseCatalog gapClose,
+            SpacetimeDB.Identity target,
+            long nowMs)
+        {
+            string kind = WireIdentifier.Normalize(gapClose.Kind);
+            if (!string.Equals(
+                    kind,
+                    ConditionalTeleportBehindKind,
+                    System.StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return HasActiveDisablingStatus(conn, target, nowMs);
+        }
+
+        private static bool HasActiveDisablingStatus(
+            DbConnection conn,
+            SpacetimeDB.Identity target,
+            long nowMs)
+        {
+            long nowMicros = nowMs * 1000L;
+            foreach (StatusEffect effect in conn.Db.StatusEffect.Target.Filter(target))
+            {
+                if (effect.ExpiresAtMicros > 0L && effect.ExpiresAtMicros <= nowMicros)
+                    continue;
+
+                switch (WireIdentifier.Normalize(effect.EffectKind))
+                {
+                    case "STUN":
+                    case "FREEZE":
+                    case "INTIMIDATED":
+                    case "FEAR":
+                    case "STAGGER":
+                    case "KNOCKDOWN":
+                        return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool IsTargetWithinFacingArc(PlayerEntity entity, ICombatTargetEntity target)

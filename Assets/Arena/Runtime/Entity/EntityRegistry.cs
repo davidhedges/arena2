@@ -41,6 +41,7 @@ namespace Arena.Entity
         private const string FearStatusKind = "FEAR";
         private const string DefenseBlockKind = "BLOCK";
         private const string DefenseParryKind = "PARRY";
+        private const string CoupDeGraceGapCloseKind = "MELEE_GAP_CLOSE:DAGGER_COUP_DE_GRACE";
 
         public static EntityRegistry Instance { get; private set; } = null!;
 
@@ -735,6 +736,15 @@ namespace Arena.Entity
                 return;
 
             entity.SetSpecialMovementRuntime(row);
+            if (entity.IsLocalPlayer
+                && string.Equals(
+                    row.Kind,
+                    CoupDeGraceGapCloseKind,
+                    System.StringComparison.OrdinalIgnoreCase))
+            {
+                entity.GameObject.GetComponent<CameraOrbitController>()?.AlignBehind(
+                    row.FacingYawStart);
+            }
         }
 
         // -------------------------------------------------------------------
@@ -1488,6 +1498,16 @@ namespace Arena.Entity
                 && TryGetLivePlayer(row.Caster, out var releaseCaster))
             {
                 releaseCaster.OnSpellCombatRelease(row);
+                return;
+            }
+
+            bool meleeLifecycleEnd = row.EventType == CombatEventTypes.Release
+                || row.EventType == CombatEventTypes.Fizzle;
+            if (meleeLifecycleEnd
+                && !string.Equals(row.SourceKind, CombatEventSources.Spell, System.StringComparison.Ordinal)
+                && TryGetLivePlayer(row.Caster, out var meleeLifecycleCaster)
+                && meleeLifecycleCaster.RequestCombatLifecycleDrivenPhasedMeleeEnd(row.ActionKind))
+            {
                 return;
             }
 

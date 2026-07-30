@@ -5071,6 +5071,7 @@ pub(crate) fn interrupt_player_actions_for_stagger(ctx: &ReducerContext, target:
     }
 
     fizzle_active_cast_for_interrupt(ctx, target, ctx.timestamp);
+    crate::melee::cancel_active_melee_channel_for_interrupt(ctx, target, ctx.timestamp);
     ctx.db.queued_melee_followup().caster().delete(target);
     ctx.db.defense_state().owner().delete(target);
     ctx.db.movement_action_state().owner().delete(target);

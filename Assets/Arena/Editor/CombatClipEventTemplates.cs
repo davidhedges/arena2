@@ -41,6 +41,7 @@ namespace Arena.Editor
             {
                 [CombatClipRole.Unknown] = System.Array.Empty<CombatClipEventTemplate>(),
                 [CombatClipRole.Locomotion] = System.Array.Empty<CombatClipEventTemplate>(),
+                [CombatClipRole.Dodge] = System.Array.Empty<CombatClipEventTemplate>(),
 
                 [CombatClipRole.SpellCastHoldEnter] = new[]
                 {
@@ -90,8 +91,8 @@ namespace Arena.Editor
                         "OnStrikeHit", 0.40f, required: false,
                         "Visible hit moment if this phased melee lands during the start phase."),
                     new CombatClipEventTemplate(
-                        "OnPhaseLoopReady", 0.90f, required: true,
-                        "Hand-off point from start phase into the looping phase."),
+                        "OnPhaseLoopReady", 0.84f, required: true,
+                        "Hand-off point from start phase into the looping phase. Earlier markers accelerate the hand-off; the shared strike-state safety exit remains the latest allowed point."),
                 },
                 [CombatClipRole.PhasedMeleeLoop] = new[]
                 {

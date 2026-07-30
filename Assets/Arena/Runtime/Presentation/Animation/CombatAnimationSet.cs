@@ -11,6 +11,8 @@ namespace Arena.Presentation
     {
         public const string OnReleaseFrame = "OnReleaseFrame";
         public const string OnInstantCastStart = "OnInstantCastStart";
+        public const string OnDodgeStart = "OnDodgeStart";
+        public const string OnDodgeTravelEnd = "OnDodgeTravelEnd";
         public const string OnEnterComplete = "OnEnterComplete";
         public const string OnHoldFadeStart = "OnHoldFadeStart";
         public const string OnHoldFadeEnd = "OnHoldFadeEnd";
@@ -23,6 +25,8 @@ namespace Arena.Presentation
         public const string OnParryWindowEnd = "OnParryWindowEnd";
         public const string OnBlockReady = "OnBlockReady";
         public const string OnWeaponHandoff = "OnWeaponHandoff";
+        public const float PhasedMeleeStartOnlyEndSafetyNormalizedTime = 0.82f;
+        public const float PhasedMeleeStartToLoopSafetyNormalizedTime = 0.84f;
 
         public static bool TryGetEventTime(AnimationClip? clip, string functionName, out float seconds)
         {
@@ -53,6 +57,23 @@ namespace Arena.Presentation
         public static float GetEventTimeOrFallback(AnimationClip? clip, string functionName, float fallbackSeconds)
             => TryGetEventTime(clip, functionName, out float seconds) ? seconds : fallbackSeconds;
 
+        public static bool TryGetEventNormalizedTime(
+            AnimationClip? clip,
+            string functionName,
+            out float normalizedTime)
+        {
+            normalizedTime = 0f;
+            if (clip == null
+                || clip.length <= 0.001f
+                || !TryGetEventTime(clip, functionName, out float seconds))
+            {
+                return false;
+            }
+
+            normalizedTime = Mathf.Clamp01(seconds / clip.length);
+            return true;
+        }
+
         public static float GetRequiredEventTimeOrFallback(
             AnimationClip? clip,
             string functionName,
@@ -74,7 +95,8 @@ namespace Arena.Presentation
             AnimationClip? clip,
             string functionName,
             List<float> destination,
-            float offsetSeconds = 0f)
+            float offsetSeconds = 0f,
+            float maxLocalTimeSeconds = float.PositiveInfinity)
         {
             if (clip == null || destination == null || string.IsNullOrWhiteSpace(functionName))
                 return false;
@@ -85,13 +107,18 @@ namespace Arena.Presentation
 
             int initialCount = destination.Count;
             float maxClipTime = Mathf.Max(0f, clip.length);
+            float maxAcceptedTime = Mathf.Min(maxClipTime, Mathf.Max(0f, maxLocalTimeSeconds));
             for (int i = 0; i < events.Length; i++)
             {
                 AnimationEvent animationEvent = events[i];
                 if (!string.Equals(animationEvent.functionName, functionName, StringComparison.Ordinal))
                     continue;
 
-                destination.Add(Mathf.Max(0f, offsetSeconds) + Mathf.Clamp(animationEvent.time, 0f, maxClipTime));
+                float eventTime = Mathf.Clamp(animationEvent.time, 0f, maxClipTime);
+                if (eventTime > maxAcceptedTime)
+                    continue;
+
+                destination.Add(Mathf.Max(0f, offsetSeconds) + eventTime);
             }
 
             return destination.Count > initialCount;
@@ -894,6 +921,23 @@ namespace Arena.Presentation
         public AnimationClip Loop { get; }
         public AnimationClip End { get; }
         public bool ReleaseAfterStart { get; }
+
+        public float ResolveStartTimelineLengthSeconds()
+        {
+            float startLengthSeconds = Mathf.Max(0f, Start.length);
+            if (!CombatAnimationEvents.TryGetEventNormalizedTime(
+                    Start,
+                    CombatAnimationEvents.OnPhaseLoopReady,
+                    out float normalizedTime))
+            {
+                return startLengthSeconds;
+            }
+
+            float safetyNormalizedTime = ReleaseAfterStart
+                ? CombatAnimationEvents.PhasedMeleeStartOnlyEndSafetyNormalizedTime
+                : CombatAnimationEvents.PhasedMeleeStartToLoopSafetyNormalizedTime;
+            return startLengthSeconds * Mathf.Min(normalizedTime, safetyNormalizedTime);
+        }
     }
 
     [Serializable]
@@ -904,6 +948,8 @@ namespace Arena.Presentation
         public string authoredActionId;
         [Tooltip("When true, this phased melee action holds its loop segment until the matching authoritative special movement ends.")]
         public bool drivePhasesFromSpecialMovement;
+        [Tooltip("When true, this phased melee action holds its loop segment until the matching authoritative combat action releases or fizzles.")]
+        public bool drivePhasesFromCombatLifecycle;
         [Tooltip("Grounded phased clips for this authored strike. Leave empty to fall back to Air if that set is complete.")]
         public WeaponPhasedActionClipSet ground;
         [Tooltip("Airborne phased clips for this authored strike. Leave empty to fall back to Ground if that set is complete.")]
@@ -960,6 +1006,8 @@ namespace Arena.Presentation
         public WeaponPhasedActionClipSet phasedAir;
         [Tooltip("Only for phased movement-coupled attacks. When enabled, Start plays once, Loop holds while special movement is active, and End plays when special movement ends.")]
         public bool drivePhasesFromSpecialMovement;
+        [Tooltip("Only for phased channeled attacks. When enabled, Start plays once, Loop holds while the authoritative combat action is active, and End plays when that action releases or fizzles.")]
+        public bool drivePhasesFromCombatLifecycle;
 
         public bool UsesPhasedPresentation => presentationMode == WeaponMeleePresentationMode.Phased;
 
@@ -997,6 +1045,7 @@ namespace Arena.Presentation
             {
                 authoredActionId = combat.AuthoredStrikeIdOrDefault,
                 drivePhasesFromSpecialMovement = drivePhasesFromSpecialMovement,
+                drivePhasesFromCombatLifecycle = drivePhasesFromCombatLifecycle,
                 ground = phasedGround,
                 air = phasedAir,
             };
@@ -1097,13 +1146,15 @@ namespace Arena.Presentation
 
             bool found = false;
             float offset = 0f;
-            if (CombatAnimationEvents.TryGetEventTime(resolved.Start, eventName, out float startTime))
+            float startTimelineLengthSeconds = resolved.ResolveStartTimelineLengthSeconds();
+            if (CombatAnimationEvents.TryGetEventTime(resolved.Start, eventName, out float startTime)
+                && startTime <= startTimelineLengthSeconds)
             {
                 eventTime = startTime;
                 found = true;
             }
 
-            offset += Mathf.Max(0f, resolved.Start.length);
+            offset += startTimelineLengthSeconds;
             if (!resolved.ReleaseAfterStart)
             {
                 if (CombatAnimationEvents.TryGetEventTime(resolved.Loop, eventName, out float loopTime)
@@ -1219,9 +1270,11 @@ namespace Arena.Presentation
             CombatAnimationEvents.AppendEventTimes(
                 resolved.Start,
                 CombatAnimationEvents.OnStrikeHit,
-                destination);
+                destination,
+                offsetSeconds: 0f,
+                maxLocalTimeSeconds: resolved.ResolveStartTimelineLengthSeconds());
 
-            float loopPhaseOffsetSeconds = Mathf.Max(0f, resolved.Start.length);
+            float loopPhaseOffsetSeconds = resolved.ResolveStartTimelineLengthSeconds();
             if (!resolved.ReleaseAfterStart)
             {
                 CombatAnimationEvents.AppendEventTimes(
@@ -1249,7 +1302,7 @@ namespace Arena.Presentation
             if (!clipSet.TryResolvePlayback(out ResolvedWeaponPhasedActionClipSet resolved))
                 return 0f;
 
-            float total = Mathf.Max(0f, resolved.Start.length);
+            float total = resolved.ResolveStartTimelineLengthSeconds();
             if (!resolved.ReleaseAfterStart)
                 total += Mathf.Max(0f, resolved.Loop.length);
             total += Mathf.Max(0f, resolved.End.length);

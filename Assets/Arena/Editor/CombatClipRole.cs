@@ -14,6 +14,10 @@ namespace Arena.Editor
         // Locomotion / non-combat. Events not currently authored on these.
         Locomotion,
 
+        // Directional ground/air dodge clips. Optional timing markers trim startup
+        // and align the movement-to-recovery hand-off.
+        Dodge,
+
         // Cast hold lifecycle.
         SpellCastHoldEnter,
         SpellCastHoldIdle,

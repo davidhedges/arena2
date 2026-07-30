@@ -63,6 +63,7 @@ namespace Arena.Editor
             "TriggerDodge",
             "DodgeX",
             "DodgeZ",
+            "DodgePhase",
             "TriggerStaggerF",
             "TriggerStaggerB",
             "TriggerStaggerL",

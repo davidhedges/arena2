@@ -29,6 +29,8 @@ use crate::combat::active_combat_projectile_target_state as _;
 #[allow(unused_imports)]
 use crate::defense::defense_state as _;
 #[allow(unused_imports)]
+use crate::melee::active_melee_channel as _;
+#[allow(unused_imports)]
 use crate::melee::pending_melee_impact as _;
 #[allow(unused_imports)]
 use crate::melee::pending_melee_timed_movement as _;
@@ -212,6 +214,7 @@ pub(crate) fn clear_transient_actor_state(ctx: &ReducerContext, identity: Identi
     ctx.db.defense_state().owner().delete(identity);
 
     ctx.db.queued_melee_followup().caster().delete(identity);
+    ctx.db.active_melee_channel().owner().delete(identity);
     ctx.db
         .pending_melee_timed_movement()
         .owner()
@@ -319,7 +322,7 @@ mod tests {
     /// Per-identity transient tables (or the helpers that own their deletion)
     /// that the unified teardown must cover. Add every new transient table's
     /// accessor here AND to `clear_transient_actor_state`.
-    const TRANSIENT_TEARDOWN_MARKERS: [&str; 19] = [
+    const TRANSIENT_TEARDOWN_MARKERS: [&str; 20] = [
         "clear_player_combat_state",
         "clear_active_cast",
         "clear_movement_action_for_owner",
@@ -332,6 +335,7 @@ mod tests {
         "active_bespoke_spell()",
         "defense_state()",
         "queued_melee_followup()",
+        "active_melee_channel()",
         "pending_melee_timed_movement()",
         "pending_melee_impact()",
         "pending_projectile_release()",

@@ -366,6 +366,7 @@ namespace Arena.Editor
                 DrawStampButtons();
                 EditorGUILayout.Space(8f);
                 DrawCustomEventStamp();
+                DrawDodgeTiming();
                 DrawInstantCastStartupTrim();
                 DrawHitWindowSynchronization();
                 DrawExistingEvents();
@@ -754,7 +755,9 @@ namespace Arena.Editor
             if (templates.Length == 0)
             {
                 EditorGUILayout.HelpBox(
-                    $"No event templates defined for role '{role}'. Use the custom-name field below.",
+                    role == CombatClipRole.Dodge
+                        ? "Dodge timing is authored in the dedicated section below."
+                        : $"No event templates defined for role '{role}'. Use the custom-name field below.",
                     MessageType.None);
                 return;
             }
@@ -807,6 +810,239 @@ namespace Arena.Editor
                 }
             }
         }
+
+        private void DrawDodgeTiming()
+        {
+            CombatClipRole role = ResolveActiveRole();
+            AnimationEvent[] clipEvents = AnimationUtility.GetAnimationEvents(_clip!);
+            AnimationEvent[] startEvents = clipEvents
+                .Where(animationEvent => string.Equals(
+                    animationEvent.functionName,
+                    CombatAnimationEvents.OnDodgeStart,
+                    StringComparison.Ordinal))
+                .OrderBy(animationEvent => animationEvent.time)
+                .ToArray();
+            AnimationEvent[] travelEndEvents = clipEvents
+                .Where(animationEvent => string.Equals(
+                    animationEvent.functionName,
+                    CombatAnimationEvents.OnDodgeTravelEnd,
+                    StringComparison.Ordinal))
+                .OrderBy(animationEvent => animationEvent.time)
+                .ToArray();
+            if (role != CombatClipRole.Dodge
+                && startEvents.Length == 0
+                && travelEndEvents.Length == 0)
+            {
+                return;
+            }
+
+            float clipLength = Mathf.Max(0f, _clip!.length);
+            float startSeconds = startEvents.Length > 0
+                ? Mathf.Clamp(startEvents[0].time, 0f, clipLength)
+                : 0f;
+            bool hasTravelEnd = travelEndEvents.Length > 0;
+            float travelEndSeconds = hasTravelEnd
+                ? Mathf.Clamp(travelEndEvents[0].time, startSeconds, clipLength)
+                : clipLength;
+
+            EditorGUILayout.Space(8f);
+            using EditorGUILayout.VerticalScope section = new(EditorStyles.helpBox);
+            EditorGUILayout.LabelField("Dodge timing", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(
+                "Startup trim skips the opening windup without deleting frames. The optional travel-end marker identifies the pose reached when dodge movement stops; the remaining recovery/settle tail plays at authored speed. Movement may crossfade to locomotion once authoritative recovery ends. Each directional clip keeps its own markers.",
+                MessageType.Info);
+
+            if (startEvents.Length > 1 || travelEndEvents.Length > 1)
+            {
+                EditorGUILayout.HelpBox(
+                    "This clip has duplicate dodge timing markers. Setting either marker here replaces all markers of that type with one.",
+                    MessageType.Warning);
+            }
+
+            EditorGUI.BeginChangeCheck();
+            float enteredStartSeconds = EditorGUILayout.DelayedFloatField(
+                new GUIContent(
+                    "Startup trim (seconds)",
+                    $"The first played frame. Limited to {CombatAnimationEvents.OnDodgeTravelEnd} when that marker exists."),
+                startSeconds);
+            if (EditorGUI.EndChangeCheck())
+            {
+                ApplyDodgeTimingMarker(
+                    CombatAnimationEvents.OnDodgeStart,
+                    enteredStartSeconds,
+                    0f,
+                    travelEndSeconds,
+                    removeAtZero: true);
+            }
+
+            string travelEndStatus = hasTravelEnd
+                ? $"{travelEndSeconds:0.000}s ({NormalizedTime(travelEndSeconds, clipLength):0.000} normalized)"
+                : "Automatic — proportional to authoritative travel/recovery durations";
+            EditorGUILayout.LabelField(
+                new GUIContent(
+                    "Travel ends",
+                    $"Optional {CombatAnimationEvents.OnDodgeTravelEnd} marker."),
+                travelEndStatus);
+
+            bool playheadCanBeStart = _time <= travelEndSeconds + 0.0001f;
+            bool playheadCanBeTravelEnd = _time + 0.0001f >= startSeconds;
+            if (position.width < 620f)
+            {
+                using (new EditorGUI.DisabledScope(!playheadCanBeStart))
+                {
+                    if (GUILayout.Button($"Set Start Here ({_time:0.000}s)"))
+                    {
+                        ApplyDodgeTimingMarker(
+                            CombatAnimationEvents.OnDodgeStart,
+                            _time,
+                            0f,
+                            travelEndSeconds,
+                            removeAtZero: true);
+                    }
+                }
+                using (new EditorGUI.DisabledScope(startEvents.Length == 0))
+                {
+                    if (GUILayout.Button("Remove Startup Trim"))
+                        RemoveDodgeTimingMarker(CombatAnimationEvents.OnDodgeStart);
+                }
+                using (new EditorGUI.DisabledScope(!playheadCanBeTravelEnd))
+                {
+                    if (GUILayout.Button($"Set Travel End Here ({_time:0.000}s)"))
+                    {
+                        ApplyDodgeTimingMarker(
+                            CombatAnimationEvents.OnDodgeTravelEnd,
+                            _time,
+                            startSeconds,
+                            clipLength,
+                            removeAtZero: false);
+                    }
+                }
+                using (new EditorGUI.DisabledScope(!hasTravelEnd))
+                {
+                    if (GUILayout.Button("Use Automatic Travel End"))
+                        RemoveDodgeTimingMarker(CombatAnimationEvents.OnDodgeTravelEnd);
+                }
+            }
+            else
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    using (new EditorGUI.DisabledScope(!playheadCanBeStart))
+                    {
+                        if (GUILayout.Button($"Set Start Here ({_time:0.000}s)"))
+                        {
+                            ApplyDodgeTimingMarker(
+                                CombatAnimationEvents.OnDodgeStart,
+                                _time,
+                                0f,
+                                travelEndSeconds,
+                                removeAtZero: true);
+                        }
+                    }
+                    using (new EditorGUI.DisabledScope(startEvents.Length == 0))
+                    {
+                        if (GUILayout.Button("Remove Startup Trim"))
+                            RemoveDodgeTimingMarker(CombatAnimationEvents.OnDodgeStart);
+                    }
+                }
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    using (new EditorGUI.DisabledScope(!playheadCanBeTravelEnd))
+                    {
+                        if (GUILayout.Button($"Set Travel End Here ({_time:0.000}s)"))
+                        {
+                            ApplyDodgeTimingMarker(
+                                CombatAnimationEvents.OnDodgeTravelEnd,
+                                _time,
+                                startSeconds,
+                                clipLength,
+                                removeAtZero: false);
+                        }
+                    }
+                    using (new EditorGUI.DisabledScope(!hasTravelEnd))
+                    {
+                        if (GUILayout.Button("Use Automatic Travel End"))
+                            RemoveDodgeTimingMarker(CombatAnimationEvents.OnDodgeTravelEnd);
+                    }
+                }
+            }
+
+            EditorGUILayout.LabelField(
+                $"Playback starts at {startSeconds:0.000}s. " +
+                (hasTravelEnd
+                    ? $"Travel reaches its authored end pose at {travelEndSeconds:0.000}s; the remaining {Mathf.Max(0f, clipLength - travelEndSeconds):0.000}s is the recovery/settle portion."
+                    : "Without a travel-end marker, the runtime estimates the travel boundary from authoritative travel/recovery proportions, then plays the recovery/settle tail at authored speed."),
+                EditorStyles.wordWrappedMiniLabel);
+        }
+
+        private void ApplyDodgeTimingMarker(
+            string functionName,
+            float requestedSeconds,
+            float minimumSeconds,
+            float maximumSeconds,
+            bool removeAtZero)
+        {
+            if (_clip == null)
+                return;
+
+            float resolvedSeconds = Mathf.Clamp(
+                requestedSeconds,
+                Mathf.Max(0f, minimumSeconds),
+                Mathf.Min(Mathf.Max(0f, _clip.length), Mathf.Max(0f, maximumSeconds)));
+            if (removeAtZero && resolvedSeconds <= 0.0001f)
+            {
+                RemoveDodgeTimingMarker(functionName);
+                return;
+            }
+
+            Undo.RegisterCompleteObjectUndo(_clip, $"Set dodge timing marker '{functionName}'");
+            List<AnimationEvent> events = AnimationUtility.GetAnimationEvents(_clip)
+                .Where(animationEvent => !string.Equals(
+                    animationEvent.functionName,
+                    functionName,
+                    StringComparison.Ordinal))
+                .ToList();
+            events.Add(new AnimationEvent
+            {
+                functionName = functionName,
+                time = resolvedSeconds,
+            });
+            AnimationUtility.SetAnimationEvents(
+                _clip,
+                events.OrderBy(animationEvent => animationEvent.time).ToArray());
+            EditorUtility.SetDirty(_clip);
+            AssetDatabase.SaveAssetIfDirty(_clip);
+            ShowNotification(new GUIContent(
+                $"{functionName} set to {resolvedSeconds:0.000}s."));
+            Repaint();
+        }
+
+        private void RemoveDodgeTimingMarker(string functionName)
+        {
+            if (_clip == null)
+                return;
+
+            AnimationEvent[] existing = AnimationUtility.GetAnimationEvents(_clip);
+            AnimationEvent[] remaining = existing
+                .Where(animationEvent => !string.Equals(
+                    animationEvent.functionName,
+                    functionName,
+                    StringComparison.Ordinal))
+                .ToArray();
+            if (remaining.Length == existing.Length)
+                return;
+
+            Undo.RegisterCompleteObjectUndo(_clip, $"Remove dodge timing marker '{functionName}'");
+            AnimationUtility.SetAnimationEvents(_clip, remaining);
+            EditorUtility.SetDirty(_clip);
+            AssetDatabase.SaveAssetIfDirty(_clip);
+            ShowNotification(new GUIContent($"{functionName} removed."));
+            Repaint();
+        }
+
+        private static float NormalizedTime(float seconds, float clipLength)
+            => clipLength > 0.0001f ? Mathf.Clamp01(seconds / clipLength) : 0f;
 
         private void DrawHitWindowSynchronization()
         {

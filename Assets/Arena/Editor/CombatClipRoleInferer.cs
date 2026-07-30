@@ -90,6 +90,13 @@ namespace Arena.Editor
             string assetPath,
             Dictionary<AnimationClip, List<CombatClipRoleObservation>> map)
         {
+            // Ground/air and normal/combat dodge banks all use the same authored
+            // per-clip timing markers.
+            AddDirectional(map, set.dodge, CombatClipRole.Dodge, assetPath, ".dodge");
+            AddDirectional(map, set.dodgeCombat, CombatClipRole.Dodge, assetPath, ".dodgeCombat");
+            AddDirectional(map, set.airDodge, CombatClipRole.Dodge, assetPath, ".airDodge");
+            AddDirectional(map, set.airDodgeCombat, CombatClipRole.Dodge, assetPath, ".airDodgeCombat");
+
             // Spell cast hold profile. SpellCastHoldExit has no field on the profile right
             // now; the role enum value is retained for forward-compat if an exit clip is
             // re-introduced, but no observations are recorded for it today.
@@ -185,6 +192,23 @@ namespace Arena.Editor
                 Add(map, wp.DrawWeapon, CombatClipRole.DrawWeapon, assetPath, ".weaponPresentation.drawWeapon");
                 Add(map, wp.SheathWeapon, CombatClipRole.SheathWeapon, assetPath, ".weaponPresentation.sheathWeapon");
             }
+        }
+
+        private static void AddDirectional(
+            Dictionary<AnimationClip, List<CombatClipRoleObservation>> map,
+            DirectionalClipSet clips,
+            CombatClipRole role,
+            string assetPath,
+            string referencePath)
+        {
+            Add(map, clips.n, role, assetPath, $"{referencePath}.n");
+            Add(map, clips.ne, role, assetPath, $"{referencePath}.ne");
+            Add(map, clips.e, role, assetPath, $"{referencePath}.e");
+            Add(map, clips.se, role, assetPath, $"{referencePath}.se");
+            Add(map, clips.s, role, assetPath, $"{referencePath}.s");
+            Add(map, clips.sw, role, assetPath, $"{referencePath}.sw");
+            Add(map, clips.w, role, assetPath, $"{referencePath}.w");
+            Add(map, clips.nw, role, assetPath, $"{referencePath}.nw");
         }
 
         private static void Add(

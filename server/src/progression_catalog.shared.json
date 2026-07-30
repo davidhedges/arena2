@@ -3683,6 +3683,483 @@
       }
     },
     {
+      "ability_id": "DAGGER_ROUNDHOUSE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_ROUNDHOUSE",
+      "display_name": "Roundhouse",
+      "resource_kind": "STAMINA",
+      "resource_cost": 30,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 35,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 34,
+        "applies_stagger": true,
+        "range": 2.5,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "DAGGER_GUT_RIPPER",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_COMBO_ATTACK_04_01",
+      "display_name": "Gut Ripper",
+      "resource_kind": "STAMINA",
+      "resource_cost": 25,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 36,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 20,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 1000,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS",
+            "status": {
+              "kind": "DOT",
+              "duration_ms": 6000,
+              "status_stack_group": "DAGGER_GUT_RIPPER_BLEED",
+              "tick_damage": 3,
+              "damage_type": "PHYSICAL",
+              "tick_interval_ms": 1000,
+              "max_stacks": 1,
+              "stack_policy": "REFRESH",
+              "dispel_types": [
+                "BLEED"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "ability_id": "DAGGER_SPINNING_SLASH",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_COMBO_ATTACK_03_01",
+      "display_name": "Spinning Slash",
+      "resource_kind": "STAMINA",
+      "resource_cost": 40,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 37,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 48,
+        "applies_stagger": false,
+        "range": 3.25,
+        "cooldown_ms": 2000,
+        "uses_global_cooldown": true,
+        "parry_behavior": "UNPARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "requires_target_los": false,
+        "melee_targeting": {
+          "kind": "CASTER_RADIUS",
+          "requires_target": false
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_CROSSCUT",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_COMBO_ATTACK_02_04",
+      "display_name": "Crosscut",
+      "resource_kind": "STAMINA",
+      "resource_cost": 30,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 38,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 36,
+        "applies_stagger": false,
+        "range": 2.25,
+        "cooldown_ms": 1000,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "DAGGER_BLADE_FLURRY",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_COMBO_ATTACK_02_02",
+      "display_name": "Blade Flurry",
+      "resource_kind": "STAMINA",
+      "resource_cost": 35,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 39,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 40,
+        "applies_stagger": false,
+        "range": 3,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "DAGGER_DEADLY_FLOURISH",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_COMBO_ATTACK_02_01",
+      "display_name": "Deadly Flourish",
+      "resource_kind": "STAMINA",
+      "resource_cost": 30,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 40,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 34,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "DAGGER_PURSUE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_COMBO_ATTACK_01_04",
+      "display_name": "Pursue",
+      "resource_kind": "STAMINA",
+      "resource_cost": 35,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 41,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 28,
+        "applies_stagger": false,
+        "range": 12,
+        "minimum_range": 4,
+        "cooldown_ms": 1400,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "gap_close": {
+          "kind": "LINEAR",
+          "destination": "NEAREST_CONTACT_POINT",
+          "speed": 24,
+          "arrival_buffer": 1.44,
+          "arrival_epsilon": 0.05,
+          "impact_range": 2,
+          "collision_policy": "STOP_AT_BLOCK",
+          "require_arrival_for_swing": true,
+          "requires_target_facing": false
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_DOWNWARD_SLASH",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_DOWNWARD_SLASH",
+      "display_name": "Downward Slash",
+      "resource_kind": "STAMINA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 42,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 24,
+        "applies_stagger": false,
+        "range": 2,
+        "cooldown_ms": 650,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "DAGGER_COUP_DE_GRACE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_COUP_DE_GRACE",
+      "display_name": "Coup de Grâce",
+      "resource_kind": "STAMINA",
+      "resource_cost": 40,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 43,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 56,
+        "applies_stagger": false,
+        "range": 12,
+        "cooldown_ms": 1800,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "gap_close": {
+          "kind": "TELEPORT_BEHIND_TARGET_DISABLED",
+          "destination": "BEHIND_TARGET",
+          "arrival_buffer": 1.44,
+          "arrival_epsilon": 0.05,
+          "impact_range": 2.5,
+          "collision_policy": "REQUIRE_CLEAR_PATH",
+          "require_arrival_for_swing": true,
+          "requires_target_facing": false
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_PRECISION_STRIKE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_PRECISION_STRIKE",
+      "display_name": "Precision Strike",
+      "resource_kind": "STAMINA",
+      "resource_cost": 25,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 44,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 38,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "DAGGER_EVISCERATE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_EVISCERATE",
+      "display_name": "Eviscerate",
+      "resource_kind": "STAMINA",
+      "resource_cost": 35,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 45,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 46,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "DAGGER_VITAL_STRIKE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_VITAL_STRIKE",
+      "display_name": "Vital Strike",
+      "resource_kind": "STAMINA",
+      "resource_cost": 40,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 46,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 58,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 1800,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "DAGGER_DEATH_CROSS",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_DEATH_CROSS",
+      "display_name": "Death Cross",
+      "resource_kind": "STAMINA",
+      "resource_cost": 35,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 47,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 44,
+        "applies_stagger": false,
+        "range": 2.75,
+        "cooldown_ms": 1400,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "DAGGER_DIVING_STRIKE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_DIVING_STRIKE",
+      "display_name": "Diving Strike",
+      "resource_kind": "STAMINA",
+      "resource_cost": 40,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 48,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 50,
+        "applies_stagger": false,
+        "range": 12,
+        "minimum_range": 4,
+        "cooldown_ms": 2200,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "gap_close": {
+          "kind": "LEAP",
+          "destination": "NEAREST_CONTACT_POINT",
+          "speed": 20,
+          "arrival_buffer": 1.44,
+          "arrival_epsilon": 0.05,
+          "impact_range": 2.5,
+          "collision_policy": "STOP_AT_BLOCK",
+          "require_arrival_for_swing": true,
+          "requires_target_facing": false
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_DISEMBOWEL",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_DISEMBOWEL",
+      "display_name": "Disembowel",
+      "resource_kind": "STAMINA",
+      "resource_cost": 30,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 49,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 42,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 1100,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "DAGGER_FLAY",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_FLAY",
+      "display_name": "Flay",
+      "resource_kind": "STAMINA",
+      "resource_cost": 40,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 50,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 64,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 4500,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_channel": {
+          "duration_ms": 2500,
+          "first_tick_delay_ms": 44,
+          "tick_interval_ms": 333,
+          "cancel_on_movement": true
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_FLURRY",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_FLURRY",
+      "display_name": "Flurry",
+      "resource_kind": "STAMINA",
+      "resource_cost": 50,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 51,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 80,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 6000,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_channel": {
+          "duration_ms": 3000,
+          "first_tick_delay_ms": 107,
+          "tick_interval_ms": 667,
+          "cancel_on_movement": true
+        }
+      }
+    },
+    {
       "ability_id": "DAGGER_STEALTH",
       "actor_scope": "PLAYER",
       "combat_profile_id": "DAGGERS",
@@ -3693,7 +4170,7 @@
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
-      "sort_order": 40,
+      "sort_order": 60,
       "gameplay": {
         "kind": "COMBAT_MODE_TOGGLE"
       }
@@ -5601,10 +6078,129 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_ROUNDHOUSE",
+      "display_name": "Roundhouse",
+      "description": "A spinning dagger strike that staggers the target without displacing it.",
+      "sort_order": 223
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_GUT_RIPPER",
+      "display_name": "Gut Ripper",
+      "description": "Rips the target with crossed daggers, leaving a bleeding wound.",
+      "sort_order": 224
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_SPINNING_SLASH",
+      "display_name": "Spinning Slash",
+      "description": "Spins through nearby enemies with a sweeping dagger slash.",
+      "sort_order": 225
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_CROSSCUT",
+      "display_name": "Crosscut",
+      "description": "Cuts the target with a crossing pair of dagger strikes.",
+      "sort_order": 226
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_BLADE_FLURRY",
+      "display_name": "Blade Flurry",
+      "description": "Unleashes a rapid flurry of alternating dagger strikes.",
+      "sort_order": 227
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_DEADLY_FLOURISH",
+      "display_name": "Deadly Flourish",
+      "description": "Carves the target with a precise two-blade flourish.",
+      "sort_order": 228
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_PURSUE",
+      "display_name": "Pursue",
+      "description": "Rushes to the target and strikes with both daggers.",
+      "sort_order": 229
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_DOWNWARD_SLASH",
+      "display_name": "Downward Slash",
+      "description": "Brings both daggers down in a decisive slash.",
+      "sort_order": 230
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_COUP_DE_GRACE",
+      "display_name": "Coup de Grâce",
+      "description": "Teleports behind a disabled target before delivering a descending execution strike.",
+      "sort_order": 231
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_PRECISION_STRIKE",
+      "display_name": "Precision Strike",
+      "description": "Places two measured dagger cuts at the target's defenses.",
+      "sort_order": 232
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_EVISCERATE",
+      "display_name": "Eviscerate",
+      "description": "Drives both daggers through the target in a brutal paired strike.",
+      "sort_order": 233
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_VITAL_STRIKE",
+      "display_name": "Vital Strike",
+      "description": "Unleashes a relentless execution sequence against a vital point.",
+      "sort_order": 234
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_DEATH_CROSS",
+      "display_name": "Death Cross",
+      "description": "Descends into a decisive crossing dagger strike.",
+      "sort_order": 235
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_DIVING_STRIKE",
+      "display_name": "Diving Strike",
+      "description": "Dives to the target and finishes with a descending dagger impact.",
+      "sort_order": 236
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_DISEMBOWEL",
+      "display_name": "Disembowel",
+      "description": "Rips both blades upward through the target.",
+      "sort_order": 237
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_FLAY",
+      "display_name": "Flay",
+      "description": "Channels a sustained series of close dagger cuts; movement cancels the attack.",
+      "sort_order": 238
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_FLURRY",
+      "display_name": "Flurry",
+      "description": "Channels a blinding storm of dagger strikes; movement cancels the attack.",
+      "sort_order": 239
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_STEALTH",
       "display_name": "Stealth",
       "description": "Enter or leave the Dagger stealthed stance.",
-      "sort_order": 225
+      "sort_order": 240
     },
     {
       "presentation_kind": "ABILITY",
@@ -7259,12 +7855,84 @@
       "sort_order": 260
     },
     {
+      "slot_id": "slot_0_3",
+      "combat_profile_id": "DAGGERS",
+      "action_kind": "ABILITY",
+      "action_id": "DAGGER_ROUNDHOUSE",
+      "ability_id": "DAGGER_ROUNDHOUSE",
+      "sort_order": 265
+    },
+    {
+      "slot_id": "slot_0_4",
+      "combat_profile_id": "DAGGERS",
+      "action_kind": "ABILITY",
+      "action_id": "DAGGER_GUT_RIPPER",
+      "ability_id": "DAGGER_GUT_RIPPER",
+      "sort_order": 266
+    },
+    {
+      "slot_id": "slot_0_5",
+      "combat_profile_id": "DAGGERS",
+      "action_kind": "ABILITY",
+      "action_id": "DAGGER_SPINNING_SLASH",
+      "ability_id": "DAGGER_SPINNING_SLASH",
+      "sort_order": 267
+    },
+    {
+      "slot_id": "slot_0_6",
+      "combat_profile_id": "DAGGERS",
+      "action_kind": "ABILITY",
+      "action_id": "DAGGER_CROSSCUT",
+      "ability_id": "DAGGER_CROSSCUT",
+      "sort_order": 268
+    },
+    {
+      "slot_id": "slot_0_7",
+      "combat_profile_id": "DAGGERS",
+      "action_kind": "ABILITY",
+      "action_id": "DAGGER_BLADE_FLURRY",
+      "ability_id": "DAGGER_BLADE_FLURRY",
+      "sort_order": 269
+    },
+    {
+      "slot_id": "slot_0_8",
+      "combat_profile_id": "DAGGERS",
+      "action_kind": "ABILITY",
+      "action_id": "DAGGER_DEADLY_FLOURISH",
+      "ability_id": "DAGGER_DEADLY_FLOURISH",
+      "sort_order": 270
+    },
+    {
+      "slot_id": "slot_1_0",
+      "combat_profile_id": "DAGGERS",
+      "action_kind": "ABILITY",
+      "action_id": "DAGGER_PURSUE",
+      "ability_id": "DAGGER_PURSUE",
+      "sort_order": 271
+    },
+    {
       "slot_id": "slot_1_1",
       "combat_profile_id": "DAGGERS",
       "action_kind": "ABILITY",
       "action_id": "DAGGER_STEALTH",
       "ability_id": "DAGGER_STEALTH",
-      "sort_order": 270
+      "sort_order": 280
+    },
+    {
+      "slot_id": "slot_1_2",
+      "combat_profile_id": "DAGGERS",
+      "action_kind": "ABILITY",
+      "action_id": "DAGGER_DOWNWARD_SLASH",
+      "ability_id": "DAGGER_DOWNWARD_SLASH",
+      "sort_order": 272
+    },
+    {
+      "slot_id": "slot_1_3",
+      "combat_profile_id": "DAGGERS",
+      "action_kind": "ABILITY",
+      "action_id": "DAGGER_COUP_DE_GRACE",
+      "ability_id": "DAGGER_COUP_DE_GRACE",
+      "sort_order": 273
     },
     {
       "slot_id": "slot_0_0",

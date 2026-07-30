@@ -80,6 +80,7 @@ namespace Arena.Editor
             changed |= EnsureParameter(controller, "TriggerDodge", AnimatorControllerParameterType.Trigger);
             changed |= EnsureParameter(controller, "DodgeX", AnimatorControllerParameterType.Float);
             changed |= EnsureParameter(controller, "DodgeZ", AnimatorControllerParameterType.Float);
+            changed |= EnsureParameter(controller, "DodgePhase", AnimatorControllerParameterType.Float);
             changed |= EnsureParameter(controller, "TriggerKnockdown", AnimatorControllerParameterType.Trigger);
             changed |= EnsureParameter(controller, "IsKnockedDown", AnimatorControllerParameterType.Bool);
             changed |= EnsureParameter(controller, "TriggerGetUp", AnimatorControllerParameterType.Trigger);
@@ -127,6 +128,7 @@ namespace Arena.Editor
             AnimatorState phasedMeleeLoop = EnsureState(root, "PhasedMeleeLoop", LoadAnimationClip(PhasedMeleeLoopSlotPath), ref changed);
             AnimatorState phasedMeleeEnd = EnsureState(root, "PhasedMeleeEnd", LoadAnimationClip(PhasedMeleeEndSlotPath), ref changed);
             AnimatorState dodge = EnsureState(root, "Dodge", dodgeDirectional, ref changed);
+            changed |= EnsureTimeParameter(dodge, "DodgePhase");
             AnimatorState upperBodyDraw = EnsureState(upperBody, "UpperBodyDrawWeapon", LoadAnimationClip(DrawWeaponSlotPath), ref changed);
             AnimatorState upperBodySheath = EnsureState(upperBody, "UpperBodySheathWeapon", LoadAnimationClip(SheathWeaponSlotPath), ref changed);
             AnimatorState upperBodyBlockStart = EnsureState(upperBody, "UpperBodyBlockStart", LoadAnimationClip(BlockStartSlotPath), ref changed);
@@ -241,6 +243,24 @@ namespace Arena.Editor
             }
 
             return state;
+        }
+
+        private static bool EnsureTimeParameter(AnimatorState state, string parameterName)
+        {
+            bool changed = false;
+            if (!state.timeParameterActive)
+            {
+                state.timeParameterActive = true;
+                changed = true;
+            }
+
+            if (state.timeParameter != parameterName)
+            {
+                state.timeParameter = parameterName;
+                changed = true;
+            }
+
+            return changed;
         }
 
         private static AnimationClip LoadAnimationClip(string clipPath)

@@ -46,6 +46,15 @@ namespace Arena.Tests.Editor
             Assert.That(role, Is.EqualTo("SpellRelease"));
         }
 
+        [Test]
+        public void NumberedDodgeFolder_InfersDodgeRole()
+        {
+            string role = InferRoleName(
+                "Assets/Arena/Content/Animation/Extracted/DaggersAnimationPack/Animations/Humanoid/06_Dodge/01_Dodge_Normal/Dodge_F_0.anim");
+
+            Assert.That(role, Is.EqualTo("Dodge"));
+        }
+
         private static string InferRoleName(string path)
             => InferFromPathMethod.Invoke(null, new object[] { path })?.ToString()
                 ?? throw new InvalidOperationException("Role inference returned null.");

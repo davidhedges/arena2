@@ -25,6 +25,14 @@ namespace Arena.Presentation
         public float ZoomSensitivity = 0.75f;
         public float MinCameraDistance = 2.0f;
         public float MaxCameraDistance = 16.0f;
+        [Header("Obstruction")]
+        [Tooltip("World layers that can pull the camera closer to keep the character visible.")]
+        public LayerMask CameraCollisionLayers = DefaultCameraCollisionMask;
+        [Range(0.01f, 1f)]
+        public float CameraCollisionRadius = 0.2f;
+        [Min(0f)]
+        [Tooltip("How gradually the camera returns to the player's selected distance after an obstruction clears.")]
+        public float ObstructionReturnDamping = 0.35f;
 
         Transform? _cameraTarget;
         LocalPlayerInputSource? _input;
@@ -35,6 +43,10 @@ namespace Arena.Presentation
         float _pitch;
 
         const float Threshold = 0.01f;
+        const string PlayerTag = "Player";
+        // ProjectSettings/TagManager.asset:
+        // Default = 0, GameplayCollision = 6, GameplayQueryCollision = 7.
+        const int DefaultCameraCollisionMask = (1 << 0) | (1 << 6) | (1 << 7);
 
         public void Initialize(
             Transform cameraTarget,
@@ -57,9 +69,29 @@ namespace Arena.Presentation
             RefreshCameraReference();
         }
 
+        public void AlignBehind(float facingYawRadians)
+        {
+            if (float.IsNaN(facingYawRadians) || float.IsInfinity(facingYawRadians))
+                return;
+
+            _yaw = ClampAngle(facingYawRadians * Mathf.Rad2Deg, float.MinValue, float.MaxValue);
+            _stateProvider?.SetCameraYaw(_yaw * Mathf.Deg2Rad);
+
+            if (_cameraTarget != null)
+            {
+                _cameraTarget.rotation = Quaternion.Euler(
+                    _pitch + CameraAngleOverride,
+                    _yaw,
+                    0f);
+            }
+        }
+
         void LateUpdate()
         {
             if (_cameraTarget == null || _input == null) return;
+
+            if (_camera == null)
+                RefreshCameraReference();
 
             ApplyZoom(_input.ScrollDelta.y);
 
@@ -81,6 +113,52 @@ namespace Arena.Presentation
         void RefreshCameraReference()
         {
             _camera = Object.FindAnyObjectByType<CinemachineVirtualCameraBase>();
+            if (_camera != null)
+                ConfigureObstructionHandling(_camera);
+        }
+
+        void ConfigureObstructionHandling(CinemachineVirtualCameraBase camera)
+        {
+            CinemachineThirdPersonFollow? thirdPersonFollow = null;
+            if (camera is CinemachineCamera cinemachineCamera)
+            {
+                thirdPersonFollow = cinemachineCamera.GetCinemachineComponent(
+                    CinemachineCore.Stage.Body) as CinemachineThirdPersonFollow;
+            }
+
+            thirdPersonFollow ??= camera.GetComponentInChildren<CinemachineThirdPersonFollow>(true);
+            if (thirdPersonFollow != null)
+            {
+                var obstacleSettings = thirdPersonFollow.AvoidObstacles;
+                obstacleSettings.Enabled = true;
+                obstacleSettings.CollisionFilter = CameraCollisionLayers;
+                obstacleSettings.IgnoreTag = PlayerTag;
+                obstacleSettings.CameraRadius = Mathf.Max(0.01f, CameraCollisionRadius);
+                obstacleSettings.DampingIntoCollision = 0f;
+                obstacleSettings.DampingFromCollision = Mathf.Max(0f, ObstructionReturnDamping);
+                thirdPersonFollow.AvoidObstacles = obstacleSettings;
+                return;
+            }
+
+            // Open-world scenes still author the Cinemachine 2-compatible body.
+            // Configure it by name so this controller remains compatible while
+            // those scene rigs are migrated independently.
+            var legacyThirdPersonFollow =
+                FindComponentInChildrenByName(camera.gameObject, "Cinemachine3rdPersonFollow");
+            if (legacyThirdPersonFollow == null)
+                return;
+
+            SetPublicField(legacyThirdPersonFollow, "CameraCollisionFilter", CameraCollisionLayers);
+            SetPublicField(legacyThirdPersonFollow, "IgnoreTag", PlayerTag);
+            SetPublicField(
+                legacyThirdPersonFollow,
+                "CameraRadius",
+                Mathf.Max(0.01f, CameraCollisionRadius));
+            SetPublicField(legacyThirdPersonFollow, "DampingIntoCollision", 0f);
+            SetPublicField(
+                legacyThirdPersonFollow,
+                "DampingFromCollision",
+                Mathf.Max(0f, ObstructionReturnDamping));
         }
 
         void ApplyZoom(float scrollY)
@@ -174,6 +252,11 @@ namespace Arena.Presentation
             }
 
             return false;
+        }
+
+        static void SetPublicField(Component component, string fieldName, object value)
+        {
+            component.GetType().GetField(fieldName)?.SetValue(component, value);
         }
 
         static Component? FindComponentInChildrenByName(GameObject root, string typeName)

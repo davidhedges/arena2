@@ -251,6 +251,8 @@ struct AbilityGameplayDefinition {
     #[serde(default)]
     melee_timed_movement: Option<MeleeTimedMovementDefinition>,
     #[serde(default)]
+    melee_channel: Option<MeleeChannelDefinition>,
+    #[serde(default)]
     melee_impact_area: Option<MeleeImpactAreaDefinition>,
     #[serde(default)]
     melee_targeting: Option<MeleeTargetingDefinition>,
@@ -671,6 +673,14 @@ pub(crate) struct MeleeTimedMovementRuntime {
     pub facing_policy: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct MeleeChannelRuntime {
+    pub duration_ms: u64,
+    pub first_tick_delay_ms: u64,
+    pub tick_interval_ms: u64,
+    pub cancel_on_movement: bool,
+}
+
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct GapCloseDefinition {
@@ -696,6 +706,15 @@ struct MeleeTimedMovementDefinition {
     speed: f32,
     collision_policy: String,
     facing_policy: String,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MeleeChannelDefinition {
+    duration_ms: u64,
+    first_tick_delay_ms: u64,
+    tick_interval_ms: u64,
+    cancel_on_movement: bool,
 }
 
 #[derive(Clone, Deserialize)]
@@ -1308,6 +1327,14 @@ pub struct MeleeAbilityCatalog {
     pub impact_area_include_primary_target: bool,
     #[default(0.0f32)]
     pub targeting_width: f32,
+    #[default(0u64)]
+    pub channel_duration_ms: u64,
+    #[default(0u64)]
+    pub channel_first_tick_delay_ms: u64,
+    #[default(0u64)]
+    pub channel_tick_interval_ms: u64,
+    #[default(false)]
+    pub channel_cancel_on_movement: bool,
 }
 
 #[table(accessor = melee_gap_close_catalog, public)]
@@ -2556,6 +2583,20 @@ pub(crate) fn melee_timed_movement_for_ability_id(
     })
 }
 
+pub(crate) fn melee_channel_for_ability_id(ability_id: &str) -> Option<MeleeChannelRuntime> {
+    let definition = ability_definition(ability_id)?;
+    if ability_gameplay_kind(definition) != "MELEE" {
+        return None;
+    }
+    let channel = definition.gameplay.melee_channel.as_ref()?;
+    Some(MeleeChannelRuntime {
+        duration_ms: channel.duration_ms,
+        first_tick_delay_ms: channel.first_tick_delay_ms,
+        tick_interval_ms: channel.tick_interval_ms,
+        cancel_on_movement: channel.cancel_on_movement,
+    })
+}
+
 fn movement_delivery_runtime_from_definition(
     definition: &AbilityDefinition,
     movement: &MovementDeliveryDefinition,
@@ -3150,6 +3191,29 @@ fn sync_melee_ability_catalog(ctx: &ReducerContext) {
                 .map(|area| area.include_primary_target)
                 .unwrap_or(false),
             targeting_width: targeting.width,
+            channel_duration_ms: definition
+                .gameplay
+                .melee_channel
+                .as_ref()
+                .map(|channel| channel.duration_ms)
+                .unwrap_or(0),
+            channel_first_tick_delay_ms: definition
+                .gameplay
+                .melee_channel
+                .as_ref()
+                .map(|channel| channel.first_tick_delay_ms)
+                .unwrap_or(0),
+            channel_tick_interval_ms: definition
+                .gameplay
+                .melee_channel
+                .as_ref()
+                .map(|channel| channel.tick_interval_ms)
+                .unwrap_or(0),
+            channel_cancel_on_movement: definition
+                .gameplay
+                .melee_channel
+                .as_ref()
+                .is_some_and(|channel| channel.cancel_on_movement),
         };
         if ctx
             .db
@@ -4542,6 +4606,10 @@ fn validate_ability_catalog() {
                 "non-melee ability '{ability_id}' must not define melee_timed_movement"
             );
             assert!(
+                ability.gameplay.melee_channel.is_none(),
+                "non-melee ability '{ability_id}' must not define melee_channel"
+            );
+            assert!(
                 ability.gameplay.melee_targeting.is_none(),
                 "non-melee ability '{ability_id}' must not define melee_targeting"
             );
@@ -4566,8 +4634,18 @@ fn validate_melee_gameplay_fields(ability_id: &str, gameplay: &AbilityGameplayDe
     if gameplay.gap_close.is_some() && gameplay.melee_timed_movement.is_some() {
         panic!("melee ability '{ability_id}' must not combine gap_close and melee_timed_movement");
     }
+    if gameplay.melee_channel.is_some()
+        && (gameplay.gap_close.is_some() || gameplay.melee_timed_movement.is_some())
+    {
+        panic!(
+            "melee ability '{ability_id}' must not combine melee_channel with authored movement"
+        );
+    }
     if let Some(movement) = gameplay.melee_timed_movement.as_ref() {
         validate_melee_timed_movement(ability_id, movement);
+    }
+    if let Some(channel) = gameplay.melee_channel.as_ref() {
+        validate_melee_channel(ability_id, channel);
     }
 
     let airborne_targeting_mode = normalize_identifier(
@@ -4647,6 +4725,26 @@ fn validate_melee_gameplay_fields(ability_id: &str, gameplay: &AbilityGameplayDe
             "melee ability '{ability_id}' melee_targeting.kind must be TARGET, CASTER_RADIUS, CASTER_CONE, or CASTER_RECTANGLE, got '{targeting_kind}'"
         ),
     }
+}
+
+fn validate_melee_channel(ability_id: &str, channel: &MeleeChannelDefinition) {
+    assert!(
+        channel.duration_ms > 0,
+        "melee ability '{ability_id}' melee_channel.duration_ms must be positive"
+    );
+    assert!(
+        channel.first_tick_delay_ms > 0
+            && channel.first_tick_delay_ms <= channel.duration_ms,
+        "melee ability '{ability_id}' melee_channel.first_tick_delay_ms must be in (0, duration_ms]"
+    );
+    assert!(
+        channel.tick_interval_ms > 0 && channel.tick_interval_ms <= channel.duration_ms,
+        "melee ability '{ability_id}' melee_channel.tick_interval_ms must be in (0, duration_ms]"
+    );
+    assert!(
+        channel.cancel_on_movement,
+        "melee ability '{ability_id}' melee_channel.cancel_on_movement must be true"
+    );
 }
 
 fn validate_melee_timed_movement(ability_id: &str, movement: &MeleeTimedMovementDefinition) {
@@ -5237,15 +5335,15 @@ mod tests {
         action_ref_for_action_bar_default, authored_status_presentation_ids,
         canonical_action_bar_slot_id, character_action_bar_assignment_is_generic_fixed_action,
         combat_rule_value, combat_vfx_cue_key, derived_spell_action_presentation_rows,
-        melee_impact_effects_for_ability_id, normalize_identifier,
+        melee_channel_for_ability_id, melee_impact_effects_for_ability_id, normalize_identifier,
         normalize_optional_target_audience, primary_resource_gain_on_action_accept,
         progression_catalog, projectile_body_vfx_id_for_spell,
         resolved_combat_profile_id_for_ability_definition, resolved_melee_targeting_for_catalog,
         selectable_slot_ids, validate_auto_attack_catalog, validate_combat_mode_catalog,
         validate_progression_catalog_authoring_contract, AbilityDefinition, ActionKind,
         CharacterActionBarAssignment, CombatVfxPresentationManifest, FixedActionId,
-        MeleeImpactEffectRuntime, ABILITY_KIND_COMBAT_MODE_TOGGLE, ACTION_KIND_FIXED,
-        ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID, AUTO_ATTACK_MOVEMENT_ALLOW_MOVING,
+        MeleeChannelRuntime, MeleeImpactEffectRuntime, ABILITY_KIND_COMBAT_MODE_TOGGLE,
+        ACTION_KIND_FIXED, ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID, AUTO_ATTACK_MOVEMENT_ALLOW_MOVING,
         AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE, COMBAT_MODE_FULL_DRAW, COMBAT_MODE_READY,
         COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED, COMBAT_PROFILE_ARCHER_BOW,
         COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_SWORD_AND_SHIELD, COMBAT_PROFILE_TWO_HANDED_SWORD,
@@ -7808,7 +7906,13 @@ mod tests {
     #[test]
     fn authored_gap_closers_are_valid_melee_gameplay() {
         let catalog = progression_catalog();
-        let supported_kinds = ["LINEAR", "LEAP", "TELEPORT", "TELEPORT_BEHIND"];
+        let supported_kinds = [
+            "LINEAR",
+            "LEAP",
+            "TELEPORT",
+            "TELEPORT_BEHIND",
+            "TELEPORT_BEHIND_TARGET_DISABLED",
+        ];
         let supported_destinations = [
             "NEAREST_CONTACT_POINT",
             "BEHIND_TARGET",
@@ -7856,7 +7960,10 @@ mod tests {
                 ability.ability_id,
                 gap_close.collision_policy
             );
-            if !matches!(kind.as_str(), "TELEPORT" | "TELEPORT_BEHIND") {
+            if !matches!(
+                kind.as_str(),
+                "TELEPORT" | "TELEPORT_BEHIND" | "TELEPORT_BEHIND_TARGET_DISABLED"
+            ) {
                 assert!(
                     gap_close.speed.unwrap_or(0.0) > 0.0,
                     "{} non-teleport gap closer must define positive speed",
@@ -8083,6 +8190,23 @@ mod tests {
             ("DAGGER_QUICK_CUT", "DAGGER_QUICK_CUT"),
             ("DAGGER_RIPOSTE", "DAGGER_RIPOSTE"),
             ("DAGGER_DASHING_CUT", "DAGGER_DASHING_CUT"),
+            ("DAGGER_ROUNDHOUSE", "DAGGER_ROUNDHOUSE"),
+            ("DAGGER_GUT_RIPPER", "DAGGER_COMBO_ATTACK_04_01"),
+            ("DAGGER_SPINNING_SLASH", "DAGGER_COMBO_ATTACK_03_01"),
+            ("DAGGER_CROSSCUT", "DAGGER_COMBO_ATTACK_02_04"),
+            ("DAGGER_BLADE_FLURRY", "DAGGER_COMBO_ATTACK_02_02"),
+            ("DAGGER_DEADLY_FLOURISH", "DAGGER_COMBO_ATTACK_02_01"),
+            ("DAGGER_PURSUE", "DAGGER_COMBO_ATTACK_01_04"),
+            ("DAGGER_DOWNWARD_SLASH", "DAGGER_DOWNWARD_SLASH"),
+            ("DAGGER_COUP_DE_GRACE", "DAGGER_COUP_DE_GRACE"),
+            ("DAGGER_PRECISION_STRIKE", "DAGGER_PRECISION_STRIKE"),
+            ("DAGGER_EVISCERATE", "DAGGER_EVISCERATE"),
+            ("DAGGER_VITAL_STRIKE", "DAGGER_VITAL_STRIKE"),
+            ("DAGGER_DEATH_CROSS", "DAGGER_DEATH_CROSS"),
+            ("DAGGER_DIVING_STRIKE", "DAGGER_DIVING_STRIKE"),
+            ("DAGGER_DISEMBOWEL", "DAGGER_DISEMBOWEL"),
+            ("DAGGER_FLAY", "DAGGER_FLAY"),
+            ("DAGGER_FLURRY", "DAGGER_FLURRY"),
         ] {
             let ability = catalog
                 .abilities
@@ -8101,6 +8225,203 @@ mod tests {
                 &AuthoredActionId::new(action_id)
             ));
         }
+    }
+
+    #[test]
+    fn dagger_channel_attacks_author_movement_canceling_runtime() {
+        assert_eq!(
+            melee_channel_for_ability_id("DAGGER_FLAY"),
+            Some(MeleeChannelRuntime {
+                duration_ms: 2500,
+                first_tick_delay_ms: 44,
+                tick_interval_ms: 333,
+                cancel_on_movement: true,
+            })
+        );
+        assert_eq!(
+            melee_channel_for_ability_id("DAGGER_FLURRY"),
+            Some(MeleeChannelRuntime {
+                duration_ms: 3000,
+                first_tick_delay_ms: 107,
+                tick_interval_ms: 667,
+                cancel_on_movement: true,
+            })
+        );
+    }
+
+    #[test]
+    fn dagger_diving_strike_authors_required_arrival_gap_close() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_DIVING_STRIKE")
+            .expect("DAGGER_DIVING_STRIKE must exist");
+        let gap_close = ability
+            .gameplay
+            .gap_close
+            .as_ref()
+            .expect("DAGGER_DIVING_STRIKE must author a gap close");
+
+        assert_eq!(normalize_identifier(gap_close.kind.as_str()), "LEAP");
+        assert_eq!(
+            normalize_identifier(gap_close.destination.as_str()),
+            "NEAREST_CONTACT_POINT"
+        );
+        assert!(gap_close.require_arrival_for_swing);
+    }
+
+    #[test]
+    fn dagger_roundhouse_staggers_without_knockback() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_ROUNDHOUSE")
+            .expect("DAGGER_ROUNDHOUSE must exist");
+
+        assert_eq!(ability.action_id, "DAGGER_ROUNDHOUSE");
+        assert_eq!(ability_gameplay_kind(ability), "MELEE");
+        assert_eq!(ability.gameplay.applies_stagger, Some(true));
+        assert!(melee_impact_effects_for_ability_id("DAGGER_ROUNDHOUSE").is_empty());
+        assert!(catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                normalize_identifier(assignment.combat_profile_id.as_str())
+                    == COMBAT_PROFILE_DAGGERS
+                    && canonical_action_bar_slot_id(assignment.slot_id.as_str()) == "SLOT_0_3"
+                    && normalize_identifier(assignment.ability_id.as_str()) == "DAGGER_ROUNDHOUSE"
+            }));
+    }
+
+    #[test]
+    fn dagger_session_abilities_have_default_action_bar_slots() {
+        let catalog = progression_catalog();
+        for (ability_id, slot_id) in [
+            ("DAGGER_ROUNDHOUSE", "SLOT_0_3"),
+            ("DAGGER_GUT_RIPPER", "SLOT_0_4"),
+            ("DAGGER_SPINNING_SLASH", "SLOT_0_5"),
+            ("DAGGER_CROSSCUT", "SLOT_0_6"),
+            ("DAGGER_BLADE_FLURRY", "SLOT_0_7"),
+            ("DAGGER_DEADLY_FLOURISH", "SLOT_0_8"),
+            ("DAGGER_PURSUE", "SLOT_1_0"),
+            ("DAGGER_DOWNWARD_SLASH", "SLOT_1_2"),
+            ("DAGGER_COUP_DE_GRACE", "SLOT_1_3"),
+        ] {
+            assert!(catalog
+                .combat_profile_action_bar_defaults
+                .iter()
+                .any(|assignment| {
+                    normalize_identifier(assignment.combat_profile_id.as_str())
+                        == COMBAT_PROFILE_DAGGERS
+                        && canonical_action_bar_slot_id(assignment.slot_id.as_str()) == slot_id
+                        && normalize_identifier(assignment.ability_id.as_str()) == ability_id
+                }));
+        }
+    }
+
+    #[test]
+    fn dagger_gut_ripper_applies_physical_bleed() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_GUT_RIPPER")
+            .expect("DAGGER_GUT_RIPPER must exist");
+
+        assert_eq!(ability.action_id, "DAGGER_COMBO_ATTACK_04_01");
+        assert_eq!(ability.gameplay.applies_stagger, Some(false));
+        assert_eq!(
+            melee_impact_effects_for_ability_id("DAGGER_GUT_RIPPER"),
+            vec![MeleeImpactEffectRuntime::ApplyStatus {
+                status: StatusApplication::new(
+                    StatusPayload::Dot {
+                        tick_damage: 3,
+                        damage_type: crate::combat::DamageType::Physical,
+                        tick_interval: Duration::from_secs(1),
+                    },
+                    Duration::from_millis(6000),
+                    Some("DAGGER_GUT_RIPPER_BLEED".to_string()),
+                    StatusStackGroupDefault::InstanceScopedActionSuffix("DOT"),
+                    1,
+                    StackPolicy::Refresh,
+                )
+                .with_dispel_types(vec![StatusDispelType::Bleed]),
+            }]
+        );
+    }
+
+    #[test]
+    fn dagger_spinning_slash_authors_targetless_radius_melee() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_SPINNING_SLASH")
+            .expect("DAGGER_SPINNING_SLASH must exist");
+
+        assert_eq!(ability.action_id, "DAGGER_COMBO_ATTACK_03_01");
+        let targeting = resolved_melee_targeting_for_catalog(&ability.gameplay);
+        assert_eq!(targeting.kind, "CASTER_RADIUS");
+        assert!(!targeting.requires_target);
+        assert_eq!(targeting.radius, 3.25);
+        assert_eq!(targeting.range, 3.25);
+    }
+
+    #[test]
+    fn dagger_pursue_authors_existing_linear_gap_close() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_PURSUE")
+            .expect("DAGGER_PURSUE must exist");
+        let gap_close = ability
+            .gameplay
+            .gap_close
+            .as_ref()
+            .expect("DAGGER_PURSUE must author gap_close");
+
+        assert_eq!(ability.action_id, "DAGGER_COMBO_ATTACK_01_04");
+        assert_eq!(normalize_identifier(gap_close.kind.as_str()), "LINEAR");
+        assert_eq!(
+            normalize_identifier(gap_close.destination.as_str()),
+            "NEAREST_CONTACT_POINT"
+        );
+        assert_eq!(gap_close.speed, Some(24.0));
+        assert_eq!(
+            normalize_identifier(gap_close.collision_policy.as_str()),
+            "STOP_AT_BLOCK"
+        );
+        assert!(gap_close.require_arrival_for_swing);
+    }
+
+    #[test]
+    fn dagger_coup_de_grace_authors_conditional_instant_behind_teleport() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_COUP_DE_GRACE")
+            .expect("DAGGER_COUP_DE_GRACE must exist");
+        let gap_close = ability
+            .gameplay
+            .gap_close
+            .as_ref()
+            .expect("DAGGER_COUP_DE_GRACE must author gap_close");
+
+        assert_eq!(ability.action_id, "DAGGER_COUP_DE_GRACE");
+        assert_eq!(
+            normalize_identifier(gap_close.kind.as_str()),
+            "TELEPORT_BEHIND_TARGET_DISABLED"
+        );
+        assert_eq!(
+            normalize_identifier(gap_close.destination.as_str()),
+            "BEHIND_TARGET"
+        );
+        assert_eq!(gap_close.impact_range, 2.5);
+        assert_eq!(
+            normalize_identifier(gap_close.collision_policy.as_str()),
+            "REQUIRE_CLEAR_PATH"
+        );
+        assert!(gap_close.require_arrival_for_swing);
+        assert!(!gap_close.requires_target_facing);
     }
 
     #[test]

@@ -12,7 +12,7 @@ namespace Arena.Presentation
     {
         private const string GhostRootName = "AnimatedAutoAttackGhost";
         private const float DefaultFadeSeconds = 0.75f;
-        private const float DefaultStartAlpha = 0.52f;
+        private const float DefaultStartAlpha = 0.44f;
         private const int DefaultMaxGhosts = 1;
 
         private static readonly int InCombatHash = Animator.StringToHash("InCombat");

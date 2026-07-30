@@ -41,12 +41,20 @@ namespace Arena.Editor
             string lowerName = fileNoExt.ToLowerInvariant();
             string lowerPath = normalizedPath.ToLowerInvariant();
 
-            // 1. Locomotion folders — strongest path signal. Matches both numbered third-
+            // 1. Dodge folders are distinct from ordinary locomotion because they carry
+            //    optional playback-trim and movement/recovery timing markers.
+            if (lowerPath.Contains("/06_dodge/")
+                || lowerPath.Contains("/dodging/"))
+            {
+                return CombatClipRole.Dodge;
+            }
+
+            // 2. Locomotion folders — strongest path signal. Matches both numbered third-
             //    party convention (01_Idle, 03_Walk, ...) and human-readable folder names.
             if (PathContainsAny(lowerPath, sLocomotionPathTokens))
                 return CombatClipRole.Locomotion;
 
-            // 2. Cast hold (Kevin Iglesias). Path-confirmed to avoid matching unrelated
+            // 3. Cast hold (Kevin Iglesias). Path-confirmed to avoid matching unrelated
             //    "casting" mentions.
             if (lowerPath.Contains("spellcasting"))
             {
@@ -55,7 +63,7 @@ namespace Arena.Editor
                 if (lowerName.Contains("castingexit"))  return CombatClipRole.SpellCastHoldExit;
             }
 
-            // 3. Spell cast lifecycle (Kevin Iglesias MagicAttacks).
+            // 4. Spell cast lifecycle (Kevin Iglesias MagicAttacks).
             if (lowerPath.Contains("magicattacks") || lowerName.Contains("magicattack"))
             {
                 // Kevin Iglesias MagicAttacks split into unsuffixed enter clips,
@@ -68,7 +76,7 @@ namespace Arena.Editor
                 if (lowerName.Contains("magicattack")) return CombatClipRole.SpellCastHoldEnter;
             }
 
-            // 4. Block — check Block_Hit_Break before Block_Hit before generic suffixes.
+            // 5. Block — check Block_Hit_Break before Block_Hit before generic suffixes.
             if (ContainsTokenStart(lowerName, "block"))
             {
                 if (lowerName.Contains("hit_break") || lowerName.Contains("hitbreak"))
@@ -79,14 +87,14 @@ namespace Arena.Editor
                 if (EndsWithSuffix(lowerName, "end"))   return CombatClipRole.BlockEnd;
             }
 
-            // 5. Parry.
+            // 6. Parry.
             if (ContainsTokenStart(lowerName, "parry"))
             {
                 if (EndsWithSuffix(lowerName, "hit"))   return CombatClipRole.ParryHit;
                 if (EndsWithSuffix(lowerName, "start")) return CombatClipRole.ParryStart;
             }
 
-            // 6. Knockdown / get up.
+            // 7. Knockdown / get up.
             if (lowerName.Contains("knock_down") || lowerName.Contains("knockdown"))
             {
                 if (EndsWithSuffix(lowerName, "start")) return CombatClipRole.KnockdownStart;
@@ -95,7 +103,7 @@ namespace Arena.Editor
             if (lowerName.Contains("get_up") || lowerName.Contains("getup"))
                 return CombatClipRole.GetUp;
 
-            // 7. Stun.
+            // 8. Stun.
             if (ContainsTokenStart(lowerName, "stun"))
             {
                 if (EndsWithSuffix(lowerName, "start")) return CombatClipRole.StunStart;
@@ -103,11 +111,11 @@ namespace Arena.Editor
                 if (EndsWithSuffix(lowerName, "end"))   return CombatClipRole.StunEnd;
             }
 
-            // 8. Stagger.
+            // 9. Stagger.
             if (lowerName.Contains("stagger"))
                 return CombatClipRole.Stagger;
 
-            // 9. Hit reaction. Folder convention "08_Hit" is a strong hint; combined with
+            // 10. Hit reaction. Folder convention "08_Hit" is a strong hint; combined with
             //    a directional suffix it's near-certain. Filename starting with "hit_" is
             //    also reliable.
             if (lowerPath.Contains("/08_hit/") || ContainsTokenStart(lowerName, "hit"))
@@ -116,11 +124,11 @@ namespace Arena.Editor
                     return CombatClipRole.HitReaction;
             }
 
-            // 10. Death.
+            // 11. Death.
             if (lowerName.Contains("death") || lowerName.Equals("die"))
                 return CombatClipRole.Death;
 
-            // 11. Draw / sheath weapon.
+            // 12. Draw / sheath weapon.
             if (lowerName.Contains("draw_weapon") || lowerName.Contains("drawweapon")
                 || lowerName.Contains("equip_weapon") || lowerName.Contains("equipweapon"))
                 return CombatClipRole.DrawWeapon;
@@ -128,7 +136,7 @@ namespace Arena.Editor
                 || lowerName.Contains("unequip_weapon") || lowerName.Contains("unequipweapon"))
                 return CombatClipRole.SheathWeapon;
 
-            // 12. Phased melee — attack-context filename with phase suffix. Matches:
+            // 13. Phased melee — attack-context filename with phase suffix. Matches:
             //     Attack_*_Start/Loop/End, Combo_Attack_*_Start/Loop/End,
             //     Charge_*_Attack_Start/Loop/End, Aim_the_Target_Start/Loop/End,
             //     Buff_Air_Start/Loop/End (charged buffs).
@@ -140,7 +148,7 @@ namespace Arena.Editor
                 if (EndsWithSuffix(lowerName, "stop"))  return CombatClipRole.PhasedMeleeEnd;
             }
 
-            // 13. Single melee strike — attack-context filename with no phase suffix.
+            // 14. Single melee strike — attack-context filename with no phase suffix.
             //     Excludes anything we already classified above.
             if (HasAttackContext(lowerName) && !HasPhaseSuffix(lowerName))
                 return CombatClipRole.MeleeStrike;
@@ -156,7 +164,6 @@ namespace Arena.Editor
             "/03_walk/",
             "/04_run/",
             "/05_jump/",
-            "/06_dodge/",
             "/07_roll/",
             "/09_turn/",
             "/idles/",
@@ -166,7 +173,6 @@ namespace Arena.Editor
             "/walking/",
             "/running/",
             "/turning/",
-            "/dodging/",
         };
 
         private static readonly string[] sAttackPrefixes = new[]
