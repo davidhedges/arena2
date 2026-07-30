@@ -650,10 +650,18 @@ namespace Arena.Input
         {
             if (_renderHistoryCount > 0)
             {
-                PredictedMovementState previous = GetRenderHistorySample(_renderHistoryCount - 1);
-                float positionDelta = Vector3.Distance(previous.Position, predicted.Position);
+                int newestIndex = _renderHistoryCount - 1;
+                PredictedMovementState newest = GetRenderHistorySample(newestIndex);
+                float positionDelta = Vector3.Distance(newest.Position, predicted.Position);
                 if (positionDelta >= LocalRenderHardSnapDistance)
+                {
                     ClearRenderHistory();
+                }
+                else if (newest.LastProcessedTick == predicted.LastProcessedTick)
+                {
+                    SetRenderHistorySample(newestIndex, predicted);
+                    return;
+                }
             }
 
             AppendRenderHistory(predicted);
@@ -926,6 +934,12 @@ namespace Arena.Input
         {
             int arrayIndex = (_renderHistoryStart + index) % RenderHistoryCapacity;
             return _renderHistory[arrayIndex];
+        }
+
+        private void SetRenderHistorySample(int index, in PredictedMovementState state)
+        {
+            int arrayIndex = (_renderHistoryStart + index) % RenderHistoryCapacity;
+            _renderHistory[arrayIndex] = state;
         }
 
         private void AppendPredictedStateHistory(in PredictedMovementState state)

@@ -1470,6 +1470,66 @@ namespace Arena.Tests.Editor
             Assert.That(GetStaticField<int>(configType, "MaxPendingCommands"), Is.EqualTo(96));
         }
 
+        [Test]
+        public void LocalRenderHistory_ZeroErrorSameTickReconcileDoesNotAdvanceRenderedPose()
+        {
+            Type driverType = RequireType("Arena.Input.LocalMovementPredictionDriver");
+            Type stateType = RequireType("Arena.Input.PredictedMovementState");
+            MethodInfo pushRenderSample = RequireMethod(
+                driverType,
+                "PushRenderSample",
+                stateType.MakeByRefType());
+            MethodInfo applyRenderedTransform = RequireMethod(
+                driverType,
+                "ApplyRenderedTransform",
+                typeof(float));
+            FieldInfo renderHistoryCount = driverType.GetField(
+                "_renderHistoryCount",
+                BindingFlags.NonPublic | BindingFlags.Instance)
+                ?? throw new InvalidOperationException(
+                    $"Field {driverType.FullName}._renderHistoryCount not found.");
+
+            var root = new GameObject("LocalRenderHistoryTest");
+            try
+            {
+                Component driver = root.AddComponent(driverType);
+                object previousTick = Activator.CreateInstance(
+                    stateType,
+                    Vector3.zero,
+                    Vector3.zero,
+                    0f,
+                    true,
+                    9u)!;
+                object newestTick = Activator.CreateInstance(
+                    stateType,
+                    Vector3.right,
+                    Vector3.zero,
+                    0f,
+                    true,
+                    10u)!;
+
+                pushRenderSample.Invoke(driver, new[] { previousTick });
+                pushRenderSample.Invoke(driver, new[] { newestTick });
+                applyRenderedTransform.Invoke(driver, new object[] { 0.5f });
+                Vector3 beforeReconcile = root.transform.position;
+
+                // A zero-error reconcile rebuilds the same prediction tick at
+                // the same position. It must replace that tick's endpoint,
+                // not append a duplicate that collapses interpolation N-1→N
+                // into N→N and visibly advances the model.
+                pushRenderSample.Invoke(driver, new[] { newestTick });
+                applyRenderedTransform.Invoke(driver, new object[] { 0.5f });
+
+                Assert.That((int)renderHistoryCount.GetValue(driver)!, Is.EqualTo(2));
+                AssertVector3(root.transform.position, beforeReconcile);
+                AssertVector3(root.transform.position, Vector3.right * 0.5f);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
         [TestCase(-1f)]
         [TestCase(1f)]
         public void KeyboardTurningWhileMoving_PreservesFullForwardSpeed(float turnAxis)
