@@ -129,7 +129,7 @@ impl PhaseStopwatch {
     }
 }
 
-pub(crate) const TABLE_WRITE_KIND_COUNT: usize = 7;
+pub(crate) const TABLE_WRITE_KIND_COUNT: usize = 8;
 
 /// Hot-tick tables whose write sites are individually instrumented.
 #[derive(Clone, Copy, Debug)]
@@ -138,9 +138,10 @@ pub(crate) enum TableWriteKind {
     PlayerIntent = 1,
     PlayerResource = 2,
     FixedActionChargeState = 3,
-    NpcCombatRuntime = 4,
-    CombatStackingPassiveRuntime = 5,
-    CombatPositionHistory = 6,
+    FixedActionChargeRecovery = 4,
+    NpcCombatRuntime = 5,
+    CombatStackingPassiveRuntime = 6,
+    CombatPositionHistory = 7,
 }
 
 pub(crate) const TABLE_WRITE_KIND_NAMES: [&str; TABLE_WRITE_KIND_COUNT] = [
@@ -148,6 +149,7 @@ pub(crate) const TABLE_WRITE_KIND_NAMES: [&str; TABLE_WRITE_KIND_COUNT] = [
     "player_intent",
     "player_resource",
     "fixed_action_charge_state",
+    "fixed_action_charge_recovery",
     "npc_combat_runtime",
     "combat_stacking_passive_runtime",
     "combat_position_history",
@@ -160,6 +162,7 @@ static EQUIPMENT_SCAN_COUNT: AtomicU64 = AtomicU64::new(0);
 static MOVE_FALLBACK_COUNT: AtomicU64 = AtomicU64::new(0);
 static NPC_TARGET_PAIRS_SCANNED: AtomicU64 = AtomicU64::new(0);
 static TABLE_WRITE_COUNTS: [AtomicU64; TABLE_WRITE_KIND_COUNT] = [
+    AtomicU64::new(0),
     AtomicU64::new(0),
     AtomicU64::new(0),
     AtomicU64::new(0),

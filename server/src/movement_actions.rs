@@ -29,6 +29,8 @@ use crate::spells::{
 #[allow(unused_imports)]
 use crate::arena::player_world as _;
 #[allow(unused_imports)]
+use crate::movement_actions::fixed_action_charge_recovery as _;
+#[allow(unused_imports)]
 use crate::movement_actions::fixed_action_charge_state as _;
 #[allow(unused_imports)]
 use crate::movement_actions::movement_action_state as _;
@@ -83,6 +85,19 @@ pub struct FixedActionChargeState {
     pub is_recharging: bool,
     pub recharge_started_at: Timestamp,
     pub next_charge_ready_at: Timestamp,
+}
+
+#[table(accessor = fixed_action_charge_recovery)]
+#[derive(Clone)]
+pub struct FixedActionChargeRecovery {
+    #[primary_key]
+    #[auto_inc]
+    pub recovery_id: u64,
+    #[index(btree)]
+    pub owner: Identity,
+    pub action_id: String,
+    pub recharge_started_at: Timestamp,
+    pub ready_at: Timestamp,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -652,6 +667,7 @@ pub(crate) fn reset_dodge_charge_state_to_full(
     owner: Identity,
     now: Timestamp,
 ) {
+    clear_fixed_action_charge_recoveries(ctx, owner, Some(ACTION_KIND_DODGE));
     upsert_fixed_action_charge_state(
         ctx,
         full_fixed_action_charge_state(owner, ACTION_KIND_DODGE, now),
@@ -671,6 +687,7 @@ pub(crate) fn sync_all_fixed_action_charge_states(ctx: &ReducerContext, now: Tim
 }
 
 pub(crate) fn clear_fixed_action_charge_states_for_owner(ctx: &ReducerContext, owner: Identity) {
+    clear_fixed_action_charge_recoveries(ctx, owner, None);
     let keys: Vec<String> = ctx
         .db
         .fixed_action_charge_state()
@@ -689,7 +706,7 @@ pub(crate) fn tick_fixed_action_charge_states(ctx: &ReducerContext, now: Timesta
         if row.action_id.as_str() != ACTION_KIND_DODGE {
             continue;
         }
-        let synced = sync_fixed_action_charge_state_row(row.clone(), now);
+        let synced = sync_fixed_action_charge_state(ctx, row.clone(), now);
         if synced == row {
             // Full charges and not recharging: value-identical — skip the
             // per-tick upsert (tick audit T3 slice 2). The row carries no
@@ -707,12 +724,20 @@ fn consume_fixed_action_charge(
     action_id: &str,
     now: Timestamp,
 ) -> bool {
-    let mut row = ensure_fixed_action_charge_state(ctx, owner, action_id, now);
-    let state = ChargeProgressState::from_row(&row);
-    let (state, consumed) = consume_charge_progress(state, now);
-    apply_charge_progress_state(&mut row, state);
-    upsert_fixed_action_charge_state(ctx, row);
-    consumed
+    let row = ensure_fixed_action_charge_state(ctx, owner, action_id, now);
+    if row.current_charges == 0 {
+        return false;
+    }
+
+    insert_fixed_action_charge_recovery(
+        ctx,
+        owner,
+        action_id,
+        charge_recovery_timing(now, row.recharge_duration_ms),
+    );
+    let synced = sync_fixed_action_charge_state(ctx, row, now);
+    upsert_fixed_action_charge_state(ctx, synced);
+    true
 }
 
 fn ensure_fixed_action_charge_state(
@@ -723,34 +748,63 @@ fn ensure_fixed_action_charge_state(
 ) -> FixedActionChargeState {
     let key = fixed_action_charge_key(owner, action_id);
     if let Some(existing) = ctx.db.fixed_action_charge_state().key().find(key) {
-        let synced = sync_fixed_action_charge_state_row(existing.clone(), now);
+        let synced = sync_fixed_action_charge_state(ctx, existing.clone(), now);
         if synced != existing {
             upsert_fixed_action_charge_state(ctx, synced.clone());
         }
         return synced;
     }
 
-    let row = full_fixed_action_charge_state(owner, action_id, now);
+    let row = sync_fixed_action_charge_state(
+        ctx,
+        full_fixed_action_charge_state(owner, action_id, now),
+        now,
+    );
     ctx.db.fixed_action_charge_state().insert(row.clone());
     row
 }
 
-fn sync_fixed_action_charge_state_row(
+fn sync_fixed_action_charge_state(
+    ctx: &ReducerContext,
     row: FixedActionChargeState,
     now: Timestamp,
 ) -> FixedActionChargeState {
     let (max_charges, recharge_duration_ms) = fixed_action_charge_config(row.action_id.as_str());
     let recharge_duration_ms = recharge_duration_ms.max(1);
-    let current_charges = row.current_charges.min(max_charges);
-    let state = ChargeProgressState {
-        current_charges,
-        max_charges,
-        recharge_duration_ms,
-        is_recharging: row.is_recharging,
-        recharge_started_at: row.recharge_started_at,
-        next_charge_ready_at: row.next_charge_ready_at,
-    };
-    let state = advance_charge_progress(state, now);
+    let mut recoveries = fixed_action_charge_recoveries(ctx, row.owner, row.action_id.as_str());
+    if recoveries.is_empty() && row.current_charges < max_charges {
+        for timing in legacy_charge_recovery_timings(&row, max_charges, recharge_duration_ms, now) {
+            insert_fixed_action_charge_recovery(ctx, row.owner, row.action_id.as_str(), timing);
+        }
+        recoveries = fixed_action_charge_recoveries(ctx, row.owner, row.action_id.as_str());
+    }
+
+    let mut pending = Vec::with_capacity(recoveries.len());
+    for recovery in recoveries {
+        if now >= recovery.ready_at {
+            delete_fixed_action_charge_recovery(ctx, recovery.recovery_id);
+        } else {
+            pending.push(recovery);
+        }
+    }
+    pending.sort_by_key(|recovery| {
+        (
+            recovery.ready_at.to_micros_since_unix_epoch(),
+            recovery.recovery_id,
+        )
+    });
+    if pending.len() > max_charges as usize {
+        for recovery in pending.drain(max_charges as usize..) {
+            delete_fixed_action_charge_recovery(ctx, recovery.recovery_id);
+        }
+    }
+
+    let timings: Vec<ChargeRecoveryTiming> = pending
+        .iter()
+        .map(ChargeRecoveryTiming::from_recovery)
+        .collect();
+    let state =
+        summarize_charge_progress(max_charges, recharge_duration_ms, timings.as_slice(), now);
 
     FixedActionChargeState {
         max_charges: state.max_charges,
@@ -763,13 +817,69 @@ fn sync_fixed_action_charge_state_row(
     }
 }
 
-fn apply_charge_progress_state(row: &mut FixedActionChargeState, state: ChargeProgressState) {
-    row.max_charges = state.max_charges;
-    row.recharge_duration_ms = state.recharge_duration_ms;
-    row.current_charges = state.current_charges;
-    row.is_recharging = state.is_recharging;
-    row.recharge_started_at = state.recharge_started_at;
-    row.next_charge_ready_at = state.next_charge_ready_at;
+fn fixed_action_charge_recoveries(
+    ctx: &ReducerContext,
+    owner: Identity,
+    action_id: &str,
+) -> Vec<FixedActionChargeRecovery> {
+    ctx.db
+        .fixed_action_charge_recovery()
+        .owner()
+        .filter(owner)
+        .filter(|recovery| recovery.action_id == action_id)
+        .collect()
+}
+
+fn insert_fixed_action_charge_recovery(
+    ctx: &ReducerContext,
+    owner: Identity,
+    action_id: &str,
+    timing: ChargeRecoveryTiming,
+) {
+    crate::tick_metrics::record_table_write(
+        crate::tick_metrics::TableWriteKind::FixedActionChargeRecovery,
+    );
+    ctx.db
+        .fixed_action_charge_recovery()
+        .insert(FixedActionChargeRecovery {
+            recovery_id: 0,
+            owner,
+            action_id: action_id.to_string(),
+            recharge_started_at: timing.recharge_started_at,
+            ready_at: timing.ready_at,
+        });
+}
+
+fn delete_fixed_action_charge_recovery(ctx: &ReducerContext, recovery_id: u64) {
+    crate::tick_metrics::record_table_write(
+        crate::tick_metrics::TableWriteKind::FixedActionChargeRecovery,
+    );
+    ctx.db
+        .fixed_action_charge_recovery()
+        .recovery_id()
+        .delete(recovery_id);
+}
+
+fn clear_fixed_action_charge_recoveries(
+    ctx: &ReducerContext,
+    owner: Identity,
+    action_id: Option<&str>,
+) {
+    let recovery_ids: Vec<u64> = ctx
+        .db
+        .fixed_action_charge_recovery()
+        .owner()
+        .filter(owner)
+        .filter(|recovery| {
+            action_id
+                .map(|expected| recovery.action_id == expected)
+                .unwrap_or(true)
+        })
+        .map(|recovery| recovery.recovery_id)
+        .collect();
+    for recovery_id in recovery_ids {
+        delete_fixed_action_charge_recovery(ctx, recovery_id);
+    }
 }
 
 fn upsert_fixed_action_charge_state(ctx: &ReducerContext, row: FixedActionChargeState) {
@@ -829,67 +939,92 @@ struct ChargeProgressState {
     next_charge_ready_at: Timestamp,
 }
 
-impl ChargeProgressState {
-    fn from_row(row: &FixedActionChargeState) -> Self {
+#[derive(Clone, Copy)]
+struct ChargeRecoveryTiming {
+    recharge_started_at: Timestamp,
+    ready_at: Timestamp,
+}
+
+impl ChargeRecoveryTiming {
+    fn from_recovery(recovery: &FixedActionChargeRecovery) -> Self {
         Self {
-            current_charges: row.current_charges,
-            max_charges: row.max_charges,
-            recharge_duration_ms: row.recharge_duration_ms,
-            is_recharging: row.is_recharging,
-            recharge_started_at: row.recharge_started_at,
-            next_charge_ready_at: row.next_charge_ready_at,
+            recharge_started_at: recovery.recharge_started_at,
+            ready_at: recovery.ready_at,
         }
     }
 }
 
-fn consume_charge_progress(
-    state: ChargeProgressState,
+fn charge_recovery_timing(now: Timestamp, recharge_duration_ms: u64) -> ChargeRecoveryTiming {
+    ChargeRecoveryTiming {
+        recharge_started_at: now,
+        ready_at: now + Duration::from_millis(recharge_duration_ms.max(1)),
+    }
+}
+
+fn legacy_charge_recovery_timings(
+    row: &FixedActionChargeState,
+    max_charges: u32,
+    recharge_duration_ms: u64,
     now: Timestamp,
-) -> (ChargeProgressState, bool) {
-    let mut state = advance_charge_progress(state, now);
-    if state.current_charges == 0 {
-        return (state, false);
+) -> Vec<ChargeRecoveryTiming> {
+    let missing_charges = max_charges.saturating_sub(row.current_charges.min(max_charges));
+    if missing_charges == 0 {
+        return Vec::new();
     }
 
-    state.current_charges = state.current_charges.saturating_sub(1);
-    if state.current_charges < state.max_charges && !state.is_recharging {
-        state.is_recharging = true;
-        state.recharge_started_at = now;
-        state.next_charge_ready_at = now + Duration::from_millis(state.recharge_duration_ms.max(1));
-    }
-
-    (state, true)
+    let recharge_duration_ms = recharge_duration_ms.max(1);
+    let first_ready_at = if row.is_recharging && row.next_charge_ready_at > Timestamp::UNIX_EPOCH {
+        row.next_charge_ready_at
+    } else {
+        now + Duration::from_millis(recharge_duration_ms)
+    };
+    (0..missing_charges)
+        .map(|offset| {
+            let ready_at = first_ready_at
+                + Duration::from_millis(recharge_duration_ms.saturating_mul(offset as u64));
+            ChargeRecoveryTiming {
+                recharge_started_at: ready_at - Duration::from_millis(recharge_duration_ms),
+                ready_at,
+            }
+        })
+        .collect()
 }
 
-fn advance_charge_progress(mut state: ChargeProgressState, now: Timestamp) -> ChargeProgressState {
-    state.recharge_duration_ms = state.recharge_duration_ms.max(1);
-    state.current_charges = state.current_charges.min(state.max_charges);
+fn summarize_charge_progress(
+    max_charges: u32,
+    recharge_duration_ms: u64,
+    recoveries: &[ChargeRecoveryTiming],
+    now: Timestamp,
+) -> ChargeProgressState {
+    let earliest_pending = recoveries
+        .iter()
+        .filter(|recovery| recovery.ready_at > now)
+        .min_by_key(|recovery| recovery.ready_at.to_micros_since_unix_epoch());
+    let pending_count = recoveries
+        .iter()
+        .filter(|recovery| recovery.ready_at > now)
+        .count()
+        .min(max_charges as usize) as u32;
+    let current_charges = max_charges.saturating_sub(pending_count);
 
-    if state.current_charges >= state.max_charges {
-        state.is_recharging = false;
-        state.recharge_started_at = Timestamp::UNIX_EPOCH;
-        state.next_charge_ready_at = Timestamp::UNIX_EPOCH;
-        return state;
+    match earliest_pending {
+        Some(recovery) => ChargeProgressState {
+            current_charges,
+            max_charges,
+            recharge_duration_ms: recharge_duration_ms.max(1),
+            is_recharging: true,
+            recharge_started_at: recovery.recharge_started_at,
+            next_charge_ready_at: recovery.ready_at,
+        },
+        None => ChargeProgressState {
+            current_charges: max_charges,
+            max_charges,
+            recharge_duration_ms: recharge_duration_ms.max(1),
+            is_recharging: false,
+            recharge_started_at: Timestamp::UNIX_EPOCH,
+            next_charge_ready_at: Timestamp::UNIX_EPOCH,
+        },
     }
-
-    if !state.is_recharging {
-        return state;
-    }
-
-    while state.current_charges < state.max_charges && now >= state.next_charge_ready_at {
-        state.current_charges = state.current_charges.saturating_add(1);
-        if state.current_charges >= state.max_charges {
-            state.is_recharging = false;
-            state.recharge_started_at = Timestamp::UNIX_EPOCH;
-            state.next_charge_ready_at = Timestamp::UNIX_EPOCH;
-        } else {
-            state.recharge_started_at = state.next_charge_ready_at;
-            state.next_charge_ready_at =
-                state.next_charge_ready_at + Duration::from_millis(state.recharge_duration_ms);
-        }
-    }
-
-    state
 }
 
 pub(crate) fn tick_movement_actions(ctx: &ReducerContext, now: Timestamp) {
@@ -1039,53 +1174,8 @@ mod tests {
         Timestamp::from_micros_since_unix_epoch((ms * 1000) as i64)
     }
 
-    #[test]
-    fn settled_charge_row_is_a_sync_fixed_point() {
-        // The per-tick upsert gate skips the write when sync returns an equal
-        // row. The first sync after a full-reset normalizes the idle
-        // timestamps (constructor stamps `now`, advance normalizes to epoch)
-        // and writes once; every sync after that must be a no-op.
-        let fresh = full_fixed_action_charge_state(Identity::ZERO, ACTION_KIND_DODGE, ts(1_000));
-        let settled = sync_fixed_action_charge_state_row(fresh, ts(2_000));
-        let resynced = sync_fixed_action_charge_state_row(settled.clone(), ts(3_000));
-        assert!(
-            resynced == settled,
-            "settled dodge charge row must be a sync fixed point"
-        );
-    }
-
-    #[test]
-    fn recharging_charge_row_changes_on_sync_once_due() {
-        let mut row = full_fixed_action_charge_state(Identity::ZERO, ACTION_KIND_DODGE, ts(1_000));
-        row.current_charges = row.current_charges.saturating_sub(1);
-        row.is_recharging = true;
-        row.recharge_started_at = ts(1_000);
-        row.next_charge_ready_at = ts(1_000 + row.recharge_duration_ms);
-
-        let synced =
-            sync_fixed_action_charge_state_row(row.clone(), ts(2_000 + row.recharge_duration_ms));
-        assert!(
-            synced != row,
-            "a due recharge must produce a changed row (and a write)"
-        );
-        assert_eq!(synced.current_charges, row.current_charges + 1);
-    }
-
-    fn charge_state(
-        current_charges: u32,
-        max_charges: u32,
-        is_recharging: bool,
-        started_ms: u64,
-        ready_ms: u64,
-    ) -> ChargeProgressState {
-        ChargeProgressState {
-            current_charges,
-            max_charges,
-            recharge_duration_ms: 15_000,
-            is_recharging,
-            recharge_started_at: ts(started_ms),
-            next_charge_ready_at: ts(ready_ms),
-        }
+    fn recovery(started_ms: u64, recharge_duration_ms: u64) -> ChargeRecoveryTiming {
+        charge_recovery_timing(ts(started_ms), recharge_duration_ms)
     }
 
     fn movement_snapshot(
@@ -1152,47 +1242,57 @@ mod tests {
     }
 
     #[test]
-    fn spending_a_charge_starts_recharge() {
-        let (state, consumed) = consume_charge_progress(charge_state(1, 1, false, 0, 0), ts(100));
+    fn spent_charges_recover_on_their_independent_deadlines() {
+        let recoveries = [
+            recovery(0, 10_000),
+            recovery(2_000, 10_000),
+            recovery(4_000, 10_000),
+        ];
 
-        assert!(consumed);
+        let state = summarize_charge_progress(3, 10_000, &recoveries, ts(9_999));
         assert_eq!(state.current_charges, 0);
-        assert!(state.is_recharging);
-        assert_eq!(state.recharge_started_at, ts(100));
-        assert_eq!(state.next_charge_ready_at, ts(15_100));
-    }
+        assert_eq!(state.next_charge_ready_at, ts(10_000));
 
-    #[test]
-    fn spending_while_recharging_does_not_reset_next_ready_time() {
-        let state = charge_state(1, 2, true, 0, 15_000);
-        let (state, consumed) = consume_charge_progress(state, ts(5_000));
-
-        assert!(consumed);
-        assert_eq!(state.current_charges, 0);
-        assert!(state.is_recharging);
-        assert_eq!(state.recharge_started_at, ts(0));
-        assert_eq!(state.next_charge_ready_at, ts(15_000));
-    }
-
-    #[test]
-    fn recharge_progress_restores_charges_one_at_a_time() {
-        let state = charge_state(0, 2, true, 0, 15_000);
-
-        let state = advance_charge_progress(state, ts(15_000));
+        let state = summarize_charge_progress(3, 10_000, &recoveries, ts(10_000));
         assert_eq!(state.current_charges, 1);
         assert!(state.is_recharging);
-        assert_eq!(state.recharge_started_at, ts(15_000));
-        assert_eq!(state.next_charge_ready_at, ts(30_000));
+        assert_eq!(state.recharge_started_at, ts(2_000));
+        assert_eq!(state.next_charge_ready_at, ts(12_000));
 
-        let state = advance_charge_progress(state, ts(29_999));
-        assert_eq!(state.current_charges, 1);
-        assert!(state.is_recharging);
-
-        let state = advance_charge_progress(state, ts(30_000));
+        let state = summarize_charge_progress(3, 10_000, &recoveries, ts(12_000));
         assert_eq!(state.current_charges, 2);
+        assert_eq!(state.next_charge_ready_at, ts(14_000));
+
+        let state = summarize_charge_progress(3, 10_000, &recoveries, ts(14_000));
+        assert_eq!(state.current_charges, 3);
         assert!(!state.is_recharging);
         assert_eq!(state.recharge_started_at, Timestamp::UNIX_EPOCH);
         assert_eq!(state.next_charge_ready_at, Timestamp::UNIX_EPOCH);
+    }
+
+    #[test]
+    fn later_spend_does_not_delay_an_existing_recovery() {
+        let recoveries = [recovery(0, 10_000), recovery(5_000, 10_000)];
+        let state = summarize_charge_progress(2, 10_000, &recoveries, ts(5_000));
+
+        assert_eq!(state.current_charges, 0);
+        assert_eq!(state.recharge_started_at, ts(0));
+        assert_eq!(state.next_charge_ready_at, ts(10_000));
+    }
+
+    #[test]
+    fn legacy_sequential_state_migrates_without_losing_missing_charges() {
+        let mut row = full_fixed_action_charge_state(Identity::ZERO, ACTION_KIND_DODGE, ts(1_000));
+        row.current_charges = row.max_charges - 3;
+        row.is_recharging = true;
+        row.recharge_started_at = ts(1_000);
+        row.next_charge_ready_at = ts(11_000);
+
+        let recoveries = legacy_charge_recovery_timings(&row, row.max_charges, 10_000, ts(2_000));
+        assert_eq!(recoveries.len(), 3);
+        assert_eq!(recoveries[0].ready_at, ts(11_000));
+        assert_eq!(recoveries[1].ready_at, ts(21_000));
+        assert_eq!(recoveries[2].ready_at, ts(31_000));
     }
 
     #[test]
