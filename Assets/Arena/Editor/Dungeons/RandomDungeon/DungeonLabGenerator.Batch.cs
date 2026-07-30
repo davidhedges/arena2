@@ -751,7 +751,10 @@ namespace DungeonLab.Editor
                 finding["shadowCellsWithoutSurface"] = new JObject
                 {
                     ["count"] = disagreement.shadowCellsWithoutSurface.Length,
-                    ["sample"] = SampleCellsToken(disagreement.shadowCellsWithoutSurface)
+                    ["sample"] = SampleCellsToken(disagreement.shadowCellsWithoutSurface),
+                    ["note"] = "informational: a shadow cell with no surface is legitimate " +
+                        "(the gap under an external span deck), and the shadow is the domain " +
+                        "the level field floods within. Not part of the agreement gate."
                 };
             }
 

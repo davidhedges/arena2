@@ -313,8 +313,77 @@ namespace DungeonLab.Editor
                     shadowCellsWithoutSurface ?? Array.Empty<Vector2Int>();
             }
 
-            public bool Agrees =>
+            /// <summary>
+            /// The gated half: every surface's plan cell is in the shadow.
+            /// </summary>
+            /// <remarks>
+            /// One-directional on purpose, settled in A2. The other side — a
+            /// shadow cell that resolved no surface — is legitimate: the gap
+            /// under an external span deck stays a gap, and the shadow is the
+            /// DOMAIN the level field floods within, so those cells must remain.
+            /// It is reported as a count so a NEW producer of unsurfaced shadow
+            /// is still visible, but it is not a defect.
+            /// </remarks>
+            public bool Agrees => surfacedCellsOutsideShadow.Length == 0;
+
+            public bool IsTwoSided =>
                 surfacedCellsOutsideShadow.Length == 0 && shadowCellsWithoutSurface.Length == 0;
+        }
+
+        /// <summary>
+        /// The A2 repair: every surface's plan cell joins the shadow.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The invariant is stated at the END of planning, and that is the only
+        /// place it can be applied. The design's prose says "any pass that adds a
+        /// surface must add its plan cell to the shadow in the same step", and
+        /// doing that literally would change what LATER passes see:
+        /// <c>BuildExternalConnectorCandidates</c> derives <c>coreExtent</c> and
+        /// its outer-face test from <c>layout.floorCells</c>, so a named vista
+        /// promontory added at its own producer would move the core's outer face
+        /// and re-pick the connector anchors — geometry moving well beyond the
+        /// shadow, which is exactly what A2's isolation exit forbids. External
+        /// promontories are the final plan mutation, so calling this immediately
+        /// after them satisfies the invariant where it is stated and leaves no
+        /// reader of the shadow downstream of the write.
+        /// </para>
+        /// <para>
+        /// It adds every surfaced cell rather than enumerating the two known
+        /// producers (named vista promontories, external connector piers). That
+        /// makes the invariant true by construction instead of true by a list
+        /// somebody has to remember to extend.
+        /// </para>
+        /// <para>
+        /// The other side of the disagreement is deliberately NOT repaired. A
+        /// shadow cell with no surface is legitimate — the gap under an external
+        /// span deck stays a gap — and the shadow is the DOMAIN the level field
+        /// floods within, so removing those cells would change what
+        /// <c>FillUnassignedFloorCells</c> and <c>CleanPath</c> operate over.
+        /// Agreement is therefore one-directional: surfaces ⊆ shadow.
+        /// </para>
+        /// </remarks>
+        /// <returns>How many cells the shadow gained.</returns>
+        private static int ReconcilePlanShadowWithSurfaces(
+            DungeonLayout layout,
+            IReadOnlyDictionary<Vector2Int, int> cellLevels)
+        {
+            HashSet<Vector2Int> shadow = layout.floorCells;
+            if (shadow == null || cellLevels == null)
+            {
+                return 0;
+            }
+
+            int added = 0;
+            foreach (KeyValuePair<Vector2Int, int> surface in cellLevels)
+            {
+                if (shadow.Add(surface.Key))
+                {
+                    added++;
+                }
+            }
+
+            return added;
         }
 
         /// <summary>

@@ -2002,6 +2002,13 @@ namespace DungeonLab.Editor
                 return false;
             }
 
+            // A2 of the layered-topology design (§3.1, §13): shadow agreement.
+            // External promontories are the final plan mutation, so this is "the
+            // end of planning" — the one point where every surface exists and no
+            // pass reads the shadow again. See ReconcilePlanShadowWithSurfaces
+            // for why the repair cannot live at the individual producers.
+            ReconcilePlanShadowWithSurfaces(layout, cellLevels);
+
             stairCandidateSummary = FormatStairCandidateHistogram(stairCandidateCounts);
 
             if (namedPromontories.Length > 0)
