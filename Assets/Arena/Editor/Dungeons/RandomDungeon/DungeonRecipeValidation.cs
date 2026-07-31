@@ -235,6 +235,19 @@ namespace DungeonLab.Editor
                 Append(canonical, "port.headroom", port?.headroomLevels ?? 0);
             }
 
+            // Conditional for the same reason the layer fields are: today's
+            // recipes author no opening and must hash exactly as they did.
+            if (recipe.DeclaresOpenings)
+            {
+                foreach (DungeonRecipeOpening opening in recipe.openings)
+                {
+                    Append(canonical, "opening.id", opening?.id);
+                    Append(canonical, "opening.cell", opening?.cell ?? default);
+                    Append(canonical, "opening.out", opening?.outwardDirection ?? default);
+                    Append(canonical, "opening.layer", opening?.layerId);
+                }
+            }
+
             foreach (DungeonRecipeMotif motif in recipe.motifs ?? Array.Empty<DungeonRecipeMotif>())
             {
                 Append(canonical, "motif.id", motif?.id);
@@ -845,18 +858,131 @@ namespace DungeonLab.Editor
                 }
             }
 
+            ValidateOpenings(recipe, declared, result);
             ValidateLayerConnectivity(recipe, declared, result);
         }
 
         /// <summary>
-        /// `RECIPE_LAYER_CONNECTIVITY` (design §8.2): every declared layer must
-        /// be reachable from the base over the recipe's OWN transitions.
+        /// `RECIPE_OPENING`: an authored bare rim must name a real stacked
+        /// surface and point at a real hole.
         /// </summary>
         /// <remarks>
+        /// The pair of tests is the whole content. A rim whose cell is not on
+        /// its layer guards nothing, and a rim pointing at another cell of the
+        /// same storey declares an aperture where the floor continues — which
+        /// the renderer would happily honour, leaving a bare edge in the middle
+        /// of a gallery and no hole to fall through.
+        /// </remarks>
+        private static void ValidateOpenings(
+            DungeonRecipeAsset recipe,
+            HashSet<string> declared,
+            DungeonRecipeValidationResult result)
+        {
+            const DungeonRecipeValidationLayer Layer = DungeonRecipeValidationLayer.Structure;
+            if (!recipe.DeclaresOpenings)
+            {
+                return;
+            }
+
+            if (!recipe.DeclaresLayers)
+            {
+                result.Add(
+                    Layer,
+                    "RECIPE_OPENING",
+                    "A recipe declared an opening without declaring the storey it belongs to. A bare rim on the entry storey is exterior void, not an aperture.");
+                return;
+            }
+
+            Dictionary<string, HashSet<Vector2Int>> footprints =
+                BuildLayerFootprints(recipe, declared);
+            foreach (DungeonRecipeOpening opening in recipe.openings)
+            {
+                if (opening == null)
+                {
+                    result.Add(Layer, "RECIPE_OPENING", "An opening entry was null.");
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(opening.layerId) ||
+                    !declared.Contains(opening.layerId) ||
+                    DungeonRecipeLayers.IsBaseLayer(recipe, opening.layerId))
+                {
+                    result.Add(
+                        Layer,
+                        "RECIPE_OPENING",
+                        $"Opening '{opening.id}' named layer '{opening.layerId}', which is not a declared non-base storey.");
+                    continue;
+                }
+
+                HashSet<Vector2Int> layerCells = footprints[opening.layerId];
+                if (!IsCardinalUnit(opening.outwardDirection) ||
+                    !layerCells.Contains(opening.cell) ||
+                    layerCells.Contains(opening.cell + opening.outwardDirection))
+                {
+                    result.Add(
+                        Layer,
+                        "RECIPE_OPENING",
+                        $"Opening '{opening.id}' did not declare a cardinal rim standing on layer '{opening.layerId}' and facing a cell that storey does not cover.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Every cell a layer's walkable footprint covers, keyed by layer id.
+        /// </summary>
+        private static Dictionary<string, HashSet<Vector2Int>> BuildLayerFootprints(
+            DungeonRecipeAsset recipe,
+            HashSet<string> declared)
+        {
+            var byLayer = new Dictionary<string, HashSet<Vector2Int>>(StringComparer.Ordinal);
+            foreach (string layerId in declared)
+            {
+                byLayer[layerId] = new HashSet<Vector2Int>();
+            }
+
+            foreach (DungeonRecipeZone zone in recipe.zones ?? Array.Empty<DungeonRecipeZone>())
+            {
+                if (zone == null ||
+                    zone.kind != DungeonRecipeZoneKind.Walkable &&
+                    zone.kind != DungeonRecipeZoneKind.Elevated)
+                {
+                    continue;
+                }
+
+                foreach (string layerId in declared)
+                {
+                    if (SameLayer(recipe, zone.layerId, layerId))
+                    {
+                        byLayer[layerId].UnionWith(Cells(zone));
+                    }
+                }
+            }
+
+            return byLayer;
+        }
+
+        /// <summary>
+        /// `RECIPE_LAYER_CONNECTIVITY` (design §8.2): every declared layer must
+        /// be reachable from the base — over the recipe's own transitions, or
+        /// across a flush lateral seam.
+        /// </summary>
+        /// <remarks>
+        /// <para>
         /// Undirected on purpose. A stair is walkable both ways, and the
         /// directed question — can you get back up — is the fall-free
         /// connectivity invariant, which lives on the plan's traversal graph and
         /// not inside one recipe's declaration.
+        /// </para>
+        /// <para>
+        /// **A transition is not the only way two storeys join, and §8.2 assumed
+        /// it was.** Two surfaces that are cardinally adjacent at the SAME
+        /// absolute level are one walkable place — that is exactly what C1's
+        /// flush-seam ruling says, and the episode it proved joins its gallery to
+        /// a ground-backed terrace that way. Demanding a stair there is not just
+        /// stricter than the plan's own traversal graph, it demands geometry that
+        /// cannot be built: a 1u strip from a ground column onto a suspended slab
+        /// spans a face with the whole storey gap open underneath it.
+        /// </para>
         /// </remarks>
         private static void ValidateLayerConnectivity(
             DungeonRecipeAsset recipe,
@@ -920,6 +1046,31 @@ namespace DungeonLab.Editor
                 Link(upper, lower);
             }
 
+            // The flush lateral seam. Two storeys touch when one has a cell
+            // cardinally beside a cell of the other AND both stand at the same
+            // absolute level — the same condition the renderer's flush seam uses
+            // to drop its guard, stated over the recipe's own declaration.
+            Dictionary<string, HashSet<Vector2Int>> footprints =
+                BuildLayerFootprints(recipe, declared);
+            var layerIds = new List<string>(declared);
+            layerIds.Sort(StringComparer.Ordinal);
+            for (int first = 0; first < layerIds.Count; first++)
+            {
+                for (int second = first + 1; second < layerIds.Count; second++)
+                {
+                    if (LayersMeetFlush(
+                            recipe,
+                            layerIds[first],
+                            footprints[layerIds[first]],
+                            layerIds[second],
+                            footprints[layerIds[second]]))
+                    {
+                        Link(layerIds[first], layerIds[second]);
+                        Link(layerIds[second], layerIds[first]);
+                    }
+                }
+            }
+
             var reached = new HashSet<string>(StringComparer.Ordinal) { baseLayerId };
             var pending = new Stack<string>();
             pending.Push(baseLayerId);
@@ -955,9 +1106,44 @@ namespace DungeonLab.Editor
                 result.Add(
                     DungeonRecipeValidationLayer.Structure,
                     "RECIPE_LAYER_CONNECTIVITY",
-                    $"Layer(s) '{string.Join("', '", stranded)}' declared no transition reaching the base layer '{baseLayerId}'.");
+                    $"Layer(s) '{string.Join("', '", stranded)}' reached the base layer '{baseLayerId}' by neither a transition nor a flush lateral seam.");
             }
         }
+
+        /// <summary>
+        /// Do two storeys share a walkable edge — adjacent cells at one level?
+        /// </summary>
+        private static bool LayersMeetFlush(
+            DungeonRecipeAsset recipe,
+            string firstLayerId,
+            HashSet<Vector2Int> firstCells,
+            string secondLayerId,
+            HashSet<Vector2Int> secondCells)
+        {
+            foreach (Vector2Int cell in firstCells)
+            {
+                int level = AbsoluteLevelAt(recipe, cell, firstLayerId);
+                foreach (Vector2Int step in CardinalSteps)
+                {
+                    Vector2Int neighbour = cell + step;
+                    if (secondCells.Contains(neighbour) &&
+                        AbsoluteLevelAt(recipe, neighbour, secondLayerId) == level)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static readonly Vector2Int[] CardinalSteps =
+        {
+            Vector2Int.up,
+            Vector2Int.right,
+            Vector2Int.down,
+            Vector2Int.left
+        };
 
         private static bool CellsInside(HashSet<Vector2Int> footprint, IEnumerable<Vector2Int> cells)
         {

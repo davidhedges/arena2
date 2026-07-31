@@ -492,6 +492,44 @@ namespace DungeonLab.Editor
             return result;
         }
 
+        /// <summary>
+        /// Every rim the PLAN declares bare: the external connectors' throats,
+        /// plus any aperture an authored recipe opened.
+        /// </summary>
+        /// <remarks>
+        /// One list, built at both render call sites, so a plan cannot render
+        /// with half its declared openings. The connector edges are
+        /// column-scoped (the sentinel level) and the recipe rims are
+        /// surface-scoped, which is exactly the distinction
+        /// <c>OpenFloorEdge.IsSurfaceScoped</c> exists to carry: a connector
+        /// throat opens the ground it stands on, an aperture rim opens one
+        /// storey and leaves the floor below it fully guarded.
+        /// </remarks>
+        private static List<ElevationEdgeModel.OpenFloorEdge> BuildPlannedOpenEdges(
+            TieredLevelPlan plan)
+        {
+            List<ElevationEdgeModel.OpenFloorEdge> edges =
+                BuildExternalConnectorOpenEdges(plan.externalConnectors);
+            foreach (RecipeResolution resolution in
+                     plan.recipeResolutions ?? Array.Empty<RecipeResolution>())
+            {
+                foreach (RecipeOpeningPlacement opening in resolution.openings)
+                {
+                    edges.Add(new ElevationEdgeModel.OpenFloorEdge(
+                        opening.cell,
+                        resolution.baseLevel +
+                            opening.layerRelativeLevel +
+                            ResolvedRecipeLayerRelativeLevel(
+                                resolution.zones,
+                                opening.cell,
+                                opening.layerId),
+                        opening.direction));
+                }
+            }
+
+            return edges;
+        }
+
         private static List<ElevationEdgeModel.OpenFloorEdge> BuildExternalConnectorOpenEdges(
             IReadOnlyList<ExternalConnectorPromontoryResolution> resolutions)
         {

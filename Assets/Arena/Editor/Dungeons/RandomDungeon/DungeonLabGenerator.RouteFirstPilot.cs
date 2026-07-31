@@ -835,6 +835,73 @@ namespace DungeonLab.Editor
             return selected.ToArray();
         }
 
+        /// <summary>
+        /// Force every seed onto one topology, ignoring its weight.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The one way to reach a weight-0 topology. An AUTHORED episode is
+        /// placed by an authored graph, and an authored graph must not be in the
+        /// weighted draw while it is being built — adding a weighted topology
+        /// changes `totalWeight` and therefore re-rolls the topology of every
+        /// seed in the corpus, which destroys the one gate that can tell a
+        /// regression from a rebaseline.
+        /// </para>
+        /// <para>
+        /// Env var so a headless run can set it (the same idiom as
+        /// `ARENA_RANDOM_DUNGEON_SEED` and `ARENA_DUNGEON_DENSITY`), static
+        /// override so a menu item can. Unset, this reads one environment
+        /// variable and changes nothing.
+        /// </para>
+        /// </remarks>
+        internal const string TopologyOverrideEnvironmentVariable = "ARENA_DUNGEON_TOPOLOGY";
+
+        private static string forcedRouteTopologyId = string.Empty;
+
+        internal static string ResolveForcedRouteTopologyId()
+        {
+            if (!string.IsNullOrEmpty(forcedRouteTopologyId))
+            {
+                return forcedRouteTopologyId;
+            }
+
+            string fromEnvironment =
+                Environment.GetEnvironmentVariable(TopologyOverrideEnvironmentVariable);
+            return string.IsNullOrWhiteSpace(fromEnvironment)
+                ? string.Empty
+                : fromEnvironment.Trim();
+        }
+
+        /// <summary>Scope a forced topology to one build.</summary>
+        internal static IDisposable ForceRouteTopology(string topologyId)
+        {
+            // Fails loudly on a typo rather than silently generating an ordinary
+            // dungeon, which is the whole failure mode of a forced build.
+            RequireRouteTopology(topologyId);
+            return new ForcedRouteTopologyScope(topologyId);
+        }
+
+        private sealed class ForcedRouteTopologyScope : IDisposable
+        {
+            private readonly string previous;
+            private bool disposed;
+
+            public ForcedRouteTopologyScope(string topologyId)
+            {
+                previous = forcedRouteTopologyId;
+                forcedRouteTopologyId = topologyId;
+            }
+
+            public void Dispose()
+            {
+                if (!disposed)
+                {
+                    disposed = true;
+                    forcedRouteTopologyId = previous;
+                }
+            }
+        }
+
         // A weighted draw over the registry, keyed on the SEED ALONE — never on
         // the layout attempt. A retry must not be able to change which dungeon
         // it is retrying, and the derived-RNG doctrine wants the key to name
@@ -842,6 +909,12 @@ namespace DungeonLab.Editor
         // without renumbering anything.
         private static string SelectRouteTopologyId(int dungeonSeed)
         {
+            string forced = ResolveForcedRouteTopologyId();
+            if (!string.IsNullOrEmpty(forced))
+            {
+                return RequireRouteTopology(forced).id;
+            }
+
             List<DungeonRouteTopology> candidates = AllRouteTopologiesByFileOrder();
             int totalWeight = 0;
             foreach (DungeonRouteTopology candidate in candidates)

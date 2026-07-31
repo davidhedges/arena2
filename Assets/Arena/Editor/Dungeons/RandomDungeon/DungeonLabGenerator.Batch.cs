@@ -4155,6 +4155,24 @@ namespace DungeonLab.Editor
                 });
             }
 
+            // Conditional, like the layer and endpoint-level rows before it: an
+            // unconditional `openings: []` on every resolution would move every
+            // seed's `hashes.recipeResolutions` and thence `canonical`, for a
+            // schema addition no existing recipe uses.
+            JArray recipeOpenings = null;
+            foreach (RecipeOpeningPlacement opening in
+                     resolution.openings ?? Array.Empty<RecipeOpeningPlacement>())
+            {
+                recipeOpenings ??= new JArray();
+                recipeOpenings.Add(new JObject
+                {
+                    ["id"] = opening.id,
+                    ["cell"] = CellToken(opening.cell),
+                    ["direction"] = opening.direction,
+                    ["layerRelativeLevel"] = opening.layerRelativeLevel
+                });
+            }
+
             if (!string.IsNullOrEmpty(resolution.selectedVisualImplementationId))
             {
                 reservationsComplete &=
@@ -4163,7 +4181,7 @@ namespace DungeonLab.Editor
                     (resolution.showpieceReservation.backdropVoidCells?.Length ?? 0) > 0;
             }
 
-            return new JObject
+            var projection = new JObject
             {
                 ["id"] = resolution.id,
                 ["kind"] = resolution.kind.ToString(),
@@ -4194,6 +4212,12 @@ namespace DungeonLab.Editor
                 ["reservationsComplete"] = reservationsComplete,
                 ["protectedZonesValid"] = resolution.atomicAndValid && resolution.protectedCells.Length > 0
             };
+            if (recipeOpenings != null)
+            {
+                projection["openings"] = recipeOpenings;
+            }
+
+            return projection;
         }
 
         private static RecipeResolution FindRecipeResolution(
@@ -4246,6 +4270,7 @@ namespace DungeonLab.Editor
             Add("zones.relativeLevel", "recipe assets", "level and transition validation");
             Add("layers.layerId/relativeLevel/isBase", "recipe assets", "per-storey level derivation and RECIPE_LAYER_CONNECTIVITY");
             Add("zones/ports/transitions.layerId", "recipe assets", "which storey a zone, entrance or stair belongs to; empty is the base");
+            Add("openings.cell/outward/layerId", "recipe assets", "bare rims on a stacked storey — the aperture you walk off");
             Add("transitions.atomicGroup", "recipe assets", "atomic transition validation");
             Add("variations/motifs", "recipe assets", "stable StairForge-backed visual selection");
             Add("ports.id/type/mandatory", "recipe assets", "route edge binding and neighbor validation");
@@ -4780,7 +4805,7 @@ namespace DungeonLab.Editor
                 plan.surfaces.StackedSurfaces(),
                 plan.transitions,
                 null,
-                BuildExternalConnectorOpenEdges(plan.externalConnectors),
+                BuildPlannedOpenEdges(plan),
                 boundaryContext,
                 CollectRenderedPromontoryCells(
                     plan.namedPromontories,

@@ -244,6 +244,40 @@ namespace DungeonLab.Editor
             }
         }
 
+        /// <summary>
+        /// One authored bare rim, in world cells and at its resolved level.
+        /// </summary>
+        /// <remarks>
+        /// The level is carried rather than looked up, for the same reason
+        /// <c>TransitionEdge</c> carries its endpoints' levels (C2b-2): the
+        /// column under an aperture rim has a FLOOR, and resolving the rim
+        /// against the level field would guard the chamber below instead of the
+        /// gallery above.
+        /// </remarks>
+        private readonly struct RecipeOpeningPlacement
+        {
+            public readonly string id;
+            public readonly Vector2Int cell;
+            public readonly int direction;
+            /// <summary>Its layer's offset from the node's level.</summary>
+            public readonly int layerRelativeLevel;
+            public readonly string layerId;
+
+            public RecipeOpeningPlacement(
+                string id,
+                Vector2Int cell,
+                int direction,
+                int layerRelativeLevel,
+                string layerId)
+            {
+                this.id = id ?? string.Empty;
+                this.cell = cell;
+                this.direction = direction;
+                this.layerRelativeLevel = layerRelativeLevel;
+                this.layerId = layerId ?? string.Empty;
+            }
+        }
+
         private sealed class RecipePlacement
         {
             public readonly RecipeSlotIntent slot;
@@ -257,6 +291,7 @@ namespace DungeonLab.Editor
             public readonly Vector2Int[] protectedCells;
             public readonly RecipePortPlacement[] ports;
             public readonly RecipeTransitionPlacement[] transitions;
+            public readonly RecipeOpeningPlacement[] openings;
             public readonly string selectedVariationId;
             public readonly string selectedVisualImplementationId;
             public readonly Vector2Int showpieceOriginCell;
@@ -275,6 +310,7 @@ namespace DungeonLab.Editor
                 Vector2Int[] protectedCells,
                 RecipePortPlacement[] ports,
                 RecipeTransitionPlacement[] transitions,
+                RecipeOpeningPlacement[] openings,
                 string selectedVariationId,
                 string selectedVisualImplementationId,
                 Vector2Int showpieceOriginCell,
@@ -292,6 +328,7 @@ namespace DungeonLab.Editor
                 this.protectedCells = protectedCells ?? Array.Empty<Vector2Int>();
                 this.ports = ports ?? Array.Empty<RecipePortPlacement>();
                 this.transitions = transitions ?? Array.Empty<RecipeTransitionPlacement>();
+                this.openings = openings ?? Array.Empty<RecipeOpeningPlacement>();
                 this.selectedVariationId = selectedVariationId ?? string.Empty;
                 this.selectedVisualImplementationId = selectedVisualImplementationId ?? string.Empty;
                 this.showpieceOriginCell = showpieceOriginCell;
@@ -344,6 +381,7 @@ namespace DungeonLab.Editor
             public readonly RecipeZonePlacement[] zones;
             public readonly RecipePortPlacement[] ports;
             public readonly RecipeTransitionPlacement[] transitions;
+            public readonly RecipeOpeningPlacement[] openings;
             public readonly string selectedVariationId;
             public readonly string selectedVisualImplementationId;
             public readonly Vector2Int showpieceOriginCell;
@@ -366,6 +404,7 @@ namespace DungeonLab.Editor
                 zones = placement?.zones ?? Array.Empty<RecipeZonePlacement>();
                 ports = placement?.ports ?? Array.Empty<RecipePortPlacement>();
                 transitions = placement?.transitions ?? Array.Empty<RecipeTransitionPlacement>();
+                openings = placement?.openings ?? Array.Empty<RecipeOpeningPlacement>();
                 selectedVariationId = placement?.selectedVariationId ?? string.Empty;
                 selectedVisualImplementationId = placement?.selectedVisualImplementationId ?? string.Empty;
                 showpieceOriginCell = placement?.showpieceOriginCell ?? default;
@@ -785,8 +824,18 @@ namespace DungeonLab.Editor
             foreach (DungeonRecipeTransition transition in
                      candidate.transitions ?? Array.Empty<DungeonRecipeTransition>())
             {
+                // C2a relaxed the rise rule for a stair joining two STOREYS, in
+                // `DungeonRecipeValidator` — and only there. This gate kept the
+                // flat `riseLevels != 1`, so a cross-layer stair validated in the
+                // authoring window and was then rejected as a CANDIDATE on every
+                // seed, silently, as TRANSITION_CONTEXT_INCOMPATIBLE. Same
+                // predicate as the validator's, so the two agree by construction.
+                // Unreachable for a recipe that declares no layers, which is
+                // every recipe in the catalog today.
+                bool crossesLayers = transition != null &&
+                    !SameRecipeLayer(candidate, transition.lowerLayerId, transition.upperLayerId);
                 if (transition == null ||
-                    transition.riseLevels != 1 ||
+                    (crossesLayers ? transition.riseLevels < 1 : transition.riseLevels != 1) ||
                     transition.laneCount != 1 ||
                     transition.headroomLevels < MinHeadroomLevels ||
                     transition.lowerLandingCells == null ||
@@ -810,6 +859,21 @@ namespace DungeonLab.Editor
 
             reasonCode = string.Empty;
             return true;
+        }
+
+        /// <summary>
+        /// Do two layer references name one storey? The generator's copy of the
+        /// validator's <c>SameLayer</c>, so the candidate gate and the contract
+        /// gate cannot disagree about what "cross-layer" means.
+        /// </summary>
+        private static bool SameRecipeLayer(
+            DungeonRecipeAsset recipe,
+            string first,
+            string second)
+        {
+            return string.Equals(first, second, StringComparison.Ordinal) ||
+                DungeonRecipeLayers.IsBaseLayer(recipe, first) &&
+                DungeonRecipeLayers.IsBaseLayer(recipe, second);
         }
 
         private static System.Random RecipeSelectionRandom(
@@ -1191,6 +1255,33 @@ namespace DungeonLab.Editor
                     transitionUpperLayerLevel));
             }
 
+            var openings = new List<RecipeOpeningPlacement>();
+            foreach (DungeonRecipeOpening opening in
+                     slot.recipe.openings ?? Array.Empty<DungeonRecipeOpening>())
+            {
+                if (opening == null ||
+                    !DungeonRecipeLayers.TryGetRelativeLevel(
+                        slot.recipe,
+                        opening.layerId,
+                        out int openingLayerLevel))
+                {
+                    rejectionReason =
+                        $"recipe '{slot.recipe.recipeId}' opening '{opening?.id}' named an undeclared layer";
+                    return false;
+                }
+
+                openings.Add(new RecipeOpeningPlacement(
+                    opening.id,
+                    TransformRecipeCell(opening.cell, center, primaryAxis, transverseAxis, mirrored),
+                    DirectionFromVector(TransformRecipeDirection(
+                        opening.outwardDirection,
+                        primaryAxis,
+                        transverseAxis,
+                        mirrored)),
+                    openingLayerLevel,
+                    DungeonRecipeLayers.CanonicalId(slot.recipe, opening.layerId)));
+            }
+
             string variationId = string.Empty;
             string visualImplementationId = string.Empty;
             Vector2Int showpieceOrigin = default;
@@ -1251,7 +1342,8 @@ namespace DungeonLab.Editor
             RecipeZonePlacement[] zoneArray = zonePlacements.ToArray();
             RecipePortPlacement[] portArray = ports.ToArray();
             RecipeTransitionPlacement[] transitionArray = transitions.ToArray();
-            if (!RecipeCellsBelongToRoom(room, zoneArray, portArray, transitionArray))
+            RecipeOpeningPlacement[] openingArray = openings.ToArray();
+            if (!RecipeCellsBelongToRoom(room, zoneArray, portArray, transitionArray, openingArray))
             {
                 rejectionReason = $"recipe '{slot.recipe.recipeId}' geometry or reservation escaped its room footprint";
                 return false;
@@ -1269,6 +1361,7 @@ namespace DungeonLab.Editor
                 SortedCells(protectedCells).ToArray(),
                 portArray,
                 transitionArray,
+                openingArray,
                 variationId,
                 visualImplementationId,
                 showpieceOrigin,
@@ -1566,7 +1659,8 @@ namespace DungeonLab.Editor
             RoomFootprint room,
             IReadOnlyList<RecipeZonePlacement> zones,
             IReadOnlyList<RecipePortPlacement> ports,
-            IReadOnlyList<RecipeTransitionPlacement> transitions)
+            IReadOnlyList<RecipeTransitionPlacement> transitions,
+            IReadOnlyList<RecipeOpeningPlacement> openings)
         {
             bool ContainsAll(IEnumerable<Vector2Int> cells)
             {
@@ -1604,6 +1698,19 @@ namespace DungeonLab.Editor
                     !ContainsAll(transition.lowerLandingCells) ||
                     !ContainsAll(transition.upperLandingCells) ||
                     !ContainsAll(transition.footprintCells))
+                {
+                    return false;
+                }
+            }
+
+            // Only the rim cell is constrained. The cell it FACES is deliberately
+            // not: an aperture's hole is a plan cell the room still owns — it
+            // carries the chamber floor you land on — it just has no surface on
+            // the rim's own storey, which is the layer-scoped test the recipe
+            // validator already made.
+            foreach (RecipeOpeningPlacement opening in openings)
+            {
+                if (!room.Contains(opening.cell))
                 {
                     return false;
                 }
@@ -2025,7 +2132,16 @@ namespace DungeonLab.Editor
 
                 foreach (RecipeZonePlacement zone in placement.zones)
                 {
-                    if (zone.kind != DungeonRecipeZoneKind.Elevated)
+                    // On the ENTRY storey only an Elevated zone writes a level:
+                    // a Walkable zone there describes the floor the room already
+                    // has, and writing it would be a no-op at best. On a STACKED
+                    // storey there is no such floor — nothing else in the
+                    // pipeline puts a surface up there — so its Walkable zones
+                    // ARE that storey's floor and have to produce it. C2a shipped
+                    // the Elevated branch alone, which meant a declared upper
+                    // storey validated, resolved, and then rendered as nothing.
+                    if (zone.kind != DungeonRecipeZoneKind.Elevated &&
+                        (zone.isBaseLayer || zone.kind != DungeonRecipeZoneKind.Walkable))
                     {
                         continue;
                     }
@@ -2414,6 +2530,26 @@ namespace DungeonLab.Editor
                         rejectionReason = $"[RECIPE_PROTECTION] zone '{zone.id}' on '{placement.RecipeId}' was re-leveled or removed";
                         return false;
                     }
+                }
+            }
+
+            // The authored aperture, read back off the plan: the rim stands on a
+            // real surface and the cell it faces genuinely has none at that
+            // level. The recipe validator asked the same question of the
+            // DECLARATION; this asks it of the field the resolver built, which is
+            // what catches a later pass filling the hole in.
+            foreach (RecipeOpeningPlacement opening in placement.openings)
+            {
+                int rimLevel = baseLevel +
+                    opening.layerRelativeLevel +
+                    ResolvedRecipeLayerRelativeLevel(placement.zones, opening.cell, opening.layerId);
+                Vector2Int hole = opening.cell + DirectionVectorInt(opening.direction);
+                if (!surfaces.HasSurfaceAt(opening.cell, rimLevel) ||
+                    surfaces.HasSurfaceAt(hole, rimLevel))
+                {
+                    rejectionReason =
+                        $"[RECIPE_OPENING] rim '{opening.id}' on '{placement.RecipeId}' did not stand at L{rimLevel} beside an open cell at {hole}";
+                    return false;
                 }
             }
 

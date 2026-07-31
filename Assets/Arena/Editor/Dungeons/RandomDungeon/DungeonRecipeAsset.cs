@@ -96,6 +96,37 @@ namespace DungeonLab.Editor
         public string layerId = string.Empty;
     }
 
+    /// <summary>
+    /// One bare rim on a stacked storey: the edge of an authored aperture
+    /// (layered-topology design §5).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Guarding is per (rim surface, direction), so an aperture railed on three
+    /// sides and open on one is expressible; this declares the OPEN ones. The
+    /// cell is the surface you stand on and <see cref="outwardDirection"/> points
+    /// at the hole, which is the same shape as the renderer's
+    /// <c>OpenFloorEdge</c> — the aperture cell itself declares nothing, because
+    /// it is not a surface.
+    /// </para>
+    /// <para>
+    /// Restricted to a declared non-base layer on purpose. A bare rim on the
+    /// entry storey is a hole in the ground with nothing under it, which is the
+    /// exterior-void case the external connectors already own — not an aperture.
+    /// </para>
+    /// </remarks>
+    [Serializable]
+    public sealed class DungeonRecipeOpening
+    {
+        public string id = string.Empty;
+        [Tooltip("The surface cell whose rim is bare. It must belong to this opening's layer.")]
+        public Vector2Int cell;
+        [Tooltip("Cardinal direction from that cell toward the hole. The cell it points at must NOT be on this layer.")]
+        public Vector2Int outwardDirection;
+        [Tooltip("Which declared storey this rim belongs to. Must name a non-base layer.")]
+        public string layerId = string.Empty;
+    }
+
     [Serializable]
     public sealed class DungeonRecipeMotif
     {
@@ -179,6 +210,8 @@ namespace DungeonLab.Editor
         public DungeonRecipeZone[] zones = Array.Empty<DungeonRecipeZone>();
         [Tooltip("Typed corridor connections bound to route edges when the recipe is placed.")]
         public DungeonRecipePort[] ports = Array.Empty<DungeonRecipePort>();
+        [Tooltip("Bare rims on a stacked storey — the edges of an authored aperture you can walk off.")]
+        public DungeonRecipeOpening[] openings = Array.Empty<DungeonRecipeOpening>();
         [Tooltip("Named stair or focal visual implementations used by transitions and weighted variations.")]
         public DungeonRecipeMotif[] motifs = Array.Empty<DungeonRecipeMotif>();
         [Tooltip("Atomic elevation changes with exact cells, landings, footprint, rise, lane, and headroom requirements.")]
@@ -196,6 +229,15 @@ namespace DungeonLab.Editor
         /// catalog today, and the switch every layer rule defaults through.
         /// </summary>
         public bool DeclaresLayers => layers != null && layers.Length > 0;
+
+        /// <summary>
+        /// True when this recipe authors a bare rim. False for every recipe in
+        /// the catalog today, and what keeps the opening fields out of the
+        /// canonical string — an unconditional append there moves every seed's
+        /// <c>hashes.canonical</c> for a schema addition that changed no
+        /// geometry (C2a's lesson, and the same conditional the layer fields use).
+        /// </summary>
+        public bool DeclaresOpenings => openings != null && openings.Length > 0;
     }
 
     /// <summary>

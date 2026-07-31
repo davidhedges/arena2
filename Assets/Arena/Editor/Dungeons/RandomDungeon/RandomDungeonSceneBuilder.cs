@@ -50,6 +50,14 @@ namespace DungeonLab.Editor
                 "Rebuild");
         }
 
+        [MenuItem("Arena/Dungeons/Rebuild Random Dungeon (Specific Topology)", false, 120)]
+        private static void RebuildSpecificTopology()
+        {
+            ScriptableWizard.DisplayWizard<TopologyWizard>(
+                "Rebuild Random Dungeon On One Topology",
+                "Rebuild");
+        }
+
         /// <summary>Entry point used by command-line validation and CI.</summary>
         public static void RebuildRandomDungeonBatch()
         {
@@ -509,6 +517,31 @@ namespace DungeonLab.Editor
             private void OnWizardCreate()
             {
                 RebuildWithSeed(seed);
+            }
+        }
+
+        /// <summary>
+        /// Rebuild on ONE named route topology, whatever its selection weight.
+        /// </summary>
+        /// <remarks>
+        /// The only way to see an authored graph that is deliberately outside
+        /// the weighted draw — a weight-0 topology is invisible to
+        /// `SelectRouteTopologyId`, which is what keeps it from re-rolling the
+        /// topology of every seed in the corpus. Headless equivalent: set
+        /// `ARENA_DUNGEON_TOPOLOGY` and run the ordinary rebuild.
+        /// </remarks>
+        private sealed class TopologyWizard : ScriptableWizard
+        {
+            public string topologyId = string.Empty;
+            public int seed;
+
+            private void OnWizardCreate()
+            {
+                using (System.IDisposable scope =
+                       DungeonLabGenerator.ForceRouteTopology(topologyId))
+                {
+                    RebuildWithSeed(seed);
+                }
             }
         }
     }

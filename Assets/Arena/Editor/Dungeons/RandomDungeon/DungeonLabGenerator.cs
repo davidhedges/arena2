@@ -373,7 +373,7 @@ namespace DungeonLab.Editor
                     levelPlan.surfaces.StackedSurfaces(),
                     levelPlan.transitions,
                     null,
-                    BuildExternalConnectorOpenEdges(levelPlan.externalConnectors),
+                    BuildPlannedOpenEdges(levelPlan),
                     roomBoundaryContext,
                     CollectRenderedPromontoryCells(
                         levelPlan.namedPromontories,
