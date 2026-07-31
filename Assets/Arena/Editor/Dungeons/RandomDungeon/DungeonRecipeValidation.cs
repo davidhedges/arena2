@@ -187,6 +187,23 @@ namespace DungeonLab.Editor
                 Append(canonical, "maximumActiveSockets", recipe.maximumActiveSockets);
             }
 
+            // Layer fields are appended ONLY by a recipe that declares layers,
+            // exactly as the socket fields above are. This is not tidiness: the
+            // digest of every recipe feeds `catalogDigest`, `catalogDigest` is
+            // in the route-intent projection, and `routeIntentHash` is in
+            // `hashes.canonical` — so an unconditional append would move every
+            // seed's canonical hash for a schema addition that changed no
+            // geometry. Today's recipes declare no layers and hash as before.
+            if (recipe.DeclaresLayers)
+            {
+                foreach (DungeonRecipeLayer layer in recipe.layers)
+                {
+                    Append(canonical, "layer.id", layer?.layerId);
+                    Append(canonical, "layer.level", layer?.relativeLevel ?? 0);
+                    Append(canonical, "layer.base", layer != null && layer.isBase ? 1 : 0);
+                }
+            }
+
             foreach (DungeonRecipeZone zone in recipe.zones ?? Array.Empty<DungeonRecipeZone>())
             {
                 Append(canonical, "zone.id", zone?.id);
@@ -194,6 +211,10 @@ namespace DungeonLab.Editor
                 Append(canonical, "zone.offset", zone?.offset ?? default);
                 Append(canonical, "zone.size", zone?.size ?? default);
                 Append(canonical, "zone.level", zone?.relativeLevel ?? 0);
+                if (recipe.DeclaresLayers)
+                {
+                    Append(canonical, "zone.layer", zone?.layerId);
+                }
             }
 
             foreach (DungeonRecipePort port in recipe.ports ?? Array.Empty<DungeonRecipePort>())
@@ -204,6 +225,11 @@ namespace DungeonLab.Editor
                 Append(canonical, "port.cell", port?.cell ?? default);
                 Append(canonical, "port.out", port?.outwardDirection ?? default);
                 Append(canonical, "port.level", port?.relativeLevel ?? 0);
+                if (recipe.DeclaresLayers)
+                {
+                    Append(canonical, "port.layer", port?.layerId);
+                }
+
                 Append(canonical, "port.width", port?.widthCells ?? 0);
                 Append(canonical, "port.approach", port?.approachDepthCells ?? 0);
                 Append(canonical, "port.headroom", port?.headroomLevels ?? 0);
@@ -230,6 +256,11 @@ namespace DungeonLab.Editor
                 Append(canonical, "transition.rise", transition?.riseLevels ?? 0);
                 Append(canonical, "transition.lanes", transition?.laneCount ?? 0);
                 Append(canonical, "transition.headroom", transition?.headroomLevels ?? 0);
+                if (recipe.DeclaresLayers)
+                {
+                    Append(canonical, "transition.lowerLayer", transition?.lowerLayerId);
+                    Append(canonical, "transition.upperLayer", transition?.upperLayerId);
+                }
             }
 
             foreach (DungeonRecipeSymmetryPair pair in recipe.symmetryPairs ?? Array.Empty<DungeonRecipeSymmetryPair>())
@@ -344,6 +375,8 @@ namespace DungeonLab.Editor
                 return;
             }
 
+            ValidateLayers(recipe, result);
+
             var footprint = new HashSet<Vector2Int>();
             var zonesById = new Dictionary<string, DungeonRecipeZone>(StringComparer.Ordinal);
             foreach (DungeonRecipeZone zone in recipe.zones ?? Array.Empty<DungeonRecipeZone>())
@@ -406,7 +439,7 @@ namespace DungeonLab.Editor
                     port.widthCells != 1 ||
                     port.approachDepthCells < 1 ||
                     port.headroomLevels < 3 ||
-                    RelativeLevelAt(recipe, port.cell) != port.relativeLevel)
+                    RelativeLevelAt(recipe, port.cell, port.layerId) != port.relativeLevel)
                 {
                     result.Add(Layer, "RECIPE_PORT_GEOMETRY", $"Port '{port.id}' did not declare an exact open boundary, level, approach, and headroom contract.");
                 }
@@ -469,10 +502,19 @@ namespace DungeonLab.Editor
 
             foreach (DungeonRecipeTransition transition in recipe.transitions ?? Array.Empty<DungeonRecipeTransition>())
             {
+                // A stair joining two STOREYS may rise more than 1u — that is
+                // what makes a layered recipe's layers connected, and C1's
+                // episode separates its two by 4u. Within one layer the rule is
+                // unchanged, so a recipe that declares no layers cannot reach
+                // the relaxed branch at all.
+                bool crossesLayers = transition != null &&
+                    !SameLayer(recipe, transition.lowerLayerId, transition.upperLayerId);
+                bool riseValid = transition != null &&
+                    (crossesLayers ? transition.riseLevels >= 1 : transition.riseLevels == 1);
                 if (transition == null ||
                     !motifsById.TryGetValue(transition?.motifId ?? string.Empty, out DungeonRecipeMotif motif) ||
                     motif.kind != DungeonRecipeMotifKind.StairTransition ||
-                    transition.riseLevels != 1 ||
+                    !riseValid ||
                     transition.laneCount != 1 ||
                     transition.headroomLevels < 3 ||
                     !IsCardinalUnit(transition.climbDirection) ||
@@ -484,12 +526,25 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
+                // The rise is measured between STOREYS — layer offset included —
+                // while the landings must agree with their own end's rise WITHIN
+                // its layer. Both collapse to today's arithmetic when every
+                // layer offset is 0.
                 bool cellsValid = footprint.Contains(transition.lowerTransitionCell) &&
                     footprint.Contains(transition.upperTransitionCell) &&
-                    RelativeLevelAt(recipe, transition.upperTransitionCell) -
-                    RelativeLevelAt(recipe, transition.lowerTransitionCell) == transition.riseLevels;
-                cellsValid &= CellsHaveLevel(recipe, transition.lowerLandingCells, RelativeLevelAt(recipe, transition.lowerTransitionCell));
-                cellsValid &= CellsHaveLevel(recipe, transition.upperLandingCells, RelativeLevelAt(recipe, transition.upperTransitionCell));
+                    AbsoluteLevelAt(recipe, transition.upperTransitionCell, transition.upperLayerId) -
+                    AbsoluteLevelAt(recipe, transition.lowerTransitionCell, transition.lowerLayerId) ==
+                    transition.riseLevels;
+                cellsValid &= CellsHaveLevel(
+                    recipe,
+                    transition.lowerLandingCells,
+                    transition.lowerLayerId,
+                    RelativeLevelAt(recipe, transition.lowerTransitionCell, transition.lowerLayerId));
+                cellsValid &= CellsHaveLevel(
+                    recipe,
+                    transition.upperLandingCells,
+                    transition.upperLayerId,
+                    RelativeLevelAt(recipe, transition.upperTransitionCell, transition.upperLayerId));
                 cellsValid &= CellsInside(footprint, transition.footprintCells);
                 if (!cellsValid)
                 {
@@ -623,12 +678,27 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static int RelativeLevelAt(DungeonRecipeAsset recipe, Vector2Int cell)
+        /// <summary>
+        /// The rise a cell has WITHIN one layer: the max over Elevated zones
+        /// covering it that belong to that layer.
+        /// </summary>
+        /// <remarks>
+        /// The `max` was §8.2's "heightfield assumption inside the recipe
+        /// schema", and scoping it by layer is the whole fix — a cell may now be
+        /// covered by zones on two storeys, and taking the max across both would
+        /// be the same collapse the level field itself just stopped doing.
+        /// Within a layer the max stays: two Elevated zones overlapping on ONE
+        /// storey still describe one surface.
+        /// </remarks>
+        private static int RelativeLevelAt(DungeonRecipeAsset recipe, Vector2Int cell, string layerId)
         {
             int level = 0;
             foreach (DungeonRecipeZone zone in recipe.zones ?? Array.Empty<DungeonRecipeZone>())
             {
-                if (zone != null && zone.kind == DungeonRecipeZoneKind.Elevated && Contains(zone, cell))
+                if (zone != null &&
+                    zone.kind == DungeonRecipeZoneKind.Elevated &&
+                    SameLayer(recipe, zone.layerId, layerId) &&
+                    Contains(zone, cell))
                 {
                     level = Mathf.Max(level, zone.relativeLevel);
                 }
@@ -637,20 +707,256 @@ namespace DungeonLab.Editor
             return level;
         }
 
+        /// <summary>
+        /// A cell's level relative to the NODE: its layer's offset plus its rise
+        /// within that layer. What a transition's `riseLevels` is measured in.
+        /// </summary>
+        private static int AbsoluteLevelAt(DungeonRecipeAsset recipe, Vector2Int cell, string layerId)
+        {
+            DungeonRecipeLayers.TryGetRelativeLevel(recipe, layerId, out int layerLevel);
+            return layerLevel + RelativeLevelAt(recipe, cell, layerId);
+        }
+
+        /// <summary>
+        /// Do two layer references name the same storey? Empty means the base,
+        /// so `""` and an explicit base id are the same layer.
+        /// </summary>
+        private static bool SameLayer(DungeonRecipeAsset recipe, string first, string second)
+        {
+            if (string.Equals(first, second, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return DungeonRecipeLayers.IsBaseLayer(recipe, first) &&
+                DungeonRecipeLayers.IsBaseLayer(recipe, second);
+        }
+
         private static bool CellsHaveLevel(
             DungeonRecipeAsset recipe,
             IEnumerable<Vector2Int> cells,
+            string layerId,
             int expected)
         {
             foreach (Vector2Int cell in cells)
             {
-                if (RelativeLevelAt(recipe, cell) != expected)
+                if (RelativeLevelAt(recipe, cell, layerId) != expected)
                 {
                     return false;
                 }
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// The layer declarations themselves, plus every reference to one
+        /// (design §8.2's `RECIPE_LAYER_CONNECTIVITY` and what it needs first).
+        /// </summary>
+        /// <remarks>
+        /// Every check here is silent for a recipe that declares no layers,
+        /// which is every recipe in the catalog today. The one thing that is
+        /// NOT silent is a stray `layerId` on a recipe with no layer
+        /// declarations — that is a typo, and reading it as "the base layer"
+        /// would hide it.
+        /// </remarks>
+        private static void ValidateLayers(
+            DungeonRecipeAsset recipe,
+            DungeonRecipeValidationResult result)
+        {
+            const DungeonRecipeValidationLayer Layer = DungeonRecipeValidationLayer.Structure;
+            var declared = new HashSet<string>(StringComparer.Ordinal);
+            int baseCount = 0;
+            foreach (DungeonRecipeLayer layer in recipe.layers ?? Array.Empty<DungeonRecipeLayer>())
+            {
+                if (layer == null || string.IsNullOrEmpty(layer.layerId))
+                {
+                    result.Add(Layer, "RECIPE_LAYER_ID", "A layer entry was null or carried no layerId.");
+                    continue;
+                }
+
+                if (!declared.Add(layer.layerId))
+                {
+                    result.Add(Layer, "RECIPE_LAYER_ID", $"Layer '{layer.layerId}' was declared more than once.");
+                }
+
+                if (layer.isBase)
+                {
+                    baseCount++;
+                    if (layer.relativeLevel != 0)
+                    {
+                        result.Add(
+                            Layer,
+                            "RECIPE_LAYER_BASE",
+                            $"Base layer '{layer.layerId}' sat at {layer.relativeLevel}u. The base IS the node's level.");
+                    }
+                }
+                else if (layer.relativeLevel == 0)
+                {
+                    result.Add(
+                        Layer,
+                        "RECIPE_LAYER_BASE",
+                        $"Layer '{layer.layerId}' is not the base but sits at the base's level.");
+                }
+            }
+
+            if (recipe.DeclaresLayers && baseCount != 1)
+            {
+                result.Add(
+                    Layer,
+                    "RECIPE_LAYER_BASE",
+                    $"A layered recipe declares exactly one base layer; this one declared {baseCount}.");
+            }
+
+            void CheckReference(string layerId, string what)
+            {
+                if (!DungeonRecipeLayers.TryGetRelativeLevel(recipe, layerId, out _))
+                {
+                    result.Add(
+                        Layer,
+                        "RECIPE_LAYER_ID",
+                        $"{what} named layer '{layerId}', which this recipe does not declare.");
+                }
+            }
+
+            foreach (DungeonRecipeZone zone in recipe.zones ?? Array.Empty<DungeonRecipeZone>())
+            {
+                if (zone != null)
+                {
+                    CheckReference(zone.layerId, $"Zone '{zone.id}'");
+                }
+            }
+
+            foreach (DungeonRecipePort port in recipe.ports ?? Array.Empty<DungeonRecipePort>())
+            {
+                if (port != null)
+                {
+                    CheckReference(port.layerId, $"Port '{port.id}'");
+                }
+            }
+
+            foreach (DungeonRecipeTransition transition in
+                     recipe.transitions ?? Array.Empty<DungeonRecipeTransition>())
+            {
+                if (transition != null)
+                {
+                    CheckReference(transition.lowerLayerId, $"Transition '{transition.id}' lower end");
+                    CheckReference(transition.upperLayerId, $"Transition '{transition.id}' upper end");
+                }
+            }
+
+            ValidateLayerConnectivity(recipe, declared, result);
+        }
+
+        /// <summary>
+        /// `RECIPE_LAYER_CONNECTIVITY` (design §8.2): every declared layer must
+        /// be reachable from the base over the recipe's OWN transitions.
+        /// </summary>
+        /// <remarks>
+        /// Undirected on purpose. A stair is walkable both ways, and the
+        /// directed question — can you get back up — is the fall-free
+        /// connectivity invariant, which lives on the plan's traversal graph and
+        /// not inside one recipe's declaration.
+        /// </remarks>
+        private static void ValidateLayerConnectivity(
+            DungeonRecipeAsset recipe,
+            HashSet<string> declared,
+            DungeonRecipeValidationResult result)
+        {
+            if (!recipe.DeclaresLayers || declared.Count <= 1)
+            {
+                return;
+            }
+
+            string baseLayerId = null;
+            foreach (DungeonRecipeLayer layer in recipe.layers)
+            {
+                if (layer != null && layer.isBase && !string.IsNullOrEmpty(layer.layerId))
+                {
+                    baseLayerId = layer.layerId;
+                    break;
+                }
+            }
+
+            if (baseLayerId == null)
+            {
+                // Already reported as RECIPE_LAYER_BASE; reachability from an
+                // unknown root would only add noise.
+                return;
+            }
+
+            var adjacency = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            void Link(string first, string second)
+            {
+                if (!adjacency.TryGetValue(first, out List<string> neighbours))
+                {
+                    neighbours = new List<string>();
+                    adjacency[first] = neighbours;
+                }
+
+                neighbours.Add(second);
+            }
+
+            foreach (DungeonRecipeTransition transition in
+                     recipe.transitions ?? Array.Empty<DungeonRecipeTransition>())
+            {
+                if (transition == null)
+                {
+                    continue;
+                }
+
+                string lower = string.IsNullOrEmpty(transition.lowerLayerId)
+                    ? baseLayerId
+                    : transition.lowerLayerId;
+                string upper = string.IsNullOrEmpty(transition.upperLayerId)
+                    ? baseLayerId
+                    : transition.upperLayerId;
+                if (!declared.Contains(lower) || !declared.Contains(upper))
+                {
+                    continue;
+                }
+
+                Link(lower, upper);
+                Link(upper, lower);
+            }
+
+            var reached = new HashSet<string>(StringComparer.Ordinal) { baseLayerId };
+            var pending = new Stack<string>();
+            pending.Push(baseLayerId);
+            while (pending.Count > 0)
+            {
+                string current = pending.Pop();
+                if (!adjacency.TryGetValue(current, out List<string> neighbours))
+                {
+                    continue;
+                }
+
+                foreach (string neighbour in neighbours)
+                {
+                    if (reached.Add(neighbour))
+                    {
+                        pending.Push(neighbour);
+                    }
+                }
+            }
+
+            var stranded = new List<string>();
+            foreach (string layerId in declared)
+            {
+                if (!reached.Contains(layerId))
+                {
+                    stranded.Add(layerId);
+                }
+            }
+
+            if (stranded.Count > 0)
+            {
+                stranded.Sort(StringComparer.Ordinal);
+                result.Add(
+                    DungeonRecipeValidationLayer.Structure,
+                    "RECIPE_LAYER_CONNECTIVITY",
+                    $"Layer(s) '{string.Join("', '", stranded)}' declared no transition reaching the base layer '{baseLayerId}'.");
+            }
         }
 
         private static bool CellsInside(HashSet<Vector2Int> footprint, IEnumerable<Vector2Int> cells)

@@ -199,8 +199,8 @@ Two rulings worth carrying forward:
    one would leak a failed tier attempt's reservations forward. Same type, same
    policy, two instances.
 
-**Phase C is in progress** — the two-layer authored episode, the first real
-proof (design §13). C1a landed 2026-07-31.
+**Phase C1 is COMPLETE (2026-07-31), all four legs.** The two-layer authored
+episode is the first real proof (design §13); C2 is the authored recipe.
 
 - **A renderer-neutrality instrument** (`8258391c`), because none existed. Every
   dungeon gate so far compares the plan, and Batch Validate never builds a
@@ -321,8 +321,9 @@ Three things the live leg found that no plan gate and no render digest could:
    compile time, so a fixture can only reach the real ground sampler by being
    baked into the dungeon's own payload.
 
-Leg 4, the **owner eyeball**, is the one Phase C leg still outstanding — no hash
-tells you whether a two-layer room reads well.
+**Leg 4, the owner eyeball, PASSED 2026-07-31 — "it looks fine". Phase C1 is
+complete.** No hash tells you whether a two-layer room reads well; this was the
+only leg that could answer it.
 
 **The episode does NOT survive in the scene, and this page previously implied it
 did.** `ops/c1-two-layer-live.sh` does leave it there, but any later
@@ -391,9 +392,75 @@ Three things measured during the migration that the map had wrong:
    seeds; the port iterates the field's backing store instead, which is what
    `SurfaceField.SurfacedCells()` exists for.
 
-Still true, and still the reason to do this at all: two layers over one plan cell
-overwrite rather than stack. The migration does not change that — it puts the
-decision in one named method so the layer schema has a place to branch.
+### C2a — the recipe layer schema, landed 2026-07-31
+
+A recipe can now declare storeys, and the resolver stacks them. `RelevelFloor`
+kept the base storey; a zone on any other storey calls `AddSurface`. That is the
+branch the whole `SurfaceField` migration existed to make possible, and it is one
+`if`.
+
+- **`DungeonRecipeLayer { layerId, relativeLevel, isBase }`**, plus `layerId` on
+  zones, ports and both ends of a transition. Empty means the base layer, so a
+  recipe that declares nothing behaves exactly as before — which is every recipe
+  in the catalog.
+- **`RelativeLevelAt` is layer-scoped.** §8.2 called its `max` over overlapping
+  zones "the heightfield assumption inside the recipe schema"; scoping the max to
+  one storey is the entire fix. Within a storey the max stays, because two
+  Elevated zones overlapping on one floor still describe one surface.
+- **Base derivation subtracts the layer offset** and nothing else. §8.2's
+  replacement (all-ports-agree, `RECIPE_BASE_LEVEL_CONFLICT`, an
+  `anchorLayerId`/`anchorLevel` escape hatch) stays retracted.
+- **`RECIPE_LAYER_ID`, `RECIPE_LAYER_BASE`, `RECIPE_LAYER_CONNECTIVITY`.** The
+  last one is an undirected reachability walk from the base over the recipe's own
+  transitions — undirected because a stair is walkable both ways, and the
+  directed question is the plan's fall-free invariant, not one recipe's.
+- **A cross-layer stair may rise more than 1u.** Intra-layer transitions keep the
+  exact `riseLevels == 1` rule, so a recipe with no layers cannot reach the
+  relaxed branch. C1's episode separates its storeys by 4u, which would have been
+  unauthorable otherwise.
+
+Gate: **identical geometry on all 200 seeds.** A field-level diff of the two
+reports found the ONLY per-seed difference anywhere to be `schemaUsage` growing
+19 → 21 rows — the two documentation rows for the layer fields. Every hash,
+every validation result and every recipe resolution is byte-identical, so
+`resultHash` moved once, `991d86e1bb577144` → `385e29f388fdae7a`.
+
+Two things worth carrying forward:
+
+1. **A recipe's canonical string is inside `hashes.canonical`.** The chain is
+   `ComputeContentDigest` → `catalogDigest` → the route-intent projection →
+   `routeIntentHash` → `canonicalHash`. So an unconditional append to the recipe
+   canonical moves EVERY seed's canonical hash for a schema addition that changed
+   no geometry. Every layer field is therefore appended only by a recipe that
+   declares layers — the same conditional the incident-socket fields already
+   used, which is where the pattern came from.
+2. **Sunken rooms are a negative LAYER, not a negative zone.** §8.2 wanted
+   `relativeLevel <= 0` allowed on Elevated zones (`DungeonRecipeValidation.cs`).
+   Unnecessary: a layer's `relativeLevel` may be negative, and an Elevated zone
+   still rises within its own storey. One existing gate left untouched.
+
+**What C2 still needs is the READER side**, and that is the real remaining cost.
+A stacked field currently throws at the first `AsHeightField()` it meets. There
+are 8 such sites: `AddAerialBridges`, `SweepIntraRoom1uDrops`,
+`TryValidateResolvedRecipes` and `TryValidateSurfaceHeadroom` inside the
+elevation stage; the stair search in `TryResolveConnectionTransition`; the
+external-connector candidate search; the stage boundary in
+`TryBuildTieredLevelPlan` (which fans out to 8 readers); and
+`TieredLevelPlan.cellLevels`, which fans out to ~19 more across validation, the
+acceptance-gate probes, the report projections and the renderer entry. Most of
+those ask "what is the floor at this cell" and are already right on a
+heightfield; classifying which genuinely need a surface is C2b's first job, not
+a mechanical sweep. One is already plumbed: `BuildLevelField` has taken an
+`IReadOnlyCollection<StackedSurface>` since C1b and is passed `null` at
+`DungeonLabGenerator.cs:369` — that argument becomes
+`levelPlan.surfaces.StackedSurfaces()`.
+
+`TryValidateResolvedRecipes` carries a `RECIPE_LAYER_UNVERIFIABLE` rejection for
+a non-base zone. It is sequenced, not dead: the `AsHeightField()` throw covers it
+today, and it becomes the live guard the moment that argument migrates.
+
+Still true, and still the reason all of this exists: before C2a, two layers over
+one plan cell overwrote rather than stacked.
 
 Three §8.2 mechanisms dissolved on inspection and should not be built:
 `baseLevel` is not derived from port zero, it **is** the node's level (every port
@@ -401,11 +468,11 @@ is already required to resolve at `nodeLevel + port.relativeLevel`), so
 `RECIPE_BASE_LEVEL_CONFLICT` and the explicit `anchorLayerId`/`anchorLevel`
 escape hatch both have nothing to do.
 
-**Order: ~~level field → `SurfaceField` (writer side)~~ → the recipe layer
-schema, then the authored episode.** The reader side stays deferred: the two
-`AsHeightField()` calls in `TryBuildTieredLevelPlan` and `TryBuildCellLevelField`
-are where a stacked field will first throw, and they throw rather than truncate
-on purpose.
+**Order: ~~level field → `SurfaceField` (writer side)~~ → ~~the recipe layer
+schema~~ → the reader side → the authored episode.** The original order had two
+steps; the reader side is the third, and it is larger than either of the first
+two. It was not visible as its own step until the writer side made a stacked
+field reachable.
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently

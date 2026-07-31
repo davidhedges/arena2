@@ -1400,6 +1400,44 @@ Two further things worth stating plainly:
 > Gate: `ops/dungeon-port-ab.sh` density 0 — identical geometry on all 200 seeds
 > with `resultHash` unmoved at `991d86e1bb577144`, i.e. byte-identical seed
 > reports.
+>
+> ---
+>
+> **DONE 2026-07-31 — the layer schema below landed as written, with four
+> corrections.** `DungeonRecipeLayer`, `layerId` on zones and ports, layer-scoped
+> `RelativeLevelAt`, per-layer base derivation and `RECIPE_LAYER_CONNECTIVITY`
+> are all in. The resolver branches at the L6 site: base storey →
+> `RelevelFloor`, any other storey → `AddSurface`. Gate: identical geometry on
+> 200 seeds, the only per-seed report difference anywhere being `schemaUsage`
+> growing 19 → 21 rows.
+>
+> 1. **Transitions need `layerId` too, on BOTH ends** — this section lists it
+>    only on zones and ports. A stair is what makes two storeys connected, so
+>    `RECIPE_LAYER_CONNECTIVITY` cannot be evaluated without knowing which
+>    storeys each transition joins, and a transition spanning layers cannot
+>    inherit a single one.
+> 2. **`riseLevels == 1` had to be relaxed for cross-layer stairs only.** Not
+>    mentioned here, and blocking: C1's episode separates its storeys by 4u, so
+>    a layered recipe was unauthorable while every recipe transition was pinned
+>    to a 1u rise. Intra-layer transitions keep the exact rule, which is what
+>    keeps single-layer recipes untouched.
+> 3. **"Elevated zones must be allowed to go negative" is unnecessary.** A sunken
+>    chamber is a LAYER at a negative `relativeLevel`; the zone still rises within
+>    its own storey. `DungeonRecipeValidation.cs:363` keeps its rule unchanged,
+>    and one fewer gate is relaxed.
+> 4. **A recipe's canonical string is inside `hashes.canonical`.**
+>    `ComputeContentDigest` → `catalogDigest` → the route-intent projection →
+>    `routeIntentHash` → `canonicalHash`. An unconditional append to the recipe
+>    canonical therefore moves every seed's canonical hash for a schema addition
+>    that changes no geometry. Every layer field is appended only when
+>    `recipe.DeclaresLayers` — the same conditional the incident-socket fields
+>    already used.
+>
+> **The remaining C2 cost is the READER side, which this section does not
+> mention at all.** A stacked field throws at the first `AsHeightField()`; there
+> are 8 such sites, two of which fan out to ~27 readers between them. Most ask
+> "what is the floor at this cell" and are already correct on a heightfield —
+> classifying which genuinely need a surface is the work, not sweeping them.
 
 **[Proposed]** three schema additions, all additive and defaulting to today's
 behaviour. **Phase split, corrected per review finding 4:** the layer fields,

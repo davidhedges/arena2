@@ -34,6 +34,40 @@ namespace DungeonLab.Editor
         FocalVisual
     }
 
+    /// <summary>
+    /// One walkable storey of a recipe (layered-topology design §8.2).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A recipe that declares no layers has exactly one, implicit, at the node's
+    /// own level — which is what every recipe in the catalog is today, and why
+    /// the whole layer schema defaults to today's behaviour.
+    /// </para>
+    /// <para>
+    /// <see cref="relativeLevel"/> is relative to the NODE's level, and the base
+    /// layer's is therefore always 0. §8.2 originally derived the base from
+    /// "port zero" and proposed an `anchorLayerId`/`anchorLevel` escape hatch for
+    /// a base layer with no external port; both dissolved on inspection — the
+    /// base IS the node level whether or not a port sits on it.
+    /// </para>
+    /// <para>
+    /// Negative levels are legal here, which is where §8.2's "Elevated zones must
+    /// be allowed to go negative" belongs. A sunken chamber is a LAYER below the
+    /// base, not a zone with a negative rise, so `RECIPE_ZONE_LEVEL` keeps its
+    /// existing rule — an Elevated zone still rises within its own layer.
+    /// </para>
+    /// </remarks>
+    [Serializable]
+    public sealed class DungeonRecipeLayer
+    {
+        [Tooltip("Stable identifier zones and ports name to join this layer. Must be non-empty and unique.")]
+        public string layerId = string.Empty;
+        [Tooltip("Levels above (or below) the node's own level. The base layer is 0 by definition.")]
+        public int relativeLevel;
+        [Tooltip("Exactly one layer is the base. It carries the recipe's entry level and must sit at relativeLevel 0.")]
+        public bool isBase;
+    }
+
     [Serializable]
     public sealed class DungeonRecipeZone
     {
@@ -42,6 +76,8 @@ namespace DungeonLab.Editor
         public Vector2Int offset;
         public Vector2Int size = Vector2Int.one;
         public int relativeLevel;
+        [Tooltip("Which declared layer this zone belongs to. Empty means the base layer, which is the only layer most recipes have.")]
+        public string layerId = string.Empty;
     }
 
     [Serializable]
@@ -56,6 +92,8 @@ namespace DungeonLab.Editor
         public int widthCells = 1;
         public int approachDepthCells = 1;
         public int headroomLevels = 3;
+        [Tooltip("Which declared layer this entrance opens onto. Empty means the base layer.")]
+        public string layerId = string.Empty;
     }
 
     [Serializable]
@@ -81,6 +119,10 @@ namespace DungeonLab.Editor
         public int riseLevels = 1;
         public int laneCount = 1;
         public int headroomLevels = 3;
+        [Tooltip("Which declared layer the lower end stands on. Empty means the base layer.")]
+        public string lowerLayerId = string.Empty;
+        [Tooltip("Which declared layer the upper end reaches. Empty means the base layer. A stair between two layers is what makes them connected.")]
+        public string upperLayerId = string.Empty;
     }
 
     [Serializable]
@@ -131,6 +173,8 @@ namespace DungeonLab.Editor
         public bool allowMirror;
         [Tooltip("Allowed clockwise quarter-turns after the recipe's route-forward axis is resolved.")]
         public int[] legalQuarterTurns = { 0, 1, 2, 3 };
+        [Tooltip("Walkable storeys this recipe stacks over one plan footprint. Empty means one implicit base layer, which is every recipe today.")]
+        public DungeonRecipeLayer[] layers = Array.Empty<DungeonRecipeLayer>();
         [Tooltip("Walkable, elevated, and protected spatial regions declared on the recipe-local cell grid.")]
         public DungeonRecipeZone[] zones = Array.Empty<DungeonRecipeZone>();
         [Tooltip("Typed corridor connections bound to route edges when the recipe is placed.")]
@@ -146,5 +190,82 @@ namespace DungeonLab.Editor
 
         public bool UsesIncidentCardinalSockets =>
             portBindingMode == DungeonRecipePortBindingMode.IncidentCardinalSockets;
+
+        /// <summary>
+        /// True when this recipe stacks storeys. False for every recipe in the
+        /// catalog today, and the switch every layer rule defaults through.
+        /// </summary>
+        public bool DeclaresLayers => layers != null && layers.Length > 0;
+    }
+
+    /// <summary>
+    /// Resolving a zone's or port's layer to a level offset — the one place that
+    /// mapping lives, so the validator and the generator cannot disagree about it.
+    /// </summary>
+    public static class DungeonRecipeLayers
+    {
+        /// <summary>
+        /// The level a layer sits at, relative to the node's own level.
+        /// </summary>
+        /// <remarks>
+        /// An empty <paramref name="layerId"/> means the base layer, whether or
+        /// not the recipe declares any — so adding a second layer to an existing
+        /// recipe does not require re-tagging the zones that were already there.
+        /// </remarks>
+        public static bool TryGetRelativeLevel(
+            DungeonRecipeAsset recipe,
+            string layerId,
+            out int relativeLevel)
+        {
+            relativeLevel = 0;
+            if (recipe == null)
+            {
+                return false;
+            }
+
+            bool unnamed = string.IsNullOrEmpty(layerId);
+            if (!recipe.DeclaresLayers)
+            {
+                // One implicit base layer at the node's level. A name that
+                // resolves to nothing is a schema error, not a silent zero.
+                return unnamed;
+            }
+
+            foreach (DungeonRecipeLayer layer in recipe.layers)
+            {
+                if (layer == null)
+                {
+                    continue;
+                }
+
+                if (unnamed ? layer.isBase : string.Equals(layer.layerId, layerId, StringComparison.Ordinal))
+                {
+                    relativeLevel = layer.relativeLevel;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>Is this the recipe's entry storey?</summary>
+        public static bool IsBaseLayer(DungeonRecipeAsset recipe, string layerId)
+        {
+            if (recipe == null || !recipe.DeclaresLayers || string.IsNullOrEmpty(layerId))
+            {
+                return true;
+            }
+
+            foreach (DungeonRecipeLayer layer in recipe.layers)
+            {
+                if (layer != null &&
+                    string.Equals(layer.layerId, layerId, StringComparison.Ordinal))
+                {
+                    return layer.isBase;
+                }
+            }
+
+            return false;
+        }
     }
 }

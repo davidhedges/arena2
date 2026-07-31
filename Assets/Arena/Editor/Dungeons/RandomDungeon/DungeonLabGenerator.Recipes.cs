@@ -130,18 +130,31 @@ namespace DungeonLab.Editor
         {
             public readonly string id;
             public readonly DungeonRecipeZoneKind kind;
+            /// <summary>The zone's rise WITHIN its layer.</summary>
             public readonly int relativeLevel;
+            /// <summary>Its layer's offset from the node's level. 0 for the base.</summary>
+            public readonly int layerRelativeLevel;
+            /// <summary>
+            /// False only for a zone on a storey above or below the recipe's
+            /// entry layer — the one case that STACKS a surface instead of
+            /// moving the column's floor (design §8.2 L6).
+            /// </summary>
+            public readonly bool isBaseLayer;
             public readonly Vector2Int[] cells;
 
             public RecipeZonePlacement(
                 string id,
                 DungeonRecipeZoneKind kind,
                 int relativeLevel,
+                int layerRelativeLevel,
+                bool isBaseLayer,
                 Vector2Int[] cells)
             {
                 this.id = id ?? string.Empty;
                 this.kind = kind;
                 this.relativeLevel = relativeLevel;
+                this.layerRelativeLevel = layerRelativeLevel;
+                this.isBaseLayer = isBaseLayer;
                 this.cells = cells ?? Array.Empty<Vector2Int>();
             }
         }
@@ -1049,7 +1062,23 @@ namespace DungeonLab.Editor
                 }
 
                 Vector2Int[] sorted = SortedCells(cells).ToArray();
-                zonePlacements.Add(new RecipeZonePlacement(zone.id, zone.kind, zone.relativeLevel, sorted));
+                if (!DungeonRecipeLayers.TryGetRelativeLevel(
+                        slot.recipe,
+                        zone.layerId,
+                        out int zoneLayerLevel))
+                {
+                    rejectionReason =
+                        $"recipe '{slot.recipe.recipeId}' zone '{zone.id}' named undeclared layer '{zone.layerId}'";
+                    return false;
+                }
+
+                zonePlacements.Add(new RecipeZonePlacement(
+                    zone.id,
+                    zone.kind,
+                    zone.relativeLevel,
+                    zoneLayerLevel,
+                    DungeonRecipeLayers.IsBaseLayer(slot.recipe, zone.layerId),
+                    sorted));
                 if (zone.kind == DungeonRecipeZoneKind.ProtectedCirculation ||
                     zone.kind == DungeonRecipeZoneKind.ProtectedFocal)
                 {
@@ -1086,7 +1115,10 @@ namespace DungeonLab.Editor
                     NeighborForEdge(routeIntent, binding.edgeId, slot.slotNode),
                     TransformRecipeCell(port.cell, center, primaryAxis, transverseAxis, mirrored),
                     TransformRecipeDirection(port.outwardDirection, primaryAxis, transverseAxis, mirrored),
-                    node.relativeElevationLevels + port.relativeLevel,
+                    // A port's relativeLevel is measured WITHIN its layer
+                    // (design §8.2), so the layer's own offset is added here.
+                    // Every recipe today is single-layer, where it is 0.
+                    node.relativeElevationLevels + PortLayerRelativeLevel(slot.recipe, port) + port.relativeLevel,
                     requiredForPlacement: true));
             }
 
@@ -1788,7 +1820,17 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                int baseLevel = firstPortLevel - firstPortContract.relativeLevel;
+                // The recipe's base level. §8.2 set out to replace this because
+                // it looked like it anchored the whole room on "port zero"; it
+                // does not — every port is separately required to resolve at
+                // `nodeLevel + layer + port.relativeLevel` in the loop below, so
+                // this expression algebraically IS the node's level and any
+                // other port would give the same answer. Subtracting the layer
+                // offset is the only change layers need here, and it is 0 for
+                // every recipe in today's catalog.
+                int baseLevel = firstPortLevel
+                    - PortLayerRelativeLevel(placement.slot.recipe, firstPortContract)
+                    - firstPortContract.relativeLevel;
                 foreach (RecipePortPlacement port in placement.ports)
                 {
                     if (!surfaces.TryGetFloorLevel(port.cell, out int portLevel) ||
@@ -1850,7 +1892,7 @@ namespace DungeonLab.Editor
                 {
                     if (!surfaces.TryGetFloorLevel(cell, out int level) ||
                         level != baseLevel ||
-                        ResolvedRecipeRelativeLevel(placement.zones, cell) != 0 ||
+                        ResolvedRecipeBaseLayerRelativeLevel(placement.zones, cell) != 0 ||
                         pathCells.Contains(cell))
                     {
                         rejectionReason =
@@ -1932,6 +1974,7 @@ namespace DungeonLab.Editor
                         continue;
                     }
 
+                    int zoneLevel = baseLevel + zone.layerRelativeLevel + zone.relativeLevel;
                     foreach (Vector2Int cell in zone.cells)
                     {
                         if (!surfaces.ContainsCell(cell))
@@ -1940,14 +1983,24 @@ namespace DungeonLab.Editor
                             return false;
                         }
 
-                        // THE OVERWRITE (design §8.2 L6). An Elevated zone is
-                        // validated to carry relativeLevel > 0, so this always
-                        // MOVES the column's floor up rather than adding a
-                        // surface over it — which is why a second authored
-                        // layer cannot be resolved yet. The layer schema turns
-                        // this call into a choice between RelevelFloor and
-                        // AddSurface; today there is nothing to choose.
-                        surfaces.RelevelFloor(cell, baseLevel + zone.relativeLevel);
+                        // The branch §8.2 L6 was blocked on, and the whole
+                        // reason the level field became a SurfaceField.
+                        //
+                        // A zone on the recipe's ENTRY storey re-levels the
+                        // column, exactly as it always has: one plan cell, one
+                        // floor, moved up by the zone's rise. A zone on any
+                        // other storey STACKS — the column keeps the surface it
+                        // had and gains a second one above (or below) it. The
+                        // old code could only ever do the first, and did it
+                        // silently for both.
+                        if (zone.isBaseLayer)
+                        {
+                            surfaces.RelevelFloor(cell, zoneLevel);
+                        }
+                        else
+                        {
+                            surfaces.AddSurface(cell, zoneLevel, SurfaceKind.Floor);
+                        }
                     }
                 }
 
@@ -2265,9 +2318,29 @@ namespace DungeonLab.Editor
 
             foreach (RecipeZonePlacement zone in placement.zones)
             {
+                // A zone on a non-base storey is a stacked surface, and this
+                // check reads the heightfield — which holds each column's LOWEST
+                // surface and therefore cannot answer for it. Comparing the
+                // stacked zone against the column floor would pass or fail for
+                // reasons that have nothing to do with the zone, so it rejects.
+                //
+                // SEQUENCED, not dead. Today a layered recipe never reaches
+                // here: this function is handed `surfaces.AsHeightField()`,
+                // which throws at the call site the moment the field stacks.
+                // This becomes the live guard when that argument migrates to a
+                // SurfaceField and the throw stops covering it — which is
+                // exactly the reader-side work C2's authored episode needs.
+                if (!zone.isBaseLayer)
+                {
+                    rejectionReason =
+                        $"[RECIPE_LAYER_UNVERIFIABLE] zone '{zone.id}' on '{placement.RecipeId}' sits on a " +
+                        "non-base layer, which the heightfield-based protection check cannot verify";
+                    return false;
+                }
+
                 foreach (Vector2Int cell in zone.cells)
                 {
-                    int expectedLevel = baseLevel + ResolvedRecipeRelativeLevel(placement.zones, cell);
+                    int expectedLevel = baseLevel + ResolvedRecipeBaseLayerRelativeLevel(placement.zones, cell);
                     if (!cellLevels.TryGetValue(cell, out int level) || level != expectedLevel)
                     {
                         rejectionReason = $"[RECIPE_PROTECTION] zone '{zone.id}' on '{placement.RecipeId}' was re-leveled or removed";
@@ -2345,7 +2418,35 @@ namespace DungeonLab.Editor
             return true;
         }
 
-        private static int ResolvedRecipeRelativeLevel(
+        /// <summary>
+        /// A port's layer offset from the node's level, or 0 if it names none.
+        /// </summary>
+        /// <remarks>
+        /// A port that names an undeclared layer is a recipe the validator
+        /// rejects, so 0 here is the single-layer answer rather than a guess:
+        /// `TryGetRelativeLevel` fails closed and leaves the out value at 0,
+        /// which is exactly what every recipe in today's catalog means.
+        /// </remarks>
+        private static int PortLayerRelativeLevel(DungeonRecipeAsset recipe, DungeonRecipePort port)
+        {
+            DungeonRecipeLayers.TryGetRelativeLevel(recipe, port?.layerId, out int layerLevel);
+            return layerLevel;
+        }
+
+        /// <summary>
+        /// The rise at a cell on the recipe's BASE storey — the generator's twin
+        /// of the validator's <c>RelativeLevelAt</c>, and the same `max` collapse
+        /// scoped the same way.
+        /// </summary>
+        /// <remarks>
+        /// Base-scoped rather than layer-parameterised because both callers ask
+        /// a question about the column FLOOR: showpiece support, and the
+        /// protection check that compares against the heightfield. A non-base
+        /// storey's answer would have to come from a surface, which is
+        /// reader-side work — so that case is rejected at the call site rather
+        /// than silently answered with the base layer's number.
+        /// </remarks>
+        private static int ResolvedRecipeBaseLayerRelativeLevel(
             IReadOnlyList<RecipeZonePlacement> zones,
             Vector2Int cell)
         {
@@ -2353,6 +2454,7 @@ namespace DungeonLab.Editor
             foreach (RecipeZonePlacement zone in zones)
             {
                 if (zone.kind == DungeonRecipeZoneKind.Elevated &&
+                    zone.isBaseLayer &&
                     Array.IndexOf(zone.cells, cell) >= 0)
                 {
                     level = Mathf.Max(level, zone.relativeLevel);

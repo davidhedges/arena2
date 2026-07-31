@@ -4085,13 +4085,22 @@ namespace DungeonLab.Editor
             var zones = new JArray();
             foreach (RecipeZonePlacement zone in resolution.zones ?? Array.Empty<RecipeZonePlacement>())
             {
-                zones.Add(new JObject
+                var zoneToken = new JObject
                 {
                     ["id"] = zone.id,
                     ["kind"] = zone.kind.ToString(),
                     ["relativeLevel"] = zone.relativeLevel,
                     ["cells"] = CellsToken(zone.cells, sort: false)
-                });
+                };
+                // Only a zone off the base storey carries its layer into the
+                // report, so a single-layer resolution projects exactly the
+                // shape it always did.
+                if (!zone.isBaseLayer)
+                {
+                    zoneToken["layerRelativeLevel"] = zone.layerRelativeLevel;
+                }
+
+                zones.Add(zoneToken);
             }
 
             var ports = new JArray();
@@ -4227,6 +4236,8 @@ namespace DungeonLab.Editor
             Add("zones.protected", "recipe assets", "late-feature and dressing protection");
             Add("zones.elevated", "recipe assets", "canonical cell levels");
             Add("zones.relativeLevel", "recipe assets", "level and transition validation");
+            Add("layers.layerId/relativeLevel/isBase", "recipe assets", "per-storey level derivation and RECIPE_LAYER_CONNECTIVITY");
+            Add("zones/ports/transitions.layerId", "recipe assets", "which storey a zone, entrance or stair belongs to; empty is the base");
             Add("transitions.atomicGroup", "recipe assets", "atomic transition validation");
             Add("variations/motifs", "recipe assets", "stable StairForge-backed visual selection");
             Add("ports.id/type/mandatory", "recipe assets", "route edge binding and neighbor validation");
