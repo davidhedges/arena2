@@ -291,9 +291,38 @@ Six things measured during C1b that the design had wrong:
    cannot see a stacked surface. The fixture walks its own surfaces instead;
    teaching the port graph is §3.2 traversal work, which C1 does not do.
 
-Two Phase C evidence legs cannot be run headlessly: the **live probe** needs a
-running SpacetimeDB plus `ops/republish-local-clear.sh`, and leg 4 is an **owner
-eyeball** — no hash tells you whether a two-layer room reads well.
+**The live leg ran 2026-07-31, and §7.2's hypothesis held.**
+`ops/c1-two-layer-live.sh` bakes the episode through the production export path,
+publishes, runs `ops/c1-two-layer-probe.py`, and puts the real dungeon back. All
+four §7.2 behaviours passed on the real server: a player under a gallery stays at
+`y=+0.000` where a soffit capture would read `+3.50`; on the gallery they stand
+at `+4.000`, not on its underside; walking off the aperture's bare rim lands them
+on the chamber floor 0.2u from the aperture cell rather than the abyss 20 levels
+down; and mid-span they stand on the deck with the lower route at `+0.00`
+underneath. **It confirms the hazard does not bite — not that §7.2's remedy
+works**, because per C1a the `_E_` slab is a convex mesh, so what was tested is
+the normal-filtered 1.2u capture, not the box collider's 0.35u one.
+
+Three things the live leg found that no plan gate and no render digest could:
+
+1. **The outer shell pass is heightfield-only and walled the upper route shut.**
+   Where a ground-backed terrace met a suspended gallery at the same level, the
+   shell put a 5.7u enclosure wall across the seam and the player could not
+   cross. The retaining face beneath is correct and stays; it is the guard on
+   top that was wrong. Fixed by a **flush seam** — a face whose open side carries
+   a walkable surface at the face's top level suppresses its top guard, which
+   suppresses shell courses, railing and railing corner columns in one move.
+   Inert single-layer by construction.
+2. **The module panics every tick on an empty dungeon door manifest**
+   (`world_interactions.rs:930`), so baking geometry with no gateways killed
+   `game_tick` while every reducer still reported `Committed`. Doors and traps
+   are deferred; the bake leaves both manifests alone.
+3. **There is no runtime world selector** — world collision is `include_str!` at
+   compile time, so a fixture can only reach the real ground sampler by taking
+   the dungeon's own payload and giving it back afterwards.
+
+Leg 4, the **owner eyeball**, is the one Phase C leg still outstanding — no hash
+tells you whether a two-layer room reads well.
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently

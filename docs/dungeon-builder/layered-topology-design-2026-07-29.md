@@ -1009,6 +1009,57 @@ and B on.
 
 ### 7.2 Collision export — probably no structural change, and here is the actual mechanism
 
+> **MEASURED LIVE 2026-07-31. The hypothesis holds — all four behaviours, on the
+> real server, against the real ground sampler.** `ops/c1-two-layer-live.sh`
+> bakes the C1 episode through the production export path, publishes it, and runs
+> `ops/c1-two-layer-probe.py`:
+>
+> | Behaviour | Measured | A failure would have read |
+> |---|---|---|
+> | under a gallery, on the chamber floor | `y = +0.000` | `+3.50` (captured by the soffit) |
+> | on the gallery slab | `y = +4.000` | `+3.50` (standing on its own underside) |
+> | walking off the aperture's bare rim | `y = +0.000`, 0.2u from the aperture cell | `−20` (the abyss base) |
+> | mid-span on the aerial deck | `y = +4.000`, lower route at `+0.00` | — |
+>
+> **What this does and does not settle.** It settles that the `max`-selection
+> hazard §7.2 reasons about does not bite at a 4-level rise: a soffit 3.5u above
+> a player's feet is far outside the 1.2u window. It does NOT validate the
+> remedy this section recommends — per C1a's re-measurement the `_E_` slab is a
+> **convex mesh**, so what was tested is a normal-filtered 1.2u capture, not the
+> box collider's unfiltered 0.35u one. The remedy was unnecessary here; whether
+> it works is still unmeasured.
+>
+> **Two things the live leg found that no plan gate and no render digest could
+> have.** Both are recorded because both cost a failed run:
+>
+> 1. **The outer shell pass is heightfield-only, and it walled the upper route
+>    shut.** Where a ground-backed terrace at L4 met a suspended gallery at L4,
+>    the shell put a 5.7u enclosure wall across the seam
+>    (`shell_0_10_4_0`, `y[4.00, 9.70]`, `z[41.75, 42.25]`) and the probe player
+>    could not cross it. The retaining face underneath is CORRECT and stays —
+>    from the chamber below, the terrace really is a wall from 0 to 4, and its
+>    top sits flush at y=4. It is the guard *on top* that was wrong. Fixed by a
+>    **flush seam**: a face whose open side carries a walkable surface at the
+>    face's top level suppresses its top guard, which suppresses the shell
+>    courses, the railing and the railing corner columns in one move, because all
+>    three already key off `WallEdge.suppressRailing`. Inert on a single-layer
+>    plan by construction — a retaining face has the open side's floor at its
+>    BOTTOM and a cliff has it at or below the bottom, so no single-layer face
+>    can carry a surface at its top on the open side.
+> 2. **The module hard-validates the dungeon door manifest as NON-EMPTY**
+>    (`world_interactions.rs:930`, inside a `OnceLock` that `game_tick` touches
+>    every tick). Baking geometry that owns no gateways exported an empty
+>    manifest and every tick panicked, so the probe player never moved while
+>    every reducer reported `Committed`. Doors and traps are deferred work and
+>    the episode has none, so the bake leaves both manifests alone.
+>
+> **And a constraint worth stating once:** there is no runtime world selector.
+> World collision is `include_str!` at compile time (`open_world_scene.rs`), so
+> the only way to put a fixture in front of the real ground sampler is to write
+> the dungeon's own payload and restore afterwards. The harness does that by byte
+> copy, refuses to back up over an existing backup, and refuses to restore a
+> backup that holds the episode.
+
 **The draft was wrong here and its central claim was unproven.** It required
 that "soffits, columns and deck undersides must not be marked `walkable_top`".
 **[Fact]** exported dungeon geometry carries no such field:

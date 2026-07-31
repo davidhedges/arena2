@@ -153,6 +153,10 @@ namespace DungeonLab.Editor
             public Vector2Int apertureCell;
             public int upperLevel;
             public float levelHeight;
+            public Vector2Int bridgeWestLanding;
+            public Vector2Int bridgeEastLanding;
+            public Vector2Int bridgeStackedCell;
+            public int bridgeDeckLevel;
 
             // What the fixture DECLARED, derived from its own surface set rather
             // than written down, so a miscounted expectation cannot pass.
@@ -229,6 +233,125 @@ namespace DungeonLab.Editor
                 if (fixture?.root != null)
                     DestroyImmediate(fixture.root);
             }
+        }
+
+        /// <summary>
+        /// Bake the C1 episode into the dungeon scene and its collision payload,
+        /// so the live probe (design §13 Phase C, evidence leg 3) has something
+        /// on the server to walk around in.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TEMPORARY AND DESTRUCTIVE. It writes the production scene and the
+        /// checked-in client/server collision payloads, because those are what
+        /// the server compiles in (`include_str!` in `open_world_scene.rs`) —
+        /// there is no runtime world selector to point at a second payload.
+        /// Back the six payload files and the scene up first and put them back
+        /// afterwards; `ops/c1-two-layer-live.sh` does exactly that.
+        /// </para>
+        /// <para>
+        /// It goes through `RandomDungeonSceneBuilder.BakeDungeonRoot`, the same
+        /// tail a real rebuild runs, on purpose. A probe that exercised a
+        /// parallel export path would be measuring its own plumbing rather than
+        /// the generator's.
+        /// </para>
+        /// </remarks>
+        [MenuItem("Tools/Dungeon Lab/Bake Two-Layer Episode Into The Dungeon Scene (TEMPORARY)")]
+        public static void BakeTwoLayerEpisodeIntoDungeonScene()
+        {
+            UnityEngine.SceneManagement.Scene destination = EditorSceneManager.NewScene(
+                NewSceneSetup.EmptyScene,
+                NewSceneMode.Single);
+
+            TwoLayerEpisodeFixture fixture = BuildTwoLayerEpisodeFixture();
+            GameObject root = fixture.root;
+            root.name = RandomDungeonSceneBuilder.DungeonRootName;
+
+            long stageStart = System.Diagnostics.Stopwatch.GetTimestamp();
+            RandomDungeonSceneBuilder.BakeDungeonRoot(
+                destination,
+                root,
+                seed: 0,
+                RandomDungeonSceneBuilder.ScenePath,
+                RandomDungeonSceneBuilder.DataKey,
+                addSceneToBuildSettings: true,
+                beforeModelImporterMutation: null,
+                stageRecorder: null,
+                ref stageStart,
+                // The episode owns no gateways and no traps, and the module
+                // PANICS every tick on an empty door manifest — measured, it
+                // killed `game_tick` on the first live attempt. The production
+                // manifests stay; their doors and traps sit far outside this
+                // episode's footprint (nearest door x=46 against an episode
+                // spanning x -16..16), so nothing they describe is in the way.
+                exportInteractionManifests: false);
+
+            // The probe needs FINAL world coordinates, and they are only final
+            // after CenterDungeonSpawn has moved the root — which floor it
+            // centres on is a tie-break over renderer bounds, not something to
+            // re-derive in Python.
+            string manifestPath = WriteTwoLayerEpisodeProbeManifest(fixture, root.transform.position);
+            Debug.Log(
+                $"[TWO_LAYER_EPISODE_BAKE] scene={RandomDungeonSceneBuilder.ScenePath} " +
+                $"rootOffset={root.transform.position} manifest={manifestPath}");
+        }
+
+        private static string WriteTwoLayerEpisodeProbeManifest(
+            TwoLayerEpisodeFixture fixture, Vector3 rootOffset)
+        {
+            float h = fixture.levelHeight;
+            int upper = fixture.upperLevel;
+
+            JObject Point(int cx, int cy, int level, string note)
+            {
+                return new JObject
+                {
+                    ["cell"] = new JArray(cx, cy),
+                    ["level"] = level,
+                    ["x"] = rootOffset.x + (cx + 0.5f) * 4f,
+                    ["y"] = rootOffset.y + level * h,
+                    ["z"] = rootOffset.z + (cy + 0.5f) * 4f,
+                    ["note"] = note
+                };
+            }
+
+            var manifest = new JObject
+            {
+                ["levelHeight"] = h,
+                ["upperLevel"] = upper,
+                ["rootOffset"] = new JArray(rootOffset.x, rootOffset.y, rootOffset.z),
+                ["stackedSurfaces"] = fixture.reportedStackedSurfaces,
+                ["bareRims"] = fixture.reportedBareRims,
+                // Every point the probe walks to or asserts about, in the order
+                // the route visits them.
+                ["lowerRouteSpawnSide"] = Point(0, 0, 0, "lower route, near the world origin spawn"),
+                ["chamberEntry"] = Point(0, 5, 0, "chamber, first cell north of the lower route"),
+                ["chamberUnderGallery"] = Point(1, 7, 0, "chamber floor DIRECTLY under a gallery slab"),
+                ["stairFoot"] = Point(-3, 6, 0, "return stair, bottom"),
+                ["stairTop"] = Point(-3, 10, upper, "return stair, top — terrace level"),
+                ["terrace"] = Point(0, 10, upper, "terrace, ground-backed at the gallery's level"),
+                ["galleryEntry"] = Point(0, 9, upper, "gallery, first stacked surface off the terrace"),
+                ["galleryRim"] = Point(0, 8, upper, "gallery cell whose SOUTH rim is bare — walk off here"),
+                ["apertureLanding"] = Point(0, 7, 0, "chamber floor under the aperture — where the fall must land"),
+                ["eastCorridor"] = Point(3, 5, upper, "level-4 corridor back toward the bridge rooms"),
+                ["bridgeEastLanding"] = Point(
+                    fixture.bridgeEastLanding.x, fixture.bridgeEastLanding.y, upper,
+                    "east end of the aerial span"),
+                ["bridgeDeck"] = Point(
+                    fixture.bridgeStackedCell.x, fixture.bridgeStackedCell.y, fixture.bridgeDeckLevel,
+                    "the span deck's stacked coordinate — lower route runs underneath at L0"),
+                ["bridgeWestLanding"] = Point(
+                    fixture.bridgeWestLanding.x, fixture.bridgeWestLanding.y, upper,
+                    "west end of the aerial span"),
+                ["lowerRouteUnderBridge"] = Point(
+                    fixture.bridgeStackedCell.x, fixture.bridgeStackedCell.y, 0,
+                    "lower route directly under the span deck")
+            };
+
+            string path = System.IO.Path.Combine(BatchReportDirectory, "two_layer_episode_probe.json");
+            System.IO.Directory.CreateDirectory(BatchReportDirectory);
+            System.IO.File.WriteAllText(path, manifest.ToString(Formatting.Indented));
+            return path;
         }
 
         private static TwoLayerEpisodeFixture BuildTwoLayerEpisodeFixture()
@@ -403,6 +526,12 @@ namespace DungeonLab.Editor
                 apertureCell = apertureCell,
                 upperLevel = upperLevel,
                 levelHeight = levelHeight,
+                bridgeWestLanding =
+                    bridge.firstCell.x <= bridge.secondCell.x ? bridge.firstCell : bridge.secondCell,
+                bridgeEastLanding =
+                    bridge.firstCell.x <= bridge.secondCell.x ? bridge.secondCell : bridge.firstCell,
+                bridgeStackedCell = bridgeStackedCell,
+                bridgeDeckLevel = bridgeDeckLevel,
                 expectedStackedSurfaces = galleryCells.Count,
                 expectedBareRims = expectedBareRims,
                 expectedRailedRims = expectedRailedRims,

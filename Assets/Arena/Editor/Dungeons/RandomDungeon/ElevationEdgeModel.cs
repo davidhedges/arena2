@@ -2584,13 +2584,31 @@ namespace DungeonLab.Editor
                         Vector2Int solidCell = face.solidSideIsCell ? cell : neighbor;
                         Vector2Int openCell = face.solidSideIsCell ? neighbor : cell;
                         bool solidSideIsStair = face.solidSideIsCell ? cellIsStair : neighborIsStair;
+                        // A FLUSH SEAM: the open side carries a walkable surface
+                        // level with the top of this face, so the two sides are
+                        // one continuous walk and the face's top belongs to that
+                        // surface. The face itself still renders — from the
+                        // chamber below, a gallery's terrace really is a wall
+                        // from the floor up — but it must take no guard and no
+                        // shell course, or the dungeon walls its own upper route
+                        // shut. Measured live 2026-07-31: without this the shell
+                        // pass put a 5.7u enclosure wall across the seam where a
+                        // ground-backed terrace meets a suspended gallery at the
+                        // same level, and the probe player could not cross it.
+                        //
+                        // Inert on a single-layer plan, and provably so rather
+                        // than by measurement: a retaining face has the open
+                        // side's floor at its BOTTOM, and a cliff has it at or
+                        // below the bottom, so no single-layer face can have a
+                        // surface at its top on the open side.
+                        bool flushSeam = surfaceColumns.HasSurfaceAt(openCell, face.higherLevel);
                         wallEdges.Add(new WallEdge(
                             EdgeFromCellToward(solidCell, openCell),
                             face.lowerLevel,
                             face.higherLevel,
                             face.isRetaining,
                             false,
-                            suppressRailing: solidSideIsStair || bridgePortEdge));
+                            suppressRailing: solidSideIsStair || bridgePortEdge || flushSeam));
                         if (face.isRetaining)
                         {
                             stats.retainingEdges++;

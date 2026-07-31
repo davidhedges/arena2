@@ -133,14 +133,62 @@ namespace DungeonLab.Editor
             }
             RecordValidationStage(stageRecorder, "resolveGeneratedRoot", ref stageStart);
 
+            BakeDungeonRoot(
+                destination,
+                dungeonRoot,
+                seed,
+                destinationScenePath,
+                dataKey,
+                addSceneToBuildSettings,
+                beforeModelImporterMutation,
+                stageRecorder,
+                ref stageStart);
+
+            Debug.Log(
+                $"[RandomDungeonSceneBuilder] Rebuilt {SceneName} with seed {seed}. " +
+                "The generated floor at world origin is the shared player/minion spawn, and collision was exported for client and server.");
+        }
+
+        /// <summary>
+        /// Everything a built dungeon root goes through on its way to a saved
+        /// scene and an exported collision payload.
+        /// </summary>
+        /// <remarks>
+        /// Extracted so a hand-built root — the layered-topology C1 episode — can
+        /// travel the EXACT production path to the server rather than a parallel
+        /// one. A live probe that exercised a second export path would be
+        /// measuring the probe's own plumbing, not the generator's.
+        /// </remarks>
+        internal static void BakeDungeonRoot(
+            Scene destination,
+            GameObject dungeonRoot,
+            int seed,
+            string destinationScenePath,
+            string dataKey,
+            bool addSceneToBuildSettings,
+            Action<string>? beforeModelImporterMutation,
+            Action<string, double>? stageRecorder,
+            ref long stageStart,
+            bool exportInteractionManifests = true)
+        {
             CenterDungeonSpawn(dungeonRoot);
             RecordValidationStage(stageRecorder, "centerDungeonSpawn", ref stageStart);
-            WorldInteractionManifestExporter.ExportActiveScene(dataKey);
-            RecordValidationStage(stageRecorder, "exportWorldInteractions", ref stageStart);
-            // After CenterDungeonSpawn, so exported trap coordinates are final
-            // world space — the same ordering the door manifest depends on.
-            WorldTrapManifestExporter.ExportActiveScene(dataKey);
-            RecordValidationStage(stageRecorder, "exportWorldTraps", ref stageStart);
+            // MEASURED 2026-07-31, and it cost a dead server: the module hard-
+            // validates the dungeon door manifest as NON-EMPTY
+            // (`world_interactions.rs:930`, inside a OnceLock that `game_tick`
+            // touches every tick), so a root with no gateways exports an empty
+            // manifest and every single tick panics. A caller baking geometry
+            // that owns no doors or traps must keep the existing manifests
+            // rather than replace them with empty ones.
+            if (exportInteractionManifests)
+            {
+                WorldInteractionManifestExporter.ExportActiveScene(dataKey);
+                RecordValidationStage(stageRecorder, "exportWorldInteractions", ref stageStart);
+                // After CenterDungeonSpawn, so exported trap coordinates are final
+                // world space — the same ordering the door manifest depends on.
+                WorldTrapManifestExporter.ExportActiveScene(dataKey);
+                RecordValidationStage(stageRecorder, "exportWorldTraps", ref stageStart);
+            }
             EnsureCollisionMeshesReadable(dungeonRoot, beforeModelImporterMutation);
             RecordValidationStage(stageRecorder, "normalizeCollisionMeshImporters", ref stageStart);
             MarkDungeonCollision(dungeonRoot);
@@ -167,11 +215,9 @@ namespace DungeonLab.Editor
             EditorSceneManager.SaveScene(destination, destinationScenePath);
             AssetDatabase.SaveAssets();
             RecordValidationStage(stageRecorder, "saveSceneAndAssetsAfterExport", ref stageStart);
-
-            Debug.Log(
-                $"[RandomDungeonSceneBuilder] Rebuilt {SceneName} with seed {seed}. " +
-                "The generated floor at world origin is the shared player/minion spawn, and collision was exported for client and server.");
         }
+
+        internal const string DungeonRootName = GeneratedRootName;
 
         private static void CenterDungeonSpawn(GameObject dungeonRoot)
         {
