@@ -325,6 +325,34 @@ Leg 4, the **owner eyeball**, is the one Phase C leg still outstanding — no ha
 tells you whether a two-layer room reads well. `ops/c1-two-layer-live.sh` leaves
 the episode in the dungeon scene, ready to walk.
 
+### C2 is blocked, and the block is one line
+
+Verified 2026-07-31 against the code, not the draft. The recipe resolver writes
+zone levels with `cellLevels[cell] = baseLevel + zone.relativeLevel`
+(`DungeonLabGenerator.Recipes.cs:1943`) into a `Dictionary<Vector2Int,int>`, so
+**two layers over one plan cell silently overwrite rather than stack** — no
+second surface and no rejection. C2's authored two-layer room cannot be resolved
+until the level field is a `SurfaceField`.
+
+That migration is smaller than the 247 `cellLevels` references suggest, because
+`AsHeightField()` defers every reader. **The writer side is 11 sites in 6
+functions**: `TrySetCellLevel` and `TrySetPlannedStairCells`, plus four
+deliberate bypasses in `FillUnassignedFloorCells` (×2),
+`TryResolveNamedVistaPromontory` and the recipe zone write. Three of the four
+only insert into cells the field does not yet hold; only the recipe one
+overwrites. Threading one `SurfaceField` through `TryBuildCellLevelField`,
+`TryResolveConnectionTransition` (one caller) and `TryResolveNamedVistaPromontory`
+covers them all. Gate it with `ops/dungeon-port-ab.sh` — it is a plan change.
+
+Three §8.2 mechanisms dissolved on inspection and should not be built:
+`baseLevel` is not derived from port zero, it **is** the node's level (every port
+is already required to resolve at `nodeLevel + port.relativeLevel`), so
+`RECIPE_BASE_LEVEL_CONFLICT` and the explicit `anchorLayerId`/`anchorLevel`
+escape hatch both have nothing to do.
+
+**Order: level field → `SurfaceField` (writer side), then the recipe layer
+schema, then the authored episode.**
+
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently
 traversable surfaces that may overlap in plan — pits that drop to a lower route,

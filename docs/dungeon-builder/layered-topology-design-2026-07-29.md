@@ -1325,6 +1325,46 @@ Two further things worth stating plainly:
 
 ### 8.2 Recipes — multi-layer authored rooms
 
+> **Verified against the code 2026-07-31, and three of this section's mechanisms
+> dissolve while a fourth blocks the phase.**
+>
+> 1. **`baseLevel` is not derived from port zero. It IS the node's level.**
+>    `expectedRelativeLevel = node.relativeElevationLevels + port.relativeLevel`
+>    (`Recipes.cs:1089`) and every port is then required to resolve at exactly
+>    that (`:1794`). So `firstPortLevel − firstPortContract.relativeLevel`
+>    (`:1791`) algebraically equals the node level, and every other port already
+>    has to agree. The "ordering dependence" this section sets out to fix is not
+>    there.
+> 2. **`RECIPE_BASE_LEVEL_CONFLICT` is therefore unnecessary** — the
+>    all-candidates-agree property is already enforced, and by a stronger rule.
+>    The layer-aware form is just
+>    `expected = nodeLevel + layer.relativeLevel + port.relativeLevel`.
+> 3. **`anchorLayerId` / `anchorLevel` is unnecessary too.** A base layer with no
+>    external port is not a problem: the base is the node's level whether or not
+>    any port sits on it.
+> 4. **THE BLOCKER. A two-layer authored room cannot be resolved at all today,
+>    and it fails SILENTLY.** The resolver writes zone levels with
+>    `cellLevels[cell] = baseLevel + zone.relativeLevel` (`Recipes.cs:1943`) into
+>    a `Dictionary<Vector2Int,int>`. Two zones on different layers over one plan
+>    cell do not stack and do not reject — the second overwrites the first. So
+>    C2's authored episode is blocked on the level field becoming a
+>    `SurfaceField`, which §12/2.5 lists as a Phase D prerequisite and which is
+>    really a **C2** prerequisite.
+>
+> **That migration is smaller than "247 references" suggests.** The reader side
+> is deferred by `AsHeightField()`; the WRITER side is 11 sites in 6 functions:
+> `TrySetCellLevel` (`cs:6530`) and `TrySetPlannedStairCells` (`:6547`), plus
+> four deliberate bypasses — `FillUnassignedFloorCells` (`:6628`, `:6638`),
+> `TryResolveNamedVistaPromontory` (`:2888`) and the recipe zone write
+> (`Recipes.cs:1943`). Three of the four bypasses only ever insert into cells the
+> field does not yet hold; only the recipe one overwrites. Threading a single
+> `SurfaceField` through `TryBuildCellLevelField` (`:1781`),
+> `TryResolveConnectionTransition` (`:2122`, one caller) and
+> `TryResolveNamedVistaPromontory` covers all of them.
+>
+> **So the order is: level field → `SurfaceField` (writer side), then this
+> section, then the authored episode.**
+
 **[Proposed]** three schema additions, all additive and defaulting to today's
 behaviour. **Phase split, corrected per review finding 4:** the layer fields,
 layer-scoped `RelativeLevelAt`, per-layer base derivation and
