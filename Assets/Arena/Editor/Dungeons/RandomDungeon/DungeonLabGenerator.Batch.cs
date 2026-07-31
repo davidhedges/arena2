@@ -742,7 +742,10 @@ namespace DungeonLab.Editor
                 planIdentityShadowDisagreementSeeds++;
                 finding["code"] = "PLAN_SHADOW_DISAGREEMENT";
                 finding["planShadowCells"] = layout.floorCells?.Count ?? 0;
-                finding["surfaceCells"] = plan.surfaces?.Count ?? 0;
+                // CELLS carrying a surface, to stay comparable with
+                // planShadowCells above. `SurfaceField.Count` counts SURFACES,
+                // which is the same number only while the field is single-layer.
+                finding["surfaceCells"] = plan.surfaces?.PlanCells().Count ?? 0;
                 finding["surfacedCellsOutsideShadow"] = new JObject
                 {
                     ["count"] = disagreement.surfacedCellsOutsideShadow.Length,

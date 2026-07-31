@@ -233,15 +233,33 @@ namespace DungeonLab.Editor
         /// POST-elevation. The canonical walkable surfaces of a plan.
         /// </summary>
         /// <remarks>
-        /// Backed by a heightfield in A1, so it carries at most one surface per
-        /// cell and <see cref="AsHeightField"/> is always valid. Consumers that
-        /// mean "a walkable place" should migrate to <see cref="Surfaces"/> and
-        /// <see cref="LevelsAt"/>; consumers that mean "a column of plan space"
-        /// keep asking for cells and stay correct forever.
+        /// <para>
+        /// A1 backed this with a bare heightfield, so it could not express a
+        /// second surface at all. C1b gives it a real one: the heightfield still
+        /// holds the LOWEST surface in every column — which is what keeps
+        /// <see cref="AsHeightField"/> byte-identical for the whole existing
+        /// pipeline — and an overlay carries anything stacked above it.
+        /// </para>
+        /// <para>
+        /// Production never touches the overlay. Nothing in the generator calls
+        /// <see cref="AddSurface"/>; only the C1 fixture does. That is what makes
+        /// this change output-neutral by construction rather than by measurement,
+        /// and it is also why <see cref="AsHeightField"/> may keep throwing on a
+        /// stacked field without stranding the ~250 consumers that still take a
+        /// dictionary: while generation is single-layer, none of them can ever
+        /// be handed a stacked field. Those consumers migrate in the phase that
+        /// first GENERATES a second surface, not this one.
+        /// </para>
         /// </remarks>
         private sealed class SurfaceField
         {
+            // The lowest surface in each column. Kept as the original concrete
+            // dictionary so `AsHeightField()` can hand back the very instance
+            // the pipeline built.
             private readonly Dictionary<Vector2Int, int> heightField;
+            // Surfaces ABOVE the lowest, per cell, ascending. Null until one
+            // exists, so the single-layer case allocates nothing.
+            private Dictionary<Vector2Int, List<int>> stacked;
             private SurfaceKey[] sortedSurfaces;
 
             public SurfaceField(Dictionary<Vector2Int, int> heightField)
@@ -249,15 +267,89 @@ namespace DungeonLab.Editor
                 this.heightField = heightField ?? new Dictionary<Vector2Int, int>();
             }
 
-            public int Count => heightField.Count;
+            /// <summary>The number of SURFACES, which exceeds the cell count once stacked.</summary>
+            public int Count
+            {
+                get
+                {
+                    int count = heightField.Count;
+                    if (stacked != null)
+                    {
+                        foreach (KeyValuePair<Vector2Int, List<int>> column in stacked)
+                        {
+                            count += column.Value.Count;
+                        }
+                    }
+
+                    return count;
+                }
+            }
 
             /// <summary>
-            /// True while every plan cell carries at most one surface. Constant
-            /// in A1 because the backing store cannot express anything else;
-            /// stated as a property rather than assumed so the phase that breaks
-            /// it breaks it in exactly one place.
+            /// True while every plan cell carries at most one surface.
             /// </summary>
-            public bool IsSingleLayer => true;
+            /// <remarks>
+            /// Computed now rather than constant. A1 hard-coded it because the
+            /// backing store could not express anything else; the store can, so
+            /// the answer has to come from the data.
+            /// </remarks>
+            public bool IsSingleLayer => stacked == null || stacked.Count == 0;
+
+            /// <summary>
+            /// Add a walkable surface to a column, keeping the heightfield on the
+            /// lowest one.
+            /// </summary>
+            /// <remarks>
+            /// The heightfield must always hold the column's LOWEST surface,
+            /// because that is what every consumer of the compatibility view
+            /// means by "the floor here" — and because
+            /// <c>IsGroundBacked</c> is defined as "lowest in its column". A
+            /// surface added below the current one therefore takes its place and
+            /// pushes the old value up into the overlay.
+            /// </remarks>
+            public void AddSurface(Vector2Int cell, int level)
+            {
+                sortedSurfaces = null;
+                if (!heightField.TryGetValue(cell, out int lowest))
+                {
+                    heightField[cell] = level;
+                    return;
+                }
+
+                if (level == lowest)
+                {
+                    return;
+                }
+
+                stacked ??= new Dictionary<Vector2Int, List<int>>();
+                if (!stacked.TryGetValue(cell, out List<int> above))
+                {
+                    above = new List<int>(1);
+                    stacked[cell] = above;
+                }
+
+                if (level < lowest)
+                {
+                    heightField[cell] = level;
+                    level = lowest;
+                }
+
+                if (!above.Contains(level))
+                {
+                    above.Add(level);
+                    above.Sort();
+                }
+            }
+
+            /// <summary>
+            /// Is this surface the lowest in its column — i.e. is the mass under
+            /// it earth rather than open air? The column half of
+            /// <c>IsGroundBacked</c> (design §7.1).
+            /// </summary>
+            public bool IsLowestInColumn(Vector2Int cell, int level)
+            {
+                return heightField.TryGetValue(cell, out int lowest) && lowest == level;
+            }
 
             /// <summary>
             /// The heightfield view. Valid only while <see cref="IsSingleLayer"/>.
@@ -301,6 +393,17 @@ namespace DungeonLab.Editor
                     surfaces.Add(new SurfaceKey(item.Key, item.Value));
                 }
 
+                if (stacked != null)
+                {
+                    foreach (KeyValuePair<Vector2Int, List<int>> column in stacked)
+                    {
+                        foreach (int level in column.Value)
+                        {
+                            surfaces.Add(new SurfaceKey(column.Key, level));
+                        }
+                    }
+                }
+
                 surfaces.Sort(SurfaceKey.Compare);
                 sortedSurfaces = surfaces.ToArray();
                 return sortedSurfaces;
@@ -309,11 +412,22 @@ namespace DungeonLab.Editor
             /// <summary>The levels present at one plan cell, ascending.</summary>
             public IReadOnlyList<int> LevelsAt(Vector2Int cell)
             {
-                return heightField.TryGetValue(cell, out int level)
-                    ? new[] { level }
-                    : Array.Empty<int>();
+                if (!heightField.TryGetValue(cell, out int level))
+                {
+                    return Array.Empty<int>();
+                }
+
+                if (stacked == null || !stacked.TryGetValue(cell, out List<int> above))
+                {
+                    return new[] { level };
+                }
+
+                var levels = new List<int>(above.Count + 1) { level };
+                levels.AddRange(above);
+                return levels;
             }
 
+            /// <summary>The LOWEST surface at a cell, which is the heightfield's.</summary>
             public bool TryGetSurfaceAt(Vector2Int cell, out SurfaceKey surface)
             {
                 if (heightField.TryGetValue(cell, out int level))
