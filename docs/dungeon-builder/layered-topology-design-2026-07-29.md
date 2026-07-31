@@ -1055,10 +1055,9 @@ and B on.
 >
 > **And a constraint worth stating once:** there is no runtime world selector.
 > World collision is `include_str!` at compile time (`open_world_scene.rs`), so
-> the only way to put a fixture in front of the real ground sampler is to write
-> the dungeon's own payload and restore afterwards. The harness does that by byte
-> copy, refuses to back up over an existing backup, and refuses to restore a
-> backup that holds the episode.
+> the only way to put a fixture in front of the real ground sampler is to bake it
+> into the dungeon's own payload. `ops/c1-two-layer-live.sh` bakes, publishes and
+> probes; rebuild a dungeon afterwards if you want one.
 
 **The draft was wrong here and its central claim was unproven.** It required
 that "soffits, columns and deck undersides must not be marked `walkable_top`".

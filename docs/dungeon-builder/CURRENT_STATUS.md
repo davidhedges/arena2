@@ -293,7 +293,7 @@ Six things measured during C1b that the design had wrong:
 
 **The live leg ran 2026-07-31, and §7.2's hypothesis held.**
 `ops/c1-two-layer-live.sh` bakes the episode through the production export path,
-publishes, runs `ops/c1-two-layer-probe.py`, and puts the real dungeon back. All
+publishes, and runs `ops/c1-two-layer-probe.py`. All
 four §7.2 behaviours passed on the real server: a player under a gallery stays at
 `y=+0.000` where a soffit capture would read `+3.50`; on the gallery they stand
 at `+4.000`, not on its underside; walking off the aperture's bare rim lands them
@@ -318,11 +318,12 @@ Three things the live leg found that no plan gate and no render digest could:
    `game_tick` while every reducer still reported `Committed`. Doors and traps
    are deferred; the bake leaves both manifests alone.
 3. **There is no runtime world selector** — world collision is `include_str!` at
-   compile time, so a fixture can only reach the real ground sampler by taking
-   the dungeon's own payload and giving it back afterwards.
+   compile time, so a fixture can only reach the real ground sampler by being
+   baked into the dungeon's own payload.
 
 Leg 4, the **owner eyeball**, is the one Phase C leg still outstanding — no hash
-tells you whether a two-layer room reads well.
+tells you whether a two-layer room reads well. `ops/c1-two-layer-live.sh` leaves
+the episode in the dungeon scene, ready to walk.
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently

@@ -242,12 +242,11 @@ namespace DungeonLab.Editor
         /// </summary>
         /// <remarks>
         /// <para>
-        /// TEMPORARY AND DESTRUCTIVE. It writes the production scene and the
-        /// checked-in client/server collision payloads, because those are what
-        /// the server compiles in (`include_str!` in `open_world_scene.rs`) —
-        /// there is no runtime world selector to point at a second payload.
-        /// Back the six payload files and the scene up first and put them back
-        /// afterwards; `ops/c1-two-layer-live.sh` does exactly that.
+        /// It writes the dungeon scene and its client/server collision payloads,
+        /// because those are what the server compiles in (`include_str!` in
+        /// `open_world_scene.rs`) — there is no runtime world selector to point
+        /// at a second payload. The dungeon it replaces is regenerated content;
+        /// rebuild one when you want it back.
         /// </para>
         /// <para>
         /// It goes through `RandomDungeonSceneBuilder.BakeDungeonRoot`, the same
