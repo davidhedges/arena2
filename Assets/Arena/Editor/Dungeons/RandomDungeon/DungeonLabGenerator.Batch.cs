@@ -745,7 +745,7 @@ namespace DungeonLab.Editor
                 // CELLS carrying a surface, to stay comparable with
                 // planShadowCells above. `SurfaceField.Count` counts SURFACES,
                 // which is the same number only while the field is single-layer.
-                finding["surfaceCells"] = plan.surfaces?.PlanCells().Count ?? 0;
+                finding["surfaceCells"] = plan.surfaces?.FlooredPlanCells().Count ?? 0;
                 finding["surfacedCellsOutsideShadow"] = new JObject
                 {
                     ["count"] = disagreement.surfacedCellsOutsideShadow.Length,
@@ -3650,6 +3650,14 @@ namespace DungeonLab.Editor
                     ["externalConnectorCount"] = plan.externalConnectors?.Length ?? 0,
                     ["externalConnectorPierCells"] = CollectExternalConnectorPierCells(plan.externalConnectors).Count,
                     ["recipeCount"] = plan.recipeResolutions?.Length ?? 0,
+                    // The span-deck inventory, reported because the claim it
+                    // settles was previously an assumption: "spans fly over
+                    // authored void, so dropping their columns from the port
+                    // graph is harmless today". `deckSurfacesOverFloor` is the
+                    // number that could have made that false, and it is now
+                    // measured per seed instead of reasoned about.
+                    ["deckSurfaces"] = CountDeckSurfaces(plan.surfaces, out int decksOverFloor),
+                    ["deckSurfacesOverFloor"] = decksOverFloor,
                     ["depthLevelCorrelation"] = float.IsNaN(correlation) ? JValue.CreateNull() : new JValue(correlation)
                 },
                 ["validation"] = validationToken,
@@ -4492,7 +4500,7 @@ namespace DungeonLab.Editor
 
             var directions = new HashSet<int>();
             var occupied = new HashSet<Vector2Int>();
-            RectInt finalExtent = GetCellRect(plan.surfaces.PlanCells());
+            RectInt finalExtent = GetCellRect(plan.surfaces.FlooredPlanCells());
             foreach (ExternalConnectorPromontoryResolution resolution in resolutions)
             {
                 Vector2Int outward = CardinalVector(resolution.direction);
@@ -4511,7 +4519,7 @@ namespace DungeonLab.Editor
                         finalExtent,
                         resolution.terminalCell,
                         resolution.direction) ||
-                    plan.surfaces.ContainsCell(resolution.terminalCell + outward))
+                    plan.surfaces.HasFloor(resolution.terminalCell + outward))
                 {
                     message = $"external connector '{resolution.id}' had invalid identity, direction, geometry, or terminal throat";
                     return false;
@@ -4600,6 +4608,42 @@ namespace DungeonLab.Editor
             return passed;
         }
 
+        /// <summary>
+        /// How many span-deck surfaces a plan carries, and how many of those
+        /// stand over a column that has a floor.
+        /// </summary>
+        /// <remarks>
+        /// The second figure is the interesting one. A deck over a true gap is
+        /// scenery; a deck over a floor is a walkway crossing playable geometry,
+        /// which is the case the port graph used to delete. Reported per seed so
+        /// the corpus answers it rather than an argument.
+        /// </remarks>
+        private static int CountDeckSurfaces(SurfaceField surfaces, out int overFloor)
+        {
+            overFloor = 0;
+            if (surfaces == null)
+            {
+                return 0;
+            }
+
+            int decks = 0;
+            foreach (ElevationEdgeModel.StackedSurface surface in surfaces.StackedSurfaces())
+            {
+                if (surface.kind != SurfaceKind.Deck)
+                {
+                    continue;
+                }
+
+                decks++;
+                if (surfaces.HasFloor(surface.cell))
+                {
+                    overFloor++;
+                }
+            }
+
+            return decks;
+        }
+
         private static bool TryValidateRendererInputs(TieredLevelPlan plan, out string message)
         {
             if (plan.surfaces == null || plan.surfaces.Count == 0)
@@ -4669,7 +4713,7 @@ namespace DungeonLab.Editor
                 }
             }
 
-            message = $"renderer inputs resolved {plan.surfaces.CellCount} leveled cells and {prefabPaths.Count} transition/set-piece prefabs";
+            message = $"renderer inputs resolved {plan.surfaces.FlooredCellCount} leveled cells and {prefabPaths.Count} transition/set-piece prefabs";
             return true;
         }
 
@@ -5053,7 +5097,7 @@ namespace DungeonLab.Editor
 
         private static JObject BuildCanonicalTieredLevelPlanProjection(TieredLevelPlan plan)
         {
-            var levelCells = new List<Vector2Int>(plan.surfaces.SurfacedCells());
+            var levelCells = new List<Vector2Int>(plan.surfaces.FlooredCells());
             levelCells.Sort(CompareCells);
             var levels = new JArray();
             foreach (Vector2Int cell in levelCells)
@@ -5233,7 +5277,7 @@ namespace DungeonLab.Editor
         {
             var externalPierCells = new HashSet<Vector2Int>(
                 CollectExternalConnectorPierCells(plan.externalConnectors));
-            var cells = new List<Vector2Int>(plan.surfaces.SurfacedCells());
+            var cells = new List<Vector2Int>(plan.surfaces.FlooredCells());
             cells.Sort(CompareCells);
             var levels = new JArray();
             foreach (Vector2Int cell in cells)
@@ -5275,13 +5319,13 @@ namespace DungeonLab.Editor
         {
             var externalPierCells = new HashSet<Vector2Int>(
                 CollectExternalConnectorPierCells(plan.externalConnectors));
-            // SurfacedCells(), not PlanCells(): backing-store order, because
+            // FlooredCells(), not FlooredPlanCells(): backing-store order, because
             // this dictionary's own enumeration order is observable downstream —
             // it is handed to the port-graph rebuild, whose node insertion order
             // reaches a diagnostic string. Same reason the shadow reconcile does
             // not sort.
             var coreLevels = new Dictionary<Vector2Int, int>();
-            foreach (Vector2Int cell in plan.surfaces.SurfacedCells())
+            foreach (Vector2Int cell in plan.surfaces.FlooredCells())
             {
                 if (!externalPierCells.Contains(cell) &&
                     plan.surfaces.TryGetFloorLevel(cell, out int cellLevel))

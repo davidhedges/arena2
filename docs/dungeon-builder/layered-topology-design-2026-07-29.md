@@ -2061,6 +2061,39 @@ properly.
 > asserts its bridge crosses exactly one stacked coordinate; adding a chamber, a
 > gallery and a stair run to the same field would either move that count or
 > force the assertion to be loosened.
+>
+> **C2a, C2b-1, C2b-2 and C2b-3 landed 2026-07-31**, in that order: the recipe
+> layer schema, the reader side's container half, transition endpoint levels, and
+> decks as surfaces. That last one is this section's "the aerial-bridge path
+> promoted so a deck's cells become surfaces", and it retires correction 6 above
+> — the port graph nodes every surface and the fixture no longer walks its own.
+> The episode reaches **94/94 nodes**, up from 84/88.
+>
+> **Three corrections from the deck work:**
+>
+> 1. **A deck is a surface but it is NOT a floor, and §3.1 does not say so.**
+>    The model here is "the surface field holds every surface, the heightfield is
+>    a compatibility view", which invites putting a deck over a true gap into the
+>    heightfield as its column's lowest surface — correction 4 above says exactly
+>    that, and reasons that `SurfaceKind` is what keeps it from becoming a
+>    pillar. The kind is enough for the RENDERER and for nothing else. The
+>    heightfield is what ~50 readers mean by "the floor here": put a deck in it
+>    and the flood fill seeds at deck height, a doorway opens onto thin air
+>    beside a span, and the plan shadow swallows the gap the deck crosses. The
+>    kind is what lets the FIELD decide where to store a surface — suspended
+>    kinds live in the overlay, floored or not — rather than a flag every reader
+>    must remember to consult.
+> 2. **Shadow agreement is floor-scoped, not surface-scoped.** §3.1's invariant
+>    ("every surface's plan cell is in the shadow", A2's one-directional form)
+>    breaks on the first suspended producer: the shadow is a GROUND claim, being
+>    both the domain the level field floods within and what `CleanPath` filters
+>    against. A surface owes the shadow a cell exactly when it rests on fill.
+> 3. **§12 scenario 2's separation mechanism does not exist and is not needed.**
+>    It calls for "a `Support` prism under the deck and a `Clearance` prism above
+>    the lower surface". The span deck's own `Footprint` prism declares a base
+>    (Phase B), and the single headroom rule computes the band per surface;
+>    `Support` still has no producer. The scenario's first sentence is now
+>    literally true.
 
 **C1 — renderer proof, code-built fixture.** No recipe schema change. Extend
 `BuildStackedCrossingFixture` into a hand-constructed two-layer field: upper

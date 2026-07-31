@@ -2727,7 +2727,7 @@ namespace DungeonLab.Editor
             bool reservedVolumeClear = requirements.reservedVistaCells.Count >= vista.minimumReservedVoidCells;
             foreach (Vector2Int cell in requirements.reservedVistaCells)
             {
-                if (layout.floorCells.Contains(cell) || surfaces.ContainsCell(cell))
+                if (layout.floorCells.Contains(cell) || surfaces.HasFloor(cell))
                 {
                     reservedVolumeClear = false;
                     break;
@@ -2899,7 +2899,7 @@ namespace DungeonLab.Editor
                 Vector2Int expected = requirements.vistaSourceCell + facing * (index + 1);
                 if (plannedCells[index] != expected ||
                     requirements.reservedVistaCells.Contains(expected) ||
-                    surfaces.ContainsCell(expected))
+                    surfaces.HasFloor(expected))
                 {
                     rejectionReason = $"[ROUTE_PROMONTORY] {NamedVistaPromontoryPolicyVersion} found an occupied, off-axis, or non-contiguous planned cell {plannedCells[index]}";
                     return false;
@@ -2908,7 +2908,7 @@ namespace DungeonLab.Editor
 
             foreach (Vector2Int cell in requirements.reservedVistaCells)
             {
-                if (surfaces.ContainsCell(cell))
+                if (surfaces.HasFloor(cell))
                 {
                     rejectionReason = $"[ROUTE_PROMONTORY] {NamedVistaPromontoryPolicyVersion} found occupied remaining vista cell {cell}";
                     return false;
@@ -3565,7 +3565,7 @@ namespace DungeonLab.Editor
             IReadOnlyDictionary<Vector2Int, int> cellRoomIds,
             HashSet<Vector2Int> blockedCells)
         {
-            return surfaces.ContainsCell(cell) && !cellRoomIds.ContainsKey(cell) && !blockedCells.Contains(cell);
+            return surfaces.HasFloor(cell) && !cellRoomIds.ContainsKey(cell) && !blockedCells.Contains(cell);
         }
 
         private static void AddInternalPathRun(
@@ -3761,8 +3761,8 @@ namespace DungeonLab.Editor
                 }
 
                 if (surfaces != null &&
-                    (!surfaces.ContainsCell(path[index]) ||
-                     !surfaces.ContainsCell(path[index + 1])))
+                    (!surfaces.HasFloor(path[index]) ||
+                     !surfaces.HasFloor(path[index + 1])))
                 {
                     return;
                 }
@@ -3838,7 +3838,7 @@ namespace DungeonLab.Editor
                 }
 
                 if (surfaces != null &&
-                    (!surfaces.ContainsCell(path[i]) || !surfaces.ContainsCell(path[i + 1])))
+                    (!surfaces.HasFloor(path[i]) || !surfaces.HasFloor(path[i + 1])))
                 {
                     return;
                 }
@@ -4940,6 +4940,32 @@ namespace DungeonLab.Editor
             // a sloped deck is never lower than this anywhere along its run.
             plannedStairLedger.RegisterSpanDeck(footprint, deckClearanceLevel, bridgeOwner);
 
+            // The deck's cells ARE walkable surfaces (design §13, Phase C
+            // systems). `SurfaceKind.Deck` had no producer until here, and the
+            // consequence was not cosmetic: with no surface to point at, the port
+            // graph read the deck's footprint as a stair body and deleted the
+            // whole column, so a span over playable geometry severed the route it
+            // crossed.
+            //
+            // `Deck`, so the field knows this is walkable and SUSPENDED. It
+            // therefore never enters the heightfield: a cell the deck flies over
+            // keeps whatever floor it has, and a cell over a true gap gains a
+            // surface without gaining ground. Every floor-scoped reader — the
+            // flood fill, the plan shadow, doorways, the overlook stat — is
+            // untouched by construction rather than by audit.
+            //
+            // ONE level for the whole run, the conservative minimum the ledger
+            // already declares for it. A sloped span (decision 34) is flat for
+            // all but its last cell, where a single flight climbs to the upper
+            // landing; the deck's own transition edge carries that rise, and a
+            // cell-granular surface model has nowhere to put a ramp. The lie is
+            // in the safe direction — the recorded surface is never above the
+            // real one, so nothing under the span reads more headroom than it has.
+            foreach (Vector2Int deckCell in footprint)
+            {
+                surfaces.AddSurface(deckCell, deckClearanceLevel, SurfaceKind.Deck);
+            }
+
             synthesizedStairs.Add(($"aerial:{candidate.roomA}<->{candidate.roomB}", setPiece));
             return true;
         }
@@ -5171,7 +5197,7 @@ namespace DungeonLab.Editor
                     {
                         Vector2Int world = entryAnchor + RotateCardinalVector(option.footprintCells[f] - option.entryCells[0], quarterTurns);
                         // Void only (decision 26): never a floor cell, never leveled.
-                        if (layoutFloorCells.Contains(world) || surfaces.ContainsCell(world))
+                        if (layoutFloorCells.Contains(world) || surfaces.HasFloor(world))
                         {
                             fits = false;
                             break;
@@ -5962,7 +5988,7 @@ namespace DungeonLab.Editor
             // partition wall). Ports stay the only edges where a span meets floor.
             foreach (Vector2Int cell in footprintCells)
             {
-                if (surfaces.ContainsCell(cell))
+                if (surfaces.HasFloor(cell))
                 {
                     return false;
                 }
@@ -6079,6 +6105,13 @@ namespace DungeonLab.Editor
                 : UnleveledTransitionEndpoint;
         }
 
+        // "Every one of these cells is either UNSURFACED, or already carries a
+        // surface at exactly this level" — any surface, not just a floor. Every
+        // caller runs during the stair search, which precedes the only suspended
+        // producer there is, so `HasFloor` would read identically today. It is
+        // the wider question on purpose: a stair landing planted in a column
+        // whose only surface is a bridge deck is wrong whether or not the pass
+        // ordering currently makes it reachable.
         private static bool PlannedCellsAreCompatible(
             SurfaceField surfaces,
             IReadOnlyList<Vector2Int> cells,
@@ -6086,7 +6119,7 @@ namespace DungeonLab.Editor
         {
             foreach (Vector2Int cell in cells)
             {
-                if (surfaces.ContainsCell(cell) && !surfaces.HasSurfaceAt(cell, level))
+                if (surfaces.CarriesAnySurface(cell) && !surfaces.HasSurfaceAt(cell, level))
                 {
                     return false;
                 }
@@ -6688,7 +6721,7 @@ namespace DungeonLab.Editor
                 string.Equals(placementClass, StairwellStairPlacementClass, StringComparison.Ordinal);
             foreach (Vector2Int cell in footprintCells)
             {
-                if (footprintStaysUnleveled && !surfaces.ContainsCell(cell))
+                if (footprintStaysUnleveled && !surfaces.HasFloor(cell))
                 {
                     continue;
                 }
@@ -6723,7 +6756,16 @@ namespace DungeonLab.Editor
         {
             // Seed the flood fill in sorted order: Dictionary key order is not contractually
             // stable, and which seed reaches a contested unassigned cell first decides its level.
-            var seeds = new List<Vector2Int>(surfaces.SurfacedCells());
+            //
+            // FLOORS on both sides of the walk — the seeds and the "already
+            // done" test — and that is load-bearing now that a span deck is a
+            // surface. This pass runs after the bridges, so a deck may already
+            // stand over a corridor cell that has no level yet. Seeding from
+            // surfaces would flood the deck's height into the ground beneath it;
+            // skipping surfaced cells would leave that corridor cell with no
+            // floor at all. It owes a floor to every cell in the shadow,
+            // whatever is flying overhead.
+            var seeds = new List<Vector2Int>(surfaces.FlooredCells());
             seeds.Sort(CompareCells);
             var queue = new Queue<Vector2Int>();
             foreach (Vector2Int cell in seeds)
@@ -6742,7 +6784,7 @@ namespace DungeonLab.Editor
                 foreach (Vector2Int neighbor in CardinalNeighbors(cell))
                 {
                     if (!floorCells.Contains(neighbor) ||
-                        surfaces.ContainsCell(neighbor) ||
+                        surfaces.HasFloor(neighbor) ||
                         externalSpanGapCells.Contains(neighbor))
                     {
                         continue;
@@ -6756,7 +6798,7 @@ namespace DungeonLab.Editor
             int unreachedCells = 0;
             foreach (Vector2Int cell in floorCells)
             {
-                if (!surfaces.ContainsCell(cell) && !externalSpanGapCells.Contains(cell))
+                if (!surfaces.HasFloor(cell) && !externalSpanGapCells.Contains(cell))
                 {
                     surfaces.AddFloorLevel(cell, 0);
                     unreachedCells++;
@@ -6864,7 +6906,8 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            HashSet<Vector2Int> stairFootprintCells = BuildTransitionFootprintCellSet(transitions);
+            HashSet<Vector2Int> stairFootprintCells =
+                BuildTransitionBodyCellSet(surfaces, transitions);
             // BACKING-STORE order, not canonical order. Node insertion order is
             // observable — it reaches the port graph's summary and its
             // reachability message, which 5 of the 200 corpus seeds emit — so
@@ -6872,8 +6915,13 @@ namespace DungeonLab.Editor
             // levels floor-first. Single-layer that is exactly the dictionary
             // enumeration this replaces. `Surfaces()` would be tidier and would
             // move seeds, which is the same trap as sorting the shadow reconcile.
+            //
+            // ALL surfaced cells, not just the floored ones: a span deck over a
+            // true gap is the first surface that stands in a column with no
+            // floor, and iterating floors alone would leave the deck out of the
+            // very graph it is a walkway in.
             var all = new List<SurfaceKey>(surfaces.Count);
-            foreach (Vector2Int cell in surfaces.SurfacedCells())
+            foreach (Vector2Int cell in surfaces.AllSurfacedCells())
             {
                 foreach (int level in surfaces.LevelsAt(cell))
                 {
@@ -7062,13 +7110,42 @@ namespace DungeonLab.Editor
             return true;
         }
 
-        private static HashSet<Vector2Int> BuildTransitionFootprintCellSet(IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions)
+        /// <summary>
+        /// The columns a transition's BODY consumes, which the port graph may
+        /// not put nodes in.
+        /// </summary>
+        /// <remarks>
+        /// A footprint normally means "treads fill this column": there is no
+        /// walkable place inside a stair body, and the way through is the stair's
+        /// two ports. A SPAN DECK is the exception, and it is not a special case
+        /// bolted on — its footprint IS its walkable surface, which is why the
+        /// deck cells carry <see cref="SurfaceKind.Deck"/> at all. Treating them
+        /// as a body removed the whole column at every level, so a deck crossing
+        /// playable geometry cut the route beneath it out of the traversal graph.
+        /// Measured on the two-layer episode: 84 of 88 nodes reachable, and
+        /// dropping this one rule from the fixture's own walk reproduced the port
+        /// graph's answer exactly.
+        /// <para>
+        /// Read off the PLAN, not off a placement-class string. A span whose deck
+        /// never became a surface — the reviewed-contract corridor span, which
+        /// may only cross cells proved unsurfaced — still consumes its columns,
+        /// and there is nothing in them to consume.
+        /// </para>
+        /// </remarks>
+        private static HashSet<Vector2Int> BuildTransitionBodyCellSet(
+            SurfaceField surfaces,
+            IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions)
         {
             var result = new HashSet<Vector2Int>();
             foreach (ElevationEdgeModel.TransitionEdge transition in transitions)
             {
                 foreach (Vector2Int cell in transition.footprintCells)
                 {
+                    if (surfaces.CarriesDeck(cell))
+                    {
+                        continue;
+                    }
+
                     result.Add(cell);
                 }
             }
@@ -7350,7 +7427,7 @@ namespace DungeonLab.Editor
             }
 
             int count = 0;
-            foreach (Vector2Int cell in surfaces.SurfacedCells())
+            foreach (Vector2Int cell in surfaces.FlooredCells())
             {
                 if (!surfaces.TryGetFloorLevel(cell, out int level))
                 {

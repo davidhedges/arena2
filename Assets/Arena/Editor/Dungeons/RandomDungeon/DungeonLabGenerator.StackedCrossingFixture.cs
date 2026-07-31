@@ -157,6 +157,9 @@ namespace DungeonLab.Editor
             public Vector2Int bridgeEastLanding;
             public Vector2Int bridgeStackedCell;
             public int bridgeDeckLevel;
+            // The span's own walkable surfaces — `SurfaceKind.Deck`, which had no
+            // producer until the deck-as-surface change.
+            public int deckSurfaces;
 
             // What the fixture DECLARED, derived from its own surface set rather
             // than written down, so a miscounted expectation cannot pass.
@@ -225,6 +228,7 @@ namespace DungeonLab.Editor
                         $" (declared {fixture.expectedStackedSurfaces})",
                     $"episode.stackedSurfacesAgree=" +
                         $"{fixture.reportedStackedSurfaces == fixture.expectedStackedSurfaces}",
+                    $"episode.deckSurfaces={fixture.deckSurfaces}",
                     $"episode.bareRims={fixture.reportedBareRims} (declared {fixture.expectedBareRims})",
                     $"episode.railedRims={fixture.reportedRailedRims} (declared {fixture.expectedRailedRims})",
                     $"episode.rimsAgree=" +
@@ -449,12 +453,12 @@ namespace DungeonLab.Editor
                 }
             }
 
-            List<ElevationEdgeModel.StackedSurface> stacked =
-                new List<ElevationEdgeModel.StackedSurface>(surfaces.StackedSurfaces());
-            if (surfaces.IsSingleLayer || stacked.Count != galleryCells.Count)
+            if (surfaces.IsSingleLayer ||
+                surfaces.StackedSurfaces().Count != galleryCells.Count)
             {
                 throw new InvalidOperationException(
-                    $"Two-layer fixture expected {galleryCells.Count} stacked surfaces; the field holds {stacked.Count}.");
+                    $"Two-layer fixture expected {galleryCells.Count} gallery surfaces; the field holds " +
+                    $"{surfaces.StackedSurfaces().Count}.");
             }
 
             // ---- transitions: the bridge, then the return stair -------------
@@ -487,6 +491,22 @@ namespace DungeonLab.Editor
             Vector2Int bridgeStackedCell = bridge.footprintCells
                 .Single(cell => levels.TryGetValue(cell, out int lower) &&
                     bridgeDeckLevel - lower >= MinHeadroomLevels);
+
+            // The deck's cells are surfaces now, so the field the renderer and
+            // the port graph are handed is snapshotted AFTER the bridge, not
+            // before it. The gallery half is unchanged; what is new is five deck
+            // surfaces, one of them standing over the lower route.
+            List<ElevationEdgeModel.StackedSurface> stacked =
+                new List<ElevationEdgeModel.StackedSurface>(surfaces.StackedSurfaces());
+            var deckSurfaces = stacked
+                .Where(surface => surface.kind == SurfaceKind.Deck)
+                .ToList();
+            if (deckSurfaces.Count != bridge.footprintCells.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Two-layer fixture expected {bridge.footprintCells.Length} deck surfaces; " +
+                    $"the field holds {deckSurfaces.Count}.");
+            }
 
             // The return stair is four rise-1 seam strips, which is the strip
             // family the generator itself uses for a corridor step. Four of them
@@ -559,17 +579,28 @@ namespace DungeonLab.Editor
             string portGraphReachability = "port graph did not build";
             bool portGraphFallFreeConnected =
                 portGraphBuilt && portGraph.IsFallFreeConnected(out portGraphReachability);
-            var portGraphFootprint = new HashSet<Vector2Int>();
+            // Every column a transition BODY consumes — which no longer includes
+            // the bridge's, because its footprint carries the deck's own
+            // surfaces. Derived here the same way the port graph derives it, so
+            // the expectation is a second reading of the rule rather than a
+            // number copied from its output.
+            var portGraphBodyColumns = new HashSet<Vector2Int>();
             foreach (ElevationEdgeModel.TransitionEdge transition in transitions)
             {
-                portGraphFootprint.UnionWith(transition.footprintCells);
+                foreach (Vector2Int cell in transition.footprintCells)
+                {
+                    if (!surfaces.CarriesDeck(cell))
+                    {
+                        portGraphBodyColumns.Add(cell);
+                    }
+                }
             }
 
             int portGraphFootprintColumns = 0;
             int portGraphExpectedNodes = transitions.Count * 2;
             foreach (SurfaceKey surface in surfaces.Surfaces())
             {
-                if (portGraphFootprint.Contains(surface.cell))
+                if (portGraphBodyColumns.Contains(surface.cell))
                 {
                     portGraphFootprintColumns++;
                     continue;
@@ -594,6 +625,10 @@ namespace DungeonLab.Editor
                     bridge.firstCell.x <= bridge.secondCell.x ? bridge.secondCell : bridge.firstCell,
                 bridgeStackedCell = bridgeStackedCell,
                 bridgeDeckLevel = bridgeDeckLevel,
+                deckSurfaces = deckSurfaces.Count,
+                // The gallery alone: the renderer's stacked counter is over the
+                // surfaces it DRAWS, and a deck's geometry is its transition's
+                // set piece. The deck surfaces are counted separately above.
                 expectedStackedSurfaces = galleryCells.Count,
                 expectedBareRims = expectedBareRims,
                 expectedRailedRims = expectedRailedRims,
@@ -618,9 +653,10 @@ namespace DungeonLab.Editor
                 portGraphNodes = portGraph?.NodeCount ?? 0,
                 portGraphReachability = portGraphReachability,
                 // Every surface whose COLUMN is not consumed by a transition
-                // footprint, plus two stair ports per transition. The port graph
-                // drops a footprint column at every level, which is what the
-                // bridge deck's own crossing cell runs into below.
+                // BODY, plus two stair ports per transition. A span deck's
+                // footprint is not a body — its cells are the deck — so the
+                // column under the bridge keeps its node and the route it
+                // crosses stays whole.
                 expectedPortGraphNodes = portGraphExpectedNodes,
                 portGraphFootprintColumns = portGraphFootprintColumns,
 
@@ -680,14 +716,31 @@ namespace DungeonLab.Editor
         /// snapshot compares two independent derivations rather than the
         /// renderer against a number somebody typed.
         /// </summary>
+        /// <remarks>
+        /// Over the surfaces the RENDERER draws, so span decks are excluded on
+        /// both sides: a deck's walk slab and its railings come from the
+        /// transition's set piece, and the surface pass emits neither a floor
+        /// tile nor a rim guard for one. Counting them here would compare the
+        /// fixture's arithmetic against geometry the renderer never had a reason
+        /// to build.
+        /// </remarks>
         private static void DeriveExpectedStackedRims(
             IReadOnlyDictionary<Vector2Int, int> levels,
-            IReadOnlyList<ElevationEdgeModel.StackedSurface> stacked,
+            IReadOnlyList<ElevationEdgeModel.StackedSurface> stackedWithDecks,
             IReadOnlyList<ElevationEdgeModel.OpenFloorEdge> plannedOpenEdges,
             int upperLevel,
             out int bareRims,
             out int railedRims)
         {
+            var stacked = new List<ElevationEdgeModel.StackedSurface>();
+            foreach (ElevationEdgeModel.StackedSurface surface in stackedWithDecks)
+            {
+                if (surface.kind != SurfaceKind.Deck)
+                {
+                    stacked.Add(surface);
+                }
+            }
+
             var surfacesAtUpper = new HashSet<Vector2Int>();
             foreach (KeyValuePair<Vector2Int, int> item in levels)
             {
@@ -778,6 +831,13 @@ namespace DungeonLab.Editor
             // level, on the reasoning that a stair body occupies it. Setting this
             // reproduces that rule here, so the two walks can be compared with
             // one variable changed instead of guessed at.
+            // Retained AFTER the fix, and it is the whole evidence for what the
+            // fix was: setting this flag re-imposes the one rule that changed —
+            // "a footprint column holds no walkable place, at any level" — over
+            // the identical surface set. If the episode still walked whole with
+            // it set, that rule was not the cause and the change was aimed at
+            // the wrong thing. It does not: 4 surfaces go unreachable, which is
+            // the number the port graph reported before the fix.
             var droppedCells = new HashSet<Vector2Int>();
             if (dropTransitionFootprintColumns)
             {

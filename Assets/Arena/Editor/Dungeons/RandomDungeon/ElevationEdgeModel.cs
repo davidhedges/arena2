@@ -12345,6 +12345,19 @@ namespace DungeonLab.Editor
                 above = new Dictionary<Vector2Int, List<StackedSurface>>();
                 foreach (StackedSurface surface in stackedSurfaces)
                 {
+                    // A span deck is a walkable surface in the PLAN and authored
+                    // set-piece geometry in the SCENE: the transition prefab
+                    // already carries its walk slab, its railings and its
+                    // underside caps. Drawing a floor tile and rim guards over it
+                    // here would be a second deck in the same place. It is also
+                    // the one surface that legitimately stands in a column with no
+                    // floor — that is what a bridge over a true gap is — so this
+                    // skip has to come before the floor check below.
+                    if (surface.kind == SurfaceKind.Deck)
+                    {
+                        continue;
+                    }
+
                     if (!columnFloors.TryGetValue(surface.cell, out int floorLevel))
                     {
                         throw new InvalidOperationException(
@@ -12367,13 +12380,22 @@ namespace DungeonLab.Editor
                     column.Add(surface);
                 }
 
+                if (above.Count == 0)
+                {
+                    // Every stacked surface was a deck. Nothing to draw above a
+                    // column floor, so this is the single-layer path — stated
+                    // rather than left to an empty dictionary reading as stacked.
+                    above = null;
+                    return;
+                }
+
                 foreach (List<StackedSurface> column in above.Values)
                 {
                     column.Sort((first, second) => first.level.CompareTo(second.level));
                 }
             }
 
-            /// <summary>True while every cell carries exactly one surface.</summary>
+            /// <summary>True while nothing the renderer draws stands above a column floor.</summary>
             public bool IsSingleLayer => above == null;
 
             /// <summary>The surfaces stacked over one column's floor, ascending.</summary>

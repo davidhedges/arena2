@@ -291,15 +291,25 @@ namespace DungeonLab.Editor
         /// </remarks>
         private sealed class SurfaceField
         {
-            // The lowest surface in each column. Kept as the original concrete
-            // dictionary so `AsHeightField()` can hand back the very instance
-            // the pipeline built.
+            // The column FLOOR — the lowest surface that RESTS ON FILL. Kept as
+            // the original concrete dictionary so `AsHeightField()` can hand back
+            // the very instance the pipeline built.
+            //
+            // "Floor", not "lowest surface", and that distinction is the whole
+            // content of `SurfaceKind`. A span deck is walkable and suspended
+            // with no mass under it, so a column whose only surface is a deck
+            // has NO FLOOR. Putting one in the heightfield instead would make
+            // every floor-scoped reader wrong at once: the flood fill would seed
+            // at deck height, a doorway would open onto thin air beside a span,
+            // the plan shadow would swallow the gap the deck crosses, and the
+            // overlook stat would count stepping off a bridge as a cliff.
             private readonly Dictionary<Vector2Int, int> heightField;
-            // Surfaces ABOVE the lowest, per cell, ascending. Null until one
-            // exists, so the single-layer case allocates nothing.
+            // Every SUSPENDED surface, per cell, ascending: whatever stands over
+            // a column floor, plus whatever stands in a column that has none.
+            // Null until one exists, so the single-layer case allocates nothing.
             private Dictionary<Vector2Int, List<StackedSurfaceEntry>> stacked;
             // Kinds that are NOT Floor, keyed by surface. Sparse on purpose:
-            // every surface the pipeline produces today is a Floor, so an
+            // every surface in the heightfield is a Floor by construction, so an
             // unstacked field allocates nothing here either.
             private Dictionary<SurfaceKey, SurfaceKind> kinds;
             private SurfaceKey[] sortedSurfaces;
@@ -322,8 +332,8 @@ namespace DungeonLab.Editor
             }
 
             /// <summary>
-            /// The number of surfaced plan CELLS — the shadow's size, not the
-            /// surface count.
+            /// The number of FLOORED plan cells — the ground shadow's size, not
+            /// the surface count.
             /// </summary>
             /// <remarks>
             /// Distinct from <see cref="Count"/> and both are wanted: a plan-space
@@ -331,7 +341,7 @@ namespace DungeonLab.Editor
             /// vertical metric means surfaces. They differ only once stacked,
             /// which is exactly when picking the wrong one stops being harmless.
             /// </remarks>
-            public int CellCount => heightField.Count;
+            public int FlooredCellCount => heightField.Count;
 
             /// <summary>The number of SURFACES, which exceeds the cell count once stacked.</summary>
             public int Count
@@ -362,28 +372,37 @@ namespace DungeonLab.Editor
             public bool IsSingleLayer => stacked == null || stacked.Count == 0;
 
             /// <summary>
-            /// Add a walkable surface to a column, keeping the heightfield on the
-            /// lowest one.
+            /// Add a walkable surface to a column: the heightfield takes it when
+            /// it is a <see cref="SurfaceKind.Floor"/> lower than the column's
+            /// current one, and the suspended overlay takes it otherwise.
             /// </summary>
             /// <remarks>
-            /// The heightfield must always hold the column's LOWEST surface,
-            /// because that is what every consumer of the compatibility view
-            /// means by "the floor here" — and because
-            /// <c>IsGroundBacked</c> is defined as "lowest in its column". A
-            /// surface added below the current one therefore takes its place and
-            /// pushes the old value up into the overlay.
+            /// <para>
+            /// The heightfield holds the column's FLOOR, so only a
+            /// <see cref="SurfaceKind.Floor"/> can ever enter it. A suspended
+            /// surface — a deck, a gallery slab, a ledge — goes to the overlay
+            /// whether or not the column has a floor beneath it, which is what
+            /// lets a span deck exist over a true gap without inventing ground
+            /// under it.
+            /// </para>
+            /// <para>
+            /// A Floor added BELOW the column's current floor takes its place and
+            /// pushes the old one up into the overlay, because "the floor" means
+            /// the lowest one and <c>IsGroundBacked</c> is defined against it.
+            /// </para>
             /// </remarks>
             public void AddSurface(Vector2Int cell, int level, SurfaceKind kind)
             {
                 sortedSurfaces = null;
-                if (!heightField.TryGetValue(cell, out int lowest))
+                bool restsOnFill = kind == SurfaceKind.Floor;
+                if (restsOnFill && !heightField.TryGetValue(cell, out _))
                 {
                     heightField[cell] = level;
                     SetKind(new SurfaceKey(cell, level), kind);
                     return;
                 }
 
-                if (level == lowest)
+                if (restsOnFill && heightField[cell] == level)
                 {
                     SetKind(new SurfaceKey(cell, level), kind);
                     return;
@@ -396,14 +415,15 @@ namespace DungeonLab.Editor
                     stacked[cell] = above;
                 }
 
-                if (level < lowest)
+                if (restsOnFill && level < heightField[cell])
                 {
-                    // The new surface is now the column's floor and the old one
-                    // is stacked above it. The kinds move with their levels.
-                    SurfaceKind displacedKind = KindAt(cell, lowest);
+                    // The new floor is now the column's, and the old one is
+                    // stacked above it. The kinds move with their levels.
+                    int displacedLevel = heightField[cell];
+                    SurfaceKind displacedKind = KindAt(cell, displacedLevel);
                     heightField[cell] = level;
                     SetKind(new SurfaceKey(cell, level), kind);
-                    level = lowest;
+                    level = displacedLevel;
                     kind = displacedKind;
                 }
 
@@ -480,6 +500,7 @@ namespace DungeonLab.Editor
             /// Give a floor to a column that has none.
             /// </summary>
             /// <remarks>
+            /// <para>
             /// The four insert-only bypasses — both <c>FillUnassignedFloorCells</c>
             /// writes, the named vista promontory and the external connector
             /// piers — all guard on absence before writing and would be wrong
@@ -487,14 +508,23 @@ namespace DungeonLab.Editor
             /// operation rather than of four separate call sites, and one of the
             /// four (the connector piers) already threw for the same reason,
             /// via <c>Dictionary.Add</c>.
+            /// </para>
+            /// <para>
+            /// Unlike its two siblings this one tolerates a column that already
+            /// carries SUSPENDED surfaces, and it has to: an aerial deck may
+            /// cross a corridor cell the flood fill has not reached yet, and that
+            /// cell still needs its floor. Adding a floor UNDER a stack is not
+            /// the layer-blind truncation the guard exists to catch — the
+            /// suspended surfaces keep their levels, and the new floor simply
+            /// becomes the lowest thing in the column, which it is.
+            /// </para>
             /// </remarks>
             public void AddFloorLevel(Vector2Int cell, int level)
             {
-                RequireUnstackedColumn(cell, nameof(AddFloorLevel));
                 if (heightField.TryGetValue(cell, out int existing))
                 {
                     throw new InvalidOperationException(
-                        $"AddFloorLevel({cell}, {level}) requires an unsurfaced column, " +
+                        $"AddFloorLevel({cell}, {level}) requires an unfloored column, " +
                         $"but its floor is already at level {existing}");
                 }
 
@@ -536,14 +566,58 @@ namespace DungeonLab.Editor
                 {
                     throw new InvalidOperationException(
                         $"{operation} is layer-blind and cannot write column {cell}, which carries " +
-                        $"{above.Count} surface(s) above its floor. Use AddSurface.");
+                        $"{above.Count} suspended surface(s). Use AddSurface.");
                 }
             }
 
-            /// <summary>Does this column carry a surface at all?</summary>
-            public bool ContainsCell(Vector2Int cell)
+            /// <summary>
+            /// Does this column carry a FLOOR — something resting on fill?
+            /// </summary>
+            /// <remarks>
+            /// Not "does it carry a surface": a column crossed by a span deck and
+            /// nothing else is surfaced but unfloored, and every caller of this
+            /// predicate wants the floor. They are asking whether the flood fill
+            /// still owes this cell a level, whether a promontory pier may be
+            /// planted here, whether a doorway has ground on both sides. A deck
+            /// three levels overhead answers none of those.
+            /// <see cref="CarriesAnySurface"/> is the other question.
+            /// </remarks>
+            public bool HasFloor(Vector2Int cell)
             {
                 return heightField.ContainsKey(cell);
+            }
+
+            /// <summary>Does this column carry a surface of any kind?</summary>
+            public bool CarriesAnySurface(Vector2Int cell)
+            {
+                return heightField.ContainsKey(cell) ||
+                    (stacked != null && stacked.ContainsKey(cell));
+            }
+
+            /// <summary>
+            /// Does this column carry a span deck?
+            /// </summary>
+            /// <remarks>
+            /// The port graph's question. A transition's footprint normally means
+            /// "a stair body fills this column", but a span's footprint IS its
+            /// walkable deck — and the geometry under it is untouched.
+            /// </remarks>
+            public bool CarriesDeck(Vector2Int cell)
+            {
+                if (stacked == null || !stacked.TryGetValue(cell, out List<StackedSurfaceEntry> above))
+                {
+                    return false;
+                }
+
+                foreach (StackedSurfaceEntry entry in above)
+                {
+                    if (entry.kind == SurfaceKind.Deck)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
             }
 
             /// <summary>The level of a column's floor — its LOWEST surface.</summary>
@@ -574,12 +648,7 @@ namespace DungeonLab.Editor
             /// </remarks>
             public bool HasSurfaceAt(Vector2Int cell, int level)
             {
-                if (!heightField.TryGetValue(cell, out int floor))
-                {
-                    return false;
-                }
-
-                if (floor == level)
+                if (heightField.TryGetValue(cell, out int floor) && floor == level)
                 {
                     return true;
                 }
@@ -613,25 +682,23 @@ namespace DungeonLab.Editor
             /// </remarks>
             public bool TryGetHighestSurfaceLevel(Vector2Int cell, out int level)
             {
-                if (!heightField.TryGetValue(cell, out level))
+                bool floored = heightField.TryGetValue(cell, out level);
+                if (stacked == null || !stacked.TryGetValue(cell, out List<StackedSurfaceEntry> above))
                 {
-                    return false;
+                    return floored;
                 }
 
-                if (stacked != null && stacked.TryGetValue(cell, out List<StackedSurfaceEntry> above))
+                // Kept ascending by AddSurface, so the last one is the top.
+                for (int index = above.Count - 1; index >= 0; index--)
                 {
-                    // Kept ascending by AddSurface, so the last one is the top.
-                    for (int index = above.Count - 1; index >= 0; index--)
+                    if (!floored || above[index].level > level)
                     {
-                        if (above[index].level > level)
-                        {
-                            level = above[index].level;
-                            break;
-                        }
+                        level = above[index].level;
+                        break;
                     }
                 }
 
-                return true;
+                return floored || above.Count > 0;
             }
 
             /// <summary>
@@ -641,7 +708,21 @@ namespace DungeonLab.Editor
             /// </summary>
             public bool IsLowestInColumn(Vector2Int cell, int level)
             {
-                return heightField.TryGetValue(cell, out int lowest) && lowest == level;
+                if (heightField.TryGetValue(cell, out int floor))
+                {
+                    // A floor is by definition the lowest thing in its column.
+                    return floor == level;
+                }
+
+                // No floor: the lowest surface is the bottom of the overlay,
+                // which is where a deck over a true gap lives.
+                if (stacked == null || !stacked.TryGetValue(cell, out List<StackedSurfaceEntry> above) ||
+                    above.Count == 0)
+                {
+                    return false;
+                }
+
+                return above[0].level == level;
             }
 
             /// <summary>
@@ -734,20 +815,31 @@ namespace DungeonLab.Editor
                 return heightField;
             }
 
-            /// <summary>The plan shadow this field actually occupies.</summary>
-            public HashSet<Vector2Int> PlanCells()
+            /// <summary>
+            /// The GROUND shadow: every plan cell this field gives a floor.
+            /// </summary>
+            /// <remarks>
+            /// Floors, not surfaces, and its one caller wants exactly that — the
+            /// external-connector exterior flood asks which void the dungeon does
+            /// not stand on, and a bridge deck overhead leaves the ground below it
+            /// as exterior as it was.
+            /// </remarks>
+            public HashSet<Vector2Int> FlooredPlanCells()
             {
                 return new HashSet<Vector2Int>(heightField.Keys);
             }
 
             /// <summary>
-            /// The surfaced plan cells, without a copy and in BACKING-STORE
+            /// The FLOORED plan cells, without a copy and in BACKING-STORE
             /// order.
             /// </summary>
             /// <remarks>
-            /// Complete for a stacked field as well: <see cref="AddSurface"/>
-            /// keeps every column's lowest surface in the heightfield, so a cell
-            /// carrying a stacked surface always carries a floor too.
+            /// Floors only. A column crossed by a span deck and nothing else is
+            /// surfaced but unfloored, and every caller here wants the ground:
+            /// the flood fill's seeds, the plan shadow reconcile, the overlook
+            /// stat, the canonical level rows. <see cref="AllSurfacedCells"/> is
+            /// the wider enumeration, and the port graph is the one reader that
+            /// wants it.
             /// <para>
             /// The order is the caller's problem and one caller genuinely wants
             /// it — <c>ReconcilePlanShadowWithSurfaces</c> inserts into the
@@ -756,9 +848,42 @@ namespace DungeonLab.Editor
             /// Sorting here would be tidier and would move seeds.
             /// </para>
             /// </remarks>
-            public IEnumerable<Vector2Int> SurfacedCells()
+            public IEnumerable<Vector2Int> FlooredCells()
             {
                 return heightField.Keys;
+            }
+
+            /// <summary>
+            /// Every plan cell carrying a surface of any kind, in BACKING-STORE
+            /// order: floored columns first, then the columns that are only
+            /// suspended.
+            /// </summary>
+            /// <remarks>
+            /// The order is deliberate and not cosmetic. The port graph's node
+            /// INSERTION order reaches its summary and its reachability message,
+            /// both of which are reported, so the floored columns must keep
+            /// enumerating exactly as the raw dictionary did and the unfloored
+            /// ones must arrive after them rather than interleaved.
+            /// </remarks>
+            public IEnumerable<Vector2Int> AllSurfacedCells()
+            {
+                foreach (Vector2Int cell in heightField.Keys)
+                {
+                    yield return cell;
+                }
+
+                if (stacked == null)
+                {
+                    yield break;
+                }
+
+                foreach (KeyValuePair<Vector2Int, List<StackedSurfaceEntry>> column in stacked)
+                {
+                    if (!heightField.ContainsKey(column.Key) && column.Value.Count > 0)
+                    {
+                        yield return column.Key;
+                    }
+                }
             }
 
             /// <summary>Every surface, in canonical (x, y, level) order.</summary>
@@ -794,36 +919,24 @@ namespace DungeonLab.Editor
             /// <summary>The levels present at one plan cell, ascending.</summary>
             public IReadOnlyList<int> LevelsAt(Vector2Int cell)
             {
-                if (!heightField.TryGetValue(cell, out int level))
-                {
-                    return Array.Empty<int>();
-                }
-
+                bool floored = heightField.TryGetValue(cell, out int level);
                 if (stacked == null || !stacked.TryGetValue(cell, out List<StackedSurfaceEntry> above))
                 {
-                    return new[] { level };
+                    return floored ? new[] { level } : Array.Empty<int>();
                 }
 
-                var levels = new List<int>(above.Count + 1) { level };
+                var levels = new List<int>(above.Count + 1);
+                if (floored)
+                {
+                    levels.Add(level);
+                }
+
                 foreach (StackedSurfaceEntry entry in above)
                 {
                     levels.Add(entry.level);
                 }
 
                 return levels;
-            }
-
-            /// <summary>The LOWEST surface at a cell, which is the heightfield's.</summary>
-            public bool TryGetSurfaceAt(Vector2Int cell, out SurfaceKey surface)
-            {
-                if (heightField.TryGetValue(cell, out int level))
-                {
-                    surface = new SurfaceKey(cell, level);
-                    return true;
-                }
-
-                surface = default;
-                return false;
             }
         }
 
@@ -899,7 +1012,16 @@ namespace DungeonLab.Editor
         /// span deck stays a gap — and the shadow is the DOMAIN the level field
         /// floods within, so removing those cells would change what
         /// <c>FillUnassignedFloorCells</c> and <c>CleanPath</c> operate over.
-        /// Agreement is therefore one-directional: surfaces ⊆ shadow.
+        /// Agreement is therefore one-directional: floors ⊆ shadow.
+        /// </para>
+        /// <para>
+        /// FLOORS, not surfaces, and the qualifier arrived with the first
+        /// suspended producer. The shadow is a GROUND claim — it is what the
+        /// level field floods within and what <c>CleanPath</c> filters against —
+        /// so a span deck's plan cell does not belong in it. Adding one would
+        /// flood a level into the gap the deck was built to cross and would let a
+        /// corridor path route through thin air. A surface owes the shadow a cell
+        /// exactly when it rests on fill.
         /// </para>
         /// </remarks>
         /// <returns>How many cells the shadow gained.</returns>
@@ -918,7 +1040,7 @@ namespace DungeonLab.Editor
             // inserted in is observable; iterating the field's own store keeps
             // it byte-for-byte what iterating the raw dictionary gave.
             int added = 0;
-            foreach (Vector2Int cell in surfaces.SurfacedCells())
+            foreach (Vector2Int cell in surfaces.FlooredCells())
             {
                 if (shadow.Add(cell))
                 {
@@ -930,8 +1052,8 @@ namespace DungeonLab.Editor
         }
 
         /// <summary>
-        /// Shadow agreement (design §3.1): `surfaceField.PlanCells()` must equal
-        /// `planShadow.cells` at the end of planning.
+        /// Shadow agreement (design §3.1): `surfaceField.FlooredPlanCells()` must
+        /// equal `planShadow.cells` at the end of planning.
         /// </summary>
         /// <remarks>
         /// DETECTED in A1 and REPAIRED in A2, and the split is not fastidiousness:
@@ -949,12 +1071,13 @@ namespace DungeonLab.Editor
             HashSet<Vector2Int> shadow = layout.floorCells ?? new HashSet<Vector2Int>();
             SurfaceField surfaces = plan.surfaces;
 
-            // Plan-space on both sides. Agreement is between the shadow and the
-            // CELLS the field surfaces, so a stacked column is one cell here, not
-            // two — a second storey adds no new plan coordinate and cannot put
-            // the shadow out of agreement by existing.
+            // Plan-space on both sides, and FLOOR-scoped. Agreement is between
+            // the shadow and the cells the field gives GROUND to, so a stacked
+            // column is one cell here, not two — a second storey adds no new plan
+            // coordinate — and a column that only carries a suspended surface
+            // adds none either, because a deck makes no ground claim.
             var surfacedOutside = new List<Vector2Int>();
-            foreach (Vector2Int cell in surfaces?.SurfacedCells() ?? Array.Empty<Vector2Int>())
+            foreach (Vector2Int cell in surfaces?.FlooredCells() ?? Array.Empty<Vector2Int>())
             {
                 if (!shadow.Contains(cell))
                 {
@@ -965,7 +1088,7 @@ namespace DungeonLab.Editor
             var shadowWithout = new List<Vector2Int>();
             foreach (Vector2Int cell in shadow)
             {
-                if (surfaces == null || !surfaces.ContainsCell(cell))
+                if (surfaces == null || !surfaces.HasFloor(cell))
                 {
                     shadowWithout.Add(cell);
                 }

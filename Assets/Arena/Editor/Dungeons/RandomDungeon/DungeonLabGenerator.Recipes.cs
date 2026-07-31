@@ -2033,7 +2033,7 @@ namespace DungeonLab.Editor
                     int zoneLevel = baseLevel + zone.layerRelativeLevel + zone.relativeLevel;
                     foreach (Vector2Int cell in zone.cells)
                     {
-                        if (!surfaces.ContainsCell(cell))
+                        if (!surfaces.HasFloor(cell))
                         {
                             rejectionReason = $"[RECIPE_LEVELS] zone '{zone.id}' on '{placement.RecipeId}' escaped the canonical level field";
                             return false;

@@ -260,6 +260,14 @@ namespace DungeonLab.Editor
             private readonly Dictionary<OwnerKey, HashSet<OwnerKey>> penetrationAllowLists =
                 new Dictionary<OwnerKey, HashSet<OwnerKey>>();
 
+            // The surface a span deck CARRIES, and who owns it. Recorded at
+            // registration, not inferred from "a prism whose base is this level":
+            // a promontory pier raised to a deck's exact level would satisfy that
+            // guess and would then excuse the 0u clearance the gate exists to
+            // reject.
+            private readonly Dictionary<SurfaceKey, OwnerKey> carriedSurfaceOwners =
+                new Dictionary<SurfaceKey, OwnerKey>();
+
             /// <summary>
             /// How many cells carry structure that declares where it sits. This
             /// is the count the headroom gate reports, and today every one of
@@ -357,7 +365,26 @@ namespace DungeonLab.Editor
             /// </remarks>
             public void RegisterSpanDeck(IEnumerable<Vector2Int> deckCells, int deckLevel, OwnerKey owner)
             {
-                Add(deckCells, LevelBand.From(deckLevel), PrismKind.Footprint, owner);
+                foreach (Vector2Int cell in deckCells ?? Array.Empty<Vector2Int>())
+                {
+                    Add(new Prism(cell, LevelBand.From(deckLevel), PrismKind.Footprint, owner));
+                    // The deck's walk surface stands ON this prism. Without that
+                    // recorded, the headroom rule reads the deck's own surface,
+                    // finds the deck's own structure in its headroom band, and
+                    // rejects every plan that places a bridge.
+                    carriedSurfaceOwners[new SurfaceKey(cell, deckLevel)] = owner;
+                }
+            }
+
+            /// <summary>
+            /// Who carries this surface: the structure it stands on, or
+            /// <see cref="OwnerKey.PlanFloor"/> when it rests on fill.
+            /// </summary>
+            public OwnerKey SurfaceOwnerAt(SurfaceKey surface)
+            {
+                return carriedSurfaceOwners.TryGetValue(surface, out OwnerKey owner)
+                    ? owner
+                    : OwnerKey.PlanFloor;
             }
 
             /// <summary>
@@ -665,7 +692,29 @@ namespace DungeonLab.Editor
                     foreach (int surfaceLevel in surfaces.LevelsAt(cell))
                     {
                         var headroom = new LevelBand(surfaceLevel, surfaceLevel + MinHeadroomLevels);
-                        if (!TryFindLowestObstruction(cell, headroom, OwnerKey.PlanFloor, out int structureBase))
+                        // The surface's own carrier, not a blanket `PlanFloor`.
+                        // A span deck is a surface standing on the very prism that
+                        // declares the deck's base, and "owned by anything other
+                        // than S" is what stops that from reading as zero
+                        // clearance. Every other surface rests on fill and answers
+                        // `PlanFloor`, which is what the constant meant while the
+                        // deck was not a surface at all.
+                        //
+                        // A FLOOR always answers `PlanFloor`, even at a deck's
+                        // exact level, and that clause is load-bearing rather than
+                        // defensive: the flood fill can reach a gap cell from the
+                        // deck's own landing and floor it at deck height, which is
+                        // precisely the zero-clearance case this gate exists to
+                        // reject. Resolving the carrier by (cell, level) alone
+                        // would hand that floor the deck's exemption and pass a
+                        // deck lying on the ground.
+                        bool restsOnFill =
+                            surfaces.TryGetFloorLevel(cell, out int columnFloor) &&
+                            columnFloor == surfaceLevel;
+                        OwnerKey surfaceOwner = restsOnFill
+                            ? OwnerKey.PlanFloor
+                            : SurfaceOwnerAt(new SurfaceKey(cell, surfaceLevel));
+                        if (!TryFindLowestObstruction(cell, headroom, surfaceOwner, out int structureBase))
                         {
                             continue;
                         }

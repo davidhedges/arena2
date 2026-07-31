@@ -1,6 +1,6 @@
 # Dungeon generator: current status
 
-Last updated: 2026-07-29
+Last updated: 2026-07-31
 
 This page describes what the generator is, the rules worth knowing before you
 change it, and where the work stands. Keep it short — if it starts growing
@@ -62,8 +62,10 @@ layered-topology direction changes all three** — see "Where the work stands":
 
 - **Everything rises from a shared abyss datum.** One global base level; every
   floor edge facing void drops to it. Becomes a per-face support base.
-- **One plan coordinate carries one walkable surface.** The canonical elevation
-  model is a heightfield (`Dictionary<Vector2Int,int>`).
+- **One plan coordinate carries one walkable surface** — *no longer true as of
+  2026-07-31.* The canonical model is a `SurfaceField`: a column FLOOR plus
+  whatever is suspended over it. Generation stacks in exactly one place so far —
+  an aerial span's deck cells — which is 28 of the 200 density-0 seeds.
 - **Bridges are capped at 2 per dungeon and may not cross room interiors.**
 
 ## The rules worth knowing before you change it
@@ -120,14 +122,15 @@ rebaseline, and the density scale. Their evidence is archived:
 
 Treat both as history, not as current constraints.
 
-### In progress: layered 3-D topology — Phases A, B and C1 landed
+### In progress: layered 3-D topology — Phases A, B, C1 and C2a/C2b landed
 
 Design of record, **still a draft beyond Phase B**:
 [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md).
 Branch `dungeon/layered-topology`.
 
 **Phase A is complete (2026-07-31).** The plan can express surface identity;
-nothing yet produces a second surface.
+nothing yet produces a second surface. *(A producer arrived in C2b-3 — see
+"decks as surfaces" below. The sentence describes what Phase A shipped.)*
 
 - **A1 — container migration, output-neutral.** `DungeonLabGenerator.Surfaces.cs`
   introduces `SurfaceKey` (cell, level), `LevelBand`, `PlanShadow` (pre-elevation
@@ -559,6 +562,84 @@ the design's "aerial-bridge path promoted so a deck's cells become surfaces"
 (§13 Phase C Systems), now with evidence attached — and it is a prerequisite for
 the authored episode, whose whole point is a bridge over playable geometry.
 
+### C2b-3 — decks as surfaces, landed 2026-07-31
+
+`SurfaceKind.Deck` has a producer. An aerial span's footprint cells are walkable
+surfaces in the plan, the port graph no longer deletes the column under a
+bridge, and the two-layer episode walks whole: **94/94 port-graph nodes, up from
+84/88.**
+
+The change is one sentence with one qualifier: **a deck is a surface but it is
+not a floor.**
+
+- **The heightfield means the column FLOOR** — the lowest surface *resting on
+  fill* — and a suspended surface goes to the overlay whether or not the column
+  has a floor beneath it. That qualifier is what makes the whole thing safe: it
+  leaves `TryGetFloorLevel`, `FlooredCells()`, `FlooredPlanCells()` and
+  `HasFloor()` (the old `ContainsCell`) answering exactly what they answered
+  before, so the flood fill, the plan shadow, doorways and the overlook stat are
+  untouched by CONSTRUCTION rather than by audit. `hashes.layout` moved on 0 of
+  200 seeds.
+- **The port graph's footprint rule is read off the plan.**
+  `BuildTransitionBodyCellSet` still means "a stair body fills this column",
+  minus any column that carries a deck. Not a placement-class test: the
+  reviewed-contract corridor span shares the `externalSpan` class, may only
+  cross cells proved unsurfaced, and still consumes its columns — of which there
+  is nothing to consume.
+- **The headroom rule needed to know who CARRIES a surface.** The deck stands on
+  the very prism that declares the deck's base, so without this every
+  bridge-bearing seed would fail its own headroom gate. `PrismLedger` records
+  the carrier at `RegisterSpanDeck`.
+- **The renderer ignores `Deck`.** Its slab, railings and undersides are the
+  transition's set piece; a floor tile and rim guards over it would be a second
+  deck in the same place. It is also the one surface that legitimately stands in
+  a floorless column, so the skip precedes `SurfaceColumns`' floor check.
+
+Gate: **28 of 200 seeds moved, and they are exactly the 28 that place an aerial
+deck** (`synth_deck*_bridge`); the other 172 are byte-identical. A field-by-field
+diff of the two reports says precisely what moved on those 28: `hashes.canonical`
+and its three plan-stage components, the conditional endpoint-level rows
+(**998 rows ADDED, 0 changed in value** — no transition field present on both
+legs differs at all), the port-graph summary and its reachability message.
+Everything derived from the floor field held on all 200: level range, transition
+counts, stair usage/topology/placement class, overlook count, promontory and
+connector cells, recipe resolutions, the headroom gate's message, the accepted
+set (200/200 both legs) and every failure code. Rendered geometry is
+byte-identical too (`renderDigest bdb90e5e8a696dd7`, 12 seeds, three of them
+deck-bearing including a sloped span). Both fixtures re-run green.
+
+Four things measured that the design doc or this page had wrong:
+
+1. **"Spans fly over authored void" was an assumption; it is now a number.**
+   Across 200 seeds the corpus carries **118 deck surfaces and 0 of them stand
+   over a floor** (`tieredLevelPlan.deckSurfacesOverFloor`, new). So the severing
+   defect really was latent in production and only bites an authored episode —
+   and the port graph's floor-node count grew by *exactly* the deck count on
+   every one of the 28 seeds, which is the same fact derived a second way.
+2. **`SurfaceKind` alone does not make a deck safe in the heightfield, and the
+   C1b comment in `DungeonLabGenerator.Surfaces.cs` said it did.** Its reasoning
+   — "a deck over a true gap IS the lowest thing in its column", so a kind is all
+   that stops it becoming a pillar — is right about the renderer and wrong about
+   everything else. Put a deck in the heightfield and `TryGetFloorLevel` starts
+   answering about it: the flood fill seeds at deck height, a doorway opens onto
+   thin air beside a span, and the plan shadow swallows the gap the deck was
+   built to cross. The kind is what lets the FIELD decide where to store a
+   surface; relying on ~50 readers to consult it is the version that does not
+   work.
+3. **§12 scenario 2's mechanism is not what proves the separation.** It says "a
+   `Support` prism under the deck and a `Clearance` prism above the lower
+   surface prove ≥3u separation". Neither exists or is needed: the span deck's
+   own `Footprint` prism declares a base, and the one headroom rule computes the
+   band per surface. `Support` still has no producer. The scenario's first
+   sentence — deck cells are `Deck` surfaces, the cells below carry `Floor` — is
+   now literally true.
+4. **The connectivity gate now proves every deck is reachable, for free.**
+   `IsFallFreeConnected` requires EVERY node reached, so a deck chain that
+   connected to nothing would reject its seed. 200/200 pass, which means each
+   deck's lateral chain genuinely reaches its lower landing — including the nine
+   sloped (`d1`) spans, whose cells all record the deck's flat level and so meet
+   only the lower landing laterally.
+
 Still true, and still the reason all of this exists: before C2a, two layers over
 one plan cell overwrote rather than stacked.
 
@@ -569,12 +650,18 @@ is already required to resolve at `nodeLevel + port.relativeLevel`), so
 escape hatch both have nothing to do.
 
 **Order: ~~level field → `SurfaceField` (writer side)~~ → ~~the recipe layer
-schema~~ → ~~the reader side, container half~~ → ~~transition levels~~ → decks as
-surfaces → the authored episode.** The original order had two steps. The reader
+schema~~ → ~~the reader side, container half~~ → ~~transition levels~~ → ~~decks as
+surfaces~~ → the authored episode.** The original order had two steps. The reader
 side was not visible as its own step until the writer side made a stacked field
 reachable; its split into a container half and a model half was not visible until
 the readers were classified; and the deck-as-surface step was not visible until
 the port graph could run on a stacked plan at all.
+
+**Next is the authored episode itself (design §13, C2):** the C1 fixture rebuilt
+as a real catalog recipe using C2a's layer schema, plus one hand-authored
+topology file that places it. Every prerequisite it was blocked on is closed —
+the plan stacks, the readers see surfaces, transitions carry levels, and a
+bridge over playable geometry no longer severs the route beneath it.
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently

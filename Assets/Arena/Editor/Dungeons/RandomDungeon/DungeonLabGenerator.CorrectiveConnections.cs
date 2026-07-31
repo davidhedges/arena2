@@ -223,7 +223,7 @@ namespace DungeonLab.Editor
                      distance++)
                 {
                     Vector2Int cell = anchor + outward * distance;
-                    if (surfaces.ContainsCell(cell) ||
+                    if (surfaces.HasFloor(cell) ||
                         excluded.Contains(cell) ||
                         !exteriorVoid.Contains(cell))
                     {
@@ -283,7 +283,7 @@ namespace DungeonLab.Editor
         {
             // PlanCells(), not Surfaces(): the exterior flood is a PLAN-space
             // question, so a stacked column occupies one cell here, not two.
-            var occupied = surfaces.PlanCells();
+            var occupied = surfaces.FlooredPlanCells();
             RectInt occupiedExtent = GetCellRect(occupied);
             int margin = ExternalConnectorAppendageCells + 1;
             int minX = occupiedExtent.xMin - margin;
