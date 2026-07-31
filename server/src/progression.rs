@@ -593,6 +593,9 @@ fn authored_status_stack_group_default(kind: &str) -> StatusStackGroupDefault {
         "SLOW" => StatusStackGroupDefault::ActionSuffix("SLOW"),
         "MOVE_SPEED" => StatusStackGroupDefault::ActionSuffix("MOVE_SPEED"),
         "MOVE_SLOW_IMMUNITY" => StatusStackGroupDefault::ActionSuffix("MOVE_SLOW_IMMUNITY"),
+        "MOVEMENT_IMPAIRING_IMMUNITY" => {
+            StatusStackGroupDefault::ActionSuffix("MOVEMENT_IMPAIRING_IMMUNITY")
+        }
         "DAMAGE_AMP" => StatusStackGroupDefault::ActionSuffix("DAMAGE_AMP"),
         "DIRECT_DAMAGE_AMP" => StatusStackGroupDefault::ActionSuffix("DIRECT_DAMAGE_AMP"),
         "HEALING_TAKEN_REDUCTION" => {
@@ -1118,6 +1121,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::Dot,
         StatusEffectKind::Hot,
         StatusEffectKind::MoveSlowImmunity,
+        StatusEffectKind::MovementImpairingImmunity,
         StatusEffectKind::DamageAmp,
         StatusEffectKind::DirectDamageAmp,
         StatusEffectKind::DamageTakenReduction,
@@ -7477,6 +7481,65 @@ mod tests {
     }
 
     #[test]
+    fn celestial_mantle_authors_targeted_holy_immunity_and_attached_wings() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_CELESTIAL_MANTLE")
+            .expect("Celestial Mantle ability should be authored");
+        assert_eq!(ability.action_id, "CELESTIAL_MANTLE");
+        assert_eq!(ability_delivery_kind(ability), "APPLY_STATUS");
+        assert_eq!(ability.gameplay.cast_time_ms, Some(0));
+        assert_eq!(
+            normalize_optional_target_audience(ability.gameplay.target_audience.as_str()),
+            "PARTY_OR_SELF"
+        );
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .expect("Celestial Mantle should define delivery data");
+        assert_eq!(
+            delivery
+                .get("damage_type")
+                .and_then(serde_json::Value::as_str),
+            Some("HOLY")
+        );
+        assert_eq!(
+            delivery
+                .get("status")
+                .and_then(serde_json::Value::as_object)
+                .and_then(|status| status.get("kind"))
+                .and_then(serde_json::Value::as_str),
+            Some("MOVEMENT_IMPAIRING_IMMUNITY")
+        );
+
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_CELESTIAL_MANTLE"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_IMPACT"
+            })
+            .expect("Celestial Mantle target wing VFX cue should be authored");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
+        assert_eq!(
+            normalize_identifier(cue.attach_mode.as_str()),
+            "FOLLOW_ANCHOR"
+        );
+        assert_eq!(normalize_identifier(cue.vfx_role.as_str()), "ATTACHED");
+        assert_eq!(normalize_identifier(cue.lifecycle.as_str()), "DURATION");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_CELESTIAL_MANTLE_WINGS_01"
+        );
+        assert_eq!(cue.duration_ms, 5_000);
+    }
+
+    #[test]
     fn frozen_grasp_authors_self_area_root_and_vfx() {
         let catalog = progression_catalog();
         let ability = catalog
@@ -9965,6 +10028,7 @@ mod tests {
             ("SPELL_ORBITING_BLADES", "ORBITING_BLADES", "LIGHTNING"),
             ("SPELL_GUST_OF_WIND", "GUST_OF_WIND", "AIR"),
             ("SPELL_BUFFET", "BUFFET", "AIR"),
+            ("SPELL_CELESTIAL_MANTLE", "CELESTIAL_MANTLE", "HOLY"),
         ];
 
         for (ability_id, action_id, damage_type) in expected {

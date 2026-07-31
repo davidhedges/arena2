@@ -2294,6 +2294,7 @@ pub enum StatusEffectKind {
     Dot,
     Hot,
     MoveSlowImmunity,
+    MovementImpairingImmunity,
     DamageAmp,
     DirectDamageAmp,
     DamageTakenReduction,
@@ -2329,6 +2330,7 @@ impl StatusEffectKind {
             Self::Dot => "DOT",
             Self::Hot => "HOT",
             Self::MoveSlowImmunity => "MOVE_SLOW_IMMUNITY",
+            Self::MovementImpairingImmunity => "MOVEMENT_IMPAIRING_IMMUNITY",
             Self::DamageAmp => "DAMAGE_AMP",
             Self::DirectDamageAmp => "DIRECT_DAMAGE_AMP",
             Self::DamageTakenReduction => "DAMAGE_TAKEN_REDUCTION",
@@ -2364,6 +2366,7 @@ impl StatusEffectKind {
             "DOT" => Some(Self::Dot),
             "HOT" => Some(Self::Hot),
             "MOVE_SLOW_IMMUNITY" => Some(Self::MoveSlowImmunity),
+            "MOVEMENT_IMPAIRING_IMMUNITY" => Some(Self::MovementImpairingImmunity),
             "DAMAGE_AMP" => Some(Self::DamageAmp),
             "DIRECT_DAMAGE_AMP" => Some(Self::DirectDamageAmp),
             "DAMAGE_TAKEN_REDUCTION" => Some(Self::DamageTakenReduction),
@@ -2412,6 +2415,7 @@ pub enum StatusPayload {
         tick_interval: Duration,
     },
     MoveSlowImmunity,
+    MovementImpairingImmunity,
     DamageAmp {
         modifier_scalar: f32,
     },
@@ -2542,6 +2546,7 @@ impl AuthoredStatusPayload {
                 tick_interval: Duration::from_millis(self.tick_interval_ms),
             },
             StatusEffectKind::MoveSlowImmunity => StatusPayload::MoveSlowImmunity,
+            StatusEffectKind::MovementImpairingImmunity => StatusPayload::MovementImpairingImmunity,
             StatusEffectKind::DamageAmp => StatusPayload::DamageAmp {
                 modifier_scalar: self.modifier_scalar,
             },
@@ -2771,6 +2776,7 @@ impl StatusPayload {
             Self::Dot { .. } => StatusEffectKind::Dot,
             Self::Hot { .. } => StatusEffectKind::Hot,
             Self::MoveSlowImmunity => StatusEffectKind::MoveSlowImmunity,
+            Self::MovementImpairingImmunity => StatusEffectKind::MovementImpairingImmunity,
             Self::DamageAmp { .. } => StatusEffectKind::DamageAmp,
             Self::DirectDamageAmp { .. } => StatusEffectKind::DirectDamageAmp,
             Self::DamageTakenReduction { .. } => StatusEffectKind::DamageTakenReduction,
@@ -2802,6 +2808,7 @@ impl StatusPayload {
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
+            | Self::MovementImpairingImmunity
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
@@ -2967,6 +2974,7 @@ impl StatusPayload {
                 tick_interval: Duration::from_millis(columns.tick_interval_ms.max(1)),
             },
             StatusEffectKind::MoveSlowImmunity => Self::MoveSlowImmunity,
+            StatusEffectKind::MovementImpairingImmunity => Self::MovementImpairingImmunity,
             StatusEffectKind::DamageAmp => Self::DamageAmp {
                 modifier_scalar: columns.modifier_scalar.max(0.0),
             },
@@ -3029,6 +3037,7 @@ impl StatusPayload {
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
+            | Self::MovementImpairingImmunity
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
@@ -3092,6 +3101,7 @@ impl StatusPayload {
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
+            | Self::MovementImpairingImmunity
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
@@ -3218,6 +3228,7 @@ impl StatusPayload {
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
+            | Self::MovementImpairingImmunity
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
@@ -6045,13 +6056,14 @@ impl StatusRuntimeView {
         let temporary = self.temporary_combat_modifiers();
 
         for (target, effects) in self.effects_by_target.iter() {
-            if temporary.has_move_slow_immunity(target) {
+            let movement_impairing_immune = temporary.has_movement_impairing_immunity(target);
+            if temporary.has_move_slow_immunity(target) || movement_impairing_immune {
                 modifiers.move_slow_immune.insert(*target);
             }
 
             for effect in effects {
                 match effect.kind {
-                    StatusEffectKind::Root => {
+                    StatusEffectKind::Root if !movement_impairing_immune => {
                         modifiers.rooted.insert(*target);
                     }
                     StatusEffectKind::Slow => {
@@ -6085,6 +6097,9 @@ impl StatusRuntimeView {
                 match effect.kind {
                     StatusEffectKind::MoveSlowImmunity => {
                         modifiers.move_slow_immune.insert(*target);
+                    }
+                    StatusEffectKind::MovementImpairingImmunity => {
+                        modifiers.movement_impairing_immune.insert(*target);
                     }
                     StatusEffectKind::DamageAmp => {
                         let entry = modifiers.damage_amp_by_target.entry(*target).or_insert(0.0);
@@ -6201,6 +6216,7 @@ impl StatusRuntimeView {
 #[derive(Default)]
 pub struct TemporaryCombatModifiers {
     move_slow_immune: HashSet<Identity>,
+    movement_impairing_immune: HashSet<Identity>,
     damage_amp_by_target: HashMap<Identity, f32>,
     direct_damage_amp_by_target: HashMap<Identity, f32>,
     damage_taken_reduction_by_target: HashMap<Identity, f32>,
@@ -6219,6 +6235,10 @@ pub struct TemporaryCombatModifiers {
 impl TemporaryCombatModifiers {
     pub fn has_move_slow_immunity(&self, identity: &Identity) -> bool {
         self.move_slow_immune.contains(identity)
+    }
+
+    pub fn has_movement_impairing_immunity(&self, identity: &Identity) -> bool {
+        self.movement_impairing_immune.contains(identity)
     }
 
     pub fn damage_multiplier_for(&self, identity: &Identity, delivery: DamageDelivery) -> f32 {
@@ -6299,6 +6319,9 @@ impl TemporaryCombatModifiers {
     }
 
     pub(crate) fn knockback_resistance_for(&self, identity: &Identity) -> f32 {
+        if self.has_movement_impairing_immunity(identity) {
+            return 1.0;
+        }
         self.knockback_resistance_by_target
             .get(identity)
             .copied()
@@ -7023,6 +7046,11 @@ mod tests {
                 StatusPayload::MoveSlowImmunity,
             ),
             (
+                StatusPayload::MovementImpairingImmunity,
+                StatusEffectKind::MovementImpairingImmunity,
+                StatusPayload::MovementImpairingImmunity,
+            ),
+            (
                 StatusPayload::DamageAmp {
                     modifier_scalar: 0.20,
                 },
@@ -7522,6 +7550,41 @@ mod tests {
         assert_eq!(
             modifiers.move_speed_multiplier(&rooted_slow_immune, 10),
             0.0
+        );
+    }
+
+    #[test]
+    fn movement_impairing_immunity_suppresses_root_slow_and_knockback() {
+        let now = Timestamp::UNIX_EPOCH + Duration::from_secs(10);
+        let protected = test_identity_number(1);
+        let expires_at = now + Duration::from_secs(5);
+        let view = status_runtime_view(
+            vec![
+                test_status_effect(protected, StatusPayload::Root, now, expires_at),
+                test_status_effect(
+                    protected,
+                    StatusPayload::Slow { slow_pct: 0.70 },
+                    now,
+                    expires_at,
+                ),
+                test_status_effect(
+                    protected,
+                    StatusPayload::MovementImpairingImmunity,
+                    now,
+                    expires_at,
+                ),
+            ],
+            &[protected],
+            now,
+        );
+
+        let movement = view.movement_modifiers();
+        assert!(!movement.blocks_movement(&protected));
+        assert!((movement.move_speed_multiplier(&protected, 10) - 1.0).abs() < 0.0001);
+        assert_eq!(
+            view.temporary_combat_modifiers()
+                .knockback_resistance_for(&protected),
+            1.0
         );
     }
 

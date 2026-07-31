@@ -1922,6 +1922,45 @@
       }
     },
     {
+      "ability_id": "SPELL_CELESTIAL_MANTLE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "CELESTIAL_MANTLE",
+      "display_name": "Celestial Mantle",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1019,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 5000,
+          "max_distance": 18,
+          "damage_type": "HOLY",
+          "status_stack_group": "CELESTIAL_MANTLE",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "MOVEMENT_IMPAIRING_IMMUNITY",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_STONESPIRE",
       "actor_scope": "PLAYER",
       "combat_profile_id": "",
@@ -5797,6 +5836,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_CELESTIAL_MANTLE",
+      "display_name": "Celestial Mantle",
+      "description": "Wraps an ally in celestial wings, granting immunity to slows, roots, and knockbacks for 5 seconds.",
+      "sort_order": 97
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_GIANT_SWING",
       "display_name": "Giant Swing",
       "description": "Empowers the next attack to reach farther and stagger enemies hit.",
@@ -6298,6 +6344,13 @@
       "display_name": "Protection",
       "description": "Damage taken reduced by 50%.",
       "sort_order": 10016
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "CELESTIAL_MANTLE",
+      "display_name": "Celestial Mantle",
+      "description": "Immune to slows, roots, and knockbacks.",
+      "sort_order": 10017
     },
     {
       "presentation_kind": "STATUS",
@@ -7242,6 +7295,19 @@
       "lifecycle": "DURATION",
       "duration_ms": 1000,
       "sort_order": 196
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_CELESTIAL_MANTLE",
+      "slot": "character_fx",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_CELESTIAL_MANTLE_WINGS_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "DURATION",
+      "duration_ms": 5000,
+      "sort_order": 197
     },
     {
       "owner_kind": "ABILITY",

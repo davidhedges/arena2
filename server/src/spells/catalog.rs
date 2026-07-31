@@ -2767,6 +2767,7 @@ fn validate_apply_status_kind_for_self(
 ) -> Result<(), String> {
     match kind {
         StatusEffectKind::MoveSlowImmunity
+        | StatusEffectKind::MovementImpairingImmunity
         | StatusEffectKind::DamageAmp
         | StatusEffectKind::DirectDamageAmp
         | StatusEffectKind::DamageTakenReduction
@@ -2903,6 +2904,7 @@ mod tests {
                 "GUST_OF_WIND",
                 "BUFFET",
                 "CAUTERIZE",
+                "CELESTIAL_MANTLE",
                 "STONESPIRE",
                 "MOMENTUM",
                 "FORTIFY",
@@ -3060,6 +3062,7 @@ mod tests {
             "FLAMING_ORB",
             "GUST_OF_WIND",
             "BUFFET",
+            "CELESTIAL_MANTLE",
             "MOMENTUM",
             "FORTIFY",
             "IRON_WILL",
@@ -3215,6 +3218,28 @@ mod tests {
             direct_target.impact_effects,
             vec![ImpactEffect::InterruptCast]
         );
+    }
+
+    #[test]
+    fn celestial_mantle_authors_instant_holy_movement_immunity() {
+        let definition = spell_definition_by_str("CELESTIAL_MANTLE")
+            .expect("CELESTIAL_MANTLE should derive from the shared catalog");
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("CELESTIAL_MANTLE should apply a status");
+
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+        assert!(definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.duration, 5.0);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.damage_type, DamageType::Holy);
+        assert_eq!(status.kind, StatusEffectKind::MovementImpairingImmunity);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
     }
 
     #[test]

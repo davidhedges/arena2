@@ -101,6 +101,7 @@ namespace Arena.Combat
                 "DOT" => FormatPeriodicDescription("Deals", status.TickAmount, stacks, status.TickIntervalMs),
                 "HOT" => FormatPeriodicDescription("Restores", status.TickAmount, stacks, status.TickIntervalMs),
                 "MOVE_SLOW_IMMUNITY" => "Prevents movement slows from reducing speed.",
+                "MOVEMENT_IMPAIRING_IMMUNITY" => "Prevents slows, roots, and knockbacks.",
                 "KNOCKBACK_RESISTANCE" => $"Reduces knockback distance by {FormatPercent(status.ModifierScalar * stacks)}.",
                 "DAMAGE_AMP" => $"Increases damage dealt by {FormatPercent(status.ModifierScalar)}.",
                 "DIRECT_DAMAGE_AMP" => $"Increases direct damage dealt by {FormatPercent(status.ModifierScalar * stacks)}.",
