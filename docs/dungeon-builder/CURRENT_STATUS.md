@@ -322,8 +322,29 @@ Three things the live leg found that no plan gate and no render digest could:
    baked into the dungeon's own payload.
 
 Leg 4, the **owner eyeball**, is the one Phase C leg still outstanding — no hash
-tells you whether a two-layer room reads well. `ops/c1-two-layer-live.sh` leaves
-the episode in the dungeon scene, ready to walk.
+tells you whether a two-layer room reads well.
+
+**The episode does NOT survive in the scene, and this page previously implied it
+did.** `ops/c1-two-layer-live.sh` does leave it there, but any later
+**Rebuild Random Dungeon** overwrites it with an ordinary dungeon — which is what
+happened right after the live probe on 2026-07-31 (`restore_rebuild.log`), so
+the scene held a full 6225-instance dungeon rather than the episode. Re-bake it
+from inside the editor with **Tools > Dungeon Lab > Bake Two-Layer Episode Into
+The Dungeon Scene (TEMPORARY)**; it needs no publish and no probe for a
+look-only pass. A baked episode is ~1000 prefab instances spanning
+x −16..20, z −16..44 — if the scene is much bigger than that, you are looking at
+a generated dungeon instead. **Baked for the eyeball 2026-07-31.**
+
+Where to look, in world coordinates (from `two_layer_episode_probe.json`):
+
+| What | Where |
+|---|---|
+| Gallery cell with the bare south rim — the aperture you walk off | (0, 4, 36) |
+| Chamber floor the fall lands on, under the aperture | (0, 0, 32) |
+| Chamber floor directly under a gallery slab — the `_E_` underside | (4, 0, 32) |
+| Return stair, foot → top | (−12, 0, 28) → (−12, 4, 44) |
+| Terrace, ground-backed at the gallery's level (the flush seam) | (0, 4, 44) |
+| Span deck, with the lower route underneath at L0 | (0, 4, 4) over (0, 0, 4) |
 
 ### C2's blocker is cleared — the level field is a `SurfaceField` on the writer side
 
