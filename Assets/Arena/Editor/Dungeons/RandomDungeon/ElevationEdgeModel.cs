@@ -2371,11 +2371,40 @@ namespace DungeonLab.Editor
                         continue;
                     }
 
+                    // The band decomposition (§7.1 step 1) decides the face. For
+                    // a single-layer field every column's mass is
+                    // `[abyssBase, level)`, so this reproduces the level compare
+                    // it replaces exactly — see the notes on DecomposeBoundary.
+                    ColumnMass cellMass = ComputeColumnMass(
+                        hasSurface: true,
+                        lowestLevel: level,
+                        lowestIsGroundBacked: IsGroundBackedSurface(levels, aerialDeckCellLevels, cell, level));
+                    ColumnMass neighborMass = ComputeColumnMass(
+                        hasSurface: hasNeighbor,
+                        lowestLevel: neighborLevel,
+                        lowestIsGroundBacked: hasNeighbor &&
+                            IsGroundBackedSurface(levels, aerialDeckCellLevels, neighbor, neighborLevel));
+
                     if (hasNeighbor)
                     {
-                        if (level == neighborLevel)
+                        BoundaryFace face = DecomposeBoundary(
+                            cellMass,
+                            neighborMass,
+                            neighborHasSurface: true,
+                            neighborLowestLevel: neighborLevel,
+                            cellHasSurface: true,
+                            cellLowestLevel: level,
+                            abyssBase: abyssBase);
+
+                        if (!face.hasFace)
                         {
-                            if (IsPartitionWallEdge(roomBoundaryContext, doorwayKeys, cell, neighbor, otherSideIsFloor: true))
+                            // Interior (both solid) or open air (neither). A
+                            // partition still stands between two floors at one
+                            // level; open air between stacked surfaces is the
+                            // case that keeps a chamber under a gallery open,
+                            // and it carries no partition.
+                            if (level == neighborLevel &&
+                                IsPartitionWallEdge(roomBoundaryContext, doorwayKeys, cell, neighbor, otherSideIsFloor: true))
                             {
                                 wallEdges.Add(new WallEdge(EdgeFromCellToward(GetPartitionOwnerCell(roomBoundaryContext, cell, neighbor), GetPartitionOtherCell(roomBoundaryContext, cell, neighbor)), level, level + 1, false, true));
                                 stats.partitionWalls++;
@@ -2386,13 +2415,25 @@ namespace DungeonLab.Editor
                             continue;
                         }
 
-                        Vector2Int higherCell = level > neighborLevel ? cell : neighbor;
-                        Vector2Int lowerCell = level > neighborLevel ? neighbor : cell;
-                        int higherLevel = Mathf.Max(level, neighborLevel);
-                        int lowerLevel = Mathf.Min(level, neighborLevel);
-                        bool higherSideIsStair = higherCell == cell ? cellIsStair : neighborIsStair;
-                        wallEdges.Add(new WallEdge(EdgeFromCellToward(higherCell, lowerCell), lowerLevel, higherLevel, true, false, suppressRailing: higherSideIsStair || bridgePortEdge));
-                        stats.retainingEdges++;
+                        Vector2Int solidCell = face.solidSideIsCell ? cell : neighbor;
+                        Vector2Int openCell = face.solidSideIsCell ? neighbor : cell;
+                        bool solidSideIsStair = face.solidSideIsCell ? cellIsStair : neighborIsStair;
+                        wallEdges.Add(new WallEdge(
+                            EdgeFromCellToward(solidCell, openCell),
+                            face.lowerLevel,
+                            face.higherLevel,
+                            face.isRetaining,
+                            false,
+                            suppressRailing: solidSideIsStair || bridgePortEdge));
+                        if (face.isRetaining)
+                        {
+                            stats.retainingEdges++;
+                        }
+                        else
+                        {
+                            stats.cliffEdges++;
+                        }
+
                         continue;
                     }
 
@@ -2555,6 +2596,231 @@ namespace DungeonLab.Editor
             return reservedSetPieceCells != null
                 ? new HashSet<Vector2Int>(reservedSetPieceCells)
                 : new HashSet<Vector2Int>();
+        }
+
+        // ------------------------------------------------------------------
+        // Boundary band decomposition — Phase C of the layered 3D topology
+        // design (§7.1 step 1), the replacement for "compare two levels".
+        //
+        // A boundary between two plan columns is decided by where SOLID MASS
+        // exists in each column, not by comparing one level to another. The
+        // draft's "nearest surface" shortcut was rejected in review because it
+        // ties, is asymmetric and can be one-to-many; the band walk has none of
+        // those problems because it never pairs surfaces at all.
+        //
+        // WHAT COUNTS AS MASS, and this is the correction that carries the pit
+        // design: an occupied band is STRUCTURAL, not "down to whatever supports
+        // it". Treating a surface's band as level -> support fills stacked space
+        // with solid mass and walls off the very chamber a gallery is meant to
+        // overlook.
+        //
+        //   > IsGroundBacked(s) = s is a Floor AND s is the lowest surface in
+        //   > its column.
+        //
+        // Both conditions are load-bearing. A bridge deck over a true gap IS
+        // lowest in its column but must not become a solid pillar — the kind
+        // test excludes it. A gallery slab over its room's own lower chamber IS
+        // a Floor but is not lowest — the column test excludes it.
+        //
+        // A suspended surface therefore contributes NO wall mass. Its 0.5u
+        // underside is real geometry, but it is the `_E_` floor family's own
+        // closed slab (§0.1, measured: `_E_` is the `_O_` top surface plus a
+        // bottom, 4u x 0.5u x 4u, hanging entirely below the walk surface), not
+        // a wall face. That is why no fractional band reaches `WallEdge`, whose
+        // levels are integers, and why the fascia and the soffit are the same
+        // change rather than two.
+        //
+        // WHY SINGLE-LAYER OUTPUT CANNOT MOVE. With one surface per column every
+        // surface is a lowest-in-column Floor, so every column's mass is exactly
+        // `[abyssBase, level)` and the walk yields:
+        //
+        //   equal levels          -> both solid throughout -> interior, no face
+        //   levels a < b          -> [a, b) solid on one side -> ONE face whose
+        //                            open side has a surface at the interval's
+        //                            bottom -> retaining, extent a..b
+        //   neighbour is void     -> [abyss, a) solid on one side, open side has
+        //                            no surface at the bottom -> cliff, extent
+        //                            abyssBase..a
+        //
+        // which is the three cases the old code wrote out by hand, with the same
+        // extents and the same types. The decomposition bites only where columns
+        // carry more than one surface.
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// The solid mass a plan column contributes to its boundaries.
+        /// </summary>
+        /// <remarks>
+        /// At most one band today: the ground band `[abyssBase, groundTop)`,
+        /// present only when the column's lowest surface is ground-backed.
+        /// Support and Wall prisms (§7.1's other two band sources) are authored
+        /// and have no producer yet, so they add nothing here.
+        /// </remarks>
+        private readonly struct ColumnMass
+        {
+            public readonly bool hasGround;
+            public readonly int groundTop;      // exclusive top of [abyssBase, groundTop)
+
+            private ColumnMass(bool hasGround, int groundTop)
+            {
+                this.hasGround = hasGround;
+                this.groundTop = groundTop;
+            }
+
+            public static ColumnMass None => new ColumnMass(false, 0);
+
+            public static ColumnMass Ground(int top)
+            {
+                return new ColumnMass(true, top);
+            }
+
+            /// <summary>Is this column solid immediately above <paramref name="level"/>?</summary>
+            public bool IsSolidAbove(int level, int abyssBase)
+            {
+                return hasGround && level >= abyssBase && level < groundTop;
+            }
+        }
+
+        /// <summary>
+        /// What the boundary walk decided for one column pair.
+        /// </summary>
+        private readonly struct BoundaryFace
+        {
+            public readonly bool hasFace;
+            public readonly int lowerLevel;
+            public readonly int higherLevel;
+            public readonly bool isRetaining;
+            // True when the SOLID side is the cell being visited, so the caller
+            // knows which way the face points without recomparing levels.
+            public readonly bool solidSideIsCell;
+
+            public BoundaryFace(bool hasFace, int lowerLevel, int higherLevel, bool isRetaining, bool solidSideIsCell)
+            {
+                this.hasFace = hasFace;
+                this.lowerLevel = lowerLevel;
+                this.higherLevel = higherLevel;
+                this.isRetaining = isRetaining;
+                this.solidSideIsCell = solidSideIsCell;
+            }
+
+            public static BoundaryFace None => new BoundaryFace(false, 0, 0, false, false);
+        }
+
+        /// <summary>
+        /// `IsGroundBacked(s)`: the surface is a Floor AND the lowest in its
+        /// column, so the mass under it is earth rather than open air (§7.1).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Unconditionally true for every entry in today's level field, and that
+        /// is a FACT about the pipeline rather than an assumption this code
+        /// makes. `TrySetPlannedStairCells` refuses to floor a span deck's or a
+        /// stairwell tower's footprint — "the gap stays a gap (span) and the
+        /// tower stands on void" — so the one suspended surface the generator
+        /// produces never reaches `levels` at its own height. A deck cell either
+        /// carries the pass-under floor beneath it or carries nothing at all.
+        /// That is why the band decomposition reproduces today's walls exactly.
+        /// </para>
+        /// <para>
+        /// It is written as the real predicate rather than `return true` so the
+        /// phase that puts a second surface in a column gets the right answer
+        /// from the same call site instead of a constant somebody has to
+        /// remember to revisit.
+        /// </para>
+        /// </remarks>
+        private static bool IsGroundBackedSurface(
+            IReadOnlyDictionary<Vector2Int, int> levels,
+            IReadOnlyDictionary<Vector2Int, int> aerialDeckCellLevels,
+            Vector2Int cell,
+            int level)
+        {
+            // A suspended deck standing at this cell's recorded height is not
+            // ground-backed; anything else in the field is the bottom of its
+            // column and rests on fill.
+            return !(aerialDeckCellLevels != null &&
+                aerialDeckCellLevels.TryGetValue(cell, out int deckLevel) &&
+                deckLevel == level);
+        }
+
+        /// <summary>
+        /// The mass a column contributes, from the surfaces standing in it.
+        /// </summary>
+        /// <remarks>
+        /// <paramref name="hasSurface"/> false means a void column — no surface,
+        /// no mass, which is what produces a cliff on the other side.
+        /// </remarks>
+        private static ColumnMass ComputeColumnMass(bool hasSurface, int lowestLevel, bool lowestIsGroundBacked)
+        {
+            return hasSurface && lowestIsGroundBacked
+                ? ColumnMass.Ground(lowestLevel)
+                : ColumnMass.None;
+        }
+
+        /// <summary>
+        /// Walk the boundary between two columns bottom to top and classify each
+        /// cut interval by which side is solid (§7.1 step 1).
+        /// </summary>
+        /// <remarks>
+        /// Both solid is interior and emits nothing; neither solid is open air
+        /// and emits nothing — that second case is what keeps a chamber under a
+        /// gallery open. One solid emits a face on the solid side, typed by what
+        /// stands at the interval's BOTTOM on the open side: a surface level with
+        /// it means the face retains that floor, no surface means it drops away
+        /// as a cliff.
+        /// <para>
+        /// Only the topmost such interval can produce a face while the only band
+        /// source is the ground band, because two ground bands share the same
+        /// floor `abyssBase` and can differ only at the top. The walk is written
+        /// as a walk anyway: the moment a Support or Wall prism gets a producer,
+        /// the extra intervals classify with no further work here.
+        /// </para>
+        /// </remarks>
+        private static BoundaryFace DecomposeBoundary(
+            ColumnMass cellMass,
+            ColumnMass neighborMass,
+            bool neighborHasSurface,
+            int neighborLowestLevel,
+            bool cellHasSurface,
+            int cellLowestLevel,
+            int abyssBase)
+        {
+            // Cut levels: every band endpoint on either side, ascending.
+            var cuts = new SortedSet<int> { abyssBase };
+            if (cellMass.hasGround)
+            {
+                cuts.Add(cellMass.groundTop);
+            }
+
+            if (neighborMass.hasGround)
+            {
+                cuts.Add(neighborMass.groundTop);
+            }
+
+            int[] ordered = new int[cuts.Count];
+            cuts.CopyTo(ordered);
+
+            for (int i = 0; i < ordered.Length - 1; i++)
+            {
+                int bottom = ordered[i];
+                int top = ordered[i + 1];
+                bool cellSolid = cellMass.IsSolidAbove(bottom, abyssBase);
+                bool neighborSolid = neighborMass.IsSolidAbove(bottom, abyssBase);
+                if (cellSolid == neighborSolid)
+                {
+                    // both solid -> interior; neither -> open air. No geometry.
+                    continue;
+                }
+
+                // The open side is whichever is not solid. The face is retaining
+                // when that side has a walkable surface level with the interval's
+                // bottom, and a cliff when it has nothing there.
+                bool openSideHasSurfaceAtBottom = cellSolid
+                    ? neighborHasSurface && neighborLowestLevel == bottom
+                    : cellHasSurface && cellLowestLevel == bottom;
+                return new BoundaryFace(true, bottom, top, openSideHasSurfaceAtBottom, cellSolid);
+            }
+
+            return BoundaryFace.None;
         }
 
         // Lowest floor level in the dungeon — the anchor for the decision-C abyss
