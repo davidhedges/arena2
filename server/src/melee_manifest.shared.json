@@ -979,7 +979,10 @@
                     "slot_id": "dagger_combo_attack_01_01_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 408
+                            "impact_delay_ms": 108
+                        },
+                        {
+                            "impact_delay_ms": 115
                         }
                     ],
                     "recovery_ms": 250,
@@ -994,7 +997,10 @@
                     "slot_id": "dagger_combo_attack_01_02_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 261
+                            "impact_delay_ms": 106
+                        },
+                        {
+                            "impact_delay_ms": 117
                         }
                     ],
                     "recovery_ms": 250,
@@ -1002,6 +1008,21 @@
                     "combo_from": "dagger_combo_attack_01_01_slot",
                     "combo_open_ms": 380,
                     "combo_grace_ms": 350,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_SLICE",
+                    "slot_id": "dagger_slice_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 408
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
                     "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
@@ -1498,7 +1519,10 @@
                     "slot_id": "auto_attack_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 408
+                            "impact_delay_ms": 108
+                        },
+                        {
+                            "impact_delay_ms": 115
                         }
                     ],
                     "recovery_ms": 250,

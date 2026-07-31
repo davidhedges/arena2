@@ -3696,6 +3696,30 @@
       }
     },
     {
+      "ability_id": "DAGGER_SLICE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_SLICE",
+      "display_name": "Slice",
+      "resource_kind": "STAMINA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 11,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 24,
+        "applies_stagger": false,
+        "range": 2,
+        "cooldown_ms": 650,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
       "ability_id": "DAGGER_RIPOSTE",
       "actor_scope": "PLAYER",
       "combat_profile_id": "DAGGERS",
@@ -6148,6 +6172,13 @@
       "display_name": "Quick Cut",
       "description": "A fast close-range dagger cut.",
       "sort_order": 200
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_SLICE",
+      "display_name": "Slice",
+      "description": "A swift, precise dagger slice.",
+      "sort_order": 201
     },
     {
       "presentation_kind": "ABILITY",

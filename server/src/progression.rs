@@ -8251,6 +8251,7 @@ mod tests {
         let catalog = progression_catalog();
         for (ability_id, action_id) in [
             ("DAGGER_QUICK_CUT", "DAGGER_QUICK_CUT"),
+            ("DAGGER_SLICE", "DAGGER_SLICE"),
             ("DAGGER_RIPOSTE", "DAGGER_RIPOSTE"),
             ("DAGGER_DASHING_CUT", "DAGGER_DASHING_CUT"),
             ("DAGGER_ROUNDHOUSE", "DAGGER_ROUNDHOUSE"),
