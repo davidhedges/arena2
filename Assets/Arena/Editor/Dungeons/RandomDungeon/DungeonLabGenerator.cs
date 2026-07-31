@@ -1303,16 +1303,6 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            // The deferral point for the readers this function has left, and it
-            // is now a SHORT list. C2b-1 migrated everything that asks a column
-            // question or a surface question; what remains here all resolves a
-            // TRANSITION's endpoint elevations by looking its cells up in the
-            // field — and `TransitionEdge` carries no levels, so a stacked column
-            // makes that lookup ambiguous by construction. No container swap
-            // fixes it; C2b-2 puts the levels on the edge. `AsHeightField()`
-            // keeps that loud rather than quietly answering for column floors.
-            Dictionary<Vector2Int, int> transitionEndpointLevels = surfaces.AsHeightField();
-
             GetLevelRange(surfaces, out int minLevel, out int maxLevel);
             int levelCount = CountDistinctLevels(surfaces);
             if (levelCount <= 1)
@@ -1321,12 +1311,12 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            if (!TryValidateTransitionLevelDeltas(transitionEndpointLevels, transitions, out rejectionReason))
+            if (!TryValidateTransitionLevelDeltas(transitions, out rejectionReason))
             {
                 return false;
             }
 
-            if (!TryBuildFloorStairPortGraph(transitionEndpointLevels, transitions, out FloorStairPortGraph portGraph, out rejectionReason))
+            if (!TryBuildFloorStairPortGraph(surfaces, transitions, out FloorStairPortGraph portGraph, out rejectionReason))
             {
                 return false;
             }
@@ -1352,7 +1342,7 @@ namespace DungeonLab.Editor
             // Reported stat only (demoted from a hard gate 2026-06-10): route
             // intent now guarantees the vertical story and separately proves its
             // named vista, so this older adjacent-cell proxy remains diagnostic.
-            int overlookCount = CountSpatialOverlookEdges(transitionEndpointLevels, transitions);
+            int overlookCount = CountSpatialOverlookEdges(surfaces, transitions);
 
             plan = new TieredLevelPlan(
                 surfaces,
@@ -1362,7 +1352,7 @@ namespace DungeonLab.Editor
                 maxLevel,
                 FormatRoomsPerTier(CountRoomsPerTier(zoneLevels)),
                 overlookCount,
-                FormatTransitionSummary(transitionEndpointLevels, transitions),
+                FormatTransitionSummary(transitions),
                 FormatStairUsageHistogram(transitions),
                 FormatStairTopologyHistogram(transitions, reviewedStairOptions),
                 FormatStairPlacementClassHistogram(transitions),
@@ -1796,10 +1786,11 @@ namespace DungeonLab.Editor
             // The elevation stage's canonical container is the surface field
             // itself, not a heightfield the plan re-wraps afterwards (design
             // §8.2's C2 prerequisite). Every write below goes through one of the
-            // field's three named writers, and after C2b-1 every reader in this
-            // stage takes the field too — except those that resolve a
-            // TRANSITION's endpoint levels from its cells, which are blocked on
-            // C2b-2 and keep `AsHeightField()` as a loud deferral marker.
+            // field's three named writers, and after C2b-2 every reader takes
+            // the field or the transition edge's own recorded levels. No reader
+            // resolves an elevation by looking a transition's cell up in the
+            // level field any more, which is what a stacked column made
+            // ambiguous.
             surfaces = new SurfaceField(new Dictionary<Vector2Int, int>());
             transitions = new List<ElevationEdgeModel.TransitionEdge>();
             prisms = new PrismLedger();
@@ -1907,6 +1898,7 @@ namespace DungeonLab.Editor
 
             AddZoneSeamStepStrips(
                 layout,
+                surfaces,
                 doorwayCells,
                 plannedStairLedger,
                 transitionKeys,
@@ -2090,6 +2082,7 @@ namespace DungeonLab.Editor
         // floor and stays a shareable landing.
         private static void AddZoneSeamStepStrips(
             DungeonLayout layout,
+            SurfaceField surfaces,
             HashSet<Vector2Int> doorwayCells,
             PrismLedger plannedStairLedger,
             HashSet<string> transitionKeys,
@@ -2127,7 +2120,9 @@ namespace DungeonLab.Editor
 
                     transitions.Add(new ElevationEdgeModel.TransitionEdge(
                         raisedCell,
+                        TransitionEndpointLevel(surfaces, raisedCell),
                         lowerCell,
+                        TransitionEndpointLevel(surfaces, lowerCell),
                         seamStairPrefabPath,
                         SeamStairPlacementClass));
                     plannedStairLedger.Register(
@@ -2467,7 +2462,9 @@ namespace DungeonLab.Editor
                 {
                     transitions.Add(new ElevationEdgeModel.TransitionEdge(
                         stripRaisedCell,
+                        TransitionEndpointLevel(surfaces, stripRaisedCell),
                         stripLowerCell,
+                        TransitionEndpointLevel(surfaces, stripLowerCell),
                         seamStairPrefabPath,
                         SeamStairPlacementClass));
                     plannedStairLedger.Register(
@@ -2523,7 +2520,9 @@ namespace DungeonLab.Editor
                     {
                         transitions.Add(new ElevationEdgeModel.TransitionEdge(
                             stairOptionPlannedTransitionFirstCell,
+                            TransitionEndpointLevel(surfaces, stairOptionPlannedTransitionFirstCell),
                             stairOptionPlannedTransitionSecondCell,
+                            TransitionEndpointLevel(surfaces, stairOptionPlannedTransitionSecondCell),
                             stairOption.prefabPath,
                             stairOptionPlannedLowerLandingCells,
                             stairOptionPlannedUpperLandingCells,
@@ -2538,7 +2537,9 @@ namespace DungeonLab.Editor
                     {
                         transitions.Add(new ElevationEdgeModel.TransitionEdge(
                             stairOptionPlannedTransitionFirstCell,
+                            TransitionEndpointLevel(surfaces, stairOptionPlannedTransitionFirstCell),
                             stairOptionPlannedTransitionSecondCell,
+                            TransitionEndpointLevel(surfaces, stairOptionPlannedTransitionSecondCell),
                             stairOption.prefabPath,
                             stairOptionPlannedLowerLandingCells,
                             stairOptionPlannedUpperLandingCells,
@@ -3020,7 +3021,9 @@ namespace DungeonLab.Editor
 
                             transitions.Add(new ElevationEdgeModel.TransitionEdge(
                                 upperCell,
+                                Mathf.Max(cellLevel, neighborLevel),
                                 lowerCell,
+                                Mathf.Min(cellLevel, neighborLevel),
                                 seamStairPrefabPath,
                                 DaisStairPlacementClass));
                             plannedStairLedger.Register(
@@ -4911,7 +4914,9 @@ namespace DungeonLab.Editor
             var setPiece = new ElevationEdgeModel.SynthesizedStairSetPiece(design.name, design.contract, design.pieces);
             transitions.Add(new ElevationEdgeModel.TransitionEdge(
                 lowerLanding,
+                Mathf.Min(levelA, levelB),
                 upperLanding,
+                Mathf.Max(levelA, levelB),
                 option.prefabPath,
                 new[] { lowerLanding },
                 new[] { upperLanding },
@@ -6049,6 +6054,31 @@ namespace DungeonLab.Editor
         // whether the column is empty, and otherwise whether the level is
         // present, separates them. Identical on a single-layer field, where a
         // surfaced column has exactly one level to compare.
+        // An endpoint whose column carries no surface. The edge owns the marker;
+        // this is the generator-side name for it.
+        //
+        // RECORDED, not thrown, so the transition-contract gate keeps producing
+        // the exact rejection it always did — the check moves from the field onto
+        // the edge, the outcome does not. It has never fired across the 200-seed
+        // corpus, which is a reason to keep it cheap rather than a reason to drop
+        // it: a stairwell tower places its body on void cells, and "the endpoint
+        // is unleveled" is the shape of mistake that would make.
+        private const int UnleveledTransitionEndpoint = ElevationEdgeModel.TransitionEdge.UnknownLevel;
+
+        // Every producer except the recipe resolver puts its endpoints on column
+        // FLOORS — none of them stacks. Reading the field at construction is
+        // therefore identical to the lookup each consumer did for itself, which
+        // is the whole point: the levels move onto the edge without changing what
+        // anybody computes. Nothing can move them afterwards, because
+        // `TrySetFloorLevel` rejects a conflict, `AddFloorLevel` needs an empty
+        // column, and `RelevelFloor` runs before every producer.
+        private static int TransitionEndpointLevel(SurfaceField surfaces, Vector2Int cell)
+        {
+            return surfaces.TryGetFloorLevel(cell, out int level)
+                ? level
+                : UnleveledTransitionEndpoint;
+        }
+
         private static bool PlannedCellsAreCompatible(
             SurfaceField surfaces,
             IReadOnlyList<Vector2Int> cells,
@@ -6749,20 +6779,29 @@ namespace DungeonLab.Editor
             return -1;
         }
 
+        // Reads the edge's OWN endpoint levels. Looking them up by cell was the
+        // thing that made a cross-layer stair unrepresentable: an upper end
+        // standing over its own lower end resolved both to the column floor,
+        // computed a delta of 0, and was rejected here as too shallow to be a
+        // stair. The rejection for an unleveled endpoint survives verbatim — the
+        // producer records a sentinel rather than throwing, so the check moved
+        // onto the edge without changing its outcome.
         private static bool TryValidateTransitionLevelDeltas(
-            Dictionary<Vector2Int, int> cellLevels,
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
             out string rejectionReason)
         {
             var transitionKeys = new HashSet<string>();
             foreach (ElevationEdgeModel.TransitionEdge transition in transitions)
             {
-                if (!cellLevels.TryGetValue(transition.firstCell, out int firstLevel) ||
-                    !cellLevels.TryGetValue(transition.secondCell, out int secondLevel))
+                if (transition.firstLevel == UnleveledTransitionEndpoint ||
+                    transition.secondLevel == UnleveledTransitionEndpoint)
                 {
                     rejectionReason = $"transition {transition.firstCell}->{transition.secondCell} referenced a missing cell";
                     return false;
                 }
+
+                int firstLevel = transition.firstLevel;
+                int secondLevel = transition.secondLevel;
 
                 // Seam transitions climb exactly 1u; the primary straight stair climbs
                 // the primary rise; anything taller must carry an explicit reviewed
@@ -6805,51 +6844,75 @@ namespace DungeonLab.Editor
             return true;
         }
 
+        // Nodes every SURFACE, not every column. The node key was already a
+        // `SurfaceKey`; what it could not do was reach a surface the heightfield
+        // did not hold, which is why C1b's fixture had to walk its own surfaces
+        // instead of asking the port graph. Iterating `Surfaces()` is the whole
+        // change, and on a single-layer field that is the same set in the same
+        // canonical order.
         private static bool TryBuildFloorStairPortGraph(
-            Dictionary<Vector2Int, int> cellLevels,
+            SurfaceField surfaces,
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
             out FloorStairPortGraph graph,
             out string rejectionReason)
         {
             graph = new FloorStairPortGraph();
             rejectionReason = string.Empty;
-            if (cellLevels.Count == 0)
+            if (surfaces.Count == 0)
             {
                 rejectionReason = "cell level field had no floor cells";
                 return false;
             }
 
             HashSet<Vector2Int> stairFootprintCells = BuildTransitionFootprintCellSet(transitions);
-            foreach (var item in cellLevels)
+            // BACKING-STORE order, not canonical order. Node insertion order is
+            // observable — it reaches the port graph's summary and its
+            // reachability message, which 5 of the 200 corpus seeds emit — so
+            // this walks cells in the field's own order and takes each column's
+            // levels floor-first. Single-layer that is exactly the dictionary
+            // enumeration this replaces. `Surfaces()` would be tidier and would
+            // move seeds, which is the same trap as sorting the shadow reconcile.
+            var all = new List<SurfaceKey>(surfaces.Count);
+            foreach (Vector2Int cell in surfaces.SurfacedCells())
             {
-                if (stairFootprintCells.Contains(item.Key))
+                foreach (int level in surfaces.LevelsAt(cell))
                 {
-                    continue;
+                    all.Add(new SurfaceKey(cell, level));
                 }
-
-                graph.EnsureNode(PortGraphNode.Floor(new SurfaceKey(item.Key, item.Value)));
             }
 
-            foreach (var item in cellLevels)
+            foreach (SurfaceKey surface in all)
             {
-                if (stairFootprintCells.Contains(item.Key))
+                if (stairFootprintCells.Contains(surface.cell))
                 {
                     continue;
                 }
 
-                PortGraphNode floorNode = PortGraphNode.Floor(new SurfaceKey(item.Key, item.Value));
-                foreach (Vector2Int neighbor in CardinalNeighbors(item.Key))
+                graph.EnsureNode(PortGraphNode.Floor(surface));
+            }
+
+            foreach (SurfaceKey surface in all)
+            {
+                if (stairFootprintCells.Contains(surface.cell))
                 {
+                    continue;
+                }
+
+                PortGraphNode floorNode = PortGraphNode.Floor(surface);
+                foreach (Vector2Int neighbor in CardinalNeighbors(surface.cell))
+                {
+                    // Lateral travel joins surfaces at the SAME level. A gallery
+                    // and the chamber floor beneath it are not neighbours, which
+                    // is exactly what stacking has to mean.
                     if (stairFootprintCells.Contains(neighbor) ||
-                        !cellLevels.TryGetValue(neighbor, out int neighborLevel) ||
-                        neighborLevel != item.Value)
+                        !surfaces.HasSurfaceAt(neighbor, surface.level))
                     {
                         continue;
                     }
 
                     graph.AddEdge(
                         floorNode,
-                        PortGraphNode.Floor(new SurfaceKey(neighbor, neighborLevel)),
+                        PortGraphNode.Floor(new SurfaceKey(neighbor, surface.level)),
                         PortGraphEdgeKind.FloorAdjacency);
                 }
             }
@@ -6857,7 +6920,7 @@ namespace DungeonLab.Editor
             for (int i = 0; i < transitions.Count; i++)
             {
                 ElevationEdgeModel.TransitionEdge transition = transitions[i];
-                if (!TryAddTransitionToPortGraph(cellLevels, transition, i, graph, out rejectionReason))
+                if (!TryAddTransitionToPortGraph(surfaces, transition, i, graph, out rejectionReason))
                 {
                     return false;
                 }
@@ -6873,19 +6936,22 @@ namespace DungeonLab.Editor
         }
 
         private static bool TryAddTransitionToPortGraph(
-            IReadOnlyDictionary<Vector2Int, int> cellLevels,
+            SurfaceField surfaces,
             ElevationEdgeModel.TransitionEdge transition,
             int transitionIndex,
             FloorStairPortGraph graph,
             out string rejectionReason)
         {
             rejectionReason = string.Empty;
-            if (!cellLevels.TryGetValue(transition.firstCell, out int firstLevel) ||
-                !cellLevels.TryGetValue(transition.secondCell, out int secondLevel))
+            if (transition.firstLevel == UnleveledTransitionEndpoint ||
+                transition.secondLevel == UnleveledTransitionEndpoint)
             {
                 rejectionReason = $"transition {transition.firstCell}->{transition.secondCell} referenced a missing floor/stair graph cell";
                 return false;
             }
+
+            int firstLevel = transition.firstLevel;
+            int secondLevel = transition.secondLevel;
 
             // Aerial decks (decisions 29-31) connect equal-level landings; the
             // lower/upper port labels degenerate to the two ends. Anything else
@@ -6916,8 +6982,8 @@ namespace DungeonLab.Editor
                 upperLandingCells = new[] { transition.firstCell };
             }
 
-            if (!ValidateTransitionLandingCells(cellLevels, lowerLandingCells, lowerLevel, transition, "lower", out rejectionReason) ||
-                !ValidateTransitionLandingCells(cellLevels, upperLandingCells, upperLevel, transition, "upper", out rejectionReason))
+            if (!ValidateTransitionLandingCells(surfaces, lowerLandingCells, lowerLevel, transition, "lower", out rejectionReason) ||
+                !ValidateTransitionLandingCells(surfaces, upperLandingCells, upperLevel, transition, "upper", out rejectionReason))
             {
                 return false;
             }
@@ -6946,8 +7012,12 @@ namespace DungeonLab.Editor
             return true;
         }
 
+        // A landing was ALREADY required to sit at its transition's endpoint
+        // level; it just had to prove it against the heightfield. Now that the
+        // transition states that level itself, the check is a plain surface
+        // query and landings need no level of their own.
         private static bool ValidateTransitionLandingCells(
-            IReadOnlyDictionary<Vector2Int, int> cellLevels,
+            SurfaceField surfaces,
             IReadOnlyList<Vector2Int> landingCells,
             int expectedLevel,
             ElevationEdgeModel.TransitionEdge transition,
@@ -6969,13 +7039,13 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                if (!cellLevels.TryGetValue(cell, out int level))
+                if (!surfaces.TryGetHighestSurfaceLevel(cell, out int level))
                 {
                     rejectionReason = $"transition {transition.firstCell}->{transition.secondCell} {label} landing cell {cell} was missing from level field";
                     return false;
                 }
 
-                if (level != expectedLevel)
+                if (!surfaces.HasSurfaceAt(cell, expectedLevel))
                 {
                     rejectionReason = $"transition {transition.firstCell}->{transition.secondCell} {label} landing cell {cell} had level {level}, expected {expectedLevel}";
                     return false;
@@ -7089,20 +7159,19 @@ namespace DungeonLab.Editor
         }
 
         private static string FormatTransitionSummary(
-            IReadOnlyDictionary<Vector2Int, int> cellLevels,
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions)
         {
             var countsByDelta = new SortedDictionary<int, int>();
             var setPiecesByDelta = new SortedDictionary<int, HashSet<string>>();
             foreach (ElevationEdgeModel.TransitionEdge transition in transitions)
             {
-                if (!cellLevels.TryGetValue(transition.firstCell, out int firstLevel) ||
-                    !cellLevels.TryGetValue(transition.secondCell, out int secondLevel))
+                if (transition.firstLevel == UnleveledTransitionEndpoint ||
+                    transition.secondLevel == UnleveledTransitionEndpoint)
                 {
                     continue;
                 }
 
-                int delta = Mathf.Abs(firstLevel - secondLevel);
+                int delta = transition.RiseLevels;
                 countsByDelta.TryGetValue(delta, out int count);
                 countsByDelta[delta] = count + 1;
                 string name = string.IsNullOrEmpty(transition.stairPrefabPath)
@@ -7266,8 +7335,12 @@ namespace DungeonLab.Editor
             }
         }
 
+        // A reported stat about COLUMN FLOORS meeting each other, which is what
+        // an overlook is: you stand on one floor and look down at the next. It
+        // takes the floors deliberately — a gallery and the chamber under it are
+        // one column, not a sheer drop between two.
         private static int CountSpatialOverlookEdges(
-            IReadOnlyDictionary<Vector2Int, int> cellLevels,
+            SurfaceField surfaces,
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions)
         {
             var transitionKeys = new HashSet<string>();
@@ -7277,18 +7350,23 @@ namespace DungeonLab.Editor
             }
 
             int count = 0;
-            foreach (var item in cellLevels)
+            foreach (Vector2Int cell in surfaces.SurfacedCells())
             {
+                if (!surfaces.TryGetFloorLevel(cell, out int level))
+                {
+                    continue;
+                }
+
                 foreach (Vector2Int direction in CardinalDirections())
                 {
-                    Vector2Int neighbor = item.Key + direction;
-                    if (cellLevels.TryGetValue(neighbor, out int neighborLevel))
+                    Vector2Int neighbor = cell + direction;
+                    if (surfaces.TryGetFloorLevel(neighbor, out int neighborLevel))
                     {
                         // Overlook stat (reported only): a sheer vista drop of at
                         // least one 4u major (decision A's tier step).
-                        if (CompareCells(item.Key, neighbor) < 0 &&
-                            !transitionKeys.Contains(TransitionKey(item.Key, neighbor)) &&
-                            Mathf.Abs(item.Value - neighborLevel) >= MajorRiseLevels)
+                        if (CompareCells(cell, neighbor) < 0 &&
+                            !transitionKeys.Contains(TransitionKey(cell, neighbor)) &&
+                            Mathf.Abs(level - neighborLevel) >= MajorRiseLevels)
                         {
                             count++;
                         }
@@ -8458,16 +8536,6 @@ namespace DungeonLab.Editor
             // STORES surfaces; every consumer now reads them.
             public readonly SurfaceField surfaces;
 
-            // The last compatibility view, and named for the ONE thing still
-            // asking for it: two validation readers that resolve a transition's
-            // endpoint elevations by looking its cells up in the field.
-            // `TransitionEdge` carries no levels, so that lookup is ambiguous the
-            // moment a column stacks and no container swap can fix it — C2b-2
-            // puts the levels on the edge and this property goes away with them.
-            // Until then the throw is deliberate: it is louder than silently
-            // answering for column floors.
-            public Dictionary<Vector2Int, int> transitionEndpointLevels =>
-                surfaces?.AsHeightField();
             public readonly List<ElevationEdgeModel.TransitionEdge> transitions;
             public readonly int levelCount;
             public readonly int minLevel;

@@ -172,6 +172,20 @@ namespace DungeonLab.Editor
             // directed Fall edge and the rest must still be one component.
             public bool fallFreeSubgraphConnected;
             public int unreachableSurfaces;
+            // C2b-2: the PRODUCTION port graph, over the same stacked field.
+            // C1b recorded that `TryBuildFloorStairPortGraph` keyed its nodes on
+            // the level field and so could not see a stacked surface, which is
+            // why this fixture had to walk its own. These re-ask the question of
+            // the real graph, so the two derivations can be compared instead of
+            // the claim being taken on trust.
+            public bool ownWalkWithFootprintDropConnected;
+            public int ownWalkWithFootprintDropUnreachable;
+            public bool portGraphBuilt;
+            public bool portGraphFallFreeConnected;
+            public int portGraphNodes;
+            public int expectedPortGraphNodes;
+            public int portGraphFootprintColumns;
+            public string portGraphReachability;
 
             // Three stacked coordinates, per the phase's evidence item 1.
             public bool apertureRimCarriesBothSurfaces;
@@ -218,6 +232,18 @@ namespace DungeonLab.Editor
                     $"episode.transitions={fixture.transitions.Count}",
                     $"episode.fallFreeSubgraphConnected={fixture.fallFreeSubgraphConnected}",
                     $"episode.unreachableSurfaces={fixture.unreachableSurfaces}",
+                    $"episode.portGraphBuilt={fixture.portGraphBuilt}",
+                    $"episode.portGraphFallFreeConnected={fixture.portGraphFallFreeConnected}",
+                    $"episode.portGraphNodes={fixture.portGraphNodes}" +
+                        $" (expected {fixture.expectedPortGraphNodes})",
+                    $"episode.portGraphSeesEverySurface=" +
+                        $"{fixture.portGraphNodes == fixture.expectedPortGraphNodes}",
+                    $"episode.portGraphFootprintColumns={fixture.portGraphFootprintColumns}",
+                    $"episode.portGraphReachability={fixture.portGraphReachability}",
+                    $"episode.ownWalkWithFootprintDropConnected=" +
+                        $"{fixture.ownWalkWithFootprintDropConnected}",
+                    $"episode.ownWalkWithFootprintDropUnreachable=" +
+                        $"{fixture.ownWalkWithFootprintDropUnreachable}",
                     $"episode.apertureRimCarriesBothSurfaces={fixture.apertureRimCarriesBothSurfaces}",
                     $"episode.chamberUnderGalleryCarriesBothSurfaces={fixture.chamberUnderGalleryCarriesBothSurfaces}",
                     $"episode.bridgeDeckCarriesBothSurfaces={fixture.bridgeDeckCarriesBothSurfaces}",
@@ -471,7 +497,9 @@ namespace DungeonLab.Editor
             {
                 transitions.Add(new ElevationEdgeModel.TransitionEdge(
                     new Vector2Int(-3, 7 + step),
+                    step + 1,
                     new Vector2Int(-3, 6 + step),
+                    step,
                     seamStairPrefabPath,
                     SeamStairPlacementClass));
             }
@@ -520,6 +548,36 @@ namespace DungeonLab.Editor
             var rimCell = new Vector2Int(0, 6);
             var underGalleryCell = new Vector2Int(1, 7);
 
+            // The production port graph over the SAME stacked field, so the
+            // fixture's own walk and the real one are two independent
+            // derivations of the same answer rather than one claim.
+            bool portGraphBuilt = TryBuildFloorStairPortGraph(
+                surfaces,
+                transitions,
+                out FloorStairPortGraph portGraph,
+                out _);
+            string portGraphReachability = "port graph did not build";
+            bool portGraphFallFreeConnected =
+                portGraphBuilt && portGraph.IsFallFreeConnected(out portGraphReachability);
+            var portGraphFootprint = new HashSet<Vector2Int>();
+            foreach (ElevationEdgeModel.TransitionEdge transition in transitions)
+            {
+                portGraphFootprint.UnionWith(transition.footprintCells);
+            }
+
+            int portGraphFootprintColumns = 0;
+            int portGraphExpectedNodes = transitions.Count * 2;
+            foreach (SurfaceKey surface in surfaces.Surfaces())
+            {
+                if (portGraphFootprint.Contains(surface.cell))
+                {
+                    portGraphFootprintColumns++;
+                    continue;
+                }
+
+                portGraphExpectedNodes++;
+            }
+
             return new TwoLayerEpisodeFixture
             {
                 levels = levels,
@@ -548,6 +606,23 @@ namespace DungeonLab.Editor
                     transitions,
                     out int unreachable),
                 unreachableSurfaces = unreachable,
+                ownWalkWithFootprintDropConnected = FallFreeSubgraphIsConnected(
+                    levels,
+                    stacked,
+                    transitions,
+                    out int droppedUnreachable,
+                    dropTransitionFootprintColumns: true),
+                ownWalkWithFootprintDropUnreachable = droppedUnreachable,
+                portGraphBuilt = portGraphBuilt,
+                portGraphFallFreeConnected = portGraphFallFreeConnected,
+                portGraphNodes = portGraph?.NodeCount ?? 0,
+                portGraphReachability = portGraphReachability,
+                // Every surface whose COLUMN is not consumed by a transition
+                // footprint, plus two stair ports per transition. The port graph
+                // drops a footprint column at every level, which is what the
+                // bridge deck's own crossing cell runs into below.
+                expectedPortGraphNodes = portGraphExpectedNodes,
+                portGraphFootprintColumns = portGraphFootprintColumns,
 
                 // Stacked coordinate 1 — an aperture rim: gallery slab above,
                 // chamber floor below, in the same plan column.
@@ -696,16 +771,40 @@ namespace DungeonLab.Editor
             IReadOnlyDictionary<Vector2Int, int> levels,
             IReadOnlyList<ElevationEdgeModel.StackedSurface> stacked,
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
-            out int unreachable)
+            out int unreachable,
+            bool dropTransitionFootprintColumns = false)
         {
+            // The port graph drops a transition's footprint COLUMN at every
+            // level, on the reasoning that a stair body occupies it. Setting this
+            // reproduces that rule here, so the two walks can be compared with
+            // one variable changed instead of guessed at.
+            var droppedCells = new HashSet<Vector2Int>();
+            if (dropTransitionFootprintColumns)
+            {
+                foreach (ElevationEdgeModel.TransitionEdge transition in transitions)
+                {
+                    droppedCells.UnionWith(transition.footprintCells);
+                }
+            }
+
             var nodes = new HashSet<(Vector2Int cell, int level)>();
             foreach (KeyValuePair<Vector2Int, int> item in levels)
             {
+                if (droppedCells.Contains(item.Key))
+                {
+                    continue;
+                }
+
                 nodes.Add((item.Key, item.Value));
             }
 
             foreach (ElevationEdgeModel.StackedSurface surface in stacked)
             {
+                if (droppedCells.Contains(surface.cell))
+                {
+                    continue;
+                }
+
                 nodes.Add((surface.cell, surface.level));
             }
 
@@ -745,10 +844,16 @@ namespace DungeonLab.Editor
             // directed kind and this episode declares none as a transition.
             foreach (ElevationEdgeModel.TransitionEdge transition in transitions)
             {
-                if (levels.TryGetValue(transition.firstCell, out int firstLevel) &&
-                    levels.TryGetValue(transition.secondCell, out int secondLevel))
+                // The edge's own levels (C2b-2). Resolving them from `levels`
+                // reached only column floors, so a transition landing on the
+                // gallery linked the wrong node — the episode's return stair
+                // happens to top out on a ground-backed terrace, which is why the
+                // walk agreed anyway.
+                if (transition.HasLevels)
                 {
-                    Link((transition.firstCell, firstLevel), (transition.secondCell, secondLevel));
+                    Link(
+                        (transition.firstCell, transition.firstLevel),
+                        (transition.secondCell, transition.secondLevel));
                 }
             }
 
@@ -900,7 +1005,7 @@ namespace DungeonLab.Editor
             foreach (Vector2Int cell in east.cells)
                 upperLevels[cell] = 4;
             bool upperGraphBuilt = TryBuildFloorStairPortGraph(
-                upperLevels,
+                new SurfaceField(upperLevels),
                 transitions,
                 out FloorStairPortGraph upperGraph,
                 out _);

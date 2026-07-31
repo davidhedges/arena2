@@ -3570,7 +3570,7 @@ namespace DungeonLab.Editor
         {
             JObject canonicalLayout = BuildCanonicalLayoutProjection(layout);
             JObject canonicalPlan = BuildCanonicalTieredLevelPlanProjection(plan);
-            JArray existingTransitions = BuildExistingTransitionProjection(plan.transitions);
+            JArray existingTransitions = BuildExistingTransitionProjection(plan.transitions, !plan.surfaces.IsSingleLayer);
             JObject preservedCorePlan = BuildPreservedCorePlanProjection(plan);
             JObject preCorrectivePlan = BuildPreCorrectiveTieredLevelPlanProjection(plan);
             JArray recipeResolutions = BuildRecipeResolutionsProjection(plan.recipeResolutions);
@@ -5075,7 +5075,7 @@ namespace DungeonLab.Editor
             // loses nothing and keeps 200 seeds byte-identical.
             JArray stackedSurfaces = BuildStackedSurfaceProjection(plan.surfaces);
 
-            JArray transitions = BuildExistingTransitionProjection(plan.transitions);
+            JArray transitions = BuildExistingTransitionProjection(plan.transitions, !plan.surfaces.IsSingleLayer);
 
             var synthesizedStairs = new JArray();
             if (plan.synthesizedStairs != null)
@@ -5179,14 +5179,29 @@ namespace DungeonLab.Editor
             return stacked;
         }
 
+        /// <summary>
+        /// The accepted transition list, with endpoint levels only when the plan
+        /// stacks.
+        /// </summary>
+        /// <remarks>
+        /// CONDITIONAL for the same reason C2a's recipe layer fields are: this
+        /// projection is hashed into `planHash` and thence into `canonicalHash`,
+        /// so unconditional rows would move every seed's hash for a schema
+        /// addition that changed no geometry. While every column carries one
+        /// surface a transition's levels are recoverable from its cells and the
+        /// `cellLevels` rows beside it, so omitting them loses nothing; a
+        /// cross-layer edge is the case that genuinely needs stating, and it can
+        /// only exist on a stacked plan.
+        /// </remarks>
         private static JArray BuildExistingTransitionProjection(
-            IReadOnlyList<ElevationEdgeModel.TransitionEdge> source)
+            IReadOnlyList<ElevationEdgeModel.TransitionEdge> source,
+            bool includeLevels)
         {
             var transitions = new JArray();
             for (int index = 0; index < (source?.Count ?? 0); index++)
             {
                 ElevationEdgeModel.TransitionEdge transition = source[index];
-                transitions.Add(new JObject
+                var token = new JObject
                 {
                     ["index"] = index,
                     ["firstCell"] = CellToken(transition.firstCell),
@@ -5201,7 +5216,14 @@ namespace DungeonLab.Editor
                     ["lowerPortDirection"] = transition.lowerPortDirection,
                     ["upperPortDirection"] = transition.upperPortDirection,
                     ["synthesizedSetPiece"] = SynthesizedSetPieceToken(transition.synthesizedSetPiece)
-                });
+                };
+                if (includeLevels)
+                {
+                    token["firstLevel"] = transition.firstLevel;
+                    token["secondLevel"] = transition.secondLevel;
+                }
+
+                transitions.Add(token);
             }
 
             return transitions;
@@ -5230,7 +5252,7 @@ namespace DungeonLab.Editor
             return new JObject
             {
                 ["cellLevelsBeforeExternalConnectors"] = levels,
-                ["transitions"] = BuildExistingTransitionProjection(plan.transitions),
+                ["transitions"] = BuildExistingTransitionProjection(plan.transitions, !plan.surfaces.IsSingleLayer),
                 ["synthesizedStairs"] = new JArray((plan.synthesizedStairs ??
                     new List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)>())
                     .ConvertAll(item => new JObject
@@ -5280,8 +5302,12 @@ namespace DungeonLab.Editor
                 });
             }
 
+            // A synthetic single-layer view by construction — the accepted plan
+            // minus the external appendage — so wrapping it is what these metrics
+            // saw before, not a stacked question in disguise.
+            var coreSurfaces = new SurfaceField(coreLevels);
             if (!TryBuildFloorStairPortGraph(
-                    coreLevels,
+                    coreSurfaces,
                     plan.transitions,
                     out FloorStairPortGraph corePortGraph,
                     out string graphError))
@@ -5289,10 +5315,7 @@ namespace DungeonLab.Editor
                 throw new InvalidOperationException(
                     $"Could not reconstruct pre-corrective port graph: {graphError}");
             }
-            // A synthetic single-layer view by construction — the accepted plan
-            // minus the external appendage — so wrapping it is what these metrics
-            // saw before, not a stacked question in disguise.
-            var coreSurfaces = new SurfaceField(coreLevels);
+
             GetLevelRange(coreSurfaces, out int coreMinLevel, out int coreMaxLevel);
 
             var synthesizedStairs = new JArray();
@@ -5311,12 +5334,12 @@ namespace DungeonLab.Editor
             return new JObject
             {
                 ["cellLevels"] = levels,
-                ["transitions"] = BuildExistingTransitionProjection(plan.transitions),
+                ["transitions"] = BuildExistingTransitionProjection(plan.transitions, !plan.surfaces.IsSingleLayer),
                 ["levelCount"] = CountDistinctLevels(coreSurfaces),
                 ["minLevel"] = coreMinLevel,
                 ["maxLevel"] = coreMaxLevel,
                 ["roomsPerTierSummary"] = plan.roomsPerTierSummary,
-                ["overlookCount"] = CountSpatialOverlookEdges(coreLevels, plan.transitions),
+                ["overlookCount"] = CountSpatialOverlookEdges(coreSurfaces, plan.transitions),
                 ["transitionSummary"] = plan.transitionSummary,
                 ["connectorCandidateCount"] = plan.connectorCandidateCount,
                 ["stairUsageSummary"] = plan.stairUsageSummary,

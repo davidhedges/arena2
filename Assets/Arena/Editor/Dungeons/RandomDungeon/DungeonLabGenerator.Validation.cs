@@ -156,16 +156,12 @@ namespace DungeonLab.Editor
         {
             bool layoutConnected = IsConnected(layout.floorCells);
             bool roomGraphConnected = TryValidateRoomGraphConnectivity(layout, out string roomGraphMessage);
-            // Both take the transition-endpoint view, not the surface field:
-            // each resolves a TransitionEdge's two elevations by cell, which the
-            // edge cannot yet state itself (C2b-2).
             bool transitionContractsValid = TryValidateTransitionLevelDeltas(
-                plan.transitionEndpointLevels,
                 plan.transitions,
                 out string transitionMessage);
 
             bool portGraphBuilt = TryBuildFloorStairPortGraph(
-                plan.transitionEndpointLevels,
+                plan.surfaces,
                 plan.transitions,
                 out FloorStairPortGraph portGraph,
                 out string portGraphBuildMessage);

@@ -183,6 +183,21 @@ namespace DungeonLab.Editor
             public readonly Vector2Int[] upperLandingCells;
             public readonly Vector2Int[] footprintCells;
             public readonly Vector2Int climbDirection;
+            /// <summary>
+            /// Which storey each end stands on, as a comparable identity, and
+            /// that storey's offset from the node's level.
+            /// </summary>
+            /// <remarks>
+            /// C2a put `lowerLayerId`/`upperLayerId` on the recipe ASSET, but
+            /// only the authoring validator ever read them — the placement
+            /// dropped them, so an authored cross-layer stair validated and then
+            /// lost its identity on the way into the plan. These carry it
+            /// through. Empty is the base storey, which is every recipe today.
+            /// </remarks>
+            public readonly string lowerLayerId;
+            public readonly string upperLayerId;
+            public readonly int lowerLayerRelativeLevel;
+            public readonly int upperLayerRelativeLevel;
 
             public RecipeTransitionPlacement(
                 DungeonRecipeTransition transition,
@@ -191,10 +206,18 @@ namespace DungeonLab.Editor
                 Vector2Int[] lowerLandingCells,
                 Vector2Int[] upperLandingCells,
                 Vector2Int[] footprintCells,
-                Vector2Int climbDirection)
+                Vector2Int climbDirection,
+                string lowerLayerId,
+                string upperLayerId,
+                int lowerLayerRelativeLevel,
+                int upperLayerRelativeLevel)
             {
                 id = transition.id;
                 atomicGroupId = transition.atomicGroupId;
+                this.lowerLayerId = lowerLayerId ?? string.Empty;
+                this.upperLayerId = upperLayerId ?? string.Empty;
+                this.lowerLayerRelativeLevel = lowerLayerRelativeLevel;
+                this.upperLayerRelativeLevel = upperLayerRelativeLevel;
                 this.lowerTransitionCell = lowerTransitionCell;
                 this.upperTransitionCell = upperTransitionCell;
                 this.lowerLandingCells = lowerLandingCells ?? Array.Empty<Vector2Int>();
@@ -1140,6 +1163,20 @@ namespace DungeonLab.Editor
             var transitions = new List<RecipeTransitionPlacement>();
             foreach (DungeonRecipeTransition transition in slot.recipe.transitions)
             {
+                if (!DungeonRecipeLayers.TryGetRelativeLevel(
+                        slot.recipe,
+                        transition.lowerLayerId,
+                        out int transitionLowerLayerLevel) ||
+                    !DungeonRecipeLayers.TryGetRelativeLevel(
+                        slot.recipe,
+                        transition.upperLayerId,
+                        out int transitionUpperLayerLevel))
+                {
+                    rejectionReason =
+                        $"recipe '{slot.recipe.recipeId}' transition '{transition.id}' named an undeclared layer";
+                    return false;
+                }
+
                 transitions.Add(new RecipeTransitionPlacement(
                     transition,
                     TransformRecipeCell(transition.lowerTransitionCell, center, primaryAxis, transverseAxis, mirrored),
@@ -1147,7 +1184,11 @@ namespace DungeonLab.Editor
                     TransformRecipeCells(transition.lowerLandingCells, center, primaryAxis, transverseAxis, mirrored),
                     TransformRecipeCells(transition.upperLandingCells, center, primaryAxis, transverseAxis, mirrored),
                     TransformRecipeCells(transition.footprintCells, center, primaryAxis, transverseAxis, mirrored),
-                    TransformRecipeDirection(transition.climbDirection, primaryAxis, transverseAxis, mirrored)));
+                    TransformRecipeDirection(transition.climbDirection, primaryAxis, transverseAxis, mirrored),
+                    DungeonRecipeLayers.CanonicalId(slot.recipe, transition.lowerLayerId),
+                    DungeonRecipeLayers.CanonicalId(slot.recipe, transition.upperLayerId),
+                    transitionLowerLayerLevel,
+                    transitionUpperLayerLevel));
             }
 
             string variationId = string.Empty;
@@ -2030,7 +2071,21 @@ namespace DungeonLab.Editor
                         recipeTransition.climbDirection.y));
                     transitions.Add(new ElevationEdgeModel.TransitionEdge(
                         recipeTransition.upperTransitionCell,
+                        RecipeTransitionEndLevel(
+                            surfaces,
+                            placement,
+                            recipeTransition.upperTransitionCell,
+                            recipeTransition.upperLayerId,
+                            recipeTransition.upperLayerRelativeLevel,
+                            baseLevel),
                         recipeTransition.lowerTransitionCell,
+                        RecipeTransitionEndLevel(
+                            surfaces,
+                            placement,
+                            recipeTransition.lowerTransitionCell,
+                            recipeTransition.lowerLayerId,
+                            recipeTransition.lowerLayerRelativeLevel,
+                            baseLevel),
                         seamStairPrefabPath,
                         recipeTransition.lowerLandingCells,
                         recipeTransition.upperLandingCells,
@@ -2444,6 +2499,36 @@ namespace DungeonLab.Editor
         {
             DungeonRecipeLayers.TryGetRelativeLevel(recipe, port?.layerId, out int layerLevel);
             return layerLevel;
+        }
+
+        /// <summary>
+        /// Where one end of an authored transition stands, in plan levels.
+        /// </summary>
+        /// <remarks>
+        /// A BASE-storey end is the column floor, so it is read from the field —
+        /// which is byte-for-byte the lookup every consumer did before the edge
+        /// carried its own levels, and is what makes this migration neutral for
+        /// the whole catalog. A STACKED end has no floor to read, so it comes
+        /// from the layer schema: the same `baseLevel + layer offset + rise
+        /// within the layer` expression the resolver used to WRITE it a few lines
+        /// above. One rule, read back.
+        /// </remarks>
+        private static int RecipeTransitionEndLevel(
+            SurfaceField surfaces,
+            RecipePlacement placement,
+            Vector2Int cell,
+            string layerId,
+            int layerRelativeLevel,
+            int baseLevel)
+        {
+            if (string.IsNullOrEmpty(layerId))
+            {
+                return TransitionEndpointLevel(surfaces, cell);
+            }
+
+            return baseLevel +
+                layerRelativeLevel +
+                ResolvedRecipeLayerRelativeLevel(placement.zones, cell, layerId);
         }
 
         /// <summary>

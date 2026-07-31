@@ -503,17 +503,61 @@ Five things measured that the plan or this page had wrong:
    the stage's own layer-blind leveling produces; an authored storey's internal
    drops are the recipe's to declare, not a sweep's to discover.
 
-**What C2 still needs is C2b-2**: `TransitionEdge` carries no levels, so every
-reader that resolves a transition's endpoint elevations does it by looking its
-cells up in the field — ambiguous by construction once a column stacks, and no
-container swap fixes it. It breaks a hard gate: a cross-layer recipe stair reads
-delta 0 and is rejected as `delta < PrimaryStairRiseLevels`. The layer ids exist
-on `DungeonRecipeTransition` but are dropped at `RecipeTransitionPlacement`, so
-an authored cross-layer stair validates and then loses its identity. Scope:
-`firstLevel`/`secondLevel` on the edge (6 of 7 producers already have both in
-local scope), the two recipe layer ids, ~4 plan-side and 6 renderer consumers.
-The projection append must be conditional — `BuildExistingTransitionProjection`
-feeds `planHash` and thence `canonicalHash`.
+### C2b-2 — transition levels, landed 2026-07-31
+
+`TransitionEdge` now carries `firstLevel`/`secondLevel`. **`AsHeightField()` has
+no callers left outside its own file**, so the reader side is done: nothing
+resolves an elevation by looking a transition's cell up in the level field.
+
+The lookup was the blocker, and it broke a hard gate rather than degrading
+quietly — a cross-layer stair whose upper end stands over its own lower end
+resolved both endpoints to the column floor, computed a delta of 0, and was
+rejected by the transition-contract gate as too shallow to be a stair.
+
+Recording levels at construction is safe because nothing can move them
+afterwards, and that is a property of C2a's three named writers rather than of
+pass ordering: `TrySetFloorLevel` rejects a conflicting value instead of
+overwriting, `AddFloorLevel` requires an empty column, and `RelevelFloor` — the
+only mover — runs inside `TryRealizeRecipes`, which precedes every producer
+including its own transitions. Six of the seven producers already had both levels
+in local scope; they had to, to decide which end was raised.
+
+- **The recipe's layer ids now reach the plan.** C2a put `lowerLayerId`/
+  `upperLayerId` on the recipe ASSET, but only the authoring validator read them —
+  `RecipeTransitionPlacement` dropped them, so an authored cross-layer stair
+  validated and then lost its identity on the way in. A base-storey end still
+  reads the field (identical to before, which is what keeps the catalog neutral);
+  a stacked end comes from the layer schema, the same expression the resolver
+  used to write it.
+- **Landings needed nothing.** A landing was already required to sit at its
+  transition's endpoint level; now that the transition states that level, the
+  check is a plain `HasSurfaceAt`.
+- **The port graph nodes every surface.** This retires C1b's finding 6 — the
+  fixture no longer has to walk its own surfaces because the graph cannot see
+  them.
+- **An unleveled endpoint is RECORDED, not thrown** (`TransitionEdge.UnknownLevel`),
+  so the missing-cell rejection survives verbatim. It has never fired across the
+  corpus.
+
+Gate: **identical geometry on all 200 seeds**, field-level diff of the two
+reports = the generation timestamp alone, `resultHash` unmoved at
+`385e29f388fdae7a`. The endpoint-level rows in the transition projection are
+conditional on the plan stacking, for the same hash reason as C2a's layer fields.
+
+**One thing C2b-2 made visible that no gate could have.** The two-layer episode
+now runs the PRODUCTION port graph, and it sees every surface (88/88 including
+all 14 stacked) but reports 84/88 reachable. The cause was tested, not guessed:
+re-running the fixture's own walk with the single rule change of dropping
+transition footprint columns reproduces the port graph's answer exactly —
+disconnected, 4 unreachable. **The port graph treats a transition footprint as a
+stair BODY and removes the whole column at every level; for an aerial deck the
+footprint sits above the route it crosses, so a deck over playable geometry
+severs that route in the traversal graph.** Pre-existing and invisible until now
+(the graph could not even build on a stacked field), and harmless in production,
+where a span flies over authored void rather than over a walkable route. This is
+the design's "aerial-bridge path promoted so a deck's cells become surfaces"
+(§13 Phase C Systems), now with evidence attached — and it is a prerequisite for
+the authored episode, whose whole point is a bridge over playable geometry.
 
 Still true, and still the reason all of this exists: before C2a, two layers over
 one plan cell overwrote rather than stacked.
@@ -525,11 +569,12 @@ is already required to resolve at `nodeLevel + port.relativeLevel`), so
 escape hatch both have nothing to do.
 
 **Order: ~~level field → `SurfaceField` (writer side)~~ → ~~the recipe layer
-schema~~ → ~~the reader side, container half~~ → transition levels → the authored
-episode.** The original order had two steps. The reader side was not visible as
-its own step until the writer side made a stacked field reachable, and its split
-into a container half and a model half was not visible until the readers were
-classified.
+schema~~ → ~~the reader side, container half~~ → ~~transition levels~~ → decks as
+surfaces → the authored episode.** The original order had two steps. The reader
+side was not visible as its own step until the writer side made a stacked field
+reachable; its split into a container half and a model half was not visible until
+the readers were classified; and the deck-as-surface step was not visible until
+the port graph could run on a stacked plan at all.
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently

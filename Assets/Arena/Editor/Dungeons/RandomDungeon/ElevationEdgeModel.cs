@@ -743,8 +743,13 @@ namespace DungeonLab.Editor
 
             foreach (TransitionEdge transition in transitions)
             {
-                if (!levels.TryGetValue(transition.firstCell, out int firstLevel) ||
-                    !levels.TryGetValue(transition.secondCell, out int secondLevel))
+                // The edge's OWN levels (C2b-2). Looking them up by cell here
+                // meant a transition ending on a stacked surface — which is not
+                // in the column-floor map at all — read as a missing cell and
+                // threw, so a cross-layer stair could not be rendered.
+                int firstLevel = transition.firstLevel;
+                int secondLevel = transition.secondLevel;
+                if (!transition.HasLevels)
                 {
                     // Was a logged skip until 2026-07-25. A skipped stair can
                     // strand a whole tier, and the resulting scene was still saved
@@ -1842,17 +1847,16 @@ namespace DungeonLab.Editor
                 // level: a floor edge facing one is even with it, so its railing
                 // is unnecessary (user rule 2026-06-12).
                 if (transition.synthesizedSetPiece != null &&
-                    levels.TryGetValue(transition.firstCell, out int deckFirstLevel) &&
-                    levels.TryGetValue(transition.secondCell, out int deckSecondLevel) &&
-                    deckFirstLevel == deckSecondLevel)
+                    transition.HasLevels &&
+                    transition.firstLevel == transition.secondLevel)
                 {
                     foreach (Vector2Int deckCell in transition.footprintCells)
                     {
-                        aerialDeckCellLevels[deckCell] = deckFirstLevel;
+                        aerialDeckCellLevels[deckCell] = transition.firstLevel;
                     }
                 }
 
-                if (!levels.ContainsKey(transition.firstCell) || !levels.ContainsKey(transition.secondCell))
+                if (!transition.HasLevels)
                 {
                     // Skipping here silently omitted an opening from the wall
                     // plan, which can seal a stair mouth. It never incremented
@@ -1895,8 +1899,8 @@ namespace DungeonLab.Editor
                     throw new InvalidOperationException($"Transition cells must share one edge: {transition.firstCell} <-> {transition.secondCell}.");
                 }
 
-                int firstLevel = levels[transition.firstCell];
-                int secondLevel = levels[transition.secondCell];
+                int firstLevel = transition.firstLevel;
+                int secondLevel = transition.secondLevel;
                 Vector2Int higherCell = firstLevel > secondLevel ? transition.firstCell : transition.secondCell;
                 Vector2Int lowerCell = firstLevel > secondLevel ? transition.secondCell : transition.firstCell;
                 if (!TryDirectionFromCellToward(higherCell, lowerCell, out int lowerDirection))
@@ -1979,13 +1983,13 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                if (!levels.TryGetValue(transition.firstCell, out int firstLevel) ||
-                    !levels.TryGetValue(transition.secondCell, out int secondLevel) ||
-                    firstLevel == secondLevel)
+                if (!transition.HasLevels || transition.RiseLevels == 0)
                 {
                     continue;
                 }
 
+                int firstLevel = transition.firstLevel;
+                int secondLevel = transition.secondLevel;
                 Vector2Int higherCell = firstLevel > secondLevel ? transition.firstCell : transition.secondCell;
                 Vector2Int lowerCell = firstLevel > secondLevel ? transition.secondCell : transition.firstCell;
                 int higherLevel = Mathf.Max(firstLevel, secondLevel);
@@ -8168,12 +8172,14 @@ namespace DungeonLab.Editor
             foreach (TransitionEdge transition in transitions)
             {
                 if (!string.Equals(transition.placementClass, DaisStairPlacementClass, StringComparison.Ordinal) ||
-                    !levels.TryGetValue(transition.firstCell, out int firstLevel) ||
-                    !levels.TryGetValue(transition.secondCell, out int secondLevel) ||
-                    firstLevel == secondLevel)
+                    !transition.HasLevels ||
+                    transition.RiseLevels == 0)
                 {
                     continue;
                 }
+
+                int firstLevel = transition.firstLevel;
+                int secondLevel = transition.secondLevel;
 
                 Vector2Int daisCell = firstLevel > secondLevel ? transition.firstCell : transition.secondCell;
                 Vector2Int ringCell = firstLevel > secondLevel ? transition.secondCell : transition.firstCell;
@@ -8321,12 +8327,14 @@ namespace DungeonLab.Editor
             foreach (TransitionEdge transition in transitions)
             {
                 if (!string.Equals(transition.placementClass, DaisStairPlacementClass, StringComparison.Ordinal) ||
-                    !levels.TryGetValue(transition.firstCell, out int firstLevel) ||
-                    !levels.TryGetValue(transition.secondCell, out int secondLevel) ||
-                    firstLevel == secondLevel)
+                    !transition.HasLevels ||
+                    transition.RiseLevels == 0)
                 {
                     continue;
                 }
+
+                int firstLevel = transition.firstLevel;
+                int secondLevel = transition.secondLevel;
 
                 Vector2Int lowerCell = firstLevel > secondLevel ? transition.secondCell : transition.firstCell;
                 Vector2Int upperCell = firstLevel > secondLevel ? transition.firstCell : transition.secondCell;
@@ -10724,10 +10732,38 @@ namespace DungeonLab.Editor
             }
         }
 
+        /// <summary>
+        /// A placed vertical connection, and the two SURFACES it joins.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// C2b-2 of the layered 3D topology design. The edge used to carry only
+        /// its two CELLS, so every consumer that needed its elevations looked
+        /// them up in the level field — which is unambiguous only while a cell
+        /// has one surface. A cross-layer stair whose upper end stands over its
+        /// own lower end would have read both endpoints as the column floor,
+        /// computed a delta of 0, and been rejected by the transition-contract
+        /// gate as too shallow to be a stair.
+        /// </para>
+        /// <para>
+        /// Recording the levels at construction is safe because nothing can move
+        /// them afterwards: of the surface field's three writers,
+        /// `TrySetFloorLevel` rejects a conflicting value rather than
+        /// overwriting, `AddFloorLevel` requires an empty column, and
+        /// `RelevelFloor` — the only mover — runs inside `TryRealizeRecipes`,
+        /// which precedes every producer including its own transitions. Every
+        /// producer already knew both levels; they had to, to decide which end
+        /// was the raised one.
+        /// </para>
+        /// </remarks>
         public readonly struct TransitionEdge
         {
             public readonly Vector2Int firstCell;
             public readonly Vector2Int secondCell;
+            /// <summary>The surface level at <see cref="firstCell"/>.</summary>
+            public readonly int firstLevel;
+            /// <summary>The surface level at <see cref="secondCell"/>.</summary>
+            public readonly int secondLevel;
             public readonly string stairPrefabPath;
             public readonly SynthesizedStairSetPiece synthesizedSetPiece;
             public readonly bool hasLandings;
@@ -10741,58 +10777,48 @@ namespace DungeonLab.Editor
             public readonly int upperPortDirection;
             public readonly string placementClass;
 
-            public TransitionEdge(Vector2Int firstCell, Vector2Int secondCell)
-                : this(firstCell, secondCell, string.Empty)
-            {
-            }
+            /// <summary>
+            /// An endpoint standing on a column that carries no surface.
+            /// </summary>
+            /// <remarks>
+            /// Recorded rather than thrown at the producer, so the checks that
+            /// used to catch a missing cell by failing a field lookup keep
+            /// producing the same rejection now that they read the edge.
+            /// </remarks>
+            public const int UnknownLevel = int.MinValue;
 
-            public TransitionEdge(Vector2Int firstCell, Vector2Int secondCell, string stairPrefabPath)
-                : this(
-                    firstCell,
-                    secondCell,
-                    stairPrefabPath,
-                    Array.Empty<Vector2Int>(),
-                    Array.Empty<Vector2Int>(),
-                    Array.Empty<Vector2Int>(),
-                    false,
-                    0,
-                    0,
-                    EmbeddedStairPlacementClass,
-                    false)
-            {
-            }
+            /// <summary>True when both ends resolved a surface.</summary>
+            public bool HasLevels => firstLevel != UnknownLevel && secondLevel != UnknownLevel;
 
+            /// <summary>The lower of the two endpoint levels.</summary>
+            public int LowerLevel => Mathf.Min(firstLevel, secondLevel);
+
+            /// <summary>The upper of the two endpoint levels.</summary>
+            public int UpperLevel => Mathf.Max(firstLevel, secondLevel);
+
+            /// <summary>How far this connection climbs. Zero for a flat deck.</summary>
+            public int RiseLevels => UpperLevel - LowerLevel;
+
+            /// <summary>The cell at the upper end; ties resolve to <see cref="firstCell"/>.</summary>
+            public Vector2Int HigherCell => firstLevel >= secondLevel ? firstCell : secondCell;
+
+            /// <summary>The cell at the lower end; ties resolve to <see cref="secondCell"/>.</summary>
+            public Vector2Int LowerCell => firstLevel >= secondLevel ? secondCell : firstCell;
+
+            // Landing-less classed transition (seam strips): landings default to
+            // the transition's own cells in the port graph.
             public TransitionEdge(
                 Vector2Int firstCell,
+                int firstLevel,
                 Vector2Int secondCell,
-                string stairPrefabPath,
-                Vector2Int lowerLandingCell,
-                Vector2Int upperLandingCell)
-                : this(
-                    firstCell,
-                    secondCell,
-                    stairPrefabPath,
-                    new[] { lowerLandingCell },
-                    new[] { upperLandingCell },
-                    Array.Empty<Vector2Int>(),
-                    false,
-                    0,
-                    0,
-                    EmbeddedStairPlacementClass,
-                    true)
-            {
-            }
-
-            // Landing-less classed transition (seam strips): landings default to the
-            // transition's own cells in the port graph.
-            public TransitionEdge(
-                Vector2Int firstCell,
-                Vector2Int secondCell,
+                int secondLevel,
                 string stairPrefabPath,
                 string placementClass)
                 : this(
                     firstCell,
+                    firstLevel,
                     secondCell,
+                    secondLevel,
                     stairPrefabPath,
                     Array.Empty<Vector2Int>(),
                     Array.Empty<Vector2Int>(),
@@ -10807,31 +10833,9 @@ namespace DungeonLab.Editor
 
             public TransitionEdge(
                 Vector2Int firstCell,
+                int firstLevel,
                 Vector2Int secondCell,
-                string stairPrefabPath,
-                Vector2Int[] lowerLandingCells,
-                Vector2Int[] upperLandingCells,
-                Vector2Int[] footprintCells)
-                : this(firstCell, secondCell, stairPrefabPath, lowerLandingCells, upperLandingCells, footprintCells, false, 0, 0, EmbeddedStairPlacementClass, true)
-            {
-            }
-
-            public TransitionEdge(
-                Vector2Int firstCell,
-                Vector2Int secondCell,
-                string stairPrefabPath,
-                Vector2Int[] lowerLandingCells,
-                Vector2Int[] upperLandingCells,
-                Vector2Int[] footprintCells,
-                int lowerPortDirection,
-                int upperPortDirection)
-                : this(firstCell, secondCell, stairPrefabPath, lowerLandingCells, upperLandingCells, footprintCells, true, lowerPortDirection, upperPortDirection, EmbeddedStairPlacementClass, true)
-            {
-            }
-
-            public TransitionEdge(
-                Vector2Int firstCell,
-                Vector2Int secondCell,
+                int secondLevel,
                 string stairPrefabPath,
                 Vector2Int[] lowerLandingCells,
                 Vector2Int[] upperLandingCells,
@@ -10839,7 +10843,20 @@ namespace DungeonLab.Editor
                 int lowerPortDirection,
                 int upperPortDirection,
                 string placementClass)
-                : this(firstCell, secondCell, stairPrefabPath, lowerLandingCells, upperLandingCells, footprintCells, true, lowerPortDirection, upperPortDirection, placementClass, true)
+                : this(
+                    firstCell,
+                    firstLevel,
+                    secondCell,
+                    secondLevel,
+                    stairPrefabPath,
+                    lowerLandingCells,
+                    upperLandingCells,
+                    footprintCells,
+                    true,
+                    lowerPortDirection,
+                    upperPortDirection,
+                    placementClass,
+                    true)
             {
             }
 
@@ -10848,7 +10865,9 @@ namespace DungeonLab.Editor
             // of loading a prefab.
             public TransitionEdge(
                 Vector2Int firstCell,
+                int firstLevel,
                 Vector2Int secondCell,
+                int secondLevel,
                 string stairPrefabPath,
                 Vector2Int[] lowerLandingCells,
                 Vector2Int[] upperLandingCells,
@@ -10857,14 +10876,29 @@ namespace DungeonLab.Editor
                 int upperPortDirection,
                 string placementClass,
                 SynthesizedStairSetPiece synthesizedSetPiece)
-                : this(firstCell, secondCell, stairPrefabPath, lowerLandingCells, upperLandingCells, footprintCells, true, lowerPortDirection, upperPortDirection, placementClass, true)
+                : this(
+                    firstCell,
+                    firstLevel,
+                    secondCell,
+                    secondLevel,
+                    stairPrefabPath,
+                    lowerLandingCells,
+                    upperLandingCells,
+                    footprintCells,
+                    true,
+                    lowerPortDirection,
+                    upperPortDirection,
+                    placementClass,
+                    true)
             {
                 this.synthesizedSetPiece = synthesizedSetPiece;
             }
 
             private TransitionEdge(
                 Vector2Int firstCell,
+                int firstLevel,
                 Vector2Int secondCell,
+                int secondLevel,
                 string stairPrefabPath,
                 Vector2Int[] lowerLandingCells,
                 Vector2Int[] upperLandingCells,
@@ -10876,7 +10910,9 @@ namespace DungeonLab.Editor
                 bool hasLandings)
             {
                 this.firstCell = firstCell;
+                this.firstLevel = firstLevel;
                 this.secondCell = secondCell;
+                this.secondLevel = secondLevel;
                 this.stairPrefabPath = stairPrefabPath ?? string.Empty;
                 this.synthesizedSetPiece = null;
                 this.lowerLandingCells = lowerLandingCells ?? Array.Empty<Vector2Int>();
