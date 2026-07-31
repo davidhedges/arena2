@@ -148,6 +148,7 @@ pub(crate) enum SpellBehavior {
     Aura,
     Emanation,
     SelfResource,
+    SelfTeleport,
     WorldObstacle,
 }
 
@@ -166,6 +167,7 @@ impl SpellBehavior {
             Self::Aura => "AURA",
             Self::Emanation => "EMANATION",
             Self::SelfResource => "SELF_RESOURCE",
+            Self::SelfTeleport => "SELF_TELEPORT",
             Self::WorldObstacle => "WORLD_OBSTACLE",
         }
     }
@@ -535,6 +537,7 @@ pub(crate) struct ConsumeStatusSecondaryTunables {
     pub polarity: Option<StatusPolarity>,
     pub dispel_types: Vec<StatusDispelType>,
     pub heal_per_stack: i32,
+    pub deal_remaining_dot_damage: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

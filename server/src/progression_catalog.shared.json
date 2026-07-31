@@ -1961,6 +1961,265 @@
       }
     },
     {
+      "ability_id": "SPELL_FLASHFIRE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "FLASHFIRE",
+      "display_name": "Flashfire",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1020,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "DIRECT_TARGET",
+          "max_distance": 30,
+          "damage": 30,
+          "damage_type": "FIRE",
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_COLLAPSE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "COLLAPSE",
+      "display_name": "Collapse",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1021,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "CONSUME_STATUS",
+          "max_distance": 30,
+          "max_count": 0,
+          "polarity": "DEBUFF",
+          "dispel_types": [
+            "MAGIC"
+          ],
+          "damage_type": "ARCANE",
+          "deal_remaining_dot_damage": true
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_DISPEL_MAGIC",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "DISPEL_MAGIC",
+      "display_name": "Dispel Magic",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1022,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "REMOVE_STATUS",
+          "max_distance": 30,
+          "max_count": 1,
+          "polarity": "BUFF",
+          "dispel_types": [
+            "MAGIC"
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_TELEPORT",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "TELEPORT",
+      "display_name": "Teleport",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1023,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 15000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "SELF_TELEPORT",
+          "distance": 15
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_SILENCE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "SILENCE",
+      "display_name": "Silence",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1024,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 20000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 5000,
+          "max_distance": 30,
+          "damage_type": "ARCANE",
+          "status_stack_group": "SILENCE",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "SILENCE",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_MANA_SHIELD",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "MANA_SHIELD",
+      "display_name": "Mana Shield",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1025,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 10000,
+          "damage_type": "ARCANE",
+          "status_stack_group": "MANA_SHIELD",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "TEMPORARY_HITPOINTS",
+            "modifier_scalar": 0,
+            "absorb_amount": 100,
+            "absorb_cap": 100,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_SHIMMER",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "SHIMMER",
+      "display_name": "Shimmer",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1026,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 3000,
+          "damage_type": "ARCANE",
+          "status_stack_group": "SHIMMER",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "DAMAGE_TAKEN_REDUCTION",
+            "modifier_scalar": 0.5,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_STONESPIRE",
       "actor_scope": "PLAYER",
       "combat_profile_id": "",
@@ -5867,6 +6126,55 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_FLASHFIRE",
+      "display_name": "Flashfire",
+      "description": "Instantly scorches the target for 30 fire damage.",
+      "sort_order": 98
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_COLLAPSE",
+      "display_name": "Collapse",
+      "description": "Consumes all magical damage-over-time effects on the target, dealing their remaining damage instantly as arcane damage.",
+      "sort_order": 99
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_DISPEL_MAGIC",
+      "display_name": "Dispel Magic",
+      "description": "Instantly removes one magical buff from the target.",
+      "sort_order": 100
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_TELEPORT",
+      "display_name": "Teleport",
+      "description": "Instantly teleports the caster up to 15 meters forward, stopping safely before obstacles.",
+      "sort_order": 101
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_SILENCE",
+      "display_name": "Silence",
+      "description": "Prevents the target from casting spells for 5 seconds without impairing attacks or movement.",
+      "sort_order": 102
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_MANA_SHIELD",
+      "display_name": "Mana Shield",
+      "description": "Redirects incoming damage to mana for 10 seconds, absorbing up to 100 damage at one mana per damage.",
+      "sort_order": 103
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_SHIMMER",
+      "display_name": "Shimmer",
+      "description": "Reduces all incoming damage by 50% for 3 seconds.",
+      "sort_order": 104
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_GIANT_SWING",
       "display_name": "Giant Swing",
       "description": "Empowers the next attack to reach farther and stagger enemies hit.",
@@ -7339,6 +7647,97 @@
       "lifecycle": "DURATION",
       "duration_ms": 5000,
       "sort_order": 197
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_FLASHFIRE",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_FIREBALL_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1000,
+      "sort_order": 198
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_COLLAPSE",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ARCANE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 199
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_DISPEL_MAGIC",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ARCANE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 200
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_TELEPORT",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ARCANE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 201
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_SILENCE",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ARCANE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 202
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_MANA_SHIELD",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ARCANE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 203
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_SHIMMER",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ARCANE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 204
     },
     {
       "owner_kind": "ABILITY",

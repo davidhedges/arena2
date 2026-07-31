@@ -225,6 +225,7 @@ namespace Arena.Entity
             { "shock",      new Color(0.9f, 1.0f, 0.3f) },
             { "MOVE_SLOW_IMMUNITY", new Color(1.0f, 0.8f, 0.25f) },
             { "MOVEMENT_IMPAIRING_IMMUNITY", new Color(1.0f, 0.88f, 0.45f) },
+            { "SILENCE", new Color(0.65f, 0.35f, 1.0f) },
             { "DAMAGE_TAKEN_REDUCTION", new Color(1.0f, 0.72f, 0.18f) },
             { "TARGETED_ABILITY_AVOIDANCE", new Color(0.65f, 0.95f, 1.0f) },
         };

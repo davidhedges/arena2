@@ -220,6 +220,7 @@ pub(crate) fn default_spell_target_audience(
         },
         crate::spells::SpellBehavior::RemoveStatus => TargetAudience::SelfOnly,
         crate::spells::SpellBehavior::SelfResource => TargetAudience::SelfOnly,
+        crate::spells::SpellBehavior::SelfTeleport => TargetAudience::SelfOnly,
         _ => TargetAudience::Hostile,
     }
 }

@@ -205,7 +205,12 @@ enum SpellCatalogDelivery {
         polarity: StatusPolarity,
         #[serde(default)]
         dispel_types: Vec<StatusDispelType>,
+        #[serde(default)]
+        damage_type: String,
+        #[serde(default)]
         heal_per_stack: i32,
+        #[serde(default)]
+        deal_remaining_dot_damage: bool,
     },
     Aura {
         radius: f32,
@@ -231,6 +236,9 @@ enum SpellCatalogDelivery {
         visual_yaw_offset_degrees: f32,
         collider: WorldObstacleColliderRow,
         visual_resource_path: String,
+    },
+    SelfTeleport {
+        distance: f32,
     },
     SelfResource {},
 }
@@ -1184,16 +1192,20 @@ impl SpellCatalogRow {
                 max_count,
                 polarity,
                 dispel_types,
+                damage_type,
                 heal_per_stack,
+                deal_remaining_dot_damage,
             } => {
                 definition.behavior = SpellBehavior::ConsumeStatus;
                 definition.max_distance = max_distance;
+                definition.damage_type = DamageType::from_wire(damage_type.as_str());
                 definition.block_behavior = BlockBehavior::Unblockable;
                 definition.secondary.consume_status = Some(ConsumeStatusSecondaryTunables {
                     max_count,
                     polarity: Some(polarity),
                     dispel_types,
                     heal_per_stack,
+                    deal_remaining_dot_damage,
                 });
             }
             SpellCatalogDelivery::Aura {
@@ -1265,6 +1277,11 @@ impl SpellCatalogRow {
             }
             SpellCatalogDelivery::SelfResource {} => {
                 definition.behavior = SpellBehavior::SelfResource;
+                definition.block_behavior = BlockBehavior::Unblockable;
+            }
+            SpellCatalogDelivery::SelfTeleport { distance } => {
+                definition.behavior = SpellBehavior::SelfTeleport;
+                definition.max_distance = distance;
                 definition.block_behavior = BlockBehavior::Unblockable;
             }
         }
@@ -1750,6 +1767,15 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
                 ));
             }
         }
+        SpellBehavior::SelfTeleport => {
+            if def.targeting != SpellTargeting::Self_ || def.requires_target {
+                return Err(format!(
+                    "{} SELF_TELEPORT must use SELF targeting without a target requirement",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(def.kind.as_str(), "delivery.distance", def.max_distance)?;
+        }
         _ if def.apply_status.is_some() => {
             return Err(format!(
                 "{} non-APPLY_STATUS spell must not define apply_status",
@@ -2191,9 +2217,14 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     def.kind.as_str()
                 ));
             }
-            if consume_status.heal_per_stack <= 0 {
+            let valid_outcome = if consume_status.deal_remaining_dot_damage {
+                consume_status.heal_per_stack == 0
+            } else {
+                consume_status.heal_per_stack > 0
+            };
+            if !valid_outcome {
                 return Err(format!(
-                    "{} CONSUME_STATUS heal_per_stack must be positive",
+                    "{} CONSUME_STATUS must define exactly one outcome: positive heal_per_stack or deal_remaining_dot_damage",
                     def.kind.as_str()
                 ));
             }
@@ -2358,6 +2389,14 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     "{} {:?} must not define secondary spell tunables",
                     def.kind.as_str(),
                     def.behavior
+                ));
+            }
+        }
+        SpellBehavior::SelfTeleport => {
+            if def.secondary != SpellSecondaryTunables::default() {
+                return Err(format!(
+                    "{} SELF_TELEPORT must not define secondary spell tunables",
+                    def.kind.as_str()
                 ));
             }
         }
@@ -2802,7 +2841,8 @@ fn validate_apply_status_kind_for_target(
         | StatusEffectKind::Stagger
         | StatusEffectKind::Knockdown
         | StatusEffectKind::Slow
-        | StatusEffectKind::Dot => Ok(()),
+        | StatusEffectKind::Dot
+        | StatusEffectKind::Silence => Ok(()),
         other => Err(format!(
             "{spell_id} TARGET APPLY_STATUS status '{}' is not supported",
             other.as_str()
@@ -2905,6 +2945,13 @@ mod tests {
                 "BUFFET",
                 "CAUTERIZE",
                 "CELESTIAL_MANTLE",
+                "FLASHFIRE",
+                "COLLAPSE",
+                "DISPEL_MAGIC",
+                "TELEPORT",
+                "SILENCE",
+                "MANA_SHIELD",
+                "SHIMMER",
                 "STONESPIRE",
                 "MOMENTUM",
                 "FORTIFY",
@@ -3063,6 +3110,13 @@ mod tests {
             "GUST_OF_WIND",
             "BUFFET",
             "CELESTIAL_MANTLE",
+            "FLASHFIRE",
+            "COLLAPSE",
+            "DISPEL_MAGIC",
+            "TELEPORT",
+            "SILENCE",
+            "MANA_SHIELD",
+            "SHIMMER",
             "MOMENTUM",
             "FORTIFY",
             "IRON_WILL",
@@ -3240,6 +3294,124 @@ mod tests {
         assert_eq!(status.kind, StatusEffectKind::MovementImpairingImmunity);
         assert_eq!(status.max_stacks, 1);
         assert_eq!(status.stack_policy, StackPolicy::Refresh);
+    }
+
+    #[test]
+    fn flashfire_authors_instant_direct_target_fire_damage() {
+        let definition = spell_definition_by_str("FLASHFIRE")
+            .expect("FLASHFIRE should derive from the shared catalog");
+        let direct_target = definition
+            .secondary
+            .direct_target
+            .as_ref()
+            .expect("FLASHFIRE should use direct-target delivery");
+
+        assert_eq!(definition.behavior, SpellBehavior::DirectTarget);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.damage, 30);
+        assert_eq!(definition.damage_type, DamageType::Fire);
+        assert_eq!(definition.max_distance, 30.0);
+        assert_eq!(definition.block_behavior, BlockBehavior::Blockable);
+        assert_eq!(direct_target.parry_behavior, SpellParryBehavior::Parryable);
+        assert!(direct_target.impact_effects.is_empty());
+    }
+
+    #[test]
+    fn collapse_authors_instant_arcane_magic_dot_consumption() {
+        let definition = spell_definition_by_str("COLLAPSE")
+            .expect("COLLAPSE should derive from the shared catalog");
+        let consume_status = definition
+            .secondary
+            .consume_status
+            .as_ref()
+            .expect("COLLAPSE should consume matching statuses");
+
+        assert_eq!(definition.behavior, SpellBehavior::ConsumeStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.damage_type, DamageType::Arcane);
+        assert_eq!(definition.max_distance, 30.0);
+        assert_eq!(consume_status.max_count, 0);
+        assert_eq!(consume_status.polarity, Some(StatusPolarity::Debuff));
+        assert_eq!(consume_status.dispel_types, vec![StatusDispelType::Magic]);
+        assert_eq!(consume_status.heal_per_stack, 0);
+        assert!(consume_status.deal_remaining_dot_damage);
+    }
+
+    #[test]
+    fn new_arcane_utility_spells_author_requested_deliveries() {
+        let dispel = spell_definition_by_str("DISPEL_MAGIC")
+            .expect("DISPEL_MAGIC should derive from the shared catalog");
+        let remove = dispel
+            .secondary
+            .remove_status
+            .as_ref()
+            .expect("DISPEL_MAGIC should remove statuses");
+        assert_eq!(dispel.behavior, SpellBehavior::RemoveStatus);
+        assert_eq!(dispel.cast_time, Duration::ZERO);
+        assert_eq!(dispel.target_audience, TargetAudience::Hostile);
+        assert_eq!(remove.max_count, 1);
+        assert_eq!(remove.polarity, Some(StatusPolarity::Buff));
+        assert_eq!(remove.dispel_types, vec![StatusDispelType::Magic]);
+
+        let teleport = spell_definition_by_str("TELEPORT")
+            .expect("TELEPORT should derive from the shared catalog");
+        assert_eq!(teleport.behavior, SpellBehavior::SelfTeleport);
+        assert_eq!(teleport.targeting, SpellTargeting::Self_);
+        assert_eq!(teleport.target_audience, TargetAudience::SelfOnly);
+        assert_eq!(teleport.cast_time, Duration::ZERO);
+        assert_eq!(teleport.max_distance, 15.0);
+
+        let silence = spell_definition_by_str("SILENCE")
+            .expect("SILENCE should derive from the shared catalog");
+        let silence_status = silence
+            .apply_status
+            .as_ref()
+            .expect("SILENCE should apply a status");
+        assert_eq!(silence.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(silence.cast_time, Duration::ZERO);
+        assert_eq!(silence.duration, 5.0);
+        assert_eq!(silence.damage_type, DamageType::Arcane);
+        assert_eq!(silence_status.kind, StatusEffectKind::Silence);
+        assert_eq!(silence_status.payload(), StatusPayload::Silence);
+
+        let mana_shield = spell_definition_by_str("MANA_SHIELD")
+            .expect("MANA_SHIELD should derive from the shared catalog");
+        let mana_shield_status = mana_shield
+            .apply_status
+            .as_ref()
+            .expect("MANA_SHIELD should apply a status");
+        assert_eq!(mana_shield.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(mana_shield.targeting, SpellTargeting::Self_);
+        assert_eq!(mana_shield.duration, 10.0);
+        assert_eq!(
+            mana_shield_status.payload(),
+            StatusPayload::TemporaryHitpoints {
+                absorb_amount: 100,
+                absorb_cap: 100,
+            }
+        );
+
+        let shimmer = spell_definition_by_str("SHIMMER")
+            .expect("SHIMMER should derive from the shared catalog");
+        let shimmer_status = shimmer
+            .apply_status
+            .as_ref()
+            .expect("SHIMMER should apply a status");
+        assert_eq!(shimmer.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(shimmer.targeting, SpellTargeting::Self_);
+        assert_eq!(shimmer.duration, 3.0);
+        assert_eq!(
+            shimmer_status.payload(),
+            StatusPayload::DamageTakenReduction {
+                modifier_scalar: 0.5,
+            }
+        );
     }
 
     #[test]

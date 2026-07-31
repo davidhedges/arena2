@@ -596,6 +596,7 @@ fn authored_status_stack_group_default(kind: &str) -> StatusStackGroupDefault {
         "MOVEMENT_IMPAIRING_IMMUNITY" => {
             StatusStackGroupDefault::ActionSuffix("MOVEMENT_IMPAIRING_IMMUNITY")
         }
+        "SILENCE" => StatusStackGroupDefault::ActionSuffix("SILENCE"),
         "DAMAGE_AMP" => StatusStackGroupDefault::ActionSuffix("DAMAGE_AMP"),
         "DIRECT_DAMAGE_AMP" => StatusStackGroupDefault::ActionSuffix("DIRECT_DAMAGE_AMP"),
         "HEALING_TAKEN_REDUCTION" => {
@@ -1122,6 +1123,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::Hot,
         StatusEffectKind::MoveSlowImmunity,
         StatusEffectKind::MovementImpairingImmunity,
+        StatusEffectKind::Silence,
         StatusEffectKind::DamageAmp,
         StatusEffectKind::DirectDamageAmp,
         StatusEffectKind::DamageTakenReduction,
@@ -7540,6 +7542,108 @@ mod tests {
     }
 
     #[test]
+    fn flashfire_authors_instant_fire_damage_and_target_hit_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_FLASHFIRE")
+            .expect("Flashfire ability should be authored");
+        assert_eq!(ability.action_id, "FLASHFIRE");
+        assert_eq!(ability_delivery_kind(ability), "DIRECT_TARGET");
+        assert_eq!(ability.gameplay.cast_time_ms, Some(0));
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .expect("Flashfire should define delivery data");
+        assert_eq!(
+            delivery.get("damage").and_then(serde_json::Value::as_i64),
+            Some(30)
+        );
+        assert_eq!(
+            delivery
+                .get("damage_type")
+                .and_then(serde_json::Value::as_str),
+            Some("FIRE")
+        );
+
+        let cues: Vec<_> = catalog
+            .combat_vfx_cues
+            .iter()
+            .filter(|cue| normalize_identifier(cue.owner_id.as_str()) == "SPELL_FLASHFIRE")
+            .collect();
+        assert_eq!(cues.len(), 1);
+        let cue = cues[0];
+        assert_eq!(normalize_identifier(cue.slot.as_str()), "IMPACT");
+        assert_eq!(normalize_identifier(cue.trigger.as_str()), "SPELL_IMPACT");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "IMPACT_POINT");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_FIREBALL_HIT_01"
+        );
+        assert_eq!(normalize_identifier(cue.vfx_role.as_str()), "ONE_SHOT");
+        assert_eq!(normalize_identifier(cue.lifecycle.as_str()), "DURATION");
+        assert_eq!(cue.duration_ms, 1_000);
+    }
+
+    #[test]
+    fn collapse_authors_instant_arcane_magic_dot_consumption_and_hit_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_COLLAPSE")
+            .expect("Collapse ability should be authored");
+        assert_eq!(ability.action_id, "COLLAPSE");
+        assert_eq!(ability_delivery_kind(ability), "CONSUME_STATUS");
+        assert_eq!(ability.gameplay.cast_time_ms, Some(0));
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .expect("Collapse should define delivery data");
+        assert_eq!(
+            delivery
+                .get("damage_type")
+                .and_then(serde_json::Value::as_str),
+            Some("ARCANE")
+        );
+        assert_eq!(
+            delivery
+                .get("deal_remaining_dot_damage")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            delivery
+                .get("dispel_types")
+                .and_then(serde_json::Value::as_array)
+                .and_then(|values| values.first())
+                .and_then(serde_json::Value::as_str),
+            Some("MAGIC")
+        );
+
+        let cues: Vec<_> = catalog
+            .combat_vfx_cues
+            .iter()
+            .filter(|cue| normalize_identifier(cue.owner_id.as_str()) == "SPELL_COLLAPSE")
+            .collect();
+        assert_eq!(cues.len(), 1);
+        let cue = cues[0];
+        assert_eq!(normalize_identifier(cue.trigger.as_str()), "SPELL_IMPACT");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "IMPACT_POINT");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_ARCANE_HIT_01"
+        );
+    }
+
+    #[test]
     fn frozen_grasp_authors_self_area_root_and_vfx() {
         let catalog = progression_catalog();
         let ability = catalog
@@ -10030,6 +10134,11 @@ mod tests {
             ("SPELL_GUST_OF_WIND", "GUST_OF_WIND", "AIR"),
             ("SPELL_BUFFET", "BUFFET", "AIR"),
             ("SPELL_CELESTIAL_MANTLE", "CELESTIAL_MANTLE", "HOLY"),
+            ("SPELL_FLASHFIRE", "FLASHFIRE", "FIRE"),
+            ("SPELL_COLLAPSE", "COLLAPSE", "ARCANE"),
+            ("SPELL_SILENCE", "SILENCE", "ARCANE"),
+            ("SPELL_MANA_SHIELD", "MANA_SHIELD", "ARCANE"),
+            ("SPELL_SHIMMER", "SHIMMER", "ARCANE"),
         ];
 
         for (ability_id, action_id, damage_type) in expected {
@@ -10451,6 +10560,7 @@ mod tests {
         );
         assert_eq!(consume_status.dispel_types, vec![StatusDispelType::Bleed]);
         assert_eq!(consume_status.heal_per_stack, 20);
+        assert!(!consume_status.deal_remaining_dot_damage);
         assert!(catalog.action_presentations.iter().any(|presentation| {
             action_presentation_key(presentation) == "ABILITY:WARRIOR_FEAST"
                 && presentation.display_name == "Feast"

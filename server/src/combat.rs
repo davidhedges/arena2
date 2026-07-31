@@ -30,9 +30,10 @@ use crate::relations::{
     can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
 };
 use crate::resources::{
-    grant_primary_resource_amount, grant_primary_resource_amount_for_kind,
-    grant_primary_resource_for_damage_dealt, grant_primary_resource_for_damage_taken,
-    pay_action_resource_cost,
+    current_primary_resource_amount_for_kind, grant_primary_resource_amount,
+    grant_primary_resource_amount_for_kind, grant_primary_resource_for_damage_dealt,
+    grant_primary_resource_for_damage_taken, pay_action_resource_cost,
+    spend_primary_resource_amount_for_kind,
 };
 use crate::spells::{
     bake_linear_special_movement, begin_special_movement_with_facing_policy,
@@ -2295,6 +2296,7 @@ pub enum StatusEffectKind {
     Hot,
     MoveSlowImmunity,
     MovementImpairingImmunity,
+    Silence,
     DamageAmp,
     DirectDamageAmp,
     DamageTakenReduction,
@@ -2331,6 +2333,7 @@ impl StatusEffectKind {
             Self::Hot => "HOT",
             Self::MoveSlowImmunity => "MOVE_SLOW_IMMUNITY",
             Self::MovementImpairingImmunity => "MOVEMENT_IMPAIRING_IMMUNITY",
+            Self::Silence => "SILENCE",
             Self::DamageAmp => "DAMAGE_AMP",
             Self::DirectDamageAmp => "DIRECT_DAMAGE_AMP",
             Self::DamageTakenReduction => "DAMAGE_TAKEN_REDUCTION",
@@ -2367,6 +2370,7 @@ impl StatusEffectKind {
             "HOT" => Some(Self::Hot),
             "MOVE_SLOW_IMMUNITY" => Some(Self::MoveSlowImmunity),
             "MOVEMENT_IMPAIRING_IMMUNITY" => Some(Self::MovementImpairingImmunity),
+            "SILENCE" => Some(Self::Silence),
             "DAMAGE_AMP" => Some(Self::DamageAmp),
             "DIRECT_DAMAGE_AMP" => Some(Self::DirectDamageAmp),
             "DAMAGE_TAKEN_REDUCTION" => Some(Self::DamageTakenReduction),
@@ -2416,6 +2420,7 @@ pub enum StatusPayload {
     },
     MoveSlowImmunity,
     MovementImpairingImmunity,
+    Silence,
     DamageAmp {
         modifier_scalar: f32,
     },
@@ -2547,6 +2552,7 @@ impl AuthoredStatusPayload {
             },
             StatusEffectKind::MoveSlowImmunity => StatusPayload::MoveSlowImmunity,
             StatusEffectKind::MovementImpairingImmunity => StatusPayload::MovementImpairingImmunity,
+            StatusEffectKind::Silence => StatusPayload::Silence,
             StatusEffectKind::DamageAmp => StatusPayload::DamageAmp {
                 modifier_scalar: self.modifier_scalar,
             },
@@ -2777,6 +2783,7 @@ impl StatusPayload {
             Self::Hot { .. } => StatusEffectKind::Hot,
             Self::MoveSlowImmunity => StatusEffectKind::MoveSlowImmunity,
             Self::MovementImpairingImmunity => StatusEffectKind::MovementImpairingImmunity,
+            Self::Silence => StatusEffectKind::Silence,
             Self::DamageAmp { .. } => StatusEffectKind::DamageAmp,
             Self::DirectDamageAmp { .. } => StatusEffectKind::DirectDamageAmp,
             Self::DamageTakenReduction { .. } => StatusEffectKind::DamageTakenReduction,
@@ -2809,6 +2816,7 @@ impl StatusPayload {
             | Self::Knockdown
             | Self::MoveSlowImmunity
             | Self::MovementImpairingImmunity
+            | Self::Silence
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
@@ -2975,6 +2983,7 @@ impl StatusPayload {
             },
             StatusEffectKind::MoveSlowImmunity => Self::MoveSlowImmunity,
             StatusEffectKind::MovementImpairingImmunity => Self::MovementImpairingImmunity,
+            StatusEffectKind::Silence => Self::Silence,
             StatusEffectKind::DamageAmp => Self::DamageAmp {
                 modifier_scalar: columns.modifier_scalar.max(0.0),
             },
@@ -3038,6 +3047,7 @@ impl StatusPayload {
             | Self::Knockdown
             | Self::MoveSlowImmunity
             | Self::MovementImpairingImmunity
+            | Self::Silence
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
@@ -3102,6 +3112,7 @@ impl StatusPayload {
             | Self::Knockdown
             | Self::MoveSlowImmunity
             | Self::MovementImpairingImmunity
+            | Self::Silence
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
@@ -3229,6 +3240,7 @@ impl StatusPayload {
             | Self::Knockdown
             | Self::MoveSlowImmunity
             | Self::MovementImpairingImmunity
+            | Self::Silence
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
             | Self::Berserking
@@ -4305,8 +4317,10 @@ fn apply_damage_to_player_state(
         mark_harmful_combat_action(ctx, source, target, ctx.timestamp, COMBAT_REASON_DAMAGE);
     }
     let mut defeated_instance_id = None;
+    let after_mana_shield =
+        absorb_damage_with_mana_shield(ctx, target, resolved_amount, ctx.timestamp);
     let hp_damage =
-        absorb_damage_with_temporary_hitpoints(ctx, target, resolved_amount, ctx.timestamp);
+        absorb_damage_with_temporary_hitpoints(ctx, target, after_mana_shield, ctx.timestamp);
     resolved.final_amount = hp_damage;
     state.hp -= hp_damage;
     grant_primary_resource_for_damage_taken(ctx, target, hp_damage, ctx.timestamp);
@@ -4633,6 +4647,7 @@ fn absorb_damage_with_temporary_hitpoints(
         .filter(target)
         .filter(|effect| {
             effect.effect_kind == StatusEffectKind::TemporaryHitpoints.as_str()
+                && effect.stack_group != "MANA_SHIELD"
                 && now < effect.expires_at
                 && effect.absorb_amount > 0
         })
@@ -4647,6 +4662,81 @@ fn absorb_damage_with_temporary_hitpoints(
     }
 
     result.hp_damage
+}
+
+fn absorb_damage_with_mana_shield(
+    ctx: &ReducerContext,
+    target: Identity,
+    amount: i32,
+    now: Timestamp,
+) -> i32 {
+    let amount = amount.max(0);
+    if amount == 0 {
+        return 0;
+    }
+    let available_mana = current_primary_resource_amount_for_kind(ctx, target, "MANA", now)
+        .floor()
+        .clamp(0.0, i32::MAX as f32) as i32;
+    if available_mana == 0 {
+        return amount;
+    }
+
+    let effects: Vec<StatusEffect> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::TemporaryHitpoints.as_str()
+                && effect.stack_group == "MANA_SHIELD"
+                && now < effect.expires_at
+                && effect.absorb_amount > 0
+        })
+        .collect();
+    let result = resolve_mana_shield_absorb(effects, amount, available_mana);
+    if result.mana_damage <= 0
+        || !spend_primary_resource_amount_for_kind(
+            ctx,
+            target,
+            "MANA",
+            result.mana_damage as f32,
+            now,
+        )
+    {
+        return amount;
+    }
+    for effect in result.updates {
+        ctx.db.status_effect().status_id().update(effect);
+    }
+    for status_id in result.delete_ids {
+        ctx.db.status_effect().status_id().delete(status_id);
+    }
+    result.hp_damage
+}
+
+#[derive(Default)]
+struct ManaShieldAbsorbResult {
+    hp_damage: i32,
+    mana_damage: i32,
+    updates: Vec<StatusEffect>,
+    delete_ids: Vec<u64>,
+}
+
+fn resolve_mana_shield_absorb(
+    effects: Vec<StatusEffect>,
+    amount: i32,
+    available_mana: i32,
+) -> ManaShieldAbsorbResult {
+    let amount = amount.max(0);
+    let redirectable = amount.min(available_mana.max(0));
+    let absorb = resolve_temporary_hitpoint_absorb(effects, redirectable);
+    let mana_damage = redirectable - absorb.hp_damage;
+    ManaShieldAbsorbResult {
+        hp_damage: amount - mana_damage,
+        mana_damage,
+        updates: absorb.updates,
+        delete_ids: absorb.delete_ids,
+    }
 }
 
 fn resolve_temporary_hitpoint_absorb(
@@ -6203,6 +6293,7 @@ impl StatusRuntimeView {
                     | StatusEffectKind::VengeanceAura
                     | StatusEffectKind::MeleeAttackModifier
                     | StatusEffectKind::TemporaryHitpoints
+                    | StatusEffectKind::Silence
                     | StatusEffectKind::BattleTrance
                     | StatusEffectKind::TargetedAbilityAvoidance => {}
                 }
@@ -6491,12 +6582,13 @@ mod tests {
         actor_distance_sq, apply_status_update, attack_speed_scalar_to_multiplier,
         battle_trance_hp_after_damage, bloodlust_passive_spec, due_interval_count,
         event_prune_cutoff_micros, knockback_stagger_duration, new_status_effect,
-        resolve_effect_amount_from_roll, resolve_temporary_hitpoint_absorb,
-        resolved_shove_tunables, stacked_slow_pct, stagger_shove_tunables, status_has_dispel_type,
-        status_matches_removal_filter_values, AuthoredStatusPayload, DamageDelivery, EffectPacket,
-        MovementModifiers, StackPolicy, StatusDispelType, StatusEffect, StatusEffectKind,
-        StatusPayload, StatusPolarity, StatusRuntimeView, TemporaryCombatModifiers,
-        BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS, PLAYER_EVENT_RETENTION,
+        resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
+        resolve_temporary_hitpoint_absorb, resolved_shove_tunables, stacked_slow_pct,
+        stagger_shove_tunables, status_has_dispel_type, status_matches_removal_filter_values,
+        AuthoredStatusPayload, DamageDelivery, EffectPacket, MovementModifiers, StackPolicy,
+        StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
+        StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
+        COMBAT_PROJECTILE_DEFINITIONS, PLAYER_EVENT_RETENTION,
     };
     use crate::movement::FIXED_TICK_MILLIS;
     use crate::relations::TargetAudience;
@@ -6710,6 +6802,55 @@ mod tests {
         assert_eq!(result.hp_damage, 15);
         assert!(result.updates.is_empty());
         assert_eq!(result.delete_ids, vec![9]);
+    }
+
+    #[test]
+    fn mana_shield_redirects_only_available_mana_and_preserves_remaining_cap() {
+        let target = test_identity();
+        let now = Timestamp::UNIX_EPOCH;
+        let mut effect = test_status_effect(
+            target,
+            StatusPayload::TemporaryHitpoints {
+                absorb_amount: 100,
+                absorb_cap: 100,
+            },
+            now,
+            now + Duration::from_secs(10),
+        );
+        effect.status_id = 11;
+        effect.stack_group = "MANA_SHIELD".to_string();
+
+        let result = resolve_mana_shield_absorb(vec![effect], 80, 30);
+
+        assert_eq!(result.mana_damage, 30);
+        assert_eq!(result.hp_damage, 50);
+        assert_eq!(result.updates.len(), 1);
+        assert_eq!(result.updates[0].absorb_amount, 70);
+        assert!(result.delete_ids.is_empty());
+    }
+
+    #[test]
+    fn mana_shield_cap_depletion_leaves_overflow_for_health() {
+        let target = test_identity();
+        let now = Timestamp::UNIX_EPOCH;
+        let mut effect = test_status_effect(
+            target,
+            StatusPayload::TemporaryHitpoints {
+                absorb_amount: 25,
+                absorb_cap: 100,
+            },
+            now,
+            now + Duration::from_secs(10),
+        );
+        effect.status_id = 12;
+        effect.stack_group = "MANA_SHIELD".to_string();
+
+        let result = resolve_mana_shield_absorb(vec![effect], 80, 100);
+
+        assert_eq!(result.mana_damage, 25);
+        assert_eq!(result.hp_damage, 55);
+        assert!(result.updates.is_empty());
+        assert_eq!(result.delete_ids, vec![12]);
     }
 
     #[test]
@@ -7049,6 +7190,11 @@ mod tests {
                 StatusPayload::MovementImpairingImmunity,
                 StatusEffectKind::MovementImpairingImmunity,
                 StatusPayload::MovementImpairingImmunity,
+            ),
+            (
+                StatusPayload::Silence,
+                StatusEffectKind::Silence,
+                StatusPayload::Silence,
             ),
             (
                 StatusPayload::DamageAmp {

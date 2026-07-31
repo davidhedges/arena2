@@ -33,13 +33,13 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect;
 use crate::combat::{
-    active_emanation_for_owner, has_active_disabling_status, hostile_targeted_ability_misses,
-    mark_harmful_combat_action, queue_effects, set_active_aura, status_matches_removal_filter,
-    temporary_combat_modifiers, timestamp_to_micros, toggle_active_emanation,
-    ActiveCombatProjectile, CombatEvent, DamageDelivery, DamageType, EffectPacket,
-    ProjectilePresentationEvent, StatusApplication, StatusEffect, StatusEffectKind, StatusPayload,
-    StatusPolarity, StatusStackGroupDefault, COMBAT_EVENT_MISS, COMBAT_METADATA_NONE,
-    COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SPELL,
+    active_emanation_for_owner, has_active_disabling_status, has_active_status,
+    hostile_targeted_ability_misses, mark_harmful_combat_action, queue_effects, set_active_aura,
+    status_matches_removal_filter, temporary_combat_modifiers, timestamp_to_micros,
+    toggle_active_emanation, ActiveCombatProjectile, CombatEvent, DamageDelivery, DamageType,
+    EffectPacket, ProjectilePresentationEvent, StatusApplication, StatusEffect, StatusEffectKind,
+    StatusPayload, StatusPolarity, StatusStackGroupDefault, COMBAT_EVENT_MISS,
+    COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SPELL,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -53,7 +53,8 @@ use crate::derived_stats::{
 use crate::npcs::npc_instance as _;
 use crate::player_intent::PlayerIntent;
 #[cfg(feature = "spellcasting_terminal_harness")]
-use crate::player_physics::{commit_player_physics, PhysicsWriteMode, PlayerPhysics};
+use crate::player_physics::PlayerPhysics;
+use crate::player_physics::{commit_player_physics, PhysicsWriteMode};
 use crate::practice::is_training_instance;
 use crate::progression::{
     ability_catalog as _, active_selectable_ability_for_authored_action,
@@ -103,7 +104,6 @@ use crate::combat::combat_event as _;
 use crate::combat::projectile_presentation_event as _;
 #[allow(unused_imports)]
 use crate::player_intent::player_intent as _;
-#[cfg(feature = "spellcasting_terminal_harness")]
 #[allow(unused_imports)]
 use crate::player_physics::player_physics as _;
 #[allow(unused_imports)]
@@ -470,8 +470,9 @@ pub(crate) fn queue_pending_cast_request(
         log_cast_rejected(caster, spell_kind, "caster_dead", "");
         return Ok(());
     }
-    if has_active_disabling_status(ctx, caster, ctx.timestamp)
-        && !spell_can_be_cast_while_disabled(definition)
+    if (has_active_disabling_status(ctx, caster, ctx.timestamp)
+        && !spell_can_be_cast_while_disabled(definition))
+        || has_active_status(ctx, caster, StatusEffectKind::Silence, ctx.timestamp)
     {
         record_spell_prediction_result(
             ctx,
@@ -796,8 +797,9 @@ fn execute_cast_intent(
         log_cast_rejected(caster, spell_kind, "unknown_spell", "");
         return Ok(());
     };
-    if has_active_disabling_status(ctx, caster, ctx.timestamp)
-        && !spell_can_be_cast_while_disabled(definition)
+    if (has_active_disabling_status(ctx, caster, ctx.timestamp)
+        && !spell_can_be_cast_while_disabled(definition))
+        || has_active_status(ctx, caster, StatusEffectKind::Silence, ctx.timestamp)
     {
         record_spell_prediction_result(
             ctx,
@@ -2039,8 +2041,9 @@ pub(crate) fn tick_active_casts(ctx: &ReducerContext, now: Timestamp) -> Result<
             );
             continue;
         }
-        if has_active_disabling_status(ctx, caster, now)
-            && !definition.is_some_and(spell_can_be_cast_while_disabled)
+        if (has_active_disabling_status(ctx, caster, now)
+            && !definition.is_some_and(spell_can_be_cast_while_disabled))
+            || has_active_status(ctx, caster, StatusEffectKind::Silence, now)
         {
             fizzle_active_cast_row_for_interrupt(
                 ctx,
@@ -2259,6 +2262,7 @@ fn process_spell_cast(
             | SpellBehavior::Aura
             | SpellBehavior::Emanation
             | SpellBehavior::SelfResource
+            | SpellBehavior::SelfTeleport
             | SpellBehavior::WorldObstacle
     ) {
         if mode == CastExecutionMode::Execute {
@@ -2346,6 +2350,16 @@ fn process_spell_cast(
                 }
                 SpellBehavior::SelfResource => {
                     cast_self_resource(
+                        ctx,
+                        caster,
+                        state,
+                        spell_kind,
+                        action_instance_id,
+                        ability_id,
+                    );
+                }
+                SpellBehavior::SelfTeleport => {
+                    cast_self_teleport(
                         ctx,
                         caster,
                         state,
@@ -7210,6 +7224,69 @@ fn cast_self_resource(
     );
 }
 
+fn cast_self_teleport(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &CombatActorSnapshot,
+    kind: &SpellId,
+    action_instance_id: &str,
+    ability_id: &str,
+) {
+    let definition = super::catalog::spell_definition(kind)
+        .expect("validated SELF_TELEPORT spell must resolve to a definition");
+    let origin = Vec3::new(state.pos_x, state.pos_y, state.pos_z);
+    let intended_end = Vec3::new(
+        state.pos_x + state.facing_yaw.sin() * definition.max_distance,
+        state.pos_y,
+        state.pos_z + state.facing_yaw.cos() * definition.max_distance,
+    );
+    let destination = bake_linear_special_movement(
+        ctx,
+        caster,
+        origin,
+        intended_end,
+        state.hit_radius,
+        state.hit_height,
+        SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+    )
+    .end;
+
+    if let Some(mut physics) = ctx.db.player_physics().identity().find(caster) {
+        physics.pos_x = destination.x;
+        physics.pos_y = destination.y;
+        physics.pos_z = destination.z;
+        physics.vel_x = 0.0;
+        physics.vel_y = 0.0;
+        physics.vel_z = 0.0;
+        physics.grounded = true;
+        physics.updated_at = ctx.timestamp;
+        commit_player_physics(ctx, physics, PhysicsWriteMode::Force, "spell_self_teleport");
+    }
+
+    for (event_type, point) in [(EVENT_RELEASE, origin), (EVENT_IMPACT, destination)] {
+        emit_spell_combat_event(
+            ctx,
+            SpellCombatEventPayload {
+                action_instance_id,
+                ability_id,
+                kind,
+                event_type,
+                caster,
+                hit: caster,
+                origin,
+                direction: default_forward_direction(state),
+                speed: 0.0,
+                max_distance: definition.max_distance,
+                scalar: SpellCombatEventScalar::None,
+                sequence_index: 0,
+                sequence_count: 1,
+                point,
+                now: ctx.timestamp,
+            },
+        );
+    }
+}
+
 fn cast_aura(ctx: &ReducerContext, caster: Identity, kind: &SpellId, ability_id: &str) {
     let Some(definition) = super::catalog::spell_definition(kind) else {
         return;
@@ -7418,7 +7495,14 @@ fn cast_consume_status(
         consumed_statuses.iter().map(|effect| effect.stacks),
         consume_status.heal_per_stack,
     );
-    if heal_amount <= 0 {
+    let remaining_dot_damage = if consume_status.deal_remaining_dot_damage {
+        consumed_statuses.iter().fold(0_i32, |total, effect| {
+            total.saturating_add(remaining_dot_damage(effect, now))
+        })
+    } else {
+        0
+    };
+    if heal_amount <= 0 && remaining_dot_damage <= 0 {
         return Ok(false);
     }
 
@@ -7465,13 +7549,26 @@ fn cast_consume_status(
             })
         })
         .collect();
-    effects.push(EffectPacket::Heal {
-        amount: heal_amount,
-        source: caster,
-        target: caster,
-        spell_id,
-        target_audience: TargetAudience::PartyOrSelf,
-    });
+    if remaining_dot_damage > 0 {
+        effects.push(EffectPacket::Damage {
+            amount: remaining_dot_damage,
+            damage_type: definition.damage_type,
+            source: caster,
+            target,
+            spell_id: spell_id.clone(),
+            delivery: DamageDelivery::Direct,
+            source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
+            direct_action_key: spell_id,
+        });
+    } else {
+        effects.push(EffectPacket::Heal {
+            amount: heal_amount,
+            source: caster,
+            target: caster,
+            spell_id,
+            target_audience: TargetAudience::PartyOrSelf,
+        });
+    }
     queue_effects(ctx, effects);
     Ok(true)
 }
@@ -7608,7 +7705,8 @@ fn matched_consume_status_effects(
                 effect,
                 consume_status.polarity,
                 consume_status.dispel_types.as_slice(),
-            )
+            ) && (!consume_status.deal_remaining_dot_damage
+                || remaining_dot_damage(effect, ctx.timestamp) > 0)
         })
         .collect();
     matches.sort_by_key(|effect| effect.status_id);
@@ -7641,6 +7739,66 @@ fn consume_status_heal_amount_from_stacks(
     }
     let consumed_stacks = consumed_status_stacks(stacks).min(i32::MAX as u32) as i32;
     heal_per_stack.saturating_mul(consumed_stacks)
+}
+
+fn remaining_dot_damage(effect: &StatusEffect, now: Timestamp) -> i32 {
+    if effect.effect_kind != StatusEffectKind::Dot.as_str()
+        || effect.tick_amount <= 0
+        || effect.tick_interval_ms == 0
+        || now >= effect.expires_at
+        || effect.next_tick_at >= effect.expires_at
+    {
+        return 0;
+    }
+
+    remaining_dot_damage_from_schedule(
+        effect.tick_amount,
+        effect.stacks,
+        effect.tick_interval_ms,
+        effect.next_tick_at,
+        effect.expires_at,
+        now,
+    )
+}
+
+fn remaining_dot_damage_from_schedule(
+    tick_amount: i32,
+    stacks: u32,
+    tick_interval_ms: u64,
+    next_tick_at: Timestamp,
+    expires_at: Timestamp,
+    now: Timestamp,
+) -> i32 {
+    if tick_amount <= 0 || tick_interval_ms == 0 || now >= expires_at || next_tick_at >= expires_at
+    {
+        return 0;
+    }
+
+    let interval_micros = i128::from(tick_interval_ms).saturating_mul(1_000);
+    let now_micros = i128::from(timestamp_to_micros(now));
+    let expires_at_micros = i128::from(timestamp_to_micros(expires_at));
+    let mut next_tick_at_micros = i128::from(timestamp_to_micros(next_tick_at));
+    let mut tick_count = 0_i128;
+
+    if next_tick_at_micros <= now_micros {
+        tick_count = 1;
+        let elapsed_intervals = (now_micros - next_tick_at_micros) / interval_micros;
+        next_tick_at_micros = next_tick_at_micros.saturating_add(
+            elapsed_intervals
+                .saturating_add(1)
+                .saturating_mul(interval_micros),
+        );
+    }
+
+    if next_tick_at_micros < expires_at_micros {
+        tick_count = tick_count
+            .saturating_add((expires_at_micros - 1 - next_tick_at_micros) / interval_micros + 1);
+    }
+
+    i128::from(tick_amount)
+        .saturating_mul(i128::from(stacks.max(1)))
+        .saturating_mul(tick_count)
+        .min(i128::from(i32::MAX)) as i32
 }
 
 fn resolve_movement_delivery_hit(
@@ -7902,9 +8060,9 @@ mod tests {
         has_movement_intent, has_voluntary_movement_after_cast, horizontal_movement_duration_ms,
         is_generic_area_spell, is_target_within_facing_arc,
         normal_cast_time_spell_refunds_gcd_on_self_cancel, projectile_release_uses_live_facing,
-        resolve_generic_area_center, resolve_special_movement_y,
-        spell_primary_resource_cost_for_action, valid_cast_action_token,
-        violates_active_cast_lifetime_mobility_requirement_for_tick,
+        remaining_dot_damage_from_schedule, resolve_generic_area_center,
+        resolve_special_movement_y, spell_primary_resource_cost_for_action,
+        valid_cast_action_token, violates_active_cast_lifetime_mobility_requirement_for_tick,
         violates_cast_mobility_requirement, ActiveCastTerminalOutcome, CastExecutionMode,
         CombatActorSnapshot, CombatAreaShape, CurvedTargetProjectileTunables, SpellBehavior,
         SpellId, Vec3, FACING_DOT_EPSILON, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
@@ -8001,6 +8159,64 @@ mod tests {
         assert_eq!(consume_status_heal_amount_from_stacks([2, 4], 0), 0);
         assert_eq!(
             consume_status_heal_amount_from_stacks([u32::MAX, u32::MAX], i32::MAX),
+            i32::MAX
+        );
+    }
+
+    #[test]
+    fn remaining_dot_damage_counts_only_scheduled_unticked_damage() {
+        let start = Timestamp::UNIX_EPOCH;
+        let expires_at = start + Duration::from_secs(6);
+
+        assert_eq!(
+            remaining_dot_damage_from_schedule(
+                3,
+                2,
+                1_000,
+                start + Duration::from_secs(1),
+                expires_at,
+                start,
+            ),
+            30
+        );
+        assert_eq!(
+            remaining_dot_damage_from_schedule(
+                3,
+                2,
+                1_000,
+                start + Duration::from_secs(1),
+                expires_at,
+                start + Duration::from_millis(3_500),
+            ),
+            18,
+            "a delayed due tick counts once before advancing to future boundaries"
+        );
+        assert_eq!(
+            remaining_dot_damage_from_schedule(
+                3,
+                2,
+                1_000,
+                start + Duration::from_secs(6),
+                expires_at,
+                start,
+            ),
+            0,
+            "the expiry boundary itself does not tick"
+        );
+    }
+
+    #[test]
+    fn remaining_dot_damage_saturates() {
+        let start = Timestamp::UNIX_EPOCH;
+        assert_eq!(
+            remaining_dot_damage_from_schedule(
+                i32::MAX,
+                u32::MAX,
+                1,
+                start + Duration::from_millis(1),
+                start + Duration::from_secs(2),
+                start,
+            ),
             i32::MAX
         );
     }

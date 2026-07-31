@@ -523,6 +523,28 @@ pub(crate) fn spend_primary_resource(
     spend_resource(ctx, owner, RESOURCE_KIND_STAMINA, amount, now)
 }
 
+pub(crate) fn current_primary_resource_amount_for_kind(
+    ctx: &ReducerContext,
+    owner: Identity,
+    resource_kind: &str,
+    now: Timestamp,
+) -> f32 {
+    if !standard_resource_kind(resource_kind) {
+        return 0.0;
+    }
+    current_resource(ctx, owner, resource_kind, now)
+}
+
+pub(crate) fn spend_primary_resource_amount_for_kind(
+    ctx: &ReducerContext,
+    owner: Identity,
+    resource_kind: &str,
+    amount: f32,
+    now: Timestamp,
+) -> bool {
+    standard_resource_kind(resource_kind) && spend_resource(ctx, owner, resource_kind, amount, now)
+}
+
 fn current_resource(
     ctx: &ReducerContext,
     owner: Identity,
