@@ -2095,6 +2095,50 @@ properly.
 >    `Support` still has no producer. The scenario's first sentence is now
 >    literally true.
 
+> **C2 LANDED 2026-08-01, and PHASE C IS COMPLETE bar the owner's eyeball.**
+> `episode_layered_gallery_01` + `aperture-gallery.json` (weight 0, outside the
+> weighted draw on purpose): **200/200 seeds accepted on its own topology, and
+> every one stacks.** Code leg `11b8da22` gated at identical geometry on all 200;
+> the content leg moves every `hashes.canonical` through `catalogDigest` and
+> nothing else — `hashes.layout` and `hashes.tieredLevelPlan` moved on ZERO
+> seeds, and the episode is rejected at all 600 existing slots (400
+> `ROLE_INELIGIBLE`, 200 `BEAT_INELIGIBLE`), so no existing seed's recipe
+> selection can move.
+>
+> **Six corrections this section needs.** The full write-up with numbers is in
+> `CURRENT_STATUS.md`; the ones that contradict text below:
+>
+> 1. **"The same episode as a real catalog recipe" is not achievable as
+>    written, because a recipe cannot author a bridge.** `AddAerialBridges` is a
+>    generator pass, capped per dungeon and forbidden over room interiors. The
+>    authored episode is the OTHER half of C1's fixture — chamber, gallery,
+>    aperture, return stair — and bridge-over-playable-geometry is what C2b-3
+>    delivered and proved on the corpus.
+> 2. **A cross-layer stair cannot be a step strip, so C2a's rise relaxation has
+>    no renderer behind it.** `PlaceSeamStepStrip` admits `seam`/`dais` only at
+>    delta 1 (2 for dais). Two storeys 4u apart join LATERALLY — C1's flush seam
+>    — which is why `RECIPE_LAYER_CONNECTIVITY` had to stop assuming a stair.
+>    §8.2's "a stair between two layers is what makes them connected" is too
+>    narrow. The candidate gate was relaxed to match the validator anyway, since
+>    the two disagreeing silently is worse than either answer.
+> 3. **A recipe room is fenced off from the intra-room 1u sweep by
+>    construction**: every `roomCells` entry is registered as a `Landing` prism
+>    and a Landing blocks an incoming Footprint. A recipe owns every transition
+>    inside its own footprint — there is no "declare the storeys and let a pass
+>    stair them".
+> 4. **A multi-step stair cannot be authored in line.** `RECIPE_CLEARANCE`
+>    forbids a cell being both a footprint and a landing, and a single-file
+>    flight makes every intermediate cell both. Two lanes: treads and landings.
+> 5. **The vista promontory reads the target CELL's floor level, not the
+>    node's**, so an authored room must keep its outward faces at the base level
+>    or it fails `ROUTE_PROMONTORY` while sitting at exactly the right node level.
+> 6. **§13's "Invariants" list is still ahead of the code on one item.** "Every
+>    aperture cell resolves a catch surface" is authored, not derived: the
+>    recipe validator proves the rim stands on its storey and faces a cell that
+>    storey does not cover, and the plan re-reads it, but nothing computes what
+>    a fall LANDS on. In this episode the aperture is over its own chamber by
+>    construction.
+
 **C1 — renderer proof, code-built fixture.** No recipe schema change. Extend
 `BuildStackedCrossingFixture` into a hand-constructed two-layer field: upper
 route, aperture, lower chamber, return stair, bridge over the lower route. This

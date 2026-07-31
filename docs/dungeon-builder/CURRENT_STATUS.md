@@ -34,6 +34,7 @@ seed + density + generation profile + recipe catalog
 |---|---|
 | Rebuild the playtest scene | **Arena > Dungeons > Rebuild Random Dungeon** |
 | Reproduce a specific layout | **Arena > Dungeons > Rebuild Random Dungeon (Specific Seed)** |
+| Build ONE named topology, whatever its weight | **Arena > Dungeons > Rebuild Random Dungeon (Specific Topology)** — the only way to reach a weight-0 graph, e.g. the authored `aperture-gallery` episode. Headless: `ARENA_DUNGEON_TOPOLOGY=<id>` |
 | Switch density | **Arena > Dungeons > Density > 0..5** (per-user pref; `ARENA_DUNGEON_DENSITY` overrides; with neither, the profile asset's own `densityLevel`) |
 | Plan only, no scene | **Tools > Dungeon Lab > Generate** |
 | Batch evidence | **Tools > Dungeon Lab > Batch Validate (50 / 200 / 100 Locked Seeds)** |
@@ -47,8 +48,8 @@ and spawning use the same geometry as the client scene
 
 ## Current shape
 
-- Seven route topologies, one drawn per seed by weight: processional spine, atrium ring, twin-wing keep, cataract shaft (descending), sunken basin, terraced cascade, ridge and ravine. Each is one JSON file under `Assets/Arena/Editor/Dungeons/RandomDungeon/Topologies/`; adding one costs no C#.
-- Three required recipe slots (`required-compression`, `required-landmark`, `required-return`) filled from an explicit catalog; four enabled recipes currently.
+- Seven route topologies in the weighted draw, one per seed: processional spine, atrium ring, twin-wing keep, cataract shaft (descending), sunken basin, terraced cascade, ridge and ravine. An **eighth is authored but weight 0** — `aperture-gallery`, which exists to place the layered episode and is deliberately outside the draw. Each is one JSON file under `Assets/Arena/Editor/Dungeons/RandomDungeon/Topologies/`; adding one costs no C#.
+- Three required recipe slots (`required-compression`, `required-landmark`, `required-return`) filled from an explicit catalog; five enabled recipes currently, one of which (`episode_layered_gallery_01`) is eligible only on the authored topology.
 - Vertical traversal from reviewed stair contracts, forged contracts, online synthesis, stairwell towers, and bridges — in that fallback order.
 - One planned vista with a reserved sight corridor, plus 1–4 external connector
   promontories. Each external promontory is a straight eight-cell (32u) run,
@@ -64,9 +65,14 @@ layered-topology direction changes all three** — see "Where the work stands":
   floor edge facing void drops to it. Becomes a per-face support base.
 - **One plan coordinate carries one walkable surface** — *no longer true as of
   2026-07-31.* The canonical model is a `SurfaceField`: a column FLOOR plus
-  whatever is suspended over it. Generation stacks in exactly one place so far —
-  an aerial span's deck cells — which is 28 of the 200 density-0 seeds.
-- **Bridges are capped at 2 per dungeon and may not cross room interiors.**
+  whatever is suspended over it. Generation stacks in **two** places: an aerial
+  span's deck cells (28 of the 200 density-0 seeds), and an authored recipe's
+  upper storey — `episode_layered_gallery_01`, on 200/200 seeds of the
+  `aperture-gallery` topology (2026-08-01).
+- **Bridges are capped at 2 per dungeon and may not cross room interiors**, so a
+  recipe cannot author one. The episode's storeys are joined by a stair and a
+  flush lateral seam; the bridge-over-playable-geometry capability is the aerial
+  span's, proved separately in C2b-3.
 
 ## The rules worth knowing before you change it
 
@@ -649,19 +655,141 @@ is already required to resolve at `nodeLevel + port.relativeLevel`), so
 `RECIPE_BASE_LEVEL_CONFLICT` and the explicit `anchorLayerId`/`anchorLevel`
 escape hatch both have nothing to do.
 
+### C2 — the authored episode, landed 2026-08-01. PHASE C IS COMPLETE.
+
+**Generation produces an authored two-storey room.** `episode_layered_gallery_01`
+is a real catalog recipe with a `base` storey and an `upper` one 4u over it, and
+`aperture-gallery.json` is the hand-authored topology that places it. On its own
+topology: **200/200 seeds accepted, and every one of them stacks.**
+
+Two commits, deliberately, because the gate can only say one thing at a time.
+The CODE leg has no content and must move nothing; the CONTENT leg moves every
+seed's `hashes.canonical` through `catalogDigest` and can only be read field by
+field.
+
+**The code leg (`11b8da22`) — four things C2a shipped half of.**
+
+- **A Walkable zone on a NON-BASE layer produces that storey's floor.** C2a wrote
+  a level only for an `Elevated` zone, which is right on the entry storey (a
+  Walkable zone there names the floor the room already has) and empty on a
+  stacked one — nothing else in the pipeline puts a surface up there. A declared
+  upper storey validated, resolved, and rendered as nothing.
+- **`RECIPE_LAYER_CONNECTIVITY` accepts a flush lateral seam.** See finding 3.
+- **Recipe `openings`** — an authored bare rim on a stacked storey, end to end:
+  `DungeonRecipeOpening (cell, outward direction, layer)`, `RECIPE_OPENING`,
+  the mirror/rotation transform, a plan-side read-back, and
+  `BuildPlannedOpenEdges` merging them with the external connectors' throats at
+  BOTH render call sites. Rims are surface-scoped; connector throats stay
+  column-scoped.
+- **The candidate gate now mirrors the validator on cross-layer rise.** C2a
+  relaxed `riseLevels` for a cross-storey stair in `DungeonRecipeValidator` and
+  ONLY there, so such a recipe validated in the authoring window and was then
+  rejected as a CANDIDATE on every seed as `TRANSITION_CONTEXT_INCOMPATIBLE`.
+
+Plus `ARENA_DUNGEON_TOPOLOGY` and **Arena > Dungeons > Rebuild Random Dungeon
+(Specific Topology)** — the only way to build a weight-0 topology.
+
+Gate: **identical geometry on all 200 seeds.** A field-by-field diff of the two
+reports (520 510 leaves) found the only per-seed difference anywhere to be
+`schemaUsage` growing 21 → 22 rows, the one documentation row for the opening
+fields. `resultHash` moved once, `fef5c66b65cea791` → `d18d46a7c0cb0f19`. Render
+Digest 12 seeds byte-identical at C2b-3's `bdb90e5e8a696dd7`; both fixtures green.
+
+**The content leg.** `weight: 0` on the topology is not timidity, it is the gate:
+adding a weighted topology moves `totalWeight` and re-rolls the topology of every
+seed in the corpus, which destroys the one instrument that tells a regression
+from a rebaseline. The recipe is eligible for role `landmark` and beat
+`aperture`, and **no other recipe declares that beat and no other topology
+declares that node** — so it is the unique candidate on its own graph and cannot
+enter any other topology's candidate pool.
+
+Evidence, all at density 0:
+
+| What | Measured |
+|---|---|
+| Plans, on the forced topology | **200/200 accepted**, no rejections |
+| Stacks | 200/200 — the transition projection carries endpoint levels, which is conditional on `!IsSingleLayer` |
+| The gallery | 8 stacked surfaces per episode at `baseLevel + 4`, 1-cell aperture, 4 authored bare rims |
+| The return stair | 4 authored `dais` steps climbing `base+0 → base+4`, with the authored landings and footprints |
+| Renders | 12/12 built, `REJECTED 0` |
+| The gallery is real geometry | **112 `P_MOD_Floor_01_E_` instances** in the baked scene — the closed slab has exactly one site in the renderer (a surface above its column floor), and 112 is ~14 tile pieces x the 8 gallery cells |
+| Topology rules | `Validate Topologies`: 8/8 PASS |
+
+**Six things measured that the plan or the design had wrong.** Five of them cost
+a rejected corpus first.
+
+1. **A recipe room is fenced off from `SweepIntraRoom1uDrops` by construction,
+   and the first draft of the episode depended on the opposite.**
+   `TryRealizeRecipes` registers every `placement.roomCells` as a `Landing`
+   prism, and `BlocksKind(Footprint, Landing)` is true — so `BlocksFootprint` is
+   true for every cell of a recipe room and the intra-room 1u sweep skips the
+   whole room. **A recipe owns every transition inside its own footprint.**
+   Measured: a recipe that declared a stepped ramp and left the stairing to the
+   sweep produced **21 unreachable port-graph nodes on every seed** — the 8
+   gallery cells, the 7 terrace cells and the 3 treads, which is exactly the
+   recipe's raised set — and lost 100 of 200 seeds to `PORT_GRAPH`.
+2. **A multi-step stair cannot be authored IN LINE.** `RECIPE_CLEARANCE` forbids
+   a cell being both a footprint and a landing anywhere in the recipe, and in a
+   single-file flight every intermediate cell is both. The flight has to be TWO
+   cells wide: one lane carries the treads (the footprints), the other the
+   landings. Only the first step's lower landing can be in line, because it is
+   the one cell below the flight.
+3. **A cross-layer stair cannot be a step strip, so the C2a rise relaxation has
+   no renderer behind it.** `PlaceSeamStepStrip` admits `seam`/`dais` only at
+   delta 1 (2 for dais) — "which no strip family covers" — so a 4u cross-storey
+   transition throws in the renderer. Two storeys 4u apart therefore join
+   LATERALLY, which is what C1's proven geometry already did, and is why
+   `RECIPE_LAYER_CONNECTIVITY` had to learn the flush seam. It is not a
+   loosening: a 1u strip from a ground column onto a suspended slab spans a face
+   with the whole storey gap open underneath it.
+4. **The vista promontory reads the target CELL's floor level, not the node's.**
+   `TryResolveNamedVistaPromontory` compares `surfaces.TryGetFloorLevel` at the
+   two facing boundary cells, so an authored room whose face toward the vista
+   source is RAISED fails `ROUTE_PROMONTORY` even when its node sits exactly the
+   required 4u below. Measured: the first draft put its 4u terrace on that face
+   and lost the other 100 seeds. The episode now keeps an outer ring of chamber
+   at the base level on all four sides, which also makes it orientation-blind.
+5. **The topology validator's vista reach falls back to
+   `roomEnvelopeRadiusCells` when NO recipe is eligible for a slot**, so a
+   role/beat typo reads as "this room is as big as the envelope" rather than "no
+   recipe matches". That fallback is what surfaced a beat mismatch, but it
+   surfaced it as a vista-clearance violation.
+6. **A route-forward slot pays for BOTH of its recipe's extents.**
+   `RouteTopologyWorstCaseRecipeReach` counts only the primary extent for a
+   `vista-source-to-target` slot and both for route-forward, because the exit
+   edge may point along either world axis. The episode's 7x7 footprint therefore
+   reaches 3 and clears the vista by exactly the required 3 — **zero margin**,
+   the same as `processional-spine` and `twin-wing-keep`.
+
+**Two limits worth stating plainly.**
+
+- **The episode has no bridge over its own lower route, and cannot.** The C1
+  fixture's bridge came from `AddAerialBridges`, a generator pass that is capped
+  per dungeon and may not cross room interiors, so no recipe can author one.
+  Bridge-over-playable-geometry is the capability C2b-3 delivered and proved
+  (fixture at 94/94 nodes, plus 118 deck surfaces across the corpus); the
+  authored episode proves the OTHER half — a room that owns two storeys.
+- **A gallery-carrying column consumed by a transition footprint still loses
+  BOTH of its surfaces from the port graph.** C2b-3 fixed this for decks
+  (`CarriesDeck`); the general form — a stair body fills `[min level, max level]`
+  and not the column to the sky, which `TransitionEdge` has been able to state
+  since C2b-2 — is NOT fixed. The episode authors around it by keeping its stair
+  footprints out of the gallery's columns. **No gate can see this**: the node is
+  simply absent, so it can never be reported unreachable.
+
 **Order: ~~level field → `SurfaceField` (writer side)~~ → ~~the recipe layer
 schema~~ → ~~the reader side, container half~~ → ~~transition levels~~ → ~~decks as
-surfaces~~ → the authored episode.** The original order had two steps. The reader
-side was not visible as its own step until the writer side made a stacked field
-reachable; its split into a container half and a model half was not visible until
-the readers were classified; and the deck-as-surface step was not visible until
-the port graph could run on a stacked plan at all.
+surfaces~~ → ~~the authored episode~~. ALL LANDED.** The original order had two
+steps. The reader side was not visible as its own step until the writer side made
+a stacked field reachable; its split into a container half and a model half was
+not visible until the readers were classified; and the deck-as-surface step was
+not visible until the port graph could run on a stacked plan at all.
 
-**Next is the authored episode itself (design §13, C2):** the C1 fixture rebuilt
-as a real catalog recipe using C2a's layer schema, plus one hand-authored
-topology file that places it. Every prerequisite it was blocked on is closed —
-the plan stacks, the readers see surfaces, transitions carry levels, and a
-bridge over playable geometry no longer severs the route beneath it.
+**Still open before Phase C can be called finished by the owner: the eyeball.**
+The episode is baked into `RandomDungeon.unity` at seed 2026072100 on the
+`aperture-gallery` topology. No hash tells you whether a two-storey room reads
+well. Rebuild it any time with **Arena > Dungeons > Rebuild Random Dungeon
+(Specific Topology)**, topology `aperture-gallery`.
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently

@@ -65,8 +65,13 @@ namespace DungeonLab.Editor
             GetWindow<DungeonRecipeAuthoringWindow>("Dungeon Recipe Authoring").Show();
         }
 
+        // Public so -executeMethod can reach it, for the same reason
+        // `ValidateTopologies` is: which recipe a catalog rejects, and why, is
+        // evidence a headless run has to be able to produce. A catalog that
+        // fails to build takes every seed with it, and the batch report can only
+        // say the seed was rejected.
         [MenuItem("Arena/Dungeons/Recipes/Validate Catalog", false, 20)]
-        private static void ValidateCatalogMenu()
+        public static void ValidateCatalogMenu()
         {
             Debug.Log(DungeonRecipeAuthoringService.ValidateCatalog());
         }

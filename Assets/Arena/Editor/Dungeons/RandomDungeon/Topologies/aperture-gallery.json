@@ -1,0 +1,98 @@
+{
+  // Route topology: one authored diagram per file. See
+  // docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the schema and the
+  // rule list. Check a draft with Tools > Dungeon Lab > Validate Topologies.
+  "id": "aperture-gallery",
+  "displayName": "Aperture Gallery",
+  "plannerVersion": "aperture-gallery-v1",
+
+  // WEIGHT 0 ON PURPOSE — this graph exists to place ONE authored episode
+  // (`episode_layered_gallery_01`, the layered-topology design's §13 C2 proof)
+  // and is deliberately outside the weighted draw. Adding a weighted topology
+  // moves `totalWeight`, which re-rolls the topology of EVERY seed in the
+  // corpus and destroys the one gate that tells a regression from a
+  // rebaseline. Build it with Arena > Dungeons > Rebuild Random Dungeon
+  // (Specific Topology), or set ARENA_DUNGEON_TOPOLOGY=aperture-gallery for a
+  // headless run. Raise the weight when the episode has earned a place in the
+  // ordinary corpus; that is a content decision with a full rebaseline attached.
+  "weight": 0,
+
+  // One whitespace-separated token per lattice cell; '.' is an empty cell.
+  // The FIRST row is the TOP row (highest lattice y).
+  //
+  // The lattice is processional-spine's, unchanged, because its rubber sheet,
+  // vista clearance and envelope fit are measured. What differs is node E: it
+  // carries the layered episode instead of the throne hall, on a route-forward
+  // slot rather than a vista-oriented one.
+  "map": [
+    ".  I  .  .",
+    "M  H  G  F",
+    "L  K  J  E",
+    "A  B  C  D"
+  ],
+
+  "spatial": {
+    "columnGapDeltaCells": { "maxDelta": 4 },
+    "rowGapDeltaCells": { "maxDelta": 4 }
+  },
+
+  // key: [ id, role, beat, level, order ]. Level is absolute in 4u units.
+  //
+  // E's beat is `aperture`, and that is the whole selection mechanism: it is
+  // the only beat `episode_layered_gallery_01` declares, and no other recipe
+  // declares it — so the episode is the unique candidate here and is
+  // INELIGIBLE at every existing topology's landmark node, which declares
+  // `landmark`. Adding this recipe therefore cannot change any other
+  // topology's candidate pool.
+  "nodes": {
+    "A": ["arrival",        "arrival",           "arrival",      0,  { "main": 0 }],
+    "B": ["threshold",      "connector",         "compression",  0,  { "main": 1 }],
+    "C": ["choice",         "junction",          "choice",       4,  { "main": 2 }],
+    "D": ["reveal",         "grand-room",        "reveal",       4,  { "main": 3 }],
+    "E": ["aperture-hall",  "landmark",          "aperture",     8,  { "main": 4 }],
+    "F": ["ascent",         "connector",         "ascent",       12, { "main": 5 }],
+    "G": ["approach",       "processional-hall", "approach",     16, { "main": 6 }],
+    "H": ["rejoin",         "return-hall",       "rejoin",       20, { "main": 7 }],
+    "I": ["culmination",    "culmination",       "culmination",  24, { "main": 8 }],
+    "J": ["vista-source",   "overlook",          "reveal",       12, { "branch": 0 }],
+    "K": ["branch-passage", "connector",         "branch",       12, { "branch": 1 }],
+    "L": ["branch-reward",  "optional-room",     "reward",       16, { "branch": 2 }],
+    "M": ["branch-return",  "connector",         "return",       20, { "branch": 3 }]
+  },
+
+  "edges": [
+    ["A", "B", "LevelCorridor"],
+    ["B", "C", "Stair"],
+    ["C", "D", "LevelCorridor"],
+    ["D", "E", "Stair"],
+    ["E", "F", "Stair"],
+    ["F", "G", "Stairwell"],
+    ["G", "H", "Stair"],
+    ["H", "I", "Stair"],
+    ["C", "J", "Bridge"],
+    ["J", "K", "LevelCorridor"],
+    ["K", "L", "Stair"],
+    ["L", "M", "Stair"],
+    ["M", "H", "LevelCorridor"]
+  ],
+
+  // E is ROUTE-FORWARD, not vista-source-to-target. The episode's two mandatory
+  // ports are on its PRIMARY axis (a straight-through room), so binding the
+  // primary axis to the vista line would leave both entrances facing the wrong
+  // way. Nothing requires the landmark slot to orient off the vista — only a
+  // slot that DECLARES `vista-source-to-target` must be a vista endpoint — and
+  // route-forward also buys the vista a wider lane, because the episode then
+  // presents its 5-cell face to the sight corridor instead of its 7-cell one.
+  "slots": [
+    { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-C" },
+    { "id": "required-landmark",    "at": "E", "entry": "D-E", "exit": "E-F" },
+    { "id": "required-return",      "at": "M", "entry": "L-M", "exit": "M-H" }
+  ],
+
+  "vista": { "id": "branch-overlook-to-aperture-hall", "from": "J", "to": "E", "minVoidCells": 3 },
+
+  "overlooks": [["G", "J"], ["H", "K"]],
+
+  "anchors": { "bottom": "A", "top": "I" },
+  "allowGenericRoomWings": true
+}

@@ -152,7 +152,29 @@ is bound to. So the catalog decides the shape of every slot node's corner:
 
 Mirroring is not an escape: `allowMirror` flips the transverse axis, so it
 chooses which *side* a port faces, never whether the pair is opposite or
-adjacent.
+adjacent. And **`allowMirror` on an asymmetric recipe is a slot-losing bug**:
+room inflation builds the footprint with `mirrored: false` while placement may
+choose `true`, and the two must be `SetEquals`. A recipe whose footprint is not
+mirror-symmetric across its primary axis must set `allowMirror: 0`.
+
+**Which recipe fills a slot is decided by the node's `role` AND `beat`, never by
+the slot id.** That is the lever for an authored graph: give the node a beat only
+your recipe declares and it becomes the unique candidate there, while staying
+ineligible on every other topology. `aperture-gallery` does this with beat
+`aperture` (measured 2026-08-01: the episode is rejected at all 600 slots of the
+other seven topologies, and their candidate lists are byte-identical with it in
+the catalog).
+
+**Two things the validator reports in a misleading shape:**
+
+- **`worst-case reach` falls back to `roomEnvelopeRadiusCells` when NO recipe is
+  eligible for a slot**, so a role/beat typo surfaces as a *vista clearance*
+  violation rather than "no recipe matches". Check eligibility first when a slot
+  node's reach reads as exactly the envelope radius.
+- **A `route-forward` slot pays for BOTH of its recipe's extents**, because its
+  primary axis follows the exit edge and may point along either world axis. Only
+  a `vista-source-to-target` slot is charged the primary extent alone. A 7x7
+  authored room therefore reaches 3 into a vista lane no matter how it is turned.
 
 Getting this wrong is expensive and silent:
 
