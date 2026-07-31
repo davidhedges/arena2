@@ -6906,8 +6906,8 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            HashSet<Vector2Int> stairFootprintCells =
-                BuildTransitionBodyCellSet(surfaces, transitions);
+            HashSet<SurfaceKey> stairBodySurfaces =
+                BuildTransitionBodySurfaceSet(surfaces, transitions);
             // BACKING-STORE order, not canonical order. Node insertion order is
             // observable — it reaches the port graph's summary and its
             // reachability message, which 5 of the 200 corpus seeds emit — so
@@ -6931,7 +6931,7 @@ namespace DungeonLab.Editor
 
             foreach (SurfaceKey surface in all)
             {
-                if (stairFootprintCells.Contains(surface.cell))
+                if (stairBodySurfaces.Contains(surface))
                 {
                     continue;
                 }
@@ -6941,7 +6941,7 @@ namespace DungeonLab.Editor
 
             foreach (SurfaceKey surface in all)
             {
-                if (stairFootprintCells.Contains(surface.cell))
+                if (stairBodySurfaces.Contains(surface))
                 {
                     continue;
                 }
@@ -6952,7 +6952,12 @@ namespace DungeonLab.Editor
                     // Lateral travel joins surfaces at the SAME level. A gallery
                     // and the chamber floor beneath it are not neighbours, which
                     // is exactly what stacking has to mean.
-                    if (stairFootprintCells.Contains(neighbor) ||
+                    //
+                    // The body test is per SURFACE on both ends, so a stair
+                    // buried under a gallery blocks travel through its treads
+                    // and not through the gallery over them.
+                    var neighborSurface = new SurfaceKey(neighbor, surface.level);
+                    if (stairBodySurfaces.Contains(neighborSurface) ||
                         !surfaces.HasSurfaceAt(neighbor, surface.level))
                     {
                         continue;
@@ -6960,7 +6965,7 @@ namespace DungeonLab.Editor
 
                     graph.AddEdge(
                         floorNode,
-                        PortGraphNode.Floor(new SurfaceKey(neighbor, surface.level)),
+                        PortGraphNode.Floor(neighborSurface),
                         PortGraphEdgeKind.FloorAdjacency);
                 }
             }
@@ -7111,34 +7116,54 @@ namespace DungeonLab.Editor
         }
 
         /// <summary>
-        /// The columns a transition's BODY consumes, which the port graph may
+        /// The SURFACES a transition's body consumes, which the port graph may
         /// not put nodes in.
         /// </summary>
         /// <remarks>
-        /// A footprint normally means "treads fill this column": there is no
-        /// walkable place inside a stair body, and the way through is the stair's
-        /// two ports. A SPAN DECK is the exception, and it is not a special case
-        /// bolted on — its footprint IS its walkable surface, which is why the
-        /// deck cells carry <see cref="SurfaceKind.Deck"/> at all. Treating them
-        /// as a body removed the whole column at every level, so a deck crossing
-        /// playable geometry cut the route beneath it out of the traversal graph.
-        /// Measured on the two-layer episode: 84 of 88 nodes reachable, and
-        /// dropping this one rule from the fixture's own walk reproduced the port
-        /// graph's answer exactly.
+        /// A footprint means "treads fill this column": there is no walkable
+        /// place inside a stair body, and the way through is the stair's two
+        /// ports. But a stair body is not infinitely tall — it fills
+        /// <c>[min endpoint level, max endpoint level]</c> and nothing above
+        /// that. Consuming the whole COLUMN was the coarse form, and it deleted
+        /// any surface stacked over a stair-adjacent cell: a gallery over such a
+        /// column lost BOTH of its surfaces from the graph, and no gate could
+        /// see it, because an absent node can never be reported unreachable.
+        /// <see cref="ElevationEdgeModel.TransitionEdge"/> has carried both
+        /// endpoint levels since C2b-2, so the band is available here.
+        /// <para>
+        /// A SPAN DECK stays a whole-column exemption rather than becoming a
+        /// band case, and that is not laziness. Its footprint IS its walkable
+        /// surface — which is why the deck cells carry
+        /// <see cref="SurfaceKind.Deck"/> at all — so the transition consumes
+        /// nothing in those columns, not even at its own level. A band rule
+        /// alone would eat the deck (a flat span's band is exactly the deck's
+        /// level) and a sloped span's band would additionally eat whatever
+        /// stands under it. Measured on the two-layer episode before C2b-3: 84
+        /// of 88 nodes reachable.
+        /// </para>
         /// <para>
         /// Read off the PLAN, not off a placement-class string. A span whose deck
         /// never became a surface — the reviewed-contract corridor span, which
         /// may only cross cells proved unsurfaced — still consumes its columns,
         /// and there is nothing in them to consume.
         /// </para>
+        /// <para>
+        /// An UNLEVELED endpoint falls back to the whole column. It has never
+        /// fired across the corpus, and the transition is rejected by name a few
+        /// lines later regardless; the fallback exists so that the body set is
+        /// never silently narrowed by a missing level.
+        /// </para>
         /// </remarks>
-        private static HashSet<Vector2Int> BuildTransitionBodyCellSet(
+        private static HashSet<SurfaceKey> BuildTransitionBodySurfaceSet(
             SurfaceField surfaces,
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions)
         {
-            var result = new HashSet<Vector2Int>();
+            var result = new HashSet<SurfaceKey>();
             foreach (ElevationEdgeModel.TransitionEdge transition in transitions)
             {
+                bool leveled = transition.HasLevels;
+                int lowerLevel = leveled ? Mathf.Min(transition.firstLevel, transition.secondLevel) : 0;
+                int upperLevel = leveled ? Mathf.Max(transition.firstLevel, transition.secondLevel) : 0;
                 foreach (Vector2Int cell in transition.footprintCells)
                 {
                     if (surfaces.CarriesDeck(cell))
@@ -7146,11 +7171,73 @@ namespace DungeonLab.Editor
                         continue;
                     }
 
-                    result.Add(cell);
+                    foreach (int level in surfaces.LevelsAt(cell))
+                    {
+                        if (leveled && (level < lowerLevel || level > upperLevel))
+                        {
+                            continue;
+                        }
+
+                        result.Add(new SurfaceKey(cell, level));
+                    }
                 }
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Surfaces that stand in a transition footprint column and OUTSIDE that
+        /// transition's body band — the ones the old whole-column rule deleted
+        /// and the band rule keeps.
+        /// </summary>
+        /// <remarks>
+        /// Reported per seed because it is the number that says whether the
+        /// narrowing changed anything: 0 across the corpus means single-layer
+        /// generation never stacked over a stair body, so the fix is latent in
+        /// production and bites only authored or generated multi-layer rooms.
+        /// Deck columns are excluded on both sides, since neither rule touches
+        /// them.
+        /// </remarks>
+        private static int CountSurfacesOverTransitionBodies(
+            SurfaceField surfaces,
+            IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions)
+        {
+            if (surfaces == null || transitions == null)
+            {
+                return 0;
+            }
+
+            var counted = new HashSet<SurfaceKey>();
+            foreach (ElevationEdgeModel.TransitionEdge transition in transitions)
+            {
+                if (!transition.HasLevels)
+                {
+                    continue;
+                }
+
+                int lowerLevel = Mathf.Min(transition.firstLevel, transition.secondLevel);
+                int upperLevel = Mathf.Max(transition.firstLevel, transition.secondLevel);
+                foreach (Vector2Int cell in transition.footprintCells)
+                {
+                    if (surfaces.CarriesDeck(cell))
+                    {
+                        continue;
+                    }
+
+                    foreach (int level in surfaces.LevelsAt(cell))
+                    {
+                        if (level >= lowerLevel && level <= upperLevel)
+                        {
+                            continue;
+                        }
+
+                        counted.Add(new SurfaceKey(cell, level));
+                    }
+                }
+            }
+
+            return counted.Count;
         }
 
         // Over SURFACES, not columns. A gallery on a storey no column floor

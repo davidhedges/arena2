@@ -2206,6 +2206,33 @@ and the phase does not exit until collider discipline or the exporter closes it.
 
 ### Phase D — Multi-layer rooms in generation
 
+> **Status. IN PROGRESS.** Slice order and evidence live in
+> [`CURRENT_STATUS.md`](CURRENT_STATUS.md); **D0 landed 2026-08-01** — the
+> transition body became a level BAND instead of a column to the sky, closing
+> the defect C2 recorded as unfixed and ungateable. Three corrections to this
+> section, all measured:
+>
+> 1. **"`ChooseEnclosedRooms` moved into the plan so bridges may legally cross
+>    rooms" names a gate that does not exist.** The aerial-bridge pass has no
+>    enclosure test — Decision 30 is an unconditional `room.Contains(cell)` →
+>    reject (`DungeonLabGenerator.cs:4636`), and enclosure is rolled at `:3419`,
+>    long after bridges are placed at `:1942`. The move is a **prerequisite** for
+>    relaxing Decision 30 (it is what lets the pass know whether the room below
+>    has a roof), not the relaxation itself.
+> 2. **`LevelBand.SpanningEndpoints` is the CORRIDOR band, not a body band.** It
+>    pads by `MinHeadroomLevels` per §8.1. A stair body fills the plain endpoint
+>    span; padding it would delete a surface 3u above the stair's top.
+> 3. **§8.1's node syntax parses today; its edge syntax does not.**
+>    `TryParseRouteTopologyNodes` rejects only `fields.Count < 5`, so a trailing
+>    6th element is already tolerated. `TryParseRouteTopologyEdges` demands
+>    exactly 3 fields, so the 4th `{ "fromLayer": … }` element is the parser
+>    change this phase owes.
+>
+> One property makes the whole phase gateable, and it is worth stating once:
+> **nothing in the shipped corpus declares a layer**, so each relaxation can be
+> authorized by a binding no topology has and is therefore output-neutral by
+> construction rather than by measurement luck.
+
 **Capability.** Topologies and recipes can declare layers; routes bind to
 declared entrance elevations; `OpenVolume` reserves an atrium; the atrium
 archetype (scenario 5) generates.

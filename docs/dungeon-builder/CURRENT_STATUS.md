@@ -128,7 +128,7 @@ rebaseline, and the density scale. Their evidence is archived:
 
 Treat both as history, not as current constraints.
 
-### Layered 3-D topology — PHASES A, B AND C ARE COMPLETE (2026-08-01). Phase D is next.
+### Layered 3-D topology — PHASES A, B AND C ARE COMPLETE (2026-08-01). Phase D is in progress.
 
 Design of record, **still a draft beyond Phase B**:
 [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md).
@@ -792,12 +792,77 @@ rebuild it any time with **Arena > Dungeons > Rebuild Random Dungeon (Specific
 Topology)**, topology `aperture-gallery`. Its gallery sits at world
 `y = 12` around `(4, 12, −64)` — the node's level 8 plus the layer's 4.
 
-**Phase D is next** (design §13): multi-layer rooms in *generation* rather than
-one authored episode — topologies and recipes declaring layers that routes bind
-to. Read the C2 corrections above before planning it; three of them
-(a recipe owns every transition in its own footprint, a multi-step stair needs
-two lanes, storeys 4u apart join laterally) are constraints on anything Phase D
-authors, not incidents.
+### Phase D — multi-layer rooms in GENERATION. IN PROGRESS; D0 landed 2026-08-01.
+
+Design §13. Topologies and recipes declare layers, and routes bind to them.
+Four of C2's corrections are constraints on anything Phase D authors rather than
+incidents: a recipe owns every transition inside its own footprint, a multi-step
+stair needs two lanes, storeys 4u apart join laterally, and the vista promontory
+reads the target CELL's floor level.
+
+**The slices, in order.** Each one ends output-neutral against the previous
+commit, and the neutrality is by construction rather than by luck: **nothing in
+the shipped corpus declares a layer**, so every rule Phase D relaxes is gated on
+a binding no topology has. That is the same weight-0 discipline `aperture-gallery`
+used, moved from content into code.
+
+| | What | Neutral because |
+|---|---|---|
+| **D0** ✅ | the transition body is a **band**, not a column to the sky | measured: 0 surfaces stand over a stair body anywhere in the corpus |
+| D1 | the **topology layer schema** — node `layers`, edge `fromLayer`/`toLayer` — parsed, validated by `Validate Topologies`, carried into `RouteIntent` and `plannedBand`, and consumed nowhere | no topology declares layers |
+| D2 | the **corridor-exclusivity and third-room relaxations**, *authorized* by both ends being layer-bound and *decided* by disjoint absolute bands (§8.1) | no connection is layer-bound |
+| D3 | a bound edge **resolves at its layer's elevation** — a per-`(connection, end)` entry level beside today's per-node `zoneLevels`, and a slot mapping a topology layer id to a recipe layer id | ditto |
+| D4 | **volumes** — `RoomFootprint.Overlaps` volumetric, an `OpenVolume` producer, `ChooseEnclosedRooms` moved into the plan | the volumetric test needs a declared reason, and nothing declares one |
+| D5 | **content** — an atrium topology plus a room binding route edges at two elevations | weight 0, exactly as `aperture-gallery` is |
+
+**D0 — the transition body is a band, not a column (landed 2026-08-01).**
+
+The port graph treated a transition footprint as a stair body and deleted the
+whole COLUMN at every level, so a gallery over a stair-adjacent cell lost BOTH
+of its surfaces. C2b-3 fixed it for decks alone (`CarriesDeck`); the general form
+has been available since C2b-2 put both endpoint levels on `TransitionEdge`. A
+stair body now fills `[min endpoint level, max endpoint level]` and consumes only
+the surfaces inside it.
+
+**No gate could see the defect, and none could see the fix either** — an absent
+node can never be reported unreachable. So the change ships with the number that
+decides it. `tieredLevelPlan.surfacesOverTransitionBodies` counts the surfaces
+the old rule deleted and the band rule keeps, and it is **0 on all 200 seeds**:
+single-layer generation never stacks over a stair body, so the defect is latent
+in production and bites only the multi-layer rooms Phase D exists to generate.
+
+A **span deck stays a whole-column exemption** rather than becoming a band case.
+Its footprint IS its walkable surface, so the transition consumes nothing in
+those columns — not even at its own level, which a band rule would eat, because
+a flat span's band is exactly the deck's level.
+
+Gate: `ops/dungeon-port-ab.sh` at density 0 — **identical geometry on all 200
+seeds**, and a field-by-field diff of the two reports (**519 227 per-seed leaves**)
+found **zero leaves changed in value**; the only differences anywhere are the one
+added metric and the generation timestamp. Render Digest 12 seeds byte-identical
+at `bdb90e5e8a696dd7`, and both fixtures re-run green — the two-layer episode
+still walks whole at 94/94 port-graph nodes with 0 unreachable surfaces.
+
+Three things measured that the design doc had wrong:
+
+1. **§13's "`ChooseEnclosedRooms` moved into the plan so bridges may legally
+   cross rooms" describes a gate that does not exist.** The aerial-bridge pass
+   has no enclosure test at all — Decision 30 is an unconditional
+   `room.Contains(cell)` → reject (`DungeonLabGenerator.cs:4636`). Enclosure is
+   rolled in the renderer-input stage (`:3419`), long after bridges are placed
+   (`:1942`). Moving it into the plan is therefore a **prerequisite** for
+   relaxing Decision 30 — it is what would let the pass know whether the room it
+   flies over has a roof — and not itself the relaxation.
+2. **`LevelBand.SpanningEndpoints` is the wrong band for a stair body.** It pads
+   by `MinHeadroomLevels` because it describes the CORRIDOR band a connection
+   claims (§8.1). A body fills the plain endpoint span; the padded one would
+   delete a surface 3u above the stair's top, which is exactly the gallery the
+   fix exists to keep.
+3. **The topology file's node syntax already admits §8.1's 6th element; its edge
+   syntax does not admit the 4th.** `TryParseRouteTopologyNodes` rejects only
+   `fields.Count < 5`, so a trailing options object parses today, while
+   `TryParseRouteTopologyEdges` demands exactly 3. D1's parser work is on the
+   edge side.
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently

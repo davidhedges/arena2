@@ -3658,6 +3658,13 @@ namespace DungeonLab.Editor
                     // measured per seed instead of reasoned about.
                     ["deckSurfaces"] = CountDeckSurfaces(plan.surfaces, out int decksOverFloor),
                     ["deckSurfacesOverFloor"] = decksOverFloor,
+                    // The transition body is a BAND, not a column to the sky.
+                    // This counts the surfaces the old whole-column rule deleted
+                    // and the band rule keeps — 0 means single-layer generation
+                    // never stacks over a stair body, so the narrowing is latent
+                    // in production and matters only to multi-layer rooms.
+                    ["surfacesOverTransitionBodies"] =
+                        CountSurfacesOverTransitionBodies(plan.surfaces, plan.transitions),
                     ["depthLevelCorrelation"] = float.IsNaN(correlation) ? JValue.CreateNull() : new JValue(correlation)
                 },
                 ["validation"] = validationToken,
