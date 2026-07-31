@@ -135,6 +135,18 @@ namespace DungeonLab.Editor
             /// <summary>Its layer's offset from the node's level. 0 for the base.</summary>
             public readonly int layerRelativeLevel;
             /// <summary>
+            /// Which storey, as a comparable identity
+            /// (<see cref="DungeonRecipeLayers.CanonicalId"/>). Empty is the base.
+            /// </summary>
+            /// <remarks>
+            /// The placement carried <see cref="layerRelativeLevel"/> and
+            /// <see cref="isBaseLayer"/> but no identity, so "are these two zones
+            /// on the same storey" could only be asked by comparing LEVELS — and
+            /// a level is not an identity. The layer-scoped `max` that C2a put in
+            /// the validator needs the real answer on the generator side too.
+            /// </remarks>
+            public readonly string layerId;
+            /// <summary>
             /// False only for a zone on a storey above or below the recipe's
             /// entry layer — the one case that STACKS a surface instead of
             /// moving the column's floor (design §8.2 L6).
@@ -147,6 +159,7 @@ namespace DungeonLab.Editor
                 DungeonRecipeZoneKind kind,
                 int relativeLevel,
                 int layerRelativeLevel,
+                string layerId,
                 bool isBaseLayer,
                 Vector2Int[] cells)
             {
@@ -154,6 +167,7 @@ namespace DungeonLab.Editor
                 this.kind = kind;
                 this.relativeLevel = relativeLevel;
                 this.layerRelativeLevel = layerRelativeLevel;
+                this.layerId = layerId ?? string.Empty;
                 this.isBaseLayer = isBaseLayer;
                 this.cells = cells ?? Array.Empty<Vector2Int>();
             }
@@ -1077,6 +1091,7 @@ namespace DungeonLab.Editor
                     zone.kind,
                     zone.relativeLevel,
                     zoneLayerLevel,
+                    DungeonRecipeLayers.CanonicalId(slot.recipe, zone.layerId),
                     DungeonRecipeLayers.IsBaseLayer(slot.recipe, zone.layerId),
                     sorted));
                 if (zone.kind == DungeonRecipeZoneKind.ProtectedCirculation ||
@@ -1892,7 +1907,7 @@ namespace DungeonLab.Editor
                 {
                     if (!surfaces.TryGetFloorLevel(cell, out int level) ||
                         level != baseLevel ||
-                        ResolvedRecipeBaseLayerRelativeLevel(placement.zones, cell) != 0 ||
+                        ResolvedRecipeLayerRelativeLevel(placement.zones, cell, string.Empty) != 0 ||
                         pathCells.Contains(cell))
                     {
                         rejectionReason =
@@ -2191,7 +2206,7 @@ namespace DungeonLab.Editor
         private static bool TryValidateResolvedRecipes(
             IReadOnlyList<RecipePlacement> placements,
             DungeonLayout layout,
-            IReadOnlyDictionary<Vector2Int, int> cellLevels,
+            SurfaceField surfaces,
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
             IReadOnlyList<DaisShowpiece> showpieces,
             IReadOnlyList<Vector2Int> promontoryCells,
@@ -2208,7 +2223,7 @@ namespace DungeonLab.Editor
                     !TryValidateResolvedRecipe(
                         placement,
                         layout,
-                        cellLevels,
+                        surfaces,
                         transitions,
                         showpieces,
                         promontoryCells,
@@ -2235,7 +2250,7 @@ namespace DungeonLab.Editor
         private static bool TryValidateResolvedRecipe(
             RecipePlacement placement,
             DungeonLayout layout,
-            IReadOnlyDictionary<Vector2Int, int> cellLevels,
+            SurfaceField surfaces,
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
             IReadOnlyList<DaisShowpiece> showpieces,
             IReadOnlyList<Vector2Int> promontoryCells,
@@ -2272,9 +2287,13 @@ namespace DungeonLab.Editor
                     Vector2Int actual = connection.fromRoom == placement.roomIndex
                         ? connection.path[0]
                         : connection.path[connection.path.Count - 1];
+                    // A SURFACE at the port's level, not the column's floor.
+                    // `expectedRelativeLevel` has carried the port's layer offset
+                    // since C2a, so a port on an upper storey expects an elevated
+                    // level — and comparing that against the floor would reject
+                    // the recipe for standing exactly where it was told to.
                     foundConnection = actual == port.cell &&
-                        cellLevels.TryGetValue(actual, out int level) &&
-                        level == port.expectedRelativeLevel;
+                        surfaces.HasSurfaceAt(actual, port.expectedRelativeLevel);
                     break;
                 }
 
@@ -2318,30 +2337,24 @@ namespace DungeonLab.Editor
 
             foreach (RecipeZonePlacement zone in placement.zones)
             {
-                // A zone on a non-base storey is a stacked surface, and this
-                // check reads the heightfield — which holds each column's LOWEST
-                // surface and therefore cannot answer for it. Comparing the
-                // stacked zone against the column floor would pass or fail for
-                // reasons that have nothing to do with the zone, so it rejects.
+                // `RECIPE_LAYER_UNVERIFIABLE` used to sit here, refusing every
+                // non-base zone because the heightfield holds a column's LOWEST
+                // surface and so cannot answer for a stacked one. It is gone: the
+                // check now asks the surface field whether the zone's own storey
+                // still stands where the resolver put it.
                 //
-                // SEQUENCED, not dead. Today a layered recipe never reaches
-                // here: this function is handed `surfaces.AsHeightField()`,
-                // which throws at the call site the moment the field stacks.
-                // This becomes the live guard when that argument migrates to a
-                // SurfaceField and the throw stops covering it — which is
-                // exactly the reader-side work C2's authored episode needs.
-                if (!zone.isBaseLayer)
-                {
-                    rejectionReason =
-                        $"[RECIPE_LAYER_UNVERIFIABLE] zone '{zone.id}' on '{placement.RecipeId}' sits on a " +
-                        "non-base layer, which the heightfield-based protection check cannot verify";
-                    return false;
-                }
-
+                // The expected level is the writer's formula read back —
+                // `baseLevel + layer offset + the zone's rise within its layer`,
+                // with the rise taken as the layer-scoped `max` over overlapping
+                // Elevated zones (C2a). On the base storey the layer offset is 0
+                // and the scoping is a no-op, which is every recipe in today's
+                // catalog and what keeps this byte-identical.
                 foreach (Vector2Int cell in zone.cells)
                 {
-                    int expectedLevel = baseLevel + ResolvedRecipeBaseLayerRelativeLevel(placement.zones, cell);
-                    if (!cellLevels.TryGetValue(cell, out int level) || level != expectedLevel)
+                    int expectedLevel = baseLevel +
+                        zone.layerRelativeLevel +
+                        ResolvedRecipeLayerRelativeLevel(placement.zones, cell, zone.layerId);
+                    if (!surfaces.HasSurfaceAt(cell, expectedLevel))
                     {
                         rejectionReason = $"[RECIPE_PROTECTION] zone '{zone.id}' on '{placement.RecipeId}' was re-leveled or removed";
                         return false;
@@ -2434,27 +2447,33 @@ namespace DungeonLab.Editor
         }
 
         /// <summary>
-        /// The rise at a cell on the recipe's BASE storey — the generator's twin
-        /// of the validator's <c>RelativeLevelAt</c>, and the same `max` collapse
-        /// scoped the same way.
+        /// The rise at a cell ON ONE STOREY — the generator's twin of the
+        /// validator's <c>RelativeLevelAt</c>, and the same `max` collapse scoped
+        /// the same way.
         /// </summary>
         /// <remarks>
-        /// Base-scoped rather than layer-parameterised because both callers ask
-        /// a question about the column FLOOR: showpiece support, and the
-        /// protection check that compares against the heightfield. A non-base
-        /// storey's answer would have to come from a surface, which is
-        /// reader-side work — so that case is rejected at the call site rather
-        /// than silently answered with the base layer's number.
+        /// Layer-parameterised rather than base-only. It was base-only because
+        /// both callers asked a question about the column FLOOR and a placement
+        /// had no layer IDENTITY to scope by — only a level, which cannot
+        /// distinguish two storeys. With <see cref="RecipeZonePlacement.layerId"/>
+        /// the scoping is the validator's verbatim, and the protection check can
+        /// ask it about a stacked storey instead of refusing to answer.
+        /// <para>
+        /// Passing <see cref="string.Empty"/> asks about the base storey, which
+        /// is what every caller asked before and is every recipe in today's
+        /// catalog.
+        /// </para>
         /// </remarks>
-        private static int ResolvedRecipeBaseLayerRelativeLevel(
+        private static int ResolvedRecipeLayerRelativeLevel(
             IReadOnlyList<RecipeZonePlacement> zones,
-            Vector2Int cell)
+            Vector2Int cell,
+            string layerId)
         {
             int level = 0;
             foreach (RecipeZonePlacement zone in zones)
             {
                 if (zone.kind == DungeonRecipeZoneKind.Elevated &&
-                    zone.isBaseLayer &&
+                    string.Equals(zone.layerId, layerId ?? string.Empty, StringComparison.Ordinal) &&
                     Array.IndexOf(zone.cells, cell) >= 0)
                 {
                     level = Mathf.Max(level, zone.relativeLevel);

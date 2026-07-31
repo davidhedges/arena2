@@ -248,6 +248,28 @@ namespace DungeonLab.Editor
             return false;
         }
 
+        /// <summary>
+        /// The comparable identity of a layer reference: one string per storey,
+        /// so two references can be tested with ordinal equality.
+        /// </summary>
+        /// <remarks>
+        /// Needed because a storey has TWO spellings — the empty string and the
+        /// base layer's declared id both name the entry storey — so a raw
+        /// <c>string.Equals</c> splits one layer in two. The validator states the
+        /// same rule as a two-argument predicate (<c>SameLayer</c>); this is the
+        /// one-argument form, which is what a placement can store.
+        /// <para>
+        /// Deliberately NOT a level. Two storeys may not share a
+        /// <c>relativeLevel</c> in any sane recipe, but "no sane recipe does
+        /// that" is not an identity, and the generator's placements had only the
+        /// level to compare with before this existed.
+        /// </para>
+        /// </remarks>
+        public static string CanonicalId(DungeonRecipeAsset recipe, string layerId)
+        {
+            return IsBaseLayer(recipe, layerId) ? string.Empty : layerId;
+        }
+
         /// <summary>Is this the recipe's entry storey?</summary>
         public static bool IsBaseLayer(DungeonRecipeAsset recipe, string layerId)
         {

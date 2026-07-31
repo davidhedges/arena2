@@ -4454,7 +4454,7 @@ namespace DungeonLab.Editor
             {
                 Vector2Int expectedCell = route.vistaSourceCell + facing * (index + 1);
                 if (resolution.cells[index] != expectedCell ||
-                    !plan.cellLevels.TryGetValue(expectedCell, out int level) ||
+                    !plan.surfaces.TryGetFloorLevel(expectedCell, out int level) ||
                     level != resolution.level ||
                     level != route.vistaSourceLevel)
                 {
@@ -4492,7 +4492,7 @@ namespace DungeonLab.Editor
 
             var directions = new HashSet<int>();
             var occupied = new HashSet<Vector2Int>();
-            RectInt finalExtent = GetCellRect(new HashSet<Vector2Int>(plan.cellLevels.Keys));
+            RectInt finalExtent = GetCellRect(plan.surfaces.PlanCells());
             foreach (ExternalConnectorPromontoryResolution resolution in resolutions)
             {
                 Vector2Int outward = CardinalVector(resolution.direction);
@@ -4511,7 +4511,7 @@ namespace DungeonLab.Editor
                         finalExtent,
                         resolution.terminalCell,
                         resolution.direction) ||
-                    plan.cellLevels.ContainsKey(resolution.terminalCell + outward))
+                    plan.surfaces.ContainsCell(resolution.terminalCell + outward))
                 {
                     message = $"external connector '{resolution.id}' had invalid identity, direction, geometry, or terminal throat";
                     return false;
@@ -4522,7 +4522,7 @@ namespace DungeonLab.Editor
                     Vector2Int cell = resolution.occupiedCells[index];
                     if (!occupied.Add(cell) ||
                         cell != resolution.anchorCell + outward * index ||
-                        !plan.cellLevels.TryGetValue(cell, out int level) ||
+                        !plan.surfaces.TryGetFloorLevel(cell, out int level) ||
                         level != resolution.level)
                     {
                         message = $"external connector '{resolution.id}' bent, overlapped another connector, or changed level";
@@ -4590,7 +4590,7 @@ namespace DungeonLab.Editor
         // one formula left in the generator.
         private static bool TryValidateAcceptedPlanHeadroom(TieredLevelPlan plan, out string rejectionReason)
         {
-            bool passed = plan.prisms.TryValidateSurfaceHeadroom(plan.cellLevels, out rejectionReason);
+            bool passed = plan.prisms.TryValidateSurfaceHeadroom(plan.surfaces, out rejectionReason);
             if (passed)
             {
                 rejectionReason =
@@ -4602,7 +4602,7 @@ namespace DungeonLab.Editor
 
         private static bool TryValidateRendererInputs(TieredLevelPlan plan, out string message)
         {
-            if (plan.cellLevels == null || plan.cellLevels.Count == 0)
+            if (plan.surfaces == null || plan.surfaces.Count == 0)
             {
                 message = "renderer input had no leveled floor cells";
                 return false;
@@ -4669,7 +4669,7 @@ namespace DungeonLab.Editor
                 }
             }
 
-            message = $"renderer inputs resolved {plan.cellLevels.Count} leveled cells and {prefabPaths.Count} transition/set-piece prefabs";
+            message = $"renderer inputs resolved {plan.surfaces.CellCount} leveled cells and {prefabPaths.Count} transition/set-piece prefabs";
             return true;
         }
 
@@ -4732,7 +4732,8 @@ namespace DungeonLab.Editor
             renderedPlan = plan;
             GameObject root = ElevationEdgeModel.BuildLevelField(
                 levelFieldOrigin,
-                plan.cellLevels,
+                plan.surfaces.ColumnFloors(),
+                plan.surfaces.StackedSurfaces(),
                 plan.transitions,
                 null,
                 BuildExternalConnectorOpenEdges(plan.externalConnectors),
@@ -5052,17 +5053,27 @@ namespace DungeonLab.Editor
 
         private static JObject BuildCanonicalTieredLevelPlanProjection(TieredLevelPlan plan)
         {
-            var levelCells = new List<Vector2Int>(plan.cellLevels.Keys);
+            var levelCells = new List<Vector2Int>(plan.surfaces.SurfacedCells());
             levelCells.Sort(CompareCells);
             var levels = new JArray();
             foreach (Vector2Int cell in levelCells)
             {
+                plan.surfaces.TryGetFloorLevel(cell, out int cellLevel);
                 levels.Add(new JObject
                 {
                     ["cell"] = CellToken(cell),
-                    ["level"] = plan.cellLevels[cell]
+                    ["level"] = cellLevel
                 });
             }
+
+            // The stacked half, and it is CONDITIONAL for the same reason C2a's
+            // recipe layer fields are: this projection is hashed into `planHash`
+            // and thence into `canonicalHash`, so an unconditional row moves
+            // every seed for a schema addition that changed no geometry. A
+            // single-layer plan is fully described by the rows above — the
+            // column floor IS the only surface — so omitting an empty array
+            // loses nothing and keeps 200 seeds byte-identical.
+            JArray stackedSurfaces = BuildStackedSurfaceProjection(plan.surfaces);
 
             JArray transitions = BuildExistingTransitionProjection(plan.transitions);
 
@@ -5101,7 +5112,7 @@ namespace DungeonLab.Editor
                 }
             }
 
-            return new JObject
+            var projection = new JObject
             {
                 ["cellLevels"] = levels,
                 ["transitions"] = transitions,
@@ -5128,6 +5139,44 @@ namespace DungeonLab.Editor
                 ["recipeResolutions"] = BuildRecipeResolutionsProjection(plan.recipeResolutions),
                 ["routeRequirements"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution)
             };
+            if (stackedSurfaces != null)
+            {
+                projection["stackedSurfaces"] = stackedSurfaces;
+            }
+
+            return projection;
+        }
+
+        /// <summary>
+        /// The surfaces standing ABOVE their column floors, or null when there
+        /// are none.
+        /// </summary>
+        /// <remarks>
+        /// Null rather than an empty array on purpose. This feeds `planHash` and
+        /// therefore `canonicalHash`, and C2a's lesson was that an unconditional
+        /// append moves every seed's hash for a schema addition that changed no
+        /// geometry — so the row is emitted only by a plan that actually stacks.
+        /// A single-layer plan is completely described without it.
+        /// </remarks>
+        private static JArray BuildStackedSurfaceProjection(SurfaceField surfaces)
+        {
+            if (surfaces == null || surfaces.IsSingleLayer)
+            {
+                return null;
+            }
+
+            var stacked = new JArray();
+            foreach (ElevationEdgeModel.StackedSurface surface in surfaces.StackedSurfaces())
+            {
+                stacked.Add(new JObject
+                {
+                    ["cell"] = CellToken(surface.cell),
+                    ["level"] = surface.level,
+                    ["kind"] = surface.kind.ToString()
+                });
+            }
+
+            return stacked;
         }
 
         private static JArray BuildExistingTransitionProjection(
@@ -5162,7 +5211,7 @@ namespace DungeonLab.Editor
         {
             var externalPierCells = new HashSet<Vector2Int>(
                 CollectExternalConnectorPierCells(plan.externalConnectors));
-            var cells = new List<Vector2Int>(plan.cellLevels.Keys);
+            var cells = new List<Vector2Int>(plan.surfaces.SurfacedCells());
             cells.Sort(CompareCells);
             var levels = new JArray();
             foreach (Vector2Int cell in cells)
@@ -5170,10 +5219,11 @@ namespace DungeonLab.Editor
                 if (externalPierCells.Contains(cell))
                     continue;
 
+                plan.surfaces.TryGetFloorLevel(cell, out int cellLevel);
                 levels.Add(new JObject
                 {
                     ["cell"] = CellToken(cell),
-                    ["level"] = plan.cellLevels[cell]
+                    ["level"] = cellLevel
                 });
             }
 
@@ -5203,11 +5253,19 @@ namespace DungeonLab.Editor
         {
             var externalPierCells = new HashSet<Vector2Int>(
                 CollectExternalConnectorPierCells(plan.externalConnectors));
+            // SurfacedCells(), not PlanCells(): backing-store order, because
+            // this dictionary's own enumeration order is observable downstream —
+            // it is handed to the port-graph rebuild, whose node insertion order
+            // reaches a diagnostic string. Same reason the shadow reconcile does
+            // not sort.
             var coreLevels = new Dictionary<Vector2Int, int>();
-            foreach (KeyValuePair<Vector2Int, int> item in plan.cellLevels)
+            foreach (Vector2Int cell in plan.surfaces.SurfacedCells())
             {
-                if (!externalPierCells.Contains(item.Key))
-                    coreLevels[item.Key] = item.Value;
+                if (!externalPierCells.Contains(cell) &&
+                    plan.surfaces.TryGetFloorLevel(cell, out int cellLevel))
+                {
+                    coreLevels[cell] = cellLevel;
+                }
             }
 
             var levelCells = new List<Vector2Int>(coreLevels.Keys);
@@ -5231,7 +5289,11 @@ namespace DungeonLab.Editor
                 throw new InvalidOperationException(
                     $"Could not reconstruct pre-corrective port graph: {graphError}");
             }
-            GetLevelRange(coreLevels, out int coreMinLevel, out int coreMaxLevel);
+            // A synthetic single-layer view by construction — the accepted plan
+            // minus the external appendage — so wrapping it is what these metrics
+            // saw before, not a stacked question in disguise.
+            var coreSurfaces = new SurfaceField(coreLevels);
+            GetLevelRange(coreSurfaces, out int coreMinLevel, out int coreMaxLevel);
 
             var synthesizedStairs = new JArray();
             if (plan.synthesizedStairs != null)
@@ -5250,7 +5312,7 @@ namespace DungeonLab.Editor
             {
                 ["cellLevels"] = levels,
                 ["transitions"] = BuildExistingTransitionProjection(plan.transitions),
-                ["levelCount"] = CountDistinctLevels(coreLevels),
+                ["levelCount"] = CountDistinctLevels(coreSurfaces),
                 ["minLevel"] = coreMinLevel,
                 ["maxLevel"] = coreMaxLevel,
                 ["roomsPerTierSummary"] = plan.roomsPerTierSummary,
@@ -5528,7 +5590,7 @@ namespace DungeonLab.Editor
             var samples = new List<Vector2>();
             for (int i = 0; i < roomCount; i++)
             {
-                if (depths[i] < 0 || !TryGetRoomLevel(layout.rooms[i], plan.cellLevels, out int level))
+                if (depths[i] < 0 || !TryGetRoomLevel(layout.rooms[i], plan.surfaces, out int level))
                 {
                     continue;
                 }
@@ -5571,16 +5633,19 @@ namespace DungeonLab.Editor
             return (float)(covariance / Math.Sqrt(depthVariance * levelVariance));
         }
 
-        private static bool TryGetRoomLevel(RoomFootprint room, Dictionary<Vector2Int, int> cellLevels, out int level)
+        // A depth-vs-level scatter sample: "roughly how high does this room
+        // sit". The column floor is the room's own storey; a gallery inside it
+        // would be a second sample, which this stat does not model.
+        private static bool TryGetRoomLevel(RoomFootprint room, SurfaceField surfaces, out int level)
         {
-            if (cellLevels.TryGetValue(room.Center, out level))
+            if (surfaces.TryGetFloorLevel(room.Center, out level))
             {
                 return true;
             }
 
             foreach (Vector2Int cell in room.CellsRowMajor())
             {
-                if (cellLevels.TryGetValue(cell, out level))
+                if (surfaces.TryGetFloorLevel(cell, out level))
                 {
                     return true;
                 }

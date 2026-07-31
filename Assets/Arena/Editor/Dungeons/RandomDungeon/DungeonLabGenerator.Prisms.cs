@@ -643,11 +643,11 @@ namespace DungeonLab.Editor
             /// </para>
             /// </remarks>
             public bool TryValidateSurfaceHeadroom(
-                IReadOnlyDictionary<Vector2Int, int> surfaceLevels,
+                SurfaceField surfaces,
                 out string rejectionReason)
             {
                 rejectionReason = string.Empty;
-                if (headroomBearingCells.Count == 0 || surfaceLevels == null)
+                if (headroomBearingCells.Count == 0 || surfaces == null)
                 {
                     return true;
                 }
@@ -656,21 +656,25 @@ namespace DungeonLab.Editor
                 cells.Sort(CompareCells);
                 foreach (Vector2Int cell in cells)
                 {
-                    if (!surfaceLevels.TryGetValue(cell, out int surfaceLevel))
+                    // EVERY surface in the column, ascending — the rule is stated
+                    // "for every surface S", and a column that carries two of them
+                    // owes clearance to both. Reading one level per cell answered
+                    // for the floor and let a gallery slab sit 1u under a deck.
+                    // Identical on a single-layer field, where LevelsAt returns
+                    // the one value TryGetValue used to.
+                    foreach (int surfaceLevel in surfaces.LevelsAt(cell))
                     {
-                        continue;
-                    }
+                        var headroom = new LevelBand(surfaceLevel, surfaceLevel + MinHeadroomLevels);
+                        if (!TryFindLowestObstruction(cell, headroom, OwnerKey.PlanFloor, out int structureBase))
+                        {
+                            continue;
+                        }
 
-                    var headroom = new LevelBand(surfaceLevel, surfaceLevel + MinHeadroomLevels);
-                    if (!TryFindLowestObstruction(cell, headroom, OwnerKey.PlanFloor, out int structureBase))
-                    {
-                        continue;
+                        int clearance = structureBase - surfaceLevel;
+                        rejectionReason =
+                            $"bridge span over cell ({cell.x}, {cell.y}) left only {clearance}u headroom above the walkable floor (minimum {MinHeadroomLevels}u)";
+                        return false;
                     }
-
-                    int clearance = structureBase - surfaceLevel;
-                    rejectionReason =
-                        $"bridge span over cell ({cell.x}, {cell.y}) left only {clearance}u headroom above the walkable floor (minimum {MinHeadroomLevels}u)";
-                    return false;
                 }
 
                 return true;

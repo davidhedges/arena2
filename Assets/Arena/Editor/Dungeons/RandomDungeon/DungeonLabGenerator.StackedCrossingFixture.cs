@@ -438,9 +438,14 @@ namespace DungeonLab.Editor
                 new List<RoomConnection>());
             var transitions = new List<ElevationEdgeModel.TransitionEdge>();
             var prisms = new PrismLedger();
+            // The STACKED field, not the bare heightfield it is backed by. The
+            // fixture used to hand this pass `levels`, which is the very reader
+            // defect C2b-1 closes: the gallery would have been invisible to the
+            // deck's clearance test. It does not sit over the bridge line, so the
+            // bridge still forms — but it is now checked against, not ignored.
             AddAerialBridges(
                 layout,
-                levels,
+                surfaces,
                 new System.Random(7),
                 transitions,
                 new HashSet<string>(),
@@ -845,9 +850,11 @@ namespace DungeonLab.Editor
                 new List<RoomConnection>());
             var transitions = new List<ElevationEdgeModel.TransitionEdge>();
             var prisms = new PrismLedger();
+            // Single-layer by construction here (Phase B's crossing fixture), so
+            // wrapping the heightfield is exactly what this pass saw before.
             AddAerialBridges(
                 layout,
-                levels,
+                new SurfaceField(levels),
                 new System.Random(7),
                 transitions,
                 new HashSet<string>(),
@@ -876,12 +883,12 @@ namespace DungeonLab.Editor
             // Negative fixture 1 (design §13 Phase B): the SAME probe as before,
             // retargeted at the general ledger rule rather than duplicated. An
             // artificially raised floor under the deck is still rejected.
-            bool positiveHeadroom = prisms.TryValidateSurfaceHeadroom(levels, out _);
+            bool positiveHeadroom = prisms.TryValidateSurfaceHeadroom(new SurfaceField(levels), out _);
             var negativeLevels = new Dictionary<Vector2Int, int>(levels)
             {
                 [stackedCells[0]] = deckLevel - 2
             };
-            bool negativeRejected = !prisms.TryValidateSurfaceHeadroom(negativeLevels, out _);
+            bool negativeRejected = !prisms.TryValidateSurfaceHeadroom(new SurfaceField(negativeLevels), out _);
             bool lowerTraversable = EqualLevelPathExists(
                 levels,
                 lowerStart,
@@ -1003,10 +1010,10 @@ namespace DungeonLab.Editor
             ledger.RegisterSpanDeck(new[] { cell }, MinHeadroomLevels, owner);
 
             exactPassed = ledger.TryValidateSurfaceHeadroom(
-                new Dictionary<Vector2Int, int> { [cell] = 0 },
+                new SurfaceField(new Dictionary<Vector2Int, int> { [cell] = 0 }),
                 out _);
             oneShortRejected = !ledger.TryValidateSurfaceHeadroom(
-                new Dictionary<Vector2Int, int> { [cell] = 1 },
+                new SurfaceField(new Dictionary<Vector2Int, int> { [cell] = 1 }),
                 out _);
         }
 

@@ -321,6 +321,18 @@ namespace DungeonLab.Editor
                 }
             }
 
+            /// <summary>
+            /// The number of surfaced plan CELLS — the shadow's size, not the
+            /// surface count.
+            /// </summary>
+            /// <remarks>
+            /// Distinct from <see cref="Count"/> and both are wanted: a plan-space
+            /// extent or a "how big is this floorplan" figure means cells, while a
+            /// vertical metric means surfaces. They differ only once stacked,
+            /// which is exactly when picking the wrong one stops being harmless.
+            /// </remarks>
+            public int CellCount => heightField.Count;
+
             /// <summary>The number of SURFACES, which exceeds the cell count once stacked.</summary>
             public int Count
             {
@@ -549,6 +561,80 @@ namespace DungeonLab.Editor
             }
 
             /// <summary>
+            /// Is there a walkable surface at exactly this level here?
+            /// </summary>
+            /// <remarks>
+            /// The reader-side counterpart of <see cref="AddSurface"/>, and the
+            /// question most of the migrated readers were really asking. On a
+            /// single-layer field it is exactly
+            /// <c>TryGetFloorLevel(cell, out l) &amp;&amp; l == level</c>, which is what
+            /// keeps the migration output-neutral; on a stacked one it is the
+            /// difference between "the recipe's gallery is still there" and "the
+            /// chamber under it is still there".
+            /// </remarks>
+            public bool HasSurfaceAt(Vector2Int cell, int level)
+            {
+                if (!heightField.TryGetValue(cell, out int floor))
+                {
+                    return false;
+                }
+
+                if (floor == level)
+                {
+                    return true;
+                }
+
+                if (stacked == null || !stacked.TryGetValue(cell, out List<StackedSurfaceEntry> above))
+                {
+                    return false;
+                }
+
+                foreach (StackedSurfaceEntry entry in above)
+                {
+                    if (entry.level == level)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            /// <summary>
+            /// The HIGHEST surface in a column — what stands in the way of
+            /// anything passing over it.
+            /// </summary>
+            /// <remarks>
+            /// The mirror of <see cref="TryGetFloorLevel"/>, and the one a
+            /// clearance question wants. A reader that asks "is this column low
+            /// enough for a deck to fly over" and gets the column FLOOR back is
+            /// answering about the wrong surface the moment anything stacks: the
+            /// gallery at deck height is invisible to it.
+            /// </remarks>
+            public bool TryGetHighestSurfaceLevel(Vector2Int cell, out int level)
+            {
+                if (!heightField.TryGetValue(cell, out level))
+                {
+                    return false;
+                }
+
+                if (stacked != null && stacked.TryGetValue(cell, out List<StackedSurfaceEntry> above))
+                {
+                    // Kept ascending by AddSurface, so the last one is the top.
+                    for (int index = above.Count - 1; index >= 0; index--)
+                    {
+                        if (above[index].level > level)
+                        {
+                            level = above[index].level;
+                            break;
+                        }
+                    }
+                }
+
+                return true;
+            }
+
+            /// <summary>
             /// Is this surface the lowest in its column — i.e. is the mass under
             /// it earth rather than open air? The column half of
             /// <c>IsGroundBacked</c> (design §7.1).
@@ -606,6 +692,24 @@ namespace DungeonLab.Editor
                     new SurfaceKey(first.cell, first.level),
                     new SurfaceKey(second.cell, second.level)));
                 return above;
+            }
+
+            /// <summary>
+            /// Every column's FLOOR, valid however many surfaces a column carries.
+            /// </summary>
+            /// <remarks>
+            /// Not <see cref="AsHeightField"/> renamed — the two say opposite
+            /// things. <see cref="AsHeightField"/> is the migration shim and its
+            /// throw means "this reader believes a cell has one surface, and it is
+            /// now wrong". This is for a reader that takes BOTH halves and knows
+            /// the difference: the renderer, which is handed these floors together
+            /// with <see cref="StackedSurfaces"/> and reassembles the columns
+            /// itself. Handing it <see cref="AsHeightField"/> would throw on
+            /// exactly the plans it exists to draw.
+            /// </remarks>
+            public IReadOnlyDictionary<Vector2Int, int> ColumnFloors()
+            {
+                return heightField;
             }
 
             /// <summary>
@@ -843,22 +947,25 @@ namespace DungeonLab.Editor
             TieredLevelPlan plan)
         {
             HashSet<Vector2Int> shadow = layout.floorCells ?? new HashSet<Vector2Int>();
-            Dictionary<Vector2Int, int> surfaces =
-                plan.cellLevels ?? new Dictionary<Vector2Int, int>();
+            SurfaceField surfaces = plan.surfaces;
 
+            // Plan-space on both sides. Agreement is between the shadow and the
+            // CELLS the field surfaces, so a stacked column is one cell here, not
+            // two — a second storey adds no new plan coordinate and cannot put
+            // the shadow out of agreement by existing.
             var surfacedOutside = new List<Vector2Int>();
-            foreach (KeyValuePair<Vector2Int, int> item in surfaces)
+            foreach (Vector2Int cell in surfaces?.SurfacedCells() ?? Array.Empty<Vector2Int>())
             {
-                if (!shadow.Contains(item.Key))
+                if (!shadow.Contains(cell))
                 {
-                    surfacedOutside.Add(item.Key);
+                    surfacedOutside.Add(cell);
                 }
             }
 
             var shadowWithout = new List<Vector2Int>();
             foreach (Vector2Int cell in shadow)
             {
-                if (!surfaces.ContainsKey(cell))
+                if (surfaces == null || !surfaces.ContainsCell(cell))
                 {
                     shadowWithout.Add(cell);
                 }

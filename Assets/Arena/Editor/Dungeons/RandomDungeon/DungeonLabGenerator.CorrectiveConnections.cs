@@ -108,9 +108,14 @@ namespace DungeonLab.Editor
                 excluded.UnionWith(promontory.cells);
             }
 
-            // Candidate search is a pure reader of the level field.
-            Dictionary<Vector2Int, int> cellLevels = surfaces.AsHeightField();
-            HashSet<Vector2Int> exteriorVoid = BuildExternalConnectorExteriorVoid(cellLevels);
+            // Candidate search is a pure reader of the surface field, and every
+            // question it asks is a COLUMN question: "is this column surfaced at
+            // all" for the run-clear and throat tests, and "what is its floor"
+            // for the anchor. Both answer identically however many surfaces a
+            // column carries, so a pier still anchors on the ground-backed floor
+            // of the outer face — attaching one to a gallery instead is a design
+            // extension, not something this migration decides by accident.
+            HashSet<Vector2Int> exteriorVoid = BuildExternalConnectorExteriorVoid(surfaces);
             RectInt coreExtent = GetCellRect(new HashSet<Vector2Int>(layout.floorCells));
             var candidatesByDirection = new Dictionary<int, List<ExternalConnectorCandidate>>();
             foreach (int direction in Direction.Cardinals)
@@ -120,7 +125,7 @@ namespace DungeonLab.Editor
                     direction,
                     coreExtent,
                     layout.floorCells,
-                    cellLevels,
+                    surfaces,
                     exteriorVoid,
                     excluded);
             }
@@ -195,7 +200,7 @@ namespace DungeonLab.Editor
             int direction,
             RectInt coreExtent,
             IReadOnlyCollection<Vector2Int> coreFloorCells,
-            IReadOnlyDictionary<Vector2Int, int> cellLevels,
+            SurfaceField surfaces,
             HashSet<Vector2Int> exteriorVoid,
             HashSet<Vector2Int> excluded)
         {
@@ -205,7 +210,7 @@ namespace DungeonLab.Editor
             {
                 if (excluded.Contains(anchor) ||
                     !IsOnExternalConnectorOuterFace(coreExtent, anchor, direction) ||
-                    !cellLevels.TryGetValue(anchor, out int level))
+                    !surfaces.TryGetFloorLevel(anchor, out int level))
                 {
                     continue;
                 }
@@ -218,7 +223,7 @@ namespace DungeonLab.Editor
                      distance++)
                 {
                     Vector2Int cell = anchor + outward * distance;
-                    if (cellLevels.ContainsKey(cell) ||
+                    if (surfaces.ContainsCell(cell) ||
                         excluded.Contains(cell) ||
                         !exteriorVoid.Contains(cell))
                     {
@@ -274,9 +279,11 @@ namespace DungeonLab.Editor
         }
 
         private static HashSet<Vector2Int> BuildExternalConnectorExteriorVoid(
-            IReadOnlyDictionary<Vector2Int, int> cellLevels)
+            SurfaceField surfaces)
         {
-            var occupied = new HashSet<Vector2Int>(cellLevels.Keys);
+            // PlanCells(), not Surfaces(): the exterior flood is a PLAN-space
+            // question, so a stacked column occupies one cell here, not two.
+            var occupied = surfaces.PlanCells();
             RectInt occupiedExtent = GetCellRect(occupied);
             int margin = ExternalConnectorAppendageCells + 1;
             int minX = occupiedExtent.xMin - margin;

@@ -439,25 +439,81 @@ Two things worth carrying forward:
    Unnecessary: a layer's `relativeLevel` may be negative, and an Elevated zone
    still rises within its own storey. One existing gate left untouched.
 
-**What C2 still needs is the READER side**, and that is the real remaining cost.
-A stacked field currently throws at the first `AsHeightField()` it meets. There
-are 8 such sites: `AddAerialBridges`, `SweepIntraRoom1uDrops`,
-`TryValidateResolvedRecipes` and `TryValidateSurfaceHeadroom` inside the
-elevation stage; the stair search in `TryResolveConnectionTransition`; the
-external-connector candidate search; the stage boundary in
-`TryBuildTieredLevelPlan` (which fans out to 8 readers); and
-`TieredLevelPlan.cellLevels`, which fans out to ~19 more across validation, the
-acceptance-gate probes, the report projections and the renderer entry. Most of
-those ask "what is the floor at this cell" and are already right on a
-heightfield; classifying which genuinely need a surface is C2b's first job, not
-a mechanical sweep. One is already plumbed: `BuildLevelField` has taken an
-`IReadOnlyCollection<StackedSurface>` since C1b and is passed `null` at
-`DungeonLabGenerator.cs:369` — that argument becomes
-`levelPlan.surfaces.StackedSurfaces()`.
+### C2b-1 — the reader side, container half, landed 2026-07-31
 
-`TryValidateResolvedRecipes` carries a `RECIPE_LAYER_UNVERIFIABLE` rejection for
-a non-base zone. It is sequenced, not dead: the `AsHeightField()` throw covers it
-today, and it becomes the live guard the moment that argument migrates.
+The reader side turned out to be **two** problems, and only one of them is a
+container migration. C2b-1 is that one. A stacked field used to throw at the
+first of **8** `AsHeightField()` sites; **2 remain**, plus the one property that
+feeds them, and each is named for the single thing blocking it.
+
+Readers classified into three groups, which is what the work was:
+
+1. **Column questions** — "is this column surfaced" / "what is its floor". These
+   answer identically however many surfaces a column carries, so migration was a
+   parameter type: the external-connector candidate search, the stair search's
+   void-only footprint tests, the whole boundary-context build, route
+   requirements, the accepted-connector geometry probes.
+2. **Genuinely surface-shaped** — the answer changes once a column stacks.
+   Aerial-deck overfly clearance now reads the column's HIGHEST surface (a
+   gallery at deck height was invisible to it); `TryValidateSurfaceHeadroom` runs
+   the rule per SURFACE rather than per cell; `PlannedCellsAreCompatible` asks
+   "unsurfaced, or surfaced at exactly L" instead of comparing against the floor;
+   `GetLevelRange`/`CountDistinctLevels` range over surfaces, so a stacked plan
+   cannot read as flat; the recipe zone check asks whether the zone's own storey
+   still stands.
+3. **Blocked on `TransitionEdge` having no levels** — deferred to C2b-2.
+
+`RECIPE_LAYER_UNVERIFIABLE` is **gone**, replaced by the real check it was
+standing in for: `baseLevel + layer offset + the layer-scoped rise`, verified with
+`HasSurfaceAt`. `RecipeZonePlacement` gained a `layerId`, because it carried a
+layer LEVEL and no layer IDENTITY — and a level cannot tell two storeys apart.
+
+Gate: **identical geometry on all 200 seeds**, and a field-by-field diff of the
+two report JSONs found exactly one difference in the whole file, the generation
+timestamp. `resultHash` did not move (`385e29f388fdae7a`, C2a's value). Both
+fixtures re-run green, and the two-layer episode now exercises the aerial-bridge
+pass against a genuinely stacked field — it was being handed the bare heightfield,
+which was the very defect this phase closes.
+
+Five things measured that the plan or this page had wrong:
+
+1. **This page named the wrong argument.** It said `BuildLevelField` "is passed
+   `null` at `DungeonLabGenerator.cs:369` — that argument becomes
+   `StackedSurfaces()`". That `null` is `reservedSetPieceCells`. The stacked-
+   surface `null` is hard-coded inside the FORWARDING overload
+   (`ElevationEdgeModel.cs:226`), so both production render call sites were
+   routed to the full overload instead.
+2. **`AerialBridgeIsRedundant` looked like C2b-2 work and is not.** Its BFS hops
+   through transition links, which suggested it needed transition levels — but
+   the hop only tests that the neighbour column is surfaced and never resolves a
+   level. It walks `(cell, level)` now; the transition hop reaches every surface
+   in the linked column, which over-states connectivity in the safe direction for
+   a "reject duplicate walks" heuristic.
+3. **`AsHeightField()` and `ColumnFloors()` are different questions**, so they are
+   different methods. The first is the migration shim and its throw means "this
+   reader believes a cell has one surface and is now wrong"; the second serves a
+   reader that takes BOTH halves and reassembles the columns itself — the
+   renderer. Handing the renderer the shim would throw on exactly the plans it
+   exists to draw.
+4. **The `SurfacedCells()` ordering trap resurfaced**, in the pre-corrective
+   projection: it rebuilds a dictionary whose own enumeration order reaches a
+   port-graph diagnostic string, so it iterates the backing store rather than the
+   `PlanCells()` copy. Same rule as the shadow reconcile.
+5. **`SweepIntraRoom1uDrops` stays floor-scoped on purpose.** It sweeps the drops
+   the stage's own layer-blind leveling produces; an authored storey's internal
+   drops are the recipe's to declare, not a sweep's to discover.
+
+**What C2 still needs is C2b-2**: `TransitionEdge` carries no levels, so every
+reader that resolves a transition's endpoint elevations does it by looking its
+cells up in the field — ambiguous by construction once a column stacks, and no
+container swap fixes it. It breaks a hard gate: a cross-layer recipe stair reads
+delta 0 and is rejected as `delta < PrimaryStairRiseLevels`. The layer ids exist
+on `DungeonRecipeTransition` but are dropped at `RecipeTransitionPlacement`, so
+an authored cross-layer stair validates and then loses its identity. Scope:
+`firstLevel`/`secondLevel` on the edge (6 of 7 producers already have both in
+local scope), the two recipe layer ids, ~4 plan-side and 6 renderer consumers.
+The projection append must be conditional — `BuildExistingTransitionProjection`
+feeds `planHash` and thence `canonicalHash`.
 
 Still true, and still the reason all of this exists: before C2a, two layers over
 one plan cell overwrote rather than stacked.
@@ -469,10 +525,11 @@ is already required to resolve at `nodeLevel + port.relativeLevel`), so
 escape hatch both have nothing to do.
 
 **Order: ~~level field → `SurfaceField` (writer side)~~ → ~~the recipe layer
-schema~~ → the reader side → the authored episode.** The original order had two
-steps; the reader side is the third, and it is larger than either of the first
-two. It was not visible as its own step until the writer side made a stacked
-field reachable.
+schema~~ → ~~the reader side, container half~~ → transition levels → the authored
+episode.** The original order had two steps. The reader side was not visible as
+its own step until the writer side made a stacked field reachable, and its split
+into a container half and a model half was not visible until the readers were
+classified.
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently
