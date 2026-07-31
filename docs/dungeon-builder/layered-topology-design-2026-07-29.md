@@ -2095,7 +2095,7 @@ properly.
 >    `Support` still has no producer. The scenario's first sentence is now
 >    literally true.
 
-> **C2 LANDED 2026-08-01, and PHASE C IS COMPLETE bar the owner's eyeball.**
+> **C2 LANDED 2026-08-01. PHASE C IS COMPLETE — owner eyeball passed the same day.**
 > `episode_layered_gallery_01` + `aperture-gallery.json` (weight 0, outside the
 > weighted draw on purpose): **200/200 seeds accepted on its own topology, and
 > every one stacks.** Code leg `11b8da22` gated at identical geometry on all 200;

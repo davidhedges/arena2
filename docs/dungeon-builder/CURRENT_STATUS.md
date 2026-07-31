@@ -1,6 +1,6 @@
 # Dungeon generator: current status
 
-Last updated: 2026-07-31
+Last updated: 2026-08-01
 
 This page describes what the generator is, the rules worth knowing before you
 change it, and where the work stands. Keep it short — if it starts growing
@@ -128,7 +128,7 @@ rebaseline, and the density scale. Their evidence is archived:
 
 Treat both as history, not as current constraints.
 
-### In progress: layered 3-D topology — Phases A, B, C1 and C2a/C2b landed
+### Layered 3-D topology — PHASES A, B AND C ARE COMPLETE (2026-08-01). Phase D is next.
 
 Design of record, **still a draft beyond Phase B**:
 [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md).
@@ -655,7 +655,7 @@ is already required to resolve at `nodeLevel + port.relativeLevel`), so
 `RECIPE_BASE_LEVEL_CONFLICT` and the explicit `anchorLayerId`/`anchorLevel`
 escape hatch both have nothing to do.
 
-### C2 — the authored episode, landed 2026-08-01. PHASE C IS COMPLETE.
+### C2 — the authored episode, landed 2026-08-01. PHASE C IS COMPLETE, owner-accepted.
 
 **Generation produces an authored two-storey room.** `episode_layered_gallery_01`
 is a real catalog recipe with a `base` storey and an `upper` one 4u over it, and
@@ -712,7 +712,7 @@ Evidence, all at density 0:
 | The gallery | 8 stacked surfaces per episode at `baseLevel + 4`, 1-cell aperture, 4 authored bare rims |
 | The return stair | 4 authored `dais` steps climbing `base+0 → base+4`, with the authored landings and footprints |
 | Renders | 12/12 built, `REJECTED 0` |
-| The gallery is real geometry | **112 `P_MOD_Floor_01_E_` instances** in the baked scene — the closed slab has exactly one site in the renderer (a surface above its column floor), and 112 is ~14 tile pieces x the 8 gallery cells |
+| The gallery is real geometry | **8 `P_MOD_Floor_01_E_` prefab instances** in the baked scene, one per gallery cell, all at `y = 12` (= the node's level 8 + the layer's 4). The closed slab has exactly one site in the renderer — a surface above its column floor — so its presence *is* the gallery. (The raw guid appears 112 times; that is 14 property references per instance, not 112 pieces.) |
 | Topology rules | `Validate Topologies`: 8/8 PASS |
 
 **Six things measured that the plan or the design had wrong.** Five of them cost
@@ -785,11 +785,19 @@ a stacked field reachable; its split into a container half and a model half was
 not visible until the readers were classified; and the deck-as-surface step was
 not visible until the port graph could run on a stacked plan at all.
 
-**Still open before Phase C can be called finished by the owner: the eyeball.**
-The episode is baked into `RandomDungeon.unity` at seed 2026072100 on the
-`aperture-gallery` topology. No hash tells you whether a two-storey room reads
-well. Rebuild it any time with **Arena > Dungeons > Rebuild Random Dungeon
-(Specific Topology)**, topology `aperture-gallery`.
+**The owner eyeball PASSED 2026-08-01 — "it's fine". PHASE C IS COMPLETE.**
+That was the last of the phase's four evidence legs and the only one no hash
+could answer. The episode is baked into `RandomDungeon.unity` at seed 2026072100;
+rebuild it any time with **Arena > Dungeons > Rebuild Random Dungeon (Specific
+Topology)**, topology `aperture-gallery`. Its gallery sits at world
+`y = 12` around `(4, 12, −64)` — the node's level 8 plus the layer's 4.
+
+**Phase D is next** (design §13): multi-layer rooms in *generation* rather than
+one authored episode — topologies and recipes declaring layers that routes bind
+to. Read the C2 corrections above before planning it; three of them
+(a recipe owns every transition in its own footprint, a multi-step stair needs
+two lanes, storeys 4u apart join laterally) are constraints on anything Phase D
+authors, not incidents.
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently
