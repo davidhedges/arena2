@@ -120,7 +120,7 @@ rebaseline, and the density scale. Their evidence is archived:
 
 Treat both as history, not as current constraints.
 
-### In progress: layered 3-D topology — Phases A and B landed
+### In progress: layered 3-D topology — Phases A, B and C1 landed
 
 Design of record, **still a draft beyond Phase B**:
 [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md).
@@ -325,24 +325,54 @@ Leg 4, the **owner eyeball**, is the one Phase C leg still outstanding — no ha
 tells you whether a two-layer room reads well. `ops/c1-two-layer-live.sh` leaves
 the episode in the dungeon scene, ready to walk.
 
-### C2 is blocked, and the block is one line
+### C2's blocker is cleared — the level field is a `SurfaceField` on the writer side
 
-Verified 2026-07-31 against the code, not the draft. The recipe resolver writes
-zone levels with `cellLevels[cell] = baseLevel + zone.relativeLevel`
-(`DungeonLabGenerator.Recipes.cs:1943`) into a `Dictionary<Vector2Int,int>`, so
-**two layers over one plan cell silently overwrite rather than stack** — no
-second surface and no rejection. C2's authored two-layer room cannot be resolved
-until the level field is a `SurfaceField`.
+**Landed 2026-07-31.** The elevation stage builds a `SurfaceField` and hands it
+to the plan; the plan no longer re-wraps a heightfield. Every write goes through
+one of three named operations instead of an indexer assignment whose meaning
+lived in the surrounding guard:
 
-That migration is smaller than the 247 `cellLevels` references suggest, because
-`AsHeightField()` defers every reader. **The writer side is 11 sites in 6
-functions**: `TrySetCellLevel` and `TrySetPlannedStairCells`, plus four
-deliberate bypasses in `FillUnassignedFloorCells` (×2),
-`TryResolveNamedVistaPromontory` and the recipe zone write. Three of the four
-only insert into cells the field does not yet hold; only the recipe one
-overwrites. Threading one `SurfaceField` through `TryBuildCellLevelField`,
-`TryResolveConnectionTransition` (one caller) and `TryResolveNamedVistaPromontory`
-covers them all. Gate it with `ops/dungeon-port-ab.sh` — it is a plan change.
+| Operation | Means | Callers |
+|---|---|---|
+| `TrySetFloorLevel` | set the column floor, reject a conflicting one | the old `TrySetCellLevel`, at all five of its call sites |
+| `AddFloorLevel` | the column has no floor; give it one | both fill passes, the named vista promontory, the external connector piers |
+| `RelevelFloor` | the column has a floor; MOVE it | the recipe zone write, and nothing else |
+
+That third row is the blocker, now named rather than implied. All three are
+**layer-blind** and throw on a column that carries a stacked surface, so the next
+producer to stack cannot silently truncate a column to its lowest level — which
+is the general form of the failure §8.2 found in the recipe resolver. Stacking
+goes through `AddSurface`.
+
+Gate: `ops/dungeon-port-ab.sh` at density 0 — **identical geometry on all 200
+seeds**, and `resultHash` itself did not move (`991d86e1bb577144`, Phase B's
+value), so every seed report is byte-identical including validation messages.
+
+Three things measured during the migration that the map had wrong:
+
+1. **The write-site map was missing a producer, and the grep that built it could
+   not have found one.** §8.2 enumerates "four deliberate bypasses"; there are
+   **five**. `TryResolveExternalConnectorPromontories` writes pier levels at
+   `DungeonLabGenerator.CorrectiveConnections.cs:170` — with `cellLevels.Add(…)`,
+   not `cellLevels[…] =`, which is why a `cellLevels[` search missed it. The same
+   design doc names that exact function in §3.1 as H2's producer of cells that
+   reach the level field, so the omission is internal to the doc, not to the code.
+2. **The recipe overwrite is a live path, not a latent one.** `Elevated` zones are
+   validated to carry `relativeLevel > 0` (`DungeonRecipeValidation.cs:363`), and
+   four enabled recipes have one — `connector_corner_return_01`,
+   `connector_example_01`, `connector_flexible_vestibule_01` and
+   `episode_throne_twin_stairs_01`. `RelevelFloor` fires on essentially every
+   seed, so the 200-seed gate exercises it rather than stepping around it.
+3. **Do not sort the shadow reconcile.** `ReconcilePlanShadowWithSurfaces` adds
+   surfaced cells to `layout.floorCells`, a `HashSet` whose own enumeration order
+   is a function of its insertion order and which later passes enumerate. The
+   canonical `Surfaces()` ordering is the tidier thing to iterate and it moves
+   seeds; the port iterates the field's backing store instead, which is what
+   `SurfaceField.SurfacedCells()` exists for.
+
+Still true, and still the reason to do this at all: two layers over one plan cell
+overwrite rather than stack. The migration does not change that — it puts the
+decision in one named method so the layer schema has a place to branch.
 
 Three §8.2 mechanisms dissolved on inspection and should not be built:
 `baseLevel` is not derived from port zero, it **is** the node's level (every port
@@ -350,8 +380,11 @@ is already required to resolve at `nodeLevel + port.relativeLevel`), so
 `RECIPE_BASE_LEVEL_CONFLICT` and the explicit `anchorLayerId`/`anchorLevel`
 escape hatch both have nothing to do.
 
-**Order: level field → `SurfaceField` (writer side), then the recipe layer
-schema, then the authored episode.**
+**Order: ~~level field → `SurfaceField` (writer side)~~ → the recipe layer
+schema, then the authored episode.** The reader side stays deferred: the two
+`AsHeightField()` calls in `TryBuildTieredLevelPlan` and `TryBuildCellLevelField`
+are where a stacked field will first throw, and they throw rather than truncate
+on purpose.
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently

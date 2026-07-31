@@ -986,6 +986,7 @@ namespace DungeonLab.Editor
             var levels = new Dictionary<Vector2Int, int>();
             foreach (Vector2Int cell in floorCells)
                 levels[cell] = 4;
+            var surfaces = new SurfaceField(levels);
             var layout = new DungeonLayout(
                 floorCells,
                 new List<RoomFootprint> { room },
@@ -993,11 +994,11 @@ namespace DungeonLab.Editor
             var protectedCells = new HashSet<Vector2Int>();
             if (excludeAllAnchors)
                 protectedCells.UnionWith(floorCells);
-            beforeCells = levels.Count;
+            beforeCells = surfaces.Count;
             resolved = TryResolveExternalConnectorPromontories(
                 seed,
                 layout,
-                levels,
+                surfaces,
                 new List<ElevationEdgeModel.TransitionEdge>(),
                 protectedCells,
                 new HashSet<Vector2Int>(),
@@ -1005,7 +1006,7 @@ namespace DungeonLab.Editor
                 Array.Empty<NamedVistaPromontoryResolution>(),
                 out resolutions,
                 out error);
-            afterCells = levels.Count;
+            afterCells = surfaces.Count;
         }
 
 
@@ -1820,12 +1821,12 @@ namespace DungeonLab.Editor
                 PromontoryProbeLevels(probeSource, 12, probeTarget, 8),
                 out _,
                 out string offAxisError);
-            Dictionary<Vector2Int, int> occupiedLevels = PromontoryProbeLevels(
+            SurfaceField occupiedLevels = PromontoryProbeLevels(
                 probeSource,
                 12,
                 probeTarget,
                 8);
-            occupiedLevels[probePlanned[0]] = 12;
+            occupiedLevels.AddFloorLevel(probePlanned[0], 12);
             bool occupiedRejected = !TryResolveNamedVistaPromontory(
                 PromontoryProbeRequirements(
                     probeIntent,
@@ -2212,17 +2213,17 @@ namespace DungeonLab.Editor
                 Array.Empty<RecipePlacement>());
         }
 
-        private static Dictionary<Vector2Int, int> PromontoryProbeLevels(
+        private static SurfaceField PromontoryProbeLevels(
             Vector2Int sourceCell,
             int sourceLevel,
             Vector2Int targetCell,
             int targetLevel)
         {
-            return new Dictionary<Vector2Int, int>
+            return new SurfaceField(new Dictionary<Vector2Int, int>
             {
                 [sourceCell] = sourceLevel,
                 [targetCell] = targetLevel
-            };
+            });
         }
 
         private static RouteNodeIntent RhythmProbeNode(

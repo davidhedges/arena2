@@ -422,6 +422,124 @@ namespace DungeonLab.Editor
                 kinds[key] = kind;
             }
 
+            // ----------------------------------------------------------------
+            // The layer-blind writers (C2 prerequisite, design §8.2 L6).
+            //
+            // The elevation stage used to build its field with twelve bare
+            // `cellLevels[cell] = level` statements whose intent lived entirely
+            // in the surrounding guard: three meant "insert, this column has
+            // nothing", one meant "replace what is here", the rest meant "set,
+            // and reject a conflict". Identical syntax for three different
+            // operations is exactly how the recipe zone write came to overwrite
+            // a second authored layer in silence.
+            //
+            // Each writer now says which it is, and all three are LAYER-BLIND:
+            // they operate on the column FLOOR, which is all a heightfield
+            // write could ever mean. A column carrying a stacked surface is
+            // refused by all three — so when a producer starts stacking, the
+            // layer-blind writers fail loudly instead of truncating the column
+            // to its lowest surface. Stacking goes through AddSurface.
+            // ----------------------------------------------------------------
+
+            /// <summary>
+            /// Set a column's floor, rejecting a conflicting existing one.
+            /// </summary>
+            /// <remarks>
+            /// This is the old free function <c>TrySetCellLevel</c>. The
+            /// rejection text is verbatim: it reaches the seed report, and this
+            /// migration must not move a single byte of it.
+            /// </remarks>
+            public bool TrySetFloorLevel(Vector2Int cell, int level, out string rejectionReason)
+            {
+                RequireUnstackedColumn(cell, nameof(TrySetFloorLevel));
+                if (heightField.TryGetValue(cell, out int existing) && existing != level)
+                {
+                    rejectionReason = $"cell {cell} was assigned both level {existing} and level {level}";
+                    return false;
+                }
+
+                sortedSurfaces = null;
+                heightField[cell] = level;
+                rejectionReason = string.Empty;
+                return true;
+            }
+
+            /// <summary>
+            /// Give a floor to a column that has none.
+            /// </summary>
+            /// <remarks>
+            /// The four insert-only bypasses — both <c>FillUnassignedFloorCells</c>
+            /// writes, the named vista promontory and the external connector
+            /// piers — all guard on absence before writing and would be wrong
+            /// without that guard. Stating it here makes it a property of the
+            /// operation rather than of four separate call sites, and one of the
+            /// four (the connector piers) already threw for the same reason,
+            /// via <c>Dictionary.Add</c>.
+            /// </remarks>
+            public void AddFloorLevel(Vector2Int cell, int level)
+            {
+                RequireUnstackedColumn(cell, nameof(AddFloorLevel));
+                if (heightField.TryGetValue(cell, out int existing))
+                {
+                    throw new InvalidOperationException(
+                        $"AddFloorLevel({cell}, {level}) requires an unsurfaced column, " +
+                        $"but its floor is already at level {existing}");
+                }
+
+                sortedSurfaces = null;
+                heightField[cell] = level;
+            }
+
+            /// <summary>
+            /// Move the floor of a column that already has one.
+            /// </summary>
+            /// <remarks>
+            /// THE OVERWRITE, and the reason C2 was blocked. Exactly one
+            /// producer calls it: the recipe resolver raising an Elevated zone
+            /// to <c>baseLevel + zone.relativeLevel</c>. Under a layer schema
+            /// that same write is what an authored upper layer wants to do
+            /// differently — stack a second surface rather than move the one
+            /// below it — so this method is the site the layer branch lands on,
+            /// and naming it is what makes that branch visible instead of an
+            /// indexer assignment that reads like every other write.
+            /// </remarks>
+            public void RelevelFloor(Vector2Int cell, int level)
+            {
+                RequireUnstackedColumn(cell, nameof(RelevelFloor));
+                if (!heightField.ContainsKey(cell))
+                {
+                    throw new InvalidOperationException(
+                        $"RelevelFloor({cell}, {level}) requires a surfaced column, but it carries no floor");
+                }
+
+                sortedSurfaces = null;
+                heightField[cell] = level;
+            }
+
+            private void RequireUnstackedColumn(Vector2Int cell, string operation)
+            {
+                if (stacked != null &&
+                    stacked.TryGetValue(cell, out List<StackedSurfaceEntry> above) &&
+                    above.Count > 0)
+                {
+                    throw new InvalidOperationException(
+                        $"{operation} is layer-blind and cannot write column {cell}, which carries " +
+                        $"{above.Count} surface(s) above its floor. Use AddSurface.");
+                }
+            }
+
+            /// <summary>Does this column carry a surface at all?</summary>
+            public bool ContainsCell(Vector2Int cell)
+            {
+                return heightField.ContainsKey(cell);
+            }
+
+            /// <summary>The level of a column's floor — its LOWEST surface.</summary>
+            public bool TryGetFloorLevel(Vector2Int cell, out int level)
+            {
+                return heightField.TryGetValue(cell, out level);
+            }
+
             /// <summary>What a surface is. <see cref="SurfaceKind.Floor"/> unless told otherwise.</summary>
             public SurfaceKind KindAt(Vector2Int cell, int level)
             {
@@ -516,6 +634,27 @@ namespace DungeonLab.Editor
             public HashSet<Vector2Int> PlanCells()
             {
                 return new HashSet<Vector2Int>(heightField.Keys);
+            }
+
+            /// <summary>
+            /// The surfaced plan cells, without a copy and in BACKING-STORE
+            /// order.
+            /// </summary>
+            /// <remarks>
+            /// Complete for a stacked field as well: <see cref="AddSurface"/>
+            /// keeps every column's lowest surface in the heightfield, so a cell
+            /// carrying a stacked surface always carries a floor too.
+            /// <para>
+            /// The order is the caller's problem and one caller genuinely wants
+            /// it — <c>ReconcilePlanShadowWithSurfaces</c> inserts into the
+            /// shadow <c>HashSet</c>, whose own enumeration order is a function
+            /// of its insertion order, and that shadow is read again downstream.
+            /// Sorting here would be tidier and would move seeds.
+            /// </para>
+            /// </remarks>
+            public IEnumerable<Vector2Int> SurfacedCells()
+            {
+                return heightField.Keys;
             }
 
             /// <summary>Every surface, in canonical (x, y, level) order.</summary>
@@ -662,18 +801,22 @@ namespace DungeonLab.Editor
         /// <returns>How many cells the shadow gained.</returns>
         private static int ReconcilePlanShadowWithSurfaces(
             DungeonLayout layout,
-            IReadOnlyDictionary<Vector2Int, int> cellLevels)
+            SurfaceField surfaces)
         {
             HashSet<Vector2Int> shadow = layout.floorCells;
-            if (shadow == null || cellLevels == null)
+            if (shadow == null || surfaces == null)
             {
                 return 0;
             }
 
+            // Backing-store order, NOT canonical order. The shadow is a
+            // HashSet that later passes enumerate, so the order these piers are
+            // inserted in is observable; iterating the field's own store keeps
+            // it byte-for-byte what iterating the raw dictionary gave.
             int added = 0;
-            foreach (KeyValuePair<Vector2Int, int> surface in cellLevels)
+            foreach (Vector2Int cell in surfaces.SurfacedCells())
             {
-                if (shadow.Add(surface.Key))
+                if (shadow.Add(cell))
                 {
                     added++;
                 }

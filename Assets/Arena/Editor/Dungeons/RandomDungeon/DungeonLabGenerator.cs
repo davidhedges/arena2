@@ -1282,7 +1282,7 @@ namespace DungeonLab.Editor
                     reviewedStairOptions,
                     dungeonSeed,
                     rng,
-                    out Dictionary<Vector2Int, int> cellLevels,
+                    out SurfaceField surfaces,
                     out List<ElevationEdgeModel.TransitionEdge> transitions,
                     out RouteTransitionResolution[] routeTransitionResolutions,
                     out string stairCandidateSummary,
@@ -1297,6 +1297,13 @@ namespace DungeonLab.Editor
             {
                 return false;
             }
+
+            // ONE deferral point for every remaining reader in this function.
+            // The stage now hands back the surface field it built rather than a
+            // heightfield the plan re-wraps, so this call — not a silent
+            // truncation to each column's lowest surface — is what a stacked
+            // field meets first.
+            Dictionary<Vector2Int, int> cellLevels = surfaces.AsHeightField();
 
             GetLevelRange(cellLevels, out int minLevel, out int maxLevel);
             int levelCount = CountDistinctLevels(cellLevels);
@@ -1340,7 +1347,7 @@ namespace DungeonLab.Editor
             int overlookCount = CountSpatialOverlookEdges(cellLevels, transitions);
 
             plan = new TieredLevelPlan(
-                cellLevels,
+                surfaces,
                 transitions,
                 levelCount,
                 minLevel,
@@ -1766,7 +1773,7 @@ namespace DungeonLab.Editor
             IReadOnlyList<ReviewedActiveStairOption> reviewedStairOptions,
             int dungeonSeed,
             DungeonRandomScope rng,
-            out Dictionary<Vector2Int, int> cellLevels,
+            out SurfaceField surfaces,
             out List<ElevationEdgeModel.TransitionEdge> transitions,
             out RouteTransitionResolution[] routeTransitionResolutions,
             out string stairCandidateSummary,
@@ -1778,7 +1785,14 @@ namespace DungeonLab.Editor
             out PrismLedger prisms,
             out string rejectionReason)
         {
-            cellLevels = new Dictionary<Vector2Int, int>();
+            // The elevation stage's canonical container is the surface field
+            // itself, not a heightfield the plan re-wraps afterwards (design
+            // §8.2's C2 prerequisite). Every write below goes through one of the
+            // field's three named writers; every remaining READER is handed
+            // `AsHeightField()`, which is the deferral marker — it keeps them
+            // byte-identical today and throws the moment a producer stacks,
+            // rather than quietly showing them a column's lowest surface.
+            surfaces = new SurfaceField(new Dictionary<Vector2Int, int>());
             transitions = new List<ElevationEdgeModel.TransitionEdge>();
             prisms = new PrismLedger();
             routeTransitionResolutions = Array.Empty<RouteTransitionResolution>();
@@ -1794,7 +1808,10 @@ namespace DungeonLab.Editor
             {
                 foreach (Vector2Int cell in layout.rooms[roomIndex].CellsRowMajor())
                 {
-                    if (!TrySetCellLevel(cellLevels, cell, zoneLevels[zones.NodeOfCell(roomIndex, cell)], out rejectionReason))
+                    if (!surfaces.TrySetFloorLevel(
+                            cell,
+                            zoneLevels[zones.NodeOfCell(roomIndex, cell)],
+                            out rejectionReason))
                     {
                         return false;
                     }
@@ -1863,7 +1880,7 @@ namespace DungeonLab.Editor
             if (!TryRealizeRecipes(
                     routeRequirements?.recipes,
                     layout,
-                    cellLevels,
+                    surfaces,
                     transitions,
                     transitionKeys,
                     plannedStairLedger,
@@ -1899,7 +1916,7 @@ namespace DungeonLab.Editor
                         reviewedStairOptions,
                         dungeonSeed,
                         rng,
-                        cellLevels,
+                        surfaces,
                         transitions,
                         transitionKeys,
                         plannedStairLedger,
@@ -1924,7 +1941,7 @@ namespace DungeonLab.Editor
             // are still validated by the deck-level headroom gate below.
             AddAerialBridges(
                 layout,
-                cellLevels,
+                surfaces.AsHeightField(),
                 rng.Stream("aerial-bridges"),
                 transitions,
                 transitionKeys,
@@ -1934,7 +1951,7 @@ namespace DungeonLab.Editor
 
             int unreachedFilledCells = FillUnassignedFloorCells(
                 layout.floorCells,
-                cellLevels,
+                surfaces,
                 externalSpanGapCells);
             if (unreachedFilledCells > 0)
             {
@@ -1952,7 +1969,7 @@ namespace DungeonLab.Editor
             // it sweeps the FINAL field.
             int sweep1uCount = SweepIntraRoom1uDrops(
                 layout,
-                cellLevels,
+                surfaces.AsHeightField(),
                 transitions,
                 transitionKeys,
                 plannedStairLedger,
@@ -1964,7 +1981,7 @@ namespace DungeonLab.Editor
             // names the vista and target; no random room or direction is rolled.
             if (!TryResolveNamedVistaPromontory(
                 routeRequirements,
-                cellLevels,
+                surfaces,
                 out namedPromontories,
                 out rejectionReason))
             {
@@ -1976,7 +1993,7 @@ namespace DungeonLab.Editor
             if (!TryValidateResolvedRecipes(
                     routeRequirements.recipes,
                     layout,
-                    cellLevels,
+                    surfaces.AsHeightField(),
                     transitions,
                     daisShowpieces,
                     promontoryCells,
@@ -1994,7 +2011,7 @@ namespace DungeonLab.Editor
             if (!TryResolveExternalConnectorPromontories(
                     dungeonSeed,
                     layout,
-                    cellLevels,
+                    surfaces,
                     transitions,
                     protectedStructuralCells,
                     doorwayCells,
@@ -2011,7 +2028,7 @@ namespace DungeonLab.Editor
             // end of planning" — the one point where every surface exists and no
             // pass reads the shadow again. See ReconcilePlanShadowWithSurfaces
             // for why the repair cannot live at the individual producers.
-            ReconcilePlanShadowWithSurfaces(layout, cellLevels);
+            ReconcilePlanShadowWithSurfaces(layout, surfaces);
 
             // Phase B, review finding H3 — THE LATE-PASS ORDERING HAZARD.
             //
@@ -2027,7 +2044,9 @@ namespace DungeonLab.Editor
             // It now runs where a gate belongs: after the last mutation it must
             // see. The accepted-plan check is the same call over the same ledger,
             // so the two cannot drift apart again.
-            if (!plannedStairLedger.TryValidateSurfaceHeadroom(cellLevels, out rejectionReason))
+            if (!plannedStairLedger.TryValidateSurfaceHeadroom(
+                    surfaces.AsHeightField(),
+                    out rejectionReason))
             {
                 return false;
             }
@@ -2128,7 +2147,7 @@ namespace DungeonLab.Editor
             IReadOnlyList<ReviewedActiveStairOption> reviewedStairOptions,
             int dungeonSeed,
             DungeonRandomScope rng,
-            Dictionary<Vector2Int, int> cellLevels,
+            SurfaceField surfaces,
             List<ElevationEdgeModel.TransitionEdge> transitions,
             HashSet<string> transitionKeys,
             PrismLedger plannedStairLedger,
@@ -2233,6 +2252,9 @@ namespace DungeonLab.Editor
 
             if (delta > 1)
             {
+                // The stair search is a pure reader of the level field, so it
+                // keeps taking the heightfield view for now.
+                Dictionary<Vector2Int, int> cellLevels = surfaces.AsHeightField();
                 ZoneArea fromNodeArea = zones.NodeArea(layout.rooms, fromNode);
                 ZoneArea toNodeArea = zones.NodeArea(layout.rooms, toNode);
                 bool reviewedStairChosen = TryChooseReviewedActiveStairTransition(
@@ -2419,7 +2441,7 @@ namespace DungeonLab.Editor
                 }
 
                 int targetLevel = delta == 0 || i <= transitionIndex ? fromLevel : toLevel;
-                if (!TrySetCellLevel(cellLevels, path[i], targetLevel, out rejectionReason))
+                if (!surfaces.TrySetFloorLevel(path[i], targetLevel, out rejectionReason))
                 {
                     return false;
                 }
@@ -2455,7 +2477,7 @@ namespace DungeonLab.Editor
                 int lowerLevel = Mathf.Min(fromLevel, toLevel);
                 int higherLevel = Mathf.Max(fromLevel, toLevel);
                 if (!TrySetPlannedStairCells(
-                        cellLevels,
+                        surfaces,
                         stairOptionPlannedLowerLandingCells,
                         stairOptionPlannedUpperLandingCells,
                         stairOptionPlannedFootprintCells,
@@ -2811,7 +2833,7 @@ namespace DungeonLab.Editor
 
         private static bool TryResolveNamedVistaPromontory(
             RouteTierRequirements requirements,
-            Dictionary<Vector2Int, int> cellLevels,
+            SurfaceField surfaces,
             out NamedVistaPromontoryResolution[] resolutions,
             out string rejectionReason)
         {
@@ -2824,7 +2846,7 @@ namespace DungeonLab.Editor
             }
 
             RouteIntent intent = requirements?.intent;
-            if (intent == null || cellLevels == null || plannedCells.Length > MaximumNamedVistaPromontoryCells)
+            if (intent == null || surfaces == null || plannedCells.Length > MaximumNamedVistaPromontoryCells)
             {
                 rejectionReason = $"[ROUTE_PROMONTORY] {NamedVistaPromontoryPolicyVersion} had invalid requirements or exceeded the {MaximumNamedVistaPromontoryCells}-cell limit";
                 return false;
@@ -2854,8 +2876,8 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            if (!cellLevels.TryGetValue(requirements.vistaSourceCell, out int sourceLevel) ||
-                !cellLevels.TryGetValue(requirements.vistaTargetCell, out int targetLevel) ||
+            if (!surfaces.TryGetFloorLevel(requirements.vistaSourceCell, out int sourceLevel) ||
+                !surfaces.TryGetFloorLevel(requirements.vistaTargetCell, out int targetLevel) ||
                 sourceLevel - targetLevel < MajorRiseLevels)
             {
                 rejectionReason = $"[ROUTE_PROMONTORY] {NamedVistaPromontoryPolicyVersion} target was not at least {MajorRiseLevels}u below its source";
@@ -2867,7 +2889,7 @@ namespace DungeonLab.Editor
                 Vector2Int expected = requirements.vistaSourceCell + facing * (index + 1);
                 if (plannedCells[index] != expected ||
                     requirements.reservedVistaCells.Contains(expected) ||
-                    cellLevels.ContainsKey(expected))
+                    surfaces.ContainsCell(expected))
                 {
                     rejectionReason = $"[ROUTE_PROMONTORY] {NamedVistaPromontoryPolicyVersion} found an occupied, off-axis, or non-contiguous planned cell {plannedCells[index]}";
                     return false;
@@ -2876,16 +2898,18 @@ namespace DungeonLab.Editor
 
             foreach (Vector2Int cell in requirements.reservedVistaCells)
             {
-                if (cellLevels.ContainsKey(cell))
+                if (surfaces.ContainsCell(cell))
                 {
                     rejectionReason = $"[ROUTE_PROMONTORY] {NamedVistaPromontoryPolicyVersion} found occupied remaining vista cell {cell}";
                     return false;
                 }
             }
 
+            // Insert-only: the loop above rejects the whole promontory if any
+            // planned cell is already surfaced, so this can never displace one.
             foreach (Vector2Int cell in plannedCells)
             {
-                cellLevels[cell] = sourceLevel;
+                surfaces.AddFloorLevel(cell, sourceLevel);
             }
 
             resolutions = new[]
@@ -6527,25 +6551,8 @@ namespace DungeonLab.Editor
             return weight;
         }
 
-        private static bool TrySetCellLevel(
-            Dictionary<Vector2Int, int> cellLevels,
-            Vector2Int cell,
-            int level,
-            out string rejectionReason)
-        {
-            if (cellLevels.TryGetValue(cell, out int existing) && existing != level)
-            {
-                rejectionReason = $"cell {cell} was assigned both level {existing} and level {level}";
-                return false;
-            }
-
-            cellLevels[cell] = level;
-            rejectionReason = string.Empty;
-            return true;
-        }
-
         private static bool TrySetPlannedStairCells(
-            Dictionary<Vector2Int, int> cellLevels,
+            SurfaceField surfaces,
             IReadOnlyList<Vector2Int> lowerLandingCells,
             IReadOnlyList<Vector2Int> upperLandingCells,
             IReadOnlyList<Vector2Int> footprintCells,
@@ -6556,7 +6563,7 @@ namespace DungeonLab.Editor
         {
             foreach (Vector2Int cell in lowerLandingCells)
             {
-                if (!TrySetCellLevel(cellLevels, cell, lowerLevel, out rejectionReason))
+                if (!surfaces.TrySetFloorLevel(cell, lowerLevel, out rejectionReason))
                 {
                     return false;
                 }
@@ -6570,12 +6577,12 @@ namespace DungeonLab.Editor
                 string.Equals(placementClass, StairwellStairPlacementClass, StringComparison.Ordinal);
             foreach (Vector2Int cell in footprintCells)
             {
-                if (footprintStaysUnleveled && !cellLevels.ContainsKey(cell))
+                if (footprintStaysUnleveled && !surfaces.ContainsCell(cell))
                 {
                     continue;
                 }
 
-                if (!TrySetCellLevel(cellLevels, cell, lowerLevel, out rejectionReason))
+                if (!surfaces.TrySetFloorLevel(cell, lowerLevel, out rejectionReason))
                 {
                     return false;
                 }
@@ -6583,7 +6590,7 @@ namespace DungeonLab.Editor
 
             foreach (Vector2Int cell in upperLandingCells)
             {
-                if (!TrySetCellLevel(cellLevels, cell, higherLevel, out rejectionReason))
+                if (!surfaces.TrySetFloorLevel(cell, higherLevel, out rejectionReason))
                 {
                     return false;
                 }
@@ -6600,12 +6607,12 @@ namespace DungeonLab.Editor
         // non-zero count rather than letting it pass unnoticed.
         private static int FillUnassignedFloorCells(
             HashSet<Vector2Int> floorCells,
-            Dictionary<Vector2Int, int> cellLevels,
+            SurfaceField surfaces,
             HashSet<Vector2Int> externalSpanGapCells)
         {
             // Seed the flood fill in sorted order: Dictionary key order is not contractually
             // stable, and which seed reaches a contested unassigned cell first decides its level.
-            var seeds = new List<Vector2Int>(cellLevels.Keys);
+            var seeds = new List<Vector2Int>(surfaces.SurfacedCells());
             seeds.Sort(CompareCells);
             var queue = new Queue<Vector2Int>();
             foreach (Vector2Int cell in seeds)
@@ -6616,16 +6623,21 @@ namespace DungeonLab.Editor
             while (queue.Count > 0)
             {
                 Vector2Int cell = queue.Dequeue();
+                if (!surfaces.TryGetFloorLevel(cell, out int level))
+                {
+                    continue;
+                }
+
                 foreach (Vector2Int neighbor in CardinalNeighbors(cell))
                 {
                     if (!floorCells.Contains(neighbor) ||
-                        cellLevels.ContainsKey(neighbor) ||
+                        surfaces.ContainsCell(neighbor) ||
                         externalSpanGapCells.Contains(neighbor))
                     {
                         continue;
                     }
 
-                    cellLevels[neighbor] = cellLevels[cell];
+                    surfaces.AddFloorLevel(neighbor, level);
                     queue.Enqueue(neighbor);
                 }
             }
@@ -6633,9 +6645,9 @@ namespace DungeonLab.Editor
             int unreachedCells = 0;
             foreach (Vector2Int cell in floorCells)
             {
-                if (!cellLevels.ContainsKey(cell) && !externalSpanGapCells.Contains(cell))
+                if (!surfaces.ContainsCell(cell) && !externalSpanGapCells.Contains(cell))
                 {
-                    cellLevels[cell] = 0;
+                    surfaces.AddFloorLevel(cell, 0);
                     unreachedCells++;
                 }
             }
@@ -8398,7 +8410,7 @@ namespace DungeonLab.Editor
             public readonly PrismLedger prisms;
 
             public TieredLevelPlan(
-                Dictionary<Vector2Int, int> cellLevels,
+                SurfaceField surfaces,
                 List<ElevationEdgeModel.TransitionEdge> transitions,
                 int levelCount,
                 int minLevel,
@@ -8424,7 +8436,10 @@ namespace DungeonLab.Editor
             {
                 this.archetypeName = archetypeName;
                 this.prisms = prisms ?? new PrismLedger();
-                surfaces = new SurfaceField(cellLevels);
+                // The elevation stage's own field, carried through rather than
+                // rebuilt from its heightfield — a rewrap would have dropped
+                // both the stacked surfaces and the kinds it took C1b to model.
+                this.surfaces = surfaces ?? new SurfaceField(new Dictionary<Vector2Int, int>());
                 this.transitions = transitions;
                 this.levelCount = levelCount;
                 this.minLevel = minLevel;

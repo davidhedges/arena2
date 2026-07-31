@@ -64,7 +64,7 @@ namespace DungeonLab.Editor
         private static bool TryResolveExternalConnectorPromontories(
             int dungeonSeed,
             DungeonLayout layout,
-            Dictionary<Vector2Int, int> cellLevels,
+            SurfaceField surfaces,
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
             IReadOnlyCollection<Vector2Int> protectedStructuralCells,
             IReadOnlyCollection<Vector2Int> doorwayCells,
@@ -108,6 +108,8 @@ namespace DungeonLab.Editor
                 excluded.UnionWith(promontory.cells);
             }
 
+            // Candidate search is a pure reader of the level field.
+            Dictionary<Vector2Int, int> cellLevels = surfaces.AsHeightField();
             HashSet<Vector2Int> exteriorVoid = BuildExternalConnectorExteriorVoid(cellLevels);
             RectInt coreExtent = GetCellRect(new HashSet<Vector2Int>(layout.floorCells));
             var candidatesByDirection = new Dictionary<int, List<ExternalConnectorCandidate>>();
@@ -167,7 +169,13 @@ namespace DungeonLab.Editor
                     {
                         for (int index = 1; index < resolution.occupiedCells.Length; index++)
                         {
-                            cellLevels.Add(resolution.occupiedCells[index], resolution.level);
+                            // Index 1 on purpose: cell 0 is the anchor, which is
+                            // already surfaced. Every cell past it was proved
+                            // unsurfaced by the run-clear test in
+                            // BuildExternalConnectorCandidates.
+                            surfaces.AddFloorLevel(
+                                resolution.occupiedCells[index],
+                                resolution.level);
                         }
                     }
 

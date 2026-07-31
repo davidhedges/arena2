@@ -1364,6 +1364,42 @@ Two further things worth stating plainly:
 >
 > **So the order is: level field → `SurfaceField` (writer side), then this
 > section, then the authored episode.**
+>
+> ---
+>
+> **DONE 2026-07-31 — the writer-side migration landed, and the map above was
+> missing a producer.** There are **five** bypasses, not four.
+> `TryResolveExternalConnectorPromontories` writes pier levels at
+> `.CorrectiveConnections.cs:170` using `cellLevels.Add(…)` rather than the
+> indexer, which is exactly why a `cellLevels[` search did not surface it — and
+> §3.1 above names that same function as H2's producer of cells that reach the
+> level field, so the omission is this document's, not the code's. It is an
+> insert-only site like the other four; `Dictionary.Add` was already asserting
+> that.
+>
+> The port replaces every one of those writes with a named operation on
+> `SurfaceField`: `TrySetFloorLevel` (set, reject a conflict — the old
+> `TrySetCellLevel`), `AddFloorLevel` (insert into an unsurfaced column — all
+> five bypasses collapse onto it) and `RelevelFloor` (move an existing floor —
+> the recipe zone write, and nothing else). All three are LAYER-BLIND and throw
+> on a column carrying a stacked surface, which generalises L6: no layer-blind
+> writer can silently truncate a stacked column, whoever writes it next.
+> `TryBuildCellLevelField` now out-params the field and `TieredLevelPlan` takes
+> it, so the stage's own field survives instead of being rebuilt from its
+> heightfield.
+>
+> **Two further facts worth carrying.** (a) The recipe overwrite is a LIVE path
+> — `Elevated` zones must carry `relativeLevel > 0`
+> (`DungeonRecipeValidation.cs:363`) and four enabled recipes have one — so the
+> gate exercised it on essentially every seed rather than stepping around it.
+> (b) `ReconcilePlanShadowWithSurfaces` must iterate the field's BACKING STORE,
+> not `Surfaces()`: it inserts into `layout.floorCells`, a `HashSet` whose
+> enumeration order follows its insertion order and which later passes read, so
+> switching to canonical order moves seeds.
+>
+> Gate: `ops/dungeon-port-ab.sh` density 0 — identical geometry on all 200 seeds
+> with `resultHash` unmoved at `991d86e1bb577144`, i.e. byte-identical seed
+> reports.
 
 **[Proposed]** three schema additions, all additive and defaulting to today's
 behaviour. **Phase split, corrected per review finding 4:** the layer fields,

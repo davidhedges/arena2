@@ -1740,7 +1740,7 @@ namespace DungeonLab.Editor
         private static bool TryRealizeRecipes(
             IReadOnlyList<RecipePlacement> placements,
             DungeonLayout layout,
-            Dictionary<Vector2Int, int> cellLevels,
+            SurfaceField surfaces,
             List<ElevationEdgeModel.TransitionEdge> transitions,
             HashSet<string> transitionKeys,
             PrismLedger stairLedger,
@@ -1774,7 +1774,7 @@ namespace DungeonLab.Editor
                 }
 
                 if (placement.ports.Length == 0 ||
-                    !cellLevels.TryGetValue(placement.ports[0].cell, out int firstPortLevel))
+                    !surfaces.TryGetFloorLevel(placement.ports[0].cell, out int firstPortLevel))
                 {
                     rejectionReason = $"[RECIPE_LEVELS] '{placement.RecipeId}' had no leveled primary port";
                     return false;
@@ -1791,7 +1791,7 @@ namespace DungeonLab.Editor
                 int baseLevel = firstPortLevel - firstPortContract.relativeLevel;
                 foreach (RecipePortPlacement port in placement.ports)
                 {
-                    if (!cellLevels.TryGetValue(port.cell, out int portLevel) ||
+                    if (!surfaces.TryGetFloorLevel(port.cell, out int portLevel) ||
                         portLevel != port.expectedRelativeLevel)
                     {
                         rejectionReason = $"[RECIPE_LEVELS] typed port '{port.id}' on '{placement.RecipeId}' resolved at {portLevel}u instead of {port.expectedRelativeLevel}u";
@@ -1848,7 +1848,7 @@ namespace DungeonLab.Editor
                 foreach (Vector2Int cell in
                          placement.showpieceReservation.requiredFloorCells ?? Array.Empty<Vector2Int>())
                 {
-                    if (!cellLevels.TryGetValue(cell, out int level) ||
+                    if (!surfaces.TryGetFloorLevel(cell, out int level) ||
                         level != baseLevel ||
                         ResolvedRecipeRelativeLevel(placement.zones, cell) != 0 ||
                         pathCells.Contains(cell))
@@ -1934,13 +1934,20 @@ namespace DungeonLab.Editor
 
                     foreach (Vector2Int cell in zone.cells)
                     {
-                        if (!cellLevels.ContainsKey(cell))
+                        if (!surfaces.ContainsCell(cell))
                         {
                             rejectionReason = $"[RECIPE_LEVELS] zone '{zone.id}' on '{placement.RecipeId}' escaped the canonical level field";
                             return false;
                         }
 
-                        cellLevels[cell] = baseLevel + zone.relativeLevel;
+                        // THE OVERWRITE (design §8.2 L6). An Elevated zone is
+                        // validated to carry relativeLevel > 0, so this always
+                        // MOVES the column's floor up rather than adding a
+                        // surface over it — which is why a second authored
+                        // layer cannot be resolved yet. The layer schema turns
+                        // this call into a choice between RelevelFloor and
+                        // AddSurface; today there is nothing to choose.
+                        surfaces.RelevelFloor(cell, baseLevel + zone.relativeLevel);
                     }
                 }
 
