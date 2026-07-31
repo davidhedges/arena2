@@ -8152,6 +8152,11 @@ namespace DungeonLab.Editor
             // layer name is room-local, so `(cell, layerId)` is not a vertical
             // identity and cannot separate two unrelated rooms.
             public readonly LevelBand plannedBand;
+            // Which declared storey each end binds to; empty is the room's base,
+            // which is every connection in the shipped corpus. A SynthesizedLoop
+            // can never carry one — it has no route edge to declare it.
+            public readonly string fromLayerId;
+            public readonly string toLayerId;
             public readonly List<Vector2Int> path;
 
             private RoomConnection(
@@ -8161,6 +8166,8 @@ namespace DungeonLab.Editor
                 string edgeId,
                 string connectionId,
                 LevelBand plannedBand,
+                string fromLayerId,
+                string toLayerId,
                 List<Vector2Int> path)
             {
                 this.fromRoom = fromRoom;
@@ -8169,15 +8176,33 @@ namespace DungeonLab.Editor
                 this.edgeId = edgeId ?? string.Empty;
                 this.connectionId = connectionId ?? string.Empty;
                 this.plannedBand = plannedBand;
+                this.fromLayerId = fromLayerId ?? string.Empty;
+                this.toLayerId = toLayerId ?? string.Empty;
                 this.path = path;
             }
+
+            /// <summary>
+            /// Whether this corridor AUTHORIZES a relaxation of corridor
+            /// exclusivity or third-room crossing (design §8.1).
+            /// </summary>
+            /// <remarks>
+            /// Authorization only. What DECIDES either relaxation is
+            /// <see cref="plannedBand"/> — two connections may share a cell when
+            /// both are layer-bound AND their absolute bands are disjoint. A
+            /// layer id can never decide it: one room's "gallery" and another's
+            /// "floor" may sit at the same absolute level.
+            /// </remarks>
+            public bool IsLayerBound =>
+                !string.IsNullOrEmpty(fromLayerId) || !string.IsNullOrEmpty(toLayerId);
 
             public static RoomConnection ForRouteEdge(
                 int fromRoom,
                 int toRoom,
                 string edgeId,
                 LevelBand plannedBand,
-                List<Vector2Int> path)
+                List<Vector2Int> path,
+                string fromLayerId = "",
+                string toLayerId = "")
             {
                 return new RoomConnection(
                     fromRoom,
@@ -8186,6 +8211,8 @@ namespace DungeonLab.Editor
                     edgeId,
                     $"edge:{edgeId}",
                     plannedBand,
+                    fromLayerId,
+                    toLayerId,
                     path);
             }
 
@@ -8202,6 +8229,8 @@ namespace DungeonLab.Editor
                     string.Empty,
                     $"loop:{firstRoom}:{secondRoom}",
                     plannedBand,
+                    string.Empty,
+                    string.Empty,
                     path);
             }
 

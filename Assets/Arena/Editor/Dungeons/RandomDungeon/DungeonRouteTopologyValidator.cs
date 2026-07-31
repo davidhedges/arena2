@@ -153,6 +153,8 @@ namespace DungeonLab.Editor
                         report.Append("    VIOLATION: ").AppendLine(violation);
                     }
                 }
+
+                passed &= AppendLayerSchemaLoaderChecks(report);
             }
             finally
             {
@@ -283,8 +285,9 @@ namespace DungeonLab.Editor
 
             var mainRoute = new List<RouteTopologyNode>();
             var branchNodes = new List<RouteTopologyNode>();
-            foreach (RouteTopologyNode node in topology.nodes)
+            for (int nodeIndex = 0; nodeIndex < topology.nodes.Length; nodeIndex++)
             {
+                RouteTopologyNode node = topology.nodes[nodeIndex];
                 (node.IsOnMainRoute ? mainRoute : branchNodes).Add(node);
                 if (node.level < 0 || node.level > MaxGeneratedLevel)
                 {
@@ -297,6 +300,8 @@ namespace DungeonLab.Editor
                     violations.Add(
                         $"node '{node.key}' ({node.id}) level {node.level} is not a multiple of {MajorRiseLevels}");
                 }
+
+                ValidateNodeLayers(nodeIndex, node, topology, violations);
             }
 
             for (int index = 0; index < mainRoute.Count; index++)
@@ -323,9 +328,16 @@ namespace DungeonLab.Editor
             foreach (RouteTopologyEdge edge in topology.edges)
             {
                 kinds.Add(edge.transitionKind);
-                int rise = topology.nodes[edge.toNode].level - topology.nodes[edge.fromNode].level;
+                // Between the BOUND elevations, not between the node levels
+                // (design §8.1: "the existing derivation, one term wider"). An
+                // unbound end resolves to its node's own level, so an
+                // unlayered graph reads exactly as it did before.
+                topology.nodes[edge.fromNode].TryGetAbsoluteLevel(edge.fromLayerId, out int fromLevel);
+                topology.nodes[edge.toNode].TryGetAbsoluteLevel(edge.toLayerId, out int toLevel);
+                int rise = toLevel - fromLevel;
                 string label = $"edge '{edge.id}' " +
-                    $"({topology.nodes[edge.fromNode].key}->{topology.nodes[edge.toNode].key})";
+                    $"({topology.nodes[edge.fromNode].key}{DescribeLayerBinding(edge.fromLayerId)}" +
+                    $"->{topology.nodes[edge.toNode].key}{DescribeLayerBinding(edge.toLayerId)})";
                 int riseMagnitude = Mathf.Abs(rise);
                 if (edge.transitionKind == RouteTransitionKind.LevelCorridor)
                 {
@@ -690,6 +702,243 @@ namespace DungeonLab.Editor
                 }
 
                 previousSlotOrder = node.mainRouteOrder;
+            }
+        }
+
+        private static string DescribeLayerBinding(string layerId)
+        {
+            return string.IsNullOrEmpty(layerId) ? string.Empty : $"#{layerId}";
+        }
+
+        // ---- layer schema, loader self-check --------------------------------
+
+        /// <summary>
+        /// A three-node graph whose middle node declares an upper storey and
+        /// whose exit edge binds to it. Every check below mutates exactly one
+        /// thing in this string.
+        /// </summary>
+        /// <remarks>
+        /// The layer schema has NO site in the shipped corpus — that is the
+        /// property that makes Phase D's neutrality provable — so nothing else
+        /// in the project executes the parser's layer branch. Without this, the
+        /// first exercise of the schema would be the first topology to declare
+        /// one, which is the arrangement that cost C2 two rejected corpora.
+        /// It lives in the topology validator rather than in the orphaned
+        /// snapshot family in `.Batch.cs`, because those have no callers.
+        /// </remarks>
+        private const string LayerSchemaProbeJson = @"{
+  ""id"": ""layer-probe"",
+  ""displayName"": ""Layer Schema Probe"",
+  ""plannerVersion"": ""layer-probe-v1"",
+  ""map"": [""A  B  C""],
+  ""spatial"": { ""columnGapDeltaCells"": 0, ""rowGapDeltaCells"": 0 },
+  ""nodes"": {
+    ""A"": [""probe-a"", ""arrival"", ""arrival"", 0, { ""main"": 0 }],
+    ""B"": [""probe-b"", ""connector"", ""compression"", 4, { ""main"": 1 }, { ""layers"": { ""gallery"": 4 } }],
+    ""C"": [""probe-c"", ""culmination"", ""culmination"", 8, { ""main"": 2 }]
+  },
+  ""edges"": [[""A"", ""B"", ""Stair""], [""B"", ""C"", ""LevelCorridor"", { ""fromLayer"": ""gallery"" }]],
+  ""slots"": [{ ""id"": ""probe-slot"", ""at"": ""B"", ""entry"": ""A-B"", ""exit"": ""B-C"" }],
+  ""vista"": { ""id"": ""probe-vista"", ""from"": ""C"", ""to"": ""A"", ""minVoidCells"": 3 },
+  ""anchors"": { ""bottom"": ""A"", ""top"": ""C"" }
+}";
+
+        private static bool TryParseLayerSchemaProbe(string json, out DungeonRouteTopology topology)
+        {
+            return TryParseRouteTopology(json, "<probe>/layer-probe.json", out topology, out _);
+        }
+
+        // A mutation that silently failed to apply would pass vacuously, so each
+        // one reports whether it changed the text at all.
+        private static bool LayerSchemaProbeRejects(string find, string replaceWith)
+        {
+            string mutated = LayerSchemaProbeJson.Replace(find, replaceWith);
+            return !string.Equals(mutated, LayerSchemaProbeJson, StringComparison.Ordinal) &&
+                !TryParseLayerSchemaProbe(mutated, out _);
+        }
+
+        private static bool AppendLayerSchemaLoaderChecks(StringBuilder report)
+        {
+            var results = new List<(string name, bool passed)>();
+
+            bool loaded = TryParseLayerSchemaProbe(LayerSchemaProbeJson, out DungeonRouteTopology probe);
+            results.Add(("probeLoads", loaded));
+
+            // B's gallery is +4 from its own level of 4, so the bound edge leaves
+            // at absolute 8 and arrives at C's 8 — a LevelCorridor across a 0u
+            // rise. Unbound, the same edge would be a 4u rise and the validator
+            // would reject it as a LevelCorridor. That contrast is the whole
+            // point: the binding, not the node level, decides the elevation.
+            bool bindingResolves =
+                loaded &&
+                probe.nodes[1].DeclaresLayers &&
+                probe.nodes[1].TryGetAbsoluteLevel("gallery", out int galleryLevel) &&
+                galleryLevel == 8 &&
+                probe.nodes[1].TryGetAbsoluteLevel(string.Empty, out int baseLevel) &&
+                baseLevel == 4 &&
+                probe.DeclaresLayers;
+            results.Add(("bindingResolvesToAbsoluteLevel", bindingResolves));
+
+            bool unboundEdgeUnchanged =
+                loaded &&
+                !probe.edges[0].IsLayerBound &&
+                probe.edges[1].IsLayerBound &&
+                string.Equals(probe.edges[1].fromLayerId, "gallery", StringComparison.Ordinal) &&
+                probe.edges[1].toLayerId.Length == 0;
+            results.Add(("unboundEdgeCarriesNoBinding", unboundEdgeUnchanged));
+
+            // A graph declaring no layers must parse to exactly what it parsed to
+            // before the schema existed.
+            bool unlayeredIsInert =
+                TryParseLayerSchemaProbe(
+                    LayerSchemaProbeJson
+                        .Replace(", { \"layers\": { \"gallery\": 4 } }", string.Empty)
+                        .Replace("\"LevelCorridor\", { \"fromLayer\": \"gallery\" }", "\"Stair\""),
+                    out DungeonRouteTopology unlayered) &&
+                !unlayered.DeclaresLayers &&
+                !unlayered.edges[1].IsLayerBound;
+            results.Add(("unlayeredGraphIsInert", unlayeredIsInert));
+
+            results.Add(("offPitchLayerRejected",
+                LayerSchemaProbeRejects("\"gallery\": 4", "\"gallery\": 3")));
+            results.Add(("outOfEnvelopeLayerRejected",
+                LayerSchemaProbeRejects("\"gallery\": 4", "\"gallery\": -8")));
+            results.Add(("duplicateLayerLevelRejected",
+                LayerSchemaProbeRejects("\"gallery\": 4", "\"gallery\": 4, \"balcony\": 4")));
+            results.Add(("twoBaseLayersRejected",
+                LayerSchemaProbeRejects("\"gallery\": 4", "\"gallery\": 4, \"floor\": 0, \"ground\": 0")));
+            results.Add(("emptyLayerTableRejected",
+                LayerSchemaProbeRejects("{ \"layers\": { \"gallery\": 4 } }", "{ \"layers\": { } }")));
+            results.Add(("unknownNodeOptionRejected",
+                LayerSchemaProbeRejects("{ \"layers\": { \"gallery\": 4 } }", "{ \"storeys\": { \"gallery\": 4 } }")));
+            results.Add(("undeclaredBindingRejected",
+                LayerSchemaProbeRejects("\"fromLayer\": \"gallery\"", "\"fromLayer\": \"catwalk\"")));
+            results.Add(("bindingOnUndeclaringNodeRejected",
+                LayerSchemaProbeRejects("\"fromLayer\": \"gallery\"", "\"toLayer\": \"gallery\"")));
+            results.Add(("nonObjectEdgeOptionRejected",
+                LayerSchemaProbeRejects("{ \"fromLayer\": \"gallery\" }", "\"gallery\"")));
+            results.Add(("fiveFieldEdgeRejected",
+                LayerSchemaProbeRejects(
+                    "{ \"fromLayer\": \"gallery\" }",
+                    "{ \"fromLayer\": \"gallery\" }, \"extra\"")));
+
+            // The two rules the loader cannot state, checked through the
+            // validator itself rather than by re-implementing them here.
+            bool unboundLayerReported = false;
+            bool slotlessLayerReported = false;
+            if (TryParseLayerSchemaProbe(
+                    LayerSchemaProbeJson.Replace(
+                        "\"LevelCorridor\", { \"fromLayer\": \"gallery\" }",
+                        "\"Stair\""),
+                    out DungeonRouteTopology unbound))
+            {
+                var violations = new List<string>();
+                ValidateNodeLayers(1, unbound.nodes[1], unbound, violations);
+                unboundLayerReported = violations.Exists(v => v.Contains("which no edge binds"));
+            }
+
+            // Move the storey onto C, which carries no slot, and bind the same
+            // edge to it from the other end. C's node index is 2 — main-route
+            // order, which is what the loader sorts by.
+            if (TryParseLayerSchemaProbe(
+                    LayerSchemaProbeJson
+                        .Replace(", { \"layers\": { \"gallery\": 4 } }", string.Empty)
+                        .Replace(
+                            "\"C\": [\"probe-c\", \"culmination\", \"culmination\", 8, { \"main\": 2 }]",
+                            "\"C\": [\"probe-c\", \"culmination\", \"culmination\", 8, { \"main\": 2 }, { \"layers\": { \"gallery\": 4 } }]")
+                        .Replace("\"fromLayer\": \"gallery\"", "\"toLayer\": \"gallery\""),
+                    out DungeonRouteTopology slotless))
+            {
+                var violations = new List<string>();
+                ValidateNodeLayers(2, slotless.nodes[2], slotless, violations);
+                slotlessLayerReported = violations.Exists(v => v.Contains("carries no recipe slot")) &&
+                    !violations.Exists(v => v.Contains("which no edge binds"));
+            }
+
+            results.Add(("unboundLayerReported", unboundLayerReported));
+            results.Add(("slotlessLayerReported", slotlessLayerReported));
+
+            bool allPassed = true;
+            report.AppendLine().AppendLine("Layer schema — loader self-check (design §8.1)");
+            foreach ((string name, bool checkPassed) in results)
+            {
+                allPassed &= checkPassed;
+                report.Append("    ")
+                    .Append(checkPassed ? "ok   " : "FAIL ")
+                    .AppendLine(name);
+            }
+
+            report.Append("    ")
+                .Append(allPassed ? "PASS" : "FAIL")
+                .Append("  ")
+                .Append(results.Count)
+                .AppendLine(" layer schema checks");
+            return allPassed;
+        }
+
+        /// <summary>
+        /// The two layer rules the LOADER cannot state, because both are about a
+        /// node's relationship to the rest of the graph rather than about its own
+        /// syntax.
+        /// </summary>
+        /// <remarks>
+        /// The loader already rejects a malformed table, an off-pitch offset, an
+        /// out-of-envelope absolute level, two ids at one elevation and an edge
+        /// binding a layer its endpoint does not declare. What is left is
+        /// authoring intent: a storey nothing routes to, and a storey nothing can
+        /// build.
+        /// </remarks>
+        private static void ValidateNodeLayers(
+            int nodeIndex,
+            RouteTopologyNode node,
+            DungeonRouteTopology topology,
+            List<string> violations)
+        {
+            if (!node.DeclaresLayers)
+            {
+                return;
+            }
+
+            // A storey no edge binds is an authored intent nothing consumes. It
+            // is exactly the class of mistake a beat typo was in C2 — the graph
+            // validates, generation runs, and the feature is silently absent.
+            foreach (RouteTopologyLayer layer in node.layers)
+            {
+                if (layer.relativeLevel == 0)
+                {
+                    continue;
+                }
+
+                bool bound = false;
+                foreach (RouteTopologyEdge edge in topology.edges)
+                {
+                    bound |= edge.fromNode == nodeIndex &&
+                        string.Equals(edge.fromLayerId, layer.layerId, StringComparison.Ordinal);
+                    bound |= edge.toNode == nodeIndex &&
+                        string.Equals(edge.toLayerId, layer.layerId, StringComparison.Ordinal);
+                }
+
+                if (!bound)
+                {
+                    violations.Add(
+                        $"node '{node.key}' ({node.id}) declares layer '{layer.layerId}' at " +
+                        $"+{layer.relativeLevel}u, which no edge binds; a storey no route reaches " +
+                        "generates as nothing");
+                }
+            }
+
+            // Nothing in the generator builds a stacked surface for a GENERIC
+            // room: the producers are the aerial-span deck and a recipe's
+            // non-base storey. So a node that declares layers must carry a
+            // recipe slot, or its storeys have no author. Relax this when a
+            // generic multi-layer producer exists (design §13 Phase D, owner
+            // decision 9).
+            if (string.IsNullOrEmpty(node.recipeSlotId))
+            {
+                violations.Add(
+                    $"node '{node.key}' ({node.id}) declares layers but carries no recipe slot; " +
+                    "only a recipe's non-base storey can build one today, so the layers would " +
+                    "have no producer");
             }
         }
 

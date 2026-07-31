@@ -792,7 +792,7 @@ rebuild it any time with **Arena > Dungeons > Rebuild Random Dungeon (Specific
 Topology)**, topology `aperture-gallery`. Its gallery sits at world
 `y = 12` around `(4, 12, −64)` — the node's level 8 plus the layer's 4.
 
-### Phase D — multi-layer rooms in GENERATION. IN PROGRESS; D0 landed 2026-08-01.
+### Phase D — multi-layer rooms in GENERATION. IN PROGRESS; D0 and D1 landed 2026-08-01.
 
 Design §13. Topologies and recipes declare layers, and routes bind to them.
 Four of C2's corrections are constraints on anything Phase D authors rather than
@@ -809,8 +809,8 @@ used, moved from content into code.
 | | What | Neutral because |
 |---|---|---|
 | **D0** ✅ | the transition body is a **band**, not a column to the sky | measured: 0 surfaces stand over a stair body anywhere in the corpus |
-| D1 | the **topology layer schema** — node `layers`, edge `fromLayer`/`toLayer` — parsed, validated by `Validate Topologies`, carried into `RouteIntent` and `plannedBand`, and consumed nowhere | no topology declares layers |
-| D2 | the **corridor-exclusivity and third-room relaxations**, *authorized* by both ends being layer-bound and *decided* by disjoint absolute bands (§8.1) | no connection is layer-bound |
+| **D1** ✅ | the **topology layer schema** — node `layers`, edge `fromLayer`/`toLayer` — parsed, validated by `Validate Topologies`, carried into `RouteIntent` and `plannedBand`, and consumed nowhere | no topology declares layers |
+| D2 | the **corridor-exclusivity and third-room relaxations** — *authorized* by layer binding, *decided* by disjoint absolute bands (§8.1) — **together with the stacked-corridor producer they need**, which the design separates and which measurement says cannot be separated (see D1's finding 1) | no connection is layer-bound |
 | D3 | a bound edge **resolves at its layer's elevation** — a per-`(connection, end)` entry level beside today's per-node `zoneLevels`, and a slot mapping a topology layer id to a recipe layer id | ditto |
 | D4 | **volumes** — `RoomFootprint.Overlaps` volumetric, an `OpenVolume` producer, `ChooseEnclosedRooms` moved into the plan | the volumetric test needs a declared reason, and nothing declares one |
 | D5 | **content** — an atrium topology plus a room binding route edges at two elevations | weight 0, exactly as `aperture-gallery` is |
@@ -863,6 +863,69 @@ Three things measured that the design doc had wrong:
    `fields.Count < 5`, so a trailing options object parses today, while
    `TryParseRouteTopologyEdges` demands exactly 3. D1's parser work is on the
    edge side.
+
+**D1 — the topology layer schema, carried not consumed (landed 2026-08-01).**
+
+A node declares storeys as offsets from its own level; an edge end binds one by
+name; the edge's rise then derives from the two BOUND elevations, which is §8.1's
+"existing derivation, one term wider". Nothing consumes the binding yet — it
+reaches `RouteIntent`, `RoomConnection` and the report, and stops.
+
+- **`RouteTopologyLayer { layerId, relativeLevel }`**, sorted by id at parse time
+  because a JSON object's property order is authored and this array reaches a
+  hashed projection. `RouteTopologyEdge` gains `fromLayerId`/`toLayerId`;
+  `RouteTraversalIntent` gains those plus `fromAbsoluteLevel`/`toAbsoluteLevel`;
+  `RoomConnection` gains the two ids and an `IsLayerBound`.
+- **The loader rejects six malformed shapes**, and does so at load rather than
+  reporting them, because an unresolvable binding has no elevation at all: the
+  edge would silently fall back to the node's base and the graph would generate
+  something other than what it says.
+- **`Validate Topologies` gained the two rules the loader cannot state** — a
+  declared layer no edge binds, and a layer-declaring node with no recipe slot.
+  Both are about the node's relationship to the rest of the graph. The second is
+  the honest statement of today's capability: only a recipe's non-base storey or
+  an aerial span's deck can build a stacked surface, so a generic room's layers
+  would have no producer.
+- **A 16-check loader self-check runs inside `Validate Topologies`.** The schema
+  has no site in the corpus — that is what makes the phase neutral — so without
+  it the first exercise of the parser would be the first topology to use it,
+  which is the arrangement that cost C2 two rejected corpora.
+
+Gate: `ops/dungeon-port-ab.sh` at density 0 — **identical geometry on all 200
+seeds**, and a field-by-field diff of the two reports (**519 427 per-seed
+leaves**) found **zero leaves changed, added or removed**. `resultHash` did not
+move either (`5a970e5560e70423`, D0's value), so the only difference in the whole
+file is the generation timestamp. `Validate Topologies` 8/8 PASS plus 16/16
+layer-schema checks.
+
+Two things measured that the design had wrong:
+
+1. **§8.1's corridor-exclusivity relaxation cannot ship without a producer, and
+   the design separates them.** It presents exclusivity as "the deeper block" and
+   the band test as the fix. But a corridor's cells are leveled with
+   `surfaces.TrySetFloorLevel(path[i], targetLevel, …)`
+   (`DungeonLabGenerator.cs:2448`), which **rejects a conflicting value rather
+   than stacking**. So two corridors sharing a plan cell at different elevations
+   would pass the relaxed claim and then fail the tier attempt — the relaxation
+   alone buys a rejection, not a second corridor surface. **D2 must carry the
+   relaxation and the stacked-corridor producer in one slice**, and its
+   capability needs a fixture, because no content will reach it until D5.
+
+   The producer is smaller than it sounds, and that is the other half of the
+   measurement: **the renderer already draws it.** `SurfaceColumns` skips only
+   `SurfaceKind.Deck` and hands every other stacked surface to C1b's three
+   passes — floor tile, per-surface rim guards, `_E_` soffit
+   (`ElevationEdgeModel.cs:12356`). So the write site changes from
+   `TrySetFloorLevel` to `AddSurface(cell, level, SurfaceKind.Ledge)` — the
+   `Ledge` kind exists and has no producer — and the geometry follows. One
+   caveat: `SurfaceColumns` throws on a stacked surface whose column has no
+   floor, which is exactly the exemption a deck needed, so a layer-bound
+   corridor crossing a true gap is a span, not a ledge.
+2. **The `.Batch.cs` snapshot family is orphaned** — all 18 `Build…Snapshot(int
+   seed)` builders, including the topology loader's own mutation probes, have
+   exactly one occurrence each: their definition. They were a test surface that
+   went away. The layer self-check therefore lives in `Validate Topologies`,
+   which actually runs.
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently

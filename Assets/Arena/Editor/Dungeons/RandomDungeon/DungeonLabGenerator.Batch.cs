@@ -2265,12 +2265,19 @@ namespace DungeonLab.Editor
                     $"{edge.transitionKind}:{edge.requiredRiseLevels}");
             }
 
+            // Rise is derived from the BOUND elevations (design §8.1), and this
+            // re-derives them from the NODES' own layer tables rather than from
+            // the levels the edge recorded — otherwise the check would compare
+            // the builder against itself. For an unbound edge both ends resolve
+            // to their node's own level and this is the identical assertion it
+            // has always been.
             bool riseIsDerived = true;
             foreach (RouteTraversalIntent edge in intent.traversalEdges)
             {
-                riseIsDerived &= edge.requiredRiseLevels ==
-                    intent.nodes[edge.toNode].relativeElevationLevels -
-                    intent.nodes[edge.fromNode].relativeElevationLevels;
+                riseIsDerived &=
+                    intent.nodes[edge.fromNode].TryGetAbsoluteLevel(edge.fromLayerId, out int fromLevel) &&
+                    intent.nodes[edge.toNode].TryGetAbsoluteLevel(edge.toLayerId, out int toLevel) &&
+                    edge.requiredRiseLevels == toLevel - fromLevel;
             }
 
             var junctionIds = new List<string>(intent.junctionNodes.Length);
@@ -3747,7 +3754,7 @@ namespace DungeonLab.Editor
             var branch = new JArray();
             foreach (RouteNodeIntent node in intent.nodes)
             {
-                nodes.Add(new JObject
+                var nodeToken = new JObject
                 {
                     ["id"] = node.id,
                     ["role"] = node.role,
@@ -3756,7 +3763,29 @@ namespace DungeonLab.Editor
                     ["branchOrder"] = node.branchOrder,
                     ["relativeElevationLevels"] = node.relativeElevationLevels,
                     ["recipeSlotId"] = node.recipeSlotId
-                });
+                };
+                // Appended only by a node that declares storeys. This projection
+                // is hashed into `routeIntentHash` and from there into every
+                // seed's `hashes.canonical`, so an unconditional row would move
+                // all 200 seeds for a schema addition that changed no geometry —
+                // the same trap, and the same fix, as C2a's recipe layer fields.
+                if (node.DeclaresLayers)
+                {
+                    var layers = new JArray();
+                    foreach (RouteTopologyLayer layer in node.layers)
+                    {
+                        layers.Add(new JObject
+                        {
+                            ["layerId"] = layer.layerId,
+                            ["relativeLevel"] = layer.relativeLevel,
+                            ["absoluteLevel"] = node.relativeElevationLevels + layer.relativeLevel
+                        });
+                    }
+
+                    nodeToken["layers"] = layers;
+                }
+
+                nodes.Add(nodeToken);
                 if (node.IsOnMainRoute)
                 {
                     mainRoute.Add(node.id);
@@ -3770,7 +3799,7 @@ namespace DungeonLab.Editor
             var traversalEdges = new JArray();
             foreach (RouteTraversalIntent edge in intent.traversalEdges)
             {
-                traversalEdges.Add(new JObject
+                var edgeToken = new JObject
                 {
                     ["id"] = edge.id,
                     ["fromNode"] = intent.nodes[edge.fromNode].id,
@@ -3778,7 +3807,19 @@ namespace DungeonLab.Editor
                     ["connectionType"] = edge.transitionKind.ToString(),
                     ["requiredRiseLevels"] = edge.requiredRiseLevels,
                     ["laneCount"] = edge.laneCount
-                });
+                };
+                // Conditional for the same hash reason as the node layers above.
+                // The absolute levels are reported beside the ids because the ids
+                // are room-local and the levels are what every rule compares.
+                if (edge.IsLayerBound)
+                {
+                    edgeToken["fromLayer"] = edge.fromLayerId;
+                    edgeToken["toLayer"] = edge.toLayerId;
+                    edgeToken["fromAbsoluteLevel"] = edge.fromAbsoluteLevel;
+                    edgeToken["toAbsoluteLevel"] = edge.toAbsoluteLevel;
+                }
+
+                traversalEdges.Add(edgeToken);
             }
 
             int loopEdges = intent.traversalEdges.Length - (intent.nodes.Length - 1);

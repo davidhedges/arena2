@@ -185,6 +185,10 @@ namespace DungeonLab.Editor
             public readonly int branchOrder;
             public readonly int relativeElevationLevels;
             public readonly string recipeSlotId;
+            // The node's declared storeys, carried so a recipe slot can bind one
+            // of them to a recipe layer later. Sorted by id at parse time — this
+            // array reaches the hashed route-intent projection.
+            public readonly RouteTopologyLayer[] layers;
 
             public RouteNodeIntent(
                 string id,
@@ -193,7 +197,8 @@ namespace DungeonLab.Editor
                 int mainRouteOrder,
                 int branchOrder,
                 int relativeElevationLevels,
-                string recipeSlotId = "")
+                string recipeSlotId = "",
+                RouteTopologyLayer[] layers = null)
             {
                 this.id = id;
                 this.role = role;
@@ -202,11 +207,38 @@ namespace DungeonLab.Editor
                 this.branchOrder = branchOrder;
                 this.relativeElevationLevels = relativeElevationLevels;
                 this.recipeSlotId = recipeSlotId ?? string.Empty;
+                this.layers = layers ?? Array.Empty<RouteTopologyLayer>();
             }
 
             public bool IsOnMainRoute => mainRouteOrder >= 0;
 
             public bool HasRecipeSlot => !string.IsNullOrEmpty(recipeSlotId);
+
+            public bool DeclaresLayers => layers.Length > 0;
+
+            /// <summary>
+            /// The absolute elevation an edge bound to <paramref name="layerId"/>
+            /// meets this node at; an empty id is the node's own level.
+            /// </summary>
+            public bool TryGetAbsoluteLevel(string layerId, out int absoluteLevel)
+            {
+                absoluteLevel = relativeElevationLevels;
+                if (string.IsNullOrEmpty(layerId))
+                {
+                    return true;
+                }
+
+                foreach (RouteTopologyLayer layer in layers)
+                {
+                    if (string.Equals(layer.layerId, layerId, StringComparison.Ordinal))
+                    {
+                        absoluteLevel = relativeElevationLevels + layer.relativeLevel;
+                        return true;
+                    }
+                }
+
+                return false;
+            }
         }
 
         private readonly struct RouteTraversalIntent
@@ -217,13 +249,26 @@ namespace DungeonLab.Editor
             public readonly int laneCount;
             public readonly int requiredRiseLevels;
             public readonly RouteTransitionKind transitionKind;
+            // The declared layer each end binds to (empty = the node's base) and
+            // the ABSOLUTE elevation that binding resolves to. The id authorizes
+            // a relaxation; the level decides one. A layer id can never do the
+            // deciding — it is room-local, so two nodes' "gallery" may sit at the
+            // same absolute level (design §8.1).
+            public readonly string fromLayerId;
+            public readonly string toLayerId;
+            public readonly int fromAbsoluteLevel;
+            public readonly int toAbsoluteLevel;
 
             public RouteTraversalIntent(
                 string id,
                 int fromNode,
                 int toNode,
                 int requiredRiseLevels,
-                RouteTransitionKind transitionKind)
+                RouteTransitionKind transitionKind,
+                string fromLayerId = "",
+                string toLayerId = "",
+                int fromAbsoluteLevel = 0,
+                int toAbsoluteLevel = 0)
             {
                 this.id = id;
                 this.fromNode = fromNode;
@@ -231,7 +276,14 @@ namespace DungeonLab.Editor
                 laneCount = 1;
                 this.requiredRiseLevels = requiredRiseLevels;
                 this.transitionKind = transitionKind;
+                this.fromLayerId = fromLayerId ?? string.Empty;
+                this.toLayerId = toLayerId ?? string.Empty;
+                this.fromAbsoluteLevel = fromAbsoluteLevel;
+                this.toAbsoluteLevel = toAbsoluteLevel;
             }
+
+            public bool IsLayerBound =>
+                !string.IsNullOrEmpty(fromLayerId) || !string.IsNullOrEmpty(toLayerId);
         }
 
         private readonly struct RouteVistaIntent
@@ -737,22 +789,37 @@ namespace DungeonLab.Editor
                     declared.mainRouteOrder,
                     declared.branchOrder,
                     declared.level,
-                    declared.recipeSlotId);
+                    declared.recipeSlotId,
+                    declared.layers);
             }
 
             var edges = new RouteTraversalIntent[topology.edges.Length];
             for (int edge = 0; edge < edges.Length; edge++)
             {
                 RouteTopologyEdge declared = topology.edges[edge];
+                // The BOUND elevations, which is the existing derivation with one
+                // term added (design §8.1). An unbound end resolves to its node's
+                // own level, so a topology declaring no layers produces exactly
+                // the rise it produced before — the property the whole phase's
+                // neutrality rests on. The loader has already rejected a binding
+                // the endpoint does not declare, so neither call can fall back
+                // silently here.
+                topology.nodes[declared.fromNode].TryGetAbsoluteLevel(
+                    declared.fromLayerId, out int fromAbsoluteLevel);
+                topology.nodes[declared.toNode].TryGetAbsoluteLevel(
+                    declared.toLayerId, out int toAbsoluteLevel);
                 edges[edge] = new RouteTraversalIntent(
                     declared.id,
                     declared.fromNode,
                     declared.toNode,
                     // Rise is derived, so an authored graph cannot disagree with
                     // its own elevations.
-                    nodes[declared.toNode].relativeElevationLevels -
-                        nodes[declared.fromNode].relativeElevationLevels,
-                    declared.transitionKind);
+                    toAbsoluteLevel - fromAbsoluteLevel,
+                    declared.transitionKind,
+                    declared.fromLayerId,
+                    declared.toLayerId,
+                    fromAbsoluteLevel,
+                    toAbsoluteLevel);
             }
 
             return new RouteIntent(
@@ -2562,14 +2629,20 @@ namespace DungeonLab.Editor
                 // Phase D relaxes. `relativeElevationLevels` is absolute despite
                 // its name: TryAssignRoomLevels copies it straight into
                 // zoneLevels after checking it against [0, MaxGeneratedLevel].
+                //
+                // D1: the band spans the BOUND elevations, which equal the node
+                // levels for every unbound edge — i.e. for every edge in the
+                // shipped corpus.
                 connections.Add(RoomConnection.ForRouteEdge(
                     edge.fromNode,
                     edge.toNode,
                     edge.id,
                     LevelBand.SpanningEndpoints(
-                        intent.nodes[edge.fromNode].relativeElevationLevels,
-                        intent.nodes[edge.toNode].relativeElevationLevels),
-                    accepted));
+                        edge.fromAbsoluteLevel,
+                        edge.toAbsoluteLevel),
+                    accepted,
+                    edge.fromLayerId,
+                    edge.toLayerId));
             }
 
             foreach (Vector2Int cell in reservedVistaCells)

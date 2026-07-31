@@ -157,6 +157,29 @@ namespace DungeonLab.Editor
                 connectorRoomSizeDelta.HasValue;
         }
 
+        /// <summary>
+        /// One additional walkable elevation a topology node declares, RELATIVE
+        /// to that node's own <c>level</c> (design §8.1).
+        /// </summary>
+        /// <remarks>
+        /// A layer id is ROOM-LOCAL and is never a vertical identity: one node's
+        /// "gallery" and another's "floor" may sit at the same absolute level.
+        /// Every rule that needs separation compares
+        /// <c>node.level + relativeLevel</c>, never a name — see
+        /// <c>RouteTopologyNode.AbsoluteLevelOf</c>.
+        /// </remarks>
+        private readonly struct RouteTopologyLayer
+        {
+            public readonly string layerId;
+            public readonly int relativeLevel;
+
+            public RouteTopologyLayer(string layerId, int relativeLevel)
+            {
+                this.layerId = layerId ?? string.Empty;
+                this.relativeLevel = relativeLevel;
+            }
+        }
+
         private sealed class RouteTopologyNode
         {
             public readonly string key;
@@ -167,6 +190,9 @@ namespace DungeonLab.Editor
             public readonly int mainRouteOrder;
             public readonly int branchOrder;
             public readonly Vector2Int lattice;
+            // Sorted by layerId, ordinal. A dictionary's enumeration order must
+            // never reach output, and these reach the route-intent projection.
+            public readonly RouteTopologyLayer[] layers;
             public string recipeSlotId = string.Empty;
 
             public RouteTopologyNode(
@@ -177,7 +203,8 @@ namespace DungeonLab.Editor
                 int level,
                 int mainRouteOrder,
                 int branchOrder,
-                Vector2Int lattice)
+                Vector2Int lattice,
+                RouteTopologyLayer[] layers = null)
             {
                 this.key = key;
                 this.id = id;
@@ -187,9 +214,39 @@ namespace DungeonLab.Editor
                 this.mainRouteOrder = mainRouteOrder;
                 this.branchOrder = branchOrder;
                 this.lattice = lattice;
+                this.layers = layers ?? Array.Empty<RouteTopologyLayer>();
             }
 
             public bool IsOnMainRoute => mainRouteOrder >= 0;
+
+            public bool DeclaresLayers => layers.Length > 0;
+
+            /// <summary>
+            /// The absolute elevation an edge bound to <paramref name="layerId"/>
+            /// meets this node at. An EMPTY id is the base layer and resolves to
+            /// the node's own level, whether or not the node declares any layers
+            /// — which is what makes every existing topology bind unchanged.
+            /// </summary>
+            public bool TryGetAbsoluteLevel(string layerId, out int absoluteLevel)
+            {
+                if (string.IsNullOrEmpty(layerId))
+                {
+                    absoluteLevel = level;
+                    return true;
+                }
+
+                foreach (RouteTopologyLayer layer in layers)
+                {
+                    if (string.Equals(layer.layerId, layerId, StringComparison.Ordinal))
+                    {
+                        absoluteLevel = level + layer.relativeLevel;
+                        return true;
+                    }
+                }
+
+                absoluteLevel = level;
+                return false;
+            }
         }
 
         private sealed class RouteTopologyEdge
@@ -198,18 +255,30 @@ namespace DungeonLab.Editor
             public readonly int fromNode;
             public readonly int toNode;
             public readonly RouteTransitionKind transitionKind;
+            // Which declared layer each end binds to; empty is the base layer.
+            // A binding AUTHORIZES a relaxation; the absolute band it implies is
+            // what DECIDES one (design §8.1).
+            public readonly string fromLayerId;
+            public readonly string toLayerId;
 
             public RouteTopologyEdge(
                 string id,
                 int fromNode,
                 int toNode,
-                RouteTransitionKind transitionKind)
+                RouteTransitionKind transitionKind,
+                string fromLayerId = "",
+                string toLayerId = "")
             {
                 this.id = id;
                 this.fromNode = fromNode;
                 this.toNode = toNode;
                 this.transitionKind = transitionKind;
+                this.fromLayerId = fromLayerId ?? string.Empty;
+                this.toLayerId = toLayerId ?? string.Empty;
             }
+
+            public bool IsLayerBound =>
+                !string.IsNullOrEmpty(fromLayerId) || !string.IsNullOrEmpty(toLayerId);
         }
 
         private sealed class RouteTopologySlot
@@ -304,6 +373,28 @@ namespace DungeonLab.Editor
                 this.rowGaps = rowGaps;
                 this.latticeColumnCount = latticeColumnCount;
                 this.latticeRowCount = latticeRowCount;
+            }
+
+            /// <summary>
+            /// Whether any node declares a layer. The whole layered-generation
+            /// path is gated on this: a topology that declares none takes every
+            /// rule exactly as it was before Phase D, which is what makes the
+            /// phase output-neutral by construction rather than by measurement.
+            /// </summary>
+            public bool DeclaresLayers
+            {
+                get
+                {
+                    foreach (RouteTopologyNode node in nodes)
+                    {
+                        if (node.DeclaresLayers)
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
             }
 
             public bool TryGetEdgeIndex(string edgeId, out int index)
@@ -509,6 +600,7 @@ namespace DungeonLab.Editor
             if (!TryParseRouteTopologyEdges(
                     root["edges"] as JArray,
                     nodeIndexByKey,
+                    nodes,
                     errors,
                     out RouteTopologyEdge[] edges))
             {
@@ -714,15 +806,27 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
+                int level = fields[3].Value<int>();
+                if (!TryParseRouteTopologyNodeLayers(
+                        key,
+                        level,
+                        fields.Count > 5 ? fields[5] as JObject : null,
+                        errors,
+                        out RouteTopologyLayer[] layers))
+                {
+                    return false;
+                }
+
                 parsed.Add(new RouteTopologyNode(
                     key,
                     nodeId,
                     fields[1].Value<string>() ?? string.Empty,
                     fields[2].Value<string>() ?? string.Empty,
-                    fields[3].Value<int>(),
+                    level,
                     mainRouteOrder,
                     branchOrder,
-                    cell));
+                    cell,
+                    layers));
             }
 
             foreach (string key in lattice.Keys)
@@ -770,9 +874,122 @@ namespace DungeonLab.Editor
             return true;
         }
 
+        /// <summary>
+        /// The optional 6th node element, <c>{ "layers": { "gallery": 4 } }</c>
+        /// (design §8.1). Values are offsets from the node's own level, so
+        /// nothing acquires a global storey number.
+        /// </summary>
+        /// <remarks>
+        /// A layer at offset 0 NAMES the base rather than adding a storey, which
+        /// is why the design's own example writes <c>"floor": 0</c> beside its
+        /// upper layers. At most one may do so; an edge that binds nothing also
+        /// means the base, so naming it twice would give one elevation two ids.
+        /// <para>
+        /// The pitch rule is <see cref="MajorRiseLevels"/>, the same multiple the
+        /// node's own level must be, because a layer is an elevation a route may
+        /// bind to and the ±4/±8 edge grammar has to survive the widened
+        /// derivation.
+        /// </para>
+        /// </remarks>
+        private static bool TryParseRouteTopologyNodeLayers(
+            string key,
+            int nodeLevel,
+            JObject declared,
+            List<string> errors,
+            out RouteTopologyLayer[] layers)
+        {
+            layers = Array.Empty<RouteTopologyLayer>();
+            var table = declared?["layers"] as JObject;
+            if (table == null)
+            {
+                if (declared != null && declared.HasValues)
+                {
+                    errors.Add(
+                        $"node '{key}' declared a 6th element with no 'layers' table; " +
+                        "the only option a node takes today is { \"layers\": { \"<id>\": <relative level> } }");
+                    return false;
+                }
+
+                return true;
+            }
+
+            var parsed = new List<RouteTopologyLayer>(table.Count);
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            bool sawBase = false;
+            foreach (JProperty property in table.Properties())
+            {
+                string layerId = property.Name;
+                if (string.IsNullOrEmpty(layerId) || !ids.Add(layerId))
+                {
+                    errors.Add($"node '{key}' layer '{layerId}' has a missing or duplicate id");
+                    return false;
+                }
+
+                int relativeLevel = property.Value.Value<int>();
+                if (relativeLevel % MajorRiseLevels != 0)
+                {
+                    errors.Add(
+                        $"node '{key}' layer '{layerId}' is at relative level {relativeLevel}, " +
+                        $"which is not a multiple of {MajorRiseLevels}");
+                    return false;
+                }
+
+                int absoluteLevel = nodeLevel + relativeLevel;
+                if (absoluteLevel < 0 || absoluteLevel > MaxGeneratedLevel)
+                {
+                    errors.Add(
+                        $"node '{key}' layer '{layerId}' resolves to absolute level {absoluteLevel}, " +
+                        $"outside 0..{MaxGeneratedLevel}");
+                    return false;
+                }
+
+                if (relativeLevel == 0)
+                {
+                    if (sawBase)
+                    {
+                        errors.Add($"node '{key}' declares more than one layer at relative level 0");
+                        return false;
+                    }
+
+                    sawBase = true;
+                }
+
+                // Two ids at one elevation is the same defect as two bases: an
+                // edge binding either would resolve identically, so the graph
+                // would claim a separation it does not have.
+                foreach (RouteTopologyLayer existing in parsed)
+                {
+                    if (existing.relativeLevel == relativeLevel)
+                    {
+                        errors.Add(
+                            $"node '{key}' layers '{existing.layerId}' and '{layerId}' are both at " +
+                            $"relative level {relativeLevel}; one elevation may have one id");
+                        return false;
+                    }
+                }
+
+                parsed.Add(new RouteTopologyLayer(layerId, relativeLevel));
+            }
+
+            if (parsed.Count == 0)
+            {
+                errors.Add($"node '{key}' declared an empty 'layers' table; omit it instead");
+                return false;
+            }
+
+            // Ordinal by id: a JSON object's property order is authored, and this
+            // array reaches the route-intent projection, which is hashed.
+            // Reformatting the file must not move a seed.
+            parsed.Sort((first, second) =>
+                string.CompareOrdinal(first.layerId, second.layerId));
+            layers = parsed.ToArray();
+            return true;
+        }
+
         private static bool TryParseRouteTopologyEdges(
             JArray declared,
             Dictionary<string, int> nodeIndexByKey,
+            IReadOnlyList<RouteTopologyNode> nodes,
             List<string> errors,
             out RouteTopologyEdge[] edges)
         {
@@ -788,11 +1005,12 @@ namespace DungeonLab.Editor
             var endpointPairs = new HashSet<string>(StringComparer.Ordinal);
             for (int index = 0; index < declared.Count; index++)
             {
-                if (!(declared[index] is JArray fields) || fields.Count != 3)
+                if (!(declared[index] is JArray fields) || fields.Count < 3 || fields.Count > 4)
                 {
                     errors.Add(
-                        $"edge {index} must be exactly [from, to, kind]; the id derives as " +
-                        "\"{from}-{to}\" and the rise derives from the two node levels");
+                        $"edge {index} must be [from, to, kind] with an optional 4th " +
+                        "{ \"fromLayer\": …, \"toLayer\": … }; the id derives as " +
+                        "\"{from}-{to}\" and the rise derives from the two BOUND elevations");
                     return false;
                 }
 
@@ -835,11 +1053,58 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                parsed.Add(new RouteTopologyEdge(edgeId, fromNode, toNode, kind));
+                var options = fields.Count > 3 ? fields[3] as JObject : null;
+                if (fields.Count > 3 && options == null)
+                {
+                    errors.Add(
+                        $"edge '{edgeId}' has a 4th element that is not an object; " +
+                        "expected { \"fromLayer\": \"<id>\", \"toLayer\": \"<id>\" }");
+                    return false;
+                }
+
+                string fromLayerId = options?.Value<string>("fromLayer") ?? string.Empty;
+                string toLayerId = options?.Value<string>("toLayer") ?? string.Empty;
+                if (!TryValidateEdgeLayerBinding(edgeId, nodes[fromNode], "fromLayer", fromLayerId, errors) ||
+                    !TryValidateEdgeLayerBinding(edgeId, nodes[toNode], "toLayer", toLayerId, errors))
+                {
+                    return false;
+                }
+
+                parsed.Add(new RouteTopologyEdge(edgeId, fromNode, toNode, kind, fromLayerId, toLayerId));
             }
 
             edges = parsed.ToArray();
             return true;
+        }
+
+        /// <summary>
+        /// An edge end may bind only to a layer its own endpoint declares.
+        /// </summary>
+        /// <remarks>
+        /// Rejected at LOAD time rather than reported by the validator, because
+        /// an unresolvable binding has no elevation at all — the edge's rise
+        /// would silently fall back to the node's base level and the graph would
+        /// generate something other than what it says.
+        /// </remarks>
+        private static bool TryValidateEdgeLayerBinding(
+            string edgeId,
+            RouteTopologyNode node,
+            string field,
+            string layerId,
+            List<string> errors)
+        {
+            if (string.IsNullOrEmpty(layerId) || node.TryGetAbsoluteLevel(layerId, out _))
+            {
+                return true;
+            }
+
+            string declaredIds = node.DeclaresLayers
+                ? string.Join(", ", Array.ConvertAll(node.layers, layer => $"'{layer.layerId}'"))
+                : "none";
+            errors.Add(
+                $"edge '{edgeId}' binds {field} '{layerId}', which node '{node.key}' does not declare " +
+                $"(declared: {declaredIds})");
+            return false;
         }
 
         private static bool TryParseRouteTopologySlots(

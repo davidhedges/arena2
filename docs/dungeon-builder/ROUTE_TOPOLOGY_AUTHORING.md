@@ -77,17 +77,23 @@ Design background and the drafted topology set:
     }
   },
 
-  // key: [ id, role, beat, level, order ]. Level is absolute, in 4u units.
+  // key: [ id, role, beat, level, order, layers? ]. Level is absolute, in 4u
+  // units. The 6th element is OPTIONAL and declares additional storeys as
+  // offsets from this node's own level — see "Layers" below.
   "nodes": {
     "A": ["rim-arrival", "arrival",   "arrival",     24, { "main": 0 }],
     "B": ["rim-gate",    "connector", "compression", 24, { "main": 1 }],
+    "E": ["great-hall",  "landmark",  "aperture",     8, { "main": 4 },
+          { "layers": { "gallery": 4 } }],
     "J": ["rim-ledge",   "connector", "branch",      24, { "branch": 0 }]
   },
 
-  // [ from, to, kind ] and nothing else. The id derives as "{from}-{to}"; the
-  // rise derives from the two levels, signed in travel order.
+  // [ from, to, kind ] plus an OPTIONAL 4th element binding either end to a
+  // declared layer. The id derives as "{from}-{to}"; the rise derives from the
+  // two BOUND elevations, signed in travel order.
   // Kind is LevelCorridor | Stair | Bridge | Stairwell.
-  "edges": [["A", "B", "LevelCorridor"], ["B", "C", "Stair"]],
+  "edges": [["A", "B", "LevelCorridor"], ["B", "C", "Stair"],
+            ["E", "F", "Stair", { "fromLayer": "gallery" }]],
 
   "slots": [
     { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-C" },
@@ -103,11 +109,50 @@ Design background and the drafted topology set:
 }
 ```
 
+### Layers — a node's additional storeys
+
+**Added 2026-08-01 (layered-topology D1). No shipped topology declares one**, and
+that is deliberate: every rule the layered direction relaxes is gated on a
+binding, so a graph that declares nothing behaves exactly as it did before.
+
+A node's `level` stays its **base**. A layer is an offset from it, so nothing
+acquires a global storey number: one node's `gallery` is at absolute 12 here and
+28 there. An edge end binds a layer by name, and the edge's rise then derives
+from `node.level + layer offset` at each end.
+
+```jsonc
+"E": ["great-hall", "landmark", "aperture", 8, { "main": 4 },
+      { "layers": { "gallery": 4 } }],          // absolute 12
+"edges": [["E", "F", "Stair", { "fromLayer": "gallery" }]]
+```
+
+Rejected by the **loader**, so the file will not load at all:
+
+- a layer id that is empty or repeated on one node;
+- an offset that is not a multiple of 4, or that puts the layer outside `[0, 24]`;
+- two layers of one node at the same offset — one elevation may have one id;
+- more than one layer at offset 0 (an offset-0 layer *names* the base, and an
+  unbound edge end already means the base);
+- an empty `layers` table, or a 6th element that is not `{ "layers": … }`;
+- `fromLayer`/`toLayer` naming a layer its own endpoint does not declare.
+
+Reported by **Validate Topologies**:
+
+- a declared layer no edge binds — a storey no route reaches generates as
+  nothing, which is the same silent-absence class as a beat typo;
+- a node that declares layers but carries no recipe slot. Only a recipe's
+  non-base storey or an aerial span's deck can build a stacked surface today, so
+  a generic room's layers would have no producer. This relaxes when one exists.
+
+`Validate Topologies` also runs a **loader self-check** over an in-memory probe
+(16 checks), because the schema has no site in the corpus and would otherwise be
+first exercised by the first topology to use it.
+
 ### Derived, never authored
 
 Edge ids, per-edge rise, node index order, cycle rank, cycle-core size, junction
 degrees, node count, main-route contiguity. There is no field for any of them, so
-a file cannot disagree with itself. An edge that carries a fourth element is
+a file cannot disagree with itself. An edge that carries a **fifth** element is
 rejected, and so is a `legacy` block or a `spatial.settings` token — both were
 step 1 scaffolding.
 
@@ -125,7 +170,8 @@ Hard rules, all enforced by the generator and all reported by the validator:
 | Exactly 3 slots: `required-compression`, `required-landmark`, `required-return` | the recipe catalog's `eligibleRoles`/`eligibleBeats` |
 | Every level in `[0, 24]` and `% 4 == 0` | the level grammar |
 | Every slot node has degree 2 | a two-port recipe room |
-| Edge rise `±4` or `±8` for Stair/Bridge/Stairwell, exactly `0` for LevelCorridor | write an edge in travel order in either direction; a descending edge is a rise of `-4` |
+| Edge rise `±4` or `±8` for Stair/Bridge/Stairwell, exactly `0` for LevelCorridor | write an edge in travel order in either direction; a descending edge is a rise of `-4`. Measured between the **bound** elevations, which are the node levels for an unbound edge |
+| A declared layer is bound by an edge, and its node carries a recipe slot | a storey nothing routes to, or that nothing can build, generates as nothing |
 | At least one Stair, one Bridge, one Stairwell | the transition-kind coverage check |
 | `anchors.bottom` at level 0, `anchors.top` at level 24 | the abyss datum and the ceiling |
 | Connected graph, cycle rank ≥ 1, at least two degree-≥3 nodes | a route loops |
