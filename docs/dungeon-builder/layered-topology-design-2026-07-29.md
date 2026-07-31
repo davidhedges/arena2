@@ -970,10 +970,37 @@ partitions, traps and promontories all iterate the same dictionary.
    the one place the design depends on unmeasured art content**, and it should
    be measured before Phase C commits.
 
-Edge keys (`EdgeKey`, `OpenEdgeKey`, `WallEdge` at `(x, z, direction)`) gain a
+~~Edge keys (`EdgeKey`, `OpenEdgeKey`, `WallEdge` at `(x, z, direction)`) gain a
 level discriminator. **[Inference]** this is mechanical but wide — these types
 thread through corner selection, gateway sockets, shell placement and trap
-placement. Budget accordingly; it is the bulk of Phase C.
+placement. Budget accordingly; it is the bulk of Phase C.~~
+
+**Retracted 2026-07-31 in C1b, and it was wrong in both directions.** The
+inference was wide where it should have been narrow and silent where it should
+have spoken.
+
+- **`WallEdge` already has one** — `lowerLevel` and `higherLevel` are its extent.
+- **`EdgeKey` does not need one.** It is an unordered cell pair naming a column
+  relation (transition suppression, doorways, gateway flanks), and it becomes
+  ambiguous only when one column pair emits two faces — which needs two mass
+  bands in a column, and Support and Wall prisms have no producer.
+- **`OpenEdgeKey` does not need one either, and giving it one would break
+  things.** Its producers all describe the level field, so every one of them
+  would write `levels[cell]` into the key — a rename, not a discriminator — and
+  several of them name cells that are not in the level field at all, where the
+  added component would silently stop matching.
+- **The type that actually could not name a stacked surface is not in the
+  list.** The railing-only edge list is `(x, z, direction)` and derived its
+  placement height by looking the cell up in the level field, so a gallery rim
+  would have been railed at the chamber's height below it. It is now
+  `RimEdge (x, z, level, direction)`.
+- **The `(x, z, direction)` suppression sets are the second site** —
+  `shellGuardEdges` and `bareLandingEdges`, both built from heightfield stages,
+  so they describe column floors and must not reach a rim above one.
+
+None of this threads through corner selection, gateway sockets, shell placement
+or trap placement, because none of those sees a stacked surface in C1. It was
+not the bulk of Phase C; the rim guard pass and the per-surface floor were.
 
 **Compatibility lever:** while `field.IsSingleLayer`, `supportBase` returns the
 global abyss base and the surface loop degenerates to today's cell loop. Every
@@ -1805,12 +1832,71 @@ properly.
 > change. The draft's "the bulk of Phase C" is considerably smaller than
 > advertised.
 >
-> Still open in C1: the multi-surface `SurfaceField`, the void-facing branch
+> Still open after C1a: the multi-surface `SurfaceField`, the void-facing branch
 > (left on its existing path — neutral in principle, but interleaved with the
 > promontory skip, the `level <= 0` partition/railing handling and the
 > aerial-deck evenness rule), the `_E_` swap (no application site until a
 > suspended floor exists — see §0.1's re-measurement), level discriminators on
 > the edge keys, and the two-layer fixture.
+>
+> **C1b landed 2026-07-31**, in two parts, and closed all of those except the
+> void-facing branch. Part 1 gave `SurfaceField` a stacked backing store; part 2
+> renders one — surfaces travel into `BuildLevelField`, a suspended surface gets
+> the `_E_` slab and its own rim guards, and the whole episode exists as a
+> fixture (`Tools/Dungeon Lab/Print Two-Layer Episode Fixture`). Gate: Render
+> Digest 200 seeds byte-identical against the C1a baseline.
+>
+> **Six corrections this section needs**, all measured rather than argued:
+>
+> 1. **The visit key is not a collision, and `EdgeKey` needs no level.** The
+>    paragraph below says the edge keys "gain a level discriminator", and the
+>    obvious reading is that `visited` — keyed on a cell pair — collides once a
+>    column holds two surfaces. It does not. `BuildWallEdges` dedupes on an
+>    unordered cell pair, which is exactly the identity of a BOUNDARY, and step
+>    1 above walks the boundary between two COLUMNS and deliberately never pairs
+>    surfaces. Keying it on a surface would visit each boundary once per stacked
+>    surface and emit its faces twice. `EdgeKey` is the same story: it is a
+>    column relation (transition suppression, doorways, gateway flanks) and
+>    needs a level only when one column pair can emit two faces — see 5.
+> 2. **Stacking changes no wall face at all.** Because the slab band emits no
+>    `WallEdge` (the fascia ruling) the only band a column has is the ground
+>    band under its floor, which *is* `levels[cell]` once the heightfield holds
+>    the column's lowest surface. `ComputeColumnMass` and `DecomposeBoundary`
+>    were untouched by C1b. What a stacked surface needs is the three things a
+>    column cannot answer: its own floor tile, its own rim guards, its own
+>    `IsGroundBacked`.
+> 3. **The discriminator that is load-bearing is on the RIM.** `WallEdge`
+>    already carries `lowerLevel`/`higherLevel`. `OpenEdgeKey`'s producers —
+>    transition ports, bridge span ports, internal path guards — all describe
+>    the level field, so a level on that key would be `levels[cell]` written by
+>    every producer (a rename, not a discriminator) and would break the
+>    producers whose cells are not in the level field at all. The thing that
+>    genuinely could not name a stacked surface was the railing-only edge list,
+>    whose height came from `levels[cell]`; it is now
+>    `RimEdge (x, z, level, direction)`. The `(x, z, direction)` suppression
+>    sets (`shellGuardEdges`, `bareLandingEdges`) are the other site and are now
+>    gated on the rim being at its column floor.
+> 4. **§3.1's `SurfaceKind` is not optional decoration.** C1b part 1 stored bare
+>    levels, which makes `IsGroundBacked` — defined here as "`kind == Floor`
+>    **and** lowest in column" — inexpressible: half the predicate had no home.
+>    The kind is now stored. The renderer still answers the deck half from the
+>    `aerialDeckCellLevels` side table, because promoting decks to surfaces is a
+>    behaviour change C1b does not make.
+> 5. **`DecomposeBoundary` still cannot emit two faces for one column pair.**
+>    Step 1 describes a multi-interval walk. With only ground bands — Support
+>    and Wall prisms have no producer — two ground bands share the abyss floor
+>    and can differ only at the top, so at most one interval is one-solid. The
+>    single-face return is provably equivalent today.
+> 6. **The fall-free invariant is not checkable through the port graph.**
+>    `TryBuildFloorStairPortGraph` keys its nodes on the level field and cannot
+>    see a stacked surface, so the fixture walks its own surfaces. Teaching the
+>    port graph is §3.2's traversal work, which C1 does not do.
+>
+> **On "extend `BuildStackedCrossingFixture`" below:** the episode is built
+> ALONGSIDE it. That fixture carries Phase B's three negative fixtures and
+> asserts its bridge crosses exactly one stacked coordinate; adding a chamber, a
+> gallery and a stair run to the same field would either move that count or
+> force the assertion to be loosened.
 
 **C1 — renderer proof, code-built fixture.** No recipe schema change. Extend
 `BuildStackedCrossingFixture` into a hand-constructed two-layer field: upper

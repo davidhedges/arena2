@@ -60,6 +60,11 @@ namespace DungeonLab.Editor
         private const string StairSideRailingName = "P_MOD_Stairs_01_Railing_3";
         private const string StairSideColumnName = "P_MOD_Railing_01_column";
         private const string FloorName = "P_MOD_Floor_01_O_straight_med";
+        // §0.1, measured: the `_E_` family is the `_O_` family plus a bottom
+        // face — a closed slab, 4u x 0.5u x 4u, hanging entirely BELOW the walk
+        // surface. A ground-backed floor never shows its underside so it keeps
+        // the cheaper one-sided plane; a suspended surface does, and gets this.
+        private const string SuspendedFloorName = "P_MOD_Floor_01_E_straight_med";
         private const string RailingName = "P_MOD_Railing_01_straight";
         private const string RailingColumnName = "P_MOD_Railing_01_column";
         private const string AuthoredFlatRailingModuleName = "LVL_01_O_rail_straight_S";
@@ -215,11 +220,46 @@ namespace DungeonLab.Editor
             out BuildReport report,
             out Bounds bounds)
         {
+            return BuildLevelField(
+                origin,
+                levels,
+                null,
+                transitions,
+                reservedSetPieceCells,
+                plannedOpenEdges,
+                roomBoundaryContext,
+                promontoryCells,
+                trapPlacement,
+                rootName,
+                out report,
+                out bounds);
+        }
+
+        // C1b of the layered 3D topology design: `levels` is the column FLOOR of
+        // each cell and `stackedSurfaces` is whatever stands above it. Passing
+        // null or an empty collection is today's plan and takes today's path —
+        // no branch anywhere is conditional on being single-layer, because the
+        // stacked passes simply have nothing to iterate.
+        public static GameObject BuildLevelField(
+            Vector3 origin,
+            IReadOnlyDictionary<Vector2Int, int> levels,
+            IReadOnlyCollection<StackedSurface> stackedSurfaces,
+            IReadOnlyList<TransitionEdge> transitions,
+            IReadOnlyCollection<Vector2Int> reservedSetPieceCells,
+            IReadOnlyCollection<OpenFloorEdge> plannedOpenEdges,
+            RoomBoundaryContext roomBoundaryContext,
+            IReadOnlyCollection<Vector2Int> promontoryCells,
+            TrapPlacementSettings trapPlacement,
+            string rootName,
+            out BuildReport report,
+            out Bounds bounds)
+        {
             if (levels == null || levels.Count == 0)
             {
                 throw new InvalidOperationException("Elevation edge model needs at least one floor cell.");
             }
 
+            var surfaceColumns = new SurfaceColumns(levels, stackedSurfaces);
             var promontorySet = promontoryCells != null ? new HashSet<Vector2Int>(promontoryCells) : new HashSet<Vector2Int>();
 
             string tempRootName = $"{rootName} __Build In Progress";
@@ -232,7 +272,11 @@ namespace DungeonLab.Editor
             HashSet<Vector2Int> setPieceReservedCells = BuildReservedSetPieceCellSet(reservedSetPieceCells);
             ValidateRoomBoundaryContext(roomBoundaryContext, ref stats);
             var transitionKeys = BuildTransitionKeys(levels, transitions, out HashSet<OpenEdgeKey> transitionOpenEdges, out HashSet<OpenEdgeKey> bridgeSpanEdges, out Dictionary<Vector2Int, int> aerialDeckCellLevels);
-            AddPlannedOpenEdges(transitionOpenEdges, plannedOpenEdges, levels);
+            AddPlannedOpenEdges(
+                transitionOpenEdges,
+                plannedOpenEdges,
+                levels,
+                out HashSet<(Vector2Int cell, int level, int direction)> bareStackedRims);
             StairReservationSet stairReservations = BuildStairReservations(levels, transitions, contracts, origin);
             // Stair footprints suppress floors and the railings they own; set-piece
             // reservations suppress everything. Walls always render around stairs.
@@ -260,7 +304,7 @@ namespace DungeonLab.Editor
             bounds = new Bounds(origin, Vector3.zero);
             bool hasBounds = false;
 
-            List<WallEdge> wallEdges = BuildWallEdges(levels, setPieceReservedCells, stairReservations.floorBlockedCells, reservedCells, transitionKeys, transitionOpenEdges, bridgeSpanEdges, aerialDeckCellLevels, roomBoundaryContext, promontorySet, out List<PlatformEdge> railingOnlyEdges, ref stats);
+            List<WallEdge> wallEdges = BuildWallEdges(levels, surfaceColumns, setPieceReservedCells, stairReservations.floorBlockedCells, reservedCells, transitionKeys, transitionOpenEdges, bridgeSpanEdges, bareStackedRims, aerialDeckCellLevels, roomBoundaryContext, promontorySet, out List<RimEdge> railingOnlyEdges, ref stats);
             RawOuterShellPlan rawOuterShellPlan = BuildRawOuterShellPlan(
                 levels,
                 wallEdges,
@@ -405,6 +449,37 @@ namespace DungeonLab.Editor
                     ref hasBounds);
             }
 
+            // §7.1 step 3, the soffit pass — and it is a prefab choice, not new
+            // art or a flipped quad. Every surface above its column floor has a
+            // visible underside, so it takes the `_E_` closed slab instead of
+            // the `_O_` one-sided plane. The slab's bottom face is genuine
+            // geometry with a genuine collider, which matters because this
+            // dungeon exports movement collision AS query collision: a
+            // render-only soffit would let sight pass straight through a floor.
+            //
+            // This is the swap's first application site. Until a suspended
+            // FLOOR surface existed there was nothing to apply it to — a bridge
+            // deck's walk surface is authored set-piece geometry from the
+            // transition prefab, not a floor tile, which is why
+            // `bridgeFloorBlockedCells` exists to keep the terrain floor under
+            // it rendering.
+            foreach (StackedSurface surface in surfaceColumns.AllAbove())
+            {
+                if (reservedCells.Contains(surface.cell) &&
+                    !stairReservations.bridgeFloorBlockedCells.Contains(surface.cell))
+                {
+                    continue;
+                }
+
+                PlaceFloor(
+                    contracts.suspendedFloor,
+                    floorRoot.transform,
+                    $"floor_{surface.cell.x}_{surface.cell.y}_level_{surface.level}_suspended",
+                    CellMin(origin, surface.cell.x, surface.cell.y, surface.level * contracts.levelHeight),
+                    ref bounds,
+                    ref hasBounds);
+            }
+
             // Decision 43(c): a room side whose guard line crosses a 1u
             // floor step takes WALL guards instead of railings — measured:
             // the pack has no railing piece that can step 1u mid-run.
@@ -533,21 +608,38 @@ namespace DungeonLab.Editor
                 stats.railings++;
             }
 
-            railingOnlyEdges.RemoveAll(edge =>
-                SuppressesGeneratedTopGuard(
-                    false,
-                    (edge.x, edge.z, edge.direction),
-                    shellGuardEdges,
-                    bareLandingEdges));
-            foreach (PlatformEdge railingEdge in railingOnlyEdges)
+            // A rim the plan declared BARE is dropped here rather than at the
+            // producer, so it still counts in the stats and still suppresses the
+            // corner columns that accompany a railing.
+            //
+            // The suppression sets are the ONE place §7.1's "the edge tuples
+            // gain a level discriminator" bites today, and it is a narrower
+            // statement than the design makes. `shellGuardEdges` and
+            // `bareLandingEdges` are keyed `(x, z, direction)` with no level,
+            // and both are built from the outer shell and from stair landings —
+            // heightfield things, so every edge in them describes a COLUMN
+            // FLOOR. Applying them to a rim eight levels up would suppress a
+            // gallery's railing because the ground floor below it happens to
+            // carry a shell wall on the same face. Gating on the rim's own level
+            // is exactly neutral for a single-layer plan, where every rim IS at
+            // the column floor.
+            railingOnlyEdges.RemoveAll(rim =>
+                rim.bare ||
+                (IsColumnFloorRim(levels, rim) &&
+                    SuppressesGeneratedTopGuard(
+                        false,
+                        (rim.edge.x, rim.edge.z, rim.edge.direction),
+                        shellGuardEdges,
+                        bareLandingEdges)));
+            foreach (RimEdge railingEdge in railingOnlyEdges)
             {
                 PlaceRailingEdge(
                     contracts.floor,
                     contracts.railings,
                     railingsRoot.transform,
-                    railingEdge,
+                    railingEdge.edge,
                     origin,
-                    levels[new Vector2Int(railingEdge.x, railingEdge.z)] * contracts.levelHeight,
+                    railingEdge.level * contracts.levelHeight,
                     ref bounds,
                     ref hasBounds);
                 stats.railings++;
@@ -586,7 +678,7 @@ namespace DungeonLab.Editor
                     ref hasBounds);
             }
 
-            foreach (var group in GroupRailingEdgesByLevel(railingOnlyEdges, levels))
+            foreach (var group in GroupRailingEdgesByLevel(railingOnlyEdges))
             {
                 PlaceRailingCornerColumns(
                     contracts.railings,
@@ -898,6 +990,9 @@ namespace DungeonLab.Editor
                 stats.internalPathBareEdges,
                 stats.bareBoundaryEdges,
                 stats.promontoryDeckCells,
+                stats.stackedSurfaces,
+                stats.stackedRailedRims,
+                stats.stackedBareRims,
                 stats.rejected,
                 contracts.rejectedContracts,
                 contracts.rejectedContractReasons,
@@ -931,6 +1026,24 @@ namespace DungeonLab.Editor
             }
 
             MeasuredPrefab floor = MeasurePrefab(inventory.GetPrefabPath(FloorName), PrefabRole.Floor);
+            // Measured 2026-07-31 (design §0.1): `_E_` and `_O_` share a pivot
+            // and a 4u x 4u footprint exactly, and `_E_`'s localTopY is 0 like
+            // `_O_`'s, so FloorPivotForTopSurface places both flush with the
+            // walk surface. The slab hangs entirely below. The swap is a
+            // drop-in, and a mismatch here would have displaced every deck.
+            MeasuredPrefab suspendedFloor = MeasurePrefab(
+                inventory.GetPrefabPath(SuspendedFloorName),
+                PrefabRole.Floor);
+            if (Mathf.Abs(suspendedFloor.localTopY - floor.localTopY) > 0.001f ||
+                Mathf.Abs(suspendedFloor.localPlanBounds.Min.x - floor.localPlanBounds.Min.x) > 0.001f ||
+                Mathf.Abs(suspendedFloor.localPlanBounds.Min.y - floor.localPlanBounds.Min.y) > 0.001f)
+            {
+                throw new InvalidOperationException(
+                    $"Suspended floor '{SuspendedFloorName}' does not share the walk-surface pivot of " +
+                    $"'{FloorName}' (topY {suspendedFloor.localTopY:0.###} vs {floor.localTopY:0.###}, " +
+                    $"min {suspendedFloor.localPlanBounds.Min} vs {floor.localPlanBounds.Min}).");
+            }
+
             RailingContracts railings = BuildRailingContracts(inventory, floor);
             List<ConnectionPointSetPieceContract> connectionPointSetPieces = stairCatalog.contracts;
             ConnectionPointSetPieceContract connectionPointStraightStair = FindReviewedPrimaryStraightStair(connectionPointSetPieces);
@@ -950,6 +1063,7 @@ namespace DungeonLab.Editor
             return new TieredPlatformContracts(
                 levelHeight,
                 floor,
+                suspendedFloor,
                 connectionPointStraightStair,
                 connectionPointVariantStairs,
                 dropFaceStack,
@@ -2154,11 +2268,27 @@ namespace DungeonLab.Editor
                 setPiece.localBounds.min.z + (cell.y + 0.5f) * CellSize);
         }
 
+        /// <summary>
+        /// Split the plan's declared-open edges into the column table the
+        /// existing passes read and the surface-scoped rim table C1b added.
+        /// </summary>
+        /// <remarks>
+        /// <c>OpenEdgeKey</c> deliberately keeps its <c>(cell, direction)</c>
+        /// shape. Its producers — transition ports, bridge span ports, internal
+        /// path guards — all describe the level field, which IS the column
+        /// floor, so giving the key a level would make every one of them write
+        /// <c>levels[cell]</c> into it: a rename, not a discriminator, and one
+        /// that would break the several producers whose cells are not in the
+        /// level field at all. A rim that belongs to a stacked surface is a
+        /// genuinely different thing and gets its own table.
+        /// </remarks>
         private static void AddPlannedOpenEdges(
             HashSet<OpenEdgeKey> openEdges,
             IReadOnlyCollection<OpenFloorEdge> plannedOpenEdges,
-            IReadOnlyDictionary<Vector2Int, int> levels)
+            IReadOnlyDictionary<Vector2Int, int> levels,
+            out HashSet<(Vector2Int cell, int level, int direction)> bareStackedRims)
         {
+            bareStackedRims = new HashSet<(Vector2Int cell, int level, int direction)>();
             if (plannedOpenEdges == null)
             {
                 return;
@@ -2166,11 +2296,17 @@ namespace DungeonLab.Editor
 
             foreach (OpenFloorEdge edge in plannedOpenEdges)
             {
-                if (!levels.ContainsKey(edge.cell))
+                if (!levels.TryGetValue(edge.cell, out int columnFloor))
                 {
                     Debug.LogError(
                         $"Dungeon Lab Elevation Edge Model: skipped planned open floor edge because it referenced a missing floor cell: " +
                         $"{edge.cell} dir {DirectionName(edge.direction)}.");
+                    continue;
+                }
+
+                if (edge.IsSurfaceScoped && edge.level != columnFloor)
+                {
+                    bareStackedRims.Add((edge.cell, edge.level, edge.direction));
                     continue;
                 }
 
@@ -2286,22 +2422,43 @@ namespace DungeonLab.Editor
         // ports) render the wall up to the deck's entry level, railing suppressed.
         private static List<WallEdge> BuildWallEdges(
             IReadOnlyDictionary<Vector2Int, int> levels,
+            SurfaceColumns surfaceColumns,
             HashSet<Vector2Int> setPieceReservedCells,
             HashSet<Vector2Int> stairFootprintCells,
             HashSet<Vector2Int> allReservedCells,
             HashSet<EdgeKey> transitionKeys,
             HashSet<OpenEdgeKey> transitionOpenEdges,
             HashSet<OpenEdgeKey> bridgeSpanEdges,
+            HashSet<(Vector2Int cell, int level, int direction)> bareStackedRims,
             Dictionary<Vector2Int, int> aerialDeckCellLevels,
             RoomBoundaryContext roomBoundaryContext,
             HashSet<Vector2Int> promontoryCells,
-            out List<PlatformEdge> railingOnlyEdges,
+            out List<RimEdge> railingOnlyEdges,
             ref TieredPlatformBuildStats stats)
         {
             var wallEdges = new List<WallEdge>();
-            railingOnlyEdges = new List<PlatformEdge>();
+            railingOnlyEdges = new List<RimEdge>();
+            // The visit key is the BOUNDARY's identity — an unordered column
+            // pair, or a column and the void beyond one of its faces — and that
+            // is right rather than a limitation. §7.1's construction walks the
+            // boundary between two COLUMNS and classifies every cut interval in
+            // one pass; it never pairs surfaces, which is the whole reason it
+            // has none of the nearest-surface shortcut's failure modes. Keying
+            // this on a surface would visit the same boundary once per stacked
+            // surface and emit its faces twice.
             var visited = new HashSet<string>();
+            // Counts SURFACES, not plan cells — the two are the same number only
+            // while every column holds one surface, and the renderer places one
+            // floor tile per surface.
             stats.floorCells = CountRenderableFloorCells(levels, allReservedCells);
+            foreach (StackedSurface surface in surfaceColumns.AllAbove())
+            {
+                if (!allReservedCells.Contains(surface.cell))
+                {
+                    stats.floorCells++;
+                }
+            }
+
             HashSet<EdgeKey> doorwayKeys = BuildDoorwayKeys(roomBoundaryContext);
             Dictionary<OpenEdgeKey, InternalPathEdgeGuard> internalPathEdgeGuards = BuildInternalPathEdgeGuards(roomBoundaryContext);
 
@@ -2356,6 +2513,14 @@ namespace DungeonLab.Editor
                     if (!bridgePortEdge &&
                         TryGetInternalPathEdgeGuard(internalPathEdgeGuards, cell, direction, hasNeighbor, neighbor, out PlatformEdge internalPathEdge, out InternalPathEdgeGuard internalPathGuard))
                     {
+                        // The guard belongs to whichever side owns the edge, so
+                        // it is railed at THAT side's level. Identical to the
+                        // `levels[edge cell]` lookup this replaces; stated at
+                        // the producer instead of re-derived at the consumer.
+                        int internalPathLevel =
+                            internalPathEdge.x == cell.x && internalPathEdge.z == cell.y
+                                ? level
+                                : neighborLevel;
                         ApplyInternalPathEdgeGuard(
                             cell,
                             level,
@@ -2364,6 +2529,7 @@ namespace DungeonLab.Editor
                             neighborLevel,
                             abyssBase,
                             internalPathEdge,
+                            internalPathLevel,
                             internalPathGuard,
                             wallEdges,
                             railingOnlyEdges,
@@ -2459,7 +2625,7 @@ namespace DungeonLab.Editor
                         }
                         else if (!deckOwnsEdgeTop)
                         {
-                            railingOnlyEdges.Add(new PlatformEdge(cell.x, cell.y, direction));
+                            railingOnlyEdges.Add(new RimEdge(new PlatformEdge(cell.x, cell.y, direction), level));
                         }
 
                         // Decision C: a ground-or-below floor edge facing void still
@@ -2488,7 +2654,77 @@ namespace DungeonLab.Editor
                 }
             }
 
+            AddStackedSurfaceRims(surfaceColumns, bareStackedRims, railingOnlyEdges, ref stats);
             return wallEdges;
+        }
+
+        /// <summary>
+        /// Guard every lateral edge of a surface that stands above its column
+        /// floor (design §7.1 step 1's guard rule, §5's bare rim).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A suspended surface emits no <c>WallEdge</c> at all — it has no
+        /// structural band, and the 0.5u underside is the <c>_E_</c> floor
+        /// family's own closed slab rather than a wall face (owner ruling, C1a).
+        /// Its edges therefore never reach the wall loop, and without this pass
+        /// a gallery would be an unguarded slab: the one thing the wall walk
+        /// cannot do for it is exactly the one thing it needs.
+        /// </para>
+        /// <para>
+        /// The rule is per (surface, direction): a rim exists wherever the
+        /// neighbouring COLUMN carries no surface at this surface's own level.
+        /// It does not ask what the neighbour's floor is — a gallery beside a
+        /// ground floor four levels down is still a rim, and the retaining face
+        /// between the two floors below is a separate, already-emitted thing.
+        /// </para>
+        /// <para>
+        /// <c>bare</c> is what makes an aperture an aperture. The rim around a
+        /// hole in an upper route must stay open or you cannot fall through it,
+        /// and §5 makes that a per-(rim surface, direction) property rather than
+        /// a property of the opening, so a pit railed on three sides and bare on
+        /// one is expressible.
+        /// </para>
+        /// </remarks>
+        private static void AddStackedSurfaceRims(
+            SurfaceColumns surfaceColumns,
+            HashSet<(Vector2Int cell, int level, int direction)> bareStackedRims,
+            List<RimEdge> railingOnlyEdges,
+            ref TieredPlatformBuildStats stats)
+        {
+            if (surfaceColumns == null || surfaceColumns.IsSingleLayer)
+            {
+                return;
+            }
+
+            foreach (StackedSurface surface in surfaceColumns.AllAbove())
+            {
+                stats.stackedSurfaces++;
+                foreach (int direction in CardinalDirections)
+                {
+                    Vector2Int neighbor = Neighbor(surface.cell, direction);
+                    if (surfaceColumns.HasSurfaceAt(neighbor, surface.level))
+                    {
+                        continue;
+                    }
+
+                    bool bare = bareStackedRims != null &&
+                        bareStackedRims.Contains((surface.cell, surface.level, direction));
+                    railingOnlyEdges.Add(new RimEdge(
+                        new PlatformEdge(surface.cell.x, surface.cell.y, direction),
+                        surface.level,
+                        bare));
+                    if (bare)
+                    {
+                        stats.stackedBareRims++;
+                        stats.bareBoundaryEdges++;
+                    }
+                    else
+                    {
+                        stats.stackedRailedRims++;
+                    }
+                }
+            }
         }
 
         private static Dictionary<OpenEdgeKey, InternalPathEdgeGuard> BuildInternalPathEdgeGuards(RoomBoundaryContext context)
@@ -2546,14 +2782,15 @@ namespace DungeonLab.Editor
             int neighborLevel,
             int abyssBase,
             PlatformEdge edge,
+            int edgeLevel,
             InternalPathEdgeGuard guard,
             List<WallEdge> wallEdges,
-            List<PlatformEdge> railingOnlyEdges,
+            List<RimEdge> railingOnlyEdges,
             ref TieredPlatformBuildStats stats)
         {
             if (guard == InternalPathEdgeGuard.Railing)
             {
-                railingOnlyEdges.Add(edge);
+                railingOnlyEdges.Add(new RimEdge(edge, edgeLevel));
                 stats.internalPathRailings++;
             }
             else
@@ -3047,25 +3284,44 @@ namespace DungeonLab.Editor
             return groups;
         }
 
+        /// <summary>
+        /// Railing corner columns are placed per level, so the rims group by the
+        /// level they were emitted AT.
+        /// </summary>
+        /// <remarks>
+        /// This used to look each edge's cell up in the level field, which is a
+        /// COLUMN query: correct while every column held one surface, and wrong
+        /// the moment one holds two, because a gallery rim and the chamber rim
+        /// under it would have grouped together and stacked their corner columns
+        /// at the chamber's height. The rim now carries the answer. Every
+        /// existing producer supplies exactly what the lookup returned, so the
+        /// grouping is unchanged for a single-layer plan — including the
+        /// skip-if-absent case, which could only fire for a cell outside the
+        /// level field and no producer creates one.
+        /// </remarks>
+        /// <summary>
+        /// Does this rim belong to its column's floor — the only surface the
+        /// heightfield-keyed edge tables can be describing?
+        /// </summary>
+        private static bool IsColumnFloorRim(IReadOnlyDictionary<Vector2Int, int> levels, RimEdge rim)
+        {
+            return levels.TryGetValue(new Vector2Int(rim.edge.x, rim.edge.z), out int columnFloor) &&
+                columnFloor == rim.level;
+        }
+
         private static Dictionary<int, List<PlatformEdge>> GroupRailingEdgesByLevel(
-            List<PlatformEdge> railingEdges,
-            IReadOnlyDictionary<Vector2Int, int> levels)
+            List<RimEdge> railingEdges)
         {
             var groups = new Dictionary<int, List<PlatformEdge>>();
-            foreach (PlatformEdge edge in railingEdges)
+            foreach (RimEdge rim in railingEdges)
             {
-                if (!levels.TryGetValue(new Vector2Int(edge.x, edge.z), out int level))
-                {
-                    continue;
-                }
-
-                if (!groups.TryGetValue(level, out List<PlatformEdge> edges))
+                if (!groups.TryGetValue(rim.level, out List<PlatformEdge> edges))
                 {
                     edges = new List<PlatformEdge>();
-                    groups[level] = edges;
+                    groups[rim.level] = edges;
                 }
 
-                edges.Add(edge);
+                edges.Add(rim.edge);
             }
 
             return groups;
@@ -10387,6 +10643,13 @@ namespace DungeonLab.Editor
             public int rejected;
             public int corners;
             public int railings;
+            // C1b: surfaces standing above their column floor, and how their
+            // rims were guarded. Zero on every plan the generator produces
+            // today, which is what makes them a change detector rather than
+            // decoration.
+            public int stackedSurfaces;
+            public int stackedRailedRims;
+            public int stackedBareRims;
             public string stairSummary;
             public readonly List<string> stairSummaries = new List<string>();
 
@@ -10711,13 +10974,64 @@ namespace DungeonLab.Editor
 
         public readonly struct OpenFloorEdge
         {
+            /// <summary>
+            /// The sentinel <see cref="level"/> for "this cell's column floor",
+            /// which is what every producer before C1b meant.
+            /// </summary>
+            public const int ColumnFloorLevel = int.MinValue;
+
             public readonly Vector2Int cell;
             public readonly int direction;
+            // C1b: which SURFACE at this cell the edge belongs to. A rim is a
+            // property of a surface, not of a column — an aperture in an upper
+            // gallery leaves the floor below it fully guarded.
+            public readonly int level;
 
             public OpenFloorEdge(Vector2Int cell, int direction)
+                : this(cell, ColumnFloorLevel, direction)
+            {
+            }
+
+            public OpenFloorEdge(Vector2Int cell, int level, int direction)
             {
                 this.cell = cell;
+                this.level = level;
                 this.direction = direction;
+            }
+
+            /// <summary>True when the edge names a surface rather than a column.</summary>
+            public bool IsSurfaceScoped => level != ColumnFloorLevel;
+        }
+
+        /// <summary>
+        /// A walkable surface ABOVE its column's floor (design §3.1).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The renderer's second input. The column floor still arrives as the
+        /// <c>Dictionary&lt;Vector2Int,int&gt;</c> level field it always has —
+        /// which is what keeps every other consumer, and every existing seed,
+        /// exactly where it was — and this carries whatever is stacked over it.
+        /// A single-layer plan passes an empty collection and nothing in the
+        /// renderer takes a different path.
+        /// </para>
+        /// <para>
+        /// <c>kind</c> travels with the surface because §7.1's
+        /// <c>IsGroundBacked</c> needs it: without it a suspended deck would be
+        /// indistinguishable from a floor standing on fill.
+        /// </para>
+        /// </remarks>
+        public readonly struct StackedSurface
+        {
+            public readonly Vector2Int cell;
+            public readonly int level;
+            public readonly SurfaceKind kind;
+
+            public StackedSurface(Vector2Int cell, int level, SurfaceKind kind)
+            {
+                this.cell = cell;
+                this.level = level;
+                this.kind = kind;
             }
         }
 
@@ -10749,6 +11063,13 @@ namespace DungeonLab.Editor
             public readonly int internalPathBareEdges;
             public readonly int bareBoundaryEdges;
             public readonly int promontoryDeckCells;
+            // C1b. Deliberately NOT in Summary: that string is logged and can
+            // reach diagnostics, and these are zero on every plan the generator
+            // produces, so adding them would be noise everywhere and evidence
+            // only in a fixture — which reads the fields directly.
+            public readonly int stackedSurfaces;
+            public readonly int stackedRailedRims;
+            public readonly int stackedBareRims;
             public readonly int rejected;
             public readonly int rejectedContracts;
             public readonly string rejectedContractReasons;
@@ -10785,6 +11106,9 @@ namespace DungeonLab.Editor
                 int internalPathBareEdges,
                 int bareBoundaryEdges,
                 int promontoryDeckCells,
+                int stackedSurfaces,
+                int stackedRailedRims,
+                int stackedBareRims,
                 int rejected,
                 int rejectedContracts,
                 string rejectedContractReasons,
@@ -10818,6 +11142,9 @@ namespace DungeonLab.Editor
                 this.internalPathBareEdges = internalPathBareEdges;
                 this.bareBoundaryEdges = bareBoundaryEdges;
                 this.promontoryDeckCells = promontoryDeckCells;
+                this.stackedSurfaces = stackedSurfaces;
+                this.stackedRailedRims = stackedRailedRims;
+                this.stackedBareRims = stackedBareRims;
                 this.rejected = rejected;
                 this.rejectedContracts = rejectedContracts;
                 this.rejectedContractReasons = rejectedContractReasons ?? "[]";
@@ -10962,6 +11289,10 @@ namespace DungeonLab.Editor
         {
             public readonly float levelHeight;
             public readonly MeasuredPrefab floor;
+            // §7.1 step 3 / §0.1: the same tile with a bottom face. Used for a
+            // surface whose underside is visible, which is every surface that is
+            // not the lowest in its column.
+            public readonly MeasuredPrefab suspendedFloor;
             public readonly ConnectionPointSetPieceContract connectionPointStraightStair;
             public readonly IReadOnlyList<ConnectionPointSetPieceContract> connectionPointVariantStairs;
             public readonly DropFaceStack dropFaceStack;
@@ -10977,6 +11308,7 @@ namespace DungeonLab.Editor
             public TieredPlatformContracts(
                 float levelHeight,
                 MeasuredPrefab floor,
+                MeasuredPrefab suspendedFloor,
                 ConnectionPointSetPieceContract connectionPointStraightStair,
                 IReadOnlyList<ConnectionPointSetPieceContract> connectionPointVariantStairs,
                 DropFaceStack dropFaceStack,
@@ -10991,6 +11323,7 @@ namespace DungeonLab.Editor
             {
                 this.levelHeight = levelHeight;
                 this.floor = floor;
+                this.suspendedFloor = suspendedFloor;
                 this.connectionPointStraightStair = connectionPointStraightStair;
                 this.connectionPointVariantStairs = connectionPointVariantStairs;
                 this.dropFaceStack = dropFaceStack;
@@ -11874,6 +12207,177 @@ namespace DungeonLab.Editor
                 this.x = x;
                 this.z = z;
                 this.direction = direction;
+            }
+        }
+
+        /// <summary>
+        /// A guarded lateral edge of ONE surface: <c>(x, z, level, direction)</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This is the level discriminator §7.1 asks for, at the one place it is
+        /// actually load-bearing. A wall face already carries its own extent
+        /// (<c>WallEdge.lowerLevel/higherLevel</c>), but a railing-only edge did
+        /// not: the height it was placed at came from looking the cell up in the
+        /// level field (<c>levels[cell]</c>), which is a column query and can
+        /// only ever answer for the column floor. A gallery rim eight levels up
+        /// would have been railed at the chamber's height.
+        /// </para>
+        /// <para>
+        /// Every existing producer already had the level in hand and now states
+        /// it, so the value placed is identical; the type simply stops throwing
+        /// the answer away and re-deriving it.
+        /// </para>
+        /// </remarks>
+        private readonly struct RimEdge
+        {
+            public readonly PlatformEdge edge;
+            public readonly int level;
+            // C1b: a rim the plan declared BARE — the aperture case (design §5).
+            // Distinct from suppression, which is about another piece owning the
+            // guard; this is about the plan wanting the drop open.
+            public readonly bool bare;
+
+            public RimEdge(PlatformEdge edge, int level)
+                : this(edge, level, bare: false)
+            {
+            }
+
+            public RimEdge(PlatformEdge edge, int level, bool bare)
+            {
+                this.edge = edge;
+                this.level = level;
+                this.bare = bare;
+            }
+        }
+
+        /// <summary>
+        /// The renderer's view of a plan's surfaces: a column floor per cell,
+        /// plus whatever is stacked over it (design §3.1).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// WHAT THIS IS NOT. It is not a replacement for the level field, and
+        /// the boundary walk does not consult it for mass. §7.1's band table
+        /// gives a suspended surface no structural band at all — the owner's
+        /// fascia ruling made the 0.5u underside the <c>_E_</c> slab's own
+        /// geometry rather than a wall face — so the only band a column has is
+        /// the ground band under its floor, which is exactly what
+        /// <c>levels[cell]</c> already is. Stacking therefore does not change
+        /// one wall face, and that is a property of the band model, not luck.
+        /// </para>
+        /// <para>
+        /// WHAT IT IS FOR: the three things a surface above the floor needs that
+        /// a column cannot answer — its own floor tile, its own rim guards, and
+        /// its own <c>IsGroundBacked</c>.
+        /// </para>
+        /// </remarks>
+        private sealed class SurfaceColumns
+        {
+            private readonly IReadOnlyDictionary<Vector2Int, int> columnFloors;
+            private readonly Dictionary<Vector2Int, List<StackedSurface>> above;
+
+            public SurfaceColumns(
+                IReadOnlyDictionary<Vector2Int, int> columnFloors,
+                IReadOnlyCollection<StackedSurface> stackedSurfaces)
+            {
+                this.columnFloors = columnFloors;
+                if (stackedSurfaces == null || stackedSurfaces.Count == 0)
+                {
+                    above = null;
+                    return;
+                }
+
+                above = new Dictionary<Vector2Int, List<StackedSurface>>();
+                foreach (StackedSurface surface in stackedSurfaces)
+                {
+                    if (!columnFloors.TryGetValue(surface.cell, out int floorLevel))
+                    {
+                        throw new InvalidOperationException(
+                            $"Stacked surface {surface.cell} L{surface.level} has no column floor beneath it. " +
+                            "The level field is the column FLOOR; a surface that is alone in its column belongs there.");
+                    }
+
+                    if (surface.level <= floorLevel)
+                    {
+                        throw new InvalidOperationException(
+                            $"Stacked surface {surface.cell} L{surface.level} is not above its column floor (L{floorLevel}).");
+                    }
+
+                    if (!above.TryGetValue(surface.cell, out List<StackedSurface> column))
+                    {
+                        column = new List<StackedSurface>(1);
+                        above[surface.cell] = column;
+                    }
+
+                    column.Add(surface);
+                }
+
+                foreach (List<StackedSurface> column in above.Values)
+                {
+                    column.Sort((first, second) => first.level.CompareTo(second.level));
+                }
+            }
+
+            /// <summary>True while every cell carries exactly one surface.</summary>
+            public bool IsSingleLayer => above == null;
+
+            /// <summary>The surfaces stacked over one column's floor, ascending.</summary>
+            public IReadOnlyList<StackedSurface> Above(Vector2Int cell)
+            {
+                if (above != null && above.TryGetValue(cell, out List<StackedSurface> column))
+                {
+                    return column;
+                }
+
+                return Array.Empty<StackedSurface>();
+            }
+
+            /// <summary>Every stacked surface, in canonical (x, y, level) order.</summary>
+            public List<StackedSurface> AllAbove()
+            {
+                var all = new List<StackedSurface>();
+                if (above == null)
+                {
+                    return all;
+                }
+
+                foreach (List<StackedSurface> column in above.Values)
+                {
+                    all.AddRange(column);
+                }
+
+                all.Sort((first, second) =>
+                {
+                    int byX = first.cell.x.CompareTo(second.cell.x);
+                    if (byX != 0)
+                    {
+                        return byX;
+                    }
+
+                    int byY = first.cell.y.CompareTo(second.cell.y);
+                    return byY != 0 ? byY : first.level.CompareTo(second.level);
+                });
+                return all;
+            }
+
+            /// <summary>Is there a walkable surface at exactly this level here?</summary>
+            public bool HasSurfaceAt(Vector2Int cell, int level)
+            {
+                if (columnFloors.TryGetValue(cell, out int floorLevel) && floorLevel == level)
+                {
+                    return true;
+                }
+
+                foreach (StackedSurface surface in Above(cell))
+                {
+                    if (surface.level == level)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
             }
         }
 

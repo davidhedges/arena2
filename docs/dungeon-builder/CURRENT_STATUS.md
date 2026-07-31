@@ -230,6 +230,67 @@ Three things measured during C1a that the design had wrong or open:
    geometry, not floor tiles, and every `FloorName` use is a ground-backed floor.
    §7.1 step 3 arrives with the first gallery surface, not before.
 
+**C1b landed 2026-07-31**, in two parts. Part 1 gave `SurfaceField` a real
+stacked backing store — the heightfield holds each column's LOWEST surface and
+an overlay carries what is above it. Part 2 renders one: surfaces travel into
+the renderer, a suspended surface gets its own floor tile and its own rim
+guards, and the whole C1 episode exists as a fixture.
+
+- **Surfaces reach the renderer.** `BuildLevelField` takes `levels` as the
+  column FLOOR plus an `IReadOnlyCollection<StackedSurface>` of what stands over
+  it. Passing null is today's plan on today's path; nothing branches on being
+  single-layer, the stacked passes simply have nothing to iterate.
+- **§7.1 step 3, the soffit pass, has its first site.** A surface above its
+  column floor renders with `P_MOD_Floor_01_E_straight_med` — the closed slab —
+  instead of the `_O_` plane, with a startup check that the two share a pivot so
+  a swapped prefab cannot silently displace every deck.
+- **Rim guards are per surface.** A suspended surface emits no `WallEdge` at
+  all, so the wall walk cannot guard it; a new pass rails every lateral edge
+  whose neighbouring column carries no surface at that level, and
+  `OpenFloorEdge` gained a level so an aperture's rim can be declared bare.
+- **The two-layer episode** (`Tools/Dungeon Lab/Print Two-Layer Episode
+  Fixture`): upper route, a 1-cell aperture with four bare rims, a chamber under
+  it, a four-strip return stair, and a bridge over the lower route. 14 stacked
+  surfaces, 4 bare + 13 railed rims — and the fixture derives those counts from
+  its own surface set, so the snapshot compares two independent derivations
+  rather than the renderer against a typed-in number.
+
+Six things measured during C1b that the design had wrong:
+
+1. **`visited` needs no level discriminator, and neither does `EdgeKey`.** The
+   hand-off and §7.1 both frame the cell-pair visit key as a collision. It is
+   not: `BuildWallEdges` dedupes on an unordered cell pair, which is exactly the
+   identity of a BOUNDARY, and §7.1's own construction walks the boundary
+   between two COLUMNS and never pairs surfaces. Keying it on a surface would
+   visit each boundary once per stacked surface and emit its faces twice.
+2. **Stacking changes no wall face at all**, and that is a property of the band
+   model rather than luck. With the slab band emitting no `WallEdge` (C1a's
+   fascia ruling) the only band a column has is the ground band under its floor
+   — which *is* `levels[cell]`, because part 1 put the lowest surface in the
+   heightfield. `ComputeColumnMass` and `DecomposeBoundary` are untouched.
+3. **The real discriminator is on the RIM.** `WallEdge` already carries its own
+   extent. `OpenEdgeKey`'s producers all describe the level field, so a level on
+   that key would be `levels[cell]` written by every producer — a rename, not a
+   discriminator — and would break the producers whose cells are not in the
+   level field. What genuinely could not name a stacked surface was the
+   railing-only edge list, which looked its height up as `levels[cell]`; it is
+   now `RimEdge (x, z, level, direction)`. The `(x, z, direction)` suppression
+   sets are the other site, now gated on the rim being at its column floor.
+4. **`SurfaceField` could not express `IsGroundBacked`.** Part 1 stored bare
+   levels, so `IsLowestInColumn` answered half the predicate and nothing
+   answered "is it a Floor". `SurfaceKind` closes it. The renderer still answers
+   the deck half from `aerialDeckCellLevels`, because promoting decks to
+   surfaces is a behaviour change C1b does not make.
+5. **`DecomposeBoundary` still cannot emit two faces for one column pair.** §7.1
+   describes a multi-interval walk; with only ground bands (Support and Wall
+   prisms have no producer) two ground bands share the abyss floor and can
+   differ only at the top, so at most one interval is one-solid. The single-face
+   return is provably equivalent today and the walk is written as a walk.
+6. **The fall-free-connectivity invariant is not checkable through the port
+   graph.** `TryBuildFloorStairPortGraph` keys nodes on the level field, so it
+   cannot see a stacked surface. The fixture walks its own surfaces instead;
+   teaching the port graph is §3.2 traversal work, which C1 does not do.
+
 Two Phase C evidence legs cannot be run headlessly: the **live probe** needs a
 running SpacetimeDB plus `ops/republish-local-clear.sh`, and leg 4 is an **owner
 eyeball** — no hash tells you whether a two-layer room reads well.

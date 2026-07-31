@@ -4,6 +4,44 @@ using UnityEngine;
 
 namespace DungeonLab.Editor
 {
+    /// <summary>
+    /// What a walkable surface IS (design §3.1).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// C1b part 1 gave <c>SurfaceField</c> a stacked backing store but left a
+    /// surface a bare <c>int</c>, which makes one of the two halves of
+    /// <c>IsGroundBacked</c> inexpressible. §7.1 defines it as "<c>kind ==
+    /// Floor</c> AND lowest in its column", and both halves carry weight: a
+    /// bridge deck over a true gap IS the lowest thing in its column and must
+    /// not become a solid pillar rising from the abyss. Without a kind, the only
+    /// thing that keeps that from happening is the renderer's
+    /// <c>aerialDeckCellLevels</c> side table — a side table that exists
+    /// precisely because the surface could not say what it was.
+    /// </para>
+    /// <para>
+    /// Public because the renderer is a separate class and takes surfaces across
+    /// that boundary. Editor-only either way.
+    /// </para>
+    /// </remarks>
+    public enum SurfaceKind
+    {
+        /// <summary>Rests on fill. The only kind that contributes ground mass.</summary>
+        Floor,
+
+        /// <summary>A span deck: walkable, suspended, no mass beneath it.</summary>
+        Deck,
+
+        /// <summary>A stair landing.</summary>
+        Landing,
+
+        /// <summary>A shelf hung off a wall or a slab over a chamber.</summary>
+        Ledge,
+
+        /// <summary>Occupied by a stair body.</summary>
+        Stair
+    }
+
     // Phase A1 of the layered 3D topology design
     // (docs/dungeon-builder/layered-topology-design-2026-07-29.md §3.1, §8.1):
     // surface identity in the plan, and NOTHING that produces a second surface.
@@ -259,12 +297,28 @@ namespace DungeonLab.Editor
             private readonly Dictionary<Vector2Int, int> heightField;
             // Surfaces ABOVE the lowest, per cell, ascending. Null until one
             // exists, so the single-layer case allocates nothing.
-            private Dictionary<Vector2Int, List<int>> stacked;
+            private Dictionary<Vector2Int, List<StackedSurfaceEntry>> stacked;
+            // Kinds that are NOT Floor, keyed by surface. Sparse on purpose:
+            // every surface the pipeline produces today is a Floor, so an
+            // unstacked field allocates nothing here either.
+            private Dictionary<SurfaceKey, SurfaceKind> kinds;
             private SurfaceKey[] sortedSurfaces;
 
             public SurfaceField(Dictionary<Vector2Int, int> heightField)
             {
                 this.heightField = heightField ?? new Dictionary<Vector2Int, int>();
+            }
+
+            private readonly struct StackedSurfaceEntry
+            {
+                public readonly int level;
+                public readonly SurfaceKind kind;
+
+                public StackedSurfaceEntry(int level, SurfaceKind kind)
+                {
+                    this.level = level;
+                    this.kind = kind;
+                }
             }
 
             /// <summary>The number of SURFACES, which exceeds the cell count once stacked.</summary>
@@ -275,7 +329,7 @@ namespace DungeonLab.Editor
                     int count = heightField.Count;
                     if (stacked != null)
                     {
-                        foreach (KeyValuePair<Vector2Int, List<int>> column in stacked)
+                        foreach (KeyValuePair<Vector2Int, List<StackedSurfaceEntry>> column in stacked)
                         {
                             count += column.Value.Count;
                         }
@@ -307,38 +361,73 @@ namespace DungeonLab.Editor
             /// surface added below the current one therefore takes its place and
             /// pushes the old value up into the overlay.
             /// </remarks>
-            public void AddSurface(Vector2Int cell, int level)
+            public void AddSurface(Vector2Int cell, int level, SurfaceKind kind)
             {
                 sortedSurfaces = null;
                 if (!heightField.TryGetValue(cell, out int lowest))
                 {
                     heightField[cell] = level;
+                    SetKind(new SurfaceKey(cell, level), kind);
                     return;
                 }
 
                 if (level == lowest)
                 {
+                    SetKind(new SurfaceKey(cell, level), kind);
                     return;
                 }
 
-                stacked ??= new Dictionary<Vector2Int, List<int>>();
-                if (!stacked.TryGetValue(cell, out List<int> above))
+                stacked ??= new Dictionary<Vector2Int, List<StackedSurfaceEntry>>();
+                if (!stacked.TryGetValue(cell, out List<StackedSurfaceEntry> above))
                 {
-                    above = new List<int>(1);
+                    above = new List<StackedSurfaceEntry>(1);
                     stacked[cell] = above;
                 }
 
                 if (level < lowest)
                 {
+                    // The new surface is now the column's floor and the old one
+                    // is stacked above it. The kinds move with their levels.
+                    SurfaceKind displacedKind = KindAt(cell, lowest);
                     heightField[cell] = level;
+                    SetKind(new SurfaceKey(cell, level), kind);
                     level = lowest;
+                    kind = displacedKind;
                 }
 
-                if (!above.Contains(level))
+                for (int index = 0; index < above.Count; index++)
                 {
-                    above.Add(level);
-                    above.Sort();
+                    if (above[index].level == level)
+                    {
+                        above[index] = new StackedSurfaceEntry(level, kind);
+                        SetKind(new SurfaceKey(cell, level), kind);
+                        return;
+                    }
                 }
+
+                above.Add(new StackedSurfaceEntry(level, kind));
+                above.Sort((first, second) => first.level.CompareTo(second.level));
+                SetKind(new SurfaceKey(cell, level), kind);
+            }
+
+            private void SetKind(SurfaceKey key, SurfaceKind kind)
+            {
+                if (kind == SurfaceKind.Floor)
+                {
+                    kinds?.Remove(key);
+                    return;
+                }
+
+                kinds ??= new Dictionary<SurfaceKey, SurfaceKind>();
+                kinds[key] = kind;
+            }
+
+            /// <summary>What a surface is. <see cref="SurfaceKind.Floor"/> unless told otherwise.</summary>
+            public SurfaceKind KindAt(Vector2Int cell, int level)
+            {
+                return kinds != null && kinds.TryGetValue(new SurfaceKey(cell, level), out SurfaceKind kind)
+                    ? kind
+                    : SurfaceKind.Floor;
             }
 
             /// <summary>
@@ -349,6 +438,56 @@ namespace DungeonLab.Editor
             public bool IsLowestInColumn(Vector2Int cell, int level)
             {
                 return heightField.TryGetValue(cell, out int lowest) && lowest == level;
+            }
+
+            /// <summary>
+            /// `IsGroundBacked(s)` in full: a <see cref="SurfaceKind.Floor"/>
+            /// AND the lowest in its column (design §7.1).
+            /// </summary>
+            /// <remarks>
+            /// Both halves are load-bearing and each excludes a different thing.
+            /// A span deck over a true gap is lowest but is not a Floor, so it
+            /// must not become a solid pillar; a gallery slab over its own
+            /// chamber is a Floor but is not lowest, so it must not wall the
+            /// chamber off. Until C1b this predicate had no home that could
+            /// answer it — the field stored levels with no kinds — and the
+            /// renderer answered the deck half from a side table instead.
+            /// </remarks>
+            public bool IsGroundBacked(Vector2Int cell, int level)
+            {
+                return IsLowestInColumn(cell, level) && KindAt(cell, level) == SurfaceKind.Floor;
+            }
+
+            /// <summary>Every surface above the column floor, in canonical order.</summary>
+            /// <remarks>
+            /// This is what the renderer is handed. The heightfield half travels
+            /// as it always has — as a <c>Dictionary&lt;Vector2Int,int&gt;</c> —
+            /// so a single-layer field hands over an empty list and the renderer
+            /// takes the path it took before this existed.
+            /// </remarks>
+            public IReadOnlyList<ElevationEdgeModel.StackedSurface> StackedSurfaces()
+            {
+                if (stacked == null || stacked.Count == 0)
+                {
+                    return Array.Empty<ElevationEdgeModel.StackedSurface>();
+                }
+
+                var above = new List<ElevationEdgeModel.StackedSurface>();
+                foreach (KeyValuePair<Vector2Int, List<StackedSurfaceEntry>> column in stacked)
+                {
+                    foreach (StackedSurfaceEntry entry in column.Value)
+                    {
+                        above.Add(new ElevationEdgeModel.StackedSurface(
+                            column.Key,
+                            entry.level,
+                            entry.kind));
+                    }
+                }
+
+                above.Sort((first, second) => SurfaceKey.Compare(
+                    new SurfaceKey(first.cell, first.level),
+                    new SurfaceKey(second.cell, second.level)));
+                return above;
             }
 
             /// <summary>
@@ -395,11 +534,11 @@ namespace DungeonLab.Editor
 
                 if (stacked != null)
                 {
-                    foreach (KeyValuePair<Vector2Int, List<int>> column in stacked)
+                    foreach (KeyValuePair<Vector2Int, List<StackedSurfaceEntry>> column in stacked)
                     {
-                        foreach (int level in column.Value)
+                        foreach (StackedSurfaceEntry entry in column.Value)
                         {
-                            surfaces.Add(new SurfaceKey(column.Key, level));
+                            surfaces.Add(new SurfaceKey(column.Key, entry.level));
                         }
                     }
                 }
@@ -417,13 +556,17 @@ namespace DungeonLab.Editor
                     return Array.Empty<int>();
                 }
 
-                if (stacked == null || !stacked.TryGetValue(cell, out List<int> above))
+                if (stacked == null || !stacked.TryGetValue(cell, out List<StackedSurfaceEntry> above))
                 {
                     return new[] { level };
                 }
 
                 var levels = new List<int>(above.Count + 1) { level };
-                levels.AddRange(above);
+                foreach (StackedSurfaceEntry entry in above)
+                {
+                    levels.Add(entry.level);
+                }
+
                 return levels;
             }
 

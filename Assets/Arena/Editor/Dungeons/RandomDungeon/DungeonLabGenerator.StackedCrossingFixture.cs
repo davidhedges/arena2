@@ -110,6 +110,587 @@ namespace DungeonLab.Editor
             }
         }
 
+        // ------------------------------------------------------------------
+        // The C1 two-layer episode (design §13 Phase C).
+        //
+        // The design says "extend BuildStackedCrossingFixture". It is built
+        // ALONGSIDE it instead, deliberately: that fixture carries Phase B's
+        // three negative fixtures and asserts that its bridge crosses EXACTLY
+        // ONE stacked coordinate, and adding a chamber, a gallery and a stair
+        // run to the same field would either move that count or force the
+        // assertion to be loosened. The Phase B evidence stays exactly as it
+        // was measured, and the episode gets a field it can grow into.
+        //
+        // The episode, in plan (x east, y north; every level is 1u, cells 4u):
+        //
+        //          -4 -3 -2 -1  0  1  2  3  4
+        //    y=10        T  T  T  T  T  T  C          T terrace  (ground, L4)
+        //    y= 9        S  g  g  g  .  .  C          C corridor (ground, L4)
+        //    y= 8        S  g  g  g  .  .  C          S stair    (ground, L3..L0)
+        //    y= 7        S  g  A  g  .  .  C          g gallery  (STACKED, L4)
+        //    y= 6        S  g  g  g  .  .  C          A aperture (no L4 surface)
+        //    y= 5        S  g  g  g  .  .  C          . chamber  (ground, L0)
+        //    y= 4              |                      | lower route (ground, L0)
+        //    y= 1  W  W        |        E  E          W/E bridge rooms (ground, L4)
+        //
+        // (the chamber spans x -2..2, y 5..9 at L0 and is what the gallery
+        // stands over; the stair column at x=-3 climbs L0->L1->L2->L3 and meets
+        // the terrace at L4.)
+        //
+        // Every piece the phase names is here: an upper route, an aperture in it
+        // that is a hole rather than a room feature, a fall onto a lower chamber
+        // that is genuinely playable, a return stair, and a bridge over the
+        // lower route.
+        // ------------------------------------------------------------------
+
+        private sealed class TwoLayerEpisodeFixture
+        {
+            public Dictionary<Vector2Int, int> levels;
+            public List<ElevationEdgeModel.StackedSurface> stacked;
+            public List<ElevationEdgeModel.TransitionEdge> transitions;
+            public GameObject root;
+            public ElevationEdgeModel.BuildReport buildReport;
+            public Vector2Int apertureCell;
+            public int upperLevel;
+            public float levelHeight;
+
+            // What the fixture DECLARED, derived from its own surface set rather
+            // than written down, so a miscounted expectation cannot pass.
+            public int expectedStackedSurfaces;
+            public int expectedBareRims;
+            public int expectedRailedRims;
+            // What the RENDERER reported it emitted.
+            public int reportedStackedSurfaces;
+            public int reportedBareRims;
+            public int reportedRailedRims;
+
+            // The invariant that carries the pit design (§3.3): delete every
+            // directed Fall edge and the rest must still be one component.
+            public bool fallFreeSubgraphConnected;
+            public int unreachableSurfaces;
+
+            // Three stacked coordinates, per the phase's evidence item 1.
+            public bool apertureRimCarriesBothSurfaces;
+            public bool chamberUnderGalleryCarriesBothSurfaces;
+            public bool bridgeDeckCarriesBothSurfaces;
+
+            // The aperture is a hole: floor below, nothing at gallery height.
+            public bool apertureColumnIsOpen;
+            // The `_E_` swap's whole point — a suspended surface has an
+            // underside, and it is real collidable geometry.
+            public bool gallerySoffitPresent;
+            public bool groundFloorHasNoSoffit;
+            // A player can stand under the gallery.
+            public bool chamberHeadroomOpen;
+        }
+
+        /// <summary>
+        /// Print the C1 two-layer episode fixture to the editor log.
+        /// </summary>
+        [MenuItem("Tools/Dungeon Lab/Print Two-Layer Episode Fixture")]
+        public static void PrintTwoLayerEpisodeSnapshot()
+        {
+            Debug.Log($"[TWO_LAYER_EPISODE_FIXTURE]\n{BuildTwoLayerEpisodeSnapshot()}");
+        }
+
+        private static string BuildTwoLayerEpisodeSnapshot()
+        {
+            TwoLayerEpisodeFixture fixture = null;
+            try
+            {
+                fixture = BuildTwoLayerEpisodeFixture();
+                return string.Join("\n", new[]
+                {
+                    $"episode.levelHeight={fixture.levelHeight:0.###}",
+                    $"episode.planCells={fixture.levels.Count}",
+                    $"episode.stackedSurfaces={fixture.reportedStackedSurfaces}" +
+                        $" (declared {fixture.expectedStackedSurfaces})",
+                    $"episode.stackedSurfacesAgree=" +
+                        $"{fixture.reportedStackedSurfaces == fixture.expectedStackedSurfaces}",
+                    $"episode.bareRims={fixture.reportedBareRims} (declared {fixture.expectedBareRims})",
+                    $"episode.railedRims={fixture.reportedRailedRims} (declared {fixture.expectedRailedRims})",
+                    $"episode.rimsAgree=" +
+                        $"{fixture.reportedBareRims == fixture.expectedBareRims && fixture.reportedRailedRims == fixture.expectedRailedRims}",
+                    $"episode.transitions={fixture.transitions.Count}",
+                    $"episode.fallFreeSubgraphConnected={fixture.fallFreeSubgraphConnected}",
+                    $"episode.unreachableSurfaces={fixture.unreachableSurfaces}",
+                    $"episode.apertureRimCarriesBothSurfaces={fixture.apertureRimCarriesBothSurfaces}",
+                    $"episode.chamberUnderGalleryCarriesBothSurfaces={fixture.chamberUnderGalleryCarriesBothSurfaces}",
+                    $"episode.bridgeDeckCarriesBothSurfaces={fixture.bridgeDeckCarriesBothSurfaces}",
+                    $"episode.apertureColumnIsOpen={fixture.apertureColumnIsOpen}",
+                    $"episode.gallerySoffitPresent={fixture.gallerySoffitPresent}",
+                    $"episode.groundFloorHasNoSoffit={fixture.groundFloorHasNoSoffit}",
+                    $"episode.chamberHeadroomOpen={fixture.chamberHeadroomOpen}",
+                    $"episode.rendererRejected={fixture.buildReport.rejected}"
+                });
+            }
+            finally
+            {
+                if (fixture?.root != null)
+                    DestroyImmediate(fixture.root);
+            }
+        }
+
+        private static TwoLayerEpisodeFixture BuildTwoLayerEpisodeFixture()
+        {
+            const int upperLevel = 4;
+            var apertureCell = new Vector2Int(0, 7);
+
+            // ---- the lower layer -------------------------------------------
+            RoomFootprint west = RoomFootprint.FromRect(new RectInt(-4, -1, 2, 3));
+            RoomFootprint east = RoomFootprint.FromRect(new RectInt(3, -1, 2, 3));
+            var floorCells = new HashSet<Vector2Int>();
+            floorCells.UnionWith(west.cells);
+            floorCells.UnionWith(east.cells);
+            var levels = new Dictionary<Vector2Int, int>();
+            foreach (Vector2Int cell in floorCells)
+                levels[cell] = upperLevel;
+
+            void AddFloor(Vector2Int cell, int level)
+            {
+                floorCells.Add(cell);
+                levels[cell] = level;
+            }
+
+            // The lower playable route the bridge crosses, unchanged in shape
+            // from the Phase B fixture so the bridge still forms the same way.
+            for (int y = -4; y <= 4; y++)
+                AddFloor(new Vector2Int(0, y), 0);
+
+            // The chamber the gallery stands over and the aperture drops into.
+            var chamberCells = new List<Vector2Int>();
+            for (int x = -2; x <= 2; x++)
+            {
+                for (int y = 5; y <= 9; y++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    chamberCells.Add(cell);
+                    AddFloor(cell, 0);
+                }
+            }
+
+            // The return stair's ground column, climbing beside the chamber.
+            for (int step = 0; step <= 3; step++)
+                AddFloor(new Vector2Int(-3, 6 + step), step);
+
+            // The upper route's ground-backed anchor: a terrace across the north
+            // end, and a corridor down the east side back to the bridge rooms.
+            for (int x = -3; x <= 2; x++)
+                AddFloor(new Vector2Int(x, 10), upperLevel);
+            for (int y = 2; y <= 10; y++)
+                AddFloor(new Vector2Int(3, y), upperLevel);
+
+            // ---- the upper layer, as stacked surfaces ----------------------
+            // Hand-constructed, which is what makes this a fixture: nothing in
+            // generation calls AddSurface, so production stays single-layer by
+            // construction rather than by measurement.
+            var surfaces = new SurfaceField(levels);
+            var galleryCells = new List<Vector2Int>();
+            for (int x = -1; x <= 1; x++)
+            {
+                for (int y = 5; y <= 9; y++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (cell == apertureCell)
+                    {
+                        continue;
+                    }
+
+                    galleryCells.Add(cell);
+                    surfaces.AddSurface(cell, upperLevel, SurfaceKind.Ledge);
+                }
+            }
+
+            List<ElevationEdgeModel.StackedSurface> stacked =
+                new List<ElevationEdgeModel.StackedSurface>(surfaces.StackedSurfaces());
+            if (surfaces.IsSingleLayer || stacked.Count != galleryCells.Count)
+            {
+                throw new InvalidOperationException(
+                    $"Two-layer fixture expected {galleryCells.Count} stacked surfaces; the field holds {stacked.Count}.");
+            }
+
+            // ---- transitions: the bridge, then the return stair -------------
+            var layout = new DungeonLayout(
+                floorCells,
+                new List<RoomFootprint> { west, east },
+                new List<RoomConnection>());
+            var transitions = new List<ElevationEdgeModel.TransitionEdge>();
+            var prisms = new PrismLedger();
+            AddAerialBridges(
+                layout,
+                levels,
+                new System.Random(7),
+                transitions,
+                new HashSet<string>(),
+                prisms,
+                new List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)>(),
+                new HashSet<Vector2Int>());
+            ElevationEdgeModel.TransitionEdge bridge = transitions.Single(transition =>
+                string.Equals(
+                    transition.placementClass,
+                    ExternalSpanStairPlacementClass,
+                    StringComparison.Ordinal));
+            int bridgeDeckLevel = DeckLevelOf(prisms, bridge.footprintCells);
+            Vector2Int bridgeStackedCell = bridge.footprintCells
+                .Single(cell => levels.TryGetValue(cell, out int lower) &&
+                    bridgeDeckLevel - lower >= MinHeadroomLevels);
+
+            // The return stair is four rise-1 seam strips, which is the strip
+            // family the generator itself uses for a corridor step. Four of them
+            // climb the gallery's whole 4u without needing a multi-rise contract
+            // the catalog may or may not carry.
+            string seamStairPrefabPath = ResolveSeamStairPrefabPath();
+            for (int step = 0; step < 4; step++)
+            {
+                transitions.Add(new ElevationEdgeModel.TransitionEdge(
+                    new Vector2Int(-3, 7 + step),
+                    new Vector2Int(-3, 6 + step),
+                    seamStairPrefabPath,
+                    SeamStairPlacementClass));
+            }
+
+            // ---- the aperture's bare rim -----------------------------------
+            // §5: guarding is per (rim surface, direction), so a pit railed on
+            // three sides and bare on one is expressible. Here all four are bare.
+            var plannedOpenEdges = new List<ElevationEdgeModel.OpenFloorEdge>
+            {
+                new ElevationEdgeModel.OpenFloorEdge(
+                    apertureCell + new Vector2Int(0, -1), upperLevel, Direction.North),
+                new ElevationEdgeModel.OpenFloorEdge(
+                    apertureCell + new Vector2Int(0, 1), upperLevel, Direction.South),
+                new ElevationEdgeModel.OpenFloorEdge(
+                    apertureCell + new Vector2Int(-1, 0), upperLevel, Direction.East),
+                new ElevationEdgeModel.OpenFloorEdge(
+                    apertureCell + new Vector2Int(1, 0), upperLevel, Direction.West)
+            };
+
+            DeriveExpectedStackedRims(
+                levels,
+                stacked,
+                plannedOpenEdges,
+                upperLevel,
+                out int expectedBareRims,
+                out int expectedRailedRims);
+
+            GameObject root = ElevationEdgeModel.BuildLevelField(
+                Vector3.zero,
+                levels,
+                stacked,
+                transitions,
+                null,
+                plannedOpenEdges,
+                null,
+                null,
+                ElevationEdgeModel.TrapPlacementSettings.Disabled,
+                "Two Layer Episode Fixture",
+                out ElevationEdgeModel.BuildReport buildReport,
+                out _);
+            Physics.SyncTransforms();
+
+            float levelHeight = buildReport.levelHeight;
+            Collider[] colliders = SolidColliders(root);
+            float galleryY = upperLevel * levelHeight;
+            var rimCell = new Vector2Int(0, 6);
+            var underGalleryCell = new Vector2Int(1, 7);
+
+            return new TwoLayerEpisodeFixture
+            {
+                levels = levels,
+                stacked = stacked,
+                transitions = transitions,
+                root = root,
+                buildReport = buildReport,
+                apertureCell = apertureCell,
+                upperLevel = upperLevel,
+                levelHeight = levelHeight,
+                expectedStackedSurfaces = galleryCells.Count,
+                expectedBareRims = expectedBareRims,
+                expectedRailedRims = expectedRailedRims,
+                reportedStackedSurfaces = buildReport.stackedSurfaces,
+                reportedBareRims = buildReport.stackedBareRims,
+                reportedRailedRims = buildReport.stackedRailedRims,
+                fallFreeSubgraphConnected = FallFreeSubgraphIsConnected(
+                    levels,
+                    stacked,
+                    transitions,
+                    out int unreachable),
+                unreachableSurfaces = unreachable,
+
+                // Stacked coordinate 1 — an aperture rim: gallery slab above,
+                // chamber floor below, in the same plan column.
+                apertureRimCarriesBothSurfaces =
+                    HasWalkSurfaceAt(colliders, rimCell, 0f) &&
+                    HasWalkSurfaceAt(colliders, rimCell, galleryY),
+                // Stacked coordinate 2 — chamber floor under the gallery.
+                chamberUnderGalleryCarriesBothSurfaces =
+                    HasWalkSurfaceAt(colliders, underGalleryCell, 0f) &&
+                    HasWalkSurfaceAt(colliders, underGalleryCell, galleryY),
+                // Stacked coordinate 3 — the bridge deck over the lower route.
+                bridgeDeckCarriesBothSurfaces =
+                    HasWalkSurfaceAt(colliders, bridgeStackedCell, 0f) &&
+                    HasAnyColliderInBand(
+                        colliders,
+                        bridgeStackedCell,
+                        bridgeDeckLevel * levelHeight - 0.6f,
+                        bridgeDeckLevel * levelHeight + 0.6f),
+
+                // The hole: chamber floor present, gallery height empty.
+                apertureColumnIsOpen =
+                    HasWalkSurfaceAt(colliders, apertureCell, 0f) &&
+                    !HasAnyColliderInBand(
+                        colliders,
+                        apertureCell,
+                        galleryY - 0.6f,
+                        galleryY + 0.4f),
+
+                // The `_E_` slab hangs in [level - 0.5, level). A ground-backed
+                // `_O_` floor is a plane at the walk surface with nothing under
+                // it, which is the control that proves the swap is what put the
+                // soffit there rather than some other pass.
+                gallerySoffitPresent = HasAnyColliderInBand(
+                    colliders,
+                    underGalleryCell,
+                    galleryY - 0.45f,
+                    galleryY - 0.05f),
+                groundFloorHasNoSoffit = !HasAnyColliderInBand(
+                    colliders,
+                    new Vector2Int(3, 6),
+                    upperLevel * levelHeight - 0.45f,
+                    upperLevel * levelHeight - 0.05f),
+
+                // A 1.8u player fits under a 4u gallery with a 0.5u slab.
+                chamberHeadroomOpen = VolumeIsClear(
+                    colliders,
+                    underGalleryCell,
+                    0.2f,
+                    galleryY - 0.6f)
+            };
+        }
+
+        /// <summary>
+        /// Derive the rim counts from the fixture's OWN surface set, so the
+        /// snapshot compares two independent derivations rather than the
+        /// renderer against a number somebody typed.
+        /// </summary>
+        private static void DeriveExpectedStackedRims(
+            IReadOnlyDictionary<Vector2Int, int> levels,
+            IReadOnlyList<ElevationEdgeModel.StackedSurface> stacked,
+            IReadOnlyList<ElevationEdgeModel.OpenFloorEdge> plannedOpenEdges,
+            int upperLevel,
+            out int bareRims,
+            out int railedRims)
+        {
+            var surfacesAtUpper = new HashSet<Vector2Int>();
+            foreach (KeyValuePair<Vector2Int, int> item in levels)
+            {
+                if (item.Value == upperLevel)
+                {
+                    surfacesAtUpper.Add(item.Key);
+                }
+            }
+
+            foreach (ElevationEdgeModel.StackedSurface surface in stacked)
+            {
+                if (surface.level == upperLevel)
+                {
+                    surfacesAtUpper.Add(surface.cell);
+                }
+            }
+
+            var bare = new HashSet<(Vector2Int, int, int)>();
+            foreach (ElevationEdgeModel.OpenFloorEdge edge in plannedOpenEdges)
+            {
+                if (edge.IsSurfaceScoped)
+                {
+                    bare.Add((edge.cell, edge.level, edge.direction));
+                }
+            }
+
+            bareRims = 0;
+            railedRims = 0;
+            foreach (ElevationEdgeModel.StackedSurface surface in stacked)
+            {
+                foreach (int direction in Direction.Cardinals)
+                {
+                    Vector2Int neighbor = NeighborCell(surface.cell, direction);
+                    if (surface.level == upperLevel && surfacesAtUpper.Contains(neighbor))
+                    {
+                        continue;
+                    }
+
+                    if (bare.Contains((surface.cell, surface.level, direction)))
+                    {
+                        bareRims++;
+                    }
+                    else
+                    {
+                        railedRims++;
+                    }
+                }
+            }
+        }
+
+        private static Vector2Int NeighborCell(Vector2Int cell, int direction)
+        {
+            switch (direction)
+            {
+                case Direction.North:
+                    return new Vector2Int(cell.x, cell.y + 1);
+                case Direction.East:
+                    return new Vector2Int(cell.x + 1, cell.y);
+                case Direction.South:
+                    return new Vector2Int(cell.x, cell.y - 1);
+                default:
+                    return new Vector2Int(cell.x - 1, cell.y);
+            }
+        }
+
+        /// <summary>
+        /// Design §3.3: delete every directed <c>Fall</c> edge and what remains
+        /// must be one component.
+        /// </summary>
+        /// <remarks>
+        /// Walked over the fixture's own surfaces rather than through
+        /// <c>TryBuildFloorStairPortGraph</c>, and that is a finding rather than
+        /// a shortcut: the production port graph keys its nodes on the level
+        /// FIELD, so it cannot see a stacked surface at all. Teaching it to is
+        /// the traversal-graph work of §3.2, which C1 does not do — C1 proves
+        /// the RENDERER. The invariant is still worth stating here, because a
+        /// two-layer episode whose return stair does not actually return is a
+        /// design failure the geometry probes would happily pass.
+        /// </remarks>
+        private static bool FallFreeSubgraphIsConnected(
+            IReadOnlyDictionary<Vector2Int, int> levels,
+            IReadOnlyList<ElevationEdgeModel.StackedSurface> stacked,
+            IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
+            out int unreachable)
+        {
+            var nodes = new HashSet<(Vector2Int cell, int level)>();
+            foreach (KeyValuePair<Vector2Int, int> item in levels)
+            {
+                nodes.Add((item.Key, item.Value));
+            }
+
+            foreach (ElevationEdgeModel.StackedSurface surface in stacked)
+            {
+                nodes.Add((surface.cell, surface.level));
+            }
+
+            var adjacency = new Dictionary<(Vector2Int, int), List<(Vector2Int, int)>>();
+            void Link((Vector2Int, int) a, (Vector2Int, int) b)
+            {
+                if (!nodes.Contains(a) || !nodes.Contains(b))
+                {
+                    return;
+                }
+
+                if (!adjacency.TryGetValue(a, out List<(Vector2Int, int)> fromA))
+                {
+                    fromA = new List<(Vector2Int, int)>();
+                    adjacency[a] = fromA;
+                }
+
+                fromA.Add(b);
+                if (!adjacency.TryGetValue(b, out List<(Vector2Int, int)> fromB))
+                {
+                    fromB = new List<(Vector2Int, int)>();
+                    adjacency[b] = fromB;
+                }
+
+                fromB.Add(a);
+            }
+
+            foreach ((Vector2Int cell, int level) node in nodes)
+            {
+                foreach (int direction in Direction.Cardinals)
+                {
+                    Link(node, (NeighborCell(node.cell, direction), node.level));
+                }
+            }
+
+            // A transition is bidirectional by definition here: Fall is the only
+            // directed kind and this episode declares none as a transition.
+            foreach (ElevationEdgeModel.TransitionEdge transition in transitions)
+            {
+                if (levels.TryGetValue(transition.firstCell, out int firstLevel) &&
+                    levels.TryGetValue(transition.secondCell, out int secondLevel))
+                {
+                    Link((transition.firstCell, firstLevel), (transition.secondCell, secondLevel));
+                }
+            }
+
+            var visited = new HashSet<(Vector2Int, int)>();
+            var queue = new Queue<(Vector2Int, int)>();
+            (Vector2Int, int) start = nodes.First();
+            visited.Add(start);
+            queue.Enqueue(start);
+            while (queue.Count > 0)
+            {
+                (Vector2Int, int) node = queue.Dequeue();
+                if (!adjacency.TryGetValue(node, out List<(Vector2Int, int)> neighbors))
+                {
+                    continue;
+                }
+
+                foreach ((Vector2Int, int) neighbor in neighbors)
+                {
+                    if (visited.Add(neighbor))
+                    {
+                        queue.Enqueue(neighbor);
+                    }
+                }
+            }
+
+            unreachable = nodes.Count - visited.Count;
+            return unreachable == 0;
+        }
+
+        private static Collider[] SolidColliders(GameObject root)
+        {
+            return root
+                .GetComponentsInChildren<Collider>(includeInactive: false)
+                .Where(collider => collider != null && collider.enabled && !collider.isTrigger)
+                .ToArray();
+        }
+
+        private static Vector3 CellCenterWorld(Vector2Int cell)
+        {
+            return new Vector3((cell.x + 0.5f) * 4f, 0f, (cell.y + 0.5f) * 4f);
+        }
+
+        private static bool CoversCellCenter(Collider collider, Vector2Int cell)
+        {
+            Vector3 center = CellCenterWorld(cell);
+            Bounds bounds = collider.bounds;
+            return center.x >= bounds.min.x && center.x <= bounds.max.x &&
+                center.z >= bounds.min.z && center.z <= bounds.max.z;
+        }
+
+        /// <summary>Is there collidable geometry whose extent brackets this height?</summary>
+        private static bool HasWalkSurfaceAt(Collider[] colliders, Vector2Int cell, float y)
+        {
+            return colliders.Any(collider =>
+                CoversCellCenter(collider, cell) &&
+                collider.bounds.min.y <= y + 0.1f &&
+                collider.bounds.max.y >= y - 0.1f);
+        }
+
+        private static bool HasAnyColliderInBand(Collider[] colliders, Vector2Int cell, float minY, float maxY)
+        {
+            return colliders.Any(collider =>
+                CoversCellCenter(collider, cell) &&
+                collider.bounds.max.y >= minY &&
+                collider.bounds.min.y <= maxY);
+        }
+
+        private static bool VolumeIsClear(Collider[] colliders, Vector2Int cell, float minY, float maxY)
+        {
+            var volume = new Bounds(
+                CellCenterWorld(cell) + Vector3.up * (minY + maxY) * 0.5f,
+                new Vector3(1f, Mathf.Max(0.01f, maxY - minY), 1f));
+            return !colliders.Any(collider => collider.bounds.Intersects(volume));
+        }
+
         private static StackedCrossingFixture BuildStackedCrossingFixture()
         {
             RoomFootprint west = RoomFootprint.FromRect(new RectInt(-4, -1, 2, 3));
