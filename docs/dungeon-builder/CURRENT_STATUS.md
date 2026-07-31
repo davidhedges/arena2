@@ -498,9 +498,17 @@ investigation is in the design doc's §1 and §2.
 
 ### Next, in order
 
-1. **Decide the three sizing questions** in the design doc §14: the vertical
-   envelope (40u vs 80u), per-topology ceiling vs a global constant, and the
-   stacking pitch (4u vs 8u). They size everything downstream.
+1. ~~**Decide the three sizing questions**~~ **Two of three decided 2026-07-31
+   (owner, both subject to change): vertical envelope 40u, stacking pitch 4u.**
+   Neither binds any code today — there is no vertical envelope constant, and a
+   dungeon's extent emerges from its topology's authored deltas. 4u is exactly
+   `MajorRiseLevels`, and clears `MinHeadroomLevels = 3` with the `_E_` slab's
+   0.5u underside, so nothing needs retuning; C1's episode already used it.
+   **Still open: the envelope MECHANISM** — a per-topology `ceiling` (existing
+   dungeons unchanged, new ones opt in) versus raising a global constant. That
+   is the one with work attached. Note the corpus already spans 24–25 levels at
+   density 0, so 40u adds ~15u of global range — and per design §14 that is not
+   the stacking budget, which is local headroom, not envelope.
 2. ~~**Measure the deck-underside art.**~~ **Done 2026-07-29 — see the design
    doc §0.1.** The kit already ships solid floor tiles: the `_E_` family is the
    `_O_` family plus a bottom face, 0.5u thick, hanging below the walk surface.

@@ -2286,13 +2286,45 @@ own bridge.
 
 ### Remaining owner decisions
 
-1. **Envelope.** Is "ten full major elevation changes" 40u (ten × 4) or 80u
-   (ten × 8)? This document is designed against 40u.
+1. **Envelope. — DECIDED 2026-07-31: 40u, subject to change.** Ten × 4.
 2. **Envelope mechanism.** Per-topology `ceiling` (existing dungeons unchanged,
    new ones opt in) versus raising the global constant (every seed stretches,
-   all seven files edited). Per-topology is recommended.
-3. **Stacking pitch.** Is one major rise (4u, ~2.2u clear) an acceptable stacking
-   pitch, or is 8u the minimum? This decides how many layers 40u actually buys.
+   all seven files edited). Per-topology is recommended. **STILL OPEN**, and it
+   is the only one of these three that creates any code — see below.
+3. **Stacking pitch. — DECIDED 2026-07-31: 4u, subject to change.** One major
+   rise.
+
+> **Measured against the code and the corpus 2026-07-31, after the ruling.**
+>
+> **Neither decision binds a line of code today.** There is no vertical envelope
+> constant to set: `MaxLevel = 5` in `DungeonGenerationProfile` is the DENSITY
+> dial, and the "ceiling" in `ResolveLatticeLaneOffsets` is a horizontal lane
+> gap in cells. A dungeon's vertical extent emerges from its topology's authored
+> elevation deltas. Decision 2 is what would create the mechanism, which is why
+> it is now the only one of the three with work attached.
+>
+> **4u is compatible with every constant already in place, and with the episode
+> the owner just accepted.** `MajorRiseLevels = 4` and one level is one world
+> unit, so the pitch is exactly one major rise. `MinHeadroomLevels = 3` demands
+> 3u of clearance under a surface; a 4u pitch minus the `_E_` slab's 0.5u
+> underside (§0.1) leaves 3.5u. It fits without touching a constant. C1's
+> two-layer episode already separates its storeys by exactly 4 levels, so the
+> ruling matches geometry that has been rendered, live-probed and eyeballed
+> rather than only reasoned about.
+>
+> **But "ten full major elevation changes" overstates what 40u buys, and the
+> two budgets in that sentence are different budgets.** Measured over the
+> accepted 200 at density 0, today's dungeons already span **24–25 levels**
+> (median 24, up to 12 distinct levels per dungeon) — about six major rises,
+> spent entirely on tiered terrain, because generation is single-layer. Raising
+> to 40u adds ~15u of GLOBAL range.
+>
+> That is not the stacking budget. A gallery 4u over a chamber consumes LOCAL
+> vertical space that was already inside the envelope and unused; it does not
+> push the lowest point down or the highest point up. So the envelope governs how
+> far the dungeon's vertical story travels, and the pitch governs how many
+> surfaces a column can carry where there is local headroom. Sizing layers by
+> dividing 40u by 4u would be wrong in both directions.
 4. **Fill metric.** Keep `floorFillPercent` as plan-cell fill (density tuning
    stays valid) and report surfaces-per-cell separately — or redefine it?
    Keeping it is recommended.
