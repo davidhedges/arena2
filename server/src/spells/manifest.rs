@@ -969,6 +969,35 @@ mod tests {
     }
 
     #[test]
+    fn cauterize_catalog_removes_all_bleed_debuffs_from_an_assistable_target() {
+        let definition = definition("CAUTERIZE");
+
+        assert_eq!(definition.kind.as_str(), "CAUTERIZE");
+        assert_eq!(definition.cooldown, Duration::from_millis(1_200));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.behavior.as_str(), "REMOVE_STATUS");
+        assert_eq!(definition.targeting.as_str(), "TARGET");
+        assert_eq!(definition.target_audience, TargetAudience::Assistable);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert!((definition.max_distance - 18.0).abs() < 0.0001);
+
+        let remove_status = definition
+            .secondary
+            .remove_status
+            .as_ref()
+            .expect("Cauterize should define bleed-removal filters");
+        assert!(remove_status.statuses.is_empty());
+        assert_eq!(remove_status.max_count, 0);
+        assert_eq!(
+            remove_status.polarity,
+            Some(crate::combat::StatusPolarity::Debuff)
+        );
+        assert_eq!(remove_status.dispel_types, vec![StatusDispelType::Bleed]);
+    }
+
+    #[test]
     fn absolution_catalog_filters_all_independent_debuffs_at_range() {
         let definition = definition("ABSOLUTION");
 

@@ -1888,6 +1888,40 @@
       }
     },
     {
+      "ability_id": "SPELL_CAUTERIZE",
+      "actor_scope": "PLAYER",
+      "combat_profile_id": "",
+      "action_id": "CAUTERIZE",
+      "display_name": "Cauterize",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1018,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "ASSISTABLE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "REMOVE_STATUS",
+          "max_distance": 18,
+          "max_count": 0,
+          "polarity": "DEBUFF",
+          "dispel_types": [
+            "BLEED"
+          ]
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_STONESPIRE",
       "actor_scope": "PLAYER",
       "combat_profile_id": "",
@@ -5756,6 +5790,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_CAUTERIZE",
+      "display_name": "Cauterize",
+      "description": "Seals a friendly target's wounds with fire, removing all bleed effects.",
+      "sort_order": 96
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_GIANT_SWING",
       "display_name": "Giant Swing",
       "description": "Empowers the next attack to reach farther and stagger enemies hit.",
@@ -7175,6 +7216,32 @@
       "attach_mode": "WORLD_ALIGNED_TO_FACING",
       "duration_ms": 2500,
       "sort_order": 194
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_CAUTERIZE",
+      "slot": "cast_glow",
+      "trigger": "SPELL_CAST",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_FIRE_CAST_HAND_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "DURATION",
+      "duration_ms": 350,
+      "sort_order": 195
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_CAUTERIZE",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_FIREBALL_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1000,
+      "sort_order": 196
     },
     {
       "owner_kind": "ABILITY",

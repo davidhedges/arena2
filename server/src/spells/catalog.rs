@@ -2902,6 +2902,7 @@ mod tests {
                 "NECROTIC_AURA",
                 "GUST_OF_WIND",
                 "BUFFET",
+                "CAUTERIZE",
                 "STONESPIRE",
                 "MOMENTUM",
                 "FORTIFY",
