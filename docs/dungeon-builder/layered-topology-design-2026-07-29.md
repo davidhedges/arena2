@@ -128,7 +128,7 @@ using them.**
 |---|---|
 | The generator's floor, `MOD_Floor_01_O_straight_med`, is a **zero-thickness one-sided plane** | 4 verts, 2 tris, both `normal_y = +1.000`, bounds **4u × 0 × 4u** |
 | Its `_E_` counterpart, `MOD_Floor_01_E_straight_med`, is a **closed solid slab** | 8 verts, bounds **4u × 0.5u × 4u**, `Ymin = −0.5, Ymax = 0` |
-| **The whole family pairs up 2:1.** Every `_E_` shape has exactly twice the vertices of its `_O_` twin — the same top surface plus a bottom | 13 matched shapes: straight 4↔8, convex_med 8↔16, convex_med_2 13↔26, angle_med 3↔6 … |
+| **The whole family pairs up.** Every `_E_` shape is its `_O_` twin's top surface plus a bottom | 13 matched shapes: straight 4↔8, convex_med 8↔16, convex_med_2 13↔26, angle_med 3↔6 … **(collision-hull counts — see the C1a correction below; the RENDER meshes are not 2:1)** |
 | **The slab hangs entirely BELOW the walk surface** | `Ymax = 0` on every `_E_` piece measured |
 | `_M_` walls are likewise closed boxes with a real bottom face | `MOD_Wall_01_M_straight_med`, bottom face `normal_y = −1.000` |
 | Floors use a non-convex `MeshCollider` sharing the render mesh | `P_MOD_Floor_01_O_straight_med.prefab` |
@@ -166,6 +166,40 @@ currently **uses** — so it showed nothing but `_O_` planes and concluded no so
 floor existed. The payload answers "what is shipped", never "what is available";
 the pack itself is the only source for the second question. Owner correction,
 2026-07-29.
+
+#### Re-measured 2026-07-31 during C1a, from the loaded prefabs
+
+Three things this section left open or got wrong. Measured by loading the
+prefabs in the editor, which is the only source that answers "what will the
+renderer actually instantiate".
+
+| Question | Measured |
+|---|---|
+| **Is the pivot the same?** The folder names say `OneSided/` vs `PivotEdge/`, which reads like a pivot difference and would displace every deck on a swap | **Identical.** `_O_` and `_E_` both span local `min=(−4, ·, 0)` `max=(0, ·, 4)` — the same max-X/min-Z corner pivot and the same 4u×4u footprint. The swap is positionally a drop-in |
+| Vertical extent | Confirmed: `_O_` is a plane at `y=0`; `_E_` spans `y ∈ [−0.5, 0]`, top flush with the walk surface. `slabThickness = 0.5` stands |
+| The 2:1 vertex claim | **Does not hold on render meshes.** Measured straight **4→24**, convex_med **8→38**, angle_med **3→18**. The 2:1 figures above are collision-hull counts; a closed box split per face for normals is 24, not 8. The slab being genuinely closed is unaffected — only the ratio was wrong |
+| **Collider kind — new, and it matters for §7.2** | `_O_` floors are **non-convex** MeshColliders; `_E_` floors are **convex** MeshColliders. **Neither is a box** |
+
+**The collider finding puts §0.1 and §7.2 in tension, and the doc never
+reconciles them.** §7.2's remedy for the soffit hazard is *"emit soffits as box
+colliders"*, chosen precisely because boxes are not normal-tested and use the
+narrow 0.35u window. §0.1's answer — use the `_E_` family — delivers a **convex
+mesh** collider instead, which is normal-tested and uses the **1.2u** window.
+§0.1's consequence 4 is the argument that this is still safe (a soffit 2.5u
+above a lower player's feet is outside 1.2u), and that argument looks right, but
+it is now a *sharper* prediction than either section states: Phase C's live probe
+is testing a convex mesh soffit on the 1.2u window, **not** the box soffit §7.2
+recommends. If the probe fails, "emit soffits as box colliders" is still the
+first remedy to try and it is not what the `_E_` swap gives you.
+
+**And the swap has no application site yet.** Every use of `FloorName` renders a
+ground-backed floor: the floor loop iterates the level field
+(`ElevationEdgeModel.cs:371`), and a bridge deck is not in it — the deck's
+walkable surface is authored set-piece geometry from the transition prefab,
+which is why `bridgeFloorBlockedCells` exists to keep the terrain floor *under*
+it rendering. So §7.1 step 3's soffit pass cannot land before the first
+suspended **floor** surface exists; it arrives with the gallery in C1b rather
+than as separate work.
 
 ---
 
@@ -1742,6 +1776,41 @@ Episode recipe with two layers" while deferring every layer-aware recipe field t
 Phase D, so its first real proof could not actually be authored. C1 proves the
 renderer without the schema; C2 adds the minimum schema and authors the episode
 properly.
+
+> **C1a landed 2026-07-31** (`13d03bbe`), with its instrument at `8258391c`.
+> The boundary band decomposition (§7.1 step 1) replaces the level compare, and
+> renders **byte-identically on all 200 seeds**.
+>
+> The gate needed building first. Every previous dungeon gate compares the PLAN
+> (`hashes.canonical` from Batch Validate), and Batch Validate never builds a
+> GameObject — so no gate in the project could see a renderer change at all, and
+> §7.1's "every existing seed renders byte-identically" was unmeasurable as
+> written. `Render Digest` now hashes every renderer and collider under the
+> built root as (mesh, world transform, collider shape), sorted so the digest
+> describes geometry rather than instantiation order. It was proven before it
+> was trusted: two independent runs, identical per-seed and combined.
+>
+> **Why neutrality holds is a fact about the pipeline, not an assumption.**
+> `TrySetPlannedStairCells` refuses to floor a span deck's or stairwell tower's
+> footprint — "the gap stays a gap" — so the one suspended surface the generator
+> makes never enters `cellLevels` at its own height. Every entry in the level
+> field is therefore the lowest in its column, i.e. `IsGroundBacked`, so every
+> column's mass is exactly `[abyssBase, level)` and the walk reproduces the three
+> hand-written cases with the same extents, types and railing suppression.
+>
+> **The owner's fascia ruling shrank the phase.** With the slab interval emitting
+> no `WallEdge` — the 0.5u underside being the `_E_` family's own closed slab —
+> no fractional band ever reaches `WallEdge` (whose levels are integers, built
+> from whole-level denominations), and §7.1's fascia and soffit become one
+> change. The draft's "the bulk of Phase C" is considerably smaller than
+> advertised.
+>
+> Still open in C1: the multi-surface `SurfaceField`, the void-facing branch
+> (left on its existing path — neutral in principle, but interleaved with the
+> promontory skip, the `level <= 0` partition/railing handling and the
+> aerial-deck evenness rule), the `_E_` swap (no application site until a
+> suspended floor exists — see §0.1's re-measurement), level discriminators on
+> the edge keys, and the two-layer fixture.
 
 **C1 — renderer proof, code-built fixture.** No recipe schema change. Extend
 `BuildStackedCrossingFixture` into a hand-constructed two-layer field: upper

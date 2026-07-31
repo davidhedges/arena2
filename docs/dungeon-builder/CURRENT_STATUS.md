@@ -199,8 +199,40 @@ Two rulings worth carrying forward:
    one would leak a failed tier attempt's reservations forward. Same type, same
    policy, two instances.
 
-**Phase C is next** — the two-layer authored episode, the first real proof
-(design §13).
+**Phase C is in progress** — the two-layer authored episode, the first real
+proof (design §13). C1a landed 2026-07-31.
+
+- **A renderer-neutrality instrument** (`8258391c`), because none existed. Every
+  dungeon gate so far compares the plan, and Batch Validate never builds a
+  GameObject — so a renderer change was invisible to every gate in the project.
+  `Tools/Dungeon Lab/Render Digest` hashes every renderer and collider under the
+  built root as (mesh, world transform, collider shape), sorted so it describes
+  geometry rather than instantiation order. Proven before use: two independent
+  runs identical.
+- **The boundary band decomposition** (`13d03bbe`, design §7.1 step 1) — a
+  boundary is decided by where solid mass sits in each column, not by comparing
+  two levels. `IsGroundBacked(s)` = s is a Floor AND the lowest in its column;
+  suspended surfaces contribute no wall mass, which is what keeps a chamber under
+  a gallery open. **Byte-identical rendered geometry on all 200 seeds**
+  (`renderDigest ea9b25ed2405324d…`).
+
+Three things measured during C1a that the design had wrong or open:
+
+1. **`_O_` and `_E_` floors share a pivot and footprint exactly** — the
+   `OneSided/` vs `PivotEdge/` folder names suggest otherwise, and a mismatch
+   would have displaced every deck. The swap is a drop-in.
+2. **`_E_` gives a CONVEX MESH collider, not a box.** §7.2's soffit remedy is
+   "emit soffits as box colliders" (0.35u window, no normal test); §0.1's `_E_`
+   answer lands on the 1.2u window and IS normal-tested. The live probe is
+   therefore testing a different thing than §7.2 prescribes — worth knowing
+   before reading its result.
+3. **The soffit swap has no site yet.** Bridge decks are authored set-piece
+   geometry, not floor tiles, and every `FloorName` use is a ground-backed floor.
+   §7.1 step 3 arrives with the first gallery surface, not before.
+
+Two Phase C evidence legs cannot be run headlessly: the **live probe** needs a
+running SpacetimeDB plus `ops/republish-local-clear.sh`, and leg 4 is an **owner
+eyeball** — no hash tells you whether a two-layer room reads well.
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently
