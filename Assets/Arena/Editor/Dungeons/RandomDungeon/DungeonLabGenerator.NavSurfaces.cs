@@ -139,6 +139,362 @@ namespace DungeonLab.Editor
             }
         }
 
+        private readonly struct ServerCollisionBucket : IEquatable<ServerCollisionBucket>
+        {
+            public readonly int x;
+            public readonly int z;
+
+            public ServerCollisionBucket(int x, int z)
+            {
+                this.x = x;
+                this.z = z;
+            }
+
+            public bool Equals(ServerCollisionBucket other)
+            {
+                return x == other.x && z == other.z;
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is ServerCollisionBucket other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    return (x * 397) ^ z;
+                }
+            }
+        }
+
+        private readonly struct CachedServerCollisionBox
+        {
+            public readonly Bounds bounds;
+            public readonly Matrix4x4 worldToLocal;
+            public readonly Vector3 center;
+            public readonly Vector3 half;
+            public readonly float top;
+            public readonly bool tilted;
+
+            public CachedServerCollisionBox(BoxCollider collider)
+            {
+                bounds = collider.bounds;
+                worldToLocal = collider.transform.worldToLocalMatrix;
+                center = collider.center;
+                half = collider.size * 0.5f;
+                top = bounds.max.y;
+                Vector3 euler = collider.transform.rotation.eulerAngles;
+                tilted = Mathf.Abs(Mathf.DeltaAngle(0f, euler.x)) > 0.01f ||
+                    Mathf.Abs(Mathf.DeltaAngle(0f, euler.z)) > 0.01f;
+            }
+
+            public bool ContainsXZ(Vector3 point)
+            {
+                if (tilted)
+                {
+                    return point.x >= bounds.min.x - NavigationCollisionEpsilon &&
+                        point.x <= bounds.max.x + NavigationCollisionEpsilon &&
+                        point.z >= bounds.min.z - NavigationCollisionEpsilon &&
+                        point.z <= bounds.max.z + NavigationCollisionEpsilon;
+                }
+
+                Vector3 local = worldToLocal.MultiplyPoint3x4(point);
+                Vector3 delta = local - center;
+                return Mathf.Abs(delta.x) <= half.x + NavigationCollisionEpsilon &&
+                    Mathf.Abs(delta.z) <= half.z + NavigationCollisionEpsilon;
+            }
+        }
+
+        private readonly struct CachedServerCollisionTriangle
+        {
+            public readonly Vector3 a;
+            public readonly Vector3 b;
+            public readonly Vector3 c;
+            public readonly float minX;
+            public readonly float maxX;
+            public readonly float minZ;
+            public readonly float maxZ;
+
+            public CachedServerCollisionTriangle(Vector3 a, Vector3 b, Vector3 c)
+            {
+                this.a = a;
+                this.b = b;
+                this.c = c;
+                minX = Mathf.Min(a.x, Mathf.Min(b.x, c.x));
+                maxX = Mathf.Max(a.x, Mathf.Max(b.x, c.x));
+                minZ = Mathf.Min(a.z, Mathf.Min(b.z, c.z));
+                maxZ = Mathf.Max(a.z, Mathf.Max(b.z, c.z));
+            }
+        }
+
+        private sealed class CachedMeshCollisionBuffers
+        {
+            public readonly Vector3[] vertices;
+            public readonly int[] triangles;
+
+            public CachedMeshCollisionBuffers(Mesh mesh)
+            {
+                // Unity returns copies from both properties. Read each distinct
+                // mesh once for the whole export instead of once per sample.
+                vertices = mesh.vertices;
+                triangles = mesh.triangles;
+            }
+        }
+
+        /// <summary>
+        /// Immutable, per-export view of the collision geometry using the same
+        /// box and mesh rules as the authoritative server payload. Validation
+        /// asks tens of thousands of point queries; all Unity mesh reads and
+        /// local-to-world triangle transforms therefore happen once here.
+        /// </summary>
+        private sealed class ServerCollisionSampler
+        {
+            private readonly int collisionLayer;
+            private readonly HashSet<Collider> sourceColliders;
+            private readonly List<CachedServerCollisionBox> boxes =
+                new List<CachedServerCollisionBox>();
+            private readonly List<CachedServerCollisionTriangle> triangles =
+                new List<CachedServerCollisionTriangle>();
+            private readonly Dictionary<ServerCollisionBucket, List<int>> boxBuckets =
+                new Dictionary<ServerCollisionBucket, List<int>>();
+            private readonly Dictionary<ServerCollisionBucket, List<int>> triangleBuckets =
+                new Dictionary<ServerCollisionBucket, List<int>>();
+
+            public int MeshBufferReadCount { get; private set; }
+            public int QueryCount { get; private set; }
+            public int BoxCandidateCheckCount { get; private set; }
+            public int TriangleCandidateCheckCount { get; private set; }
+            public int BoxPrimitiveCount => boxes.Count;
+            public int TrianglePrimitiveCount => triangles.Count;
+            public int CollisionLayer => collisionLayer;
+
+            private ServerCollisionSampler(
+                int collisionLayer,
+                IReadOnlyList<Collider> colliders)
+            {
+                this.collisionLayer = collisionLayer;
+                sourceColliders = new HashSet<Collider>();
+                for (int index = 0; index < colliders.Count; index++)
+                {
+                    Collider collider = colliders[index];
+                    if (collider != null)
+                    {
+                        sourceColliders.Add(collider);
+                    }
+                }
+            }
+
+            public static ServerCollisionSampler Build(
+                IReadOnlyList<Collider> colliders,
+                int collisionLayer)
+            {
+                var sampler = new ServerCollisionSampler(collisionLayer, colliders);
+                var meshBuffers = new Dictionary<Mesh, CachedMeshCollisionBuffers>();
+                foreach (Collider collider in colliders)
+                {
+                    if (collider == null ||
+                        !collider.enabled ||
+                        collider.isTrigger ||
+                        collider.gameObject.layer != collisionLayer)
+                    {
+                        continue;
+                    }
+
+                    if (collider is BoxCollider boxCollider)
+                    {
+                        sampler.AddBox(new CachedServerCollisionBox(boxCollider));
+                        continue;
+                    }
+
+                    if (!(collider is MeshCollider meshCollider) ||
+                        meshCollider.sharedMesh == null ||
+                        !meshCollider.sharedMesh.isReadable)
+                    {
+                        continue;
+                    }
+
+                    Mesh mesh = meshCollider.sharedMesh;
+                    if (!meshBuffers.TryGetValue(mesh, out CachedMeshCollisionBuffers buffers))
+                    {
+                        buffers = new CachedMeshCollisionBuffers(mesh);
+                        meshBuffers.Add(mesh, buffers);
+                        sampler.MeshBufferReadCount++;
+                    }
+
+                    Vector3[] worldVertices = new Vector3[buffers.vertices.Length];
+                    Matrix4x4 localToWorld = meshCollider.transform.localToWorldMatrix;
+                    for (int index = 0; index < buffers.vertices.Length; index++)
+                    {
+                        worldVertices[index] =
+                            localToWorld.MultiplyPoint3x4(buffers.vertices[index]);
+                    }
+
+                    int[] meshTriangles = buffers.triangles;
+                    for (int index = 0; index + 2 < meshTriangles.Length; index += 3)
+                    {
+                        Vector3 a = worldVertices[meshTriangles[index]];
+                        Vector3 b = worldVertices[meshTriangles[index + 1]];
+                        Vector3 c = worldVertices[meshTriangles[index + 2]];
+                        Vector3 cross = Vector3.Cross(b - a, c - a);
+                        float length = cross.magnitude;
+                        if (length <= ServerCollisionEpsilon ||
+                            Mathf.Abs(cross.y / length) < ServerMeshMinimumNormalY)
+                        {
+                            continue;
+                        }
+
+                        sampler.AddTriangle(new CachedServerCollisionTriangle(a, b, c));
+                    }
+                }
+
+                return sampler;
+            }
+
+            public bool ContainsCollider(Collider collider)
+            {
+                return sourceColliders.Contains(collider);
+            }
+
+            public void ResetDiagnostics()
+            {
+                QueryCount = 0;
+                BoxCandidateCheckCount = 0;
+                TriangleCandidateCheckCount = 0;
+            }
+
+            public bool TrySampleSurface(
+                Vector3 expected,
+                out float sampled,
+                out float allowedAdjustment)
+            {
+                QueryCount++;
+                sampled = float.NegativeInfinity;
+                allowedAdjustment = 0f;
+                bool found = false;
+                ServerCollisionBucket bucket = BucketAt(expected.x, expected.z);
+
+                if (boxBuckets.TryGetValue(bucket, out List<int> boxIndices))
+                {
+                    foreach (int boxIndex in boxIndices)
+                    {
+                        BoxCandidateCheckCount++;
+                        CachedServerCollisionBox box = boxes[boxIndex];
+                        if (!box.ContainsXZ(expected) ||
+                            box.top > expected.y + ServerBoxStepUpLevels +
+                                NavigationCollisionEpsilon)
+                        {
+                            continue;
+                        }
+
+                        if (!found || box.top > sampled)
+                        {
+                            sampled = box.top;
+                            allowedAdjustment = ServerBoxStepUpLevels;
+                            found = true;
+                        }
+                    }
+                }
+
+                float ceiling = expected.y + ServerMeshSnapUpLevels;
+                if (triangleBuckets.TryGetValue(bucket, out List<int> triangleIndices))
+                {
+                    foreach (int triangleIndex in triangleIndices)
+                    {
+                        TriangleCandidateCheckCount++;
+                        CachedServerCollisionTriangle triangle = triangles[triangleIndex];
+                        if (!TryServerTriangleHeightAtXZ(
+                                triangle.a,
+                                triangle.b,
+                                triangle.c,
+                                expected.x,
+                                expected.z,
+                                out float height) ||
+                            height > ceiling + ServerCollisionEpsilon)
+                        {
+                            continue;
+                        }
+
+                        if (!found || height > sampled)
+                        {
+                            sampled = height;
+                            allowedAdjustment = ServerMeshSnapUpLevels;
+                            found = true;
+                        }
+                    }
+                }
+
+                return found;
+            }
+
+            private void AddBox(CachedServerCollisionBox box)
+            {
+                int index = boxes.Count;
+                boxes.Add(box);
+                AddToBuckets(
+                    boxBuckets,
+                    index,
+                    box.bounds.min.x,
+                    box.bounds.max.x,
+                    box.bounds.min.z,
+                    box.bounds.max.z);
+            }
+
+            private void AddTriangle(CachedServerCollisionTriangle triangle)
+            {
+                int index = triangles.Count;
+                triangles.Add(triangle);
+                AddToBuckets(
+                    triangleBuckets,
+                    index,
+                    triangle.minX,
+                    triangle.maxX,
+                    triangle.minZ,
+                    triangle.maxZ);
+            }
+
+            private static void AddToBuckets(
+                Dictionary<ServerCollisionBucket, List<int>> buckets,
+                int primitiveIndex,
+                float minX,
+                float maxX,
+                float minZ,
+                float maxZ)
+            {
+                int firstX = BucketCoordinate(minX - NavigationCollisionEpsilon);
+                int lastX = BucketCoordinate(maxX + NavigationCollisionEpsilon);
+                int firstZ = BucketCoordinate(minZ - NavigationCollisionEpsilon);
+                int lastZ = BucketCoordinate(maxZ + NavigationCollisionEpsilon);
+                for (int x = firstX; x <= lastX; x++)
+                {
+                    for (int z = firstZ; z <= lastZ; z++)
+                    {
+                        var key = new ServerCollisionBucket(x, z);
+                        if (!buckets.TryGetValue(key, out List<int> indices))
+                        {
+                            indices = new List<int>();
+                            buckets.Add(key, indices);
+                        }
+
+                        indices.Add(primitiveIndex);
+                    }
+                }
+            }
+
+            private static ServerCollisionBucket BucketAt(float x, float z)
+            {
+                return new ServerCollisionBucket(
+                    BucketCoordinate(x),
+                    BucketCoordinate(z));
+            }
+
+            private static int BucketCoordinate(float coordinate)
+            {
+                return Mathf.FloorToInt(coordinate / NavigationCellSize);
+            }
+        }
+
         private static CapturedNavigationSurfacePlan lastNavigationSurfacePlan;
 
         private static void ResetNavigationSurfaceExport()
@@ -871,6 +1227,8 @@ namespace DungeonLab.Editor
 
             Collider[] colliders = dungeonRoot.GetComponentsInChildren<Collider>(includeInactive: false);
             Physics.SyncTransforms();
+            ServerCollisionSampler collisionSampler =
+                ServerCollisionSampler.Build(colliders, collisionLayer);
             var requiredNodes = new HashSet<string>(StringComparer.Ordinal);
             foreach (NavigationSurfaceEdge edge in artifact.edges)
             {
@@ -892,8 +1250,7 @@ namespace DungeonLab.Editor
                     node.world_center[1],
                     node.world_center[2]);
                 if (!TryFindExactNavigationSurfacePoint(
-                        colliders,
-                        collisionLayer,
+                        collisionSampler,
                         dungeonRoot.transform,
                         planned,
                         out Vector3 sampledPoint))
@@ -940,8 +1297,7 @@ namespace DungeonLab.Editor
             }
 
             if (!ValidateNavigationWalkEdgesAgainstCollision(
-                    colliders,
-                    collisionLayer,
+                    collisionSampler,
                     artifact,
                     out failure))
             {
@@ -963,8 +1319,7 @@ namespace DungeonLab.Editor
         }
 
         private static bool TryFindExactNavigationSurfacePoint(
-            IReadOnlyList<Collider> colliders,
-            int collisionLayer,
+            ServerCollisionSampler collisionSampler,
             Transform dungeonRoot,
             Vector3 plannedCenter,
             out Vector3 sampledPoint)
@@ -999,9 +1354,7 @@ namespace DungeonLab.Editor
                 {
                     Vector3 candidate =
                         plannedCenter + right * xOffset + forward * zOffset;
-                    if (!TrySampleServerCollisionSurface(
-                            colliders,
-                            collisionLayer,
+                    if (!collisionSampler.TrySampleSurface(
                             candidate,
                             out float sampled,
                             out _))
@@ -1012,8 +1365,7 @@ namespace DungeonLab.Editor
                     Vector3 foot = new Vector3(candidate.x, sampled, candidate.z);
                     if (NavigationCollisionHeightAgrees(plannedCenter.y, sampled) &&
                         !NavigationCapsuleOverlapsBlocker(
-                            colliders,
-                            collisionLayer,
+                            collisionSampler,
                             foot))
                     {
                         sampledPoint = foot;
@@ -1034,8 +1386,7 @@ namespace DungeonLab.Editor
         }
 
         private static bool ValidateNavigationWalkEdgesAgainstCollision(
-            IReadOnlyList<Collider> colliders,
-            int collisionLayer,
+            ServerCollisionSampler collisionSampler,
             NavigationSurfaceArtifact artifact,
             out string failure)
         {
@@ -1067,9 +1418,7 @@ namespace DungeonLab.Editor
                 {
                     float t = step / (float)steps;
                     Vector3 expected = Vector3.Lerp(start, end, t);
-                    if (!TrySampleServerCollisionSurface(
-                            colliders,
-                            collisionLayer,
+                    if (!collisionSampler.TrySampleSurface(
                             expected,
                             out float sampled,
                             out _) ||
@@ -1239,8 +1588,7 @@ namespace DungeonLab.Editor
         }
 
         private static bool NavigationCapsuleOverlapsBlocker(
-            IReadOnlyList<Collider> colliders,
-            int collisionLayer,
+            ServerCollisionSampler collisionSampler,
             Vector3 foot)
         {
             float insetRadius = NavigationPlayerRadius - NavigationCollisionEpsilon;
@@ -1251,14 +1599,14 @@ namespace DungeonLab.Editor
                          bottom,
                          top,
                          insetRadius,
-                         1 << collisionLayer,
+                         1 << collisionSampler.CollisionLayer,
                          QueryTriggerInteraction.Ignore))
             {
                 if (collider == null ||
                     !collider.enabled ||
                     collider.isTrigger ||
-                    collider.gameObject.layer != collisionLayer ||
-                    !ContainsCollider(colliders, collider))
+                    collider.gameObject.layer != collisionSampler.CollisionLayer ||
+                    !collisionSampler.ContainsCollider(collider))
                 {
                     continue;
                 }
@@ -1274,172 +1622,6 @@ namespace DungeonLab.Editor
             }
 
             return false;
-        }
-
-        private static bool ContainsCollider(
-            IReadOnlyList<Collider> colliders,
-            Collider target)
-        {
-            for (int index = 0; index < colliders.Count; index++)
-            {
-                if (colliders[index] == target)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool TrySampleServerCollisionSurface(
-            IReadOnlyList<Collider> colliders,
-            int collisionLayer,
-            Vector3 expected,
-            out float sampled,
-            out float allowedAdjustment)
-        {
-            sampled = float.NegativeInfinity;
-            allowedAdjustment = 0f;
-            bool found = false;
-            foreach (Collider collider in colliders)
-            {
-                if (collider == null || !collider.enabled || collider.isTrigger ||
-                    collider.gameObject.layer != collisionLayer)
-                {
-                    continue;
-                }
-
-                if (collider is BoxCollider)
-                {
-                    Bounds bounds = collider.bounds;
-                    float top = bounds.max.y;
-                    if (!ServerExportedBoxContainsXZ(collider as BoxCollider, expected) ||
-                        top > expected.y + ServerBoxStepUpLevels + NavigationCollisionEpsilon)
-                    {
-                        continue;
-                    }
-
-                    if (!found || top > sampled)
-                    {
-                        sampled = top;
-                        allowedAdjustment = ServerBoxStepUpLevels;
-                        found = true;
-                    }
-
-                    continue;
-                }
-            }
-
-            // The server does not use PhysX for movement surfaces. Sample the
-            // exported mesh triangles with its barycentric boundary rule at
-            // the exact cell centre, including the shared seam in rounded
-            // corner floor replacements.
-            if (TrySampleServerMeshTrianglesAtCellCenter(
-                    colliders,
-                    collisionLayer,
-                    expected,
-                    out float triangleSample) &&
-                (!found || triangleSample > sampled))
-            {
-                sampled = triangleSample;
-                allowedAdjustment = ServerMeshSnapUpLevels;
-                found = true;
-            }
-
-            return found;
-        }
-
-        private static bool ServerExportedBoxContainsXZ(
-            BoxCollider collider,
-            Vector3 point)
-        {
-            Vector3 euler = collider.transform.rotation.eulerAngles;
-            bool tilted = Mathf.Abs(Mathf.DeltaAngle(0f, euler.x)) > 0.01f ||
-                Mathf.Abs(Mathf.DeltaAngle(0f, euler.z)) > 0.01f;
-            if (tilted)
-            {
-                // Movement export turns an X/Z-tilted box into this world AABB.
-                Bounds bounds = collider.bounds;
-                return point.x >= bounds.min.x - NavigationCollisionEpsilon &&
-                    point.x <= bounds.max.x + NavigationCollisionEpsilon &&
-                    point.z >= bounds.min.z - NavigationCollisionEpsilon &&
-                    point.z <= bounds.max.z + NavigationCollisionEpsilon;
-            }
-
-            // Untilited boxes export as OBB-Y. InverseTransformPoint applies the
-            // same translation, yaw and scale as the exported centre/half extents.
-            Vector3 local = collider.transform.InverseTransformPoint(point);
-            Vector3 half = collider.size * 0.5f;
-            Vector3 delta = local - collider.center;
-            return Mathf.Abs(delta.x) <= half.x + NavigationCollisionEpsilon &&
-                Mathf.Abs(delta.z) <= half.z + NavigationCollisionEpsilon;
-        }
-
-        private static bool TrySampleServerMeshTrianglesAtCellCenter(
-            IReadOnlyList<Collider> colliders,
-            int collisionLayer,
-            Vector3 expected,
-            out float sampled)
-        {
-            sampled = float.NegativeInfinity;
-            bool found = false;
-            float ceiling = expected.y + ServerMeshSnapUpLevels;
-            foreach (Collider candidate in colliders)
-            {
-                if (!(candidate is MeshCollider collider) ||
-                    collider == null ||
-                    !collider.enabled ||
-                    collider.isTrigger ||
-                    collider.gameObject.layer != collisionLayer ||
-                    collider.sharedMesh == null ||
-                    !collider.sharedMesh.isReadable)
-                {
-                    continue;
-                }
-
-                Bounds bounds = collider.bounds;
-                if (expected.x < bounds.min.x - ServerCollisionEpsilon ||
-                    expected.x > bounds.max.x + ServerCollisionEpsilon ||
-                    expected.z < bounds.min.z - ServerCollisionEpsilon ||
-                    expected.z > bounds.max.z + ServerCollisionEpsilon ||
-                    bounds.min.y > ceiling + ServerCollisionEpsilon)
-                {
-                    continue;
-                }
-
-                Mesh mesh = collider.sharedMesh;
-                Vector3[] vertices = mesh.vertices;
-                int[] triangles = mesh.triangles;
-                for (int index = 0; index + 2 < triangles.Length; index += 3)
-                {
-                    Vector3 a = collider.transform.TransformPoint(vertices[triangles[index]]);
-                    Vector3 b = collider.transform.TransformPoint(vertices[triangles[index + 1]]);
-                    Vector3 c = collider.transform.TransformPoint(vertices[triangles[index + 2]]);
-                    Vector3 cross = Vector3.Cross(b - a, c - a);
-                    float length = cross.magnitude;
-                    if (length <= ServerCollisionEpsilon ||
-                        Mathf.Abs(cross.y / length) < ServerMeshMinimumNormalY ||
-                        !TryServerTriangleHeightAtXZ(
-                            a,
-                            b,
-                            c,
-                            expected.x,
-                            expected.z,
-                            out float height) ||
-                        height > ceiling + ServerCollisionEpsilon)
-                    {
-                        continue;
-                    }
-
-                    if (!found || height > sampled)
-                    {
-                        sampled = height;
-                        found = true;
-                    }
-                }
-            }
-
-            return found;
         }
 
         private static bool TryServerTriangleHeightAtXZ(
@@ -1484,6 +1666,119 @@ namespace DungeonLab.Editor
             string outputPath = Path.Combine(projectRoot, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
             File.WriteAllText(outputPath, json);
+        }
+
+        // Focused EditMode contract for the production sampler. Two collider
+        // instances deliberately share one mesh, and distant primitives occupy
+        // other spatial buckets. Repeated hot-loop queries must therefore reuse
+        // one mesh-buffer read and visit only the one local triangle.
+        private static string BuildNavigationCollisionSamplerContractSnapshot()
+        {
+            int collisionLayer = LayerMask.NameToLayer(NavigationCollisionLayerName);
+            if (collisionLayer < 0)
+            {
+                return "collision.layerPresent=False";
+            }
+
+            var root = new GameObject("Navigation Collision Sampler Contract");
+            var mesh = new Mesh { name = "Navigation Collision Sampler Contract Mesh" };
+            try
+            {
+                GameObject nearBoxObject = new GameObject("Near Box");
+                nearBoxObject.transform.SetParent(root.transform, worldPositionStays: false);
+                nearBoxObject.transform.position = new Vector3(0f, -0.5f, 0f);
+                nearBoxObject.layer = collisionLayer;
+                BoxCollider nearBox = nearBoxObject.AddComponent<BoxCollider>();
+                nearBox.size = new Vector3(4f, 1f, 4f);
+
+                GameObject farBoxObject = new GameObject("Far Box");
+                farBoxObject.transform.SetParent(root.transform, worldPositionStays: false);
+                farBoxObject.transform.position = new Vector3(64f, -0.5f, 0f);
+                farBoxObject.layer = collisionLayer;
+                BoxCollider farBox = farBoxObject.AddComponent<BoxCollider>();
+                farBox.size = new Vector3(4f, 1f, 4f);
+
+                mesh.vertices = new[]
+                {
+                    new Vector3(4f, 2f, 0f),
+                    new Vector3(4f, 2f, 4f),
+                    new Vector3(8f, 2f, 0f)
+                };
+                mesh.triangles = new[] { 0, 1, 2 };
+                mesh.RecalculateBounds();
+
+                GameObject nearMeshObject = new GameObject("Near Mesh");
+                nearMeshObject.transform.SetParent(root.transform, worldPositionStays: false);
+                nearMeshObject.layer = collisionLayer;
+                nearMeshObject.AddComponent<MeshCollider>().sharedMesh = mesh;
+
+                GameObject farMeshObject = new GameObject("Far Mesh");
+                farMeshObject.transform.SetParent(root.transform, worldPositionStays: false);
+                farMeshObject.transform.position = new Vector3(64f, 0f, 0f);
+                farMeshObject.layer = collisionLayer;
+                farMeshObject.AddComponent<MeshCollider>().sharedMesh = mesh;
+
+                Physics.SyncTransforms();
+                Collider[] colliders =
+                    root.GetComponentsInChildren<Collider>(includeInactive: false);
+                ServerCollisionSampler sampler =
+                    ServerCollisionSampler.Build(colliders, collisionLayer);
+
+                bool boxAccepted = sampler.TrySampleSurface(
+                    Vector3.zero,
+                    out float boxHeight,
+                    out _);
+                bool triangleAccepted = sampler.TrySampleSurface(
+                    new Vector3(6f, 2f, 2f),
+                    out float triangleHeight,
+                    out _);
+                bool outsideTriangleRejected = !sampler.TrySampleSurface(
+                    new Vector3(6.25f, 2f, 2.25f),
+                    out _,
+                    out _);
+                bool captureWindowDriftRejected = !sampler.TrySampleSurface(
+                    new Vector3(6f, 0f, 2f),
+                    out _,
+                    out _);
+
+                sampler.ResetDiagnostics();
+                bool repeatedQueriesAccepted = true;
+                const int RepeatedQueryCount = 128;
+                for (int index = 0; index < RepeatedQueryCount; index++)
+                {
+                    repeatedQueriesAccepted &= sampler.TrySampleSurface(
+                        new Vector3(6f, 2f, 2f),
+                        out _,
+                        out _);
+                }
+
+                bool spatiallyPruned =
+                    sampler.BoxCandidateCheckCount == 0 &&
+                    sampler.TriangleCandidateCheckCount == RepeatedQueryCount;
+                return string.Join("\n", new[]
+                {
+                    "collision.layerPresent=True",
+                    $"collision.boxAccepted={boxAccepted}",
+                    $"collision.boxHeightExact={Mathf.Abs(boxHeight) <= ServerCollisionEpsilon}",
+                    $"collision.triangleAccepted={triangleAccepted}",
+                    $"collision.triangleHeightExact={Mathf.Abs(triangleHeight - 2f) <= ServerCollisionEpsilon}",
+                    $"collision.outsideTriangleRejected={outsideTriangleRejected}",
+                    $"collision.captureWindowDriftRejected={captureWindowDriftRejected}",
+                    $"cache.boxPrimitives={sampler.BoxPrimitiveCount}",
+                    $"cache.trianglePrimitives={sampler.TrianglePrimitiveCount}",
+                    $"cache.meshBufferReads={sampler.MeshBufferReadCount}",
+                    $"cache.repeatedQueriesAccepted={repeatedQueriesAccepted}",
+                    $"cache.queryCount={sampler.QueryCount}",
+                    $"cache.boxCandidateChecks={sampler.BoxCandidateCheckCount}",
+                    $"cache.triangleCandidateChecks={sampler.TriangleCandidateCheckCount}",
+                    $"cache.spatiallyPruned={spatiallyPruned}"
+                });
+            }
+            finally
+            {
+                DestroyImmediate(root);
+                DestroyImmediate(mesh);
+            }
         }
 
         // Pure headless contract used by EditMode tests: a same-level walk and a

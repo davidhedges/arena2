@@ -59,6 +59,29 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["collision.captureWindowDriftRejected"], Is.EqualTo("True"));
         }
 
+        [Test]
+        public void PhaseE_NavigationCollisionSamplerCachesAndSpatiallyPrunes()
+        {
+            Dictionary<string, string> snapshot =
+                InvokeSnapshot("BuildNavigationCollisionSamplerContractSnapshot");
+
+            Assert.That(snapshot["collision.layerPresent"], Is.EqualTo("True"));
+            Assert.That(snapshot["collision.boxAccepted"], Is.EqualTo("True"));
+            Assert.That(snapshot["collision.boxHeightExact"], Is.EqualTo("True"));
+            Assert.That(snapshot["collision.triangleAccepted"], Is.EqualTo("True"));
+            Assert.That(snapshot["collision.triangleHeightExact"], Is.EqualTo("True"));
+            Assert.That(snapshot["collision.outsideTriangleRejected"], Is.EqualTo("True"));
+            Assert.That(snapshot["collision.captureWindowDriftRejected"], Is.EqualTo("True"));
+            Assert.That(snapshot["cache.boxPrimitives"], Is.EqualTo("2"));
+            Assert.That(snapshot["cache.trianglePrimitives"], Is.EqualTo("2"));
+            Assert.That(snapshot["cache.meshBufferReads"], Is.EqualTo("1"));
+            Assert.That(snapshot["cache.repeatedQueriesAccepted"], Is.EqualTo("True"));
+            Assert.That(snapshot["cache.queryCount"], Is.EqualTo("128"));
+            Assert.That(snapshot["cache.boxCandidateChecks"], Is.EqualTo("0"));
+            Assert.That(snapshot["cache.triangleCandidateChecks"], Is.EqualTo("128"));
+            Assert.That(snapshot["cache.spatiallyPruned"], Is.EqualTo("True"));
+        }
+
         private static Dictionary<string, string> InvokeSnapshot(string methodName)
         {
             MethodInfo method = GeneratorType.GetMethod(

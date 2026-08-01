@@ -1091,6 +1091,73 @@ namespace DungeonLab.Editor
                 stairCatalog.unsupportedContractReasons);
         }
 
+        /// <summary>
+        /// Resolve a reviewed stair contract by NAME, for an author who wants a
+        /// specific flight rather than whatever the planner would have picked.
+        /// </summary>
+        /// <remarks>
+        /// A recipe stair is authored, not planned: the room's geometry is drawn
+        /// around one particular flight, so "any contract with this rise" is the
+        /// wrong question — two rise-4 contracts in the pool are a straight run
+        /// and an L-turn, and they need different rooms. Selecting by name keeps
+        /// the choice in the recipe and off a JSON ordering accident.
+        /// <para>
+        /// Reads the same two files, and applies the same reviewStatus gate, as
+        /// <see cref="LoadReviewedStairContractsForGeneration"/>; it deliberately
+        /// does NOT reuse that catalog, which measures prefabs and is far more
+        /// than a name lookup needs.
+        /// </para>
+        /// </remarks>
+        public static bool TryGetReviewedStairContract(
+            string contractName,
+            out string prefabPath,
+            out int riseLevels)
+        {
+            prefabPath = string.Empty;
+            riseLevels = 0;
+            if (string.IsNullOrWhiteSpace(contractName))
+            {
+                return false;
+            }
+
+            foreach (string path in new[] { StairProofContractsPath, ForgedStairContractsPath })
+            {
+                if (!File.Exists(path))
+                {
+                    continue;
+                }
+
+                if (!(JObject.Parse(File.ReadAllText(path))["contracts"] is JArray records))
+                {
+                    continue;
+                }
+
+                foreach (JToken token in records)
+                {
+                    if (!string.Equals(token.Value<string>("name"), contractName, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    // `reviewStatus` is absent on the hand-authored proof
+                    // contracts, which are reviewed by construction; only the
+                    // forge writes it, and only "reviewed" may generate.
+                    string status = token.Value<string>("reviewStatus");
+                    if (!string.IsNullOrEmpty(status) &&
+                        !string.Equals(status, "reviewed", StringComparison.Ordinal))
+                    {
+                        return false;
+                    }
+
+                    prefabPath = NormalizeAssetPath(token.Value<string>("prefab") ?? string.Empty);
+                    riseLevels = token.Value<int?>("rise") ?? 0;
+                    return !string.IsNullOrEmpty(prefabPath) && riseLevels > 0;
+                }
+            }
+
+            return false;
+        }
+
         private static ActiveStairContractCatalog LoadReviewedStairContractsForGeneration()
         {
             if (!File.Exists(StairProofContractsPath))

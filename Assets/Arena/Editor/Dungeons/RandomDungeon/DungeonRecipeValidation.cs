@@ -550,15 +550,30 @@ namespace DungeonLab.Editor
             {
                 // A stair joining two STOREYS may rise more than 1u — that is
                 // what makes a layered recipe's layers connected, and C1's
-                // episode separates its two by 4u. Within one layer the rule is
-                // unchanged, so a recipe that declares no layers cannot reach
-                // the relaxed branch at all.
+                // episode separates its two by 4u.
                 bool crossesLayers = transition != null &&
                     !SameLayer(recipe, transition.lowerLayerId, transition.upperLayerId);
+                motifsById.TryGetValue(transition?.motifId ?? string.Empty, out DungeonRecipeMotif motif);
+
+                // Within one layer the rise used to be pinned to exactly 1,
+                // because the only stair a recipe could render was a step strip
+                // and a strip is one step. That pin is what forced a room that
+                // wanted to climb 4u to author four transitions up four terraces
+                // — the shape that put a retaining wall on every step face and
+                // the stair art in a column the port graph had deleted. A motif
+                // that names a reviewed stair contract renders a real flight, so
+                // its rise is the contract's business, not this rule's; the
+                // strip motif stays pinned, which is every recipe that has not
+                // been re-authored.
+                bool authorsStepStrip = motif == null ||
+                    string.IsNullOrEmpty(motif.implementationId) ||
+                    string.Equals(motif.implementationId, "seam-rise-1", StringComparison.Ordinal);
                 bool riseValid = transition != null &&
-                    (crossesLayers ? transition.riseLevels >= 1 : transition.riseLevels == 1);
+                    (crossesLayers || !authorsStepStrip
+                        ? transition.riseLevels >= 1
+                        : transition.riseLevels == 1);
                 if (transition == null ||
-                    !motifsById.TryGetValue(transition?.motifId ?? string.Empty, out DungeonRecipeMotif motif) ||
+                    motif == null ||
                     motif.kind != DungeonRecipeMotifKind.StairTransition ||
                     !riseValid ||
                     transition.laneCount != 1 ||

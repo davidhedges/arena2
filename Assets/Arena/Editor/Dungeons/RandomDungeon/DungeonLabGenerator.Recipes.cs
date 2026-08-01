@@ -251,8 +251,17 @@ namespace DungeonLab.Editor
             public readonly int lowerLayerRelativeLevel;
             public readonly int upperLayerRelativeLevel;
 
+            /// <summary>
+            /// The stair implementation the transition's motif names. A step
+            /// strip for <c>seam-rise-1</c>; otherwise a reviewed stair contract
+            /// name, which is what lets a recipe author one flight instead of a
+            /// run of terraces.
+            /// </summary>
+            public readonly string motifImplementationId;
+
             public RecipeTransitionPlacement(
                 DungeonRecipeTransition transition,
+                string motifImplementationId,
                 Vector2Int lowerTransitionCell,
                 Vector2Int upperTransitionCell,
                 Vector2Int[] lowerLandingCells,
@@ -266,6 +275,7 @@ namespace DungeonLab.Editor
             {
                 id = transition.id;
                 atomicGroupId = transition.atomicGroupId;
+                this.motifImplementationId = motifImplementationId ?? string.Empty;
                 this.lowerLayerId = lowerLayerId ?? string.Empty;
                 this.upperLayerId = upperLayerId ?? string.Empty;
                 this.lowerLayerRelativeLevel = lowerLayerRelativeLevel;
@@ -906,13 +916,26 @@ namespace DungeonLab.Editor
                 // flat `riseLevels != 1`, so a cross-layer stair validated in the
                 // authoring window and was then rejected as a CANDIDATE on every
                 // seed, silently, as TRANSITION_CONTEXT_INCOMPATIBLE. Same
-                // predicate as the validator's, so the two agree by construction.
-                // Unreachable for a recipe that declares no layers, which is
-                // every recipe in the catalog today.
+                // predicate as the validator's, so the two agree by construction
+                // — including the second relaxation, for a motif that names a
+                // reviewed stair contract and therefore renders a real flight
+                // whose rise is the contract's business. Miss either half and a
+                // re-authored recipe validates and then never generates.
                 bool crossesLayers = transition != null &&
                     !SameRecipeLayer(candidate, transition.lowerLayerId, transition.upperLayerId);
+                DungeonRecipeMotif candidateMotif = transition == null
+                    ? null
+                    : FindRecipeMotif(candidate, transition.motifId);
+                bool candidateAuthorsStepStrip = candidateMotif == null ||
+                    string.IsNullOrEmpty(candidateMotif.implementationId) ||
+                    string.Equals(
+                        candidateMotif.implementationId,
+                        SeamRiseStripImplementationId,
+                        StringComparison.Ordinal);
                 if (transition == null ||
-                    (crossesLayers ? transition.riseLevels < 1 : transition.riseLevels != 1) ||
+                    (crossesLayers || !candidateAuthorsStepStrip
+                        ? transition.riseLevels < 1
+                        : transition.riseLevels != 1) ||
                     transition.laneCount != 1 ||
                     transition.headroomLevels < MinHeadroomLevels ||
                     transition.lowerLandingCells == null ||
@@ -1454,8 +1477,17 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
+                DungeonRecipeMotif transitionMotif = FindRecipeMotif(slot.recipe, transition.motifId);
+                if (transitionMotif == null)
+                {
+                    rejectionReason =
+                        $"recipe '{slot.recipe.recipeId}' transition '{transition.id}' named an undeclared motif";
+                    return false;
+                }
+
                 transitions.Add(new RecipeTransitionPlacement(
                     transition,
+                    transitionMotif.implementationId,
                     TransformRecipeCell(transition.lowerTransitionCell, center, primaryAxis, transverseAxis, mirrored),
                     TransformRecipeCell(transition.upperTransitionCell, center, primaryAxis, transverseAxis, mirrored),
                     TransformRecipeCells(transition.lowerLandingCells, center, primaryAxis, transverseAxis, mirrored),
@@ -2413,30 +2445,81 @@ namespace DungeonLab.Editor
                     int lowerPortDirection = DirectionFromVector(new Vector2(
                         recipeTransition.climbDirection.x,
                         recipeTransition.climbDirection.y));
+                    int upperEndLevel = RecipeTransitionEndLevel(
+                        surfaces,
+                        placement,
+                        recipeTransition.upperTransitionCell,
+                        recipeTransition.upperLayerId,
+                        recipeTransition.upperLayerRelativeLevel,
+                        baseLevel);
+                    int lowerEndLevel = RecipeTransitionEndLevel(
+                        surfaces,
+                        placement,
+                        recipeTransition.lowerTransitionCell,
+                        recipeTransition.lowerLayerId,
+                        recipeTransition.lowerLayerRelativeLevel,
+                        baseLevel);
+
+                    // Which STAIR this is, rather than assuming the only one a
+                    // recipe used to be able to ask for.
+                    //
+                    // Every recipe transition used to be classed `dais` and
+                    // handed the seam strip prefab, and a step strip climbs 1u.
+                    // So a recipe that wanted to climb 4u had to author FOUR of
+                    // them, one per cell, which is a run of terraces and not a
+                    // staircase: the strips landed in the footprint column, the
+                    // port graph consumed that column, and the parallel landing
+                    // column the player actually walked got a retaining wall on
+                    // every step face instead of a flight.
+                    //
+                    // A rise the strip families do not cover now resolves the
+                    // reviewed contract its motif names, which is how the route
+                    // planner has always built anything taller than the primary
+                    // rise. One cell, one flight, one transition.
+                    if (!TryResolveRecipeTransitionStair(
+                            recipeTransition,
+                            Mathf.Abs(upperEndLevel - lowerEndLevel),
+                            seamStairPrefabPath,
+                            placement.RecipeId,
+                            out string transitionStairPrefabPath,
+                            out string transitionPlacementClass,
+                            out rejectionReason))
+                    {
+                        return false;
+                    }
+
+                    // A step strip ignores its port directions — it is placed off
+                    // the seam between its two cells — so the pair it has always
+                    // carried is left exactly as it was. A FLIGHT is placed by
+                    // them: the yaw that maps the contract's entry port onto the
+                    // world is derived here, and the contract's entry port faces
+                    // AGAINST the climb (it is the face you walk in through),
+                    // which is the convention the route planner uses for every
+                    // stair it selects. Handing a flight the strip's pair rotated
+                    // it 180 degrees and put its footprint one cell the wrong
+                    // side of the landing, off the room's floor entirely.
+                    bool isStepStrip = string.Equals(
+                        transitionPlacementClass,
+                        DaisStairPlacementClass,
+                        StringComparison.Ordinal);
+                    int transitionLowerPortDirection = isStepStrip
+                        ? lowerPortDirection
+                        : DirectionFromVector(new Vector2(
+                            -recipeTransition.climbDirection.x,
+                            -recipeTransition.climbDirection.y));
+
                     transitions.Add(new ElevationEdgeModel.TransitionEdge(
                         recipeTransition.upperTransitionCell,
-                        RecipeTransitionEndLevel(
-                            surfaces,
-                            placement,
-                            recipeTransition.upperTransitionCell,
-                            recipeTransition.upperLayerId,
-                            recipeTransition.upperLayerRelativeLevel,
-                            baseLevel),
+                        upperEndLevel,
                         recipeTransition.lowerTransitionCell,
-                        RecipeTransitionEndLevel(
-                            surfaces,
-                            placement,
-                            recipeTransition.lowerTransitionCell,
-                            recipeTransition.lowerLayerId,
-                            recipeTransition.lowerLayerRelativeLevel,
-                            baseLevel),
-                        seamStairPrefabPath,
+                        lowerEndLevel,
+                        transitionStairPrefabPath,
                         recipeTransition.lowerLandingCells,
                         recipeTransition.upperLandingCells,
                         recipeTransition.footprintCells,
-                        lowerPortDirection,
-                        OppositeDirection(lowerPortDirection),
-                        DaisStairPlacementClass));
+                        transitionLowerPortDirection,
+                        OppositeDirection(transitionLowerPortDirection),
+                        transitionPlacementClass));
                 }
 
                 if (!string.IsNullOrEmpty(placement.selectedVisualImplementationId))
@@ -3021,6 +3104,78 @@ namespace DungeonLab.Editor
         /// within the layer` expression the resolver used to WRITE it a few lines
         /// above. One rule, read back.
         /// </remarks>
+        /// <summary>The step-strip motif every recipe stair used to be.</summary>
+        private const string SeamRiseStripImplementationId = "seam-rise-1";
+
+        /// <summary>How far a step strip climbs. It is one step.</summary>
+        private const int StepStripRiseLevels = 1;
+
+        /// <summary>
+        /// Pick the prefab and placement class for one authored recipe stair.
+        /// </summary>
+        /// <remarks>
+        /// Output-neutral for every recipe that authors <c>seam-rise-1</c> at
+        /// rise 1, which was the whole catalog before this: same seam prefab,
+        /// same `dais` class, same edge. Anything else names a reviewed contract
+        /// and must agree with it on rise, because the contract's ports ARE the
+        /// geometry — a rise-3 flight asked to span 4u would render a step into
+        /// the air, and no later gate measures the prefab against the drop.
+        /// </remarks>
+        private static bool TryResolveRecipeTransitionStair(
+            RecipeTransitionPlacement transition,
+            int riseLevels,
+            string seamStairPrefabPath,
+            string recipeId,
+            out string stairPrefabPath,
+            out string placementClass,
+            out string rejectionReason)
+        {
+            stairPrefabPath = seamStairPrefabPath;
+            placementClass = DaisStairPlacementClass;
+            rejectionReason = string.Empty;
+            bool authorsStrip = string.IsNullOrEmpty(transition.motifImplementationId) ||
+                string.Equals(
+                    transition.motifImplementationId,
+                    SeamRiseStripImplementationId,
+                    StringComparison.Ordinal);
+            if (authorsStrip)
+            {
+                if (riseLevels > StepStripRiseLevels)
+                {
+                    rejectionReason =
+                        $"[RECIPE_TRANSITION_STAIR] '{recipeId}' transition '{transition.id}' climbs " +
+                        $"{riseLevels}u on the step-strip motif '{SeamRiseStripImplementationId}', which climbs " +
+                        $"{StepStripRiseLevels}u; name a reviewed stair contract instead";
+                    return false;
+                }
+
+                return true;
+            }
+
+            if (!ElevationEdgeModel.TryGetReviewedStairContract(
+                    transition.motifImplementationId,
+                    out string contractPrefabPath,
+                    out int contractRiseLevels))
+            {
+                rejectionReason =
+                    $"[RECIPE_TRANSITION_STAIR] '{recipeId}' transition '{transition.id}' named stair " +
+                    $"contract '{transition.motifImplementationId}', which is not a reviewed contract";
+                return false;
+            }
+
+            if (contractRiseLevels != riseLevels)
+            {
+                rejectionReason =
+                    $"[RECIPE_TRANSITION_STAIR] '{recipeId}' transition '{transition.id}' climbs {riseLevels}u " +
+                    $"but its contract '{transition.motifImplementationId}' climbs {contractRiseLevels}u";
+                return false;
+            }
+
+            stairPrefabPath = contractPrefabPath;
+            placementClass = EmbeddedStairPlacementClass;
+            return true;
+        }
+
         private static int RecipeTransitionEndLevel(
             SurfaceField surfaces,
             RecipePlacement placement,
