@@ -99,6 +99,26 @@ namespace Arena.Tests.Editor
                 Does.Contain("ROUTE_TOPOLOGY_DEPRECATED"));
         }
 
+        [Test]
+        public void DeprecatedEnvironmentOverride_FallsForwardToProduction()
+        {
+            const string variable = "ARENA_DUNGEON_TOPOLOGY";
+            string? previous = Environment.GetEnvironmentVariable(variable);
+            try
+            {
+                Environment.SetEnvironmentVariable(variable, "deep-processional");
+                Dictionary<string, string> report = ParseSnapshot(
+                    InvokeSnapshot("BuildRouteCharacterizationSnapshot", AnySeed));
+
+                CollectionAssert.Contains(ProductionTopologies, report["route.pattern"]);
+                Assert.That(report["accepted"], Is.EqualTo("true"));
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(variable, previous);
+            }
+        }
+
         private static Dictionary<string, string> ProductionSnapshot()
         {
             return ParseSnapshot(InvokeSnapshot("BuildLayeredProductionSnapshot", AnySeed));

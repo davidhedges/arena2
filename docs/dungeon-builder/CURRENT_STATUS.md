@@ -14,8 +14,9 @@ or `docs/archive/`, not here. *(It did grow them back, and was trimmed again on
 The heightmap-like corpus has been retired. Normal generation now draws only
 `vertical-braid`, `hanging-ring`, and `layered-cascade`. The ten earlier graphs
 remain in the repository as `deprecated: true`, `weight: 0` historical fixtures;
-the menu, API, and `ARENA_DUNGEON_TOPOLOGY` override all reject attempts to
-generate them.
+the specific-topology menu and API reject attempts to generate them. A stale
+`ARENA_DUNGEON_TOPOLOGY` value naming one is ignored with a warning and falls
+forward to the weighted production set, so it cannot brick ordinary generation.
 
 Every weighted topology must bind **all three** required recipe slots to a
 declared non-base storey and route an incident edge through that storey. Every

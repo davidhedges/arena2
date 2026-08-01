@@ -815,9 +815,9 @@ namespace DungeonLab.Editor
         }
 
         // Historical authoring fixtures still prove that deprecated data parses
-        // and resolves. This private diagnostic bypass does not weaken either
-        // ForceRouteTopology or the environment override: player-facing and
-        // command-line generation remain unable to select deprecated content.
+        // and resolves. This private diagnostic bypass does not weaken the
+        // retirement boundary: explicit forcing rejects deprecated content and
+        // a stale environment override falls forward to weighted production.
         private static JObject BuildSeedReportForTopology(string topologyId, int seed)
         {
             using (new ForcedRouteTopologyScope(topologyId, allowDeprecated: true))

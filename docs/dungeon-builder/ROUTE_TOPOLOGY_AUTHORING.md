@@ -28,8 +28,9 @@ Design background and the drafted topology set:
   "weight": 1,
 
   // Historical-data marker. A deprecated graph MUST have weight 0 and cannot
-  // be generated through the menu, API, or environment override. Omit/false
-  // for an authoring draft or production graph.
+  // be generated through the menu or API. A stale environment override naming
+  // one is ignored and falls forward to weighted production. Omit/false for an
+  // authoring draft or production graph.
   "deprecated": false,
 
   // OPTIONAL vertical envelope in 1u levels. Omit to preserve the historical
@@ -236,7 +237,7 @@ Hard rules, all enforced by the generator and all reported by the validator:
 | Rule | Why |
 | --- | --- |
 | 9 to 20 nodes | the sanity rails on room count; the profile's `denseFloorplanMinRooms` is the binding floor in practice |
-| `deprecated: true` requires `weight: 0`; deprecated graphs cannot be forced through a generation entry point | retirement must be explicit and irreversible from player-facing tools while historical parser/authoring evidence remains available |
+| `deprecated: true` requires `weight: 0`; explicit forcing rejects deprecated graphs, while a stale environment override is ignored | retirement must be irreversible without allowing obsolete process configuration to break ordinary production generation |
 | Every weighted graph has all three slot nodes declare a non-base layer, maps that layer to a recipe storey, and binds an incident edge to it | production may not regress to three single-surface rooms plus one decorative vertical event |
 | Exactly 3 slots: `required-compression`, `required-landmark`, `required-return` | the recipe catalog's `eligibleRoles`/`eligibleBeats` |
 | Optional `ceiling` omitted, or a multiple of 4 in `[4, 40]` | omitted means 24u, preserving every existing topology; 40u is the global schema cap |

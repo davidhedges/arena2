@@ -938,8 +938,9 @@ namespace DungeonLab.Editor
         /// <remarks>
         /// <para>
         /// This remains the authoring path for a weight-0 draft. A graph marked
-        /// deprecated is historical data, not a draft, and both this API and the
-        /// environment override reject it.
+        /// deprecated is historical data, not a draft. This API rejects it; a
+        /// stale environment override is ignored so it cannot brick ordinary
+        /// weighted generation.
         /// </para>
         /// <para>
         /// Env var so a headless run can set it (the same idiom as
@@ -952,19 +953,28 @@ namespace DungeonLab.Editor
 
         private static string forcedRouteTopologyId = string.Empty;
         private static bool allowDeprecatedForcedRouteTopology;
+        private static string lastIgnoredDeprecatedEnvironmentTopologyId = string.Empty;
 
         internal static string ResolveForcedRouteTopologyId()
         {
+            return ResolveForcedRouteTopologyId(out _);
+        }
+
+        private static string ResolveForcedRouteTopologyId(out bool fromEnvironment)
+        {
             if (!string.IsNullOrEmpty(forcedRouteTopologyId))
             {
+                fromEnvironment = false;
                 return forcedRouteTopologyId;
             }
 
-            string fromEnvironment =
+            string environmentValue =
                 Environment.GetEnvironmentVariable(TopologyOverrideEnvironmentVariable);
-            return string.IsNullOrWhiteSpace(fromEnvironment)
+            bool hasEnvironmentOverride = !string.IsNullOrWhiteSpace(environmentValue);
+            fromEnvironment = hasEnvironmentOverride;
+            return !hasEnvironmentOverride
                 ? string.Empty
-                : fromEnvironment.Trim();
+                : environmentValue.Trim();
         }
 
         /// <summary>Scope a forced topology to one build.</summary>
@@ -1013,17 +1023,32 @@ namespace DungeonLab.Editor
         // without renumbering anything.
         private static string SelectRouteTopologyId(int dungeonSeed)
         {
-            string forced = ResolveForcedRouteTopologyId();
+            string forced = ResolveForcedRouteTopologyId(out bool forcedFromEnvironment);
             if (!string.IsNullOrEmpty(forced))
             {
                 DungeonRouteTopology forcedTopology = RequireRouteTopology(forced);
                 if (forcedTopology.deprecated && !allowDeprecatedForcedRouteTopology)
                 {
-                    throw new InvalidOperationException(
-                        $"[ROUTE_TOPOLOGY_DEPRECATED] topology '{forcedTopology.id}' is retained for historical validation only and cannot generate a dungeon");
-                }
+                    if (!forcedFromEnvironment)
+                    {
+                        throw new InvalidOperationException(
+                            $"[ROUTE_TOPOLOGY_DEPRECATED] topology '{forcedTopology.id}' is retained for historical validation only and cannot generate a dungeon");
+                    }
 
-                return forcedTopology.id;
+                    if (!string.Equals(
+                            lastIgnoredDeprecatedEnvironmentTopologyId,
+                            forcedTopology.id,
+                            StringComparison.Ordinal))
+                    {
+                        lastIgnoredDeprecatedEnvironmentTopologyId = forcedTopology.id;
+                        Debug.LogWarning(
+                            $"[ROUTE_TOPOLOGY_DEPRECATED_OVERRIDE_IGNORED] {TopologyOverrideEnvironmentVariable} named retired topology '{forcedTopology.id}'; ignoring the stale override and selecting from the production topology set");
+                    }
+                }
+                else
+                {
+                    return forcedTopology.id;
+                }
             }
 
             List<DungeonRouteTopology> candidates = AllRouteTopologiesByFileOrder();
