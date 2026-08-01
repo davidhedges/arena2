@@ -14,7 +14,10 @@ or `docs/archive/`, not here. *(It did grow them back, and was trimmed again on
 The heightmap-like corpus has been retired. Normal generation now draws only
 `vertical-braid`, `hanging-ring`, and `layered-cascade`. The ten earlier graphs
 remain in the repository as `deprecated: true`, `weight: 0` historical fixtures;
-the specific-topology menu and API reject attempts to generate them. A stale
+they live under `Topologies/Deprecated/`. Historical-only episode recipes live
+under `Recipes/Episodes/Deprecated/`; the episode folder root contains only the
+three production recipes. The specific-topology menu and API reject attempts to
+generate them. A stale
 `ARENA_DUNGEON_TOPOLOGY` value naming one is ignored with a warning and falls
 forward to the weighted production set, so it cannot brick ordinary generation.
 

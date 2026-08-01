@@ -78,7 +78,7 @@ namespace Arena.Tests.Editor
 
             Assert.That(
                 graph["graph.source"],
-                Does.EndWith("Topologies/processional-spine.json"));
+                Does.EndWith("Topologies/Deprecated/processional-spine.json"));
             Assert.That(graph["contract.probeLoaded"], Is.EqualTo("True"));
             Assert.That(graph["contract.probeNodeIds"], Is.EqualTo("probe-a|probe-b|probe-c"));
             Assert.That(graph["contract.probeEdgeIds"], Is.EqualTo("A-B|B-C"));

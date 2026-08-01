@@ -1,7 +1,8 @@
 # Authoring a route topology
 
-A route topology is one JSON file under
-`Assets/Arena/Editor/Dungeons/RandomDungeon/Topologies/`. It is the whole graph:
+A production route topology is one JSON file directly under
+`Assets/Arena/Editor/Dungeons/RandomDungeon/Topologies/`. Deprecated historical
+fixtures live in its `Deprecated/` subfolder. A topology file is the whole graph:
 nodes, edges, recipe slots, the vista, the anchors, and an ASCII lattice map that
 places every node. Adding one costs no C#.
 

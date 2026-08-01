@@ -34,8 +34,8 @@ namespace Arena.Tests.Editor
                 "hanging-ring|layered-cascade|vertical-braid"));
             Assert.That(snapshot["selector.weights"], Is.EqualTo(
                 "aperture-gallery:0|atrium-hub:0|atrium-ring:0|deep-processional:0|" +
-                "descent-shaft:0|hanging-ring:1|layered-cascade:1|processional-spine:0|" +
-                "ridge-ravine:0|sunken-basin:0|terraced-cascade:0|twin-wing-keep:0|" +
+                "descent-shaft:0|processional-spine:0|ridge-ravine:0|sunken-basin:0|" +
+                "terraced-cascade:0|twin-wing-keep:0|hanging-ring:1|layered-cascade:1|" +
                 "vertical-braid:1"));
 
             foreach (string topology in ProductionTopologies)

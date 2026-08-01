@@ -551,7 +551,10 @@ namespace DungeonLab.Editor
                 return "missing";
             }
 
-            paths = Directory.GetFiles(RouteTopologyDirectory, "*.json", SearchOption.TopDirectoryOnly);
+            // Production files live at the root; retired historical fixtures
+            // live under Deprecated/. Both remain loadable for diagnostics,
+            // while the folder layout makes the selection boundary obvious.
+            paths = Directory.GetFiles(RouteTopologyDirectory, "*.json", SearchOption.AllDirectories);
             Array.Sort(paths, StringComparer.Ordinal);
             var signature = new System.Text.StringBuilder();
             foreach (string path in paths)

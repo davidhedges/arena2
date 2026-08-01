@@ -2631,7 +2631,7 @@ own bridge.
 
 **Recipes / topology** — `DungeonRecipeAsset.cs` · `DungeonRecipeValidation.cs` ·
 `DungeonRouteTopology.cs` · `DungeonRouteTopologyValidator.cs` ·
-`Topologies/atrium-ring.json` and the six siblings
+`Topologies/Deprecated/atrium-ring.json` and the six siblings
 
 **Export / runtime** — `Assets/Arena/Editor/GameplayCollisionExporter.cs` ·
 `server/src/world_collision.rs` (`try_open_world_surface_height_at_y` :1464) ·
