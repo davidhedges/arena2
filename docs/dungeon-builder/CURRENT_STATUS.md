@@ -128,7 +128,7 @@ rebaseline, and the density scale. Their evidence is archived:
 
 Treat both as history, not as current constraints.
 
-### Layered 3-D topology — PHASES A, B AND C ARE COMPLETE (2026-08-01). Phase D is in progress.
+### Layered 3-D topology — PHASES A, B, C AND D ARE COMPLETE (2026-08-01). Phase E is next.
 
 Design of record, **still a draft beyond Phase B**:
 [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md).
@@ -792,7 +792,7 @@ rebuild it any time with **Arena > Dungeons > Rebuild Random Dungeon (Specific
 Topology)**, topology `aperture-gallery`. Its gallery sits at world
 `y = 12` around `(4, 12, −64)` — the node's level 8 plus the layer's 4.
 
-### Phase D — multi-layer rooms in GENERATION. IN PROGRESS; D0–D4 landed 2026-08-01.
+### Phase D — multi-layer rooms in GENERATION. COMPLETE 2026-08-01 (D0–D5).
 
 Design §13. Topologies and recipes declare layers, and routes bind to them.
 Four of C2's corrections are constraints on anything Phase D authors rather than
@@ -813,7 +813,7 @@ used, moved from content into code.
 | **D2** ✅ | the **corridor-exclusivity and third-room relaxations** — *authorized* by layer binding, *decided* by disjoint absolute bands (§8.1) — **together with the stacked-corridor producer they need**, which the design separates and which measurement says cannot be separated (see D1's finding 1) | no connection is layer-bound |
 | **D3** ✅ | a bound edge **resolves at its layer's elevation** — a per-`(connection, end)` entry level beside today's per-node `zoneLevels`, and a slot mapping a topology layer id to a recipe layer id | ditto |
 | **D4** ✅ | **volumes** — `RoomFootprint.Overlaps` volumetric, an `OpenVolume` producer, `ChooseEnclosedRooms` moved into the plan | the volumetric test needs a declared reason, and nothing declares one |
-| D5 | **content** — an atrium topology plus a room binding route edges at two elevations | weight 0, exactly as `aperture-gallery` is |
+| **D5** ✅ | **content** — an atrium topology plus a room binding route edges at two elevations | weight 0, exactly as `aperture-gallery` is |
 
 **D0 — the transition body is a band, not a column (landed 2026-08-01).**
 
@@ -1176,6 +1176,98 @@ Six things measured that the design had wrong or left open:
    expecting rather than investigating. The same run is also direct evidence
    that `schemaUsage` reaches `resultHash` and *not* `hashes.canonical`: it
    changed on all 200 seeds while the canonical vector did not move.
+
+**D5 — the atrium, and Phase D is complete (landed 2026-08-01).**
+
+`episode_atrium_hub_01` is entered on the ground and left from the gallery.
+`atrium-hub.json` is the weight-0 topology that places it, and node E is the
+first node in the project to declare a storey.
+
+The room, in its own frame: the C2 episode's proven 7x7 chamber and four-step
+west stair to a +4 terrace, with the gallery ring extended east to the room's
+edge so a route edge can meet it there, a 1-cell shaft railed on no side, and an
+`OpenVolume` reserving the air over that shaft from the gallery's own elevation
+up. Edge `D-E` binds nothing and arrives on the chamber floor at level 8; edge
+`E-F` binds E's `gallery` and leaves from level 12 — a `LevelCorridor` across a
+0u rise, which unbound would be a 4u rise the validator rejects outright. The
+way back down is the room's own stair.
+
+**Phase D's exit criteria, all met** (`ops/dungeon-atrium-evidence.py`, which
+reads them off the seed reports rather than asserting them):
+
+| density | accepted | atrium placed | ≥2 elevations | openVolumeCells | violations |
+|---|---|---|---|---|---|
+| 0–5 | **200/200 at every density** | 200 | **100%**, always `[8, 12]` | 200 (1/seed) | **0** |
+
+The bar was ≥199/200 and ≥90%. The void survives density 5 at **94.2% lattice
+fill** — §6 payoff 4's specific worry ("density 5 will try to fill the atrium")
+answered by measurement rather than by the invariant that was supposed to
+prevent it.
+
+Other gates: determinism — two independent 200-seed runs on the atrium topology
+byte-identical at `7f38059f3385ea23`, 200/200. Renders — 12/12 built with
+`REJECTED 0`. All five fixtures re-run green. `Validate Topologies` 9/9 PASS
+plus 26/26 layer-schema checks. **All 200 plans are multi-layer**, so every
+accepted seed really does stack.
+
+**Corpus A/B: 200 of 200 canonical hashes moved, and the diff says precisely
+why** — the same shape C2 measured, for the same reason. Every changed leaf is
+`catalogDigest` and the three hashes derived from it, the `rejectedCandidates`
+rows for a seventh recipe, one `topologySelection.weights` row gaining
+`atrium-hub:0` with every other weight unchanged, and the new `openVolumes`
+validation row. **`hashes.layout` and `hashes.tieredLevelPlan` moved on ZERO
+seeds**, accepted stayed 200/200 on both legs, and no validation result
+changed. The dungeons did not move; the digest that names the catalog did.
+
+Selection isolation is measured in both directions, not argued: with the atrium
+in the catalog, all **600 slots** of the unforced corpus reject it (400
+`ROLE_INELIGIBLE`, 200 `BEAT_INELIGIBLE`) and it is eligible nowhere.
+
+Three code fixes the content forced, and all three were latent:
+
+1. **An upper-storey port was unauthorable, and C2a's comment here had it
+   backwards.** `TryRealizeRecipes` derived the room's base as `firstPortLevel −
+   layerOffset − port.relativeLevel`, but `firstPortLevel` comes from
+   `TryGetFloorLevel`, which answers about the column's FLOOR — not the surface
+   the port opens onto. The layer offset is not in that number, so subtracting
+   it put the whole room a storey below itself the moment its first port sat on
+   a gallery. The per-port check had the same bug from the other side. Both now
+   ask about the COLUMN (`RecipePortPlacement.ColumnFloorLevel`), and that the
+   port's own storey materialises where it said it would is
+   `TryValidateResolvedRecipes`, which asks `HasSurfaceAt` after every surface
+   exists. Invisible until now because every port in the catalog had offset 0.
+2. **`RECIPE_PROTECTION` demanded a surface at an `OpenVolume`'s level** — the
+   exact inverse of what the zone means. It cost the first 200-seed run: 0/200
+   accepted, every seed reporting the shaft "was re-leveled or removed". An
+   OpenVolume declares the ABSENCE of a surface and is now skipped there; its
+   own gate asks the opposite question of the same field.
+3. **`OPEN_VOLUME_VIOLATION` did not exist**, though Phase D's exit criteria
+   name it. It is now a plan check: for every reserved prism, no surface may
+   stand inside its band. Vacuously true until a recipe declares one, which is
+   exactly its value — it is what would catch the atrium being quietly packed,
+   whichever pass did it.
+
+**And one authoring near-miss worth recording.** The topology's comment block
+explained at length why the file is weight 0 — and the file had no `weight`
+field at all, so it loaded at the default weight 1. `Validate Topologies` prints
+`selection weight N` per topology, which is the only reason it was caught before
+a run. A comment is not a declaration; read the validator's echo of what it
+actually parsed.
+
+**Two scope notes, so the exit criteria are not read as more than they were.**
+
+1. **The shipped atrium is DEGREE 2, and owner decision 9 is still open.** The
+   exit criterion asks for entrances at "≥2 distinct elevations", which a
+   degree-2 slot node satisfies — entry on the chamber floor, exit from the
+   gallery — so Phase D never needed the degree-N vertical hub decision 9 is
+   about. A three- or four-way atrium still needs either a degree-N slot kind or
+   a generic multi-layer room, and D3 measured that the second route is blocked:
+   an `IncidentCardinalSockets` recipe binds by direction, so nothing in the
+   route can name which storey a socket is on.
+2. **"With the atrium in the mix" is measured on the atrium's OWN seeds**,
+   because `atrium-hub` is weight 0 exactly as `aperture-gallery` is. Raising
+   its weight moves `totalWeight` and re-rolls every seed's topology — a content
+   decision with a full rebaseline attached, and the owner's to make.
 
 **A tooling note, because this ritual is now six slices old.**
 `ops/dungeon-report-diff.py` does the leaf-by-leaf report comparison by hand up

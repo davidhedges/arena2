@@ -1,0 +1,111 @@
+{
+  // Route topology: one authored diagram per file. See
+  // docs/dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md for the schema and the
+  // rule list. Check a draft with Tools > Dungeon Lab > Validate Topologies.
+  "id": "atrium-hub",
+  "displayName": "Atrium Hub",
+  "plannerVersion": "atrium-hub-v1",
+
+  // WEIGHT 0 ON PURPOSE, exactly as `aperture-gallery` is. This graph exists to
+  // place ONE authored episode (`episode_atrium_hub_01`, the layered-topology
+  // design's §13 Phase D proof) and is deliberately outside the weighted draw:
+  // adding a weighted topology moves `totalWeight`, which re-rolls the topology
+  // of EVERY seed in the corpus and destroys the one gate that tells a
+  // regression from a rebaseline. Build it with Arena > Dungeons > Rebuild
+  // Random Dungeon (Specific Topology), or set ARENA_DUNGEON_TOPOLOGY=atrium-hub
+  // for a headless run. Raising the weight is a content decision with a full
+  // rebaseline attached, and it is the owner's to make.
+  "weight": 0,
+
+  // One whitespace-separated token per lattice cell; '.' is an empty cell.
+  // The FIRST row is the TOP row (highest lattice y).
+  //
+  // The lattice is processional-spine's, unchanged, because its rubber sheet,
+  // vista clearance and envelope fit are measured.
+  "map": [
+    ".  I  .  .",
+    "M  H  G  F",
+    "L  K  J  E",
+    "A  B  C  D"
+  ],
+
+  "spatial": {
+    "columnGapDeltaCells": { "maxDelta": 4 },
+    "rowGapDeltaCells": { "maxDelta": 4 }
+  },
+
+  // key: [ id, role, beat, level, order, layers? ]. Level is absolute in 4u
+  // units; the 6th element declares additional storeys as offsets from it.
+  //
+  // E IS THE ATRIUM, and it is the first node in the project to declare a
+  // storey. Its `gallery` sits 4u above its own floor, which is where
+  // `episode_atrium_hub_01` builds its upper ring — the slot below says so in
+  // the recipe's own vocabulary.
+  //
+  // E's beat is `atrium`, and that is the whole selection mechanism: it is the
+  // only beat `episode_atrium_hub_01` declares, no other recipe declares it,
+  // and no other topology's node asks for it. So the episode is the unique
+  // candidate here and is INELIGIBLE everywhere else.
+  "nodes": {
+    "A": ["arrival",        "arrival",           "arrival",      0,  { "main": 0 }],
+    "B": ["threshold",      "connector",         "compression",  0,  { "main": 1 }],
+    "C": ["choice",         "junction",          "choice",       4,  { "main": 2 }],
+    "D": ["reveal",         "grand-room",        "reveal",       4,  { "main": 3 }],
+    "E": ["atrium-hall",    "landmark",          "atrium",       8,  { "main": 4 },
+          { "layers": { "gallery": 4 } }],
+    "F": ["ascent",         "connector",         "ascent",       12, { "main": 5 }],
+    "G": ["approach",       "processional-hall", "approach",     16, { "main": 6 }],
+    "H": ["rejoin",         "return-hall",       "rejoin",       20, { "main": 7 }],
+    "I": ["culmination",    "culmination",       "culmination",  24, { "main": 8 }],
+    "J": ["vista-source",   "overlook",          "reveal",       12, { "branch": 0 }],
+    "K": ["branch-passage", "connector",         "branch",       12, { "branch": 1 }],
+    "L": ["branch-reward",  "optional-room",     "reward",       16, { "branch": 2 }],
+    "M": ["branch-return",  "connector",         "return",       20, { "branch": 3 }]
+  },
+
+  // THE POINT OF THE GRAPH is the pair D-E and E-F.
+  //
+  // D-E binds nothing, so it meets E on E's own floor at level 8 — a 4u Stair
+  // up from D. E-F binds E's `gallery`, so it LEAVES from level 12 and arrives
+  // at F's 12: a rise of 0, which is what a LevelCorridor is. Unbound, that same
+  // edge would be a 4u rise and the validator would reject it as a
+  // LevelCorridor. The binding, not the node level, decides the elevation.
+  //
+  // So the atrium is entered on the ground and left from the gallery, and the
+  // way back down is the episode's own four-step stair.
+  "edges": [
+    ["A", "B", "LevelCorridor"],
+    ["B", "C", "Stair"],
+    ["C", "D", "LevelCorridor"],
+    ["D", "E", "Stair"],
+    ["E", "F", "LevelCorridor", { "fromLayer": "gallery" }],
+    ["F", "G", "Stairwell"],
+    ["G", "H", "Stair"],
+    ["H", "I", "Stair"],
+    ["C", "J", "Bridge"],
+    ["J", "K", "LevelCorridor"],
+    ["K", "L", "Stair"],
+    ["L", "M", "Stair"],
+    ["M", "H", "LevelCorridor"]
+  ],
+
+  // `layers` on the landmark slot is the only place the graph's vocabulary and
+  // the recipe's meet: the route calls that elevation `gallery`, the recipe
+  // calls it `upper`, and neither has to know the other's name anywhere else.
+  // The two must agree on the relative level — that is checked per candidate,
+  // before admission — so a room built at one height cannot be routed to at
+  // another.
+  "slots": [
+    { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-C" },
+    { "id": "required-landmark",    "at": "E", "entry": "D-E", "exit": "E-F",
+      "layers": { "gallery": "upper" } },
+    { "id": "required-return",      "at": "M", "entry": "L-M", "exit": "M-H" }
+  ],
+
+  "vista": { "id": "branch-overlook-to-atrium-hall", "from": "J", "to": "E", "minVoidCells": 3 },
+
+  "overlooks": [["G", "J"], ["H", "K"]],
+
+  "anchors": { "bottom": "A", "top": "I" },
+  "allowGenericRoomWings": true
+}

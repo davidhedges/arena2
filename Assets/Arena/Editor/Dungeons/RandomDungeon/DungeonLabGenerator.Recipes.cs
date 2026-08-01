@@ -106,10 +106,33 @@ namespace DungeonLab.Editor
             public readonly int neighborRoomIndex;
             public readonly Vector2Int cell;
             public readonly Vector2Int outwardDirection;
+            /// <summary>
+            /// The absolute level this entrance OPENS ONTO — the node's level
+            /// plus its storey's offset plus its own rise.
+            /// </summary>
             public readonly int expectedRelativeLevel;
+            /// <summary>
+            /// Its storey's offset alone. 0 for a base-layer port, which is
+            /// every port in the catalog before D5.
+            /// </summary>
+            /// <remarks>
+            /// Carried because two different questions are asked about a port,
+            /// and conflating them is what made an upper-storey entrance
+            /// unauthorable: "what does this port open onto"
+            /// (<see cref="expectedRelativeLevel"/>) and "what is the floor of
+            /// the column it stands in" (that minus this). They differ by
+            /// exactly this term, and only for a port on a stacked storey.
+            /// </remarks>
+            public readonly int layerRelativeLevel;
             public readonly int widthCells;
             public readonly int approachDepthCells;
             public readonly int headroomLevels;
+
+            /// <summary>
+            /// The level of the column this port stands in — the room's ENTRY
+            /// storey, whatever storey the port itself opens onto.
+            /// </summary>
+            public int ColumnFloorLevel => expectedRelativeLevel - layerRelativeLevel;
 
             public RecipePortPlacement(
                 DungeonRecipePort port,
@@ -118,6 +141,7 @@ namespace DungeonLab.Editor
                 Vector2Int cell,
                 Vector2Int outwardDirection,
                 int expectedRelativeLevel,
+                int layerRelativeLevel = 0,
                 bool requiredForPlacement = false)
             {
                 id = port.id;
@@ -128,6 +152,7 @@ namespace DungeonLab.Editor
                 this.cell = cell;
                 this.outwardDirection = outwardDirection;
                 this.expectedRelativeLevel = expectedRelativeLevel;
+                this.layerRelativeLevel = layerRelativeLevel;
                 widthCells = port.widthCells;
                 approachDepthCells = port.approachDepthCells;
                 headroomLevels = port.headroomLevels;
@@ -1403,8 +1428,9 @@ namespace DungeonLab.Editor
                     TransformRecipeDirection(port.outwardDirection, primaryAxis, transverseAxis, mirrored),
                     // A port's relativeLevel is measured WITHIN its layer
                     // (design §8.2), so the layer's own offset is added here.
-                    // Every recipe today is single-layer, where it is 0.
+                    // Every recipe before D5 is single-layer, where it is 0.
                     node.relativeElevationLevels + PortLayerRelativeLevel(slot.recipe, port) + port.relativeLevel,
+                    PortLayerRelativeLevel(slot.recipe, port),
                     requiredForPlacement: true));
             }
 
@@ -2172,18 +2198,32 @@ namespace DungeonLab.Editor
                 // does not — every port is separately required to resolve at
                 // `nodeLevel + layer + port.relativeLevel` in the loop below, so
                 // this expression algebraically IS the node's level and any
-                // other port would give the same answer. Subtracting the layer
-                // offset is the only change layers need here, and it is 0 for
-                // every recipe in today's catalog.
-                int baseLevel = firstPortLevel
-                    - PortLayerRelativeLevel(placement.slot.recipe, firstPortContract)
-                    - firstPortContract.relativeLevel;
+                // other port would give the same answer.
+                //
+                // D5 CORRECTION, and C2a's comment here had it backwards.
+                // `firstPortLevel` comes from `TryGetFloorLevel`, which answers
+                // about the column's FLOOR — the room's entry storey — not about
+                // the surface the port opens onto. So the layer offset must NOT
+                // be subtracted: it is not in the number to begin with, and
+                // taking it out again put the whole room a storey below itself
+                // the moment its first port sat on a gallery. The two readings
+                // agree for every port whose layer offset is 0, which is every
+                // port in the catalog before this slice, so the term was
+                // invisible until an upper-storey entrance existed.
+                int baseLevel = firstPortLevel - firstPortContract.relativeLevel;
                 foreach (RecipePortPlacement port in placement.ports)
                 {
-                    if (!surfaces.TryGetFloorLevel(port.cell, out int portLevel) ||
-                        portLevel != port.expectedRelativeLevel)
+                    // Asked of the COLUMN, for the same reason: at this point in
+                    // the pass no stacked storey exists yet — the zone writes
+                    // that build one are further down this very loop — so a port
+                    // on a gallery can only be checked against the floor beneath
+                    // it. That its own storey then materialises where it said it
+                    // would is `TryValidateResolvedRecipes`, which asks
+                    // `HasSurfaceAt` after every surface exists.
+                    if (!surfaces.TryGetFloorLevel(port.cell, out int portFloorLevel) ||
+                        portFloorLevel != port.ColumnFloorLevel)
                     {
-                        rejectionReason = $"[RECIPE_LEVELS] typed port '{port.id}' on '{placement.RecipeId}' resolved at {portLevel}u instead of {port.expectedRelativeLevel}u";
+                        rejectionReason = $"[RECIPE_LEVELS] typed port '{port.id}' on '{placement.RecipeId}' stood over a floor at {portFloorLevel}u instead of {port.ColumnFloorLevel}u";
                         return false;
                     }
                 }
@@ -2749,6 +2789,15 @@ namespace DungeonLab.Editor
 
             foreach (RecipeZonePlacement zone in placement.zones)
             {
+                // An OpenVolume declares the ABSENCE of a surface, so demanding
+                // one at its level is the exact inverse of what it means. Its own
+                // gate is `OPEN_VOLUME_VIOLATION`, which asks the opposite
+                // question of the same field (D5).
+                if (zone.kind == DungeonRecipeZoneKind.OpenVolume)
+                {
+                    continue;
+                }
+
                 // `RECIPE_LAYER_UNVERIFIABLE` used to sit here, refusing every
                 // non-base zone because the heightfield holds a column's LOWEST
                 // surface and so cannot answer for a stacked one. It is gone: the

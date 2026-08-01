@@ -553,6 +553,69 @@ namespace DungeonLab.Editor
                 return Blocks(cell, LevelBand.Unbounded, PrismKind.Mouth, OwnerKey.CandidateProbe);
             }
 
+            /// <summary>
+            /// Did every reserved void survive the plan? (design §13 Phase D's
+            /// "`OpenVolume` survives every density level".)
+            /// </summary>
+            /// <remarks>
+            /// The registration-time rule can only refuse the claims it is
+            /// SHOWN. This asks the finished article instead: for every
+            /// <see cref="PrismKind.OpenVolume"/> prism, is there a walkable
+            /// surface standing inside its band? That catches the case §11 names
+            /// — a fill pass, a late corrective pass or a producer that never
+            /// consulted the ledger putting floor in the atrium — regardless of
+            /// which pass did it or whether it asked permission first.
+            /// <para>
+            /// A surface at a level BELOW the band is the point of the thing: an
+            /// aperture's catch floor is what makes it an aperture rather than a
+            /// shaft into the abyss. Half-open, so a surface exactly at the
+            /// band's exclusive top is a lid, not a violation.
+            /// </para>
+            /// </remarks>
+            public bool TryValidateOpenVolumes(SurfaceField surfaces, out string rejectionReason)
+            {
+                int volumeCells = 0;
+                foreach (KeyValuePair<Vector2Int, List<Prism>> item in
+                         SortedByCell(byCell))
+                {
+                    foreach (Prism prism in item.Value)
+                    {
+                        if (prism.kind != PrismKind.OpenVolume)
+                        {
+                            continue;
+                        }
+
+                        volumeCells++;
+                        foreach (int level in surfaces.LevelsAt(item.Key))
+                        {
+                            if (prism.band.Contains(level))
+                            {
+                                rejectionReason =
+                                    $"[OPEN_VOLUME_VIOLATION] reserved volume '{prism.owner}' was filled at " +
+                                    $"{item.Key} level {level}, inside {prism.band}";
+                                return false;
+                            }
+                        }
+                    }
+                }
+
+                rejectionReason = $"open-volume gate passed for {volumeCells} reserved cell(s)";
+                return true;
+            }
+
+            // Canonical cell order, so the FIRST violation a seed reports is a
+            // property of the geometry rather than of dictionary iteration.
+            private static IEnumerable<KeyValuePair<Vector2Int, List<Prism>>> SortedByCell(
+                Dictionary<Vector2Int, List<Prism>> source)
+            {
+                var cells = new List<Vector2Int>(source.Keys);
+                cells.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+                foreach (Vector2Int cell in cells)
+                {
+                    yield return new KeyValuePair<Vector2Int, List<Prism>>(cell, source[cell]);
+                }
+            }
+
             /// <summary>Every cell carrying a prism of one kind.</summary>
             public IEnumerable<Vector2Int> CellsOfKind(PrismKind kind)
             {

@@ -178,6 +178,13 @@ namespace DungeonLab.Editor
             bool namedPromontoriesValid = TryValidateAcceptedNamedPromontories(plan, out string namedPromontoryMessage);
             bool externalConnectorsValid = TryValidateAcceptedExternalConnectors(seed, plan, out string externalConnectorMessage);
             bool headroomValid = TryValidateAcceptedPlanHeadroom(plan, out string headroomMessage);
+            // D5: the reserved-void gate design §13 names in Phase D's exit
+            // criteria. Vacuously true until a recipe declares a volume, and
+            // that is exactly its value — it is the check that would catch the
+            // atrium being quietly packed, whichever pass did it.
+            bool openVolumesValid = plan.prisms.TryValidateOpenVolumes(
+                plan.surfaces,
+                out string openVolumeMessage);
             bool rendererInputsValid = TryValidateRendererInputs(plan, out string rendererInputMessage);
 
             return new DungeonPlanValidation(new[]
@@ -230,6 +237,11 @@ namespace DungeonLab.Editor
                     "POST_PLAN_HEADROOM_CLEARANCE",
                     headroomValid,
                     headroomMessage),
+                new DungeonPlanCheck(
+                    "openVolumes",
+                    "OPEN_VOLUME_VIOLATION",
+                    openVolumesValid,
+                    openVolumeMessage),
                 new DungeonPlanCheck("boundary", "BOUNDARY_CONTEXT", boundaryValid, boundaryMessage),
                 new DungeonPlanCheck(
                     "rendererInputs",

@@ -2237,15 +2237,16 @@ and the phase does not exit until collider discipline or the exporter closes it.
 
 ### Phase D — Multi-layer rooms in generation
 
-> **Status. IN PROGRESS.** Slice order and evidence live in
-> [`CURRENT_STATUS.md`](CURRENT_STATUS.md); **D0 through D4 landed 2026-08-01**
+> **Status. COMPLETE 2026-08-01.** Slice order and evidence live in
+> [`CURRENT_STATUS.md`](CURRENT_STATUS.md); **D0 through D5 landed 2026-08-01**
 > — the transition body became a level BAND instead of a column to the sky
 > (closing the defect C2 recorded as unfixed and ungateable), the topology layer
 > schema parses and is carried, the corridor-exclusivity and third-room
 > relaxations shipped with the stacked-corridor producer they need, a bound edge
-> now RESOLVES at its layer's elevation, and the `OpenVolume` kind Phase B
-> shipped without a producer finally has two. **D5, the atrium content, is all
-> that remains.** Three corrections to this section, all measured:
+> now RESOLVES at its layer's elevation, the `OpenVolume` kind Phase B shipped
+> without a producer finally has two, and **D5's atrium generates: 200/200 at
+> every density 0–5, entered on the ground and left from the gallery on 100% of
+> its seeds.** Three corrections to this section, all measured:
 >
 > 1. **"`ChooseEnclosedRooms` moved into the plan so bridges may legally cross
 >    rooms" names a gate that does not exist.** The aerial-bridge pass has no
@@ -2290,6 +2291,28 @@ and the phase does not exit until collider discipline or the exporter closes it.
 > `Recipe:<id>` owner, so an authored list could only spell the blanket
 > exemption the section forbids. The list is derived until owners get finer, and
 > `OPEN_VOLUME_PENETRATION_UNDECLARED` is deliberately not implemented.
+>
+> **D5 forced three latent code fixes and left two scope notes.** The fixes: an
+> upper-storey port was unauthorable because the base-level derivation subtracted
+> a layer offset that was never in the number (`TryGetFloorLevel` answers about
+> the column's FLOOR); `RECIPE_PROTECTION` demanded a surface at an
+> `OpenVolume`'s level, the exact inverse of what the zone means, which cost the
+> first 200-seed run 0/200; and `OPEN_VOLUME_VIOLATION` did not exist though
+> this section's exit criteria name it.
+>
+> The scope notes, so the exit criteria are not read as more than they were.
+> **(a) The shipped atrium is DEGREE 2, and owner decision 9 is still open.**
+> The exit criterion asks for entrances at "≥2 distinct elevations", which a
+> degree-2 slot node satisfies — entry on the chamber floor, exit from the
+> gallery — so the phase never needed the degree-N vertical hub decision 9 is
+> about. A three- or four-way atrium still needs either a degree-N slot kind or a
+> generic multi-layer room, and D3 measured that the second route is blocked: an
+> `IncidentCardinalSockets` recipe binds by direction, so nothing in the route
+> can name which storey a socket is on. **(b) "With the atrium in the mix" is
+> measured on the atrium's OWN seeds**, because the topology is weight 0 like
+> `aperture-gallery`. Raising its weight moves `totalWeight` and re-rolls every
+> seed's topology; that is a content decision with a full rebaseline attached and
+> it is the owner's to make.
 
 **Capability.** Topologies and recipes can declare layers; routes bind to
 declared entrance elevations; `OpenVolume` reserves an atrium; the atrium
