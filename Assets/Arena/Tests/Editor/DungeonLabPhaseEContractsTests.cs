@@ -82,6 +82,34 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["cache.spatiallyPruned"], Is.EqualTo("True"));
         }
 
+        [Test]
+        public void Slice2_OpeningsAndOpenVolumesHavePlanLevelOwnership()
+        {
+            Dictionary<string, string> snapshot =
+                InvokeSnapshot("BuildSlice2OwnershipContractSnapshot");
+
+            Assert.That(snapshot["opening.singlePlanListCount"], Is.EqualTo("3"));
+            Assert.That(snapshot["opening.generatedAndRecipeAccepted"], Is.EqualTo("True"), snapshot["opening.combinedFailure"]);
+            Assert.That(snapshot["opening.generatedPassagesColumnScoped"], Is.EqualTo("True"));
+            Assert.That(snapshot["opening.recipeApertureSurfaceScoped"], Is.EqualTo("True"));
+            Assert.That(snapshot["opening.recipeReportEquivalentFromPlanList"], Is.EqualTo("True"));
+            Assert.That(snapshot["opening.fallNavigationUsesPlanList"], Is.EqualTo("True"));
+            Assert.That(snapshot["opening.generatedSurfacePassagePreserved"], Is.EqualTo("True"));
+            Assert.That(snapshot["opening.duplicateRejected"], Is.EqualTo("True"));
+            Assert.That(snapshot["opening.duplicateFailureCode"], Is.EqualTo("True"));
+            Assert.That(snapshot["opening.missingRimRejected"], Is.EqualTo("True"));
+            Assert.That(snapshot["opening.missingRimFailureCode"], Is.EqualTo("True"));
+            Assert.That(snapshot["opening.recipeResolutionStorageRemoved"], Is.EqualTo("True"));
+
+            Assert.That(snapshot["volume.generatedOwnerGroupCount"], Is.EqualTo("1"));
+            Assert.That(int.Parse(snapshot["volume.unprotectedAtriumPartitions"]), Is.GreaterThan(1));
+            Assert.That(snapshot["volume.protectedAtriumPartitions"], Is.EqualTo("1"));
+            Assert.That(snapshot["volume.chamberSubdivisionContinues"], Is.EqualTo("True"));
+            Assert.That(snapshot["volume.generatedAccepted"], Is.EqualTo("True"));
+            Assert.That(snapshot["volume.penetrationRejected"], Is.EqualTo("True"));
+            Assert.That(snapshot["volume.penetrationFailureCode"], Is.EqualTo("True"));
+        }
+
         private static Dictionary<string, string> InvokeSnapshot(string methodName)
         {
             MethodInfo method = GeneratorType.GetMethod(

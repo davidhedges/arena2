@@ -369,11 +369,9 @@ namespace DungeonLab.Editor
             HashSet<Vector2Int> floorCells)
         {
             var blocked = new PrismLedger();
-            blocked.Register(
-                new OwnerKey(OwnerFamily.Vista, "reserved-lane"),
-                SortedCells(protectedVistaCells ?? new HashSet<Vector2Int>()),
-                Array.Empty<Vector2Int>(),
-                Array.Empty<Vector2Int>());
+            RegisterReservedVistaOpenVolume(
+                blocked,
+                SortedCells(protectedVistaCells ?? new HashSet<Vector2Int>()));
             foreach (RecipePlacement placement in
                      recipePlacements ?? Array.Empty<RecipePlacement>())
             {
@@ -447,7 +445,8 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                ledger.RegisterOpenVolume(
+                RegisterPlannedOpenVolume(
+                    ledger,
                     zone.cells,
                     zone.OpenVolumeBand(declaredBaseLevel),
                     RecipeOpenVolumeOwner(placement.RecipeId, zone.id),

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -63,6 +64,7 @@ namespace DungeonLab.Editor
         private static void SubdivideOversizeRoomsIntoChambers(
             DungeonLayout layout,
             IReadOnlyList<RecipePlacement> recipePlacements,
+            PrismLedger prisms,
             Dictionary<Vector2Int, int> cellRoomIds,
             List<ElevationEdgeModel.DoorwayEdge> doorways,
             ref bool[] enclosedRooms)
@@ -82,6 +84,8 @@ namespace DungeonLab.Editor
                 }
             }
 
+            IReadOnlyList<HashSet<Vector2Int>> openVolumes =
+                prisms?.OpenVolumeCellGroups() ?? Array.Empty<HashSet<Vector2Int>>();
             var enclosed = new List<bool>(enclosedRooms);
             for (int room = 0; room < layout.rooms.Count; room++)
             {
@@ -92,7 +96,9 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                List<HashSet<Vector2Int>> chambers = SplitRoomIntoChambers(layout.rooms[room].cells);
+                List<HashSet<Vector2Int>> chambers = SplitRoomIntoChambers(
+                    layout.rooms[room].cells,
+                    openVolumes);
                 if (chambers.Count <= 1)
                 {
                     continue;
@@ -125,9 +131,13 @@ namespace DungeonLab.Editor
         /// masonry, and a ragged chamber boundary would render as a staircase of
         /// wall stubs. A cut is only taken when both sides stay 4-connected and
         /// the seam is long enough to hold a flanked doorway, so an L-shaped
-        /// room is cut across the L rather than through its notch.
+        /// room is cut across the L rather than through its notch. The cut also
+        /// keeps every owner-grouped reserved void wholly inside one chamber;
+        /// the search may move the seam, but may not partition an atrium.
         /// </remarks>
-        private static List<HashSet<Vector2Int>> SplitRoomIntoChambers(HashSet<Vector2Int> roomCells)
+        private static List<HashSet<Vector2Int>> SplitRoomIntoChambers(
+            HashSet<Vector2Int> roomCells,
+            IReadOnlyList<HashSet<Vector2Int>> openVolumes)
         {
             var chambers = new List<HashSet<Vector2Int>>();
             var pending = new Queue<HashSet<Vector2Int>>();
@@ -136,7 +146,11 @@ namespace DungeonLab.Editor
             {
                 HashSet<Vector2Int> cells = pending.Dequeue();
                 if (cells.Count <= ChamberMaximumCells ||
-                    !TryCutChamber(cells, out HashSet<Vector2Int> first, out HashSet<Vector2Int> second))
+                    !TryCutChamber(
+                        cells,
+                        openVolumes,
+                        out HashSet<Vector2Int> first,
+                        out HashSet<Vector2Int> second))
                 {
                     chambers.Add(cells);
                     continue;
@@ -154,6 +168,7 @@ namespace DungeonLab.Editor
 
         private static bool TryCutChamber(
             HashSet<Vector2Int> cells,
+            IReadOnlyList<HashSet<Vector2Int>> openVolumes,
             out HashSet<Vector2Int> first,
             out HashSet<Vector2Int> second)
         {
@@ -177,7 +192,13 @@ namespace DungeonLab.Editor
                         continue;
                     }
 
-                    if (TryTakeChamberCut(cells, cutX, cut, out first, out second))
+                    if (TryTakeChamberCut(
+                            cells,
+                            openVolumes,
+                            cutX,
+                            cut,
+                            out first,
+                            out second))
                     {
                         return true;
                     }
@@ -189,6 +210,7 @@ namespace DungeonLab.Editor
 
         private static bool TryTakeChamberCut(
             HashSet<Vector2Int> cells,
+            IReadOnlyList<HashSet<Vector2Int>> openVolumes,
             bool cutX,
             int cut,
             out HashSet<Vector2Int> first,
@@ -212,7 +234,8 @@ namespace DungeonLab.Editor
                 second.Count == 0 ||
                 !IsCellSetConnected(first) ||
                 !IsCellSetConnected(second) ||
-                CountSeamPairs(first, second) < ChamberMinimumSeamCells)
+                CountSeamPairs(first, second) < ChamberMinimumSeamCells ||
+                SplitsOpenVolume(first, second, openVolumes))
             {
                 first = null;
                 second = null;
@@ -220,6 +243,30 @@ namespace DungeonLab.Editor
             }
 
             return true;
+        }
+
+        private static bool SplitsOpenVolume(
+            HashSet<Vector2Int> first,
+            HashSet<Vector2Int> second,
+            IReadOnlyList<HashSet<Vector2Int>> openVolumes)
+        {
+            foreach (HashSet<Vector2Int> volume in
+                     openVolumes ?? Array.Empty<HashSet<Vector2Int>>())
+            {
+                bool touchesFirst = false;
+                bool touchesSecond = false;
+                foreach (Vector2Int cell in volume)
+                {
+                    touchesFirst |= first.Contains(cell);
+                    touchesSecond |= second.Contains(cell);
+                    if (touchesFirst && touchesSecond)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static int CountSeamPairs(HashSet<Vector2Int> first, HashSet<Vector2Int> second)

@@ -10,12 +10,9 @@ namespace DungeonLab.Editor
     //
     // The five `HashSet<Vector2Int>` that were `StairPlacementLedger` become one
     // ledger of prisms, each carrying a half-open level band and a typed owner.
-    // Nothing yet supplies a band that is not `LevelBand.Unbounded`, which is
-    // exactly why this phase is output-neutral: two unbounded bands always
-    // intersect, so every conflict resolves as it did when the ledger was five
-    // flat cell sets. Design §6: "today's semantics are the special case where
-    // every band is [-∞, +∞), every owner is distinct, and no OpenVolume or
-    // Support prism exists."
+    // Flat reservations still use `LevelBand.Unbounded`; structural decks and
+    // reserved voids add their resolved bands through this same ledger. The
+    // original flat behavior remains the unbounded special case.
     //
     // Three things this file is careful about, because three review rounds got
     // each of them wrong (design §6, "three corrections to the draft"):
@@ -43,7 +40,7 @@ namespace DungeonLab.Editor
             FootprintClearance,             // was `clearanceCells` — tests against footprints
             TransitionClearance,            // was `transitionClearanceCells` — tests against mouths
 
-            // --- added by the layered design, no producer yet ---
+            // --- added by the layered design ---
             Support,                        // piers, columns, buttresses, stairwell shafts (§7.1)
             Wall,                           // partitions and enclosure walls (§7.1)
             OpenVolume                      // reserved vertical void (§6, §5)
@@ -392,11 +389,10 @@ namespace DungeonLab.Editor
             /// to penetrate it (design §6).
             /// </summary>
             /// <remarks>
-            /// No producer calls this in Phase B — the phase ships the kind, the
-            /// allow-list mechanism and the enforcement, and the atrium that
-            /// needs them arrives later. The allow-list is what keeps the
-            /// reservation usable: an atrium that forbade everything would forbid
-            /// its own balconies, stairs and bridges.
+            /// Recipe atria and generated vista volumes both publish here. The
+            /// allow-list is what keeps the reservation usable: an atrium that
+            /// forbade everything would forbid its own balconies, stairs and
+            /// bridges.
             /// </remarks>
             public void RegisterOpenVolume(
                 IEnumerable<Vector2Int> cells,
@@ -416,6 +412,44 @@ namespace DungeonLab.Editor
                 }
 
                 Add(cells, band, PrismKind.OpenVolume, owner);
+            }
+
+            /// <summary>
+            /// Open-volume footprints grouped by their plan owner. Consumers
+            /// reason about reserved voids through this owner-neutral ledger
+            /// view rather than walking recipe zones.
+            /// </summary>
+            public IReadOnlyList<HashSet<Vector2Int>> OpenVolumeCellGroups()
+            {
+                var cellsByOwner = new Dictionary<OwnerKey, HashSet<Vector2Int>>();
+                foreach (KeyValuePair<Vector2Int, List<Prism>> item in SortedByCell(byCell))
+                {
+                    foreach (Prism prism in item.Value)
+                    {
+                        if (prism.kind != PrismKind.OpenVolume)
+                        {
+                            continue;
+                        }
+
+                        if (!cellsByOwner.TryGetValue(prism.owner, out HashSet<Vector2Int> cells))
+                        {
+                            cells = new HashSet<Vector2Int>();
+                            cellsByOwner[prism.owner] = cells;
+                        }
+
+                        cells.Add(item.Key);
+                    }
+                }
+
+                var owners = new List<OwnerKey>(cellsByOwner.Keys);
+                owners.Sort((a, b) => string.CompareOrdinal(a.Token, b.Token));
+                var result = new List<HashSet<Vector2Int>>(owners.Count);
+                foreach (OwnerKey owner in owners)
+                {
+                    result.Add(cellsByOwner[owner]);
+                }
+
+                return result;
             }
 
             /// <summary>
@@ -836,6 +870,32 @@ namespace DungeonLab.Editor
 
                 return found;
             }
+        }
+
+        private static void RegisterPlannedOpenVolume(
+            PrismLedger ledger,
+            IEnumerable<Vector2Int> cells,
+            LevelBand band,
+            OwnerKey owner,
+            IEnumerable<OwnerKey> penetrationAllowList)
+        {
+            ledger.RegisterOpenVolume(
+                cells,
+                band,
+                owner,
+                penetrationAllowList);
+        }
+
+        private static void RegisterReservedVistaOpenVolume(
+            PrismLedger ledger,
+            IEnumerable<Vector2Int> cells)
+        {
+            RegisterPlannedOpenVolume(
+                ledger,
+                cells,
+                LevelBand.Unbounded,
+                new OwnerKey(OwnerFamily.Vista, "reserved-lane"),
+                Array.Empty<OwnerKey>());
         }
     }
 }

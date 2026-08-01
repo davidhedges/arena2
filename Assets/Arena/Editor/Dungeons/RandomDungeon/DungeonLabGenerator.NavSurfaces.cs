@@ -816,69 +816,73 @@ namespace DungeonLab.Editor
             List<NavigationEdgeDraft> drafts,
             HashSet<string> edgeKeys)
         {
-            foreach (RecipeResolution resolution in
-                     plan.recipeResolutions ?? Array.Empty<RecipeResolution>())
+            AddOpeningNavigationEdges(
+                plan.surfaces,
+                plan.openings,
+                included,
+                drafts,
+                edgeKeys);
+        }
+
+        private static void AddOpeningNavigationEdges(
+            SurfaceField surfaces,
+            IReadOnlyList<PlanOpening> openings,
+            HashSet<SurfaceKey> included,
+            List<NavigationEdgeDraft> drafts,
+            HashSet<string> edgeKeys)
+        {
+            foreach (PlanOpening opening in openings ?? Array.Empty<PlanOpening>())
             {
-                foreach (RecipeOpeningPlacement opening in
-                         resolution.openings ?? Array.Empty<RecipeOpeningPlacement>())
+                if (opening.kind != OpeningKind.Aperture)
                 {
-                    if (opening.kind != OpeningKind.Aperture)
-                    {
-                        continue;
-                    }
-
-                    int rimLevel = resolution.baseLevel +
-                        opening.layerRelativeLevel +
-                        ResolvedRecipeLayerRelativeLevel(
-                            resolution.zones,
-                            opening.cell,
-                            opening.layerId);
-                    Vector2Int hole = opening.cell + DirectionVectorInt(opening.direction);
-                    if (!plan.surfaces.TryGetHighestSurfaceBelow(
-                            hole,
-                            rimLevel,
-                            out int catchLevel))
-                    {
-                        throw new InvalidOperationException(
-                            $"[APERTURE_NO_CATCH_SURFACE] aperture rim '{opening.id}' found no " +
-                            $"surface below {hole},L{rimLevel}");
-                    }
-
-                    var rim = new SurfaceKey(opening.cell, rimLevel);
-                    var caught = new SurfaceKey(hole, catchLevel);
-                    if (!included.Contains(rim) || !included.Contains(caught))
-                    {
-                        throw new InvalidOperationException(
-                            $"[APERTURE_NAV_ENDPOINT_MISSING] aperture rim '{opening.id}' " +
-                            $"resolved {rim}->{caught}, but one endpoint was consumed by transition geometry");
-                    }
-
-                    int fallLevels = rimLevel - catchLevel;
-                    if (fallLevels < MinHeadroomLevels)
-                    {
-                        throw new InvalidOperationException(
-                            $"[APERTURE_FALL_TOO_SHALLOW] aperture rim '{opening.id}' falls " +
-                            $"{fallLevels}u; minimum is {MinHeadroomLevels}u");
-                    }
-
-                    if (fallLevels > MaxSurvivableFallLevels)
-                    {
-                        throw new InvalidOperationException(
-                            $"[APERTURE_FALL_UNSURVIVABLE] aperture rim '{opening.id}' falls " +
-                            $"{fallLevels}u; maximum is {MaxSurvivableFallLevels}u");
-                    }
-
-                    AddNavigationEdge(
-                        drafts,
-                        edgeKeys,
-                        new NavigationEdgeDraft(
-                            rim,
-                            caught,
-                            "Fall",
-                            directed: true,
-                            riseLevels: fallLevels,
-                            cost: NavigationCellSize + fallLevels));
+                    continue;
                 }
+
+                Vector2Int hole = opening.cell + DirectionVectorInt(opening.direction);
+                if (!surfaces.TryGetHighestSurfaceBelow(
+                        hole,
+                        opening.level,
+                        out int catchLevel))
+                {
+                    throw new InvalidOperationException(
+                        $"[APERTURE_NO_CATCH_SURFACE] aperture rim '{opening.id}' found no " +
+                        $"surface below {hole},L{opening.level}");
+                }
+
+                var rim = new SurfaceKey(opening.cell, opening.level);
+                var caught = new SurfaceKey(hole, catchLevel);
+                if (!included.Contains(rim) || !included.Contains(caught))
+                {
+                    throw new InvalidOperationException(
+                        $"[APERTURE_NAV_ENDPOINT_MISSING] aperture rim '{opening.id}' " +
+                        $"resolved {rim}->{caught}, but one endpoint was consumed by transition geometry");
+                }
+
+                int fallLevels = opening.level - catchLevel;
+                if (fallLevels < MinHeadroomLevels)
+                {
+                    throw new InvalidOperationException(
+                        $"[APERTURE_FALL_TOO_SHALLOW] aperture rim '{opening.id}' falls " +
+                        $"{fallLevels}u; minimum is {MinHeadroomLevels}u");
+                }
+
+                if (fallLevels > MaxSurvivableFallLevels)
+                {
+                    throw new InvalidOperationException(
+                        $"[APERTURE_FALL_UNSURVIVABLE] aperture rim '{opening.id}' falls " +
+                        $"{fallLevels}u; maximum is {MaxSurvivableFallLevels}u");
+                }
+
+                AddNavigationEdge(
+                    drafts,
+                    edgeKeys,
+                    new NavigationEdgeDraft(
+                        rim,
+                        caught,
+                        "Fall",
+                        directed: true,
+                        riseLevels: fallLevels,
+                        cost: NavigationCellSize + fallLevels));
             }
         }
 
@@ -896,8 +900,7 @@ namespace DungeonLab.Editor
                 foreach (RecipeZonePlacement zone in
                          resolution.zones ?? Array.Empty<RecipeZonePlacement>())
                 {
-                    if (zone.kind == DungeonRecipeZoneKind.OpenVolume ||
-                        !ContainsCell(zone.cells, surface.cell))
+                    if (!ContainsCell(zone.cells, surface.cell))
                     {
                         continue;
                     }

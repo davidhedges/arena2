@@ -1378,6 +1378,7 @@ namespace DungeonLab.Editor
                     out NamedVistaPromontoryResolution[] namedPromontories,
                     out ExternalConnectorPromontoryResolution[] externalConnectors,
                     out RecipeResolution[] recipeResolutions,
+                    out PlanOpening[] openings,
                     out PrismLedger prisms,
                     out rejectionReason);
             if (!cellLevelFieldBuilt)
@@ -1453,6 +1454,7 @@ namespace DungeonLab.Editor
                 namedPromontories,
                 externalConnectors,
                 recipeResolutions,
+                openings,
                 routeRequirementResolution,
                 prisms,
                 topologyCeiling);
@@ -1467,6 +1469,7 @@ namespace DungeonLab.Editor
                 loopedLayout,
                 surfaces,
                 transitions,
+                plan.prisms,
                 routeRequirements?.recipes,
                 plannedEnclosedRooms,
                 enclosureRandom,
@@ -2052,6 +2055,7 @@ namespace DungeonLab.Editor
             out NamedVistaPromontoryResolution[] namedPromontories,
             out ExternalConnectorPromontoryResolution[] externalConnectors,
             out RecipeResolution[] recipeResolutions,
+            out PlanOpening[] openings,
             out PrismLedger prisms,
             out string rejectionReason)
         {
@@ -2073,6 +2077,7 @@ namespace DungeonLab.Editor
             namedPromontories = Array.Empty<NamedVistaPromontoryResolution>();
             externalConnectors = Array.Empty<ExternalConnectorPromontoryResolution>();
             recipeResolutions = Array.Empty<RecipeResolution>();
+            openings = Array.Empty<PlanOpening>();
             rejectionReason = string.Empty;
 
             for (int roomIndex = 0; roomIndex < layout.rooms.Count; roomIndex++)
@@ -2100,15 +2105,12 @@ namespace DungeonLab.Editor
             if (routeRequirements?.reservedVistaCells != null)
             {
                 protectedStructuralCells.UnionWith(routeRequirements.reservedVistaCells);
-                // Treat the sight volume as protected structural space before any
-                // stair/bridge/stairwell candidate is chosen. The ledger already
-                // owns footprint/landing conflict rules, so this adds no parallel
-                // geometry implementation.
-                plannedStairLedger.Register(
-                    new OwnerKey(OwnerFamily.Vista, "reserved-lane"),
-                    SortedCells(routeRequirements.reservedVistaCells).ToArray(),
-                    Array.Empty<Vector2Int>(),
-                    Array.Empty<Vector2Int>());
+                // Publish the generated sight volume through the same reserved-
+                // void mechanism used by authored atria before any stair/bridge/
+                // stairwell candidate is chosen.
+                RegisterReservedVistaOpenVolume(
+                    plannedStairLedger,
+                    SortedCells(routeRequirements.reservedVistaCells).ToArray());
 
                 // The two facing boundary cells are the final-view anchors. Treat
                 // them as shareable landings: route stairs may land there, while
@@ -2295,6 +2297,10 @@ namespace DungeonLab.Editor
             {
                 return false;
             }
+
+            openings = BuildPlanOpenings(
+                externalConnectors,
+                routeRequirements?.recipes);
 
             // A2 of the layered-topology design (§3.1, §13): shadow agreement.
             // External promontories are the final plan mutation, so this is "the
@@ -3703,6 +3709,7 @@ namespace DungeonLab.Editor
             DungeonLayout layout,
             SurfaceField surfaces,
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
+            PrismLedger prisms,
             IReadOnlyList<RecipePlacement> recipePlacements,
             bool[] plannedEnclosedRooms,
             System.Random random,
@@ -3733,6 +3740,7 @@ namespace DungeonLab.Editor
             SubdivideOversizeRoomsIntoChambers(
                 layout,
                 recipePlacements,
+                prisms,
                 cellRoomIds,
                 doorways,
                 ref enclosedRooms);
@@ -7669,12 +7677,9 @@ namespace DungeonLab.Editor
         /// producer's output.
         /// </summary>
         /// <remarks>
-        /// 0 across the corpus means no recipe declares one, so the producer,
-        /// the fill exclusion and the penetration rule are all reachable and all
-        /// unexercised — which is exactly what makes the slice neutral. It is
-        /// also the number that would catch the failure §11 names: a volume that
-        /// silently stopped being registered would read as 0 here on a seed whose
-        /// content declares one.
+        /// This includes authored recipe voids and generated vista volumes. It
+        /// catches the failure §11 names: a volume that silently stopped being
+        /// registered would disappear from this count on a seed that owns one.
         /// </remarks>
         private static int CountOpenVolumeCells(PrismLedger prisms)
         {
@@ -9348,6 +9353,11 @@ namespace DungeonLab.Editor
             // cardinal, and separate from the optional scenic vista promontory.
             public readonly ExternalConnectorPromontoryResolution[] externalConnectors;
             public readonly RecipeResolution[] recipeResolutions;
+            // Every bare rim in the accepted plan. Recipe, external and later
+            // generated topology producers publish the same absolute record;
+            // renderer/navigation/validation never recover one by walking its
+            // producer-specific resolution.
+            public readonly PlanOpening[] openings;
             public readonly RouteRequirementResolution routeRequirementResolution;
             // Phase B: the volumetric reservations the planner enforced (design
             // §6). Carried on the plan so the acceptance gate can run the one
@@ -9381,6 +9391,7 @@ namespace DungeonLab.Editor
                 NamedVistaPromontoryResolution[] namedPromontories,
                 ExternalConnectorPromontoryResolution[] externalConnectors,
                 RecipeResolution[] recipeResolutions,
+                PlanOpening[] openings,
                 RouteRequirementResolution routeRequirementResolution,
                 PrismLedger prisms,
                 int topologyCeilingLevels)
@@ -9411,6 +9422,7 @@ namespace DungeonLab.Editor
                 this.namedPromontories = namedPromontories ?? Array.Empty<NamedVistaPromontoryResolution>();
                 this.externalConnectors = externalConnectors ?? Array.Empty<ExternalConnectorPromontoryResolution>();
                 this.recipeResolutions = recipeResolutions ?? Array.Empty<RecipeResolution>();
+                this.openings = openings ?? Array.Empty<PlanOpening>();
                 this.routeRequirementResolution = routeRequirementResolution;
             }
         }

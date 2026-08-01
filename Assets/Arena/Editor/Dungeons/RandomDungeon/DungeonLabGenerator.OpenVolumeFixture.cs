@@ -10,11 +10,9 @@ namespace DungeonLab.Editor
     // a recipe can reserve a vertical void, and two rooms can share a plan
     // column when both declare storeys and their bands do not meet.
     //
-    // Nothing in the shipped catalog declares an OpenVolume and no topology
-    // declares a layer, which is what makes the slice output-neutral — and is
-    // also why the capability needs a fixture. Phase B shipped the OpenVolume
-    // kind, its allow-list and its enforcement with NO producer at all, so
-    // until now not one line of that mechanism had ever run.
+    // Authored recipes and generated vista volumes now share this reservation
+    // mechanism. The fixture keeps the original band, allow-list, and overlap
+    // contracts explicit independently of either producer.
     internal sealed partial class DungeonLabGenerator
     {
         private sealed class OpenVolumeFixture

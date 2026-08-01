@@ -4208,7 +4208,9 @@ namespace DungeonLab.Editor
             JArray existingTransitions = BuildExistingTransitionProjection(plan.transitions, !plan.surfaces.IsSingleLayer);
             JObject preservedCorePlan = BuildPreservedCorePlanProjection(plan);
             JObject preCorrectivePlan = BuildPreCorrectiveTieredLevelPlanProjection(plan);
-            JArray recipeResolutions = BuildRecipeResolutionsProjection(plan.recipeResolutions);
+            JArray recipeResolutions = BuildRecipeResolutionsProjection(
+                plan.recipeResolutions,
+                plan.openings);
 
             string layoutHash = ComputeSha256(canonicalLayout.ToString(Formatting.None));
             string planHash = ComputeSha256(canonicalPlan.ToString(Formatting.None));
@@ -4797,18 +4799,22 @@ namespace DungeonLab.Editor
             };
         }
 
-        private static JArray BuildRecipeResolutionsProjection(IEnumerable<RecipeResolution> resolutions)
+        private static JArray BuildRecipeResolutionsProjection(
+            IEnumerable<RecipeResolution> resolutions,
+            IReadOnlyList<PlanOpening> openings)
         {
             var result = new JArray();
             foreach (RecipeResolution resolution in resolutions ?? Array.Empty<RecipeResolution>())
             {
-                result.Add(BuildRecipeResolutionProjection(resolution));
+                result.Add(BuildRecipeResolutionProjection(resolution, openings));
             }
 
             return result;
         }
 
-        private static JObject BuildRecipeResolutionProjection(RecipeResolution resolution)
+        private static JObject BuildRecipeResolutionProjection(
+            RecipeResolution resolution,
+            IReadOnlyList<PlanOpening> openings)
         {
             var zones = new JArray();
             foreach (RecipeZonePlacement zone in resolution.zones ?? Array.Empty<RecipeZonePlacement>())
@@ -4880,21 +4886,26 @@ namespace DungeonLab.Editor
             // seed's `hashes.recipeResolutions` and thence `canonical`, for a
             // schema addition no existing recipe uses.
             JArray recipeOpenings = null;
-            foreach (RecipeOpeningPlacement opening in
-                     resolution.openings ?? Array.Empty<RecipeOpeningPlacement>())
+            var openingOwner = new OwnerKey(OwnerFamily.Recipe, resolution.id);
+            foreach (PlanOpening opening in openings ?? Array.Empty<PlanOpening>())
             {
+                if (!opening.owner.Equals(openingOwner) || !opening.kind.HasValue)
+                {
+                    continue;
+                }
+
                 recipeOpenings ??= new JArray();
                 recipeOpenings.Add(new JObject
                 {
                     ["id"] = opening.id,
                     ["cell"] = CellToken(opening.cell),
                     ["direction"] = opening.direction,
-                    ["layerRelativeLevel"] = opening.layerRelativeLevel
+                    ["layerRelativeLevel"] = opening.level - resolution.baseLevel
                 });
                 if (opening.kind != OpeningKind.Aperture)
                 {
                     ((JObject)recipeOpenings[recipeOpenings.Count - 1])["kind"] =
-                        opening.kind.ToString();
+                        opening.kind.Value.ToString();
                 }
             }
 
@@ -5331,6 +5342,7 @@ namespace DungeonLab.Editor
 
             var directions = new HashSet<int>();
             var occupied = new HashSet<Vector2Int>();
+            int externalOpeningCount = 0;
             RectInt finalExtent = GetCellRect(plan.surfaces.FlooredPlanCells());
             foreach (ExternalConnectorPromontoryResolution resolution in resolutions)
             {
@@ -5368,10 +5380,37 @@ namespace DungeonLab.Editor
                         return false;
                     }
                 }
+
+                var openingOwner = new OwnerKey(OwnerFamily.Promontory, resolution.id);
+                int ownerOpeningCount = 0;
+                bool anchorOpened = false;
+                bool terminalOpened = false;
+                foreach (PlanOpening opening in plan.openings ?? Array.Empty<PlanOpening>())
+                {
+                    if (!opening.owner.Equals(openingOwner) || opening.IsSurfaceScoped)
+                    {
+                        continue;
+                    }
+
+                    ownerOpeningCount++;
+                    anchorOpened |= opening.id == "anchor" &&
+                        opening.cell == resolution.anchorCell &&
+                        opening.direction == resolution.direction;
+                    terminalOpened |= opening.id == "terminal" &&
+                        opening.cell == resolution.terminalCell &&
+                        opening.direction == resolution.direction;
+                }
+
+                if (ownerOpeningCount != 2 || !anchorOpened || !terminalOpened)
+                {
+                    message =
+                        $"external connector '{resolution.id}' did not publish its two plan openings";
+                    return false;
+                }
+
+                externalOpeningCount += ownerOpeningCount;
             }
 
-            List<ElevationEdgeModel.OpenFloorEdge> openEdges =
-                BuildExternalConnectorOpenEdges(resolutions);
             // Against the RESOLVED count, not the preferred one: the resolver may
             // have walked down when the grown core stopped offering anchors, and
             // what this has to prove is that every connector it did resolve is a
@@ -5379,9 +5418,9 @@ namespace DungeonLab.Editor
             int resolvedCount = resolutions.Length;
             bool passed = directions.Count == resolvedCount &&
                 occupied.Count == resolvedCount * (ExternalConnectorAppendageCells + 1) &&
-                openEdges.Count == resolvedCount * 2;
+                externalOpeningCount == resolvedCount * 2;
             message = passed
-                ? $"resolved {resolvedCount} of a preferred {desiredCount} as {ExternalConnectorAppendageCells}-cell straight runs with unique directions, clear terminal throats, and {openEdges.Count} renderer openings"
+                ? $"resolved {resolvedCount} of a preferred {desiredCount} as {ExternalConnectorAppendageCells}-cell straight runs with unique directions, clear terminal throats, and {externalOpeningCount} renderer openings"
                 : "external connector set was incomplete";
             return passed;
         }
@@ -5500,6 +5539,11 @@ namespace DungeonLab.Editor
             if (plan.surfaces == null || plan.surfaces.Count == 0)
             {
                 message = "renderer input had no leveled floor cells";
+                return false;
+            }
+
+            if (!TryValidatePlanOpenings(plan.surfaces, plan.openings, out message))
+            {
                 return false;
             }
 
@@ -6034,7 +6078,9 @@ namespace DungeonLab.Editor
                 ["namedPromontories"] = BuildNamedPromontoryProjection(plan.namedPromontories),
                 ["externalConnectorPierCells"] = CellsToken(CollectExternalConnectorPierCells(plan.externalConnectors), sort: true),
                 ["externalConnectors"] = BuildExternalConnectorProjection(plan.externalConnectors),
-                ["recipeResolutions"] = BuildRecipeResolutionsProjection(plan.recipeResolutions),
+                ["recipeResolutions"] = BuildRecipeResolutionsProjection(
+                    plan.recipeResolutions,
+                    plan.openings),
                 ["routeRequirements"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution)
             };
             if (stackedSurfaces != null)
@@ -6160,7 +6206,9 @@ namespace DungeonLab.Editor
                     })),
                 ["daisShowpieces"] = BuildDaisShowpieceProjection(plan.daisShowpieces),
                 ["namedPromontories"] = BuildNamedPromontoryProjection(plan.namedPromontories),
-                ["recipeResolutions"] = BuildRecipeResolutionsProjection(plan.recipeResolutions),
+                ["recipeResolutions"] = BuildRecipeResolutionsProjection(
+                    plan.recipeResolutions,
+                    plan.openings),
                 ["routeRequirements"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution)
             };
         }
@@ -6261,7 +6309,9 @@ namespace DungeonLab.Editor
                 ["daisShowpieces"] = BuildDaisShowpieceProjection(plan.daisShowpieces),
                 ["promontoryCells"] = CellsToken(CollectNamedPromontoryCells(plan.namedPromontories), sort: true),
                 ["namedPromontories"] = BuildNamedPromontoryProjection(plan.namedPromontories),
-                ["recipeResolutions"] = BuildRecipeResolutionsProjection(plan.recipeResolutions),
+                ["recipeResolutions"] = BuildRecipeResolutionsProjection(
+                    plan.recipeResolutions,
+                    plan.openings),
                 ["routeRequirements"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution)
             };
         }

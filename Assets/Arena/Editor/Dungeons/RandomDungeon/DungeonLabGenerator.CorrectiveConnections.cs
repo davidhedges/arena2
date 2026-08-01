@@ -493,56 +493,66 @@ namespace DungeonLab.Editor
         }
 
         /// <summary>
-        /// Every rim the PLAN declares bare: the external connectors' throats,
-        /// plus any typed opening an authored recipe opened.
+        /// Compile every producer's bare rims into the plan's one opening list.
         /// </summary>
         /// <remarks>
-        /// One list, built at both render call sites, so a plan cannot render
-        /// with half its declared openings. The connector edges are
+        /// The connector edges are
         /// column-scoped (the sentinel level) and the recipe rims are
         /// surface-scoped, which is exactly the distinction
         /// <c>OpenFloorEdge.IsSurfaceScoped</c> exists to carry: a connector
         /// throat opens the ground it stands on, a recipe rim opens one
         /// storey and leaves the floor below it fully guarded.
         /// </remarks>
+        private static PlanOpening[] BuildPlanOpenings(
+            IReadOnlyList<ExternalConnectorPromontoryResolution> externalConnectors,
+            IReadOnlyList<RecipePlacement> recipePlacements)
+        {
+            var openings = new List<PlanOpening>();
+            foreach (ExternalConnectorPromontoryResolution resolution in
+                     externalConnectors ?? Array.Empty<ExternalConnectorPromontoryResolution>())
+            {
+                var owner = new OwnerKey(OwnerFamily.Promontory, resolution.id);
+                openings.Add(new PlanOpening(
+                    owner,
+                    "anchor",
+                    resolution.anchorCell,
+                    resolution.direction));
+                openings.Add(new PlanOpening(
+                    owner,
+                    "terminal",
+                    resolution.terminalCell,
+                    resolution.direction));
+            }
+
+            foreach (RecipePlacement placement in
+                     recipePlacements ?? Array.Empty<RecipePlacement>())
+            {
+                openings.AddRange(placement?.openings ?? Array.Empty<PlanOpening>());
+            }
+
+            return openings.ToArray();
+        }
+
         private static List<ElevationEdgeModel.OpenFloorEdge> BuildPlannedOpenEdges(
             TieredLevelPlan plan)
         {
-            List<ElevationEdgeModel.OpenFloorEdge> edges =
-                BuildExternalConnectorOpenEdges(plan.externalConnectors);
-            foreach (RecipeResolution resolution in
-                     plan.recipeResolutions ?? Array.Empty<RecipeResolution>())
-            {
-                foreach (RecipeOpeningPlacement opening in resolution.openings)
-                {
-                    edges.Add(new ElevationEdgeModel.OpenFloorEdge(
-                        opening.cell,
-                        resolution.baseLevel +
-                            opening.layerRelativeLevel +
-                            ResolvedRecipeLayerRelativeLevel(
-                                resolution.zones,
-                                opening.cell,
-                                opening.layerId),
-                        opening.direction));
-                }
-            }
-
-            return edges;
+            return BuildPlannedOpenEdges(plan.openings);
         }
 
-        private static List<ElevationEdgeModel.OpenFloorEdge> BuildExternalConnectorOpenEdges(
-            IReadOnlyList<ExternalConnectorPromontoryResolution> resolutions)
+        private static List<ElevationEdgeModel.OpenFloorEdge> BuildPlannedOpenEdges(
+            IReadOnlyList<PlanOpening> openings)
         {
             var result = new List<ElevationEdgeModel.OpenFloorEdge>();
-            foreach (ExternalConnectorPromontoryResolution resolution in
-                     resolutions ?? Array.Empty<ExternalConnectorPromontoryResolution>())
+            foreach (PlanOpening opening in openings ?? Array.Empty<PlanOpening>())
             {
-                result.Add(new ElevationEdgeModel.OpenFloorEdge(
-                    resolution.anchorCell,
-                    resolution.direction));
-                result.Add(new ElevationEdgeModel.OpenFloorEdge(
-                    resolution.terminalCell,
-                    resolution.direction));
+                result.Add(opening.IsSurfaceScoped
+                    ? new ElevationEdgeModel.OpenFloorEdge(
+                        opening.cell,
+                        opening.level,
+                        opening.direction)
+                    : new ElevationEdgeModel.OpenFloorEdge(
+                        opening.cell,
+                        opening.direction));
             }
 
             return result;

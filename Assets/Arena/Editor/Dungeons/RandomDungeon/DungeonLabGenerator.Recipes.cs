@@ -307,7 +307,7 @@ namespace DungeonLab.Editor
         }
 
         /// <summary>
-        /// One authored bare rim, in world cells and at its resolved level.
+        /// One planned bare rim, in world cells and at its resolved level.
         /// </summary>
         /// <remarks>
         /// The level is carried rather than looked up, for the same reason
@@ -316,31 +316,67 @@ namespace DungeonLab.Editor
         /// against the level field would guard the chamber below instead of the
         /// gallery above.
         /// </remarks>
-        private readonly struct RecipeOpeningPlacement
+        private readonly struct PlanOpening
         {
+            public readonly OwnerKey owner;
             public readonly string id;
-            public readonly OpeningKind kind;
+            // Null means a horizontal passage; its level may name one surface
+            // or use the column-floor sentinel. Aperture/Void always name a
+            // surface and a fall-column contract. Keeping that distinction here
+            // lets generated and authored producers publish one record without
+            // extending the recipe-facing enum or schema.
+            public readonly OpeningKind? kind;
             public readonly Vector2Int cell;
             public readonly int direction;
-            /// <summary>Its layer's offset from the node's level.</summary>
-            public readonly int layerRelativeLevel;
-            public readonly string layerId;
+            public readonly int level;
 
-            public RecipeOpeningPlacement(
+            public PlanOpening(
+                OwnerKey owner,
                 string id,
                 OpeningKind kind,
                 Vector2Int cell,
                 int direction,
-                int layerRelativeLevel,
-                string layerId)
+                int level)
             {
+                this.owner = owner;
                 this.id = id ?? string.Empty;
                 this.kind = kind;
                 this.cell = cell;
                 this.direction = direction;
-                this.layerRelativeLevel = layerRelativeLevel;
-                this.layerId = layerId ?? string.Empty;
+                this.level = level;
             }
+
+            public PlanOpening(
+                OwnerKey owner,
+                string id,
+                Vector2Int cell,
+                int direction)
+                : this(
+                    owner,
+                    id,
+                    cell,
+                    direction,
+                    ElevationEdgeModel.OpenFloorEdge.ColumnFloorLevel)
+            {
+            }
+
+            public PlanOpening(
+                OwnerKey owner,
+                string id,
+                Vector2Int cell,
+                int direction,
+                int level)
+            {
+                this.owner = owner;
+                this.id = id ?? string.Empty;
+                kind = null;
+                this.cell = cell;
+                this.direction = direction;
+                this.level = level;
+            }
+
+            public bool IsSurfaceScoped =>
+                level != ElevationEdgeModel.OpenFloorEdge.ColumnFloorLevel;
         }
 
         private sealed class RecipePlacement
@@ -356,7 +392,7 @@ namespace DungeonLab.Editor
             public readonly Vector2Int[] protectedCells;
             public readonly RecipePortPlacement[] ports;
             public readonly RecipeTransitionPlacement[] transitions;
-            public readonly RecipeOpeningPlacement[] openings;
+            public readonly PlanOpening[] openings;
             public readonly string selectedVariationId;
             public readonly string selectedVisualImplementationId;
             public readonly Vector2Int showpieceOriginCell;
@@ -375,7 +411,7 @@ namespace DungeonLab.Editor
                 Vector2Int[] protectedCells,
                 RecipePortPlacement[] ports,
                 RecipeTransitionPlacement[] transitions,
-                RecipeOpeningPlacement[] openings,
+                PlanOpening[] openings,
                 string selectedVariationId,
                 string selectedVisualImplementationId,
                 Vector2Int showpieceOriginCell,
@@ -393,7 +429,7 @@ namespace DungeonLab.Editor
                 this.protectedCells = protectedCells ?? Array.Empty<Vector2Int>();
                 this.ports = ports ?? Array.Empty<RecipePortPlacement>();
                 this.transitions = transitions ?? Array.Empty<RecipeTransitionPlacement>();
-                this.openings = openings ?? Array.Empty<RecipeOpeningPlacement>();
+                this.openings = openings ?? Array.Empty<PlanOpening>();
                 this.selectedVariationId = selectedVariationId ?? string.Empty;
                 this.selectedVisualImplementationId = selectedVisualImplementationId ?? string.Empty;
                 this.showpieceOriginCell = showpieceOriginCell;
@@ -446,7 +482,6 @@ namespace DungeonLab.Editor
             public readonly RecipeZonePlacement[] zones;
             public readonly RecipePortPlacement[] ports;
             public readonly RecipeTransitionPlacement[] transitions;
-            public readonly RecipeOpeningPlacement[] openings;
             public readonly string selectedVariationId;
             public readonly string selectedVisualImplementationId;
             public readonly Vector2Int showpieceOriginCell;
@@ -469,7 +504,6 @@ namespace DungeonLab.Editor
                 zones = placement?.zones ?? Array.Empty<RecipeZonePlacement>();
                 ports = placement?.ports ?? Array.Empty<RecipePortPlacement>();
                 transitions = placement?.transitions ?? Array.Empty<RecipeTransitionPlacement>();
-                openings = placement?.openings ?? Array.Empty<RecipeOpeningPlacement>();
                 selectedVariationId = placement?.selectedVariationId ?? string.Empty;
                 selectedVisualImplementationId = placement?.selectedVisualImplementationId ?? string.Empty;
                 showpieceOriginCell = placement?.showpieceOriginCell ?? default;
@@ -1500,7 +1534,8 @@ namespace DungeonLab.Editor
                     transitionUpperLayerLevel));
             }
 
-            var openings = new List<RecipeOpeningPlacement>();
+            var openings = new List<PlanOpening>();
+            var openingOwner = new OwnerKey(OwnerFamily.Recipe, slot.recipe.recipeId);
             foreach (DungeonRecipeOpening opening in
                      slot.recipe.openings ?? Array.Empty<DungeonRecipeOpening>())
             {
@@ -1515,17 +1550,31 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                openings.Add(new RecipeOpeningPlacement(
+                string openingLayerId = DungeonRecipeLayers.CanonicalId(
+                    slot.recipe,
+                    opening.layerId);
+                Vector2Int openingCell = TransformRecipeCell(
+                    opening.cell,
+                    center,
+                    primaryAxis,
+                    transverseAxis,
+                    mirrored);
+                openings.Add(new PlanOpening(
+                    openingOwner,
                     opening.id,
                     opening.kind,
-                    TransformRecipeCell(opening.cell, center, primaryAxis, transverseAxis, mirrored),
+                    openingCell,
                     DirectionFromVector(TransformRecipeDirection(
                         opening.outwardDirection,
                         primaryAxis,
                         transverseAxis,
                         mirrored)),
-                    openingLayerLevel,
-                    DungeonRecipeLayers.CanonicalId(slot.recipe, opening.layerId)));
+                    node.relativeElevationLevels +
+                        openingLayerLevel +
+                        ResolvedRecipeLayerRelativeLevel(
+                            zonePlacements,
+                            openingCell,
+                            openingLayerId)));
             }
 
             string variationId = string.Empty;
@@ -1588,7 +1637,7 @@ namespace DungeonLab.Editor
             RecipeZonePlacement[] zoneArray = zonePlacements.ToArray();
             RecipePortPlacement[] portArray = ports.ToArray();
             RecipeTransitionPlacement[] transitionArray = transitions.ToArray();
-            RecipeOpeningPlacement[] openingArray = openings.ToArray();
+            PlanOpening[] openingArray = openings.ToArray();
             if (!RecipeCellsBelongToRoom(room, zoneArray, portArray, transitionArray, openingArray))
             {
                 rejectionReason = $"recipe '{slot.recipe.recipeId}' geometry or reservation escaped its room footprint";
@@ -1906,7 +1955,7 @@ namespace DungeonLab.Editor
             IReadOnlyList<RecipeZonePlacement> zones,
             IReadOnlyList<RecipePortPlacement> ports,
             IReadOnlyList<RecipeTransitionPlacement> transitions,
-            IReadOnlyList<RecipeOpeningPlacement> openings)
+            IReadOnlyList<PlanOpening> openings)
         {
             bool ContainsAll(IEnumerable<Vector2Int> cells)
             {
@@ -1954,7 +2003,7 @@ namespace DungeonLab.Editor
             // carries the chamber floor you land on — it just has no surface on
             // the rim's own storey, which is the layer-scoped test the recipe
             // validator already made.
-            foreach (RecipeOpeningPlacement opening in openings)
+            foreach (PlanOpening opening in openings)
             {
                 if (!room.Contains(opening.cell))
                 {
@@ -2572,9 +2621,9 @@ namespace DungeonLab.Editor
         }
 
         /// <summary>
-        /// The <see cref="PrismKind.OpenVolume"/> PRODUCER (design §6). Phase B
-        /// shipped the kind, the allow-list and the enforcement with nothing
-        /// calling them; this is the thing that calls them.
+        /// The authored <see cref="PrismKind.OpenVolume"/> producer (design §6).
+        /// It publishes through the same plan-level operation as generated
+        /// vista volumes.
         /// </summary>
         /// <remarks>
         /// The volume gets its OWN owner rather than the recipe's, because §6
@@ -2610,7 +2659,8 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                ledger.RegisterOpenVolume(
+                RegisterPlannedOpenVolume(
+                    ledger,
                     zone.cells,
                     zone.OpenVolumeBand(baseLevel),
                     RecipeOpenVolumeOwner(placement.RecipeId, zone.id),
@@ -2927,47 +2977,6 @@ namespace DungeonLab.Editor
                 }
             }
 
-            // The authored opening, read back off the plan: the rim stands on a
-            // real surface and the cell it faces genuinely has none at that
-            // level. The recipe validator asked the same question of the
-            // DECLARATION; this asks it of the field the resolver built, which is
-            // what catches a later pass filling the hole in. Void additionally
-            // proves that no lower surface obstructs the fall column.
-            foreach (RecipeOpeningPlacement opening in placement.openings)
-            {
-                int rimLevel = baseLevel +
-                    opening.layerRelativeLevel +
-                    ResolvedRecipeLayerRelativeLevel(placement.zones, opening.cell, opening.layerId);
-                Vector2Int hole = opening.cell + DirectionVectorInt(opening.direction);
-                if (!surfaces.HasSurfaceAt(opening.cell, rimLevel) ||
-                    surfaces.HasSurfaceAt(hole, rimLevel))
-                {
-                    rejectionReason =
-                        $"[RECIPE_OPENING] rim '{opening.id}' on '{placement.RecipeId}' did not stand at L{rimLevel} beside an open cell at {hole}";
-                    return false;
-                }
-
-                if (opening.kind == OpeningKind.Aperture &&
-                    !TryValidateApertureOpeningFallColumn(
-                        surfaces,
-                        opening,
-                        rimLevel,
-                        out rejectionReason))
-                {
-                    return false;
-                }
-
-                if (opening.kind == OpeningKind.Void &&
-                    !TryValidateVoidOpeningFallColumn(
-                        surfaces,
-                        opening,
-                        rimLevel,
-                        out rejectionReason))
-                {
-                    return false;
-                }
-            }
-
             foreach (DungeonRecipeSymmetryPair pair in placement.slot.recipe.symmetryPairs)
             {
                 if (!placement.TryGetZone(pair.firstZoneId, out RecipeZonePlacement first) ||
@@ -3037,27 +3046,107 @@ namespace DungeonLab.Editor
             return true;
         }
 
+        // One validation path for every planned rim. Producer-specific schema
+        // validation still checks declarations before placement; acceptance
+        // checks only this absolute plan record and therefore works unchanged
+        // for recipe, passage and generated-topology openings.
+        private static bool TryValidatePlanOpenings(
+            SurfaceField surfaces,
+            IReadOnlyList<PlanOpening> openings,
+            out string rejectionReason)
+        {
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (PlanOpening opening in openings ?? Array.Empty<PlanOpening>())
+            {
+                if (string.IsNullOrWhiteSpace(opening.id) ||
+                    Array.IndexOf(Direction.Cardinals, opening.direction) < 0)
+                {
+                    rejectionReason =
+                        $"[PLAN_OPENING] opening '{opening.id}' had invalid identity or direction";
+                    return false;
+                }
+
+                string key =
+                    $"{opening.cell.x},{opening.cell.y},L{opening.level},D{opening.direction}";
+                if (!keys.Add(key))
+                {
+                    rejectionReason = $"[PLAN_OPENING_DUPLICATE] opening '{opening.id}' duplicated {key}";
+                    return false;
+                }
+
+                bool rimExists = opening.IsSurfaceScoped
+                    ? surfaces.HasSurfaceAt(opening.cell, opening.level)
+                    : surfaces.HasFloor(opening.cell);
+                if (!rimExists)
+                {
+                    rejectionReason =
+                        $"[PLAN_OPENING_RIM_MISSING] opening '{opening.id}' had no rim surface at {opening.cell},L{opening.level}";
+                    return false;
+                }
+
+                if (!opening.kind.HasValue)
+                {
+                    continue;
+                }
+
+                if (!opening.IsSurfaceScoped)
+                {
+                    rejectionReason =
+                        $"[PLAN_OPENING_LEVEL] fall opening '{opening.id}' did not name an absolute surface";
+                    return false;
+                }
+
+                Vector2Int hole = opening.cell + DirectionVectorInt(opening.direction);
+                if (surfaces.HasSurfaceAt(hole, opening.level))
+                {
+                    rejectionReason =
+                        $"[PLAN_OPENING_BLOCKED] rim '{opening.id}' at L{opening.level} faced a surface at {hole}";
+                    return false;
+                }
+
+                if (opening.kind == OpeningKind.Aperture &&
+                    !TryValidateApertureOpeningFallColumn(
+                        surfaces,
+                        opening,
+                        out rejectionReason))
+                {
+                    return false;
+                }
+
+                if (opening.kind == OpeningKind.Void &&
+                    !TryValidateVoidOpeningFallColumn(
+                        surfaces,
+                        opening,
+                        out rejectionReason))
+                {
+                    return false;
+                }
+            }
+
+            rejectionReason = $"validated {(openings?.Count ?? 0)} planned opening(s)";
+            return true;
+        }
+
         private static bool TryValidateApertureOpeningFallColumn(
             SurfaceField surfaces,
-            RecipeOpeningPlacement opening,
-            int rimLevel,
+            PlanOpening opening,
             out string rejectionReason)
         {
             Vector2Int hole = opening.cell + DirectionVectorInt(opening.direction);
-            if (!surfaces.TryGetHighestSurfaceBelow(hole, rimLevel, out int catchLevel))
+            if (!surfaces.TryGetHighestSurfaceBelow(hole, opening.level, out int catchLevel))
             {
                 rejectionReason =
                     $"[APERTURE_NO_CATCH_SURFACE] aperture rim '{opening.id}' found no " +
-                    $"surface below {hole},L{rimLevel}";
+                    $"surface below {hole},L{opening.level}";
                 return false;
             }
 
-            int fallLevels = rimLevel - catchLevel;
+            int fallLevels = opening.level - catchLevel;
             if (fallLevels < MinHeadroomLevels)
             {
                 rejectionReason =
                     $"[APERTURE_FALL_TOO_SHALLOW] aperture rim '{opening.id}' falls " +
-                    $"{fallLevels}u from L{rimLevel} to L{catchLevel}; minimum is " +
+                    $"{fallLevels}u from L{opening.level} to L{catchLevel}; minimum is " +
                     $"{MinHeadroomLevels}u";
                 return false;
             }
@@ -3066,7 +3155,7 @@ namespace DungeonLab.Editor
             {
                 rejectionReason =
                     $"[APERTURE_FALL_UNSURVIVABLE] aperture rim '{opening.id}' falls " +
-                    $"{fallLevels}u from L{rimLevel} to L{catchLevel}; maximum is " +
+                    $"{fallLevels}u from L{opening.level} to L{catchLevel}; maximum is " +
                     $"{MaxSurvivableFallLevels}u";
                 return false;
             }
@@ -3077,12 +3166,11 @@ namespace DungeonLab.Editor
 
         private static bool TryValidateVoidOpeningFallColumn(
             SurfaceField surfaces,
-            RecipeOpeningPlacement opening,
-            int rimLevel,
+            PlanOpening opening,
             out string rejectionReason)
         {
             Vector2Int hole = opening.cell + DirectionVectorInt(opening.direction);
-            if (surfaces.TryGetHighestSurfaceBelow(hole, rimLevel, out int obstructionLevel))
+            if (surfaces.TryGetHighestSurfaceBelow(hole, opening.level, out int obstructionLevel))
             {
                 rejectionReason =
                     $"[VOID_OPENING_OBSTRUCTED] void rim '{opening.id}' found surface " +
