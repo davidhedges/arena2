@@ -374,6 +374,63 @@ namespace DungeonLab.Editor
             }
 
             /// <summary>
+            /// Register one generated room storey: its closed slab, bracket
+            /// supports, and the clear air between it and the structural level
+            /// below. The walk surface itself remains in <see cref="SurfaceField"/>.
+            /// </summary>
+            /// <remarks>
+            /// Integer prism bands cannot spell the renderer's measured 0.5u
+            /// slab, so the structural reservation conservatively occupies the
+            /// final 1u below the surface. On the 4u structural lattice that
+            /// leaves exactly the existing 3u minimum headroom; half-open bands
+            /// make the boundary legal. Supports use the same bracket band and
+            /// therefore do not turn the traversable chamber below into piers.
+            /// </remarks>
+            public bool TryRegisterStructuralSurface(
+                IReadOnlyList<Vector2Int> surfaceCells,
+                IReadOnlyList<Vector2Int> supportCells,
+                int lowerLevel,
+                int surfaceLevel,
+                OwnerKey owner,
+                out Prism blocker)
+            {
+                var slabBand = new LevelBand(surfaceLevel - 1, surfaceLevel);
+                var clearanceBand = new LevelBand(lowerLevel, surfaceLevel - 1);
+                foreach (Vector2Int cell in surfaceCells ?? Array.Empty<Vector2Int>())
+                {
+                    if (Blocks(cell, slabBand, PrismKind.Footprint, owner, out blocker) ||
+                        !clearanceBand.IsEmpty &&
+                        Blocks(cell, clearanceBand, PrismKind.FootprintClearance, owner, out blocker))
+                    {
+                        return false;
+                    }
+                }
+
+                foreach (Vector2Int cell in supportCells ?? Array.Empty<Vector2Int>())
+                {
+                    if (Blocks(cell, slabBand, PrismKind.Support, owner, out blocker))
+                    {
+                        return false;
+                    }
+                }
+
+                Add(surfaceCells, slabBand, PrismKind.Footprint, owner);
+                Add(supportCells, slabBand, PrismKind.Support, owner);
+                if (!clearanceBand.IsEmpty)
+                {
+                    Add(surfaceCells, clearanceBand, PrismKind.FootprintClearance, owner);
+                }
+
+                foreach (Vector2Int cell in surfaceCells ?? Array.Empty<Vector2Int>())
+                {
+                    carriedSurfaceOwners[new SurfaceKey(cell, surfaceLevel)] = owner;
+                }
+
+                blocker = default;
+                return true;
+            }
+
+            /// <summary>
             /// Who carries this surface: the structure it stands on, or
             /// <see cref="OwnerKey.PlanFloor"/> when it rests on fill.
             /// </summary>
@@ -400,6 +457,39 @@ namespace DungeonLab.Editor
                 OwnerKey owner,
                 IEnumerable<OwnerKey> penetrationAllowList)
             {
+                AdmitOpenVolumePenetrations(owner, penetrationAllowList);
+                Add(cells, band, PrismKind.OpenVolume, owner);
+            }
+
+            /// <summary>
+            /// Register a generated void only when its declared band does not
+            /// intersect an existing, non-admitted structural prism.
+            /// </summary>
+            public bool TryRegisterOpenVolume(
+                IEnumerable<Vector2Int> cells,
+                LevelBand band,
+                OwnerKey owner,
+                IEnumerable<OwnerKey> penetrationAllowList,
+                out Prism blocker)
+            {
+                AdmitOpenVolumePenetrations(owner, penetrationAllowList);
+                foreach (Vector2Int cell in cells ?? Array.Empty<Vector2Int>())
+                {
+                    if (Blocks(cell, band, PrismKind.OpenVolume, owner, out blocker))
+                    {
+                        return false;
+                    }
+                }
+
+                Add(cells, band, PrismKind.OpenVolume, owner);
+                blocker = default;
+                return true;
+            }
+
+            private void AdmitOpenVolumePenetrations(
+                OwnerKey owner,
+                IEnumerable<OwnerKey> penetrationAllowList)
+            {
                 if (!penetrationAllowLists.TryGetValue(owner, out HashSet<OwnerKey> allowed))
                 {
                     allowed = new HashSet<OwnerKey>();
@@ -410,8 +500,6 @@ namespace DungeonLab.Editor
                 {
                     allowed.Add(admitted);
                 }
-
-                Add(cells, band, PrismKind.OpenVolume, owner);
             }
 
             /// <summary>
@@ -715,31 +803,55 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            public bool ConflictsWith(StairTransitionCandidate candidate)
+            public bool ConflictsWith(
+                StairTransitionCandidate candidate,
+                int lowerLevel,
+                int upperLevel)
             {
-                return ConflictsWithReservation(
-                    OwnerKey.CandidateProbe,
-                    candidate.footprintCells,
-                    Concat(candidate.lowerLandingCells, candidate.upperLandingCells),
-                    new[] { candidate.transitionFirstCell, candidate.transitionSecondCell },
-                    Array.Empty<Vector2Int>(),
-                    Array.Empty<Vector2Int>(),
-                    out _);
+                OwnerKey owner = OwnerKey.CandidateProbe;
+                if (FirstBlocked(candidate.footprintCells, PrismKind.Footprint, owner, out _) ||
+                    FirstBlocked(
+                        candidate.lowerLandingCells,
+                        new LevelBand(lowerLevel, lowerLevel + 1),
+                        PrismKind.Landing,
+                        owner,
+                        out _) ||
+                    FirstBlocked(
+                        candidate.upperLandingCells,
+                        new LevelBand(upperLevel, upperLevel + 1),
+                        PrismKind.Landing,
+                        owner,
+                        out _) ||
+                    FirstBlocked(
+                        new[] { candidate.transitionFirstCell, candidate.transitionSecondCell },
+                        PrismKind.Mouth,
+                        owner,
+                        out _))
+                {
+                    return true;
+                }
+
+                return false;
             }
 
-            private static IEnumerable<Vector2Int> Concat(
-                IEnumerable<Vector2Int> first,
-                IEnumerable<Vector2Int> second)
+            private bool FirstBlocked(
+                IEnumerable<Vector2Int> cells,
+                LevelBand band,
+                PrismKind kind,
+                OwnerKey owner,
+                out Vector2Int conflictCell)
             {
-                foreach (Vector2Int cell in first ?? Array.Empty<Vector2Int>())
+                foreach (Vector2Int cell in cells ?? Array.Empty<Vector2Int>())
                 {
-                    yield return cell;
+                    if (Blocks(cell, band, kind, owner))
+                    {
+                        conflictCell = cell;
+                        return true;
+                    }
                 }
 
-                foreach (Vector2Int cell in second ?? Array.Empty<Vector2Int>())
-                {
-                    yield return cell;
-                }
+                conflictCell = default;
+                return false;
             }
 
             /// <summary>

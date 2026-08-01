@@ -110,6 +110,36 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["volume.penetrationFailureCode"], Is.EqualTo("True"));
         }
 
+        [Test]
+        public void Slice3_NoRecipeGenericRoomRealizesNavigableStructuralStorey()
+        {
+            Dictionary<string, string> snapshot =
+                InvokeSnapshot("BuildSlice3GenericStructuralLayerSnapshot");
+
+            Assert.That(snapshot["patterns.full"], Is.EqualTo("True"));
+            Assert.That(snapshot["patterns.balcony"], Is.EqualTo("True"));
+            Assert.That(snapshot["patterns.partialGallery"], Is.EqualTo("True"));
+            Assert.That(snapshot["patterns.perimeterRing"], Is.EqualTo("True"));
+
+            Assert.That(snapshot["producer.noRecipe"], Is.EqualTo("True"), snapshot["producer.failure"]);
+            Assert.That(snapshot["producer.basePreserved"], Is.EqualTo("True"));
+            Assert.That(snapshot["producer.boundLayerRealized"], Is.EqualTo("True"));
+            Assert.That(int.Parse(snapshot["producer.stackedSurfaces"]), Is.GreaterThan(0));
+            Assert.That(snapshot["producer.generatedOwner"], Is.EqualTo("Room:generic-room#gallery"));
+            Assert.That(int.Parse(snapshot["producer.occupiedCells"]), Is.GreaterThan(0));
+            Assert.That(int.Parse(snapshot["producer.supportCells"]), Is.GreaterThan(0));
+            Assert.That(int.Parse(snapshot["producer.clearanceCells"]), Is.GreaterThan(0));
+            Assert.That(int.Parse(snapshot["producer.openVolumeCells"]), Is.GreaterThan(0));
+            Assert.That(snapshot["producer.openVolumesValid"], Is.EqualTo("True"), snapshot["producer.volumeFailure"]);
+            Assert.That(snapshot["producer.headroomValid"], Is.EqualTo("True"), snapshot["producer.headroomFailure"]);
+            Assert.That(snapshot["producer.boundLandingAccepted"], Is.EqualTo("True"));
+            Assert.That(snapshot["producer.unboundedLandingStillRejected"], Is.EqualTo("True"));
+
+            Assert.That(snapshot["navigation.graphBuilt"], Is.EqualTo("True"), snapshot["navigation.reachability"]);
+            Assert.That(snapshot["navigation.fallFreeConnected"], Is.EqualTo("True"), snapshot["navigation.reachability"]);
+            Assert.That(snapshot["validator.slotlessLayerAccepted"], Is.EqualTo("True"));
+        }
+
         private static Dictionary<string, string> InvokeSnapshot(string methodName)
         {
             MethodInfo method = GeneratorType.GetMethod(

@@ -156,10 +156,15 @@ Rejected by the **loader**, so the file will not load at all:
 Reported by **Validate Topologies**:
 
 - a declared layer no edge binds — a storey no route reaches generates as
-  nothing, which is the same silent-absence class as a beat typo;
-- a node that declares layers but carries no recipe slot. Only a recipe's
-  non-base storey or an aerial span's deck can build a stacked surface today, so
-  a generic room's layers would have no producer. This relaxes when one exists.
+  nothing, which is the same silent-absence class as a beat typo.
+
+**Added 2026-08-02 (procedural 3-D topology Slice 3):** a bound layer on a node
+without a selected recipe is realized generically from that node's existing room
+footprint and bound threshold cells. Depending on the footprint and the number
+and placement of thresholds, the producer chooses a full storey, partial
+gallery, perimeter ring, or balcony. It writes the same `SurfaceField` and
+`PrismLedger` as authored rooms; no second room-plan format is involved. A node
+with real storeys does not receive a local +1u `RoomZonePlan` split.
 
 A bound edge **resolves at its layer's elevation** — its corridor is leveled
 there and its rise is measured from there — rather than at its node's own level
@@ -245,7 +250,7 @@ Hard rules, all enforced by the generator and all reported by the validator:
 | Every level in `[0, ceiling]` and `% 4 == 0` | the level grammar |
 | Every slot node has degree 2 | a two-port recipe room |
 | Edge rise `±4` or `±8` for Stair/Bridge/Stairwell, exactly `0` for LevelCorridor | write an edge in travel order in either direction; a descending edge is a rise of `-4`. Measured between the **bound** elevations, which are the node levels for an unbound edge |
-| A declared layer is bound by an edge, and its node carries a recipe slot | a storey nothing routes to, or that nothing can build, generates as nothing |
+| Every non-base declared layer is bound by an edge | a storey no route reaches generates as nothing; a slotless bound storey is built by the generic structural producer |
 | A slot maps only layers its node declares, one recipe storey each; the mapped recipe storey exists, sits at the same relative level, and carries the port every bound edge arrives on | the graph and the room must agree about where a storey is, or the room is built at one height and routed to at another |
 | Two rooms may share plan cells only when **both** their nodes declare storeys and the absolute bands those storeys imply do not meet | room inflation's overlap test is volumetric from 2026-08-01 (D4). A node declaring one elevation authorizes nothing, however far its level is from its neighbour's — otherwise generic rooms would start stacking wherever the corpus already spreads levels, which is a variety regression rather than a feature |
 | At least one Stair, one Bridge, one Stairwell | the transition-kind coverage check |

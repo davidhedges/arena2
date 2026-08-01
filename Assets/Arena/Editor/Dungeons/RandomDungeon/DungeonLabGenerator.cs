@@ -2086,7 +2086,7 @@ namespace DungeonLab.Editor
                 {
                     if (!surfaces.TrySetFloorLevel(
                             cell,
-                            zoneLevels[zones.NodeOfCell(roomIndex, cell)],
+                            zoneLevels[roomIndex],
                             out rejectionReason))
                     {
                         return false;
@@ -2160,6 +2160,35 @@ namespace DungeonLab.Editor
                     seamStairPrefabPath,
                     daisShowpieces,
                     out Dictionary<string, int> recipeBaseLevels,
+                    out rejectionReason))
+            {
+                return false;
+            }
+
+            // Slice 3: authored modules retain first claim on their exact
+            // footprint. Every unclaimed node with declared storeys is then
+            // realized directly from its existing room footprint and bound
+            // thresholds into the same SurfaceField and PrismLedger.
+            if (!TryRealizeGenericStructuralRoomLayers(
+                    layout,
+                    routeRequirements?.intent?.nodes,
+                    routeRequirements?.recipes,
+                    surfaces,
+                    plannedStairLedger,
+                    out rejectionReason))
+            {
+                return false;
+            }
+
+            // RoomZonePlan is a local +1u finish, not structural ownership.
+            // Apply it only after recipe and generated structural storeys have
+            // published their surfaces. Storeyed generic rooms are excluded
+            // from zone splitting at layout time, just as recipe rooms are.
+            if (!TryApplyRoomZoneLocalFinishing(
+                    layout,
+                    zones,
+                    zoneLevels,
+                    surfaces,
                     out rejectionReason))
             {
                 return false;
@@ -2349,6 +2378,36 @@ namespace DungeonLab.Editor
 
             routeTransitionResolutions = resolvedRouteTransitions.ToArray();
 
+            return true;
+        }
+
+        private static bool TryApplyRoomZoneLocalFinishing(
+            DungeonLayout layout,
+            RoomZoneContext zones,
+            IReadOnlyList<int> zoneLevels,
+            SurfaceField surfaces,
+            out string rejectionReason)
+        {
+            foreach (RoomZonePlan zone in layout.roomZones ?? Array.Empty<RoomZonePlan>())
+            {
+                foreach (Vector2Int cell in SortedCells(zone.raisedCells))
+                {
+                    int raisedLevel = zoneLevels[zones.NodeOfCell(zone.roomIndex, cell)];
+                    if (!surfaces.TryGetFloorLevel(cell, out int currentLevel))
+                    {
+                        rejectionReason =
+                            $"[ROOM_ZONE_LOCAL_FINISH] room {zone.roomIndex} had no floor at {cell}";
+                        return false;
+                    }
+
+                    if (currentLevel != raisedLevel)
+                    {
+                        surfaces.RelevelFloor(cell, raisedLevel);
+                    }
+                }
+            }
+
+            rejectionReason = string.Empty;
             return true;
         }
 
@@ -4422,7 +4481,11 @@ namespace DungeonLab.Editor
                 requireEmbeddedSideFloorSupport,
                 candidates);
             RemoveCandidatesOutsideRequiredPlacementClass(candidates, requiredPlacementClass);
-            RemovePlannedStairConflicts(candidates, plannedStairLedger);
+            RemovePlannedStairConflicts(
+                candidates,
+                plannedStairLedger,
+                Mathf.Min(fromLevel, toLevel),
+                Mathf.Max(fromLevel, toLevel));
             if (candidates.Count == 0)
             {
                 AddReviewedActiveStairTransitionCandidates(
@@ -4442,7 +4505,11 @@ namespace DungeonLab.Editor
                     requireEmbeddedSideFloorSupport,
                     candidates);
                 RemoveCandidatesOutsideRequiredPlacementClass(candidates, requiredPlacementClass);
-                RemovePlannedStairConflicts(candidates, plannedStairLedger);
+                RemovePlannedStairConflicts(
+                    candidates,
+                    plannedStairLedger,
+                    Mathf.Min(fromLevel, toLevel),
+                    Mathf.Max(fromLevel, toLevel));
             }
 
             if (candidates.Count == 0)
@@ -5207,7 +5274,10 @@ namespace DungeonLab.Editor
                 ExternalSpanStairPlacementClass,
                 option);
             // Routine: the picker retries other lines, so conflicts stay quiet.
-            if (plannedStairLedger.ConflictsWith(stairCandidate))
+            if (plannedStairLedger.ConflictsWith(
+                    stairCandidate,
+                    Mathf.Min(levelA, levelB),
+                    Mathf.Max(levelA, levelB)))
             {
                 return false;
             }
@@ -5383,7 +5453,11 @@ namespace DungeonLab.Editor
                     candidates);
             }
 
-            RemovePlannedStairConflicts(candidates, plannedStairLedger);
+            RemovePlannedStairConflicts(
+                candidates,
+                plannedStairLedger,
+                Mathf.Min(fromLevel, toLevel),
+                Mathf.Max(fromLevel, toLevel));
             if (candidates.Count == 0)
             {
                 foreach (ReviewedActiveStairOption option in preparedCatalog.options)
@@ -5402,7 +5476,11 @@ namespace DungeonLab.Editor
                         candidates);
                 }
 
-                RemovePlannedStairConflicts(candidates, plannedStairLedger);
+                RemovePlannedStairConflicts(
+                    candidates,
+                    plannedStairLedger,
+                    Mathf.Min(fromLevel, toLevel),
+                    Mathf.Max(fromLevel, toLevel));
             }
 
             if (candidates.Count == 0)
@@ -5571,14 +5649,19 @@ namespace DungeonLab.Editor
 
         private static void RemovePlannedStairConflicts(
             List<StairTransitionCandidate> candidates,
-            PrismLedger plannedStairLedger)
+            PrismLedger plannedStairLedger,
+            int lowerLevel,
+            int upperLevel)
         {
             if (plannedStairLedger == null)
             {
                 return;
             }
 
-            candidates.RemoveAll(plannedStairLedger.ConflictsWith);
+            candidates.RemoveAll(candidate => plannedStairLedger.ConflictsWith(
+                candidate,
+                lowerLevel,
+                upperLevel));
         }
 
         private static bool StairCandidateHasFullWidthLandingContinuation(
@@ -8767,14 +8850,11 @@ namespace DungeonLab.Editor
         /// </para>
         /// <para>
         /// The additive form also composes with the +1 raised-zone accent
-        /// instead of overriding it — and it can never be ASKED to compose,
-        /// which is the measured half of the argument. A node declaring a real
-        /// storey must carry a recipe slot (D1's validator rule), and a
-        /// recipe-slot room is excluded from zone splitting outright
-        /// (<c>DungeonLabGenerator.RouteFirstPilot.cs:668</c>), so a storey
-        /// offset and a raised zone cannot meet on one node. A base-only layer
-        /// table — D2's authorization for a stacked crossing — may sit on a
-        /// split room, and its offset is 0.
+        /// instead of overriding it. Slice 3 keeps that composition from being
+        /// requested by excluding every node with a real structural storey from
+        /// local <c>RoomZonePlan</c> splitting, whether the room is authored or
+        /// generic. A base-only layer table — D2's authorization for a stacked
+        /// crossing — may still sit on a split room, and its offset is 0.
         /// </para>
         /// </remarks>
         private sealed class ConnectionEntryLevels

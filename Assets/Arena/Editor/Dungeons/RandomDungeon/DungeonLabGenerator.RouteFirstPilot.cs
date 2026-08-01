@@ -219,6 +219,22 @@ namespace DungeonLab.Editor
 
             public bool DeclaresLayers => layers.Length > 0;
 
+            public bool DeclaresStoreys
+            {
+                get
+                {
+                    foreach (RouteTopologyLayer layer in layers)
+                    {
+                        if (layer.relativeLevel != 0)
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+            }
+
             /// <summary>
             /// The absolute elevation an edge bound to <paramref name="layerId"/>
             /// meets this node at; an empty id is the node's own level.
@@ -693,6 +709,7 @@ namespace DungeonLab.Editor
             // culmination. All other route rooms retain the existing zone policy.
             roomZones.RemoveAll(zone =>
                 intent.nodes[zone.roomIndex].relativeElevationLevels >= intent.topology.ceilingLevels ||
+                intent.nodes[zone.roomIndex].DeclaresStoreys ||
                 zone.roomIndex == intent.vista.sourceNode ||
                 zone.roomIndex == intent.vista.targetNode ||
                 TryGetRecipeSlot(intent.recipeSlots, zone.roomIndex, out _));

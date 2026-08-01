@@ -946,10 +946,12 @@ namespace DungeonLab.Editor
                     "{ \"fromLayer\": \"gallery\" }",
                     "{ \"fromLayer\": \"gallery\" }, \"extra\"")));
 
-            // The two rules the loader cannot state, checked through the
-            // validator itself rather than by re-implementing them here.
+            // The remaining graph-level rule the loader cannot state, checked
+            // through the validator itself rather than re-implementing it here.
+            // Slice 3 also proves that a bound storey on a slotless node is now
+            // accepted for the generic structural producer.
             bool unboundLayerReported = false;
-            bool slotlessLayerReported = false;
+            bool slotlessLayerAccepted = false;
             if (TryParseLayerSchemaProbe(
                     LayerSchemaProbeJson.Replace(
                         "\"LevelCorridor\", { \"fromLayer\": \"gallery\" }",
@@ -975,8 +977,7 @@ namespace DungeonLab.Editor
             {
                 var violations = new List<string>();
                 ValidateNodeLayers(2, slotless.nodes[2], slotless, violations);
-                slotlessLayerReported = violations.Exists(v => v.Contains("carries no recipe slot")) &&
-                    !violations.Exists(v => v.Contains("which no edge binds"));
+                slotlessLayerAccepted = violations.Count == 0;
             }
 
             // D2: a BASE-ONLY table declares no storey, so it needs no producer
@@ -1087,7 +1088,7 @@ namespace DungeonLab.Editor
                                 "\"floor\": \"upper\", \"gallery\": \"upper\"")))));
 
             results.Add(("unboundLayerReported", unboundLayerReported));
-            results.Add(("slotlessLayerReported", slotlessLayerReported));
+            results.Add(("slotlessLayerAccepted", slotlessLayerAccepted));
             results.Add(("baseOnlyLayerNeedsNoSlot", baseOnlyLayerAccepted));
             results.Add(("laneNodeBlocksUnboundEdge", unboundLaneParsed && laneNodeBlocksUnboundEdge));
             results.Add(("laneNodeClearedByBoundEdge", boundLaneParsed && laneNodeClearedByBoundEdge));
@@ -1111,16 +1112,16 @@ namespace DungeonLab.Editor
         }
 
         /// <summary>
-        /// The two layer rules the LOADER cannot state, because both are about a
-        /// node's relationship to the rest of the graph rather than about its own
-        /// syntax.
+        /// The layer rule the LOADER cannot state, because it is about a node's
+        /// relationship to the rest of the graph rather than its own syntax.
         /// </summary>
         /// <remarks>
         /// The loader already rejects a malformed table, an off-pitch offset, an
         /// out-of-envelope absolute level, two ids at one elevation and an edge
         /// binding a layer its endpoint does not declare. What is left is
-        /// authoring intent: a storey nothing routes to, and a storey nothing can
-        /// build.
+        /// authoring intent: a storey nothing routes to. Generic structural room
+        /// realization now builds a bound storey whether or not the node carries
+        /// a selected recipe.
         /// </remarks>
         private static void ValidateNodeLayers(
             int nodeIndex,
@@ -1161,33 +1162,6 @@ namespace DungeonLab.Editor
                 }
             }
 
-            // Nothing in the generator builds a stacked surface for a GENERIC
-            // room: the producers are the aerial-span deck, a recipe's non-base
-            // storey, and (D2) a layer-bound corridor's crossing cells. The
-            // first two build a ROOM's storey; the third does not, so a node
-            // that declares a real storey must still carry a recipe slot or its
-            // storeys have no author. Relax the rest of this when a generic
-            // multi-layer ROOM producer exists (design §13 Phase D, owner
-            // decision 9).
-            //
-            // D2: a table of nothing but base layers declares no storey at all.
-            // It names the node's own elevation so an edge can bind it, which is
-            // how a topology AUTHORIZES a stacked corridor crossing — and the
-            // "no edge binds" rule above already exempts a base layer for the
-            // same reason. Requiring a recipe slot for it would make the
-            // authorization unreachable outside a slot node.
-            if (!node.DeclaresStoreys)
-            {
-                return;
-            }
-
-            if (string.IsNullOrEmpty(node.recipeSlotId))
-            {
-                violations.Add(
-                    $"node '{node.key}' ({node.id}) declares layers but carries no recipe slot; " +
-                    "only a recipe's non-base storey can build one today, so the layers would " +
-                    "have no producer");
-            }
         }
 
         // ---- per-density rules --------------------------------------------
