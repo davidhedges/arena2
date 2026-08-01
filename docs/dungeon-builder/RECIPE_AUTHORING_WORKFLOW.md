@@ -175,7 +175,18 @@ Use the existing schema-v1 zone kinds:
 - `Walkable`;
 - `Elevated` at an exact relative level;
 - `ProtectedCirculation`;
-- `ProtectedFocal`.
+- `ProtectedFocal`;
+- `OpenVolume` — **reserved air, not geometry** (added 2026-08-01, layered
+  topology D4). It declares `openVolumeHeightLevels`, and the band it reserves
+  is `[its layer's elevation, + that height)`. Nothing may put floor, landing,
+  wall or density fill inside it except the recipe that declared it, whose own
+  rim, stairs and balconies are exactly what the void exists to surround. An
+  atrium's void therefore belongs to the storey it opens THROUGH, not to the
+  floor it stands over: give it the gallery's `layerId`, not the base's.
+
+A zone that names a height without being an `OpenVolume`, or an `OpenVolume`
+with no height, is `RECIPE_OPEN_VOLUME_HEIGHT` — both reserve nothing and would
+otherwise validate, generate, and silently do nothing.
 
 Transitions separately declare exact lower/upper cells, landing arrays,
 occupied footprint, climb direction, rise, lane count, headroom, and atomic

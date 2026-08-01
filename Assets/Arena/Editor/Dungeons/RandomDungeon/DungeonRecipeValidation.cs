@@ -215,6 +215,17 @@ namespace DungeonLab.Editor
                 {
                     Append(canonical, "zone.layer", zone?.layerId);
                 }
+
+                // D4, and the same conditional for the same hash reason as the
+                // layer fields above. `zone.kind` already distinguishes an
+                // OpenVolume from a Walkable, but its HEIGHT is what the
+                // reservation actually is — without this, two recipes whose
+                // atria differ by four levels of air digest identically and the
+                // catalog cannot tell them apart.
+                if (zone != null && zone.openVolumeHeightLevels != 0)
+                {
+                    Append(canonical, "zone.openVolume", zone.openVolumeHeightLevels);
+                }
             }
 
             foreach (DungeonRecipePort port in recipe.ports ?? Array.Empty<DungeonRecipePort>())
@@ -410,6 +421,22 @@ namespace DungeonLab.Editor
                     zone.kind != DungeonRecipeZoneKind.Elevated && zone.relativeLevel != 0)
                 {
                     result.Add(Layer, "RECIPE_ZONE_LEVEL", $"Zone '{zone.id}' had an incompatible relative level.");
+                }
+
+                // A reserved void with no height reserves nothing, and a height
+                // on anything else is an authoring slip that would silently do
+                // nothing. Both are the same class of mistake as a beat typo:
+                // the recipe validates, generation runs, and the feature is
+                // absent (design §6, §11).
+                bool isOpenVolume = zone.kind == DungeonRecipeZoneKind.OpenVolume;
+                if (isOpenVolume ? zone.openVolumeHeightLevels < 1 : zone.openVolumeHeightLevels != 0)
+                {
+                    result.Add(
+                        Layer,
+                        "RECIPE_OPEN_VOLUME_HEIGHT",
+                        isOpenVolume
+                            ? $"OpenVolume zone '{zone.id}' reserved no height."
+                            : $"Zone '{zone.id}' declared an open-volume height but is not an OpenVolume.");
                 }
             }
 

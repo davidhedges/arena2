@@ -3679,6 +3679,13 @@ namespace DungeonLab.Editor
                     // with no site in production yet.
                     ["layerOffsetConnectionEnds"] =
                         CountLayerOffsetConnectionEnds(layout, lastRouteIntent),
+                    // D4's two numbers. `openVolumeCells` says whether the
+                    // OpenVolume producer fired; `stackedRoomPairs` says whether
+                    // the volumetric `Overlaps` let any two rooms share a plan
+                    // cell. Both 0 across the corpus is what "declared reason,
+                    // and nothing declares one" looks like from the outside.
+                    ["openVolumeCells"] = CountOpenVolumeCells(plan.prisms),
+                    ["stackedRoomPairs"] = CountStackedRoomPairs(layout),
                     ["depthLevelCorrelation"] = float.IsNaN(correlation) ? JValue.CreateNull() : new JValue(correlation)
                 },
                 ["validation"] = validationToken,
@@ -4354,6 +4361,7 @@ namespace DungeonLab.Editor
             Add("layers.layerId/relativeLevel/isBase", "recipe assets", "per-storey level derivation and RECIPE_LAYER_CONNECTIVITY");
             Add("zones/ports/transitions.layerId", "recipe assets", "which storey a zone, entrance or stair belongs to; empty is the base");
             Add("openings.cell/outward/layerId", "recipe assets", "bare rims on a stacked storey — the aperture you walk off");
+            Add("zones.openVolumeHeightLevels", "recipe assets", "the OpenVolume prism's half-open band — reserved air the fill sweeps and foreign structure may not take");
             Add("transitions.atomicGroup", "recipe assets", "atomic transition validation");
             Add("variations/motifs", "recipe assets", "stable StairForge-backed visual selection");
             Add("ports.id/type/mandatory", "recipe assets", "route edge binding and neighbor validation");

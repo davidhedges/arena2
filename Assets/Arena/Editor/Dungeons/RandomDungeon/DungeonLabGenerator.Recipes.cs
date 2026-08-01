@@ -160,6 +160,11 @@ namespace DungeonLab.Editor
             /// moving the column's floor (design §8.2 L6).
             /// </summary>
             public readonly bool isBaseLayer;
+            /// <summary>
+            /// How many levels of void an <see cref="DungeonRecipeZoneKind.OpenVolume"/>
+            /// zone reserves above its layer; 0 for every other kind (design §6).
+            /// </summary>
+            public readonly int openVolumeHeightLevels;
             public readonly Vector2Int[] cells;
 
             public RecipeZonePlacement(
@@ -169,6 +174,7 @@ namespace DungeonLab.Editor
                 int layerRelativeLevel,
                 string layerId,
                 bool isBaseLayer,
+                int openVolumeHeightLevels,
                 Vector2Int[] cells)
             {
                 this.id = id ?? string.Empty;
@@ -177,7 +183,20 @@ namespace DungeonLab.Editor
                 this.layerRelativeLevel = layerRelativeLevel;
                 this.layerId = layerId ?? string.Empty;
                 this.isBaseLayer = isBaseLayer;
+                this.openVolumeHeightLevels = openVolumeHeightLevels;
                 this.cells = cells ?? Array.Empty<Vector2Int>();
+            }
+
+            /// <summary>
+            /// The reserved void's half-open band, given the recipe's resolved
+            /// base level. Its floor is its LAYER's elevation — an atrium's void
+            /// is the air above the chamber, so it belongs to the storey it opens
+            /// through rather than to the floor it stands over.
+            /// </summary>
+            public LevelBand OpenVolumeBand(int baseLevel)
+            {
+                int floor = baseLevel + layerRelativeLevel + relativeLevel;
+                return new LevelBand(floor, floor + openVolumeHeightLevels);
             }
         }
 
@@ -1344,6 +1363,7 @@ namespace DungeonLab.Editor
                     zoneLayerLevel,
                     DungeonRecipeLayers.CanonicalId(slot.recipe, zone.layerId),
                     DungeonRecipeLayers.IsBaseLayer(slot.recipe, zone.layerId),
+                    zone.openVolumeHeightLevels,
                     sorted));
                 if (zone.kind == DungeonRecipeZoneKind.ProtectedCirculation ||
                     zone.kind == DungeonRecipeZoneKind.ProtectedFocal)
@@ -2400,10 +2420,67 @@ namespace DungeonLab.Editor
                     Array.Empty<Vector2Int>(),
                     placement.roomCells,
                     Array.Empty<Vector2Int>());
+                RegisterRecipeOpenVolumes(placement, baseLevel, stairLedger);
                 baseLevels.Add(placement.RecipeId, baseLevel);
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// The <see cref="PrismKind.OpenVolume"/> PRODUCER (design §6). Phase B
+        /// shipped the kind, the allow-list and the enforcement with nothing
+        /// calling them; this is the thing that calls them.
+        /// </summary>
+        /// <remarks>
+        /// The volume gets its OWN owner rather than the recipe's, because §6
+        /// exempts <c>OpenVolume</c> from the same-owner rule on purpose: a room
+        /// whose void shared its owner would let its own floor fill its own
+        /// atrium. The recipe is then admitted back explicitly — a room's
+        /// balconies, stairs and rim ARE the thing the void exists to surround,
+        /// so a reservation that excluded them would forbid the atrium it
+        /// describes.
+        /// <para>
+        /// **The authored per-feature allow-list §6 describes is deferred, and
+        /// the reason is measured rather than chosen.** It names owners like
+        /// <c>Transition:atrium-stair-a</c>, which assumes a granularity the
+        /// generator does not have: every prism a recipe registers — its
+        /// footprints, its landings, its room cells, its transitions — goes in
+        /// under one <c>Recipe:&lt;id&gt;</c> owner. Until per-feature owners
+        /// exist, an authored list could only spell that same single owner, so
+        /// it would be a blanket exemption wearing a checklist's clothes. The
+        /// derived form admits exactly the same set and does not claim
+        /// otherwise.
+        /// </para>
+        /// </remarks>
+        private static void RegisterRecipeOpenVolumes(
+            RecipePlacement placement,
+            int baseLevel,
+            PrismLedger ledger)
+        {
+            OwnerKey recipeOwner = new OwnerKey(OwnerFamily.Recipe, placement.RecipeId);
+            foreach (RecipeZonePlacement zone in placement.zones)
+            {
+                if (zone.kind != DungeonRecipeZoneKind.OpenVolume)
+                {
+                    continue;
+                }
+
+                ledger.RegisterOpenVolume(
+                    zone.cells,
+                    zone.OpenVolumeBand(baseLevel),
+                    RecipeOpenVolumeOwner(placement.RecipeId, zone.id),
+                    new[] { recipeOwner });
+            }
+        }
+
+        /// <summary>
+        /// A reserved void's owner: distinct from its recipe's, and stable, so an
+        /// allow-list can name it once per-feature owners exist.
+        /// </summary>
+        private static OwnerKey RecipeOpenVolumeOwner(string recipeId, string zoneId)
+        {
+            return new OwnerKey(OwnerFamily.Opening, $"{recipeId}#{zoneId}");
         }
 
         private static bool TryCollectRecipePortApproachCells(

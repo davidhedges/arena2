@@ -1575,6 +1575,11 @@ namespace DungeonLab.Editor
             rooms = new List<RoomFootprint>(intent.nodes.Length);
             rejectionReason = string.Empty;
             lastRoomInflationAttempts = 0;
+            // D4: every room's DECLARED absolute elevations — the same table D2
+            // built for the third-room rule, so the two relaxations compare the
+            // same numbers rather than two derivations of them.
+            int[][] roomDeclaredElevations =
+                BuildRoomDeclaredElevations(intent.nodes, intent.nodes.Length);
 
             // Recipe rooms have authored, fixed footprints: rebuilding one with
             // six random streams does not produce six alternatives. Reserve
@@ -1612,7 +1617,7 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                if (OverlapsPlacedRoom(candidate, placedRooms))
+                if (OverlapsPlacedRoom(candidate, nodeIndex, placedRooms, roomDeclaredElevations))
                 {
                     rejectionReason = $"fixed recipe room node '{node.id}' overlapped another fixed recipe room";
                     return false;
@@ -1664,7 +1669,7 @@ namespace DungeonLab.Editor
                         continue;
                     }
 
-                    if (OverlapsPlacedRoom(candidate, placedRooms))
+                    if (OverlapsPlacedRoom(candidate, nodeIndex, placedRooms, roomDeclaredElevations))
                     {
                         continue;
                     }
@@ -1710,19 +1715,103 @@ namespace DungeonLab.Editor
             return true;
         }
 
+        /// <summary>
+        /// May this candidate room share plan cells with one already placed?
+        /// </summary>
+        /// <remarks>
+        /// D4 makes the test VOLUMETRIC (design §4.1), and the split is D2's,
+        /// restated for rooms rather than corridors:
+        /// <para>
+        /// <b>Declared layers authorize an overlap. The absolute bands decide
+        /// it.</b>
+        /// </para>
+        /// Both halves are load-bearing. The band test alone is not enough —
+        /// §4.1 says so plainly, and the corpus proves it: `atrium-ring` spans 0
+        /// to 24, so pairs of its rooms already have disjoint bands and would
+        /// start silently stacking, which §4.1 calls a variety regression rather
+        /// than a feature. And the authorization alone is not enough either,
+        /// because a layer id is room-local: one node's "gallery" may sit at
+        /// another's floor elevation.
+        /// <para>
+        /// §4.1 words the authorization differently — "at least one of them
+        /// declares the shared column as part of a reserved open volume or a
+        /// bridge span" — and <b>that clause is not evaluable at this site</b>.
+        /// Room inflation runs three passes before `TryPlaceRouteRecipes`, so no
+        /// recipe zone exists yet to declare a volume, and aerial bridges are not
+        /// placed until the elevation stage. What IS known here is the topology's
+        /// declared storeys, which is the same pre-elevation absolute the
+        /// corridor rules use, so that is what authorizes the relaxation.
+        /// </para>
+        /// </remarks>
         private static bool OverlapsPlacedRoom(
             RoomFootprint candidate,
-            IReadOnlyList<RoomFootprint> placedRooms)
+            int candidateNode,
+            IReadOnlyList<RoomFootprint> placedRooms,
+            int[][] roomDeclaredElevations)
         {
-            foreach (RoomFootprint existing in placedRooms)
+            for (int room = 0; room < placedRooms.Count; room++)
             {
-                if (existing != null && candidate.Overlaps(existing))
+                RoomFootprint existing = placedRooms[room];
+                if (existing == null || !candidate.Overlaps(existing))
+                {
+                    continue;
+                }
+
+                if (!RoomsMayShareAColumn(candidateNode, room, roomDeclaredElevations))
                 {
                     return true;
                 }
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// The volumetric half: both rooms declare storeys, and the absolute
+        /// bands those storeys imply do not meet.
+        /// </summary>
+        /// <remarks>
+        /// The band is <see cref="LevelBand.SpanningEndpoints"/> over each room's
+        /// declared elevations, so disjoint bands are separated by at least
+        /// <see cref="MinHeadroomLevels"/> for free — the same property D2
+        /// measured for crossing corridors, and the reason neither rule needs a
+        /// separate clearance term.
+        /// </remarks>
+        private static bool RoomsMayShareAColumn(
+            int firstRoom,
+            int secondRoom,
+            int[][] roomDeclaredElevations)
+        {
+            if (roomDeclaredElevations == null ||
+                firstRoom < 0 || firstRoom >= roomDeclaredElevations.Length ||
+                secondRoom < 0 || secondRoom >= roomDeclaredElevations.Length)
+            {
+                return false;
+            }
+
+            // A room with one declared elevation declares no storey, so it
+            // authorizes nothing — which is every room in the shipped corpus.
+            int[] first = roomDeclaredElevations[firstRoom];
+            int[] second = roomDeclaredElevations[secondRoom];
+            if (first.Length < 2 || second.Length < 2)
+            {
+                return false;
+            }
+
+            return !DeclaredElevationBand(first).Intersects(DeclaredElevationBand(second));
+        }
+
+        private static LevelBand DeclaredElevationBand(int[] declaredElevations)
+        {
+            int lowest = declaredElevations[0];
+            int highest = declaredElevations[0];
+            foreach (int elevation in declaredElevations)
+            {
+                lowest = Mathf.Min(lowest, elevation);
+                highest = Mathf.Max(highest, elevation);
+            }
+
+            return LevelBand.SpanningEndpoints(lowest, highest);
         }
 
         private static void ApplyProcessionalNeighborBias(

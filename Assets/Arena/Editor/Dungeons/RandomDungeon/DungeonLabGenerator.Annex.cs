@@ -397,10 +397,62 @@ namespace DungeonLab.Editor
                     placement?.showpieceReservation.backdropVoidCells ?? Array.Empty<Vector2Int>(),
                     Array.Empty<Vector2Int>(),
                     Array.Empty<Vector2Int>());
+
+                // D4: the OpenVolume producer's SECOND site, and it is not
+                // optional. §6 makes "the fill passes query the prism ledger" an
+                // invariant and §11 calls missing it the most likely first
+                // implementation failure — but the invariant alone is not enough
+                // here, because there are TWO ledgers (Phase B finding 2). The
+                // annex sweep runs during LAYOUT and the recipe registers its
+                // volume during ELEVATION, a whole stage later, so a volume
+                // declared only at the elevation site would already have been
+                // packed solid by the time it existed.
+                RegisterDeclaredRecipeOpenVolumes(intent, placement, blocked);
             }
 
             ReserveStairwellShafts(intent, connections, rooms, floorCells, blocked);
             return blocked;
+        }
+
+        /// <summary>
+        /// Register a placement's reserved voids against the LAYOUT-stage ledger,
+        /// where the elevation stage's resolved base level does not exist yet.
+        /// </summary>
+        /// <remarks>
+        /// The band comes from the topology's DECLARED node level instead, which
+        /// is the same pre-elevation absolute the corridor band uses (§8.1) and
+        /// is exactly what `TryAssignRoomLevels` will later copy into
+        /// `zoneLevels`. So the two sites reserve the identical band, derived two
+        /// ways because the two stages know different things — not two rules.
+        /// </remarks>
+        private static void RegisterDeclaredRecipeOpenVolumes(
+            RouteIntent intent,
+            RecipePlacement placement,
+            PrismLedger ledger)
+        {
+            if (placement == null ||
+                intent?.nodes == null ||
+                placement.roomIndex < 0 ||
+                placement.roomIndex >= intent.nodes.Length)
+            {
+                return;
+            }
+
+            int declaredBaseLevel = intent.nodes[placement.roomIndex].relativeElevationLevels;
+            var recipeOwner = new OwnerKey(OwnerFamily.Recipe, placement.RecipeId);
+            foreach (RecipeZonePlacement zone in placement.zones)
+            {
+                if (zone.kind != DungeonRecipeZoneKind.OpenVolume)
+                {
+                    continue;
+                }
+
+                ledger.RegisterOpenVolume(
+                    zone.cells,
+                    zone.OpenVolumeBand(declaredBaseLevel),
+                    RecipeOpenVolumeOwner(placement.RecipeId, zone.id),
+                    new[] { recipeOwner });
+            }
         }
 
         /// <summary>

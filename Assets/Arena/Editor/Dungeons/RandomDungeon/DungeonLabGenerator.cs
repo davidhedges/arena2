@@ -1279,6 +1279,24 @@ namespace DungeonLab.Editor
                 zones,
                 zoneLevels,
                 routeRequirements?.intent);
+
+            // D4: the enclosure roll moves INTO THE PLAN (design §13). It used
+            // to happen inside `TryBuildRoomBoundaryContext`, in the
+            // renderer-input stage, long after `AddAerialBridges` has decided
+            // where every deck goes — so the bridge pass had no way to ask
+            // whether the room it flies over has a roof. D0 measured that this
+            // move is a PREREQUISITE for relaxing Decision 30 rather than the
+            // relaxation itself, and it is only the move: nothing consumes the
+            // answer earlier yet.
+            //
+            // The STREAM moves with the roll, not just the call. Its draw
+            // sequence is N draws for the rooms, then the boundary context's own
+            // `Next()` for its dressing seed, and the two are the same stream
+            // instance — so hoisting the roll while leaving the stream behind
+            // would re-phase that seed and move every dressed dungeon.
+            System.Random enclosureRandom = rng.Stream("enclosed-rooms");
+            bool[] plannedEnclosedRooms =
+                ChooseEnclosedRooms(loopedLayout.rooms.Count, enclosureRandom);
             bool connectedDeltasValid = TryValidateConnectedRoomLevelDeltas(
                 loopedLayout,
                 entryLevels,
@@ -1391,7 +1409,8 @@ namespace DungeonLab.Editor
                 surfaces,
                 transitions,
                 routeRequirements?.recipes,
-                rng.Stream("enclosed-rooms"),
+                plannedEnclosedRooms,
+                enclosureRandom,
                 out boundaryContext,
                 out string boundaryMessage);
             validation = ValidateDungeonPlan(
@@ -3531,11 +3550,23 @@ namespace DungeonLab.Editor
             return (path ?? string.Empty).Replace('\\', '/').Trim();
         }
 
+        /// <summary>
+        /// Build the renderer's boundary context from an enclosure decision the
+        /// PLAN already made.
+        /// </summary>
+        /// <remarks>
+        /// D4 moved the roll out of here (design §13). The array arrives decided;
+        /// what still happens here is everything that needs geometry — chamber
+        /// subdivision resizes it, and the two sealed-room passes demote entries
+        /// that turn out to have no doorway. The roll and its consequences were
+        /// never the same step; only the roll could move earlier.
+        /// </remarks>
         private static bool TryBuildRoomBoundaryContext(
             DungeonLayout layout,
             SurfaceField surfaces,
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
             IReadOnlyList<RecipePlacement> recipePlacements,
+            bool[] plannedEnclosedRooms,
             System.Random random,
             out ElevationEdgeModel.RoomBoundaryContext context,
             out string rejectionReason)
@@ -3553,7 +3584,11 @@ namespace DungeonLab.Editor
             List<ElevationEdgeModel.GatewayConnectionEnd> gatewayConnectionEnds =
                 BuildGatewayConnectionEnds(layout, surfaces);
             List<ElevationEdgeModel.InternalPathEdge> internalPathEdges = BuildInternalPathEdges(layout, surfaces, cellRoomIds, transitions);
-            bool[] enclosedRooms = ChooseEnclosedRooms(layout.rooms.Count, random);
+            // Copied, because the passes below MUTATE it and the plan's own copy
+            // is what a later pass would consult. A shared array would let a
+            // demotion here rewrite the answer the bridge pass was given.
+            var enclosedRooms = new bool[plannedEnclosedRooms.Length];
+            Array.Copy(plannedEnclosedRooms, enclosedRooms, plannedEnclosedRooms.Length);
             // M4b. It runs AFTER BuildInternalPathEdges, which only asks whether
             // a cell is in some room, and BEFORE the two sealed-room passes, so
             // the chambers it adds are validated rather than exempt.
@@ -7409,6 +7444,65 @@ namespace DungeonLab.Editor
             }
 
             return ends;
+        }
+
+        /// <summary>
+        /// Plan cells carrying a reserved void — the <see cref="PrismKind.OpenVolume"/>
+        /// producer's output.
+        /// </summary>
+        /// <remarks>
+        /// 0 across the corpus means no recipe declares one, so the producer,
+        /// the fill exclusion and the penetration rule are all reachable and all
+        /// unexercised — which is exactly what makes the slice neutral. It is
+        /// also the number that would catch the failure §11 names: a volume that
+        /// silently stopped being registered would read as 0 here on a seed whose
+        /// content declares one.
+        /// </remarks>
+        private static int CountOpenVolumeCells(PrismLedger prisms)
+        {
+            if (prisms == null)
+            {
+                return 0;
+            }
+
+            int cells = 0;
+            foreach (Vector2Int _ in prisms.CellsOfKind(PrismKind.OpenVolume))
+            {
+                cells++;
+            }
+
+            return cells;
+        }
+
+        /// <summary>
+        /// Room pairs that share at least one plan cell — what the volumetric
+        /// <c>Overlaps</c> now permits and the flat one forbade outright.
+        /// </summary>
+        /// <remarks>
+        /// The counterpart number to D3's `layerOffsetConnectionEnds`: 0 across
+        /// the corpus means no generic room started stacking, which is §4.1's
+        /// stated failure mode for relaxing this test on the band alone.
+        /// </remarks>
+        private static int CountStackedRoomPairs(DungeonLayout layout)
+        {
+            if (layout.rooms == null)
+            {
+                return 0;
+            }
+
+            int pairs = 0;
+            for (int first = 0; first < layout.rooms.Count; first++)
+            {
+                for (int second = first + 1; second < layout.rooms.Count; second++)
+                {
+                    if (layout.rooms[first].Overlaps(layout.rooms[second]))
+                    {
+                        pairs++;
+                    }
+                }
+            }
+
+            return pairs;
         }
 
         // Over SURFACES, not columns. A gallery on a storey no column floor

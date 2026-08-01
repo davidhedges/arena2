@@ -2238,13 +2238,14 @@ and the phase does not exit until collider discipline or the exporter closes it.
 ### Phase D — Multi-layer rooms in generation
 
 > **Status. IN PROGRESS.** Slice order and evidence live in
-> [`CURRENT_STATUS.md`](CURRENT_STATUS.md); **D0, D1, D2 and D3 landed
-> 2026-08-01** — the transition body became a level BAND instead of a column to
-> the sky (closing the defect C2 recorded as unfixed and ungateable), the
-> topology layer schema parses and is carried, the corridor-exclusivity and
-> third-room relaxations shipped with the stacked-corridor producer they need,
-> and a bound edge now RESOLVES at its layer's elevation. Three corrections to
-> this section, all measured:
+> [`CURRENT_STATUS.md`](CURRENT_STATUS.md); **D0 through D4 landed 2026-08-01**
+> — the transition body became a level BAND instead of a column to the sky
+> (closing the defect C2 recorded as unfixed and ungateable), the topology layer
+> schema parses and is carried, the corridor-exclusivity and third-room
+> relaxations shipped with the stacked-corridor producer they need, a bound edge
+> now RESOLVES at its layer's elevation, and the `OpenVolume` kind Phase B
+> shipped without a producer finally has two. **D5, the atrium content, is all
+> that remains.** Three corrections to this section, all measured:
 >
 > 1. **"`ChooseEnclosedRooms` moved into the plan so bridges may legally cross
 >    rooms" names a gate that does not exist.** The aerial-bridge pass has no
@@ -2276,6 +2277,19 @@ and the phase does not exit until collider discipline or the exporter closes it.
 > lost — and it can never be asked to compose the two, because a node declaring a
 > real storey must carry a recipe slot and a recipe-slot room is excluded from
 > zone splitting outright.
+>
+> **D4 added three more.** (a) §4.1's authorization for a volumetric `Overlaps`
+> — "declares the shared column as part of a reserved open volume or a bridge
+> span" — **is not evaluable at the site it names**: room inflation runs three
+> passes before any recipe zone resolves and a whole stage before aerial bridges
+> exist. Declared storeys authorize it instead. (b) §6's fill-pass invariant is
+> not sufficient on its own: there are **two ledgers**, so the producer needs two
+> registration sites or the layout-stage sweep packs the void before the
+> elevation-stage recipe declares it. (c) §6's authored per-feature penetration
+> allow-list **needs per-feature owners, which do not exist** — a recipe is one
+> `Recipe:<id>` owner, so an authored list could only spell the blanket
+> exemption the section forbids. The list is derived until owners get finer, and
+> `OPEN_VOLUME_PENETRATION_UNDECLARED` is deliberately not implemented.
 
 **Capability.** Topologies and recipes can declare layers; routes bind to
 declared entrance elevations; `OpenVolume` reserves an atrium; the atrium

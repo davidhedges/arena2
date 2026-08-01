@@ -230,6 +230,7 @@ Hard rules, all enforced by the generator and all reported by the validator:
 | Edge rise `±4` or `±8` for Stair/Bridge/Stairwell, exactly `0` for LevelCorridor | write an edge in travel order in either direction; a descending edge is a rise of `-4`. Measured between the **bound** elevations, which are the node levels for an unbound edge |
 | A declared layer is bound by an edge, and its node carries a recipe slot | a storey nothing routes to, or that nothing can build, generates as nothing |
 | A slot maps only layers its node declares, one recipe storey each; the mapped recipe storey exists, sits at the same relative level, and carries the port every bound edge arrives on | the graph and the room must agree about where a storey is, or the room is built at one height and routed to at another |
+| Two rooms may share plan cells only when **both** their nodes declare storeys and the absolute bands those storeys imply do not meet | room inflation's overlap test is volumetric from 2026-08-01 (D4). A node declaring one elevation authorizes nothing, however far its level is from its neighbour's — otherwise generic rooms would start stacking wherever the corpus already spreads levels, which is a variety regression rather than a feature |
 | At least one Stair, one Bridge, one Stairwell | the transition-kind coverage check |
 | `anchors.bottom` at level 0, `anchors.top` at level 24 | the abyss datum and the ceiling |
 | Connected graph, cycle rank ≥ 1, at least two degree-≥3 nodes | a route loops |

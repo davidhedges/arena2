@@ -792,7 +792,7 @@ rebuild it any time with **Arena > Dungeons > Rebuild Random Dungeon (Specific
 Topology)**, topology `aperture-gallery`. Its gallery sits at world
 `y = 12` around `(4, 12, −64)` — the node's level 8 plus the layer's 4.
 
-### Phase D — multi-layer rooms in GENERATION. IN PROGRESS; D0–D3 landed 2026-08-01.
+### Phase D — multi-layer rooms in GENERATION. IN PROGRESS; D0–D4 landed 2026-08-01.
 
 Design §13. Topologies and recipes declare layers, and routes bind to them.
 Four of C2's corrections are constraints on anything Phase D authors rather than
@@ -812,7 +812,7 @@ used, moved from content into code.
 | **D1** ✅ | the **topology layer schema** — node `layers`, edge `fromLayer`/`toLayer` — parsed, validated by `Validate Topologies`, carried into `RouteIntent` and `plannedBand`, and consumed nowhere | no topology declares layers |
 | **D2** ✅ | the **corridor-exclusivity and third-room relaxations** — *authorized* by layer binding, *decided* by disjoint absolute bands (§8.1) — **together with the stacked-corridor producer they need**, which the design separates and which measurement says cannot be separated (see D1's finding 1) | no connection is layer-bound |
 | **D3** ✅ | a bound edge **resolves at its layer's elevation** — a per-`(connection, end)` entry level beside today's per-node `zoneLevels`, and a slot mapping a topology layer id to a recipe layer id | ditto |
-| D4 | **volumes** — `RoomFootprint.Overlaps` volumetric, an `OpenVolume` producer, `ChooseEnclosedRooms` moved into the plan | the volumetric test needs a declared reason, and nothing declares one |
+| **D4** ✅ | **volumes** — `RoomFootprint.Overlaps` volumetric, an `OpenVolume` producer, `ChooseEnclosedRooms` moved into the plan | the volumetric test needs a declared reason, and nothing declares one |
 | D5 | **content** — an atrium topology plus a room binding route edges at two elevations | weight 0, exactly as `aperture-gallery` is |
 
 **D0 — the transition body is a band, not a column (landed 2026-08-01).**
@@ -1087,6 +1087,95 @@ Five things measured that the design or the earlier slices had wrong:
    — so a slot may map its `upper` storey and the agreement rule passes, while
    binding an edge to that storey is rejected `PORT_LAYER_MISMATCH` until a port
    is authored there. The fixture asserts exactly that pair.
+
+**D4 — volumes (landed 2026-08-01).**
+
+Three systems, and the thread joining them is *a reservation with a height*.
+Phase B shipped the `OpenVolume` prism kind, its penetration allow-list and its
+enforcement with **no producer at all**, so until now not one line of that
+mechanism had ever executed.
+
+- **The `OpenVolume` producer.** A recipe zone of kind `OpenVolume` declares
+  `openVolumeHeightLevels` and reserves `[its layer's elevation, + that height)`.
+  Its floor is its LAYER's level, not the room's: an atrium's void is the air
+  above the chamber, so it belongs to the storey it opens through.
+- **`RoomFootprint.Overlaps` is volumetric**, and the split is D2's restated for
+  rooms: **declared layers authorize an overlap, the absolute bands decide it.**
+  Both halves are load-bearing — `atrium-ring` spans 0 to 24, so the band test
+  alone would let pairs of its rooms start stacking.
+- **`ChooseEnclosedRooms` moved into the plan**, before the elevation stage, so
+  a later slice can let the aerial-bridge pass ask whether the room it flies
+  over has a roof. Only the move; nothing consumes the answer earlier yet.
+
+Gate: `ops/dungeon-port-ab.sh` at density 0 — **identical geometry on all 200
+seeds**, and a leaf-by-leaf diff of the two reports (**520 627 per-seed leaves**)
+found **zero leaves changed outside `schemaUsage`**, which moved because a row
+was inserted into it. `resultHash` `10b28a82b65fc21f` → `286cbcdac24a2ba8`.
+Render Digest 12 seeds byte-identical at `bdb90e5e8a696dd7`. `Validate
+Topologies` 8/8 PASS plus 26/26 layer-schema checks. All four older fixtures
+re-run green.
+
+**Two numbers decide the slice**, both **0 on all 200 seeds**:
+`tieredLevelPlan.openVolumeCells` (no recipe declares a void, so the producer,
+the fill exclusion and the penetration rule are reachable and unexercised) and
+`tieredLevelPlan.stackedRoomPairs` (no two rooms share a plan cell, which is
+§4.1's stated failure mode for relaxing `Overlaps` on the band alone).
+
+**The capability, measured** — `Tools > Dungeon Lab > Print Open Volume Fixture`.
+23 checks, all green: a fill sweep blocked inside the band and free one level
+below its floor and at its exclusive top; a foreign transition's footprint and
+its *landing* blocked, and its structure below the floor allowed; the owning
+recipe admitted and another recipe refused; the two `RECIPE_OPEN_VOLUME_HEIGHT`
+slips rejected; and the overlap rule's exact/one-short-of-headroom pair.
+
+Six things measured that the design had wrong or left open:
+
+1. **§4.1's authorization clause is not evaluable at the site it names.** It
+   says two rooms may share a column when "at least one of them declares the
+   shared column as part of a reserved open volume or a bridge span". But
+   `OverlapsPlacedRoom` runs inside room inflation — three passes before
+   `TryPlaceRouteRecipes` resolves any zone, and a whole stage before
+   `AddAerialBridges` exists. Neither declaration has been made yet. What IS
+   known there is the topology's declared storeys, which is the same
+   pre-elevation absolute every other layered rule compares, so that is what
+   authorizes the relaxation.
+2. **The producer needs TWO sites, because there are two ledgers.** §6 makes
+   "the density fill passes must query the prism ledger" an invariant and §11
+   calls missing it the most likely first-implementation failure — but the
+   invariant alone is not enough. Phase B finding 2 established that the annex
+   sweep runs during LAYOUT and the transition ledger is built during
+   ELEVATION, and they cannot share an instance. A volume registered only where
+   the recipe realizes would already have been packed solid by the sweep that
+   ran a stage earlier. So it registers twice: from the topology's declared node
+   level at the layout site, and from the resolved base level at the elevation
+   site. The same number by construction, derived two ways because the two
+   stages know different things.
+3. **§6's authored per-feature allow-list needs per-feature owners, and they do
+   not exist.** It names entries like `Transition:atrium-stair-a`, but every
+   prism a recipe registers — footprints, landings, room cells, transitions —
+   goes in under one `Recipe:<id>` owner. An authored list could therefore only
+   ever spell that single owner, which is the blanket exemption §6 exists to
+   forbid, wearing a checklist's clothes. The allow-list is derived instead
+   (the owning recipe, and nothing else), which admits exactly the same set and
+   does not claim otherwise. `OPEN_VOLUME_PENETRATION_UNDECLARED` is *not*
+   implemented: it has nothing to validate until owners get finer.
+4. **The recipe content digest omitted the new field, and `zone.kind` alone was
+   not enough.** Two recipes whose atria differ by four levels of air would have
+   digested identically, and `catalogDigest` is how the generator notices a
+   catalog changed. Closed with C2a's conditional append, so today's recipes
+   hash unchanged.
+5. **The enclosure STREAM had to move with the roll.** Its draw sequence is N
+   room draws followed by the boundary context's own `Next()` for the dressing
+   seed, on one instance — so hoisting the roll while leaving the stream behind
+   would re-phase that seed and move every dressed dungeon. The array is also
+   COPIED into the boundary context, because the passes there mutate it
+   (subdivision resizes it, the sealed-room passes demote entries) and the
+   plan's copy must stay the decision that was made.
+6. **Inserting a row into `schemaUsage` shifts every row after it.** That is 30
+   changed leaves in the report diff which are positional, not semantic — worth
+   expecting rather than investigating. The same run is also direct evidence
+   that `schemaUsage` reaches `resultHash` and *not* `hashes.canonical`: it
+   changed on all 200 seeds while the canonical vector did not move.
 
 **A tooling note, because this ritual is now six slices old.**
 `ops/dungeon-report-diff.py` does the leaf-by-leaf report comparison by hand up

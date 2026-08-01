@@ -14,7 +14,10 @@ namespace DungeonLab.Editor
         Walkable,
         Elevated,
         ProtectedCirculation,
-        ProtectedFocal
+        ProtectedFocal,
+        // APPENDED, never inserted: these are serialized as integers in every
+        // recipe asset, so reordering the enum silently re-kinds authored zones.
+        OpenVolume
     }
 
     public enum DungeonRecipePortType
@@ -78,6 +81,8 @@ namespace DungeonLab.Editor
         public int relativeLevel;
         [Tooltip("Which declared layer this zone belongs to. Empty means the base layer, which is the only layer most recipes have.")]
         public string layerId = string.Empty;
+        [Tooltip("OpenVolume only: how many levels of void this zone reserves above its layer. The band is half-open, so 8 reserves [layer, layer+8).")]
+        public int openVolumeHeightLevels;
     }
 
     [Serializable]
