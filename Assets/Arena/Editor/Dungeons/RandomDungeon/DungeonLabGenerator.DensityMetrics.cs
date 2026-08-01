@@ -102,30 +102,33 @@ namespace DungeonLab.Editor
             return inside / (float)area;
         }
 
-        // The diagnostic entry point, which reads the ephemeral route embedding
-        // the report path already depends on. Generation gates use the pure
-        // overload above with the embedding they hold.
-        private static bool TryResolveLatticeEnvelope(out RectInt envelope)
+        // Reporting receives the accepted intent explicitly. The embedding
+        // coordinates remain diagnostic state, but a stale diagnostic intent
+        // can no longer select the topology settings used by an accepted report.
+        private static bool TryResolveLatticeEnvelope(
+            RouteIntent intent,
+            out RectInt envelope)
         {
-            return TryResolveLatticeEnvelope(out envelope, out _);
+            return TryResolveLatticeEnvelope(intent, out envelope, out _);
         }
 
         private static bool TryResolveLatticeEnvelope(
+            RouteIntent intent,
             out RectInt envelope,
             out RectInt[] nodeEnvelopes)
         {
             envelope = default;
             nodeEnvelopes = System.Array.Empty<RectInt>();
-            if (lastRouteIntent == null ||
+            if (intent == null ||
                 lastNodeCenters == null ||
                 lastNodeCenters.Length == 0 ||
-                lastNodeCenters.Length != lastRouteIntent.nodes.Length)
+                lastNodeCenters.Length != intent.nodes.Length)
             {
                 return false;
             }
 
             DungeonPatternSpatialSettings spatial =
-                ResolveTopologySpatialSettings(lastRouteIntent.topology);
+                ResolveTopologySpatialSettings(intent.topology);
             envelope = LatticeEnvelopeFor(lastNodeCenters, spatial);
             nodeEnvelopes = new RectInt[lastNodeCenters.Length];
             for (int node = 0; node < lastNodeCenters.Length; node++)
@@ -389,9 +392,13 @@ namespace DungeonLab.Editor
 
         private static JObject BuildVoidDensityMeasurements(
             DungeonLayout layout,
-            TieredLevelPlan plan)
+            TieredLevelPlan plan,
+            RouteIntent intent)
         {
-            if (!TryResolveLatticeEnvelope(out RectInt envelope, out RectInt[] nodeEnvelopes))
+            if (!TryResolveLatticeEnvelope(
+                    intent,
+                    out RectInt envelope,
+                    out RectInt[] nodeEnvelopes))
             {
                 return new JObject
                 {
@@ -570,7 +577,8 @@ namespace DungeonLab.Editor
         // envelope is drawn rather than clipped at the frame.
         private static JObject BuildFloorplanProjection(
             DungeonLayout layout,
-            TieredLevelPlan plan)
+            TieredLevelPlan plan,
+            RouteIntent intent)
         {
             var roomIdByCell = new Dictionary<Vector2Int, int>();
             for (int room = 0; room < layout.rooms.Count; room++)
@@ -591,7 +599,7 @@ namespace DungeonLab.Editor
             var drawn = new HashSet<Vector2Int>(layout.floorCells);
             drawn.UnionWith(authoredVoid);
             RectInt window = GetCellRect(drawn);
-            bool hasEnvelope = TryResolveLatticeEnvelope(out RectInt envelope);
+            bool hasEnvelope = TryResolveLatticeEnvelope(intent, out RectInt envelope);
             if (hasEnvelope)
             {
                 int minX = Mathf.Min(window.xMin, envelope.xMin);

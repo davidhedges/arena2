@@ -154,6 +154,7 @@ namespace DungeonLab.Editor
             int seed,
             DungeonLayout layout,
             TieredLevelPlan plan,
+            RouteIntent intent,
             bool boundaryValid,
             string boundaryMessage)
         {
@@ -162,6 +163,7 @@ namespace DungeonLab.Editor
             bool transitionContractsValid = TryValidateTransitionLevelDeltas(
                 plan.transitions,
                 plan.topologyCeilingLevels,
+                layout,
                 out string transitionMessage);
 
             bool portGraphBuilt = TryBuildFloorStairPortGraph(
@@ -177,10 +179,14 @@ namespace DungeonLab.Editor
             }
 
             bool bottomToTop = portGraphConnected && plan.minLevel < plan.maxLevel;
-            bool routeRequirementsValid = TryValidateAcceptedRouteRequirements(plan, out string routeRequirementsMessage);
-            bool recipesValid = TryValidateAcceptedRecipes(plan, out string recipesMessage);
-            bool richLayeringValid = TryValidateAcceptedRichLayering(plan, out string richLayeringMessage);
-            bool namedPromontoriesValid = TryValidateAcceptedNamedPromontories(plan, out string namedPromontoryMessage);
+            bool routeRequirementsValid = TryValidateAcceptedRouteRequirements(
+                intent,
+                layout,
+                plan,
+                out string routeRequirementsMessage);
+            bool recipesValid = TryValidateAcceptedRecipes(intent, plan, out string recipesMessage);
+            bool richLayeringValid = TryValidateAcceptedRichLayering(intent, plan, out string richLayeringMessage);
+            bool namedPromontoriesValid = TryValidateAcceptedNamedPromontories(intent, plan, out string namedPromontoryMessage);
             bool externalConnectorsValid = TryValidateAcceptedExternalConnectors(seed, plan, out string externalConnectorMessage);
             bool headroomValid = TryValidateAcceptedPlanHeadroom(plan, out string headroomMessage);
             // D5: the reserved-void gate design §13 names in Phase D's exit

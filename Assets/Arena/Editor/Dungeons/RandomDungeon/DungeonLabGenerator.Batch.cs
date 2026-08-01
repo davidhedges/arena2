@@ -837,6 +837,7 @@ namespace DungeonLab.Editor
                     rejectionHistogram,
                     out DungeonLayout layout,
                     out TieredLevelPlan plan,
+                    out RouteIntent acceptedIntent,
                     out _,
                     out DungeonPlanValidation validation,
                     out int layoutAttemptsUsed,
@@ -851,6 +852,7 @@ namespace DungeonLab.Editor
                         rejectionHistogram,
                         layout,
                         plan,
+                        acceptedIntent,
                         validation);
                     return acceptedReport;
                 }
@@ -873,6 +875,425 @@ namespace DungeonLab.Editor
                     exception);
                 return exceptionReport;
             }
+        }
+
+        private static bool HasRecipeValidationFinding(
+            DungeonRecipeValidationResult result,
+            string code)
+        {
+            foreach (DungeonRecipeValidationFinding finding in result.Findings)
+            {
+                if (string.Equals(finding.code, code, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // Slice 1's focused acceptance/rejection fixture. Every probe calls the
+        // production predicate or validator directly; malformed recipes exist
+        // only as HideAndDontSave clones and never touch the authoring workflow.
+        private static string BuildStructuralElevationOwnershipSnapshot(int seed)
+        {
+            bool structuralLevelsAccepted =
+                IsStructuralLevel(0) && IsStructuralLevel(4) && IsStructuralLevel(8);
+            bool localLevelsRejectedAsStructural =
+                !IsStructuralLevel(1) && !IsStructuralLevel(2) && !IsStructuralLevel(5);
+            bool structuralConnectionsAccepted =
+                AreStructuralConnectionLevels(0, 0) &&
+                AreStructuralConnectionLevels(0, 4) &&
+                AreStructuralConnectionLevels(4, 12);
+            bool twoUnitConnectionRejected = !AreStructuralConnectionLevels(0, 2);
+            bool localConnectionRejected = !AreStructuralConnectionLevels(1, 5);
+            bool flatStructuralBridgeAccepted = AreStructuralAerialBridgeLandingLevels(4, 4);
+            bool twoUnitBridgeRejected = !AreStructuralAerialBridgeLandingLevels(4, 6);
+            bool localBridgeRejected = !AreStructuralAerialBridgeLandingLevels(2, 2);
+
+            RoomFootprint firstRoom = RoomFootprint.FromRect(new RectInt(0, 0, 4, 4));
+            RoomFootprint secondRoom = RoomFootprint.FromRect(new RectInt(6, 0, 4, 4));
+            var rooms = new List<RoomFootprint> { firstRoom, secondRoom };
+            var path = new List<Vector2Int>
+            {
+                new Vector2Int(3, 1),
+                new Vector2Int(4, 1),
+                new Vector2Int(5, 1),
+                new Vector2Int(6, 1)
+            };
+            var connections = new List<RoomConnection>
+            {
+                RoomConnection.ForRouteEdge(
+                    0,
+                    1,
+                    "structural-ownership-probe",
+                    new LevelBand(0, 1),
+                    path)
+            };
+            var floorCells = new HashSet<Vector2Int>(firstRoom.cells);
+            floorCells.UnionWith(secondRoom.cells);
+            floorCells.UnionWith(path);
+
+            var validLower = new HashSet<Vector2Int>();
+            var validRaised = new HashSet<Vector2Int>();
+            foreach (Vector2Int cell in firstRoom.cells)
+            {
+                (cell.x == firstRoom.bounds.xMin ? validRaised : validLower).Add(cell);
+            }
+
+            var validLocalLayout = new DungeonLayout(
+                floorCells,
+                rooms,
+                connections,
+                new[] { new RoomZonePlan(0, validLower, validRaised) },
+                0);
+            bool roomLocalOffsetAccepted = TryValidateRoomLocalElevationOwnership(
+                validLocalLayout,
+                out string validLocalMessage);
+
+            var thresholdLower = new HashSet<Vector2Int>();
+            var thresholdRaised = new HashSet<Vector2Int>();
+            foreach (Vector2Int cell in firstRoom.cells)
+            {
+                (cell.x == firstRoom.bounds.xMax - 1 ? thresholdRaised : thresholdLower).Add(cell);
+            }
+
+            var thresholdOwningLayout = new DungeonLayout(
+                floorCells,
+                rooms,
+                connections,
+                new[] { new RoomZonePlan(0, thresholdLower, thresholdRaised) },
+                0);
+            bool externalThresholdRejected = !TryValidateRoomLocalElevationOwnership(
+                thresholdOwningLayout,
+                out string thresholdMessage);
+
+            var crossingRaised = new HashSet<Vector2Int>(validRaised)
+            {
+                new Vector2Int(secondRoom.bounds.xMin, secondRoom.bounds.yMin)
+            };
+            var crossingLayout = new DungeonLayout(
+                floorCells,
+                rooms,
+                connections,
+                new[] { new RoomZonePlan(0, validLower, crossingRaised) },
+                0);
+            bool ownershipBoundaryRejected = !TryValidateRoomLocalElevationOwnership(
+                crossingLayout,
+                out string ownershipMessage);
+
+            var roomLocalPhysicalTransition = new ElevationEdgeModel.TransitionEdge(
+                new Vector2Int(0, 0),
+                0,
+                new Vector2Int(1, 0),
+                PrimaryStairRiseLevels,
+                string.Empty,
+                EmbeddedStairPlacementClass);
+            bool roomLocalPhysicalTransitionAccepted = TryValidateTransitionLevelDeltas(
+                new[] { roomLocalPhysicalTransition },
+                24,
+                validLocalLayout,
+                out string roomLocalPhysicalTransitionMessage);
+            var crossingPhysicalTransition = new ElevationEdgeModel.TransitionEdge(
+                new Vector2Int(3, 1),
+                0,
+                new Vector2Int(6, 1),
+                PrimaryStairRiseLevels,
+                string.Empty,
+                EmbeddedStairPlacementClass);
+            bool crossingPhysicalTransitionRejected = !TryValidateTransitionLevelDeltas(
+                new[] { crossingPhysicalTransition },
+                24,
+                validLocalLayout,
+                out string crossingPhysicalTransitionMessage);
+
+            var structuralExternal = new[]
+            {
+                new ExternalConnectorPromontoryResolution(
+                    "structural-external",
+                    Direction.North,
+                    Vector2Int.zero,
+                    Vector2Int.up,
+                    4,
+                    Array.Empty<Vector2Int>())
+            };
+            var localExternal = new[]
+            {
+                new ExternalConnectorPromontoryResolution(
+                    "local-external",
+                    Direction.North,
+                    Vector2Int.zero,
+                    Vector2Int.up,
+                    2,
+                    Array.Empty<Vector2Int>())
+            };
+            bool structuralExternalAccepted = TryValidateExternalConnectorStructuralLevels(
+                structuralExternal,
+                out string structuralExternalMessage);
+            bool localExternalRejected = !TryValidateExternalConnectorStructuralLevels(
+                localExternal,
+                out string localExternalMessage);
+
+            RouteIntent validIntent = BuildDiagnosticSelectedRouteIntent(seed);
+            bool structuralIntentAccepted = TryValidateRouteIntent(
+                validIntent,
+                out string validIntentMessage);
+            var invalidNodes = (RouteNodeIntent[])validIntent.nodes.Clone();
+            RouteNodeIntent invalidNode = invalidNodes[0];
+            invalidNodes[0] = new RouteNodeIntent(
+                invalidNode.id,
+                invalidNode.role,
+                invalidNode.beat,
+                invalidNode.mainRouteOrder,
+                invalidNode.branchOrder,
+                invalidNode.relativeElevationLevels + 2,
+                invalidNode.recipeSlotId,
+                invalidNode.layers);
+            var localRouteIntent = new RouteIntent(
+                validIntent.seed,
+                validIntent.plannerVersion,
+                validIntent.topology,
+                invalidNodes,
+                validIntent.traversalEdges,
+                validIntent.vista,
+                validIntent.elevationPolicy,
+                validIntent.recipeSlots,
+                validIntent.catalogDigest,
+                validIntent.bottomNode,
+                validIntent.topNode,
+                validIntent.plannedOverlooks,
+                validIntent.allowGenericRoomWings);
+            bool localRouteNodeRejected = !TryValidateRouteIntent(
+                localRouteIntent,
+                out string localRouteMessage);
+
+            if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog catalog,
+                    out string catalogMessage))
+            {
+                throw new InvalidOperationException(catalogMessage);
+            }
+
+            DungeonRecipeAsset layeredRecipe = null;
+            foreach (DungeonRecipeAsset recipe in catalog.recipes)
+            {
+                if (recipe != null &&
+                    recipe.DeclaresLayers &&
+                    recipe.ports != null && recipe.ports.Length > 0 &&
+                    recipe.transitions != null && recipe.transitions.Length > 0)
+                {
+                    layeredRecipe = recipe;
+                    break;
+                }
+            }
+
+            if (layeredRecipe == null)
+            {
+                throw new InvalidOperationException(
+                    "active recipe catalog had no layered contract for structural ownership probes");
+            }
+
+            bool existingLocalRecipeAccepted =
+                DungeonRecipeValidator.ValidateContract(layeredRecipe).Passed;
+            DungeonRecipeAsset localPortRecipe = null;
+            DungeonRecipeAsset localLayerRecipe = null;
+            DungeonRecipeAsset localTransitionRecipe = null;
+            bool localRecipePortRejected = false;
+            bool localRecipeLayerRejected = false;
+            bool localRecipeTransitionRejected = false;
+            try
+            {
+                localPortRecipe = Instantiate(layeredRecipe);
+                localPortRecipe.hideFlags = HideFlags.HideAndDontSave;
+                DungeonRecipePort localPort = localPortRecipe.ports[0];
+                localPort.relativeLevel = 1;
+                var portZones = new List<DungeonRecipeZone>(
+                    localPortRecipe.zones ?? Array.Empty<DungeonRecipeZone>())
+                {
+                    new DungeonRecipeZone
+                    {
+                        id = "slice-1-local-port",
+                        kind = DungeonRecipeZoneKind.Elevated,
+                        offset = localPort.cell,
+                        size = Vector2Int.one,
+                        relativeLevel = 1,
+                        layerId = localPort.layerId
+                    }
+                };
+                localPortRecipe.zones = portZones.ToArray();
+                localRecipePortRejected = HasRecipeValidationFinding(
+                    DungeonRecipeValidator.ValidateContract(localPortRecipe),
+                    "RECIPE_EXTERNAL_PORT_LEVEL");
+
+                localLayerRecipe = Instantiate(layeredRecipe);
+                localLayerRecipe.hideFlags = HideFlags.HideAndDontSave;
+                foreach (DungeonRecipeLayer layer in localLayerRecipe.layers)
+                {
+                    if (layer != null && !layer.isBase)
+                    {
+                        layer.relativeLevel += 2;
+                        break;
+                    }
+                }
+                localRecipeLayerRejected = HasRecipeValidationFinding(
+                    DungeonRecipeValidator.ValidateContract(localLayerRecipe),
+                    "RECIPE_STRUCTURAL_LAYER_LEVEL");
+
+                localTransitionRecipe = Instantiate(layeredRecipe);
+                localTransitionRecipe.hideFlags = HideFlags.HideAndDontSave;
+                DungeonRecipeLayer upperLayer = null;
+                foreach (DungeonRecipeLayer layer in localTransitionRecipe.layers)
+                {
+                    if (layer != null && !layer.isBase)
+                    {
+                        upperLayer = layer;
+                        break;
+                    }
+                }
+
+                DungeonRecipeTransition crossLayerTransition =
+                    localTransitionRecipe.transitions[0];
+                if (upperLayer == null || crossLayerTransition == null)
+                {
+                    throw new InvalidOperationException(
+                        $"layered recipe '{layeredRecipe.recipeId}' lacked an inter-layer probe contract");
+                }
+
+                crossLayerTransition.upperLayerId = upperLayer.layerId;
+                var transitionZones = new List<DungeonRecipeZone>(
+                    localTransitionRecipe.zones ?? Array.Empty<DungeonRecipeZone>())
+                {
+                    new DungeonRecipeZone
+                    {
+                        id = "slice-1-local-transition",
+                        kind = DungeonRecipeZoneKind.Elevated,
+                        offset = crossLayerTransition.lowerTransitionCell,
+                        size = Vector2Int.one,
+                        relativeLevel = 1,
+                        layerId = crossLayerTransition.lowerLayerId
+                    }
+                };
+                localTransitionRecipe.zones = transitionZones.ToArray();
+                localRecipeTransitionRejected = HasRecipeValidationFinding(
+                    DungeonRecipeValidator.ValidateContract(localTransitionRecipe),
+                    "RECIPE_INTERLAYER_TRANSITION_LEVEL");
+            }
+            finally
+            {
+                if (localPortRecipe != null) DestroyImmediate(localPortRecipe);
+                if (localLayerRecipe != null) DestroyImmediate(localLayerRecipe);
+                if (localTransitionRecipe != null) DestroyImmediate(localTransitionRecipe);
+            }
+
+            CurrentGenerationSettings = LoadActiveGenerationSettings(
+                ResolveRequestedDensityLevel());
+            var rejectionHistogram = new Dictionary<string, int>(StringComparer.Ordinal);
+            bool planBuilt = TryBuildAcceptedPlan(
+                seed,
+                rejectionHistogram,
+                out DungeonLayout acceptedLayout,
+                out TieredLevelPlan acceptedPlan,
+                out RouteIntent acceptedIntent,
+                out _,
+                out DungeonPlanValidation validation,
+                out int layoutAttemptsUsed,
+                out string rejectionReason);
+            bool staticPoisonDifferent = false;
+            bool acceptanceUsesCarriedIntent = false;
+            bool nullIntentRejected = false;
+            bool reportUsesCarriedIntent = false;
+            bool geometryHashesIgnoreDiagnosticIntent = false;
+            RouteIntent priorDiagnosticIntent = lastRouteIntent;
+            try
+            {
+                if (planBuilt)
+                {
+                    JObject unpoisonedReport = CreateAcceptedSeedReport(
+                        seed,
+                        layoutAttemptsUsed,
+                        rejectionReason,
+                        rejectionHistogram,
+                        acceptedLayout,
+                        acceptedPlan,
+                        acceptedIntent,
+                        validation);
+                    lastRouteIntent = BuildDiagnosticRouteIntent(seed);
+                    staticPoisonDifferent = !string.Equals(
+                        lastRouteIntent.patternId,
+                        acceptedIntent.patternId,
+                        StringComparison.Ordinal);
+                    acceptanceUsesCarriedIntent = TryValidateAcceptedRouteRequirements(
+                        acceptedIntent,
+                        acceptedLayout,
+                        acceptedPlan,
+                        out _);
+                    nullIntentRejected = !TryValidateAcceptedRouteRequirements(
+                        null,
+                        acceptedLayout,
+                        acceptedPlan,
+                        out _);
+                    JObject acceptedReport = CreateAcceptedSeedReport(
+                        seed,
+                        layoutAttemptsUsed,
+                        rejectionReason,
+                        rejectionHistogram,
+                        acceptedLayout,
+                        acceptedPlan,
+                        acceptedIntent,
+                        validation);
+                    reportUsesCarriedIntent = string.Equals(
+                        acceptedReport["routeIntent"]?.Value<string>("patternId"),
+                        acceptedIntent.patternId,
+                        StringComparison.Ordinal);
+                    geometryHashesIgnoreDiagnosticIntent =
+                        JToken.DeepEquals(unpoisonedReport["hashes"], acceptedReport["hashes"]);
+                }
+            }
+            finally
+            {
+                lastRouteIntent = priorDiagnosticIntent;
+            }
+
+            return string.Join("\n", new[]
+            {
+                $"lattice.structuralAccepted={structuralLevelsAccepted}",
+                $"lattice.localRejected={localLevelsRejectedAsStructural}",
+                $"connection.structuralAccepted={structuralConnectionsAccepted}",
+                $"connection.twoUnitRejected={twoUnitConnectionRejected}",
+                $"connection.localEndpointRejected={localConnectionRejected}",
+                $"bridge.flatStructuralAccepted={flatStructuralBridgeAccepted}",
+                $"bridge.twoUnitRejected={twoUnitBridgeRejected}",
+                $"bridge.localLandingRejected={localBridgeRejected}",
+                $"local.roomOwnedAccepted={roomLocalOffsetAccepted}",
+                $"local.roomOwnedMessage={validLocalMessage}",
+                $"local.externalThresholdRejected={externalThresholdRejected}",
+                $"local.externalThresholdMessage={thresholdMessage}",
+                $"local.ownershipBoundaryRejected={ownershipBoundaryRejected}",
+                $"local.ownershipBoundaryMessage={ownershipMessage}",
+                $"local.physicalTransitionAccepted={roomLocalPhysicalTransitionAccepted}",
+                $"local.physicalTransitionMessage={roomLocalPhysicalTransitionMessage}",
+                $"local.crossingTransitionRejected={crossingPhysicalTransitionRejected}",
+                $"local.crossingTransitionMessage={crossingPhysicalTransitionMessage}",
+                $"external.structuralAccepted={structuralExternalAccepted}",
+                $"external.structuralMessage={structuralExternalMessage}",
+                $"external.localRejected={localExternalRejected}",
+                $"external.localMessage={localExternalMessage}",
+                $"intent.structuralAccepted={structuralIntentAccepted}",
+                $"intent.structuralMessage={validIntentMessage}",
+                $"intent.localNodeRejected={localRouteNodeRejected}",
+                $"intent.localNodeMessage={localRouteMessage}",
+                $"recipe.existingLocalContractAccepted={existingLocalRecipeAccepted}",
+                $"recipe.localPortRejected={localRecipePortRejected}",
+                $"recipe.localLayerRejected={localRecipeLayerRejected}",
+                $"recipe.localInterlayerRejected={localRecipeTransitionRejected}",
+                $"physical.primaryStairRiseLevels={PrimaryStairRiseLevels}",
+                $"ownership.planBuilt={planBuilt}",
+                $"ownership.staticPoisonDifferent={staticPoisonDifferent}",
+                $"ownership.acceptanceUsesCarriedIntent={acceptanceUsesCarriedIntent}",
+                $"ownership.nullIntentRejected={nullIntentRejected}",
+                $"ownership.reportUsesCarriedIntent={reportUsesCarriedIntent}",
+                $"ownership.geometryHashesIgnoreDiagnosticIntent={geometryHashesIgnoreDiagnosticIntent}"
+            });
         }
 
         // Focused corrective-item diagnostic used by EditMode tests. It stays on
@@ -1349,7 +1770,7 @@ namespace DungeonLab.Editor
         {
             ResetRouteDiagnostics();
             lastRouteIntent = BuildDiagnosticRouteIntent(seed);
-            JObject intent = BuildRouteIntentProjection();
+            JObject intent = BuildRouteIntentProjection(lastRouteIntent);
             JObject phase4Recipe = FindRecipeProjection(
                 intent["recipeSlots"] as JArray,
                 ThroneRecipeFixtureId);
@@ -2910,8 +3331,8 @@ namespace DungeonLab.Editor
 
             RouteIntent intent = BuildDiagnosticSelectedRouteIntent(seed);
             lastRouteIntent = intent;
-            JObject firstProjection = BuildRouteIntentProjection();
-            JObject secondProjection = BuildRouteIntentProjection();
+            JObject firstProjection = BuildRouteIntentProjection(intent);
+            JObject secondProjection = BuildRouteIntentProjection(intent);
             var lines = new List<string>
             {
                 $"catalog.activeCount={catalog.recipes.Length}",
@@ -3779,6 +4200,7 @@ namespace DungeonLab.Editor
             Dictionary<string, int> rejectionHistogram,
             DungeonLayout layout,
             TieredLevelPlan plan,
+            RouteIntent intent,
             DungeonPlanValidation validation)
         {
             JObject canonicalLayout = BuildCanonicalLayoutProjection(layout);
@@ -3794,7 +4216,7 @@ namespace DungeonLab.Editor
             string preservedCorePlanHash = ComputeSha256(preservedCorePlan.ToString(Formatting.None));
             string preCorrectivePlanHash = ComputeSha256(preCorrectivePlan.ToString(Formatting.None));
             string recipeResolutionHash = ComputeSha256(recipeResolutions.ToString(Formatting.None));
-            JObject routeIntentProjection = BuildRouteIntentProjection();
+            JObject routeIntentProjection = BuildRouteIntentProjection(intent);
             string routeIntentHash = ComputeSha256(routeIntentProjection.ToString(Formatting.None));
             string recipeCatalogDigest = DungeonRecipeCatalogService.TryLoadActiveCatalog(
                 out ActiveDungeonRecipeCatalog activeRecipeCatalog,
@@ -3808,12 +4230,13 @@ namespace DungeonLab.Editor
             float correlation = CalculateDepthLevelCorrelation(layout, plan);
             JObject validationToken = BuildValidationSummaryToken(validation);
             JObject graphSummary = BuildLayoutGraphSummary(layout);
-            JObject routePlacement = BuildRoutePlacementProjection(layout);
+            JObject routePlacement = BuildRoutePlacementProjection(layout, intent);
             JObject densityAdjacencyMeasurements = BuildDensityAdjacencyMeasurements(
                 layout,
                 plan,
                 graphSummary,
                 routePlacement,
+                intent,
                 routeIntentProjection.Value<string>("patternId") ?? string.Empty);
 
             var report = new JObject
@@ -3885,7 +4308,7 @@ namespace DungeonLab.Editor
                     // code read, so the per-(connection, end) table is a widening
                     // with no site in production yet.
                     ["layerOffsetConnectionEnds"] =
-                        CountLayerOffsetConnectionEnds(layout, lastRouteIntent),
+                        CountLayerOffsetConnectionEnds(layout, intent),
                     // D4's two numbers. `openVolumeCells` says whether the
                     // OpenVolume producer fired; `stackedRoomPairs` says whether
                     // the volumetric `Overlaps` let any two rooms share a plan
@@ -3915,7 +4338,7 @@ namespace DungeonLab.Editor
             report["routePlacement"] = routePlacement;
             report["measurements"] = densityAdjacencyMeasurements;
             report["routeResolution"] = BuildRouteRequirementResolutionProjection(plan.routeRequirementResolution);
-            report["floorplan"] = BuildFloorplanProjection(layout, plan);
+            report["floorplan"] = BuildFloorplanProjection(layout, plan, intent);
             report["recipeResolutions"] = recipeResolutions;
             report["namedPromontories"] = BuildNamedPromontoryProjection(plan.namedPromontories);
             report["externalConnectors"] = BuildExternalConnectorProjection(plan.externalConnectors);
@@ -3955,21 +4378,19 @@ namespace DungeonLab.Editor
             };
             if (lastRouteIntent != null)
             {
-                report["routeIntent"] = BuildRouteIntentProjection();
+                report["routeIntent"] = BuildRouteIntentProjection(lastRouteIntent);
                 report["routeBuilderFailureCode"] = lastRouteFailureCode;
             }
 
             return report;
         }
 
-        private static JObject BuildRouteIntentProjection()
+        private static JObject BuildRouteIntentProjection(RouteIntent intent)
         {
-            if (lastRouteIntent == null)
+            if (intent == null)
             {
                 return new JObject();
             }
-
-            RouteIntent intent = lastRouteIntent;
             var nodes = new JArray();
             var mainRoute = new JArray();
             var branch = new JArray();
@@ -4220,19 +4641,21 @@ namespace DungeonLab.Editor
             return projection;
         }
 
-        private static JObject BuildRoutePlacementProjection(DungeonLayout layout)
+        private static JObject BuildRoutePlacementProjection(
+            DungeonLayout layout,
+            RouteIntent intent)
         {
             var centers = new JArray();
-            if (lastRouteIntent != null &&
-                lastNodeCenters.Length == lastRouteIntent.nodes.Length)
+            if (intent != null &&
+                lastNodeCenters.Length == intent.nodes.Length)
             {
                 DungeonPatternSpatialSettings spatial =
-                    ResolveTopologySpatialSettings(lastRouteIntent.topology);
+                    ResolveTopologySpatialSettings(intent.topology);
                 for (int node = 0; node < lastNodeCenters.Length; node++)
                 {
                     centers.Add(new JObject
                     {
-                        ["nodeId"] = lastRouteIntent.nodes[node].id,
+                        ["nodeId"] = intent.nodes[node].id,
                         ["center"] = CellToken(lastNodeCenters[node]),
                         ["envelope"] = RectToken(RoomEnvelope(lastNodeCenters[node], spatial))
                     });
@@ -4240,10 +4663,10 @@ namespace DungeonLab.Editor
             }
 
             var approaches = new JArray();
-            if (lastRouteIntent != null &&
-                lastNodeCenters.Length == lastRouteIntent.nodes.Length)
+            if (intent != null &&
+                lastNodeCenters.Length == intent.nodes.Length)
             {
-                foreach (RouteTraversalIntent edge in lastRouteIntent.traversalEdges)
+                foreach (RouteTraversalIntent edge in intent.traversalEdges)
                 {
                     Vector2Int delta = lastNodeCenters[edge.toNode] - lastNodeCenters[edge.fromNode];
                     var direction = new Vector2Int(Math.Sign(delta.x), Math.Sign(delta.y));
@@ -4257,7 +4680,7 @@ namespace DungeonLab.Editor
             }
 
             bool vistaUnobstructedAtLayoutHandoff = lastVistaCells.Length >=
-                (lastRouteIntent?.vista.minimumReservedVoidCells ?? int.MaxValue);
+                (intent?.vista.minimumReservedVoidCells ?? int.MaxValue);
             bool reservedVoidPreservedAfterTierLooping = vistaUnobstructedAtLayoutHandoff;
             foreach (Vector2Int cell in lastVistaCells)
             {
@@ -4623,9 +5046,17 @@ namespace DungeonLab.Editor
         }
 
         private static bool TryValidateAcceptedRouteRequirements(
+            RouteIntent intent,
+            DungeonLayout layout,
             TieredLevelPlan plan,
             out string message)
         {
+            if (!TryValidateRouteIntent(intent, out message) ||
+                !TryValidateRoomLocalElevationOwnership(layout, out message))
+            {
+                return false;
+            }
+
             RouteRequirementResolution resolution = plan.routeRequirementResolution;
             int stairCount = 0;
             int bridgeCount = 0;
@@ -4656,9 +5087,8 @@ namespace DungeonLab.Editor
                 }
             }
 
-            int expectedTransitionCount = lastRouteIntent?.traversalEdges?.Length ?? 0;
-            int expectedCeiling = lastRouteIntent?.topology?.ceilingLevels ??
-                DefaultTopologyCeilingLevels;
+            int expectedTransitionCount = intent.traversalEdges.Length;
+            int expectedCeiling = intent.topology.ceilingLevels;
             bool passed = resolution.transitions != null &&
                 resolution.transitions.Length == expectedTransitionCount &&
                 resolution.bottomLevel == 0 &&
@@ -4678,23 +5108,24 @@ namespace DungeonLab.Editor
         }
 
         private static bool TryValidateAcceptedRecipes(
+            RouteIntent intent,
             TieredLevelPlan plan,
             out string message)
         {
             if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
                     out ActiveDungeonRecipeCatalog catalog,
                     out message) ||
-                lastRouteIntent?.recipeSlots == null ||
+                intent?.recipeSlots == null ||
                 plan.recipeResolutions == null ||
-                plan.recipeResolutions.Length != lastRouteIntent.recipeSlots.Length)
+                plan.recipeResolutions.Length != intent.recipeSlots.Length)
             {
                 message = string.IsNullOrEmpty(message)
-                    ? $"expected {lastRouteIntent?.recipeSlots?.Length ?? 0} selected recipe resolutions; found {plan.recipeResolutions?.Length ?? 0}"
+                    ? $"expected {intent?.recipeSlots?.Length ?? 0} selected recipe resolutions; found {plan.recipeResolutions?.Length ?? 0}"
                     : message;
                 return false;
             }
 
-            foreach (RecipeSlotIntent slot in lastRouteIntent.recipeSlots)
+            foreach (RecipeSlotIntent slot in intent.recipeSlots)
             {
                 DungeonRecipeAsset recipe = slot.recipe;
                 string requiredId = recipe.recipeId;
@@ -4730,6 +5161,17 @@ namespace DungeonLab.Editor
                         return false;
                     }
                 }
+
+                foreach (RecipePortPlacement port in resolution.ports)
+                {
+                    if (!IsStructuralLevel(port.expectedRelativeLevel))
+                    {
+                        message =
+                            $"recipe port '{port.id}' on '{requiredId}' opened at non-structural " +
+                            $"level {port.expectedRelativeLevel}";
+                        return false;
+                    }
+                }
             }
 
             message = $"three selected recipes resolved atomically with catalog {catalog.digest}";
@@ -4737,10 +5179,11 @@ namespace DungeonLab.Editor
         }
 
         private static bool TryValidateAcceptedRichLayering(
+            RouteIntent intent,
             TieredLevelPlan plan,
             out string message)
         {
-            DungeonRouteTopology topology = lastRouteIntent?.topology;
+            DungeonRouteTopology topology = intent?.topology;
             if (topology == null)
             {
                 message = "accepted plan had no topology context for layered-production validation";
@@ -4759,7 +5202,7 @@ namespace DungeonLab.Editor
             var layeredRecipeIds = new HashSet<string>(StringComparer.Ordinal);
             var layeredRecipeIdsWithRise = new HashSet<string>(StringComparer.Ordinal);
             int internalVerticalTransitions = 0;
-            foreach (RecipeSlotIntent slot in lastRouteIntent.recipeSlots ?? Array.Empty<RecipeSlotIntent>())
+            foreach (RecipeSlotIntent slot in intent.recipeSlots ?? Array.Empty<RecipeSlotIntent>())
             {
                 DungeonRecipeAsset recipe = slot.recipe;
                 if (recipe == null || !recipe.DeclaresLayers)
@@ -4790,10 +5233,10 @@ namespace DungeonLab.Editor
         }
 
         private static bool TryValidateAcceptedNamedPromontories(
+            RouteIntent intent,
             TieredLevelPlan plan,
             out string message)
         {
-            RouteIntent intent = lastRouteIntent;
             RouteRequirementResolution route = plan.routeRequirementResolution;
             NamedVistaPromontoryResolution[] resolutions =
                 plan.namedPromontories ?? Array.Empty<NamedVistaPromontoryResolution>();
@@ -4865,6 +5308,11 @@ namespace DungeonLab.Editor
         {
             ExternalConnectorPromontoryResolution[] resolutions =
                 plan.externalConnectors ?? Array.Empty<ExternalConnectorPromontoryResolution>();
+            if (!TryValidateExternalConnectorStructuralLevels(resolutions, out message))
+            {
+                return false;
+            }
+
             // The contract is "1-4 external promontories, at most one per
             // cardinal". The seed's drawn count is the PREFERENCE the resolver
             // starts from and may walk down when the grown core stops offering
@@ -4936,6 +5384,26 @@ namespace DungeonLab.Editor
                 ? $"resolved {resolvedCount} of a preferred {desiredCount} as {ExternalConnectorAppendageCells}-cell straight runs with unique directions, clear terminal throats, and {openEdges.Count} renderer openings"
                 : "external connector set was incomplete";
             return passed;
+        }
+
+        private static bool TryValidateExternalConnectorStructuralLevels(
+            IReadOnlyList<ExternalConnectorPromontoryResolution> resolutions,
+            out string message)
+        {
+            foreach (ExternalConnectorPromontoryResolution resolution in
+                     resolutions ?? Array.Empty<ExternalConnectorPromontoryResolution>())
+            {
+                if (!IsStructuralLevel(resolution.level))
+                {
+                    message =
+                        $"external connector '{resolution.id}' owned non-structural threshold " +
+                        $"level {resolution.level}";
+                    return false;
+                }
+            }
+
+            message = "external connector thresholds use structural levels";
+            return true;
         }
 
         private static bool TryValidateRoomGraphConnectivity(DungeonLayout layout, out string message)
@@ -5133,6 +5601,7 @@ namespace DungeonLab.Editor
                     rejectionHistogram,
                     out DungeonLayout layout,
                     out TieredLevelPlan plan,
+                    out RouteIntent acceptedIntent,
                     out ElevationEdgeModel.RoomBoundaryContext boundaryContext,
                     out DungeonPlanValidation validation,
                     out int layoutAttemptsUsed,
@@ -5153,6 +5622,7 @@ namespace DungeonLab.Editor
                 rejectionHistogram,
                 layout,
                 plan,
+                acceptedIntent,
                 validation);
 
             levelFieldOrigin = CalculateCenteredLevelFieldOrigin(layout.floorCells, Vector3.zero);
@@ -5257,6 +5727,7 @@ namespace DungeonLab.Editor
             TieredLevelPlan plan,
             JObject graphSummary,
             JObject routePlacement,
+            RouteIntent intent,
             string patternId)
         {
             var roomCells = new HashSet<Vector2Int>();
@@ -5322,7 +5793,7 @@ namespace DungeonLab.Editor
                 // The density metric proper. floorFillPercent above stays for
                 // continuity with the corpus already measured; this is what the
                 // density dial is steered and accepted on.
-                ["density"] = BuildVoidDensityMeasurements(layout, plan)
+                ["density"] = BuildVoidDensityMeasurements(layout, plan, intent)
             };
         }
 

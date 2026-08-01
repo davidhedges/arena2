@@ -51,6 +51,36 @@ namespace DungeonLab.Editor
         // type before the tier planner reserves a concrete realization.
         private const int MajorRiseLevels = 4;
         private const int DoubleMajorRiseLevels = 8;
+        // One predicate owns the existing structural lattice. Structural
+        // topology is still expressed in the generator's long-standing 1u
+        // levels and MajorRiseLevels quantum; this only prevents each validator
+        // from restating the divisibility arithmetic independently.
+        internal static bool IsStructuralLevel(int level)
+        {
+            return level % MajorRiseLevels == 0;
+        }
+
+        private static bool AreStructuralConnectionLevels(int firstLevel, int secondLevel)
+        {
+            if (!IsStructuralLevel(firstLevel) || !IsStructuralLevel(secondLevel))
+            {
+                return false;
+            }
+
+            int delta = Mathf.Abs(firstLevel - secondLevel);
+            return delta == 0 ||
+                delta == MajorRiseLevels ||
+                delta == DoubleMajorRiseLevels;
+        }
+
+        private static bool AreStructuralAerialBridgeLandingLevels(
+            int firstLevel,
+            int secondLevel)
+        {
+            return firstLevel == secondLevel &&
+                IsStructuralLevel(firstLevel) &&
+                IsStructuralLevel(secondLevel);
+        }
         // Apertures are optional traversable falls, not lethal voids. Until the
         // runtime owns fall damage, keep their survivable vocabulary inside the
         // already-reviewed double-major vertical move rather than silently
@@ -329,6 +359,7 @@ namespace DungeonLab.Editor
                     rejectionHistogram,
                     out DungeonLayout layout,
                     out TieredLevelPlan levelPlan,
+                    out RouteIntent acceptedRouteIntent,
                     out ElevationEdgeModel.RoomBoundaryContext roomBoundaryContext,
                     out DungeonPlanValidation validation,
                     out int layoutAttemptsUsed,
@@ -418,6 +449,7 @@ namespace DungeonLab.Editor
             // centres against that final transform.
             CaptureNavigationSurfacePlan(
                 seed,
+                acceptedRouteIntent.patternId,
                 levelPlan,
                 roomBoundaryContext,
                 levelFieldOrigin,
@@ -1016,6 +1048,7 @@ namespace DungeonLab.Editor
             Dictionary<string, int> rejectionHistogram,
             out DungeonLayout layout,
             out TieredLevelPlan levelPlan,
+            out RouteIntent acceptedRouteIntent,
             out ElevationEdgeModel.RoomBoundaryContext boundaryContext,
             out DungeonPlanValidation validation,
             out int layoutAttemptsUsed,
@@ -1023,6 +1056,7 @@ namespace DungeonLab.Editor
         {
             layout = default;
             levelPlan = default;
+            acceptedRouteIntent = null;
             boundaryContext = null;
             validation = null;
             layoutAttemptsUsed = 0;
@@ -1055,6 +1089,7 @@ namespace DungeonLab.Editor
                         out rejectionReason);
                 if (tieredPlanBuilt)
                 {
+                    acceptedRouteIntent = routeRequirements.intent;
                     return true;
                 }
             }
@@ -1362,6 +1397,7 @@ namespace DungeonLab.Editor
             if (!TryValidateTransitionLevelDeltas(
                     transitions,
                     topologyCeiling,
+                    layout,
                     out rejectionReason))
             {
                 return false;
@@ -1440,6 +1476,7 @@ namespace DungeonLab.Editor
                 dungeonSeed,
                 loopedLayout,
                 plan,
+                routeRequirements.intent,
                 boundaryValid,
                 boundaryMessage);
             if (!validation.passed)
@@ -1565,9 +1602,9 @@ namespace DungeonLab.Editor
                     candidate.secondRoom,
                     ThresholdCell(layout.rooms[candidate.secondRoom], path, forward: false));
                 int levelDelta = Mathf.Abs(zoneLevels[firstNode] - zoneLevels[secondNode]);
-                if (levelDelta != 0 &&
-                    levelDelta != MajorRiseLevels &&
-                    levelDelta != DoubleMajorRiseLevels)
+                if (!AreStructuralConnectionLevels(
+                        zoneLevels[firstNode],
+                        zoneLevels[secondNode]))
                 {
                     continue;
                 }
@@ -1795,7 +1832,7 @@ namespace DungeonLab.Editor
             {
                 int requiredLevel = routeRequirements.intent.nodes[roomIndex].relativeElevationLevels;
                 if (requiredLevel < 0 || requiredLevel > topologyCeiling ||
-                    requiredLevel % MajorRiseLevels != 0)
+                    !IsStructuralLevel(requiredLevel))
                 {
                     rejectionReason = $"[ROUTE_ELEVATION_REQUIREMENT] room {roomIndex} declared invalid relative level {requiredLevel}";
                     return false;
@@ -1890,25 +1927,23 @@ namespace DungeonLab.Editor
                 // Corridor deltas are measured between the elevations the
                 // connection ENTERS its two rooms at — the threshold zone's
                 // level plus whatever storey that end bound (D3). Decision A: a
-                // flat corridor needs no stair; the 2u bridge uses the reviewed
-                // primary rise; every other delta (4u/8u majors) needs a
-                // reviewed contract with that exact rise.
+                // flat corridor needs no stair; every structural transition is
+                // a 4u/8u major and needs a reviewed contract with that exact
+                // rise. The reviewed 2u physical stair remains available to
+                // room-local recipe geometry, but cannot reconcile rooms.
                 entryLevels.Resolve(index, out int fromLevel, out int toLevel);
                 int delta = Mathf.Abs(fromLevel - toLevel);
+                if (!AreStructuralConnectionLevels(fromLevel, toLevel))
+                {
+                    rejectionReason =
+                        $"connected regions {connection.fromRoom} and {connection.toRoom} met at " +
+                        $"non-structural levels {fromLevel} and {toLevel} (delta {delta})";
+                    return false;
+                }
+
                 if (delta == 0)
                 {
                     continue;
-                }
-
-                // Decision A grammar safety net: a corridor delta must be a 4u/8u
-                // major or the single 2u bridge — never an off-grammar value (e.g.
-                // a 12u multi-major or an odd delta). A non-tree edge between two
-                // on-grammar rooms can produce these; reject and let the attempt
-                // retry rather than render an off-grammar stair.
-                if (delta != PrimaryStairRiseLevels && delta != MajorRiseLevels && delta != DoubleMajorRiseLevels)
-                {
-                    rejectionReason = $"connected regions {connection.fromRoom} and {connection.toRoom} differed by off-grammar {delta} levels";
-                    return false;
                 }
 
                 if (HasReviewedActiveStairOption(reviewedStairOptions, delta, maxLaneCount: MaxActiveStairLaneCount))
@@ -1918,6 +1953,81 @@ namespace DungeonLab.Editor
 
                 rejectionReason = $"connected regions {connection.fromRoom} and {connection.toRoom} differed by {delta} levels";
                 return false;
+            }
+
+            rejectionReason = string.Empty;
+            return true;
+        }
+
+        // A +1u RoomZonePlan is local geometry owned by exactly one room. The
+        // producer already chooses the threshold-free side to raise; acceptance
+        // restates that ownership over the finished DungeonLayout so a malformed
+        // fixture or later producer cannot turn the local offset into an
+        // inter-room threshold.
+        private static bool TryValidateRoomLocalElevationOwnership(
+            DungeonLayout layout,
+            out string rejectionReason)
+        {
+            foreach (RoomZonePlan zone in layout.roomZones ?? Array.Empty<RoomZonePlan>())
+            {
+                if (zone.roomIndex < 0 || zone.roomIndex >= layout.rooms.Count ||
+                    zone.lowerCells == null || zone.lowerCells.Count == 0 ||
+                    zone.raisedCells == null || zone.raisedCells.Count == 0)
+                {
+                    rejectionReason =
+                        "room-local elevation declared an invalid or empty owning room";
+                    return false;
+                }
+
+                RoomFootprint owner = layout.rooms[zone.roomIndex];
+                var ownedCells = new HashSet<Vector2Int>();
+                foreach (Vector2Int cell in zone.lowerCells)
+                {
+                    if (!owner.Contains(cell) || !ownedCells.Add(cell))
+                    {
+                        rejectionReason =
+                            $"room-local elevation in room {zone.roomIndex} crossed its ownership boundary at {cell}";
+                        return false;
+                    }
+                }
+
+                foreach (Vector2Int cell in zone.raisedCells)
+                {
+                    if (!owner.Contains(cell) || !ownedCells.Add(cell))
+                    {
+                        rejectionReason =
+                            $"room-local elevation in room {zone.roomIndex} crossed its ownership boundary at {cell}";
+                        return false;
+                    }
+                }
+
+                if (ownedCells.Count != owner.Area)
+                {
+                    rejectionReason =
+                        $"room-local elevation in room {zone.roomIndex} did not partition its one owning room";
+                    return false;
+                }
+
+                foreach (RoomConnection connection in layout.connections)
+                {
+                    bool isFrom = connection.fromRoom == zone.roomIndex;
+                    bool isTo = connection.toRoom == zone.roomIndex;
+                    if (!isFrom && !isTo)
+                    {
+                        continue;
+                    }
+
+                    Vector2Int threshold = ThresholdCell(
+                        owner,
+                        connection.path,
+                        forward: isFrom);
+                    if (zone.raisedCells.Contains(threshold))
+                    {
+                        rejectionReason =
+                            $"room-local elevation in room {zone.roomIndex} owned external threshold {threshold}";
+                        return false;
+                    }
+                }
             }
 
             rejectionReason = string.Empty;
@@ -4642,9 +4752,6 @@ namespace DungeonLab.Editor
         // and may not hug a parallel walkway within this level tolerance.
         private const int AerialBridgeShortcutFactor = 3;
         private const int AerialBridgeHugLevelTolerance = 2;
-        // Decision 34: aerial endpoints may differ by this much (sloped spans).
-        private const int MaxAerialBridgeEndDeltaLevels = 2;
-
         private readonly struct AerialBridgeCandidate
         {
             public readonly int roomA;
@@ -4797,9 +4904,6 @@ namespace DungeonLab.Editor
             Vector2Int lineDirection,
             List<AerialBridgeCandidate> candidates)
         {
-            // Decision 34: endpoints may differ by up to the end-delta cap; all
-            // clearance gates use the conservative LOWER landing level.
-            //
             // The landings stay COLUMN FLOORS. A deck that springs from a gallery
             // instead is a capability, not a consequence of changing containers,
             // and C2's non-goals put generic multi-layer bridging out of scope —
@@ -4808,7 +4912,7 @@ namespace DungeonLab.Editor
             // stands over its landing.
             if (!surfaces.TryGetFloorLevel(landingA, out int levelA) ||
                 !surfaces.TryGetFloorLevel(landingB, out int levelB) ||
-                Mathf.Abs(levelA - levelB) > MaxAerialBridgeEndDeltaLevels ||
+                !AreStructuralAerialBridgeLandingLevels(levelA, levelB) ||
                 Mathf.Min(levelA, levelB) < MinAerialBridgeLevel)
             {
                 return;
@@ -4992,15 +5096,10 @@ namespace DungeonLab.Editor
             List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
             SurfaceField surfaces)
         {
-            // Decision 34: the walk runs lower -> upper, so the contract's entry
-            // (level 0) anchors at the LOWER landing whatever the candidate's
-            // collection order was. Column floors, matching the landing rule the
-            // candidate was collected under.
-            //
             // Throws on a missing landing exactly as the indexer did. The
-            // candidate was only collected because both landings resolved a
-            // floor, and no writer can take one away, so this is unreachable —
-            // and a silent 0 would place a deck at the abyss datum.
+            // candidate was only collected because both landings resolved the
+            // same structural floor, and no writer can take one away, so this is
+            // unreachable — and a silent 0 would place a deck at the abyss datum.
             if (!surfaces.TryGetFloorLevel(candidate.landingA, out int levelA) ||
                 !surfaces.TryGetFloorLevel(candidate.landingB, out int levelB))
             {
@@ -5154,13 +5253,9 @@ namespace DungeonLab.Editor
             // flood fill, the plan shadow, doorways, the overlook stat — is
             // untouched by construction rather than by audit.
             //
-            // ONE level for the whole run, the conservative minimum the ledger
-            // already declares for it. A sloped span (decision 34) is flat for
-            // all but its last cell, where a single flight climbs to the upper
-            // landing; the deck's own transition edge carries that rise, and a
-            // cell-granular surface model has nowhere to put a ramp. The lie is
-            // in the safe direction — the recorded surface is never above the
-            // real one, so nothing under the span reads more headroom than it has.
+            // ONE level for the whole flat run, which is also the level the
+            // ledger declares for it. Both landings were required to resolve to
+            // this same structural level during candidate collection.
             foreach (Vector2Int deckCell in footprint)
             {
                 surfaces.AddSurface(deckCell, deckClearanceLevel, SurfaceKind.Deck);
@@ -7050,6 +7145,7 @@ namespace DungeonLab.Editor
         private static bool TryValidateTransitionLevelDeltas(
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
             int topologyCeiling,
+            DungeonLayout layout,
             out string rejectionReason)
         {
             var transitionKeys = new HashSet<string>();
@@ -7069,11 +7165,24 @@ namespace DungeonLab.Editor
                 // the primary rise; anything taller must carry an explicit reviewed
                 // stair prefab and stay within the generated level cap.
                 int delta = Mathf.Abs(firstLevel - secondLevel);
-                // Aerial decks are flat (rise 0, decisions 29-31) or absorb a
-                // small end delta (decision 34: a rise-1 sloped span is legal for
-                // synthesized transitions; the gate otherwise admits only seam
-                // strips at delta 1).
-                if (delta <= 1 && transition.synthesizedSetPiece != null)
+                bool externalSpan = string.Equals(
+                    transition.placementClass,
+                    ExternalSpanStairPlacementClass,
+                    StringComparison.Ordinal);
+                if (externalSpan &&
+                    (!IsStructuralLevel(firstLevel) || !IsStructuralLevel(secondLevel)))
+                {
+                    rejectionReason =
+                        $"bridge transition {transition.firstCell}->{transition.secondCell} had " +
+                        $"non-structural landing levels {firstLevel} and {secondLevel}";
+                    return false;
+                }
+
+                // A synthesized aerial deck is flat. Room-local seam/dais
+                // strips keep their existing 1u physical contracts below.
+                if (delta == 0 &&
+                    externalSpan &&
+                    transition.synthesizedSetPiece != null)
                 {
                     transitionKeys.Add(TransitionKey(transition.firstCell, transition.secondCell));
                     continue;
@@ -7083,14 +7192,38 @@ namespace DungeonLab.Editor
                     (string.Equals(transition.placementClass, SeamStairPlacementClass, StringComparison.Ordinal) ||
                      string.Equals(transition.placementClass, DaisStairPlacementClass, StringComparison.Ordinal)))
                 {
+                    if (!IsTransitionOwnedByOneRoom(layout, transition))
+                    {
+                        rejectionReason =
+                            $"room-local transition {transition.firstCell}->{transition.secondCell} " +
+                            "crossed a room ownership boundary";
+                        return false;
+                    }
+
                     transitionKeys.Add(TransitionKey(transition.firstCell, transition.secondCell));
                     continue;
                 }
 
                 if (delta == PrimaryStairRiseLevels)
                 {
+                    if (!IsTransitionOwnedByOneRoom(layout, transition))
+                    {
+                        rejectionReason =
+                            $"room-local transition {transition.firstCell}->{transition.secondCell} " +
+                            "crossed a room ownership boundary";
+                        return false;
+                    }
+
                     transitionKeys.Add(TransitionKey(transition.firstCell, transition.secondCell));
                     continue;
+                }
+
+                if (!IsStructuralLevel(firstLevel) || !IsStructuralLevel(secondLevel))
+                {
+                    rejectionReason =
+                        $"structural transition {transition.firstCell}->{transition.secondCell} had " +
+                        $"non-structural endpoint levels {firstLevel} and {secondLevel}";
+                    return false;
                 }
 
                 if (delta < PrimaryStairRiseLevels ||
@@ -7105,6 +7238,42 @@ namespace DungeonLab.Editor
             }
 
             rejectionReason = string.Empty;
+            return true;
+        }
+
+        private static bool IsTransitionOwnedByOneRoom(
+            DungeonLayout layout,
+            ElevationEdgeModel.TransitionEdge transition)
+        {
+            foreach (RoomFootprint room in layout.rooms)
+            {
+                if (!room.Contains(transition.firstCell) ||
+                    !room.Contains(transition.secondCell) ||
+                    !AreCellsOwnedByRoom(room, transition.lowerLandingCells) ||
+                    !AreCellsOwnedByRoom(room, transition.upperLandingCells) ||
+                    !AreCellsOwnedByRoom(room, transition.footprintCells))
+                {
+                    continue;
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool AreCellsOwnedByRoom(
+            RoomFootprint room,
+            IReadOnlyList<Vector2Int> cells)
+        {
+            foreach (Vector2Int cell in cells)
+            {
+                if (!room.Contains(cell))
+                {
+                    return false;
+                }
+            }
+
             return true;
         }
 
@@ -7359,8 +7528,7 @@ namespace DungeonLab.Editor
         /// <see cref="SurfaceKind.Deck"/> at all — so the transition consumes
         /// nothing in those columns, not even at its own level. A band rule
         /// alone would eat the deck (a flat span's band is exactly the deck's
-        /// level) and a sloped span's band would additionally eat whatever
-        /// stands under it. Measured on the two-layer episode before C2b-3: 84
+        /// level). Measured on the two-layer episode before C2b-3: 84
         /// of 88 nodes reachable.
         /// </para>
         /// <para>

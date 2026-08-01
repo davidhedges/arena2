@@ -304,7 +304,7 @@ namespace DungeonLab.Editor
                         $"0..{topology.ceilingLevels} ceiling");
                 }
 
-                if (node.level % MajorRiseLevels != 0)
+                if (!IsStructuralLevel(node.level))
                 {
                     violations.Add(
                         $"node '{node.key}' ({node.id}) level {node.level} is not a multiple of {MajorRiseLevels}");
@@ -1619,7 +1619,7 @@ namespace DungeonLab.Editor
                 if (!isTraversal &&
                     rise >= MajorRiseLevels &&
                     rise <= seams.maximumRiseLevels &&
-                    rise % MajorRiseLevels == 0)
+                    IsStructuralLevel(rise))
                 {
                     selected.Add(pair);
                 }

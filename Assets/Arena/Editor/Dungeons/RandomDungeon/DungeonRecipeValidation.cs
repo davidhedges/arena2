@@ -479,6 +479,15 @@ namespace DungeonLab.Editor
                 }
 
                 mandatoryPortCount += port.mandatory ? 1 : 0;
+                if (!DungeonLabGenerator.IsStructuralLevel(
+                        AbsoluteLevelAt(recipe, port.cell, port.layerId)))
+                {
+                    result.Add(
+                        Layer,
+                        "RECIPE_EXTERNAL_PORT_LEVEL",
+                        $"Port '{port.id}' opened at a local offset instead of a structural level.");
+                }
+
                 if (!IsCardinalUnit(port.outwardDirection) ||
                     !footprint.Contains(port.cell) ||
                     footprint.Contains(port.cell + port.outwardDirection) ||
@@ -554,6 +563,22 @@ namespace DungeonLab.Editor
                 bool crossesLayers = transition != null &&
                     !SameLayer(recipe, transition.lowerLayerId, transition.upperLayerId);
                 motifsById.TryGetValue(transition?.motifId ?? string.Empty, out DungeonRecipeMotif motif);
+
+                if (crossesLayers &&
+                    (!DungeonLabGenerator.IsStructuralLevel(AbsoluteLevelAt(
+                         recipe,
+                         transition.lowerTransitionCell,
+                         transition.lowerLayerId)) ||
+                     !DungeonLabGenerator.IsStructuralLevel(AbsoluteLevelAt(
+                         recipe,
+                         transition.upperTransitionCell,
+                         transition.upperLayerId))))
+                {
+                    result.Add(
+                        Layer,
+                        "RECIPE_INTERLAYER_TRANSITION_LEVEL",
+                        $"Transition '{transition.id}' used a local offset to reconcile structural layers.");
+                }
 
                 // Within one layer the rise used to be pinned to exactly 1,
                 // because the only stair a recipe could render was a step strip
@@ -839,6 +864,14 @@ namespace DungeonLab.Editor
                 if (!declared.Add(layer.layerId))
                 {
                     result.Add(Layer, "RECIPE_LAYER_ID", $"Layer '{layer.layerId}' was declared more than once.");
+                }
+
+                if (!DungeonLabGenerator.IsStructuralLevel(layer.relativeLevel))
+                {
+                    result.Add(
+                        Layer,
+                        "RECIPE_STRUCTURAL_LAYER_LEVEL",
+                        $"Layer '{layer.layerId}' sat at non-structural relative level {layer.relativeLevel}u.");
                 }
 
                 if (layer.isBase)

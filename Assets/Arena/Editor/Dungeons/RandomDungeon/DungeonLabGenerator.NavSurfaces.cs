@@ -504,6 +504,7 @@ namespace DungeonLab.Editor
 
         private static void CaptureNavigationSurfacePlan(
             int seed,
+            string topologyId,
             TieredLevelPlan plan,
             ElevationEdgeModel.RoomBoundaryContext boundaryContext,
             Vector3 localOrigin,
@@ -511,7 +512,7 @@ namespace DungeonLab.Editor
         {
             lastNavigationSurfacePlan = new CapturedNavigationSurfacePlan(
                 seed,
-                lastRouteIntent?.patternId ?? string.Empty,
+                topologyId,
                 plan,
                 boundaryContext,
                 localOrigin,

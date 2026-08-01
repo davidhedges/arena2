@@ -916,7 +916,7 @@ namespace DungeonLab.Editor
                 if (!isTraversal &&
                     rise >= MajorRiseLevels &&
                     rise <= settings.maximumRiseLevels &&
-                    rise % MajorRiseLevels == 0)
+                    IsStructuralLevel(rise))
                 {
                     selected.Add(candidate);
                 }
@@ -1093,9 +1093,12 @@ namespace DungeonLab.Editor
         private static bool TryValidateRouteIntent(RouteIntent intent, out string rejectionReason)
         {
             rejectionReason = string.Empty;
-            if (intent == null || intent.nodes == null || intent.traversalEdges == null)
+            if (intent == null ||
+                intent.topology == null ||
+                intent.nodes == null ||
+                intent.traversalEdges == null)
             {
-                rejectionReason = "route intent or its graph collections were null";
+                rejectionReason = "route intent, topology, or its graph collections were null";
                 return false;
             }
 
@@ -1122,6 +1125,31 @@ namespace DungeonLab.Editor
                 {
                     rejectionReason = $"route intent contained a missing or duplicate node id '{node.id}'";
                     return false;
+                }
+
+                if (node.relativeElevationLevels < 0 ||
+                    node.relativeElevationLevels > intent.topology.ceilingLevels ||
+                    !IsStructuralLevel(node.relativeElevationLevels))
+                {
+                    rejectionReason =
+                        $"route node '{node.id}' declared non-structural elevation " +
+                        $"{node.relativeElevationLevels} outside the 0..{intent.topology.ceilingLevels}u story";
+                    return false;
+                }
+
+                foreach (RouteTopologyLayer layer in node.layers)
+                {
+                    int absoluteLevel = node.relativeElevationLevels + layer.relativeLevel;
+                    if (!IsStructuralLevel(layer.relativeLevel) ||
+                        absoluteLevel < 0 ||
+                        absoluteLevel > intent.topology.ceilingLevels ||
+                        !IsStructuralLevel(absoluteLevel))
+                    {
+                        rejectionReason =
+                            $"route node '{node.id}' layer '{layer.layerId}' resolved to " +
+                            $"non-structural elevation {absoluteLevel}";
+                        return false;
+                    }
                 }
 
                 // A role with no size class would silently render as a hall.
@@ -1196,6 +1224,25 @@ namespace DungeonLab.Editor
                     edge.laneCount != 1)
                 {
                     rejectionReason = $"route edge '{edge.id}' had invalid endpoints or lane count";
+                    return false;
+                }
+
+                bool fromResolved = intent.nodes[edge.fromNode].TryGetAbsoluteLevel(
+                    edge.fromLayerId,
+                    out int fromAbsoluteLevel);
+                bool toResolved = intent.nodes[edge.toNode].TryGetAbsoluteLevel(
+                    edge.toLayerId,
+                    out int toAbsoluteLevel);
+                if (!fromResolved ||
+                    !toResolved ||
+                    fromAbsoluteLevel != edge.fromAbsoluteLevel ||
+                    toAbsoluteLevel != edge.toAbsoluteLevel ||
+                    !IsStructuralLevel(fromAbsoluteLevel) ||
+                    !IsStructuralLevel(toAbsoluteLevel) ||
+                    toAbsoluteLevel - fromAbsoluteLevel != edge.requiredRiseLevels)
+                {
+                    rejectionReason =
+                        $"route edge '{edge.id}' did not own two structural endpoint elevations";
                     return false;
                 }
 

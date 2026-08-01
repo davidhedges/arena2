@@ -806,7 +806,7 @@ namespace DungeonLab.Editor
             ceilingLevels = declared.Value<int>();
             if (ceilingLevels < MajorRiseLevels ||
                 ceilingLevels > MaxTopologyCeilingLevels ||
-                ceilingLevels % MajorRiseLevels != 0)
+                !IsStructuralLevel(ceilingLevels))
             {
                 errors.Add(
                     $"'ceiling' is {ceilingLevels}; expected a multiple of {MajorRiseLevels} " +
@@ -1057,7 +1057,7 @@ namespace DungeonLab.Editor
                 }
 
                 int relativeLevel = property.Value.Value<int>();
-                if (relativeLevel % MajorRiseLevels != 0)
+                if (!IsStructuralLevel(relativeLevel))
                 {
                     errors.Add(
                         $"node '{key}' layer '{layerId}' is at relative level {relativeLevel}, " +

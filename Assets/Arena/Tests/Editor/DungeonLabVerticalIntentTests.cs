@@ -14,6 +14,9 @@ namespace Arena.Tests.Editor
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
             .Load("Assembly-CSharp-Editor")
             .GetType("DungeonLab.Editor.DungeonLabGenerator", throwOnError: true)!;
+        private static readonly Lazy<Dictionary<string, string>> StructuralOwnership =
+            new Lazy<Dictionary<string, string>>(() => ParseSnapshot(
+                InvokeSnapshot("BuildStructuralElevationOwnershipSnapshot", VerticalIntentSeed)));
 
         [Test]
         public void Intent_DeclaresElevationStoryAndTypedTransitionsBeforeCoordinates()
@@ -137,6 +140,69 @@ namespace Arena.Tests.Editor
             Assert.That(int.Parse(report["renderer.stairFootprintChecks"]), Is.GreaterThan(0));
             Assert.That(report["collision.passed"], Is.EqualTo("true"), snapshot);
             Assert.That(int.Parse(report["collision.enabledNonTriggerColliders"]), Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void StructuralLattice_AcceptsMajorLevelsAndRejectsLocalRouteNodes()
+        {
+            Dictionary<string, string> report = StructuralOwnership.Value;
+
+            Assert.That(report["lattice.structuralAccepted"], Is.EqualTo("True"));
+            Assert.That(report["lattice.localRejected"], Is.EqualTo("True"));
+            Assert.That(report["intent.structuralAccepted"], Is.EqualTo("True"));
+            Assert.That(report["intent.localNodeRejected"], Is.EqualTo("True"));
+        }
+
+        [Test]
+        public void LocalElevation_StaysInsideOneRoomAndCannotOwnExternalThreshold()
+        {
+            Dictionary<string, string> report = StructuralOwnership.Value;
+
+            Assert.That(report["local.roomOwnedAccepted"], Is.EqualTo("True"));
+            Assert.That(report["local.externalThresholdRejected"], Is.EqualTo("True"));
+            Assert.That(report["local.ownershipBoundaryRejected"], Is.EqualTo("True"));
+            Assert.That(report["local.physicalTransitionAccepted"], Is.EqualTo("True"));
+            Assert.That(report["local.crossingTransitionRejected"], Is.EqualTo("True"));
+            Assert.That(report["external.structuralAccepted"], Is.EqualTo("True"));
+            Assert.That(report["external.localRejected"], Is.EqualTo("True"));
+        }
+
+        [Test]
+        public void ConnectionsAndBridgeLandings_RejectTwoUnitStructuralUse()
+        {
+            Dictionary<string, string> report = StructuralOwnership.Value;
+
+            Assert.That(report["connection.structuralAccepted"], Is.EqualTo("True"));
+            Assert.That(report["connection.twoUnitRejected"], Is.EqualTo("True"));
+            Assert.That(report["connection.localEndpointRejected"], Is.EqualTo("True"));
+            Assert.That(report["bridge.flatStructuralAccepted"], Is.EqualTo("True"));
+            Assert.That(report["bridge.twoUnitRejected"], Is.EqualTo("True"));
+            Assert.That(report["bridge.localLandingRejected"], Is.EqualTo("True"));
+            Assert.That(report["physical.primaryStairRiseLevels"], Is.EqualTo("2"));
+        }
+
+        [Test]
+        public void RecipeStructuralBoundaries_RejectLocalPortsLayersAndInterlayerReconciliation()
+        {
+            Dictionary<string, string> report = StructuralOwnership.Value;
+
+            Assert.That(report["recipe.existingLocalContractAccepted"], Is.EqualTo("True"));
+            Assert.That(report["recipe.localPortRejected"], Is.EqualTo("True"));
+            Assert.That(report["recipe.localLayerRejected"], Is.EqualTo("True"));
+            Assert.That(report["recipe.localInterlayerRejected"], Is.EqualTo("True"));
+        }
+
+        [Test]
+        public void AcceptanceAndReporting_UseTheCarriedRouteIntentDirectly()
+        {
+            Dictionary<string, string> report = StructuralOwnership.Value;
+
+            Assert.That(report["ownership.planBuilt"], Is.EqualTo("True"));
+            Assert.That(report["ownership.staticPoisonDifferent"], Is.EqualTo("True"));
+            Assert.That(report["ownership.acceptanceUsesCarriedIntent"], Is.EqualTo("True"));
+            Assert.That(report["ownership.nullIntentRejected"], Is.EqualTo("True"));
+            Assert.That(report["ownership.reportUsesCarriedIntent"], Is.EqualTo("True"));
+            Assert.That(report["ownership.geometryHashesIgnoreDiagnosticIntent"], Is.EqualTo("True"));
         }
 
         private static Dictionary<string, string> VerticalSnapshot()
