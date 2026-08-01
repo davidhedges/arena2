@@ -3,77 +3,155 @@
   "world_definition_key": "RANDOM_DUNGEON",
   "traps": [
     {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_POST:12:4:16",
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_ARM:16:8:0",
       "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SAW_POST",
+      "trap_profile_id": "TRAP_SAW_ARM",
       "origin": {
-        "x": -48.0,
+        "x": -32.0,
         "y": -4.0,
-        "z": -60.0
+        "z": -64.0
       },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
+      "yaw_degrees": 270.0,
+      "footprint_cells": 6,
       "definition_version": 1
     },
     {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_POST:13:34:4",
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_POST:15:46:12",
       "world_definition_key": "RANDOM_DUNGEON",
       "trap_profile_id": "TRAP_SAW_POST",
       "origin": {
-        "x": -44.0,
-        "y": -16.0,
-        "z": 60.0
+        "x": -36.0,
+        "y": 8.0,
+        "z": 88.0
       },
       "yaw_degrees": 0.0,
       "footprint_cells": 1,
       "definition_version": 1
     },
     {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_POST:18:11:16",
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_POST:26:49:8",
       "world_definition_key": "RANDOM_DUNGEON",
       "trap_profile_id": "TRAP_SAW_POST",
+      "origin": {
+        "x": 8.0,
+        "y": 4.0,
+        "z": 100.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 1,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_POST:2:28:16",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SAW_POST",
+      "origin": {
+        "x": -88.0,
+        "y": 12.0,
+        "z": 16.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 1,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_SWEEP:2:45:16",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SAW_SWEEP",
+      "origin": {
+        "x": -88.0,
+        "y": 12.0,
+        "z": 86.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 2,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_SWEEP:32:27:4",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SAW_SWEEP",
+      "origin": {
+        "x": 34.0,
+        "y": 0.0,
+        "z": 12.0
+      },
+      "yaw_degrees": 90.0,
+      "footprint_cells": 2,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_SWEEP:3:13:20",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SAW_SWEEP",
+      "origin": {
+        "x": -84.0,
+        "y": 16.0,
+        "z": -42.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 2,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:17:28:8",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SPIKES",
+      "origin": {
+        "x": -28.0,
+        "y": 4.0,
+        "z": 16.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 1,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:17:46:12",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SPIKES",
+      "origin": {
+        "x": -28.0,
+        "y": 8.0,
+        "z": 88.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 1,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:18:2:0",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SPIKES",
       "origin": {
         "x": -24.0,
         "y": -4.0,
-        "z": -32.0
+        "z": -88.0
       },
       "yaw_degrees": 0.0,
       "footprint_cells": 1,
       "definition_version": 1
     },
     {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_POST:18:28:12",
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:28:46:8",
       "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SAW_POST",
+      "trap_profile_id": "TRAP_SPIKES",
       "origin": {
-        "x": -24.0,
-        "y": -8.0,
-        "z": 36.0
+        "x": 16.0,
+        "y": 4.0,
+        "z": 88.0
       },
       "yaw_degrees": 0.0,
       "footprint_cells": 1,
       "definition_version": 1
     },
     {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_POST:24:31:0",
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:2:27:16",
       "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SAW_POST",
+      "trap_profile_id": "TRAP_SPIKES",
       "origin": {
-        "x": 0.0,
-        "y": -20.0,
-        "z": 48.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_POST:7:22:8",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SAW_POST",
-      "origin": {
-        "x": -68.0,
-        "y": -12.0,
+        "x": -88.0,
+        "y": 12.0,
         "z": 12.0
       },
       "yaw_degrees": 0.0,
@@ -81,258 +159,37 @@
       "definition_version": 1
     },
     {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_SWEEP:18:2:16",
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:2:49:16",
       "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SAW_SWEEP",
+      "trap_profile_id": "TRAP_SPIKES",
       "origin": {
-        "x": -24.0,
-        "y": -4.0,
-        "z": -66.0
+        "x": -88.0,
+        "y": 12.0,
+        "z": 100.0
       },
       "yaw_degrees": 0.0,
-      "footprint_cells": 2,
+      "footprint_cells": 1,
       "definition_version": 1
     },
     {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_SWEEP:19:24:12",
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:32:5:4",
       "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SAW_SWEEP",
+      "trap_profile_id": "TRAP_SPIKES",
       "origin": {
-        "x": -18.0,
-        "y": -8.0,
-        "z": 20.0
-      },
-      "yaw_degrees": 90.0,
-      "footprint_cells": 2,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_SWEEP:27:36:0",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SAW_SWEEP",
-      "origin": {
-        "x": 12.0,
-        "y": -20.0,
-        "z": 70.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 2,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_SWEEP:32:18:20",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SAW_SWEEP",
-      "origin": {
-        "x": 34.0,
+        "x": 32.0,
         "y": 0.0,
-        "z": -4.0
-      },
-      "yaw_degrees": 90.0,
-      "footprint_cells": 2,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_SWEEP:3:17:12",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SAW_SWEEP",
-      "origin": {
-        "x": -82.0,
-        "y": -8.0,
-        "z": -8.0
-      },
-      "yaw_degrees": 90.0,
-      "footprint_cells": 2,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SAW_SWEEP:3:18:12",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SAW_SWEEP",
-      "origin": {
-        "x": -82.0,
-        "y": -8.0,
-        "z": -4.0
-      },
-      "yaw_degrees": 90.0,
-      "footprint_cells": 2,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:10:21:16",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -56.0,
-        "y": -4.0,
-        "z": 8.0
+        "z": -76.0
       },
       "yaw_degrees": 0.0,
       "footprint_cells": 1,
       "definition_version": 1
     },
     {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:11:4:16",
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:40:17:4",
       "world_definition_key": "RANDOM_DUNGEON",
       "trap_profile_id": "TRAP_SPIKES",
       "origin": {
-        "x": -52.0,
-        "y": -4.0,
-        "z": -60.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:11:8:16",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -52.0,
-        "y": -4.0,
-        "z": -44.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:12:19:16",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -48.0,
-        "y": -4.0,
-        "z": 0.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:12:3:16",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -48.0,
-        "y": -4.0,
-        "z": -64.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:13:18:16",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -44.0,
-        "y": -4.0,
-        "z": -4.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:13:1:16",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -44.0,
-        "y": -4.0,
-        "z": -72.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:15:13:16",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -36.0,
-        "y": -4.0,
-        "z": -24.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:16:27:12",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -32.0,
-        "y": -8.0,
-        "z": 32.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:18:7:16",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -24.0,
-        "y": -4.0,
-        "z": -48.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:22:31:0",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -8.0,
-        "y": -20.0,
-        "z": 48.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:27:24:12",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": 12.0,
-        "y": -8.0,
-        "z": 20.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:34:26:16",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": 40.0,
-        "y": -4.0,
-        "z": 28.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:36:12:20",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": 48.0,
+        "x": 64.0,
         "y": 0.0,
         "z": -28.0
       },
@@ -341,90 +198,12 @@
       "definition_version": 1
     },
     {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:3:24:8",
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:40:20:4",
       "world_definition_key": "RANDOM_DUNGEON",
       "trap_profile_id": "TRAP_SPIKES",
       "origin": {
-        "x": -84.0,
-        "y": -12.0,
-        "z": 20.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:4:22:8",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -80.0,
-        "y": -12.0,
-        "z": 12.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:5:34:4",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -76.0,
-        "y": -16.0,
-        "z": 60.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:6:14:12",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -72.0,
-        "y": -8.0,
-        "z": -20.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:8:20:16",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -64.0,
-        "y": -4.0,
-        "z": 4.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:8:27:8",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -64.0,
-        "y": -12.0,
-        "z": 32.0
-      },
-      "yaw_degrees": 0.0,
-      "footprint_cells": 1,
-      "definition_version": 1
-    },
-    {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:9:15:12",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "trap_profile_id": "TRAP_SPIKES",
-      "origin": {
-        "x": -60.0,
-        "y": -8.0,
+        "x": 64.0,
+        "y": 0.0,
         "z": -16.0
       },
       "yaw_degrees": 0.0,
@@ -432,13 +211,130 @@
       "definition_version": 1
     },
     {
-      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:9:23:16",
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:40:2:4",
       "world_definition_key": "RANDOM_DUNGEON",
       "trap_profile_id": "TRAP_SPIKES",
       "origin": {
-        "x": -60.0,
-        "y": -4.0,
+        "x": 64.0,
+        "y": 0.0,
+        "z": -88.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 1,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:41:28:4",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SPIKES",
+      "origin": {
+        "x": 68.0,
+        "y": 0.0,
         "z": 16.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 1,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:42:24:4",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SPIKES",
+      "origin": {
+        "x": 72.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 1,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:42:4:4",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SPIKES",
+      "origin": {
+        "x": 72.0,
+        "y": 0.0,
+        "z": -80.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 1,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:4:14:20",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SPIKES",
+      "origin": {
+        "x": -80.0,
+        "y": 16.0,
+        "z": -40.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 1,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:5:21:20",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SPIKES",
+      "origin": {
+        "x": -76.0,
+        "y": 16.0,
+        "z": -12.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 1,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:6:51:20",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SPIKES",
+      "origin": {
+        "x": -72.0,
+        "y": 16.0,
+        "z": 108.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 1,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:7:16:20",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SPIKES",
+      "origin": {
+        "x": -68.0,
+        "y": 16.0,
+        "z": -32.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 1,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:7:50:16",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SPIKES",
+      "origin": {
+        "x": -68.0,
+        "y": 12.0,
+        "z": 104.0
+      },
+      "yaw_degrees": 0.0,
+      "footprint_cells": 1,
+      "definition_version": 1
+    },
+    {
+      "trap_definition_id": "RANDOM_DUNGEON:TRAP:SPIKES:8:16:20",
+      "world_definition_key": "RANDOM_DUNGEON",
+      "trap_profile_id": "TRAP_SPIKES",
+      "origin": {
+        "x": -64.0,
+        "y": 16.0,
+        "z": -32.0
       },
       "yaw_degrees": 0.0,
       "footprint_cells": 1,
