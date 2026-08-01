@@ -256,6 +256,12 @@ namespace DungeonLab.Editor
                     Append(canonical, "opening.cell", opening?.cell ?? default);
                     Append(canonical, "opening.out", opening?.outwardDirection ?? default);
                     Append(canonical, "opening.layer", opening?.layerId);
+                    // Aperture was the implicit meaning before Phase E. Keeping
+                    // its zero value out preserves every existing recipe digest.
+                    if (opening != null && opening.kind != OpeningKind.Aperture)
+                    {
+                        Append(canonical, "opening.kind", (int)opening.kind);
+                    }
                 }
             }
 
@@ -930,14 +936,26 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                if (string.IsNullOrEmpty(opening.layerId) ||
-                    !declared.Contains(opening.layerId) ||
-                    DungeonRecipeLayers.IsBaseLayer(recipe, opening.layerId))
+                if (!Enum.IsDefined(typeof(OpeningKind), opening.kind))
                 {
                     result.Add(
                         Layer,
                         "RECIPE_OPENING",
-                        $"Opening '{opening.id}' named layer '{opening.layerId}', which is not a declared non-base storey.");
+                        $"Opening '{opening.id}' declared unknown kind {(int)opening.kind}.");
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(opening.layerId) ||
+                    !declared.Contains(opening.layerId) ||
+                    (opening.kind == OpeningKind.Aperture &&
+                     DungeonRecipeLayers.IsBaseLayer(recipe, opening.layerId)))
+                {
+                    result.Add(
+                        Layer,
+                        "RECIPE_OPENING",
+                        opening.kind == OpeningKind.Aperture
+                            ? $"Opening '{opening.id}' named layer '{opening.layerId}', which is not a declared non-base storey."
+                            : $"Opening '{opening.id}' named undeclared layer '{opening.layerId}'.");
                     continue;
                 }
 

@@ -27,6 +27,11 @@ Design background and the drafted topology set:
   // topology without renumbering anything.
   "weight": 1,
 
+  // OPTIONAL vertical envelope in 1u levels. Omit to preserve the historical
+  // 24u topology. Authored values must be multiples of 4 from 4 through the
+  // global hard cap of 40; the top anchor must land exactly on this value.
+  "ceiling": 40,
+
   // One whitespace-separated token per lattice cell; '.' is empty.
   // The FIRST row is the TOP row (highest lattice y).
   "map": [
@@ -77,9 +82,10 @@ Design background and the drafted topology set:
     }
   },
 
-  // key: [ id, role, beat, level, order, layers? ]. Level is absolute, in 4u
-  // units. The 6th element is OPTIONAL and declares additional storeys as
-  // offsets from this node's own level — see "Layers" below.
+  // key: [ id, role, beat, level, order, layers? ]. Level is absolute in 1u
+  // levels and must sit on the 4u major-rise lattice. The 6th element is
+  // OPTIONAL and declares additional storeys as offsets from this node's own
+  // level — see "Layers" below.
   "nodes": {
     "A": ["rim-arrival", "arrival",   "arrival",     24, { "main": 0 }],
     "B": ["rim-gate",    "connector", "compression", 24, { "main": 1 }],
@@ -114,9 +120,9 @@ Design background and the drafted topology set:
 
 ### Layers — a node's additional storeys
 
-**Added 2026-08-01 (layered-topology D1). No shipped topology declares one**, and
-that is deliberate: every rule the layered direction relaxes is gated on a
-binding, so a graph that declares nothing behaves exactly as it did before.
+**Added 2026-08-01 (layered-topology D1).** `atrium-hub` now declares the first
+shipped layer. Every relaxed rule remains gated on a binding, so a graph that
+declares nothing behaves exactly as it did before.
 
 A node's `level` stays its **base**. A layer is an offset from it, so nothing
 acquires a global storey number: one node's `gallery` is at absolute 12 here and
@@ -132,7 +138,8 @@ from `node.level + layer offset` at each end.
 Rejected by the **loader**, so the file will not load at all:
 
 - a layer id that is empty or repeated on one node;
-- an offset that is not a multiple of 4, or that puts the layer outside `[0, 24]`;
+- an offset that is not a multiple of 4, or that puts the layer outside the
+  topology's `[0, ceiling]` envelope;
 - two layers of one node at the same offset — one elevation may have one id;
 - more than one layer at offset 0 (an offset-0 layer *names* the base, and an
   unbound edge end already means the base);
@@ -154,7 +161,9 @@ did.
 
 ### Slot layer mapping — which storey of the recipe is which storey of the node
 
-**Added 2026-08-01 (layered-topology D3). No shipped topology declares one.**
+**Added 2026-08-01 (layered-topology D3).** `atrium-hub` maps its graph
+`gallery` to the recipe's `gallery` storey; topologies without a mapping keep
+the original base-only behavior.
 
 A topology names the elevations its **routes** bind to. A recipe names the
 storeys its own geometry is built on, and it does so without knowing which graph
@@ -200,10 +209,9 @@ base — which is every port of every recipe in the catalog today. A recipe you
 want routed to on its upper storey therefore needs a **port authored there**;
 `episode_layered_gallery_01` has none yet.
 
-`Validate Topologies` also runs a **loader self-check** over in-memory probes
-(26 checks), because the schema has no site in the corpus and would otherwise be
-first exercised by the first topology to use it. The generator's side has its own
-— `Tools > Dungeon Lab > Print Layer Entry Fixture`.
+`Validate Topologies` also runs a **loader self-check** over 26 in-memory probes,
+so malformed bindings are tested without committing broken corpus files. The
+generator's side has its own — `Tools > Dungeon Lab > Print Layer Entry Fixture`.
 
 ### Derived, never authored
 
@@ -225,14 +233,15 @@ Hard rules, all enforced by the generator and all reported by the validator:
 | --- | --- |
 | 9 to 20 nodes | the sanity rails on room count; the profile's `denseFloorplanMinRooms` is the binding floor in practice |
 | Exactly 3 slots: `required-compression`, `required-landmark`, `required-return` | the recipe catalog's `eligibleRoles`/`eligibleBeats` |
-| Every level in `[0, 24]` and `% 4 == 0` | the level grammar |
+| Optional `ceiling` omitted, or a multiple of 4 in `[4, 40]` | omitted means 24u, preserving every existing topology; 40u is the global schema cap |
+| Every level in `[0, ceiling]` and `% 4 == 0` | the level grammar |
 | Every slot node has degree 2 | a two-port recipe room |
 | Edge rise `±4` or `±8` for Stair/Bridge/Stairwell, exactly `0` for LevelCorridor | write an edge in travel order in either direction; a descending edge is a rise of `-4`. Measured between the **bound** elevations, which are the node levels for an unbound edge |
 | A declared layer is bound by an edge, and its node carries a recipe slot | a storey nothing routes to, or that nothing can build, generates as nothing |
 | A slot maps only layers its node declares, one recipe storey each; the mapped recipe storey exists, sits at the same relative level, and carries the port every bound edge arrives on | the graph and the room must agree about where a storey is, or the room is built at one height and routed to at another |
 | Two rooms may share plan cells only when **both** their nodes declare storeys and the absolute bands those storeys imply do not meet | room inflation's overlap test is volumetric from 2026-08-01 (D4). A node declaring one elevation authorizes nothing, however far its level is from its neighbour's — otherwise generic rooms would start stacking wherever the corpus already spreads levels, which is a variety regression rather than a feature |
 | At least one Stair, one Bridge, one Stairwell | the transition-kind coverage check |
-| `anchors.bottom` at level 0, `anchors.top` at level 24 | the abyss datum and the ceiling |
+| `anchors.bottom` at level 0, `anchors.top` exactly at `ceiling` | the abyss datum and that topology's own ceiling |
 | Connected graph, cycle rank ≥ 1, at least two degree-≥3 nodes | a route loops |
 | Main route: contiguous orders, no adjacent duplicate role or beat, ≤2 nodes per role, ≥2 intervening nodes between slot-bearing nodes | `TryValidateRouteRhythm` |
 | Vista source ≥4u above its target, cardinally aligned, nothing between | `TryValidateRouteIntent` + `TryReserveProcessionalVista` |

@@ -381,6 +381,8 @@ namespace DungeonLab.Editor
             public readonly int topNode;
             public readonly bool allowGenericRoomWings;
             public readonly int weight;
+            public readonly int ceilingLevels;
+            public readonly bool declaresCeiling;
             public readonly RouteTopologySpatialOverrides spatialOverrides;
             // One entry per gap between adjacent lanes, so length == lanes - 1.
             public readonly RouteLaneGap[] columnGaps;
@@ -405,6 +407,8 @@ namespace DungeonLab.Editor
                 int topNode,
                 bool allowGenericRoomWings,
                 int weight,
+                int ceilingLevels,
+                bool declaresCeiling,
                 RouteTopologySpatialOverrides spatialOverrides,
                 RouteLaneGap[] columnGaps,
                 RouteLaneGap[] rowGaps,
@@ -427,6 +431,8 @@ namespace DungeonLab.Editor
                 this.topNode = topNode;
                 this.allowGenericRoomWings = allowGenericRoomWings;
                 this.weight = weight;
+                this.ceilingLevels = ceilingLevels;
+                this.declaresCeiling = declaresCeiling;
                 this.spatialOverrides = spatialOverrides;
                 this.columnGaps = columnGaps;
                 this.rowGaps = rowGaps;
@@ -631,6 +637,15 @@ namespace DungeonLab.Editor
                 errors.Add($"'id' is '{id}' but the file is named '{expectedId}.json'");
             }
 
+            if (!TryParseRouteTopologyCeiling(
+                    root["ceiling"],
+                    errors,
+                    out int ceilingLevels,
+                    out bool declaresCeiling))
+            {
+                return false;
+            }
+
             if (!TryParseRouteTopologyMap(
                     root["map"] as JArray,
                     errors,
@@ -644,6 +659,7 @@ namespace DungeonLab.Editor
             if (!TryParseRouteTopologyNodes(
                     root["nodes"] as JObject,
                     lattice,
+                    ceilingLevels,
                     errors,
                     out RouteTopologyNode[] nodes))
             {
@@ -740,12 +756,48 @@ namespace DungeonLab.Editor
                 topNode,
                 root.Value<bool?>("allowGenericRoomWings") ?? false,
                 weight,
+                ceilingLevels,
+                declaresCeiling,
                 spatialOverrides,
                 columnGaps,
                 rowGaps,
                 columnCount,
                 rowCount);
             return errors.Count == 0;
+        }
+
+        private static bool TryParseRouteTopologyCeiling(
+            JToken declared,
+            List<string> errors,
+            out int ceilingLevels,
+            out bool declaresCeiling)
+        {
+            declaresCeiling = declared != null;
+            ceilingLevels = DefaultTopologyCeilingLevels;
+            if (!declaresCeiling)
+            {
+                return true;
+            }
+
+            if (declared.Type != JTokenType.Integer)
+            {
+                errors.Add(
+                    $"'ceiling' must be an integer number of 1u levels; received {declared.Type}");
+                return false;
+            }
+
+            ceilingLevels = declared.Value<int>();
+            if (ceilingLevels < MajorRiseLevels ||
+                ceilingLevels > MaxTopologyCeilingLevels ||
+                ceilingLevels % MajorRiseLevels != 0)
+            {
+                errors.Add(
+                    $"'ceiling' is {ceilingLevels}; expected a multiple of {MajorRiseLevels} " +
+                    $"from {MajorRiseLevels} through the global cap {MaxTopologyCeilingLevels}");
+                return false;
+            }
+
+            return true;
         }
 
         private static bool TryParseRouteTopologyMap(
@@ -816,6 +868,7 @@ namespace DungeonLab.Editor
         private static bool TryParseRouteTopologyNodes(
             JObject declared,
             Dictionary<string, Vector2Int> lattice,
+            int ceilingLevels,
             List<string> errors,
             out RouteTopologyNode[] nodes)
         {
@@ -869,6 +922,7 @@ namespace DungeonLab.Editor
                 if (!TryParseRouteTopologyNodeLayers(
                         key,
                         level,
+                        ceilingLevels,
                         fields.Count > 5 ? fields[5] as JObject : null,
                         errors,
                         out RouteTopologyLayer[] layers))
@@ -953,6 +1007,7 @@ namespace DungeonLab.Editor
         private static bool TryParseRouteTopologyNodeLayers(
             string key,
             int nodeLevel,
+            int ceilingLevels,
             JObject declared,
             List<string> errors,
             out RouteTopologyLayer[] layers)
@@ -994,11 +1049,11 @@ namespace DungeonLab.Editor
                 }
 
                 int absoluteLevel = nodeLevel + relativeLevel;
-                if (absoluteLevel < 0 || absoluteLevel > MaxGeneratedLevel)
+                if (absoluteLevel < 0 || absoluteLevel > ceilingLevels)
                 {
                     errors.Add(
                         $"node '{key}' layer '{layerId}' resolves to absolute level {absoluteLevel}, " +
-                        $"outside 0..{MaxGeneratedLevel}");
+                        $"outside this topology's 0..{ceilingLevels} ceiling");
                     return false;
                 }
 

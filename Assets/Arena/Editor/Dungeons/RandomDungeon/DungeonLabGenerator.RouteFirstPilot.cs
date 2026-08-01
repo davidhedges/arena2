@@ -686,10 +686,10 @@ namespace DungeonLab.Editor
                 thresholds,
                 zoneRandom,
                 settings);
-            // A +1 intraroom accent cannot sit above the declared 24u
+            // A +1 intraroom accent cannot sit above this topology's ceiling.
             // culmination. All other route rooms retain the existing zone policy.
             roomZones.RemoveAll(zone =>
-                intent.nodes[zone.roomIndex].relativeElevationLevels >= MaxGeneratedLevel ||
+                intent.nodes[zone.roomIndex].relativeElevationLevels >= intent.topology.ceilingLevels ||
                 zone.roomIndex == intent.vista.sourceNode ||
                 zone.roomIndex == intent.vista.targetNode ||
                 TryGetRecipeSlot(intent.recipeSlots, zone.roomIndex, out _));
@@ -1214,11 +1214,13 @@ namespace DungeonLab.Editor
             }
 
             if (intent.nodes[intent.bottomNode].relativeElevationLevels != 0 ||
-                intent.nodes[intent.topNode].relativeElevationLevels != MaxGeneratedLevel ||
+                intent.nodes[intent.topNode].relativeElevationLevels != intent.topology.ceilingLevels ||
                 intent.nodes[intent.vista.sourceNode].relativeElevationLevels -
                     intent.nodes[intent.vista.targetNode].relativeElevationLevels < MajorRiseLevels)
             {
-                rejectionReason = "route elevation story did not span 0..24u or raise the vista source at least one major above its target";
+                rejectionReason =
+                    $"route elevation story did not span 0..{intent.topology.ceilingLevels}u " +
+                    "or raise the vista source at least one major above its target";
                 return false;
             }
 
@@ -2702,7 +2704,8 @@ namespace DungeonLab.Editor
                 // property that makes the band usable by the exclusivity rule
                 // Phase D relaxes. `relativeElevationLevels` is absolute despite
                 // its name: TryAssignRoomLevels copies it straight into
-                // zoneLevels after checking it against [0, MaxGeneratedLevel].
+                // zoneLevels after checking it against the selected topology's
+                // [0, ceiling] envelope.
                 //
                 // D1: the band spans the BOUND elevations, which equal the node
                 // levels for every unbound edge — i.e. for every edge in the

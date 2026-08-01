@@ -158,6 +158,7 @@ namespace DungeonLab.Editor
             bool roomGraphConnected = TryValidateRoomGraphConnectivity(layout, out string roomGraphMessage);
             bool transitionContractsValid = TryValidateTransitionLevelDeltas(
                 plan.transitions,
+                plan.topologyCeilingLevels,
                 out string transitionMessage);
 
             bool portGraphBuilt = TryBuildFloorStairPortGraph(

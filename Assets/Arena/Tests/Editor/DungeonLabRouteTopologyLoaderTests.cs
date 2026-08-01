@@ -64,6 +64,11 @@ namespace Arena.Tests.Editor
             // that a general graph does not have.
             Assert.That(graph["derived.junctions"], Is.EqualTo("choice:3|rejoin:3"));
             Assert.That(graph["derived.weight"], Is.EqualTo("1"));
+            Assert.That(graph["derived.ceiling"], Is.EqualTo("24"));
+            Assert.That(graph["derived.ceilingDeclared"], Is.EqualTo("False"));
+            Assert.That(graph["derived.deepCeiling"], Is.EqualTo("40"));
+            Assert.That(graph["derived.deepCeilingDeclared"], Is.EqualTo("True"));
+            Assert.That(graph["derived.deepTopAnchor"], Is.EqualTo("40"));
         }
 
         [Test]
@@ -101,6 +106,9 @@ namespace Arena.Tests.Editor
                          "contract.absoluteRoomSizesRejected",
                          "contract.unknownRoomSizeClassRejected",
                          "contract.negativeWeightRejected",
+                         "contract.offPitchCeilingRejected",
+                         "contract.aboveGlobalCeilingRejected",
+                         "contract.nonIntegerCeilingRejected",
                          "contract.unknownEndpointRejected",
                          "contract.selfEdgeRejected",
                          "contract.parallelEdgeRejected",
@@ -116,6 +124,8 @@ namespace Arena.Tests.Editor
             {
                 Assert.That(graph[contract], Is.EqualTo("True"), contract);
             }
+
+            Assert.That(graph["contract.explicitFortyCeilingAccepted"], Is.EqualTo("True"));
         }
 
         [Test]

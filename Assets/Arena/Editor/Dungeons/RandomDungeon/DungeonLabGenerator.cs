@@ -36,13 +36,14 @@ namespace DungeonLab.Editor
         // Every entry point supplies a profile ID to the single settings resolver.
         // Downstream planning consumes only the resolved settings value and never
         // branches on profile identity.
-        // One generated level is 1u of world height (the elevation quantum since the
-        // stair-forge recalibration). The plan grid stays 4u cells. MaxGeneratedLevel
-        // is in 1u levels; magnificence decision A (2026-06-13) raised the world
-        // height cap from 10u to 24u so the 4u-major grammar can stack gold-like
-        // tiers (gold level 1 spans 26u) and the dungeon net-climbs ~24u
-        // (subsumes decision I).
-        private const int MaxGeneratedLevel = 24;
+        // One generated level is 1u of world height (the elevation quantum since
+        // the stair-forge recalibration). The plan grid stays 4u cells. Phase E
+        // makes the route envelope a topology property: old files omit `ceiling`
+        // and therefore retain the historical 24u story, while a new topology may
+        // opt into a taller one. Forty is a schema safety limit, not a reason to
+        // stretch every existing dungeon.
+        private const int DefaultTopologyCeilingLevels = 24;
+        private const int MaxTopologyCeilingLevels = 40;
         // Magnificence decision A: inter-room/tier elevation lands on a 4u lattice.
         // A corridor climbs one major (4u) or a steeper double-major (8u); 1u and
         // 2u are reserved for INTRA-room accents, never plain
@@ -50,6 +51,11 @@ namespace DungeonLab.Editor
         // type before the tier planner reserves a concrete realization.
         private const int MajorRiseLevels = 4;
         private const int DoubleMajorRiseLevels = 8;
+        // Apertures are optional traversable falls, not lethal voids. Until the
+        // runtime owns fall damage, keep their survivable vocabulary inside the
+        // already-reviewed double-major vertical move rather than silently
+        // allowing an envelope-spanning drop.
+        private const int MaxSurvivableFallLevels = DoubleMajorRiseLevels;
         // The primary straight stair climbs 2u and remains the edge model's
         // reviewed primary-stair physical contract. Route corridors use 4u/8u.
         private const int PrimaryStairRiseLevels = 2;
@@ -211,6 +217,7 @@ namespace DungeonLab.Editor
 
         internal static void GenerateWithSeed(int seed)
         {
+            ResetNavigationSurfaceExport();
             var generator = ScriptableObject.CreateInstance<DungeonLabGenerator>();
             try
             {
@@ -404,6 +411,17 @@ namespace DungeonLab.Editor
                     return;
                 }
             }
+
+            // Capture only after the renderer and authored showpieces succeed.
+            // Scene preparation may translate the root before export; the nav
+            // projection stores local grid coordinates and resolves world
+            // centres against that final transform.
+            CaptureNavigationSurfacePlan(
+                seed,
+                levelPlan,
+                roomBoundaryContext,
+                levelFieldOrigin,
+                root);
 
             if (createPlayCamera)
             {
@@ -1340,7 +1358,11 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            if (!TryValidateTransitionLevelDeltas(transitions, out rejectionReason))
+            int topologyCeiling = routeRequirements.intent.topology.ceilingLevels;
+            if (!TryValidateTransitionLevelDeltas(
+                    transitions,
+                    topologyCeiling,
+                    out rejectionReason))
             {
                 return false;
             }
@@ -1379,7 +1401,7 @@ namespace DungeonLab.Editor
                 levelCount,
                 minLevel,
                 maxLevel,
-                FormatRoomsPerTier(CountRoomsPerTier(zoneLevels)),
+                FormatRoomsPerTier(CountRoomsPerTier(zoneLevels, topologyCeiling)),
                 overlookCount,
                 FormatTransitionSummary(transitions),
                 FormatStairUsageHistogram(transitions),
@@ -1396,7 +1418,8 @@ namespace DungeonLab.Editor
                 externalConnectors,
                 recipeResolutions,
                 routeRequirementResolution,
-                prisms);
+                prisms,
+                topologyCeiling);
 
             // The single acceptance gate. The boundary context is built here (not
             // after acceptance) so it is constructed exactly once: it is both a
@@ -1763,13 +1786,15 @@ namespace DungeonLab.Editor
                 return false;
             }
 
+            int topologyCeiling = routeRequirements.intent.topology.ceilingLevels;
+
             // Route intent is the active constraint on the retained ascending-spine
             // elevation policy. Rooms sit on its declared 4u-major story; the
             // existing +1u split policy remains a strictly intraroom accent.
             for (int roomIndex = 0; roomIndex < layout.rooms.Count; roomIndex++)
             {
                 int requiredLevel = routeRequirements.intent.nodes[roomIndex].relativeElevationLevels;
-                if (requiredLevel < 0 || requiredLevel > MaxGeneratedLevel ||
+                if (requiredLevel < 0 || requiredLevel > topologyCeiling ||
                     requiredLevel % MajorRiseLevels != 0)
                 {
                     rejectionReason = $"[ROUTE_ELEVATION_REQUIREMENT] room {roomIndex} declared invalid relative level {requiredLevel}";
@@ -1783,7 +1808,7 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                if (requiredLevel + 1 > MaxGeneratedLevel)
+                if (requiredLevel + 1 > topologyCeiling)
                 {
                     rejectionReason = $"[ROUTE_ELEVATION_REQUIREMENT] room {roomIndex} could not reserve its +1u zone below the level cap";
                     return false;
@@ -2858,9 +2883,12 @@ namespace DungeonLab.Editor
                 return false;
             }
             int routeClimb = topLevel - bottomLevel;
-            if (bottomLevel != 0 || topLevel != MaxGeneratedLevel || routeClimb != MaxGeneratedLevel)
+            int topologyCeiling = requirements.intent.topology.ceilingLevels;
+            if (bottomLevel != 0 || topLevel != topologyCeiling || routeClimb != topologyCeiling)
             {
-                rejectionReason = $"[ROUTE_ELEVATION_REQUIREMENT] declared bottom/top resolved to {bottomLevel}u/{topLevel}u instead of 0u/{MaxGeneratedLevel}u";
+                rejectionReason =
+                    $"[ROUTE_ELEVATION_REQUIREMENT] declared bottom/top resolved to " +
+                    $"{bottomLevel}u/{topLevel}u instead of 0u/{topologyCeiling}u";
                 return false;
             }
 
@@ -7002,6 +7030,7 @@ namespace DungeonLab.Editor
         // onto the edge without changing its outcome.
         private static bool TryValidateTransitionLevelDeltas(
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
+            int topologyCeiling,
             out string rejectionReason)
         {
             var transitionKeys = new HashSet<string>();
@@ -7045,7 +7074,9 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                if (delta < PrimaryStairRiseLevels || delta > MaxGeneratedLevel || string.IsNullOrEmpty(transition.stairPrefabPath))
+                if (delta < PrimaryStairRiseLevels ||
+                    delta > topologyCeiling ||
+                    string.IsNullOrEmpty(transition.stairPrefabPath))
                 {
                     rejectionReason = $"transition {transition.firstCell}->{transition.secondCell} had level delta {delta}";
                     return false;
@@ -7562,9 +7593,11 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static int[] CountRoomsPerTier(IReadOnlyList<int> roomLevels)
+        private static int[] CountRoomsPerTier(
+            IReadOnlyList<int> roomLevels,
+            int topologyCeiling)
         {
-            var counts = new int[MaxGeneratedLevel + 1];
+            var counts = new int[topologyCeiling + 1];
             foreach (int level in roomLevels)
             {
                 if (level >= 0 && level < counts.Length)
@@ -9135,6 +9168,9 @@ namespace DungeonLab.Editor
             // deck heights from the transition list with a second copy of the
             // formula — which is how the gate and its post-hoc twin drifted.
             public readonly PrismLedger prisms;
+            // Plan policy, deliberately not an unconditional report/hash field:
+            // old topology files must retain byte-identical projections.
+            public readonly int topologyCeilingLevels;
 
             public TieredLevelPlan(
                 SurfaceField surfaces,
@@ -9159,10 +9195,12 @@ namespace DungeonLab.Editor
                 ExternalConnectorPromontoryResolution[] externalConnectors,
                 RecipeResolution[] recipeResolutions,
                 RouteRequirementResolution routeRequirementResolution,
-                PrismLedger prisms)
+                PrismLedger prisms,
+                int topologyCeilingLevels)
             {
                 this.archetypeName = archetypeName;
                 this.prisms = prisms ?? new PrismLedger();
+                this.topologyCeilingLevels = topologyCeilingLevels;
                 // The elevation stage's own field, carried through rather than
                 // rebuilt from its heightfield — a rewrap would have dropped
                 // both the stacked surfaces and the kinds it took C1b to model.

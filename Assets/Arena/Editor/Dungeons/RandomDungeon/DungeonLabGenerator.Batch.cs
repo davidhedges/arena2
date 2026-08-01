@@ -2249,6 +2249,7 @@ namespace DungeonLab.Editor
         private static string BuildRouteGraphCompositionSnapshot(int seed)
         {
             RouteIntent intent = BuildDiagnosticRouteIntent(seed);
+            DungeonRouteTopology deepTopology = RequireRouteTopology("deep-processional");
             var nodeIds = new List<string>(intent.nodes.Length);
             var edgeIds = new List<string>(intent.traversalEdges.Length);
             var edgeDetails = new List<string>(intent.traversalEdges.Length);
@@ -2329,6 +2330,11 @@ namespace DungeonLab.Editor
                 $"derived.cycleCoreNodeCount={intent.cycleCoreNodeCount}",
                 $"derived.junctions={string.Join("|", junctionIds)}",
                 $"derived.weight={intent.topology.weight}",
+                $"derived.ceiling={intent.topology.ceilingLevels}",
+                $"derived.ceilingDeclared={intent.topology.declaresCeiling}",
+                $"derived.deepCeiling={deepTopology.ceilingLevels}",
+                $"derived.deepCeilingDeclared={deepTopology.declaresCeiling}",
+                $"derived.deepTopAnchor={deepTopology.nodes[deepTopology.topNode].level}",
                 $"selector.weights={TopologyWeightSummary()}",
                 $"selector.firstSeed={FirstSeedSelectingTopology(ProcessionalPatternId, BaselineFirstSeed, 2000)}",
                 $"contract.probeLoaded={probeLoaded}",
@@ -2344,6 +2350,10 @@ namespace DungeonLab.Editor
                 $"contract.absoluteRoomSizesRejected={RouteTopologyProbeRejects("\"rowGapDeltaCells\": 0", "\"rowGapDeltaCells\": 0, \"roomSizes\": { \"hall\": [5, 5, 5, 5] }")}",
                 $"contract.unknownRoomSizeClassRejected={RouteTopologyProbeRejects("\"rowGapDeltaCells\": 0", "\"rowGapDeltaCells\": 0, \"roomSizeDeltaCells\": { \"gallery\": [-4, -4, -4, -4] }")}",
                 $"contract.negativeWeightRejected={RouteTopologyProbeRejects("\"plannerVersion\": \"probe-v1\",", "\"plannerVersion\": \"probe-v1\",\n  \"weight\": -1,")}",
+                $"contract.explicitFortyCeilingAccepted={RouteTopologyProbeAccepts("\"plannerVersion\": \"probe-v1\",", "\"plannerVersion\": \"probe-v1\",\n  \"ceiling\": 40,")}",
+                $"contract.offPitchCeilingRejected={RouteTopologyProbeRejects("\"plannerVersion\": \"probe-v1\",", "\"plannerVersion\": \"probe-v1\",\n  \"ceiling\": 38,")}",
+                $"contract.aboveGlobalCeilingRejected={RouteTopologyProbeRejects("\"plannerVersion\": \"probe-v1\",", "\"plannerVersion\": \"probe-v1\",\n  \"ceiling\": 44,")}",
+                $"contract.nonIntegerCeilingRejected={RouteTopologyProbeRejects("\"plannerVersion\": \"probe-v1\",", "\"plannerVersion\": \"probe-v1\",\n  \"ceiling\": \"40\",")}",
                 $"contract.unknownEndpointRejected={RouteTopologyProbeRejects("[\"A\", \"B\", \"Stair\"]", "[\"A\", \"Z\", \"Stair\"]")}",
                 $"contract.selfEdgeRejected={RouteTopologyProbeRejects("[\"A\", \"B\", \"Stair\"]", "[\"A\", \"A\", \"Stair\"]")}",
                 $"contract.parallelEdgeRejected={RouteTopologyProbeRejects("[\"B\", \"C\", \"Stair\"]", "[\"B\", \"A\", \"Stair\"]")}",
@@ -2398,6 +2408,12 @@ namespace DungeonLab.Editor
         {
             return TryMutateRouteTopologyProbe(find, replaceWith, out string mutated) &&
                 !TryParseRouteTopologyProbe(mutated, out _);
+        }
+
+        private static bool RouteTopologyProbeAccepts(string find, string replaceWith)
+        {
+            return TryMutateRouteTopologyProbe(find, replaceWith, out string mutated) &&
+                TryParseRouteTopologyProbe(mutated, out _);
         }
 
 
@@ -4261,6 +4277,11 @@ namespace DungeonLab.Editor
                     ["direction"] = opening.direction,
                     ["layerRelativeLevel"] = opening.layerRelativeLevel
                 });
+                if (opening.kind != OpeningKind.Aperture)
+                {
+                    ((JObject)recipeOpenings[recipeOpenings.Count - 1])["kind"] =
+                        opening.kind.ToString();
+                }
             }
 
             if (!string.IsNullOrEmpty(resolution.selectedVisualImplementationId))
@@ -4360,7 +4381,7 @@ namespace DungeonLab.Editor
             Add("zones.relativeLevel", "recipe assets", "level and transition validation");
             Add("layers.layerId/relativeLevel/isBase", "recipe assets", "per-storey level derivation and RECIPE_LAYER_CONNECTIVITY");
             Add("zones/ports/transitions.layerId", "recipe assets", "which storey a zone, entrance or stair belongs to; empty is the base");
-            Add("openings.cell/outward/layerId", "recipe assets", "bare rims on a stacked storey — the aperture you walk off");
+            Add("openings.kind/cell/outward/layerId", "recipe assets", "typed aperture/void rims and their fall-column contract");
             Add("zones.openVolumeHeightLevels", "recipe assets", "the OpenVolume prism's half-open band — reserved air the fill sweeps and foreign structure may not take");
             Add("transitions.atomicGroup", "recipe assets", "atomic transition validation");
             Add("variations/motifs", "recipe assets", "stable StairForge-backed visual selection");
@@ -4445,11 +4466,13 @@ namespace DungeonLab.Editor
             }
 
             int expectedTransitionCount = lastRouteIntent?.traversalEdges?.Length ?? 0;
+            int expectedCeiling = lastRouteIntent?.topology?.ceilingLevels ??
+                DefaultTopologyCeilingLevels;
             bool passed = resolution.transitions != null &&
                 resolution.transitions.Length == expectedTransitionCount &&
                 resolution.bottomLevel == 0 &&
-                resolution.topLevel == MaxGeneratedLevel &&
-                resolution.RouteClimbLevels == MaxGeneratedLevel &&
+                resolution.topLevel == expectedCeiling &&
+                resolution.RouteClimbLevels == expectedCeiling &&
                 stairCount > 0 &&
                 bridgeCount > 0 &&
                 stairwellCount > 0 &&

@@ -128,9 +128,9 @@ rebaseline, and the density scale. Their evidence is archived:
 
 Treat both as history, not as current constraints.
 
-### Layered 3-D topology — PHASES A, B, C AND D ARE COMPLETE (2026-08-01). Phase E is next.
+### Layered 3-D topology — PHASES A–E COMPLETE. PHASE E AUDIT REPAIR ACCEPTED (2026-08-01).
 
-Design of record, **still a draft beyond Phase B**:
+Design of record (implementation status is tracked on this page):
 [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md).
 Branch `dungeon/layered-topology`.
 
@@ -1269,6 +1269,63 @@ actually parsed.
    its weight moves `totalWeight` and re-rolls every seed's topology — a content
    decision with a full rebaseline attached, and the owner's to make.
 
+**Phase E — COMPLETE AFTER AUDIT REPAIR 2026-08-01.** The owner selected a per-topology ceiling on 2026-08-01:
+files that omit `ceiling` keep the historical 24u envelope, authored ceilings
+must be 4u multiples, and 40u is the global hard cap.
+
+The first nav acceptance was not valid: its collision gate permitted the
+server's capture window to move a node by as much as 1u, and its transition
+"witness" test checked only that an integer index was in range. The repaired
+implementation supersedes those nav results.
+
+- `deep-processional.json` is the weight-0 40u proof topology. Its top anchor is
+  at 40 and no individual transition exceeds the reviewed 8u vocabulary. Weight
+  0 keeps the established weighted seed selection stable.
+- `AbyssDepthLevels` remains 20 below the *lowest floor*. The helper now states
+  that derivation directly: raising the route ceiling adds height above the
+  dungeon and does not move its lethal datum.
+- scene rebuild exports `random_dungeon.navsurfaces.shared.json` beside both
+  copies of shared collision data. The graph is derived from `SurfaceField` and
+  physical transitions, includes same-level walk, stair/bridge and declared
+  aperture-fall edges, requires fall-free connectivity, and refuses to write if
+  a nav node cannot find a deterministic radius-safe point at its exact planned
+  height. It samples every Walk segment at 0.25u intervals with the server
+  surface-height rule; cosmetic-covered plan surfaces and collision-gap Walk
+  edges are omitted rather than moved to a different height. Components with no
+  physical traversal witness are conservatively excluded, while witnesses
+  spanning components reject the export, then connectivity is rechecked.
+- recipe openings now carry `OpeningKind` (`Aperture = 0` preserves existing
+  serialized assets and digests; `Void = 1`). A Void may belong to any declared
+  layer and rejects with `VOID_OPENING_OBSTRUCTED` when any lower surface exists
+  in the hole's fall column. Aperture now fails closed for a missing catch, a
+  fall below the 3u headroom minimum, or a fall above the reviewed 8u
+  double-major cap. Void death and procedural void invention remain non-goals.
+- pure Phase E fixtures cover ceiling/default/cap, abyss derivation, Void schema
+  and producer behavior, aperture catch/range behavior, fall-column
+  obstruction, graph connectivity, and exact transition endpoint witness
+  rejection. Both editor assemblies compile with zero errors outside Unity.
+- a native server test resamples every exported node and every Walk edge through
+  the server's actual collision code. It also checks
+  that the artifact counted every Walk, physical transition and Fall edge.
+- **Pre-audit ceiling evidence, still valid for the ceiling mechanism:** Unity `Validate Topologies` passed all ten files and all 26 layer-schema
+  checks. Existing files report the 24u default; `deep-processional` reports its
+  authored 40u ceiling.
+- **Pre-audit ceiling evidence:** forced `deep-processional`, density 0, seeds 2026072100–2026072299 accepted and
+  hard-validates 200/200. Every seed spans 40u and succeeds on its first layout
+  and tier attempt; there are no validation failure codes. Result hash:
+  `a21f925dd7c485bc675d05041b28b13f0e28ae5a59d3174e6b850e6d7c34fe57`.
+- **Replacement nav evidence:** the normal-Editor rebuild of forced
+  `deep-processional`, seed 2026072100, exported 707 nodes and 1,128 edges
+  (1,112 Walk, 16 Stair) at ceiling 40 with `max_abs_collision_y_adjustment =
+  0`. It conservatively omitted six collision-covered nodes, two collision-gap
+  Walk edges and 75 surfaces in two components with no physical traversal
+  witness. All 13 source transitions emit 16 exact witness edges. The native
+  server nav/collision test passed all exported nodes and Walk edges. The Phase
+  E EditMode contracts passed 2/2 in the synchronous Unity gate; the
+  full gate separately reported 18 unrelated current melee-contact and
+  remote-presentation failures. The earlier 14/14 result and 531-node/803-edge
+  payload remain superseded.
+
 **A tooling note, because this ritual is now six slices old.**
 `ops/dungeon-report-diff.py` does the leaf-by-leaf report comparison by hand up
 to now: it flattens both reports to dotted leaf paths and prints every path that
@@ -1303,17 +1360,13 @@ investigation is in the design doc's §1 and §2.
 
 ### Next, in order
 
-1. ~~**Decide the three sizing questions**~~ **Two of three decided 2026-07-31
-   (owner, both subject to change): vertical envelope 40u, stacking pitch 4u.**
-   Neither binds any code today — there is no vertical envelope constant, and a
-   dungeon's extent emerges from its topology's authored deltas. 4u is exactly
-   `MajorRiseLevels`, and clears `MinHeadroomLevels = 3` with the `_E_` slab's
-   0.5u underside, so nothing needs retuning; C1's episode already used it.
-   **Still open: the envelope MECHANISM** — a per-topology `ceiling` (existing
-   dungeons unchanged, new ones opt in) versus raising a global constant. That
-   is the one with work attached. Note the corpus already spans 24–25 levels at
-   density 0, so 40u adds ~15u of global range — and per design §14 that is not
-   the stacking budget, which is local headroom, not envelope.
+1. ~~**Decide the three sizing questions**~~ **All decided by the owner:**
+   vertical envelope 40u and stacking pitch 4u on 2026-07-31; per-topology
+   `ceiling`, default 24u and globally capped at 40u, on 2026-08-01. The
+   mechanism and its Unity acceptance gates are complete in Phase E. The corpus
+   already spans 24–25 levels at density 0,
+   so 40u adds ~15u of global range — and per design §14 that is not the
+   stacking budget, which is local headroom, not envelope.
 2. ~~**Measure the deck-underside art.**~~ **Done 2026-07-29 — see the design
    doc §0.1.** The kit already ships solid floor tiles: the `_E_` family is the
    `_O_` family plus a bottom face, 0.5u thick, hanging below the walk surface.

@@ -5030,9 +5030,48 @@ mod tests {
         DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE, GIANT_SKELETON_PROFILE, GREAT_HALL_DAY_PROFILE,
         IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, RANDOM_DUNGEON_PROFILE, TEMPLE_GARDENS_PROFILE,
     };
+    use serde::Deserialize;
+    use std::collections::HashMap;
 
     const TEST_PLAYER_RADIUS: f32 = 0.45;
     const TEST_PLAYER_HEIGHT: f32 = 1.8;
+    const RANDOM_DUNGEON_NAV_SURFACES_JSON: &str =
+        include_str!("world_data/random_dungeon.navsurfaces.shared.json");
+    const NAV_SURFACE_EPSILON: f32 = 0.06;
+
+    #[derive(Deserialize)]
+    struct TestNavigationSurfaceArtifact {
+        nodes: Vec<TestNavigationSurfaceNode>,
+        edges: Vec<TestNavigationSurfaceEdge>,
+        validation: TestNavigationSurfaceValidation,
+    }
+
+    #[derive(Deserialize)]
+    struct TestNavigationSurfaceNode {
+        id: String,
+        planned_world_y: f32,
+        world_center: Vec<f32>,
+    }
+
+    #[derive(Deserialize)]
+    struct TestNavigationSurfaceEdge {
+        id: String,
+        from: String,
+        to: String,
+        kind: String,
+    }
+
+    #[derive(Deserialize)]
+    struct TestNavigationSurfaceValidation {
+        collision_agreement: bool,
+        max_abs_collision_y_adjustment: f32,
+        #[serde(default)]
+        collision_checked_walk_edges: usize,
+        #[serde(default)]
+        witnessed_transition_edges: usize,
+        #[serde(default)]
+        validated_fall_edges: usize,
+    }
 
     fn test_aabb(center_x: f32, center_y: f32, center_z: f32) -> GameplayCollisionBox {
         GameplayCollisionBox::Aabb {
@@ -6705,6 +6744,119 @@ mod tests {
             spawn_y.abs() < 0.01,
             "Dungeon spawn missed origin floor: {spawn_y}"
         );
+    }
+
+    #[test]
+    fn random_dungeon_nav_surface_artifact_matches_server_collision_and_walk_edges() {
+        let artifact: TestNavigationSurfaceArtifact =
+            serde_json::from_str(RANDOM_DUNGEON_NAV_SURFACES_JSON)
+                .expect("failed to parse random-dungeon nav surface artifact");
+        assert!(
+            artifact.validation.collision_agreement,
+            "nav artifact was exported without collision agreement"
+        );
+        assert!(
+            artifact.validation.max_abs_collision_y_adjustment <= NAV_SURFACE_EPSILON,
+            "nav artifact accepted {:.3}u of vertical drift",
+            artifact.validation.max_abs_collision_y_adjustment
+        );
+
+        let nodes: HashMap<&str, &TestNavigationSurfaceNode> = artifact
+            .nodes
+            .iter()
+            .map(|node| (node.id.as_str(), node))
+            .collect();
+        for node in &artifact.nodes {
+            assert_eq!(
+                node.world_center.len(),
+                3,
+                "nav node '{}' has malformed world_center",
+                node.id
+            );
+            let sampled = try_open_world_surface_height_at_y(
+                &RANDOM_DUNGEON_PROFILE,
+                node.world_center[0],
+                node.world_center[2],
+                node.planned_world_y,
+            )
+            .unwrap_or_else(|| panic!("nav node '{}' sampled no server surface", node.id));
+            assert!(
+                (sampled - node.planned_world_y).abs() <= NAV_SURFACE_EPSILON,
+                "nav node '{}' plans y={:.3} but server samples y={sampled:.3}",
+                node.id,
+                node.planned_world_y
+            );
+            assert!(
+                (sampled - node.world_center[1]).abs() <= NAV_SURFACE_EPSILON,
+                "nav node '{}' stores y={:.3} but server samples y={sampled:.3}",
+                node.id,
+                node.world_center[1]
+            );
+        }
+
+        let mut walk_edges = 0usize;
+        let mut transition_edges = 0usize;
+        let mut fall_edges = 0usize;
+        for edge in &artifact.edges {
+            match edge.kind.as_str() {
+                "Walk" => {
+                    walk_edges += 1;
+                    let from = nodes.get(edge.from.as_str()).unwrap_or_else(|| {
+                        panic!(
+                            "walk edge '{}' is missing from-node '{}'",
+                            edge.id, edge.from
+                        )
+                    });
+                    let to = nodes.get(edge.to.as_str()).unwrap_or_else(|| {
+                        panic!("walk edge '{}' is missing to-node '{}'", edge.id, edge.to)
+                    });
+                    assert_server_walk_surface_continuity(edge, from, to);
+                }
+                "Stair" | "Bridge" => transition_edges += 1,
+                "Fall" => fall_edges += 1,
+                kind => panic!("nav edge '{}' has unknown kind '{kind}'", edge.id),
+            }
+        }
+
+        assert_eq!(
+            artifact.validation.collision_checked_walk_edges, walk_edges,
+            "Unity export did not collision-check every walk edge"
+        );
+        assert_eq!(
+            artifact.validation.witnessed_transition_edges, transition_edges,
+            "Unity export did not witness every physical transition edge"
+        );
+        assert_eq!(
+            artifact.validation.validated_fall_edges, fall_edges,
+            "Unity export did not validate every fall edge"
+        );
+    }
+
+    fn assert_server_walk_surface_continuity(
+        edge: &TestNavigationSurfaceEdge,
+        from: &TestNavigationSurfaceNode,
+        to: &TestNavigationSurfaceNode,
+    ) {
+        let start_x = from.world_center[0];
+        let start_z = from.world_center[2];
+        let target_x = to.world_center[0];
+        let target_z = to.world_center[2];
+        let distance = ((target_x - start_x).powi(2) + (target_z - start_z).powi(2)).sqrt();
+        let steps = (distance / 0.2).ceil().max(1.0) as usize;
+        for step in 0..=steps {
+            let t = step as f32 / steps as f32;
+            let x = start_x + (target_x - start_x) * t;
+            let z = start_z + (target_z - start_z) * t;
+            let expected_y = from.planned_world_y + (to.planned_world_y - from.planned_world_y) * t;
+            let sampled_y =
+                try_open_world_surface_height_at_y(&RANDOM_DUNGEON_PROFILE, x, z, expected_y)
+                    .unwrap_or_else(|| panic!("walk edge '{}' lost ground at t={t:.3}", edge.id));
+            assert!(
+                (sampled_y - expected_y).abs() <= NAV_SURFACE_EPSILON,
+                "walk edge '{}' changed height at t={t:.3}: planned={expected_y:.3} sampled={sampled_y:.3}",
+                edge.id,
+            );
+        }
     }
 
     #[test]

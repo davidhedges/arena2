@@ -51,8 +51,17 @@ namespace DungeonLab.Editor
         // dungeon then reads as a unified mass rising from a deep plinth (gold is
         // "built over a void" — 84% of its floor edges face open air, walls drop
         // 16-34u). Cosmetic mass only; applies to every void edge (user choice).
-        // Buttress towers + support columns are deferred (C v1 scope).
-        private const int AbyssDepthLevels = 20;
+        // Phase E re-derived this against the 40u route envelope: skirt depth is
+        // measured below the LOWEST floor, not from the topology ceiling, so the
+        // existing 20u exterior drop keeps the authored underworld silhouette.
+        // A 40u plan gains height above it; it does not move the lethal datum.
+        // Internal so nav/collision probes use the renderer's one value.
+        internal const int AbyssDepthLevels = 20;
+
+        internal static int AbyssBaseForMinFloor(int minimumFloorLevel)
+        {
+            return minimumFloorLevel - AbyssDepthLevels;
+        }
         // The primary straight stair climbs one legacy tier = 2 u-levels (2u world).
         private const int PrimaryStairRiseLevels = 2;
         private const int StairRiseVariant = 3;
@@ -699,7 +708,7 @@ namespace DungeonLab.Editor
                     promontorySet,
                     levels,
                     transitionOpenEdges,
-                    MinFloorLevel(levels) - AbyssDepthLevels,
+                    AbyssBaseForMinFloor(MinFloorLevel(levels)),
                     origin,
                     contracts.levelHeight,
                     piersRoot.transform,
@@ -933,7 +942,7 @@ namespace DungeonLab.Editor
                         levels,
                         reservedCells,
                         origin,
-                        (MinFloorLevel(levels) - AbyssDepthLevels) * contracts.levelHeight,
+                        AbyssBaseForMinFloor(MinFloorLevel(levels)) * contracts.levelHeight,
                         stairsRoot.transform,
                         ref bounds,
                         ref hasBounds,
@@ -2468,7 +2477,7 @@ namespace DungeonLab.Editor
 
             // Decision C: every void-edge cliff face drops to this shared base
             // (the underworld plinth) instead of bottoming at y=0.
-            int abyssBase = MinFloorLevel(levels) - AbyssDepthLevels;
+            int abyssBase = AbyssBaseForMinFloor(MinFloorLevel(levels));
 
             foreach (var item in levels)
             {

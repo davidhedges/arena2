@@ -19,13 +19,25 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> snapshot = AtriumIntentSnapshot();
 
             Assert.That(snapshot["selector.weights"], Is.EqualTo(
-                "atrium-ring:1|descent-shaft:1|processional-spine:1|ridge-ravine:1|" +
+                "aperture-gallery:0|atrium-hub:0|atrium-ring:1|deep-processional:0|" +
+                "descent-shaft:1|processional-spine:1|ridge-ravine:1|" +
                 "sunken-basin:1|terraced-cascade:1|twin-wing-keep:1"));
             // Every weighted topology has to actually appear over a 200-seed
-            // window, or the draw is not doing what the weights say.
+            // window, or the draw is not doing what the weights say. Weight-0
+            // authoring proofs deliberately remain absent from the draw.
+            var weighted = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string entry in snapshot["selector.weights"].Split('|'))
+            {
+                string[] fields = entry.Split(':');
+                if (int.Parse(fields[1]) > 0)
+                    weighted.Add(fields[0]);
+            }
+
             foreach (string entry in snapshot["selector.distribution"].Split('|'))
             {
-                Assert.That(int.Parse(entry.Split(':')[1]), Is.GreaterThan(0), entry);
+                string[] fields = entry.Split(':');
+                if (weighted.Contains(fields[0]))
+                    Assert.That(int.Parse(fields[1]), Is.GreaterThan(0), entry);
             }
 
             Assert.That(snapshot["processional.cycleLength"], Is.EqualTo("10"));

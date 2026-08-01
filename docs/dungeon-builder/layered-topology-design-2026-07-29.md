@@ -213,18 +213,16 @@ than as separate work.
 | Elevation level | **1 world unit** | `LevelHeight = 1f`, `StairForge.cs:37` |
 | Major elevation change | **4 levels = 4u** | `MajorRiseLevels = 4`, `DungeonLabGenerator.cs:51` |
 | Double-major | 8 levels = 8u | `DoubleMajorRiseLevels = 8`, `DungeonLabGenerator.cs:52` |
-| Current vertical ceiling | **24 levels = 24u = 6 major changes** | `MaxGeneratedLevel = 24`, `DungeonLabGenerator.cs:45` |
+| Default topology ceiling | **24 levels = 24u = 6 major changes** | `DefaultTopologyCeilingLevels = 24`, `DungeonLabGenerator.cs` |
+| Global topology ceiling | **40 levels = 40u = 10 major changes** | `MaxTopologyCeilingLevels = 40`, `DungeonLabGenerator.cs` |
 | Minimum stacked clearance | 3 levels = 3u | `MinHeadroomLevels = 3`, `DungeonLabGenerator.cs:58` |
 | Abyss skirt | 20 levels below the lowest floor | `AbyssDepthLevels = 20`, `ElevationEdgeModel.cs:55` |
 | Wall masonry course | 2u — walls are composed of whole courses | `ElevationEdgeModel.cs:47` |
 | Player capsule | radius 0.45u, height 1.8u | `server/src/world_collision.rs:5034` |
 
-**Ten full major elevation changes = 40 levels = 40 world units** — a
-`MaxGeneratedLevel` of 40, up from 24.
-
-**[Proposed]** Confirm this reading: if "major" meant the double-major step the
-envelope is 80u, which changes the abyss skirt and the wall-course budget
-materially. This document is designed against 40.
+**Ten full major elevation changes = 40 levels = 40 world units.** The owner
+confirmed that reading and selected an optional per-topology ceiling: old files
+omit it and remain 24u; the schema hard-stops authored ceilings at 40u.
 
 Two consequences worth stating up front, because they bound everything else:
 
@@ -232,11 +230,10 @@ Two consequences worth stating up front, because they bound everything else:
   change is the minimum viable stacking pitch, and it is tight.** 8u is the
   comfortable one. So a 40u envelope supports at most ~10 stacked surfaces in
   the pathological case and realistically 5–7.
-- Topology node levels are validated to `[0, MaxGeneratedLevel]` and `% 4 == 0`,
-  and **`anchors.top` must equal `MaxGeneratedLevel` exactly**
-  (`DungeonRouteTopologyValidator.cs:289`, `:366`). Raising the constant to 40
-  therefore **invalidates all seven shipped topology files at once.** That is a
-  migration item, not a constant edit (§10).
+- Topology node levels are validated to `[0, topology.ceiling]` and `% 4 == 0`,
+  and **`anchors.top` must equal that topology's ceiling exactly**. The optional
+  field defaults to 24, so introducing the 40u capability does not reshape or
+  invalidate the older files.
 
 ### 1.2 The canonical model
 
@@ -657,9 +654,9 @@ sealed class Opening {
 | Derived catch | **every** cell must resolve one | **no** cell may resolve one |
 | Graph effect | one `Fall` edge per (rim surface, opening cell) pair → that cell's catch surface | none; a sink outside the graph |
 | Reversibility | the fall-free subgraph must be connected (§3.3); the witness path is reported | n/a |
-| Fall height | ≥ `MinHeadroomLevels` per cell, ≤ a `MaxSurvivableFallLevels` cap | unbounded |
+| Fall height | ≥ `MinHeadroomLevels` per cell, ≤ `MaxSurvivableFallLevels = DoubleMajorRiseLevels = 8` | unbounded |
 | Renderer | interior cliff faces drop to that column's catch level; soffit under the opening's rim | cliff faces drop to `abyssBase`, as today |
-| Rejection codes | `APERTURE_NO_CATCH_SURFACE` (names the offending cell), `APERTURE_FALL_TOO_SHALLOW`, `APERTURE_UNREACHABLE_RETURN` | `VOID_OPENING_OBSTRUCTED` (names the offending cell) |
+| Rejection codes | `APERTURE_NO_CATCH_SURFACE` (names the offending cell), `APERTURE_FALL_TOO_SHALLOW`, `APERTURE_FALL_UNSURVIVABLE`, `APERTURE_UNREACHABLE_RETURN` | `VOID_OPENING_OBSTRUCTED` (names the offending cell) |
 
 **Guarding is per rim edge, not per opening** — corrected in round two. The
 draft made `Window` an opening-level kind, which cannot express a pit railed on
@@ -1557,7 +1554,17 @@ Three rules that keep this honest without designing the NPC system:
 1. **Derived, never authored.** It is a projection of the plan, like the
    canonical layout projection.
 2. **Validated against collision.** Every nav node's level must equal the
-   surface height the server would sample at that cell centre. A
+   surface height the server would sample at its deterministic, radius-safe
+   point inside the cell. The centre is tried first; transition lips may move
+   the point laterally, never vertically. A plan floor fully covered by cosmetic
+   movement geometry is omitted conservatively rather than relabelled as the
+   covering surface. Same-level plan adjacencies that lose the declared floor
+   under server collision sampling are likewise omitted as `Walk` edges; the
+   fall-free connectivity gate runs after both omissions. Furniture-scale path
+   avoidance remains deferred to the local navigation system. If conservative
+   omissions leave components with no Stair/Bridge/Fall witness, those
+   unwitnessed components are excluded; export rejects instead if physical
+   traversal witnesses span components. A
    `NAV_COLLISION_DISAGREEMENT` rejection is what stops the nav graph and the
    geometry drifting apart — the failure mode
    [`npc-system-design-2026-07-11.md`](../npc-system-design-2026-07-11.md)
@@ -1642,7 +1649,7 @@ grammars whose railing and corner rules drift.
 | Concern | Assessment |
 |---|---|
 | **Single-surface generation** | Preserved exactly while `IsSingleLayer`. `AsHeightField()`, `IsGroundBacked` making every single-layer band `[abyssBase, level)` so retaining walls *and* abyss cliffs reproduce exactly (§7.1), and the old canonical projection shape make **A1 and B** output-neutral by construction — provable with `ops/dungeon-port-ab.sh`. **A2 is not**, and is deliberately rebaselined on its own. |
-| **`MaxGeneratedLevel` 24 → 40** | **Not** output-neutral, and it breaks all seven topology files: `anchors.top` must equal `MaxGeneratedLevel` exactly (`DungeonRouteTopologyValidator.cs:366`). **[Proposed]** relax that rule to "the top anchor is at the topology's declared ceiling" and add an optional per-topology `ceiling` (default 24, capped at the global 40). Existing dungeons then keep their shape and a *new* topology opts into depth. Raising the constant alone would stretch every shipped dungeon and is the wrong lever. |
+| **24u default + 40u global cap** | **Implemented in Phase E.** `anchors.top` equals the selected topology's declared ceiling. The optional `ceiling` defaults to 24 and is capped at 40, so existing topology plans retain their authored levels while `deep-processional` opts into 40. |
 | **Density dial** | Fill passes must query the prism ledger; `OpenVolume` joins the authored-void exclusion list. `floorFillPercent` becomes ambiguous under stacking — **[Proposed]** keep it as *plan-cell* fill (unchanged meaning, unchanged tuning) and add `surfacesPerPlanCell` as a separate reported metric. Do not redefine the number the dial was tuned against. |
 | **Recipes** | Additive fields, empty `layerId` = today's behaviour. The four enabled recipes need no edit. |
 | **The seven topologies** | **Leave all seven untouched through A1, B and C** — they are the corpus that proves output-neutrality, and redrawing one destroys the baseline. They stay structurally valid because layers do not move lattice positions or footprints (§8.1). Add layered topologies as *new* files in Phase D; that is the cheap path the topology-as-data work already bought. **Measured 2026-07-29** (§10.1): the corpus is far more uniform than authorship would explain, and three of the seven are workarounds for the capability this design adds. |
@@ -2358,6 +2365,39 @@ elevations on ≥90% of its seeds.
 
 ### Phase E — Depth, navigation surface, and void declaration
 
+**Audit repair status 2026-08-01 — ACCEPTED; PHASE E COMPLETE.** The ceiling,
+40u topology and Void producer remain accepted. The
+first nav export overstated its evidence: it allowed the server's snap window
+to move nodes vertically and its "physical witness" test checked only an index.
+That evidence is superseded. The repaired gate now:
+
+- rejects aperture declarations with no catch, a fall below 3u, or a fall above
+  the reviewed 8u double-major cap;
+- requires every Stair/Bridge edge to match the endpoints and kind of the exact
+  `TransitionEdge` it cites, and requires every physical transition to emit;
+- accepts a nav node only at the plan surface's exact height (0.06u numeric
+  tolerance). It may move the sample point laterally inside the cell, never up
+  the server's 0.35u/1.2u capture window; inaccessible cosmetic-covered plan
+  floors are omitted and connectivity is rechecked;
+- samples every Walk segment at 0.25u intervals with the server height rule,
+  omits collision-gap Walk adjacencies, and rechecks connectivity after
+  pruning. Components with no physical traversal witness are conservatively
+  excluded, while witnesses spanning components reject the export; and
+- ships a native server test that resamples every node and every Walk edge
+  against the exported collision payload.
+
+The earlier 531-node/803-edge nav acceptance numbers and "14/14" statement are
+superseded. The repaired seed-2026072100 `deep-processional` payload contains
+707 nodes and 1,128 edges (1,112 Walk, 16 Stair), with zero vertical adjustment.
+It records six collision-covered nodes, two collision-gap Walk edges and 75
+surfaces in two unwitnessed components as conservative omissions. All 13 source
+transitions emit 16 exact witness edges. The focused Phase E contracts passed
+2/2 in Unity's synchronous EditMode gate, and the native server test
+resampled every exported node and Walk edge successfully. The same full EditMode
+run reported 18 unrelated current failures in melee-contact and
+remote-presentation tests; none was a Phase E contract. The pre-audit 200/200
+ceiling-generation result remains evidence for the ceiling mechanism only.
+
 **Capability.** Ten major elevation changes; the nav artifact exports; lethal
 void is declarable.
 
@@ -2368,15 +2408,19 @@ nav surface export + its collision-agreement check; `OpeningKind.Void` producer.
 has nothing in its fall column. Existing topologies keep their 24u ceiling
 unless edited.
 
-**Evidence.** A deep new topology at ceiling 40 generating 200/200; nav/collision
-agreement 100%; a headless probe walking the nav graph's edges to confirm each
-is traversable.
+**Evidence.** A deep new topology at ceiling 40 generating 200/200; exact-height
+nav/collision agreement; export-time collision-height validation of every Walk
+segment; and the native server probe resampling all nodes and every Walk edge.
+Stair/Bridge edges are tied to their exact plan transition;
+Fall edges are range-checked declarations whose return is proven by fall-free
+connectivity.
 
 **Non-goals.** The NPC planner. Void-death mechanics. Deliberate lethal-void
 floorplan generation.
 
 **Exit.** A 40u topology ships; the nav artifact exports and validates; `Void` is
-declarable and rejected when obstructed.
+declarable and rejected when obstructed. **Passed after the 2026-08-01 audit
+repair.**
 
 ---
 
@@ -2472,21 +2516,18 @@ own bridge.
 ### Remaining owner decisions
 
 1. **Envelope. — DECIDED 2026-07-31: 40u, subject to change.** Ten × 4.
-2. **Envelope mechanism.** Per-topology `ceiling` (existing dungeons unchanged,
-   new ones opt in) versus raising the global constant (every seed stretches,
-   all seven files edited). Per-topology is recommended. **STILL OPEN**, and it
-   is the only one of these three that creates any code — see below.
+2. **Envelope mechanism. — DECIDED 2026-08-01.** Per-topology `ceiling`, default
+   24u for files that omit it, with a global hard cap of 40u. Existing
+   topologies remain unchanged; new ones opt in. Implemented in Phase E.
 3. **Stacking pitch. — DECIDED 2026-07-31: 4u, subject to change.** One major
    rise.
 
 > **Measured against the code and the corpus 2026-07-31, after the ruling.**
 >
-> **Neither decision binds a line of code today.** There is no vertical envelope
-> constant to set: `MaxLevel = 5` in `DungeonGenerationProfile` is the DENSITY
-> dial, and the "ceiling" in `ResolveLatticeLaneOffsets` is a horizontal lane
-> gap in cells. A dungeon's vertical extent emerges from its topology's authored
-> elevation deltas. Decision 2 is what would create the mechanism, which is why
-> it is now the only one of the three with work attached.
+> **Implementation update 2026-08-01.** `MaxLevel = 5` in
+> `DungeonGenerationProfile` remains the DENSITY dial, and the "ceiling" in
+> `ResolveLatticeLaneOffsets` remains a horizontal lane gap in cells. Phase E
+> added the separate topology-envelope mechanism described above.
 >
 > **4u is compatible with every constant already in place, and with the episode
 > the owner just accepted.** `MajorRiseLevels = 4` and one level is one world

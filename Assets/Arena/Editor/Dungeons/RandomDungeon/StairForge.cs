@@ -70,7 +70,9 @@ namespace DungeonLab.Editor
                 new ForgeRequest(5, 1, ForgeSideStyle.Bridge),
                 new ForgeRequest(6, 1, ForgeSideStyle.Walled),
                 new ForgeRequest(6, 1, ForgeSideStyle.Walled, forceTurn: true),
-                // Rises 7-10 complete coverage up to MaxGeneratedLevel: with full
+                // Rises 7-10 complete the reviewed per-transition vocabulary:
+                // even a topology at the 40u global ceiling reaches it through
+                // several transitions rather than one envelope-spanning stair. With full
                 // 0..10 tier spans common, these were the dominant remaining
                 // rejection ("no reviewed contract for rise N"). Tall straights get
                 // long (4-5 cells), so each tall rise also ships a turn variant

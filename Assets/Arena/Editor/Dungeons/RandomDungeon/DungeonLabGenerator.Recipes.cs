@@ -309,6 +309,7 @@ namespace DungeonLab.Editor
         private readonly struct RecipeOpeningPlacement
         {
             public readonly string id;
+            public readonly OpeningKind kind;
             public readonly Vector2Int cell;
             public readonly int direction;
             /// <summary>Its layer's offset from the node's level.</summary>
@@ -317,12 +318,14 @@ namespace DungeonLab.Editor
 
             public RecipeOpeningPlacement(
                 string id,
+                OpeningKind kind,
                 Vector2Int cell,
                 int direction,
                 int layerRelativeLevel,
                 string layerId)
             {
                 this.id = id ?? string.Empty;
+                this.kind = kind;
                 this.cell = cell;
                 this.direction = direction;
                 this.layerRelativeLevel = layerRelativeLevel;
@@ -1482,6 +1485,7 @@ namespace DungeonLab.Editor
 
                 openings.Add(new RecipeOpeningPlacement(
                     opening.id,
+                    opening.kind,
                     TransformRecipeCell(opening.cell, center, primaryAxis, transverseAxis, mirrored),
                     DirectionFromVector(TransformRecipeDirection(
                         opening.outwardDirection,
@@ -2823,11 +2827,12 @@ namespace DungeonLab.Editor
                 }
             }
 
-            // The authored aperture, read back off the plan: the rim stands on a
+            // The authored opening, read back off the plan: the rim stands on a
             // real surface and the cell it faces genuinely has none at that
             // level. The recipe validator asked the same question of the
             // DECLARATION; this asks it of the field the resolver built, which is
-            // what catches a later pass filling the hole in.
+            // what catches a later pass filling the hole in. Void additionally
+            // proves that no lower surface obstructs the fall column.
             foreach (RecipeOpeningPlacement opening in placement.openings)
             {
                 int rimLevel = baseLevel +
@@ -2839,6 +2844,26 @@ namespace DungeonLab.Editor
                 {
                     rejectionReason =
                         $"[RECIPE_OPENING] rim '{opening.id}' on '{placement.RecipeId}' did not stand at L{rimLevel} beside an open cell at {hole}";
+                    return false;
+                }
+
+                if (opening.kind == OpeningKind.Aperture &&
+                    !TryValidateApertureOpeningFallColumn(
+                        surfaces,
+                        opening,
+                        rimLevel,
+                        out rejectionReason))
+                {
+                    return false;
+                }
+
+                if (opening.kind == OpeningKind.Void &&
+                    !TryValidateVoidOpeningFallColumn(
+                        surfaces,
+                        opening,
+                        rimLevel,
+                        out rejectionReason))
+                {
                     return false;
                 }
             }
@@ -2909,6 +2934,63 @@ namespace DungeonLab.Editor
             }
 
             resolution = new RecipeResolution(placement, baseLevel, atomicAndValid: true);
+            return true;
+        }
+
+        private static bool TryValidateApertureOpeningFallColumn(
+            SurfaceField surfaces,
+            RecipeOpeningPlacement opening,
+            int rimLevel,
+            out string rejectionReason)
+        {
+            Vector2Int hole = opening.cell + DirectionVectorInt(opening.direction);
+            if (!surfaces.TryGetHighestSurfaceBelow(hole, rimLevel, out int catchLevel))
+            {
+                rejectionReason =
+                    $"[APERTURE_NO_CATCH_SURFACE] aperture rim '{opening.id}' found no " +
+                    $"surface below {hole},L{rimLevel}";
+                return false;
+            }
+
+            int fallLevels = rimLevel - catchLevel;
+            if (fallLevels < MinHeadroomLevels)
+            {
+                rejectionReason =
+                    $"[APERTURE_FALL_TOO_SHALLOW] aperture rim '{opening.id}' falls " +
+                    $"{fallLevels}u from L{rimLevel} to L{catchLevel}; minimum is " +
+                    $"{MinHeadroomLevels}u";
+                return false;
+            }
+
+            if (fallLevels > MaxSurvivableFallLevels)
+            {
+                rejectionReason =
+                    $"[APERTURE_FALL_UNSURVIVABLE] aperture rim '{opening.id}' falls " +
+                    $"{fallLevels}u from L{rimLevel} to L{catchLevel}; maximum is " +
+                    $"{MaxSurvivableFallLevels}u";
+                return false;
+            }
+
+            rejectionReason = string.Empty;
+            return true;
+        }
+
+        private static bool TryValidateVoidOpeningFallColumn(
+            SurfaceField surfaces,
+            RecipeOpeningPlacement opening,
+            int rimLevel,
+            out string rejectionReason)
+        {
+            Vector2Int hole = opening.cell + DirectionVectorInt(opening.direction);
+            if (surfaces.TryGetHighestSurfaceBelow(hole, rimLevel, out int obstructionLevel))
+            {
+                rejectionReason =
+                    $"[VOID_OPENING_OBSTRUCTED] void rim '{opening.id}' found surface " +
+                    $"{hole},L{obstructionLevel} in its fall column";
+                return false;
+            }
+
+            rejectionReason = string.Empty;
             return true;
         }
 

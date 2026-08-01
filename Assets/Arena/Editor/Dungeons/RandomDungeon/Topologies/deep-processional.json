@@ -1,0 +1,75 @@
+{
+  // Phase E's explicit 40u proof. It remains outside the ordinary weighted
+  // draw so adding the capability cannot reroll the established corpus; use the
+  // specific-topology rebuild or ARENA_DUNGEON_TOPOLOGY=deep-processional.
+  "id": "deep-processional",
+  "displayName": "Deep Processional",
+  "plannerVersion": "deep-processional-v1",
+  "weight": 0,
+  "ceiling": 40,
+
+  // Processional Spine's measured lattice and room grammar, with its vertical
+  // story extended through ten 4u majors. No edge exceeds the reviewed 8u
+  // transition vocabulary.
+  "map": [
+    ".  I  .  .",
+    "M  H  G  F",
+    "L  K  J  E",
+    "A  B  C  D"
+  ],
+
+  "spatial": {
+    "columnGapDeltaCells": { "maxDelta": 4 },
+    "rowGapDeltaCells": { "maxDelta": 4 },
+    "tierSeamCount": 0
+  },
+
+  "nodes": {
+    "A": ["deep-arrival",        "arrival",           "arrival",      0,  { "main": 0 }],
+    "B": ["deep-threshold",      "connector",         "compression",  0,  { "main": 1 }],
+    "C": ["deep-choice",         "junction",          "choice",       8,  { "main": 2 }],
+    "D": ["deep-reveal",         "grand-room",        "reveal",       8,  { "main": 3 }],
+    "E": ["deep-vista-target",   "landmark",          "landmark",     12, { "main": 4 }],
+    "F": ["deep-ascent",         "connector",         "ascent",       20, { "main": 5 }],
+    "G": ["deep-approach",       "processional-hall", "approach",     28, { "main": 6 }],
+    "H": ["deep-rejoin",         "return-hall",       "rejoin",       32, { "main": 7 }],
+    "I": ["deep-culmination",    "culmination",       "culmination",  40, { "main": 8 }],
+    "J": ["deep-vista-source",   "overlook",          "reveal",       16, { "branch": 0 }],
+    "K": ["deep-branch-passage", "connector",         "branch",       16, { "branch": 1 }],
+    "L": ["deep-branch-reward",  "optional-room",     "reward",       24, { "branch": 2 }],
+    "M": ["deep-branch-return",  "connector",         "return",       32, { "branch": 3 }]
+  },
+
+  "edges": [
+    ["A", "B", "LevelCorridor"],
+    ["B", "C", "Stair"],
+    ["C", "D", "LevelCorridor"],
+    ["D", "E", "Stair"],
+    ["E", "F", "Stair"],
+    ["F", "G", "Stairwell"],
+    ["G", "H", "Stair"],
+    ["H", "I", "Stair"],
+    ["C", "J", "Bridge"],
+    ["J", "K", "LevelCorridor"],
+    ["K", "L", "Stair"],
+    ["L", "M", "Stair"],
+    ["M", "H", "LevelCorridor"]
+  ],
+
+  "slots": [
+    { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-C" },
+    { "id": "required-landmark",    "at": "E", "entry": "D-E", "exit": "E-F",
+      "orientation": "vista-source-to-target" },
+    { "id": "required-return",      "at": "M", "entry": "L-M", "exit": "M-H" }
+  ],
+
+  "vista": {
+    "id": "deep-overlook-to-landmark",
+    "from": "J",
+    "to": "E",
+    "minVoidCells": 3
+  },
+  "overlooks": [],
+  "anchors": { "bottom": "A", "top": "I" },
+  "allowGenericRoomWings": true
+}

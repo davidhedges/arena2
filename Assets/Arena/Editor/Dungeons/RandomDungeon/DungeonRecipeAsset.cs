@@ -3,6 +3,15 @@ using UnityEngine;
 
 namespace DungeonLab.Editor
 {
+    /// <summary>What lies below an authored opening (layered-topology §5).</summary>
+    public enum OpeningKind
+    {
+        // Zero preserves every existing serialized opening as the aperture it
+        // already meant before Phase E added an explicit declaration.
+        Aperture = 0,
+        Void = 1
+    }
+
     public enum DungeonRecipeKind
     {
         Connector,
@@ -102,7 +111,7 @@ namespace DungeonLab.Editor
     }
 
     /// <summary>
-    /// One bare rim on a stacked storey: the edge of an authored aperture
+    /// One bare rim: the edge of an authored aperture or lethal void
     /// (layered-topology design §5).
     /// </summary>
     /// <remarks>
@@ -115,20 +124,22 @@ namespace DungeonLab.Editor
     /// it is not a surface.
     /// </para>
     /// <para>
-    /// Restricted to a declared non-base layer on purpose. A bare rim on the
-    /// entry storey is a hole in the ground with nothing under it, which is the
-    /// exterior-void case the external connectors already own — not an aperture.
+    /// An Aperture is restricted to a declared non-base layer because it must
+    /// have a catch surface below. A Void may belong to any declared layer,
+    /// including the base, and proves that its fall column contains no surface.
     /// </para>
     /// </remarks>
     [Serializable]
     public sealed class DungeonRecipeOpening
     {
         public string id = string.Empty;
+        [Tooltip("Aperture requires a catch surface below; Void requires an unobstructed fall column.")]
+        public OpeningKind kind = OpeningKind.Aperture;
         [Tooltip("The surface cell whose rim is bare. It must belong to this opening's layer.")]
         public Vector2Int cell;
         [Tooltip("Cardinal direction from that cell toward the hole. The cell it points at must NOT be on this layer.")]
         public Vector2Int outwardDirection;
-        [Tooltip("Which declared storey this rim belongs to. Must name a non-base layer.")]
+        [Tooltip("Which declared storey this rim belongs to. Aperture must be non-base; Void may use any declared layer.")]
         public string layerId = string.Empty;
     }
 

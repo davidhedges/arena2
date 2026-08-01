@@ -494,7 +494,7 @@ namespace DungeonLab.Editor
 
         /// <summary>
         /// Every rim the PLAN declares bare: the external connectors' throats,
-        /// plus any aperture an authored recipe opened.
+        /// plus any typed opening an authored recipe opened.
         /// </summary>
         /// <remarks>
         /// One list, built at both render call sites, so a plan cannot render
@@ -502,7 +502,7 @@ namespace DungeonLab.Editor
         /// column-scoped (the sentinel level) and the recipe rims are
         /// surface-scoped, which is exactly the distinction
         /// <c>OpenFloorEdge.IsSurfaceScoped</c> exists to carry: a connector
-        /// throat opens the ground it stands on, an aperture rim opens one
+        /// throat opens the ground it stands on, a recipe rim opens one
         /// storey and leaves the floor below it fully guarded.
         /// </remarks>
         private static List<ElevationEdgeModel.OpenFloorEdge> BuildPlannedOpenEdges(

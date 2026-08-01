@@ -764,6 +764,21 @@ namespace DungeonLab.Editor
                 return floored || above.Count > 0;
             }
 
+            /// <summary>The highest surface strictly below a level in one column.</summary>
+            public bool TryGetHighestSurfaceBelow(Vector2Int cell, int ceiling, out int level)
+            {
+                level = int.MinValue;
+                foreach (int candidate in LevelsAt(cell))
+                {
+                    if (candidate < ceiling && candidate > level)
+                    {
+                        level = candidate;
+                    }
+                }
+
+                return level != int.MinValue;
+            }
+
             /// <summary>
             /// Is this surface the lowest in its column — i.e. is the mass under
             /// it earth rather than open air? The column half of

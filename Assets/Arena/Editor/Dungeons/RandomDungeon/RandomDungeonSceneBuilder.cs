@@ -177,7 +177,8 @@ namespace DungeonLab.Editor
             Action<string>? beforeModelImporterMutation,
             Action<string, double>? stageRecorder,
             ref long stageStart,
-            bool exportInteractionManifests = true)
+            bool exportInteractionManifests = true,
+            bool exportNavigationSurfaces = true)
         {
             CenterDungeonSpawn(dungeonRoot);
             RecordValidationStage(stageRecorder, "centerDungeonSpawn", ref stageStart);
@@ -218,6 +219,11 @@ namespace DungeonLab.Editor
                 AddSceneToBuildSettings(destinationScenePath);
             SceneManager.SetActiveScene(destination);
             RecordValidationStage(stageRecorder, "activateAndRegisterScene", ref stageStart);
+            if (exportNavigationSurfaces)
+            {
+                DungeonLabGenerator.ExportLastNavigationSurfaces(dungeonRoot, dataKey);
+                RecordValidationStage(stageRecorder, "exportNavigationSurfaces", ref stageStart);
+            }
             GameplayCollisionExporter.ExportActiveSceneSharedCollisionData(dataKey);
             RecordValidationStage(stageRecorder, "exportSharedCollision", ref stageStart);
             EditorSceneManager.SaveScene(destination, destinationScenePath);

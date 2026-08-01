@@ -50,6 +50,11 @@ namespace Arena.Editor
             RunAndThrowOnFailure("Arena.Tests.Editor.CharacterAppearanceCatalogTests");
         }
 
+        public static void ValidateDungeonLabPhaseEContracts()
+        {
+            RunAndThrowOnFailure("Arena.Tests.Editor.DungeonLabPhaseEContractsTests");
+        }
+
         private static void RunAndThrowOnFailure(string? testName = null)
         {
             EditModeTestRunResult result = RunBuildBlockingEditModeTests(testName);

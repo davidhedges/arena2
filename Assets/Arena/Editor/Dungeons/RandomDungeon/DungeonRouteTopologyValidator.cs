@@ -143,6 +143,9 @@ namespace DungeonLab.Editor
                         .AppendLine(")");
                     report.Append(RenderRouteTopologyMap(topology));
                     report.AppendLine(RenderRouteTopologyMetrics(topology));
+                    report.Append("    ceiling  ")
+                        .Append(topology.ceilingLevels)
+                        .AppendLine(topology.declaresCeiling ? "u (authored)" : "u (default)");
                     foreach (string note in notes)
                     {
                         report.Append("    ").AppendLine(note);
@@ -289,10 +292,11 @@ namespace DungeonLab.Editor
             {
                 RouteTopologyNode node = topology.nodes[nodeIndex];
                 (node.IsOnMainRoute ? mainRoute : branchNodes).Add(node);
-                if (node.level < 0 || node.level > MaxGeneratedLevel)
+                if (node.level < 0 || node.level > topology.ceilingLevels)
                 {
                     violations.Add(
-                        $"node '{node.key}' ({node.id}) level {node.level} is outside 0..{MaxGeneratedLevel}");
+                        $"node '{node.key}' ({node.id}) level {node.level} is outside this topology's " +
+                        $"0..{topology.ceilingLevels} ceiling");
                 }
 
                 if (node.level % MajorRiseLevels != 0)
@@ -375,11 +379,12 @@ namespace DungeonLab.Editor
                     $"{topology.nodes[topology.bottomNode].level}; must be 0");
             }
 
-            if (topology.nodes[topology.topNode].level != MaxGeneratedLevel)
+            if (topology.nodes[topology.topNode].level != topology.ceilingLevels)
             {
                 violations.Add(
                     $"top anchor '{topology.nodes[topology.topNode].key}' is at level " +
-                    $"{topology.nodes[topology.topNode].level}; must be {MaxGeneratedLevel}");
+                    $"{topology.nodes[topology.topNode].level}; must equal this topology's " +
+                    $"ceiling {topology.ceilingLevels}");
             }
 
             int vistaDrop = topology.nodes[topology.vistaSourceNode].level -

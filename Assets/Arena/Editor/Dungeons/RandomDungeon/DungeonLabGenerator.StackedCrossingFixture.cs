@@ -313,7 +313,11 @@ namespace DungeonLab.Editor
                 // manifests stay; their doors and traps sit far outside this
                 // episode's footprint (nearest door x=46 against an episode
                 // spanning x -16..16), so nothing they describe is in the way.
-                exportInteractionManifests: false);
+                exportInteractionManifests: false,
+                // This hand-built renderer fixture has no TieredLevelPlan to
+                // project. Production rebuilds keep nav export mandatory; this
+                // explicit opt-out preserves the shared bake/collision path.
+                exportNavigationSurfaces: false);
 
             // The probe needs FINAL world coordinates, and they are only final
             // after CenterDungeonSpawn has moved the root — which floor it

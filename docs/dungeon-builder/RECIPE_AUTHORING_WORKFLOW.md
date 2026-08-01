@@ -1,7 +1,7 @@
 # Dungeon recipe authoring workflow
 
-Status: current for recipe schema v1 and the completed Slice D pool proof
-Last updated: 2026-07-24
+Status: current through layered-topology Phase E
+Last updated: 2026-08-01
 
 This is the operational checklist for creating or changing a room recipe. Use
 [`GLOSSARY.md`](GLOSSARY.md) for the authoritative definitions of recipe,
@@ -209,13 +209,31 @@ sockets and an active range within one through four. For that opt-in mode,
 placement binds the incident route edges to matching transformed directions;
 it does not change any other recipe's port behavior.
 
-### 5.3 Declare composition intent
+### 5.3 Declare typed openings
+
+An opening describes what lies below a bare rim; its `cell` is the walkable rim
+cell and `outwardDirection` points into the hole. `kind` is one of:
+
+- `Aperture` (the default and serialized zero): must belong to a declared
+  non-base layer and requires a catch surface 3–8u below. Generation rejects a
+  missing catch, a shallower ledge, or a fall beyond the reviewed double-major
+  survivable vocabulary. Existing recipe digests do not change when this
+  default is omitted.
+- `Void`: may belong to any declared layer, including the base, and generation
+  rejects it with `VOID_OPENING_OBSTRUCTED` if any surface exists below the hole
+  in its fall column. Declaring the void does not implement player death.
+
+Both kinds require a real rim surface and an absent same-level surface in the
+cell they face. Guarding remains per rim edge: only rims listed in `openings`
+are bare.
+
+### 5.4 Declare composition intent
 
 Declare protected focal/circulation zones, symmetry pairs, transition atomic
 groups, primary-axis inputs, and embedded focal alternatives explicitly.
 Vista endpoints, route order, and node/edge identity remain outside the asset.
 
-### 5.4 Attach motifs and visuals
+### 5.5 Attach motifs and visuals
 
 Reference only assets whose measured contracts are current. Schema v1 supports
 embedded `StairTransition` and `FocalVisual` motifs. It does not authorize
