@@ -15,7 +15,7 @@ namespace Arena.Tests.Editor
             .GetType("DungeonLab.Editor.DungeonLabGenerator", throwOnError: true)!;
 
         [Test]
-        public void ProductionGraph_KeepsTheExistingNodeOrderExactly()
+        public void DeprecatedGraph_KeepsTheExistingNodeOrderExactly()
         {
             Dictionary<string, string> graph = TopologySnapshot();
 
@@ -26,7 +26,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void ProductionGraph_KeepsTheExistingEdgeOrderExactly()
+        public void DeprecatedGraph_KeepsTheExistingEdgeOrderExactly()
         {
             Dictionary<string, string> graph = TopologySnapshot();
 
@@ -63,7 +63,7 @@ namespace Arena.Tests.Editor
             // Every node of degree >= 3, not a first/last "attach/rejoin" pair
             // that a general graph does not have.
             Assert.That(graph["derived.junctions"], Is.EqualTo("choice:3|rejoin:3"));
-            Assert.That(graph["derived.weight"], Is.EqualTo("1"));
+            Assert.That(graph["derived.weight"], Is.EqualTo("0"));
             Assert.That(graph["derived.ceiling"], Is.EqualTo("24"));
             Assert.That(graph["derived.ceilingDeclared"], Is.EqualTo("False"));
             Assert.That(graph["derived.deepCeiling"], Is.EqualTo("40"));
@@ -139,7 +139,7 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> first = ParseSnapshot(firstText);
 
             Assert.That(first["accepted"], Is.EqualTo("true"), firstText);
-            Assert.That(first["route.pattern"], Is.EqualTo("processional-spine"));
+            Assert.That(first["route.pattern"], Is.EqualTo("vertical-braid"));
             Assert.That(first["hash.routeIntent"], Is.Not.Empty);
             Assert.That(firstText, Is.EqualTo(secondText));
         }

@@ -8,7 +8,7 @@ The former `dungeon_builder` Unity project is integrated as an Arena feature ins
 2. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — hard geometry, traversal, and placement rules. Read before changing generator, measurement, contract, or placement code.
 3. [`GLOSSARY.md`](GLOSSARY.md) — authoritative vocabulary (role vs. beat, room vs. recipe, zone, port, transition, reservation).
 4. [`ARCHITECTURE_REVIEW_2026-07-25.md`](ARCHITECTURE_REVIEW_2026-07-25.md) — current system model, findings, and recommended work.
-5. [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md) — **draft** proposal for the next direction: multiple traversable surfaces overlapping in plan space. Not accepted; read it as a proposal, not as rules.
+5. [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md) — design and implementation record for multiple traversable surfaces overlapping in plan space; production adoption is complete as of 2026-08-01.
 6. [`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md), [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) and [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) — adding content.
 7. [`stair_forge_design.md`](stair_forge_design.md) — vertical-traversal design decisions and implementation history.
 

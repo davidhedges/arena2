@@ -5,7 +5,8 @@
   "id": "sunken-basin",
   "displayName": "Sunken Basin",
   "plannerVersion": "sunken-basin-v1",
-  "weight": 1,
+  "deprecated": true,
+  "weight": 0,
 
   // Two rims at 24 either side of a basin, the island shrine at 0 on the basin
   // floor, a bridge across the north lip and a sump shelf below the south. The

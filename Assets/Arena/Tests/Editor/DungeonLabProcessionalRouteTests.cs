@@ -9,9 +9,8 @@ namespace Arena.Tests.Editor
 {
     public sealed class DungeonLabProcessionalRouteTests
     {
-        // BuildRouteIntentOnlySnapshot forces this topology, so any seed builds
-        // its graph; the production snapshots below need a seed the weighted
-        // selector actually lands on, which that snapshot reports.
+        // BuildRouteIntentOnlySnapshot retains the deprecated graph as loader
+        // coverage; selector.firstSeed now names its layered replacement.
         private const int AnySeed = 2026072100;
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
             .Load("Assembly-CSharp-Editor")
@@ -52,12 +51,12 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void Pilot_CompilesProcessionalGraphDirectlyIntoDungeonLayout()
+        public void Pilot_CompilesVerticalBraidDirectlyIntoDungeonLayout()
         {
             Dictionary<string, string> report = PilotSnapshot();
 
             Assert.That(report["accepted"], Is.EqualTo("true"));
-            Assert.That(report["route.pattern"], Is.EqualTo("processional-spine"));
+            Assert.That(report["route.pattern"], Is.EqualTo("vertical-braid"));
             Assert.That(report["route.mainRouteCount"], Is.EqualTo("9"));
             Assert.That(report["route.branchNodeCount"], Is.EqualTo("4"));
             Assert.That(report["route.loopEdges"], Is.EqualTo("1"));

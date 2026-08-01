@@ -22,7 +22,7 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> values = Snapshot.Value;
 
             Assert.That(values["catalog.valid"], Is.EqualTo("True"));
-            Assert.That(values["catalog.activeCount"], Is.EqualTo("5"));
+            Assert.That(values["catalog.activeCount"], Is.EqualTo("10"));
             Assert.That(values["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(values["recipe.id"], Is.EqualTo("connector_corner_return_01"));
             Assert.That(values["recipe.schema"], Is.EqualTo("1"));

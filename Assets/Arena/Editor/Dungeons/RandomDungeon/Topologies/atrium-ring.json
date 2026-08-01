@@ -5,7 +5,8 @@
   "id": "atrium-ring",
   "displayName": "Atrium Ring",
   "plannerVersion": "atrium-ring-v4",
-  "weight": 1,
+  "deprecated": true,
+  "weight": 0,
 
   // Lattice column x1 is deliberately empty: it is the atrium void the ring
   // gallery looks across, and it is the vista lane J..M -> D..G.

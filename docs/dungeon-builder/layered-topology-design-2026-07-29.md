@@ -2424,6 +2424,44 @@ repair.**
 
 ---
 
+### Production adoption — complete 2026-08-01
+
+The phased capability work above is now the default corpus rather than a
+weight-0 demonstration. The former production graphs are retained only as
+`deprecated: true`, `weight: 0` authoring/parser fixtures and cannot be selected
+or forced through a generation entry point. The weighted registry contains only
+three replacements:
+
+- `vertical-braid` distributes upper-storey exits across its threshold, central
+  court, and return loop;
+- `hanging-ring` circles its vista void with two-level circulation at three
+  distant route beats; and
+- `layered-cascade` interleaves a lower ascent, hanging mid-court, elevated
+  return, and high cascade.
+
+All three required slots on every weighted graph declare and map a +4 storey.
+They resolve three different layered recipes—Switchback Mezzanine, Hanging
+Bridge Court, and Spiral Return Gallery—each with four authored 1u internal
+steps and an upper-layer routed exit. This is enforced twice: topology
+validation rejects a weighted graph without three routed storeyed slots, and
+accepted-plan validation rejects fewer than three distinct layered episodes,
+fewer than three internal vertical transitions, or fewer than 48 stacked
+surfaces.
+
+Captured post-adoption evidence accepted and hard-validated 200/200 fixed seeds,
+with all three graphs represented, 12 internal vertical transitions, and 64–69
+stacked surfaces per dungeon. The focused normal-Editor suite rendered one
+accepted seed per graph, checked collision preconditions, and proved the public
+deprecation guard. A later full export then found two recipe-local
+aperture/stair-clearance defects; the affected rim and upper walkways were moved
+off intermediate landings. Because no Unity run followed that content-only
+correction, the earlier results remain adoption evidence rather than final
+export evidence. This still supersedes the earlier statements in the phase
+diary that the layered graphs were intentionally outside the weighted draw or
+that production never populated `SurfaceField`'s stacked overlay.
+
+---
+
 ## 14. Bottom line
 
 ### Recommended architecture

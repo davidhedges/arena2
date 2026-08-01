@@ -28,7 +28,7 @@ namespace Arena.Tests.Editor
             string example = RecipePrefix(snapshot, "connector_example_01");
 
             Assert.That(snapshot["catalog.valid"], Is.EqualTo("True"));
-            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("5"));
+            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("10"));
             Assert.That(snapshot["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(snapshot["route.recipeSlotCount"], Is.EqualTo("3"));
             Assert.That(snapshot["route.catalogDigestMatches"], Is.EqualTo("True"));
@@ -116,37 +116,23 @@ namespace Arena.Tests.Editor
         public void FullDungeon_ResolvesAllThreeSelectedRecipesThroughCanonicalConsumers()
         {
             Dictionary<string, string> snapshot = Snapshot("BuildRecipeFullDungeonSnapshot");
-            Dictionary<string, string> pool = Snapshot("BuildRecipePoolSelectionSnapshot");
-            string throne = RecipePrefix(snapshot, "episode_throne_twin_stairs_01");
-            // The return slot draws between two connector/return recipes, the
-            // same way the compression slot below already does — naming one is
-            // asserting the candidate pool away.
-            string cornerReturn = RecipePrefix(snapshot, pool["slot.required-return.selected"]);
-            // Both connector slots draw from a pool of compatible candidates, so
-            // both are read from the selection snapshot. Naming one recipe here
-            // asserted the pool away and broke when a second connector/return
-            // recipe was enabled.
-            string compression = RecipePrefix(
-                snapshot,
-                pool["slot.required-compression.selected"]);
+            string compression = RecipePrefix(snapshot, "episode_switchback_mezzanine_01");
+            string landmark = RecipePrefix(snapshot, "episode_hanging_bridge_court_01");
+            string returnHall = RecipePrefix(snapshot, "episode_spiral_return_01");
 
             Assert.That(snapshot["accepted"], Is.EqualTo("true"));
             Assert.That(snapshot["validation.passed"], Is.EqualTo("true"));
             Assert.That(snapshot["validation.recipes"], Is.EqualTo("true"));
             Assert.That(snapshot["recipes.count"], Is.EqualTo("3"));
-            Assert.That(snapshot[$"{throne}.atomic"], Is.EqualTo("true"));
             Assert.That(snapshot[$"{compression}.atomic"], Is.EqualTo("true"));
-            Assert.That(snapshot[$"{cornerReturn}.atomic"], Is.EqualTo("true"));
-            Assert.That(snapshot[$"{throne}.transitions"], Is.EqualTo("2"));
-            Assert.That(snapshot[$"{compression}.transitions"], Is.EqualTo("1"));
-            // Not pinned: the return slot's recipe is drawn from the pool and the
-            // two candidates differ here — `connector_corner_return_01` carries a
-            // reward stair, `connector_generic_room_01` carries none. What has to
-            // hold is that whichever won resolved atomically, asserted above.
-            Assert.That(int.Parse(snapshot[$"{cornerReturn}.transitions"]), Is.GreaterThanOrEqualTo(0));
-            Assert.That(int.Parse(snapshot[$"{throne}.protected"]), Is.GreaterThan(0));
+            Assert.That(snapshot[$"{landmark}.atomic"], Is.EqualTo("true"));
+            Assert.That(snapshot[$"{returnHall}.atomic"], Is.EqualTo("true"));
+            Assert.That(snapshot[$"{compression}.transitions"], Is.EqualTo("4"));
+            Assert.That(snapshot[$"{landmark}.transitions"], Is.EqualTo("4"));
+            Assert.That(snapshot[$"{returnHall}.transitions"], Is.EqualTo("4"));
             Assert.That(int.Parse(snapshot[$"{compression}.protected"]), Is.GreaterThan(0));
-            Assert.That(int.Parse(snapshot[$"{cornerReturn}.protected"]), Is.GreaterThan(0));
+            Assert.That(int.Parse(snapshot[$"{landmark}.protected"]), Is.GreaterThan(0));
+            Assert.That(int.Parse(snapshot[$"{returnHall}.protected"]), Is.GreaterThan(0));
         }
 
         [Test]
@@ -233,7 +219,7 @@ namespace Arena.Tests.Editor
         {
             Dictionary<string, string> snapshot = Snapshot("BuildRecipePoolSelectionSnapshot");
 
-            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("5"));
+            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("10"));
             Assert.That(snapshot["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(snapshot["route.recipeSlotCount"], Is.EqualTo("3"));
             Assert.That(snapshot["report.repeatable"], Is.EqualTo("True"));
@@ -345,7 +331,7 @@ namespace Arena.Tests.Editor
                 snapshot["incompatible.message"],
                 Does.Contain("had no compatible required route slot"));
             Assert.That(snapshot["ordinary.catalogValid"], Is.EqualTo("True"));
-            Assert.That(snapshot["ordinary.activeCount"], Is.EqualTo("5"));
+            Assert.That(snapshot["ordinary.activeCount"], Is.EqualTo("10"));
             Assert.That(snapshot["ordinary.catalogDigestPreserved"], Is.EqualTo("True"));
             Assert.That(snapshot["ordinary.previewAbsentBefore"], Is.EqualTo("True"));
             Assert.That(snapshot["ordinary.previewAbsentAfter"], Is.EqualTo("True"));
@@ -359,7 +345,7 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> snapshot =
                 Snapshot("BuildRecipePoolProofSnapshot");
 
-            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("5"));
+            Assert.That(snapshot["catalog.activeCount"], Is.EqualTo("10"));
             Assert.That(snapshot["catalog.digest"], Has.Length.EqualTo(64));
             Assert.That(snapshot["recipe.id"], Is.EqualTo("connector_example_01"));
             Assert.That(snapshot["recipe.kind"], Is.EqualTo("Connector"));
@@ -471,7 +457,13 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot[$"{prefix}.beat"], Is.EqualTo(beat));
             Assert.That(snapshot[$"{prefix}.catalogDigestMatches"], Is.EqualTo("True"));
             Assert.That(snapshot[$"{prefix}.candidates"], Is.EqualTo(candidates));
-            Assert.That(snapshot[$"{prefix}.rejected"], Is.EqualTo(rejected));
+            foreach (string expectedRejection in rejected.Split(','))
+            {
+                Assert.That(
+                    snapshot[$"{prefix}.rejected"],
+                    Does.Contain(expectedRejection),
+                    $"{slotId} did not retain rejection evidence for {expectedRejection}");
+            }
             Assert.That(snapshot[$"{prefix}.selected"], Is.EqualTo(selected));
             Assert.That(snapshot[$"{prefix}.stream"], Is.EqualTo("recipe-selection-v1"));
         }
@@ -554,7 +546,11 @@ namespace Arena.Tests.Editor
 
         private static string RecipePrefix(Dictionary<string, string> snapshot, string recipeId)
         {
-            for (int index = 0; index < 8; index++)
+            int recipeCount = snapshot.TryGetValue("catalog.activeCount", out string count) ||
+                snapshot.TryGetValue("recipes.count", out count)
+                    ? int.Parse(count)
+                    : 0;
+            for (int index = 0; index < recipeCount; index++)
             {
                 string prefix = $"recipe{index}";
                 if (snapshot.TryGetValue($"{prefix}.id", out string id) &&

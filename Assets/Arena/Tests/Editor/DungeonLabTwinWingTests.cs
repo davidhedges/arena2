@@ -14,14 +14,14 @@ namespace Arena.Tests.Editor
             .GetType("DungeonLab.Editor.DungeonLabGenerator", throwOnError: true)!;
 
         [Test]
-        public void Selector_DrawsThisTopologyByWeightRatherThanBySeedResidue()
+        public void Selector_DeprecatesThisTopologyWithoutDeletingItsGraph()
         {
             Dictionary<string, string> snapshot = TwinWingIntentSnapshot();
 
-            Assert.That(snapshot["selector.weights"], Does.Contain("twin-wing-keep:1"));
+            Assert.That(snapshot["selector.weights"], Does.Contain("twin-wing-keep:0"));
             Assert.That(
                 snapshot["selector.distribution"],
-                Does.Not.Contain("twin-wing-keep:0"),
+                Does.Contain("twin-wing-keep:0"),
                 snapshot["selector.distribution"]);
         }
 
@@ -91,7 +91,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void ASelectedSeed_ProducesOneDeterministicHardValidTwinWingPlan()
+        public void ReplacementSeed_ProducesOneDeterministicHardValidLayeredCascadePlan()
         {
             int seed = TwinWingSeed();
             string firstText = SnapshotText("BuildRouteCharacterizationSnapshot", seed);
@@ -99,14 +99,15 @@ namespace Arena.Tests.Editor
             Dictionary<string, string> report = ParseSnapshot(firstText);
 
             Assert.That(report["accepted"], Is.EqualTo("true"), firstText);
-            Assert.That(report["route.pattern"], Is.EqualTo("twin-wing-keep"));
-            Assert.That(report["route.nodeCount"], Is.EqualTo("13"));
-            Assert.That(report["route.mainRouteCount"], Is.EqualTo("7"));
-            Assert.That(report["route.branchNodeCount"], Is.EqualTo("6"));
+            Assert.That(report["route.pattern"], Is.EqualTo("layered-cascade"));
+            Assert.That(report["route.nodeCount"], Is.EqualTo("16"));
+            Assert.That(report["route.mainRouteCount"], Is.EqualTo("11"));
+            Assert.That(report["route.branchNodeCount"], Is.EqualTo("5"));
             Assert.That(report["route.loopEdges"], Is.EqualTo("2"));
             Assert.That(report["vertical.routeClimb"], Is.EqualTo("24"));
             Assert.That(report["vertical.requirementsSatisfied"], Is.EqualTo("true"));
             Assert.That(report["validation.recipes"], Is.EqualTo("true"));
+            Assert.That(report["validation.richLayering"], Is.EqualTo("true"));
             Assert.That(report["validation.passed"], Is.EqualTo("true"));
             Assert.That(report["hash.routeIntent"], Is.Not.Empty);
             Assert.That(firstText, Is.EqualTo(secondText));

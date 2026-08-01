@@ -73,13 +73,11 @@ namespace Arena.Tests.Editor
         public void DeclaredProcessionalStair_ReservesEmbeddedFootprintInNarrowCorridor()
         {
             string report = InvokeReportText("BuildSeedReport", VerticalIntentSeed);
-            // Repinned 2026-07-28: edge ids stopped being authored strings when
-            // topologies became data — they derive as "{fromKey}-{toKey}", so
-            // "main-1-2" has not existed since the step-2 rebaseline. `M-N` is
-            // this seed's declared rise-4 Stair on `sunken-basin`.
+            // Edge ids derive as "{fromKey}-{toKey}". This production seed now
+            // selects `vertical-braid`; D-E is its narrow two-cell rise-4 stair.
             Match transition = Regex.Match(
                 report,
-                @"""edgeId"": ""M-N""(?:(?!""edgeId"").)*?""reservedBeforeFill"": true",
+                @"""edgeId"": ""D-E""(?:(?!""edgeId"").)*?""reservedBeforeFill"": true",
                 RegexOptions.CultureInvariant | RegexOptions.Singleline);
             Match footprint = Regex.Match(
                 transition.Value,

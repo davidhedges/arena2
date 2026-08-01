@@ -14,6 +14,9 @@ namespace DungeonLab.Editor
     // reason, and the report projects the same result instead of recomputing it.
     internal sealed partial class DungeonLabGenerator
     {
+        private const int MinimumProductionLayeredRecipeCount = 3;
+        private const int MinimumProductionStackedSurfaceCount = 48;
+
         // Named, independently derived random streams for the tier planner.
         //
         // Before 2026-07-25 one System.Random was threaded sequentially through
@@ -176,6 +179,7 @@ namespace DungeonLab.Editor
             bool bottomToTop = portGraphConnected && plan.minLevel < plan.maxLevel;
             bool routeRequirementsValid = TryValidateAcceptedRouteRequirements(plan, out string routeRequirementsMessage);
             bool recipesValid = TryValidateAcceptedRecipes(plan, out string recipesMessage);
+            bool richLayeringValid = TryValidateAcceptedRichLayering(plan, out string richLayeringMessage);
             bool namedPromontoriesValid = TryValidateAcceptedNamedPromontories(plan, out string namedPromontoryMessage);
             bool externalConnectorsValid = TryValidateAcceptedExternalConnectors(seed, plan, out string externalConnectorMessage);
             bool headroomValid = TryValidateAcceptedPlanHeadroom(plan, out string headroomMessage);
@@ -223,6 +227,11 @@ namespace DungeonLab.Editor
                     routeRequirementsValid,
                     routeRequirementsMessage),
                 new DungeonPlanCheck("recipes", "RECIPES", recipesValid, recipesMessage),
+                new DungeonPlanCheck(
+                    "richLayering",
+                    "RICH_LAYERING_REQUIRED",
+                    richLayeringValid,
+                    richLayeringMessage),
                 new DungeonPlanCheck(
                     "namedPromontories",
                     "NAMED_PROMONTORY",

@@ -5,7 +5,8 @@
   "id": "twin-wing-keep",
   "displayName": "Twin-Wing Keep",
   "plannerVersion": "twin-wing-keep-v4",
-  "weight": 1,
+  "deprecated": true,
+  "weight": 0,
 
   // A long keep spine with a wing above and a wing below, both forking off the
   // hub C and rejoining at F.

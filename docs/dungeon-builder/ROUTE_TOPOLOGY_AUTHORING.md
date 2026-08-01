@@ -27,6 +27,11 @@ Design background and the drafted topology set:
   // topology without renumbering anything.
   "weight": 1,
 
+  // Historical-data marker. A deprecated graph MUST have weight 0 and cannot
+  // be generated through the menu, API, or environment override. Omit/false
+  // for an authoring draft or production graph.
+  "deprecated": false,
+
   // OPTIONAL vertical envelope in 1u levels. Omit to preserve the historical
   // 24u topology. Authored values must be multiples of 4 from 4 through the
   // global hard cap of 40; the top anchor must land exactly on this value.
@@ -205,9 +210,8 @@ that slot's `rejectedCandidates` in the seed report:
 | `PORT_LAYER_MISMATCH` | a bound port is not on the storey its own edge arrives at — or an incident **socket** is off the base layer, which sockets must be: a socket binds by direction, and nothing in the route can say which storey it is on |
 
 An edge that binds nothing arrives on the node's base, which means the recipe's
-base — which is every port of every recipe in the catalog today. A recipe you
-want routed to on its upper storey therefore needs a **port authored there**;
-`episode_layered_gallery_01` has none yet.
+base. A recipe routed to on its upper storey needs a **port authored there**;
+the three production layered episodes all expose their exit on `upper`.
 
 `Validate Topologies` also runs a **loader self-check** over 26 in-memory probes,
 so malformed bindings are tested without committing broken corpus files. The
@@ -232,6 +236,8 @@ Hard rules, all enforced by the generator and all reported by the validator:
 | Rule | Why |
 | --- | --- |
 | 9 to 20 nodes | the sanity rails on room count; the profile's `denseFloorplanMinRooms` is the binding floor in practice |
+| `deprecated: true` requires `weight: 0`; deprecated graphs cannot be forced through a generation entry point | retirement must be explicit and irreversible from player-facing tools while historical parser/authoring evidence remains available |
+| Every weighted graph has all three slot nodes declare a non-base layer, maps that layer to a recipe storey, and binds an incident edge to it | production may not regress to three single-surface rooms plus one decorative vertical event |
 | Exactly 3 slots: `required-compression`, `required-landmark`, `required-return` | the recipe catalog's `eligibleRoles`/`eligibleBeats` |
 | Optional `ceiling` omitted, or a multiple of 4 in `[4, 40]` | omitted means 24u, preserving every existing topology; 40u is the global schema cap |
 | Every level in `[0, ceiling]` and `% 4 == 0` | the level grammar |
@@ -260,9 +266,9 @@ is bound to. So the catalog decides the shape of every slot node's corner:
 
 | Slot | Node must be | Because |
 | --- | --- | --- |
-| `required-compression` | **straight through** — its two edges leave in opposite directions | `connector_example_01` and `connector_flexible_vestibule_01` both put their two mandatory ports on opposite faces (`-x` / `+x`), and `route-forward` binds `+x` to the exit edge |
-| `required-landmark` | **straight through, and perpendicular to the vista** | `episode_throne_twin_stairs_01` puts its ports on the *transverse* axis (`-y` / `+y`), while `vista-source-to-target` binds the *primary* axis to the vista line |
-| `required-return` | **a corner** — its two edges leave at 90° | `connector_corner_return_01` puts its ports on adjacent faces (`-y` / `+x`) |
+| `required-compression` | **straight through** — its two edges leave in opposite directions | production's `episode_switchback_mezzanine_01` enters on base `-x` and exits from upper `+x` |
+| `required-landmark` | **straight through** | production's `episode_hanging_bridge_court_01` enters on base `-x` and exits from upper `+x`; the separate vista declaration still controls the sight line |
+| `required-return` | **a corner** — its two edges leave at 90° | production's `episode_spiral_return_01` enters on base `-y` and exits from upper `+x` |
 
 Mirroring is not an escape: `allowMirror` flips the transverse axis, so it
 chooses which *side* a port faces, never whether the pair is opposite or
@@ -273,11 +279,11 @@ mirror-symmetric across its primary axis must set `allowMirror: 0`.
 
 **Which recipe fills a slot is decided by the node's `role` AND `beat`, never by
 the slot id.** That is the lever for an authored graph: give the node a beat only
-your recipe declares and it becomes the unique candidate there, while staying
-ineligible on every other topology. `aperture-gallery` does this with beat
-`aperture` (measured 2026-08-01: the episode is rejected at all 600 slots of the
-other seven topologies, and their candidate lists are byte-identical with it in
-the catalog).
+your recipe declares and it becomes the unique candidate there. The production
+corpus uses `vertical-compression`, `hanging-court`, and `layered-return` to bind
+the Switchback Mezzanine, Hanging Bridge Court, and Spiral Return Gallery. The
+deprecated graphs retain their former beat vocabulary only for authoring and
+loader fixtures.
 
 **Two things the validator reports in a misleading shape:**
 

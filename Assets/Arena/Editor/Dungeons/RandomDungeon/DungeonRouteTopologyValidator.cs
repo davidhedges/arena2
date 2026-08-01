@@ -33,6 +33,11 @@ namespace DungeonLab.Editor
         // reach density 5", and a rule check alone cannot.
         private static readonly int[] RouteTopologyValidationDensityLevels = { 0, 1, 2, 3, 4, 5 };
 
+        // Production content is no longer allowed to satisfy "layered" with a
+        // lone atrium. The three mandatory authored beats must all be storeyed
+        // and must all participate in the route at their second elevation.
+        private const int ProductionLayeredSlotCount = 3;
+
         // Public so -executeMethod can reach it: the report is now part of the
         // evidence a batch run produces, not only something clicked in-editor.
         [MenuItem("Tools/Dungeon Lab/Validate Topologies")]
@@ -440,6 +445,48 @@ namespace DungeonLab.Editor
             if (junctionCount < 2)
             {
                 violations.Add($"only {junctionCount} nodes have degree >= 3; a route needs at least two branch points");
+            }
+
+            if (topology.weight > 0)
+            {
+                int layeredSlots = 0;
+                int routeBoundLayeredSlots = 0;
+                foreach (RouteTopologySlot slot in topology.slots)
+                {
+                    RouteTopologyNode slotNode = topology.nodes[slot.node];
+                    if (!slotNode.DeclaresStoreys || !slot.DeclaresLayers)
+                    {
+                        continue;
+                    }
+
+                    layeredSlots++;
+                    foreach (string edgeId in new[] { slot.entryEdgeId, slot.exitEdgeId })
+                    {
+                        if (!topology.TryGetEdgeIndex(edgeId, out int edgeIndex))
+                        {
+                            continue;
+                        }
+
+                        RouteTopologyEdge edge = topology.edges[edgeIndex];
+                        string layerId = edge.fromNode == slot.node
+                            ? edge.fromLayerId
+                            : edge.toLayerId;
+                        if (!string.IsNullOrEmpty(layerId))
+                        {
+                            routeBoundLayeredSlots++;
+                            break;
+                        }
+                    }
+                }
+
+                if (layeredSlots < ProductionLayeredSlotCount ||
+                    routeBoundLayeredSlots < ProductionLayeredSlotCount)
+                {
+                    violations.Add(
+                        $"weighted production topology has {layeredSlots} storeyed recipe slots and " +
+                        $"{routeBoundLayeredSlots} route-bound storeyed slots; every one of the " +
+                        $"{ProductionLayeredSlotCount} required beats must be genuinely layered");
+                }
             }
 
             AppendRouteTopologySlotRules(topology, adjacency, violations);
@@ -1769,7 +1816,9 @@ namespace DungeonLab.Editor
                 .Append(" @").Append(topology.nodes[topology.topNode].level).AppendLine("u");
             metrics.Append("    selection  weight ")
                 .Append(topology.weight)
-                .Append(topology.weight == 0 ? " (disabled)" : string.Empty)
+                .Append(topology.deprecated
+                    ? " (deprecated)"
+                    : topology.weight == 0 ? " (disabled)" : string.Empty)
                 .Append(topology.spatialOverrides.DeclaresAnything
                     ? ", declares per-topology spatial overrides"
                     : ", takes the profile's spatial settings verbatim");

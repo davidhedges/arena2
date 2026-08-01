@@ -527,14 +527,13 @@ namespace DungeonLab.Editor
         }
 
         /// <summary>
-        /// Rebuild on ONE named route topology, whatever its selection weight.
+        /// Rebuild on ONE named non-deprecated route topology, whatever its selection weight.
         /// </summary>
         /// <remarks>
-        /// The only way to see an authored graph that is deliberately outside
-        /// the weighted draw — a weight-0 topology is invisible to
-        /// `SelectRouteTopologyId`, which is what keeps it from re-rolling the
-        /// topology of every seed in the corpus. Headless equivalent: set
-        /// `ARENA_DUNGEON_TOPOLOGY` and run the ordinary rebuild.
+        /// A weight-0 authoring draft is invisible to `SelectRouteTopologyId`,
+        /// so this remains its preview path. Deprecated graphs are blocked.
+        /// Headless equivalent: set `ARENA_DUNGEON_TOPOLOGY` and run the ordinary
+        /// rebuild.
         /// </remarks>
         private sealed class TopologyWizard : ScriptableWizard
         {

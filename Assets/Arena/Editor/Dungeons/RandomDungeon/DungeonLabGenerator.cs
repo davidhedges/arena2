@@ -6907,7 +6907,7 @@ namespace DungeonLab.Editor
         {
             foreach (Vector2Int cell in lowerLandingCells)
             {
-                if (!surfaces.TrySetFloorLevel(cell, lowerLevel, out rejectionReason))
+                if (!TryEnsurePlannedSurfaceLevel(surfaces, cell, lowerLevel, out rejectionReason))
                 {
                     return false;
                 }
@@ -6926,7 +6926,7 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                if (!surfaces.TrySetFloorLevel(cell, lowerLevel, out rejectionReason))
+                if (!TryEnsurePlannedSurfaceLevel(surfaces, cell, lowerLevel, out rejectionReason))
                 {
                     return false;
                 }
@@ -6934,7 +6934,7 @@ namespace DungeonLab.Editor
 
             foreach (Vector2Int cell in upperLandingCells)
             {
-                if (!surfaces.TrySetFloorLevel(cell, higherLevel, out rejectionReason))
+                if (!TryEnsurePlannedSurfaceLevel(surfaces, cell, higherLevel, out rejectionReason))
                 {
                     return false;
                 }
@@ -6942,6 +6942,25 @@ namespace DungeonLab.Editor
 
             rejectionReason = string.Empty;
             return true;
+        }
+
+        /// <summary>
+        /// Make a route stair endpoint stand on the requested surface without
+        /// confusing a suspended gallery landing for the column floor.
+        /// </summary>
+        private static bool TryEnsurePlannedSurfaceLevel(
+            SurfaceField surfaces,
+            Vector2Int cell,
+            int level,
+            out string rejectionReason)
+        {
+            if (surfaces.HasSurfaceAt(cell, level))
+            {
+                rejectionReason = string.Empty;
+                return true;
+            }
+
+            return surfaces.TrySetFloorLevel(cell, level, out rejectionReason);
         }
 
         // Returns the number of floor cells the flood fill could not reach, which

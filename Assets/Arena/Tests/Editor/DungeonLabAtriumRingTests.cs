@@ -7,153 +7,104 @@ using NUnit.Framework;
 
 namespace Arena.Tests.Editor
 {
-    public sealed class DungeonLabAtriumRingTests
+    public sealed class DungeonLabLayeredProductionTests
     {
+        private const int AnySeed = 2026072100;
+        private static readonly string[] ProductionTopologies =
+        {
+            "hanging-ring",
+            "layered-cascade",
+            "vertical-braid"
+        };
+
+        private const string LayeredRecipes =
+            "episode_hanging_bridge_court_01|episode_spiral_return_01|episode_switchback_mezzanine_01";
+
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
             .Load("Assembly-CSharp-Editor")
             .GetType("DungeonLab.Editor.DungeonLabGenerator", throwOnError: true)!;
 
         [Test]
-        public void Selector_DrawsEveryTopologyByWeightRatherThanBySeedResidue()
+        public void WeightedCorpus_ContainsOnlyTheThreeLayeredReplacements()
         {
-            Dictionary<string, string> snapshot = AtriumIntentSnapshot();
+            Dictionary<string, string> snapshot = ProductionSnapshot();
 
+            Assert.That(snapshot["deprecated.count"], Is.EqualTo("10"));
+            Assert.That(snapshot["production.ids"], Is.EqualTo(
+                "hanging-ring|layered-cascade|vertical-braid"));
             Assert.That(snapshot["selector.weights"], Is.EqualTo(
-                "aperture-gallery:0|atrium-hub:0|atrium-ring:1|deep-processional:0|" +
-                "descent-shaft:1|processional-spine:1|ridge-ravine:1|" +
-                "sunken-basin:1|terraced-cascade:1|twin-wing-keep:1"));
-            // Every weighted topology has to actually appear over a 200-seed
-            // window, or the draw is not doing what the weights say. Weight-0
-            // authoring proofs deliberately remain absent from the draw.
-            var weighted = new HashSet<string>(StringComparer.Ordinal);
-            foreach (string entry in snapshot["selector.weights"].Split('|'))
+                "aperture-gallery:0|atrium-hub:0|atrium-ring:0|deep-processional:0|" +
+                "descent-shaft:0|hanging-ring:1|layered-cascade:1|processional-spine:0|" +
+                "ridge-ravine:0|sunken-basin:0|terraced-cascade:0|twin-wing-keep:0|" +
+                "vertical-braid:1"));
+
+            foreach (string topology in ProductionTopologies)
             {
-                string[] fields = entry.Split(':');
-                if (int.Parse(fields[1]) > 0)
-                    weighted.Add(fields[0]);
+                Assert.That(snapshot["selector.distribution"],
+                    Does.Not.Contain($"{topology}:0"), snapshot["selector.distribution"]);
             }
+        }
 
-            foreach (string entry in snapshot["selector.distribution"].Split('|'))
+        [Test]
+        public void EveryProductionTopology_ResolvesThreeDistinctLayeredEpisodes()
+        {
+            Dictionary<string, string> snapshot = ProductionSnapshot();
+
+            foreach (string topology in ProductionTopologies)
             {
-                string[] fields = entry.Split(':');
-                if (weighted.Contains(fields[0]))
-                    Assert.That(int.Parse(fields[1]), Is.GreaterThan(0), entry);
+                Assert.That(snapshot[$"{topology}.accepted"], Is.EqualTo("True"), topology);
+                Assert.That(snapshot[$"{topology}.hardValid"], Is.EqualTo("True"), topology);
+                Assert.That(snapshot[$"{topology}.richLayering"], Is.EqualTo("True"), topology);
+                Assert.That(int.Parse(snapshot[$"{topology}.stackedSurfaces"]),
+                    Is.GreaterThanOrEqualTo(48), topology);
+                Assert.That(int.Parse(snapshot[$"{topology}.layerOffsetConnectionEnds"]),
+                    Is.GreaterThanOrEqualTo(3), topology);
+                Assert.That(snapshot[$"{topology}.recipes"], Is.EqualTo(LayeredRecipes), topology);
+                Assert.That(snapshot[$"{topology}.richLayeringMessage"],
+                    Does.Contain("3 distinct layered episodes"), topology);
+                Assert.That(snapshot[$"{topology}.richLayeringMessage"],
+                    Does.Contain("3 with internal vertical transitions"), topology);
             }
-
-            Assert.That(snapshot["processional.cycleLength"], Is.EqualTo("10"));
         }
 
         [Test]
-        public void AtriumIntent_ComposesTheDistinctEightNodeRingCycle()
+        public void EveryProductionTopology_RendersAndProducesCollisionWithoutRepair()
         {
-            Dictionary<string, string> snapshot = AtriumIntentSnapshot();
+            Dictionary<string, string> snapshot = ProductionSnapshot();
+            foreach (string topology in ProductionTopologies)
+            {
+                int seed = int.Parse(snapshot[$"{topology}.seed"]);
+                string rendered = InvokeSnapshot("BuildRendererProbeSnapshot", seed);
+                Dictionary<string, string> report = ParseSnapshot(rendered);
 
-            Assert.That(snapshot["graph.pattern"], Is.EqualTo("atrium-ring"));
-            Assert.That(snapshot["graph.nodeCount"], Is.EqualTo("13"));
-            Assert.That(snapshot["graph.edgeCount"], Is.EqualTo("13"));
-            Assert.That(snapshot["graph.loopEdges"], Is.EqualTo("1"));
-            Assert.That(snapshot["graph.cycleLength"], Is.EqualTo("8"));
-            Assert.That(snapshot["graph.junctions"], Is.EqualTo("ring-entry:3|ring-rejoin:3"));
-            Assert.That(snapshot["route.valid"], Is.EqualTo("True"), snapshot["route.validationError"]);
+                Assert.That(report["accepted"], Is.EqualTo("true"), rendered);
+                Assert.That(report["boundary"], Is.EqualTo("true"), rendered);
+                Assert.That(report["renderer.passed"], Is.EqualTo("true"), rendered);
+                Assert.That(report["renderer.rejectedPlacements"], Is.EqualTo("0"), rendered);
+                Assert.That(report["collision.passed"], Is.EqualTo("true"), rendered);
+            }
         }
 
         [Test]
-        public void AtriumIntent_PreservesExactNodeEdgeAndTransitionOrder()
+        public void DeprecatedTopology_CannotBeForcedThroughAGenerationEntryPoint()
         {
-            Dictionary<string, string> snapshot = AtriumIntentSnapshot();
+            MethodInfo method = GeneratorType.GetMethod(
+                "ForceRouteTopology",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
 
-            Assert.That(snapshot["graph.nodeIds"], Is.EqualTo(
-                "atrium-arrival|atrium-threshold|outer-approach|ring-entry|atrium-landmark|ring-ascent|" +
-                "ring-rejoin|upper-approach|atrium-culmination|lower-ring-gallery|ring-overlook|" +
-                "far-ring-gallery|upper-ring-gallery"));
-            Assert.That(snapshot["graph.edgeDetails"], Is.EqualTo(
-                "A-B:atrium-arrival>atrium-threshold:LevelCorridor:0|" +
-                "B-C:atrium-threshold>outer-approach:Stair:4|" +
-                "C-D:outer-approach>ring-entry:LevelCorridor:0|" +
-                "D-E:ring-entry>atrium-landmark:LevelCorridor:0|" +
-                "E-F:atrium-landmark>ring-ascent:Stair:4|" +
-                "F-G:ring-ascent>ring-rejoin:Stairwell:8|" +
-                "G-H:ring-rejoin>upper-approach:Stair:4|" +
-                "H-I:upper-approach>atrium-culmination:Stair:4|" +
-                "D-J:ring-entry>lower-ring-gallery:Bridge:4|" +
-                "J-K:lower-ring-gallery>ring-overlook:LevelCorridor:0|" +
-                "K-L:ring-overlook>far-ring-gallery:Stair:4|" +
-                "L-M:far-ring-gallery>upper-ring-gallery:Stair:4|" +
-                "M-G:upper-ring-gallery>ring-rejoin:LevelCorridor:0"));
+            TargetInvocationException exception = Assert.Throws<TargetInvocationException>(
+                () => method.Invoke(null, new object[] { "processional-spine" }))!;
+            Assert.That(exception.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(exception.InnerException!.Message,
+                Does.Contain("ROUTE_TOPOLOGY_DEPRECATED"));
         }
 
-        [Test]
-        public void AtriumEmbedding_AlignsTheDeclaredVistaAcrossTheCentralVoid()
+        private static Dictionary<string, string> ProductionSnapshot()
         {
-            Dictionary<string, string> intent = AtriumIntentSnapshot();
-            Dictionary<string, string> report = AtriumProductionSnapshot();
-
-            Assert.That(intent["embedding.succeeded"], Is.EqualTo("True"), intent["embedding.error"]);
-            Assert.That(intent["vista.source"], Is.EqualTo("ring-overlook"));
-            Assert.That(intent["vista.target"], Is.EqualTo("atrium-landmark"));
-            Assert.That(intent["vista.centerCardinallyAligned"], Is.EqualTo("True"));
-            // Two lattice steps at a minimum 9-cell lane gap, plus whatever the
-            // rubber sheet spent on those two lanes.
-            Assert.That(int.Parse(intent["vista.centerDistanceCells"]), Is.GreaterThanOrEqualTo(18));
-            Assert.That(report["vista.facingOpposed"], Is.EqualTo("true"), SnapshotText("BuildRouteCharacterizationSnapshot", AtriumSeed()));
-            Assert.That(report["vista.unobstructed"], Is.EqualTo("true"));
-            Assert.That(report["vista.finalValid"], Is.EqualTo("true"));
-            Assert.That(int.Parse(report["vista.finalReservedVoidCells"]), Is.GreaterThanOrEqualTo(3));
+            return ParseSnapshot(InvokeSnapshot("BuildLayeredProductionSnapshot", AnySeed));
         }
 
-        [Test]
-        public void ASelectedSeed_ProducesOneDeterministicHardValidAtriumPlan()
-        {
-            int seed = AtriumSeed();
-            string firstText = SnapshotText("BuildRouteCharacterizationSnapshot", seed);
-            string secondText = SnapshotText("BuildRouteCharacterizationSnapshot", seed);
-            Dictionary<string, string> report = ParseSnapshot(firstText);
-
-            Assert.That(report["accepted"], Is.EqualTo("true"), firstText);
-            Assert.That(report["route.pattern"], Is.EqualTo("atrium-ring"));
-            Assert.That(report["route.nodeCount"], Is.EqualTo("13"));
-            Assert.That(report["route.mainRouteCount"], Is.EqualTo("9"));
-            Assert.That(report["route.branchNodeCount"], Is.EqualTo("4"));
-            Assert.That(report["route.loopEdges"], Is.EqualTo("1"));
-            Assert.That(report["vertical.routeClimb"], Is.EqualTo("24"));
-            Assert.That(report["vertical.requirementsSatisfied"], Is.EqualTo("true"));
-            Assert.That(report["validation.recipes"], Is.EqualTo("true"));
-            Assert.That(report["validation.passed"], Is.EqualTo("true"));
-            Assert.That(report["hash.routeIntent"], Is.Not.Empty);
-            Assert.That(firstText, Is.EqualTo(secondText));
-        }
-
-        [Test]
-        public void ExistingRendererAndCollision_ConsumeTheAtriumWithoutRepair()
-        {
-            string snapshotText = SnapshotText("BuildRendererProbeSnapshot", AtriumSeed());
-            Dictionary<string, string> report = ParseSnapshot(snapshotText);
-
-            Assert.That(report["accepted"], Is.EqualTo("true"), snapshotText);
-            Assert.That(report["boundary"], Is.EqualTo("true"), snapshotText);
-            Assert.That(report["renderer.passed"], Is.EqualTo("true"), snapshotText);
-            Assert.That(int.Parse(report["renderer.rejectedPlacements"]), Is.Zero);
-            Assert.That(report["collision.passed"], Is.EqualTo("true"), snapshotText);
-        }
-
-        // A weighted draw means no seed is guaranteed to be an atrium seed, so
-        // the snapshot reports the first one that is.
-        private static int AtriumSeed()
-        {
-            return int.Parse(AtriumIntentSnapshot()["selector.firstSeed"]);
-        }
-
-        private static Dictionary<string, string> AtriumIntentSnapshot()
-        {
-            return ParseSnapshot(SnapshotText("BuildAtriumRingSnapshot", 2026072100));
-        }
-
-        private static Dictionary<string, string> AtriumProductionSnapshot()
-        {
-            return ParseSnapshot(SnapshotText("BuildRouteCharacterizationSnapshot", AtriumSeed()));
-        }
-
-        private static string SnapshotText(string methodName, int seed)
+        private static string InvokeSnapshot(string methodName, int seed)
         {
             MethodInfo method = GeneratorType.GetMethod(
                 methodName,
@@ -168,10 +119,10 @@ namespace Arena.Tests.Editor
             foreach (string line in snapshot.Split('\n'))
             {
                 int separator = line.IndexOf('=');
-                if (separator < 0)
-                    continue;
-
-                result[line.Substring(0, separator)] = line.Substring(separator + 1);
+                if (separator >= 0)
+                {
+                    result[line.Substring(0, separator)] = line.Substring(separator + 1);
+                }
             }
 
             return result;

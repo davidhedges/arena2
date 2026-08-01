@@ -5,6 +5,7 @@
   "id": "aperture-gallery",
   "displayName": "Aperture Gallery",
   "plannerVersion": "aperture-gallery-v1",
+  "deprecated": true,
 
   // WEIGHT 0 ON PURPOSE — this graph exists to place ONE authored episode
   // (`episode_layered_gallery_01`, the layered-topology design's §13 C2 proof)

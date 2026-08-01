@@ -5,7 +5,8 @@
   "id": "terraced-cascade",
   "displayName": "Terraced Cascade",
   "plannerVersion": "terraced-cascade-v1",
-  "weight": 1,
+  "deprecated": true,
+  "weight": 0,
 
   // Broad and shallow: eleven main-route nodes stepping up 4u at a time across
   // a terrace field, so the climb is spread over more, smaller risers than any

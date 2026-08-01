@@ -5,7 +5,8 @@
   "id": "descent-shaft",
   "displayName": "Cataract Shaft",
   "plannerVersion": "descent-shaft-v1",
-  "weight": 1,
+  "deprecated": true,
+  "weight": 0,
 
   // Arrive on a high rim, turn down a shaft, end in a flooded vault on the
   // abyss datum. Levels run 24 -> 0, so this is the first graph in the set

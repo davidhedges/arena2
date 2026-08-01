@@ -814,6 +814,18 @@ namespace DungeonLab.Editor
             return BuildSeedReport(seed, ResolveRequestedDensityLevel());
         }
 
+        // Historical authoring fixtures still prove that deprecated data parses
+        // and resolves. This private diagnostic bypass does not weaken either
+        // ForceRouteTopology or the environment override: player-facing and
+        // command-line generation remain unable to select deprecated content.
+        private static JObject BuildSeedReportForTopology(string topologyId, int seed)
+        {
+            using (new ForcedRouteTopologyScope(topologyId, allowDeprecated: true))
+            {
+                return BuildSeedReport(seed);
+            }
+        }
+
         private static JObject BuildSeedReport(int seed, int densityLevel)
         {
             CurrentGenerationSettings = LoadActiveGenerationSettings(densityLevel);
@@ -1137,6 +1149,8 @@ namespace DungeonLab.Editor
                 SnapshotLine("validation.verticalTraversal", report["validation"]?["verticalTraversal"]?["passed"]),
                 SnapshotLine("validation.routeRequirements", report["validation"]?["routeRequirements"]?["passed"]),
                 SnapshotLine("validation.recipes", report["validation"]?["recipes"]?["passed"]),
+                SnapshotLine("validation.richLayering", report["validation"]?["richLayering"]?["passed"]),
+                SnapshotLine("validation.richLayeringMessage", report["validation"]?["richLayering"]?["message"]),
                 SnapshotLine("validation.headroom", report["validation"]?["headroom"]?["passed"]),
                 SnapshotLine(
                     "recipe.approachTransitionConflicts",
@@ -1146,6 +1160,7 @@ namespace DungeonLab.Editor
                 SnapshotLine("metric.rooms", report["layout"]?["rooms"]),
                 SnapshotLine("metric.connections", report["layout"]?["connections"]),
                 SnapshotLine("metric.loopEdges", report["layout"]?["graph"]?["loopEdges"]),
+                SnapshotLine("metric.stackedSurfaces", report["tieredLevelPlan"]?["stackedSurfaceCount"]),
                 SnapshotLine("lastRejectionCode", report["lastRejectionCode"]),
                 SnapshotLine("failure", report["lastRejection"])
             };
@@ -1153,6 +1168,99 @@ namespace DungeonLab.Editor
                 lines,
                 report["recipeResolutions"] as JArray);
             return string.Join("\n", lines);
+        }
+
+        private static string BuildLayeredProductionSnapshot(int seed)
+        {
+            var lines = new List<string>
+            {
+                $"selector.weights={TopologyWeightSummary()}",
+                $"selector.distribution={TopologySelectionSummary(BaselineFirstSeed, 200)}"
+            };
+
+            int deprecatedCount = 0;
+            var weightedIds = new List<string>();
+            foreach (DungeonRouteTopology topology in AllRouteTopologiesByFileOrder())
+            {
+                if (topology.deprecated)
+                {
+                    deprecatedCount++;
+                }
+
+                if (topology.weight > 0)
+                {
+                    weightedIds.Add(topology.id);
+                }
+            }
+
+            lines.Add($"deprecated.count={deprecatedCount}");
+            lines.Add($"production.ids={string.Join("|", weightedIds)}");
+            foreach (string topologyId in new[]
+                     {
+                         HangingRingPatternId,
+                         LayeredCascadePatternId,
+                         VerticalBraidPatternId
+                     })
+            {
+                int sampleSeed = FirstSeedSelectingTopology(topologyId, BaselineFirstSeed, 2000);
+                JObject report = BuildSeedReport(sampleSeed);
+                var recipeIds = new List<string>();
+                foreach (JToken recipe in report["recipeResolutions"] as JArray ?? new JArray())
+                {
+                    recipeIds.Add(recipe.Value<string>("id") ?? string.Empty);
+                }
+
+                recipeIds.Sort(StringComparer.Ordinal);
+                lines.Add($"{topologyId}.seed={sampleSeed}");
+                lines.Add($"{topologyId}.accepted={report.Value<bool?>("accepted") == true}");
+                lines.Add($"{topologyId}.hardValid={report["validation"]?.Value<bool?>("passed") == true}");
+                lines.Add($"{topologyId}.richLayering={report["validation"]?["richLayering"]?.Value<bool?>("passed") == true}");
+                lines.Add($"{topologyId}.richLayeringMessage={report["validation"]?["richLayering"]?.Value<string>("message") ?? string.Empty}");
+                lines.Add($"{topologyId}.stackedSurfaces={report["tieredLevelPlan"]?.Value<int?>("stackedSurfaceCount") ?? 0}");
+                lines.Add($"{topologyId}.layerOffsetConnectionEnds={report["tieredLevelPlan"]?.Value<int?>("layerOffsetConnectionEnds") ?? 0}");
+                lines.Add($"{topologyId}.recipes={string.Join("|", recipeIds)}");
+            }
+
+            lines.Add($"diagnostic.seed={seed}");
+            return string.Join("\n", lines);
+        }
+
+        // The throne episode remains covered as an authoring/render regression
+        // even though its former topology is no longer production content.
+        private static string BuildThroneEpisodeCharacterizationSnapshot(int seed)
+        {
+            using (new ForcedRouteTopologyScope(ProcessionalPatternId, allowDeprecated: true))
+            {
+                return BuildRouteCharacterizationSnapshot(seed);
+            }
+        }
+
+        private static string BuildThroneEpisodeRendererProbeSnapshot(int seed)
+        {
+            using (new ForcedRouteTopologyScope(ProcessionalPatternId, allowDeprecated: true))
+            {
+                return BuildRendererProbeSnapshot(seed);
+            }
+        }
+
+        private static GameObject BuildThroneEpisodeRenderedSeed(
+            int seed,
+            out Bounds bounds,
+            out JObject seedReport,
+            out ElevationEdgeModel.BuildReport buildReport,
+            out Vector3 origin,
+            out TieredLevelPlan plan)
+        {
+            using (new ForcedRouteTopologyScope(ProcessionalPatternId, allowDeprecated: true))
+            {
+                return BuildRenderedSeed(
+                    seed,
+                    out bounds,
+                    out seedReport,
+                    out buildReport,
+                    out origin,
+                    out plan);
+            }
         }
 
         private static int CountReservedRecipeApproachTransitionConflicts(
@@ -1258,7 +1366,7 @@ namespace DungeonLab.Editor
 
             var lines = new List<string>
             {
-                $"selector.firstSeed={FirstSeedSelectingTopology(ProcessionalPatternId, BaselineFirstSeed, 2000)}",
+                $"selector.firstSeed={FirstSeedSelectingTopology(VerticalBraidPatternId, BaselineFirstSeed, 2000)}",
                 SnapshotLine("route.pattern", intent["patternId"]),
                 SnapshotLine("route.nodeCount", intent["nodeCount"]),
                 SnapshotLine("route.mainRouteCount", intent["graph"]?["mainRouteCount"]),
@@ -1343,15 +1451,19 @@ namespace DungeonLab.Editor
             int firstSeed,
             int seedLimit)
         {
+            DungeonRouteTopology topology = RequireRouteTopology(topologyId);
             for (int index = 0; index < seedLimit; index++)
             {
                 int seed = firstSeed + index;
-                if (!string.Equals(SelectRouteTopologyId(seed), topologyId, StringComparison.Ordinal))
+                if (!topology.deprecated &&
+                    !string.Equals(SelectRouteTopologyId(seed), topologyId, StringComparison.Ordinal))
                 {
                     continue;
                 }
 
-                JObject report = BuildSeedReport(seed);
+                JObject report = topology.deprecated
+                    ? BuildSeedReportForTopology(topologyId, seed)
+                    : BuildSeedReport(seed);
                 if (report.Value<bool?>("accepted") == true &&
                     FindRecipeProjection(
                         report["routeIntent"]?["recipeSlots"] as JArray,
@@ -1474,6 +1586,48 @@ namespace DungeonLab.Editor
                 catalog);
         }
 
+        private static RouteIntent BuildDiagnosticPreviewIntent(int seed, string recipeId)
+        {
+            if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog catalog,
+                    out string rejectionReason))
+            {
+                throw new InvalidOperationException(rejectionReason);
+            }
+
+            string lastRejection = string.Empty;
+            foreach (DungeonRouteTopology topology in AllRouteTopologiesByFileOrder())
+            {
+                RouteIntent intent = BuildTopologyRouteIntent(
+                    topology,
+                    seed,
+                    Array.Empty<RecipeSlotIntent>(),
+                    string.Empty);
+                if (!TryResolveRequiredRecipeSlots(
+                        catalog,
+                        intent,
+                        out RecipeSlotIntent[] slots,
+                        out lastRejection))
+                {
+                    continue;
+                }
+
+                intent.ResolveRecipeSlots(slots, catalog.digest);
+                if (slots.Any(slot => string.Equals(
+                        slot.recipe.recipeId,
+                        recipeId,
+                        StringComparison.Ordinal)))
+                {
+                    return intent;
+                }
+            }
+
+            throw new InvalidOperationException(
+                string.IsNullOrEmpty(lastRejection)
+                    ? $"[RECIPE_PREVIEW] recipe '{recipeId}' had no compatible route topology"
+                    : lastRejection);
+        }
+
         private static RouteIntent ResolveDiagnosticRouteIntent(
             RouteIntent intent,
             ActiveDungeonRecipeCatalog catalog)
@@ -1536,7 +1690,7 @@ namespace DungeonLab.Editor
             {
                 $"selector.weights={TopologyWeightSummary()}",
                 $"selector.distribution={TopologySelectionSummary(BaselineFirstSeed, 200)}",
-                $"selector.firstSeed={FirstSeedSelectingTopology(AtriumRingPatternId, BaselineFirstSeed, 2000)}",
+                $"selector.firstSeed={FirstSeedSelectingTopology(HangingRingPatternId, BaselineFirstSeed, 2000)}",
                 $"processional.plannerVersion={processional.plannerVersion}",
                 $"processional.cycleLength={processional.cycleCoreNodeCount}",
                 $"graph.pattern={intent.patternId}",
@@ -1617,7 +1771,7 @@ namespace DungeonLab.Editor
             {
                 $"selector.weights={TopologyWeightSummary()}",
                 $"selector.distribution={TopologySelectionSummary(BaselineFirstSeed, 200)}",
-                $"selector.firstSeed={FirstSeedSelectingTopology(TwinWingPatternId, BaselineFirstSeed, 2000)}",
+                $"selector.firstSeed={FirstSeedSelectingTopology(LayeredCascadePatternId, BaselineFirstSeed, 2000)}",
                 $"processional.plannerVersion={processional.plannerVersion}",
                 $"atrium.plannerVersion={atrium.plannerVersion}",
                 $"graph.pattern={intent.patternId}",
@@ -1648,12 +1802,9 @@ namespace DungeonLab.Editor
 
         private static string BuildRouteRhythmSnapshot(int seed)
         {
-            RouteIntent processional = BuildDiagnosticSelectedRouteIntent(
-                FirstSeedSelectingTopology(ProcessionalPatternId, BaselineFirstSeed, 2000));
-            RouteIntent atrium = BuildDiagnosticSelectedRouteIntent(
-                FirstSeedSelectingTopology(AtriumRingPatternId, BaselineFirstSeed, 2000));
-            RouteIntent twinWing = BuildDiagnosticSelectedRouteIntent(
-                FirstSeedSelectingTopology(TwinWingPatternId, BaselineFirstSeed, 2000));
+            RouteIntent processional = BuildDiagnosticRouteIntent(seed);
+            RouteIntent atrium = BuildDiagnosticAtriumRingIntent(seed);
+            RouteIntent twinWing = BuildDiagnosticTwinWingIntent(seed);
             bool processionalValid = TryValidateRouteRhythm(processional.nodes, out string processionalError);
             bool atriumValid = TryValidateRouteRhythm(atrium.nodes, out string atriumError);
             bool twinWingValid = TryValidateRouteRhythm(twinWing.nodes, out string twinWingError);
@@ -1758,13 +1909,10 @@ namespace DungeonLab.Editor
 
         private static string BuildNamedPromontorySnapshot(int seed)
         {
-            JObject processional = BuildSeedReport(
-                FirstSeedSelectingTopology(ProcessionalPatternId, 2026072124, 2000));
+            JObject processional = BuildSeedReportForTopology(ProcessionalPatternId, 2026072124);
             JObject noSurplus = BuildSeedReport(BaselineFirstSeed);
-            JObject atrium = BuildSeedReport(
-                FirstSeedSelectingTopology(AtriumRingPatternId, BaselineFirstSeed, 2000));
-            JObject twinWing = BuildSeedReport(
-                FirstSeedSelectingTopology(TwinWingPatternId, BaselineFirstSeed, 2000));
+            JObject atrium = BuildSeedReportForTopology(AtriumRingPatternId, BaselineFirstSeed);
+            JObject twinWing = BuildSeedReportForTopology(TwinWingPatternId, BaselineFirstSeed);
 
             RouteIntent probeIntent = BuildDiagnosticSelectedRouteIntent(BaselineFirstSeed);
             Vector2Int probeSource = Vector2Int.zero;
@@ -2028,12 +2176,12 @@ namespace DungeonLab.Editor
                          ("twinWing", TwinWingPatternId)
                      })
             {
-                JObject report = BuildSeedReport(
-                    FirstSeedBindingRecipe(
+                int bindingSeed = FirstSeedBindingRecipe(
                         sample.topologyId,
                         CornerReturnRecipeFixtureId,
                         2026072100,
-                        2000));
+                        2000);
+                JObject report = BuildSeedReportForTopology(sample.topologyId, bindingSeed);
                 JObject slot = FindRecipeProjection(
                     report["routeIntent"]?["recipeSlots"] as JArray,
                     CornerReturnRecipeFixtureId);
@@ -2336,7 +2484,7 @@ namespace DungeonLab.Editor
                 $"derived.deepCeilingDeclared={deepTopology.declaresCeiling}",
                 $"derived.deepTopAnchor={deepTopology.nodes[deepTopology.topNode].level}",
                 $"selector.weights={TopologyWeightSummary()}",
-                $"selector.firstSeed={FirstSeedSelectingTopology(ProcessionalPatternId, BaselineFirstSeed, 2000)}",
+                $"selector.firstSeed={FirstSeedSelectingTopology(VerticalBraidPatternId, BaselineFirstSeed, 2000)}",
                 $"contract.probeLoaded={probeLoaded}",
                 $"contract.probeNodeIds={string.Join("|", probeNodeIds)}",
                 $"contract.probeEdgeIds={string.Join("|", probeEdgeIds)}",
@@ -2463,7 +2611,7 @@ namespace DungeonLab.Editor
                         }
                         else
                         {
-                            recipeIntent = BuildDiagnosticRouteIntent(seed);
+                            recipeIntent = BuildDiagnosticPreviewIntent(seed, recipe.recipeId);
                             foreach (RecipeSlotIntent candidate in recipeIntent.recipeSlots)
                             {
                                 if (string.Equals(
@@ -3347,8 +3495,9 @@ namespace DungeonLab.Editor
                 int missingMeshCount = 0;
                 int unreadableMeshCount = 0;
                 int selectedShowpieceCount = 0;
+                JArray recipeResolutions = seedReport["recipeResolutions"] as JArray ?? new JArray();
                 JObject visualRecipe = FindRecipeProjection(
-                    seedReport["recipeResolutions"] as JArray,
+                    recipeResolutions,
                     ThroneRecipeFixtureId);
                 string focalDesignId = visualRecipe?.Value<string>("selectedVisualImplementationId") ?? string.Empty;
                 string focalRootPrefix = $"dais_showpiece_{focalDesignId}_";
@@ -3389,13 +3538,21 @@ namespace DungeonLab.Editor
                     seedReport["tieredLevelPlan"]?.Value<int?>("promontoryCells") ?? 0;
                 expectedPromontoryDeckCells +=
                     seedReport["tieredLevelPlan"]?.Value<int?>("externalConnectorPierCells") ?? 0;
+                bool allRecipesAtomicAndValid =
+                    recipeResolutions.Count > 0 &&
+                    recipeResolutions
+                        .OfType<JObject>()
+                        .All(recipe => recipe.Value<bool?>("atomicAndValid") == true);
+                bool optionalThroneShowpiecePassed =
+                    visualRecipe == null ||
+                    (visualRecipe.Value<bool?>("atomicAndValid") == true && selectedShowpieceCount == 1);
                 bool rendererPassed =
                     buildReport.rejected == 0 &&
                     buildReport.floorCells > 0 &&
                     buildReport.transitionEdges > 0 &&
                     buildReport.promontoryDeckCells == expectedPromontoryDeckCells &&
-                    visualRecipe?.Value<bool?>("atomicAndValid") == true &&
-                    selectedShowpieceCount == 1 &&
+                    allRecipesAtomicAndValid &&
+                    optionalThroneShowpiecePassed &&
                     bounds.size.sqrMagnitude > 0.01f;
                 // `missingMeshCount` used to gate this and it measured the wrong
                 // thing: a MeshCollider with no mesh is INERT — the exporter
@@ -3499,20 +3656,42 @@ namespace DungeonLab.Editor
             evidence = default;
             message = string.Empty;
             JObject seedReport = BuildSeedReport(seed);
+            JObject recipe = FindRecipeProjection(
+                seedReport["recipeResolutions"] as JArray,
+                recipeId);
+            string diagnosticTopologyId = string.Empty;
+
+            // A deprecated recipe can remain previewable after its production
+            // topology is retired. If no weighted graph has a compatible slot,
+            // use the same private historical-data path as the authoring
+            // fixtures; player-facing generation still rejects these graphs.
+            if (seedReport.Value<bool?>("accepted") != true || recipe == null)
+            {
+                foreach (DungeonRouteTopology topology in AllRouteTopologiesByFileOrder())
+                {
+                    if (!topology.deprecated)
+                    {
+                        continue;
+                    }
+
+                    JObject candidate = BuildSeedReportForTopology(topology.id, seed);
+                    JObject candidateRecipe = FindRecipeProjection(
+                        candidate["recipeResolutions"] as JArray,
+                        recipeId);
+                    if (candidate.Value<bool?>("accepted") == true && candidateRecipe != null)
+                    {
+                        seedReport = candidate;
+                        recipe = candidateRecipe;
+                        diagnosticTopologyId = topology.id;
+                        break;
+                    }
+                }
+            }
+
             if (seedReport.Value<bool?>("accepted") != true)
             {
                 message = seedReport.Value<string>("lastRejection") ?? "full-dungeon preview rejected";
                 return false;
-            }
-
-            JObject recipe = null;
-            foreach (JToken token in seedReport["recipeResolutions"] as JArray ?? new JArray())
-            {
-                if (string.Equals(token.Value<string>("id"), recipeId, StringComparison.Ordinal))
-                {
-                    recipe = token as JObject;
-                    break;
-                }
             }
 
             if (recipe == null)
@@ -3537,7 +3716,18 @@ namespace DungeonLab.Editor
                 }
             }
 
-            JObject rendererReport = JObject.Parse(BuildRendererProbeJson(seed));
+            JObject rendererReport;
+            if (string.IsNullOrEmpty(diagnosticTopologyId))
+            {
+                rendererReport = JObject.Parse(BuildRendererProbeJson(seed));
+            }
+            else
+            {
+                using (new ForcedRouteTopologyScope(diagnosticTopologyId, allowDeprecated: true))
+                {
+                    rendererReport = JObject.Parse(BuildRendererProbeJson(seed));
+                }
+            }
             bool canonicalValid = seedReport["validation"]?.Value<bool?>("passed") == true;
             bool rendererValid = rendererReport["renderer"]?.Value<bool?>("passed") == true;
             bool boundaryValid = rendererReport["boundary"]?.Value<bool?>("passed") == true;
@@ -3673,6 +3863,7 @@ namespace DungeonLab.Editor
                     ["externalConnectorCount"] = plan.externalConnectors?.Length ?? 0,
                     ["externalConnectorPierCells"] = CollectExternalConnectorPierCells(plan.externalConnectors).Count,
                     ["recipeCount"] = plan.recipeResolutions?.Length ?? 0,
+                    ["stackedSurfaceCount"] = plan.surfaces.StackedSurfaces().Count,
                     // The span-deck inventory, reported because the claim it
                     // settles was previously an assumption: "spans fly over
                     // authored void, so dropping their columns from the port
@@ -4543,6 +4734,59 @@ namespace DungeonLab.Editor
 
             message = $"three selected recipes resolved atomically with catalog {catalog.digest}";
             return true;
+        }
+
+        private static bool TryValidateAcceptedRichLayering(
+            TieredLevelPlan plan,
+            out string message)
+        {
+            DungeonRouteTopology topology = lastRouteIntent?.topology;
+            if (topology == null)
+            {
+                message = "accepted plan had no topology context for layered-production validation";
+                return false;
+            }
+
+            // Weight-zero graphs are diagnostics and historical fixtures. The
+            // guarantee is attached to production eligibility itself, so a new
+            // graph cannot enter the draw without satisfying this gate.
+            if (topology.weight == 0)
+            {
+                message = "weight-zero diagnostic topology is exempt from the production layering floor";
+                return true;
+            }
+
+            var layeredRecipeIds = new HashSet<string>(StringComparer.Ordinal);
+            var layeredRecipeIdsWithRise = new HashSet<string>(StringComparer.Ordinal);
+            int internalVerticalTransitions = 0;
+            foreach (RecipeSlotIntent slot in lastRouteIntent.recipeSlots ?? Array.Empty<RecipeSlotIntent>())
+            {
+                DungeonRecipeAsset recipe = slot.recipe;
+                if (recipe == null || !recipe.DeclaresLayers)
+                {
+                    continue;
+                }
+
+                layeredRecipeIds.Add(recipe.recipeId);
+                foreach (DungeonRecipeTransition transition in
+                         recipe.transitions ?? Array.Empty<DungeonRecipeTransition>())
+                {
+                    if (transition != null && transition.riseLevels > 0)
+                    {
+                        internalVerticalTransitions++;
+                        layeredRecipeIdsWithRise.Add(recipe.recipeId);
+                    }
+                }
+            }
+
+            int stackedSurfaces = plan.surfaces.StackedSurfaces().Count;
+            bool passed = layeredRecipeIds.Count >= MinimumProductionLayeredRecipeCount &&
+                layeredRecipeIdsWithRise.Count >= MinimumProductionLayeredRecipeCount &&
+                stackedSurfaces >= MinimumProductionStackedSurfaceCount;
+            message = passed
+                ? $"{layeredRecipeIds.Count} distinct layered episodes, {layeredRecipeIdsWithRise.Count} with internal vertical transitions ({internalVerticalTransitions} total), and {stackedSurfaces} stacked surfaces"
+                : $"production layering floor missed: distinct layered episodes={layeredRecipeIds.Count}/{MinimumProductionLayeredRecipeCount}, episodes with internal vertical transitions={layeredRecipeIdsWithRise.Count}/{MinimumProductionLayeredRecipeCount} ({internalVerticalTransitions} total), stacked surfaces={stackedSurfaces}/{MinimumProductionStackedSurfaceCount}";
+            return passed;
         }
 
         private static bool TryValidateAcceptedNamedPromontories(
@@ -5485,10 +5729,20 @@ namespace DungeonLab.Editor
                 });
             }
 
-            // A synthetic single-layer view by construction — the accepted plan
-            // minus the external appendage — so wrapping it is what these metrics
-            // saw before, not a stacked question in disguise.
+            // The accepted plan minus the external appendage. Before production
+            // layering this was necessarily single-layer; now its suspended
+            // half must travel with it or the port-graph reconstruction asks a
+            // gallery stair to land on the chamber floor and throws while merely
+            // trying to write a report.
             var coreSurfaces = new SurfaceField(coreLevels);
+            foreach (ElevationEdgeModel.StackedSurface surface in plan.surfaces.StackedSurfaces())
+            {
+                if (!externalPierCells.Contains(surface.cell))
+                {
+                    coreSurfaces.AddSurface(surface.cell, surface.level, surface.kind);
+                }
+            }
+
             if (!TryBuildFloorStairPortGraph(
                     coreSurfaces,
                     plan.transitions,

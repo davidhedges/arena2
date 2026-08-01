@@ -5,6 +5,7 @@
   "id": "deep-processional",
   "displayName": "Deep Processional",
   "plannerVersion": "deep-processional-v1",
+  "deprecated": true,
   "weight": 0,
   "ceiling": 40,
 

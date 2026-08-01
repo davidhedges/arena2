@@ -5,9 +5,10 @@
   "id": "processional-spine",
   "displayName": "Processional Spine",
   "plannerVersion": "processional-spine-v7",
+  "deprecated": true,
 
   // Selection weight. Every topology draws equally until one earns otherwise.
-  "weight": 1,
+  "weight": 0,
 
   // One whitespace-separated token per lattice cell; '.' is an empty cell.
   // The FIRST row is the TOP row (highest lattice y).

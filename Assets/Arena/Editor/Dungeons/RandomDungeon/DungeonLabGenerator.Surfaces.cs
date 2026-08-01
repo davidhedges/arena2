@@ -279,14 +279,13 @@ namespace DungeonLab.Editor
         /// pipeline — and an overlay carries anything stacked above it.
         /// </para>
         /// <para>
-        /// Production never touches the overlay. Nothing in the generator calls
-        /// <see cref="AddSurface"/>; only the C1 fixture does. That is what makes
-        /// this change output-neutral by construction rather than by measurement,
-        /// and it is also why <see cref="AsHeightField"/> may keep throwing on a
-        /// stacked field without stranding the ~250 consumers that still take a
-        /// dictionary: while generation is single-layer, none of them can ever
-        /// be handed a stacked field. Those consumers migrate in the phase that
-        /// first GENERATES a second surface, not this one.
+        /// Production recipes now populate the overlay through
+        /// <see cref="AddSurface"/>. Layer-aware planning, validation, rendering,
+        /// collision, and navigation consume the complete surface set; passes
+        /// that intentionally operate on supporting terrain use the floor
+        /// projection. <see cref="AsHeightField"/> therefore still throws on a
+        /// stacked field so a new layer-blind consumer cannot silently flatten a
+        /// production dungeon back into a heightmap.
         /// </para>
         /// </remarks>
         private sealed class SurfaceField
@@ -531,9 +530,10 @@ namespace DungeonLab.Editor
             // Each writer now says which it is, and all three are LAYER-BLIND:
             // they operate on the column FLOOR, which is all a heightfield
             // write could ever mean. A column carrying a stacked surface is
-            // refused by all three — so when a producer starts stacking, the
-            // layer-blind writers fail loudly instead of truncating the column
-            // to its lowest surface. Stacking goes through AddSurface.
+            // refused by all three when they would MUTATE that floor — so when a
+            // producer starts stacking, a layer-blind rewrite fails loudly
+            // instead of truncating the column. An identical set is a safe no-op;
+            // stacking itself goes through AddSurface.
             // ----------------------------------------------------------------
 
             /// <summary>
@@ -546,13 +546,25 @@ namespace DungeonLab.Editor
             /// </remarks>
             public bool TrySetFloorLevel(Vector2Int cell, int level, out string rejectionReason)
             {
-                RequireUnstackedColumn(cell, nameof(TrySetFloorLevel));
-                if (heightField.TryGetValue(cell, out int existing) && existing != level)
+                if (heightField.TryGetValue(cell, out int existing))
                 {
+                    // A repeated write of the SAME floor mutates nothing and is
+                    // therefore safe under a gallery. This is common at route
+                    // landings inside a storeyed endpoint room. Refusing it made
+                    // the first production layered corpus throw even though no
+                    // surface would have been lost or moved.
+                    if (existing == level)
+                    {
+                        rejectionReason = string.Empty;
+                        return true;
+                    }
+
+                    RequireUnstackedColumn(cell, nameof(TrySetFloorLevel));
                     rejectionReason = $"cell {cell} was assigned both level {existing} and level {level}";
                     return false;
                 }
 
+                RequireUnstackedColumn(cell, nameof(TrySetFloorLevel));
                 sortedSurfaces = null;
                 heightField[cell] = level;
                 rejectionReason = string.Empty;

@@ -5,6 +5,7 @@
   "id": "atrium-hub",
   "displayName": "Atrium Hub",
   "plannerVersion": "atrium-hub-v1",
+  "deprecated": true,
 
   // WEIGHT 0 ON PURPOSE, exactly as `aperture-gallery` is. This graph exists to
   // place ONE authored episode (`episode_atrium_hub_01`, the layered-topology

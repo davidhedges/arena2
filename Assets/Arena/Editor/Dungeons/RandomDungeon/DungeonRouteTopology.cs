@@ -380,6 +380,10 @@ namespace DungeonLab.Editor
             public readonly int bottomNode;
             public readonly int topNode;
             public readonly bool allowGenericRoomWings;
+            // Retained for historical inspection and validator coverage, but
+            // unavailable to every generation entry point. A deprecated graph
+            // is data we can still audit, not content a future dungeon can draw.
+            public readonly bool deprecated;
             public readonly int weight;
             public readonly int ceilingLevels;
             public readonly bool declaresCeiling;
@@ -406,6 +410,7 @@ namespace DungeonLab.Editor
                 int bottomNode,
                 int topNode,
                 bool allowGenericRoomWings,
+                bool deprecated,
                 int weight,
                 int ceilingLevels,
                 bool declaresCeiling,
@@ -430,6 +435,7 @@ namespace DungeonLab.Editor
                 this.bottomNode = bottomNode;
                 this.topNode = topNode;
                 this.allowGenericRoomWings = allowGenericRoomWings;
+                this.deprecated = deprecated;
                 this.weight = weight;
                 this.ceilingLevels = ceilingLevels;
                 this.declaresCeiling = declaresCeiling;
@@ -731,6 +737,13 @@ namespace DungeonLab.Editor
                 return false;
             }
 
+            bool deprecated = root.Value<bool?>("deprecated") ?? false;
+            if (deprecated && weight != 0)
+            {
+                errors.Add("a deprecated topology must have weight 0");
+                return false;
+            }
+
             if (root["legacy"] != null)
             {
                 errors.Add(
@@ -755,6 +768,7 @@ namespace DungeonLab.Editor
                 bottomNode,
                 topNode,
                 root.Value<bool?>("allowGenericRoomWings") ?? false,
+                deprecated,
                 weight,
                 ceilingLevels,
                 declaresCeiling,

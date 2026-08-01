@@ -18,6 +18,9 @@ namespace DungeonLab.Editor
         private const string ProcessionalPatternId = "processional-spine";
         private const string AtriumRingPatternId = "atrium-ring";
         private const string TwinWingPatternId = "twin-wing-keep";
+        private const string VerticalBraidPatternId = "vertical-braid";
+        private const string HangingRingPatternId = "hanging-ring";
+        private const string LayeredCascadePatternId = "layered-cascade";
         private const string RouteIntentInvalidFailureCode = "ROUTE_INTENT_INVALID";
         private const string RecipeSelectionFailureCode = "RECIPE_SELECTION";
         private const int LayoutAttemptLimit = 2;
@@ -930,16 +933,13 @@ namespace DungeonLab.Editor
         }
 
         /// <summary>
-        /// Force every seed onto one topology, ignoring its weight.
+        /// Force every seed onto one non-deprecated topology, ignoring its weight.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// The one way to reach a weight-0 topology. An AUTHORED episode is
-        /// placed by an authored graph, and an authored graph must not be in the
-        /// weighted draw while it is being built — adding a weighted topology
-        /// changes `totalWeight` and therefore re-rolls the topology of every
-        /// seed in the corpus, which destroys the one gate that can tell a
-        /// regression from a rebaseline.
+        /// This remains the authoring path for a weight-0 draft. A graph marked
+        /// deprecated is historical data, not a draft, and both this API and the
+        /// environment override reject it.
         /// </para>
         /// <para>
         /// Env var so a headless run can set it (the same idiom as
@@ -951,6 +951,7 @@ namespace DungeonLab.Editor
         internal const string TopologyOverrideEnvironmentVariable = "ARENA_DUNGEON_TOPOLOGY";
 
         private static string forcedRouteTopologyId = string.Empty;
+        private static bool allowDeprecatedForcedRouteTopology;
 
         internal static string ResolveForcedRouteTopologyId()
         {
@@ -971,19 +972,27 @@ namespace DungeonLab.Editor
         {
             // Fails loudly on a typo rather than silently generating an ordinary
             // dungeon, which is the whole failure mode of a forced build.
-            RequireRouteTopology(topologyId);
-            return new ForcedRouteTopologyScope(topologyId);
+            DungeonRouteTopology topology = RequireRouteTopology(topologyId);
+            if (topology.deprecated)
+            {
+                throw new InvalidOperationException(
+                    $"[ROUTE_TOPOLOGY_DEPRECATED] topology '{topology.id}' is retained for historical validation only and cannot generate a dungeon");
+            }
+            return new ForcedRouteTopologyScope(topologyId, allowDeprecated: false);
         }
 
         private sealed class ForcedRouteTopologyScope : IDisposable
         {
             private readonly string previous;
+            private readonly bool previousAllowDeprecated;
             private bool disposed;
 
-            public ForcedRouteTopologyScope(string topologyId)
+            public ForcedRouteTopologyScope(string topologyId, bool allowDeprecated = false)
             {
                 previous = forcedRouteTopologyId;
+                previousAllowDeprecated = allowDeprecatedForcedRouteTopology;
                 forcedRouteTopologyId = topologyId;
+                allowDeprecatedForcedRouteTopology = allowDeprecated;
             }
 
             public void Dispose()
@@ -992,6 +1001,7 @@ namespace DungeonLab.Editor
                 {
                     disposed = true;
                     forcedRouteTopologyId = previous;
+                    allowDeprecatedForcedRouteTopology = previousAllowDeprecated;
                 }
             }
         }
@@ -1006,7 +1016,14 @@ namespace DungeonLab.Editor
             string forced = ResolveForcedRouteTopologyId();
             if (!string.IsNullOrEmpty(forced))
             {
-                return RequireRouteTopology(forced).id;
+                DungeonRouteTopology forcedTopology = RequireRouteTopology(forced);
+                if (forcedTopology.deprecated && !allowDeprecatedForcedRouteTopology)
+                {
+                    throw new InvalidOperationException(
+                        $"[ROUTE_TOPOLOGY_DEPRECATED] topology '{forcedTopology.id}' is retained for historical validation only and cannot generate a dungeon");
+                }
+
+                return forcedTopology.id;
             }
 
             List<DungeonRouteTopology> candidates = AllRouteTopologiesByFileOrder();

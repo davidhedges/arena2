@@ -9,6 +9,38 @@ or `docs/archive/`, not here. *(It did grow them back, and was trimmed again on
 2026-07-29; the July route-topology, RNG and rebaseline evidence is in
 [`docs/archive/2026-07-dungeon-phase-log/ROUTE_TOPOLOGY_AND_RNG_LOG.md`](../archive/2026-07-dungeon-phase-log/ROUTE_TOPOLOGY_AND_RNG_LOG.md).)*
 
+## Production layering contract (landed 2026-08-01)
+
+The heightmap-like corpus has been retired. Normal generation now draws only
+`vertical-braid`, `hanging-ring`, and `layered-cascade`. The ten earlier graphs
+remain in the repository as `deprecated: true`, `weight: 0` historical fixtures;
+the menu, API, and `ARENA_DUNGEON_TOPOLOGY` override all reject attempts to
+generate them.
+
+Every weighted topology must bind **all three** required recipe slots to a
+declared non-base storey and route an incident edge through that storey. Every
+accepted production plan must then contain:
+
+- three distinct layered recipe episodes;
+- at least three authored internal vertical transitions; and
+- at least 48 stacked walkable surfaces.
+
+The current recipes are Switchback Mezzanine, Hanging Bridge Court, and Spiral
+Return Gallery. Each contains lower play space, an independently walkable upper
+storey, a four-step internal ascent, and a routed upper-storey exit. These are
+distributed across the threshold, landmark, and return loop; one atrium is not
+the production layering strategy.
+
+Captured adoption evidence accepted **200/200** fixed seeds, with 12 internal
+vertical transitions and 64–69 stacked surfaces per dungeon. Selection covered
+all three graphs (`hanging-ring` 55, `layered-cascade` 70, `vertical-braid` 75).
+The focused normal-Editor production suite passed 4/4, including one full
+render/collision probe per graph and the public deprecation guard. A later full
+export exposed two aperture/stair-clearance defects in the new recipe geometry;
+both were corrected by moving the affected rim and carving the upper walkways
+off intermediate stair landings. No post-correction Unity run was made, so those
+earlier runs are adoption evidence, not a claim about the final export payload.
+
 ## What it does
 
 One integer seed produces one deterministic Unity scene (`Assets/Arena/Content/Scenes/OpenWorld/RandomDungeon.unity`) plus matching client/server collision payloads.
@@ -34,7 +66,7 @@ seed + density + generation profile + recipe catalog
 |---|---|
 | Rebuild the playtest scene | **Arena > Dungeons > Rebuild Random Dungeon** |
 | Reproduce a specific layout | **Arena > Dungeons > Rebuild Random Dungeon (Specific Seed)** |
-| Build ONE named topology, whatever its weight | **Arena > Dungeons > Rebuild Random Dungeon (Specific Topology)** — the only way to reach a weight-0 graph, e.g. the authored `aperture-gallery` episode. Headless: `ARENA_DUNGEON_TOPOLOGY=<id>` |
+| Build ONE named non-deprecated topology, whatever its weight | **Arena > Dungeons > Rebuild Random Dungeon (Specific Topology)**. Deprecated historical graphs are deliberately blocked. Headless: `ARENA_DUNGEON_TOPOLOGY=<id>` |
 | Switch density | **Arena > Dungeons > Density > 0..5** (per-user pref; `ARENA_DUNGEON_DENSITY` overrides; with neither, the profile asset's own `densityLevel`) |
 | Plan only, no scene | **Tools > Dungeon Lab > Generate** |
 | Batch evidence | **Tools > Dungeon Lab > Batch Validate (50 / 200 / 100 Locked Seeds)** |
@@ -48,8 +80,15 @@ and spawning use the same geometry as the client scene
 
 ## Current shape
 
-- Seven route topologies in the weighted draw, one per seed: processional spine, atrium ring, twin-wing keep, cataract shaft (descending), sunken basin, terraced cascade, ridge and ravine. An **eighth is authored but weight 0** — `aperture-gallery`, which exists to place the layered episode and is deliberately outside the draw. Each is one JSON file under `Assets/Arena/Editor/Dungeons/RandomDungeon/Topologies/`; adding one costs no C#.
-- Three required recipe slots (`required-compression`, `required-landmark`, `required-return`) filled from an explicit catalog; five enabled recipes currently, one of which (`episode_layered_gallery_01`) is eligible only on the authored topology.
+- Three equally weighted production topologies, one per seed: vertical braid,
+  hanging ring, and layered cascade. Ten earlier topologies are deprecated
+  weight-0 historical fixtures. Each is one JSON file under
+  `Assets/Arena/Editor/Dungeons/RandomDungeon/Topologies/`; adding one costs no
+  C# but a weighted graph must satisfy the production layering rule above.
+- Three required recipe slots (`required-compression`, `required-landmark`,
+  `required-return`) filled from an explicit ten-recipe catalog. Production
+  graphs deliberately narrow those slots to the three multi-storey episodes;
+  older recipes remain author-previewable on private historical contexts.
 - Vertical traversal from reviewed stair contracts, forged contracts, online synthesis, stairwell towers, and bridges — in that fallback order.
 - One planned vista with a reserved sight corridor, plus 1–4 external connector
   promontories. Each external promontory is a straight eight-cell (32u) run,
@@ -58,17 +97,14 @@ and spawning use the same geometry as the client scene
 - Density is a 0–5 dial. Design of record:
   [`density-scale-design-2026-07-27.md`](density-scale-design-2026-07-27.md).
 
-**Three items in this list describe today's behaviour, not a rule, and the
-layered-topology direction changes all three** — see "Where the work stands":
+**Three older constraints remain relevant to layered geometry:**
 
 - **Everything rises from a shared abyss datum.** One global base level; every
   floor edge facing void drops to it. Becomes a per-face support base.
-- **One plan coordinate carries one walkable surface** — *no longer true as of
-  2026-07-31.* The canonical model is a `SurfaceField`: a column FLOOR plus
-  whatever is suspended over it. Generation stacks in **two** places: an aerial
-  span's deck cells (28 of the 200 density-0 seeds), and an authored recipe's
-  upper storey — `episode_layered_gallery_01`, on 200/200 seeds of the
-  `aperture-gallery` topology (2026-08-01).
+- **One plan coordinate carries one walkable surface** — false. The canonical
+  `SurfaceField` stores a supporting floor plus any number of suspended
+  surfaces. All production dungeons now contain three authored upper storeys,
+  in addition to any aerial-span decks.
 - **Bridges are capped at 2 per dungeon and may not cross room interiors**, so a
   recipe cannot author one. The episode's storeys are joined by a stair and a
   flush lateral seam; the bridge-over-playable-geometry capability is the aerial

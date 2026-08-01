@@ -5,7 +5,8 @@
   "id": "ridge-ravine",
   "displayName": "Ridge And Ravine",
   "plannerVersion": "ridge-ravine-v1",
-  "weight": 1,
+  "deprecated": true,
+  "weight": 0,
 
   // A ridge climbing to 24 over a ravine floor at 0: the route runs the length
   // of the ravine, climbs its head wall, and finishes along the ridge. The
