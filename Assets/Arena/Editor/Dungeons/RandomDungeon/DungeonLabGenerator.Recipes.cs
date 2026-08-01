@@ -2508,6 +2508,23 @@ namespace DungeonLab.Editor
                             -recipeTransition.climbDirection.x,
                             -recipeTransition.climbDirection.y));
 
+                    // A step strip consumes NO body, which is what the renderer
+                    // has always said about it — "they sit on the lower cell's
+                    // floor and the cell stays walkable" — and how the
+                    // generator's own seam strips are already built, with an
+                    // empty footprint. Recipe strips were the one exception, not
+                    // by intent but because the recipe schema requires a
+                    // non-empty `footprintCells`, and the port graph read it as
+                    // "a stair body fills this column" and deleted the cell. On
+                    // `connector_example_01` that cell is on the room's own
+                    // protected route lane, so the lane was severed by its own
+                    // stair. The authored footprint still reserves against other
+                    // stairs in the prism ledger; it just no longer eats a
+                    // surface a player walks over.
+                    Vector2Int[] transitionBodyFootprint = isStepStrip
+                        ? Array.Empty<Vector2Int>()
+                        : recipeTransition.footprintCells;
+
                     transitions.Add(new ElevationEdgeModel.TransitionEdge(
                         recipeTransition.upperTransitionCell,
                         upperEndLevel,
@@ -2516,7 +2533,7 @@ namespace DungeonLab.Editor
                         transitionStairPrefabPath,
                         recipeTransition.lowerLandingCells,
                         recipeTransition.upperLandingCells,
-                        recipeTransition.footprintCells,
+                        transitionBodyFootprint,
                         transitionLowerPortDirection,
                         OppositeDirection(transitionLowerPortDirection),
                         transitionPlacementClass));
