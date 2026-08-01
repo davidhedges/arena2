@@ -1,3 +1,10 @@
+# Archived dungeon generator status snapshot
+
+> Archived 2026-08-02. This describes the completed exact-topology / mandatory
+> layered-recipe production state and is historical evidence, not current design
+> authority or an implementation plan. The active architectural direction is
+> [`PROCEDURAL_3D_TOPOLOGY_PLAN.md`](../../dungeon-builder/PROCEDURAL_3D_TOPOLOGY_PLAN.md).
+
 # Dungeon generator: current status
 
 Last updated: 2026-08-01
@@ -7,7 +14,7 @@ change it, and where the work stands. Keep it short — if it starts growing
 per-phase evidence sections again, that evidence belongs in `DungeonLabReports/`
 or `docs/archive/`, not here. *(It did grow them back, and was trimmed again on
 2026-07-29; the July route-topology, RNG and rebaseline evidence is in
-[`docs/archive/2026-07-dungeon-phase-log/ROUTE_TOPOLOGY_AND_RNG_LOG.md`](../archive/2026-07-dungeon-phase-log/ROUTE_TOPOLOGY_AND_RNG_LOG.md).)*
+[`docs/archive/2026-07-dungeon-phase-log/ROUTE_TOPOLOGY_AND_RNG_LOG.md`](../2026-07-dungeon-phase-log/ROUTE_TOPOLOGY_AND_RNG_LOG.md).)*
 
 ## Production layering contract (landed 2026-08-01)
 
@@ -99,7 +106,7 @@ and spawning use the same geometry as the client scene
   with at most one per cardinal direction. Its first added cell crosses the
   core dungeon's global outer face; exterior-connected concavities do not count.
 - Density is a 0–5 dial. Design of record:
-  [`density-scale-design-2026-07-27.md`](density-scale-design-2026-07-27.md).
+  [`density-scale-design-2026-07-27.md`](../../dungeon-builder/density-scale-design-2026-07-27.md).
 
 **Three older constraints remain relevant to layered geometry:**
 
@@ -163,15 +170,15 @@ density 3, not 5, because a half-packed floorplan has the most boundary.
 — the route-first cutover, the topology-as-data port, the derived-RNG
 rebaseline, and the density scale. Their evidence is archived:
 
-- [`ROUTE_TOPOLOGY_AND_RNG_LOG.md`](../archive/2026-07-dungeon-phase-log/ROUTE_TOPOLOGY_AND_RNG_LOG.md)
-- [`DENSITY_SCALE_PHASE_LOG.md`](../archive/2026-07-dungeon-phase-log/DENSITY_SCALE_PHASE_LOG.md)
+- [`ROUTE_TOPOLOGY_AND_RNG_LOG.md`](../2026-07-dungeon-phase-log/ROUTE_TOPOLOGY_AND_RNG_LOG.md)
+- [`DENSITY_SCALE_PHASE_LOG.md`](../2026-07-dungeon-phase-log/DENSITY_SCALE_PHASE_LOG.md)
 
 Treat both as history, not as current constraints.
 
 ### Layered 3-D topology — PHASES A–E COMPLETE. PHASE E AUDIT REPAIR ACCEPTED (2026-08-01).
 
 Design of record (implementation status is tracked on this page):
-[`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md).
+[`layered-topology-design-2026-07-29.md`](../../dungeon-builder/layered-topology-design-2026-07-29.md).
 Branch `dungeon/layered-topology`.
 
 **Phase A is complete (2026-07-31).** The plan can express surface identity;
@@ -1419,7 +1426,7 @@ investigation is in the design doc's §1 and §2.
 4. **Teach `Validate Topologies` the slot-geometry rule.** It is the one
    authoring rule with real teeth that nothing checks, and it cost two of four
    topology drafts a redraw. See "Slot geometry" in
-   [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md).
+   [`ROUTE_TOPOLOGY_AUTHORING.md`](../../dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md).
 5. **`atrium-ring` fails 16 of its 19 spacious seeds for density** —
    pre-existing; the one-line fix and why it was not folded in are in the
    archived route-topology log.
@@ -1438,9 +1445,9 @@ investigation is in the design doc's §1 and §2.
 
 ## Read next
 
-1. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — non-negotiable geometry and placement rules. Read before changing generator, measurement, contract, or placement code.
-2. [`GLOSSARY.md`](GLOSSARY.md) — authoritative vocabulary (role vs. beat, room vs. recipe, zone, port, transition, reservation).
-3. [`ARCHITECTURE_REVIEW_2026-07-25.md`](ARCHITECTURE_REVIEW_2026-07-25.md) — current system model and recommended work.
-4. [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md) — the proposed next direction (draft).
-5. [`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md), [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) and [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) — adding content.
-6. [`stair_forge_design.md`](stair_forge_design.md) — vertical traversal decision history.
+1. [`PROJECT_INVARIANTS.md`](../../dungeon-builder/PROJECT_INVARIANTS.md) — non-negotiable geometry and placement rules. Read before changing generator, measurement, contract, or placement code.
+2. [`GLOSSARY.md`](../../dungeon-builder/GLOSSARY.md) — authoritative vocabulary (role vs. beat, room vs. recipe, zone, port, transition, reservation).
+3. [`ARCHITECTURE_REVIEW_2026-07-25.md`](../../dungeon-builder/ARCHITECTURE_REVIEW_2026-07-25.md) — current system model and recommended work.
+4. [`layered-topology-design-2026-07-29.md`](../../dungeon-builder/layered-topology-design-2026-07-29.md) — the proposed next direction (draft).
+5. [`ROOM_AUTHORING_GUIDE_CURRENT.md`](../../dungeon-builder/ROOM_AUTHORING_GUIDE_CURRENT.md), [`RECIPE_AUTHORING_WORKFLOW.md`](../../dungeon-builder/RECIPE_AUTHORING_WORKFLOW.md) and [`ROUTE_TOPOLOGY_AUTHORING.md`](../../dungeon-builder/ROUTE_TOPOLOGY_AUTHORING.md) — adding content.
+6. [`stair_forge_design.md`](../../dungeon-builder/stair_forge_design.md) — vertical traversal decision history.

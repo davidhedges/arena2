@@ -7,8 +7,8 @@ review: retry transaction named (§3.2), M4's boundary-room state corrected
 
 **COMPLETE — all six phases landed 2026-07-27/28.** Fill across the dial
 measures 26/33/47/65/80/93%, density 5 meets §5's acceptance on all 200 seeds,
-and the whole corpus renders at every level. Live status and the full evidence:
-`CURRENT_STATUS.md`; baseline numbers:
+and the whole corpus renders at every level. The completed status and evidence
+snapshot is [archived](../archive/2026-08-dungeon-layering-status/CURRENT_STATUS.md); baseline numbers:
 `DungeonLabReports/void_baseline_2026-07-27.md`.
 Supersedes: `docs/archive/2026-07-dungeon-phase-log/DENSITY_ADJACENCY_PLAN.md` (closed 2026-07-23)
 
@@ -116,7 +116,7 @@ set, distinct from `floorCells`, and a deterministic candidate ladder per edge:
 Candidate 3 was the one piece needing a spike before it could be trusted: does
 `TryResolveConnectionTransition` accept a laterally offset corridor, and does the
 boundary builder derive the right threshold? **Both yes, measured 2026-07-27** —
-see §9.1 and `CURRENT_STATUS.md`. Recipe-port edges are excluded from the rung,
+see §9.1 and the archived August 2026 status snapshot. Recipe-port edges are excluded from the rung,
 because their approach depth is authored.
 
 ### 3.2 The retry transaction
@@ -380,7 +380,7 @@ gate of §7.1 — that is exactly what `ops/dungeon-port-ab.sh` exists for, and 
 compares against the current commit rather than a recorded value.
 
 **Phases 2–6 are design flux, and get no hash ceremony.** Per the owner ruling
-of 2026-07-22 carried in `CURRENT_STATUS.md`: hard validity gates every build,
+of 2026-07-22 carried in the archived August 2026 status snapshot: hard validity gates every build,
 run-twice determinism on any seed being inspected, sentinel eyeballing with no
 gate attached, and the batch sweep as a smoke test rather than a gate. Every seed
 moves at every density ≥1 and that is the intended outcome, not a regression.
@@ -424,7 +424,7 @@ footprint, wall, doorway, level and collision machinery that already exists.
    fits is equally valid, and as the ladder's third rung it is only reached when
    the straight path already failed. Recipe-port edges are excluded: their
    approach depth is authored and candidate 3 never proposed moving them.
-   Evidence in `CURRENT_STATUS.md`.
+   Evidence in the archived August 2026 status snapshot.
 2. **Recipe rooms cannot grow.** Authored footprints are fixed and their ports
    declare approach depth; at high density they end up ringed by annexed
    neighbour space and their port approach must stay reserved.

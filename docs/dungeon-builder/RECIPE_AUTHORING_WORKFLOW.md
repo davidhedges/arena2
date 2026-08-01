@@ -27,14 +27,16 @@ There is no stored approval token or formal recipe lifecycle.
 
 ## Returning after a break
 
-1. Read [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for the active milestone,
-   verified commands, known failures, and next task.
+1. Read [`PROCEDURAL_3D_TOPOLOGY_PLAN.md`](PROCEDURAL_3D_TOPOLOGY_PLAN.md) for
+   the active architecture and check the current owner-approved item before
+   changing production behavior.
 2. Re-read [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) and the current
    owner-approved plan item. Everything-rises-from-the-abyss is a hard
    invariant.
 3. Open Unity at the committed editor version and let assets finish importing.
 4. Run **Arena > Dungeons > Recipes > Validate Catalog**.
-5. Rebuild one known-good production seed from `CURRENT_STATUS.md`.
+5. Rebuild a known-good production seed from the relevant committed evidence,
+   or record the current baseline before authoring.
 6. If the catalog or known seed already fails, record that baseline before
    authoring.
 
@@ -347,8 +349,8 @@ migration.
 1. Run current-recipe and catalog validation.
 2. Record the last known-good and known-bad seeds.
 3. Record whether Unity has uncommitted/generated asset changes.
-4. Update the active milestone, exact next action, menu/command path, and
-   blockers in [`CURRENT_STATUS.md`](CURRENT_STATUS.md).
+4. Record reproducible evidence under `DungeonLabReports/`; do not turn the
+   architecture plan into a running status log.
 5. Leave incomplete content disabled and name the next validation layer.
 
 The next session should begin from a reproducible state and one explicit

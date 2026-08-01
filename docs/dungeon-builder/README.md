@@ -4,18 +4,20 @@ The former `dungeon_builder` Unity project is integrated as an Arena feature ins
 
 ## Start here
 
-1. [`CURRENT_STATUS.md`](CURRENT_STATUS.md) — what the generator is, how to run it, where the work stands.
+1. [`PROCEDURAL_3D_TOPOLOGY_PLAN.md`](PROCEDURAL_3D_TOPOLOGY_PLAN.md) — active architectural direction and bounded implementation order.
 2. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — hard geometry, traversal, and placement rules. Read before changing generator, measurement, contract, or placement code.
 3. [`GLOSSARY.md`](GLOSSARY.md) — authoritative vocabulary (role vs. beat, room vs. recipe, zone, port, transition, reservation).
-4. [`ARCHITECTURE_REVIEW_2026-07-25.md`](ARCHITECTURE_REVIEW_2026-07-25.md) — current system model, findings, and recommended work.
-5. [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md) — design and implementation record for multiple traversable surfaces overlapping in plan space; production adoption is complete as of 2026-08-01.
-6. [`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md), [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) and [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) — adding content.
+4. [`ARCHITECTURE_REVIEW_2026-07-25.md`](ARCHITECTURE_REVIEW_2026-07-25.md) — system model, findings, and historical recommendations.
+5. [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md) — landed multi-surface substrate and its implementation record.
+6. [`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md), [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) and [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) — existing content-authoring workflows; where they imply that authored rooms or exact topology diagrams are the future production architecture, the procedural 3-D plan wins.
 7. [`stair_forge_design.md`](stair_forge_design.md) — vertical-traversal design decisions and implementation history.
 
-The completed phase plans and their evidence log live in
-[`docs/archive/2026-07-dungeon-phase-log/`](../archive/2026-07-dungeon-phase-log/).
-They are history, not instructions — do not treat their acceptance budgets or
-locked hashes as current constraints.
+Completed phase plans and status/evidence snapshots live in
+[`docs/archive/2026-07-dungeon-phase-log/`](../archive/2026-07-dungeon-phase-log/)
+and
+[`docs/archive/2026-08-dungeon-layering-status/`](../archive/2026-08-dungeon-layering-status/).
+They are history, not instructions — do not treat their acceptance budgets,
+production claims, or locked hashes as current constraints.
 
 ## Repository locations
 

@@ -4,7 +4,8 @@
 > recommendations 2.1 (validation gate), 2.2/2.3 (derived RNG) and 1.2 (splitting
 > `TryBuildCellLevelField`) all landed on the day of the review, in that order,
 > each gated on the measurement the previous one made possible. See
-> [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for the landed list and the numbers.
+> the [archived August 2026 status snapshot](../archive/2026-08-dungeon-layering-status/CURRENT_STATUS.md)
+> for the landed list and the numbers.
 > The findings below are preserved as written at review time; where a finding has
 > been addressed it is marked **[FIXED 2026-07-25]** inline.
 
@@ -280,7 +281,7 @@ stateDiagram-v2
 
 Because failed tier attempts consume from the same stream, **the choice of which rooms are visually enclosed depends on how many tier attempts failed first.** `ChooseEnclosedRooms` is reached at [cs:3176](Assets/Arena/Editor/Dungeons/RandomDungeon/DungeonLabGenerator.cs#L3176) via `TryBuildRoomBoundaryContext`, called once after acceptance — but with a stream whose position is the sum of every draw made by every failed attempt.
 
-**[Fact]** The same seed reproduces the same dungeon *today* (verified by the project's own two-run comparisons — `CURRENT_STATUS.md` records identical result hashes across independent runs). The problem is not present-tense irreproducibility; it is that **the mapping from seed to dungeon is a function of every draw count anywhere upstream**. Adding one `random.Next()` to loop-candidate evaluation reshuffles enclosed rooms, stair prefab choices and bridges across every seed.
+**[Fact]** The same seed reproduced the same dungeon at review time (verified by the project's own two-run comparisons — the [archived status snapshot](../archive/2026-08-dungeon-layering-status/CURRENT_STATUS.md) records identical result hashes across independent runs). The problem was not present-tense irreproducibility; it was that **the mapping from seed to dungeon was a function of every draw count anywhere upstream**. Adding one `random.Next()` to loop-candidate evaluation reshuffled enclosed rooms, stair prefab choices and bridges across every seed.
 
 **Interpretation:** this is why the project developed the hash-lock ritual. Locked hashes are a *symptom* of Regime B, not a solution to it. Under Regime A, an unrelated change provably cannot perturb an unrelated stream, and hash locking becomes unnecessary for the streams that were not touched. Your own 2026-07-22 ruling — that the locked-hash ceremony applies only to identity-preserving refactors — is the right policy, and extending Regime A is what makes that policy cheap to honour.
 

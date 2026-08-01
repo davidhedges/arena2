@@ -1300,7 +1300,8 @@ The split is therefore:
   > room's own floor and a room floor is ground-backed by construction. And the
   > producer's surface KIND is decided by where the corridor lands in the
   > column, not by the corridor being a corridor: measured, 6 of 11 cells of one
-  > crossing corridor stay ground-backed floors. See `CURRENT_STATUS.md`.
+  > crossing corridor stay ground-backed floors. See the
+  > [archived August 2026 status snapshot](../archive/2026-08-dungeon-layering-status/CURRENT_STATUS.md).
 
 `PathCrossesThirdRoom` becomes *"must not cross a third room **on the same
 layer**"*. Its own justification licenses this: the harm it names is "an
@@ -1592,7 +1593,7 @@ any NPC decision to take a fall.
 - **Never gate on a recorded hash.** Compare against the current commit with
   `ops/dungeon-port-ab.sh` (stash/restore, seed-by-seed diff) — a recorded value
   rots the moment an unrelated profile asset moves, which is why `3092863a…` is
-  unreachable ([`CURRENT_STATUS.md`](CURRENT_STATUS.md)).
+  unreachable ([archived status snapshot](../archive/2026-08-dungeon-layering-status/CURRENT_STATUS.md)).
 - **Replay metadata:** the plan report should carry `maxLayersPerCell`, the
   surface count, and every `Aperture`/`Void`/`Fall` with its catch surface, so a
   bad seed is diagnosable without re-deriving the field.
@@ -2144,7 +2145,7 @@ properly.
 > selection can move.
 >
 > **Six corrections this section needs.** The full write-up with numbers is in
-> `CURRENT_STATUS.md`; the ones that contradict text below:
+> the [archived August 2026 status snapshot](../archive/2026-08-dungeon-layering-status/CURRENT_STATUS.md); the ones that contradict text below:
 >
 > 1. **"The same episode as a real catalog recipe" is not achievable as
 >    written, because a recipe cannot author a bridge.** `AddAerialBridges` is a
@@ -2244,8 +2245,8 @@ and the phase does not exit until collider discipline or the exporter closes it.
 
 ### Phase D — Multi-layer rooms in generation
 
-> **Status. COMPLETE 2026-08-01.** Slice order and evidence live in
-> [`CURRENT_STATUS.md`](CURRENT_STATUS.md); **D0 through D5 landed 2026-08-01**
+> **Status. COMPLETE 2026-08-01.** Slice order and evidence live in the
+> [archived August 2026 status snapshot](../archive/2026-08-dungeon-layering-status/CURRENT_STATUS.md); **D0 through D5 landed 2026-08-01**
 > — the transition body became a level BAND instead of a column to the sky
 > (closing the defect C2 recorded as unfixed and ungateable), the topology layer
 > schema parses and is carried, the corridor-exclusivity and third-room
@@ -2639,7 +2640,7 @@ own bridge.
 `server/src/player_physics.rs`
 
 **Documentation** — [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) ·
-[`GLOSSARY.md`](GLOSSARY.md) · [`CURRENT_STATUS.md`](CURRENT_STATUS.md) ·
+[`GLOSSARY.md`](GLOSSARY.md) · [`PROCEDURAL_3D_TOPOLOGY_PLAN.md`](PROCEDURAL_3D_TOPOLOGY_PLAN.md) ·
 [`ARCHITECTURE_REVIEW_2026-07-25.md`](ARCHITECTURE_REVIEW_2026-07-25.md) ·
 [`stair_forge_design.md`](stair_forge_design.md) (decisions 22, 29–34) ·
 [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) ·

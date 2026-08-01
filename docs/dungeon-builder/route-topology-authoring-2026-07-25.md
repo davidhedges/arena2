@@ -2,8 +2,10 @@
 
 Date: 2026-07-25. Status: **all of §5 is implemented, steps 1, 2 and 3.** See
 [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) for the shipped
-format and `CURRENT_STATUS.md` for what each step landed and measured. This page
-is now design background; where it disagrees with those two, they win.
+format and the
+[archived August 2026 status snapshot](../archive/2026-08-dungeon-layering-status/CURRENT_STATUS.md)
+for what each step landed and measured. This page is now design background;
+where it disagrees with the current procedural 3-D plan, the current plan wins.
 
 Where the shipped step 3 differs from the §6 drafts:
 
@@ -23,7 +25,7 @@ Where the shipped step 3 differs from the §6 drafts:
   the four author lane minimums one cell under the profile pitch, and two also
   override `latticeSlackMaxCells` or `roomSizes`, because floor fill is the
   binding constraint on a five-lane lattice. Each file states its reason and
-  `CURRENT_STATUS.md` carries the measurements.
+  the archived August 2026 status snapshot carries the measurements.
 - **All four declare `tierSeamCount: 0`** (they declare no `overlooks` pairs, and
   `BuildPlannedOverlooks` throws rather than rejects), **`allowGenericRoomWings:
   true`**, a `vista.id`, and `weight: 1`.
@@ -40,7 +42,7 @@ Where the shipped step 2 differs from the §3/§4 sketch below:
   than the largest room that can land in it.
 - The slack budget is capped by a new per-profile `latticeSlackMaxCells` (shipped
   at 8) as well as by the envelope. §4 called that the honest fix if fill bit; it
-  does bite, and the measurement is in `CURRENT_STATUS.md`.
+  does bite, and the measurement is in the archived August 2026 status snapshot.
 - Spatial settings are one profile default plus per-topology *overrides* of any
   field, rather than the three fields §3 sketched. `twin-wing-keep` needs a
   room-size override to fit its seven-column lattice at all.
@@ -48,7 +50,7 @@ Where the shipped step 2 differs from the §3/§4 sketch below:
   §7's table did not anticipate. The step 1 `legacy` block and `spatial.settings`
   token are gone, and the loader now rejects both by name.
 
-Context: `CURRENT_STATUS.md` "Open: variation regression". Owner ruling 2026-07-25:
+Historical context: the former status page's "Open: variation regression". Owner ruling 2026-07-25:
 **an archetype is a different route graph entirely.** This page proposes how a
 route topology should be authored so that adding one is cheap, then drafts new
 ones — including descending and basin shapes the current ascending-spine
