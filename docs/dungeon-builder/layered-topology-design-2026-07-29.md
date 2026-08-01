@@ -1297,6 +1297,14 @@ The split is therefore:
   forever. `PathCrossesThirdRoom` relaxes the same way and on the same absolute
   comparison — never on layer names.
 
+  > **Shipped in D2, with two qualifications this section does not state.** The
+  > third-room relaxation is **upward only** — the band must CLEAR the room's
+  > ground, not merely miss it, because passing under would have to suspend the
+  > room's own floor and a room floor is ground-backed by construction. And the
+  > producer's surface KIND is decided by where the corridor lands in the
+  > column, not by the corridor being a corridor: measured, 6 of 11 cells of one
+  > crossing corridor stay ground-backed floors. See `CURRENT_STATUS.md`.
+
 `PathCrossesThirdRoom` becomes *"must not cross a third room **on the same
 layer**"*. Its own justification licenses this: the harm it names is "an
 undeclared doorway and an unowned threshold", and a corridor passing *over* a
@@ -2207,10 +2215,12 @@ and the phase does not exit until collider discipline or the exporter closes it.
 ### Phase D — Multi-layer rooms in generation
 
 > **Status. IN PROGRESS.** Slice order and evidence live in
-> [`CURRENT_STATUS.md`](CURRENT_STATUS.md); **D0 landed 2026-08-01** — the
-> transition body became a level BAND instead of a column to the sky, closing
-> the defect C2 recorded as unfixed and ungateable. Three corrections to this
-> section, all measured:
+> [`CURRENT_STATUS.md`](CURRENT_STATUS.md); **D0, D1 and D2 landed 2026-08-01** —
+> the transition body became a level BAND instead of a column to the sky
+> (closing the defect C2 recorded as unfixed and ungateable), the topology layer
+> schema parses and is carried, and the corridor-exclusivity and third-room
+> relaxations shipped with the stacked-corridor producer they need. Three
+> corrections to this section, all measured:
 >
 > 1. **"`ChooseEnclosedRooms` moved into the plan so bridges may legally cross
 >    rooms" names a gate that does not exist.** The aerial-bridge pass has no

@@ -521,10 +521,20 @@ namespace DungeonLab.Editor
 
             // A corridor is a straight cardinal run between its endpoints, so any
             // third node on the same lane between them is a room it would cross.
+            //
+            // D2: unless it passes OVER that room. This is the author-time mirror
+            // of `PathCrossesThirdRoom`, and it goes through the same predicate
+            // on purpose — a rule stated twice is a rule that drifts, and the two
+            // disagreeing is what cost C2 a whole rejected corpus.
             foreach (RouteTopologyEdge edge in topology.edges)
             {
                 foreach (int blocking in RouteTopologyNodesBetween(topology, edge.fromNode, edge.toNode))
                 {
+                    if (RouteTopologyEdgeClearsNode(topology, edge, blocking))
+                    {
+                        continue;
+                    }
+
                     violations.Add(
                         $"edge '{edge.id}' runs straight through node " +
                         $"'{topology.nodes[blocking].key}' ({topology.nodes[blocking].id})");
@@ -568,6 +578,46 @@ namespace DungeonLab.Editor
                         $"{targetCell}; the reservation forbids a corridor there");
                 }
             }
+        }
+
+        /// <summary>
+        /// Does this edge pass OVER the node blocking its lattice lane?
+        /// </summary>
+        /// <remarks>
+        /// Authorized by the edge's layer binding and decided by the absolute
+        /// bands, exactly as `PathCrossesThirdRoom` is — same predicate, and the
+        /// elevations agree by construction because `RouteNodeIntent` carries
+        /// this node's level and layer table verbatim.
+        /// </remarks>
+        private static bool RouteTopologyEdgeClearsNode(
+            DungeonRouteTopology topology,
+            RouteTopologyEdge edge,
+            int blockingNode)
+        {
+            if (!edge.IsLayerBound)
+            {
+                return false;
+            }
+
+            topology.nodes[edge.fromNode].TryGetAbsoluteLevel(edge.fromLayerId, out int fromLevel);
+            topology.nodes[edge.toNode].TryGetAbsoluteLevel(edge.toLayerId, out int toLevel);
+            return CorridorClearsRoomVertically(
+                LevelBand.SpanningEndpoints(fromLevel, toLevel),
+                layerBound: true,
+                RouteTopologyNodeDeclaredElevations(topology.nodes[blockingNode]));
+        }
+
+        /// <summary>A node's own level first, then one per declared layer.</summary>
+        private static int[] RouteTopologyNodeDeclaredElevations(RouteTopologyNode node)
+        {
+            var declared = new int[node.layers.Length + 1];
+            declared[0] = node.level;
+            for (int layer = 0; layer < node.layers.Length; layer++)
+            {
+                declared[layer + 1] = node.level + node.layers[layer].relativeLevel;
+            }
+
+            return declared;
         }
 
         private static IEnumerable<int> RouteTopologyNodesBetween(
@@ -757,6 +807,23 @@ namespace DungeonLab.Editor
                 !TryParseLayerSchemaProbe(mutated, out _);
         }
 
+        /// <summary>
+        /// Does the lattice-lane rule report a node blocking an edge in this
+        /// topology? Asked through the real rule pass, not by re-implementing it.
+        /// </summary>
+        private static bool LaneRuleReportsBlockingNode(string json, out bool parsed)
+        {
+            parsed = TryParseLayerSchemaProbe(json, out DungeonRouteTopology topology);
+            if (!parsed)
+            {
+                return false;
+            }
+
+            var violations = new List<string>();
+            AppendRouteTopologyLatticeRules(topology, violations);
+            return violations.Exists(violation => violation.Contains("runs straight through node"));
+        }
+
         private static bool AppendLayerSchemaLoaderChecks(StringBuilder report)
         {
             var results = new List<(string name, bool passed)>();
@@ -855,8 +922,58 @@ namespace DungeonLab.Editor
                     !violations.Exists(v => v.Contains("which no edge binds"));
             }
 
+            // D2: a BASE-ONLY table declares no storey, so it needs no producer
+            // and no recipe slot — it exists to give an edge something to bind,
+            // which is how a topology authorizes a stacked corridor crossing.
+            // Same mutation as the slotless case above, with the storey moved to
+            // the node's own elevation.
+            bool baseOnlyLayerAccepted = false;
+            if (TryParseLayerSchemaProbe(
+                    LayerSchemaProbeJson
+                        .Replace(", { \"layers\": { \"gallery\": 4 } }", string.Empty)
+                        .Replace(
+                            "\"C\": [\"probe-c\", \"culmination\", \"culmination\", 8, { \"main\": 2 }]",
+                            "\"C\": [\"probe-c\", \"culmination\", \"culmination\", 8, { \"main\": 2 }, { \"layers\": { \"floor\": 0 } }]")
+                        .Replace("\"fromLayer\": \"gallery\"", "\"toLayer\": \"floor\""),
+                    out DungeonRouteTopology baseOnly))
+            {
+                var violations = new List<string>();
+                ValidateNodeLayers(2, baseOnly.nodes[2], baseOnly, violations);
+                baseOnlyLayerAccepted =
+                    violations.Count == 0 &&
+                    baseOnly.nodes[2].DeclaresLayers &&
+                    !baseOnly.nodes[2].DeclaresStoreys &&
+                    baseOnly.edges[1].IsLayerBound &&
+                    baseOnly.nodes[2].TryGetAbsoluteLevel("floor", out int boundBaseLevel) &&
+                    boundBaseLevel == 8;
+            }
+
+            // D2: the lattice-lane rule, author-time mirror of
+            // `PathCrossesThirdRoom`. A's storey at +8 puts the A-C edge's band
+            // at [8, 11) and B keeps only its own level 4, so the bound edge
+            // clears B and the unbound one — band [0, 11) — does not. One
+            // variable between the two.
+            string laneProbe = LayerSchemaProbeJson
+                .Replace(", { \"layers\": { \"gallery\": 4 } }", string.Empty)
+                .Replace(
+                    "\"A\": [\"probe-a\", \"arrival\", \"arrival\", 0, { \"main\": 0 }]",
+                    "\"A\": [\"probe-a\", \"arrival\", \"arrival\", 0, { \"main\": 0 }, { \"layers\": { \"sky\": 8 } }]");
+            bool laneNodeBlocksUnboundEdge = LaneRuleReportsBlockingNode(
+                laneProbe.Replace(
+                    "[\"B\", \"C\", \"LevelCorridor\", { \"fromLayer\": \"gallery\" }]",
+                    "[\"B\", \"C\", \"LevelCorridor\"], [\"A\", \"C\", \"LevelCorridor\"]"),
+                out bool unboundLaneParsed);
+            bool laneNodeClearedByBoundEdge = !LaneRuleReportsBlockingNode(
+                laneProbe.Replace(
+                    "[\"B\", \"C\", \"LevelCorridor\", { \"fromLayer\": \"gallery\" }]",
+                    "[\"B\", \"C\", \"LevelCorridor\"], [\"A\", \"C\", \"LevelCorridor\", { \"fromLayer\": \"sky\" }]"),
+                out bool boundLaneParsed);
+
             results.Add(("unboundLayerReported", unboundLayerReported));
             results.Add(("slotlessLayerReported", slotlessLayerReported));
+            results.Add(("baseOnlyLayerNeedsNoSlot", baseOnlyLayerAccepted));
+            results.Add(("laneNodeBlocksUnboundEdge", unboundLaneParsed && laneNodeBlocksUnboundEdge));
+            results.Add(("laneNodeClearedByBoundEdge", boundLaneParsed && laneNodeClearedByBoundEdge));
 
             bool allPassed = true;
             report.AppendLine().AppendLine("Layer schema — loader self-check (design §8.1)");
@@ -928,11 +1045,25 @@ namespace DungeonLab.Editor
             }
 
             // Nothing in the generator builds a stacked surface for a GENERIC
-            // room: the producers are the aerial-span deck and a recipe's
-            // non-base storey. So a node that declares layers must carry a
-            // recipe slot, or its storeys have no author. Relax this when a
-            // generic multi-layer producer exists (design §13 Phase D, owner
+            // room: the producers are the aerial-span deck, a recipe's non-base
+            // storey, and (D2) a layer-bound corridor's crossing cells. The
+            // first two build a ROOM's storey; the third does not, so a node
+            // that declares a real storey must still carry a recipe slot or its
+            // storeys have no author. Relax the rest of this when a generic
+            // multi-layer ROOM producer exists (design §13 Phase D, owner
             // decision 9).
+            //
+            // D2: a table of nothing but base layers declares no storey at all.
+            // It names the node's own elevation so an edge can bind it, which is
+            // how a topology AUTHORIZES a stacked corridor crossing — and the
+            // "no edge binds" rule above already exempts a base layer for the
+            // same reason. Requiring a recipe slot for it would make the
+            // authorization unreachable outside a slot node.
+            if (!node.DeclaresStoreys)
+            {
+                return;
+            }
+
             if (string.IsNullOrEmpty(node.recipeSlotId))
             {
                 violations.Add(

@@ -442,6 +442,69 @@ namespace DungeonLab.Editor
                 SetKind(new SurfaceKey(cell, level), kind);
             }
 
+            /// <summary>
+            /// Add a corridor's walking surface to a column, letting the column
+            /// decide what it is: the LOWEST such surface is the floor and
+            /// everything over it is a suspended <see cref="SurfaceKind.Ledge"/>.
+            /// </summary>
+            /// <remarks>
+            /// <para>
+            /// D2's producer, and the reason it is not the design's literal
+            /// <c>AddSurface(cell, level, SurfaceKind.Ledge)</c>: the kind is not
+            /// a property of "being a corridor", it is a property of WHERE the
+            /// corridor landed in the column. A layer-bound corridor's cells are
+            /// mostly its own — nothing else is there, and the corridor is the
+            /// ground — so a constant <c>Ledge</c> would suspend a surface in a
+            /// column with no floor under it, which the renderer refuses
+            /// (<c>SurfaceColumns</c> throws) and which is what a bridge is for.
+            /// </para>
+            /// <para>
+            /// The last branch is order-independence rather than tidiness. Which
+            /// of two crossing corridors resolves first is the order the topology
+            /// author happened to list their edges in, and the geometry must not
+            /// depend on it — so a corridor arriving BELOW the column's floor
+            /// takes the floor and suspends what it displaced.
+            /// </para>
+            /// <para>
+            /// It can only ever displace another CORRIDOR's surface, and that is
+            /// a property of the claim rules rather than of this method: a
+            /// corridor never writes its endpoint rooms' cells, and the
+            /// third-room relaxation admits a crossing only STRICTLY ABOVE the
+            /// room's floor. A room's floor is ground-backed by construction and
+            /// suspending it would take its wall mass away.
+            /// </para>
+            /// </remarks>
+            public void AddCorridorSurface(Vector2Int cell, int level)
+            {
+                if (!heightField.TryGetValue(cell, out int floor))
+                {
+                    // Nothing here: this corridor IS the ground.
+                    sortedSurfaces = null;
+                    heightField[cell] = level;
+                    SetKind(new SurfaceKey(cell, level), SurfaceKind.Floor);
+                    return;
+                }
+
+                if (floor == level)
+                {
+                    // Already this column's floor — the same surface, claimed by
+                    // two connections that agree about its elevation.
+                    return;
+                }
+
+                if (level > floor)
+                {
+                    AddSurface(cell, level, SurfaceKind.Ledge);
+                    return;
+                }
+
+                int displaced = floor;
+                sortedSurfaces = null;
+                heightField[cell] = level;
+                SetKind(new SurfaceKey(cell, level), SurfaceKind.Floor);
+                AddSurface(cell, displaced, SurfaceKind.Ledge);
+            }
+
             private void SetKind(SurfaceKey key, SurfaceKind kind)
             {
                 if (kind == SurfaceKind.Floor)

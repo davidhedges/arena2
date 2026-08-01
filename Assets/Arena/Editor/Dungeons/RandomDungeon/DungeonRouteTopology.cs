@@ -222,6 +222,32 @@ namespace DungeonLab.Editor
             public bool DeclaresLayers => layers.Length > 0;
 
             /// <summary>
+            /// Does this node declare a STOREY — a layer at some other elevation
+            /// than its own?
+            /// </summary>
+            /// <remarks>
+            /// A table of nothing but base layers declares no storey. It names
+            /// the node's own elevation so that an edge may BIND it, which is
+            /// how a topology authorizes a stacked corridor crossing (D2) — and
+            /// a binding is the only thing a name is for.
+            /// </remarks>
+            public bool DeclaresStoreys
+            {
+                get
+                {
+                    foreach (RouteTopologyLayer layer in layers)
+                    {
+                        if (layer.relativeLevel != 0)
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+            }
+
+            /// <summary>
             /// The absolute elevation an edge bound to <paramref name="layerId"/>
             /// meets this node at. An EMPTY id is the base layer and resolves to
             /// the node's own level, whether or not the node declares any layers

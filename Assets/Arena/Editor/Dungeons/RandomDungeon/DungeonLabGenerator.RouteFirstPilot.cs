@@ -2532,7 +2532,12 @@ namespace DungeonLab.Editor
             // construction — the old rule tested the path against floorCells,
             // which meant it could only say "something is already here" and had
             // to abort the whole layout attempt to say it.
-            var claimedCorridorCells = new HashSet<Vector2Int>();
+            var claimedCorridorCells = new CorridorClaimLedger();
+            // Every room's DECLARED absolute elevations, so a layer-bound
+            // corridor's third-room crossing can be decided against them (design
+            // §8.1). Authored and absolute, exactly like the connection bands,
+            // and available here because rooms are indexed by node.
+            int[][] roomDeclaredElevations = BuildRoomDeclaredElevations(intent.nodes, rooms.Count);
             lastCorridorRungCounts.Clear();
             foreach (RoomFootprint room in rooms)
             {
@@ -2575,6 +2580,19 @@ namespace DungeonLab.Editor
                     }
                 }
 
+                // The declared node levels are absolute and are known here, at
+                // claim time, long before the level field exists — which is the
+                // property that makes the band usable by the exclusivity rule
+                // Phase D relaxes. `relativeElevationLevels` is absolute despite
+                // its name: TryAssignRoomLevels copies it straight into
+                // zoneLevels after checking it against [0, MaxGeneratedLevel].
+                //
+                // D1: the band spans the BOUND elevations, which equal the node
+                // levels for every unbound edge — i.e. for every edge in the
+                // shipped corpus.
+                LevelBand plannedBand = LevelBand.SpanningEndpoints(
+                    edge.fromAbsoluteLevel,
+                    edge.toAbsoluteLevel);
                 List<Vector2Int> accepted = null;
                 string lastCandidateFailure = "no candidate was produced";
                 foreach ((string rung, List<Vector2Int> candidate) in EnumerateCorridorCandidates(
@@ -2593,6 +2611,8 @@ namespace DungeonLab.Editor
                             edge,
                             fromRoom,
                             toRoom,
+                            plannedBand,
+                            roomDeclaredElevations,
                             claimedCorridorCells,
                             reservedVistaCells,
                             out string candidateFailure))
@@ -2619,27 +2639,15 @@ namespace DungeonLab.Editor
                 {
                     if (!fromRoom.Contains(cell) && !toRoom.Contains(cell))
                     {
-                        claimedCorridorCells.Add(cell);
+                        claimedCorridorCells.Add(cell, plannedBand, edge.IsLayerBound);
                     }
                 }
 
-                // The declared node levels are absolute and are known here, at
-                // claim time, long before the level field exists — which is the
-                // property that makes the band usable by the exclusivity rule
-                // Phase D relaxes. `relativeElevationLevels` is absolute despite
-                // its name: TryAssignRoomLevels copies it straight into
-                // zoneLevels after checking it against [0, MaxGeneratedLevel].
-                //
-                // D1: the band spans the BOUND elevations, which equal the node
-                // levels for every unbound edge — i.e. for every edge in the
-                // shipped corpus.
                 connections.Add(RoomConnection.ForRouteEdge(
                     edge.fromNode,
                     edge.toNode,
                     edge.id,
-                    LevelBand.SpanningEndpoints(
-                        edge.fromAbsoluteLevel,
-                        edge.toAbsoluteLevel),
+                    plannedBand,
                     accepted,
                     edge.fromLayerId,
                     edge.toLayerId));
@@ -2723,6 +2731,136 @@ namespace DungeonLab.Editor
             }
         }
 
+        /// <summary>
+        /// Who owns each corridor cell, and in which vertical band.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// D2. This was a bare <c>HashSet&lt;Vector2Int&gt;</c>, which could only
+        /// answer "is anything here" — and that is the whole of today's rule, so
+        /// the set was exactly as expressive as the rule needed. Sharing a plan
+        /// cell at two elevations needs the band that goes with the claim.
+        /// </para>
+        /// <para>
+        /// Only ever queried by key, never enumerated, so the dictionary's own
+        /// order cannot reach a hash. That matters here: this runs inside the
+        /// layout attempt, and <c>hashes.layout</c> is derived from what it
+        /// accepts.
+        /// </para>
+        /// </remarks>
+        private sealed class CorridorClaimLedger
+        {
+            private readonly Dictionary<Vector2Int, List<CorridorClaim>> claims =
+                new Dictionary<Vector2Int, List<CorridorClaim>>();
+
+            private readonly struct CorridorClaim
+            {
+                public readonly LevelBand band;
+                public readonly bool layerBound;
+
+                public CorridorClaim(LevelBand band, bool layerBound)
+                {
+                    this.band = band;
+                    this.layerBound = layerBound;
+                }
+            }
+
+            public void Add(Vector2Int cell, LevelBand band, bool layerBound)
+            {
+                if (!claims.TryGetValue(cell, out List<CorridorClaim> cellClaims))
+                {
+                    cellClaims = new List<CorridorClaim>(1);
+                    claims[cell] = cellClaims;
+                }
+
+                cellClaims.Add(new CorridorClaim(band, layerBound));
+            }
+
+            /// <summary>
+            /// May a connection with this band claim this cell as well?
+            /// </summary>
+            /// <remarks>
+            /// The rule in one line, and both halves are load-bearing (design
+            /// §8.1): <b>layer binding authorizes an attempt, the absolute band
+            /// decides</b>. Both connections must be layer-bound — the
+            /// authorization is a declaration by the topology author that this
+            /// cell is meant to carry two surfaces — and their bands must be
+            /// disjoint, because a layer name is room-local and one room's
+            /// "gallery" may sit at another's "floor" elevation.
+            /// </remarks>
+            public bool CanShare(Vector2Int cell, LevelBand band, bool layerBound, out string conflict)
+            {
+                conflict = string.Empty;
+                if (!claims.TryGetValue(cell, out List<CorridorClaim> cellClaims) ||
+                    cellClaims.Count == 0)
+                {
+                    return true;
+                }
+
+                if (!layerBound)
+                {
+                    // Verbatim: this message reaches the seed report on the
+                    // seeds that reroute, and every connection in the shipped
+                    // corpus takes this branch.
+                    conflict = $"another connection already owns {cell}";
+                    return false;
+                }
+
+                foreach (CorridorClaim claim in cellClaims)
+                {
+                    if (!claim.layerBound)
+                    {
+                        conflict = $"another connection already owns {cell} and declares no layer";
+                        return false;
+                    }
+
+                    if (claim.band.Intersects(band))
+                    {
+                        conflict =
+                            $"another connection already owns {cell} in band {claim.band}, " +
+                            $"which meets {band}";
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Every room's DECLARED absolute elevations — its node level first,
+        /// then one per declared layer.
+        /// </summary>
+        /// <remarks>
+        /// Index 0 is the room's BASE by construction, and one caller depends on
+        /// that: a corridor may cross a third room only from ABOVE its ground.
+        /// </remarks>
+        private static int[][] BuildRoomDeclaredElevations(RouteNodeIntent[] nodes, int roomCount)
+        {
+            var elevations = new int[roomCount][];
+            for (int room = 0; room < roomCount; room++)
+            {
+                if (nodes == null || room >= nodes.Length)
+                {
+                    elevations[room] = Array.Empty<int>();
+                    continue;
+                }
+
+                RouteNodeIntent node = nodes[room];
+                var declared = new int[node.layers.Length + 1];
+                declared[0] = node.relativeElevationLevels;
+                for (int layer = 0; layer < node.layers.Length; layer++)
+                {
+                    declared[layer + 1] =
+                        node.relativeElevationLevels + node.layers[layer].relativeLevel;
+                }
+
+                elevations[room] = declared;
+            }
+
+            return elevations;
+        }
+
         // Everything that makes a candidate unusable, as a reroute reason rather
         // than an attempt-abort. PathCrossesThirdRoom keeps its meaning exactly
         // — a corridor must not punch through an unrelated room, creating an
@@ -2734,7 +2872,9 @@ namespace DungeonLab.Editor
             RouteTraversalIntent edge,
             RoomFootprint fromRoom,
             RoomFootprint toRoom,
-            HashSet<Vector2Int> claimedCorridorCells,
+            LevelBand plannedBand,
+            int[][] roomDeclaredElevations,
+            CorridorClaimLedger claimedCorridorCells,
             HashSet<Vector2Int> reservedVistaCells,
             out string failure)
         {
@@ -2743,7 +2883,14 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            if (PathCrossesThirdRoom(path, rooms, edge.fromNode, edge.toNode))
+            if (PathCrossesThirdRoom(
+                    path,
+                    rooms,
+                    edge.fromNode,
+                    edge.toNode,
+                    plannedBand,
+                    edge.IsLayerBound,
+                    roomDeclaredElevations))
             {
                 failure = "crossed a third room";
                 return false;
@@ -2756,9 +2903,8 @@ namespace DungeonLab.Editor
                     continue;
                 }
 
-                if (claimedCorridorCells.Contains(cell))
+                if (!claimedCorridorCells.CanShare(cell, plannedBand, edge.IsLayerBound, out failure))
                 {
-                    failure = $"another connection already owns {cell}";
                     return false;
                 }
 

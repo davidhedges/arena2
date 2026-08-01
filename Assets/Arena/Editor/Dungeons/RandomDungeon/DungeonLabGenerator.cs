@@ -1484,6 +1484,9 @@ namespace DungeonLab.Editor
                         "loop-corridor",
                         RoomConnection.RngSubjectFor(candidate.firstRoom, candidate.secondRoom)));
                 if (!ValidatePathCardinality(path, out _) ||
+                    // Unconditional, and it stays that way: a synthesized loop
+                    // has no route edge, so it can never carry a layer binding
+                    // to authorize the D2 relaxation.
                     PathCrossesThirdRoom(path, layout.rooms, candidate.firstRoom, candidate.secondRoom) ||
                     PathTouchesExistingFloorOutsideEndpointRooms(
                         path,
@@ -1585,11 +1588,35 @@ namespace DungeonLab.Editor
             return false;
         }
 
+        /// <summary>
+        /// Does this corridor punch through a room that is not one of its own
+        /// endpoints?
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The harm the rule names is "an undeclared doorway and an unowned
+        /// threshold", and a corridor passing OVER a room at a different
+        /// elevation creates neither — which is the design's licence to relax it
+        /// (§8.1). The relaxation is authorized by the connection being
+        /// layer-bound and decided by the absolute bands, never by layer names.
+        /// </para>
+        /// <para>
+        /// It relaxes UPWARD only, and that is a measured limit rather than
+        /// timidity. Passing under a room would have to suspend the room's own
+        /// floor, and a room floor is ground-backed by construction: take its
+        /// mass away and the boundary decomposition stops giving it walls. So a
+        /// corridor must clear the room's ground (index 0 of its declared
+        /// elevations) as well as miss every storey the room declares.
+        /// </para>
+        /// </remarks>
         private static bool PathCrossesThirdRoom(
             IReadOnlyList<Vector2Int> path,
             IReadOnlyList<RoomFootprint> rooms,
             int firstRoom,
-            int secondRoom)
+            int secondRoom,
+            LevelBand plannedBand = default,
+            bool layerBound = false,
+            int[][] roomDeclaredElevations = null)
         {
             for (int i = 0; i < rooms.Count; i++)
             {
@@ -1601,14 +1628,82 @@ namespace DungeonLab.Editor
                 RoomFootprint room = rooms[i];
                 foreach (Vector2Int cell in path)
                 {
-                    if (room.Contains(cell))
+                    if (!room.Contains(cell))
+                    {
+                        continue;
+                    }
+
+                    if (!CorridorClearsRoomVertically(plannedBand, layerBound, roomDeclaredElevations, i))
                     {
                         return true;
                     }
+
+                    break;
                 }
             }
 
             return false;
+        }
+
+        private static bool CorridorClearsRoomVertically(
+            LevelBand plannedBand,
+            bool layerBound,
+            int[][] roomDeclaredElevations,
+            int room)
+        {
+            if (roomDeclaredElevations == null || room >= roomDeclaredElevations.Length)
+            {
+                return false;
+            }
+
+            return CorridorClearsRoomVertically(
+                plannedBand,
+                layerBound,
+                roomDeclaredElevations[room]);
+        }
+
+        /// <summary>
+        /// May a corridor in this band pass over a room standing at these
+        /// declared elevations?
+        /// </summary>
+        /// <remarks>
+        /// One predicate, two callers, deliberately: `PathCrossesThirdRoom` at
+        /// generation time and the topology validator's lattice-lane rule at
+        /// author time. §8.1 asks the two to relax "the same way and on the same
+        /// absolute comparison", and the C2 incident that cost a whole corpus
+        /// was a validator and a candidate gate stating the same rule twice and
+        /// disagreeing.
+        /// <para>
+        /// Index 0 must be the room's BASE. The band has to clear it, not merely
+        /// miss it: passing UNDER would suspend the room's own floor, and a room
+        /// floor is ground-backed by construction.
+        /// </para>
+        /// </remarks>
+        private static bool CorridorClearsRoomVertically(
+            LevelBand plannedBand,
+            bool layerBound,
+            int[] declaredElevations)
+        {
+            if (!layerBound || declaredElevations == null || declaredElevations.Length == 0)
+            {
+                return false;
+            }
+
+            if (plannedBand.minLevel <= declaredElevations[0])
+            {
+                return false;
+            }
+
+            foreach (int elevation in declaredElevations)
+            {
+                if (plannedBand.Intersects(
+                        new LevelBand(elevation, elevation + MinHeadroomLevels)))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static string RoomPairKey(int firstRoom, int secondRoom)
@@ -2445,6 +2540,18 @@ namespace DungeonLab.Editor
                 }
 
                 int targetLevel = delta == 0 || i <= transitionIndex ? fromLevel : toLevel;
+                if (connection.IsLayerBound)
+                {
+                    // D2's producer, and the half of the relaxation that could
+                    // not be shipped without it: the claim rule alone lets two
+                    // corridors share a plan cell, and then `TrySetFloorLevel`
+                    // REJECTS the conflicting value rather than stacking — so
+                    // the relaxation on its own buys a failed tier attempt, not
+                    // a second corridor surface.
+                    surfaces.AddCorridorSurface(path[i], targetLevel);
+                    continue;
+                }
+
                 if (!surfaces.TrySetFloorLevel(path[i], targetLevel, out rejectionReason))
                 {
                     return false;

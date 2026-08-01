@@ -792,7 +792,7 @@ rebuild it any time with **Arena > Dungeons > Rebuild Random Dungeon (Specific
 Topology)**, topology `aperture-gallery`. Its gallery sits at world
 `y = 12` around `(4, 12, −64)` — the node's level 8 plus the layer's 4.
 
-### Phase D — multi-layer rooms in GENERATION. IN PROGRESS; D0 and D1 landed 2026-08-01.
+### Phase D — multi-layer rooms in GENERATION. IN PROGRESS; D0, D1 and D2 landed 2026-08-01.
 
 Design §13. Topologies and recipes declare layers, and routes bind to them.
 Four of C2's corrections are constraints on anything Phase D authors rather than
@@ -810,7 +810,7 @@ used, moved from content into code.
 |---|---|---|
 | **D0** ✅ | the transition body is a **band**, not a column to the sky | measured: 0 surfaces stand over a stair body anywhere in the corpus |
 | **D1** ✅ | the **topology layer schema** — node `layers`, edge `fromLayer`/`toLayer` — parsed, validated by `Validate Topologies`, carried into `RouteIntent` and `plannedBand`, and consumed nowhere | no topology declares layers |
-| D2 | the **corridor-exclusivity and third-room relaxations** — *authorized* by layer binding, *decided* by disjoint absolute bands (§8.1) — **together with the stacked-corridor producer they need**, which the design separates and which measurement says cannot be separated (see D1's finding 1) | no connection is layer-bound |
+| **D2** ✅ | the **corridor-exclusivity and third-room relaxations** — *authorized* by layer binding, *decided* by disjoint absolute bands (§8.1) — **together with the stacked-corridor producer they need**, which the design separates and which measurement says cannot be separated (see D1's finding 1) | no connection is layer-bound |
 | D3 | a bound edge **resolves at its layer's elevation** — a per-`(connection, end)` entry level beside today's per-node `zoneLevels`, and a slot mapping a topology layer id to a recipe layer id | ditto |
 | D4 | **volumes** — `RoomFootprint.Overlaps` volumetric, an `OpenVolume` producer, `ChooseEnclosedRooms` moved into the plan | the volumetric test needs a declared reason, and nothing declares one |
 | D5 | **content** — an atrium topology plus a room binding route edges at two elevations | weight 0, exactly as `aperture-gallery` is |
@@ -926,6 +926,97 @@ Two things measured that the design had wrong:
    exactly one occurrence each: their definition. They were a test surface that
    went away. The layer self-check therefore lives in `Validate Topologies`,
    which actually runs.
+
+**D2 — the corridor relaxations and the producer they need (landed 2026-08-01).**
+
+Two connections may share a plan cell, and a corridor may cross a room it does
+not belong to, when a layer binding **authorizes** it and the disjoint absolute
+bands **decide** it. The relaxation ships with its producer because D1 measured
+the two as inseparable: the claim rule alone lets two corridors share a cell and
+then `TrySetFloorLevel` rejects the conflicting value, so on its own it buys a
+failed tier attempt rather than a second corridor surface.
+
+- **`CorridorClaimLedger` replaces the bare claim set.** A
+  `HashSet<Vector2Int>` can only answer "is anything here", which is exactly as
+  expressive as the old rule needed. It is queried by key and never enumerated,
+  so its order cannot reach `hashes.layout`.
+- **`SurfaceField.AddCorridorSurface` is the producer** — one named writer
+  beside C2's three, and the fourth thing the field can be asked to do.
+- **`PathCrossesThirdRoom` and the topology validator's lattice-lane rule relax
+  through ONE predicate**, `CorridorClearsRoomVertically`. §8.1 asks the two to
+  relax "the same way and on the same absolute comparison", and a rule stated
+  twice in two places is exactly what cost C2 a rejected corpus.
+- **A base-only layer table declares no storey**, so `Validate Topologies` no
+  longer demands a recipe slot for one (`RouteTopologyNode.DeclaresStoreys`).
+  That is what makes the authorization reachable outside a slot node:
+  `{ "floor": 0 }` names a node's own elevation so an edge can bind it, and the
+  "a layer no edge binds" rule already exempted relative level 0 for the same
+  reason.
+
+Gate: `ops/dungeon-port-ab.sh` at density 0 — **identical geometry on all 200
+seeds**, `resultHash` unmoved at D1's `5a970e5560e70423`, and a leaf-by-leaf
+diff of the two reports (**519 427 per-seed leaves**) found **zero leaves
+changed, added or removed**; the only difference in the whole file is the
+generation timestamp. Render Digest 12 seeds byte-identical at
+`bdb90e5e8a696dd7`. `Validate Topologies` 8/8 PASS plus **19/19** layer-schema
+checks (17 from D1, plus the two lane-rule cases). Both older fixtures re-run
+green.
+
+**The capability, measured** — `Tools > Dungeon Lab > Print Stacked Corridor
+Fixture`. Eleven claim/producer cases, then a rendered crossing: a 5x5 room at
+L0, a layer-bound corridor crossing it at L4, and a return stair, so the whole
+thing is one component. 5 suspended surfaces, 10 railed rims, **72/72
+port-graph nodes connected**, headroom open under the catwalk, `_E_` soffit
+present, renderer `REJECTED 0`.
+
+Five things measured that the design or D1 had wrong:
+
+1. **The producer's KIND cannot be a constant, and D1's finding said it was.**
+   The write site is not `AddSurface(cell, level, SurfaceKind.Ledge)`: most of a
+   layer-bound corridor's cells are its own, nothing else is there, and the
+   corridor IS the ground — so a constant `Ledge` suspends a surface in a
+   floorless column, which `SurfaceColumns` refuses. Measured on the fixture: of
+   11 corridor cells crossing a 5x5 room, **6 stay ground-backed floors and 5
+   suspend**. The kind is a property of where the corridor landed in the column.
+2. **The producer has to be order-independent, and nothing says so.** Which of
+   two crossing corridors resolves first is the order the topology author listed
+   their edges in, and the geometry must not depend on it — so a corridor
+   arriving BELOW a column's floor takes the floor and suspends what it
+   displaced. The fixture builds the same crossing in both orders and compares
+   the whole column, kinds included.
+3. **The relaxation is upward-only, and that is a limit rather than caution.**
+   Passing UNDER a room would have to suspend the room's own floor, and a room
+   floor is ground-backed by construction: take its mass away and the boundary
+   decomposition stops giving it walls. So the band must CLEAR the room's ground
+   (declared elevation 0), not merely miss it.
+4. **The band test IS the headroom test, for free.** `LevelBand.SpanningEndpoints`
+   pads the top by `MinHeadroomLevels`, so two disjoint bands are separated by at
+   least that much. The fixture's exact/one-short pair proves the half-open
+   boundary is what decides it.
+5. **§8.1's justification for the third-room relaxation is now verified, not
+   assumed.** It licenses the relaxation on the grounds that a corridor passing
+   over a room creates "no undeclared doorway and no unowned threshold".
+   `BuildDoorwayEdges` and `BuildGatewayConnectionEnds` iterate a connection's
+   OWN two endpoint rooms (`DungeonLabGenerator.cs:3773`, `:3802`), so a third
+   room it flies over is never offered a doorway or a gateway end.
+
+**A limit worth stating plainly.** `AddCorridorSurface` swallows a conflict that
+`TrySetFloorLevel` would have rejected, and the claim ledger only knows PATH
+cells — a stair landing another connection places off-path is not in it. So a
+layer-bound corridor crossing such a landing would stack over it instead of
+rejecting the attempt. It cannot happen in the corpus, because nothing is
+layer-bound, and **no gate can see it**; D5's content is where it would first
+bite.
+
+**A tooling note, because this ritual is now six slices old.**
+`ops/dungeon-report-diff.py` does the leaf-by-leaf report comparison by hand up
+to now: it flattens both reports to dotted leaf paths and prints every path that
+changed, was added or was removed, with counts and examples. It answers the
+question `ops/dungeon-port-ab.sh` deliberately does not — that one compares a
+per-seed geometry vector, which says nothing about the fields outside it.
+**Do not edit the working tree while `dungeon-port-ab.sh` runs**: it stashes the
+tree for the pre-port leg and pops it back, so a mid-run edit lands on the wrong
+side of the stash.
 
 The generator makes rooms at different elevations but behaves like a single
 surface: one plan coordinate, one floor. The direction is multiple independently
