@@ -28,9 +28,11 @@ topology-family rules + seed
              -> existing renderer, navigation and collision export
 ```
 
-Rooms and parts are generated from constraints. Recipes remain optional
-landmarks; ordinary multi-level architecture must not require authors to create
-dozens of room assets.
+Rooms and parts can be generated from constraints or supplied through the
+existing recipe workflow. Authored ordinary rooms, connectors, episodes, and
+landmarks remain first-class production content; ordinary multi-level
+architecture must simply not require authors to create enough assets to cover
+every generated node and edge.
 
 ## Elevation invariant
 
@@ -92,8 +94,13 @@ This plan does not replace the landed downstream architecture:
 - Reviewed stair contracts, Stair Forge, landings, footprints, mouths, and
   supports remain the only structural transition realization path.
 - The existing abutting-doorway resolver and corridor candidate ladder remain.
-- Recipe layers, exact ports, transitions, openings, and atomic validation
-  remain for optional landmarks.
+- `DungeonRecipeAsset`, its current `Connector` and `Episode` kinds, catalog
+  membership, enable/disable policy, authoring window, deterministic preview,
+  content digest, exact placement, and atomic validation remain the sole
+  authored-room and authored-connector workflow.
+- Recipe layers, zones, exact footprints, ports, transitions, openings,
+  reservations, and visual implementations remain structural inputs when an
+  authored module is selected.
 - Suspended slabs, rims, bridge decks, fall navigation, exact collision
   witnesses, and runtime landing remain unchanged consumers.
 - Existing deterministic random scopes remain the only RNG mechanism.
@@ -102,6 +109,38 @@ Historical implementation is also reusable. Before commit `f5d8d4b3`, the
 repository contained `TryAddSpine`, `TryAddBranch`, `TryRejoin`, `TryPublish`,
 and a bounded coarse-path branch embedder. Recover and adapt that code at the
 current `RouteIntent` seam; do not design a second graph family.
+
+## Authored rooms and connectors
+
+Generated topology supplies **opportunities**, not a prohibition on authored
+content. The current recipe workflow is generalized in place:
+
+1. The composed `RouteIntent` declares semantic room and connection
+   opportunities: role, beat, degree, structural layers, incident edge kinds,
+   and required port levels.
+2. The existing catalog and validator find zero or more compatible
+   `DungeonRecipeAsset` modules.
+3. Selection occurs before spatial embedding, as it does today, so a selected
+   recipe's exact footprint, ports, layers, transitions, and reservations are
+   structural anchors for room placement and corridor routing. It is never
+   fitted into finished geometry or repaired afterward.
+4. The generic room/connector producer realizes every unclaimed opportunity.
+5. Both authored and generic producers publish into the same `SurfaceField`,
+   `PrismLedger`, transition, opening, renderer, navigation, and collision path.
+
+Compatibility continues to be derived from explicit contracts: catalog
+availability, role, beat, connection degree and kind, layer requirements, port
+orientation/elevation, landing and headroom requirements, footprint fit, and
+current validation. A flat authored room, multi-layer room, connector,
+vestibule, junction, approach, episode, or landmark may therefore participate
+where its existing contract fits.
+
+"Optional" means the generator remains complete with zero selected recipes. It
+does not mean recipes are rare, decorative, landmark-only, or selected after
+generation. This migration does not introduce a second prefab registry, room
+asset type, connector schema, catalog, preview tool, or placement pipeline. The
+current `Connector` and `Episode` kinds remain unless a later owner-approved
+item demonstrates a capability they genuinely cannot express.
 
 ## Single-path rules
 
@@ -114,6 +153,10 @@ current `RouteIntent` seam; do not design a second graph family.
   schemas are never selectable simultaneously.
 - Generic and recipe producers write the same surfaces, prisms, transitions,
   and openings. They do not own parallel collections.
+- The current recipe catalog, validator, authoring window, preview, selection,
+  placement, and resolution pipeline remains the one authored-content path.
+- Authored modules are selected before embedding and constrain it; there is no
+  post-embedding recipe substitution path.
 - A planned connection has one identity and one realization. Late passes may
   decorate it but may not invent another topology.
 - An abstraction is extracted only from an existing implementation or after two
@@ -189,6 +232,11 @@ alternative.
   deterministic random scopes.
 - Assign structural node levels, room layers, edge kinds, and edge layer bindings
   on the 4u lattice before spatial embedding.
+- Publish compatible authored-room and authored-connector opportunities through
+  the existing recipe-slot intent and catalog-selection seam, generalized from
+  three fixed required slots to zero or more generated opportunities.
+- Resolve selected recipes before embedding so their exact footprints, ports,
+  layers, and reservations remain structural constraints.
 - Feed the result through the existing orientation, rubber sheet, room
   envelopes, inflation, vista reservation, ports, and corridor candidate ladder.
 - Migrate the current topology assets from literal maps/nodes/edges to compact
@@ -218,21 +266,31 @@ machinery.
 Exit: every topology relationship resolves exactly once, with no architectural
 connection invented after planning.
 
-### 6. Make recipes optional and replace author quotas
+### 6. Generalize the existing recipe workflow and replace author quotas
 
-Boundary: retain recipe capability but remove its responsibility for ordinary
-vertical architecture.
+Boundary: retain the current recipe workflow as the sole authored-content path,
+while removing its responsibility to cover ordinary generated architecture.
 
 - Generated topology supplies the required multi-level structure.
-- Recipe selection becomes zero-or-more compatible landmark substitutions.
-- Keep the current layered recipes and their exact validation as optional
-  content and regression fixtures.
+- Generalize the current fixed required-slot selection to zero or more
+  compatible authored room, connector, episode, or landmark opportunities.
+- Keep `DungeonRecipeAsset`, the `Connector` and `Episode` kinds, catalog
+  service, enable/disable controls, authoring window, deterministic preview,
+  validator, content digest, `RecipePlacement`, and `RecipeResolution`.
+- Keep selection before embedding; selected exact footprints and ports constrain
+  embedding and corridor routing rather than replacing completed geometry.
+- Preserve the current layered recipes and their exact validation as selectable
+  production content and regression fixtures.
+- Let the generic producer fill every opportunity for which no recipe is
+  selected or compatible.
 - Remove the exactly-three layered recipe requirement and the 48 stacked-surface
   quota only after the generic structural gate is live.
 - Replace those checks with generated topology and traversal properties.
 
-Exit: a dungeon with no layered recipe satisfies every structural, traversal,
-rendering, navigation, and collision requirement.
+Exit: current authored rooms and connectors still validate, preview, select,
+place, render, navigate, and export through their existing workflow; a dungeon
+with no selected recipe also satisfies every structural, traversal, rendering,
+navigation, and collision requirement.
 
 ## Final acceptance
 
@@ -251,6 +309,9 @@ Every accepted production dungeon must prove:
 - repeat generation is deterministic; and
 - a fixed seed corpus demonstrates direct adjacency, corridors, stairs,
   stairwells, bridges, atriums, balconies, and pits without counting recipe IDs.
+- focused production evidence proves both sides of the same path: compatible
+  authored rooms/connectors can be selected before embedding, and the same
+  opportunities resolve generically when no recipe is selected.
 
 Automated plan, rendering, navigation, and collision evidence is followed by
 normal-Editor visual review. Unity batch mode is not used.
@@ -268,8 +329,9 @@ The migration is incomplete while any obsolete owner remains:
 - topology-inventing aerial bridges;
 - documentation calling the current exact-diagram system generated 3-D
   topology; or
-- current authoring guidance that makes authored layered rooms the ordinary
-  route to vertical architecture.
+- fixed-slot authoring guidance that mistakes three mandatory layered episodes
+  for the recipe workflow itself or makes authored layered rooms the only route
+  to vertical architecture.
 
 ## Explicit next item
 
