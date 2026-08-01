@@ -48,6 +48,10 @@ namespace DungeonLab.Editor
             public readonly RecipeCandidateRejection[] rejectedCandidates;
             public readonly string selectionStreamIdentity;
             public readonly bool forcedForAuthoringPreview;
+            // Which recipe storey each of the node's declared storeys is. Empty
+            // for every slot in the shipped corpus, where the node's base is the
+            // recipe's base and neither names the other.
+            public readonly RouteTopologySlotLayer[] layerBindings;
 
             public RecipeSlotIntent(
                 string slotId,
@@ -59,13 +63,15 @@ namespace DungeonLab.Editor
                 string[] compatibleCandidateIds = null,
                 RecipeCandidateRejection[] rejectedCandidates = null,
                 string selectionStreamIdentity = "",
-                bool forcedForAuthoringPreview = false)
+                bool forcedForAuthoringPreview = false,
+                RouteTopologySlotLayer[] layerBindings = null)
             {
                 this.slotId = slotId ?? string.Empty;
                 this.slotNode = slotNode;
                 this.recipe = recipe;
                 this.orientationBinding = orientationBinding;
                 this.portBindings = portBindings ?? Array.Empty<RecipePortBinding>();
+                this.layerBindings = layerBindings ?? Array.Empty<RouteTopologySlotLayer>();
                 this.catalogDigest = catalogDigest ?? string.Empty;
                 this.compatibleCandidateIds = compatibleCandidateIds ?? Array.Empty<string>();
                 this.rejectedCandidates = rejectedCandidates ?? Array.Empty<RecipeCandidateRejection>();
@@ -87,6 +93,8 @@ namespace DungeonLab.Editor
                 edgeId = string.Empty;
                 return false;
             }
+
+            public bool DeclaresLayerBindings => layerBindings.Length > 0;
         }
 
         private readonly struct RecipePortPlacement
@@ -450,7 +458,8 @@ namespace DungeonLab.Editor
                             intent,
                             nodeIndex,
                             out RecipeOrientationBinding orientationBinding,
-                            out RecipePortBinding[] portBindings))
+                            out RecipePortBinding[] portBindings,
+                            out RouteTopologySlotLayer[] layerBindings))
                     {
                         rejectionReason =
                             $"[RECIPE_SELECTION] slot '{node.recipeSlotId}' had no declared route-edge binding contract";
@@ -467,6 +476,7 @@ namespace DungeonLab.Editor
                                 candidate,
                                 orientationBinding,
                                 portBindings,
+                                layerBindings,
                                 out _))
                         {
                             continue;
@@ -542,7 +552,8 @@ namespace DungeonLab.Editor
                         intent,
                         nodeIndex,
                         out RecipeOrientationBinding orientationBinding,
-                        out RecipePortBinding[] portBindings))
+                        out RecipePortBinding[] portBindings,
+                        out RouteTopologySlotLayer[] layerBindings))
                 {
                     rejectionReason =
                         $"[RECIPE_SELECTION] slot '{node.recipeSlotId}' had no declared route-edge binding contract";
@@ -559,6 +570,7 @@ namespace DungeonLab.Editor
                             candidate,
                             orientationBinding,
                             portBindings,
+                            layerBindings,
                             out string reasonCode))
                     {
                         compatible.Add(candidate);
@@ -655,7 +667,8 @@ namespace DungeonLab.Editor
                     compatibleIds,
                     rejections.ToArray(),
                     RecipeSelectionStreamIdentity,
-                    forceAuthoringPreview));
+                    forceAuthoringPreview,
+                    layerBindings));
             }
 
             if (authoringPreviewActive && !authoringPreviewForced)
@@ -680,17 +693,20 @@ namespace DungeonLab.Editor
             RouteIntent intent,
             int slotNode,
             out RecipeOrientationBinding orientationBinding,
-            out RecipePortBinding[] portBindings)
+            out RecipePortBinding[] portBindings,
+            out RouteTopologySlotLayer[] layerBindings)
         {
             orientationBinding = RecipeOrientationBinding.RouteForward;
             portBindings = Array.Empty<RecipePortBinding>();
+            layerBindings = Array.Empty<RouteTopologySlotLayer>();
             if (intent == null || slotNode < 0 || slotNode >= intent.nodes.Length)
             {
                 return false;
             }
 
-            // The slot's node, its entry/exit edges and its orientation all come
-            // from the topology file, so adding a topology adds no code here.
+            // The slot's node, its entry/exit edges, its orientation and (D3) its
+            // layer mapping all come from the topology file, so adding a topology
+            // adds no code here.
             foreach (RouteTopologySlot slot in intent.topology.slots)
             {
                 if (slot.node != slotNode)
@@ -704,6 +720,7 @@ namespace DungeonLab.Editor
                     new RecipePortBinding("entry", slot.entryEdgeId),
                     new RecipePortBinding("exit", slot.exitEdgeId)
                 };
+                layerBindings = slot.layers;
                 return true;
             }
 
@@ -716,6 +733,7 @@ namespace DungeonLab.Editor
             DungeonRecipeAsset candidate,
             RecipeOrientationBinding orientationBinding,
             IReadOnlyList<RecipePortBinding> portBindings,
+            IReadOnlyList<RouteTopologySlotLayer> layerBindings,
             out string reasonCode)
         {
             RouteNodeIntent node = intent.nodes[slotNode];
@@ -806,6 +824,18 @@ namespace DungeonLab.Editor
                 }
             }
 
+            if (!TryValidateSlotLayerBindings(
+                    intent,
+                    slotNode,
+                    candidate,
+                    portBindings,
+                    layerBindings,
+                    incidentSockets,
+                    out reasonCode))
+            {
+                return false;
+            }
+
             bool orientationContextValid =
                 (orientationBinding == RecipeOrientationBinding.RouteForward &&
                  (incidentSockets || boundPorts.Contains("exit"))) ||
@@ -859,6 +889,140 @@ namespace DungeonLab.Editor
 
             reasonCode = string.Empty;
             return true;
+        }
+
+        /// <summary>
+        /// The slot's storey mapping, checked against ONE candidate, before it is
+        /// admitted (design §13, phase D3).
+        /// </summary>
+        /// <remarks>
+        /// The loader can say that a slot maps a storey its node declares; only
+        /// here is the recipe known, and three things become checkable at once:
+        /// <list type="number">
+        /// <item>the mapped recipe storey EXISTS in this candidate;</item>
+        /// <item>it sits at the same relative level as the topology storey — the
+        /// agreement rule, and the load-bearing one. Every downstream elevation
+        /// in the room is already derived from the RECIPE's layer offset
+        /// (<c>PortLayerRelativeLevel</c>, <c>zone.layerRelativeLevel</c>), while
+        /// every downstream elevation on the ROUTE is derived from the topology's.
+        /// Proving the two equal here is what lets both derivations stand
+        /// unchanged instead of one overriding the other — and a room whose
+        /// storey pitch disagrees with the graph that placed it cannot be built
+        /// as declared, so rejecting the candidate is the honest answer;</item>
+        /// <item>every bound port sits on the storey its own edge arrives at.
+        /// This is the rule that makes a two-storey room ROUTABLE rather than
+        /// merely tall: an edge bound to the node's gallery must meet a port on
+        /// the recipe's gallery, and an edge that binds nothing must meet one on
+        /// the base.</item>
+        /// </list>
+        /// <para>
+        /// Neutral by MEASUREMENT as well as by construction: every port in the
+        /// catalog today is on its recipe's base layer, and no edge in the corpus
+        /// binds anything, so every existing (slot, candidate) pair takes the
+        /// base-to-base branch.
+        /// </para>
+        /// </remarks>
+        private static bool TryValidateSlotLayerBindings(
+            RouteIntent intent,
+            int slotNode,
+            DungeonRecipeAsset candidate,
+            IReadOnlyList<RecipePortBinding> portBindings,
+            IReadOnlyList<RouteTopologySlotLayer> layerBindings,
+            bool incidentSockets,
+            out string reasonCode)
+        {
+            reasonCode = string.Empty;
+            RouteNodeIntent node = intent.nodes[slotNode];
+            foreach (RouteTopologySlotLayer binding in
+                     layerBindings ?? Array.Empty<RouteTopologySlotLayer>())
+            {
+                if (!DungeonRecipeLayers.TryGetRelativeLevel(
+                        candidate,
+                        binding.recipeLayerId,
+                        out int recipeRelativeLevel))
+                {
+                    reasonCode = "LAYER_BINDING_UNDECLARED";
+                    return false;
+                }
+
+                if (recipeRelativeLevel != node.LayerOffset(binding.topologyLayerId))
+                {
+                    reasonCode = "LAYER_BINDING_LEVEL_MISMATCH";
+                    return false;
+                }
+            }
+
+            // A socket recipe binds its entrances by DIRECTION, so nothing in the
+            // route can say which storey a socket is on. Keeping them on the base
+            // is the honest statement of that limit rather than a caution — and
+            // it is where a generic multi-layer room would relax it (owner
+            // decision 9).
+            if (incidentSockets)
+            {
+                foreach (DungeonRecipePort socket in candidate.ports ?? Array.Empty<DungeonRecipePort>())
+                {
+                    if (socket != null && !DungeonRecipeLayers.IsBaseLayer(candidate, socket.layerId))
+                    {
+                        reasonCode = "PORT_LAYER_MISMATCH";
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            foreach (RecipePortBinding portBinding in portBindings ?? Array.Empty<RecipePortBinding>())
+            {
+                if (!TryGetTraversal(intent, portBinding.edgeId, out RouteTraversalIntent edge))
+                {
+                    // Already rejected as PORT_BINDING_MISMATCH above; this is the
+                    // local guard, not a second statement of that rule.
+                    reasonCode = "PORT_BINDING_MISMATCH";
+                    return false;
+                }
+
+                string topologyLayerId = edge.fromNode == slotNode ? edge.fromLayerId : edge.toLayerId;
+                if (!TryGetSlotRecipeLayerId(layerBindings, topologyLayerId, out string recipeLayerId))
+                {
+                    // The edge binds a storey this slot never said the recipe's
+                    // name for, so there is no storey to arrive on.
+                    reasonCode = "PORT_LAYER_UNMAPPED";
+                    return false;
+                }
+
+                DungeonRecipePort port = FindRecipePort(candidate, portBinding.portId);
+                if (port == null || !SameRecipeLayer(candidate, port.layerId, recipeLayerId))
+                {
+                    reasonCode = "PORT_LAYER_MISMATCH";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryGetSlotRecipeLayerId(
+            IReadOnlyList<RouteTopologySlotLayer> layerBindings,
+            string topologyLayerId,
+            out string recipeLayerId)
+        {
+            recipeLayerId = string.Empty;
+            if (string.IsNullOrEmpty(topologyLayerId))
+            {
+                return true;
+            }
+
+            foreach (RouteTopologySlotLayer binding in
+                     layerBindings ?? Array.Empty<RouteTopologySlotLayer>())
+            {
+                if (string.Equals(binding.topologyLayerId, topologyLayerId, StringComparison.Ordinal))
+                {
+                    recipeLayerId = binding.recipeLayerId;
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

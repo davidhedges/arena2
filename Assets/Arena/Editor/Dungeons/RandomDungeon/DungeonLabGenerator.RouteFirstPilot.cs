@@ -239,6 +239,33 @@ namespace DungeonLab.Editor
 
                 return false;
             }
+
+            /// <summary>
+            /// How far ABOVE this node's own level an edge bound to
+            /// <paramref name="layerId"/> meets it — the term D3 adds to a
+            /// connection's entry level.
+            /// </summary>
+            /// <remarks>
+            /// 0 for the base layer, and therefore 0 for every binding in the
+            /// shipped corpus, which is what makes the entry-level table
+            /// output-neutral by construction rather than by measurement luck.
+            /// <para>
+            /// An id this node does not declare also yields 0 rather than
+            /// throwing. The loader already rejects such a binding
+            /// (<c>TryValidateEdgeLayerBinding</c>), so it cannot reach here;
+            /// if it ever did, the edge's required rise was derived from the
+            /// BOUND elevations, so a 0 offset makes the resolved rise disagree
+            /// and the seed fails by name at the
+            /// <c>[ROUTE_ELEVATION_REQUIREMENT]</c> gate instead of quietly
+            /// generating something other than what the graph says.
+            /// </para>
+            /// </remarks>
+            public int LayerOffset(string layerId)
+            {
+                return TryGetAbsoluteLevel(layerId, out int absoluteLevel)
+                    ? absoluteLevel - relativeElevationLevels
+                    : 0;
+            }
         }
 
         private readonly struct RouteTraversalIntent
@@ -1111,6 +1138,7 @@ namespace DungeonLab.Editor
                         slot.recipe,
                         slot.orientationBinding,
                         slot.portBindings,
+                        slot.layerBindings,
                         out _))
                 {
                     rejectionReason = "route intent contained an incompatible recipe slot binding";

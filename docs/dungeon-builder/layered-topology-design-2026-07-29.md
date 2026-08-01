@@ -1446,6 +1446,29 @@ Two further things worth stating plainly:
 > are 8 such sites, two of which fan out to ~27 readers between them. Most ask
 > "what is the floor at this cell" and are already correct on a heightfield —
 > classifying which genuinely need a surface is the work, not sweeping them.
+>
+> ---
+>
+> **DONE 2026-08-01 (D3) — the two vocabularies are equated at the SLOT, and
+> that is why nothing in this section had to change.** A recipe's layer ids and a
+> topology's are independent by design (§8.1: a layer id is room-local), so
+> `"layers": { "gallery": "upper" }` on a slot is the only place they can meet.
+> Given that mapping, the candidate gate proves the two storeys sit at the same
+> relative level before the recipe is admitted — and once that holds, every
+> expression in this section is already right: the port's expected elevation
+> stays `nodeLevel + recipe layer offset + port.relativeLevel`, and `baseLevel`
+> stays `firstPortLevel − PortLayerRelativeLevel − port.relativeLevel`. The
+> mapping's job is to make two vocabularies provably describe one elevation, not
+> to convert between them.
+>
+> Two limits the section does not state. **A port must be authored on the storey
+> its edge arrives on** — every port in the catalog is on its recipe's base, so
+> `episode_layered_gallery_01` can be MAPPED at its gallery but not ROUTED to
+> there until a port exists (a D5 content prerequisite, not a defect). And **an
+> `IncidentCardinalSockets` recipe cannot be routed to on a storey at all**: it
+> binds entrances by direction, so nothing in the route can name a socket's
+> storey, and the rule requires every socket on the base. That is the concrete
+> shape of owner decision 9's gap.
 
 **[Proposed]** three schema additions, all additive and defaulting to today's
 behaviour. **Phase split, corrected per review finding 4:** the layer fields,
@@ -2215,12 +2238,13 @@ and the phase does not exit until collider discipline or the exporter closes it.
 ### Phase D — Multi-layer rooms in generation
 
 > **Status. IN PROGRESS.** Slice order and evidence live in
-> [`CURRENT_STATUS.md`](CURRENT_STATUS.md); **D0, D1 and D2 landed 2026-08-01** —
-> the transition body became a level BAND instead of a column to the sky
-> (closing the defect C2 recorded as unfixed and ungateable), the topology layer
-> schema parses and is carried, and the corridor-exclusivity and third-room
-> relaxations shipped with the stacked-corridor producer they need. Three
-> corrections to this section, all measured:
+> [`CURRENT_STATUS.md`](CURRENT_STATUS.md); **D0, D1, D2 and D3 landed
+> 2026-08-01** — the transition body became a level BAND instead of a column to
+> the sky (closing the defect C2 recorded as unfixed and ungateable), the
+> topology layer schema parses and is carried, the corridor-exclusivity and
+> third-room relaxations shipped with the stacked-corridor producer they need,
+> and a bound edge now RESOLVES at its layer's elevation. Three corrections to
+> this section, all measured:
 >
 > 1. **"`ChooseEnclosedRooms` moved into the plan so bridges may legally cross
 >    rooms" names a gate that does not exist.** The aerial-bridge pass has no
@@ -2242,6 +2266,16 @@ and the phase does not exit until collider discipline or the exporter closes it.
 > **nothing in the shipped corpus declares a layer**, so each relaxation can be
 > authorized by a binding no topology has and is therefore output-neutral by
 > construction rather than by measurement luck.
+>
+> **D3 added two corrections of its own.** (a) D1's schema was not merely
+> unconsumed, it was **unusable**: a layer-bound edge did not resolve at the
+> wrong elevation, it failed the tier attempt outright, because
+> `TryAssignRoomLevels` compared a rise derived from the BOUND levels against one
+> measured between the NODE levels. (b) The entry level has to be **additive**
+> over the zone level rather than a replacement, or the +1 raised-zone accent is
+> lost — and it can never be asked to compose the two, because a node declaring a
+> real storey must carry a recipe slot and a recipe-slot room is excluded from
+> zone splitting outright.
 
 **Capability.** Topologies and recipes can declare layers; routes bind to
 declared entrance elevations; `OpenVolume` reserves an atrium; the atrium

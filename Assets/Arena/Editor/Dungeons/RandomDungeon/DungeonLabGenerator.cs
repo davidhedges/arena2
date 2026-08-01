@@ -1268,10 +1268,20 @@ namespace DungeonLab.Editor
 
             // Loop connections never change rooms or zone plans, so the zone context
             // stays valid for the looped layout; only its connection list grew.
-            bool connectedDeltasValid = TryValidateConnectedRoomLevelDeltas(
+            //
+            // D3: the entry-level table is built ONCE, here, because this is the
+            // first point where every connection exists — the loop pass adds
+            // more — and because two readers must agree about the elevation a
+            // corridor meets its room at. Deriving it twice is how the rule
+            // stated in two places that cost C2 a rejected corpus gets rebuilt.
+            ConnectionEntryLevels entryLevels = ConnectionEntryLevels.Build(
                 loopedLayout,
                 zones,
                 zoneLevels,
+                routeRequirements?.intent);
+            bool connectedDeltasValid = TryValidateConnectedRoomLevelDeltas(
+                loopedLayout,
+                entryLevels,
                 reviewedStairOptions,
                 out rejectionReason);
             if (!connectedDeltasValid)
@@ -1283,6 +1293,7 @@ namespace DungeonLab.Editor
                     loopedLayout,
                     zones,
                     zoneLevels,
+                    entryLevels,
                     routeRequirements,
                     reviewedStairOptions,
                     dungeonSeed,
@@ -1764,7 +1775,16 @@ namespace DungeonLab.Editor
 
             foreach (RouteTraversalIntent edge in routeRequirements.intent.traversalEdges)
             {
-                int actualRise = zoneLevels[edge.toNode] - zoneLevels[edge.fromNode];
+                // D3: a bound edge resolves at its LAYER's elevation, so the
+                // rise is measured between the two ENTRY levels rather than
+                // between the two node levels. `requiredRiseLevels` was derived
+                // from the same two bound elevations in D1, so an edge that
+                // binds nothing compares exactly what it compared before.
+                int fromEntryLevel = zoneLevels[edge.fromNode] +
+                    routeRequirements.intent.nodes[edge.fromNode].LayerOffset(edge.fromLayerId);
+                int toEntryLevel = zoneLevels[edge.toNode] +
+                    routeRequirements.intent.nodes[edge.toNode].LayerOffset(edge.toLayerId);
+                int actualRise = toEntryLevel - fromEntryLevel;
                 if (actualRise != edge.requiredRiseLevels)
                 {
                     rejectionReason = $"[ROUTE_ELEVATION_REQUIREMENT] edge '{edge.id}' resolved rise {actualRise}u instead of {edge.requiredRiseLevels}u";
@@ -1816,19 +1836,21 @@ namespace DungeonLab.Editor
 
         private static bool TryValidateConnectedRoomLevelDeltas(
             DungeonLayout layout,
-            RoomZoneContext zones,
-            int[] zoneLevels,
+            ConnectionEntryLevels entryLevels,
             IReadOnlyList<ReviewedActiveStairOption> reviewedStairOptions,
             out string rejectionReason)
         {
-            foreach (RoomConnection connection in layout.connections)
+            for (int index = 0; index < layout.connections.Count; index++)
             {
-                // Corridor deltas are measured between the threshold zones the
-                // connection binds to. Decision A: a flat corridor needs no stair;
-                // the 2u bridge uses the reviewed primary rise; every other delta
-                // (4u/8u majors) needs a reviewed contract with that exact rise.
-                ResolveConnectionNodes(zones, layout.rooms, connection, out int fromNode, out int toNode);
-                int delta = Mathf.Abs(zoneLevels[fromNode] - zoneLevels[toNode]);
+                RoomConnection connection = layout.connections[index];
+                // Corridor deltas are measured between the elevations the
+                // connection ENTERS its two rooms at — the threshold zone's
+                // level plus whatever storey that end bound (D3). Decision A: a
+                // flat corridor needs no stair; the 2u bridge uses the reviewed
+                // primary rise; every other delta (4u/8u majors) needs a
+                // reviewed contract with that exact rise.
+                entryLevels.Resolve(index, out int fromLevel, out int toLevel);
+                int delta = Mathf.Abs(fromLevel - toLevel);
                 if (delta == 0)
                 {
                     continue;
@@ -1862,6 +1884,7 @@ namespace DungeonLab.Editor
             DungeonLayout layout,
             RoomZoneContext zones,
             int[] zoneLevels,
+            ConnectionEntryLevels entryLevels,
             RouteTierRequirements routeRequirements,
             IReadOnlyList<ReviewedActiveStairOption> reviewedStairOptions,
             int dungeonSeed,
@@ -2000,13 +2023,14 @@ namespace DungeonLab.Editor
                 transitions,
                 seamStairPrefabPath);
 
-            foreach (RoomConnection connection in layout.connections)
+            for (int connectionIndex = 0; connectionIndex < layout.connections.Count; connectionIndex++)
             {
                 if (!TryResolveConnectionTransition(
-                        connection,
+                        layout.connections[connectionIndex],
+                        connectionIndex,
                         layout,
                         zones,
-                        zoneLevels,
+                        entryLevels,
                         routeRequirements,
                         reviewedStairOptions,
                         dungeonSeed,
@@ -2238,9 +2262,10 @@ namespace DungeonLab.Editor
         // synthesis, then a stairwell tower.
         private static bool TryResolveConnectionTransition(
             RoomConnection connection,
+            int connectionIndex,
             DungeonLayout layout,
             RoomZoneContext zones,
-            int[] zoneLevels,
+            ConnectionEntryLevels entryLevels,
             RouteTierRequirements routeRequirements,
             IReadOnlyList<ReviewedActiveStairOption> reviewedStairOptions,
             int dungeonSeed,
@@ -2259,8 +2284,13 @@ namespace DungeonLab.Editor
         {
             rejectionReason = string.Empty;
             ResolveConnectionNodes(zones, layout.rooms, connection, out int fromNode, out int toNode);
-            int fromLevel = zoneLevels[fromNode];
-            int toLevel = zoneLevels[toNode];
+            // D3: the elevation this corridor MEETS each room at, which is the
+            // threshold zone's level for an unbound end and the bound storey's
+            // for a layer-bound one. Everything below — the delta, the directed
+            // rise, the stair search, the levels written into the corridor's own
+            // cells — is derived from these two numbers, so binding a layer moves
+            // the whole resolution rather than one term of it.
+            entryLevels.Resolve(connectionIndex, out int fromLevel, out int toLevel);
             int delta = Mathf.Abs(fromLevel - toLevel);
             RouteTraversalIntent routeTransitionRequirement = default;
             // Optional BY DESIGN: a synthesized loop corridor carries no route
@@ -7347,6 +7377,40 @@ namespace DungeonLab.Editor
             return counted.Count;
         }
 
+        /// <summary>
+        /// Connection ENDS whose entry level sits above their room's own — the
+        /// ends D3's table resolves somewhere other than <c>zoneLevels</c>.
+        /// </summary>
+        /// <remarks>
+        /// The number that decides the slice, and the same shape of evidence D0
+        /// shipped: 0 across the corpus means every entry level in production is
+        /// the value the pre-D3 code read at that site, so the widening is
+        /// latent and bites only the layer-bound routes D5 will author.
+        /// <para>
+        /// Deliberately re-derived from the ACCEPTED layout and the route intent
+        /// rather than carried out of the planner on a static. A rejected tier
+        /// attempt would leave a static describing a dungeon that was thrown
+        /// away, and the two inputs here are exactly what the accepted plan is
+        /// made of.
+        /// </para>
+        /// </remarks>
+        private static int CountLayerOffsetConnectionEnds(DungeonLayout layout, RouteIntent intent)
+        {
+            if (layout.connections == null || intent?.nodes == null)
+            {
+                return 0;
+            }
+
+            int ends = 0;
+            foreach (RoomConnection connection in layout.connections)
+            {
+                ends += LayerOffsetAt(intent, connection.fromRoom, connection.fromLayerId) != 0 ? 1 : 0;
+                ends += LayerOffsetAt(intent, connection.toRoom, connection.toLayerId) != 0 ? 1 : 0;
+            }
+
+            return ends;
+        }
+
         // Over SURFACES, not columns. A gallery on a storey no column floor
         // reaches is a level the dungeon has, and counting floors alone would let
         // a two-storey plan read as flat and be rejected as "a single level".
@@ -8362,6 +8426,112 @@ namespace DungeonLab.Editor
             {
                 return $"{firstRoom}:{secondRoom}";
             }
+        }
+
+        /// <summary>
+        /// The elevation each END of each connection meets its room at
+        /// (design §13, phase D3).
+        /// </summary>
+        /// <remarks>
+        /// BESIDE <c>zoneLevels</c>, not instead of it. A zone level is a
+        /// property of a PLACE — one room zone, one elevation — and that was
+        /// enough while every corridor met its room on the ground. A layer-bound
+        /// edge breaks the assumption: two connections may reach the same room
+        /// at two storeys, so the elevation a corridor resolves at is a property
+        /// of the <c>(connection, end)</c> pair and of nothing smaller.
+        /// <para>
+        /// The entry level is the zone level PLUS the offset of whatever layer
+        /// that end bound. Additive on purpose, and that is what makes the whole
+        /// table output-neutral by construction: an unbound end has no offset
+        /// and resolves at exactly the <c>zoneLevels[node]</c> every caller read
+        /// before this type existed.
+        /// </para>
+        /// <para>
+        /// The additive form also composes with the +1 raised-zone accent
+        /// instead of overriding it — and it can never be ASKED to compose,
+        /// which is the measured half of the argument. A node declaring a real
+        /// storey must carry a recipe slot (D1's validator rule), and a
+        /// recipe-slot room is excluded from zone splitting outright
+        /// (<c>DungeonLabGenerator.RouteFirstPilot.cs:668</c>), so a storey
+        /// offset and a raised zone cannot meet on one node. A base-only layer
+        /// table — D2's authorization for a stacked crossing — may sit on a
+        /// split room, and its offset is 0.
+        /// </para>
+        /// </remarks>
+        private sealed class ConnectionEntryLevels
+        {
+            private readonly int[] fromLevels;
+            private readonly int[] toLevels;
+
+            /// <summary>
+            /// How many connection ends resolved somewhere OTHER than their zone
+            /// level. It is the number that decides this slice: 0 means every
+            /// entry level in the corpus is the value the old code read.
+            /// </summary>
+            public readonly int layerOffsetEnds;
+
+            private ConnectionEntryLevels(int[] fromLevels, int[] toLevels, int layerOffsetEnds)
+            {
+                this.fromLevels = fromLevels;
+                this.toLevels = toLevels;
+                this.layerOffsetEnds = layerOffsetEnds;
+            }
+
+            public static ConnectionEntryLevels Build(
+                DungeonLayout layout,
+                RoomZoneContext zones,
+                IReadOnlyList<int> zoneLevels,
+                RouteIntent intent)
+            {
+                int count = layout.connections.Count;
+                var fromLevels = new int[count];
+                var toLevels = new int[count];
+                int layerOffsetEnds = 0;
+                for (int index = 0; index < count; index++)
+                {
+                    RoomConnection connection = layout.connections[index];
+                    ResolveConnectionNodes(
+                        zones,
+                        layout.rooms,
+                        connection,
+                        out int fromNode,
+                        out int toNode);
+                    int fromOffset = LayerOffsetAt(intent, connection.fromRoom, connection.fromLayerId);
+                    int toOffset = LayerOffsetAt(intent, connection.toRoom, connection.toLayerId);
+                    fromLevels[index] = zoneLevels[fromNode] + fromOffset;
+                    toLevels[index] = zoneLevels[toNode] + toOffset;
+                    layerOffsetEnds += fromOffset != 0 ? 1 : 0;
+                    layerOffsetEnds += toOffset != 0 ? 1 : 0;
+                }
+
+                return new ConnectionEntryLevels(fromLevels, toLevels, layerOffsetEnds);
+            }
+
+            public void Resolve(int connectionIndex, out int fromLevel, out int toLevel)
+            {
+                fromLevel = fromLevels[connectionIndex];
+                toLevel = toLevels[connectionIndex];
+            }
+        }
+
+        /// <summary>
+        /// The offset a connection end's layer binding adds to its zone level.
+        /// </summary>
+        /// <remarks>
+        /// A synthesized loop carries no binding by construction — it has no
+        /// route edge to declare one — so it always lands on 0 here.
+        /// </remarks>
+        private static int LayerOffsetAt(RouteIntent intent, int room, string layerId)
+        {
+            if (string.IsNullOrEmpty(layerId) ||
+                intent?.nodes == null ||
+                room < 0 ||
+                room >= intent.nodes.Length)
+            {
+                return 0;
+            }
+
+            return intent.nodes[room].LayerOffset(layerId);
         }
 
         private readonly struct LoopConnectionCandidate

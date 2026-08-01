@@ -3672,6 +3672,13 @@ namespace DungeonLab.Editor
                     // in production and matters only to multi-layer rooms.
                     ["surfacesOverTransitionBodies"] =
                         CountSurfacesOverTransitionBodies(plan.surfaces, plan.transitions),
+                    // D3's counterpart number: connection ends that resolved at a
+                    // BOUND storey rather than at their room's own level. 0 means
+                    // every entry level in the corpus is the zone level the old
+                    // code read, so the per-(connection, end) table is a widening
+                    // with no site in production yet.
+                    ["layerOffsetConnectionEnds"] =
+                        CountLayerOffsetConnectionEnds(layout, lastRouteIntent),
                     ["depthLevelCorrelation"] = float.IsNaN(correlation) ? JValue.CreateNull() : new JValue(correlation)
                 },
                 ["validation"] = validationToken,
@@ -3954,6 +3961,34 @@ namespace DungeonLab.Editor
                 projection["portBindingMode"] = slot.recipe.portBindingMode.ToString();
                 projection["minimumActiveSockets"] = slot.recipe.minimumActiveSockets;
                 projection["maximumActiveSockets"] = slot.recipe.maximumActiveSockets;
+            }
+
+            // Appended only by a slot that maps a storey, for the same hash
+            // reason as D1's node layers: this projection feeds `routeIntentHash`
+            // and from there every seed's `hashes.canonical`, so an unconditional
+            // row would move all 200 seeds for a schema addition that changed no
+            // geometry. The resolved level is reported beside the two ids because
+            // the ids are local to their own vocabulary and the LEVEL is the
+            // thing the agreement rule compares.
+            if (slot.DeclaresLayerBindings)
+            {
+                var layerBindings = new JArray();
+                foreach (RouteTopologySlotLayer binding in slot.layerBindings)
+                {
+                    DungeonRecipeLayers.TryGetRelativeLevel(
+                        slot.recipe,
+                        binding.recipeLayerId,
+                        out int recipeRelativeLevel);
+                    layerBindings.Add(new JObject
+                    {
+                        ["topologyLayerId"] = binding.topologyLayerId,
+                        ["recipeLayerId"] = binding.recipeLayerId,
+                        ["relativeLevel"] = recipeRelativeLevel,
+                        ["absoluteLevel"] = node.relativeElevationLevels + recipeRelativeLevel
+                    });
+                }
+
+                projection["layerBindings"] = layerBindings;
             }
 
             if (slot.forcedForAuthoringPreview)

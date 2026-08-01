@@ -792,7 +792,7 @@ rebuild it any time with **Arena > Dungeons > Rebuild Random Dungeon (Specific
 Topology)**, topology `aperture-gallery`. Its gallery sits at world
 `y = 12` around `(4, 12, −64)` — the node's level 8 plus the layer's 4.
 
-### Phase D — multi-layer rooms in GENERATION. IN PROGRESS; D0, D1 and D2 landed 2026-08-01.
+### Phase D — multi-layer rooms in GENERATION. IN PROGRESS; D0–D3 landed 2026-08-01.
 
 Design §13. Topologies and recipes declare layers, and routes bind to them.
 Four of C2's corrections are constraints on anything Phase D authors rather than
@@ -811,7 +811,7 @@ used, moved from content into code.
 | **D0** ✅ | the transition body is a **band**, not a column to the sky | measured: 0 surfaces stand over a stair body anywhere in the corpus |
 | **D1** ✅ | the **topology layer schema** — node `layers`, edge `fromLayer`/`toLayer` — parsed, validated by `Validate Topologies`, carried into `RouteIntent` and `plannedBand`, and consumed nowhere | no topology declares layers |
 | **D2** ✅ | the **corridor-exclusivity and third-room relaxations** — *authorized* by layer binding, *decided* by disjoint absolute bands (§8.1) — **together with the stacked-corridor producer they need**, which the design separates and which measurement says cannot be separated (see D1's finding 1) | no connection is layer-bound |
-| D3 | a bound edge **resolves at its layer's elevation** — a per-`(connection, end)` entry level beside today's per-node `zoneLevels`, and a slot mapping a topology layer id to a recipe layer id | ditto |
+| **D3** ✅ | a bound edge **resolves at its layer's elevation** — a per-`(connection, end)` entry level beside today's per-node `zoneLevels`, and a slot mapping a topology layer id to a recipe layer id | ditto |
 | D4 | **volumes** — `RoomFootprint.Overlaps` volumetric, an `OpenVolume` producer, `ChooseEnclosedRooms` moved into the plan | the volumetric test needs a declared reason, and nothing declares one |
 | D5 | **content** — an atrium topology plus a room binding route edges at two elevations | weight 0, exactly as `aperture-gallery` is |
 
@@ -1007,6 +1007,86 @@ layer-bound corridor crossing such a landing would stack over it instead of
 rejecting the attempt. It cannot happen in the corpus, because nothing is
 layer-bound, and **no gate can see it**; D5's content is where it would first
 bite.
+
+**D3 — a bound edge resolves at its layer's elevation (landed 2026-08-01).**
+
+Two halves that meet in the middle of a room: a corridor now resolves at the
+elevation its edge BOUND rather than at its room's own level, and a slot now says
+which storey of the recipe that elevation is.
+
+- **`ConnectionEntryLevels` is the per-`(connection, end)` table**, built once per
+  tier attempt beside `zoneLevels` and read by all three sites that used to index
+  `zoneLevels` at a connection endpoint — the per-edge rise check in
+  `TryAssignRoomLevels`, the corridor delta gate, and
+  `TryResolveConnectionTransition`. An entry level is the zone level PLUS the
+  bound layer's offset. Additive, not a replacement, which is what makes it
+  output-neutral by construction: an unbound end has no offset and resolves at
+  exactly the number the old code read.
+- **A slot maps a topology layer id to a recipe layer id** —
+  `"layers": { "gallery": "upper" }` — rejected at load when malformed, carried
+  into `RecipeSlotIntent` and the report, and consumed by
+  `TryValidateSlotLayerBindings` before a candidate can be admitted. Four codes:
+  `LAYER_BINDING_UNDECLARED`, `LAYER_BINDING_LEVEL_MISMATCH`,
+  `PORT_LAYER_UNMAPPED`, `PORT_LAYER_MISMATCH`.
+
+Gate: `ops/dungeon-port-ab.sh` at density 0 — **identical geometry on all 200
+seeds**, and a leaf-by-leaf diff of the two reports (**519 627 per-seed leaves**)
+found **zero leaves changed in value and none removed**; the only addition is the
+new metric, and the only two differing values in the whole file are the
+generation timestamp and `resultHash`. `resultHash` moved once for the added
+field, `5a970e5560e70423` → `10b28a82b65fc21f`. Render Digest 12 seeds
+byte-identical at `bdb90e5e8a696dd7`. `Validate Topologies` 8/8 PASS plus
+**26/26** layer-schema checks (19 from D1/D2, plus 7 slot-mapping cases). All
+three older fixtures re-run green.
+
+**No gate could see this one either, so it ships with its number.**
+`tieredLevelPlan.layerOffsetConnectionEnds` counts the connection ends that
+resolved above their room's own level, and it is **0 on all 200 seeds** — every
+entry level in production is the value the pre-D3 code read at that site.
+
+**The capability, measured** — `Tools > Dungeon Lab > Print Layer Entry Fixture`.
+A three-node probe graph parsed by the real loader, one room per node, and the
+same graph run with and without the binding. 30 checks, all green. The
+load-bearing ones: the bound B-C edge is accepted where the unbound one is
+rejected with `[ROUTE_ELEVATION_REQUIREMENT] edge 'B-C' resolved rise 4u instead
+of 0u`; the bound end resolves at 8 and the unbound end at 4; and **one room is
+met at two elevations** through the real `TryResolveConnectionTransition` — the
+ground-side corridor cell at 4, the gallery-side corridor cell at 8, the room's
+own floor untouched at 4.
+
+Five things measured that the design or the earlier slices had wrong:
+
+1. **D1's schema was not merely unconsumed — it was unusable.** The pre-D3 code
+   did not resolve a layer-bound edge at the wrong elevation; it failed the tier
+   attempt outright, because `TryAssignRoomLevels` compared a rise derived from
+   the BOUND levels against one measured between the NODE levels. The fixture
+   records that message verbatim. D3 is therefore the slice that makes the layer
+   schema reachable at all, not a refinement of it.
+2. **The entry level must be additive, and it can never be asked to compose.**
+   `zoneLevels[node] + offset` is the only form that keeps the +1 raised-zone
+   accent working, and a storey offset can never meet a raised zone: a node
+   declaring a real storey must carry a recipe slot (D1's validator rule) and a
+   recipe-slot room is excluded from zone splitting outright
+   (`DungeonLabGenerator.RouteFirstPilot.cs:668`). A base-only layer table — D2's
+   authorization — may sit on a split room, and its offset is 0.
+3. **The agreement rule is what lets the recipe side stay unchanged.** Every
+   elevation inside a room is derived from the RECIPE's layer offset
+   (`PortLayerRelativeLevel`, `zone.layerRelativeLevel`) and every elevation on
+   the route from the TOPOLOGY's. Proving the two equal per candidate means
+   neither derivation has to override the other, so §8.2's port-level expression
+   needed no edit — the mapping's real job is to make two vocabularies provably
+   describe one elevation, not to convert between them.
+4. **A socket recipe cannot be routed to on a storey, and that is a limit worth
+   stating.** `IncidentCardinalSockets` binds entrances by DIRECTION, so nothing
+   in the route can name which storey a socket is on; the rule therefore requires
+   every socket on the base layer. That is the concrete shape of owner decision
+   9's gap, and where a generic multi-layer room would relax it.
+5. **`episode_layered_gallery_01` cannot yet be routed to on its gallery**, and
+   this is a D5 prerequisite rather than a defect. Both of its ports are on its
+   base layer — measured across the whole catalog, every port of every recipe is
+   — so a slot may map its `upper` storey and the agreement rule passes, while
+   binding an edge to that storey is rejected `PORT_LAYER_MISMATCH` until a port
+   is authored there. The fixture asserts exactly that pair.
 
 **A tooling note, because this ritual is now six slices old.**
 `ops/dungeon-report-diff.py` does the leaf-by-leaf report comparison by hand up

@@ -95,10 +95,13 @@ Design background and the drafted topology set:
   "edges": [["A", "B", "LevelCorridor"], ["B", "C", "Stair"],
             ["E", "F", "Stair", { "fromLayer": "gallery" }]],
 
+  // "layers" is OPTIONAL and says which storey of the RECIPE each of the
+  // node's declared storeys is — see "Slot layer mapping" below.
   "slots": [
     { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-C" },
     { "id": "required-landmark",    "at": "E", "entry": "D-E", "exit": "E-F",
-      "orientation": "vista-source-to-target" },   // default is "route-forward"
+      "orientation": "vista-source-to-target",     // default is "route-forward"
+      "layers": { "gallery": "upper" } },
     { "id": "required-return",      "at": "M", "entry": "L-M", "exit": "M-H" }
   ],
 
@@ -144,9 +147,63 @@ Reported by **Validate Topologies**:
   non-base storey or an aerial span's deck can build a stacked surface today, so
   a generic room's layers would have no producer. This relaxes when one exists.
 
-`Validate Topologies` also runs a **loader self-check** over an in-memory probe
-(16 checks), because the schema has no site in the corpus and would otherwise be
-first exercised by the first topology to use it.
+A bound edge **resolves at its layer's elevation** — its corridor is leveled
+there and its rise is measured from there — rather than at its node's own level
+(added 2026-08-01, D3). An unbound end keeps meeting its room where it always
+did.
+
+### Slot layer mapping — which storey of the recipe is which storey of the node
+
+**Added 2026-08-01 (layered-topology D3). No shipped topology declares one.**
+
+A topology names the elevations its **routes** bind to. A recipe names the
+storeys its own geometry is built on, and it does so without knowing which graph
+will place it. The slot is the only place that knows both vocabularies, so it is
+the only place they can be equated:
+
+```jsonc
+"nodes": {
+  "E": ["great-hall", "landmark", "aperture", 8, { "main": 4 },
+        { "layers": { "gallery": 4 } }]            // the GRAPH calls it "gallery"
+},
+"edges": [["E", "F", "Stair", { "fromLayer": "gallery" }]],
+"slots": [
+  { "id": "required-landmark", "at": "E", "entry": "D-E", "exit": "E-F",
+    "layers": { "gallery": "upper" } }            // the RECIPE calls it "upper"
+]
+```
+
+Equating the two by *name* is what the mapping exists to avoid: it would make
+every recipe's layer ids part of every topology's, and a layer id is room-local
+by design.
+
+Rejected by the **loader**:
+
+- a mapping naming a layer its own slot node does not declare;
+- a missing, empty or non-string recipe layer id;
+- two topology layers mapped onto one recipe layer — that would collapse two
+  elevations into one place;
+- an empty `layers` mapping, or one that is not an object.
+
+Checked per **recipe candidate**, before it can be selected. The codes appear in
+that slot's `rejectedCandidates` in the seed report:
+
+| Code | Meaning |
+| --- | --- |
+| `LAYER_BINDING_UNDECLARED` | the candidate has no storey by that name |
+| `LAYER_BINDING_LEVEL_MISMATCH` | the recipe's storey and the node's sit at different relative levels. **The agreement rule** — every elevation inside the room derives from the recipe's offset and every elevation on the route from the topology's, so proving them equal is what lets both derivations stand unchanged |
+| `PORT_LAYER_UNMAPPED` | an edge binds a storey this slot never mapped, so its port has nowhere to arrive |
+| `PORT_LAYER_MISMATCH` | a bound port is not on the storey its own edge arrives at — or an incident **socket** is off the base layer, which sockets must be: a socket binds by direction, and nothing in the route can say which storey it is on |
+
+An edge that binds nothing arrives on the node's base, which means the recipe's
+base — which is every port of every recipe in the catalog today. A recipe you
+want routed to on its upper storey therefore needs a **port authored there**;
+`episode_layered_gallery_01` has none yet.
+
+`Validate Topologies` also runs a **loader self-check** over in-memory probes
+(26 checks), because the schema has no site in the corpus and would otherwise be
+first exercised by the first topology to use it. The generator's side has its own
+— `Tools > Dungeon Lab > Print Layer Entry Fixture`.
 
 ### Derived, never authored
 
@@ -172,6 +229,7 @@ Hard rules, all enforced by the generator and all reported by the validator:
 | Every slot node has degree 2 | a two-port recipe room |
 | Edge rise `±4` or `±8` for Stair/Bridge/Stairwell, exactly `0` for LevelCorridor | write an edge in travel order in either direction; a descending edge is a rise of `-4`. Measured between the **bound** elevations, which are the node levels for an unbound edge |
 | A declared layer is bound by an edge, and its node carries a recipe slot | a storey nothing routes to, or that nothing can build, generates as nothing |
+| A slot maps only layers its node declares, one recipe storey each; the mapped recipe storey exists, sits at the same relative level, and carries the port every bound edge arrives on | the graph and the room must agree about where a storey is, or the room is built at one height and routed to at another |
 | At least one Stair, one Bridge, one Stairwell | the transition-kind coverage check |
 | `anchors.bottom` at level 0, `anchors.top` at level 24 | the abyss datum and the ceiling |
 | Connected graph, cycle rank ≥ 1, at least two degree-≥3 nodes | a route loops |

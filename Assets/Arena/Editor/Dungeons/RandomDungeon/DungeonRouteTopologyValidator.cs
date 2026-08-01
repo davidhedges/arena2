@@ -802,7 +802,12 @@ namespace DungeonLab.Editor
         // one reports whether it changed the text at all.
         private static bool LayerSchemaProbeRejects(string find, string replaceWith)
         {
-            string mutated = LayerSchemaProbeJson.Replace(find, replaceWith);
+            return LayerSchemaProbeMutationRejected(LayerSchemaProbeJson.Replace(find, replaceWith));
+        }
+
+        /// <summary>The same guarantee for a case that has to edit two members.</summary>
+        private static bool LayerSchemaProbeMutationRejected(string mutated)
+        {
             return !string.Equals(mutated, LayerSchemaProbeJson, StringComparison.Ordinal) &&
                 !TryParseLayerSchemaProbe(mutated, out _);
         }
@@ -968,6 +973,66 @@ namespace DungeonLab.Editor
                     "[\"B\", \"C\", \"LevelCorridor\", { \"fromLayer\": \"gallery\" }]",
                     "[\"B\", \"C\", \"LevelCorridor\"], [\"A\", \"C\", \"LevelCorridor\", { \"fromLayer\": \"sky\" }]"),
                 out bool boundLaneParsed);
+
+            // D3: the slot's storey mapping. The node already declares 'gallery'
+            // and the probe's slot sits on that node, so every case here is one
+            // edit to the slot object.
+            const string bareSlot =
+                "{ \"id\": \"probe-slot\", \"at\": \"B\", \"entry\": \"A-B\", \"exit\": \"B-C\" }";
+            const string mappedSlot =
+                "{ \"id\": \"probe-slot\", \"at\": \"B\", \"entry\": \"A-B\", \"exit\": \"B-C\", " +
+                "\"layers\": { \"gallery\": \"upper\" } }";
+            bool slotMapParses =
+                TryParseLayerSchemaProbe(
+                    LayerSchemaProbeJson.Replace(bareSlot, mappedSlot),
+                    out DungeonRouteTopology mapped) &&
+                mapped.slots[0].DeclaresLayers &&
+                mapped.slots[0].layers.Length == 1 &&
+                string.Equals(
+                    mapped.slots[0].layers[0].topologyLayerId,
+                    "gallery",
+                    StringComparison.Ordinal) &&
+                string.Equals(
+                    mapped.slots[0].layers[0].recipeLayerId,
+                    "upper",
+                    StringComparison.Ordinal);
+            results.Add(("slotLayerMapParses", slotMapParses));
+
+            // The shipped shape: no mapping member at all, and therefore no
+            // bindings. This is what makes the whole of D3's recipe side inert
+            // on every topology in the corpus.
+            results.Add(("unmappedSlotCarriesNoBinding", loaded && !probe.slots[0].DeclaresLayers));
+
+            results.Add(("slotLayerMapUndeclaredRejected",
+                LayerSchemaProbeRejects(
+                    bareSlot,
+                    mappedSlot.Replace("\"gallery\": \"upper\"", "\"catwalk\": \"upper\""))));
+            results.Add(("slotLayerMapEmptyRejected",
+                LayerSchemaProbeRejects(
+                    bareSlot,
+                    mappedSlot.Replace("{ \"gallery\": \"upper\" }", "{ }"))));
+            results.Add(("slotLayerMapNonObjectRejected",
+                LayerSchemaProbeRejects(
+                    bareSlot,
+                    mappedSlot.Replace("{ \"gallery\": \"upper\" }", "\"upper\""))));
+            results.Add(("slotLayerMapNonStringTargetRejected",
+                LayerSchemaProbeRejects(
+                    bareSlot,
+                    mappedSlot.Replace("\"gallery\": \"upper\"", "\"gallery\": 4"))));
+            // Two storeys onto one recipe storey would collapse two elevations
+            // into one place. 'floor' has to be declared on B for the mapping to
+            // reach the duplicate check at all, so this one edits two members.
+            results.Add(("slotLayerMapDuplicateTargetRejected",
+                LayerSchemaProbeMutationRejected(
+                    LayerSchemaProbeJson
+                        .Replace(
+                            "{ \"layers\": { \"gallery\": 4 } }",
+                            "{ \"layers\": { \"gallery\": 4, \"floor\": 0 } }")
+                        .Replace(
+                            bareSlot,
+                            mappedSlot.Replace(
+                                "\"gallery\": \"upper\"",
+                                "\"floor\": \"upper\", \"gallery\": \"upper\"")))));
 
             results.Add(("unboundLayerReported", unboundLayerReported));
             results.Add(("slotlessLayerReported", slotlessLayerReported));

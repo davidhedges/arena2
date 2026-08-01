@@ -307,6 +307,31 @@ namespace DungeonLab.Editor
                 !string.IsNullOrEmpty(fromLayerId) || !string.IsNullOrEmpty(toLayerId);
         }
 
+        /// <summary>
+        /// One slot's answer to "which storey of the recipe is this storey of the
+        /// node?" (design §13, phase D3).
+        /// </summary>
+        /// <remarks>
+        /// The two vocabularies are independent on purpose. A topology names the
+        /// elevations its ROUTES bind to; a recipe names the storeys its own
+        /// geometry is built on, and it does so without knowing which graph will
+        /// place it. The slot is the only place that knows both, so it is the
+        /// only place the two can be equated — and equating them by NAME would
+        /// have made every recipe's layer ids part of every topology's, which is
+        /// exactly the room-local coupling §8.1 spends a page rejecting.
+        /// </remarks>
+        private readonly struct RouteTopologySlotLayer
+        {
+            public readonly string topologyLayerId;
+            public readonly string recipeLayerId;
+
+            public RouteTopologySlotLayer(string topologyLayerId, string recipeLayerId)
+            {
+                this.topologyLayerId = topologyLayerId ?? string.Empty;
+                this.recipeLayerId = recipeLayerId ?? string.Empty;
+            }
+        }
+
         private sealed class RouteTopologySlot
         {
             public readonly string slotId;
@@ -314,20 +339,28 @@ namespace DungeonLab.Editor
             public readonly string entryEdgeId;
             public readonly string exitEdgeId;
             public readonly RecipeOrientationBinding orientationBinding;
+            // Sorted by topology layer id, ordinal, for the same reason the node
+            // layer table is: a JSON object's property order is authored, and
+            // this array reaches the hashed route-intent projection.
+            public readonly RouteTopologySlotLayer[] layers;
 
             public RouteTopologySlot(
                 string slotId,
                 int node,
                 string entryEdgeId,
                 string exitEdgeId,
-                RecipeOrientationBinding orientationBinding)
+                RecipeOrientationBinding orientationBinding,
+                RouteTopologySlotLayer[] layers = null)
             {
                 this.slotId = slotId;
                 this.node = node;
                 this.entryEdgeId = entryEdgeId;
                 this.exitEdgeId = exitEdgeId;
                 this.orientationBinding = orientationBinding;
+                this.layers = layers ?? Array.Empty<RouteTopologySlotLayer>();
             }
+
+            public bool DeclaresLayers => layers.Length > 0;
         }
 
         private sealed class DungeonRouteTopology
@@ -1208,11 +1241,131 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
+                if (!TryParseRouteTopologySlotLayers(
+                        slotId,
+                        nodes[node],
+                        slot["layers"] as JObject,
+                        slot,
+                        errors,
+                        out RouteTopologySlotLayer[] slotLayers))
+                {
+                    return false;
+                }
+
                 nodes[node].recipeSlotId = slotId;
-                parsed.Add(new RouteTopologySlot(slotId, node, entryEdgeId, exitEdgeId, orientation));
+                parsed.Add(new RouteTopologySlot(
+                    slotId,
+                    node,
+                    entryEdgeId,
+                    exitEdgeId,
+                    orientation,
+                    slotLayers));
             }
 
             slots = parsed.ToArray();
+            return true;
+        }
+
+        /// <summary>
+        /// The optional slot member
+        /// <c>"layers": { "&lt;topology layer&gt;": "&lt;recipe layer&gt;" }</c>
+        /// (design §13, phase D3).
+        /// </summary>
+        /// <remarks>
+        /// Rejected at LOAD time rather than reported, on the same reasoning as
+        /// an edge's layer binding: a mapping that names a storey the node does
+        /// not declare has no elevation at all, so the room would be built at
+        /// one height and routed to at another.
+        /// <para>
+        /// What is NOT checked here is the only interesting rule — that the
+        /// recipe layer sits at the same relative level as the topology layer.
+        /// The loader cannot know which recipe will fill the slot; that is
+        /// checked per candidate, before catalog admission, in
+        /// <c>TryValidateRecipeCandidate</c>.
+        /// </para>
+        /// </remarks>
+        private static bool TryParseRouteTopologySlotLayers(
+            string slotId,
+            RouteTopologyNode node,
+            JObject table,
+            JObject slot,
+            List<string> errors,
+            out RouteTopologySlotLayer[] layers)
+        {
+            layers = Array.Empty<RouteTopologySlotLayer>();
+            if (table == null)
+            {
+                // A slot member spelled `layer`, `storeys`, … would otherwise be
+                // ignored in silence, which is the failure mode C2 paid for
+                // twice: the graph validates, generation runs, and the authored
+                // feature is simply absent.
+                if (slot?["layers"] != null)
+                {
+                    errors.Add(
+                        $"slot '{slotId}' declared 'layers' as something other than an object; " +
+                        "expected { \"<topology layer>\": \"<recipe layer>\" }");
+                    return false;
+                }
+
+                return true;
+            }
+
+            var parsed = new List<RouteTopologySlotLayer>(table.Count);
+            var topologyIds = new HashSet<string>(StringComparer.Ordinal);
+            var recipeIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (JProperty property in table.Properties())
+            {
+                string topologyLayerId = property.Name;
+                string recipeLayerId = property.Value.Type == JTokenType.String
+                    ? property.Value.Value<string>()
+                    : null;
+                if (string.IsNullOrEmpty(topologyLayerId) || !topologyIds.Add(topologyLayerId))
+                {
+                    errors.Add($"slot '{slotId}' layer mapping '{topologyLayerId}' is missing or duplicated");
+                    return false;
+                }
+
+                if (string.IsNullOrEmpty(recipeLayerId))
+                {
+                    errors.Add(
+                        $"slot '{slotId}' maps layer '{topologyLayerId}' to a missing or non-string " +
+                        "recipe layer id");
+                    return false;
+                }
+
+                if (!node.TryGetAbsoluteLevel(topologyLayerId, out _))
+                {
+                    string declaredIds = node.DeclaresLayers
+                        ? string.Join(", ", Array.ConvertAll(node.layers, layer => $"'{layer.layerId}'"))
+                        : "none";
+                    errors.Add(
+                        $"slot '{slotId}' maps layer '{topologyLayerId}', which its node '{node.key}' " +
+                        $"does not declare (declared: {declaredIds})");
+                    return false;
+                }
+
+                // Two storeys onto one recipe storey would collapse two
+                // elevations into one place, and the graph would then claim a
+                // separation the room cannot build.
+                if (!recipeIds.Add(recipeLayerId))
+                {
+                    errors.Add(
+                        $"slot '{slotId}' maps more than one layer onto recipe layer '{recipeLayerId}'");
+                    return false;
+                }
+
+                parsed.Add(new RouteTopologySlotLayer(topologyLayerId, recipeLayerId));
+            }
+
+            if (parsed.Count == 0)
+            {
+                errors.Add($"slot '{slotId}' declared an empty 'layers' mapping; omit it instead");
+                return false;
+            }
+
+            parsed.Sort((first, second) =>
+                string.CompareOrdinal(first.topologyLayerId, second.topologyLayerId));
+            layers = parsed.ToArray();
             return true;
         }
 
