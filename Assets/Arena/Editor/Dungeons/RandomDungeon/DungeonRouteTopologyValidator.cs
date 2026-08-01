@@ -33,11 +33,6 @@ namespace DungeonLab.Editor
         // reach density 5", and a rule check alone cannot.
         private static readonly int[] RouteTopologyValidationDensityLevels = { 0, 1, 2, 3, 4, 5 };
 
-        // Production content is no longer allowed to satisfy "layered" with a
-        // lone atrium. The three mandatory authored beats must all be storeyed
-        // and must all participate in the route at their second elevation.
-        private const int ProductionLayeredSlotCount = 3;
-
         // Public so -executeMethod can reach it: the report is now part of the
         // evidence a batch run produces, not only something clicked in-editor.
         [MenuItem("Tools/Dungeon Lab/Validate Topologies")]
@@ -102,10 +97,20 @@ namespace DungeonLab.Editor
                     return report.ToString();
                 }
 
-                foreach (DungeonRouteTopology topology in topologies)
+                foreach (DungeonRouteTopology definition in topologies)
                 {
+                    DungeonRouteTopology topology = definition.IsFamilyDefinition
+                        ? ComposeRouteTopologyFamily(
+                            definition,
+                            StableFamilyValidationSeed(definition.id))
+                        : definition;
                     var violations = new List<string>();
                     var notes = new List<string>();
+                    if (topology.WasComposedFromFamily)
+                    {
+                        notes.Add(
+                            "sample composed from compact family constraints; production file has no exact graph");
+                    }
                     AppendRouteTopologyGraphRules(topology, violations);
                     AppendRouteTopologyLatticeRules(topology, violations);
                     AppendRouteTopologyRhythmRules(topology, violations);
@@ -174,6 +179,21 @@ namespace DungeonLab.Editor
                     ? "RESULT: every topology satisfies every authoring rule."
                     : "RESULT: at least one topology violates an authoring rule.");
             return report.ToString();
+        }
+
+        private static int StableFamilyValidationSeed(string familyId)
+        {
+            unchecked
+            {
+                uint hash = 2166136261u;
+                foreach (char character in familyId ?? string.Empty)
+                {
+                    hash ^= character;
+                    hash *= 16777619u;
+                }
+
+                return (int)hash;
+            }
         }
 
         // Enough seeds to see whether a topology reaches a level, few enough
@@ -447,45 +467,28 @@ namespace DungeonLab.Editor
                 violations.Add($"only {junctionCount} nodes have degree >= 3; a route needs at least two branch points");
             }
 
-            if (topology.weight > 0)
+            if (topology.WasComposedFromFamily)
             {
-                int layeredSlots = 0;
-                int routeBoundLayeredSlots = 0;
-                foreach (RouteTopologySlot slot in topology.slots)
+                int structuralLayers = 0;
+                foreach (RouteTopologyNode node in topology.nodes)
                 {
-                    RouteTopologyNode slotNode = topology.nodes[slot.node];
-                    if (!slotNode.DeclaresStoreys || !slot.DeclaresLayers)
-                    {
-                        continue;
-                    }
-
-                    layeredSlots++;
-                    foreach (string edgeId in new[] { slot.entryEdgeId, slot.exitEdgeId })
-                    {
-                        if (!topology.TryGetEdgeIndex(edgeId, out int edgeIndex))
-                        {
-                            continue;
-                        }
-
-                        RouteTopologyEdge edge = topology.edges[edgeIndex];
-                        string layerId = edge.fromNode == slot.node
-                            ? edge.fromLayerId
-                            : edge.toLayerId;
-                        if (!string.IsNullOrEmpty(layerId))
-                        {
-                            routeBoundLayeredSlots++;
-                            break;
-                        }
-                    }
+                    structuralLayers += node.DeclaresStoreys ? 1 : 0;
                 }
 
-                if (layeredSlots < ProductionLayeredSlotCount ||
-                    routeBoundLayeredSlots < ProductionLayeredSlotCount)
+                if (structuralLayers < topology.family.minimumStructuralLayers)
                 {
                     violations.Add(
-                        $"weighted production topology has {layeredSlots} storeyed recipe slots and " +
-                        $"{routeBoundLayeredSlots} route-bound storeyed slots; every one of the " +
-                        $"{ProductionLayeredSlotCount} required beats must be genuinely layered");
+                        $"composed family has {structuralLayers} structural layers; its goal requires " +
+                        $"at least {topology.family.minimumStructuralLayers}");
+                }
+
+                if (topology.slots.Length < topology.family.recipeOpportunities.minimum ||
+                    topology.slots.Length > topology.family.recipeOpportunities.maximum)
+                {
+                    violations.Add(
+                        $"composed family published {topology.slots.Length} recipe opportunities, outside " +
+                        $"its [{topology.family.recipeOpportunities.minimum}, " +
+                        $"{topology.family.recipeOpportunities.maximum}] constraint");
                 }
             }
 
@@ -497,31 +500,6 @@ namespace DungeonLab.Editor
             List<int>[] adjacency,
             List<string> violations)
         {
-            if (topology.slots.Length != 3)
-            {
-                violations.Add(
-                    $"{topology.slots.Length} recipe slots are declared; the generator requires exactly 3");
-            }
-
-            foreach (string required in new[]
-                     {
-                         CompressionRecipeSlotId,
-                         LandmarkRecipeSlotId,
-                         ReturnRecipeSlotId
-                     })
-            {
-                bool found = false;
-                foreach (RouteTopologySlot slot in topology.slots)
-                {
-                    found |= string.Equals(slot.slotId, required, StringComparison.Ordinal);
-                }
-
-                if (!found)
-                {
-                    violations.Add($"no slot declares id '{required}'");
-                }
-            }
-
             foreach (RouteTopologySlot slot in topology.slots)
             {
                 RouteTopologyNode node = topology.nodes[slot.node];

@@ -6,6 +6,14 @@ Unity version: `6000.4.0f1`
 
 Last verified: 2026-07-24
 
+> Procedural-topology note (2026-08-02): production no longer contains three
+> fixed required slots. Route families generate zero through three authored
+> content opportunities per seed. The schema-v1 field instructions below remain
+> useful, but the fixed-slot tables and pinned slot IDs describe deprecated
+> evidence graphs. Current compatibility is by generated node role/beat,
+> degree, ports or sockets, orientation, and layer mapping; see
+> [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md).
+
 This guide answers one question: **how do I author another room that the current
 dungeon generator can select from a pool?**
 

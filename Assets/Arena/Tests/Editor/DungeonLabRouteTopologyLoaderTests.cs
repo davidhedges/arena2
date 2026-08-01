@@ -144,6 +144,38 @@ namespace Arena.Tests.Editor
             Assert.That(firstText, Is.EqualTo(secondText));
         }
 
+        [Test]
+        public void ProductionFamilies_ComposeDeterministicThreeDimensionalRouteIntent()
+        {
+            Dictionary<string, string> snapshot = ParseSnapshot(
+                InvokeSnapshot("BuildProceduralRouteCompositionSnapshot", TopologySeed));
+
+            Assert.That(snapshot["family.definition"], Is.EqualTo("True"));
+            Assert.That(snapshot["family.productionCount"], Is.EqualTo("3"));
+            Assert.That(snapshot["family.authoredExactFieldCount"], Is.EqualTo("0"));
+            Assert.That(snapshot["families.allStaticRulesPass"], Is.EqualTo("True"));
+            Assert.That(snapshot["composer.deterministic"], Is.EqualTo("True"));
+            Assert.That(snapshot["composer.connected"], Is.EqualTo("True"));
+            Assert.That(snapshot["composer.surfaceGraphConnected"], Is.EqualTo("True"));
+            Assert.That(int.Parse(snapshot["composer.cycleRank"]), Is.GreaterThanOrEqualTo(1));
+            Assert.That(int.Parse(snapshot["composer.layeredNodes"]), Is.GreaterThanOrEqualTo(1));
+            Assert.That(int.Parse(snapshot["composer.searchExpansions"]), Is.GreaterThan(0));
+            Assert.That(snapshot["composer.searchWithinBound"], Is.EqualTo("True"));
+            Assert.That(snapshot["composer.cardinalCoarseEmbedding"], Is.EqualTo("True"));
+            Assert.That(snapshot["composer.structuralLattice"], Is.EqualTo("True"));
+            Assert.That(snapshot["composer.bindingsResolve"], Is.EqualTo("True"));
+            Assert.That(snapshot["composer.hasLevelCorridor"], Is.EqualTo("True"));
+            Assert.That(snapshot["composer.hasStair"], Is.EqualTo("True"));
+            Assert.That(snapshot["composer.hasBridge"], Is.EqualTo("True"));
+            Assert.That(snapshot["composer.hasStairwell"], Is.EqualTo("True"));
+            Assert.That(snapshot["opportunities.minimumObserved"], Is.EqualTo("0"));
+            Assert.That(snapshot["opportunities.maximumObserved"], Is.EqualTo("3"));
+            Assert.That(snapshot["opportunities.contractsValid"], Is.EqualTo("True"));
+            Assert.That(snapshot["surfaces.allSamplesConnected"], Is.EqualTo("True"));
+            Assert.That(snapshot["loops.sawOne"], Is.EqualTo("True"));
+            Assert.That(snapshot["loops.sawTwo"], Is.EqualTo("True"));
+        }
+
         private static Dictionary<string, string> TopologySnapshot()
         {
             return ParseSnapshot(InvokeSnapshot("BuildRouteGraphCompositionSnapshot", TopologySeed));

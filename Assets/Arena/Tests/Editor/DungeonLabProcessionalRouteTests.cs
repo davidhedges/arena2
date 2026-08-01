@@ -58,11 +58,11 @@ namespace Arena.Tests.Editor
             Assert.That(report["accepted"], Is.EqualTo("true"));
             Assert.That(report["route.pattern"], Is.EqualTo("vertical-braid"));
             Assert.That(report["route.mainRouteCount"], Is.EqualTo("9"));
-            Assert.That(report["route.branchNodeCount"], Is.EqualTo("4"));
-            Assert.That(report["route.loopEdges"], Is.EqualTo("1"));
-            Assert.That(int.Parse(report["metric.rooms"]), Is.EqualTo(13));
-            Assert.That(int.Parse(report["metric.connections"]), Is.GreaterThanOrEqualTo(13));
-            Assert.That(int.Parse(report["metric.loopEdges"]), Is.GreaterThanOrEqualTo(1));
+            Assert.That(report["route.branchNodeCount"], Is.EqualTo("8"));
+            Assert.That(report["route.loopEdges"], Is.EqualTo("2"));
+            Assert.That(int.Parse(report["metric.rooms"]), Is.EqualTo(17));
+            Assert.That(int.Parse(report["metric.connections"]), Is.GreaterThanOrEqualTo(18));
+            Assert.That(int.Parse(report["metric.loopEdges"]), Is.GreaterThanOrEqualTo(2));
         }
 
         [Test]

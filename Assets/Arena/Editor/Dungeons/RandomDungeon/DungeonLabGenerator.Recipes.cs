@@ -630,7 +630,7 @@ namespace DungeonLab.Editor
             }
 
             bool authoringPreviewForced = false;
-            var resolved = new List<RecipeSlotIntent>(3);
+            var resolved = new List<RecipeSlotIntent>();
             for (int nodeIndex = 0; nodeIndex < intent.nodes.Length; nodeIndex++)
             {
                 RouteNodeIntent node = intent.nodes[nodeIndex];
@@ -766,13 +766,6 @@ namespace DungeonLab.Editor
             {
                 rejectionReason =
                     $"[RECIPE_PREVIEW] recipe '{authoringPreviewRecipeId}' had no compatible required route slot";
-                return false;
-            }
-
-            if (resolved.Count != 3)
-            {
-                rejectionReason =
-                    $"[RECIPE_SELECTION] route declared {resolved.Count} recipe slots instead of 3";
                 return false;
             }
 
@@ -1280,8 +1273,7 @@ namespace DungeonLab.Editor
             rejectionReason = string.Empty;
             if (routeIntent?.recipeSlots == null || routeIntent.recipeSlots.Length == 0)
             {
-                rejectionReason = "route intent declared no recipe slots";
-                return false;
+                return routeIntent?.recipeSlots != null;
             }
 
             var completed = new List<RecipePlacement>(routeIntent.recipeSlots.Length);

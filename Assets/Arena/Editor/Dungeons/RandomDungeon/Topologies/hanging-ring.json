@@ -1,64 +1,29 @@
 {
-  // A vertical ring surrounds the empty vista lane. The gate, court, and far
-  // return each contain their own lower hall, upper circulation, and stair.
+  // Compact constraints for a single-loop family. The composer owns every
+  // concrete node, elevation, layer binding, edge and coarse lattice cell.
   "id": "hanging-ring",
-  "displayName": "Hanging Ring",
-  "plannerVersion": "hanging-ring-v1",
+  "displayName": "Hanging Ring Family",
+  "plannerVersion": "procedural-route-family-v1",
   "weight": 1,
 
-  "map": [
-    "M  .  G  H  .",
-    "L  .  F  I  A",
-    "K  .  E  .  B",
-    "J  .  D  .  C"
-  ],
+  "family": {
+    "criticalPathNodes": [9, 9],
+    "loopCount": [1, 1],
+    "branchNodes": [4, 4],
+    "recipeOpportunities": [0, 2]
+  },
+
+  "goals": {
+    "ceilingLevels": 24,
+    "minimumCycleRank": 1,
+    "minimumStructuralLayers": 1,
+    "minimumVistaVoidCells": 3,
+    "allowGenericRoomWings": false
+  },
 
   "spatial": {
     "columnGapDeltaCells": { "maxDelta": 4 },
     "rowGapDeltaCells": { "maxDelta": 4 },
     "tierSeamCount": 0
-  },
-
-  "nodes": {
-    "A": ["ring-arrival",       "arrival",           "arrival",              0,  { "main": 0 }],
-    "B": ["mezzanine-gate",    "connector",         "vertical-compression", 0,  { "main": 1 }, { "layers": { "upper": 4 } }],
-    "C": ["outer-approach",    "processional-hall", "approach",             4,  { "main": 2 }],
-    "D": ["ring-entry",        "junction",          "choice",               4,  { "main": 3 }],
-    "E": ["bridge-court",      "landmark",          "hanging-court",        4,  { "main": 4 }, { "layers": { "upper": 4 } }],
-    "F": ["ring-ascent",       "connector",         "ascent",               8,  { "main": 5 }],
-    "G": ["ring-rejoin",       "junction",          "rejoin",              16, { "main": 6 }],
-    "H": ["upper-approach",    "processional-hall", "approach",            20, { "main": 7 }],
-    "I": ["ring-culmination",  "culmination",       "culmination",         24, { "main": 8 }],
-    "J": ["lower-ring",        "connector",         "branch",               8,  { "branch": 0 }],
-    "K": ["ring-overlook",     "overlook",          "reveal",               8,  { "branch": 1 }],
-    "L": ["far-ring-reward",   "optional-room",     "reward",              12, { "branch": 2 }],
-    "M": ["spiral-ring-return", "return-hall",      "layered-return",      16, { "branch": 3 }, { "layers": { "upper": 4 } }]
-  },
-
-  "edges": [
-    ["A", "B", "LevelCorridor"],
-    ["B", "C", "LevelCorridor", { "fromLayer": "upper" }],
-    ["C", "D", "LevelCorridor"],
-    ["D", "E", "LevelCorridor"],
-    ["E", "F", "LevelCorridor", { "fromLayer": "upper" }],
-    ["F", "G", "Stairwell"],
-    ["G", "H", "Stair"],
-    ["H", "I", "Stair"],
-    ["D", "J", "Bridge"],
-    ["J", "K", "LevelCorridor"],
-    ["K", "L", "Stair"],
-    ["L", "M", "Stair"],
-    ["M", "G", "Stair", { "fromLayer": "upper" }]
-  ],
-
-  "slots": [
-    { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-C", "layers": { "upper": "upper" } },
-    { "id": "required-landmark",    "at": "E", "entry": "D-E", "exit": "E-F", "layers": { "upper": "upper" } },
-    { "id": "required-return",      "at": "M", "entry": "L-M", "exit": "M-G", "layers": { "upper": "upper" } }
-  ],
-
-  "vista": { "id": "ring-overlook-to-bridge-court", "from": "K", "to": "E", "minVoidCells": 3 },
-  "overlooks": [],
-  "anchors": { "bottom": "A", "top": "I" },
-  "allowGenericRoomWings": false
+  }
 }

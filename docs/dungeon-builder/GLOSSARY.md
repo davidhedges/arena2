@@ -10,10 +10,10 @@ the entry says so explicitly.
 ## How the terms fit together
 
 ```text
-Macro-topology pattern
+Route family constraints
     -> Route intent
         -> Route nodes (each has a role and a beat)
-            -> Required recipe slots or generic rooms
+            -> Generated recipe opportunities or generic rooms
                 -> Recipes
                     -> zones + ports + transitions + motifs + variations
         -> DungeonLayout
@@ -28,14 +28,14 @@ journey timing**, and **recipe describes authored construction**.
 
 | Term | Meaning in this project |
 | --- | --- |
-| **Macro-topology pattern** | A semantic graph template for the whole dungeon: main route, branches, loops, landmarks, and vista opportunities. It has no final world coordinates. Current patterns are the processional spine, atrium ring, and twin-wing keep. |
+| **Route family** | A compact production contract for the whole dungeon: bounded spine/branch/loop counts and semantic, vertical, vista, layering, and spatial goals. It contains no authored node map, elevations, or exact edge list. The composer turns the selected family into one concrete route intent for the seed. |
 | **Route intent** | The transient semantic graph for one generation attempt. It contains route nodes, traversal edges, the planned vista, elevation requirements, and recipe slots. It is consumed while producing `DungeonLayout`; it is not a second renderer-facing plan. |
-| **Route node** | One intended place on the route graph. A node has a stable ID, a **role**, a **beat**, route/branch order, relative elevation, and possibly a required recipe slot. It becomes a room footprint during embedding. |
+| **Route node** | One generated place on the route graph. A node has a stable ID, a **role**, a **beat**, route/branch order, structural elevation/layers, and possibly an authored-content opportunity. It becomes a room footprint during embedding. |
 | **Role** | What a route node must do spatially. Examples currently include `arrival`, `connector`, `junction`, `grand-room`, `landmark`, `processional-hall`, `return-hall`, `culmination`, `overlook`, and `optional-room`. Role can influence generic room geometry and recipe compatibility. |
 | **Beat** | Where the node sits in the player's journey or pacing sequence. Current examples include `arrival`, `compression`, `choice`, `reveal`, `landmark`, `ascent`, `approach`, `rejoin`, `culmination`, `branch`, `reward`, and `return`. A beat is a semantic label—not a combat state, victory condition, or claim that the room can be “beaten.” |
 | **Eligible role / eligible beat** | Exact compatibility filters on a recipe. A recipe can fill a slot only when both the node's role and beat occur in its eligible lists. Eligibility means “may be selected here”; it does not guarantee selection and does not confer gameplay behavior. |
 | **Reward beat** | A pacing slot intended to feel rewarding, currently used on optional branches. The label does not itself spawn loot or consume a separately implemented loot-room quota. Actual rewards remain a gameplay/content responsibility. |
-| **Recipe slot** | A route-node binding that requires one compatible enabled recipe selected from the active catalog. Current production has three required recipe slots. Nodes without a recipe slot use generic-room construction. If a required slot has no compatible recipe, generation rejects instead of silently substituting a generic room. |
+| **Recipe opportunity** | A generated degree-two route-node binding through which zero or more compatible enabled recipes may enter a dungeon. The family constrains the opportunity count; it does not author fixed slot names or exact nodes. Selected recipes resolve before embedding, while nodes without a selected recipe use generated construction. A published opportunity with no compatible active candidate rejects explicitly. |
 | **Traversal edge** | A graph connection the player can physically use. Current transition kinds are level corridor, stair, bridge, and stairwell. |
 | **Vista edge** | A planned line of sight from a source node to a target node. It does not imply adjacency or a traversable connection. |
 | **Main route** | The ordered entrance-to-culmination path through the route graph. |

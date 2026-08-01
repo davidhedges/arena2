@@ -14,9 +14,6 @@ namespace DungeonLab.Editor
     // reason, and the report projects the same result instead of recomputing it.
     internal sealed partial class DungeonLabGenerator
     {
-        private const int MinimumProductionLayeredRecipeCount = 3;
-        private const int MinimumProductionStackedSurfaceCount = 48;
-
         // Named, independently derived random streams for the tier planner.
         //
         // Before 2026-07-25 one System.Random was threaded sequentially through

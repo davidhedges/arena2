@@ -1,73 +1,29 @@
 {
-  // A long ascent is crossed by an independently layered eastern return and a
-  // high western cascade. Three multi-storey rooms are distributed from the
-  // threshold through the middle landmark to the return loop.
+  // A denser family may compose one or two rejoining loops. Authored content
+  // is an opportunity range, not three mandatory rooms in a literal diagram.
   "id": "layered-cascade",
-  "displayName": "Layered Cascade",
-  "plannerVersion": "layered-cascade-v1",
+  "displayName": "Layered Cascade Family",
+  "plannerVersion": "procedural-route-family-v1",
   "weight": 1,
 
-  "map": [
-    "N  H  I  J  K",
-    ".  .  .  .  .",
-    "O  G  F  E  M",
-    "P  .  .  .  .",
-    "A  B  C  D  L"
-  ],
+  "family": {
+    "criticalPathNodes": [9, 9],
+    "loopCount": [1, 2],
+    "branchNodes": [4, 4],
+    "recipeOpportunities": [1, 3]
+  },
+
+  "goals": {
+    "ceilingLevels": 32,
+    "minimumCycleRank": 1,
+    "minimumStructuralLayers": 1,
+    "minimumVistaVoidCells": 3,
+    "allowGenericRoomWings": true
+  },
 
   "spatial": {
-    "columnGapDeltaCells": { "minDelta": -1, "maxDelta": 2 },
+    "columnGapDeltaCells": -1,
     "rowGapDeltaCells": { "minDelta": -1, "maxDelta": 2 },
     "tierSeamCount": 0
-  },
-
-  "nodes": {
-    "A": ["cascade-arrival",      "arrival",       "arrival",              0,  { "main": 0 }],
-    "B": ["switchback-threshold", "connector",    "vertical-compression", 0,  { "main": 1 }, { "layers": { "upper": 4 } }],
-    "C": ["lower-terrace",        "terrace-hall", "approach",             4,  { "main": 2 }],
-    "D": ["terrace-junction",     "junction",     "choice",               4,  { "main": 3 }],
-    "E": ["mid-terrace",          "terrace-hall", "reveal",               8,  { "main": 4 }],
-    "F": ["hanging-mid-court",    "landmark",     "hanging-court",       12,  { "main": 5 }, { "layers": { "upper": 4 } }],
-    "G": ["upper-junction",       "junction",     "rejoin",              16,  { "main": 6 }],
-    "H": ["high-stair",           "stair-hall",   "ascent",              20,  { "main": 7 }],
-    "I": ["terrace-overlook",     "overlook",     "reveal",              20,  { "main": 8 }],
-    "J": ["crown-walk",           "gallery",      "approach",            24,  { "main": 9 }],
-    "K": ["cascade-summit",       "culmination",  "culmination",         24,  { "main": 10 }],
-    "L": ["east-spur",            "connector",    "branch",               4,  { "branch": 0 }],
-    "M": ["spiral-east-return",   "return-hall",  "layered-return",       8,  { "branch": 1 }, { "layers": { "upper": 4 } }],
-    "N": ["cascade-crown",        "gallery",      "reward",              20,  { "branch": 2 }],
-    "O": ["cascade-span",         "optional-room", "reward",             12,  { "branch": 3 }],
-    "P": ["cascade-foot",         "gallery",      "reward",               8,  { "branch": 4 }]
-  },
-
-  "edges": [
-    ["A", "B", "LevelCorridor"],
-    ["B", "C", "LevelCorridor", { "fromLayer": "upper" }],
-    ["C", "D", "LevelCorridor"],
-    ["D", "E", "Stair"],
-    ["E", "F", "Stair"],
-    ["F", "G", "LevelCorridor", { "fromLayer": "upper" }],
-    ["G", "H", "Stair"],
-    ["H", "I", "LevelCorridor"],
-    ["I", "J", "Stair"],
-    ["J", "K", "LevelCorridor"],
-    ["D", "L", "LevelCorridor"],
-    ["L", "M", "Stairwell"],
-    ["M", "E", "Stair", { "fromLayer": "upper" }],
-    ["H", "N", "LevelCorridor"],
-    ["N", "O", "Bridge"],
-    ["O", "P", "Stair"],
-    ["P", "A", "Stair"]
-  ],
-
-  "slots": [
-    { "id": "required-compression", "at": "B", "entry": "A-B", "exit": "B-C", "layers": { "upper": "upper" } },
-    { "id": "required-landmark",    "at": "F", "entry": "E-F", "exit": "F-G", "layers": { "upper": "upper" } },
-    { "id": "required-return",      "at": "M", "entry": "L-M", "exit": "M-E", "layers": { "upper": "upper" } }
-  ],
-
-  "vista": { "id": "terrace-overlook-to-hanging-mid-court", "from": "I", "to": "F", "minVoidCells": 3 },
-  "overlooks": [],
-  "anchors": { "bottom": "A", "top": "K" },
-  "allowGenericRoomWings": true
+  }
 }

@@ -8,7 +8,7 @@ namespace DungeonLab.Editor
     // compiles it directly into the existing DungeonLayout.
     internal sealed partial class DungeonLabGenerator
     {
-        private const string RoutePlannerVersion = "route-topologies-v11";
+        private const string RoutePlannerVersion = "procedural-route-family-v1";
         private const string RouteRhythmPolicyVersion = "route-rhythm-v1";
         private const string NamedVistaPromontoryPolicyVersion = "named-vista-promontory-v1";
         internal static string ActiveRecipePlannerVersion => RoutePlannerVersion;
@@ -817,14 +817,16 @@ namespace DungeonLab.Editor
             return true;
         }
 
-        // One generic builder: a topology file is the graph, so there is no
-        // per-pattern factory to keep in sync with a per-pattern embedder.
+        // The existing seam now receives either an isolated exact fixture or a
+        // production family definition. Production is composed first; every
+        // downstream consumer still receives the same concrete RouteIntent.
         private static RouteIntent BuildTopologyRouteIntent(
             DungeonRouteTopology topology,
             int dungeonSeed,
             RecipeSlotIntent[] recipeSlots,
             string catalogDigest)
         {
+            topology = ComposeRouteTopologyFamily(topology, dungeonSeed);
             var nodes = new RouteNodeIntent[topology.nodes.Length];
             for (int node = 0; node < nodes.Length; node++)
             {
@@ -1188,11 +1190,11 @@ namespace DungeonLab.Editor
             }
 
             if (intent.recipeSlots == null ||
-                intent.recipeSlots.Length != 3 ||
-                recipeSlotCount != 3 ||
+                intent.recipeSlots.Length != recipeSlotCount ||
                 string.IsNullOrEmpty(intent.catalogDigest))
             {
-                rejectionReason = "route intent did not declare exactly three active recipe slots and a catalog digest";
+                rejectionReason =
+                    "route intent recipe resolutions did not match its generated opportunities and catalog digest";
                 return false;
             }
 

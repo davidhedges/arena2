@@ -17,15 +17,12 @@ namespace Arena.Tests.Editor
             "vertical-braid"
         };
 
-        private const string LayeredRecipes =
-            "episode_hanging_bridge_court_01|episode_spiral_return_01|episode_switchback_mezzanine_01";
-
         private static readonly Type GeneratorType = AppDomain.CurrentDomain
             .Load("Assembly-CSharp-Editor")
             .GetType("DungeonLab.Editor.DungeonLabGenerator", throwOnError: true)!;
 
         [Test]
-        public void WeightedCorpus_ContainsOnlyTheThreeLayeredReplacements()
+        public void WeightedCorpus_ContainsOnlyTheThreeProceduralFamilies()
         {
             Dictionary<string, string> snapshot = ProductionSnapshot();
 
@@ -46,7 +43,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void EveryProductionTopology_ResolvesThreeDistinctLayeredEpisodes()
+        public void EveryProductionTopology_RealizesGeneratedStructuralLayersWithOptionalRecipes()
         {
             Dictionary<string, string> snapshot = ProductionSnapshot();
 
@@ -56,14 +53,13 @@ namespace Arena.Tests.Editor
                 Assert.That(snapshot[$"{topology}.hardValid"], Is.EqualTo("True"), topology);
                 Assert.That(snapshot[$"{topology}.richLayering"], Is.EqualTo("True"), topology);
                 Assert.That(int.Parse(snapshot[$"{topology}.stackedSurfaces"]),
-                    Is.GreaterThanOrEqualTo(48), topology);
+                    Is.GreaterThanOrEqualTo(1), topology);
                 Assert.That(int.Parse(snapshot[$"{topology}.layerOffsetConnectionEnds"]),
-                    Is.GreaterThanOrEqualTo(3), topology);
-                Assert.That(snapshot[$"{topology}.recipes"], Is.EqualTo(LayeredRecipes), topology);
+                    Is.GreaterThanOrEqualTo(1), topology);
                 Assert.That(snapshot[$"{topology}.richLayeringMessage"],
-                    Does.Contain("3 distinct layered episodes"), topology);
+                    Does.Contain("generated topology declared"), topology);
                 Assert.That(snapshot[$"{topology}.richLayeringMessage"],
-                    Does.Contain("3 with internal vertical transitions"), topology);
+                    Does.Contain("generically"), topology);
             }
         }
 

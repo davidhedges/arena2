@@ -3329,7 +3329,11 @@ namespace DungeonLab.Editor
                 throw new InvalidOperationException(rejectionReason);
             }
 
-            RouteIntent intent = BuildDiagnosticSelectedRouteIntent(seed);
+            // This snapshot isolates the catalog-selection contract from the
+            // production family producer. Its three named slots are retained as
+            // deprecated evidence; production opportunity breadth is covered by
+            // the procedural composition and full-dungeon fixtures.
+            RouteIntent intent = BuildDiagnosticRouteIntent(seed);
             lastRouteIntent = intent;
             JObject firstProjection = BuildRouteIntentProjection(intent);
             JObject secondProjection = BuildRouteIntentProjection(intent);
@@ -3367,7 +3371,8 @@ namespace DungeonLab.Editor
             var incompatibleCatalog = new ActiveDungeonRecipeCatalog(
                 new[] { landmarkOnly },
                 "diagnostic-incompatible-catalog");
-            RouteIntent unresolved = BuildSelectedRouteIntent(
+            RouteIntent unresolved = BuildTopologyRouteIntent(
+                RequireRouteTopology(ProcessionalPatternId),
                 seed,
                 Array.Empty<RecipeSlotIntent>(),
                 string.Empty);
@@ -3428,8 +3433,8 @@ namespace DungeonLab.Editor
             for (int offset = 0; offset < corpusSeedCount; offset++)
             {
                 int corpusSeed = corpusFirstSeed + offset;
-                JObject first = BuildSeedReport(corpusSeed);
-                JObject second = BuildSeedReport(corpusSeed);
+                JObject first = BuildSeedReportForTopology(ProcessionalPatternId, corpusSeed);
+                JObject second = BuildSeedReportForTopology(ProcessionalPatternId, corpusSeed);
                 firstAccepted += first.Value<bool?>("accepted") == true ? 1 : 0;
                 secondAccepted += second.Value<bool?>("accepted") == true ? 1 : 0;
                 JObject firstCompression = FindRecipeSlotProjection(
@@ -3641,7 +3646,8 @@ namespace DungeonLab.Editor
                 }
 
                 activeCount = scenarioCatalog.recipes.Length;
-                RouteIntent unresolved = BuildSelectedRouteIntent(
+                RouteIntent unresolved = BuildTopologyRouteIntent(
+                    RequireRouteTopology(ProcessionalPatternId),
                     seed,
                     Array.Empty<RecipeSlotIntent>(),
                     string.Empty);
@@ -5185,7 +5191,9 @@ namespace DungeonLab.Editor
                 }
             }
 
-            message = $"three selected recipes resolved atomically with catalog {catalog.digest}";
+            message =
+                $"{intent.recipeSlots.Length} generated recipe opportunities resolved atomically " +
+                $"with catalog {catalog.digest}";
             return true;
         }
 
@@ -5210,36 +5218,53 @@ namespace DungeonLab.Editor
                 return true;
             }
 
-            var layeredRecipeIds = new HashSet<string>(StringComparer.Ordinal);
-            var layeredRecipeIdsWithRise = new HashSet<string>(StringComparer.Ordinal);
-            int internalVerticalTransitions = 0;
-            foreach (RecipeSlotIntent slot in intent.recipeSlots ?? Array.Empty<RecipeSlotIntent>())
+            int declaredLayeredNodes = 0;
+            int genericLayeredNodes = 0;
+            foreach (RouteNodeIntent node in intent.nodes ?? Array.Empty<RouteNodeIntent>())
             {
-                DungeonRecipeAsset recipe = slot.recipe;
-                if (recipe == null || !recipe.DeclaresLayers)
+                if (!node.DeclaresStoreys)
                 {
                     continue;
                 }
 
-                layeredRecipeIds.Add(recipe.recipeId);
-                foreach (DungeonRecipeTransition transition in
-                         recipe.transitions ?? Array.Empty<DungeonRecipeTransition>())
+                declaredLayeredNodes++;
+                bool selectedRecipe = false;
+                foreach (RecipeSlotIntent slot in intent.recipeSlots ?? Array.Empty<RecipeSlotIntent>())
                 {
-                    if (transition != null && transition.riseLevels > 0)
+                    if (slot != null &&
+                        string.Equals(slot.slotId, node.recipeSlotId, StringComparison.Ordinal))
                     {
-                        internalVerticalTransitions++;
-                        layeredRecipeIdsWithRise.Add(recipe.recipeId);
+                        selectedRecipe = true;
+                        break;
                     }
                 }
+
+                genericLayeredNodes += selectedRecipe ? 0 : 1;
             }
 
             int stackedSurfaces = plan.surfaces.StackedSurfaces().Count;
-            bool passed = layeredRecipeIds.Count >= MinimumProductionLayeredRecipeCount &&
-                layeredRecipeIdsWithRise.Count >= MinimumProductionLayeredRecipeCount &&
-                stackedSurfaces >= MinimumProductionStackedSurfaceCount;
+            int generatedStackedSurfaces = 0;
+            foreach (ElevationEdgeModel.StackedSurface surface in plan.surfaces.StackedSurfaces())
+            {
+                OwnerKey owner = plan.prisms.SurfaceOwnerAt(new SurfaceKey(surface.cell, surface.level));
+                generatedStackedSurfaces += owner.family == OwnerFamily.Room &&
+                    !string.Equals(owner.id, OwnerKey.PlanFloor.id, StringComparison.Ordinal)
+                    ? 1
+                    : 0;
+            }
+
+            int requiredLayeredNodes = topology.family?.minimumStructuralLayers ?? 1;
+            bool passed = declaredLayeredNodes >= requiredLayeredNodes &&
+                genericLayeredNodes >= 1 &&
+                generatedStackedSurfaces >= 1 &&
+                stackedSurfaces >= generatedStackedSurfaces;
             message = passed
-                ? $"{layeredRecipeIds.Count} distinct layered episodes, {layeredRecipeIdsWithRise.Count} with internal vertical transitions ({internalVerticalTransitions} total), and {stackedSurfaces} stacked surfaces"
-                : $"production layering floor missed: distinct layered episodes={layeredRecipeIds.Count}/{MinimumProductionLayeredRecipeCount}, episodes with internal vertical transitions={layeredRecipeIdsWithRise.Count}/{MinimumProductionLayeredRecipeCount} ({internalVerticalTransitions} total), stacked surfaces={stackedSurfaces}/{MinimumProductionStackedSurfaceCount}";
+                ? $"generated topology declared {declaredLayeredNodes} layered nodes, " +
+                  $"realized {genericLayeredNodes} generically, and owns " +
+                  $"{generatedStackedSurfaces}/{stackedSurfaces} stacked surfaces"
+                : $"generated topology layering missed: declared={declaredLayeredNodes}/" +
+                  $"{requiredLayeredNodes}, generic nodes={genericLayeredNodes}/1, " +
+                  $"generated stacked surfaces={generatedStackedSurfaces}/1, total={stackedSurfaces}";
             return passed;
         }
 

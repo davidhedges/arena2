@@ -76,11 +76,12 @@ namespace Arena.Tests.Editor
         public void DeclaredProcessionalStair_ReservesEmbeddedFootprintInNarrowCorridor()
         {
             string report = InvokeReportText("BuildSeedReport", VerticalIntentSeed);
-            // Edge ids derive as "{fromKey}-{toKey}". This production seed now
-            // selects `vertical-braid`; D-E is its narrow two-cell rise-4 stair.
+            // Procedural edge IDs derive from their composition operation. This
+            // production seed selects `vertical-braid`; main-3-4 is its
+            // lower-to-landmark rise-4 stair.
             Match transition = Regex.Match(
                 report,
-                @"""edgeId"": ""D-E""(?:(?!""edgeId"").)*?""reservedBeforeFill"": true",
+                @"""edgeId"": ""main-3-4""(?:(?!""edgeId"").)*?""reservedBeforeFill"": true",
                 RegexOptions.CultureInvariant | RegexOptions.Singleline);
             Match footprint = Regex.Match(
                 transition.Value,
@@ -118,7 +119,7 @@ namespace Arena.Tests.Editor
         {
             Dictionary<string, string> report = VerticalSnapshot();
 
-            Assert.That(report["vertical.routeClimb"], Is.EqualTo("24"));
+            Assert.That(report["vertical.routeClimb"], Is.EqualTo("40"));
             Assert.That(report["validation.layoutConnectivity"], Is.EqualTo("true"));
             Assert.That(report["validation.roomGraphConnectivity"], Is.EqualTo("true"));
             Assert.That(report["validation.verticalTraversal"], Is.EqualTo("true"));

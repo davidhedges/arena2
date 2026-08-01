@@ -7,14 +7,11 @@ using UnityEngine;
 
 namespace DungeonLab.Editor
 {
-    // A route topology is an authored diagram, not code: an ASCII lattice map
-    // plus node/edge/slot tables. This file owns loading, structural parsing,
-    // and the derived graph metrics that used to be declared per pattern.
-    //
-    // Everything derivable is derived: edge ids default to "{from}-{to}", edge
-    // rise comes from the two node levels, and cycle rank, cycle-core size and
-    // junction degrees come from the adjacency. Nothing about a graph is
-    // asserted twice.
+    // Production route files describe a FAMILY: bounded composition ranges and
+    // semantic goals. The selected family is composed into a concrete runtime
+    // graph before the existing recipe and spatial seams see it. Literal maps,
+    // nodes and edges remain readable only for deprecated or in-memory evidence
+    // fixtures; production never selects that historical producer.
     internal sealed partial class DungeonLabGenerator
     {
         private const string RouteTopologyDirectory =
@@ -22,6 +19,8 @@ namespace DungeonLab.Editor
         private const string RouteEmbeddingFailureCode = "ROUTE_MAIN_EMBEDDING_EXHAUSTED";
         private const string RouteForwardOrientationToken = "route-forward";
         private const string VistaOrientationToken = "vista-source-to-target";
+        private const int ProceduralTopologyLatticeColumnCount = 6;
+        private const int ProceduralTopologyLatticeRowCount = 4;
 
         private static Dictionary<string, DungeonRouteTopology> routeTopologyCache;
         private static string routeTopologyCacheSignature = string.Empty;
@@ -155,6 +154,61 @@ namespace DungeonLab.Editor
                 terminalRoomSizeDelta.HasValue ||
                 hallRoomSizeDelta.HasValue ||
                 connectorRoomSizeDelta.HasValue;
+        }
+
+        private readonly struct RouteTopologyIntRange
+        {
+            public readonly int minimum;
+            public readonly int maximum;
+
+            public RouteTopologyIntRange(int minimum, int maximum)
+            {
+                this.minimum = minimum;
+                this.maximum = maximum;
+            }
+
+            public int Choose(System.Random random)
+            {
+                return minimum == maximum ? minimum : random.Next(minimum, maximum + 1);
+            }
+        }
+
+        // Compact production authoring contract. These are limits and goals,
+        // never a node diagram: the composer owns node identities, elevations,
+        // layers, transitions, bindings and coarse cells.
+        private sealed class RouteTopologyFamilyConstraints
+        {
+            public readonly RouteTopologyIntRange criticalPathNodes;
+            public readonly RouteTopologyIntRange loopCount;
+            public readonly RouteTopologyIntRange branchNodes;
+            public readonly RouteTopologyIntRange recipeOpportunities;
+            public readonly int minimumStructuralLayers;
+            public readonly int minimumCycleRank;
+            public readonly int minimumVistaVoidCells;
+            public readonly int ceilingLevels;
+            public readonly bool allowGenericRoomWings;
+
+            public RouteTopologyFamilyConstraints(
+                RouteTopologyIntRange criticalPathNodes,
+                RouteTopologyIntRange loopCount,
+                RouteTopologyIntRange branchNodes,
+                RouteTopologyIntRange recipeOpportunities,
+                int minimumStructuralLayers,
+                int minimumCycleRank,
+                int minimumVistaVoidCells,
+                int ceilingLevels,
+                bool allowGenericRoomWings)
+            {
+                this.criticalPathNodes = criticalPathNodes;
+                this.loopCount = loopCount;
+                this.branchNodes = branchNodes;
+                this.recipeOpportunities = recipeOpportunities;
+                this.minimumStructuralLayers = minimumStructuralLayers;
+                this.minimumCycleRank = minimumCycleRank;
+                this.minimumVistaVoidCells = minimumVistaVoidCells;
+                this.ceilingLevels = ceilingLevels;
+                this.allowGenericRoomWings = allowGenericRoomWings;
+            }
         }
 
         /// <summary>
@@ -393,6 +447,7 @@ namespace DungeonLab.Editor
             public readonly RouteLaneGap[] rowGaps;
             public readonly int latticeColumnCount;
             public readonly int latticeRowCount;
+            public readonly RouteTopologyFamilyConstraints family;
 
             public DungeonRouteTopology(
                 string id,
@@ -418,7 +473,8 @@ namespace DungeonLab.Editor
                 RouteLaneGap[] columnGaps,
                 RouteLaneGap[] rowGaps,
                 int latticeColumnCount,
-                int latticeRowCount)
+                int latticeRowCount,
+                RouteTopologyFamilyConstraints family = null)
             {
                 this.id = id;
                 this.displayName = displayName;
@@ -444,7 +500,12 @@ namespace DungeonLab.Editor
                 this.rowGaps = rowGaps;
                 this.latticeColumnCount = latticeColumnCount;
                 this.latticeRowCount = latticeRowCount;
+                this.family = family;
             }
+
+            public bool IsFamilyDefinition => family != null && nodes.Length == 0;
+
+            public bool WasComposedFromFamily => family != null && nodes.Length > 0;
 
             /// <summary>
             /// Whether any node declares a layer. The whole layered-generation
@@ -646,6 +707,29 @@ namespace DungeonLab.Editor
                 errors.Add($"'id' is '{id}' but the file is named '{expectedId}.json'");
             }
 
+            if (root["family"] != null)
+            {
+                return TryParseRouteTopologyFamily(
+                    root,
+                    path,
+                    id,
+                    displayName,
+                    plannerVersion,
+                    errors,
+                    out topology);
+            }
+
+            bool deprecatedExact = root.Value<bool?>("deprecated") == true;
+            bool inMemoryProbe = path.StartsWith("<probe>", StringComparison.Ordinal);
+            bool deprecatedEvidencePath = path.Replace('\\', '/').Contains("/Topologies/Deprecated/");
+            if (!inMemoryProbe && (!deprecatedEvidencePath || !deprecatedExact))
+            {
+                errors.Add(
+                    "production topology files must declare compact 'family' constraints; " +
+                    "literal map/nodes/edges data is accepted only in Deprecated/ or an in-memory <probe>");
+                return false;
+            }
+
             if (!TryParseRouteTopologyCeiling(
                     root["ceiling"],
                     errors,
@@ -781,6 +865,227 @@ namespace DungeonLab.Editor
                 columnCount,
                 rowCount);
             return errors.Count == 0;
+        }
+
+        private static bool TryParseRouteTopologyFamily(
+            JObject root,
+            string path,
+            string id,
+            string displayName,
+            string plannerVersion,
+            List<string> errors,
+            out DungeonRouteTopology topology)
+        {
+            topology = null;
+            if (!(root["family"] is JObject family) || !(root["goals"] is JObject goals))
+            {
+                errors.Add("a production family requires both 'family' and 'goals' objects");
+                return false;
+            }
+
+            foreach (string retired in new[]
+                     {
+                         "map", "nodes", "edges", "slots", "vista", "overlooks", "anchors", "ceiling"
+                     })
+            {
+                if (root[retired] != null)
+                {
+                    errors.Add(
+                        $"production family '{id}' declares retired exact-diagram field '{retired}'; " +
+                        "the composer owns concrete topology");
+                    return false;
+                }
+            }
+
+            if (root.Value<bool?>("deprecated") == true)
+            {
+                errors.Add("a compact production family cannot be deprecated");
+                return false;
+            }
+
+            int weight = root.Value<int?>("weight") ?? 1;
+            if (weight < 0)
+            {
+                errors.Add($"'weight' is {weight}; it must be 0 (disabled) or greater");
+                return false;
+            }
+
+            if (!TryParseRouteTopologyRange(
+                    family["criticalPathNodes"],
+                    "family.criticalPathNodes",
+                    9,
+                    9,
+                    errors,
+                    out RouteTopologyIntRange criticalPathNodes) ||
+                !TryParseRouteTopologyRange(
+                    family["loopCount"],
+                    "family.loopCount",
+                    1,
+                    2,
+                    errors,
+                    out RouteTopologyIntRange loopCount) ||
+                !TryParseRouteTopologyRange(
+                    family["branchNodes"],
+                    "family.branchNodes",
+                    4,
+                    4,
+                    errors,
+                    out RouteTopologyIntRange branchNodes) ||
+                !TryParseRouteTopologyRange(
+                    family["recipeOpportunities"],
+                    "family.recipeOpportunities",
+                    0,
+                    3,
+                    errors,
+                    out RouteTopologyIntRange recipeOpportunities))
+            {
+                return false;
+            }
+
+            int minimumStructuralLayers = goals.Value<int?>("minimumStructuralLayers") ?? 1;
+            int minimumCycleRank = goals.Value<int?>("minimumCycleRank") ?? 1;
+            int minimumVistaVoidCells = goals.Value<int?>("minimumVistaVoidCells") ?? 3;
+            if (minimumStructuralLayers < 1 || minimumStructuralLayers > 2)
+            {
+                errors.Add("'goals.minimumStructuralLayers' must be between 1 and 2");
+                return false;
+            }
+
+            if (minimumStructuralLayers > loopCount.minimum)
+            {
+                errors.Add(
+                    $"'goals.minimumStructuralLayers' cannot exceed the minimum loop count " +
+                    $"{loopCount.minimum}");
+                return false;
+            }
+
+            int minimumAvailableOpportunities = loopCount.minimum == 1 ? 2 : 3;
+            if (recipeOpportunities.minimum > minimumAvailableOpportunities)
+            {
+                errors.Add(
+                    $"'family.recipeOpportunities' requires {recipeOpportunities.minimum}, but the " +
+                    $"minimum {loopCount.minimum}-loop graph exposes only " +
+                    $"{minimumAvailableOpportunities}");
+                return false;
+            }
+
+            if (minimumCycleRank < 1 || minimumCycleRank > loopCount.minimum)
+            {
+                errors.Add(
+                    $"'goals.minimumCycleRank' must be at least 1 and no greater than " +
+                    $"the minimum loop count {loopCount.minimum}");
+                return false;
+            }
+
+            if (minimumVistaVoidCells < 1)
+            {
+                errors.Add("'goals.minimumVistaVoidCells' must be at least 1");
+                return false;
+            }
+
+            if (!TryParseRouteTopologyCeiling(
+                    goals["ceilingLevels"],
+                    errors,
+                    out int ceilingLevels,
+                    out bool declaresCeiling) ||
+                !declaresCeiling ||
+                !TryParseRouteTopologySpatial(
+                    root["spatial"] as JObject,
+                    ProceduralTopologyLatticeColumnCount,
+                    ProceduralTopologyLatticeRowCount,
+                    errors,
+                    out RouteTopologySpatialOverrides spatialOverrides,
+                    out RouteLaneGap[] columnGaps,
+                    out RouteLaneGap[] rowGaps))
+            {
+                if (!declaresCeiling)
+                {
+                    errors.Add("'goals.ceilingLevels' is required");
+                }
+                return false;
+            }
+
+            if (ceilingLevels < DefaultTopologyCeilingLevels)
+            {
+                errors.Add(
+                    $"'goals.ceilingLevels' must be at least {DefaultTopologyCeilingLevels} " +
+                    "for the production route-family grammar");
+                return false;
+            }
+
+            if (root["legacy"] != null)
+            {
+                errors.Add("'legacy' is not valid in a production family");
+                return false;
+            }
+
+            var constraints = new RouteTopologyFamilyConstraints(
+                criticalPathNodes,
+                loopCount,
+                branchNodes,
+                recipeOpportunities,
+                minimumStructuralLayers,
+                minimumCycleRank,
+                minimumVistaVoidCells,
+                ceilingLevels,
+                goals.Value<bool?>("allowGenericRoomWings") ?? false);
+            topology = new DungeonRouteTopology(
+                id,
+                displayName,
+                plannerVersion,
+                path,
+                Array.Empty<RouteTopologyNode>(),
+                Array.Empty<RouteTopologyEdge>(),
+                Array.Empty<RouteTopologySlot>(),
+                string.Empty,
+                -1,
+                -1,
+                minimumVistaVoidCells,
+                Array.Empty<RouteOverlookIntent>(),
+                -1,
+                -1,
+                constraints.allowGenericRoomWings,
+                deprecated: false,
+                weight,
+                ceilingLevels,
+                declaresCeiling: true,
+                spatialOverrides,
+                columnGaps,
+                rowGaps,
+                ProceduralTopologyLatticeColumnCount,
+                ProceduralTopologyLatticeRowCount,
+                constraints);
+            return errors.Count == 0;
+        }
+
+        private static bool TryParseRouteTopologyRange(
+            JToken declared,
+            string field,
+            int legalMinimum,
+            int legalMaximum,
+            List<string> errors,
+            out RouteTopologyIntRange range)
+        {
+            range = default;
+            if (!(declared is JArray values) || values.Count != 2 ||
+                values[0].Type != JTokenType.Integer || values[1].Type != JTokenType.Integer)
+            {
+                errors.Add($"'{field}' must be [minimum, maximum]");
+                return false;
+            }
+
+            int minimum = values[0].Value<int>();
+            int maximum = values[1].Value<int>();
+            if (minimum < legalMinimum || maximum > legalMaximum || maximum < minimum)
+            {
+                errors.Add(
+                    $"'{field}' range [{minimum}, {maximum}] must be ordered within " +
+                    $"[{legalMinimum}, {legalMaximum}]");
+                return false;
+            }
+
+            range = new RouteTopologyIntRange(minimum, maximum);
+            return true;
         }
 
         private static bool TryParseRouteTopologyCeiling(

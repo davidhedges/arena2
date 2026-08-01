@@ -1,15 +1,15 @@
 # Dungeon recipe authoring workflow
 
-Status: current through layered-topology Phase E
-Last updated: 2026-08-01
+Status: current through procedural 3-D topology Slice 4
+Last updated: 2026-08-02
 
 This is the operational checklist for creating or changing a room recipe. Use
 [`GLOSSARY.md`](GLOSSARY.md) for the authoritative definitions of recipe,
-recipe slot, availability, catalog, episode, motif, role, beat, room, port, and
-zone.
+recipe opportunity, availability, catalog, episode, motif, role, beat, room,
+port, and zone.
 
 For the literal click-by-click procedure, complete flat-room template, every
-schema-v1 field, current fixed-slot limitations, and exact error checklist, use
+schema-v1 field and exact error checklist, use
 [`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md).
 
 The current schema has only `Connector` and `Episode` recipe kinds. Validation
@@ -57,20 +57,20 @@ Write a one-page brief
     -> Enable it directly only after its current validation passes
 ```
 
-Production recipe slots now discover compatible enabled catalog members by
+Generated recipe opportunities discover compatible enabled catalog members by
 role, beat, route-edge/port, orientation, elevation, transition, landing,
 headroom, and current-validation contracts. Selection is deterministic and
 uniform within the compatible set. In authoring-preview scope, a disabled
-previously unknown recipe is forced into one compatible existing required slot
+previously unknown recipe is forced into one compatible generated opportunity
 without a production C# binding. The scope temporarily replaces the production
 candidate that ordinary selection would use and is always disposed before
 ordinary generation resumes.
 
-The proven `required-compression` pool currently contains
-`connector_example_01` and `connector_flexible_vestibule_01`. Both use the same
-selector, placement, canonical-plan, renderer, abyss, and collision paths.
-Additional recipe content requires separate explicit owner approval, one
-bounded asset increment at a time.
+Production families may publish zero through three opportunities. Opportunity
+IDs are generated diagnostic identities; recipe compatibility is determined by
+role, beat, ports/sockets, orientation, layer mapping, and the remaining
+contracts above. All selected content uses the same placement, canonical-plan,
+renderer, abyss, and collision paths.
 
 ## 1. Availability
 

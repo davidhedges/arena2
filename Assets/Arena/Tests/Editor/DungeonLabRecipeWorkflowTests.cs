@@ -113,26 +113,22 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void FullDungeon_ResolvesAllThreeSelectedRecipesThroughCanonicalConsumers()
+        public void FullDungeon_ResolvesGeneratedRecipeOpportunitiesThroughCanonicalConsumers()
         {
             Dictionary<string, string> snapshot = Snapshot("BuildRecipeFullDungeonSnapshot");
-            string compression = RecipePrefix(snapshot, "episode_switchback_mezzanine_01");
-            string landmark = RecipePrefix(snapshot, "episode_hanging_bridge_court_01");
-            string returnHall = RecipePrefix(snapshot, "episode_spiral_return_01");
 
             Assert.That(snapshot["accepted"], Is.EqualTo("true"));
             Assert.That(snapshot["validation.passed"], Is.EqualTo("true"));
             Assert.That(snapshot["validation.recipes"], Is.EqualTo("true"));
-            Assert.That(snapshot["recipes.count"], Is.EqualTo("3"));
-            Assert.That(snapshot[$"{compression}.atomic"], Is.EqualTo("true"));
-            Assert.That(snapshot[$"{landmark}.atomic"], Is.EqualTo("true"));
-            Assert.That(snapshot[$"{returnHall}.atomic"], Is.EqualTo("true"));
-            Assert.That(snapshot[$"{compression}.transitions"], Is.EqualTo("4"));
-            Assert.That(snapshot[$"{landmark}.transitions"], Is.EqualTo("4"));
-            Assert.That(snapshot[$"{returnHall}.transitions"], Is.EqualTo("4"));
-            Assert.That(int.Parse(snapshot[$"{compression}.protected"]), Is.GreaterThan(0));
-            Assert.That(int.Parse(snapshot[$"{landmark}.protected"]), Is.GreaterThan(0));
-            Assert.That(int.Parse(snapshot[$"{returnHall}.protected"]), Is.GreaterThan(0));
+            int recipeCount = int.Parse(snapshot["recipes.count"]);
+            Assert.That(recipeCount, Is.InRange(0, 3));
+            for (int recipe = 0; recipe < recipeCount; recipe++)
+            {
+                string prefix = $"recipe{recipe}";
+                Assert.That(snapshot[$"{prefix}.atomic"], Is.EqualTo("true"));
+                Assert.That(int.Parse(snapshot[$"{prefix}.transitions"]), Is.GreaterThan(0));
+                Assert.That(int.Parse(snapshot[$"{prefix}.protected"]), Is.GreaterThan(0));
+            }
         }
 
         [Test]
