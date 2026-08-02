@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Arena.Editor;
 using UnityEditor;
@@ -24,14 +25,27 @@ namespace DungeonLab.Editor
         internal const string SceneName = "RandomDungeon";
         internal const string ScenePath = "Assets/Arena/Content/Scenes/OpenWorld/RandomDungeon.unity";
         internal const string DataKey = "random_dungeon";
+        private const string StagingScenePath =
+            "Assets/Arena/Content/Scenes/OpenWorld/RandomDungeon.__staging.unity";
+        private const string StagingDataKey = "random_dungeon_staging";
 
         private const string CameraTemplateScenePath =
             "Assets/Arena/Content/Scenes/OpenWorld/Great_Hall_Day.unity";
         private const string DungeonVolumeProfilePath =
             "Assets/Arena/Content/Settings/Rendering/OpenWorldProfiles/Arena_RandomDungeon_Profile.asset";
         private const string SeedEnvironmentVariable = "ARENA_RANDOM_DUNGEON_SEED";
+        private const string AutoPublishEnvironmentVariable = "ARENA_AUTO_PUBLISH_SHARED_DATA";
         private const string GeneratedRootName = "Generated Dungeon";
         private const string GameplayCollisionLayerName = "GameplayCollision";
+        private const string CollisionRevisionNamePrefix = "Collision Revision ";
+        private static readonly string[] GeneratedDataSuffixes =
+        {
+            "doors.shared.json",
+            "navsurfaces.shared.json",
+            "traps.shared.json",
+            "collision.shared.json",
+            "query_collision.shared.json"
+        };
 
         [MenuItem("Arena/Dungeons/Rebuild Random Dungeon", false, 100)]
         private static void RebuildFromMenu()
@@ -66,13 +80,30 @@ namespace DungeonLab.Editor
 
         internal static void RebuildWithSeed(int seed)
         {
-            RebuildWithSeed(
-                seed,
-                ScenePath,
-                DataKey,
-                addSceneToBuildSettings: true,
-                beforeModelImporterMutation: null,
-                stageRecorder: null);
+            using LocalSpacetimeDbSharedDataPublisher.SharedDataTransaction transaction =
+                LocalSpacetimeDbSharedDataPublisher.BeginSharedDataTransaction();
+            CleanupStagingArtifacts();
+            try
+            {
+                RebuildWithSeed(
+                    seed,
+                    StagingScenePath,
+                    StagingDataKey,
+                    addSceneToBuildSettings: false,
+                    beforeModelImporterMutation: null,
+                    stageRecorder: null);
+                PromoteStagedProductionBuild();
+                transaction.Complete();
+            }
+            catch
+            {
+                RestoreProductionSceneAfterFailedStagingBuild();
+                throw;
+            }
+            finally
+            {
+                CleanupStagingArtifacts();
+            }
         }
 
         // Phase 7 validation uses the exact production rebuild core with unique
@@ -127,7 +158,14 @@ namespace DungeonLab.Editor
                 NewSceneSetup.EmptyScene,
                 NewSceneMode.Single);
             RecordValidationStage(stageRecorder, "newScene", ref stageStart);
-            DungeonLabGenerator.GenerateWithSeed(seed);
+            // This build owns a fresh staging scene and closes it wholesale on
+            // failure, so thousands of per-object Undo records provide no
+            // recovery value and make prefab-heavy generation substantially
+            // slower. Direct interactive Dungeon Lab generation keeps Undo.
+            using (DungeonLabGenerator.SuppressGenerationUndo())
+            {
+                DungeonLabGenerator.GenerateWithSeed(seed);
+            }
             RecordValidationStage(stageRecorder, "planAndRender", ref stageStart);
             GameObject? dungeonRoot = destination.GetRootGameObjects()
                 .FirstOrDefault(root => string.Equals(
@@ -202,9 +240,13 @@ namespace DungeonLab.Editor
             RecordValidationStage(stageRecorder, "normalizeCollisionMeshImporters", ref stageStart);
             MarkDungeonCollision(dungeonRoot);
             RecordValidationStage(stageRecorder, "markDungeonCollision", ref stageStart);
-            CreateSceneMetadata(seed);
             CloneGameplayCameraRig(destination);
             CreateLighting();
+            GameplayCollisionExporter.PreparedSharedCollisionBake collisionBake =
+                GameplayCollisionExporter.PrepareSceneSharedCollisionBake(destination);
+            string collisionRevision = collisionBake.Revision;
+            RecordValidationStage(stageRecorder, "computeCollisionRevision", ref stageStart);
+            CreateSceneMetadata(seed, collisionRevision);
             RecordValidationStage(stageRecorder, "sceneMetadataCameraAndLighting", ref stageStart);
 
             EditorSceneManager.MarkSceneDirty(destination);
@@ -224,11 +266,12 @@ namespace DungeonLab.Editor
                 DungeonLabGenerator.ExportLastNavigationSurfaces(dungeonRoot, dataKey);
                 RecordValidationStage(stageRecorder, "exportNavigationSurfaces", ref stageStart);
             }
-            GameplayCollisionExporter.ExportActiveSceneSharedCollisionData(dataKey);
+            GameplayCollisionExporter.ExportPreparedActiveSceneSharedCollisionData(
+                dataKey,
+                collisionBake);
             RecordValidationStage(stageRecorder, "exportSharedCollision", ref stageStart);
-            EditorSceneManager.SaveScene(destination, destinationScenePath);
             AssetDatabase.SaveAssets();
-            RecordValidationStage(stageRecorder, "saveSceneAndAssetsAfterExport", ref stageStart);
+            RecordValidationStage(stageRecorder, "saveAssetsAfterExport", ref stageStart);
         }
 
         internal const string DungeonRootName = GeneratedRootName;
@@ -345,7 +388,9 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static void CreateSceneMetadata(int seed)
+        private static void CreateSceneMetadata(
+            int seed,
+            string collisionRevision)
         {
             GameObject metadata = new($"Random Dungeon Seed {seed}");
             metadata.transform.position = Vector3.zero;
@@ -354,6 +399,11 @@ namespace DungeonLab.Editor
             spawn.transform.SetParent(metadata.transform, worldPositionStays: false);
             spawn.transform.localPosition = Vector3.zero;
             spawn.transform.localRotation = Quaternion.identity;
+
+
+            GameObject revision = new($"{CollisionRevisionNamePrefix}{collisionRevision}");
+            revision.transform.SetParent(metadata.transform, worldPositionStays: false);
+            revision.transform.localPosition = Vector3.zero;
         }
 
         private static void CloneGameplayCameraRig(Scene destination)
@@ -462,6 +512,348 @@ namespace DungeonLab.Editor
             RenderSettings.fogDensity = 0.01f;
             RenderSettings.fogStartDistance = 18f;
             RenderSettings.fogEndDistance = 39.6f;
+        }
+
+        [InitializeOnLoadMethod]
+        private static void RepairStaleCollisionAfterScriptReload()
+        {
+            if (Application.isBatchMode ||
+                string.Equals(
+                    Environment.GetEnvironmentVariable(AutoPublishEnvironmentVariable),
+                    "0",
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            EditorApplication.delayCall += () =>
+            {
+                if (EditorApplication.isCompiling ||
+                    EditorApplication.isUpdating ||
+                    EditorApplication.isPlayingOrWillChangePlaymode ||
+                    IsCollisionRevisionCurrent(out _))
+                {
+                    return;
+                }
+
+                TryRepairCollisionFromSavedScene();
+            };
+        }
+
+        internal static bool IsCollisionRevisionCurrent(out string failure)
+        {
+            string scenePath = ProjectAbsolutePath(ScenePath);
+            if (!File.Exists(scenePath))
+            {
+                failure = $"scene '{ScenePath}' is missing";
+                return false;
+            }
+
+            string? sceneRevision = File.ReadLines(scenePath)
+                .Select(line => line.Trim())
+                .Where(line => line.StartsWith("m_Name: ", StringComparison.Ordinal))
+                .Select(line => line.Substring("m_Name: ".Length))
+                .FirstOrDefault(name => name.StartsWith(CollisionRevisionNamePrefix, StringComparison.Ordinal))?
+                .Substring(CollisionRevisionNamePrefix.Length);
+            if (string.IsNullOrWhiteSpace(sceneRevision))
+            {
+                failure = "the saved scene has no collision revision marker";
+                return false;
+            }
+
+            foreach (string suffix in new[] { "collision.shared.json", "query_collision.shared.json" })
+            {
+                string relativePath = BundledWorldDataPath(DataKey, suffix);
+                string absolutePath = ProjectAbsolutePath(relativePath);
+                if (!File.Exists(absolutePath))
+                {
+                    failure = $"'{relativePath}' is missing";
+                    return false;
+                }
+
+                CollisionRevisionLayout? layout =
+                    JsonUtility.FromJson<CollisionRevisionLayout>(File.ReadAllText(absolutePath));
+                if (layout == null ||
+                    !string.Equals(layout.source_revision, sceneRevision, StringComparison.Ordinal))
+                {
+                    failure = $"'{relativePath}' does not match scene revision {sceneRevision}";
+                    return false;
+                }
+            }
+
+            failure = string.Empty;
+            return true;
+        }
+
+        [MenuItem("Arena/Dungeons/Repair Random Dungeon Collision From Saved Scene", false, 190)]
+        private static void RepairCollisionFromSavedSceneMenu()
+        {
+            TryRepairCollisionFromSavedScene();
+        }
+
+        internal static bool TryRepairCollisionFromSavedScene()
+        {
+            if (Application.isBatchMode ||
+                EditorApplication.isCompiling ||
+                EditorApplication.isUpdating ||
+                EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                Debug.LogError(
+                    "[RandomDungeonSceneBuilder] Cannot repair saved collision while " +
+                    "Unity is compiling, importing, or changing Play mode.");
+                return false;
+            }
+
+            Scene previousActiveScene = SceneManager.GetActiveScene();
+            Scene dungeonScene = SceneManager.GetSceneByPath(ScenePath);
+            bool openedForRepair = !dungeonScene.IsValid() || !dungeonScene.isLoaded;
+            using LocalSpacetimeDbSharedDataPublisher.SharedDataTransaction transaction =
+                LocalSpacetimeDbSharedDataPublisher.BeginSharedDataTransaction();
+            try
+            {
+                if (openedForRepair)
+                    dungeonScene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Additive);
+                if (!dungeonScene.IsValid() || !dungeonScene.isLoaded ||
+                    !SceneManager.SetActiveScene(dungeonScene))
+                {
+                    throw new InvalidOperationException(
+                        $"Unable to load '{ScenePath}' for collision recovery.");
+                }
+
+                GameObject dungeonRoot = dungeonScene.GetRootGameObjects()
+                    .FirstOrDefault(root => string.Equals(root.name, GeneratedRootName, StringComparison.Ordinal))
+                    ?? throw new InvalidOperationException(
+                        $"Saved scene '{ScenePath}' has no '{GeneratedRootName}' root.");
+                EnsureCollisionMeshesReadable(dungeonRoot, beforeModelImporterMutation: null);
+                MarkDungeonCollision(dungeonRoot);
+                GameplayCollisionExporter.PreparedSharedCollisionBake collisionBake =
+                    GameplayCollisionExporter.PrepareSceneSharedCollisionBake(dungeonScene);
+                string revision = collisionBake.Revision;
+                SetCollisionRevisionMetadata(dungeonScene, revision);
+                GameplayCollisionExporter.ExportPreparedActiveSceneSharedCollisionData(
+                    DataKey,
+                    collisionBake);
+                EditorSceneManager.MarkSceneDirty(dungeonScene);
+                if (!EditorSceneManager.SaveScene(dungeonScene, ScenePath))
+                    throw new InvalidOperationException($"Failed to save repaired scene '{ScenePath}'.");
+                AssetDatabase.SaveAssets();
+                transaction.Complete();
+                Debug.Log(
+                    "[RandomDungeonSceneBuilder] Recovered RandomDungeon collision " +
+                    $"from the saved scene at revision {revision}; local publish queued.");
+                return true;
+            }
+            catch (Exception error)
+            {
+                Debug.LogError(
+                    "[RandomDungeonSceneBuilder] Collision recovery failed: " + error);
+                return false;
+            }
+            finally
+            {
+                if (previousActiveScene.IsValid() && previousActiveScene.isLoaded)
+                    SceneManager.SetActiveScene(previousActiveScene);
+                if (openedForRepair && dungeonScene.IsValid() && dungeonScene.isLoaded)
+                    EditorSceneManager.CloseScene(dungeonScene, removeScene: true);
+            }
+        }
+
+        private static void SetCollisionRevisionMetadata(Scene scene, string revision)
+        {
+            GameObject metadata = scene.GetRootGameObjects()
+                .FirstOrDefault(root => root.name.StartsWith("Random Dungeon Seed ", StringComparison.Ordinal))
+                ?? throw new InvalidOperationException(
+                    "Saved RandomDungeon scene has no seed metadata root.");
+            foreach (Transform child in metadata.transform.Cast<Transform>()
+                         .Where(child => child.name.StartsWith(CollisionRevisionNamePrefix, StringComparison.Ordinal))
+                         .ToArray())
+            {
+                UnityEngine.Object.DestroyImmediate(child.gameObject);
+            }
+
+            GameObject marker = new($"{CollisionRevisionNamePrefix}{revision}");
+            marker.transform.SetParent(metadata.transform, worldPositionStays: false);
+            marker.transform.localPosition = Vector3.zero;
+            EditorSceneManager.MarkSceneDirty(scene);
+        }
+
+        private static void PromoteStagedProductionBuild()
+        {
+            Scene stagedScene = SceneManager.GetSceneByPath(StagingScenePath);
+            if (!stagedScene.IsValid() || !stagedScene.isLoaded)
+                throw new InvalidOperationException("The completed staging dungeon scene is not loaded.");
+
+            string[] productionPaths = ProductionArtifactPaths().ToArray();
+            var snapshot = new ProductionFileSnapshot(productionPaths);
+            try
+            {
+                foreach (string suffix in GeneratedDataSuffixes)
+                {
+                    CopyRequiredProjectFile(
+                        ServerWorldDataPath(StagingDataKey, suffix),
+                        ServerWorldDataPath(DataKey, suffix));
+                    CopyRequiredProjectFile(
+                        BundledWorldDataPath(StagingDataKey, suffix),
+                        BundledWorldDataPath(DataKey, suffix));
+                }
+
+                EditorSceneManager.MarkSceneDirty(stagedScene);
+                if (!EditorSceneManager.SaveScene(stagedScene, ScenePath))
+                    throw new InvalidOperationException($"Failed to promote staged scene to '{ScenePath}'.");
+                AddSceneToBuildSettings(ScenePath);
+                AssetDatabase.Refresh();
+                AssetDatabase.SaveAssets();
+            }
+            catch
+            {
+                snapshot.Restore();
+                AssetDatabase.Refresh();
+                throw;
+            }
+        }
+
+        private static void RestoreProductionSceneAfterFailedStagingBuild()
+        {
+            if (!File.Exists(ProjectAbsolutePath(ScenePath)))
+                return;
+
+            try
+            {
+                EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            }
+            catch (Exception error)
+            {
+                Debug.LogError(
+                    $"[RandomDungeonSceneBuilder] Failed to reopen last good '{ScenePath}': {error}");
+            }
+        }
+
+        private static void CleanupStagingArtifacts()
+        {
+            Scene stagedScene = SceneManager.GetSceneByPath(StagingScenePath);
+            if (stagedScene.IsValid() && stagedScene.isLoaded)
+                EditorSceneManager.CloseScene(stagedScene, removeScene: true);
+
+            AssetDatabase.DeleteAsset(StagingScenePath);
+            foreach (string suffix in GeneratedDataSuffixes)
+            {
+                AssetDatabase.DeleteAsset(BundledWorldDataPath(StagingDataKey, suffix));
+                DeleteProjectFileIfPresent(ServerWorldDataPath(StagingDataKey, suffix));
+            }
+            AssetDatabase.Refresh();
+        }
+
+        private static IEnumerable<string> ProductionArtifactPaths()
+        {
+            yield return ScenePath;
+            foreach (string suffix in GeneratedDataSuffixes)
+            {
+                yield return ServerWorldDataPath(DataKey, suffix);
+                yield return BundledWorldDataPath(DataKey, suffix);
+            }
+        }
+
+        private static string ServerWorldDataPath(string dataKey, string suffix)
+            => $"server/src/world_data/{dataKey}.{suffix}";
+
+        private static string BundledWorldDataPath(string dataKey, string suffix)
+            => $"Assets/Arena/Resources/SharedData/Worlds/{dataKey}.{suffix}";
+
+        private static string ProjectAbsolutePath(string relativePath)
+        {
+            string root = Directory.GetParent(Application.dataPath)?.FullName
+                ?? throw new InvalidOperationException("Unable to resolve Unity project root.");
+            return Path.Combine(root, relativePath);
+        }
+
+        private static void CopyRequiredProjectFile(string sourceRelativePath, string destinationRelativePath)
+        {
+            string sourcePath = ProjectAbsolutePath(sourceRelativePath);
+            if (!File.Exists(sourcePath))
+                throw new FileNotFoundException($"Staged artifact '{sourceRelativePath}' is missing.", sourcePath);
+
+            string destinationPath = ProjectAbsolutePath(destinationRelativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+            if (FilesHaveIdenticalContents(sourcePath, destinationPath))
+                return;
+
+            File.Copy(sourcePath, destinationPath, overwrite: true);
+        }
+
+        private static bool FilesHaveIdenticalContents(string firstPath, string secondPath)
+        {
+            if (!File.Exists(firstPath) || !File.Exists(secondPath))
+                return false;
+
+            var firstInfo = new FileInfo(firstPath);
+            var secondInfo = new FileInfo(secondPath);
+            if (firstInfo.Length != secondInfo.Length)
+                return false;
+
+            const int bufferSize = 128 * 1024;
+            byte[] firstBuffer = new byte[bufferSize];
+            byte[] secondBuffer = new byte[bufferSize];
+            using FileStream first = File.OpenRead(firstPath);
+            using FileStream second = File.OpenRead(secondPath);
+            while (true)
+            {
+                int firstRead = first.Read(firstBuffer, 0, firstBuffer.Length);
+                int secondRead = second.Read(secondBuffer, 0, secondBuffer.Length);
+                if (firstRead != secondRead)
+                    return false;
+                if (firstRead == 0)
+                    return true;
+
+                for (int i = 0; i < firstRead; i++)
+                {
+                    if (firstBuffer[i] != secondBuffer[i])
+                        return false;
+                }
+            }
+        }
+
+        private static void DeleteProjectFileIfPresent(string relativePath)
+        {
+            string path = ProjectAbsolutePath(relativePath);
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+
+        [Serializable]
+        private sealed class CollisionRevisionLayout
+        {
+            public string source_revision = string.Empty;
+        }
+
+        private sealed class ProductionFileSnapshot
+        {
+            private readonly Dictionary<string, byte[]?> files = new(StringComparer.Ordinal);
+
+            internal ProductionFileSnapshot(IEnumerable<string> relativePaths)
+            {
+                foreach (string relativePath in relativePaths)
+                {
+                    string path = ProjectAbsolutePath(relativePath);
+                    files.Add(relativePath, File.Exists(path) ? File.ReadAllBytes(path) : null);
+                }
+            }
+
+            internal void Restore()
+            {
+                foreach ((string relativePath, byte[]? contents) in files)
+                {
+                    string path = ProjectAbsolutePath(relativePath);
+                    if (contents == null)
+                    {
+                        if (File.Exists(path))
+                            File.Delete(path);
+                        continue;
+                    }
+
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    File.WriteAllBytes(path, contents);
+                }
+            }
         }
 
         private static void EnsureDestinationFolder()

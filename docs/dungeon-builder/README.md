@@ -59,6 +59,6 @@ In Unity, use **Arena > Dungeons > Rebuild Random Dungeon**. Use the specific-se
 
 Set `ARENA_RANDOM_DUNGEON_SEED` to an integer to make the batch entry point deterministic.
 
-The builder recenters a safe generated floor at world `(0, 0, 0)`, authors the standard Arena gameplay camera, adds the scene to build settings, and exports `random_dungeon` collision payloads to both Unity Resources and `server/src/world_data`. Always publish/restart the server module after regenerating so server-authoritative movement, player spawning, and NPC/minion spawning use the same geometry as the client scene.
+The builder recenters a safe generated floor at world `(0, 0, 0)`, authors the standard Arena gameplay camera, and builds the scene plus doors, traps, navigation, movement collision, and query collision under staging destinations. It promotes that set to `random_dungeon` only after every validation/export succeeds; a failed rebuild leaves the previous production scene and data intact. The promoted scene and both collision payloads share a collision revision. With the Unity Editor open, promotion automatically queues a data-preserving local SpacetimeDB rebuild/publish and holds Play until the live contract gate passes, so a separate server restart is not required.
 
 Runtime generation is intentionally not used yet: a client-only random layout would disagree with Arena's authoritative server collision. The editor workflow gives each rebuild a new random dungeon while keeping a single synchronized playtest destination.

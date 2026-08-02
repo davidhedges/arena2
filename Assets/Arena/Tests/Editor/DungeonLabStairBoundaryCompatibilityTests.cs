@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -92,6 +93,233 @@ namespace Arena.Tests.Editor
                 }),
                 Is.True,
                 "At least one unrelated reviewed angle/round corner kit should remain in the accepted dungeon.");
+        }
+
+        [Test]
+        public void AbyssWallCourses_BelowThePlayableLipAreVisualOnly()
+        {
+            Transform walls = root!.transform.Find("Elevation Edge Walls");
+            Assert.That(walls, Is.Not.Null);
+
+            var cliffCourses = walls.Cast<Transform>()
+                .Select(transform => (
+                    transform,
+                    match: Regex.Match(
+                        transform.name,
+                        @"^(cliff_(?:north|east|south|west)_-?\d+_-?\d+)_(\d+)_\d+$",
+                        RegexOptions.CultureInvariant)))
+                .Where(entry => entry.match.Success)
+                .Select(entry => (
+                    entry.transform,
+                    edge: entry.match.Groups[1].Value,
+                    course: int.Parse(entry.match.Groups[2].Value)))
+                .GroupBy(entry => entry.edge, StringComparer.Ordinal)
+                .ToArray();
+
+            Assert.That(cliffCourses, Is.Not.Empty, "The regression seed must exercise abyss cliff walls.");
+
+            int decorativeColliderCount = 0;
+            int lipColliderCount = 0;
+            foreach (var edge in cliffCourses)
+            {
+                int highestCourse = edge.Max(entry => entry.course);
+                foreach (var entry in edge)
+                {
+                    Collider[] colliders = entry.transform.GetComponentsInChildren<Collider>(includeInactive: true);
+                    Assert.That(
+                        colliders,
+                        Is.Not.Empty,
+                        $"Cliff course '{entry.transform.name}' must exercise the prefab's authored collision.");
+                    if (entry.course < highestCourse)
+                    {
+                        Assert.That(
+                            colliders.All(collider => !collider.enabled),
+                            Is.True,
+                            $"Decorative abyss course '{entry.transform.name}' leaked into gameplay collision.");
+                        decorativeColliderCount += colliders.Length;
+                    }
+                    else
+                    {
+                        Assert.That(
+                            colliders.Any(collider => collider.enabled),
+                            Is.True,
+                            $"Playable cliff lip '{entry.transform.name}' lost its collision.");
+                        lipColliderCount += colliders.Count(collider => collider.enabled);
+                    }
+                }
+            }
+
+            Assert.That(decorativeColliderCount, Is.GreaterThan(0));
+            Assert.That(lipColliderCount, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void RetainingWallCourses_KeepCollisionAtPlayableLowerFloors()
+        {
+            Transform walls = root!.transform.Find("Elevation Edge Walls");
+            Assert.That(walls, Is.Not.Null);
+
+            Transform[] retainingCourses = walls.Cast<Transform>()
+                .Where(transform => transform.name.StartsWith("retaining_", StringComparison.Ordinal))
+                .ToArray();
+            Assert.That(retainingCourses, Is.Not.Empty, "The regression seed must exercise retaining walls.");
+            Assert.That(
+                retainingCourses.All(course =>
+                    course.GetComponentsInChildren<Collider>(includeInactive: true)
+                        .Any(collider => collider.enabled)),
+                Is.True,
+                "A retaining course bordering a playable lower floor lost its collision.");
+        }
+
+        [Test]
+        public void SharedCollisionBake_ReusesOnePreparedMeshPayloadForMovementAndQueries()
+        {
+            Type builderType = AppDomain.CurrentDomain
+                .Load("Assembly-CSharp-Editor")
+                .GetType("DungeonLab.Editor.RandomDungeonSceneBuilder", throwOnError: true)!;
+            MethodInfo prepareRoot = builderType.GetMethod(
+                "PrepareGeneratedDungeonCollisionForValidation",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            prepareRoot.Invoke(null, new object?[] { root, null });
+
+            Type exporterType = AppDomain.CurrentDomain
+                .Load("Assembly-CSharp-Editor")
+                .GetType("Arena.Editor.GameplayCollisionExporter", throwOnError: true)!;
+            MethodInfo prepareBake = exporterType.GetMethod(
+                "PrepareSceneSharedCollisionBake",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            object bake = prepareBake.Invoke(null, new object[] { root!.scene })!;
+            Type bakeType = bake.GetType();
+            string revision = (string)bakeType.GetProperty(
+                "Revision",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(bake)!;
+            bool payloadsIdentical = (bool)bakeType.GetProperty(
+                "PayloadsIdentical",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(bake)!;
+            object movement = bakeType.GetProperty(
+                "Movement",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(bake)!;
+            object query = bakeType.GetProperty(
+                "Query",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(bake)!;
+
+            IList movementGeometries = (IList)movement.GetType().GetProperty("MeshGeometries")!
+                .GetValue(movement)!;
+            IList queryGeometries = (IList)query.GetType().GetProperty("MeshGeometries")!
+                .GetValue(query)!;
+            IList movementInstances = (IList)movement.GetType().GetProperty("MeshInstances")!
+                .GetValue(movement)!;
+            IList queryInstances = (IList)query.GetType().GetProperty("MeshInstances")!
+                .GetValue(query)!;
+
+            Assert.That(revision, Has.Length.EqualTo(64));
+            Assert.That(
+                payloadsIdentical,
+                Is.True,
+                "This dungeon has no tilted movement boxes, so one serialized payload should feed all four files.");
+            Assert.That(movementGeometries, Is.Not.Empty);
+            Assert.That(movementInstances.Count, Is.GreaterThan(movementGeometries.Count));
+            Assert.That(queryGeometries.Count, Is.EqualTo(movementGeometries.Count));
+            Assert.That(queryInstances.Count, Is.EqualTo(movementInstances.Count));
+            Assert.That(
+                queryGeometries.Cast<object>().Zip(
+                    movementGeometries.Cast<object>(),
+                    ReferenceEquals).All(equal => equal),
+                Is.True,
+                "Movement and query exports must reference the same prepared geometry objects.");
+            Assert.That(
+                queryInstances.Cast<object>().Zip(
+                    movementInstances.Cast<object>(),
+                    ReferenceEquals).All(equal => equal),
+                Is.True,
+                "Movement and query exports must reference the same prepared instance objects.");
+        }
+
+        [Test]
+        public void TransactionalGeneration_SuppressesAndRestoresUndoRecording()
+        {
+            PropertyInfo shouldRecord = GeneratorType.GetProperty(
+                "ShouldRecordGenerationUndo",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            MethodInfo suppress = GeneratorType.GetMethod(
+                "SuppressGenerationUndo",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            bool before = (bool)shouldRecord.GetValue(null)!;
+            IDisposable scope = (IDisposable)suppress.Invoke(null, Array.Empty<object>())!;
+            try
+            {
+                Assert.That((bool)shouldRecord.GetValue(null)!, Is.False);
+            }
+            finally
+            {
+                scope.Dispose();
+            }
+
+            Assert.That((bool)shouldRecord.GetValue(null)!, Is.EqualTo(before));
+        }
+
+        [Test]
+        public void AutoPublish_IgnoresStagingArtifactsButRecognizesProductionSharedData()
+        {
+            Type publisherType = AppDomain.CurrentDomain
+                .Load("Assembly-CSharp-Editor")
+                .GetType("Arena.Editor.LocalSpacetimeDbSharedDataPublisher", throwOnError: true)!;
+            MethodInfo containsSharedData = publisherType.GetMethod(
+                "ContainsSharedData",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+
+            bool staging = (bool)containsSharedData.Invoke(
+                null,
+                new object[]
+                {
+                    new[]
+                    {
+                        "Assets/Arena/Resources/SharedData/Worlds/random_dungeon_staging.collision.shared.json",
+                    },
+                })!;
+            bool production = (bool)containsSharedData.Invoke(
+                null,
+                new object[]
+                {
+                    new[]
+                    {
+                        "Assets/Arena/Resources/SharedData/Worlds/random_dungeon.collision.shared.json",
+                    },
+                })!;
+
+            Assert.That(staging, Is.False);
+            Assert.That(production, Is.True);
+        }
+
+        [Test]
+        public void PromotionContentCheck_DetectsIdenticalAndChangedArtifacts()
+        {
+            Type builderType = AppDomain.CurrentDomain
+                .Load("Assembly-CSharp-Editor")
+                .GetType("DungeonLab.Editor.RandomDungeonSceneBuilder", throwOnError: true)!;
+            MethodInfo filesEqual = builderType.GetMethod(
+                "FilesHaveIdenticalContents",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            string first = Path.GetTempFileName();
+            string second = Path.GetTempFileName();
+            try
+            {
+                File.WriteAllText(first, "same generated payload");
+                File.WriteAllText(second, "same generated payload");
+                Assert.That(
+                    (bool)filesEqual.Invoke(null, new object[] { first, second })!,
+                    Is.True);
+
+                File.WriteAllText(second, "changed generated payload");
+                Assert.That(
+                    (bool)filesEqual.Invoke(null, new object[] { first, second })!,
+                    Is.False);
+            }
+            finally
+            {
+                File.Delete(first);
+                File.Delete(second);
+            }
         }
 
         [Test]

@@ -10,6 +10,33 @@ namespace DungeonLab.Editor
 {
     internal sealed partial class DungeonLabGenerator : ScriptableObject
     {
+        private static int generationUndoSuppressionDepth;
+
+        internal static bool ShouldRecordGenerationUndo =>
+            !Application.isBatchMode && generationUndoSuppressionDepth == 0;
+
+        internal static IDisposable SuppressGenerationUndo()
+        {
+            generationUndoSuppressionDepth++;
+            return new GenerationUndoSuppression();
+        }
+
+        private sealed class GenerationUndoSuppression : IDisposable
+        {
+            private bool disposed;
+
+            public void Dispose()
+            {
+                if (disposed)
+                    return;
+
+                disposed = true;
+                if (generationUndoSuppressionDepth <= 0)
+                    throw new InvalidOperationException("Dungeon generation Undo suppression depth underflow.");
+                generationUndoSuppressionDepth--;
+            }
+        }
+
         private const string PackageInventoryPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/package_inventory.json";
         private const string StairProofContractsPath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/stair_proof_contracts.json";
         private const string GenerationProfilePath = "Assets/Arena/Content/Settings/Dungeons/RandomDungeon/generation_profile.asset";
@@ -8022,7 +8049,7 @@ namespace DungeonLab.Editor
             }
 
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            if (!Application.isBatchMode)
+            if (ShouldRecordGenerationUndo)
             {
                 Undo.RegisterCreatedObjectUndo(instance, $"Create {name}");
             }
@@ -8072,7 +8099,8 @@ namespace DungeonLab.Editor
                 if (cameraObject == null)
                 {
                     cameraObject = new GameObject("Dungeon Lab Camera");
-                    Undo.RegisterCreatedObjectUndo(cameraObject, "Create Dungeon Lab Camera");
+                    if (ShouldRecordGenerationUndo)
+                        Undo.RegisterCreatedObjectUndo(cameraObject, "Create Dungeon Lab Camera");
                 }
 
                 camera = cameraObject.GetComponent<Camera>();
@@ -8092,10 +8120,13 @@ namespace DungeonLab.Editor
             var flyCamera = cameraObject.GetComponent<DungeonLab.FlyCameraController>();
             if (flyCamera == null)
             {
-                flyCamera = Undo.AddComponent<DungeonLab.FlyCameraController>(cameraObject);
+                flyCamera = ShouldRecordGenerationUndo
+                    ? Undo.AddComponent<DungeonLab.FlyCameraController>(cameraObject)
+                    : cameraObject.AddComponent<DungeonLab.FlyCameraController>();
             }
 
-            Undo.RecordObject(flyCamera, "Configure Dungeon Lab Camera Controller");
+            if (ShouldRecordGenerationUndo)
+                Undo.RecordObject(flyCamera, "Configure Dungeon Lab Camera Controller");
             flyCamera.Configure(8f, 3f, 0.12f, false);
             EditorUtility.SetDirty(flyCamera);
 
@@ -8103,11 +8134,13 @@ namespace DungeonLab.Editor
             Vector3 target = dungeonBounds.center;
             Vector3 cameraPosition = target + new Vector3(0f, Mathf.Max(8f, cellSize * 1.5f), -distance);
 
-            Undo.RecordObject(cameraObject.transform, "Position Dungeon Lab Camera");
+            if (ShouldRecordGenerationUndo)
+                Undo.RecordObject(cameraObject.transform, "Position Dungeon Lab Camera");
             cameraObject.transform.position = cameraPosition;
             cameraObject.transform.rotation = Quaternion.LookRotation((target - cameraPosition).normalized, Vector3.up);
 
-            Undo.RecordObject(camera, "Configure Dungeon Lab Camera");
+            if (ShouldRecordGenerationUndo)
+                Undo.RecordObject(camera, "Configure Dungeon Lab Camera");
             camera.nearClipPlane = 0.1f;
             camera.farClipPlane = 1000f;
             camera.fieldOfView = 70f;

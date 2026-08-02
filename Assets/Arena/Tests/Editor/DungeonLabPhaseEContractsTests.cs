@@ -53,6 +53,10 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["graph.witnessedTransitionEdges"], Is.EqualTo("1"));
             Assert.That(snapshot["graph.sealedPartitionRejected"], Is.EqualTo("True"));
             Assert.That(snapshot["graph.doorwayAccepted"], Is.EqualTo("True"));
+            Assert.That(
+                snapshot["graph.isolatedFallPruned"],
+                Is.EqualTo("True"),
+                snapshot["graph.isolatedFallFailure"]);
             Assert.That(snapshot["collision.triangleEdgeAccepted"], Is.EqualTo("True"));
             Assert.That(snapshot["collision.outsideTriangleRejected"], Is.EqualTo("True"));
             Assert.That(snapshot["collision.exactHeightAccepted"], Is.EqualTo("True"));

@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -48,13 +50,14 @@ namespace Arena.Editor
         private sealed class ExportLayout
         {
             public int version = 1;
+            public string source_revision = "";
             public ExportBox[] boxes = Array.Empty<ExportBox>();
             public ExportMeshGeometry[] mesh_geometries = Array.Empty<ExportMeshGeometry>();
             public ExportMeshInstance[] mesh_instances = Array.Empty<ExportMeshInstance>();
         }
 
         [Serializable]
-        private sealed class ExportBox
+        internal sealed class ExportBox
         {
             public string name = "";
             public string shape = "obb_y";
@@ -65,7 +68,7 @@ namespace Arena.Editor
         }
 
         [Serializable]
-        private sealed class ExportMeshGeometry
+        internal sealed class ExportMeshGeometry
         {
             public string id = "";
             public string source = "";
@@ -76,18 +79,65 @@ namespace Arena.Editor
         }
 
         [Serializable]
-        private sealed class ExportMeshInstance
+        internal sealed class ExportMeshInstance
         {
             public string name = "";
             public string geometry_id = "";
             public float[] transform = Array.Empty<float>();
         }
 
-        private sealed class ExportCollisionData
+        internal sealed class ExportCollisionData
         {
             public List<ExportBox> Boxes { get; } = new();
             public List<ExportMeshGeometry> MeshGeometries { get; } = new();
             public List<ExportMeshInstance> MeshInstances { get; } = new();
+        }
+
+        private sealed class PreparedMeshGeometry
+        {
+            public ExportMeshGeometry? Geometry { get; set; }
+            public string? Warning { get; set; }
+            public string? Error { get; set; }
+        }
+
+        internal sealed class PreparedSharedCollisionBake
+        {
+            private readonly ExportCollisionData movement;
+            private readonly ExportCollisionData query;
+            private readonly string[] warnings;
+
+            private PreparedSharedCollisionBake(
+                Scene scene,
+                ExportCollisionData movement,
+                ExportCollisionData query,
+                IEnumerable<string> warnings,
+                string revision,
+                bool payloadsIdentical)
+            {
+                SceneHandle = scene.handle.GetRawData();
+                this.movement = movement;
+                this.query = query;
+                this.warnings = warnings.Distinct(StringComparer.Ordinal).ToArray();
+                Revision = revision;
+                PayloadsIdentical = payloadsIdentical;
+            }
+
+            internal ulong SceneHandle { get; }
+            internal string Revision { get; }
+            internal bool PayloadsIdentical { get; }
+
+            internal static PreparedSharedCollisionBake Create(
+                Scene scene,
+                ExportCollisionData movement,
+                ExportCollisionData query,
+                IEnumerable<string> warnings,
+                string revision,
+                bool payloadsIdentical)
+                => new(scene, movement, query, warnings, revision, payloadsIdentical);
+
+            internal ExportCollisionData Movement => movement;
+            internal ExportCollisionData Query => query;
+            internal IReadOnlyList<string> Warnings => warnings;
         }
 
         private enum TiltedBoxExportMode
@@ -101,6 +151,7 @@ namespace Arena.Editor
         {
             Query,
             Movement,
+            Shared,
         }
 
         [Serializable]
@@ -194,16 +245,23 @@ namespace Arena.Editor
 
         public static void ExportActiveSceneSharedCollisionData(string? dataKey)
         {
-            ExportActiveSceneWorldData(
-                reuseMovementCollisionForQueries: true,
-                exportHeightfield: false,
-                dataKeyOverride: dataKey);
+            ExportActiveSceneSharedCollisionData(dataKey, sourceRevision: null);
+        }
+
+        internal static void ExportActiveSceneSharedCollisionData(
+            string? dataKey,
+            string? sourceRevision)
+        {
+            Scene activeScene = SceneManager.GetActiveScene();
+            PreparedSharedCollisionBake bake = PrepareSceneSharedCollisionBake(activeScene);
+            ExportPreparedActiveSceneSharedCollisionData(dataKey, bake, sourceRevision);
         }
 
         private static void ExportActiveSceneWorldData(
             bool reuseMovementCollisionForQueries,
             bool exportHeightfield,
-            string? dataKeyOverride)
+            string? dataKeyOverride,
+            string? sourceRevision = null)
         {
             Scene activeScene = SceneManager.GetActiveScene();
             if (!activeScene.IsValid())
@@ -214,10 +272,21 @@ namespace Arena.Editor
 
             string dataKey = BuildSceneDataKey(
                 string.IsNullOrWhiteSpace(dataKeyOverride)
-                    ? activeScene.name
-                    : dataKeyOverride);
-            ExportSceneGameplayCollision(activeScene, dataKey);
-            ExportSceneGameplayQueryCollision(activeScene, dataKey, reuseMovementCollisionForQueries);
+                    ? activeScene.name ?? string.Empty
+                    : dataKeyOverride!);
+            if (reuseMovementCollisionForQueries)
+            {
+                PreparedSharedCollisionBake bake = PrepareSceneSharedCollisionBake(activeScene);
+                ExportPreparedActiveSceneSharedCollisionData(dataKey, bake, sourceRevision);
+                return;
+            }
+
+            ExportSceneGameplayCollision(activeScene, dataKey, sourceRevision);
+            ExportSceneGameplayQueryCollision(
+                activeScene,
+                dataKey,
+                reuseMovementCollisionForQueries: false,
+                sourceRevision);
             if (exportHeightfield)
                 ExportSelectedTerrainHeightfieldInternal(activeScene, dataKey);
             AssetDatabase.Refresh();
@@ -1510,7 +1579,112 @@ namespace Arena.Editor
             return true;
         }
 
-        private static void ExportSceneGameplayCollision(Scene activeScene, string dataKey)
+        internal static string ComputeSceneSharedCollisionRevision(Scene activeScene)
+            => PrepareSceneSharedCollisionBake(activeScene).Revision;
+
+        internal static PreparedSharedCollisionBake PrepareSceneSharedCollisionBake(Scene activeScene)
+        {
+            if (!activeScene.IsValid() || !activeScene.isLoaded)
+                throw new ArgumentException("Collision revision requires a loaded scene.", nameof(activeScene));
+
+            int layer = LayerMask.NameToLayer(GameplayCollisionLayer);
+            if (layer < 0)
+                throw new InvalidOperationException($"Required layer '{GameplayCollisionLayer}' does not exist.");
+
+            List<string> warnings = new();
+            List<string> errors = new();
+            (ExportCollisionData movement, ExportCollisionData query, bool payloadsIdentical) =
+                CollectSharedCollisionDataForLayer(
+                activeScene,
+                layer,
+                warnings,
+                errors);
+            if (errors.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "Cannot compute a collision revision because export validation failed: " +
+                    string.Join(" | ", errors.Take(MaxExportDiagnosticsToLog)));
+            }
+
+            string revision = ComputeCollisionRevision(movement);
+            return PreparedSharedCollisionBake.Create(
+                activeScene,
+                movement,
+                query,
+                warnings,
+                revision,
+                payloadsIdentical);
+        }
+
+        internal static void ExportPreparedActiveSceneSharedCollisionData(
+            string? dataKey,
+            PreparedSharedCollisionBake bake)
+            => ExportPreparedActiveSceneSharedCollisionData(dataKey, bake, bake.Revision);
+
+        private static void ExportPreparedActiveSceneSharedCollisionData(
+            string? dataKey,
+            PreparedSharedCollisionBake bake,
+            string? sourceRevision)
+        {
+            if (bake == null)
+                throw new ArgumentNullException(nameof(bake));
+
+            Scene activeScene = SceneManager.GetActiveScene();
+            if (!activeScene.IsValid() ||
+                !activeScene.isLoaded ||
+                activeScene.handle.GetRawData() != bake.SceneHandle)
+            {
+                throw new InvalidOperationException(
+                    "Prepared shared collision must be exported while its source scene remains active and loaded.");
+            }
+
+            string resolvedDataKey = BuildSceneDataKey(
+                string.IsNullOrWhiteSpace(dataKey)
+                    ? activeScene.name ?? string.Empty
+                    : dataKey!);
+            if (bake.PayloadsIdentical)
+            {
+                string json = SerializeExportLayout(bake.Movement, sourceRevision);
+                WriteProjectText(SceneServerCollisionPath(resolvedDataKey), json);
+                WriteProjectText(SceneBundledCollisionPath(resolvedDataKey), json);
+                WriteProjectText(SceneServerQueryCollisionPath(resolvedDataKey), json);
+                WriteProjectText(SceneBundledQueryCollisionPath(resolvedDataKey), json);
+            }
+            else
+            {
+                WriteExportLayout(
+                    SceneServerCollisionPath(resolvedDataKey),
+                    SceneBundledCollisionPath(resolvedDataKey),
+                    bake.Movement,
+                    sourceRevision);
+                WriteExportLayout(
+                    SceneServerQueryCollisionPath(resolvedDataKey),
+                    SceneBundledQueryCollisionPath(resolvedDataKey),
+                    bake.Query,
+                    sourceRevision);
+            }
+            AssetDatabase.Refresh();
+
+            Debug.Log(
+                $"[GameplayCollisionExporter] Exported one prepared shared bake for '{activeScene.name}' " +
+                $"(key '{resolvedDataKey}'): {bake.Movement.Boxes.Count} movement box collider(s), " +
+                $"{bake.Query.Boxes.Count} query box collider(s), {bake.Movement.MeshInstances.Count} " +
+                $"shared mesh instance(s), and {bake.Movement.MeshGeometries.Count} unique mesh geometries.");
+            LogExportWarnings(bake.Warnings);
+        }
+
+        private static string ComputeCollisionRevision(ExportCollisionData collision)
+        {
+            string canonicalJson = JsonUtility.ToJson(BuildExportLayout(collision, sourceRevision: null));
+            using SHA256 sha256 = SHA256.Create();
+            byte[] digest = sha256.ComputeHash(Encoding.UTF8.GetBytes(canonicalJson));
+            return string.Concat(digest.Select(value => value.ToString("x2")));
+        }
+
+        private static void ExportSceneGameplayCollision(
+            Scene activeScene,
+            string dataKey,
+            string? sourceRevision)
         {
             int layer = LayerMask.NameToLayer(GameplayCollisionLayer);
             if (layer < 0)
@@ -1528,7 +1702,12 @@ namespace Arena.Editor
                 errors,
                 requireArenaEnvironmentVariantSource: false,
                 tiltedBoxExportMode: TiltedBoxExportMode.WorldAabb);
-            WriteExportLayout(SceneServerCollisionPath(dataKey), SceneBundledCollisionPath(dataKey), movementCollision);
+            ThrowIfSceneExportErrors(activeScene, "movement", errors);
+            WriteExportLayout(
+                SceneServerCollisionPath(dataKey),
+                SceneBundledCollisionPath(dataKey),
+                movementCollision,
+                sourceRevision);
 
             Debug.Log(
                 $"[GameplayCollisionExporter] Exported {movementCollision.Boxes.Count} scene movement box collider(s) and " +
@@ -1542,7 +1721,8 @@ namespace Arena.Editor
         private static void ExportSceneGameplayQueryCollision(
             Scene activeScene,
             string dataKey,
-            bool reuseMovementCollisionForQueries)
+            bool reuseMovementCollisionForQueries,
+            string? sourceRevision)
         {
             string layerName = reuseMovementCollisionForQueries
                 ? GameplayCollisionLayer
@@ -1563,7 +1743,12 @@ namespace Arena.Editor
                 errors,
                 requireArenaEnvironmentVariantSource: !reuseMovementCollisionForQueries,
                 tiltedBoxExportMode: TiltedBoxExportMode.FullRotation);
-            WriteExportLayout(SceneServerQueryCollisionPath(dataKey), SceneBundledQueryCollisionPath(dataKey), queryCollision);
+            ThrowIfSceneExportErrors(activeScene, "query", errors);
+            WriteExportLayout(
+                SceneServerQueryCollisionPath(dataKey),
+                SceneBundledQueryCollisionPath(dataKey),
+                queryCollision,
+                sourceRevision);
 
             Debug.Log(
                 $"[GameplayCollisionExporter] Exported {queryCollision.Boxes.Count} scene query box collider(s) and " +
@@ -1572,6 +1757,20 @@ namespace Arena.Editor
                 $"{SceneServerQueryCollisionPath(dataKey)} and {SceneBundledQueryCollisionPath(dataKey)}");
             LogExportWarnings(warnings);
             LogExportErrors(errors);
+        }
+
+        private static void ThrowIfSceneExportErrors(
+            Scene scene,
+            string collisionKind,
+            IReadOnlyCollection<string> errors)
+        {
+            if (errors.Count == 0)
+                return;
+
+            throw new InvalidOperationException(
+                $"Scene '{scene.name}' {collisionKind} collision export failed with " +
+                $"{errors.Count} error(s): " +
+                string.Join(" | ", errors.Take(MaxExportDiagnosticsToLog)));
         }
 
         private static List<ExportBox> CollectExportBoxesForLayer(
@@ -1671,6 +1870,86 @@ namespace Arena.Editor
             return data;
         }
 
+        private static (ExportCollisionData movement, ExportCollisionData query, bool payloadsIdentical)
+            CollectSharedCollisionDataForLayer(
+                Scene activeScene,
+                int layer,
+                List<string> warnings,
+                List<string> errors)
+        {
+            var movement = new ExportCollisionData();
+            var query = new ExportCollisionData();
+            bool payloadsIdentical = true;
+            foreach (BoxCollider collider in UnityEngine.Object.FindObjectsByType<BoxCollider>())
+            {
+                if (!IsExportableCollider(collider, activeScene, layer))
+                    continue;
+
+                if (TryBuildExportBox(
+                        collider,
+                        warnings,
+                        errors,
+                        TiltedBoxExportMode.WorldAabb,
+                        out ExportBox? movementBox))
+                {
+                    movement.Boxes.Add(movementBox!);
+                }
+
+                if (TryBuildExportBox(
+                        collider,
+                        warnings,
+                        errors,
+                        TiltedBoxExportMode.FullRotation,
+                        out ExportBox? queryBox))
+                {
+                    query.Boxes.Add(queryBox!);
+                }
+
+                if (movementBox == null ||
+                    queryBox == null ||
+                    !ExportBoxesAreIdentical(movementBox, queryBox))
+                {
+                    payloadsIdentical = false;
+                }
+            }
+
+            movement.Boxes.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+            query.Boxes.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+            CollectMeshCollisionDataForLayer(
+                activeScene,
+                layer,
+                warnings,
+                errors,
+                requireArenaEnvironmentVariantSource: false,
+                MeshCollisionExportMode.Shared,
+                movement);
+
+            // Shared collision means the same mesh instances and geometry are
+            // authoritative for movement and queries. Boxes are derived twice
+            // because tilted movement boxes intentionally become world AABBs,
+            // while query boxes retain their full rotation.
+            query.MeshGeometries.AddRange(movement.MeshGeometries);
+            query.MeshInstances.AddRange(movement.MeshInstances);
+            return (movement, query, payloadsIdentical);
+        }
+
+        private static bool ExportBoxesAreIdentical(ExportBox first, ExportBox second)
+            => string.Equals(first.name, second.name, StringComparison.Ordinal) &&
+               string.Equals(first.shape, second.shape, StringComparison.Ordinal) &&
+               first.rotation_y_deg.Equals(second.rotation_y_deg) &&
+               first.center.SequenceEqual(second.center) &&
+               first.size.SequenceEqual(second.size) &&
+               first.rotation.SequenceEqual(second.rotation);
+
+        private static bool IsExportableCollider(Collider collider, Scene activeScene, int layer)
+            => collider != null &&
+               collider.enabled &&
+               !collider.isTrigger &&
+               collider.gameObject.activeInHierarchy &&
+               collider.gameObject.layer == layer &&
+               !ShouldExcludeFromGameplayCollision(collider.gameObject) &&
+               collider.gameObject.scene == activeScene;
+
         private static void CollectMeshCollisionDataForLayer(
             Scene activeScene,
             int layer,
@@ -1682,18 +1961,11 @@ namespace Arena.Editor
         {
             int sceneUniqueTriangleCount = 0;
             var meshGeometriesById = new Dictionary<string, ExportMeshGeometry>(StringComparer.Ordinal);
+            var preparedGeometryByMesh = new Dictionary<Mesh, PreparedMeshGeometry>();
             foreach (var collider in UnityEngine.Object.FindObjectsByType<MeshCollider>())
             {
-                if (collider == null ||
-                    !collider.enabled ||
-                    collider.isTrigger ||
-                    !collider.gameObject.activeInHierarchy ||
-                    collider.gameObject.layer != layer ||
-                    ShouldExcludeFromGameplayCollision(collider.gameObject) ||
-                    collider.gameObject.scene != activeScene)
-                {
+                if (!IsExportableCollider(collider, activeScene, layer))
                     continue;
-                }
 
                 if (requireArenaEnvironmentVariantSource &&
                     !IsAllowedArenaEnvironmentVariantCollider(collider, out string sourcePath))
@@ -1709,6 +1981,7 @@ namespace Arena.Editor
                         warnings,
                         errors,
                         mode,
+                        preparedGeometryByMesh,
                         meshGeometriesById,
                         ref sceneUniqueTriangleCount,
                         out ExportMeshInstance? exportMeshInstance))
@@ -1798,6 +2071,7 @@ namespace Arena.Editor
             List<string> warnings,
             List<string> errors,
             MeshCollisionExportMode mode,
+            Dictionary<Mesh, PreparedMeshGeometry> preparedGeometryByMesh,
             Dictionary<string, ExportMeshGeometry> meshGeometriesById,
             ref int sceneUniqueTriangleCount,
             out ExportMeshInstance? exportMeshInstance)
@@ -1805,27 +2079,97 @@ namespace Arena.Editor
             exportMeshInstance = null;
             Mesh? mesh = collider.sharedMesh;
             string path = GetHierarchyPath(collider.transform);
-            string label = mode == MeshCollisionExportMode.Query ? "mesh query collision" : "movement mesh collision";
+            string label = mode switch
+            {
+                MeshCollisionExportMode.Query => "mesh query collision",
+                MeshCollisionExportMode.Movement => "movement mesh collision",
+                _ => "shared mesh collision",
+            };
             if (mesh == null)
             {
-                errors.Add($"Skipping {path} {label}: MeshCollider has no shared mesh.");
+                // A MeshCollider without sharedMesh is inert in Unity and emits
+                // no server geometry. Third-party gateway prefabs intentionally
+                // contain these placeholders; their closed-door blocker comes
+                // from the door manifest. Keep the omission visible, but do not
+                // reject an otherwise complete scene export.
+                warnings.Add($"Skipping {path} {label}: MeshCollider has no shared mesh.");
                 return false;
             }
-            if (!mesh.isReadable)
+
+            if (!preparedGeometryByMesh.TryGetValue(mesh, out PreparedMeshGeometry prepared))
             {
-                errors.Add($"Skipping {path} {label}: mesh asset is not readable.");
+                prepared = PrepareMeshGeometry(mesh);
+                preparedGeometryByMesh.Add(mesh, prepared);
+            }
+
+            if (prepared.Geometry == null)
+            {
+                if (!string.IsNullOrEmpty(prepared.Error))
+                    errors.Add($"Skipping {path} {label}: {prepared.Error}");
+                else
+                    warnings.Add($"Skipping {path} {label}: {prepared.Warning}");
                 return false;
             }
+
+            if (!string.IsNullOrEmpty(prepared.Warning))
+                warnings.Add($"{path} {label} {prepared.Warning}");
+
+            ExportMeshGeometry geometry = prepared.Geometry;
+            int maxTrianglesPerCollider = mode switch
+            {
+                MeshCollisionExportMode.Query => MaxQueryMeshTrianglesPerCollider,
+                MeshCollisionExportMode.Movement => MaxMovementMeshTrianglesPerCollider,
+                _ => Math.Min(MaxQueryMeshTrianglesPerCollider, MaxMovementMeshTrianglesPerCollider),
+            };
+            int maxTrianglesPerScene = mode switch
+            {
+                MeshCollisionExportMode.Query => MaxQueryMeshTrianglesPerScene,
+                MeshCollisionExportMode.Movement => MaxMovementMeshTrianglesPerScene,
+                _ => Math.Min(MaxQueryMeshTrianglesPerScene, MaxMovementMeshTrianglesPerScene),
+            };
+            if (geometry.triangle_count > maxTrianglesPerCollider)
+            {
+                errors.Add(
+                    $"Skipping {path} {label}: {geometry.triangle_count} triangle(s) exceeds per-collider budget " +
+                    $"{maxTrianglesPerCollider}.");
+                return false;
+            }
+
+            if (!meshGeometriesById.ContainsKey(geometry.id) &&
+                sceneUniqueTriangleCount + geometry.triangle_count > maxTrianglesPerScene)
+            {
+                errors.Add(
+                    $"Skipping {path} {label}: scene unique mesh triangle budget would exceed " +
+                    $"{maxTrianglesPerScene}.");
+                return false;
+            }
+
+            if (!meshGeometriesById.ContainsKey(geometry.id))
+            {
+                meshGeometriesById.Add(geometry.id, geometry);
+                sceneUniqueTriangleCount += geometry.triangle_count;
+            }
+
+            exportMeshInstance = new ExportMeshInstance
+            {
+                name = path,
+                geometry_id = geometry.id,
+                transform = MatrixToRowMajorArray(collider.transform.localToWorldMatrix),
+            };
+            return true;
+        }
+
+        private static PreparedMeshGeometry PrepareMeshGeometry(Mesh mesh)
+        {
+            if (!mesh.isReadable)
+                return new PreparedMeshGeometry { Error = "mesh asset is not readable." };
 
             string meshAssetPath = AssetDatabase.GetAssetPath(mesh);
             string meshAssetGuid = string.IsNullOrEmpty(meshAssetPath)
                 ? string.Empty
                 : AssetDatabase.AssetPathToGUID(meshAssetPath);
             if (string.IsNullOrEmpty(meshAssetGuid))
-            {
-                errors.Add($"Skipping {path} {label}: mesh asset has no stable AssetDatabase GUID.");
-                return false;
-            }
+                return new PreparedMeshGeometry { Error = "mesh asset has no stable AssetDatabase GUID." };
 
             int[] indices;
             Vector3[] localVertices;
@@ -1836,19 +2180,20 @@ namespace Arena.Editor
             }
             catch (Exception ex)
             {
-                errors.Add($"Skipping {path} {label}: failed to read mesh data ({ex.GetType().Name}).");
-                return false;
+                return new PreparedMeshGeometry
+                {
+                    Error = $"failed to read mesh data ({ex.GetType().Name}).",
+                };
             }
 
             if (indices.Length == 0 || localVertices.Length == 0)
-            {
-                warnings.Add($"Skipping {path} {label}: mesh is empty.");
-                return false;
-            }
+                return new PreparedMeshGeometry { Warning = "mesh is empty." };
             if (indices.Length % 3 != 0)
             {
-                errors.Add($"Skipping {path} {label}: mesh index count {indices.Length} is not divisible by 3.");
-                return false;
+                return new PreparedMeshGeometry
+                {
+                    Error = $"mesh index count {indices.Length} is not divisible by 3.",
+                };
             }
 
             var cleanedIndices = new List<int>(indices.Length);
@@ -1861,8 +2206,10 @@ namespace Arena.Editor
                 if (a < 0 || b < 0 || c < 0 ||
                     a >= localVertices.Length || b >= localVertices.Length || c >= localVertices.Length)
                 {
-                    errors.Add($"Skipping {path} {label}: mesh contains an out-of-range index.");
-                    return false;
+                    return new PreparedMeshGeometry
+                    {
+                        Error = "mesh contains an out-of-range index.",
+                    };
                 }
 
                 if (IsDegenerateTriangle(localVertices[a], localVertices[b], localVertices[c]))
@@ -1879,75 +2226,45 @@ namespace Arena.Editor
             int triangleCount = cleanedIndices.Count / 3;
             if (triangleCount == 0)
             {
-                warnings.Add($"Skipping {path} {label}: mesh has no non-degenerate triangles.");
-                return false;
-            }
-            if (degenerateTriangleCount > 0)
-            {
-                warnings.Add(
-                    $"{path} {label} removed {degenerateTriangleCount} degenerate triangle(s) before export.");
-            }
-            int maxTrianglesPerCollider = mode == MeshCollisionExportMode.Query
-                ? MaxQueryMeshTrianglesPerCollider
-                : MaxMovementMeshTrianglesPerCollider;
-            int maxTrianglesPerScene = mode == MeshCollisionExportMode.Query
-                ? MaxQueryMeshTrianglesPerScene
-                : MaxMovementMeshTrianglesPerScene;
-            if (triangleCount > maxTrianglesPerCollider)
-            {
-                errors.Add(
-                    $"Skipping {path} {label}: {triangleCount} triangle(s) exceeds per-collider budget " +
-                    $"{maxTrianglesPerCollider}.");
-                return false;
-            }
-
-            string geometryId = $"{meshAssetGuid}:{mesh.name}:{localVertices.Length}:{triangleCount}";
-            if (!meshGeometriesById.ContainsKey(geometryId) &&
-                sceneUniqueTriangleCount + triangleCount > maxTrianglesPerScene)
-            {
-                errors.Add(
-                    $"Skipping {path} {label}: scene unique mesh triangle budget would exceed " +
-                    $"{maxTrianglesPerScene}.");
-                return false;
-            }
-
-            if (!meshGeometriesById.ContainsKey(geometryId))
-            {
-                var vertices = new float[localVertices.Length * 3];
-                for (int i = 0; i < localVertices.Length; i++)
+                return new PreparedMeshGeometry
                 {
-                    Vector3 local = localVertices[i];
-                    if (!IsFinite(local))
-                    {
-                        errors.Add($"Skipping {path} {label}: mesh contains non-finite vertex data.");
-                        return false;
-                    }
+                    Warning = "mesh has no non-degenerate triangles.",
+                };
+            }
 
-                    int output = i * 3;
-                    vertices[output] = local.x;
-                    vertices[output + 1] = local.y;
-                    vertices[output + 2] = local.z;
+            var vertices = new float[localVertices.Length * 3];
+            for (int i = 0; i < localVertices.Length; i++)
+            {
+                Vector3 local = localVertices[i];
+                if (!IsFinite(local))
+                {
+                    return new PreparedMeshGeometry
+                    {
+                        Error = "mesh contains non-finite vertex data.",
+                    };
                 }
 
-                meshGeometriesById.Add(geometryId, new ExportMeshGeometry
+                int output = i * 3;
+                vertices[output] = local.x;
+                vertices[output + 1] = local.y;
+                vertices[output + 2] = local.z;
+            }
+
+            return new PreparedMeshGeometry
+            {
+                Geometry = new ExportMeshGeometry
                 {
-                    id = geometryId,
+                    id = $"{meshAssetGuid}:{mesh.name}:{localVertices.Length}:{triangleCount}",
                     source = string.IsNullOrEmpty(meshAssetPath) ? mesh.name : meshAssetPath,
                     vertex_count = localVertices.Length,
                     triangle_count = triangleCount,
                     vertices = vertices,
                     indices = cleanedIndices.ToArray(),
-                });
-                sceneUniqueTriangleCount += triangleCount;
-            }
-
-            exportMeshInstance = new ExportMeshInstance
-            {
-                name = path,
-                geometry_id = geometryId,
-                transform = MatrixToRowMajorArray(collider.transform.localToWorldMatrix),
+                },
+                Warning = degenerateTriangleCount > 0
+                    ? $"removed {degenerateTriangleCount} degenerate triangle(s) before export."
+                    : null,
             };
-            return true;
         }
 
         private static bool IsDegenerateTriangle(Vector3 a, Vector3 b, Vector3 c)
@@ -2012,27 +2329,68 @@ namespace Arena.Editor
                 Array.Empty<ExportMeshGeometry>(),
                 Array.Empty<ExportMeshInstance>());
 
-        private static void WriteExportLayout(string serverPath, string bundledPath, ExportCollisionData data)
-            => WriteExportLayout(serverPath, bundledPath, data.Boxes, data.MeshGeometries, data.MeshInstances);
+        private static void WriteExportLayout(
+            string serverPath,
+            string bundledPath,
+            ExportCollisionData data,
+            string? sourceRevision = null)
+        {
+            string json = SerializeExportLayout(data, sourceRevision);
+            WriteProjectText(serverPath, json);
+            WriteProjectText(bundledPath, json);
+        }
 
         private static void WriteExportLayout(
             string serverPath,
             string bundledPath,
             IReadOnlyCollection<ExportBox> boxes,
             IReadOnlyCollection<ExportMeshGeometry> meshGeometries,
-            IReadOnlyCollection<ExportMeshInstance> meshInstances)
+            IReadOnlyCollection<ExportMeshInstance> meshInstances,
+            string? sourceRevision = null)
         {
-            var layout = new ExportLayout
+            ExportLayout layout = BuildExportLayout(
+                boxes,
+                meshGeometries,
+                meshInstances,
+                sourceRevision);
+
+            // These files are generated transport payloads, not hand-authored
+            // documents. Pretty printing more than doubles the current dungeon
+            // payload and needlessly inflates Unity import and Rust include_str!
+            // rebuild work.
+            string json = JsonUtility.ToJson(layout);
+            WriteProjectText(serverPath, json);
+            WriteProjectText(bundledPath, json);
+        }
+
+        private static string SerializeExportLayout(
+            ExportCollisionData data,
+            string? sourceRevision)
+            => JsonUtility.ToJson(BuildExportLayout(data, sourceRevision));
+
+        private static ExportLayout BuildExportLayout(
+            ExportCollisionData data,
+            string? sourceRevision)
+            => BuildExportLayout(
+                data.Boxes,
+                data.MeshGeometries,
+                data.MeshInstances,
+                sourceRevision);
+
+        private static ExportLayout BuildExportLayout(
+            IReadOnlyCollection<ExportBox> boxes,
+            IReadOnlyCollection<ExportMeshGeometry> meshGeometries,
+            IReadOnlyCollection<ExportMeshInstance> meshInstances,
+            string? sourceRevision)
+        {
+            return new ExportLayout
             {
                 version = 1,
+                source_revision = sourceRevision ?? string.Empty,
                 boxes = boxes.ToArray(),
                 mesh_geometries = meshGeometries.ToArray(),
                 mesh_instances = meshInstances.ToArray(),
             };
-
-            string json = JsonUtility.ToJson(layout, true);
-            WriteProjectText(serverPath, json);
-            WriteProjectText(bundledPath, json);
         }
 
         private static string BuildSceneDataKey(string sceneName)
@@ -2104,6 +2462,12 @@ namespace Arena.Editor
             string projectRoot = Directory.GetParent(Application.dataPath)!.FullName;
             string outputPath = Path.Combine(projectRoot, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+            if (File.Exists(outputPath) &&
+                string.Equals(File.ReadAllText(outputPath), contents, StringComparison.Ordinal))
+            {
+                return;
+            }
+
             File.WriteAllText(outputPath, contents);
         }
     }

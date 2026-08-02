@@ -21,6 +21,8 @@ namespace Arena.Editor
     internal sealed class LocalSpacetimeDbSharedDataPublisher : AssetPostprocessor
     {
         private const string SharedDataPrefix = "Assets/Arena/Resources/SharedData/";
+        private const string RandomDungeonStagingDataPrefix =
+            "Assets/Arena/Resources/SharedData/Worlds/random_dungeon_staging.";
         private const string DisableEnvironmentVariable = "ARENA_AUTO_PUBLISH_SHARED_DATA";
         private const double DebounceSeconds = 2d;
 
@@ -28,6 +30,8 @@ namespace Arena.Editor
         private static bool publishRequested;
         private static bool enterPlayWhenReady;
         private static double lastRequestTime;
+        private static int sharedDataTransactionDepth;
+        private static bool sharedDataChangedInTransaction;
 
         static LocalSpacetimeDbSharedDataPublisher()
         {
@@ -52,6 +56,45 @@ namespace Arena.Editor
                 return;
             }
 
+            if (sharedDataTransactionDepth > 0)
+            {
+                sharedDataChangedInTransaction = true;
+                return;
+            }
+
+            QueuePublish();
+        }
+
+        /// <summary>
+        /// Suppresses publish triggers while an editor generator writes a
+        /// complete set of related shared-data files. Disposing without calling
+        /// <see cref="SharedDataTransaction.Complete"/> discards only the
+        /// triggers raised inside this transaction; a publish that was already
+        /// pending is preserved.
+        /// </summary>
+        internal static SharedDataTransaction BeginSharedDataTransaction()
+        {
+            sharedDataTransactionDepth++;
+            return new SharedDataTransaction();
+        }
+
+        private static void EndSharedDataTransaction(bool completed)
+        {
+            if (sharedDataTransactionDepth <= 0)
+                throw new InvalidOperationException("Shared-data transaction depth underflow.");
+
+            sharedDataTransactionDepth--;
+            if (sharedDataTransactionDepth > 0)
+                return;
+
+            bool changed = sharedDataChangedInTransaction;
+            sharedDataChangedInTransaction = false;
+            if (completed && changed)
+                QueuePublish();
+        }
+
+        private static void QueuePublish()
+        {
             publishRequested = true;
             lastRequestTime = EditorApplication.timeSinceStartup;
             EditorApplication.update -= Tick;
@@ -65,6 +108,7 @@ namespace Arena.Editor
         {
             return paths.Any(path =>
                 path.StartsWith(SharedDataPrefix, StringComparison.Ordinal) &&
+                !path.StartsWith(RandomDungeonStagingDataPrefix, StringComparison.Ordinal) &&
                 path.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
         }
 
@@ -78,11 +122,30 @@ namespace Arena.Editor
 
         private static void OnPlayModeStateChanged(PlayModeStateChange state)
         {
-            if (state != PlayModeStateChange.ExitingEditMode ||
-                (activeRun == null && !publishRequested))
+            if (state != PlayModeStateChange.ExitingEditMode || AutoPublishDisabled())
             {
                 return;
             }
+
+            if (!DungeonLab.Editor.RandomDungeonSceneBuilder.IsCollisionRevisionCurrent(
+                    out string collisionRevisionFailure))
+            {
+                enterPlayWhenReady = true;
+                EditorApplication.isPlaying = false;
+                Debug.LogWarning(
+                    "[SpacetimeDB Auto Publish] Holding Play because RandomDungeon " +
+                    $"collision is stale: {collisionRevisionFailure} Repairing and " +
+                    "republishing automatically.");
+                EditorApplication.delayCall += () =>
+                {
+                    if (!DungeonLab.Editor.RandomDungeonSceneBuilder.TryRepairCollisionFromSavedScene())
+                        enterPlayWhenReady = false;
+                };
+                return;
+            }
+
+            if (activeRun == null && !publishRequested)
+                return;
 
             enterPlayWhenReady = true;
             EditorApplication.isPlaying = false;
@@ -276,6 +339,27 @@ namespace Arena.Editor
             {
                 lock (outputLock)
                     return error.ToString();
+            }
+        }
+
+        internal sealed class SharedDataTransaction : IDisposable
+        {
+            private bool completed;
+            private bool disposed;
+
+            internal void Complete()
+            {
+                if (disposed)
+                    throw new ObjectDisposedException(nameof(SharedDataTransaction));
+                completed = true;
+            }
+
+            public void Dispose()
+            {
+                if (disposed)
+                    return;
+                disposed = true;
+                EndSharedDataTransaction(completed);
             }
         }
     }

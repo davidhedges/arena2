@@ -58,6 +58,13 @@ namespace DungeonLab.Editor
         // Internal so nav/collision probes use the renderer's one value.
         internal const int AbyssDepthLevels = 20;
 
+        // A cliff's open side has no lower walkable surface: every masonry
+        // course below its lip is silhouette, and a player can only reach it
+        // after leaving the navigable dungeon. Keep the highest course solid so
+        // near-lip contacts remain unchanged, but do not feed the deep decorative
+        // skirt into Unity physics or the shared client/server collision bake.
+        private const int CollisionBearingAbyssWallCourses = 1;
+
         internal static int AbyssBaseForMinFloor(int minimumFloorLevel)
         {
             return minimumFloorLevel - AbyssDepthLevels;
@@ -304,7 +311,7 @@ namespace DungeonLab.Editor
             }
 
             root = new GameObject(tempRootName);
-            if (!Application.isBatchMode)
+            if (DungeonLabGenerator.ShouldRecordGenerationUndo)
             {
                 Undo.RegisterCreatedObjectUndo(root, $"Create {rootName}");
             }
@@ -3328,7 +3335,7 @@ namespace DungeonLab.Editor
                 {
                     MeasuredPrefab piece = stack.pieces[i];
                     string wallKind = wallEdge.isRetaining ? "retaining" : "cliff";
-                    PlaceEdgePrefab(
+                    GameObject instance = PlaceEdgePrefab(
                         piece,
                         parent,
                         $"{wallKind}_{DirectionName(wallEdge.edge.direction).ToLowerInvariant()}_{wallEdge.edge.x}_{wallEdge.edge.z}_{course}_{i}",
@@ -3337,8 +3344,22 @@ namespace DungeonLab.Editor
                         outwardNormal,
                         ref bounds,
                         ref hasBounds);
+                    if (!wallEdge.isRetaining &&
+                        course < courseCount - CollisionBearingAbyssWallCourses)
+                    {
+                        DisableDecorativeAbyssCourseCollision(instance);
+                    }
                     yOffset += piece.height;
                 }
+            }
+        }
+
+        private static void DisableDecorativeAbyssCourseCollision(GameObject instance)
+        {
+            foreach (Collider collider in instance.GetComponentsInChildren<Collider>(includeInactive: true))
+            {
+                collider.enabled = false;
+                EditorUtility.SetDirty(collider);
             }
         }
 
@@ -10009,7 +10030,7 @@ namespace DungeonLab.Editor
             }
 
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            if (!Application.isBatchMode)
+            if (DungeonLabGenerator.ShouldRecordGenerationUndo)
             {
                 Undo.RegisterCreatedObjectUndo(instance, $"Create {name}");
             }
@@ -10024,7 +10045,7 @@ namespace DungeonLab.Editor
         private static GameObject CreateChild(Transform parent, string name)
         {
             var child = new GameObject(name);
-            if (!Application.isBatchMode)
+            if (DungeonLabGenerator.ShouldRecordGenerationUndo)
             {
                 Undo.RegisterCreatedObjectUndo(child, $"Create {name}");
             }
@@ -10037,7 +10058,10 @@ namespace DungeonLab.Editor
             var existing = GameObject.Find(rootName);
             if (existing != null)
             {
-                Undo.DestroyObjectImmediate(existing);
+                if (DungeonLabGenerator.ShouldRecordGenerationUndo)
+                    Undo.DestroyObjectImmediate(existing);
+                else
+                    UnityEngine.Object.DestroyImmediate(existing);
             }
         }
 

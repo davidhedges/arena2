@@ -1511,7 +1511,14 @@ namespace DungeonLab.Editor
             int witnessedComponent = -1;
             foreach (NavigationSurfaceEdge edge in artifact.edges)
             {
-                if (edge.kind == "Walk")
+                // Directed falls are traversal opportunities, not evidence that
+                // both endpoints belong to the same fall-free component. A fall
+                // into a collision-isolated cosmetic pocket must be pruned with
+                // that pocket below; rejecting it here leaves the production
+                // scene saved while navigation/collision export is still stale.
+                // Only physical Stair/Bridge transitions witness a component
+                // that must survive this conservative pruning pass.
+                if (edge.kind == "Walk" || edge.kind == "Fall")
                 {
                     continue;
                 }
@@ -1896,6 +1903,35 @@ namespace DungeonLab.Editor
                 transitions,
                 out _);
             edges[1].to = witnessedEndpoint;
+
+            var isolatedFallArtifact = new NavigationSurfaceArtifact
+            {
+                nodes = new[]
+                {
+                    new NavigationSurfaceNode { id = "main-low" },
+                    new NavigationSurfaceNode { id = "main-high" },
+                    new NavigationSurfaceNode { id = "isolated-fall-target" }
+                },
+                edges = new[]
+                {
+                    new NavigationSurfaceEdge
+                    {
+                        id = "main-stair", from = "main-low", to = "main-high",
+                        kind = "Stair", directed = false
+                    },
+                    new NavigationSurfaceEdge
+                    {
+                        id = "isolated-fall", from = "main-high", to = "isolated-fall-target",
+                        kind = "Fall", directed = true
+                    }
+                }
+            };
+            bool isolatedFallPruned = PruneNavigationComponentsWithoutTraversalWitness(
+                isolatedFallArtifact,
+                out string isolatedFallFailure) &&
+                isolatedFallArtifact.nodes.Length == 2 &&
+                isolatedFallArtifact.edges.Length == 1 &&
+                isolatedFallArtifact.validation.omitted_unwitnessed_component_surfaces == 1;
             return string.Join("\n", new[]
             {
                 $"graph.valid={valid}",
@@ -1907,6 +1943,8 @@ namespace DungeonLab.Editor
                 $"graph.witnessedTransitionEdges={witnessedTransitionEdgeCount}",
                 $"graph.sealedPartitionRejected={sealedPartitionRejected}",
                 $"graph.doorwayAccepted={doorwayAccepted}",
+                $"graph.isolatedFallPruned={isolatedFallPruned}",
+                $"graph.isolatedFallFailure={isolatedFallFailure}",
                 $"collision.triangleEdgeAccepted={triangleEdgeAccepted}",
                 $"collision.outsideTriangleRejected={outsideTriangleRejected}",
                 $"collision.exactHeightAccepted={exactCollisionHeightAccepted}",

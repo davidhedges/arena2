@@ -58,8 +58,12 @@ While the Unity Editor is open, importing a changed JSON file under
 `Assets/Arena/Resources/SharedData` automatically queues a data-preserving local
 republish through the same verification gate. If Play is requested while that
 publish is pending, the editor waits for the live contract check and then enters
-Play automatically. Set `ARENA_AUTO_PUBLISH_SHARED_DATA=0` in Unity's environment
-to disable this local workflow intentionally.
+Play automatically. Random-dungeon generation is transactional: it validates a
+staging scene and all five paired world-data artifacts before replacing the
+production scene or queuing that publish. The scene and collision payloads carry
+the same collision revision; Play repairs and republishes collision from the
+saved scene if that revision is stale. Set `ARENA_AUTO_PUBLISH_SHARED_DATA=0` in
+Unity's environment to disable this local workflow intentionally.
 
 Projectile load harness reducers are feature-gated and are not included by the
 plain workflow above. Use the harness build/publish workflow in
