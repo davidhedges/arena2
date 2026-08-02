@@ -125,6 +125,9 @@ namespace DungeonLab.Editor
             }
         }
 
+        private static OwnerKey FinalViewAnchorsOwner =>
+            new OwnerKey(OwnerFamily.Vista, "final-view-anchors");
+
         /// <summary>
         /// One reservation: a plan cell, a half-open level band, a kind and an owner.
         /// </summary>

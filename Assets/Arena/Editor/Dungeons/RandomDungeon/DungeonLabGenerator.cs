@@ -1994,7 +1994,7 @@ namespace DungeonLab.Editor
                 // stair bodies and later structural passes cannot consume or re-level
                 // either endpoint.
                 plannedStairLedger.Register(
-                    new OwnerKey(OwnerFamily.Vista, "final-view-anchors"),
+                    FinalViewAnchorsOwner,
                     Array.Empty<Vector2Int>(),
                     new[] { routeRequirements.vistaSourceCell },
                     new[] { routeRequirements.vistaTargetCell });

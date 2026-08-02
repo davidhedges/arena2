@@ -131,6 +131,7 @@ namespace Arena.Tests.Editor
             Assert.That(int.Parse(snapshot["producer.clearanceCells"]), Is.GreaterThan(0));
             Assert.That(int.Parse(snapshot["producer.openVolumeCells"]), Is.GreaterThan(0));
             Assert.That(snapshot["producer.openVolumesValid"], Is.EqualTo("True"), snapshot["producer.volumeFailure"]);
+            Assert.That(snapshot["producer.vistaAnchorVoidAccepted"], Is.EqualTo("True"));
             Assert.That(snapshot["producer.headroomValid"], Is.EqualTo("True"), snapshot["producer.headroomFailure"]);
             Assert.That(snapshot["producer.boundLandingAccepted"], Is.EqualTo("True"));
             Assert.That(snapshot["producer.unboundedLandingStillRejected"], Is.EqualTo("True"));

@@ -170,11 +170,15 @@ namespace DungeonLab.Editor
                     var voidOwner = new OwnerKey(
                         OwnerFamily.Opening,
                         $"{node.id}#{layerId}-shared-void");
+                    // Vista endpoints are base-floor catches, but their legacy
+                    // placement reservation is an unbounded Landing prism. It
+                    // may occupy the floor below this half-open void without
+                    // admitting a slab, support, or transition body into it.
                     if (!prisms.TryRegisterOpenVolume(
                             SortedCells(sharedVoidCells),
                             voidBand,
                             voidOwner,
-                            new[] { layerOwner },
+                            new[] { layerOwner, FinalViewAnchorsOwner },
                             out Prism voidBlocker))
                     {
                         rejectionReason =
@@ -700,6 +704,14 @@ namespace DungeonLab.Editor
             }
 
             var prisms = new PrismLedger();
+            var galleryVoidCells = new HashSet<Vector2Int>(wideRoom.cells);
+            galleryVoidCells.ExceptWith(gallery);
+            Vector2Int vistaAnchorBelowVoid = SortedCells(galleryVoidCells)[0];
+            prisms.Register(
+                FinalViewAnchorsOwner,
+                Array.Empty<Vector2Int>(),
+                new[] { vistaAnchorBelowVoid },
+                Array.Empty<Vector2Int>());
             var generatedOpeningCandidates = new List<PlanOpening>();
             bool realized = TryRealizeGenericStructuralRoomLayers(
                 layout,
@@ -746,6 +758,15 @@ namespace DungeonLab.Editor
             bool volumesValid = prisms.TryValidateOpenVolumes(
                 surfaces,
                 out string volumeFailure);
+            bool vistaAnchorVoidAccepted = false;
+            foreach (HashSet<Vector2Int> volumeCells in prisms.OpenVolumeCellGroups())
+            {
+                if (volumeCells.Contains(vistaAnchorBelowVoid))
+                {
+                    vistaAnchorVoidAccepted = true;
+                    break;
+                }
+            }
             bool headroomValid = prisms.TryValidateSurfaceHeadroom(
                 surfaces,
                 out string headroomFailure);
@@ -815,6 +836,7 @@ namespace DungeonLab.Editor
                 $"producer.openingFailure={openingFailure}",
                 $"producer.openVolumesValid={volumesValid}",
                 $"producer.volumeFailure={volumeFailure}",
+                $"producer.vistaAnchorVoidAccepted={vistaAnchorVoidAccepted}",
                 $"producer.headroomValid={headroomValid}",
                 $"producer.headroomFailure={headroomFailure}",
                 $"producer.boundLandingAccepted={boundLandingAccepted}",
