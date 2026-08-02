@@ -108,6 +108,18 @@ namespace Arena.EditModeTests
                 Assert.That(trap["trap_profile_id"]!.Value<string>(), Is.EqualTo("TRAP_SPIKES"));
                 Assert.That(trap["origin"]!["z"]!.Value<float>(), Is.EqualTo(26f));
                 Assert.That(trap["yaw_degrees"]!.Value<float>(), Is.EqualTo(90f));
+                Assert.That(
+                    WorldTrapManifestExporter.ClientTrapManifestPath(
+                        "random_dungeon_staging"),
+                    Is.EqualTo(
+                        "Assets/Arena/Resources/SharedData/Worlds/" +
+                        "random_dungeon_staging.traps.shared.json"));
+                Assert.That(
+                    WorldTrapManifestExporter.ServerTrapManifestPath(
+                        "random_dungeon_staging"),
+                    Is.EqualTo(
+                        "server/src/world_data/" +
+                        "random_dungeon_staging.traps.shared.json"));
 
                 Assert.Throws<System.InvalidOperationException>(() =>
                     WorldTrapManifestExporter.BuildTrapManifestJson(

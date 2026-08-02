@@ -95,12 +95,27 @@ namespace Arena.EditModeTests
                 JToken definition = document["doors"]![0]!;
 
                 Assert.That(
+                    document["world_definition_key"]!.Value<string>(),
+                    Is.EqualTo("RANDOM_DUNGEON"));
+                Assert.That(
                     definition["door_definition_id"]!.Value<string>(),
                     Is.EqualTo("RANDOM_DUNGEON:GATEWAY:1:2:3"));
                 Assert.That(definition["default_open"]!.Value<bool>(), Is.True);
                 Assert.That(
                     definition["closed_blocker"]!["size"]!["z"]!.Value<float>(),
                     Is.EqualTo(0.35f).Within(0.0001f));
+                Assert.That(
+                    WorldInteractionManifestExporter.ClientDoorManifestPath(
+                        "random_dungeon_staging"),
+                    Is.EqualTo(
+                        "Assets/Arena/Resources/SharedData/Worlds/" +
+                        "random_dungeon_staging.doors.shared.json"));
+                Assert.That(
+                    WorldInteractionManifestExporter.ServerDoorManifestPath(
+                        "random_dungeon_staging"),
+                    Is.EqualTo(
+                        "server/src/world_data/" +
+                        "random_dungeon_staging.doors.shared.json"));
             }
             finally
             {

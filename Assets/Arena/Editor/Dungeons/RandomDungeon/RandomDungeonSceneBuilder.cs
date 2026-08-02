@@ -229,11 +229,15 @@ namespace DungeonLab.Editor
             // rather than replace them with empty ones.
             if (exportInteractionManifests)
             {
-                WorldInteractionManifestExporter.ExportActiveScene(dataKey);
+                // Generated authoring always belongs to RANDOM_DUNGEON. During
+                // a transaction only the artifact filename changes; treating
+                // the staging filename as a new logical world rejects every
+                // authored door and trap before the build can be promoted.
+                WorldInteractionManifestExporter.ExportActiveScene(DataKey, dataKey);
                 RecordValidationStage(stageRecorder, "exportWorldInteractions", ref stageStart);
                 // After CenterDungeonSpawn, so exported trap coordinates are final
                 // world space — the same ordering the door manifest depends on.
-                WorldTrapManifestExporter.ExportActiveScene(dataKey);
+                WorldTrapManifestExporter.ExportActiveScene(DataKey, dataKey);
                 RecordValidationStage(stageRecorder, "exportWorldTraps", ref stageStart);
             }
             EnsureCollisionMeshesReadable(dungeonRoot, beforeModelImporterMutation);

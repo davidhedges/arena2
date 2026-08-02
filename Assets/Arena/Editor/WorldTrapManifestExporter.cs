@@ -49,8 +49,19 @@ namespace Arena.Editor
         }
 
         public static void ExportActiveScene(string dataKey)
+            => ExportActiveScene(dataKey, dataKey);
+
+        /// <summary>
+        /// Exports one logical world's traps under a separate artifact key so
+        /// transactional builds do not confuse a staging filename with the
+        /// stable world identity authored on each trap.
+        /// </summary>
+        internal static void ExportActiveScene(
+            string worldDefinitionKey,
+            string outputDataKey)
         {
-            string normalizedDataKey = NormalizeDataKey(dataKey);
+            string normalizedWorldDefinitionKey = NormalizeDataKey(worldDefinitionKey);
+            string normalizedOutputDataKey = NormalizeDataKey(outputDataKey);
             TrapAuthoring[] traps = UnityEngine.Object.FindObjectsByType<TrapAuthoring>(
                     FindObjectsInactive.Include)
                 .Where(trap => !trap.TemplateOnly)
@@ -62,15 +73,24 @@ namespace Arena.Editor
             HashSet<string> profileIds = profiles
                 .Select(profile => profile.ProfileId)
                 .ToHashSet(StringComparer.Ordinal);
-            string trapJson = BuildTrapManifestJson(normalizedDataKey, traps, profileIds);
+            string trapJson = BuildTrapManifestJson(
+                normalizedWorldDefinitionKey,
+                traps,
+                profileIds);
 
             WritePaired(
-                $"{ClientWorldDataRoot}/{normalizedDataKey}.traps.shared.json",
-                $"{ServerWorldDataRoot}/{normalizedDataKey}.traps.shared.json",
+                ClientTrapManifestPath(normalizedOutputDataKey),
+                ServerTrapManifestPath(normalizedOutputDataKey),
                 trapJson);
             WritePaired(ClientProfilePath, ServerProfilePath, profileJson);
             AssetDatabase.Refresh();
         }
+
+        internal static string ClientTrapManifestPath(string outputDataKey)
+            => $"{ClientWorldDataRoot}/{NormalizeDataKey(outputDataKey)}.traps.shared.json";
+
+        internal static string ServerTrapManifestPath(string outputDataKey)
+            => $"{ServerWorldDataRoot}/{NormalizeDataKey(outputDataKey)}.traps.shared.json";
 
         public static string BuildProfileManifestJson(IReadOnlyCollection<TrapProfile> profiles)
         {

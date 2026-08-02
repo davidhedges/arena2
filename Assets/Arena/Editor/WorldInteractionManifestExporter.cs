@@ -42,8 +42,20 @@ namespace Arena.Editor
         }
 
         public static void ExportActiveScene(string dataKey)
+            => ExportActiveScene(dataKey, dataKey);
+
+        /// <summary>
+        /// Exports one logical world's doors under a separate artifact key.
+        /// Transactional scene builders use this to validate and serialize the
+        /// production world identity while keeping incomplete files isolated
+        /// under a staging filename until promotion.
+        /// </summary>
+        internal static void ExportActiveScene(
+            string worldDefinitionKey,
+            string outputDataKey)
         {
-            string normalizedDataKey = NormalizeDataKey(dataKey);
+            string normalizedWorldDefinitionKey = NormalizeDataKey(worldDefinitionKey);
+            string normalizedOutputDataKey = NormalizeDataKey(outputDataKey);
             DoorAuthoring[] doors = UnityEngine.Object.FindObjectsByType<DoorAuthoring>(
                     FindObjectsInactive.Include)
                 .Where(door => !door.TemplateOnly)
@@ -56,17 +68,23 @@ namespace Arena.Editor
                 .Select(profile => profile.ProfileId)
                 .ToHashSet(StringComparer.Ordinal);
             string doorJson = BuildDoorManifestJson(
-                normalizedDataKey,
+                normalizedWorldDefinitionKey,
                 doors,
                 profileIds);
 
             WritePaired(
-                $"{ClientWorldDataRoot}/{normalizedDataKey}.doors.shared.json",
-                $"{ServerWorldDataRoot}/{normalizedDataKey}.doors.shared.json",
+                ClientDoorManifestPath(normalizedOutputDataKey),
+                ServerDoorManifestPath(normalizedOutputDataKey),
                 doorJson);
             WritePaired(ClientProfilePath, ServerProfilePath, profileJson);
             AssetDatabase.Refresh();
         }
+
+        internal static string ClientDoorManifestPath(string outputDataKey)
+            => $"{ClientWorldDataRoot}/{NormalizeDataKey(outputDataKey)}.doors.shared.json";
+
+        internal static string ServerDoorManifestPath(string outputDataKey)
+            => $"{ServerWorldDataRoot}/{NormalizeDataKey(outputDataKey)}.doors.shared.json";
 
         public static string BuildProfileManifestJson(
             IReadOnlyCollection<WorldInteractionProfile> profiles)
