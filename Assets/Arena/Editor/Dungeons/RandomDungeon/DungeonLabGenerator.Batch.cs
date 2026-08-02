@@ -2041,6 +2041,49 @@ namespace DungeonLab.Editor
                 intent.recipeSlots,
                 intent.vista.targetNode,
                 out RecipeSlotIntent targetSlot);
+            bool targetContractValid = targetSlot?.recipe != null &&
+                DungeonRecipeValidator.ValidateContract(targetSlot.recipe).Passed;
+            bool targetPortsMatchTopology = targetSlot?.recipe != null &&
+                RecipeCandidatePortsMatchTopology(
+                    intent,
+                    intent.vista.targetNode,
+                    targetSlot.recipe,
+                    targetSlot.orientationBinding,
+                    targetSlot.portBindings);
+            bool incompatibleAxisRejected = false;
+            DungeonRecipeAsset incompatibleAxis = null;
+            try
+            {
+                incompatibleAxis = ScriptableObject.CreateInstance<DungeonRecipeAsset>();
+                incompatibleAxis.legalQuarterTurns = targetSlot?.recipe?.legalQuarterTurns ??
+                    Array.Empty<int>();
+                incompatibleAxis.allowMirror = true;
+                incompatibleAxis.ports = new[]
+                {
+                    new DungeonRecipePort
+                    {
+                        id = "entry",
+                        outwardDirection = Vector2Int.left
+                    },
+                    new DungeonRecipePort
+                    {
+                        id = "exit",
+                        outwardDirection = Vector2Int.right
+                    }
+                };
+                incompatibleAxisRejected = targetSlot != null &&
+                    !RecipeCandidatePortsMatchTopology(
+                        intent,
+                        intent.vista.targetNode,
+                        incompatibleAxis,
+                        targetSlot.orientationBinding,
+                        targetSlot.portBindings);
+            }
+            finally
+            {
+                DestroyImmediate(incompatibleAxis);
+            }
+
             var lines = new List<string>
             {
                 $"catalog.error={catalogError}",
@@ -2048,6 +2091,9 @@ namespace DungeonLab.Editor
                 $"pattern={intent.patternId}",
                 $"target.node={intent.nodes[intent.vista.targetNode].id}",
                 $"target.recipe={targetSlot?.recipe?.recipeId ?? string.Empty}",
+                $"target.contractValid={targetContractValid}",
+                $"target.portsMatchTopology={targetPortsMatchTopology}",
+                $"target.incompatibleAxisRejected={incompatibleAxisRejected}",
                 $"vista.required={intent.vista.minimumReservedVoidCells}"
             };
 

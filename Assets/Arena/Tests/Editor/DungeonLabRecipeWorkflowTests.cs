@@ -220,6 +220,9 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["catalog.error"], Is.Empty);
             Assert.That(snapshot["selection.error"], Is.Empty);
             Assert.That(snapshot["target.recipe"], Is.EqualTo("episode_hanging_bridge_court_01"));
+            Assert.That(snapshot["target.contractValid"], Is.EqualTo("True"));
+            Assert.That(snapshot["target.portsMatchTopology"], Is.EqualTo("True"));
+            Assert.That(snapshot["target.incompatibleAxisRejected"], Is.EqualTo("True"));
             Assert.That(snapshot["vista.required"], Is.EqualTo("3"));
             for (int layoutAttempt = 1; layoutAttempt <= 2; layoutAttempt++)
             {

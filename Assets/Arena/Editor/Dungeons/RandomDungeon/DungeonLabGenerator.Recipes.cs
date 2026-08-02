@@ -946,6 +946,23 @@ namespace DungeonLab.Editor
                 return false;
             }
 
+            // Compatibility includes direction, not just names and degree. A
+            // vista-bound recipe may use its primary axis as a focal line while
+            // exposing route ports on the transverse axis; a candidate that
+            // exposes them on the wrong axis can never be repaired by room,
+            // mirror, or layout retries. Reject it while the opportunity can
+            // still fall back to generic architecture.
+            if (!RecipeCandidatePortsMatchTopology(
+                    intent,
+                    slotNode,
+                    candidate,
+                    orientationBinding,
+                    portBindings))
+            {
+                reasonCode = "PORT_DIRECTION_INCOMPATIBLE";
+                return false;
+            }
+
             foreach (DungeonRecipeTransition transition in
                      candidate.transitions ?? Array.Empty<DungeonRecipeTransition>())
             {
@@ -997,6 +1014,78 @@ namespace DungeonLab.Editor
 
             reasonCode = string.Empty;
             return true;
+        }
+
+        private static bool RecipeCandidatePortsMatchTopology(
+            RouteIntent intent,
+            int slotNode,
+            DungeonRecipeAsset candidate,
+            RecipeOrientationBinding orientationBinding,
+            IReadOnlyList<RecipePortBinding> portBindings)
+        {
+            var bindingArray = new RecipePortBinding[portBindings.Count];
+            for (int binding = 0; binding < bindingArray.Length; binding++)
+            {
+                bindingArray[binding] = portBindings[binding];
+            }
+
+            var probeSlot = new RecipeSlotIntent(
+                intent.nodes[slotNode].recipeSlotId,
+                slotNode,
+                candidate,
+                orientationBinding,
+                bindingArray);
+            var latticeCenters = new Vector2Int[intent.topology.nodes.Length];
+            for (int node = 0; node < latticeCenters.Length; node++)
+            {
+                latticeCenters[node] = intent.topology.nodes[node].lattice;
+            }
+
+            Vector2Int primaryAxis;
+            if (orientationBinding == RecipeOrientationBinding.VistaSourceToTarget)
+            {
+                Vector2Int delta =
+                    latticeCenters[intent.vista.targetNode] -
+                    latticeCenters[intent.vista.sourceNode];
+                if (delta == Vector2Int.zero || delta.x != 0 && delta.y != 0)
+                {
+                    return false;
+                }
+
+                primaryAxis = CardinalUnit(delta);
+            }
+            else if (!TryResolveRouteForwardRecipeAxis(
+                         intent,
+                         probeSlot,
+                         latticeCenters,
+                         out primaryAxis))
+            {
+                return false;
+            }
+
+            int quarterTurns = QuarterTurnsForAxis(primaryAxis);
+            if (Array.IndexOf(candidate.legalQuarterTurns, quarterTurns) < 0)
+            {
+                return false;
+            }
+
+            Vector2Int transverseAxis = new Vector2Int(-primaryAxis.y, primaryAxis.x);
+            int mirrorCount = candidate.allowMirror ? 2 : 1;
+            for (int mirror = 0; mirror < mirrorCount; mirror++)
+            {
+                if (RecipePortsMatchRoute(
+                        intent,
+                        probeSlot,
+                        latticeCenters,
+                        primaryAxis,
+                        transverseAxis,
+                        mirrored: mirror != 0))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
