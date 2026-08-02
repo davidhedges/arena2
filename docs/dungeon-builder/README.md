@@ -4,18 +4,26 @@ The former `dungeon_builder` Unity project is integrated as an Arena feature ins
 
 ## Start here
 
-1. [`PROCEDURAL_3D_TOPOLOGY_PLAN.md`](PROCEDURAL_3D_TOPOLOGY_PLAN.md) — active architectural direction and bounded implementation order.
+1. [`PROCEDURAL_3D_TOPOLOGY_PLAN.md`](PROCEDURAL_3D_TOPOLOGY_PLAN.md) —
+   implemented architectural direction and acceptance criteria. Its
+   [closeout record](../archive/2026-08-procedural-3d-topology/CURRENT_STATUS.md)
+   maps the six slices to commits and records the remaining manual verification.
 2. [`PROJECT_INVARIANTS.md`](PROJECT_INVARIANTS.md) — hard geometry, traversal, and placement rules. Read before changing generator, measurement, contract, or placement code.
 3. [`GLOSSARY.md`](GLOSSARY.md) — authoritative vocabulary (role vs. beat, room vs. recipe, zone, port, transition, reservation).
 4. [`ARCHITECTURE_REVIEW_2026-07-25.md`](ARCHITECTURE_REVIEW_2026-07-25.md) — system model, findings, and historical recommendations.
 5. [`layered-topology-design-2026-07-29.md`](layered-topology-design-2026-07-29.md) — landed multi-surface substrate and its implementation record.
-6. [`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md), [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) and [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) — existing content-authoring workflows; where they imply that authored rooms or exact topology diagrams are the future production architecture, the procedural 3-D plan wins.
+6. [`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md),
+   [`RECIPE_AUTHORING_WORKFLOW.md`](RECIPE_AUTHORING_WORKFLOW.md) and
+   [`ROUTE_TOPOLOGY_AUTHORING.md`](ROUTE_TOPOLOGY_AUTHORING.md) — current
+   procedural room, recipe, and topology-family authoring workflows.
 7. [`stair_forge_design.md`](stair_forge_design.md) — vertical-traversal design decisions and implementation history.
 
 Completed phase plans and status/evidence snapshots live in
 [`docs/archive/2026-07-dungeon-phase-log/`](../archive/2026-07-dungeon-phase-log/)
 and
 [`docs/archive/2026-08-dungeon-layering-status/`](../archive/2026-08-dungeon-layering-status/).
+The procedural 3-D topology implementation closeout is in
+[`docs/archive/2026-08-procedural-3d-topology/`](../archive/2026-08-procedural-3d-topology/).
 They are history, not instructions — do not treat their acceptance budgets,
 production claims, or locked hashes as current constraints.
 

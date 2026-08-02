@@ -2,9 +2,10 @@
 
 Date recorded: 2026-08-02
 
-Status: recorded implementation plan. This document records the architectural
-destination and implementation order. It does not authorize a slice by itself;
-implementation still begins only from an explicit owner-approved item.
+Status: all six owner-approved implementation slices landed 2026-08-02.
+Non-Unity gates pass; normal-Editor acceptance and a post-cutover rebuild/export
+remain. See the
+[implementation closeout](../archive/2026-08-procedural-3d-topology/CURRENT_STATUS.md).
 
 This is deliberately not a status log. Per-run evidence belongs in
 `DungeonLabReports/`, and closed implementation evidence belongs in
@@ -335,6 +336,8 @@ The migration is incomplete while any obsolete owner remains:
 
 ## Explicit next item
 
-None until the owner approves an implementation slice. When approved, the
-first bounded item is slice 1 only: structural/local elevation enforcement and
-`RouteIntent` ownership cleanup, with no intentional geometry change.
+None. Slices 1–6 are implemented, and this plan defines no follow-on slice.
+Further feature work requires a new owner-approved plan. The remaining closeout
+is verification rather than implementation: normal-Editor acceptance followed
+by a post-Slice-6 rebuild/export and intentional disposition of its generated
+payloads. Unity batch mode is not used.
