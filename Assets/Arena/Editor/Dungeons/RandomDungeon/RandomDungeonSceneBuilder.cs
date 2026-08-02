@@ -72,6 +72,17 @@ namespace DungeonLab.Editor
                 "Rebuild");
         }
 
+        [MenuItem("Arena/Dungeons/Rebuild Random Dungeon (Descent Floor)", false, 130)]
+        private static void RebuildDescentFloor()
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                return;
+
+            ScriptableWizard.DisplayWizard<DescentFloorWizard>(
+                "Rebuild Random Dungeon At One Descent Floor",
+                "Rebuild");
+        }
+
         /// <summary>Entry point used by command-line validation and CI.</summary>
         public static void RebuildRandomDungeonBatch()
         {
@@ -244,13 +255,20 @@ namespace DungeonLab.Editor
             RecordValidationStage(stageRecorder, "normalizeCollisionMeshImporters", ref stageStart);
             MarkDungeonCollision(dungeonRoot);
             RecordValidationStage(stageRecorder, "markDungeonCollision", ref stageStart);
-            CloneGameplayCameraRig(destination);
-            CreateLighting();
             GameplayCollisionExporter.PreparedSharedCollisionBake collisionBake =
                 GameplayCollisionExporter.PrepareSceneSharedCollisionBake(destination);
             string collisionRevision = collisionBake.Revision;
             RecordValidationStage(stageRecorder, "computeCollisionRevision", ref stageStart);
-            CreateSceneMetadata(seed, collisionRevision);
+            // After CenterDungeonSpawn and MarkDungeonCollision: the envelope
+            // measures the dungeon's FINAL world extent, and builds its own
+            // scene root so nothing it creates can be swept into the render
+            // digest, the navigation projection, or either collision payload.
+            CavernDepthProfile depth = CavernDepthProfile.ResolveRequested();
+            DungeonCavernEnvelope.Build(destination, dungeonRoot, seed, depth);
+            RecordValidationStage(stageRecorder, "buildCavernEnvelope", ref stageStart);
+            CreateSceneMetadata(seed, depth, collisionRevision);
+            CloneGameplayCameraRig(destination, depth);
+            CreateLighting(depth);
             RecordValidationStage(stageRecorder, "sceneMetadataCameraAndLighting", ref stageStart);
 
             EditorSceneManager.MarkSceneDirty(destination);
@@ -394,8 +412,14 @@ namespace DungeonLab.Editor
 
         private static void CreateSceneMetadata(
             int seed,
+            CavernDepthProfile depth,
             string collisionRevision)
         {
+            // The name stays EXACTLY "Random Dungeon Seed <number>":
+            // WorldInteractionFoundationBuilder recovers the checked-in seed by
+            // substring-and-parse off that prefix, so a suffix here breaks
+            // "Arena/Interaction/Rebuild Approved Foundation Assets". Descent
+            // depth goes on a child instead.
             GameObject metadata = new($"Random Dungeon Seed {seed}");
             metadata.transform.position = Vector3.zero;
 
@@ -404,13 +428,16 @@ namespace DungeonLab.Editor
             spawn.transform.localPosition = Vector3.zero;
             spawn.transform.localRotation = Quaternion.identity;
 
+            GameObject descent = new($"Descent Depth {depth.Depth01:0.##}");
+            descent.transform.SetParent(metadata.transform, worldPositionStays: false);
+            descent.transform.localPosition = Vector3.zero;
 
             GameObject revision = new($"{CollisionRevisionNamePrefix}{collisionRevision}");
             revision.transform.SetParent(metadata.transform, worldPositionStays: false);
             revision.transform.localPosition = Vector3.zero;
         }
 
-        private static void CloneGameplayCameraRig(Scene destination)
+        private static void CloneGameplayCameraRig(Scene destination, CavernDepthProfile depth)
         {
             Scene template = EditorSceneManager.OpenScene(CameraTemplateScenePath, OpenSceneMode.Additive);
             try
@@ -439,7 +466,7 @@ namespace DungeonLab.Editor
 
                 GameObject mainCamera = CloneIntoScene(sourceMainCamera, destination);
                 CloneIntoScene(sourceFollowCamera, destination);
-                ConfigureDungeonCameraRendering(mainCamera);
+                ConfigureDungeonCameraRendering(mainCamera, depth);
             }
             finally
             {
@@ -456,7 +483,7 @@ namespace DungeonLab.Editor
             return clone;
         }
 
-        private static void ConfigureDungeonCameraRendering(GameObject mainCamera)
+        private static void ConfigureDungeonCameraRendering(GameObject mainCamera, CavernDepthProfile depth)
         {
             VolumeProfile? profile =
                 AssetDatabase.LoadAssetAtPath<VolumeProfile>(DungeonVolumeProfilePath);
@@ -470,7 +497,11 @@ namespace DungeonLab.Editor
                 ?? throw new InvalidOperationException(
                     "The cloned random-dungeon MainCamera has no Camera component.");
             camera.clearFlags = CameraClearFlags.Skybox;
-            camera.backgroundColor = new Color(0.04111782f, 0.073195f, 0.11320752f, 1f);
+            // Equal to the fog colour by contract. When the clear colour is
+            // darker than the fog, distant geometry fades UP into a brighter
+            // value against a near-black void, which is the signature of
+            // outdoor atmospheric haze and reads as sky rather than cavern.
+            camera.backgroundColor = depth.Background;
             camera.allowHDR = true;
             camera.allowMSAA = true;
 
@@ -490,32 +521,48 @@ namespace DungeonLab.Editor
             volume.sharedProfile = profile;
         }
 
-        private static void CreateLighting()
+        /// <summary>
+        /// Scene lighting for one floor of the descent.
+        /// </summary>
+        /// <remarks>
+        /// This replaces a fixed daylight-shaped setup — flat ambient at 0.41,
+        /// 0.51, 0.60 with a shadow-casting directional, and a fog colour four
+        /// times brighter than the clear colour. Parallel shadows from a single
+        /// consistent direction are the strongest possible tell that a space is
+        /// not underground, and no amount of distant geometry undoes them.
+        ///
+        /// The remaining directional is a weak, cool downlight standing in for a
+        /// distant shaft, and it is effectively gone by the bottom floor, where
+        /// the lava underglow is meant to be the only source. Ambient shifts
+        /// cold to warm across the descent WITHOUT gaining luminance.
+        /// </remarks>
+        private static void CreateLighting(CavernDepthProfile depth)
         {
-            GameObject lightObject = new("Directional Light");
+            GameObject lightObject = new("Cavern Shaft Light");
             lightObject.transform.position = new Vector3(0f, 3f, 0f);
-            lightObject.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+            lightObject.transform.rotation = Quaternion.Euler(72f, -30f, 0f);
             Light light = lightObject.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.color = new Color(0.77265036f, 0.9150943f, 0.9032317f);
-            light.intensity = 0.25f;
-            light.shadows = LightShadows.Soft;
-            light.shadowStrength = 0.278f;
+            light.color = depth.SunColor;
+            light.intensity = depth.SunIntensity;
+            light.shadows = LightShadows.None;
             light.bounceIntensity = 0f;
-            light.shadowAngle = 10f;
 
-            RenderSettings.skybox = null;
+            // RenderSettings.skybox is NOT touched here. CavernBackdrop owns it,
+            // and this method runs after the envelope is built — the inherited
+            // `skybox = null` line silently wiped the generated backdrop on
+            // every build, so the camera fell back to the flat clear colour.
             RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.41295835f, 0.51094455f, 0.6037736f);
+            RenderSettings.ambientLight = depth.Ambient;
             RenderSettings.ambientIntensity = 1f;
             RenderSettings.ambientEquatorColor = Color.black;
             RenderSettings.ambientGroundColor = Color.black;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = new Color(0.28635636f, 0.35730952f, 0.4245283f);
+            RenderSettings.fogColor = depth.FogColor;
             RenderSettings.fogDensity = 0.01f;
-            RenderSettings.fogStartDistance = 18f;
-            RenderSettings.fogEndDistance = 39.6f;
+            RenderSettings.fogStartDistance = depth.FogStart;
+            RenderSettings.fogEndDistance = depth.FogEnd;
         }
 
         [InitializeOnLoadMethod]
@@ -941,6 +988,27 @@ namespace DungeonLab.Editor
             private void OnWizardCreate()
             {
                 RebuildWithSeed(seed);
+            }
+        }
+
+        /// <summary>
+        /// Rebuild as one floor of a hypothetical descent, to review the cavern
+        /// envelope at depth before a descent system exists.
+        /// </summary>
+        /// <remarks>
+        /// Headless equivalent: set `ARENA_DUNGEON_FLOOR` and
+        /// `ARENA_DUNGEON_FLOOR_COUNT` and run the ordinary rebuild.
+        /// </remarks>
+        private sealed class DescentFloorWizard : ScriptableWizard
+        {
+            public int floorIndex;
+            public int floorCount = 8;
+
+            private void OnWizardCreate()
+            {
+                EditorPrefs.SetInt(CavernDepthProfile.FloorEditorPreferenceKey, Mathf.Max(0, floorIndex));
+                EditorPrefs.SetInt(CavernDepthProfile.FloorCountEditorPreferenceKey, Mathf.Max(1, floorCount));
+                RebuildWithSeed(CreateInteractiveSeed());
             }
         }
 
