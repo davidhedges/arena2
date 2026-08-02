@@ -53,7 +53,7 @@ namespace DungeonLab.Editor
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
                 return;
 
-            RebuildWithSeed(CreateSeed());
+            RebuildWithSeed(CreateInteractiveSeed());
         }
 
         [MenuItem("Arena/Dungeons/Rebuild Random Dungeon (Specific Seed)", false, 110)]
@@ -75,7 +75,7 @@ namespace DungeonLab.Editor
         /// <summary>Entry point used by command-line validation and CI.</summary>
         public static void RebuildRandomDungeonBatch()
         {
-            RebuildWithSeed(CreateSeed());
+            RebuildWithSeed(CreateBatchSeed());
         }
 
         internal static void RebuildWithSeed(int seed)
@@ -903,13 +903,35 @@ namespace DungeonLab.Editor
             stageStart = end;
         }
 
-        private static int CreateSeed()
+        private static int CreateInteractiveSeed()
         {
-            string? configured = Environment.GetEnvironmentVariable(SeedEnvironmentVariable);
-            if (!string.IsNullOrWhiteSpace(configured) && int.TryParse(configured, out int parsed))
-                return parsed;
+            return ResolveInvocationSeed(
+                allowEnvironmentOverride: false,
+                Environment.GetEnvironmentVariable(SeedEnvironmentVariable),
+                Guid.NewGuid().GetHashCode());
+        }
 
-            return Guid.NewGuid().GetHashCode();
+        private static int CreateBatchSeed()
+        {
+            return ResolveInvocationSeed(
+                allowEnvironmentOverride: true,
+                Environment.GetEnvironmentVariable(SeedEnvironmentVariable),
+                Guid.NewGuid().GetHashCode());
+        }
+
+        internal static int ResolveInvocationSeed(
+            bool allowEnvironmentOverride,
+            string? configured,
+            int randomSeed)
+        {
+            if (allowEnvironmentOverride &&
+                !string.IsNullOrWhiteSpace(configured) &&
+                int.TryParse(configured, out int parsed))
+            {
+                return parsed;
+            }
+
+            return randomSeed;
         }
 
         private sealed class SeedWizard : ScriptableWizard

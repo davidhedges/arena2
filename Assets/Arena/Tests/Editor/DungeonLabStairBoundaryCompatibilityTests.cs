@@ -13,6 +13,50 @@ using UnityEngine;
 
 namespace Arena.Tests.Editor
 {
+    public sealed class RandomDungeonSceneBuilderSeedTests
+    {
+        private static readonly MethodInfo ResolveInvocationSeed = AppDomain.CurrentDomain
+            .Load("Assembly-CSharp-Editor")
+            .GetType("DungeonLab.Editor.RandomDungeonSceneBuilder", throwOnError: true)!
+            .GetMethod("ResolveInvocationSeed", BindingFlags.Static | BindingFlags.NonPublic)!;
+
+        [Test]
+        public void InteractiveRebuild_IgnoresBatchSeedEnvironmentOverride()
+        {
+            const int configuredSeed = 2026072100;
+            const int randomSeed = -8675309;
+
+            Assert.That(
+                Resolve(allowEnvironmentOverride: false, configuredSeed.ToString(), randomSeed),
+                Is.EqualTo(randomSeed));
+            Assert.That(
+                Resolve(allowEnvironmentOverride: true, configuredSeed.ToString(), randomSeed),
+                Is.EqualTo(configuredSeed));
+        }
+
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase("not-an-integer")]
+        public void BatchRebuild_InvalidOrAbsentOverrideUsesRandomSeed(string? configured)
+        {
+            const int randomSeed = -8675309;
+
+            Assert.That(
+                Resolve(allowEnvironmentOverride: true, configured, randomSeed),
+                Is.EqualTo(randomSeed));
+        }
+
+        private static int Resolve(
+            bool allowEnvironmentOverride,
+            string? configured,
+            int randomSeed)
+        {
+            return (int)ResolveInvocationSeed.Invoke(
+                null,
+                new object?[] { allowEnvironmentOverride, configured, randomSeed })!;
+        }
+    }
+
     public sealed class DungeonLabStairBoundaryCompatibilityTests
     {
         private const int RegressionSeed = 2062860779;
