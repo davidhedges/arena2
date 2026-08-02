@@ -11,26 +11,16 @@ Arena is a Unity project backed by a SpacetimeDB module. First-party Unity code 
 ## First Run
 
 1. Open the repository root in Unity.
-2. Build the SpacetimeDB module:
-
-```bash
-spacetime build
-```
-
-3. Start the local SpacetimeDB server:
-
-```bash
-spacetime start
-```
-
-4. Publish the local `arena` database. This clears existing local database data
-   and regenerates matching Unity bindings:
+2. Publish the local `arena` database. This starts the local SpacetimeDB server
+   when needed, clears existing local database data, regenerates matching Unity
+   bindings, and verifies every bundled shared-data hash against the live
+   database before succeeding:
 
 ```bash
 ops/republish-local-clear.sh
 ```
 
-5. Return to Unity and let the editor recompile.
+3. Return to Unity and let the editor recompile.
 
 ## Project Layout
 
@@ -56,10 +46,13 @@ ops/republish-local-clear.sh
 
 The script builds the server module, publishes `arena` with cleared data,
 regenerates Unity bindings, and runs `dotnet build Assembly-CSharp.csproj` when
-that project file is present. It defaults to the local projectile-load-harness
-feature so regenerated bindings keep matching the checked-in Unity debug overlay.
-Set `ARENA_PROJECTILE_LOAD_HARNESS=0` only when intentionally publishing the
-plain server shape.
+that project file is present. It also starts the configured local server when it
+is down and rejects a publish whose live `contract_version` rows do not match the
+Unity `SharedData` resources. The published module uses default features; the
+canonical binding-generation step separately builds the projectile-load-harness
+shape so checked-in bindings keep matching the Unity debug overlay.
+Set `ARENA_PROJECTILE_LOAD_HARNESS=1` only when intentionally publishing the
+harness-enabled server shape.
 
 Projectile load harness reducers are feature-gated and are not included by the
 plain workflow above. Use the harness build/publish workflow in
