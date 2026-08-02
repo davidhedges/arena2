@@ -54,6 +54,13 @@ shape so checked-in bindings keep matching the Unity debug overlay.
 Set `ARENA_PROJECTILE_LOAD_HARNESS=1` only when intentionally publishing the
 harness-enabled server shape.
 
+While the Unity Editor is open, importing a changed JSON file under
+`Assets/Arena/Resources/SharedData` automatically queues a data-preserving local
+republish through the same verification gate. If Play is requested while that
+publish is pending, the editor waits for the live contract check and then enters
+Play automatically. Set `ARENA_AUTO_PUBLISH_SHARED_DATA=0` in Unity's environment
+to disable this local workflow intentionally.
+
 Projectile load harness reducers are feature-gated and are not included by the
 plain workflow above. Use the harness build/publish workflow in
 `docs/combat-projectile-load-harness-plan-2026-05-15.md` when running that
