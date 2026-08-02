@@ -286,7 +286,15 @@ namespace DungeonLab.Editor
                 plannedOpenEdges,
                 levels,
                 out HashSet<(Vector2Int cell, int level, int direction)> bareStackedRims);
-            StairReservationSet stairReservations = BuildStairReservations(levels, transitions, contracts, origin);
+            // A route stair may open onto a suspended gallery. Its body still
+            // reserves column-floor cells, but both landing ports belong to the
+            // complete walkable surface set rather than `levels` alone.
+            StairReservationSet stairReservations = BuildStairReservations(
+                levels,
+                surfaceColumns,
+                transitions,
+                contracts,
+                origin);
             // Stair footprints suppress floors and the railings they own; set-piece
             // reservations suppress everything. Walls always render around stairs.
             var reservedCells = new HashSet<Vector2Int>(setPieceReservedCells);
@@ -2036,6 +2044,7 @@ namespace DungeonLab.Editor
 
         private static StairReservationSet BuildStairReservations(
             IReadOnlyDictionary<Vector2Int, int> levels,
+            SurfaceColumns surfaceColumns,
             IReadOnlyList<TransitionEdge> transitions,
             TieredPlatformContracts contracts,
             Vector3 origin)
@@ -2161,7 +2170,7 @@ namespace DungeonLab.Editor
                         setPiece,
                         placement,
                         origin,
-                        levels,
+                        surfaceColumns,
                         lowerLevel,
                         higherLevel,
                         transitionContractFootprint);
@@ -2176,7 +2185,7 @@ namespace DungeonLab.Editor
             ConnectionPointSetPieceContract setPiece,
             ConnectionPointPlacement placement,
             Vector3 origin,
-            IReadOnlyDictionary<Vector2Int, int> levels,
+            SurfaceColumns surfaceColumns,
             int lowerLevel,
             int higherLevel,
             HashSet<Vector2Int> footprintCells)
@@ -2204,7 +2213,7 @@ namespace DungeonLab.Editor
 
             foreach (Vector2Int lowerLandingCell in plannedLowerLandings)
             {
-                if (!levels.TryGetValue(lowerLandingCell, out int lowerLandingLevel) || lowerLandingLevel != lowerLevel)
+                if (!surfaceColumns.HasSurfaceAt(lowerLandingCell, lowerLevel))
                 {
                     throw new InvalidOperationException(
                         $"Stair prefab '{setPiece.name}' lower landing {lowerLandingCell} is not present at level {lowerLevel}.");
@@ -2213,7 +2222,7 @@ namespace DungeonLab.Editor
 
             foreach (Vector2Int upperLandingCell in plannedUpperLandings)
             {
-                if (!levels.TryGetValue(upperLandingCell, out int upperLandingLevel) || upperLandingLevel != higherLevel)
+                if (!surfaceColumns.HasSurfaceAt(upperLandingCell, higherLevel))
                 {
                     throw new InvalidOperationException(
                         $"Stair prefab '{setPiece.name}' upper landing {upperLandingCell} is not present at level {higherLevel}.");
@@ -12405,6 +12414,11 @@ namespace DungeonLab.Editor
         private sealed class SurfaceColumns
         {
             private readonly IReadOnlyDictionary<Vector2Int, int> columnFloors;
+            // Includes prefab-owned Deck surfaces. `above` deliberately omits
+            // those because their transition prefab draws them, but topology
+            // questions (flush adjacency and stair landings) must still see
+            // them as walkable.
+            private readonly HashSet<(Vector2Int cell, int level)> walkableAbove;
             private readonly Dictionary<Vector2Int, List<StackedSurface>> above;
 
             public SurfaceColumns(
@@ -12419,8 +12433,11 @@ namespace DungeonLab.Editor
                 }
 
                 above = new Dictionary<Vector2Int, List<StackedSurface>>();
+                walkableAbove = new HashSet<(Vector2Int cell, int level)>();
                 foreach (StackedSurface surface in stackedSurfaces)
                 {
+                    walkableAbove.Add((surface.cell, surface.level));
+
                     // A span deck is a walkable surface in the PLAN and authored
                     // set-piece geometry in the SCENE: the transition prefab
                     // already carries its walk slab, its railings and its
@@ -12521,15 +12538,7 @@ namespace DungeonLab.Editor
                     return true;
                 }
 
-                foreach (StackedSurface surface in Above(cell))
-                {
-                    if (surface.level == level)
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
+                return walkableAbove != null && walkableAbove.Contains((cell, level));
             }
         }
 
