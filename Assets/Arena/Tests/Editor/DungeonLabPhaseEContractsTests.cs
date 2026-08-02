@@ -61,6 +61,9 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["collision.outsideTriangleRejected"], Is.EqualTo("True"));
             Assert.That(snapshot["collision.exactHeightAccepted"], Is.EqualTo("True"));
             Assert.That(snapshot["collision.captureWindowDriftRejected"], Is.EqualTo("True"));
+            Assert.That(snapshot["collision.walkGatewayThresholdAccepted"], Is.EqualTo("True"));
+            Assert.That(snapshot["collision.walkAboveServerStepRejected"], Is.EqualTo("True"));
+            Assert.That(snapshot["collision.walkDropRejected"], Is.EqualTo("True"));
         }
 
         [Test]

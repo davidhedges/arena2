@@ -15,6 +15,7 @@ namespace DungeonLab.Editor
         private const float NavigationLevelHeight = 1f;
         private const float ServerBoxStepUpLevels = 0.35f;
         private const float ServerMeshSnapUpLevels = 1.2f;
+        private const float ServerMeshStepUpLevels = 0.65f;
         private const float ServerMeshMinimumNormalY = 0.35f;
         private const float ServerCollisionEpsilon = 0.0001f;
         private const float NavigationCollisionEpsilon = 0.06f;
@@ -419,7 +420,13 @@ namespace DungeonLab.Editor
                         if (!found || height > sampled)
                         {
                             sampled = height;
-                            allowedAdjustment = ServerMeshSnapUpLevels;
+                            // The surface query may look as high as the server's
+                            // snap window, but horizontal movement only treats a
+                            // mesh hull as a step through this smaller height.
+                            // Keep those contracts separate so navigation cannot
+                            // bless geometry the server would push the player out
+                            // of horizontally.
+                            allowedAdjustment = ServerMeshStepUpLevels;
                             found = true;
                         }
                     }
@@ -1425,8 +1432,11 @@ namespace DungeonLab.Editor
                     if (!collisionSampler.TrySampleSurface(
                             expected,
                             out float sampled,
-                            out _) ||
-                        !NavigationCollisionHeightAgrees(expected.y, sampled))
+                            out float allowedStepUp) ||
+                        !NavigationWalkCollisionHeightAgrees(
+                            expected.y,
+                            sampled,
+                            allowedStepUp))
                     {
                         surfaceContinuous = false;
                         break;
@@ -1446,6 +1456,31 @@ namespace DungeonLab.Editor
             artifact.edges = retainedEdges.ToArray();
             failure = string.Empty;
             return true;
+        }
+
+        private static bool NavigationWalkCollisionHeightAgrees(
+            float planned,
+            float sampled,
+            float allowedStepUp)
+        {
+            if (!float.IsFinite(planned) ||
+                !float.IsFinite(sampled) ||
+                !float.IsFinite(allowedStepUp) ||
+                allowedStepUp < 0f)
+            {
+                return false;
+            }
+
+            float delta = sampled - planned;
+            // Walk nodes remain exact-height plan surfaces. Between two nodes,
+            // however, the authoritative server explicitly permits small box
+            // and mesh steps. Static gateway thresholds are one such surface:
+            // rejecting their 0.075u lip deleted the only Walk edge through a
+            // valid doorway and split otherwise reachable dungeon tiers.
+            // Downward drift still means the declared floor disappeared and is
+            // never accepted as an ordinary same-level Walk edge.
+            return delta >= -NavigationCollisionEpsilon &&
+                delta <= allowedStepUp + NavigationCollisionEpsilon;
         }
 
         private static bool PruneNavigationComponentsWithoutTraversalWitness(
@@ -1847,6 +1882,18 @@ namespace DungeonLab.Editor
                 out _);
             bool exactCollisionHeightAccepted = NavigationCollisionHeightAgrees(2f, 2.05f);
             bool captureWindowDriftRejected = !NavigationCollisionHeightAgrees(2f, 3f);
+            bool walkGatewayThresholdAccepted = NavigationWalkCollisionHeightAgrees(
+                24f,
+                24.075f,
+                ServerMeshStepUpLevels);
+            bool walkAboveServerStepRejected = !NavigationWalkCollisionHeightAgrees(
+                24f,
+                24f + ServerMeshStepUpLevels + 0.1f,
+                ServerMeshStepUpLevels);
+            bool walkDropRejected = !NavigationWalkCollisionHeightAgrees(
+                24f,
+                23.9f,
+                ServerMeshStepUpLevels);
 
             var nodes = new[]
             {
@@ -1948,7 +1995,10 @@ namespace DungeonLab.Editor
                 $"collision.triangleEdgeAccepted={triangleEdgeAccepted}",
                 $"collision.outsideTriangleRejected={outsideTriangleRejected}",
                 $"collision.exactHeightAccepted={exactCollisionHeightAccepted}",
-                $"collision.captureWindowDriftRejected={captureWindowDriftRejected}"
+                $"collision.captureWindowDriftRejected={captureWindowDriftRejected}",
+                $"collision.walkGatewayThresholdAccepted={walkGatewayThresholdAccepted}",
+                $"collision.walkAboveServerStepRejected={walkAboveServerStepRejected}",
+                $"collision.walkDropRejected={walkDropRejected}"
             });
         }
     }

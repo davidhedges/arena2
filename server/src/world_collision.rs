@@ -5023,7 +5023,8 @@ mod tests {
         GameplayBoxBroadphase, GameplayCollisionBox, GameplayCollisionBoxFile,
         GameplayCollisionLayoutFile, GameplayMovementMeshHull, GameplayQueryMeshBvh,
         GameplayQueryMeshGeometry, GameplayQueryMeshGeometryFile, GameplayQueryMeshInstance,
-        GameplayQueryMeshInstanceFile, GameplayQueryMeshSet, MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER,
+        GameplayQueryMeshInstanceFile, GameplayQueryMeshSet, GAMEPLAY_MESH_STEP_UP_HEIGHT,
+        MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER,
     };
     use crate::arena::{WorldRayHit, WorldRaycastRequest};
     use crate::open_world_scene::{
@@ -5038,6 +5039,12 @@ mod tests {
     const RANDOM_DUNGEON_NAV_SURFACES_JSON: &str =
         include_str!("world_data/random_dungeon.navsurfaces.shared.json");
     const NAV_SURFACE_EPSILON: f32 = 0.06;
+
+    fn navigation_walk_height_agrees(expected_y: f32, sampled_y: f32) -> bool {
+        let height_delta = sampled_y - expected_y;
+        height_delta >= -NAV_SURFACE_EPSILON
+            && height_delta <= GAMEPLAY_MESH_STEP_UP_HEIGHT + NAV_SURFACE_EPSILON
+    }
 
     #[derive(Deserialize)]
     struct TestNavigationSurfaceArtifact {
@@ -6832,6 +6839,16 @@ mod tests {
         );
     }
 
+    #[test]
+    fn navigation_walk_witness_accepts_server_steps_but_rejects_drops_and_tall_meshes() {
+        assert!(navigation_walk_height_agrees(24.0, 24.075));
+        assert!(!navigation_walk_height_agrees(24.0, 23.9));
+        assert!(!navigation_walk_height_agrees(
+            24.0,
+            24.0 + GAMEPLAY_MESH_STEP_UP_HEIGHT + 0.1
+        ));
+    }
+
     fn assert_server_walk_surface_continuity(
         edge: &TestNavigationSurfaceEdge,
         from: &TestNavigationSurfaceNode,
@@ -6852,7 +6869,7 @@ mod tests {
                 try_open_world_surface_height_at_y(&RANDOM_DUNGEON_PROFILE, x, z, expected_y)
                     .unwrap_or_else(|| panic!("walk edge '{}' lost ground at t={t:.3}", edge.id));
             assert!(
-                (sampled_y - expected_y).abs() <= NAV_SURFACE_EPSILON,
+                navigation_walk_height_agrees(expected_y, sampled_y),
                 "walk edge '{}' changed height at t={t:.3}: planned={expected_y:.3} sampled={sampled_y:.3}",
                 edge.id,
             );
