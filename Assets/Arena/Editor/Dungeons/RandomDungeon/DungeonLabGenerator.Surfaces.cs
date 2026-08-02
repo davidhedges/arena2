@@ -218,12 +218,10 @@ namespace DungeonLab.Editor
         /// Where a <see cref="RoomConnection"/> came from.
         /// </summary>
         /// <remarks>
-        /// The distinction is load-bearing and it is NOT "has an edge or not by
-        /// accident": <c>AddLevelSafeLoopConnections</c> builds connections that
-        /// carry no route intent at all, and the elevation path treats the route
-        /// requirement as optional by design. So the invariant is "a RouteEdge
-        /// connection resolves to exactly one edge; a SynthesizedLoop resolves to
-        /// none" — never "every connection has an edge".
+        /// Production accepts only <c>RouteEdge</c>: every connection resolves
+        /// exactly one planned edge. <c>SynthesizedLoop</c> remains solely for
+        /// isolated layered fixtures that exercise the optional-requirement
+        /// elevation path without constructing a full RouteIntent.
         /// </remarks>
         private enum ConnectionSource
         {
@@ -1191,14 +1189,13 @@ namespace DungeonLab.Editor
 
         /// <summary>
         /// The connection-identity invariant (design §8.1, rejection code
-        /// `CONNECTION_IDENTITY`), evaluated as a diagnostic.
+        /// `ROUTE_CONNECTION_OWNERSHIP`).
         /// </summary>
         /// <remarks>
-        /// Not a rejection in A1. A new gate can only change which seeds are
-        /// accepted, and A1's whole claim is that nothing changes; so the
-        /// violations are collected and reported out of band, next to the shadow
-        /// disagreement, and promoting them to a rejection code belongs to the
-        /// phase that is allowed to move the baseline.
+        /// Slice 5 promotes A1's diagnostic to the production ownership gate:
+        /// after route composition, every connection must be the sole
+        /// realization of one declared edge and no synthesized connection may
+        /// appear.
         /// </remarks>
         private static List<string> FindConnectionIdentityViolations(
             DungeonLayout layout,
@@ -1207,6 +1204,14 @@ namespace DungeonLab.Editor
             var violations = new List<string>();
             if (layout.connections == null)
             {
+                foreach (RouteTraversalIntent edge in
+                         routeRequirements?.intent?.traversalEdges ??
+                         Array.Empty<RouteTraversalIntent>())
+                {
+                    violations.Add(
+                        $"route edge '{edge.id}' had no connection realization");
+                }
+
                 return violations;
             }
 
@@ -1247,10 +1252,31 @@ namespace DungeonLab.Editor
                         }
                     }
                 }
-                else if (!string.IsNullOrEmpty(connection.edgeId))
+                else
                 {
-                    violations.Add(
-                        $"SynthesizedLoop connection '{connection.connectionId}' resolved route edge '{connection.edgeId}'");
+                    if (!string.IsNullOrEmpty(connection.edgeId))
+                    {
+                        violations.Add(
+                            $"SynthesizedLoop connection '{connection.connectionId}' resolved route edge '{connection.edgeId}'");
+                    }
+
+                    if (routeRequirements?.intent != null)
+                    {
+                        violations.Add(
+                            $"connection '{connection.connectionId}' was invented after route composition");
+                    }
+                }
+            }
+
+            if (routeRequirements?.intent?.traversalEdges != null)
+            {
+                foreach (RouteTraversalIntent edge in routeRequirements.intent.traversalEdges)
+                {
+                    if (!seenEdgeIds.Contains(edge.id))
+                    {
+                        violations.Add(
+                            $"route edge '{edge.id}' had no connection realization");
+                    }
                 }
             }
 

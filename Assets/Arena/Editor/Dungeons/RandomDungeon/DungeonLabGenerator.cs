@@ -73,7 +73,7 @@ namespace DungeonLab.Editor
                 delta == DoubleMajorRiseLevels;
         }
 
-        private static bool AreStructuralAerialBridgeLandingLevels(
+        private static bool AreStructuralFlatBridgeLandingLevels(
             int firstLevel,
             int secondLevel)
         {
@@ -136,10 +136,13 @@ namespace DungeonLab.Editor
         private const string EmbeddedStairPlacementClass = "embedded";
         private const string ExternalSpanStairPlacementClass = "externalSpan";
         private const string StairwellStairPlacementClass = "stairwell";
+        private const string DirectDoorwayPlacementClass = "directDoorway";
+        private const string RoutedCorridorPlacementClass = "routedCorridor";
         // Tier attempts do not re-roll level assignment: TryAssignRoomLevels is a
         // deterministic copy of the route intent's declared elevations. What varies
-        // is loop-connection routing, stair candidate selection, and aerial bridges,
-        // each of which now draws from a stream keyed on the tier attempt index.
+        // is stair candidate selection, keyed on the tier attempt index. Route
+        // loops and bridges are already topology relationships and are never
+        // rolled by a later architectural pass.
         //
         // Measured over seeds 2026072100..2026072299 (dense): max 2 attempts,
         // p95 1, mean 1.02, histogram {1: 194, 2: 4}. The former ceiling of 32 was
@@ -1287,16 +1290,25 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            DungeonLayout loopedLayout = AddLevelSafeLoopConnections(
-                layout,
-                zones,
-                zoneLevels,
-                routeRequirements,
-                rng,
-                CurrentGenerationSettings);
-            int loopEdges = CountLoopEdges(loopedLayout);
+            // Slice 5: the composed RouteIntent already owns its loops. The old
+            // late loop pass added unnameable corridors after planning, making
+            // accepted architecture contain more relationships than its
+            // topology. The embedded layout is now the
+            // final connection set.
+            DungeonLayout plannedLayout = layout;
+            List<string> connectionIdentityViolations =
+                FindConnectionIdentityViolations(plannedLayout, routeRequirements);
+            lastConnectionIdentityViolations = connectionIdentityViolations;
+            if (connectionIdentityViolations.Count > 0)
+            {
+                rejectionReason =
+                    $"[ROUTE_CONNECTION_OWNERSHIP] {connectionIdentityViolations[0]}";
+                return false;
+            }
+
+            int loopEdges = CountLoopEdges(plannedLayout);
             float latticeFillPercent = LatticeEnvelopeFillPercent(
-                loopedLayout.floorCells,
+                plannedLayout.floorCells,
                 routeRequirements.latticeEnvelope);
             if (loopEdges <= 0)
             {
@@ -1304,43 +1316,33 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            if (loopedLayout.rooms.Count < CurrentGenerationSettings.denseFloorplanMinRooms)
+            if (plannedLayout.rooms.Count < CurrentGenerationSettings.denseFloorplanMinRooms)
             {
-                rejectionReason = $"floorplan had only {loopedLayout.rooms.Count} rooms";
+                rejectionReason = $"floorplan had only {plannedLayout.rooms.Count} rooms";
                 return false;
             }
 
-            // Loop connections only ever ADD corridor cells, so this can only
-            // rise above what the layout stage already accepted. It stays as the
-            // post-loop restatement of the same backstop.
+            // Restate the layout-stage density backstop over the final planned
+            // connection set. No later pass is allowed to inflate this number.
             if (latticeFillPercent < CurrentGenerationSettings.minLatticeEnvelopeFillPercent)
             {
                 rejectionReason = $"lattice-envelope fill {latticeFillPercent * 100f:0.#}% was below the {CurrentGenerationSettings.minLatticeEnvelopeFillPercent * 100f:0.#}% gate";
                 return false;
             }
 
-            // Loop connections never change rooms or zone plans, so the zone context
-            // stays valid for the looped layout; only its connection list grew.
-            //
-            // D3: the entry-level table is built ONCE, here, because this is the
-            // first point where every connection exists — the loop pass adds
-            // more — and because two readers must agree about the elevation a
+            // D3: the entry-level table is built ONCE, here, from the complete
+            // planned connection set, because two readers must agree about the elevation a
             // corridor meets its room at. Deriving it twice is how the rule
             // stated in two places that cost C2 a rejected corpus gets rebuilt.
             ConnectionEntryLevels entryLevels = ConnectionEntryLevels.Build(
-                loopedLayout,
+                plannedLayout,
                 zones,
                 zoneLevels,
                 routeRequirements?.intent);
 
-            // D4: the enclosure roll moves INTO THE PLAN (design §13). It used
-            // to happen inside `TryBuildRoomBoundaryContext`, in the
-            // renderer-input stage, long after `AddAerialBridges` has decided
-            // where every deck goes — so the bridge pass had no way to ask
-            // whether the room it flies over has a roof. D0 measured that this
-            // move is a PREREQUISITE for relaxing Decision 30 rather than the
-            // relaxation itself, and it is only the move: nothing consumes the
-            // answer earlier yet.
+            // D4: the enclosure roll lives in the plan rather than the renderer
+            // input stage. Planned bridge placement no longer depends on it,
+            // but boundary construction and dressing still share this one draw.
             //
             // The STREAM moves with the roll, not just the call. Its draw
             // sequence is N draws for the rooms, then the boundary context's own
@@ -1349,9 +1351,9 @@ namespace DungeonLab.Editor
             // would re-phase that seed and move every dressed dungeon.
             System.Random enclosureRandom = rng.Stream("enclosed-rooms");
             bool[] plannedEnclosedRooms =
-                ChooseEnclosedRooms(loopedLayout.rooms.Count, enclosureRandom);
+                ChooseEnclosedRooms(plannedLayout.rooms.Count, enclosureRandom);
             bool connectedDeltasValid = TryValidateConnectedRoomLevelDeltas(
-                loopedLayout,
+                plannedLayout,
                 entryLevels,
                 reviewedStairOptions,
                 out rejectionReason);
@@ -1361,7 +1363,7 @@ namespace DungeonLab.Editor
             }
 
             bool cellLevelFieldBuilt = TryBuildCellLevelField(
-                    loopedLayout,
+                    plannedLayout,
                     zones,
                     zoneLevels,
                     entryLevels,
@@ -1404,7 +1406,12 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            if (!TryBuildFloorStairPortGraph(surfaces, transitions, out FloorStairPortGraph portGraph, out rejectionReason))
+            if (!TryBuildFloorStairPortGraph(
+                    surfaces,
+                    transitions,
+                    openings,
+                    out FloorStairPortGraph portGraph,
+                    out rejectionReason))
             {
                 return false;
             }
@@ -1417,7 +1424,7 @@ namespace DungeonLab.Editor
 
             if (!TryResolveRouteRequirements(
                     routeRequirements,
-                    loopedLayout,
+                    plannedLayout,
                     surfaces,
                     transitions,
                     routeTransitionResolutions,
@@ -1446,7 +1453,7 @@ namespace DungeonLab.Editor
                 FormatStairPlacementClassHistogram(transitions),
                 stairCandidateSummary,
                 portGraph.Summary,
-                loopedLayout.connectorCandidateCount,
+                plannedLayout.connectorCandidateCount,
                 archetype.ToString(),
                 synthesizedStairs,
                 FormatSynthesizedStairSummary(synthesizedStairs),
@@ -1466,7 +1473,7 @@ namespace DungeonLab.Editor
             // point and the old construction site, so the draw sequence for an
             // accepted plan is unchanged.
             bool boundaryValid = TryBuildRoomBoundaryContext(
-                loopedLayout,
+                plannedLayout,
                 surfaces,
                 transitions,
                 plan.prisms,
@@ -1477,7 +1484,7 @@ namespace DungeonLab.Editor
                 out string boundaryMessage);
             validation = ValidateDungeonPlan(
                 dungeonSeed,
-                loopedLayout,
+                plannedLayout,
                 plan,
                 routeRequirements.intent,
                 boundaryValid,
@@ -1489,12 +1496,7 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            // A1 diagnostic, computed here because this is the only place the
-            // final connection list and the route requirements are both in
-            // scope. Deliberately NOT a gate: see FindConnectionIdentityViolations.
-            lastConnectionIdentityViolations =
-                FindConnectionIdentityViolations(loopedLayout, routeRequirements);
-            acceptedLayout = loopedLayout;
+            acceptedLayout = plannedLayout;
             return true;
         }
 
@@ -1511,131 +1513,6 @@ namespace DungeonLab.Editor
             return new Vector2Int(
                 Mathf.FloorToInt((point.x + boundaryBias) / 4f),
                 Mathf.FloorToInt((point.y + boundaryBias) / 4f));
-        }
-
-        private static DungeonLayout AddLevelSafeLoopConnections(
-            DungeonLayout layout,
-            RoomZoneContext zones,
-            IReadOnlyList<int> zoneLevels,
-            RouteTierRequirements routeRequirements,
-            DungeonRandomScope rng,
-            DungeonGenerationSettings settings)
-        {
-            var floorCells = new HashSet<Vector2Int>(layout.floorCells);
-            var connections = new List<RoomConnection>(layout.connections);
-            var connectedPairs = new HashSet<string>();
-            foreach (RoomConnection connection in connections)
-            {
-                connectedPairs.Add(RoomPairKey(connection.fromRoom, connection.toRoom));
-            }
-
-            var candidates = new List<LoopConnectionCandidate>();
-            for (int first = 0; first < layout.rooms.Count; first++)
-            {
-                for (int second = first + 1; second < layout.rooms.Count; second++)
-                {
-                    if (FindRecipePlacement(routeRequirements?.recipes, first) != null ||
-                        FindRecipePlacement(routeRequirements?.recipes, second) != null)
-                    {
-                        // Authored recipe boundaries open only at declared
-                        // thresholds; generic loops cannot add a center-routed
-                        // doorway to an authored room.
-                        continue;
-                    }
-
-                    if (connectedPairs.Contains(RoomPairKey(first, second)))
-                    {
-                        continue;
-                    }
-
-                    int distance = SquaredDistance(layout.rooms[first].Center, layout.rooms[second].Center);
-                    if (distance > settings.maxLoopCandidateDistanceCells * settings.maxLoopCandidateDistanceCells)
-                    {
-                        continue;
-                    }
-
-                    candidates.Add(new LoopConnectionCandidate(first, second, distance));
-                }
-            }
-
-            candidates.Sort((left, right) => left.distance.CompareTo(right.distance));
-            int desiredLoops = Mathf.Max(1, Mathf.RoundToInt(Mathf.Max(1, layout.rooms.Count - 1) * settings.loopConnectionFraction));
-            int loopCount = 0;
-            foreach (LoopConnectionCandidate candidate in candidates)
-            {
-                if (loopCount >= desiredLoops)
-                {
-                    break;
-                }
-
-                // One stream per room pair: whether an earlier candidate was
-                // rejected can no longer shift this pair's routing.
-                List<Vector2Int> path = BuildCorridorPath(
-                    layout.rooms[candidate.firstRoom].Center,
-                    layout.rooms[candidate.secondRoom].Center,
-                    rng.Stream(
-                        "loop-corridor",
-                        RoomConnection.RngSubjectFor(candidate.firstRoom, candidate.secondRoom)));
-                if (!ValidatePathCardinality(path, out _) ||
-                    // Unconditional, and it stays that way: a synthesized loop
-                    // has no route edge, so it can never carry a layer binding
-                    // to authorize the D2 relaxation.
-                    PathCrossesThirdRoom(path, layout.rooms, candidate.firstRoom, candidate.secondRoom) ||
-                    PathTouchesExistingFloorOutsideEndpointRooms(
-                        path,
-                        floorCells,
-                        layout.rooms[candidate.firstRoom],
-                        layout.rooms[candidate.secondRoom]) ||
-                    PathTouchesProtectedCells(path, routeRequirements?.reservedVistaCells) ||
-                    // A loop corridor through a reserved shaft would take away the
-                    // one place its edge's stairwell tower is guaranteed to fit.
-                    PathTouchesProtectedCells(path, layout.reservedShaftCells))
-                {
-                    continue;
-                }
-
-                // A center-to-center loop can leave either endpoint room through a
-                // different split zone than the one holding its center. Validate the
-                // actual doorway thresholds that the connection will bind to, so a
-                // nominal 4u/8u candidate cannot become an off-grammar 5u/9u edge.
-                int firstNode = zones.NodeOfCell(
-                    candidate.firstRoom,
-                    ThresholdCell(layout.rooms[candidate.firstRoom], path, forward: true));
-                int secondNode = zones.NodeOfCell(
-                    candidate.secondRoom,
-                    ThresholdCell(layout.rooms[candidate.secondRoom], path, forward: false));
-                int levelDelta = Mathf.Abs(zoneLevels[firstNode] - zoneLevels[secondNode]);
-                if (!AreStructuralConnectionLevels(
-                        zoneLevels[firstNode],
-                        zoneLevels[secondNode]))
-                {
-                    continue;
-                }
-
-                foreach (Vector2Int cell in path)
-                {
-                    floorCells.Add(cell);
-                }
-
-                // A synthesized loop has no route edge, so its band comes from
-                // the two zone levels it actually joins — the same thresholds
-                // its level-delta gate above was checked against.
-                connections.Add(RoomConnection.ForSynthesizedLoop(
-                    candidate.firstRoom,
-                    candidate.secondRoom,
-                    LevelBand.SpanningEndpoints(zoneLevels[firstNode], zoneLevels[secondNode]),
-                    path));
-                connectedPairs.Add(RoomPairKey(candidate.firstRoom, candidate.secondRoom));
-                loopCount++;
-            }
-
-            return new DungeonLayout(
-                floorCells,
-                layout.rooms,
-                connections,
-                layout.roomZones,
-                layout.connectorCandidateCount,
-                layout.reservedShaftCells);
         }
 
         private static bool PathTouchesProtectedCells(
@@ -2169,12 +2046,14 @@ namespace DungeonLab.Editor
             // footprint. Every unclaimed node with declared storeys is then
             // realized directly from its existing room footprint and bound
             // thresholds into the same SurfaceField and PrismLedger.
+            var generatedOpeningCandidates = new List<PlanOpening>();
             if (!TryRealizeGenericStructuralRoomLayers(
                     layout,
                     routeRequirements?.intent?.nodes,
                     routeRequirements?.recipes,
                     surfaces,
                     plannedStairLedger,
+                    generatedOpeningCandidates,
                     out rejectionReason))
             {
                 return false;
@@ -2235,23 +2114,6 @@ namespace DungeonLab.Editor
                     return false;
                 }
             }
-
-            // Aerial loop bridges (step 8, decisions 29-31): after every corridor
-            // has leveled its cells, equal-level room pairs with a straight clear
-            // line between facing boundary cells may gain a flat deck — a new
-            // loop edge that is a transition + port-graph edge, never a corridor
-            // (no leveling, no doorway; the deck lands ON TOP of the walls).
-            // Runs before the fill pass: overflown corridor cells filled later
-            // are still validated by the deck-level headroom gate below.
-            AddAerialBridges(
-                layout,
-                surfaces,
-                rng.Stream("aerial-bridges"),
-                transitions,
-                transitionKeys,
-                plannedStairLedger,
-                synthesizedStairs,
-                protectedStructuralCells);
 
             int unreachedFilledCells = FillUnassignedFloorCells(
                 layout.floorCells,
@@ -2327,9 +2189,17 @@ namespace DungeonLab.Editor
                 return false;
             }
 
-            openings = BuildPlanOpenings(
-                externalConnectors,
-                routeRequirements?.recipes);
+            if (!TryBuildPlanOpenings(
+                    externalConnectors,
+                    routeRequirements?.recipes,
+                    generatedOpeningCandidates,
+                    surfaces,
+                    transitions,
+                    out openings,
+                    out rejectionReason))
+            {
+                return false;
+            }
 
             // A2 of the layered-topology design (§3.1, §13): shadow agreement.
             // External promontories are the final plan mutation, so this is "the
@@ -2758,6 +2628,18 @@ namespace DungeonLab.Editor
                 var deckOwner = new OwnerKey(
                     OwnerFamily.Transition,
                     $"connection-stair:{TransitionKey(stairOptionPlannedTransitionFirstCell, stairOptionPlannedTransitionSecondCell)}");
+                var bridgeVoidCells = new HashSet<Vector2Int>(
+                    stairOptionPlannedFootprintCells);
+                for (int pathIndex = spanSkipFromIndex;
+                     pathIndex <= spanSkipToIndex && pathIndex < path.Count;
+                     pathIndex++)
+                {
+                    if (pathIndex >= 0)
+                    {
+                        bridgeVoidCells.Add(path[pathIndex]);
+                    }
+                }
+
                 foreach (Vector2Int deckCell in stairOptionPlannedFootprintCells)
                 {
                     externalSpanGapCells.Add(deckCell);
@@ -2768,6 +2650,25 @@ namespace DungeonLab.Editor
                         Mathf.Max(fromLevel, toLevel),
                         spanLength > 0 ? (float)deckDistance / spanLength : 0f));
                     plannedStairLedger.RegisterSpanDeck(new[] { deckCell }, deckLevel, deckOwner);
+                }
+
+                // A declared Bridge owns both the deck transition and the void
+                // it crosses. The deck owner is the sole admitted penetration;
+                // fill, unrelated corridors, landings and late structures are
+                // rejected by the existing OpenVolume ledger.
+                if (!TryRegisterPlannedBridgeOpenVolume(
+                        plannedStairLedger,
+                        connection.edgeId,
+                        bridgeVoidCells,
+                        fromLevel,
+                        toLevel,
+                        deckOwner,
+                        out Prism bridgeVoidBlocker))
+                {
+                    rejectionReason =
+                        $"[ROUTE_BRIDGE_VOID] edge '{connection.edgeId}' could not reserve its " +
+                        $"bridge void because it conflicted with {bridgeVoidBlocker}";
+                    return false;
                 }
             }
 
@@ -2912,6 +2813,9 @@ namespace DungeonLab.Editor
                 int directedRise = routeTransitionRequirement.fromNode == connection.fromRoom
                     ? toLevel - fromLevel
                     : fromLevel - toLevel;
+                string realizationClass = delta == 0
+                    ? LevelConnectionPlacementClass(connection, layout.rooms)
+                    : stairOptionPlacementClass;
                 resolvedRouteTransitions.Add(new RouteTransitionResolution(
                     routeTransitionRequirement.id,
                     routeTransitionRequirement.fromNode,
@@ -2919,7 +2823,7 @@ namespace DungeonLab.Editor
                     routeTransitionRequirement.transitionKind,
                     routeTransitionRequirement.requiredRiseLevels,
                     directedRise,
-                    delta == 0 ? "level-corridor" : stairOptionPlacementClass,
+                    realizationClass,
                     delta == 0 ? default : stairOptionPlannedTransitionFirstCell,
                     delta == 0 ? default : stairOptionPlannedTransitionSecondCell,
                     stairOptionPlannedLowerLandingCells,
@@ -2927,6 +2831,52 @@ namespace DungeonLab.Editor
                     stairOptionPlannedFootprintCells));
             }
             return true;
+        }
+
+        private static bool TryRegisterPlannedBridgeOpenVolume(
+            PrismLedger prisms,
+            string edgeId,
+            IEnumerable<Vector2Int> voidCells,
+            int firstLevel,
+            int secondLevel,
+            OwnerKey deckOwner,
+            out Prism blocker)
+        {
+            return prisms.TryRegisterOpenVolume(
+                SortedCells(new HashSet<Vector2Int>(voidCells)),
+                LevelBand.SpanningEndpoints(firstLevel, secondLevel),
+                new OwnerKey(OwnerFamily.Opening, $"bridge-void:{edgeId}"),
+                new[] { deckOwner },
+                out blocker);
+        }
+
+        private static string LevelConnectionPlacementClass(
+            RoomConnection connection,
+            IReadOnlyList<RoomFootprint> rooms)
+        {
+            if (connection.path != null &&
+                connection.path.Count == 2 &&
+                connection.fromRoom >= 0 &&
+                connection.fromRoom < rooms.Count &&
+                connection.toRoom >= 0 &&
+                connection.toRoom < rooms.Count)
+            {
+                Vector2Int first = connection.path[0];
+                Vector2Int second = connection.path[1];
+                bool forwardDoorway =
+                    rooms[connection.fromRoom].Contains(first) &&
+                    rooms[connection.toRoom].Contains(second);
+                bool reverseDoorway =
+                    rooms[connection.fromRoom].Contains(second) &&
+                    rooms[connection.toRoom].Contains(first);
+                if ((forwardDoorway || reverseDoorway) &&
+                    Mathf.Abs(first.x - second.x) + Mathf.Abs(first.y - second.y) == 1)
+                {
+                    return DirectDoorwayPlacementClass;
+                }
+            }
+
+            return RoutedCorridorPlacementClass;
         }
 
         private static string StairPlacementFailureReason(
@@ -2979,7 +2929,7 @@ namespace DungeonLab.Editor
                 }
 
                 string expectedPlacementClass = required.transitionKind == RouteTransitionKind.LevelCorridor
-                    ? "level-corridor"
+                    ? ExpectedLevelConnectionPlacementClass(layout, required.id)
                     : required.transitionKind == RouteTransitionKind.Bridge
                         ? ExternalSpanStairPlacementClass
                         : required.transitionKind == RouteTransitionKind.Stairwell
@@ -3009,7 +2959,7 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                bool transitionFound = false;
+                int transitionMatches = 0;
                 string actualKey = TransitionKey(actual.transitionFirstCell, actual.transitionSecondCell);
                 foreach (ElevationEdgeModel.TransitionEdge transition in transitions)
                 {
@@ -3019,14 +2969,15 @@ namespace DungeonLab.Editor
                             actualKey,
                             StringComparison.Ordinal))
                     {
-                        transitionFound = true;
-                        break;
+                        transitionMatches++;
                     }
                 }
 
-                if (!transitionFound)
+                if (transitionMatches != 1)
                 {
-                    rejectionReason = $"[ROUTE_TRANSITION_RESERVATION] edge '{required.id}' reservation had no canonical TransitionEdge consumer";
+                    rejectionReason =
+                        $"[ROUTE_TRANSITION_RESERVATION] edge '{required.id}' reservation had " +
+                        $"{transitionMatches} canonical TransitionEdge consumers";
                     return false;
                 }
 
@@ -3139,6 +3090,25 @@ namespace DungeonLab.Editor
                 SortedCells(requirements.reservedVistaCells).ToArray(),
                 vistaValid);
             return true;
+        }
+
+        private static string ExpectedLevelConnectionPlacementClass(
+            DungeonLayout layout,
+            string edgeId)
+        {
+            if (layout.connections != null)
+            {
+                foreach (RoomConnection connection in layout.connections)
+                {
+                    if (connection.source == ConnectionSource.RouteEdge &&
+                        string.Equals(connection.edgeId, edgeId, StringComparison.Ordinal))
+                    {
+                        return LevelConnectionPlacementClass(connection, layout.rooms);
+                    }
+                }
+            }
+
+            return string.Empty;
         }
 
         private static bool TryGetRouteNodeAnchorLevel(
@@ -4817,17 +4787,11 @@ namespace DungeonLab.Editor
             return true;
         }
 
-        // Aerial loop bridges (step 8, decisions 29-32).
-        private const int MaxAerialBridgesPerDungeon = 2;
-        private const int MinAerialBridgeLevel = 3;
-        private const int MinAerialBridgeSpanCells = 2;
-        private const int MaxAerialBridgeSpanCells = 8;
-        // Decision 32: a bridge must be a genuine shortcut — landings already
-        // reachable within factor x (span + 2) walk cells make it redundant —
-        // and may not hug a parallel walkway within this level tolerance.
-        private const int AerialBridgeShortcutFactor = 3;
-        private const int AerialBridgeHugLevelTolerance = 2;
-        private readonly struct AerialBridgeCandidate
+        // Explicit bridge geometry retained solely by the stacked-crossing
+        // fixtures. There is no room-pair scan, candidate lottery or production
+        // caller: production bridges come only from RouteTransitionKind.Bridge.
+        private const int FixtureBridgeShortcutFactor = 3;
+        private readonly struct FixtureBridgeCandidate
         {
             public readonly int roomA;
             public readonly int roomB;
@@ -4836,7 +4800,7 @@ namespace DungeonLab.Editor
             public readonly Vector2Int lineDirection;
             public readonly List<Vector2Int> gapCells;
 
-            public AerialBridgeCandidate(int roomA, int roomB, Vector2Int landingA, Vector2Int landingB, Vector2Int lineDirection, List<Vector2Int> gapCells)
+            public FixtureBridgeCandidate(int roomA, int roomB, Vector2Int landingA, Vector2Int landingB, Vector2Int lineDirection, List<Vector2Int> gapCells)
             {
                 this.roomA = roomA;
                 this.roomB = roomB;
@@ -4847,238 +4811,52 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static void AddAerialBridges(
-            DungeonLayout layout,
+        private static void AddExplicitFixtureBridge(
             SurfaceField surfaces,
-            System.Random random,
             List<ElevationEdgeModel.TransitionEdge> transitions,
-            HashSet<string> transitionKeys,
-            PrismLedger plannedStairLedger,
-            List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)> synthesizedStairs,
-            HashSet<Vector2Int> protectedCells)
+            PrismLedger plannedStairLedger)
         {
-            // Directly connected pairs already have a walk; bridges are for peers
-            // without one (loop edges, decision 6).
-            var connectedPairs = new HashSet<(int, int)>();
-            foreach (RoomConnection connection in layout.connections)
+            var gapCells = new List<Vector2Int>();
+            for (int x = -2; x <= 2; x++)
             {
-                int low = Mathf.Min(connection.fromRoom, connection.toRoom);
-                int high = Mathf.Max(connection.fromRoom, connection.toRoom);
-                connectedPairs.Add((low, high));
+                gapCells.Add(new Vector2Int(x, 0));
             }
 
-            var candidates = new List<AerialBridgeCandidate>();
-            for (int roomA = 0; roomA < layout.rooms.Count; roomA++)
+            var candidate = new FixtureBridgeCandidate(
+                0,
+                1,
+                new Vector2Int(-3, 0),
+                new Vector2Int(3, 0),
+                Vector2Int.right,
+                gapCells);
+            if (!TryPlaceFixtureBridge(
+                    candidate,
+                    transitions,
+                    new HashSet<string>(),
+                    plannedStairLedger,
+                    new List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)>(),
+                    surfaces))
             {
-                for (int roomB = roomA + 1; roomB < layout.rooms.Count; roomB++)
-                {
-                    if (connectedPairs.Contains((roomA, roomB)))
-                    {
-                        continue;
-                    }
-
-                    CollectAerialBridgeCandidates(layout, surfaces, roomA, roomB, candidates);
-                }
+                throw new InvalidOperationException(
+                    "The explicit stacked-crossing fixture bridge could not be realized.");
             }
-
-            int placed = 0;
-            var bridgedPairs = new HashSet<(int, int)>();
-            while (placed < MaxAerialBridgesPerDungeon && candidates.Count > 0)
-            {
-                int pick = random.Next(candidates.Count);
-                AerialBridgeCandidate candidate = candidates[pick];
-                candidates.RemoveAt(pick);
-                if (bridgedPairs.Contains((candidate.roomA, candidate.roomB)))
-                {
-                    continue;
-                }
-
-                if (PathTouchesProtectedCells(candidate.gapCells, protectedCells))
-                {
-                    continue;
-                }
-
-                if (TryPlaceAerialBridge(candidate, transitions, transitionKeys, plannedStairLedger, synthesizedStairs, surfaces))
-                {
-                    bridgedPairs.Add((candidate.roomA, candidate.roomB));
-                    placed++;
-                }
-            }
-        }
-
-        private static void CollectAerialBridgeCandidates(
-            DungeonLayout layout,
-            SurfaceField surfaces,
-            int roomA,
-            int roomB,
-            List<AerialBridgeCandidate> candidates)
-        {
-            RoomFootprint roomFootprintA = layout.rooms[roomA];
-            RoomFootprint roomFootprintB = layout.rooms[roomB];
-            RectInt a = roomFootprintA.bounds;
-            RectInt b = roomFootprintB.bounds;
-
-            // Horizontal lines: A strictly west of B (or the mirror) with
-            // overlapping rows; vertical lines symmetric. Landings are the
-            // rooms' true facing EDGE CELLS on each shared line (for non-rect
-            // rooms a line may miss a footprint entirely — skip it).
-            if (a.xMax < b.xMin)
-            {
-                for (int z = Mathf.Max(a.yMin, b.yMin); z < Mathf.Min(a.yMax, b.yMax); z++)
-                {
-                    if (roomFootprintA.TryGetEdgeCellTowards(new Vector2Int(1, 0), z, out Vector2Int landingA) &&
-                        roomFootprintB.TryGetEdgeCellTowards(new Vector2Int(-1, 0), z, out Vector2Int landingB))
-                    {
-                        TryCollectAerialBridgeLine(layout, surfaces, roomA, roomB, landingA, landingB, new Vector2Int(1, 0), candidates);
-                    }
-                }
-            }
-            else if (b.xMax < a.xMin)
-            {
-                for (int z = Mathf.Max(a.yMin, b.yMin); z < Mathf.Min(a.yMax, b.yMax); z++)
-                {
-                    if (roomFootprintA.TryGetEdgeCellTowards(new Vector2Int(-1, 0), z, out Vector2Int landingA) &&
-                        roomFootprintB.TryGetEdgeCellTowards(new Vector2Int(1, 0), z, out Vector2Int landingB))
-                    {
-                        TryCollectAerialBridgeLine(layout, surfaces, roomA, roomB, landingA, landingB, new Vector2Int(-1, 0), candidates);
-                    }
-                }
-            }
-
-            if (a.yMax < b.yMin)
-            {
-                for (int x = Mathf.Max(a.xMin, b.xMin); x < Mathf.Min(a.xMax, b.xMax); x++)
-                {
-                    if (roomFootprintA.TryGetEdgeCellTowards(new Vector2Int(0, 1), x, out Vector2Int landingA) &&
-                        roomFootprintB.TryGetEdgeCellTowards(new Vector2Int(0, -1), x, out Vector2Int landingB))
-                    {
-                        TryCollectAerialBridgeLine(layout, surfaces, roomA, roomB, landingA, landingB, new Vector2Int(0, 1), candidates);
-                    }
-                }
-            }
-            else if (b.yMax < a.yMin)
-            {
-                for (int x = Mathf.Max(a.xMin, b.xMin); x < Mathf.Min(a.xMax, b.xMax); x++)
-                {
-                    if (roomFootprintA.TryGetEdgeCellTowards(new Vector2Int(0, -1), x, out Vector2Int landingA) &&
-                        roomFootprintB.TryGetEdgeCellTowards(new Vector2Int(0, 1), x, out Vector2Int landingB))
-                    {
-                        TryCollectAerialBridgeLine(layout, surfaces, roomA, roomB, landingA, landingB, new Vector2Int(0, -1), candidates);
-                    }
-                }
-            }
-        }
-
-        private static void TryCollectAerialBridgeLine(
-            DungeonLayout layout,
-            SurfaceField surfaces,
-            int roomA,
-            int roomB,
-            Vector2Int landingA,
-            Vector2Int landingB,
-            Vector2Int lineDirection,
-            List<AerialBridgeCandidate> candidates)
-        {
-            // The landings stay COLUMN FLOORS. A deck that springs from a gallery
-            // instead is a capability, not a consequence of changing containers,
-            // and C2's non-goals put generic multi-layer bridging out of scope —
-            // so this reads the floor deliberately rather than by omission. The
-            // headroom gate is what keeps a floor-level deck clear of whatever
-            // stands over its landing.
-            if (!surfaces.TryGetFloorLevel(landingA, out int levelA) ||
-                !surfaces.TryGetFloorLevel(landingB, out int levelB) ||
-                !AreStructuralAerialBridgeLandingLevels(levelA, levelB) ||
-                Mathf.Min(levelA, levelB) < MinAerialBridgeLevel)
-            {
-                return;
-            }
-
-            int deckClearanceLevel = Mathf.Min(levelA, levelB);
-
-            int span = Mathf.Abs(landingB.x - landingA.x) + Mathf.Abs(landingB.y - landingA.y) - 1;
-            if (span < MinAerialBridgeSpanCells || span > MaxAerialBridgeSpanCells)
-            {
-                return;
-            }
-
-            var gapCells = new List<Vector2Int>(span);
-            var lateral = new Vector2Int(-lineDirection.y, lineDirection.x);
-            int huggedCells = 0;
-            for (int i = 1; i <= span; i++)
-            {
-                Vector2Int cell = landingA + lineDirection * i;
-                // Decision 30: room interiors are off-limits; anything else is
-                // overflyable if it leaves headroom (cells still unleveled here
-                // get filled later and re-checked by the late headroom gate).
-                foreach (RoomFootprint room in layout.rooms)
-                {
-                    if (room.Contains(cell))
-                    {
-                        return;
-                    }
-                }
-
-                // The HIGHEST surface, not the column floor. What obstructs a deck
-                // is the topmost thing in the column it flies over — and reading
-                // the floor here is precisely the failure that makes a gallery at
-                // deck height invisible to the clearance test. Identical on a
-                // single-layer field, where the floor IS the highest surface.
-                if (surfaces.TryGetHighestSurfaceLevel(cell, out int cellLevel) &&
-                    cellLevel > deckClearanceLevel - MinHeadroomLevels)
-                {
-                    return;
-                }
-
-                if (CellHugsWalkway(surfaces, cell + lateral, deckClearanceLevel) ||
-                    CellHugsWalkway(surfaces, cell - lateral, deckClearanceLevel))
-                {
-                    huggedCells++;
-                }
-
-                gapCells.Add(cell);
-            }
-
-            // Decision 32: a deck running laterally beside an existing walkway
-            // for half its span or more reads as a duplicate of that walkway.
-            if (huggedCells * 2 >= span)
-            {
-                return;
-            }
-
-            candidates.Add(new AerialBridgeCandidate(roomA, roomB, landingA, landingB, lineDirection, gapCells));
-        }
-
-        // ANY surface in the column, not just its floor: the rule is "a deck
-        // running beside an existing walkway reads as a duplicate of it", and a
-        // gallery beside the deck is as much a walkway as a floor is.
-        private static bool CellHugsWalkway(SurfaceField surfaces, Vector2Int cell, int deckLevel)
-        {
-            foreach (int level in surfaces.LevelsAt(cell))
-            {
-                if (Mathf.Abs(level - deckLevel) <= AerialBridgeHugLevelTolerance)
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         // Decision 32: bridges are shortcuts, not alternatives. BFS the live walk
         // network — equal-level SURFACE adjacency plus every placed transition
-        // (stairs, strips, seams and earlier aerial decks, so twin bridges
+        // (stairs, strips, seams and earlier fixture decks, so twin bridges
         // self-exclude) — and reject when the landings are already close.
         //
         // Walks (cell, level), not cells. The lateral step always compared levels,
         // so it was only ever a surface walk with a heightfield's single surface
         // per column; the transition hop never resolved a level at all, which is
         // what lets this generalize without waiting on C2b-2.
-        private static bool AerialBridgeIsRedundant(
-            AerialBridgeCandidate candidate,
+        private static bool FixtureBridgeIsRedundant(
+            FixtureBridgeCandidate candidate,
             SurfaceField surfaces,
             IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions)
         {
-            int threshold = AerialBridgeShortcutFactor * (candidate.gapCells.Count + 2);
+            int threshold = FixtureBridgeShortcutFactor * (candidate.gapCells.Count + 2);
             var links = new Dictionary<Vector2Int, List<Vector2Int>>();
             void AddLink(Vector2Int from, Vector2Int to)
             {
@@ -5163,8 +4941,8 @@ namespace DungeonLab.Editor
             return false;
         }
 
-        private static bool TryPlaceAerialBridge(
-            AerialBridgeCandidate candidate,
+        private static bool TryPlaceFixtureBridge(
+            FixtureBridgeCandidate candidate,
             List<ElevationEdgeModel.TransitionEdge> transitions,
             HashSet<string> transitionKeys,
             PrismLedger plannedStairLedger,
@@ -5179,7 +4957,7 @@ namespace DungeonLab.Editor
                 !surfaces.TryGetFloorLevel(candidate.landingB, out int levelB))
             {
                 throw new KeyNotFoundException(
-                    $"aerial bridge landing {candidate.landingA}/{candidate.landingB} lost its floor between " +
+                    $"fixture bridge landing {candidate.landingA}/{candidate.landingB} lost its floor between " +
                     "candidate collection and placement");
             }
             int rise = Mathf.Abs(levelA - levelB);
@@ -5226,33 +5004,33 @@ namespace DungeonLab.Editor
                 design = StairForge.SynthesizeDeckDesign(orderedGapCells.Count, rise, railPlusMask, railMinusMask, out string failureSummary);
                 if (design == null)
                 {
-                    LogPlanningWarning($"Dungeon Lab Generate: aerial deck synthesis failed for span {orderedGapCells.Count}: {failureSummary}");
+                    LogPlanningWarning($"Dungeon Lab fixture deck synthesis failed for span {orderedGapCells.Count}: {failureSummary}");
                     return false;
                 }
             }
             catch (Exception exception)
             {
-                LogPlanningWarning($"Dungeon Lab Generate: aerial deck synthesis failed for span {candidate.gapCells.Count}: {exception.Message}");
+                LogPlanningWarning($"Dungeon Lab fixture deck synthesis failed for span {candidate.gapCells.Count}: {exception.Message}");
                 return false;
             }
 
             string parserError = ElevationEdgeModel.ValidateSynthesizedContractToken(design.contract, StairForge.LevelHeight);
             if (!string.IsNullOrEmpty(parserError))
             {
-                LogPlanningWarning($"Dungeon Lab Generate: aerial deck '{design.name}' rejected by the edge-model parser: {parserError}");
+                LogPlanningWarning($"Dungeon Lab fixture deck '{design.name}' rejected by the edge-model parser: {parserError}");
                 return false;
             }
 
             if (!TryBuildSynthesizedStairOption(design.contract, out ReviewedActiveStairOption option, out string optionError))
             {
-                LogPlanningWarning($"Dungeon Lab Generate: aerial deck '{design.name}' rejected by the planner parser: {optionError}");
+                LogPlanningWarning($"Dungeon Lab fixture deck '{design.name}' rejected by the planner parser: {optionError}");
                 return false;
             }
 
             // Decision 32: only genuine shortcuts get a deck — checked against the
-            // LIVE network so earlier aerial decks count as existing paths.
+            // LIVE network so earlier fixture decks count as existing paths.
             //
-            if (AerialBridgeIsRedundant(candidate, surfaces, transitions))
+            if (FixtureBridgeIsRedundant(candidate, surfaces, transitions))
             {
                 return false;
             }
@@ -5339,7 +5117,7 @@ namespace DungeonLab.Editor
                 surfaces.AddSurface(deckCell, deckClearanceLevel, SurfaceKind.Deck);
             }
 
-            synthesizedStairs.Add(($"aerial:{candidate.roomA}<->{candidate.roomB}", setPiece));
+            synthesizedStairs.Add(($"fixture-bridge:{candidate.roomA}<->{candidate.roomB}", setPiece));
             return true;
         }
 
@@ -7269,7 +7047,7 @@ namespace DungeonLab.Editor
                     return false;
                 }
 
-                // A synthesized aerial deck is flat. Room-local seam/dais
+                // A synthesized fixture deck is flat. Room-local seam/dais
                 // strips keep their existing 1u physical contracts below.
                 if (delta == 0 &&
                     externalSpan &&
@@ -7380,6 +7158,21 @@ namespace DungeonLab.Editor
             out FloorStairPortGraph graph,
             out string rejectionReason)
         {
+            return TryBuildFloorStairPortGraph(
+                surfaces,
+                transitions,
+                Array.Empty<PlanOpening>(),
+                out graph,
+                out rejectionReason);
+        }
+
+        private static bool TryBuildFloorStairPortGraph(
+            SurfaceField surfaces,
+            IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
+            IReadOnlyList<PlanOpening> openings,
+            out FloorStairPortGraph graph,
+            out string rejectionReason)
+        {
             graph = new FloorStairPortGraph();
             rejectionReason = string.Empty;
             if (surfaces.Count == 0)
@@ -7457,6 +7250,40 @@ namespace DungeonLab.Editor
                 ElevationEdgeModel.TransitionEdge transition = transitions[i];
                 if (!TryAddTransitionToPortGraph(surfaces, transition, i, graph, out rejectionReason))
                 {
+                    return false;
+                }
+            }
+
+            foreach (PlanOpening opening in openings ?? Array.Empty<PlanOpening>())
+            {
+                if (opening.kind != OpeningKind.Aperture)
+                {
+                    continue;
+                }
+
+                if (!TryValidateApertureOpeningFallColumn(
+                        surfaces,
+                        opening,
+                        out rejectionReason))
+                {
+                    return false;
+                }
+
+                Vector2Int hole = opening.cell + DirectionVectorInt(opening.direction);
+                surfaces.TryGetHighestSurfaceBelow(hole, opening.level, out int catchLevel);
+                var rimNode = PortGraphNode.Floor(
+                    new SurfaceKey(opening.cell, opening.level));
+                var catchNode = PortGraphNode.Floor(
+                    new SurfaceKey(hole, catchLevel));
+                if (!graph.AddDirectedEdge(
+                        rimNode,
+                        catchNode,
+                        PortGraphEdgeKind.OpeningFall))
+                {
+                    rejectionReason =
+                        $"[APERTURE_PORT_ENDPOINT_MISSING] aperture '{opening.id}' " +
+                        $"resolved {opening.cell},L{opening.level}->{hole},L{catchLevel}, " +
+                        "but a transition consumed one endpoint";
                     return false;
                 }
             }
@@ -8429,7 +8256,7 @@ namespace DungeonLab.Editor
 
             // The room cell furthest along `direction` at the given transverse
             // coordinate (the row for ±x, the column for ±y) — the true edge
-            // cell an aerial bridge line leaves from. False when the footprint
+            // cell a cardinal boundary query leaves from. False when the footprint
             // has no cell on that line.
             public bool TryGetEdgeCellTowards(Vector2Int direction, int transverse, out Vector2Int edgeCell)
             {
@@ -8933,20 +8760,6 @@ namespace DungeonLab.Editor
             return intent.nodes[room].LayerOffset(layerId);
         }
 
-        private readonly struct LoopConnectionCandidate
-        {
-            public readonly int firstRoom;
-            public readonly int secondRoom;
-            public readonly int distance;
-
-            public LoopConnectionCandidate(int firstRoom, int secondRoom, int distance)
-            {
-                this.firstRoom = firstRoom;
-                this.secondRoom = secondRoom;
-                this.distance = distance;
-            }
-        }
-
         private readonly struct ReviewedActiveStairOption
         {
             public readonly string name;
@@ -9066,7 +8879,8 @@ namespace DungeonLab.Editor
         {
             FloorAdjacency,
             PortLanding,
-            StairInternal
+            StairInternal,
+            OpeningFall
         }
 
         private readonly struct PortGraphNode
@@ -9101,10 +8915,8 @@ namespace DungeonLab.Editor
             public readonly string second;
             public readonly PortGraphEdgeKind kind;
             // True only for a one-way descent (design §3.2's `Fall`, and `Drop`
-            // if it is ever adopted). Nothing produces one in A1 — there are no
-            // openings and therefore no falls — but the connectivity rule that
-            // carries the pit design has to be stated in terms of it, so the
-            // flag exists and the rule reads correctly the day a fall appears.
+            // if it is ever adopted). Slice 5's planned apertures publish these
+            // edges; ordinary floors and physical transitions remain reversible.
             public readonly bool directed;
 
             public PortGraphEdge(string first, string second, PortGraphEdgeKind kind, bool directed = false)
@@ -9123,6 +8935,19 @@ namespace DungeonLab.Editor
             private readonly HashSet<string> edgeKeys = new HashSet<string>(StringComparer.Ordinal);
 
             public int NodeCount => nodes.Count;
+            public int DirectedEdgeCount
+            {
+                get
+                {
+                    int count = 0;
+                    foreach (PortGraphEdge edge in edges)
+                    {
+                        count += edge.directed ? 1 : 0;
+                    }
+
+                    return count;
+                }
+            }
 
             public string Summary
             {
@@ -9181,6 +9006,28 @@ namespace DungeonLab.Editor
                 edges.Add(new PortGraphEdge(a, b, kind));
             }
 
+            public bool AddDirectedEdge(
+                PortGraphNode first,
+                PortGraphNode second,
+                PortGraphEdgeKind kind)
+            {
+                if (!nodes.ContainsKey(first.key) ||
+                    !nodes.ContainsKey(second.key) ||
+                    first.key == second.key)
+                {
+                    return false;
+                }
+
+                string edgeKey = $"{first.key}>{second.key}|{kind}";
+                if (!edgeKeys.Add(edgeKey))
+                {
+                    return true;
+                }
+
+                edges.Add(new PortGraphEdge(first.key, second.key, kind, directed: true));
+                return true;
+            }
+
             /// <summary>
             /// The fall-free subgraph must be connected (design §3.3).
             /// </summary>
@@ -9195,11 +9042,9 @@ namespace DungeonLab.Editor
             /// full strong connectivity AND per-fall reversibility, and it is
             /// the literal statement of "pits create optional branches".
             /// <para>
-            /// With no fall edges in existence it is arithmetically identical to
-            /// the check it replaces, which is why it can land in an
-            /// output-neutral phase. The messages are the old ones verbatim:
-            /// they are projected into the seed report, and the report array is
-            /// what `resultHash` is computed over.
+            /// With no aperture it is arithmetically identical to the check it
+            /// replaced. With an aperture, deleting the directed edge proves
+            /// that the topology supplied a reversible return route.
             /// </para>
             /// </remarks>
             public bool IsFallFreeConnected(out string message)

@@ -166,6 +166,7 @@ namespace DungeonLab.Editor
             bool portGraphBuilt = TryBuildFloorStairPortGraph(
                 plan.surfaces,
                 plan.transitions,
+                plan.openings,
                 out FloorStairPortGraph portGraph,
                 out string portGraphBuildMessage);
             bool portGraphConnected = false;

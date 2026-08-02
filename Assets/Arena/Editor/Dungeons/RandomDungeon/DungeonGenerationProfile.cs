@@ -267,18 +267,10 @@ namespace DungeonLab.Editor
         [Tooltip("Maximum plan depth in 4u grid cells. Route embeddings that exceed it are rejected.")]
         public int mapDepthMaxCells = 28;
 
-        [Header("Density And Loops")]
+        [Header("Density")]
         [Min(1)]
         [Tooltip("Minimum accepted room count. Layouts below this are rejected before rendering.")]
         public int denseFloorplanMinRooms = 9;
-
-        [Range(0f, 1f)]
-        [Tooltip("Target loop-edge fraction relative to the room tree. Loops are still gated by level grammar and path validation.")]
-        public float loopConnectionFraction = 0.35f;
-
-        [Min(1)]
-        [Tooltip("Maximum squared-distance candidate radius is derived from this room-center distance in grid cells. Larger values allow longer loop corridors.")]
-        public int maxLoopCandidateDistanceCells = 14;
 
         [Header("Interior Features")]
         [Range(0f, 1f)]
@@ -370,8 +362,6 @@ namespace DungeonLab.Editor
                 mapWidthMaxCells = mapWidthMaxCells,
                 mapDepthMaxCells = mapDepthMaxCells,
                 denseFloorplanMinRooms = denseFloorplanMinRooms,
-                loopConnectionFraction = loopConnectionFraction,
-                maxLoopCandidateDistanceCells = maxLoopCandidateDistanceCells,
                 roomZoneSplitChance = roomZoneSplitChance,
                 // Not a spatial setting, but it is on the same dial: once rooms
                 // abut, an unenclosed pair merges into one open field.
@@ -530,8 +520,6 @@ namespace DungeonLab.Editor
         public int mapDepthMaxCells;
         public int denseFloorplanMinRooms;
         public float minLatticeEnvelopeFillPercent;
-        public float loopConnectionFraction;
-        public int maxLoopCandidateDistanceCells;
         public float roomZoneSplitChance;
         public float enclosedRoomChance;
         public float annexVacantFraction;
@@ -548,8 +536,6 @@ namespace DungeonLab.Editor
             value.mapDepthMaxCells = Mathf.Max(12, value.mapDepthMaxCells);
             value.denseFloorplanMinRooms = Mathf.Max(1, value.denseFloorplanMinRooms);
             value.minLatticeEnvelopeFillPercent = Mathf.Clamp01(value.minLatticeEnvelopeFillPercent);
-            value.loopConnectionFraction = Mathf.Clamp01(value.loopConnectionFraction);
-            value.maxLoopCandidateDistanceCells = Mathf.Max(1, value.maxLoopCandidateDistanceCells);
             value.roomZoneSplitChance = Mathf.Clamp01(value.roomZoneSplitChance);
             value.enclosedRoomChance = Mathf.Clamp01(value.enclosedRoomChance);
             value.annexVacantFraction = Mathf.Clamp01(value.annexVacantFraction);

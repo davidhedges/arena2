@@ -533,6 +533,104 @@ namespace DungeonLab.Editor
             return openings.ToArray();
         }
 
+        /// <summary>
+        /// Resolve generated shared-space aperture candidates into the plan's
+        /// same opening list after all transition geometry is known.
+        /// </summary>
+        private static bool TryBuildPlanOpenings(
+            IReadOnlyList<ExternalConnectorPromontoryResolution> externalConnectors,
+            IReadOnlyList<RecipePlacement> recipePlacements,
+            IReadOnlyList<PlanOpening> generatedCandidates,
+            SurfaceField surfaces,
+            IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions,
+            out PlanOpening[] resolved,
+            out string rejectionReason)
+        {
+            var openings = new List<PlanOpening>(
+                BuildPlanOpenings(externalConnectors, recipePlacements));
+            var occupiedRims = new HashSet<string>(StringComparer.Ordinal);
+            foreach (PlanOpening opening in openings)
+            {
+                occupiedRims.Add(PlanOpeningRimKey(opening));
+            }
+
+            var requiredOwners = new HashSet<OwnerKey>();
+            var resolvedOwners = new HashSet<OwnerKey>();
+            foreach (PlanOpening candidate in generatedCandidates ?? Array.Empty<PlanOpening>())
+            {
+                requiredOwners.Add(candidate.owner);
+                if (resolvedOwners.Contains(candidate.owner) ||
+                    occupiedRims.Contains(PlanOpeningRimKey(candidate)) ||
+                    OpeningTouchesTransition(candidate, transitions))
+                {
+                    continue;
+                }
+
+                Vector2Int hole =
+                    candidate.cell + DirectionVectorInt(candidate.direction);
+                if (!surfaces.HasSurfaceAt(candidate.cell, candidate.level) ||
+                    surfaces.HasSurfaceAt(hole, candidate.level) ||
+                    !TryValidateApertureOpeningFallColumn(
+                        surfaces,
+                        candidate,
+                        out _))
+                {
+                    continue;
+                }
+
+                openings.Add(candidate);
+                occupiedRims.Add(PlanOpeningRimKey(candidate));
+                resolvedOwners.Add(candidate.owner);
+            }
+
+            foreach (OwnerKey owner in requiredOwners)
+            {
+                if (!resolvedOwners.Contains(owner))
+                {
+                    resolved = Array.Empty<PlanOpening>();
+                    rejectionReason =
+                        $"[GENERATED_APERTURE_UNRESOLVED] shared volume '{owner}' had no " +
+                        "valid rim outside transition geometry";
+                    return false;
+                }
+            }
+
+            resolved = openings.ToArray();
+            return TryValidatePlanOpenings(surfaces, resolved, out rejectionReason);
+        }
+
+        private static string PlanOpeningRimKey(PlanOpening opening)
+        {
+            return
+                $"{opening.cell.x},{opening.cell.y},L{opening.level},D{opening.direction}";
+        }
+
+        private static bool OpeningTouchesTransition(
+            PlanOpening opening,
+            IReadOnlyList<ElevationEdgeModel.TransitionEdge> transitions)
+        {
+            Vector2Int hole = opening.cell + DirectionVectorInt(opening.direction);
+            foreach (ElevationEdgeModel.TransitionEdge transition in
+                     transitions ?? Array.Empty<ElevationEdgeModel.TransitionEdge>())
+            {
+                if (transition.firstCell == opening.cell ||
+                    transition.secondCell == opening.cell ||
+                    transition.firstCell == hole ||
+                    transition.secondCell == hole ||
+                    ContainsCell(transition.lowerLandingCells, opening.cell) ||
+                    ContainsCell(transition.upperLandingCells, opening.cell) ||
+                    ContainsCell(transition.footprintCells, opening.cell) ||
+                    ContainsCell(transition.lowerLandingCells, hole) ||
+                    ContainsCell(transition.upperLandingCells, hole) ||
+                    ContainsCell(transition.footprintCells, hole))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static List<ElevationEdgeModel.OpenFloorEdge> BuildPlannedOpenEdges(
             TieredLevelPlan plan)
         {

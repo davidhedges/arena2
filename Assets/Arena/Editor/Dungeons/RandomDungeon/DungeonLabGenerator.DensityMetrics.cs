@@ -146,7 +146,7 @@ namespace DungeonLab.Editor
         //     reserved it;
         //   * stairwell shafts — a stairwell tower stands on void BESIDE the
         //     path, so its folded footprint is deliberately empty floor mask;
-        //   * aerial span footprints — a bridge over filled floor is a walkway
+        //   * planned span footprints — a bridge over filled floor is a walkway
         //     (fork F2), so the span keeps its void;
         //   * promontory and external-connector pier cells, which are surfaces
         //     the tier stage adds after the layout floor mask is closed and
@@ -154,7 +154,7 @@ namespace DungeonLab.Editor
         //
         // Everything here is an exact cell set the plan already carries. It is
         // deliberately NOT a dilation or a guess: the flanking void beside an
-        // aerial deck is still counted today, and gets revisited in phase 4/6
+        // planned deck is still counted today, and gets revisited in phase 4/6
         // when the number actually binds.
         private static HashSet<Vector2Int> CollectAuthoredVoidCells(
             DungeonLayout layout,

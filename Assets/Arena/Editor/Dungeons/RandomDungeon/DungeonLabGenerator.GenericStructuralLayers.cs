@@ -37,6 +37,7 @@ namespace DungeonLab.Editor
             IReadOnlyList<RecipePlacement> selectedRecipes,
             SurfaceField surfaces,
             PrismLedger prisms,
+            List<PlanOpening> generatedOpeningCandidates,
             out string rejectionReason)
         {
             rejectionReason = string.Empty;
@@ -181,10 +182,61 @@ namespace DungeonLab.Editor
                             $"shared void {voidBand} conflicted with {voidBlocker}";
                         return false;
                     }
+
+                    AddGeneratedApertureCandidates(
+                        node.id,
+                        layerId,
+                        layerCells,
+                        sharedVoidCells,
+                        absoluteLevel,
+                        voidOwner,
+                        generatedOpeningCandidates);
                 }
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Publish every legal rim-to-shared-void edge as a deterministic
+        /// candidate. Final planning selects one aperture per volume after
+        /// transition footprints are known; all remaining edges stay guarded
+        /// and are rendered as the balcony/atrium rim by the existing renderer.
+        /// </summary>
+        private static void AddGeneratedApertureCandidates(
+            string nodeId,
+            string layerId,
+            HashSet<Vector2Int> upperCells,
+            HashSet<Vector2Int> sharedVoidCells,
+            int upperLevel,
+            OwnerKey voidOwner,
+            List<PlanOpening> candidates)
+        {
+            if (candidates == null)
+            {
+                return;
+            }
+
+            int candidateIndex = 0;
+            foreach (Vector2Int rim in SortedCells(upperCells))
+            {
+                foreach (Vector2Int direction in GenericLayerDirections)
+                {
+                    Vector2Int hole = rim + direction;
+                    if (!sharedVoidCells.Contains(hole))
+                    {
+                        continue;
+                    }
+
+                    candidates.Add(new PlanOpening(
+                        voidOwner,
+                        $"{nodeId}#{layerId}-aperture-{candidateIndex++}",
+                        OpeningKind.Aperture,
+                        rim,
+                        DirectionFromVector(new Vector2(direction.x, direction.y)),
+                        upperLevel));
+                }
+            }
         }
 
         private static bool HasSelectedRecipeAtRoom(
@@ -648,12 +700,14 @@ namespace DungeonLab.Editor
             }
 
             var prisms = new PrismLedger();
+            var generatedOpeningCandidates = new List<PlanOpening>();
             bool realized = TryRealizeGenericStructuralRoomLayers(
                 layout,
                 nodes,
                 Array.Empty<RecipePlacement>(),
                 surfaces,
                 prisms,
+                generatedOpeningCandidates,
                 out string realizationFailure);
             var transitions = new List<ElevationEdgeModel.TransitionEdge>
             {
@@ -665,9 +719,18 @@ namespace DungeonLab.Editor
                     "generic-structural-fixture-stair",
                     EmbeddedStairPlacementClass)
             };
+            bool openingsBuilt = TryBuildPlanOpenings(
+                Array.Empty<ExternalConnectorPromontoryResolution>(),
+                Array.Empty<RecipePlacement>(),
+                generatedOpeningCandidates,
+                surfaces,
+                transitions,
+                out PlanOpening[] generatedOpenings,
+                out string openingFailure);
             bool graphBuilt = TryBuildFloorStairPortGraph(
                 surfaces,
                 transitions,
+                generatedOpenings,
                 out FloorStairPortGraph portGraph,
                 out string graphFailure);
             string reachability = graphFailure;
@@ -746,6 +809,10 @@ namespace DungeonLab.Editor
                 $"producer.supportCells={supportCells}",
                 $"producer.clearanceCells={clearanceCells}",
                 $"producer.openVolumeCells={openVolumeCells}",
+                $"producer.generatedOpeningCandidates={generatedOpeningCandidates.Count}",
+                $"producer.generatedApertures={generatedOpenings.Length}",
+                $"producer.openingsBuilt={openingsBuilt}",
+                $"producer.openingFailure={openingFailure}",
                 $"producer.openVolumesValid={volumesValid}",
                 $"producer.volumeFailure={volumeFailure}",
                 $"producer.headroomValid={headroomValid}",
@@ -753,6 +820,7 @@ namespace DungeonLab.Editor
                 $"producer.boundLandingAccepted={boundLandingAccepted}",
                 $"producer.unboundedLandingStillRejected={unboundedLandingStillRejected}",
                 $"navigation.graphBuilt={graphBuilt}",
+                $"navigation.directedFalls={(graphBuilt ? portGraph.DirectedEdgeCount : 0)}",
                 $"navigation.fallFreeConnected={fallFreeConnected}",
                 $"navigation.reachability={reachability}",
                 $"validator.slotlessLayerAccepted={slotlessLayerAccepted}"
@@ -765,6 +833,311 @@ namespace DungeonLab.Editor
             foreach (Vector2Int _ in prisms.CellsOfKind(kind))
             {
                 count++;
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// Slice 5's pure realization fixture: planned level connections,
+        /// bridge-owned void, shared-space rims, one aperture fall and its
+        /// reversible return route, all without recipe identity.
+        /// </summary>
+        private static string BuildSlice5ConnectionRealizationSnapshot()
+        {
+            var firstRoom = RoomFootprint.FromRect(new RectInt(0, 0, 2, 2));
+            var abuttingRoom = RoomFootprint.FromRect(new RectInt(2, 0, 2, 2));
+            var separatedRoom = RoomFootprint.FromRect(new RectInt(5, 0, 2, 2));
+            var direct = RoomConnection.ForRouteEdge(
+                0,
+                1,
+                "direct",
+                LevelBand.SpanningEndpoints(0, 0),
+                new List<Vector2Int>
+                {
+                    new Vector2Int(1, 0),
+                    new Vector2Int(2, 0)
+                });
+            var routed = RoomConnection.ForRouteEdge(
+                0,
+                1,
+                "routed",
+                LevelBand.SpanningEndpoints(0, 0),
+                new List<Vector2Int>
+                {
+                    new Vector2Int(1, 0),
+                    new Vector2Int(2, 0),
+                    new Vector2Int(3, 0),
+                    new Vector2Int(4, 0),
+                    new Vector2Int(5, 0)
+                });
+            bool directClassified = string.Equals(
+                LevelConnectionPlacementClass(
+                    direct,
+                    new[] { firstRoom, abuttingRoom }),
+                DirectDoorwayPlacementClass,
+                StringComparison.Ordinal);
+            bool routedClassified = string.Equals(
+                LevelConnectionPlacementClass(
+                    routed,
+                    new[] { firstRoom, separatedRoom }),
+                RoutedCorridorPlacementClass,
+                StringComparison.Ordinal);
+
+            var identityTopology = new DungeonRouteTopology(
+                "slice5-identity-fixture",
+                "Slice 5 identity fixture",
+                "slice5-fixture-v1",
+                "<fixture>",
+                Array.Empty<RouteTopologyNode>(),
+                Array.Empty<RouteTopologyEdge>(),
+                Array.Empty<RouteTopologySlot>(),
+                string.Empty,
+                0,
+                1,
+                1,
+                Array.Empty<RouteOverlookIntent>(),
+                0,
+                1,
+                false,
+                false,
+                1,
+                MajorRiseLevels,
+                true,
+                default,
+                Array.Empty<RouteLaneGap>(),
+                Array.Empty<RouteLaneGap>(),
+                1,
+                1);
+            var identityIntent = new RouteIntent(
+                1,
+                "slice5-fixture-v1",
+                identityTopology,
+                new[]
+                {
+                    new RouteNodeIntent("a", "arrival", "arrival", 0, -1, 0),
+                    new RouteNodeIntent("b", "culmination", "culmination", 1, -1, 0)
+                },
+                new[]
+                {
+                    new RouteTraversalIntent(
+                        "direct",
+                        0,
+                        1,
+                        0,
+                        RouteTransitionKind.LevelCorridor)
+                },
+                default,
+                RouteElevationPolicy.AscendingSpine,
+                Array.Empty<RecipeSlotIntent>(),
+                string.Empty,
+                0,
+                1,
+                Array.Empty<RouteOverlookIntent>(),
+                false);
+            var identityRequirements = new RouteTierRequirements(
+                identityIntent,
+                new RectInt(0, 0, 4, 2),
+                Array.Empty<Vector2Int>(),
+                default,
+                default,
+                default,
+                default,
+                Array.Empty<Vector2Int>(),
+                Array.Empty<RecipePlacement>());
+            var identityFloor = new HashSet<Vector2Int>(firstRoom.cells);
+            identityFloor.UnionWith(abuttingRoom.cells);
+            bool exactIdentityAccepted = FindConnectionIdentityViolations(
+                new DungeonLayout(
+                    identityFloor,
+                    new List<RoomFootprint> { firstRoom, abuttingRoom },
+                    new List<RoomConnection> { direct }),
+                identityRequirements).Count == 0;
+            bool duplicateIdentityRejected = FindConnectionIdentityViolations(
+                new DungeonLayout(
+                    identityFloor,
+                    new List<RoomFootprint> { firstRoom, abuttingRoom },
+                    new List<RoomConnection> { direct, direct }),
+                identityRequirements).Count > 0;
+            bool missingIdentityRejected = FindConnectionIdentityViolations(
+                new DungeonLayout(
+                    identityFloor,
+                    new List<RoomFootprint> { firstRoom, abuttingRoom },
+                    new List<RoomConnection>()),
+                identityRequirements).Count > 0;
+            bool inventedIdentityRejected = FindConnectionIdentityViolations(
+                new DungeonLayout(
+                    identityFloor,
+                    new List<RoomFootprint> { firstRoom, abuttingRoom },
+                    new List<RoomConnection>
+                    {
+                        RoomConnection.ForSynthesizedLoop(
+                            0,
+                            1,
+                            LevelBand.SpanningEndpoints(0, 0),
+                            direct.path)
+                    }),
+                identityRequirements).Count > 0;
+
+            var bridgeCells = new[]
+            {
+                new Vector2Int(20, 20),
+                new Vector2Int(21, 20)
+            };
+            var bridgeOwner = new OwnerKey(
+                OwnerFamily.Transition,
+                "connection-stair:fixture-bridge");
+            var bridgePrisms = new PrismLedger();
+            bridgePrisms.RegisterSpanDeck(
+                bridgeCells,
+                MajorRiseLevels,
+                bridgeOwner);
+            bool bridgeVolumeRegistered = TryRegisterPlannedBridgeOpenVolume(
+                bridgePrisms,
+                "fixture-bridge",
+                bridgeCells,
+                0,
+                MajorRiseLevels,
+                bridgeOwner,
+                out _);
+            var emptyBridgeSurfaces = new SurfaceField(
+                new Dictionary<Vector2Int, int>());
+            bool bridgeVolumeValid = bridgePrisms.TryValidateOpenVolumes(
+                emptyBridgeSurfaces,
+                out _);
+            var filledBridgeSurfaces = new SurfaceField(
+                new Dictionary<Vector2Int, int>
+                {
+                    [bridgeCells[0]] = 2
+                });
+            bool bridgeFillRejected = !bridgePrisms.TryValidateOpenVolumes(
+                filledBridgeSurfaces,
+                out string bridgeFillFailure) &&
+                bridgeFillFailure.StartsWith(
+                    "[OPEN_VOLUME_VIOLATION]",
+                    StringComparison.Ordinal);
+
+            var atriumRoom = RoomFootprint.FromRect(new RectInt(0, 0, 7, 7));
+            HashSet<Vector2Int> atriumRing = BuildPerimeterRingCells(
+                atriumRoom,
+                new[] { new Vector2Int(0, 1), new Vector2Int(0, 5) });
+            var atriumVoid = new HashSet<Vector2Int>(atriumRoom.cells);
+            atriumVoid.ExceptWith(atriumRing);
+            int atriumRimEdges = CountSharedVoidRimEdges(atriumRing, atriumVoid);
+            HashSet<Vector2Int> balcony = BuildBalconyCells(
+                atriumRoom,
+                new Vector2Int(0, 3));
+            var balconyVoid = new HashSet<Vector2Int>(atriumRoom.cells);
+            balconyVoid.ExceptWith(balcony);
+            int balconyRimEdges = CountSharedVoidRimEdges(balcony, balconyVoid);
+
+            var sharedSurfaces = new SurfaceField(
+                new Dictionary<Vector2Int, int>());
+            foreach (Vector2Int cell in atriumRoom.CellsRowMajor())
+            {
+                sharedSurfaces.AddFloorLevel(cell, 0);
+            }
+
+            foreach (Vector2Int cell in SortedCells(atriumRing))
+            {
+                sharedSurfaces.AddSurface(
+                    cell,
+                    MajorRiseLevels,
+                    SurfaceKind.Floor);
+            }
+
+            var sharedOwner = new OwnerKey(
+                OwnerFamily.Opening,
+                "fixture-atrium");
+            var apertureCandidates = new List<PlanOpening>();
+            AddGeneratedApertureCandidates(
+                "fixture-room",
+                "gallery",
+                atriumRing,
+                atriumVoid,
+                MajorRiseLevels,
+                sharedOwner,
+                apertureCandidates);
+            var returnTransitions = new List<ElevationEdgeModel.TransitionEdge>
+            {
+                new ElevationEdgeModel.TransitionEdge(
+                    new Vector2Int(0, 0),
+                    MajorRiseLevels,
+                    new Vector2Int(1, 1),
+                    0,
+                    "fixture-return-stair",
+                    EmbeddedStairPlacementClass)
+            };
+            bool openingsBuilt = TryBuildPlanOpenings(
+                Array.Empty<ExternalConnectorPromontoryResolution>(),
+                Array.Empty<RecipePlacement>(),
+                apertureCandidates,
+                sharedSurfaces,
+                returnTransitions,
+                out PlanOpening[] openings,
+                out string openingFailure);
+            bool graphBuilt = TryBuildFloorStairPortGraph(
+                sharedSurfaces,
+                returnTransitions,
+                openings,
+                out FloorStairPortGraph graph,
+                out string graphFailure);
+            string reachability = graphFailure;
+            bool fallFreeConnected = false;
+            if (graphBuilt)
+            {
+                fallFreeConnected = graph.IsFallFreeConnected(out reachability);
+            }
+
+            List<ElevationEdgeModel.OpenFloorEdge> renderedOpenEdges =
+                BuildPlannedOpenEdges(openings);
+            bool surfaceScopedAperture = openings.Length == 1 &&
+                openings[0].kind == OpeningKind.Aperture &&
+                openings[0].IsSurfaceScoped &&
+                renderedOpenEdges.Count == 1 &&
+                renderedOpenEdges[0].IsSurfaceScoped;
+
+            return string.Join("\n", new[]
+            {
+                $"level.directDoorway={directClassified}",
+                $"level.routedCorridor={routedClassified}",
+                $"identity.exactAccepted={exactIdentityAccepted}",
+                $"identity.duplicateRejected={duplicateIdentityRejected}",
+                $"identity.missingRejected={missingIdentityRejected}",
+                $"identity.inventedRejected={inventedIdentityRejected}",
+                $"vertical.fourUnitAccepted={AreStructuralConnectionLevels(0, MajorRiseLevels)}",
+                $"vertical.eightUnitAccepted={AreStructuralConnectionLevels(0, DoubleMajorRiseLevels)}",
+                $"vertical.stairClass={EmbeddedStairPlacementClass}",
+                $"vertical.stairwellClass={StairwellStairPlacementClass}",
+                $"bridge.class={ExternalSpanStairPlacementClass}",
+                $"bridge.volumeRegistered={bridgeVolumeRegistered}",
+                $"bridge.volumeValid={bridgeVolumeValid}",
+                $"bridge.fillRejected={bridgeFillRejected}",
+                $"shared.balconyRimEdges={balconyRimEdges}",
+                $"shared.atriumRimEdges={atriumRimEdges}",
+                $"shared.apertureCandidates={apertureCandidates.Count}",
+                $"shared.openingsBuilt={openingsBuilt}",
+                $"shared.openingFailure={openingFailure}",
+                $"shared.apertures={openings.Length}",
+                $"shared.surfaceScopedAperture={surfaceScopedAperture}",
+                $"navigation.graphBuilt={graphBuilt}",
+                $"navigation.directedFalls={(graphBuilt ? graph.DirectedEdgeCount : 0)}",
+                $"navigation.fallFreeConnected={fallFreeConnected}",
+                $"navigation.reachability={reachability}"
+            });
+        }
+
+        private static int CountSharedVoidRimEdges(
+            HashSet<Vector2Int> surfaceCells,
+            HashSet<Vector2Int> voidCells)
+        {
+            int count = 0;
+            foreach (Vector2Int cell in SortedCells(surfaceCells))
+            {
+                foreach (Vector2Int direction in GenericLayerDirections)
+                {
+                    count += voidCells.Contains(cell + direction) ? 1 : 0;
+                }
             }
 
             return count;

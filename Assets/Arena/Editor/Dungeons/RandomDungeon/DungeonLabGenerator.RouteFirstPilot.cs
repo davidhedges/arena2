@@ -1847,9 +1847,9 @@ namespace DungeonLab.Editor
         /// declares the shared column as part of a reserved open volume or a
         /// bridge span" — and <b>that clause is not evaluable at this site</b>.
         /// Room inflation runs three passes before `TryPlaceRouteRecipes`, so no
-        /// recipe zone exists yet to declare a volume, and aerial bridges are not
-        /// placed until the elevation stage. What IS known here is the topology's
-        /// declared storeys, which is the same pre-elevation absolute the
+        /// recipe zone exists yet to declare a volume, and planned bridge spans
+        /// are not realized until the elevation stage. What IS known here is the
+        /// topology's declared storeys, which is the same pre-elevation absolute the
         /// corridor rules use, so that is what authorizes the relaxation.
         /// </para>
         /// </remarks>

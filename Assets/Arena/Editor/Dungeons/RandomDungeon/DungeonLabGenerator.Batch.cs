@@ -907,9 +907,9 @@ namespace DungeonLab.Editor
                 AreStructuralConnectionLevels(4, 12);
             bool twoUnitConnectionRejected = !AreStructuralConnectionLevels(0, 2);
             bool localConnectionRejected = !AreStructuralConnectionLevels(1, 5);
-            bool flatStructuralBridgeAccepted = AreStructuralAerialBridgeLandingLevels(4, 4);
-            bool twoUnitBridgeRejected = !AreStructuralAerialBridgeLandingLevels(4, 6);
-            bool localBridgeRejected = !AreStructuralAerialBridgeLandingLevels(2, 2);
+            bool flatStructuralBridgeAccepted = AreStructuralFlatBridgeLandingLevels(4, 4);
+            bool twoUnitBridgeRejected = !AreStructuralFlatBridgeLandingLevels(4, 6);
+            bool localBridgeRejected = !AreStructuralFlatBridgeLandingLevels(2, 2);
 
             RoomFootprint firstRoom = RoomFootprint.FromRect(new RectInt(0, 0, 4, 4));
             RoomFootprint secondRoom = RoomFootprint.FromRect(new RectInt(6, 0, 4, 4));
@@ -4689,12 +4689,12 @@ namespace DungeonLab.Editor
 
             bool vistaUnobstructedAtLayoutHandoff = lastVistaCells.Length >=
                 (intent?.vista.minimumReservedVoidCells ?? int.MaxValue);
-            bool reservedVoidPreservedAfterTierLooping = vistaUnobstructedAtLayoutHandoff;
+            bool reservedVoidPreservedAfterPlanning = vistaUnobstructedAtLayoutHandoff;
             foreach (Vector2Int cell in lastVistaCells)
             {
                 if (layout.floorCells.Contains(cell))
                 {
-                    reservedVoidPreservedAfterTierLooping = false;
+                    reservedVoidPreservedAfterPlanning = false;
                     break;
                 }
             }
@@ -4730,8 +4730,8 @@ namespace DungeonLab.Editor
                     ["reservedVoidCellCount"] = lastVistaCells.Length,
                     ["reservedVoidCells"] = CellsToken(lastVistaCells, sort: false),
                     ["unobstructedCandidateVolume"] = vistaUnobstructedAtLayoutHandoff,
-                    ["measurementStage"] = "DungeonLayout handoff before route-constrained tier planning and loop additions",
-                    ["reservedVoidPreservedAfterTierLooping"] = reservedVoidPreservedAfterTierLooping
+                    ["measurementStage"] = "final planned DungeonLayout handoff",
+                    ["reservedVoidPreservedAfterPlanning"] = reservedVoidPreservedAfterPlanning
                 }
             };
         }
@@ -5852,8 +5852,8 @@ namespace DungeonLab.Editor
                 ["voidExtent"] = new JObject
                 {
                     ["reservedVistaCellCount"] = vista.Value<int?>("reservedVoidCellCount") ?? 0,
-                    ["reservedVistaPreservedAfterTierLooping"] =
-                        vista.Value<bool?>("reservedVoidPreservedAfterTierLooping") ?? false,
+                    ["reservedVistaPreservedAfterPlanning"] =
+                        vista.Value<bool?>("reservedVoidPreservedAfterPlanning") ?? false,
                     ["atriumCenterVoidCellCount"] = isAtrium
                         ? new JValue(CountLargestEnclosedVoidCells(layout.floorCells))
                         : JValue.CreateNull(),
@@ -6290,6 +6290,7 @@ namespace DungeonLab.Editor
             if (!TryBuildFloorStairPortGraph(
                     coreSurfaces,
                     plan.transitions,
+                    plan.openings,
                     out FloorStairPortGraph corePortGraph,
                     out string graphError))
             {
@@ -6817,7 +6818,7 @@ namespace DungeonLab.Editor
                 JObject voidExtent = measurements["voidExtent"] as JObject ?? new JObject();
                 accumulator.reservedVistaCellsPerSeed.Add(
                     voidExtent.Value<int?>("reservedVistaCellCount") ?? 0);
-                if (voidExtent.Value<bool?>("reservedVistaPreservedAfterTierLooping") == true)
+                if (voidExtent.Value<bool?>("reservedVistaPreservedAfterPlanning") == true)
                 {
                     accumulator.reservedVistaPreservedSeeds++;
                 }

@@ -11,9 +11,9 @@ using Unity.Plastic.Newtonsoft.Json.Linq;
 
 namespace DungeonLab.Editor
 {
-    // Focused optional-crossing evidence only. Production generation continues
-    // to use AddAerialBridges; this fixture supplies deterministic eligible
-    // geometry to that existing method and inspects its normal renderer/export.
+    // Focused optional-crossing evidence only. This fixture publishes one
+    // explicit fixed bridge into the existing deck renderer/export path; it
+    // does not scan room pairs or participate in production topology.
     internal sealed partial class DungeonLabGenerator
     {
         private sealed class StackedCrossingFixture
@@ -466,10 +466,6 @@ namespace DungeonLab.Editor
             }
 
             // ---- transitions: the bridge, then the return stair -------------
-            var layout = new DungeonLayout(
-                floorCells,
-                new List<RoomFootprint> { west, east },
-                new List<RoomConnection>());
             var transitions = new List<ElevationEdgeModel.TransitionEdge>();
             var prisms = new PrismLedger();
             // The STACKED field, not the bare heightfield it is backed by. The
@@ -477,15 +473,10 @@ namespace DungeonLab.Editor
             // defect C2b-1 closes: the gallery would have been invisible to the
             // deck's clearance test. It does not sit over the bridge line, so the
             // bridge still forms — but it is now checked against, not ignored.
-            AddAerialBridges(
-                layout,
+            AddExplicitFixtureBridge(
                 surfaces,
-                new System.Random(7),
                 transitions,
-                new HashSet<string>(),
-                prisms,
-                new List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)>(),
-                new HashSet<Vector2Int>());
+                prisms);
             ElevationEdgeModel.TransitionEdge bridge = transitions.Single(transition =>
                 string.Equals(
                     transition.placementClass,
@@ -1013,23 +1004,14 @@ namespace DungeonLab.Editor
                 levels[cell] = 0;
             }
 
-            var layout = new DungeonLayout(
-                floorCells,
-                new List<RoomFootprint> { west, east },
-                new List<RoomConnection>());
             var transitions = new List<ElevationEdgeModel.TransitionEdge>();
             var prisms = new PrismLedger();
             // Single-layer by construction here (Phase B's crossing fixture), so
             // wrapping the heightfield is exactly what this pass saw before.
-            AddAerialBridges(
-                layout,
+            AddExplicitFixtureBridge(
                 new SurfaceField(levels),
-                new System.Random(7),
                 transitions,
-                new HashSet<string>(),
-                prisms,
-                new List<(string gapId, ElevationEdgeModel.SynthesizedStairSetPiece setPiece)>(),
-                new HashSet<Vector2Int>());
+                prisms);
             ElevationEdgeModel.TransitionEdge bridge = transitions.Single(transition =>
                 string.Equals(
                     transition.placementClass,

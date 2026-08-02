@@ -140,6 +140,40 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["validator.slotlessLayerAccepted"], Is.EqualTo("True"));
         }
 
+        [Test]
+        public void Slice5_PlannedConnectionsAndSharedSpacesResolveOnce()
+        {
+            Dictionary<string, string> snapshot =
+                InvokeSnapshot("BuildSlice5ConnectionRealizationSnapshot");
+
+            Assert.That(snapshot["level.directDoorway"], Is.EqualTo("True"));
+            Assert.That(snapshot["level.routedCorridor"], Is.EqualTo("True"));
+            Assert.That(snapshot["identity.exactAccepted"], Is.EqualTo("True"));
+            Assert.That(snapshot["identity.duplicateRejected"], Is.EqualTo("True"));
+            Assert.That(snapshot["identity.missingRejected"], Is.EqualTo("True"));
+            Assert.That(snapshot["identity.inventedRejected"], Is.EqualTo("True"));
+            Assert.That(snapshot["vertical.fourUnitAccepted"], Is.EqualTo("True"));
+            Assert.That(snapshot["vertical.eightUnitAccepted"], Is.EqualTo("True"));
+            Assert.That(snapshot["vertical.stairClass"], Is.EqualTo("embedded"));
+            Assert.That(snapshot["vertical.stairwellClass"], Is.EqualTo("stairwell"));
+
+            Assert.That(snapshot["bridge.class"], Is.EqualTo("externalSpan"));
+            Assert.That(snapshot["bridge.volumeRegistered"], Is.EqualTo("True"));
+            Assert.That(snapshot["bridge.volumeValid"], Is.EqualTo("True"));
+            Assert.That(snapshot["bridge.fillRejected"], Is.EqualTo("True"));
+
+            Assert.That(int.Parse(snapshot["shared.balconyRimEdges"]), Is.GreaterThan(0));
+            Assert.That(int.Parse(snapshot["shared.atriumRimEdges"]), Is.GreaterThan(1));
+            Assert.That(int.Parse(snapshot["shared.apertureCandidates"]), Is.GreaterThan(1));
+            Assert.That(snapshot["shared.openingsBuilt"], Is.EqualTo("True"), snapshot["shared.openingFailure"]);
+            Assert.That(snapshot["shared.apertures"], Is.EqualTo("1"));
+            Assert.That(snapshot["shared.surfaceScopedAperture"], Is.EqualTo("True"));
+
+            Assert.That(snapshot["navigation.graphBuilt"], Is.EqualTo("True"), snapshot["navigation.reachability"]);
+            Assert.That(snapshot["navigation.directedFalls"], Is.EqualTo("1"));
+            Assert.That(snapshot["navigation.fallFreeConnected"], Is.EqualTo("True"), snapshot["navigation.reachability"]);
+        }
+
         private static Dictionary<string, string> InvokeSnapshot(string methodName)
         {
             MethodInfo method = GeneratorType.GetMethod(
