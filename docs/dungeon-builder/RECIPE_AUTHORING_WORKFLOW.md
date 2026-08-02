@@ -1,6 +1,6 @@
 # Dungeon recipe authoring workflow
 
-Status: current through procedural 3-D topology Slice 4
+Status: current through procedural 3-D topology Slice 6
 Last updated: 2026-08-02
 
 This is the operational checklist for creating or changing a room recipe. Use
@@ -13,8 +13,8 @@ schema-v1 field and exact error checklist, use
 [`ROOM_AUTHORING_GUIDE_CURRENT.md`](ROOM_AUTHORING_GUIDE_CURRENT.md).
 
 The current schema has only `Connector` and `Episode` recipe kinds. Validation
-and deterministic previews are authoring tools. Ordinary generation admits a
-recipe only when all three conditions hold:
+and deterministic previews are authoring tools. Ordinary generation considers
+a recipe for an authored opportunity only when all three conditions hold:
 
 ```text
 explicit catalog membership
@@ -23,7 +23,9 @@ AND current contract validation passes
 ```
 
 New recipe assets start disabled. Enabling a recipe is a direct owner action.
-There is no stored approval token or formal recipe lifecycle.
+There is no stored approval token or formal recipe lifecycle. Compatible
+opportunities are selected independently and deterministically; an opportunity
+with no selected or compatible recipe remains generated architecture.
 
 ## Returning after a break
 
@@ -60,11 +62,11 @@ Write a one-page brief
 Generated recipe opportunities discover compatible enabled catalog members by
 role, beat, route-edge/port, orientation, elevation, transition, landing,
 headroom, and current-validation contracts. Selection is deterministic and
+first decides whether each opportunity stays generic; an authored decision is
 uniform within the compatible set. In authoring-preview scope, a disabled
 previously unknown recipe is forced into one compatible generated opportunity
-without a production C# binding. The scope temporarily replaces the production
-candidate that ordinary selection would use and is always disposed before
-ordinary generation resumes.
+without a production C# binding. The scope temporarily replaces a compatible
+production candidate and is always disposed before ordinary generation resumes.
 
 Production families may publish zero through three opportunities. Opportunity
 IDs are generated diagnostic identities; recipe compatibility is determined by
@@ -282,11 +284,11 @@ declared level.
 
 ### Layer E — Full-dungeon integration
 
-The authoring-preview seam discovers a compatible existing required slot,
+The authoring-preview seam discovers a compatible generated opportunity,
 forces the current recipe there for the preview scope, and runs the existing
 placement, `DungeonLayout`, `TieredLevelPlan`, renderer, abyss, and collision
 evidence. The recipe may remain disabled and absent from the explicit
-production catalog. A recipe with no compatible required slot fails explicitly.
+production catalog. A recipe with no compatible opportunity fails explicitly.
 
 ## 8. Build deterministic previews
 

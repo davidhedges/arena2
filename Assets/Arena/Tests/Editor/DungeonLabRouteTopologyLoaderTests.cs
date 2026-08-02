@@ -171,6 +171,13 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["opportunities.minimumObserved"], Is.EqualTo("0"));
             Assert.That(snapshot["opportunities.maximumObserved"], Is.EqualTo("3"));
             Assert.That(snapshot["opportunities.contractsValid"], Is.EqualTo("True"));
+            Assert.That(snapshot["selectionDecision.repeatable"], Is.EqualTo("True"));
+            Assert.That(
+                int.Parse(snapshot["selectionDecision.allGenericOpportunitySeeds"]),
+                Is.GreaterThan(0));
+            Assert.That(
+                int.Parse(snapshot["selectionDecision.authoredOpportunitySeeds"]),
+                Is.GreaterThan(0));
             Assert.That(snapshot["surfaces.allSamplesConnected"], Is.EqualTo("True"));
             Assert.That(snapshot["loops.sawOne"], Is.EqualTo("True"));
             Assert.That(snapshot["loops.sawTwo"], Is.EqualTo("True"));

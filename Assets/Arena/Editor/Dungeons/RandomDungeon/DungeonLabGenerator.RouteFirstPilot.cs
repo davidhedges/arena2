@@ -158,7 +158,7 @@ namespace DungeonLab.Editor
             {
                 if (recipeSlots.Length != 0 || !string.IsNullOrEmpty(catalogDigest))
                 {
-                    throw new InvalidOperationException("route intent recipe slots were already resolved");
+                    throw new InvalidOperationException("route intent recipe opportunities were already resolved");
                 }
 
                 recipeSlots = resolvedRecipeSlots ?? Array.Empty<RecipeSlotIntent>();
@@ -481,7 +481,7 @@ namespace DungeonLab.Editor
                 dungeonSeed,
                 Array.Empty<RecipeSlotIntent>(),
                 string.Empty);
-            if (!TryResolveRequiredRecipeSlots(
+            if (!TryResolveRecipeOpportunities(
                     recipeCatalog,
                     intent,
                     out RecipeSlotIntent[] recipeSlots,
@@ -1137,7 +1137,7 @@ namespace DungeonLab.Editor
 
             DungeonGenerationSettings activeSettings = CurrentGenerationSettings.Validated();
             var ids = new HashSet<string>(StringComparer.Ordinal);
-            int recipeSlotCount = 0;
+            int recipeOpportunityCount = 0;
             foreach (RouteNodeIntent node in intent.nodes)
             {
                 if (string.IsNullOrEmpty(node.id) || !ids.Add(node.id))
@@ -1174,8 +1174,7 @@ namespace DungeonLab.Editor
                 // A role with no size class would silently render as a hall.
                 // Catching it here means a new role name is an authoring error
                 // with a node in the message, not a shape nobody ordered.
-                if (!node.HasRecipeSlot &&
-                    !activeSettings.TryResolveRoomSizeClass(node.role, out _))
+                if (!activeSettings.TryResolveRoomSizeClass(node.role, out _))
                 {
                     rejectionReason =
                         $"route node '{node.id}' declares role '{node.role}', which profile " +
@@ -1185,16 +1184,16 @@ namespace DungeonLab.Editor
 
                 if (node.HasRecipeSlot)
                 {
-                    recipeSlotCount++;
+                    recipeOpportunityCount++;
                 }
             }
 
             if (intent.recipeSlots == null ||
-                intent.recipeSlots.Length != recipeSlotCount ||
+                intent.recipeSlots.Length > recipeOpportunityCount ||
                 string.IsNullOrEmpty(intent.catalogDigest))
             {
                 rejectionReason =
-                    "route intent recipe resolutions did not match its generated opportunities and catalog digest";
+                    "route intent selected more recipes than its generated opportunities or lacked a catalog digest";
                 return false;
             }
 
@@ -1433,7 +1432,7 @@ namespace DungeonLab.Editor
                         rejectionReason =
                             $"{RouteRhythmPolicyVersion} requires at least " +
                             $"{MinimumMainRouteNodesBetweenRecipeSlots} intervening main-route nodes " +
-                            "between recipe-bearing nodes";
+                            "between recipe-opportunity nodes";
                         return false;
                     }
 
@@ -1699,7 +1698,7 @@ namespace DungeonLab.Editor
             for (int nodeIndex = 0; nodeIndex < intent.nodes.Length; nodeIndex++)
             {
                 RouteNodeIntent node = intent.nodes[nodeIndex];
-                if (!node.HasRecipeSlot)
+                if (!TryGetRecipeSlot(intent.recipeSlots, nodeIndex, out _))
                 {
                     continue;
                 }

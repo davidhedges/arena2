@@ -257,8 +257,58 @@ namespace Arena.Tests.Editor
                 Is.EqualTo("connector_corner_return_01")
                     .Or.EqualTo("connector_generic_room_01"));
 
-            Assert.That(snapshot["noCandidate.rejected"], Is.EqualTo("True"));
-            Assert.That(snapshot["noCandidate.reason"], Does.Contain("had no compatible active recipe"));
+            Assert.That(snapshot["noCandidate.resolved"], Is.EqualTo("True"));
+            Assert.That(snapshot["noCandidate.selected"], Is.EqualTo("1"));
+            Assert.That(snapshot["noCandidate.reason"], Is.Empty);
+        }
+
+        [Test]
+        public void GeneratedOpportunities_FallBackToACompleteGenericDungeon()
+        {
+            Dictionary<string, string> snapshot =
+                Snapshot("BuildRecipeOpportunityFallbackSnapshot");
+
+            Assert.That(int.Parse(snapshot["generic.opportunities"]), Is.GreaterThan(0));
+            Assert.That(snapshot["generic.selected"], Is.EqualTo("0"));
+            Assert.That(snapshot["generic.repeatSelected"], Is.EqualTo("0"));
+            Assert.That(int.Parse(snapshot["generic.allCompatibleSelected"]), Is.GreaterThan(0));
+            Assert.That(snapshot["generic.accepted"], Is.EqualTo("true"));
+            Assert.That(snapshot["generic.validation"], Is.EqualTo("true"));
+            Assert.That(snapshot["generic.recipes"], Is.EqualTo("true"));
+            Assert.That(snapshot["generic.richLayering"], Is.EqualTo("true"));
+            Assert.That(snapshot["generic.verticalTraversal"], Is.EqualTo("true"));
+            Assert.That(snapshot["generic.bottomToTopTraversal"], Is.EqualTo("true"));
+            Assert.That(int.Parse(snapshot["generic.stackedSurfaces"]), Is.GreaterThan(0));
+            Assert.That(snapshot["generic.recipeResolutionHash"], Has.Length.EqualTo(64));
+            Assert.That(snapshot["generic.canonicalHash"], Has.Length.EqualTo(64));
+            Assert.That(snapshot["generic.renderer"], Is.EqualTo("true"));
+            Assert.That(snapshot["generic.boundary"], Is.EqualTo("true"));
+            Assert.That(snapshot["generic.collision"], Is.EqualTo("true"));
+            Assert.That(snapshot["emptyCatalog.resolved"], Is.EqualTo("True"));
+            Assert.That(snapshot["emptyCatalog.selected"], Is.EqualTo("0"));
+            Assert.That(snapshot["emptyCatalog.reason"], Is.Empty);
+            Assert.That(snapshot["emptyCatalog.intentValid"], Is.EqualTo("True"));
+            Assert.That(snapshot["emptyCatalog.intentReason"], Is.Empty);
+        }
+
+        [Test]
+        public void EmptyRecipeCollections_AreCompletePipelineResults()
+        {
+            Dictionary<string, string> snapshot =
+                Snapshot("BuildEmptyRecipePipelineSnapshot");
+
+            Assert.That(int.Parse(snapshot["opportunities.count"]), Is.GreaterThan(0));
+            Assert.That(snapshot["opportunities.resolved"], Is.EqualTo("True"));
+            Assert.That(snapshot["opportunities.selected"], Is.EqualTo("0"));
+            Assert.That(snapshot["opportunities.reason"], Is.Empty);
+            Assert.That(snapshot["intent.valid"], Is.EqualTo("True"));
+            Assert.That(snapshot["intent.reason"], Is.Empty);
+            Assert.That(snapshot["empty.realized"], Is.EqualTo("True"));
+            Assert.That(snapshot["empty.realizationReason"], Is.Empty);
+            Assert.That(snapshot["empty.baseLevels"], Is.EqualTo("0"));
+            Assert.That(snapshot["empty.validated"], Is.EqualTo("True"));
+            Assert.That(snapshot["empty.validationReason"], Is.Empty);
+            Assert.That(snapshot["empty.resolutions"], Is.EqualTo("0"));
         }
 
         [Test]
@@ -325,7 +375,7 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["incompatible.passed"], Is.EqualTo("False"));
             Assert.That(
                 snapshot["incompatible.message"],
-                Does.Contain("had no compatible required route slot"));
+                Does.Contain("had no compatible generated opportunity"));
             Assert.That(snapshot["ordinary.catalogValid"], Is.EqualTo("True"));
             Assert.That(snapshot["ordinary.activeCount"], Is.EqualTo("10"));
             Assert.That(snapshot["ordinary.catalogDigestPreserved"], Is.EqualTo("True"));
@@ -410,15 +460,13 @@ namespace Arena.Tests.Editor
             Assert.That(
                 snapshot["withoutVestibule.return"],
                 Is.EqualTo("connector_corner_return_01"));
-            Assert.That(snapshot["withoutBoth.resolved"], Is.EqualTo("False"));
+            Assert.That(snapshot["withoutBoth.resolved"], Is.EqualTo("True"));
             Assert.That(snapshot["withoutBoth.compression"], Is.Empty);
-            Assert.That(
-                snapshot["withoutBoth.reason"],
-                Does.Contain("had no compatible active recipe"));
+            Assert.That(snapshot["withoutBoth.reason"], Is.Empty);
 
             Assert.That(
                 GeneratorType.GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
-                    .Count(method => method.Name == "TryResolveRequiredRecipeSlots"),
+                    .Count(method => method.Name == "TryResolveRecipeOpportunities"),
                 Is.EqualTo(1));
             Assert.That(
                 GeneratorType.GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
@@ -461,7 +509,7 @@ namespace Arena.Tests.Editor
                     $"{slotId} did not retain rejection evidence for {expectedRejection}");
             }
             Assert.That(snapshot[$"{prefix}.selected"], Is.EqualTo(selected));
-            Assert.That(snapshot[$"{prefix}.stream"], Is.EqualTo("recipe-selection-v1"));
+            Assert.That(snapshot[$"{prefix}.stream"], Is.EqualTo("recipe-selection-v2"));
         }
 
         private static Dictionary<string, string> Snapshot(string methodName)

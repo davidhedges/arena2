@@ -6,9 +6,11 @@ Unity version: `6000.4.0f1`
 
 Last verified: 2026-07-24
 
-> Procedural-topology note (2026-08-02): production no longer contains three
+> Procedural-topology Slice 6 note (2026-08-02): production no longer contains three
 > fixed required slots. Route families generate zero through three authored
-> content opportunities per seed. The schema-v1 field instructions below remain
+> content opportunities per seed and deterministically leave any of them
+> generic when no recipe is selected or compatible. The schema-v1 field
+> instructions below remain
 > useful, but the fixed-slot tables and pinned slot IDs describe deprecated
 > evidence graphs. Current compatibility is by generated node role/beat,
 > degree, ports or sockets, orientation, and layer mapping; see
@@ -739,9 +741,10 @@ Every port has a stable unique Id. Current rules are:
   sockets covering north, east, south, and west;
 - all four socket cells must belong to one connected room footprint.
 
-Exact named candidates in the three implemented fixed slots require every port
-to be mandatory and bound by the slot. In practice those recipes have exactly
-`entry` and `exit`. The generic-room prototype's explicit
+Exact named candidates require every port to be mandatory and bound by the
+generated degree-two opportunity. The deprecated regression slots use the same
+contract. In practice those recipes have exactly `entry` and `exit`. The
+generic-room prototype's explicit
 `IncidentCardinalSockets` mode is the only current exception: its active subset
 is bound by direction after placement, and inactive sockets create no corridor
 opening.
@@ -866,7 +869,7 @@ before the deterministic index is chosen.
 | `ORIENTATION_UNSUPPORTED` | Legal turns is empty or the slot cannot resolve the required orientation |
 | `TRANSITION_CONTEXT_INCOMPATIBLE` | Transition is not the supported rise-1, lane-1, reserved-landing form |
 | `CONTRACT_INVALID` | One of the schema/structure/variation/neighbor checks failed |
-| `recipe ... had no compatible required route slot` | Roles, beats, ports, orientation, or transition contract does not match any of the three implemented slots |
+| `recipe ... had no compatible generated opportunity` | Preview recipe roles, beats, ports, orientation, layers, or transition contract do not match any generated opportunity |
 | Catalog `duplicate recipe ID` | Two catalog elements have the same Recipe Id, even if one is disabled |
 | Catalog `catalog contained a null asset` | A Recipes element is `None` |
 | Catalog `enabled recipe ... failed current validation` | Disable or fix the named enabled recipe |

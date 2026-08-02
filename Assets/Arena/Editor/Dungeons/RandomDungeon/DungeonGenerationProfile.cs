@@ -141,8 +141,10 @@ namespace DungeonLab.Editor
             value.horizontalPitchCells = Mathf.Max(1, value.horizontalPitchCells);
             value.verticalPitchCells = Mathf.Max(1, value.verticalPitchCells);
             value.latticeSlackMaxCells = Mathf.Max(0, value.latticeSlackMaxCells);
-            // Every route pattern carries the reviewed landmark recipe, whose
-            // authored footprint reaches four cells from its logical anchor.
+            // Any generated opportunity may select the reviewed landmark
+            // recipe, whose authored footprint reaches four cells from its
+            // logical anchor. The envelope must fit it even when this seed
+            // leaves the same opportunity generic.
             value.roomEnvelopeRadiusCells = Mathf.Max(4, value.roomEnvelopeRadiusCells);
             value.neighborBiasStrengthCells = Mathf.Max(0, value.neighborBiasStrengthCells);
             value.tierSeamAdjacency = value.tierSeamAdjacency.Validated();
@@ -397,7 +399,7 @@ namespace DungeonLab.Editor
         /// and not a special case in the code.
         /// <para>
         /// <c>roomEnvelopeRadiusCells</c> deliberately does NOT move. It is
-        /// floored at 4 by the reviewed landmark recipe's authored footprint, and
+        /// floored at 4 by the selectable landmark recipe's authored footprint, and
         /// with the pitch shrinking underneath it the 9x9 envelope stops binding
         /// on its own — so making it density-driven would only inflate the fill
         /// denominator, which is the opposite of what §3 wanted from it.

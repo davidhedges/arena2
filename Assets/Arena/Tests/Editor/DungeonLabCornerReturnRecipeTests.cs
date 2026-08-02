@@ -87,7 +87,9 @@ namespace Arena.Tests.Editor
             Assert.That(values[$"{prefix}.accepted"], Is.EqualTo("True"));
             Assert.That(values[$"{prefix}.validation"], Is.EqualTo("True"));
             Assert.That(values[$"{prefix}.plannerVersion"], Is.EqualTo(plannerVersion));
-            Assert.That(values[$"{prefix}.recipeCount"], Is.EqualTo("3"));
+            Assert.That(
+                int.Parse(values[$"{prefix}.recipeCount"]),
+                Is.InRange(1, 3));
             Assert.That(values[$"{prefix}.slotNode"], Is.EqualTo("12"));
             Assert.That(values[$"{prefix}.nodeRole"], Is.EqualTo("connector"));
             Assert.That(values[$"{prefix}.nodeBeat"], Is.EqualTo("return"));

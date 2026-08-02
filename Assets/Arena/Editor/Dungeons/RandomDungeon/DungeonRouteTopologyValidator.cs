@@ -776,7 +776,7 @@ namespace DungeonLab.Editor
                     node.mainRouteOrder - previousSlotOrder - 1 < MinimumMainRouteNodesBetweenRecipeSlots)
                 {
                     violations.Add(
-                        $"recipe-bearing node '{node.key}' is only " +
+                        $"recipe-opportunity node '{node.key}' is only " +
                         $"{node.mainRouteOrder - previousSlotOrder - 1} main-route nodes after the " +
                         $"previous one; the minimum is {MinimumMainRouteNodesBetweenRecipeSlots}");
                 }
@@ -1221,6 +1221,7 @@ namespace DungeonLab.Editor
             AppendRouteTopologyRoomSizeRules(
                 topology,
                 densityLabel,
+                settings,
                 spatial,
                 columnOffsets,
                 rowOffsets,
@@ -1282,7 +1283,7 @@ namespace DungeonLab.Editor
             var reported = new HashSet<string>(StringComparer.Ordinal);
             foreach (RouteTopologyNode node in topology.nodes)
             {
-                if (!string.IsNullOrEmpty(node.recipeSlotId) || !reported.Add(node.role))
+                if (!reported.Add(node.role))
                 {
                     continue;
                 }
@@ -1299,6 +1300,7 @@ namespace DungeonLab.Editor
         private static void AppendRouteTopologyRoomSizeRules(
             DungeonRouteTopology topology,
             string densityLabel,
+            DungeonGenerationSettings settings,
             DungeonPatternSpatialSettings spatial,
             int[] columnOffsets,
             int[] rowOffsets,
@@ -1310,7 +1312,8 @@ namespace DungeonLab.Editor
             var reported = new HashSet<string>(StringComparer.Ordinal);
             foreach (RouteTopologyNode node in topology.nodes)
             {
-                if (!string.IsNullOrEmpty(node.recipeSlotId) || !reported.Add(node.role))
+                if (!reported.Add(node.role) ||
+                    !settings.TryResolveRoomSizeClass(node.role, out _))
                 {
                     continue;
                 }
@@ -1435,31 +1438,39 @@ namespace DungeonLab.Editor
             DungeonPatternSpatialSettings spatial,
             int laneCells)
         {
-            int reach = RouteTopologyWorstCaseHalfExtent(topology, node, spatial);
-            if (!string.IsNullOrEmpty(topology.nodes[node].recipeSlotId))
+            RouteTopologyNode declared = topology.nodes[node];
+            int genericReach = RouteTopologyWorstCaseGenericReach(
+                topology,
+                node,
+                declared,
+                spatial);
+            int capped = MaxRoomExtentForTransition(laneCells, topology.vistaMinimumVoidCells);
+            int cappedGenericReach = Mathf.Min(genericReach, capped / 2);
+            if (string.IsNullOrEmpty(declared.recipeSlotId))
             {
-                return reach;
+                return cappedGenericReach;
             }
 
-            int capped = MaxRoomExtentForTransition(laneCells, topology.vistaMinimumVoidCells);
-            return Mathf.Min(reach, capped / 2);
+            int recipeReach = RouteTopologyWorstCaseRecipeReach(
+                topology,
+                node,
+                declared,
+                spatial,
+                out bool authoredReachApplies);
+            return authoredReachApplies
+                ? Mathf.Max(cappedGenericReach, recipeReach)
+                : cappedGenericReach;
         }
 
-        // The largest number of cells a room at this node can put between its
-        // centre and the vista lane, taken over every orientation. Recipe rooms
-        // use their authored zones; generic rooms use the profile's role range,
-        // narrowed by the planned-overlook force-shrink.
-        private static int RouteTopologyWorstCaseHalfExtent(
+        // The generic half of an opportunity's worst case. An opportunity may
+        // be left unselected, so this path applies to every role, including one
+        // that also has compatible authored candidates.
+        private static int RouteTopologyWorstCaseGenericReach(
             DungeonRouteTopology topology,
             int node,
+            RouteTopologyNode declared,
             DungeonPatternSpatialSettings spatial)
         {
-            RouteTopologyNode declared = topology.nodes[node];
-            if (!string.IsNullOrEmpty(declared.recipeSlotId))
-            {
-                return RouteTopologyWorstCaseRecipeReach(topology, node, declared, spatial);
-            }
-
             int width;
             int depth;
             if (RouteTopologyHasOverlookAppendage(topology, node))
@@ -1484,8 +1495,10 @@ namespace DungeonLab.Editor
             DungeonRouteTopology topology,
             int node,
             RouteTopologyNode declared,
-            DungeonPatternSpatialSettings spatial)
+            DungeonPatternSpatialSettings spatial,
+            out bool authoredReachApplies)
         {
+            authoredReachApplies = false;
             // A slot oriented off the vista axis puts its recipe's PRIMARY axis
             // along the lane, so only the primary extent faces the vista. A
             // route-forward slot's axis follows its exit edge, which may be
@@ -1502,45 +1515,49 @@ namespace DungeonLab.Editor
 
             int reach = 0;
             bool sawCandidate = false;
-            if (DungeonRecipeCatalogService.TryLoadActiveCatalog(
+            if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
                     out ActiveDungeonRecipeCatalog catalog,
                     out _))
             {
-                foreach (DungeonRecipeAsset candidate in catalog.recipes)
+                // Without a readable catalog, retain the conservative envelope
+                // cap because an authored candidate cannot be ruled out.
+                authoredReachApplies = true;
+                return spatial.roomEnvelopeRadiusCells;
+            }
+
+            foreach (DungeonRecipeAsset candidate in catalog.recipes)
+            {
+                if (candidate == null ||
+                    Array.IndexOf(candidate.eligibleRoles, declared.role) < 0 ||
+                    Array.IndexOf(candidate.eligibleBeats, declared.beat) < 0)
                 {
-                    if (candidate == null ||
-                        Array.IndexOf(candidate.eligibleRoles, declared.role) < 0 ||
-                        Array.IndexOf(candidate.eligibleBeats, declared.beat) < 0)
+                    continue;
+                }
+
+                sawCandidate = true;
+                foreach (DungeonRecipeZone zone in candidate.zones ?? Array.Empty<DungeonRecipeZone>())
+                {
+                    if (zone == null ||
+                        zone.kind != DungeonRecipeZoneKind.Walkable &&
+                        zone.kind != DungeonRecipeZoneKind.Elevated)
                     {
                         continue;
                     }
 
-                    sawCandidate = true;
-                    foreach (DungeonRecipeZone zone in candidate.zones ?? Array.Empty<DungeonRecipeZone>())
+                    reach = Mathf.Max(reach, Mathf.Abs(zone.offset.x));
+                    reach = Mathf.Max(reach, Mathf.Abs(zone.offset.x + zone.size.x - 1));
+                    if (primaryAxisOnly)
                     {
-                        if (zone == null ||
-                            zone.kind != DungeonRecipeZoneKind.Walkable &&
-                            zone.kind != DungeonRecipeZoneKind.Elevated)
-                        {
-                            continue;
-                        }
-
-                        reach = Mathf.Max(reach, Mathf.Abs(zone.offset.x));
-                        reach = Mathf.Max(reach, Mathf.Abs(zone.offset.x + zone.size.x - 1));
-                        if (primaryAxisOnly)
-                        {
-                            continue;
-                        }
-
-                        reach = Mathf.Max(reach, Mathf.Abs(zone.offset.y));
-                        reach = Mathf.Max(reach, Mathf.Abs(zone.offset.y + zone.size.y - 1));
+                        continue;
                     }
+
+                    reach = Mathf.Max(reach, Mathf.Abs(zone.offset.y));
+                    reach = Mathf.Max(reach, Mathf.Abs(zone.offset.y + zone.size.y - 1));
                 }
             }
 
-            // No readable catalog, or no eligible recipe yet: fall back to the
-            // hard cap every recipe footprint has to fit inside.
-            return sawCandidate ? reach : spatial.roomEnvelopeRadiusCells;
+            authoredReachApplies = sawCandidate;
+            return reach;
         }
 
         // BuildPlannedOverlooks accepts only non-traversal pairs whose rise is a

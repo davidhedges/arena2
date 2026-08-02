@@ -847,6 +847,9 @@ namespace DungeonLab.Editor
             bool sawTwoLoops = false;
             bool allGeneratedSurfaceGraphsConnected = true;
             bool allOpportunityContractsValid = true;
+            bool allOpportunityDecisionsRepeatable = true;
+            int allGenericOpportunitySeeds = 0;
+            int authoredOpportunitySeeds = 0;
             bool allStaticTopologyRulesPass = true;
             bool allSearchesBounded = true;
             int maximumSearchExpansions = 0;
@@ -886,11 +889,28 @@ namespace DungeonLab.Editor
                     allGeneratedSurfaceGraphsConnected &= ProceduralSurfaceGraphConnected(composed);
                     List<int>[] adjacency = composed.BuildAdjacency();
                     var semanticContracts = new HashSet<string>(StringComparer.Ordinal);
+                    int authoredDecisionCount = 0;
                     foreach (RouteTopologySlot slot in composed.slots)
                     {
                         RouteTopologyNode node = composed.nodes[slot.node];
                         allOpportunityContractsValid &= adjacency[slot.node].Count == 2 &&
                             semanticContracts.Add($"{node.role}:{node.beat}");
+                        bool firstDecision = ShouldSelectRecipeOpportunity(
+                            seed + sample,
+                            composed.id,
+                            node.id);
+                        bool secondDecision = ShouldSelectRecipeOpportunity(
+                            seed + sample,
+                            composed.id,
+                            node.id);
+                        allOpportunityDecisionsRepeatable &= firstDecision == secondDecision;
+                        authoredDecisionCount += firstDecision ? 1 : 0;
+                    }
+
+                    if (composed.slots.Length > 0)
+                    {
+                        allGenericOpportunitySeeds += authoredDecisionCount == 0 ? 1 : 0;
+                        authoredOpportunitySeeds += authoredDecisionCount > 0 ? 1 : 0;
                     }
 
                     var violations = new List<string>();
@@ -970,6 +990,9 @@ namespace DungeonLab.Editor
                 $"opportunities.minimumObserved={minimumOpportunities}",
                 $"opportunities.maximumObserved={maximumOpportunities}",
                 $"opportunities.contractsValid={allOpportunityContractsValid}",
+                $"selectionDecision.repeatable={allOpportunityDecisionsRepeatable}",
+                $"selectionDecision.allGenericOpportunitySeeds={allGenericOpportunitySeeds}",
+                $"selectionDecision.authoredOpportunitySeeds={authoredOpportunitySeeds}",
                 $"search.maximumObserved={maximumSearchExpansions}",
                 $"surfaces.allSamplesConnected={allGeneratedSurfaceGraphsConnected}",
                 $"loops.sawOne={sawOneLoop}",

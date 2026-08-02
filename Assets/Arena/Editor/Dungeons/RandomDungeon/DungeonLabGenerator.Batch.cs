@@ -18,7 +18,7 @@ namespace DungeonLab.Editor
     internal sealed partial class DungeonLabGenerator
     {
         private const string BatchReportDirectory = "DungeonLabReports";
-        private const string DungeonPlanSummaryVersion = "dungeon-plan-v11";
+        private const string DungeonPlanSummaryVersion = "dungeon-plan-v12";
         private const string ThroneRecipeFixtureId = "episode_throne_twin_stairs_01";
         private const string VestibuleRecipeFixtureId = "connector_flexible_vestibule_01";
         private const string CornerReturnRecipeFixtureId = "connector_corner_return_01";
@@ -506,7 +506,7 @@ namespace DungeonLab.Editor
             int hardValidCount = 0;
             int routeRequirementsValidCount = 0;
             int finalVistaValidCount = 0;
-            int recipeSetValidCount = 0;
+            int recipeWorkflowValidCount = 0;
             int completedSeedCount = 0;
 
             try
@@ -582,10 +582,9 @@ namespace DungeonLab.Editor
                         finalVistaValidCount++;
                     }
 
-                    if (seedReport["validation"]?["recipes"]?.Value<bool?>("passed") == true &&
-                        (seedReport["recipeResolutions"] as JArray)?.Count == 3)
+                    if (seedReport["validation"]?["recipes"]?.Value<bool?>("passed") == true)
                     {
-                        recipeSetValidCount++;
+                        recipeWorkflowValidCount++;
                     }
 
                     JToken correlationToken = planSummary["depthLevelCorrelation"];
@@ -637,7 +636,7 @@ namespace DungeonLab.Editor
                 "Dungeon Lab BATCH_VALIDATION " +
                 $"range={firstSeed}..{firstSeed + completedSeedCount - 1}; seeds={completedSeedCount}; " +
                 $"accepted={successCount}; failed={failedSeeds.Count}; hardValid={hardValidCount}; " +
-                $"routeRequirementsValid={routeRequirementsValidCount}; finalVistasValid={finalVistaValidCount}; recipeSetsValid={recipeSetValidCount}; " +
+                $"routeRequirementsValid={routeRequirementsValidCount}; finalVistasValid={finalVistaValidCount}; recipeWorkflowValid={recipeWorkflowValidCount}; " +
                 $"meanLayoutAttempts={attemptDistribution.Value<double>("mean"):0.##}; " +
                 $"p95LayoutAttempts={attemptDistribution.Value<int>("p95")}; maxLayoutAttempts={attemptDistribution.Value<int>("max")}; " +
                 $"archetypes={archetypeSummary}; tierSpans={tierSpanSummary}; " +
@@ -680,7 +679,6 @@ namespace DungeonLab.Editor
                 routeClimbCounts,
                 routeRequirementsValidCount,
                 finalVistaValidCount,
-                recipeSetValidCount,
                 seedReports,
                 tierAttemptCounts);
             Debug.Log($"Dungeon Lab: batch validation report written to {reportPath}");
@@ -2024,11 +2022,12 @@ namespace DungeonLab.Editor
                     seed,
                     Array.Empty<RecipeSlotIntent>(),
                     string.Empty);
-                if (!TryResolveRequiredRecipeSlots(
+                if (!TryResolveRecipeOpportunities(
                         catalog,
                         intent,
                         out RecipeSlotIntent[] slots,
-                        out lastRejection))
+                        out lastRejection,
+                        selectEveryCompatibleOpportunity: true))
                 {
                     continue;
                 }
@@ -2053,11 +2052,12 @@ namespace DungeonLab.Editor
             RouteIntent intent,
             ActiveDungeonRecipeCatalog catalog)
         {
-            if (!TryResolveRequiredRecipeSlots(
+            if (!TryResolveRecipeOpportunities(
                     catalog,
                     intent,
                     out RecipeSlotIntent[] slots,
-                    out string rejectionReason))
+                    out string rejectionReason,
+                    selectEveryCompatibleOpportunity: true))
             {
                 throw new InvalidOperationException(rejectionReason);
             }
@@ -3376,14 +3376,231 @@ namespace DungeonLab.Editor
                 seed,
                 Array.Empty<RecipeSlotIntent>(),
                 string.Empty);
-            bool noCandidateRejected = !TryResolveRequiredRecipeSlots(
+            bool noCandidateResolved = TryResolveRecipeOpportunities(
                 incompatibleCatalog,
                 unresolved,
-                out _,
-                out string noCandidateReason);
-            lines.Add($"noCandidate.rejected={noCandidateRejected}");
+                out RecipeSlotIntent[] partialSlots,
+                out string noCandidateReason,
+                selectEveryCompatibleOpportunity: true);
+            lines.Add($"noCandidate.resolved={noCandidateResolved}");
+            lines.Add($"noCandidate.selected={partialSlots.Length}");
             lines.Add($"noCandidate.reason={noCandidateReason}");
             return string.Join("\n", lines);
+        }
+
+        // Slice 6 evidence: find a production-family seed that exposes authored
+        // opportunities but deterministically selects none, then run that exact
+        // seed through planning, navigation, rendering, boundary, and collision
+        // evidence. The same concrete intent is also resolved in the diagnostic
+        // select-all mode to prove that generic fallback did not erase catalog
+        // compatibility or move selection after embedding.
+        private static string BuildRecipeOpportunityFallbackSnapshot(int seed)
+        {
+            CurrentGenerationSettings = LoadActiveGenerationSettings(
+                ResolveRequestedDensityLevel());
+            if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog catalog,
+                    out string rejectionReason))
+            {
+                throw new InvalidOperationException(rejectionReason);
+            }
+
+            int genericSeed = -1;
+            RouteIntent genericIntent = null;
+            RecipeSlotIntent[] repeatedSlots = Array.Empty<RecipeSlotIntent>();
+            RecipeSlotIntent[] allCompatibleSlots = Array.Empty<RecipeSlotIntent>();
+            JObject genericReport = null;
+            for (int offset = 0; offset < 256; offset++)
+            {
+                int candidateSeed = seed + offset;
+                RouteIntent candidate = BuildTopologyRouteIntent(
+                    RequireRouteTopology(LayeredCascadePatternId),
+                    candidateSeed,
+                    Array.Empty<RecipeSlotIntent>(),
+                    string.Empty);
+                int opportunityCount = candidate.nodes.Count(node => node.HasRecipeSlot);
+                if (opportunityCount == 0 ||
+                    !TryResolveRecipeOpportunities(
+                        catalog,
+                        candidate,
+                        out RecipeSlotIntent[] selected,
+                        out rejectionReason) ||
+                    selected.Length != 0)
+                {
+                    continue;
+                }
+
+                candidate.ResolveRecipeSlots(selected, catalog.digest);
+                if (!TryValidateRouteIntent(candidate, out _))
+                {
+                    continue;
+                }
+
+                JObject candidateReport = BuildSeedReportForTopology(
+                    LayeredCascadePatternId,
+                    candidateSeed);
+                if (candidateReport.Value<bool?>("accepted") != true ||
+                    (candidateReport["routeIntent"]?["recipeSlots"] as JArray)?.Count != 0)
+                {
+                    continue;
+                }
+
+                RouteIntent repeated = BuildTopologyRouteIntent(
+                    RequireRouteTopology(LayeredCascadePatternId),
+                    candidateSeed,
+                    Array.Empty<RecipeSlotIntent>(),
+                    string.Empty);
+                if (!TryResolveRecipeOpportunities(
+                        catalog,
+                        repeated,
+                        out repeatedSlots,
+                        out rejectionReason))
+                {
+                    throw new InvalidOperationException(rejectionReason);
+                }
+
+                RouteIntent allCompatible = BuildTopologyRouteIntent(
+                    RequireRouteTopology(LayeredCascadePatternId),
+                    candidateSeed,
+                    Array.Empty<RecipeSlotIntent>(),
+                    string.Empty);
+                if (!TryResolveRecipeOpportunities(
+                        catalog,
+                        allCompatible,
+                        out allCompatibleSlots,
+                        out rejectionReason,
+                        selectEveryCompatibleOpportunity: true))
+                {
+                    throw new InvalidOperationException(rejectionReason);
+                }
+
+                genericSeed = candidateSeed;
+                genericIntent = candidate;
+                genericReport = candidateReport;
+                break;
+            }
+
+            if (genericSeed < 0 || genericIntent == null || genericReport == null)
+            {
+                throw new InvalidOperationException(
+                    "[RECIPE_SELECTION] no accepted all-generic production opportunity seed was found");
+            }
+
+            JObject renderer;
+            using (new ForcedRouteTopologyScope(LayeredCascadePatternId))
+            {
+                renderer = JObject.Parse(BuildRendererProbeJson(genericSeed));
+            }
+
+            string emptyDigest = DungeonRecipeCatalogService.ComputeCatalogDigest(
+                Array.Empty<DungeonRecipeAsset>());
+            var emptyCatalog = new ActiveDungeonRecipeCatalog(
+                Array.Empty<DungeonRecipeAsset>(),
+                emptyDigest);
+            RouteIntent emptyCatalogIntent = BuildTopologyRouteIntent(
+                RequireRouteTopology(LayeredCascadePatternId),
+                genericSeed,
+                Array.Empty<RecipeSlotIntent>(),
+                string.Empty);
+            bool emptyCatalogResolved = TryResolveRecipeOpportunities(
+                emptyCatalog,
+                emptyCatalogIntent,
+                out RecipeSlotIntent[] emptyCatalogSlots,
+                out string emptyCatalogReason,
+                selectEveryCompatibleOpportunity: true);
+            emptyCatalogIntent.ResolveRecipeSlots(emptyCatalogSlots, emptyDigest);
+            bool emptyCatalogIntentValid = TryValidateRouteIntent(
+                emptyCatalogIntent,
+                out string emptyCatalogIntentReason);
+
+            int generatedOpportunityCount = genericIntent.nodes.Count(node => node.HasRecipeSlot);
+            return string.Join("\n", new[]
+            {
+                $"generic.seed={genericSeed}",
+                $"generic.opportunities={generatedOpportunityCount}",
+                $"generic.selected={genericIntent.recipeSlots.Length}",
+                $"generic.repeatSelected={repeatedSlots.Length}",
+                $"generic.allCompatibleSelected={allCompatibleSlots.Length}",
+                SnapshotLine("generic.accepted", genericReport["accepted"]),
+                SnapshotLine("generic.validation", genericReport["validation"]?["passed"]),
+                SnapshotLine("generic.recipes", genericReport["validation"]?["recipes"]?["passed"]),
+                SnapshotLine("generic.richLayering", genericReport["validation"]?["richLayering"]?["passed"]),
+                SnapshotLine("generic.verticalTraversal", genericReport["validation"]?["verticalTraversal"]?["passed"]),
+                SnapshotLine("generic.bottomToTopTraversal", genericReport["validation"]?["bottomToTopTraversal"]?["passed"]),
+                SnapshotLine("generic.stackedSurfaces", genericReport["tieredLevelPlan"]?["stackedSurfaceCount"]),
+                SnapshotLine("generic.recipeResolutionHash", genericReport["hashes"]?["recipeResolutions"]),
+                SnapshotLine("generic.canonicalHash", genericReport["hashes"]?["canonical"]),
+                SnapshotLine("generic.renderer", renderer["renderer"]?["passed"]),
+                SnapshotLine("generic.boundary", renderer["boundary"]?["passed"]),
+                SnapshotLine("generic.collision", renderer["collisionPreconditions"]?["passed"]),
+                $"emptyCatalog.resolved={emptyCatalogResolved}",
+                $"emptyCatalog.selected={emptyCatalogSlots.Length}",
+                $"emptyCatalog.reason={emptyCatalogReason}",
+                $"emptyCatalog.intentValid={emptyCatalogIntentValid}",
+                $"emptyCatalog.intentReason={emptyCatalogIntentReason}"
+            });
+        }
+
+        // Pure Slice 6 seam check. Null collaborators are intentional: an empty
+        // selected set must return before recipe-specific geometry is touched.
+        private static string BuildEmptyRecipePipelineSnapshot(int seed)
+        {
+            string emptyDigest = DungeonRecipeCatalogService.ComputeCatalogDigest(
+                Array.Empty<DungeonRecipeAsset>());
+            var emptyCatalog = new ActiveDungeonRecipeCatalog(
+                Array.Empty<DungeonRecipeAsset>(),
+                emptyDigest);
+            RouteIntent intent = BuildTopologyRouteIntent(
+                RequireRouteTopology(LayeredCascadePatternId),
+                seed,
+                Array.Empty<RecipeSlotIntent>(),
+                string.Empty);
+            int opportunityCount = intent.nodes.Count(node => node.HasRecipeSlot);
+            bool opportunitiesResolved = TryResolveRecipeOpportunities(
+                emptyCatalog,
+                intent,
+                out RecipeSlotIntent[] slots,
+                out string opportunityReason,
+                selectEveryCompatibleOpportunity: true);
+            intent.ResolveRecipeSlots(slots, emptyDigest);
+            bool intentValid = TryValidateRouteIntent(intent, out string intentReason);
+
+            bool realized = TryRealizeRecipes(
+                Array.Empty<RecipePlacement>(),
+                default,
+                null,
+                null,
+                null,
+                null,
+                string.Empty,
+                null,
+                out Dictionary<string, int> baseLevels,
+                out string realizationReason);
+            bool validated = TryValidateResolvedRecipes(
+                Array.Empty<RecipePlacement>(),
+                default,
+                null,
+                null,
+                null,
+                null,
+                baseLevels,
+                out RecipeResolution[] resolutions,
+                out string validationReason);
+            return string.Join("\n", new[]
+            {
+                $"opportunities.count={opportunityCount}",
+                $"opportunities.resolved={opportunitiesResolved}",
+                $"opportunities.selected={slots.Length}",
+                $"opportunities.reason={opportunityReason}",
+                $"intent.valid={intentValid}",
+                $"intent.reason={intentReason}",
+                $"empty.realized={realized}",
+                $"empty.realizationReason={realizationReason}",
+                $"empty.baseLevels={baseLevels.Count}",
+                $"empty.validated={validated}",
+                $"empty.validationReason={validationReason}",
+                $"empty.resolutions={resolutions.Length}"
+            });
         }
 
         private static string BuildRecipePoolProofSnapshot(int seed)
@@ -3651,11 +3868,12 @@ namespace DungeonLab.Editor
                     seed,
                     Array.Empty<RecipeSlotIntent>(),
                     string.Empty);
-                if (!TryResolveRequiredRecipeSlots(
+                if (!TryResolveRecipeOpportunities(
                         scenarioCatalog,
                         unresolved,
                         out RecipeSlotIntent[] slots,
-                        out rejectionReason))
+                        out rejectionReason,
+                        selectEveryCompatibleOpportunity: true))
                 {
                     return false;
                 }
@@ -3965,11 +4183,9 @@ namespace DungeonLab.Editor
                     seedReport["tieredLevelPlan"]?.Value<int?>("promontoryCells") ?? 0;
                 expectedPromontoryDeckCells +=
                     seedReport["tieredLevelPlan"]?.Value<int?>("externalConnectorPierCells") ?? 0;
-                bool allRecipesAtomicAndValid =
-                    recipeResolutions.Count > 0 &&
-                    recipeResolutions
-                        .OfType<JObject>()
-                        .All(recipe => recipe.Value<bool?>("atomicAndValid") == true);
+                bool allRecipesAtomicAndValid = recipeResolutions
+                    .OfType<JObject>()
+                    .All(recipe => recipe.Value<bool?>("atomicAndValid") == true);
                 bool optionalThroneShowpiecePassed =
                     visualRecipe == null ||
                     (visualRecipe.Value<bool?>("atomicAndValid") == true && selectedShowpieceCount == 1);
@@ -4489,6 +4705,8 @@ namespace DungeonLab.Editor
                 recipeSlots.Add(BuildRecipeSlotIntentProjection(intent, slot));
             }
 
+            int recipeOpportunityCount = intent.nodes.Count(node => node.HasRecipeSlot);
+
             return new JObject
             {
                 ["seed"] = intent.seed,
@@ -4497,6 +4715,10 @@ namespace DungeonLab.Editor
                 ["catalogDigest"] = intent.catalogDigest,
                 ["elevationPolicy"] = intent.elevationPolicy.ToString(),
                 ["nodeCount"] = intent.nodes.Length,
+                ["recipeOpportunityCount"] = recipeOpportunityCount,
+                ["selectedRecipeCount"] = intent.recipeSlots.Length,
+                ["genericRecipeOpportunityCount"] =
+                    recipeOpportunityCount - intent.recipeSlots.Length,
                 ["nodes"] = nodes,
                 ["bottomNode"] = intent.nodes[intent.bottomNode].id,
                 ["topNode"] = intent.nodes[intent.topNode].id,
@@ -5134,10 +5356,14 @@ namespace DungeonLab.Editor
                     out message) ||
                 intent?.recipeSlots == null ||
                 plan.recipeResolutions == null ||
-                plan.recipeResolutions.Length != intent.recipeSlots.Length)
+                plan.recipeResolutions.Length != intent.recipeSlots.Length ||
+                !string.Equals(intent.catalogDigest, catalog.digest, StringComparison.Ordinal))
             {
                 message = string.IsNullOrEmpty(message)
-                    ? $"expected {intent?.recipeSlots?.Length ?? 0} selected recipe resolutions; found {plan.recipeResolutions?.Length ?? 0}"
+                    ? $"expected {intent?.recipeSlots?.Length ?? 0} selected recipe resolutions " +
+                      $"and active catalog digest {catalog?.digest}; found " +
+                      $"{plan.recipeResolutions?.Length ?? 0} resolutions with " +
+                      $"intent digest {intent?.catalogDigest}"
                     : message;
                 return false;
             }
@@ -5191,9 +5417,11 @@ namespace DungeonLab.Editor
                 }
             }
 
+            int opportunityCount = intent.nodes.Count(node => node.HasRecipeSlot);
             message =
-                $"{intent.recipeSlots.Length} generated recipe opportunities resolved atomically " +
-                $"with catalog {catalog.digest}";
+                $"{intent.recipeSlots.Length}/{opportunityCount} generated recipe opportunities " +
+                $"selected and resolved atomically with catalog {catalog.digest}; " +
+                $"{opportunityCount - intent.recipeSlots.Length} realized generically";
             return true;
         }
 
@@ -6920,7 +7148,6 @@ namespace DungeonLab.Editor
             List<int> routeClimbCounts,
             int routeRequirementsValidCount,
             int finalVistaValidCount,
-            int recipeSetValidCount,
             JArray seedReports,
             List<int> tierAttemptCounts)
         {

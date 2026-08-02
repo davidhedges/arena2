@@ -514,13 +514,14 @@ namespace DungeonLab.Editor
             }
         }
 
-        private const string RecipeSelectionStreamIdentity = "recipe-selection-v1";
+        private const string RecipeSelectionStreamIdentity = "recipe-selection-v2";
 
-        private static bool TryResolveRequiredRecipeSlots(
+        private static bool TryResolveRecipeOpportunities(
             ActiveDungeonRecipeCatalog catalog,
             RouteIntent intent,
             out RecipeSlotIntent[] slots,
-            out string rejectionReason)
+            out string rejectionReason,
+            bool selectEveryCompatibleOpportunity = false)
         {
             slots = Array.Empty<RecipeSlotIntent>();
             rejectionReason = string.Empty;
@@ -624,7 +625,7 @@ namespace DungeonLab.Editor
                 if (authoringPreviewSlotNode < 0)
                 {
                     rejectionReason =
-                        $"[RECIPE_PREVIEW] recipe '{authoringPreviewRecipeId}' had no compatible required route slot";
+                        $"[RECIPE_PREVIEW] recipe '{authoringPreviewRecipeId}' had no compatible generated opportunity";
                     return false;
                 }
             }
@@ -674,9 +675,11 @@ namespace DungeonLab.Editor
 
                 if (compatible.Count == 0)
                 {
-                    rejectionReason =
-                        $"[RECIPE_SELECTION] slot '{node.recipeSlotId}' at node '{node.id}' had no compatible active recipe";
-                    return false;
+                    // An opportunity is generated architecture first. Authored
+                    // content may occupy it, but catalog breadth is never a
+                    // structural dependency: the generic room producer owns
+                    // every opportunity with no compatible active asset.
+                    continue;
                 }
 
                 int previewCandidateIndex = -1;
@@ -700,6 +703,13 @@ namespace DungeonLab.Editor
                     !authoringPreviewForced &&
                     nodeIndex == authoringPreviewSlotNode &&
                     previewCandidateIndex >= 0;
+                if (!forceAuthoringPreview &&
+                    !selectEveryCompatibleOpportunity &&
+                    !ShouldSelectRecipeOpportunity(intent.seed, intent.patternId, node.id))
+                {
+                    continue;
+                }
+
                 DungeonRecipeAsset selectedRecipe;
                 if (forceAuthoringPreview)
                 {
@@ -727,9 +737,10 @@ namespace DungeonLab.Editor
 
                         if (selectionCandidates.Count == 0)
                         {
-                            rejectionReason =
-                                $"[RECIPE_PREVIEW] forced recipe '{authoringPreviewRecipeId}' was the only candidate for multiple slots";
-                            return false;
+                            // A preview asset is forced exactly once. Any other
+                            // opportunity for which it is the sole compatible
+                            // asset remains generic for the preview build.
+                            continue;
                         }
                     }
 
@@ -765,7 +776,7 @@ namespace DungeonLab.Editor
             if (authoringPreviewActive && !authoringPreviewForced)
             {
                 rejectionReason =
-                    $"[RECIPE_PREVIEW] recipe '{authoringPreviewRecipeId}' had no compatible required route slot";
+                    $"[RECIPE_PREVIEW] recipe '{authoringPreviewRecipeId}' had no compatible generated opportunity";
                 return false;
             }
 
@@ -1154,6 +1165,28 @@ namespace DungeonLab.Editor
                 MixDerivedSeedHash(ref hash, routeNodeId ?? string.Empty);
                 MixDerivedSeedHash(ref hash, "recipe-selection");
                 return new System.Random((int)hash);
+            }
+        }
+
+        private static bool ShouldSelectRecipeOpportunity(
+            int dungeonSeed,
+            string topologyId,
+            string routeNodeId)
+        {
+            // Selection eligibility is independent of the candidate draw and
+            // all spatial streams. Adding, disabling, or reordering catalog
+            // members therefore cannot change the opportunity's authored-vs-
+            // generic decision or perturb embedding when it stays generic.
+            unchecked
+            {
+                uint hash = 2166136261u;
+                MixDerivedSeedHash(
+                    ref hash,
+                    dungeonSeed.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                MixDerivedSeedHash(ref hash, topologyId ?? string.Empty);
+                MixDerivedSeedHash(ref hash, routeNodeId ?? string.Empty);
+                MixDerivedSeedHash(ref hash, "recipe-opportunity-selection");
+                return new System.Random((int)hash).Next(2) == 0;
             }
         }
 
@@ -2233,10 +2266,18 @@ namespace DungeonLab.Editor
         {
             baseLevels = new Dictionary<string, int>(StringComparer.Ordinal);
             rejectionReason = string.Empty;
-            if (placements == null || placements.Count == 0)
+            if (placements == null)
             {
-                rejectionReason = "[RECIPE_ATOMICITY] tier planning received no complete recipe placements";
+                rejectionReason = "[RECIPE_ATOMICITY] tier planning received no recipe placement collection";
                 return false;
+            }
+
+            // Zero selected recipes is a complete result. The generic
+            // structural producer runs immediately after this seam and owns
+            // every generated opportunity that was left unselected.
+            if (placements.Count == 0)
+            {
+                return true;
             }
 
             var pathCells = new HashSet<Vector2Int>();
@@ -2814,8 +2855,15 @@ namespace DungeonLab.Editor
         {
             resolutions = Array.Empty<RecipeResolution>();
             rejectionReason = string.Empty;
+            if (placements == null)
+            {
+                rejectionReason =
+                    "[RECIPE_ATOMICITY] final plan received no recipe placement collection";
+                return false;
+            }
+
             var completed = new List<RecipeResolution>();
-            foreach (RecipePlacement placement in placements ?? Array.Empty<RecipePlacement>())
+            foreach (RecipePlacement placement in placements)
             {
                 if (!baseLevels.TryGetValue(placement.RecipeId, out int baseLevel) ||
                     !TryValidateResolvedRecipe(

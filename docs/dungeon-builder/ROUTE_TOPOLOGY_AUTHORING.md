@@ -1,6 +1,6 @@
 # Authoring procedural route families
 
-Status: current through procedural 3-D topology Slice 4
+Status: current through procedural 3-D topology Slice 6
 Last updated: 2026-08-02
 
 A production route file is a compact family contract under
@@ -90,10 +90,13 @@ compatibility still comes from the existing catalog seam:
 - port elevation, transition, landing, and headroom contracts; and
 - current recipe validation and catalog membership.
 
-A family may publish zero opportunities. When it does, the catalog still has a
-deterministic digest, recipe resolution returns an empty collection, and all
-rooms are generated. A published opportunity must resolve a compatible active
-recipe; authoring preview still requires a compatible opportunity.
+A family may publish zero opportunities. Each published opportunity also makes
+an independent deterministic authored-versus-generic decision before spatial
+embedding. No compatible candidate, or a generic decision, leaves that node to
+the generic room producer. The catalog still has a deterministic digest and an
+all-generic result carries empty `RecipePlacement` and `RecipeResolution`
+collections. Authoring preview still requires a compatible opportunity and
+forces the preview recipe there without changing ordinary selection state.
 
 ## Structural layers and bindings
 
