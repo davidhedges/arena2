@@ -1537,6 +1537,17 @@ namespace DungeonLab.Editor
                 "lattice-y",
                 out int rowSlackSpent,
                 out int rowSlackAvailable);
+            // Generic vista endpoints are capped during room inflation, but an
+            // authored recipe keeps its exact footprint. Resolve that footprint
+            // now, while the lattice can still make room for it. Shape retries
+            // cannot change a selected recipe or its anchor, so leaving this
+            // until vista reservation only turns a structural spacing problem
+            // into a deterministic retry exhaustion.
+            ExpandLatticeForSelectedVistaRecipes(
+                intent,
+                spatial,
+                columnOffsets,
+                rowOffsets);
             lastLatticeSlackSpentCells = columnSlackSpent + rowSlackSpent;
             lastLatticeSlackAvailableCells = columnSlackAvailable + rowSlackAvailable;
             var embedding = new Vector2Int[topology.nodes.Length];
@@ -1570,6 +1581,243 @@ namespace DungeonLab.Editor
                 out nodeCenters,
                 out latticeCellCenters,
                 out rejectionReason);
+        }
+
+        /// <summary>
+        /// Widens the resolved lattice just enough for selected exact recipe
+        /// footprints to retain the vista's authored clear run.
+        /// </summary>
+        /// <remarks>
+        /// This is structural spacing, not optional rubber-sheet slack: the
+        /// selected recipe is already part of the route intent and cannot be
+        /// shrunk by <see cref="ResolveGenericRoomDimensions"/>. The existing
+        /// coarse-embedding transform still owns the map-envelope check after
+        /// this adjustment.
+        /// </remarks>
+        private static int ExpandLatticeForSelectedVistaRecipes(
+            RouteIntent intent,
+            DungeonPatternSpatialSettings spatial,
+            int[] columnOffsets,
+            int[] rowOffsets)
+        {
+            if (intent == null ||
+                intent.vista.sourceNode < 0 ||
+                intent.vista.sourceNode >= intent.nodes.Length ||
+                intent.vista.targetNode < 0 ||
+                intent.vista.targetNode >= intent.nodes.Length)
+            {
+                return 0;
+            }
+
+            Vector2Int sourceLattice = intent.topology.nodes[intent.vista.sourceNode].lattice;
+            Vector2Int targetLattice = intent.topology.nodes[intent.vista.targetNode].lattice;
+            bool horizontal = sourceLattice.y == targetLattice.y && sourceLattice.x != targetLattice.x;
+            bool vertical = sourceLattice.x == targetLattice.x && sourceLattice.y != targetLattice.y;
+            if (!horizontal && !vertical)
+            {
+                return 0;
+            }
+
+            var latticeCenters = new Vector2Int[intent.nodes.Length];
+            for (int node = 0; node < latticeCenters.Length; node++)
+            {
+                Vector2Int lattice = intent.topology.nodes[node].lattice;
+                latticeCenters[node] = new Vector2Int(
+                    columnOffsets[lattice.x],
+                    rowOffsets[lattice.y]);
+            }
+
+            int sourceNode = intent.vista.sourceNode;
+            int targetNode = intent.vista.targetNode;
+            if (!TryGetRecipeSlot(intent.recipeSlots, sourceNode, out _) &&
+                !TryGetRecipeSlot(intent.recipeSlots, targetNode, out _))
+            {
+                return 0;
+            }
+
+            int currentDistance = horizontal
+                ? Mathf.Abs(latticeCenters[targetNode].x - latticeCenters[sourceNode].x)
+                : Mathf.Abs(latticeCenters[targetNode].y - latticeCenters[sourceNode].y);
+            int requiredVoid = intent.vista.minimumReservedVoidCells;
+            int maximumSourceReach = VistaEndpointReach(
+                intent,
+                sourceNode,
+                spatial,
+                latticeCenters,
+                currentDistance,
+                capGenericReach: false);
+            int maximumTargetReach = VistaEndpointReach(
+                intent,
+                targetNode,
+                spatial,
+                latticeCenters,
+                currentDistance,
+                capGenericReach: false);
+            int maximumRequiredDistance =
+                maximumSourceReach + maximumTargetReach + requiredVoid + 1;
+            int requiredDistance = currentDistance;
+            for (int candidate = currentDistance; candidate <= maximumRequiredDistance; candidate++)
+            {
+                int sourceReach = VistaEndpointReach(
+                    intent,
+                    sourceNode,
+                    spatial,
+                    latticeCenters,
+                    candidate,
+                    capGenericReach: true);
+                int targetReach = VistaEndpointReach(
+                    intent,
+                    targetNode,
+                    spatial,
+                    latticeCenters,
+                    candidate,
+                    capGenericReach: true);
+                if (candidate - sourceReach - targetReach - 1 >= requiredVoid)
+                {
+                    requiredDistance = candidate;
+                    break;
+                }
+            }
+
+            int addedCells = Mathf.Max(0, requiredDistance - currentDistance);
+            if (addedCells == 0)
+            {
+                return 0;
+            }
+
+            int firstLane = horizontal
+                ? Mathf.Min(sourceLattice.x, targetLattice.x)
+                : Mathf.Min(sourceLattice.y, targetLattice.y);
+            int[] offsets = horizontal ? columnOffsets : rowOffsets;
+            for (int lane = firstLane + 1; lane < offsets.Length; lane++)
+            {
+                offsets[lane] += addedCells;
+            }
+
+            return addedCells;
+        }
+
+        private static int VistaEndpointReach(
+            RouteIntent intent,
+            int nodeIndex,
+            DungeonPatternSpatialSettings spatial,
+            IReadOnlyList<Vector2Int> nodeCenters,
+            int vistaDistanceCells,
+            bool capGenericReach)
+        {
+            if (TryGetRecipeSlot(intent.recipeSlots, nodeIndex, out RecipeSlotIntent recipeSlot))
+            {
+                return SelectedRecipeReachTowardsVista(
+                    intent,
+                    recipeSlot,
+                    nodeCenters);
+            }
+
+            int reach;
+            if (HasPlannedOverlookAppendage(intent, nodeIndex))
+            {
+                // BuildProcessionalRoomParts forces a 4x5 footprint for the
+                // selected overlook pair.
+                reach = 2;
+            }
+            else
+            {
+                DungeonRoomSizeRange range = RoomSizeRangeForRole(
+                    spatial,
+                    intent.nodes[nodeIndex].role).Validated();
+                reach = Mathf.Max(
+                    range.maxWidthCells / 2,
+                    range.maxDepthCells / 2);
+            }
+            if (!capGenericReach)
+            {
+                return reach;
+            }
+
+            int cappedExtent = MaxRoomExtentForTransition(
+                vistaDistanceCells,
+                intent.vista.minimumReservedVoidCells);
+            return Mathf.Min(reach, cappedExtent / 2);
+        }
+
+        private static int SelectedRecipeReachTowardsVista(
+            RouteIntent intent,
+            RecipeSlotIntent recipeSlot,
+            IReadOnlyList<Vector2Int> nodeCenters)
+        {
+            int nodeIndex = recipeSlot.slotNode;
+            int otherNode = nodeIndex == intent.vista.sourceNode
+                ? intent.vista.targetNode
+                : intent.vista.sourceNode;
+            Vector2Int center = nodeCenters[nodeIndex];
+            Vector2Int towardOther = CardinalUnit(nodeCenters[otherNode] - center);
+            Vector2Int primaryAxis;
+            if (recipeSlot.orientationBinding == RecipeOrientationBinding.VistaSourceToTarget)
+            {
+                primaryAxis = CardinalUnit(
+                    nodeCenters[intent.vista.targetNode] -
+                    nodeCenters[intent.vista.sourceNode]);
+            }
+            else if (!TryResolveRouteForwardRecipeAxis(
+                         intent,
+                         recipeSlot,
+                         nodeCenters,
+                         out primaryAxis))
+            {
+                // Intent validation normally makes this unreachable. Retaining
+                // the recipe's largest local reach is the safe embedding bound
+                // if a bad diagnostic intent reaches this helper anyway.
+                return ConservativeSelectedRecipeReach(intent, nodeIndex);
+            }
+
+            int reach = 0;
+            int mirrorCount = recipeSlot.recipe.allowMirror ? 2 : 1;
+            for (int mirror = 0; mirror < mirrorCount; mirror++)
+            {
+                foreach (RectInt part in BuildRecipeRoomParts(
+                             recipeSlot,
+                             center,
+                             primaryAxis,
+                             mirrored: mirror != 0))
+                {
+                    for (int y = part.yMin; y < part.yMax; y++)
+                    {
+                        for (int x = part.xMin; x < part.xMax; x++)
+                        {
+                            Vector2Int fromCenter = new Vector2Int(x, y) - center;
+                            reach = Mathf.Max(
+                                reach,
+                                fromCenter.x * towardOther.x + fromCenter.y * towardOther.y);
+                        }
+                    }
+                }
+            }
+
+            return reach;
+        }
+
+        private static int ConservativeSelectedRecipeReach(RouteIntent intent, int nodeIndex)
+        {
+            int reach = 0;
+            foreach (DungeonRecipeZone zone in
+                     TryGetRecipeSlot(intent.recipeSlots, nodeIndex, out RecipeSlotIntent slot)
+                         ? slot.recipe.zones ?? Array.Empty<DungeonRecipeZone>()
+                         : Array.Empty<DungeonRecipeZone>())
+            {
+                if (zone == null ||
+                    zone.kind != DungeonRecipeZoneKind.Walkable &&
+                    zone.kind != DungeonRecipeZoneKind.Elevated)
+                {
+                    continue;
+                }
+
+                reach = Mathf.Max(reach, Mathf.Abs(zone.offset.x));
+                reach = Mathf.Max(reach, Mathf.Abs(zone.offset.x + zone.size.x - 1));
+                reach = Mathf.Max(reach, Mathf.Abs(zone.offset.y));
+                reach = Mathf.Max(reach, Mathf.Abs(zone.offset.y + zone.size.y - 1));
+            }
+
+            return reach;
         }
 
         private static bool TryTransformCoarseEmbedding(

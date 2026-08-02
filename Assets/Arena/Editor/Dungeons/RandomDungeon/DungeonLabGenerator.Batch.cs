@@ -2005,6 +2005,154 @@ namespace DungeonLab.Editor
                 catalog);
         }
 
+        // Regression evidence for a selected exact recipe on a vista endpoint.
+        // Seed 2026072165 selects the 7x7 hanging-bridge court and previously
+        // left only two of the three required void cells on both layout
+        // attempts, because generic room caps did not constrain the recipe.
+        private static string BuildSelectedVistaRecipeSpacingSnapshot(int seed)
+        {
+            // A fixture reads the versioned profile default, not per-user
+            // EditorPrefs, so it means the same thing on every workstation.
+            CurrentGenerationSettings = LoadActiveGenerationSettings(
+                DungeonDensity.Clamp(LoadGenerationProfileAsset().densityLevel));
+            if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(
+                    out ActiveDungeonRecipeCatalog catalog,
+                    out string catalogError))
+            {
+                return $"catalog.error={catalogError}";
+            }
+
+            RouteIntent intent = BuildSelectedRouteIntent(
+                seed,
+                Array.Empty<RecipeSlotIntent>(),
+                string.Empty);
+            if (!TryResolveRecipeOpportunities(
+                    catalog,
+                    intent,
+                    out RecipeSlotIntent[] slots,
+                    out string selectionError))
+            {
+                return $"selection.error={selectionError}";
+            }
+
+            intent.ResolveRecipeSlots(slots, catalog.digest);
+            DungeonPatternSpatialSettings spatial = ResolveTopologySpatialSettings(intent.topology);
+            TryGetRecipeSlot(
+                intent.recipeSlots,
+                intent.vista.targetNode,
+                out RecipeSlotIntent targetSlot);
+            var lines = new List<string>
+            {
+                $"catalog.error={catalogError}",
+                $"selection.error={selectionError}",
+                $"pattern={intent.patternId}",
+                $"target.node={intent.nodes[intent.vista.targetNode].id}",
+                $"target.recipe={targetSlot?.recipe?.recipeId ?? string.Empty}",
+                $"vista.required={intent.vista.minimumReservedVoidCells}"
+            };
+
+            // Production numbers layout attempts from one, not zero.
+            for (int layoutAttempt = 1; layoutAttempt <= 2; layoutAttempt++)
+            {
+                int[] columnOffsets = ResolveLatticeLaneOffsets(
+                    seed,
+                    layoutAttempt,
+                    intent.topology,
+                    intent.topology.columnGaps,
+                    spatial.horizontalPitchCells,
+                    intent.topology.latticeColumnCount,
+                    spatial,
+                    "lattice-x",
+                    out _,
+                    out _);
+                int[] rowOffsets = ResolveLatticeLaneOffsets(
+                    seed,
+                    layoutAttempt,
+                    intent.topology,
+                    intent.topology.rowGaps,
+                    spatial.verticalPitchCells,
+                    intent.topology.latticeRowCount,
+                    spatial,
+                    "lattice-y",
+                    out _,
+                    out _);
+                var beforeCenters = new Vector2Int[intent.nodes.Length];
+                for (int node = 0; node < beforeCenters.Length; node++)
+                {
+                    Vector2Int lattice = intent.topology.nodes[node].lattice;
+                    beforeCenters[node] = new Vector2Int(
+                        columnOffsets[lattice.x],
+                        rowOffsets[lattice.y]);
+                }
+
+                int sourceNode = intent.vista.sourceNode;
+                int targetNode = intent.vista.targetNode;
+                Vector2Int beforeDelta = beforeCenters[targetNode] - beforeCenters[sourceNode];
+                int beforeDistance = Mathf.Abs(beforeDelta.x) + Mathf.Abs(beforeDelta.y);
+                int beforeSourceReach = VistaEndpointReach(
+                    intent,
+                    sourceNode,
+                    spatial,
+                    beforeCenters,
+                    beforeDistance,
+                    capGenericReach: true);
+                int beforeTargetReach = VistaEndpointReach(
+                    intent,
+                    targetNode,
+                    spatial,
+                    beforeCenters,
+                    beforeDistance,
+                    capGenericReach: true);
+                int beforeClear = beforeDistance - beforeSourceReach - beforeTargetReach - 1;
+
+                int addedCells = ExpandLatticeForSelectedVistaRecipes(
+                    intent,
+                    spatial,
+                    columnOffsets,
+                    rowOffsets);
+                var afterCenters = new Vector2Int[intent.nodes.Length];
+                for (int node = 0; node < afterCenters.Length; node++)
+                {
+                    Vector2Int lattice = intent.topology.nodes[node].lattice;
+                    afterCenters[node] = new Vector2Int(
+                        columnOffsets[lattice.x],
+                        rowOffsets[lattice.y]);
+                }
+
+                Vector2Int afterDelta = afterCenters[targetNode] - afterCenters[sourceNode];
+                int afterDistance = Mathf.Abs(afterDelta.x) + Mathf.Abs(afterDelta.y);
+                int afterSourceReach = VistaEndpointReach(
+                    intent,
+                    sourceNode,
+                    spatial,
+                    afterCenters,
+                    afterDistance,
+                    capGenericReach: true);
+                int afterTargetReach = VistaEndpointReach(
+                    intent,
+                    targetNode,
+                    spatial,
+                    afterCenters,
+                    afterDistance,
+                    capGenericReach: true);
+                int afterClear = afterDistance - afterSourceReach - afterTargetReach - 1;
+                int secondPassAdded = ExpandLatticeForSelectedVistaRecipes(
+                    intent,
+                    spatial,
+                    columnOffsets,
+                    rowOffsets);
+                string prefix = $"attempt{layoutAttempt}";
+                lines.Add($"{prefix}.beforeDistance={beforeDistance}");
+                lines.Add($"{prefix}.beforeClear={beforeClear}");
+                lines.Add($"{prefix}.added={addedCells}");
+                lines.Add($"{prefix}.afterDistance={afterDistance}");
+                lines.Add($"{prefix}.afterClear={afterClear}");
+                lines.Add($"{prefix}.idempotent={secondPassAdded == 0}");
+            }
+
+            return string.Join("\n", lines);
+        }
+
         private static RouteIntent BuildDiagnosticPreviewIntent(int seed, string recipeId)
         {
             if (!DungeonRecipeCatalogService.TryLoadActiveCatalog(

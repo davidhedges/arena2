@@ -211,6 +211,27 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void SelectedVistaRecipe_ExpandsLatticeBeforeRoomInflation()
+        {
+            Dictionary<string, string> snapshot = Snapshot(
+                "BuildSelectedVistaRecipeSpacingSnapshot",
+                2026072165);
+
+            Assert.That(snapshot["catalog.error"], Is.Empty);
+            Assert.That(snapshot["selection.error"], Is.Empty);
+            Assert.That(snapshot["target.recipe"], Is.EqualTo("episode_hanging_bridge_court_01"));
+            Assert.That(snapshot["vista.required"], Is.EqualTo("3"));
+            for (int layoutAttempt = 1; layoutAttempt <= 2; layoutAttempt++)
+            {
+                string prefix = $"attempt{layoutAttempt}";
+                Assert.That(int.Parse(snapshot[$"{prefix}.beforeClear"]), Is.LessThan(3));
+                Assert.That(int.Parse(snapshot[$"{prefix}.added"]), Is.GreaterThan(0));
+                Assert.That(int.Parse(snapshot[$"{prefix}.afterClear"]), Is.GreaterThanOrEqualTo(3));
+                Assert.That(snapshot[$"{prefix}.idempotent"], Is.EqualTo("True"));
+            }
+        }
+
+        [Test]
         public void RecipePoolSelection_UsesStableSlotsAndCompatibleCandidatePool()
         {
             Dictionary<string, string> snapshot = Snapshot("BuildRecipePoolSelectionSnapshot");
@@ -517,6 +538,11 @@ namespace Arena.Tests.Editor
             return Parse(Invoke(methodName));
         }
 
+        private static Dictionary<string, string> Snapshot(string methodName, int seed)
+        {
+            return Parse(Invoke(methodName, seed));
+        }
+
         private static HashSet<string> TransitionOpenEdges(string placementClass)
         {
             Type edgeModelType = EditorAssembly.GetType(
@@ -610,11 +636,16 @@ namespace Arena.Tests.Editor
 
         private static string Invoke(string methodName)
         {
+            return Invoke(methodName, Seed);
+        }
+
+        private static string Invoke(string methodName, int seed)
+        {
             MethodInfo method = GeneratorType.GetMethod(
                 methodName,
                 BindingFlags.Static | BindingFlags.NonPublic)!;
             Assert.That(method, Is.Not.Null, $"Missing diagnostic method {methodName}.");
-            return (string)method.Invoke(null, new object[] { Seed })!;
+            return (string)method.Invoke(null, new object[] { seed })!;
         }
 
         private static Dictionary<string, string> Parse(string snapshot)
