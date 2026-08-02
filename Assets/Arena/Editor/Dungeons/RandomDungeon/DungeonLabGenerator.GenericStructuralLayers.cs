@@ -285,33 +285,16 @@ namespace DungeonLab.Editor
                     string.Equals(connection.fromLayerId, layerId, StringComparison.Ordinal);
                 bool atEnd = connection.toRoom == roomIndex &&
                     string.Equals(connection.toLayerId, layerId, StringComparison.Ordinal);
-                if (!atStart && !atEnd || connection.path == null)
+                if (!atStart && !atEnd || connection.path == null || connection.path.Count == 0)
                 {
                     continue;
                 }
 
-                if (atStart)
-                {
-                    for (int index = 0; index < connection.path.Count; index++)
-                    {
-                        if (room.Contains(connection.path[index]))
-                        {
-                            cells.Add(connection.path[index]);
-                            break;
-                        }
-                    }
-                }
-                else
-                {
-                    for (int index = connection.path.Count - 1; index >= 0; index--)
-                    {
-                        if (room.Contains(connection.path[index]))
-                        {
-                            cells.Add(connection.path[index]);
-                            break;
-                        }
-                    }
-                }
+                // Use the same boundary threshold as zone resolution and
+                // transition landing placement. A path may contain several
+                // room cells; binding to its first endpoint instead strands the
+                // generated layer from the landing at the room's outer edge.
+                cells.Add(ThresholdCell(room, connection.path, forward: atStart));
             }
 
             return new List<Vector2Int>(SortedCells(cells));
@@ -640,6 +623,9 @@ namespace DungeonLab.Editor
             var upperNeighbor = RoomFootprint.FromRect(new RectInt(-4, 2, 2, 3));
             var upperPath = new List<Vector2Int>
             {
+                new Vector2Int(3, 3),
+                new Vector2Int(2, 3),
+                new Vector2Int(1, 3),
                 new Vector2Int(0, 3),
                 new Vector2Int(-1, 3),
                 new Vector2Int(-2, 3),
@@ -688,9 +674,13 @@ namespace DungeonLab.Editor
                 surfaces.TrySetFloorLevel(cell, MajorRiseLevels, out _);
             }
 
-            for (int index = 1; index < upperPath.Count; index++)
+            for (int index = 0; index < upperPath.Count; index++)
             {
-                surfaces.AddCorridorSurface(upperPath[index], MajorRiseLevels);
+                Vector2Int cell = upperPath[index];
+                if (!wideRoom.Contains(cell) && !upperNeighbor.Contains(cell))
+                {
+                    surfaces.AddCorridorSurface(cell, MajorRiseLevels);
+                }
             }
 
             foreach (Vector2Int cell in new[]
@@ -752,7 +742,7 @@ namespace DungeonLab.Editor
                 fallFreeConnected = portGraph.IsFallFreeConnected(out reachability);
             }
 
-            Vector2Int boundThreshold = upperPath[0];
+            Vector2Int boundThreshold = ThresholdCell(wideRoom, upperPath, forward: true);
             OwnerKey generatedOwner = prisms.SurfaceOwnerAt(
                 new SurfaceKey(boundThreshold, MajorRiseLevels));
             bool volumesValid = prisms.TryValidateOpenVolumes(
@@ -824,6 +814,7 @@ namespace DungeonLab.Editor
                 $"producer.failure={realizationFailure}",
                 $"producer.basePreserved={surfaces.HasSurfaceAt(boundThreshold, 0)}",
                 $"producer.boundLayerRealized={surfaces.HasSurfaceAt(boundThreshold, MajorRiseLevels)}",
+                $"producer.canonicalThresholdBound={boundThreshold == new Vector2Int(0, 3) && !surfaces.HasSurfaceAt(upperPath[0], MajorRiseLevels)}",
                 $"producer.stackedSurfaces={surfaces.Count - surfaces.FlooredCellCount}",
                 $"producer.generatedOwner={generatedOwner.Token}",
                 $"producer.occupiedCells={occupiedCells}",

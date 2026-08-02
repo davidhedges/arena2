@@ -124,6 +124,7 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["producer.noRecipe"], Is.EqualTo("True"), snapshot["producer.failure"]);
             Assert.That(snapshot["producer.basePreserved"], Is.EqualTo("True"));
             Assert.That(snapshot["producer.boundLayerRealized"], Is.EqualTo("True"));
+            Assert.That(snapshot["producer.canonicalThresholdBound"], Is.EqualTo("True"));
             Assert.That(int.Parse(snapshot["producer.stackedSurfaces"]), Is.GreaterThan(0));
             Assert.That(snapshot["producer.generatedOwner"], Is.EqualTo("Room:generic-room#gallery"));
             Assert.That(int.Parse(snapshot["producer.occupiedCells"]), Is.GreaterThan(0));
