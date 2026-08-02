@@ -2692,9 +2692,8 @@ namespace DungeonLab.Editor
                     // stair. The authored footprint still reserves against other
                     // stairs in the prism ledger; it just no longer eats a
                     // surface a player walks over.
-                    Vector2Int[] transitionBodyFootprint = isStepStrip
-                        ? Array.Empty<Vector2Int>()
-                        : recipeTransition.footprintCells;
+                    Vector2Int[] transitionBodyFootprint =
+                        RealizedRecipeTransitionFootprint(recipeTransition);
 
                     transitions.Add(new ElevationEdgeModel.TransitionEdge(
                         recipeTransition.upperTransitionCell,
@@ -3122,14 +3121,7 @@ namespace DungeonLab.Editor
                 int matchCount = 0;
                 foreach (ElevationEdgeModel.TransitionEdge transition in transitions)
                 {
-                    if (string.Equals(
-                            TransitionKey(transition.firstCell, transition.secondCell),
-                            TransitionKey(recipeTransition.upperTransitionCell, recipeTransition.lowerTransitionCell),
-                            StringComparison.Ordinal) &&
-                        transition.hasLandings &&
-                        SameRecipeCells(transition.lowerLandingCells, recipeTransition.lowerLandingCells) &&
-                        SameRecipeCells(transition.upperLandingCells, recipeTransition.upperLandingCells) &&
-                        SameRecipeCells(transition.footprintCells, recipeTransition.footprintCells))
+                    if (ResolvedTransitionMatchesRecipe(transition, recipeTransition))
                     {
                         matchCount++;
                     }
@@ -3344,6 +3336,51 @@ namespace DungeonLab.Editor
         /// <summary>How far a step strip climbs. It is one step.</summary>
         private const int StepStripRiseLevels = 1;
 
+        private static bool RecipeTransitionAuthorsStepStrip(
+            RecipeTransitionPlacement transition)
+        {
+            return string.IsNullOrEmpty(transition.motifImplementationId) ||
+                string.Equals(
+                    transition.motifImplementationId,
+                    SeamRiseStripImplementationId,
+                    StringComparison.Ordinal);
+        }
+
+        // The authored footprint remains a prism reservation even though a
+        // seam strip has no stair body. Realization and atomicity validation
+        // must project that distinction through the same function; comparing
+        // the realized empty body to the authored reservation is what made a
+        // correctly realized strip report that it resolved zero times.
+        private static Vector2Int[] RealizedRecipeTransitionFootprint(
+            RecipeTransitionPlacement transition)
+        {
+            return RecipeTransitionAuthorsStepStrip(transition)
+                ? Array.Empty<Vector2Int>()
+                : transition.footprintCells;
+        }
+
+        private static bool ResolvedTransitionMatchesRecipe(
+            ElevationEdgeModel.TransitionEdge transition,
+            RecipeTransitionPlacement recipeTransition)
+        {
+            return string.Equals(
+                       TransitionKey(transition.firstCell, transition.secondCell),
+                       TransitionKey(
+                           recipeTransition.upperTransitionCell,
+                           recipeTransition.lowerTransitionCell),
+                       StringComparison.Ordinal) &&
+                   transition.hasLandings &&
+                   SameRecipeCells(
+                       transition.lowerLandingCells,
+                       recipeTransition.lowerLandingCells) &&
+                   SameRecipeCells(
+                       transition.upperLandingCells,
+                       recipeTransition.upperLandingCells) &&
+                   SameRecipeCells(
+                       transition.footprintCells,
+                       RealizedRecipeTransitionFootprint(recipeTransition));
+        }
+
         /// <summary>
         /// Pick the prefab and placement class for one authored recipe stair.
         /// </summary>
@@ -3367,11 +3404,7 @@ namespace DungeonLab.Editor
             stairPrefabPath = seamStairPrefabPath;
             placementClass = DaisStairPlacementClass;
             rejectionReason = string.Empty;
-            bool authorsStrip = string.IsNullOrEmpty(transition.motifImplementationId) ||
-                string.Equals(
-                    transition.motifImplementationId,
-                    SeamRiseStripImplementationId,
-                    StringComparison.Ordinal);
+            bool authorsStrip = RecipeTransitionAuthorsStepStrip(transition);
             if (authorsStrip)
             {
                 if (riseLevels > StepStripRiseLevels)

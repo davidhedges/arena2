@@ -223,6 +223,10 @@ namespace Arena.Tests.Editor
             Assert.That(snapshot["target.contractValid"], Is.EqualTo("True"));
             Assert.That(snapshot["target.portsMatchTopology"], Is.EqualTo("True"));
             Assert.That(snapshot["target.incompatibleAxisRejected"], Is.EqualTo("True"));
+            Assert.That(snapshot["cornerReturn.selected"], Is.EqualTo("True"));
+            Assert.That(snapshot["cornerReturn.reservedFootprintCount"], Is.EqualTo("1"));
+            Assert.That(snapshot["cornerReturn.realizedBodyCount"], Is.EqualTo("0"));
+            Assert.That(snapshot["cornerReturn.atomicMatch"], Is.EqualTo("True"));
             Assert.That(snapshot["vista.required"], Is.EqualTo("3"));
             for (int layoutAttempt = 1; layoutAttempt <= 2; layoutAttempt++)
             {

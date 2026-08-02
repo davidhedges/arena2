@@ -2084,6 +2084,67 @@ namespace DungeonLab.Editor
                 DestroyImmediate(incompatibleAxis);
             }
 
+            RecipeSlotIntent cornerReturnSlot = null;
+            foreach (RecipeSlotIntent slot in intent.recipeSlots)
+            {
+                if (string.Equals(
+                        slot?.recipe?.recipeId,
+                        CornerReturnRecipeFixtureId,
+                        StringComparison.Ordinal))
+                {
+                    cornerReturnSlot = slot;
+                    break;
+                }
+            }
+
+            int cornerReservedFootprintCount = -1;
+            int cornerRealizedBodyCount = -1;
+            bool cornerAtomicMatch = false;
+            DungeonRecipeTransition cornerTransition =
+                cornerReturnSlot?.recipe?.transitions != null &&
+                cornerReturnSlot.recipe.transitions.Length > 0
+                    ? cornerReturnSlot.recipe.transitions[0]
+                    : null;
+            DungeonRecipeMotif cornerMotif = cornerTransition == null
+                ? null
+                : FindRecipeMotif(cornerReturnSlot.recipe, cornerTransition.motifId);
+            if (cornerTransition != null && cornerMotif != null)
+            {
+                var transitionPlacement = new RecipeTransitionPlacement(
+                    cornerTransition,
+                    cornerMotif.implementationId,
+                    cornerTransition.lowerTransitionCell,
+                    cornerTransition.upperTransitionCell,
+                    cornerTransition.lowerLandingCells,
+                    cornerTransition.upperLandingCells,
+                    cornerTransition.footprintCells,
+                    cornerTransition.climbDirection,
+                    string.Empty,
+                    string.Empty,
+                    0,
+                    0);
+                Vector2Int[] realizedBody =
+                    RealizedRecipeTransitionFootprint(transitionPlacement);
+                int fixtureLowerDirection = DirectionFromVector(Vector2.up);
+                var realizedTransition = new ElevationEdgeModel.TransitionEdge(
+                    transitionPlacement.upperTransitionCell,
+                    1,
+                    transitionPlacement.lowerTransitionCell,
+                    0,
+                    "fixture-step-strip",
+                    transitionPlacement.lowerLandingCells,
+                    transitionPlacement.upperLandingCells,
+                    realizedBody,
+                    fixtureLowerDirection,
+                    OppositeDirection(fixtureLowerDirection),
+                    DaisStairPlacementClass);
+                cornerReservedFootprintCount = transitionPlacement.footprintCells.Length;
+                cornerRealizedBodyCount = realizedBody.Length;
+                cornerAtomicMatch = ResolvedTransitionMatchesRecipe(
+                    realizedTransition,
+                    transitionPlacement);
+            }
+
             var lines = new List<string>
             {
                 $"catalog.error={catalogError}",
@@ -2094,6 +2155,10 @@ namespace DungeonLab.Editor
                 $"target.contractValid={targetContractValid}",
                 $"target.portsMatchTopology={targetPortsMatchTopology}",
                 $"target.incompatibleAxisRejected={incompatibleAxisRejected}",
+                $"cornerReturn.selected={cornerReturnSlot != null}",
+                $"cornerReturn.reservedFootprintCount={cornerReservedFootprintCount}",
+                $"cornerReturn.realizedBodyCount={cornerRealizedBodyCount}",
+                $"cornerReturn.atomicMatch={cornerAtomicMatch}",
                 $"vista.required={intent.vista.minimumReservedVoidCells}"
             };
 
