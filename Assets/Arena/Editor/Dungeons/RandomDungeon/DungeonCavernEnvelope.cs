@@ -488,7 +488,10 @@ namespace DungeonLab.Editor
             const int rings = 6;
             const int sides = 40;
 
-            float core = Mathf.Lerp(0.10f, 0.95f, depth.Glow);
+            // A distant pool, not a lit floor. At 0.95 this disc is 285m across
+            // and nearly pure lava colour, so it filled the lower half of the
+            // view on its own and everything in front of it went to silhouette.
+            float core = Mathf.Lerp(0.05f, 0.38f, depth.Glow);
             var vertices = new List<Vector3>(rings * sides + 1) { Vector3.zero };
             var colours = new List<Color>(rings * sides + 1)
             {

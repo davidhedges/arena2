@@ -35,11 +35,28 @@ namespace DungeonLab.Editor
         private const int Width = 2048;
         private const int Height = 1024;
 
-        /// <summary>Fraction of image height over which the underglow reaches.</summary>
-        private const float GlowBandTop = 0.44f;
+        /// <summary>
+        /// Fraction of image height over which the underglow reaches, measured
+        /// from straight down.
+        /// </summary>
+        /// <remarks>
+        /// MEASURED WRONG AT 0.44: that assumption was that the dungeon occludes
+        /// everything below the horizon. It does not — the dungeon is a platform
+        /// standing in open space, so from any edge the player looks straight
+        /// out into the panorama's lower half. Lighting that whole half put a
+        /// cream-coloured field across most of the frame and silhouetted the
+        /// spires, the architecture and the player against it. The distance must
+        /// be the DARKEST thing in a cavern; the lava is an accent, not a floor
+        /// of light.
+        /// </remarks>
+        private const float GlowBandTop = 0.18f;
 
         /// <summary>Blur radius in pixels. This is what keeps it painterly rather than faceted.</summary>
-        private const int BlurRadius = 5;
+        // 5 left ridge edges hard; 14 smeared every silhouette into a blob. The
+        // hard edge that prompted raising this was really a CONTRAST problem —
+        // a bright field behind a dark mass — and darkening the palette fixed
+        // it, so this only needs to take the aliasing off.
+        private const int BlurRadius = 7;
 
         /// <summary>
         /// Horizon layers, farthest first. Each is a noise profile at its own
@@ -231,7 +248,7 @@ namespace DungeonLab.Editor
 
         /// <summary>Lava light on rock rising from below.</summary>
         private static float FloorLit(float verticalFraction, CavernDepthProfile depth) =>
-            Mathf.Pow(Mathf.Clamp01(1f - verticalFraction / GlowBandTop), 1.4f) * depth.Glow;
+            Mathf.Pow(Mathf.Clamp01(1f - verticalFraction / GlowBandTop), 1.4f) * depth.Glow * MaxLit;
 
         /// <summary>
         /// Lava light on the ceiling mass, which catches it on its UNDERSIDES.
@@ -244,7 +261,15 @@ namespace DungeonLab.Editor
         /// most cave-like cue available here.
         /// </remarks>
         private static float CeilingLit(float verticalFraction, CavernDepthProfile depth) =>
-            Mathf.Pow(Mathf.Clamp01(1f - (verticalFraction - 0.5f) / 0.5f), 1.8f) * depth.Glow * 0.5f;
+            Mathf.Pow(Mathf.Clamp01(1f - (verticalFraction - 0.5f) / 0.5f), 1.8f) * depth.Glow * 0.22f;
+
+        /// <summary>
+        /// Ceiling on how far any painted rock may be pushed toward the raw lava
+        /// colour. Distant rock catching lava light is never AS bright as the
+        /// lava; letting it reach the full colour is what flattened the backdrop
+        /// into a uniform glow with no stone left in it.
+        /// </summary>
+        private const float MaxLit = 0.55f;
 
         private static Color RockColour(
             Color background,
