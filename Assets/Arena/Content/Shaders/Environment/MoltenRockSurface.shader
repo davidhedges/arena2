@@ -83,6 +83,21 @@ Shader "Arena/Environment/MoltenRockSurface"
         _EmissionPulseSpeed("Pulse Speed", Float) = 0.3
 
         [Space(12)]
+        [Header(Tiling Breakup)]
+        // The static rock set is sampled once at a fixed UV, so on a large flat
+        // surface its own grid is plainly readable — a 40m floor at a 2.9m
+        // repeat shows fourteen copies of every distinctive feature. This
+        // samples the set a SECOND time at a rotated, rescaled UV and blends
+        // between them on low-frequency noise, so the two grids never align and
+        // there is no repeating unit to find. Costs five extra samples, so it
+        // is a shader_feature and off unless a material asks for it.
+        [Toggle(_TILINGBREAKUP_ON)] _TilingBreakup("Break Up Tiling", Float) = 0
+        _BreakupUVScale("Breakup UV Scale", Float) = 0.63
+        _BreakupRotation("Breakup Rotation (Degrees)", Range(0, 90)) = 37
+        _BreakupMaskTiling("Breakup Mask Tiling", Float) = 0.06
+        _BreakupSharpness("Breakup Edge Sharpness", Range(0, 8)) = 3
+
+        [Space(12)]
         [Header(Advanced)]
         [ToggleUI] _WorldSpaceUV("World Space UV (XZ, 1 unit = 1 UV)", Float) = 0
     }
@@ -143,6 +158,10 @@ Shader "Arena/Environment/MoltenRockSurface"
             half _MaskThreshold;
             half _MaskSoftness;
             half _WorldSpaceUV;
+            float _BreakupUVScale;
+            float _BreakupRotation;
+            float _BreakupMaskTiling;
+            half _BreakupSharpness;
         CBUFFER_END
         ENDHLSL
 
@@ -177,6 +196,7 @@ Shader "Arena/Environment/MoltenRockSurface"
             #pragma multi_compile_fragment _ _DBUFFER_MRT1 _DBUFFER_MRT2 _DBUFFER_MRT3
             #pragma multi_compile_fog
             #pragma multi_compile_instancing
+            #pragma shader_feature_local_fragment _TILINGBREAKUP_ON
 
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/ParallaxMapping.hlsl"
@@ -279,6 +299,50 @@ Shader "Arena/Environment/MoltenRockSurface"
                 half4 metallicGloss = SAMPLE_TEXTURE2D(_MetallicGlossMap, sampler_BaseMap, uv);
                 half occlusion = lerp(1.0, SAMPLE_TEXTURE2D(_OcclusionMap, sampler_BaseMap, uv).g, _OcclusionStrength);
                 half4 emissionSample = SAMPLE_TEXTURE2D(_EmissionMap, sampler_BaseMap, uv);
+
+#if defined(_TILINGBREAKUP_ON)
+                // Second copy of the same static set on a rotated, rescaled
+                // grid. Because neither the rotation nor the scale is rational
+                // against the first, the two grids never come back into phase,
+                // and a low-frequency mask decides which one is showing.
+                float sinB, cosB;
+                sincos(radians(_BreakupRotation), sinB, cosB);
+                float2 uvBreakup = RotateUV(uv, float2(sinB, cosB)) * _BreakupUVScale;
+
+                // Mask rides the UNROTATED uv so its own features stay put
+                // while the layer under them swaps.
+                half breakupNoise = SAMPLE_TEXTURE2D(_NoiseMap, sampler_NoiseMap, uv * _BreakupMaskTiling).r;
+                half breakupWeight = saturate((breakupNoise - 0.5) * _BreakupSharpness + 0.5);
+
+                staticAlbedo = lerp(
+                    staticAlbedo,
+                    SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uvBreakup).rgb * _BaseColor.rgb,
+                    breakupWeight);
+
+                // The second normal is stored in ITS texture space, which this
+                // layer maps into the surface by the INVERSE rotation. Blending
+                // it unrotated lights the rotated rock as if its detail still
+                // ran along the original axes — the shading and the albedo
+                // disagree, and the surface reads as smeared rather than
+                // fractured.
+                half3 breakupNormalTS = UnpackNormalScale(
+                    SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uvBreakup), _NormalStrength);
+                breakupNormalTS.xy = RotateUV(breakupNormalTS.xy, float2(-sinB, cosB));
+                staticNormalTS = BlendLayerNormals(staticNormalTS, breakupNormalTS, breakupWeight);
+
+                metallicGloss = lerp(
+                    metallicGloss, SAMPLE_TEXTURE2D(_MetallicGlossMap, sampler_BaseMap, uvBreakup), breakupWeight);
+                occlusion = lerp(
+                    occlusion,
+                    lerp(1.0, SAMPLE_TEXTURE2D(_OcclusionMap, sampler_BaseMap, uvBreakup).g, _OcclusionStrength),
+                    breakupWeight);
+                // Emission goes through the same blend, and the molten mask is
+                // derived from it below — so the glowing crack web, which is
+                // the strongest repeating signal on this surface, is broken up
+                // by the same weight rather than staying on the original grid.
+                emissionSample = lerp(
+                    emissionSample, SAMPLE_TEXTURE2D(_EmissionMap, sampler_BaseMap, uvBreakup), breakupWeight);
+#endif
 
                 // The molten mask is sampled at the same fixed UV, so the
                 // rock/molten boundary never moves. Default source is the

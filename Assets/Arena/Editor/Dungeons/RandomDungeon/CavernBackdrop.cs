@@ -29,7 +29,15 @@ namespace DungeonLab.Editor
     internal static class CavernBackdrop
     {
         private const string GeneratedFolder = "Assets/Arena/Content/Art/Generated";
-        private const string BackdropAssetPath = GeneratedFolder + "/CavernBackdrop.png";
+
+        /// <summary>Where the generated dungeon's own backdrop lands.</summary>
+        /// <remarks>
+        /// Callers that are not the dungeon MUST pass their own path. The
+        /// texture is a shared asset referenced by GUID from whichever scene
+        /// generated it, so two scenes writing this one path means rebuilding
+        /// either silently repaints the other.
+        /// </remarks>
+        internal const string DungeonBackdropAssetPath = GeneratedFolder + "/CavernBackdrop.png";
         private const string PanoramicShaderName = "Skybox/Panoramic";
 
         private const int Width = 2048;
@@ -135,8 +143,17 @@ namespace DungeonLab.Editor
             new(baseHeight: 0.58f, amplitude: 0.10f, frequency: 4f, haze: 0.34f, roughness: 0.65f),
         };
 
-        internal static void Apply(int seed, CavernDepthProfile depth)
+        internal static void Apply(int seed, CavernDepthProfile depth, string? backdropAssetPath = null)
         {
+            string assetPath = backdropAssetPath ?? DungeonBackdropAssetPath;
+            if (!assetPath.StartsWith(GeneratedFolder + "/", StringComparison.Ordinal) ||
+                !assetPath.EndsWith(".png", StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    $"Backdrop path must be a .png under '{GeneratedFolder}'; got '{assetPath}'.",
+                    nameof(backdropAssetPath));
+            }
+
             Color[] pixels = Paint(seed, depth);
             Blur(pixels);
             ToGammaSpace(pixels);
@@ -147,11 +164,11 @@ namespace DungeonLab.Editor
 
             byte[] png = texture.EncodeToPNG();
             UnityEngine.Object.DestroyImmediate(texture);
-            WriteBackdropAsset(png);
+            WriteBackdropAsset(png, assetPath);
 
-            Texture2D? imported = AssetDatabase.LoadAssetAtPath<Texture2D>(BackdropAssetPath);
+            Texture2D? imported = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
             if (imported == null)
-                throw new InvalidOperationException($"Generated backdrop '{BackdropAssetPath}' did not import.");
+                throw new InvalidOperationException($"Generated backdrop '{assetPath}' did not import.");
 
             Shader? shader = Shader.Find(PanoramicShaderName);
             if (shader == null)
@@ -437,19 +454,19 @@ namespace DungeonLab.Editor
             }
         }
 
-        private static void WriteBackdropAsset(byte[] png)
+        private static void WriteBackdropAsset(byte[] png, string assetPath)
         {
             if (!AssetDatabase.IsValidFolder(GeneratedFolder))
                 AssetDatabase.CreateFolder("Assets/Arena/Content/Art", "Generated");
 
-            File.WriteAllBytes(BackdropAssetPath, png);
-            AssetDatabase.ImportAsset(BackdropAssetPath, ImportAssetOptions.ForceUpdate);
+            File.WriteAllBytes(assetPath, png);
+            AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
 
             // Written as an imported asset rather than embedded in the scene: a
             // 2048x1024 texture serialised into scene YAML bloats the scene file
             // and its load time for no benefit.
-            if (AssetImporter.GetAtPath(BackdropAssetPath) is not TextureImporter importer)
-                throw new InvalidOperationException($"Generated backdrop '{BackdropAssetPath}' has no texture importer.");
+            if (AssetImporter.GetAtPath(assetPath) is not TextureImporter importer)
+                throw new InvalidOperationException($"Generated backdrop '{assetPath}' has no texture importer.");
 
             importer.textureType = TextureImporterType.Default;
             importer.wrapModeU = TextureWrapMode.Repeat;  // seamless around the horizon

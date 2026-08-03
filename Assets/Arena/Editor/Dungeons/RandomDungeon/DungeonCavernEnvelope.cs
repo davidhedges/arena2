@@ -148,11 +148,28 @@ namespace DungeonLab.Editor
         private const float OverheadMinHeight = 45f;
         private const float OverheadMaxHeight = 130f;
 
+        /// <summary>
+        /// Wraps a built world in the cavern illusion.
+        /// </summary>
+        /// <param name="buildGlowPool">
+        /// False suppresses the fake lava disc. Required whenever the caller
+        /// owns REAL lava geometry: the disc is an unlit vertex-coloured
+        /// gradient standing in for a surface, and drawn over one it z-fights
+        /// and flattens it. The vertex-baked warmth on the rock and the
+        /// underglow light are unaffected and still wanted.
+        /// </param>
+        /// <param name="backdropAssetPath">
+        /// Where the generated panorama lands. Defaults to the dungeon's own
+        /// asset; every other caller must claim its own path, or rebuilding one
+        /// scene repaints the other. See <see cref="CavernBackdrop"/>.
+        /// </param>
         internal static void Build(
             Scene destination,
             GameObject dungeonRoot,
             int seed,
-            CavernDepthProfile depth)
+            CavernDepthProfile depth,
+            bool buildGlowPool = true,
+            string? backdropAssetPath = null)
         {
             if (dungeonRoot == null)
                 throw new ArgumentNullException(nameof(dungeonRoot));
@@ -190,10 +207,10 @@ namespace DungeonLab.Editor
             silhouettes += BuildOverheadField(
                 farVault.transform, seed, depth, centre, ceilingY, glowY, glowSpan, silhouette);
 
-            BuildUnderglow(root.transform, seed, depth, centre, hullRadius, glowY, silhouette);
+            BuildUnderglow(root.transform, seed, depth, centre, hullRadius, glowY, silhouette, buildGlowPool);
 
             // Behind every band: the painted layer the bands parallax against.
-            CavernBackdrop.Apply(seed, depth);
+            CavernBackdrop.Apply(seed, depth, backdropAssetPath);
 
             NormalizeEnvelopeObjects(root);
 
@@ -374,7 +391,8 @@ namespace DungeonLab.Editor
             Vector3 centre,
             float hullRadius,
             float glowY,
-            Material silhouette)
+            Material silhouette,
+            bool buildGlowPool)
         {
             GameObject underglow = new("Underglow");
             underglow.transform.SetParent(parent, worldPositionStays: false);
@@ -395,6 +413,9 @@ namespace DungeonLab.Editor
             light.intensity = depth.GlowIntensity;
             light.shadows = LightShadows.None;
             light.bounceIntensity = 0f;
+
+            if (!buildGlowPool)
+                return;
 
             System.Random rng = Stream(seed, "glow-pool");
             float radius = hullRadius * 2.2f + 60f;
