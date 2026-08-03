@@ -194,6 +194,7 @@ namespace Arena.EditModeTests
                     doorId,
                     "OPEN",
                     null,
+                    0UL,
                     "RandomDungeon",
                     false,
                     1,
