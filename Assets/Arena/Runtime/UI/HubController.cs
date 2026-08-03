@@ -22,6 +22,8 @@ namespace Arena.UI
     public sealed class HubController : MonoBehaviour, IEscapeCloseable
     {
         private const string HubSceneName = "Hub";
+        private const string SurvivalButtonName = "Mode_Survival";
+        private const string SurvivalDisplayName = "Survival Mode";
 
         // All hub styling flows through the shared theme so the baked scene and
         // the procedural windows read as one system.
@@ -50,6 +52,7 @@ namespace Arena.UI
         private TMP_Text? _destinationValue;
         private DbConnection? _travelConnection;
         private string? _pendingTravelScene;
+        private bool _pendingSurvivalStart;
         private bool _wired;
         private string _lastCombatProfile = string.Empty;
         private string _lastShowcaseAppearanceSignature = string.Empty;
@@ -213,6 +216,13 @@ namespace Arena.UI
                     if (destinationButton == null)
                         continue;
 
+                    if (string.Equals(child.name, SurvivalButtonName, System.StringComparison.Ordinal))
+                    {
+                        destinationButton.onClick.RemoveAllListeners();
+                        destinationButton.onClick.AddListener(RequestSurvival);
+                        continue;
+                    }
+
                     string sceneName = child.name.StartsWith("Travel_", System.StringComparison.Ordinal)
                         ? child.name.Substring("Travel_".Length)
                         : string.Empty;
@@ -242,22 +252,29 @@ namespace Arena.UI
                 return;
 
             if (_travelConnection != null)
+            {
                 _travelConnection.Reducers.OnSetOpenWorldScene -= OnSetOpenWorldScene;
+                _travelConnection.Reducers.OnStartSurvivalRun -= OnStartSurvivalRun;
+            }
 
             _travelConnection = conn;
-            if (_pendingTravelScene != null)
+            if (_pendingTravelScene != null || _pendingSurvivalStart)
             {
                 _pendingTravelScene = null;
+                _pendingSurvivalStart = false;
                 SetTravelButtonsInteractable(true);
             }
 
             if (conn != null)
+            {
                 conn.Reducers.OnSetOpenWorldScene += OnSetOpenWorldScene;
+                conn.Reducers.OnStartSurvivalRun += OnStartSurvivalRun;
+            }
         }
 
         private void RequestTravel(string sceneName)
         {
-            if (_pendingTravelScene != null)
+            if (_pendingTravelScene != null || _pendingSurvivalStart)
                 return;
             if (!OpenWorldTravelCatalog.IsRegisteredOpenWorldScene(sceneName))
             {
@@ -275,6 +292,23 @@ namespace Arena.UI
             _pendingTravelScene = sceneName;
             SetTravelButtonsInteractable(false);
             _travelConnection.Reducers.SetOpenWorldScene(sceneName);
+        }
+
+        private void RequestSurvival()
+        {
+            if (_pendingTravelScene != null || _pendingSurvivalStart)
+                return;
+
+            EnsureTravelConnection();
+            if (_travelConnection == null)
+            {
+                Debug.LogWarning($"[{nameof(HubController)}] Cannot start survival while disconnected.");
+                return;
+            }
+
+            _pendingSurvivalStart = true;
+            SetTravelButtonsInteractable(false);
+            _travelConnection.Reducers.StartSurvivalRun();
         }
 
         private void OnSetOpenWorldScene(ReducerEventContext ctx, string sceneName)
@@ -303,6 +337,34 @@ namespace Arena.UI
             };
             Debug.LogError($"[{nameof(HubController)}] Travel to '{sceneName}' failed: {reason}");
             _pendingTravelScene = null;
+            SetTravelButtonsInteractable(true);
+        }
+
+        private void OnStartSurvivalRun(ReducerEventContext ctx)
+        {
+            if (_travelConnection == null
+                || !_travelConnection.Identity.HasValue
+                || ctx.Event.CallerIdentity != _travelConnection.Identity.Value
+                || !_pendingSurvivalStart)
+            {
+                return;
+            }
+
+            if (ctx.Event.Status is Status.Committed)
+            {
+                if (_travelMenu != null)
+                    _travelMenu.SetActive(false);
+                return;
+            }
+
+            string reason = ctx.Event.Status switch
+            {
+                Status.Failed(var failure) => failure,
+                Status.OutOfEnergy(var _) => "server was out of reducer energy",
+                _ => "server did not commit the survival request",
+            };
+            Debug.LogError($"[{nameof(HubController)}] Starting survival failed: {reason}");
+            _pendingSurvivalStart = false;
             SetTravelButtonsInteractable(true);
         }
 
@@ -494,7 +556,7 @@ namespace Arena.UI
             float buttonHeight = metrics.DestinationButtonHeight;
             float buttonGap = metrics.DestinationButtonGap;
             float buttonStep = buttonHeight + buttonGap;
-            float listHeight = destinations.Length * buttonStep;
+            float listHeight = (destinations.Length + 1) * buttonStep;
             float menuHeight = Mathf.Max(320f, metrics.PanelInset * 2f + 46f + listHeight);
             float listWidth = metrics.RightPanelWidth - metrics.PanelInset * 2f;
 
@@ -509,7 +571,10 @@ namespace Arena.UI
 
             SetTopLeft(list, new Vector2(metrics.PanelInset, -metrics.PanelInset - 58f), new Vector2(listWidth, listHeight));
 
-            var destinationNames = new HashSet<string>(destinations.Select(destination => $"Travel_{destination.SceneName}"), System.StringComparer.Ordinal);
+            var destinationNames = new HashSet<string>(destinations.Select(destination => $"Travel_{destination.SceneName}"), System.StringComparer.Ordinal)
+            {
+                SurvivalButtonName,
+            };
             for (int i = list.childCount - 1; i >= 0; i--)
             {
                 Transform child = list.GetChild(i);
@@ -522,48 +587,70 @@ namespace Arena.UI
                 }
             }
 
+            Transform? survivalChild = list.Find(SurvivalButtonName);
+            RectTransform survivalRect = survivalChild as RectTransform ?? CreateRect(list, SurvivalButtonName);
+            survivalRect.SetSiblingIndex(0);
+            SetTopLeft(survivalRect, Vector2.zero, new Vector2(listWidth, buttonHeight));
+            ConfigureDestinationButton(
+                survivalRect,
+                _pendingSurvivalStart ? "Entering Survival..." : SurvivalDisplayName,
+                listWidth,
+                buttonHeight,
+                Color.Lerp(ButtonColor, Accent, 0.18f),
+                "MODE");
+
             for (int i = 0; i < destinations.Length; i++)
             {
                 OpenWorldTravelCatalog.Destination destination = destinations[i];
                 string buttonName = $"Travel_{destination.SceneName}";
                 Transform? child = list.Find(buttonName);
                 RectTransform buttonRect = child as RectTransform ?? CreateRect(list, buttonName);
-                buttonRect.SetSiblingIndex(i);
-                SetTopLeft(buttonRect, new Vector2(0f, -i * buttonStep), new Vector2(listWidth, buttonHeight));
+                buttonRect.SetSiblingIndex(i + 1);
+                SetTopLeft(buttonRect, new Vector2(0f, -(i + 1) * buttonStep), new Vector2(listWidth, buttonHeight));
+                ConfigureDestinationButton(buttonRect, destination.DisplayName, listWidth, buttonHeight, ButtonColor);
+            }
+        }
 
-                Image image = ArenaUiKit.EnsureComponent<Image>(buttonRect.gameObject);
-                image.color = ButtonColor;
+        private void ConfigureDestinationButton(
+            RectTransform buttonRect,
+            string displayName,
+            float listWidth,
+            float buttonHeight,
+            Color background,
+            string? tag = null)
+        {
+            Image image = ArenaUiKit.EnsureComponent<Image>(buttonRect.gameObject);
+            image.color = background;
 
-                Button button = ArenaUiKit.EnsureComponent<Button>(buttonRect.gameObject);
-                button.interactable = true;
-                ColorBlock colors = button.colors;
-                colors.normalColor = image.color;
-                colors.highlightedColor = ButtonHoverColor;
-                colors.selectedColor = colors.highlightedColor;
-                colors.pressedColor = Color.Lerp(image.color, Color.black, 0.24f);
-                colors.disabledColor = new Color(0.05f, 0.055f, 0.065f, 0.52f);
-                button.colors = colors;
-                AttachHeatButton(button, destination.DisplayName);
+            Button button = ArenaUiKit.EnsureComponent<Button>(buttonRect.gameObject);
+            button.interactable = _pendingTravelScene == null && !_pendingSurvivalStart;
+            ColorBlock colors = button.colors;
+            colors.normalColor = image.color;
+            colors.highlightedColor = ButtonHoverColor;
+            colors.selectedColor = colors.highlightedColor;
+            colors.pressedColor = Color.Lerp(image.color, Color.black, 0.24f);
+            colors.disabledColor = new Color(0.05f, 0.055f, 0.065f, 0.52f);
+            button.colors = colors;
+            AttachHeatButton(button, displayName);
 
-                RectTransform accent = EnsureImage(buttonRect, "Accent", Accent).rectTransform;
-                SetAnchored(accent, new Vector2(0f, 0.5f), Vector2.zero, new Vector2(4f, buttonHeight - 14f), new Vector2(0f, 0.5f));
-                RectTransform chevron = EnsureText(buttonRect, "Chevron", ">", 20, FontStyles.Bold, TextAlignmentOptions.Center, MutedTextColor).rectTransform;
-                SetAnchored(chevron, new Vector2(1f, 0.5f), new Vector2(-22f, 0f), new Vector2(20f, 22f), new Vector2(0.5f, 0.5f));
+            RectTransform accent = EnsureImage(buttonRect, "Accent", Accent).rectTransform;
+            SetAnchored(accent, new Vector2(0f, 0.5f), Vector2.zero, new Vector2(4f, buttonHeight - 14f), new Vector2(0f, 0.5f));
+            RectTransform chevron = EnsureText(buttonRect, "Chevron", ">", 20, FontStyles.Bold, TextAlignmentOptions.Center, MutedTextColor).rectTransform;
+            SetAnchored(chevron, new Vector2(1f, 0.5f), new Vector2(-22f, 0f), new Vector2(20f, 22f), new Vector2(0.5f, 0.5f));
 
-                TMP_Text? label = buttonRect.Find("Label")?.GetComponent<TMP_Text>();
-                if (label == null)
-                {
-                    label = CreateText(buttonRect, "Label", destination.DisplayName, 15, FontStyles.Bold, TextAlignmentOptions.Left, ArenaUiTheme.Text);
-                    SetAnchored(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(22f, 0f), new Vector2(listWidth - 70f, 22f), new Vector2(0f, 0.5f));
-                }
-                else
-                {
-                    label.text = destination.DisplayName;
-                    label.fontSize = 15;
-                    label.fontStyle = FontStyles.Bold;
-                    label.color = ArenaUiTheme.Text;
-                    SetAnchored(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(22f, 0f), new Vector2(listWidth - 70f, 22f), new Vector2(0f, 0.5f));
-                }
+            float tagWidth = string.IsNullOrWhiteSpace(tag) ? 0f : 54f;
+            TMP_Text label = EnsureText(buttonRect, "Label", displayName, 15, FontStyles.Bold, TextAlignmentOptions.Left, ArenaUiTheme.Text);
+            SetAnchored(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(22f, 0f), new Vector2(listWidth - 70f - tagWidth, 22f), new Vector2(0f, 0.5f));
+
+            Transform? existingTag = buttonRect.Find("Tag");
+            if (!string.IsNullOrWhiteSpace(tag))
+            {
+                TMP_Text tagLabel = EnsureText(buttonRect, "Tag", tag, 10, FontStyles.Bold, TextAlignmentOptions.Center, Accent);
+                SetAnchored(tagLabel.rectTransform, new Vector2(1f, 0.5f), new Vector2(-66f, 0f), new Vector2(48f, 18f), new Vector2(0.5f, 0.5f));
+            }
+            else if (existingTag != null)
+            {
+                DestroySceneObject(existingTag.gameObject);
             }
         }
 
@@ -740,7 +827,7 @@ namespace Arena.UI
             TMP_Text title = EnsureText(_travelMenu.transform, "Title", "SELECT DESTINATION", 17, FontStyles.Bold, TextAlignmentOptions.Left, ArenaUiTheme.Text);
             SetTopLeft(title.rectTransform, new Vector2(metrics.PanelInset, -metrics.PanelInset), new Vector2(320f, 24f));
 
-            TMP_Text subtitle = EnsureText(_travelMenu.transform, "HeatTravelSubtitle", "OPEN WORLD", 11, FontStyles.Bold, TextAlignmentOptions.Left, MutedTextColor);
+            TMP_Text subtitle = EnsureText(_travelMenu.transform, "HeatTravelSubtitle", "MODES & OPEN WORLD", 11, FontStyles.Bold, TextAlignmentOptions.Left, MutedTextColor);
             SetTopLeft(subtitle.rectTransform, new Vector2(metrics.PanelInset, -metrics.PanelInset - 24f), new Vector2(180f, 18f));
         }
 

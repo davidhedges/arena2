@@ -15,6 +15,7 @@ use crate::action_prediction::{
     has_predicted_action_result, record_predicted_action_result, ActionPredictionToken,
     ActionRejectReason, ActionResultKind, PredictedActionFamily,
 };
+use crate::arena::instance_uses_flat_layout;
 use crate::arena::player_world as _;
 use crate::arena::{
     arena_seed_for_identity, open_world_scene_name_for_identity, players_share_world_context,
@@ -51,7 +52,6 @@ use crate::defense::{
     DefenseResolution, DefensibleCombatHit,
 };
 use crate::player::DEFAULT_COMBAT_PROFILE;
-use crate::practice::is_training_instance;
 use crate::progression::{
     active_action_bar_assignment_debug_summary, active_selectable_ability_for_authored_action,
     derived_combat_profile_id_for_owner, melee_channel_for_ability_id,
@@ -2260,14 +2260,14 @@ fn gap_close_target_facing_satisfied(
         )
 }
 
-fn gap_close_uses_flat_training_collision(ctx: &ReducerContext, owner: Identity) -> bool {
+fn gap_close_uses_flat_layout(ctx: &ReducerContext, owner: Identity) -> bool {
     let Some(world) = ctx.db.player_world().identity().find(owner) else {
         return false;
     };
     let Some(instance_id) = world.instance_id else {
         return false;
     };
-    is_training_instance(ctx, instance_id)
+    instance_uses_flat_layout(ctx, instance_id)
 }
 
 fn validate_gap_close_destination(
@@ -2279,7 +2279,7 @@ fn validate_gap_close_destination(
     arrival_epsilon: f32,
 ) -> Result<SpellVec3, GapCloseResolveFailure> {
     let arena_seed = arena_seed_for_identity(ctx, owner);
-    let flat_ground_only = gap_close_uses_flat_training_collision(ctx, owner);
+    let flat_ground_only = gap_close_uses_flat_layout(ctx, owner);
     let open_world_scene_name = open_world_scene_name_for_identity(ctx, owner);
     let ground_y = surface_height_for_world_at_y_with_layout_for_scene(
         arena_seed,

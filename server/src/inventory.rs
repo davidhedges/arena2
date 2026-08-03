@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use serde::{Deserialize, Serialize};
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::{open_world_scene_name_for_identity, player_world as _};
@@ -19,6 +20,15 @@ use crate::progression::{
 use crate::relations::TargetAudience;
 use crate::resources::grant_primary_resource_amount_for_kind;
 use crate::spells::{is_on_global_cooldown, stamp_global_cooldown_for_duration};
+
+#[allow(unused_imports)]
+use crate::survival::survival_run as _;
+#[allow(unused_imports)]
+use crate::survival::survival_run_item as _;
+#[allow(unused_imports)]
+use crate::survival::survival_stash as _;
+#[allow(unused_imports)]
+use crate::survival::survival_upgrade as _;
 
 #[allow(unused_imports)]
 use crate::inventory::equipment_loadout as _;
@@ -252,6 +262,9 @@ pub struct InventoryContainer {
     pub anchor_identity: Option<Identity>,
     pub world_kind: String,
     pub instance_id: Option<u64>,
+    /// Query-safe scalar mirror of `instance_id`; zero means no instance.
+    #[index(btree)]
+    pub instance_scope_id: u64,
     pub open_world_scene_name: String,
     pub pos_x: f32,
     pub pos_y: f32,
@@ -386,6 +399,59 @@ struct LootRollContext {
     open_world_scene_name: String,
     hidden_loot_quality: f32,
     drop_chance: f32,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Serialize)]
+struct SurvivalEquipmentSnapshot {
+    head_item_id: Option<String>,
+    shoulder_item_id: Option<String>,
+    cape_item_id: Option<String>,
+    chest_item_id: Option<String>,
+    legs_item_id: Option<String>,
+    boots_item_id: Option<String>,
+    gloves_item_id: Option<String>,
+    ring_1_item_id: Option<String>,
+    ring_2_item_id: Option<String>,
+    amulet_item_id: Option<String>,
+    main_hand_item_id: Option<String>,
+    off_hand_item_id: Option<String>,
+    spellbook_item_id: Option<String>,
+    revision: u64,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Serialize)]
+struct SurvivalItemSnapshot {
+    item_instance_id: String,
+    item_def_id: String,
+    quantity: u32,
+    created_at_micros: i64,
+    affixes: Vec<SurvivalAffixSnapshot>,
+    spells: Vec<SurvivalSpellSnapshot>,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Serialize)]
+struct SurvivalAffixSnapshot {
+    key: String,
+    affix_id: String,
+    modifier_kind: String,
+    value: f32,
+    sort_order: u32,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Serialize)]
+struct SurvivalSpellSnapshot {
+    key: String,
+    slot_index: u32,
+    spell_id: String,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Serialize)]
+struct SurvivalPlacementSnapshot {
+    item_instance_id: String,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -2259,6 +2325,511 @@ pub(crate) fn ensure_player_inventory_for_identity(ctx: &ReducerContext, owner: 
     sync_progression_for_equipment_change(ctx, owner, ctx.timestamp);
 }
 
+pub(crate) fn begin_survival_inventory(
+    ctx: &ReducerContext,
+    owner: Identity,
+    arena_id: u64,
+) -> Result<(), String> {
+    if ctx.db.survival_stash().owner().find(owner).is_some() {
+        return Err("A survival inventory stash already exists".to_string());
+    }
+    let bag = require_player_bag(ctx, owner)?;
+    let equipment = ctx
+        .db
+        .equipment_loadout()
+        .owner()
+        .find(owner)
+        .ok_or_else(|| "Player equipment is not initialized".to_string())?;
+
+    let mut placements: Vec<SurvivalPlacementSnapshot> = ctx
+        .db
+        .inventory_slot()
+        .container_id()
+        .filter(bag.container_id.as_str())
+        .map(|slot| SurvivalPlacementSnapshot {
+            item_instance_id: slot.item_instance_id,
+            x: slot.x,
+            y: slot.y,
+            width: slot.width,
+            height: slot.height,
+        })
+        .collect();
+    placements.sort_by(|left, right| left.item_instance_id.cmp(&right.item_instance_id));
+
+    let mut item_ids: Vec<String> = placements
+        .iter()
+        .map(|placement| placement.item_instance_id.clone())
+        .chain(equipment_item_ids(&equipment).map(str::to_string))
+        .collect();
+    item_ids.sort();
+    item_ids.dedup();
+
+    let mut item_snapshots = Vec::with_capacity(item_ids.len());
+    for item_instance_id in &item_ids {
+        item_snapshots.push(snapshot_item_aggregate(ctx, item_instance_id.as_str())?);
+    }
+    let equipment_snapshot = snapshot_equipment(&equipment);
+    let equipment_json = serde_json::to_string(&equipment_snapshot)
+        .map_err(|error| format!("Cannot snapshot survival equipment: {error}"))?;
+    let items_json = serde_json::to_string(&item_snapshots)
+        .map_err(|error| format!("Cannot snapshot survival items: {error}"))?;
+    let placements_json = serde_json::to_string(&placements)
+        .map_err(|error| format!("Cannot snapshot survival placements: {error}"))?;
+
+    ctx.db
+        .survival_stash()
+        .insert(crate::survival::SurvivalStash {
+            owner,
+            arena_id,
+            equipment_json,
+            items_json,
+            placements_json,
+            captured_at: ctx.timestamp,
+        });
+
+    let emptied = clear_equipment_loadout(equipment, ctx.timestamp);
+    ctx.db.equipment_loadout().owner().update(emptied.clone());
+    for item_instance_id in &item_ids {
+        delete_item_aggregate(ctx, item_instance_id.as_str());
+    }
+    touch_container(ctx, bag);
+
+    let starter_equipment = seed_baseline_equipment(ctx, owner, emptied, false, false);
+    let starter_item_ids: Vec<String> = equipment_item_ids(&starter_equipment)
+        .map(str::to_string)
+        .collect();
+    for item_instance_id in starter_item_ids {
+        ctx.db
+            .survival_run_item()
+            .insert(crate::survival::SurvivalRunItem {
+                item_instance_id,
+                arena_id,
+                source: crate::survival::SURVIVAL_RUN_ITEM_SOURCE_STARTER.to_string(),
+            });
+    }
+    sync_progression_for_equipment_change(ctx, owner, ctx.timestamp);
+    Ok(())
+}
+
+pub(crate) fn restore_survival_inventory(
+    ctx: &ReducerContext,
+    owner: Identity,
+    arena_id: u64,
+) -> Result<(), String> {
+    let Some(stash) = ctx.db.survival_stash().owner().find(owner) else {
+        if ctx
+            .db
+            .survival_run_item()
+            .arena_id()
+            .filter(arena_id)
+            .next()
+            .is_some()
+        {
+            return Err("Survival run items exist without an inventory stash".to_string());
+        }
+        return Ok(());
+    };
+    if stash.arena_id != arena_id {
+        return Err("Survival inventory stash belongs to another run".to_string());
+    }
+
+    let equipment_snapshot: SurvivalEquipmentSnapshot =
+        serde_json::from_str(stash.equipment_json.as_str())
+            .map_err(|error| format!("Cannot restore survival equipment snapshot: {error}"))?;
+    let item_snapshots: Vec<SurvivalItemSnapshot> = serde_json::from_str(stash.items_json.as_str())
+        .map_err(|error| format!("Cannot restore survival item snapshot: {error}"))?;
+    let placements: Vec<SurvivalPlacementSnapshot> =
+        serde_json::from_str(stash.placements_json.as_str())
+            .map_err(|error| format!("Cannot restore survival placement snapshot: {error}"))?;
+
+    let mut snapshot_ids: Vec<&str> = item_snapshots
+        .iter()
+        .map(|item| item.item_instance_id.as_str())
+        .collect();
+    snapshot_ids.sort_unstable();
+    if snapshot_ids.windows(2).any(|pair| pair[0] == pair[1]) {
+        return Err("Survival inventory snapshot contains duplicate item ids".to_string());
+    }
+    for item_instance_id in &snapshot_ids {
+        if ctx
+            .db
+            .item_instance()
+            .item_instance_id()
+            .find((*item_instance_id).to_string())
+            .is_some()
+        {
+            return Err(format!(
+                "Cannot restore survival item '{}' because that id already exists",
+                item_instance_id
+            ));
+        }
+    }
+    if placements.iter().any(|placement| {
+        snapshot_ids
+            .binary_search(&placement.item_instance_id.as_str())
+            .is_err()
+    }) {
+        return Err("Survival placement snapshot references an unknown item".to_string());
+    }
+
+    let bag = require_player_bag(ctx, owner)?;
+    let run_item_ids: Vec<String> = ctx
+        .db
+        .survival_run_item()
+        .arena_id()
+        .filter(arena_id)
+        .map(|row| row.item_instance_id)
+        .collect();
+    let bag_has_non_run_item = ctx
+        .db
+        .inventory_slot()
+        .container_id()
+        .filter(bag.container_id.as_str())
+        .any(|slot| !run_item_ids.iter().any(|id| id == &slot.item_instance_id));
+    if bag_has_non_run_item {
+        return Err("Survival bag contains an item without run provenance".to_string());
+    }
+
+    let current_equipment = ctx
+        .db
+        .equipment_loadout()
+        .owner()
+        .find(owner)
+        .unwrap_or_else(|| empty_equipment_loadout(owner, ctx.timestamp));
+    let emptied = clear_equipment_loadout(current_equipment, ctx.timestamp);
+    if ctx.db.equipment_loadout().owner().find(owner).is_some() {
+        ctx.db.equipment_loadout().owner().update(emptied.clone());
+    } else {
+        ctx.db.equipment_loadout().insert(emptied.clone());
+    }
+
+    for item_instance_id in run_item_ids {
+        delete_item_aggregate(ctx, item_instance_id.as_str());
+        ctx.db
+            .survival_run_item()
+            .item_instance_id()
+            .delete(item_instance_id);
+    }
+
+    for snapshot in &item_snapshots {
+        restore_item_aggregate(ctx, owner, snapshot);
+    }
+    for placement in placements {
+        upsert_inventory_slot(
+            ctx,
+            bag.container_id.as_str(),
+            placement.item_instance_id.as_str(),
+            placement.x,
+            placement.y,
+            placement.width,
+            placement.height,
+        );
+    }
+
+    let restored_revision = emptied
+        .revision
+        .max(equipment_snapshot.revision)
+        .saturating_add(1);
+    let restored =
+        restore_equipment_loadout(owner, equipment_snapshot, restored_revision, ctx.timestamp);
+    ctx.db.equipment_loadout().owner().update(restored);
+    touch_container(ctx, bag);
+    sync_equipment_presentation_for_owner(ctx, owner);
+    sync_progression_for_equipment_change(ctx, owner, ctx.timestamp);
+    ctx.db.survival_stash().owner().delete(owner);
+
+    if ctx
+        .db
+        .survival_run_item()
+        .arena_id()
+        .filter(arena_id)
+        .next()
+        .is_some()
+    {
+        return Err("Survival run-item teardown invariant failed".to_string());
+    }
+    Ok(())
+}
+
+pub(crate) fn roll_survival_shop_item(
+    ctx: &ReducerContext,
+    counter_owner: Identity,
+    arena_id: u64,
+    round: u32,
+    slot: u32,
+    seed: u64,
+) -> Result<(String, u32), String> {
+    let context = LootRollContext {
+        source_kind: "SURVIVAL_SHOP",
+        source_id: format!("{arena_id}:{round}:{slot}:{seed}"),
+        template_id: String::new(),
+        world_kind: "INSTANCE".to_string(),
+        open_world_scene_name: String::new(),
+        hidden_loot_quality: survival_shop_hidden_quality(round),
+        drop_chance: 1.0,
+    };
+    let definition = choose_loot_item_definition(&context).ok_or_else(|| {
+        "No equipment definitions are available for the survival shop".to_string()
+    })?;
+    let affixes = roll_item_affixes(&context, &definition);
+    let affix_count = affixes.len() as u32;
+    let item_instance_id = next_item_instance_id(ctx, counter_owner);
+    ctx.db.item_instance().insert(ItemInstance {
+        item_instance_id: item_instance_id.clone(),
+        item_def_id: definition.item_def_id.to_string(),
+        current_owner_key: String::new(),
+        current_owner: None,
+        quantity: 1,
+        created_at: ctx.timestamp,
+    });
+    for rolled in affixes {
+        ctx.db.item_affix_instance().insert(ItemAffixInstance {
+            key: item_affix_instance_key(item_instance_id.as_str(), rolled.affix.affix_id),
+            item_instance_id: item_instance_id.clone(),
+            affix_id: normalize_id(rolled.affix.affix_id),
+            modifier_kind: normalize_id(rolled.affix.modifier_kind),
+            value: rolled.value,
+            sort_order: rolled.affix.sort_order,
+        });
+    }
+    Ok((item_instance_id, affix_count))
+}
+
+pub(crate) fn purchase_survival_shop_item(
+    ctx: &ReducerContext,
+    owner: Identity,
+    item_instance_id: &str,
+) -> Result<(), String> {
+    let mut item = require_item_instance(ctx, item_instance_id)?;
+    if item.current_owner.is_some() || !item.current_owner_key.is_empty() {
+        return Err("Survival shop item is no longer unowned".to_string());
+    }
+    let definition = require_item_definition(ctx, item.item_def_id.as_str())?;
+    let bag = require_player_bag(ctx, owner)?;
+    let Some((x, y)) = first_free_position(
+        ctx,
+        bag.container_id.as_str(),
+        bag.width,
+        bag.height,
+        definition.width,
+        definition.height,
+        None,
+    ) else {
+        return Err("Player inventory has no room for this survival item".to_string());
+    };
+
+    item.current_owner_key = identity_key(owner);
+    item.current_owner = Some(owner);
+    ctx.db.item_instance().item_instance_id().update(item);
+    upsert_inventory_slot(
+        ctx,
+        bag.container_id.as_str(),
+        item_instance_id,
+        x,
+        y,
+        definition.width,
+        definition.height,
+    );
+    touch_container(ctx, bag);
+    Ok(())
+}
+
+pub(crate) fn delete_item_aggregate(ctx: &ReducerContext, item_instance_id: &str) {
+    let slot_keys: Vec<String> = ctx
+        .db
+        .inventory_slot()
+        .item_instance_id()
+        .filter(item_instance_id)
+        .map(|row| row.key)
+        .collect();
+    for key in slot_keys {
+        ctx.db.inventory_slot().key().delete(key);
+    }
+    let affix_keys: Vec<String> = ctx
+        .db
+        .item_affix_instance()
+        .item_instance_id()
+        .filter(item_instance_id)
+        .map(|row| row.key)
+        .collect();
+    for key in affix_keys {
+        ctx.db.item_affix_instance().key().delete(key);
+    }
+    let spell_keys: Vec<String> = ctx
+        .db
+        .item_spell()
+        .item_instance_id()
+        .filter(item_instance_id)
+        .map(|row| row.key)
+        .collect();
+    for key in spell_keys {
+        ctx.db.item_spell().key().delete(key);
+    }
+    ctx.db
+        .item_instance()
+        .item_instance_id()
+        .delete(item_instance_id.to_string());
+}
+
+fn snapshot_equipment(equipment: &EquipmentLoadout) -> SurvivalEquipmentSnapshot {
+    SurvivalEquipmentSnapshot {
+        head_item_id: equipment.head_item_id.clone(),
+        shoulder_item_id: equipment.shoulder_item_id.clone(),
+        cape_item_id: equipment.cape_item_id.clone(),
+        chest_item_id: equipment.chest_item_id.clone(),
+        legs_item_id: equipment.legs_item_id.clone(),
+        boots_item_id: equipment.boots_item_id.clone(),
+        gloves_item_id: equipment.gloves_item_id.clone(),
+        ring_1_item_id: equipment.ring_1_item_id.clone(),
+        ring_2_item_id: equipment.ring_2_item_id.clone(),
+        amulet_item_id: equipment.amulet_item_id.clone(),
+        main_hand_item_id: equipment.main_hand_item_id.clone(),
+        off_hand_item_id: equipment.off_hand_item_id.clone(),
+        spellbook_item_id: equipment.spellbook_item_id.clone(),
+        revision: equipment.revision,
+    }
+}
+
+fn snapshot_item_aggregate(
+    ctx: &ReducerContext,
+    item_instance_id: &str,
+) -> Result<SurvivalItemSnapshot, String> {
+    let item = require_item_instance(ctx, item_instance_id)?;
+    let mut affixes: Vec<SurvivalAffixSnapshot> = ctx
+        .db
+        .item_affix_instance()
+        .item_instance_id()
+        .filter(item_instance_id)
+        .map(|row| SurvivalAffixSnapshot {
+            key: row.key,
+            affix_id: row.affix_id,
+            modifier_kind: row.modifier_kind,
+            value: row.value,
+            sort_order: row.sort_order,
+        })
+        .collect();
+    affixes.sort_by(|left, right| left.key.cmp(&right.key));
+    let mut spells: Vec<SurvivalSpellSnapshot> = ctx
+        .db
+        .item_spell()
+        .item_instance_id()
+        .filter(item_instance_id)
+        .map(|row| SurvivalSpellSnapshot {
+            key: row.key,
+            slot_index: row.slot_index,
+            spell_id: row.spell_id,
+        })
+        .collect();
+    spells.sort_by_key(|row| row.slot_index);
+    Ok(SurvivalItemSnapshot {
+        item_instance_id: item.item_instance_id,
+        item_def_id: item.item_def_id,
+        quantity: item.quantity,
+        created_at_micros: item.created_at.to_micros_since_unix_epoch(),
+        affixes,
+        spells,
+    })
+}
+
+fn restore_item_aggregate(ctx: &ReducerContext, owner: Identity, snapshot: &SurvivalItemSnapshot) {
+    ctx.db.item_instance().insert(ItemInstance {
+        item_instance_id: snapshot.item_instance_id.clone(),
+        item_def_id: snapshot.item_def_id.clone(),
+        current_owner_key: identity_key(owner),
+        current_owner: Some(owner),
+        quantity: snapshot.quantity,
+        created_at: Timestamp::from_micros_since_unix_epoch(snapshot.created_at_micros),
+    });
+    for affix in &snapshot.affixes {
+        ctx.db.item_affix_instance().insert(ItemAffixInstance {
+            key: affix.key.clone(),
+            item_instance_id: snapshot.item_instance_id.clone(),
+            affix_id: affix.affix_id.clone(),
+            modifier_kind: affix.modifier_kind.clone(),
+            value: affix.value,
+            sort_order: affix.sort_order,
+        });
+    }
+    for spell in &snapshot.spells {
+        ctx.db.item_spell().insert(ItemSpell {
+            key: spell.key.clone(),
+            item_instance_id: snapshot.item_instance_id.clone(),
+            slot_index: spell.slot_index,
+            spell_id: spell.spell_id.clone(),
+        });
+    }
+}
+
+fn empty_equipment_loadout(owner: Identity, now: Timestamp) -> EquipmentLoadout {
+    EquipmentLoadout {
+        owner,
+        head_item_id: None,
+        shoulder_item_id: None,
+        cape_item_id: None,
+        chest_item_id: None,
+        legs_item_id: None,
+        boots_item_id: None,
+        gloves_item_id: None,
+        ring_1_item_id: None,
+        ring_2_item_id: None,
+        amulet_item_id: None,
+        main_hand_item_id: None,
+        off_hand_item_id: None,
+        spellbook_item_id: None,
+        revision: 0,
+        updated_at: now,
+    }
+}
+
+fn clear_equipment_loadout(mut equipment: EquipmentLoadout, now: Timestamp) -> EquipmentLoadout {
+    equipment.head_item_id = None;
+    equipment.shoulder_item_id = None;
+    equipment.cape_item_id = None;
+    equipment.chest_item_id = None;
+    equipment.legs_item_id = None;
+    equipment.boots_item_id = None;
+    equipment.gloves_item_id = None;
+    equipment.ring_1_item_id = None;
+    equipment.ring_2_item_id = None;
+    equipment.amulet_item_id = None;
+    equipment.main_hand_item_id = None;
+    equipment.off_hand_item_id = None;
+    equipment.spellbook_item_id = None;
+    equipment.revision = equipment.revision.saturating_add(1);
+    equipment.updated_at = now;
+    equipment
+}
+
+fn restore_equipment_loadout(
+    owner: Identity,
+    snapshot: SurvivalEquipmentSnapshot,
+    revision: u64,
+    now: Timestamp,
+) -> EquipmentLoadout {
+    EquipmentLoadout {
+        owner,
+        head_item_id: snapshot.head_item_id,
+        shoulder_item_id: snapshot.shoulder_item_id,
+        cape_item_id: snapshot.cape_item_id,
+        chest_item_id: snapshot.chest_item_id,
+        legs_item_id: snapshot.legs_item_id,
+        boots_item_id: snapshot.boots_item_id,
+        gloves_item_id: snapshot.gloves_item_id,
+        ring_1_item_id: snapshot.ring_1_item_id,
+        ring_2_item_id: snapshot.ring_2_item_id,
+        amulet_item_id: snapshot.amulet_item_id,
+        main_hand_item_id: snapshot.main_hand_item_id,
+        off_hand_item_id: snapshot.off_hand_item_id,
+        spellbook_item_id: snapshot.spellbook_item_id,
+        revision,
+        updated_at: now,
+    }
+}
+
+fn survival_shop_hidden_quality(round: u32) -> f32 {
+    (0.10 + 0.055 * round.saturating_sub(1) as f32).min(1.0)
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct EquipmentModifierTotals {
     pub physical_resistance: f32,
@@ -2365,6 +2936,16 @@ pub(crate) fn equipment_modifier_totals_for_owner(
                 continue;
             }
             apply_modifier_value(&mut totals, affix.modifier_kind.as_str(), affix.value);
+        }
+    }
+
+    if let Some(run) = ctx.db.survival_run().owner().filter(owner).next() {
+        for upgrade in ctx.db.survival_upgrade().arena_id().filter(run.arena_id) {
+            apply_modifier_value(
+                &mut totals,
+                upgrade.modifier_id.as_str(),
+                upgrade.total_value,
+            );
         }
     }
 
@@ -2527,16 +3108,7 @@ pub(crate) fn clear_inventory_for_owner(ctx: &ReducerContext, owner: Identity) {
         .map(|row| row.item_instance_id)
         .collect();
     for item_id in item_ids {
-        if let Some(slot) = ctx
-            .db
-            .inventory_slot()
-            .item_instance_id()
-            .filter(item_id.as_str())
-            .next()
-        {
-            ctx.db.inventory_slot().key().delete(slot.key);
-        }
-        ctx.db.item_instance().item_instance_id().delete(item_id);
+        delete_item_aggregate(ctx, item_id.as_str());
     }
 
     if ctx.db.equipment_loadout().owner().find(owner).is_some() {
@@ -2606,6 +3178,7 @@ pub(crate) fn create_corpse_loot_for_npc(
             anchor_identity: Some(npc_identity),
             world_kind: npc.world_kind.clone(),
             instance_id: npc.instance_id,
+            instance_scope_id: npc.instance_scope_id,
             open_world_scene_name: npc.open_world_scene_name.clone(),
             pos_x: physics.pos_x,
             pos_y: physics.pos_y,
@@ -3531,6 +4104,7 @@ fn ensure_player_bag(ctx: &ReducerContext, owner: Identity) -> (InventoryContain
         anchor_identity: Some(owner),
         world_kind: String::new(),
         instance_id: None,
+        instance_scope_id: 0,
         open_world_scene_name: String::new(),
         pos_x: 0.0,
         pos_y: 0.0,
@@ -5138,6 +5712,7 @@ mod tests {
             display_name: "Kobold".to_string(),
             world_kind: world_kind.to_string(),
             instance_id,
+            instance_scope_id: instance_id.unwrap_or_default(),
             open_world_scene_name: scene.to_string(),
             home_x: 0.0,
             home_y: 0.0,
@@ -5691,5 +6266,61 @@ mod tests {
         assert!(is_starter_weapon_definition_id("training-sword-and-shield"));
         assert!(!is_starter_weapon_definition_id("training-bow"));
         assert!(!is_starter_weapon_definition_id("EPIC_PLAYER_SWORD"));
+    }
+
+    #[test]
+    fn survival_shop_quality_matches_the_approved_curve() {
+        assert!((survival_shop_hidden_quality(1) - 0.10).abs() < f32::EPSILON);
+        assert!((survival_shop_hidden_quality(10) - 0.595).abs() < 0.0001);
+        assert_eq!(survival_shop_hidden_quality(100), 1.0);
+    }
+
+    #[test]
+    fn survival_equipment_snapshot_round_trips_every_slot() {
+        let owner = test_identity(9);
+        let now = Timestamp::from_micros_since_unix_epoch(77);
+        let mut loadout = empty_equipment_loadout(owner, now);
+        loadout.head_item_id = Some("head".to_string());
+        loadout.shoulder_item_id = Some("shoulder".to_string());
+        loadout.cape_item_id = Some("cape".to_string());
+        loadout.chest_item_id = Some("chest".to_string());
+        loadout.legs_item_id = Some("legs".to_string());
+        loadout.boots_item_id = Some("boots".to_string());
+        loadout.gloves_item_id = Some("gloves".to_string());
+        loadout.ring_1_item_id = Some("ring1".to_string());
+        loadout.ring_2_item_id = Some("ring2".to_string());
+        loadout.amulet_item_id = Some("amulet".to_string());
+        loadout.main_hand_item_id = Some("main".to_string());
+        loadout.off_hand_item_id = Some("off".to_string());
+        loadout.spellbook_item_id = Some("spellbook".to_string());
+        loadout.revision = 41;
+
+        let expected_json = serde_json::to_string(&snapshot_equipment(&loadout)).unwrap();
+        let snapshot: SurvivalEquipmentSnapshot = serde_json::from_str(&expected_json).unwrap();
+        let restored = restore_equipment_loadout(owner, snapshot, 42, now);
+        let mut restored_snapshot = snapshot_equipment(&restored);
+        restored_snapshot.revision = 41;
+        assert_eq!(
+            serde_json::to_string(&restored_snapshot).unwrap(),
+            expected_json
+        );
+        assert_eq!(restored.revision, 42);
+    }
+
+    #[test]
+    fn survival_restore_source_preserves_the_required_order() {
+        let source =
+            fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/inventory.rs"))
+                .expect("inventory.rs should be readable");
+        let body = source_function(&source, "pub(crate) fn restore_survival_inventory");
+        let clear_equipment = body.find("clear_equipment_loadout").unwrap();
+        let delete_run_items = body.find("delete_item_aggregate").unwrap();
+        let restore_items = body.find("restore_item_aggregate").unwrap();
+        let restore_loadout = body.find("restore_equipment_loadout").unwrap();
+        let sync_presentation = body.find("sync_equipment_presentation_for_owner").unwrap();
+        assert!(clear_equipment < delete_run_items);
+        assert!(delete_run_items < restore_items);
+        assert!(restore_items < restore_loadout);
+        assert!(restore_loadout < sync_presentation);
     }
 }

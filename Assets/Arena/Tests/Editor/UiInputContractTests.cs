@@ -500,6 +500,37 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void HubDestinationMenu_ExposesServerAuthoritativeSurvivalEntry()
+        {
+            string hub = File.ReadAllText(HubControllerPath);
+            Assert.That(hub, Does.Contain("SurvivalButtonName = \"Mode_Survival\""));
+            Assert.That(hub, Does.Contain("SurvivalDisplayName = \"Survival Mode\""));
+            Assert.That(hub, Does.Contain("destinationButton.onClick.AddListener(RequestSurvival)"));
+            Assert.That(hub, Does.Contain("_travelConnection.Reducers.StartSurvivalRun()"));
+            Assert.That(hub, Does.Contain("OnStartSurvivalRun += OnStartSurvivalRun"));
+            Assert.That(hub, Does.Not.Contain("SceneManager.LoadScene(\"SurvivalArena\")"));
+
+            string builder = File.ReadAllText("Assets/Arena/Editor/HubSceneAuthoringBuilder.cs");
+            Assert.That(builder, Does.Contain("\"Mode_Survival\""));
+            Assert.That(builder, Does.Contain("\"Survival Mode\""));
+        }
+
+        [Test]
+        public void SurvivalShop_ClipsAndScrollsOffersWithinItsFrame()
+        {
+            string uxml = File.ReadAllText("Assets/Arena/Resources/UI/Toolkit/SurvivalShop.uxml");
+            Assert.That(uxml, Does.Contain("<ui:ScrollView name=\"OfferScroll\""));
+            Assert.That(uxml, Does.Contain("horizontal-scroller-visibility=\"Hidden\""));
+
+            string uss = File.ReadAllText("Assets/Arena/Resources/UI/Toolkit/SurvivalShop.uss");
+            Assert.That(uss, Does.Contain(".offer-scroll"));
+            Assert.That(uss, Does.Contain(".offer-scroll .unity-scroll-view__content-viewport"));
+            Assert.That(uss, Does.Contain(".offer-card"));
+            Assert.That(uss, Does.Contain("overflow: hidden;"));
+            Assert.That(uss, Does.Contain("white-space: normal;"));
+        }
+
+        [Test]
         public void BuffAndDebuffIcons_UseSharedTooltipPresenter()
         {
             string hud = File.ReadAllText(HudControllerPath);

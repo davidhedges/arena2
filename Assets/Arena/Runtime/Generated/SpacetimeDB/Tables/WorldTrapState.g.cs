@@ -26,6 +26,15 @@ namespace SpacetimeDB.Types
 
             public readonly CycleEndsAtMicrosIndex CycleEndsAtMicros;
 
+            public sealed class InstanceScopeIdIndex : BTreeIndexBase<ulong>
+            {
+                protected override ulong GetKey(WorldTrapState row) => row.InstanceScopeId;
+
+                public InstanceScopeIdIndex(WorldTrapStateHandle table) : base(table) { }
+            }
+
+            public readonly InstanceScopeIdIndex InstanceScopeId;
+
             public sealed class TrapDefinitionIdIndex : BTreeIndexBase<string>
             {
                 protected override string GetKey(WorldTrapState row) => row.TrapDefinitionId;
@@ -47,6 +56,7 @@ namespace SpacetimeDB.Types
             internal WorldTrapStateHandle(DbConnection conn) : base(conn)
             {
                 CycleEndsAtMicros = new(this);
+                InstanceScopeId = new(this);
                 TrapDefinitionId = new(this);
                 TrapStateId = new(this);
             }
@@ -63,6 +73,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<WorldTrapState, string> TrapDefinitionId { get; }
         public global::SpacetimeDB.Col<WorldTrapState, string> WorldKind { get; }
         public global::SpacetimeDB.Col<WorldTrapState, ulong> InstanceId { get; }
+        public global::SpacetimeDB.Col<WorldTrapState, ulong> InstanceScopeId { get; }
         public global::SpacetimeDB.Col<WorldTrapState, string> OpenWorldSceneName { get; }
         public global::SpacetimeDB.Col<WorldTrapState, SpacetimeDB.Timestamp> CycleStartedAt { get; }
         public global::SpacetimeDB.Col<WorldTrapState, long> CycleEndsAtMicros { get; }
@@ -74,6 +85,7 @@ namespace SpacetimeDB.Types
             TrapDefinitionId = new global::SpacetimeDB.Col<WorldTrapState, string>(tableName, "trap_definition_id");
             WorldKind = new global::SpacetimeDB.Col<WorldTrapState, string>(tableName, "world_kind");
             InstanceId = new global::SpacetimeDB.Col<WorldTrapState, ulong>(tableName, "instance_id");
+            InstanceScopeId = new global::SpacetimeDB.Col<WorldTrapState, ulong>(tableName, "instance_scope_id");
             OpenWorldSceneName = new global::SpacetimeDB.Col<WorldTrapState, string>(tableName, "open_world_scene_name");
             CycleStartedAt = new global::SpacetimeDB.Col<WorldTrapState, SpacetimeDB.Timestamp>(tableName, "cycle_started_at");
             CycleEndsAtMicros = new global::SpacetimeDB.Col<WorldTrapState, long>(tableName, "cycle_ends_at_micros");
@@ -85,12 +97,14 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.IxCol<WorldTrapState, string> TrapStateId { get; }
         public global::SpacetimeDB.IxCol<WorldTrapState, string> TrapDefinitionId { get; }
+        public global::SpacetimeDB.IxCol<WorldTrapState, ulong> InstanceScopeId { get; }
         public global::SpacetimeDB.IxCol<WorldTrapState, long> CycleEndsAtMicros { get; }
 
         public WorldTrapStateIxCols(string tableName)
         {
             TrapStateId = new global::SpacetimeDB.IxCol<WorldTrapState, string>(tableName, "trap_state_id");
             TrapDefinitionId = new global::SpacetimeDB.IxCol<WorldTrapState, string>(tableName, "trap_definition_id");
+            InstanceScopeId = new global::SpacetimeDB.IxCol<WorldTrapState, ulong>(tableName, "instance_scope_id");
             CycleEndsAtMicros = new global::SpacetimeDB.IxCol<WorldTrapState, long>(tableName, "cycle_ends_at_micros");
         }
     }

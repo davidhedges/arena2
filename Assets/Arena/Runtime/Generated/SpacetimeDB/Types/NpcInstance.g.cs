@@ -33,6 +33,8 @@ namespace SpacetimeDB.Types
         public string WorldKind;
         [DataMember(Name = "instance_id")]
         public ulong? InstanceId;
+        [DataMember(Name = "instance_scope_id")]
+        public ulong InstanceScopeId;
         [DataMember(Name = "open_world_scene_name")]
         public string OpenWorldSceneName;
         [DataMember(Name = "home_x")]
@@ -55,6 +57,7 @@ namespace SpacetimeDB.Types
             string DisplayName,
             string WorldKind,
             ulong? InstanceId,
+            ulong InstanceScopeId,
             string OpenWorldSceneName,
             float HomeX,
             float HomeY,
@@ -72,6 +75,7 @@ namespace SpacetimeDB.Types
             this.DisplayName = DisplayName;
             this.WorldKind = WorldKind;
             this.InstanceId = InstanceId;
+            this.InstanceScopeId = InstanceScopeId;
             this.OpenWorldSceneName = OpenWorldSceneName;
             this.HomeX = HomeX;
             this.HomeY = HomeY;

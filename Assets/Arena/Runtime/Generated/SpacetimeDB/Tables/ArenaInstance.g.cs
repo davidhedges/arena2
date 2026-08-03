@@ -46,6 +46,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<ArenaInstance, string> Phase { get; }
         public global::SpacetimeDB.Col<ArenaInstance, SpacetimeDB.Identity> WinnerId { get; }
         public global::SpacetimeDB.Col<ArenaInstance, SpacetimeDB.Timestamp> EndedAt { get; }
+        public global::SpacetimeDB.Col<ArenaInstance, string> InstanceKind { get; }
         public global::SpacetimeDB.Col<ArenaInstance, bool> IsPractice { get; }
         public global::SpacetimeDB.Col<ArenaInstance, SpacetimeDB.Timestamp> CountdownStartedAt { get; }
 
@@ -58,6 +59,7 @@ namespace SpacetimeDB.Types
             Phase = new global::SpacetimeDB.Col<ArenaInstance, string>(tableName, "phase");
             WinnerId = new global::SpacetimeDB.Col<ArenaInstance, SpacetimeDB.Identity>(tableName, "winner_id");
             EndedAt = new global::SpacetimeDB.Col<ArenaInstance, SpacetimeDB.Timestamp>(tableName, "ended_at");
+            InstanceKind = new global::SpacetimeDB.Col<ArenaInstance, string>(tableName, "instance_kind");
             IsPractice = new global::SpacetimeDB.Col<ArenaInstance, bool>(tableName, "is_practice");
             CountdownStartedAt = new global::SpacetimeDB.Col<ArenaInstance, SpacetimeDB.Timestamp>(tableName, "countdown_started_at");
         }

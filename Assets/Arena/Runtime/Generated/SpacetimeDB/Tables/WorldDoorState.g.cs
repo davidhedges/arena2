@@ -35,10 +35,20 @@ namespace SpacetimeDB.Types
 
             public readonly DoorStateIdUniqueIndex DoorStateId;
 
+            public sealed class InstanceScopeIdIndex : BTreeIndexBase<ulong>
+            {
+                protected override ulong GetKey(WorldDoorState row) => row.InstanceScopeId;
+
+                public InstanceScopeIdIndex(WorldDoorStateHandle table) : base(table) { }
+            }
+
+            public readonly InstanceScopeIdIndex InstanceScopeId;
+
             internal WorldDoorStateHandle(DbConnection conn) : base(conn)
             {
                 DoorDefinitionId = new(this);
                 DoorStateId = new(this);
+                InstanceScopeId = new(this);
             }
 
             protected override object GetPrimaryKey(WorldDoorState row) => row.DoorStateId;
@@ -53,6 +63,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<WorldDoorState, string> DoorDefinitionId { get; }
         public global::SpacetimeDB.Col<WorldDoorState, string> WorldKind { get; }
         public global::SpacetimeDB.Col<WorldDoorState, ulong> InstanceId { get; }
+        public global::SpacetimeDB.Col<WorldDoorState, ulong> InstanceScopeId { get; }
         public global::SpacetimeDB.Col<WorldDoorState, string> OpenWorldSceneName { get; }
         public global::SpacetimeDB.Col<WorldDoorState, bool> IsOpen { get; }
         public global::SpacetimeDB.Col<WorldDoorState, ulong> Revision { get; }
@@ -64,6 +75,7 @@ namespace SpacetimeDB.Types
             DoorDefinitionId = new global::SpacetimeDB.Col<WorldDoorState, string>(tableName, "door_definition_id");
             WorldKind = new global::SpacetimeDB.Col<WorldDoorState, string>(tableName, "world_kind");
             InstanceId = new global::SpacetimeDB.Col<WorldDoorState, ulong>(tableName, "instance_id");
+            InstanceScopeId = new global::SpacetimeDB.Col<WorldDoorState, ulong>(tableName, "instance_scope_id");
             OpenWorldSceneName = new global::SpacetimeDB.Col<WorldDoorState, string>(tableName, "open_world_scene_name");
             IsOpen = new global::SpacetimeDB.Col<WorldDoorState, bool>(tableName, "is_open");
             Revision = new global::SpacetimeDB.Col<WorldDoorState, ulong>(tableName, "revision");
@@ -75,11 +87,13 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.IxCol<WorldDoorState, string> DoorStateId { get; }
         public global::SpacetimeDB.IxCol<WorldDoorState, string> DoorDefinitionId { get; }
+        public global::SpacetimeDB.IxCol<WorldDoorState, ulong> InstanceScopeId { get; }
 
         public WorldDoorStateIxCols(string tableName)
         {
             DoorStateId = new global::SpacetimeDB.IxCol<WorldDoorState, string>(tableName, "door_state_id");
             DoorDefinitionId = new global::SpacetimeDB.IxCol<WorldDoorState, string>(tableName, "door_definition_id");
+            InstanceScopeId = new global::SpacetimeDB.IxCol<WorldDoorState, ulong>(tableName, "instance_scope_id");
         }
     }
 }

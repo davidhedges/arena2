@@ -1,12 +1,12 @@
 use spacetimedb::{Identity, ReducerContext};
 
+use crate::arena::instance_uses_flat_layout;
 use crate::arena::{
     arena_seed_for_identity, open_world_scene_name_for_identity, players_share_world_context,
     resolve_player_world_context, shared_arena_seed_for_identities, ResolvedWorldContext,
     WorldRayHit, WorldRaycastRequest,
 };
 use crate::combat::actor_snapshot::CombatActorSnapshot;
-use crate::practice::is_training_instance;
 use crate::world_collision::{
     raycast_world_with_layout_for_scene, raycast_world_with_layout_for_scene_with_stats,
     surface_height_for_world_at_y_with_layout_for_scene, WorldRaycastStats,
@@ -972,7 +972,7 @@ fn flat_ground_only_for_identity(ctx: &ReducerContext, identity: Identity) -> bo
     else {
         return false;
     };
-    is_training_instance(ctx, instance_id)
+    instance_uses_flat_layout(ctx, instance_id)
 }
 
 fn shared_flat_ground_only_for_identities(ctx: &ReducerContext, a: Identity, b: Identity) -> bool {
@@ -987,7 +987,7 @@ fn shared_flat_ground_only_for_identities(ctx: &ReducerContext, a: Identity, b: 
     if instance_a != instance_b {
         return false;
     }
-    is_training_instance(ctx, instance_a)
+    instance_uses_flat_layout(ctx, instance_a)
 }
 
 #[cfg(test)]

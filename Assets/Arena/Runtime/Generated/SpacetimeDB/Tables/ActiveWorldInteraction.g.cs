@@ -35,10 +35,20 @@ namespace SpacetimeDB.Types
 
             public readonly CompletesAtMicrosIndex CompletesAtMicros;
 
+            public sealed class InstanceScopeIdIndex : BTreeIndexBase<ulong>
+            {
+                protected override ulong GetKey(ActiveWorldInteraction row) => row.InstanceScopeId;
+
+                public InstanceScopeIdIndex(ActiveWorldInteractionHandle table) : base(table) { }
+            }
+
+            public readonly InstanceScopeIdIndex InstanceScopeId;
+
             internal ActiveWorldInteractionHandle(DbConnection conn) : base(conn)
             {
                 Actor = new(this);
                 CompletesAtMicros = new(this);
+                InstanceScopeId = new(this);
             }
 
             protected override object GetPrimaryKey(ActiveWorldInteraction row) => row.Actor;
@@ -62,6 +72,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<ActiveWorldInteraction, string> ProgressLabelKey { get; }
         public global::SpacetimeDB.Col<ActiveWorldInteraction, string> WorldKind { get; }
         public global::SpacetimeDB.Col<ActiveWorldInteraction, ulong> InstanceId { get; }
+        public global::SpacetimeDB.Col<ActiveWorldInteraction, ulong> InstanceScopeId { get; }
         public global::SpacetimeDB.Col<ActiveWorldInteraction, string> OpenWorldSceneName { get; }
         public global::SpacetimeDB.Col<ActiveWorldInteraction, float> InteractionAnchorX { get; }
         public global::SpacetimeDB.Col<ActiveWorldInteraction, float> InteractionAnchorY { get; }
@@ -91,6 +102,7 @@ namespace SpacetimeDB.Types
             ProgressLabelKey = new global::SpacetimeDB.Col<ActiveWorldInteraction, string>(tableName, "progress_label_key");
             WorldKind = new global::SpacetimeDB.Col<ActiveWorldInteraction, string>(tableName, "world_kind");
             InstanceId = new global::SpacetimeDB.Col<ActiveWorldInteraction, ulong>(tableName, "instance_id");
+            InstanceScopeId = new global::SpacetimeDB.Col<ActiveWorldInteraction, ulong>(tableName, "instance_scope_id");
             OpenWorldSceneName = new global::SpacetimeDB.Col<ActiveWorldInteraction, string>(tableName, "open_world_scene_name");
             InteractionAnchorX = new global::SpacetimeDB.Col<ActiveWorldInteraction, float>(tableName, "interaction_anchor_x");
             InteractionAnchorY = new global::SpacetimeDB.Col<ActiveWorldInteraction, float>(tableName, "interaction_anchor_y");
@@ -110,11 +122,13 @@ namespace SpacetimeDB.Types
     public sealed class ActiveWorldInteractionIxCols
     {
         public global::SpacetimeDB.IxCol<ActiveWorldInteraction, SpacetimeDB.Identity> Actor { get; }
+        public global::SpacetimeDB.IxCol<ActiveWorldInteraction, ulong> InstanceScopeId { get; }
         public global::SpacetimeDB.IxCol<ActiveWorldInteraction, long> CompletesAtMicros { get; }
 
         public ActiveWorldInteractionIxCols(string tableName)
         {
             Actor = new global::SpacetimeDB.IxCol<ActiveWorldInteraction, SpacetimeDB.Identity>(tableName, "actor");
+            InstanceScopeId = new global::SpacetimeDB.IxCol<ActiveWorldInteraction, ulong>(tableName, "instance_scope_id");
             CompletesAtMicros = new global::SpacetimeDB.IxCol<ActiveWorldInteraction, long>(tableName, "completes_at_micros");
         }
     }

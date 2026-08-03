@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using SpacetimeDB;
 using SpacetimeDB.Types;
 
@@ -10,10 +11,8 @@ namespace Arena.Match
     /// Populated by NetworkManager via ArenaInstance table callbacks.
     /// Read by MatchController and MatchOverlay — no table access needed there.
     ///
-    /// IsArenaMode only becomes true once we've received the ArenaInstance row
-    /// AND confirmed it is not flagged as a practice instance. This prevents
-    /// misclassifying a practice session as an arena match during the window
-    /// between joining and subscription settle.
+    /// Mode properties only become true once the local ArenaInstance row arrives.
+    /// The server-authored instance kind is the canonical discriminator.
     ///
     /// INVARIANT: Only written by table event callbacks. Only read by presentation.
     /// </summary>
@@ -25,6 +24,7 @@ namespace Arena.Match
         private Identity? _serverWinnerId;
         private bool _clientFallbackEnded;
         private Identity? _clientFallbackWinnerId;
+        private readonly Dictionary<ulong, ArenaInstance> _instancesById = new();
 
         public MatchPhase Phase
             => _clientFallbackEnded && _serverPhase != MatchPhase.Ended
@@ -37,10 +37,11 @@ namespace Arena.Match
         public ulong? LocalInstanceId { get; private set; }
 
         private bool _hasInstanceData;
-        private bool _isPractice;
+        private string _instanceKind = string.Empty;
 
-        public bool IsArenaMode   => _hasInstanceData && !_isPractice;
-        public bool IsPracticeMode => _hasInstanceData && _isPractice;
+        public bool IsArenaMode => HasInstanceKind("ARENA");
+        public bool IsPracticeMode => HasInstanceKind("PRACTICE") || HasInstanceKind("TRAINING");
+        public bool IsSurvivalMode => HasInstanceKind("SURVIVAL");
         public bool IsCountdown   => Phase == MatchPhase.Countdown;
         public bool IsInProgress  => Phase == MatchPhase.InProgress;
         public bool IsEnded       => Phase == MatchPhase.Ended;
@@ -56,10 +57,16 @@ namespace Arena.Match
                 Reset();
             }
             LocalInstanceId = instanceId;
+            if (instanceId.HasValue
+                && _instancesById.TryGetValue(instanceId.Value, out ArenaInstance instance))
+            {
+                ApplyInstance(instance);
+            }
         }
 
         internal void ResetForNetworkReconnect()
         {
+            _instancesById.Clear();
             LocalInstanceId = null;
             Reset();
         }
@@ -67,13 +74,20 @@ namespace Arena.Match
         // ArenaInstance callbacks — wired by NetworkManager.
 
         public void OnArenaInstanceInsert(EventContext ctx, ArenaInstance row)
-            => ApplyInstance(row);
+        {
+            _instancesById[row.Id] = row;
+            ApplyInstance(row);
+        }
 
         public void OnArenaInstanceUpdate(EventContext ctx, ArenaInstance old, ArenaInstance row)
-            => ApplyInstance(row);
+        {
+            _instancesById[row.Id] = row;
+            ApplyInstance(row);
+        }
 
         public void OnArenaInstanceDelete(EventContext ctx, ArenaInstance row)
         {
+            _instancesById.Remove(row.Id);
             if (row.Id == LocalInstanceId)
                 Reset();
         }
@@ -82,7 +96,7 @@ namespace Arena.Match
         {
             if (row.Id != LocalInstanceId) return;
             _hasInstanceData = true;
-            _isPractice = row.IsPractice;
+            _instanceKind = row.InstanceKind;
             _serverPhase = ParsePhase(row.Phase);
             _serverWinnerId = row.WinnerId;
             CountdownStartedAt = row.CountdownStartedAt.HasValue
@@ -104,9 +118,13 @@ namespace Arena.Match
             _clientFallbackEnded = false;
             _clientFallbackWinnerId = null;
             _hasInstanceData = false;
-            _isPractice      = false;
+            _instanceKind    = string.Empty;
             CountdownStartedAt = null;
         }
+
+        private bool HasInstanceKind(string expected)
+            => _hasInstanceData
+               && string.Equals(_instanceKind, expected, System.StringComparison.Ordinal);
 
         public void SetClientFallbackEnded(Identity? winnerId)
         {

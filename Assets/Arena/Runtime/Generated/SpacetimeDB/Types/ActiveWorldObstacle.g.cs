@@ -27,6 +27,8 @@ namespace SpacetimeDB.Types
         public string WorldKind;
         [DataMember(Name = "instance_id")]
         public ulong? InstanceId;
+        [DataMember(Name = "instance_scope_id")]
+        public ulong InstanceScopeId;
         [DataMember(Name = "open_world_scene_name")]
         public string OpenWorldSceneName;
         [DataMember(Name = "root_x")]
@@ -72,6 +74,7 @@ namespace SpacetimeDB.Types
             string VisualResourcePath,
             string WorldKind,
             ulong? InstanceId,
+            ulong InstanceScopeId,
             string OpenWorldSceneName,
             float RootX,
             float RootY,
@@ -99,6 +102,7 @@ namespace SpacetimeDB.Types
             this.VisualResourcePath = VisualResourcePath;
             this.WorldKind = WorldKind;
             this.InstanceId = InstanceId;
+            this.InstanceScopeId = InstanceScopeId;
             this.OpenWorldSceneName = OpenWorldSceneName;
             this.RootX = RootX;
             this.RootY = RootY;

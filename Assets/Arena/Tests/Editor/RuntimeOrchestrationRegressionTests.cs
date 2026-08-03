@@ -3,6 +3,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
@@ -35,7 +36,7 @@ namespace Arena.Tests.Editor
         {
             Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
             Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
-            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, "Oasis_Day")!;
+            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, 0UL, "Oasis_Day")!;
 
             object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string)).Invoke(null, new[] { row, null })!;
 
@@ -47,12 +48,48 @@ namespace Arena.Tests.Editor
         {
             Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
             Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
-            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "INSTANCE", 42UL, string.Empty)!;
+            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "INSTANCE", 42UL, 42UL, string.Empty)!;
 
             object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string)).Invoke(null, new[] { row, null })!;
 
             Assert.That(scope.ToString(), Is.EqualTo("instance 42"));
             Assert.That(RequireProperty(gameplayScopeType, "InstanceId").GetValue(scope), Is.EqualTo(42UL));
+        }
+
+        [Test]
+        public void GameplaySubscriptionPlanner_InstanceQueriesUseNonNullableScopeKeys()
+        {
+            Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
+            Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
+            Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
+            object row = Activator.CreateInstance(
+                playerWorldType,
+                CreateIdentity(1),
+                "INSTANCE",
+                42UL,
+                42UL,
+                string.Empty)!;
+            object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
+                .Invoke(null, new[] { row, null })!;
+
+            string[] scopedSql = (string[])RequireMethod(plannerType, "BuildScopedQuerySqls", gameplayScopeType)
+                .Invoke(null, new[] { scope })!;
+            string sql = string.Join("\n", scopedSql);
+
+            foreach (string table in new[]
+                     {
+                         "player_world",
+                         "npc_instance",
+                         "inventory_container",
+                         "active_world_interaction",
+                         "active_world_obstacle",
+                         "world_door_state",
+                         "world_trap_state",
+                     })
+            {
+                Assert.That(sql, Does.Contain($"\"{table}\".\"instance_scope_id\" = 42"));
+                Assert.That(sql, Does.Not.Contain($"\"{table}\".\"instance_id\" = 42"));
+            }
         }
 
         [Test]
@@ -70,23 +107,104 @@ namespace Arena.Tests.Editor
         public void LocalWorldSceneDecider_PreservesTrainingExceptionAndTargetsExpectedScenes()
         {
             Type deciderType = RequireRuntimeType("Arena.Entity.LocalWorldSceneDecider");
-            MethodInfo method = RequireMethod(deciderType, "DetermineTargetScene", typeof(string), typeof(ulong?), typeof(string), typeof(string));
+            MethodInfo method = RequireMethod(
+                deciderType,
+                "DetermineTargetScene",
+                typeof(string),
+                typeof(ulong?),
+                typeof(string),
+                typeof(string),
+                typeof(string),
+                typeof(string));
 
-            object? training = method.Invoke(null, new object?[] { "TrainingGround", 99UL, "Arena_VerdantStand_Blockout", "ArenaMatch" });
-            object? characterCreation = method.Invoke(null, new object?[] { "CharacterCreation", null, "Arena_VerdantStand_Blockout", "ArenaMatch" });
-            object? groundSlashDemo = method.Invoke(null, new object?[] { "VFXGraph_GroundSlash", null, "Arena_VerdantStand_Blockout", "ArenaMatch" });
-            object? pilotoHolyDemo = method.Invoke(null, new object?[] { "Holy & Paladin Spells Bundle", null, "Arena_VerdantStand_Blockout", "ArenaMatch" });
-            object? enterInstance = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, "Arena_VerdantStand_Blockout", "ArenaMatch" });
-            object? enterOpenWorld = method.Invoke(null, new object?[] { "ArenaMatch", null, "Arena_VerdantStand_Blockout", "ArenaMatch" });
-            object? preserveLoadedOpenWorld = method.Invoke(null, new object?[] { "Oasis_Day", null, "Golden_Valley_Sunny", "ArenaMatch" });
+            object? training = method.Invoke(null, new object?[] { "TrainingGround", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
+            object? characterCreation = method.Invoke(null, new object?[] { "CharacterCreation", null, null, "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
+            object? groundSlashDemo = method.Invoke(null, new object?[] { "VFXGraph_GroundSlash", null, null, "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
+            object? pilotoHolyDemo = method.Invoke(null, new object?[] { "Holy & Paladin Spells Bundle", null, null, "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
+            object? unknownInstanceKind = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, null, "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
+            object? enterArenaInstance = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, "ARENA", "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
+            object? enterSurvivalInstance = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
+            object? enterSurvivalFromHub = method.Invoke(null, new object?[] { "Hub", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
+            object? preserveHubForOpenWorld = method.Invoke(null, new object?[] { "Hub", null, null, "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
+            object? preserveLoadedSurvival = method.Invoke(null, new object?[] { "SurvivalArena", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
+            object? enterOpenWorld = method.Invoke(null, new object?[] { "ArenaMatch", null, null, "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
+            object? preserveLoadedOpenWorld = method.Invoke(null, new object?[] { "Oasis_Day", null, null, "Golden_Valley_Sunny", "ArenaMatch", "SurvivalArena" });
 
             Assert.That(training, Is.Null);
             Assert.That(characterCreation, Is.Null);
             Assert.That(groundSlashDemo, Is.Null);
             Assert.That(pilotoHolyDemo, Is.Null);
-            Assert.That(enterInstance, Is.EqualTo("ArenaMatch"));
+            Assert.That(unknownInstanceKind, Is.Null);
+            Assert.That(enterArenaInstance, Is.EqualTo("ArenaMatch"));
+            Assert.That(enterSurvivalInstance, Is.EqualTo("SurvivalArena"));
+            Assert.That(enterSurvivalFromHub, Is.EqualTo("SurvivalArena"));
+            Assert.That(preserveHubForOpenWorld, Is.Null);
+            Assert.That(preserveLoadedSurvival, Is.Null);
             Assert.That(enterOpenWorld, Is.EqualTo("Arena_VerdantStand_Blockout"));
             Assert.That(preserveLoadedOpenWorld, Is.Null);
+        }
+
+        [Test]
+        public void LocalWorldRuntimeCoordinator_WaitsForKindThenLoadsDedicatedSurvivalScene()
+        {
+            Type coordinatorType = RequireRuntimeType("Arena.Entity.LocalWorldRuntimeCoordinator");
+            Type worldContextType = RequireRuntimeType("Arena.Input.LocalMovementWorldContext");
+            Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
+            Type arenaInstanceType = RequireRuntimeType("SpacetimeDB.Types.ArenaInstance");
+            object identity = CreateIdentity(1);
+            object worldContext = Activator.CreateInstance(worldContextType)!;
+            var loadedScenes = new List<string>();
+            object coordinator = CreateLocalWorldRuntimeCoordinator(
+                coordinatorType,
+                worldContext,
+                () => "Hub",
+                scene => loadedScenes.Add(scene));
+            RequireMethod(coordinatorType, "SetLocalIdentity", identity.GetType()).Invoke(coordinator, new[] { identity });
+
+            object currentWorld = Activator.CreateInstance(
+                playerWorldType,
+                identity,
+                "INSTANCE",
+                42UL,
+                42UL,
+                string.Empty)!;
+            RequireMethod(coordinatorType, "OnPlayerWorldInsert", playerWorldType).Invoke(coordinator, new[] { currentWorld });
+            Assert.That(loadedScenes, Is.Empty, "The generic match scene must not load while the instance kind is unknown.");
+
+            object arenaInstance = Activator.CreateInstance(arenaInstanceType)!;
+            SetField(arenaInstance, "Id", 42UL);
+            SetField(arenaInstance, "Seed", 7UL);
+            SetField(arenaInstance, "InstanceKind", "SURVIVAL");
+            RequireMethod(coordinatorType, "OnArenaInstanceInsert", arenaInstanceType).Invoke(coordinator, new[] { arenaInstance });
+
+            Assert.That(loadedScenes, Is.EqualTo(new[] { "SurvivalArena" }));
+        }
+
+        [Test]
+        public void MatchStateCache_RecognizesSurvivalRegardlessOfSubscriptionArrivalOrder()
+        {
+            Type cacheType = RequireRuntimeType("Arena.Match.MatchStateCache");
+            Type arenaInstanceType = RequireRuntimeType("SpacetimeDB.Types.ArenaInstance");
+            MethodInfo insert = cacheType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                .Single(method => method.Name == "OnArenaInstanceInsert");
+            MethodInfo setLocalWorld = RequireMethod(cacheType, "OnLocalPlayerWorldUpdate", typeof(ulong?));
+            PropertyInfo isSurvival = RequireProperty(cacheType, "IsSurvivalMode");
+
+            object arenaInstance = Activator.CreateInstance(arenaInstanceType)!;
+            SetField(arenaInstance, "Id", 42UL);
+            SetField(arenaInstance, "InstanceKind", "SURVIVAL");
+            SetField(arenaInstance, "Phase", "WAITING");
+
+            object instanceFirst = Activator.CreateInstance(cacheType)!;
+            insert.Invoke(instanceFirst, new object?[] { null, arenaInstance });
+            Assert.That(isSurvival.GetValue(instanceFirst), Is.False);
+            setLocalWorld.Invoke(instanceFirst, new object?[] { 42UL });
+            Assert.That(isSurvival.GetValue(instanceFirst), Is.True);
+
+            object playerWorldFirst = Activator.CreateInstance(cacheType)!;
+            setLocalWorld.Invoke(playerWorldFirst, new object?[] { 42UL });
+            insert.Invoke(playerWorldFirst, new object?[] { null, arenaInstance });
+            Assert.That(isSurvival.GetValue(playerWorldFirst), Is.True);
         }
 
         [Test]
@@ -108,7 +226,7 @@ namespace Arena.Tests.Editor
 
             RequireMethod(coordinatorType, "SetLocalIdentity", identity.GetType()).Invoke(coordinator, new[] { identity });
 
-            object currentWorld = Activator.CreateInstance(playerWorldType, identity, "OPEN", null, "Oasis_Day")!;
+            object currentWorld = Activator.CreateInstance(playerWorldType, identity, "OPEN", null, 0UL, "Oasis_Day")!;
             RequireMethod(coordinatorType, "OnPlayerWorldInsert", playerWorldType).Invoke(coordinator, new[] { currentWorld });
             loadedScenes.Clear();
 
@@ -136,11 +254,11 @@ namespace Arena.Tests.Editor
 
             RequireMethod(coordinatorType, "SetLocalIdentity", identity.GetType()).Invoke(coordinator, new[] { identity });
 
-            object currentWorld = Activator.CreateInstance(playerWorldType, identity, "OPEN", null, "Oasis_Day")!;
+            object currentWorld = Activator.CreateInstance(playerWorldType, identity, "OPEN", null, 0UL, "Oasis_Day")!;
             RequireMethod(coordinatorType, "OnPlayerWorldInsert", playerWorldType).Invoke(coordinator, new[] { currentWorld });
             Assert.That(loadedScenes, Is.Empty);
 
-            object requestedWorld = Activator.CreateInstance(playerWorldType, identity, "OPEN", null, "Golden_Valley_Sunny")!;
+            object requestedWorld = Activator.CreateInstance(playerWorldType, identity, "OPEN", null, 0UL, "Golden_Valley_Sunny")!;
             RequireMethod(coordinatorType, "OnPlayerWorldUpdate", playerWorldType).Invoke(coordinator, new[] { requestedWorld });
             Assert.That(loadedScenes, Is.Empty);
         }
@@ -183,6 +301,11 @@ namespace Arena.Tests.Editor
                 "ArenaMatch",
                 "Assets/Arena/Content/Scenes/ArenaMatch.unity",
             });
+            object? sceneGateSurvivalArena = sceneGateMethod.Invoke(null, new object[]
+            {
+                "SurvivalArena",
+                string.Empty,
+            });
 
             Assert.That(pilotoHolyDemo, Is.False);
             Assert.That(pilotoFrostDemo, Is.False);
@@ -190,6 +313,21 @@ namespace Arena.Tests.Editor
             Assert.That(openWorldSceneInPlayerBuild, Is.True);
             Assert.That(sceneGatePilotoHolyDemo, Is.False);
             Assert.That(sceneGateArenaMatch, Is.True);
+            Assert.That(sceneGateSurvivalArena, Is.True);
+        }
+
+        [Test]
+        public void SurvivalArena_IsBuildRegisteredWithFourAuthoredEntrances()
+        {
+            const string scenePath = "Assets/Arena/Content/Scenes/SurvivalArena.unity";
+            Assert.That(File.Exists(scenePath), Is.True);
+
+            string buildSettings = File.ReadAllText("ProjectSettings/EditorBuildSettings.asset");
+            Assert.That(buildSettings, Does.Contain($"path: {scenePath}"));
+
+            string scene = File.ReadAllText(scenePath);
+            foreach (string side in new[] { "North", "East", "South", "West" })
+                Assert.That(scene, Does.Contain($"m_Name: Level Entrance {side}"));
         }
 
         [Test]
@@ -297,7 +435,7 @@ namespace Arena.Tests.Editor
             Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
             Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
             Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
-            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, "Oasis_Day")!;
+            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, 0UL, "Oasis_Day")!;
             object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
                 .Invoke(null, new[] { row, null })!;
 
@@ -321,6 +459,7 @@ namespace Arena.Tests.Editor
                 CreateIdentity(1),
                 "OPEN",
                 null,
+                0UL,
                 "RandomDungeon")!;
             object scope = RequireMethod(
                     gameplayScopeType,
@@ -346,7 +485,7 @@ namespace Arena.Tests.Editor
             Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
             Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
             Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
-            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, "Oasis_Day")!;
+            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, 0UL, "Oasis_Day")!;
             object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
                 .Invoke(null, new[] { row, null })!;
 
@@ -364,7 +503,7 @@ namespace Arena.Tests.Editor
             Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
             Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
             Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
-            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, "Oasis_Day")!;
+            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, 0UL, "Oasis_Day")!;
             object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
                 .Invoke(null, new[] { row, null })!;
 
@@ -388,6 +527,7 @@ namespace Arena.Tests.Editor
                 CreateIdentity(1),
                 "OPEN",
                 null,
+                0UL,
                 "RandomDungeon")!;
             object scope = RequireMethod(
                     gameplayScopeType,
@@ -506,7 +646,7 @@ namespace Arena.Tests.Editor
             Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
             Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
             Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
-            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, "Oasis_Day")!;
+            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, 0UL, "Oasis_Day")!;
             object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
                 .Invoke(null, new[] { row, null })!;
 
@@ -953,7 +1093,7 @@ namespace Arena.Tests.Editor
         {
             ConstructorInfo constructor = coordinatorType
                 .GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                .Single(ctor => ctor.GetParameters().Length == 6);
+                .Single(ctor => ctor.GetParameters().Length == 7);
             return constructor.Invoke(new object?[]
             {
                 worldContext,
@@ -962,6 +1102,7 @@ namespace Arena.Tests.Editor
                 getActiveSceneName,
                 loadScene,
                 "ArenaMatch",
+                "SurvivalArena",
             });
         }
 

@@ -596,8 +596,8 @@ namespace Arena.Input
 
         private static float HeightAt(ulong seed, float x, float z)
         {
-            // Keep the client prediction surface aligned with the authored ArenaMatch scene.
-            // The scene floor is flat right now, so prediction/visibility should stay flat too.
+            // Instance scenes currently share a flat authoritative movement surface.
+            // Keep prediction and visibility aligned with that server contract.
             _ = seed;
             _ = x;
             _ = z;

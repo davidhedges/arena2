@@ -45,9 +45,7 @@ use crate::player_physics::{commit_player_physics, PhysicsWriteMode};
 #[allow(unused_imports)]
 use crate::player_state::player_state as _;
 use crate::playground_targets::despawn_all_playground_targets_for_owner;
-use crate::practice::{
-    despawn_training_instance, is_training_instance, resolve_instance_spawn_override,
-};
+use crate::practice::{despawn_training_instance, resolve_instance_spawn_override};
 use crate::world_collision::{
     resolve_world_spawn_position_with_layout, resolve_world_spawn_position_with_layout_for_scene,
 };
@@ -80,6 +78,10 @@ pub(crate) const MATCH_PHASE_WAITING: &str = "WAITING";
 pub(crate) const MATCH_PHASE_COUNTDOWN: &str = "COUNTDOWN";
 pub(crate) const MATCH_PHASE_IN_PROGRESS: &str = "IN_PROGRESS";
 pub(crate) const MATCH_PHASE_ENDED: &str = "ENDED";
+pub(crate) const INSTANCE_KIND_ARENA: &str = "ARENA";
+pub(crate) const INSTANCE_KIND_PRACTICE: &str = "PRACTICE";
+pub(crate) const INSTANCE_KIND_TRAINING: &str = "TRAINING";
+pub(crate) const INSTANCE_KIND_SURVIVAL: &str = "SURVIVAL";
 const LEGACY_INSTANCE_DUMMY_PREFIX_HEX: &str = "00000000000000000000000000000000000000000000d00d";
 const INSTANCE_PLAYER_SPAWN_RADIUS: f32 = 5.0;
 const INSTANCE_PLAYER_SPAWN_RADIUS_JITTER: f32 = 1.2;
@@ -151,6 +153,8 @@ pub struct ArenaInstance {
     pub phase: String,
     pub winner_id: Option<Identity>,
     pub ended_at: Option<spacetimedb::Timestamp>,
+    pub instance_kind: String,
+    /// Compatibility mirror for older readers. `instance_kind` is canonical.
     pub is_practice: bool,
     pub countdown_started_at: Option<spacetimedb::Timestamp>,
 }
@@ -161,6 +165,10 @@ pub struct PlayerWorld {
     pub identity: Identity,
     pub world_kind: String,
     pub instance_id: Option<u64>,
+    /// Non-null mirror used by subscription SQL, which cannot construct an
+    /// `Option<u64>` literal. Zero is reserved for non-instance rows.
+    #[index(btree)]
+    pub instance_scope_id: u64,
     pub open_world_scene_name: String,
 }
 
@@ -199,6 +207,15 @@ pub fn list_open_instances(ctx: &ReducerContext) -> Result<(), String> {
 #[reducer]
 pub fn join_instance(ctx: &ReducerContext, arena_id: u64) -> Result<(), String> {
     ensure_open_arena_exists(ctx);
+    let Some(arena) = ctx.db.arena_instance().id().find(arena_id) else {
+        return Err(format!("Instance {arena_id} not found"));
+    };
+    if arena.instance_kind != INSTANCE_KIND_ARENA {
+        return Err(format!(
+            "Cannot join private {} instance {arena_id}",
+            arena.instance_kind
+        ));
+    }
     join_identity_into_instance(ctx, ctx.sender(), arena_id)
 }
 
@@ -208,8 +225,11 @@ pub fn start_match(ctx: &ReducerContext, arena_id: u64) -> Result<(), String> {
         return Err(format!("Instance {arena_id} not found"));
     };
 
-    if arena.is_practice || is_training_instance(ctx, arena_id) {
-        return Err("Cannot start a practice instance as a match".to_string());
+    if arena.instance_kind != INSTANCE_KIND_ARENA {
+        return Err(format!(
+            "Cannot start a {} instance as an arena match",
+            arena.instance_kind
+        ));
     }
 
     if arena.phase != MATCH_PHASE_WAITING {
@@ -254,6 +274,7 @@ pub fn set_open_world_scene(ctx: &ReducerContext, scene_name: String) -> Result<
 }
 
 pub fn set_player_open_world(ctx: &ReducerContext, identity: Identity) -> Result<(), String> {
+    crate::survival::teardown_survival_for_owner(ctx, identity, "leave_instance")?;
     despawn_all_playground_targets_for_owner(ctx, identity)?;
     clear_statuses_for_identity(ctx, identity);
     clear_combat_engagement_for_identity(ctx, identity);
@@ -330,6 +351,7 @@ pub fn backfill_player_open_world_scene_rows(ctx: &ReducerContext) -> usize {
 }
 
 pub fn clear_player_world(ctx: &ReducerContext, identity: Identity) -> Result<(), String> {
+    crate::survival::teardown_survival_for_owner(ctx, identity, "actor_teardown")?;
     clear_statuses_for_identity(ctx, identity);
     clear_combat_engagement_for_identity(ctx, identity);
     remove_identity_from_current_instance(ctx, identity)?;
@@ -370,7 +392,7 @@ fn remove_identity_from_current_instance(
     if arena.player_count == 0 {
         ctx.db.arena_instance().id().delete(arena.id);
         clear_match_stats_for_instance(ctx, arena.id);
-        if is_training_instance(ctx, arena.id) {
+        if arena.instance_kind == INSTANCE_KIND_TRAINING {
             despawn_training_instance(ctx, arena.id);
         }
     } else {
@@ -440,14 +462,18 @@ fn sanitize_max_players(max_players: u32) -> u32 {
 }
 
 pub(crate) fn create_arena_instance(ctx: &ReducerContext, max_players: u32) -> u64 {
-    create_arena_instance_with_options(ctx, max_players, false)
+    create_arena_instance_with_kind(ctx, max_players, INSTANCE_KIND_ARENA)
 }
 
-pub(crate) fn create_arena_instance_with_options(
+pub(crate) fn create_arena_instance_with_kind(
     ctx: &ReducerContext,
     max_players: u32,
-    is_practice: bool,
+    instance_kind: &str,
 ) -> u64 {
+    assert!(
+        is_known_instance_kind(instance_kind),
+        "unknown arena instance kind: {instance_kind}"
+    );
     let previous_max_id = max_arena_id(ctx);
     let fallback_id = previous_max_id.saturating_add(1);
     let fallback_seed = seed_for_arena(ctx, fallback_id);
@@ -457,14 +483,15 @@ pub(crate) fn create_arena_instance_with_options(
         seed: fallback_seed,
         max_players,
         player_count: 0,
-        phase: if is_practice {
-            MATCH_PHASE_IN_PROGRESS.to_string()
-        } else {
+        phase: if instance_kind == INSTANCE_KIND_ARENA {
             MATCH_PHASE_WAITING.to_string()
+        } else {
+            MATCH_PHASE_IN_PROGRESS.to_string()
         },
         winner_id: None,
         ended_at: None,
-        is_practice,
+        instance_kind: instance_kind.to_string(),
+        is_practice: instance_kind_is_practice(instance_kind),
         countdown_started_at: None,
     });
 
@@ -511,11 +538,11 @@ fn hash_bytes(bytes: &[u8]) -> u64 {
 }
 
 fn ensure_open_arena_exists(ctx: &ReducerContext) {
-    let has_open_arena = ctx
-        .db
-        .arena_instance()
-        .iter()
-        .any(|arena| arena.player_count < arena.max_players);
+    let has_open_arena = ctx.db.arena_instance().iter().any(|arena| {
+        arena.instance_kind == INSTANCE_KIND_ARENA
+            && arena.phase == MATCH_PHASE_WAITING
+            && arena.player_count < arena.max_players
+    });
 
     if !has_open_arena {
         create_arena_instance(ctx, DEFAULT_MAX_PLAYERS);
@@ -543,7 +570,7 @@ pub(crate) fn join_identity_into_instance(
         return Err(format!("Instance {instance_id} not found"));
     };
 
-    if !arena.is_practice && arena.phase != MATCH_PHASE_WAITING {
+    if arena.instance_kind == INSTANCE_KIND_ARENA && arena.phase != MATCH_PHASE_WAITING {
         return Err(format!("Instance {instance_id} is no longer joinable"));
     }
 
@@ -559,6 +586,38 @@ pub(crate) fn join_identity_into_instance(
     Ok(())
 }
 
+pub(crate) fn is_known_instance_kind(instance_kind: &str) -> bool {
+    matches!(
+        instance_kind,
+        INSTANCE_KIND_ARENA
+            | INSTANCE_KIND_PRACTICE
+            | INSTANCE_KIND_TRAINING
+            | INSTANCE_KIND_SURVIVAL
+    )
+}
+
+pub(crate) fn instance_kind_is_practice(instance_kind: &str) -> bool {
+    matches!(
+        instance_kind,
+        INSTANCE_KIND_PRACTICE | INSTANCE_KIND_TRAINING
+    )
+}
+
+pub(crate) fn instance_uses_flat_layout(ctx: &ReducerContext, instance_id: u64) -> bool {
+    ctx.db
+        .arena_instance()
+        .id()
+        .find(instance_id)
+        .is_some_and(|arena| instance_kind_uses_flat_layout(arena.instance_kind.as_str()))
+}
+
+fn instance_kind_uses_flat_layout(instance_kind: &str) -> bool {
+    matches!(
+        instance_kind,
+        INSTANCE_KIND_TRAINING | INSTANCE_KIND_SURVIVAL
+    )
+}
+
 fn reset_player_for_instance(
     ctx: &ReducerContext,
     identity: Identity,
@@ -572,17 +631,21 @@ fn reset_player_for_instance(
         .find(identity)
         .and_then(|world| world.instance_id);
     let (spawn_target_x, spawn_target_z, spawn_yaw) = instance_id
-        .and_then(|instance_id| resolve_instance_spawn_override(ctx, instance_id, identity))
+        .and_then(|instance_id| crate::survival::resolve_survival_spawn_override(ctx, instance_id))
+        .or_else(|| {
+            instance_id
+                .and_then(|instance_id| resolve_instance_spawn_override(ctx, instance_id, identity))
+        })
         .unwrap_or_else(|| {
             let (spawn_x, spawn_z) = instance_spawn_for_player(arena_seed, identity);
             (spawn_x, spawn_z, 0.0)
         });
-    let use_flat_training_layout = instance_id
-        .map(|id| is_training_instance(ctx, id))
+    let use_flat_layout = instance_id
+        .map(|id| instance_uses_flat_layout(ctx, id))
         .unwrap_or(false);
     let (spawn_x, spawn_y, spawn_z) = resolve_world_spawn_position_with_layout(
         Some(arena_seed),
-        use_flat_training_layout,
+        use_flat_layout,
         spawn_target_x,
         spawn_target_z,
         DEFAULT_HIT_RADIUS,
@@ -677,6 +740,7 @@ pub(crate) fn upsert_player_world(
     if let Some(mut world) = ctx.db.player_world().identity().find(identity) {
         world.world_kind = normalized_world_kind.to_string();
         world.instance_id = normalized_instance_id;
+        world.instance_scope_id = normalized_instance_id.unwrap_or_default();
         world.open_world_scene_name = open_world_scene_name;
         ctx.db.player_world().identity().update(world);
     } else {
@@ -684,6 +748,7 @@ pub(crate) fn upsert_player_world(
             identity,
             world_kind: normalized_world_kind.to_string(),
             instance_id: normalized_instance_id,
+            instance_scope_id: normalized_instance_id.unwrap_or_default(),
             open_world_scene_name,
         });
     }
@@ -1046,7 +1111,40 @@ pub fn players_share_world_context(ctx: &ReducerContext, a: Identity, b: Identit
 
 #[cfg(test)]
 mod tests {
-    use super::{world_contexts_share, ResolvedWorldContext};
+    use super::{
+        instance_kind_is_practice, instance_kind_uses_flat_layout, is_known_instance_kind,
+        world_contexts_share, ResolvedWorldContext, INSTANCE_KIND_ARENA, INSTANCE_KIND_PRACTICE,
+        INSTANCE_KIND_SURVIVAL, INSTANCE_KIND_TRAINING,
+    };
+
+    #[test]
+    fn instance_kind_mapping_preserves_practice_compatibility() {
+        assert!(!instance_kind_is_practice(INSTANCE_KIND_ARENA));
+        assert!(instance_kind_is_practice(INSTANCE_KIND_PRACTICE));
+        assert!(instance_kind_is_practice(INSTANCE_KIND_TRAINING));
+        assert!(!instance_kind_is_practice(INSTANCE_KIND_SURVIVAL));
+    }
+
+    #[test]
+    fn instance_kind_vocabulary_is_closed() {
+        for kind in [
+            INSTANCE_KIND_ARENA,
+            INSTANCE_KIND_PRACTICE,
+            INSTANCE_KIND_TRAINING,
+            INSTANCE_KIND_SURVIVAL,
+        ] {
+            assert!(is_known_instance_kind(kind));
+        }
+        assert!(!is_known_instance_kind("DUNGEON"));
+    }
+
+    #[test]
+    fn only_training_and_survival_use_the_flat_layout() {
+        assert!(!instance_kind_uses_flat_layout(INSTANCE_KIND_ARENA));
+        assert!(!instance_kind_uses_flat_layout(INSTANCE_KIND_PRACTICE));
+        assert!(instance_kind_uses_flat_layout(INSTANCE_KIND_TRAINING));
+        assert!(instance_kind_uses_flat_layout(INSTANCE_KIND_SURVIVAL));
+    }
 
     #[test]
     fn open_world_context_requires_matching_scene() {

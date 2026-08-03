@@ -83,7 +83,6 @@ pub(crate) const RESOURCE_KIND_STAMINA: &str = "STAMINA";
 pub(crate) const COMBAT_MODE_SHORT_DRAW: &str = "SHORT_DRAW";
 pub(crate) const COMBAT_MODE_FULL_DRAW: &str = "FULL_DRAW";
 pub(crate) const COMBAT_MODE_READY: &str = "READY";
-#[cfg(test)]
 pub(crate) const COMBAT_MODE_STEALTHED: &str = "STEALTHED";
 pub(crate) const AUTO_ATTACK_MOVEMENT_ALLOW_MOVING: &str = "ALLOW_MOVING";
 pub(crate) const AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE: &str =
@@ -1983,6 +1982,7 @@ pub(crate) fn sync_active_combat_mode_for_owner(
         normalize_active_combat_mode_for_profile(ctx, owner, combat_profile_id.as_str(), now);
     } else if ctx.db.active_combat_mode().owner().find(owner).is_some() {
         ctx.db.active_combat_mode().owner().delete(owner);
+        crate::survival::on_survival_combat_mode_changed(ctx, owner);
     }
 }
 
@@ -2032,6 +2032,7 @@ fn normalize_active_combat_mode_for_profile(
     if combat_profile_id.is_empty() || !combat_profile_has_modes(ctx, combat_profile_id.as_str()) {
         if ctx.db.active_combat_mode().owner().find(owner).is_some() {
             ctx.db.active_combat_mode().owner().delete(owner);
+            crate::survival::on_survival_combat_mode_changed(ctx, owner);
         }
         return;
     }
@@ -2114,6 +2115,7 @@ fn default_combat_mode_for_profile(
 }
 
 fn upsert_active_combat_mode(ctx: &ReducerContext, row: ActiveCombatMode) {
+    let owner = row.owner;
     if ctx
         .db
         .active_combat_mode()
@@ -2125,6 +2127,7 @@ fn upsert_active_combat_mode(ctx: &ReducerContext, row: ActiveCombatMode) {
     } else {
         ctx.db.active_combat_mode().insert(row);
     }
+    crate::survival::on_survival_combat_mode_changed(ctx, owner);
 }
 
 fn upsert_active_combat_discipline(ctx: &ReducerContext, row: ActiveCombatDiscipline) {

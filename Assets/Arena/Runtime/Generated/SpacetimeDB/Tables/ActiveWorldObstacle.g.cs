@@ -26,6 +26,15 @@ namespace SpacetimeDB.Types
 
             public readonly ExpiresAtMicrosIndex ExpiresAtMicros;
 
+            public sealed class InstanceScopeIdIndex : BTreeIndexBase<ulong>
+            {
+                protected override ulong GetKey(ActiveWorldObstacle row) => row.InstanceScopeId;
+
+                public InstanceScopeIdIndex(ActiveWorldObstacleHandle table) : base(table) { }
+            }
+
+            public readonly InstanceScopeIdIndex InstanceScopeId;
+
             public sealed class ObstacleIdUniqueIndex : UniqueIndexBase<ulong>
             {
                 protected override ulong GetKey(ActiveWorldObstacle row) => row.ObstacleId;
@@ -47,6 +56,7 @@ namespace SpacetimeDB.Types
             internal ActiveWorldObstacleHandle(DbConnection conn) : base(conn)
             {
                 ExpiresAtMicros = new(this);
+                InstanceScopeId = new(this);
                 ObstacleId = new(this);
                 Owner = new(this);
             }
@@ -66,6 +76,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<ActiveWorldObstacle, string> VisualResourcePath { get; }
         public global::SpacetimeDB.Col<ActiveWorldObstacle, string> WorldKind { get; }
         public global::SpacetimeDB.Col<ActiveWorldObstacle, ulong> InstanceId { get; }
+        public global::SpacetimeDB.Col<ActiveWorldObstacle, ulong> InstanceScopeId { get; }
         public global::SpacetimeDB.Col<ActiveWorldObstacle, string> OpenWorldSceneName { get; }
         public global::SpacetimeDB.Col<ActiveWorldObstacle, float> RootX { get; }
         public global::SpacetimeDB.Col<ActiveWorldObstacle, float> RootY { get; }
@@ -94,6 +105,7 @@ namespace SpacetimeDB.Types
             VisualResourcePath = new global::SpacetimeDB.Col<ActiveWorldObstacle, string>(tableName, "visual_resource_path");
             WorldKind = new global::SpacetimeDB.Col<ActiveWorldObstacle, string>(tableName, "world_kind");
             InstanceId = new global::SpacetimeDB.Col<ActiveWorldObstacle, ulong>(tableName, "instance_id");
+            InstanceScopeId = new global::SpacetimeDB.Col<ActiveWorldObstacle, ulong>(tableName, "instance_scope_id");
             OpenWorldSceneName = new global::SpacetimeDB.Col<ActiveWorldObstacle, string>(tableName, "open_world_scene_name");
             RootX = new global::SpacetimeDB.Col<ActiveWorldObstacle, float>(tableName, "root_x");
             RootY = new global::SpacetimeDB.Col<ActiveWorldObstacle, float>(tableName, "root_y");
@@ -119,12 +131,14 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.IxCol<ActiveWorldObstacle, ulong> ObstacleId { get; }
         public global::SpacetimeDB.IxCol<ActiveWorldObstacle, SpacetimeDB.Identity> Owner { get; }
+        public global::SpacetimeDB.IxCol<ActiveWorldObstacle, ulong> InstanceScopeId { get; }
         public global::SpacetimeDB.IxCol<ActiveWorldObstacle, long> ExpiresAtMicros { get; }
 
         public ActiveWorldObstacleIxCols(string tableName)
         {
             ObstacleId = new global::SpacetimeDB.IxCol<ActiveWorldObstacle, ulong>(tableName, "obstacle_id");
             Owner = new global::SpacetimeDB.IxCol<ActiveWorldObstacle, SpacetimeDB.Identity>(tableName, "owner");
+            InstanceScopeId = new global::SpacetimeDB.IxCol<ActiveWorldObstacle, ulong>(tableName, "instance_scope_id");
             ExpiresAtMicros = new global::SpacetimeDB.IxCol<ActiveWorldObstacle, long>(tableName, "expires_at_micros");
         }
     }

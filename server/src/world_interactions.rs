@@ -59,6 +59,9 @@ pub struct WorldDoorState {
     pub door_definition_id: String,
     pub world_kind: String,
     pub instance_id: Option<u64>,
+    /// Query-safe scalar mirror of `instance_id`; zero means open world.
+    #[index(btree)]
+    pub instance_scope_id: u64,
     pub open_world_scene_name: String,
     pub is_open: bool,
     pub revision: u64,
@@ -82,6 +85,9 @@ pub struct ActiveWorldInteraction {
     pub progress_label_key: String,
     pub world_kind: String,
     pub instance_id: Option<u64>,
+    /// Query-safe scalar mirror of `instance_id`; zero means open world.
+    #[index(btree)]
+    pub instance_scope_id: u64,
     pub open_world_scene_name: String,
     pub interaction_anchor_x: f32,
     pub interaction_anchor_y: f32,
@@ -260,6 +266,7 @@ pub fn begin_world_door_action(
             progress_label_key: profile.progress_label_key.clone(),
             world_kind: scope.world_kind,
             instance_id: scope.instance_id,
+            instance_scope_id: scope.instance_id.unwrap_or_default(),
             open_world_scene_name: scope.open_world_scene_name,
             interaction_anchor_x: door.interaction_anchor.x,
             interaction_anchor_y: door.interaction_anchor.y,
@@ -875,6 +882,7 @@ fn materialize_door_state(
         door_definition_id: door.door_definition_id.clone(),
         world_kind: scope.world_kind.clone(),
         instance_id: scope.instance_id,
+        instance_scope_id: scope.instance_id.unwrap_or_default(),
         open_world_scene_name: scope.open_world_scene_name.clone(),
         is_open: door.default_open,
         revision: 0,

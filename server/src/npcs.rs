@@ -5,8 +5,10 @@ use std::time::Duration;
 use serde::Deserialize;
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
-use crate::arena::open_world_scene_name_for_identity;
-use crate::arena::{resolve_player_world_context, world_contexts_share, ResolvedWorldContext};
+use crate::arena::{
+    instance_uses_flat_layout, open_world_scene_name_for_identity, resolve_player_world_context,
+    world_contexts_share, ResolvedWorldContext, INSTANCE_KIND_SURVIVAL,
+};
 use crate::combat::actor_snapshot::CombatActorSnapshotSet;
 #[allow(unused_imports)]
 use crate::combat::status_effect as _;
@@ -18,7 +20,6 @@ use crate::melee::{
     resolve_due_pending_melee_impacts_for_event_source, ServerActorMeleeCommitment,
 };
 use crate::movement::FIXED_TICK_SECONDS;
-use crate::practice::is_training_instance;
 use crate::progression::{ability_catalog as _, MeleeAbilityCatalog};
 use crate::relations::{can_harm, combat_relation, CombatRelation, TargetAudience};
 #[allow(unused_imports)]
@@ -181,6 +182,9 @@ pub struct NpcInstance {
     pub display_name: String,
     pub world_kind: String,
     pub instance_id: Option<u64>,
+    /// Query-safe scalar mirror of `instance_id`; zero means open world.
+    #[index(btree)]
+    pub instance_scope_id: u64,
     pub open_world_scene_name: String,
     pub home_x: f32,
     pub home_y: f32,
@@ -1050,6 +1054,15 @@ pub fn spawn_npc(
         } else {
             None
         };
+    if instance_id.is_some_and(|id| {
+        ctx.db
+            .arena_instance()
+            .id()
+            .find(id)
+            .is_some_and(|arena| arena.instance_kind == INSTANCE_KIND_SURVIVAL)
+    }) {
+        return Err("Public NPC spawning is disabled inside survival".to_string());
+    }
     let open_world_scene_name = if is_instance {
         String::new()
     } else if owner_world.world_kind.eq_ignore_ascii_case(WORLD_KIND_OPEN) {
@@ -1069,7 +1082,7 @@ pub fn spawn_npc(
     let spawn_z = owner_physics.pos_z + owner_physics.yaw.cos() * NPC_SPAWN_FORWARD;
     let arena_seed =
         instance_id.and_then(|id| ctx.db.arena_instance().id().find(id).map(|row| row.seed));
-    let flat_ground_only = instance_id.is_some_and(|id| is_training_instance(ctx, id));
+    let flat_ground_only = instance_id.is_some_and(|id| instance_uses_flat_layout(ctx, id));
     let spawn_y = surface_height_for_world_at_y_with_layout_for_scene(
         arena_seed,
         flat_ground_only,
@@ -1094,6 +1107,7 @@ pub fn spawn_npc(
             WORLD_KIND_OPEN.to_string()
         },
         instance_id,
+        instance_scope_id: instance_id.unwrap_or_default(),
         open_world_scene_name,
         home_x: spawn_x,
         home_y: spawn_y,
@@ -1125,6 +1139,9 @@ pub fn spawn_npc(
 #[reducer]
 pub fn despawn_npc(ctx: &ReducerContext, identity: Identity) -> Result<(), String> {
     let owner = ctx.sender();
+    if crate::survival::is_survival_npc(ctx, identity) {
+        return Err("Survival NPCs can only be despawned by the survival director".to_string());
+    }
     let Some(row) = ctx.db.npc_instance().identity().find(identity) else {
         return Ok(());
     };
@@ -1139,6 +1156,16 @@ pub fn despawn_npc(ctx: &ReducerContext, identity: Identity) -> Result<(), Strin
 
 #[reducer]
 pub fn despawn_all_npcs(ctx: &ReducerContext) -> Result<(), String> {
+    let owner = ctx.sender();
+    if ctx
+        .db
+        .npc_instance()
+        .spawned_by()
+        .filter(owner)
+        .any(|npc| crate::survival::is_survival_npc(ctx, npc.identity))
+    {
+        return Err("Survival NPCs can only be despawned by the survival director".to_string());
+    }
     despawn_all_npcs_for_owner(ctx, ctx.sender());
     Ok(())
 }
@@ -1150,6 +1177,9 @@ pub fn set_npc_target_override(
     target: Option<Identity>,
 ) -> Result<(), String> {
     let owner = ctx.sender();
+    if crate::survival::is_survival_npc(ctx, identity) {
+        return Err("Survival NPC target pins are server-owned".to_string());
+    }
     let Some(npc) = ctx.db.npc_instance().identity().find(identity) else {
         return Err("Cannot pin a missing NPC".to_string());
     };
@@ -1160,13 +1190,25 @@ pub fn set_npc_target_override(
         ctx.db.npc_target_override().identity().delete(identity);
         return Ok(());
     };
+    pin_npc_target(ctx, identity, target, owner)
+}
+
+pub(crate) fn pin_npc_target(
+    ctx: &ReducerContext,
+    identity: Identity,
+    target: Identity,
+    set_by: Identity,
+) -> Result<(), String> {
+    if ctx.db.npc_instance().identity().find(identity).is_none() {
+        return Err("Cannot pin a missing NPC".to_string());
+    }
     if ctx.db.player_state().player_id().find(target).is_none() {
         return Err("NPC target override requires a player actor target".to_string());
     }
     let row = NpcTargetOverride {
         identity,
         target,
-        set_by: owner,
+        set_by,
         updated_at: ctx.timestamp,
     };
     if ctx
@@ -1181,6 +1223,81 @@ pub fn set_npc_target_override(
         ctx.db.npc_target_override().insert(row);
     }
     Ok(())
+}
+
+pub(crate) fn clear_npc_target_pin(ctx: &ReducerContext, identity: Identity) {
+    ctx.db.npc_target_override().identity().delete(identity);
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn spawn_system_npc_in_instance(
+    ctx: &ReducerContext,
+    spawned_by: Identity,
+    template_id: &str,
+    instance_id: u64,
+    spawn_x: f32,
+    spawn_z: f32,
+    yaw: f32,
+) -> Result<Identity, String> {
+    let template =
+        npc_template(template_id).ok_or_else(|| format!("Unknown NPC template '{template_id}'"))?;
+    let visual_id = template
+        .visual_ids
+        .first()
+        .cloned()
+        .ok_or_else(|| format!("NPC template '{}' has no visual", template.template_id))?;
+    let arena = ctx
+        .db
+        .arena_instance()
+        .id()
+        .find(instance_id)
+        .ok_or_else(|| format!("Instance {instance_id} not found"))?;
+    let sequence = next_npc_sequence(ctx, spawned_by);
+    let identity = npc_identity(spawned_by, sequence)?;
+    let spawn_y = surface_height_for_world_at_y_with_layout_for_scene(
+        Some(arena.seed),
+        instance_uses_flat_layout(ctx, instance_id),
+        None,
+        spawn_x,
+        spawn_z,
+        0.0,
+    );
+    let faction = NpcFaction::Hostile;
+    ctx.db.npc_instance().insert(NpcInstance {
+        identity,
+        spawned_by,
+        template_id: template.template_id.clone(),
+        visual_id,
+        species_id: template.species_id.clone(),
+        faction: faction.as_str().to_string(),
+        combat_team_id: debug_combat_team_id(faction, spawned_by, identity),
+        display_name: template.display_name.clone(),
+        world_kind: WORLD_KIND_INSTANCE.to_string(),
+        instance_id: Some(instance_id),
+        instance_scope_id: instance_id,
+        open_world_scene_name: String::new(),
+        home_x: spawn_x,
+        home_y: spawn_y,
+        home_z: spawn_z,
+        spawned_at: ctx.timestamp,
+    });
+    ctx.db.npc_state().insert(NpcState {
+        identity,
+        alive: true,
+        hp: template.max_hp,
+        max_hp: template.max_hp,
+        hit_radius: template.hit_radius,
+        hit_height: template.hit_height,
+    });
+    ctx.db.npc_physics().insert(NpcPhysics {
+        identity,
+        pos_x: spawn_x,
+        pos_y: spawn_y,
+        pos_z: spawn_z,
+        yaw,
+        updated_at: ctx.timestamp,
+    });
+    Ok(identity)
 }
 
 pub(crate) fn despawn_all_npcs_for_owner(ctx: &ReducerContext, owner: Identity) {
@@ -1355,17 +1472,47 @@ pub(crate) fn tick_npc_combat(
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
+        match crate::survival::update_survival_npc_perception(
+            ctx,
+            npc.identity,
+            (physics.pos_x, physics.pos_y, physics.pos_z),
+        ) {
+            crate::survival::SurvivalNpcPerceptionState::Active => {}
+            crate::survival::SurvivalNpcPerceptionState::Paused {
+                last_known_x,
+                last_known_y,
+                last_known_z,
+                newly_paused,
+            } => {
+                if newly_paused {
+                    interrupt_npc_actions_for_crowd_control(ctx, npc.identity, now);
+                    clear_npc_combat_runtime(ctx, npc.identity);
+                }
+                move_survival_npc_toward_last_known(
+                    ctx,
+                    now,
+                    &npc,
+                    &physics,
+                    &template,
+                    movement_modifiers.move_speed_multiplier(&npc.identity, 0),
+                    (last_known_x, last_known_y, last_known_z),
+                );
+                continue;
+            }
+        }
         let target_override = ctx.db.npc_target_override().identity().find(npc.identity);
         let target_is_pinned = target_override.is_some();
+        let suppress_leash = crate::survival::is_survival_npc(ctx, npc.identity);
         if target_is_pinned {
             ctx.db.npc_return_home().identity().delete(npc.identity);
-        } else if ctx
-            .db
-            .npc_return_home()
-            .identity()
-            .find(npc.identity)
-            .is_some()
-            || npc_is_outside_leash(&npc, &physics, brain.leash_radius)
+        } else if !suppress_leash
+            && (ctx
+                .db
+                .npc_return_home()
+                .identity()
+                .find(npc.identity)
+                .is_some()
+                || npc_is_outside_leash(&npc, &physics, brain.leash_radius))
         {
             if ctx
                 .db
@@ -1479,11 +1626,16 @@ pub(crate) fn tick_npc_combat(
             continue;
         };
         let planned_action = if decision_was_due {
-            let nearby = perception.nearby_counts(
-                ctx,
-                npc.identity,
-                physics.pos_x,
-                physics.pos_z,
+            let nearby = include_globally_pinned_survival_target(
+                perception.nearby_counts(
+                    ctx,
+                    npc.identity,
+                    physics.pos_x,
+                    physics.pos_z,
+                    brain.perception_radius,
+                ),
+                suppress_leash && target_is_pinned,
+                target.distance,
                 brain.perception_radius,
             );
             let selection = select_npc_melee_action(
@@ -2167,6 +2319,42 @@ fn return_npc_home(
     );
 }
 
+fn survival_last_known_travel(move_speed: f32, move_speed_multiplier: f32, distance: f32) -> f32 {
+    (move_speed * move_speed_multiplier * FIXED_TICK_SECONDS).min(distance)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn move_survival_npc_toward_last_known(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    npc: &NpcInstance,
+    physics: &NpcPhysics,
+    template: &NpcTemplate,
+    move_speed_multiplier: f32,
+    last_known: (f32, f32, f32),
+) {
+    let dx = last_known.0 - physics.pos_x;
+    let dz = last_known.2 - physics.pos_z;
+    let distance = (dx * dx + dz * dz).sqrt();
+    if distance <= NPC_CHASE_STOP_EPSILON || move_speed_multiplier <= 0.0 {
+        return;
+    }
+    let dir_x = dx / distance;
+    let dir_z = dz / distance;
+    let travel = survival_last_known_travel(template.move_speed, move_speed_multiplier, distance);
+    move_npc_along(
+        ctx,
+        now,
+        npc,
+        physics,
+        template,
+        dir_x,
+        dir_z,
+        travel,
+        yaw_for_direction(dir_x, dir_z),
+    );
+}
+
 struct NpcActionSelection {
     action: Option<NpcExecutableAction>,
     target: Option<NpcAttackTarget>,
@@ -2596,6 +2784,21 @@ fn npc_action_count_requirements_met(
     nearby: NpcNearbyCounts,
 ) -> bool {
     nearby.allies >= min_nearby_allies && nearby.enemies >= min_nearby_enemies
+}
+
+fn include_globally_pinned_survival_target(
+    mut nearby: NpcNearbyCounts,
+    has_global_survival_pin: bool,
+    target_distance: f32,
+    perception_radius: f32,
+) -> NpcNearbyCounts {
+    // Survival's owner pin is explicitly global. If the pinned owner lies
+    // outside the ordinary perception disc, count that known hostile target
+    // for action prerequisites so the NPC can select an action and chase.
+    if has_global_survival_pin && target_distance > perception_radius.max(0.0) {
+        nearby.enemies = nearby.enemies.saturating_add(1);
+    }
+    nearby
 }
 
 fn npc_action_distance_score(
@@ -3084,7 +3287,7 @@ fn npc_movement_world(ctx: &ReducerContext, npc: &NpcInstance) -> (Option<u64>, 
     let Some(instance_id) = npc.instance_id else {
         return (None, false);
     };
-    let flat_ground_only = is_training_instance(ctx, instance_id);
+    let flat_ground_only = instance_uses_flat_layout(ctx, instance_id);
     let arena_seed = ctx
         .db
         .arena_instance()
@@ -3266,7 +3469,8 @@ fn resolve_npc_swing_target(
     })
 }
 
-fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
+pub(crate) fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
+    crate::survival::clear_survival_perception_pause(ctx, identity);
     clear_npc_forced_movement(ctx, identity);
     clear_npc_combat_runtime(ctx, identity);
     clear_actor_cooldowns(ctx, identity);
@@ -3289,6 +3493,10 @@ fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
         ctx.db.npc_physics().identity().delete(identity);
     }
     crate::combat::position_history::clear_position_history(ctx, identity);
+}
+
+pub(crate) fn clear_npc_spawn_counter_for_owner(ctx: &ReducerContext, owner: Identity) {
+    ctx.db.npc_spawn_counter().owner().delete(owner);
 }
 
 pub(crate) fn record_npc_damage_threat(
@@ -3342,7 +3550,7 @@ fn npc_threat_key(npc_identity: Identity, source_identity: Identity) -> String {
     format!("{}:{}", npc_identity.to_hex(), source_identity.to_hex())
 }
 
-fn clear_npc_combat_runtime(ctx: &ReducerContext, identity: Identity) {
+pub(crate) fn clear_npc_combat_runtime(ctx: &ReducerContext, identity: Identity) {
     if ctx
         .db
         .npc_combat_runtime()
@@ -3432,18 +3640,20 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        npc_action_count_requirements_met, npc_action_distance_score, npc_action_recovery_ms,
-        npc_catalog, npc_decision_interval_ms, npc_health_fraction, npc_health_needs_healing,
-        npc_identity, npc_identity_cmp, npc_is_outside_leash_from_positions,
-        npc_movement_hold_active, npc_tactical_band, npc_target_stickiness_keeps_current,
-        npc_target_stickiness_keeps_scored_current, npc_template, npc_threat_key,
-        parse_npc_catalog, sample_npc_forced_movement_pose, stamp_npc_movement_hold,
-        visual_id_for_template, yaw_for_direction, NpcActionRejectCounts, NpcAttackTarget,
-        NpcCombatRuntime, NpcFaction, NpcForcedMovement, NpcNearbyCounts, NpcScoredTarget,
-        NpcTacticalBand, NpcThreatComponents, NPC_CATALOG_JSON, NPC_FACTION_FRIENDLY,
-        NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL, NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD,
-        NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR, NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
+        include_globally_pinned_survival_target, npc_action_count_requirements_met,
+        npc_action_distance_score, npc_action_recovery_ms, npc_catalog, npc_decision_interval_ms,
+        npc_health_fraction, npc_health_needs_healing, npc_identity, npc_identity_cmp,
+        npc_is_outside_leash_from_positions, npc_movement_hold_active, npc_tactical_band,
+        npc_target_stickiness_keeps_current, npc_target_stickiness_keeps_scored_current,
+        npc_template, npc_threat_key, parse_npc_catalog, sample_npc_forced_movement_pose,
+        stamp_npc_movement_hold, survival_last_known_travel, visual_id_for_template,
+        yaw_for_direction, NpcActionRejectCounts, NpcAttackTarget, NpcCombatRuntime, NpcFaction,
+        NpcForcedMovement, NpcNearbyCounts, NpcScoredTarget, NpcTacticalBand, NpcThreatComponents,
+        NPC_CATALOG_JSON, NPC_FACTION_FRIENDLY, NPC_FACTION_HOSTILE, NPC_FACTION_NEUTRAL,
+        NPC_TEMPLATE_KOBOLD_THIEF_BK_DUAL_SWORD, NPC_TEMPLATE_KOBOLD_WARRIOR_GN_SPEAR,
+        NPC_TEMPLATE_KOBOLD_WARRIOR_RD_SWORD_SHIELD,
     };
+    use crate::movement::FIXED_TICK_SECONDS;
     use spacetimedb::{Identity, Timestamp};
 
     #[test]
@@ -3497,6 +3707,15 @@ mod tests {
     }
 
     #[test]
+    fn survival_last_known_travel_stops_at_the_captured_point() {
+        assert_eq!(survival_last_known_travel(6.0, 1.0, 0.02), 0.02);
+        assert_eq!(
+            survival_last_known_travel(6.0, 1.0, 10.0),
+            6.0 * FIXED_TICK_SECONDS
+        );
+    }
+
+    #[test]
     fn npc_action_distance_scoring_requires_movement_permission() {
         assert_eq!(
             npc_action_distance_score(1.0, 1.0, 3.0, 2.0, false),
@@ -3536,6 +3755,21 @@ mod tests {
         assert!(npc_action_count_requirements_met(2, 3, nearby));
         assert!(!npc_action_count_requirements_met(3, 3, nearby));
         assert!(!npc_action_count_requirements_met(2, 4, nearby));
+    }
+
+    #[test]
+    fn survival_global_pin_counts_owner_outside_perception_for_action_selection() {
+        let nearby = NpcNearbyCounts::default();
+
+        let globally_pinned = include_globally_pinned_survival_target(nearby, true, 28.0, 12.0);
+        assert_eq!(globally_pinned.enemies, 1);
+        assert!(npc_action_count_requirements_met(0, 1, globally_pinned));
+
+        let ordinary_npc = include_globally_pinned_survival_target(nearby, false, 28.0, 12.0);
+        assert_eq!(ordinary_npc.enemies, 0);
+
+        let already_perceived = include_globally_pinned_survival_target(nearby, true, 8.0, 12.0);
+        assert_eq!(already_perceived.enemies, 0);
     }
 
     #[test]

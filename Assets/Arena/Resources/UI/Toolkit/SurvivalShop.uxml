@@ -1,0 +1,44 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- Translated one-way from docs/ui-prototypes/survival-shop. Dynamic offer
+         cards use the same classes defined in SurvivalShop.uss. -->
+    <Style src="SurvivalShop.uss" />
+
+    <ui:VisualElement name="SurvivalShop" class="survival-shop">
+        <ui:VisualElement class="menu-veil" />
+        <ui:VisualElement name="Window" class="menu-window shop-window">
+            <ui:VisualElement class="window-shadow" picking-mode="Ignore" />
+            <ui:VisualElement class="window-body" />
+            <ui:VisualElement class="frame-rail frame-rail--top" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--bottom" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--left" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-rail frame-rail--right" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--tl" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--tr" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--bl" picking-mode="Ignore" />
+            <ui:VisualElement class="frame-corner frame-corner--br" picking-mode="Ignore" />
+
+            <ui:VisualElement class="window-flow">
+                <ui:VisualElement class="header-plate">
+                    <ui:Label class="window-title" text="SURVIVAL FORGE" />
+                </ui:VisualElement>
+                <ui:VisualElement class="shop-content">
+                    <ui:VisualElement class="shop-summary">
+                        <ui:VisualElement class="summary-copy">
+                            <ui:Label name="RoundLabel" class="round-label" />
+                            <ui:Label class="shop-hint" text="Choose upgrades. Unspent gold carries forward." />
+                        </ui:VisualElement>
+                        <ui:Label name="GoldBalance" class="gold-balance" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="section-rule" picking-mode="Ignore" />
+                    <ui:ScrollView name="OfferScroll" class="offer-scroll" mode="Vertical" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto">
+                        <ui:VisualElement name="OfferGrid" class="offer-grid" />
+                    </ui:ScrollView>
+                    <ui:VisualElement class="shop-footer">
+                        <ui:Label class="footer-note" text="Weapons immediately change your action bar when equipped." />
+                        <ui:Button name="ReadyButton" class="arena-button arena-button--primary ready-button" text="START ROUND" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

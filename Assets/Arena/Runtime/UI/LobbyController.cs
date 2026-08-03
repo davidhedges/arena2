@@ -29,6 +29,7 @@ namespace Arena.UI
         private ArenaWindow _window = null!;
         private RectTransform _listContent = null!;
         private ArenaButtonHandle _createButton;
+        private ArenaButtonHandle _survivalButton;
         private ArenaButtonHandle _startButton;
         private TextMeshProUGUI _statusText = null!;
         private readonly List<GameObject> _instanceRows = new();
@@ -136,6 +137,19 @@ namespace Arena.UI
             createRect.sizeDelta = new Vector2(160f, ArenaUiTheme.ButtonHeight);
             createRect.anchoredPosition = new Vector2(ArenaUiTheme.ContentPadding, 0f);
 
+            _survivalButton = ArenaUiKit.MakeButton(
+                footer,
+                "SurvivalBtn",
+                "Start Survival",
+                ArenaButtonStyle.Secondary,
+                OnSurvivalPressed);
+            RectTransform survivalRect = _survivalButton.Rect;
+            survivalRect.anchorMin = new Vector2(1f, 0.5f);
+            survivalRect.anchorMax = new Vector2(1f, 0.5f);
+            survivalRect.pivot = new Vector2(1f, 0.5f);
+            survivalRect.sizeDelta = new Vector2(160f, ArenaUiTheme.ButtonHeight);
+            survivalRect.anchoredPosition = new Vector2(-ArenaUiTheme.ContentPadding, 0f);
+
             _startButton = ArenaUiKit.MakeButton(
                 footer,
                 "StartBtn",
@@ -160,6 +174,7 @@ namespace Arena.UI
             var conn = NetworkManager.Instance?.Conn;
 
             bool eligible = NetworkManager.Instance?.IsConnected == true
+                && !cache.IsSurvivalMode
                 && (!cache.IsArenaMode || cache.Phase == MatchPhase.Waiting)
                 && !ShouldSuppressInCurrentScene();
 
@@ -175,7 +190,10 @@ namespace Arena.UI
             if (!_panelOpen) return;
 
             bool connected = conn != null;
-            _createButton.SetInteractable(connected && !cache.LocalInstanceId.HasValue);
+            bool outsideInstance = !cache.LocalInstanceId.HasValue;
+            _createButton.SetInteractable(connected && outsideInstance);
+            _survivalButton.GameObject.SetActive(outsideInstance);
+            _survivalButton.SetInteractable(connected && outsideInstance);
 
             bool inWaitingInstance = cache.LocalInstanceId.HasValue && cache.Phase == MatchPhase.Waiting;
             _startButton.GameObject.SetActive(inWaitingInstance);
@@ -206,7 +224,7 @@ namespace Arena.UI
             var instances = new List<ArenaInstance>();
             foreach (var inst in conn.Db.ArenaInstance.Iter())
             {
-                if (inst.IsPractice) continue;
+                if (!string.Equals(inst.InstanceKind, "ARENA", System.StringComparison.Ordinal)) continue;
                 if (string.Equals(inst.Phase, "ENDED", System.StringComparison.OrdinalIgnoreCase)) continue;
                 instances.Add(inst);
             }
@@ -315,6 +333,14 @@ namespace Arena.UI
             var conn = NetworkManager.Instance?.Conn;
             if (conn == null) return;
             conn.Reducers.CreateInstance(2);
+        }
+
+        private void OnSurvivalPressed()
+        {
+            var conn = NetworkManager.Instance?.Conn;
+            if (conn == null || MatchStateCache.Instance.LocalInstanceId.HasValue) return;
+            conn.Reducers.StartSurvivalRun();
+            _panelOpen = false;
         }
 
         private void OnJoinPressed(ulong instanceId)

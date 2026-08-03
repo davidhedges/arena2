@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "arena_radius": 30.0,
+  "player_spawn": { "x": 0.0, "z": 0.0, "yaw": 0.0 },
+  "edge_spawn_points": [
+    { "x": 0.0, "z": 28.0 },
+    { "x": 28.0, "z": 0.0 },
+    { "x": 0.0, "z": -28.0 },
+    { "x": -28.0, "z": 0.0 }
+  ],
+  "obstacles": []
+}

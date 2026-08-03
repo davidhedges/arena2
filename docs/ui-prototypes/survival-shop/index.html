@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arena — Survival Shop (UI spec)</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../kit.css">
+<link rel="stylesheet" href="survival-shop.css">
+<style>
+@font-face { font-family: "Cinzel"; src: url("../../../Assets/Arena/Content/UI/Fonts/Cinzel.ttf") format("truetype"); }
+@font-face { font-family: "Alegreya"; src: url("../../../Assets/Arena/Content/UI/Fonts/Alegreya.ttf") format("truetype"); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #08090b; overflow: hidden; }
+.sc-stagewrap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.sc-stage { position: relative; width: 1920px; height: 1080px; flex: none; background: radial-gradient(circle at 50% 52%, #26313a 0%, #11171b 58%, #07090b 100%); transform-origin: center center; }
+</style>
+</head>
+<body>
+<div class="sc-stagewrap">
+  <div class="sc-stage" id="Stage">
+    <!-- ids are the binding contract for SurvivalShop.uxml/controller. -->
+    <div class="survival-shop is-open" id="SurvivalShop">
+      <div class="menu-veil"></div>
+      <div class="menu-window shop-window" id="Window">
+        <div class="window-shadow"></div>
+        <div class="window-body"></div>
+        <div class="frame-rail frame-rail--top"></div>
+        <div class="frame-rail frame-rail--bottom"></div>
+        <div class="frame-rail frame-rail--left"></div>
+        <div class="frame-rail frame-rail--right"></div>
+        <div class="frame-corner frame-corner--tl"></div>
+        <div class="frame-corner frame-corner--tr"></div>
+        <div class="frame-corner frame-corner--bl"></div>
+        <div class="frame-corner frame-corner--br"></div>
+        <div class="window-flow">
+          <div class="header-plate"><div class="window-title">SURVIVAL FORGE</div></div>
+          <div class="shop-content">
+            <div class="shop-summary">
+              <div class="summary-copy">
+                <div class="round-label" id="RoundLabel">PREPARE FOR ROUND 6</div>
+                <div class="shop-hint">Choose upgrades. Unspent gold carries forward.</div>
+              </div>
+              <div class="gold-balance" id="GoldBalance">1,240 GOLD</div>
+            </div>
+            <div class="section-rule"></div>
+            <div class="offer-scroll">
+              <div class="offer-grid" id="OfferGrid">
+                <button class="offer-card"><span class="offer-kind">MODIFIER</span><span class="offer-name">PHYSICAL DAMAGE</span><span class="offer-detail">+8% damage · Stack 2/8</span><span class="offer-price">149 GOLD</span></button>
+                <button class="offer-card"><span class="offer-kind">MODIFIER</span><span class="offer-name">FORTITUDE</span><span class="offer-detail">+12 max HP · Stack 1/10</span><span class="offer-price">122 GOLD</span></button>
+                <button class="offer-card"><span class="offer-kind">MODIFIER</span><span class="offer-name">MOVE SPEED</span><span class="offer-detail">+4% speed · Stack 0/5</span><span class="offer-price">130 GOLD</span></button>
+                <button class="offer-card"><span class="offer-kind">MODIFIER</span><span class="offer-name">FIRE RESISTANCE</span><span class="offer-detail">+6% resistance · Stack 3/5</span><span class="offer-price">144 GOLD</span></button>
+                <button class="offer-card offer-card--item"><span class="offer-kind">EQUIPMENT · 2 AFFIXES</span><span class="offer-name">GILDED CHESTPLATE</span><span class="offer-detail">Heavy chest armor</span><span class="offer-price">482 GOLD</span></button>
+                <button class="offer-card offer-card--item is-purchased" disabled><span class="offer-kind">EQUIPMENT · 1 AFFIX</span><span class="offer-name">HUNTER BOW</span><span class="offer-detail">Purchased</span><span class="offer-price">OWNED</span></button>
+              </div>
+            </div>
+            <div class="shop-footer">
+              <div class="footer-note">Weapons immediately change your action bar when equipped.</div>
+              <button class="arena-button arena-button--primary ready-button" id="ReadyButton">START ROUND 6</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function scaleStage() {
+  const stage = document.getElementById('Stage');
+  const scale = Math.min(innerWidth / 1920, innerHeight / 1080);
+  stage.style.transform = `scale(${scale})`;
+}
+addEventListener('resize', scaleStage);
+scaleStage();
+document.querySelectorAll('.offer-card:not(.is-purchased)').forEach(card => card.addEventListener('click', () => card.classList.toggle('is-selected')));
+</script>
+</body>
+</html>

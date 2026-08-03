@@ -12,7 +12,7 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::{
     arena_seed_for_identity, open_world_scene_profile_for_identity, players_share_world_context,
-    MATCH_PHASE_ENDED, MATCH_PHASE_IN_PROGRESS,
+    INSTANCE_KIND_ARENA, MATCH_PHASE_ENDED, MATCH_PHASE_IN_PROGRESS,
 };
 use crate::derived_stats::{derived_combat_stats_for_owner, derived_combat_stats_from_allocations};
 use crate::inventory::{
@@ -22,7 +22,7 @@ use crate::movement::FIXED_TICK_MILLIS;
 use crate::npcs::schedule_npc_corpse_despawn;
 use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WORLD_SPAWN_Z};
 use crate::player_state::PlayerState;
-use crate::practice::{is_training_instance, resolve_respawn_pose};
+use crate::practice::resolve_respawn_pose;
 use crate::progression::{
     combat_rule_value, derived_combat_profile_id_for_owner, COMBAT_PROFILE_TWO_HANDED_SWORD,
 };
@@ -4307,7 +4307,7 @@ fn apply_damage_to_player_state(
 ) -> bool {
     let source = hit.source;
     let target = hit.target;
-    if !state.alive {
+    if !state.alive || crate::survival::survival_player_is_invulnerable(ctx, target) {
         return false;
     }
 
@@ -4317,6 +4317,7 @@ fn apply_damage_to_player_state(
         mark_harmful_combat_action(ctx, source, target, ctx.timestamp, COMBAT_REASON_DAMAGE);
     }
     let mut defeated_instance_id = None;
+    let mut player_was_defeated = false;
     let after_mana_shield =
         absorb_damage_with_mana_shield(ctx, target, resolved_amount, ctx.timestamp);
     let hp_damage =
@@ -4331,6 +4332,7 @@ fn apply_damage_to_player_state(
     state.hp = battle_trance_hp;
     if state.hp <= 0 {
         state.hp = 0;
+        player_was_defeated = true;
         defeated_instance_id = handle_death(ctx, &mut state);
     }
     if hp_damage > 0 {
@@ -4342,6 +4344,9 @@ fn apply_damage_to_player_state(
     }
 
     ctx.db.player_state().player_id().update(state);
+    if player_was_defeated {
+        crate::survival::end_survival_run_for_player_death(ctx, target);
+    }
     if let Some(instance_id) = defeated_instance_id {
         record_match_kill(ctx, source, instance_id);
         conclude_match_if_needed(ctx, instance_id);
@@ -4397,6 +4402,8 @@ fn apply_damage_to_npc_state(
     state.hp -= hp_damage;
     crate::npcs::record_npc_damage_threat(ctx, target, source, hp_damage);
     let defeated = state.hp <= 0;
+    let survival_defeated =
+        defeated && crate::survival::on_survival_npc_defeated(ctx, target, source);
     if defeated {
         state.hp = 0;
         state.alive = false;
@@ -4404,7 +4411,12 @@ fn apply_damage_to_npc_state(
         clear_statuses_for_target(ctx, target);
         clear_combat_engagement_for_identity(ctx, target);
         clear_combat_stacking_passive_runtime_for_identity(ctx, target);
-        create_corpse_loot_for_npc(ctx, target, source);
+        if !survival_defeated {
+            create_corpse_loot_for_npc(ctx, target, source);
+        }
+        // Survival suppresses corpse loot, not the shared death lifecycle.
+        // Keeping the dead rows until the normal delayed despawn lets clients
+        // observe Alive=false, clear targeting, and play the death animation.
         schedule_npc_corpse_despawn(ctx, target, ctx.timestamp);
     }
 
@@ -4426,6 +4438,34 @@ fn apply_damage_to_npc_state(
     record_match_damage_done(ctx, source, hp_damage.max(0));
     emit_combat_effect_event(ctx, hit, EFFECT_TYPE_DAMAGE, resolved);
     defeated
+}
+
+pub(crate) fn apply_survival_npc_damage_multiplier(
+    ctx: &ReducerContext,
+    identity: Identity,
+    multiplier: f32,
+) {
+    if !multiplier.is_finite() || multiplier <= 1.0 {
+        return;
+    }
+    apply_status_internal(
+        ctx,
+        ctx.timestamp,
+        identity,
+        identity,
+        "SURVIVAL_ROUND_SCALING",
+        StatusPayload::DamageAmp {
+            modifier_scalar: multiplier - 1.0,
+        },
+        StatusPolarity::Buff,
+        Duration::from_secs(365 * 24 * 60 * 60),
+        "SURVIVAL_ROUND_SCALING",
+        1,
+        StackPolicy::Refresh,
+        TargetAudience::SelfOnly,
+        Vec::new(),
+        false,
+    );
 }
 
 fn resolve_damage_amount(
@@ -5700,7 +5740,7 @@ fn is_live_arena_match(ctx: &ReducerContext, instance_id: u64) -> bool {
         return false;
     };
 
-    if instance.is_practice || is_training_instance(ctx, instance_id) {
+    if instance.instance_kind != INSTANCE_KIND_ARENA {
         return false;
     }
 
@@ -5821,7 +5861,7 @@ fn record_match_stats_delta(
     let Some(instance) = ctx.db.arena_instance().id().find(instance_id) else {
         return;
     };
-    if instance.is_practice {
+    if instance.instance_kind != INSTANCE_KIND_ARENA {
         return;
     }
 

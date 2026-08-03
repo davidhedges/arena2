@@ -4,6 +4,7 @@ use crate::actor_lifecycle::{
     despawn_actor_bundle, spawn_actor_bundle, ActorDespawnOptions, ActorSpawnSpec,
     ActorWorldAssignment, ActorWorldCleanup,
 };
+use crate::arena::instance_uses_flat_layout;
 use crate::arena::{
     arena_seed_for_identity, open_world_scene_name_for_identity, upsert_player_open_world_scene,
     upsert_player_world,
@@ -15,7 +16,6 @@ use crate::party::{
     ensure_playground_party_member, remove_playground_party_member,
     remove_playground_party_member_and_created_party, MAX_PARTY_MEMBERS,
 };
-use crate::practice::is_training_instance;
 use crate::world_collision::resolve_world_spawn_position_with_layout_for_scene;
 
 #[allow(unused_imports)]
@@ -147,7 +147,7 @@ pub fn spawn_playground_target(ctx: &ReducerContext, kind: String) -> Result<(),
     // the dummy inside padded movement boxes, which reads as a false
     // line-of-sight block from every direction (S4 follow-up).
     let flat_ground_only = owner_instance_id
-        .map(|instance_id| is_training_instance(ctx, instance_id))
+        .map(|instance_id| instance_uses_flat_layout(ctx, instance_id))
         .unwrap_or(false);
     let (spawn_x, spawn_y, spawn_z) = resolve_world_spawn_position_with_layout_for_scene(
         arena_seed_for_identity(ctx, owner),

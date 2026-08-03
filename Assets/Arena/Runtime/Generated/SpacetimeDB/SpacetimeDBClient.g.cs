@@ -100,6 +100,10 @@ namespace SpacetimeDB.Types
             AddTable(SpellDefinition = new(conn));
             AddTable(StatScalingCatalog = new(conn));
             AddTable(StatusEffect = new(conn));
+            AddTable(SurvivalResult = new(conn));
+            AddTable(SurvivalRun = new(conn));
+            AddTable(SurvivalScore = new(conn));
+            AddTable(SurvivalShopOffer = new(conn));
             AddTable(WorldDoorState = new(conn));
             AddTable(WorldTrapState = new(conn));
         }
@@ -671,6 +675,10 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.SpellDefinition().ToSql(),
             new QueryBuilder().From.StatScalingCatalog().ToSql(),
             new QueryBuilder().From.StatusEffect().ToSql(),
+            new QueryBuilder().From.SurvivalResult().ToSql(),
+            new QueryBuilder().From.SurvivalRun().ToSql(),
+            new QueryBuilder().From.SurvivalScore().ToSql(),
+            new QueryBuilder().From.SurvivalShopOffer().ToSql(),
             new QueryBuilder().From.WorldDoorState().ToSql(),
             new QueryBuilder().From.WorldTrapState().ToSql(),
         }
@@ -752,6 +760,10 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<SpellDefinition, SpellDefinitionCols, SpellDefinitionIxCols> SpellDefinition() => new("spell_definition", new SpellDefinitionCols("spell_definition"), new SpellDefinitionIxCols("spell_definition"));
         public global::SpacetimeDB.Table<StatScalingCatalog, StatScalingCatalogCols, StatScalingCatalogIxCols> StatScalingCatalog() => new("stat_scaling_catalog", new StatScalingCatalogCols("stat_scaling_catalog"), new StatScalingCatalogIxCols("stat_scaling_catalog"));
         public global::SpacetimeDB.Table<StatusEffect, StatusEffectCols, StatusEffectIxCols> StatusEffect() => new("status_effect", new StatusEffectCols("status_effect"), new StatusEffectIxCols("status_effect"));
+        public global::SpacetimeDB.Table<SurvivalResult, SurvivalResultCols, SurvivalResultIxCols> SurvivalResult() => new("survival_result", new SurvivalResultCols("survival_result"), new SurvivalResultIxCols("survival_result"));
+        public global::SpacetimeDB.Table<SurvivalRun, SurvivalRunCols, SurvivalRunIxCols> SurvivalRun() => new("survival_run", new SurvivalRunCols("survival_run"), new SurvivalRunIxCols("survival_run"));
+        public global::SpacetimeDB.Table<SurvivalScore, SurvivalScoreCols, SurvivalScoreIxCols> SurvivalScore() => new("survival_score", new SurvivalScoreCols("survival_score"), new SurvivalScoreIxCols("survival_score"));
+        public global::SpacetimeDB.Table<SurvivalShopOffer, SurvivalShopOfferCols, SurvivalShopOfferIxCols> SurvivalShopOffer() => new("survival_shop_offer", new SurvivalShopOfferCols("survival_shop_offer"), new SurvivalShopOfferIxCols("survival_shop_offer"));
         public global::SpacetimeDB.Table<WorldDoorState, WorldDoorStateCols, WorldDoorStateIxCols> WorldDoorState() => new("world_door_state", new WorldDoorStateCols("world_door_state"), new WorldDoorStateIxCols("world_door_state"));
         public global::SpacetimeDB.Table<WorldTrapState, WorldTrapStateCols, WorldTrapStateIxCols> WorldTrapState() => new("world_trap_state", new WorldTrapStateCols("world_trap_state"), new WorldTrapStateIxCols("world_trap_state"));
     }
@@ -858,6 +870,7 @@ namespace SpacetimeDB.Types
                 Reducer.DespawnNpc args => Reducers.InvokeDespawnNpc(eventContext, args),
                 Reducer.DespawnPlaygroundTarget args => Reducers.InvokeDespawnPlaygroundTarget(eventContext, args),
                 Reducer.DismissDiceRoll args => Reducers.InvokeDismissDiceRoll(eventContext, args),
+                Reducer.DismissSurvivalResult args => Reducers.InvokeDismissSurvivalResult(eventContext, args),
                 Reducer.EquipItem args => Reducers.InvokeEquipItem(eventContext, args),
                 Reducer.InviteToParty args => Reducers.InvokeInviteToParty(eventContext, args),
                 Reducer.JoinInstance args => Reducers.InvokeJoinInstance(eventContext, args),
@@ -878,7 +891,9 @@ namespace SpacetimeDB.Types
                 Reducer.PublishMeleeDefinitions args => Reducers.InvokePublishMeleeDefinitions(eventContext, args),
                 Reducer.PublishProgressionCatalogs args => Reducers.InvokePublishProgressionCatalogs(eventContext, args),
                 Reducer.PublishSpellDefinitions args => Reducers.InvokePublishSpellDefinitions(eventContext, args),
+                Reducer.PurchaseSurvivalOffer args => Reducers.InvokePurchaseSurvivalOffer(eventContext, args),
                 Reducer.QuickLoot args => Reducers.InvokeQuickLoot(eventContext, args),
+                Reducer.ReadyForNextSurvivalRound args => Reducers.InvokeReadyForNextSurvivalRound(eventContext, args),
                 Reducer.ReleaseCastRequest args => Reducers.InvokeReleaseCastRequest(eventContext, args),
                 Reducer.RequestDiceRollPreview args => Reducers.InvokeRequestDiceRollPreview(eventContext, args),
                 Reducer.RunKnockbackProbeShove args => Reducers.InvokeRunKnockbackProbeShove(eventContext, args),
@@ -898,6 +913,7 @@ namespace SpacetimeDB.Types
                 Reducer.StartDodge args => Reducers.InvokeStartDodge(eventContext, args),
                 Reducer.StartMatch args => Reducers.InvokeStartMatch(eventContext, args),
                 Reducer.StartParry args => Reducers.InvokeStartParry(eventContext, args),
+                Reducer.StartSurvivalRun args => Reducers.InvokeStartSurvivalRun(eventContext, args),
                 Reducer.StopBlock args => Reducers.InvokeStopBlock(eventContext, args),
                 Reducer.StopParry args => Reducers.InvokeStopParry(eventContext, args),
                 Reducer.UnequipItem args => Reducers.InvokeUnequipItem(eventContext, args),

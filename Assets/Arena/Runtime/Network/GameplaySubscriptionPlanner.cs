@@ -73,6 +73,9 @@ namespace Arena.Network
                 new QueryBuilder().From.PartyInvite().Where(c => c.Invitee.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.EquipmentLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PlayerEquipmentPresentation().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.SurvivalRun().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.SurvivalResult().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.SurvivalScore().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 // Inventory rows are owner-key filtered (netcode audit R4): the
                 // client receives its own containers/slots/items plus unowned
                 // world-loot rows. Corpse containers carry their killer/party
@@ -152,7 +155,12 @@ namespace Arena.Network
             };
 
             if (scope.Kind == NetworkManager.GameplayScopeKind.Instance)
+            {
                 queries.Add(BuildScopedMatchParticipantStatsQuery(new QueryBuilder(), scope).ToSql());
+                queries.Add(new QueryBuilder().From.SurvivalShopOffer()
+                    .Where(c => c.ArenaId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .ToSql());
+            }
 
             return queries.ToArray();
         }
@@ -173,7 +181,7 @@ namespace Arena.Network
                     .InventoryContainer()
                     .Where(c => c.OwnerKey.Eq(string.Empty))
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped loot-container query requested for GameplayScope.None"),
             };
@@ -196,7 +204,7 @@ namespace Arena.Network
                     .InventoryContainer()
                     .Where(c => c.OwnerKey.Eq(string.Empty))
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.InventorySlot(), (container, slot) => container.ContainerId.Eq(slot.ContainerId))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped loot-slot query requested for GameplayScope.None"),
@@ -219,7 +227,7 @@ namespace Arena.Network
                     .InventoryContainer()
                     .Where(c => c.ContainerKind.Eq("CORPSE"))
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped corpse-container query requested for GameplayScope.None"),
             };
@@ -242,7 +250,7 @@ namespace Arena.Network
                     .InventoryContainer()
                     .Where(c => c.ContainerKind.Eq("CORPSE"))
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.InventorySlot(), (container, slot) => container.ContainerId.Eq(slot.ContainerId))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped corpse-slot query requested for GameplayScope.None"),
@@ -264,7 +272,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.Player(), (world, player) => world.Identity.Eq(player.Identity))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped player query requested for GameplayScope.None"),
@@ -286,7 +294,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.CharacterAppearance(), (world, appearance) => world.Identity.Eq(appearance.Owner))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped character-appearance query requested for GameplayScope.None"),
@@ -308,7 +316,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.PlayerEquipmentPresentation(), (world, equipment) => world.Identity.Eq(equipment.Owner))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped player-equipment-presentation query requested for GameplayScope.None"),
@@ -330,7 +338,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.PlayerPhysics(), (world, physics) => world.Identity.Eq(physics.Identity))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped player-physics query requested for GameplayScope.None"),
@@ -352,7 +360,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.PlayerState(), (world, state) => world.Identity.Eq(state.PlayerId))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped player-state query requested for GameplayScope.None"),
@@ -374,7 +382,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.ActiveCombatMode(), (world, mode) => world.Identity.Eq(mode.Owner))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped active-combat-mode query requested for GameplayScope.None"),
@@ -395,7 +403,7 @@ namespace Arena.Network
                     .From
                     .NpcInstance()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped NPC instance query requested for GameplayScope.None"),
             };
@@ -416,7 +424,7 @@ namespace Arena.Network
                     .From
                     .NpcInstance()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.NpcPhysics(), (npc, physics) => npc.Identity.Eq(physics.Identity))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped NPC physics query requested for GameplayScope.None"),
@@ -438,7 +446,7 @@ namespace Arena.Network
                     .From
                     .NpcInstance()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.NpcState(), (npc, state) => npc.Identity.Eq(state.Identity))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped NPC state query requested for GameplayScope.None"),
@@ -460,7 +468,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.PlayerResource(), (world, resource) => world.Identity.Eq(resource.Owner))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped player-resource query requested for GameplayScope.None"),
@@ -482,7 +490,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.DefenseState(), (world, defense) => world.Identity.Eq(defense.Owner))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped defense-state query requested for GameplayScope.None"),
@@ -504,7 +512,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.ActiveCast(), (world, cast) => world.Identity.Eq(cast.Caster))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped active-cast query requested for GameplayScope.None"),
@@ -526,7 +534,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.ActiveRadialEffect(), (world, effect) => world.Identity.Eq(effect.Owner))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped active-radial-effect query requested for GameplayScope.None"),
@@ -549,7 +557,7 @@ namespace Arena.Network
                     .From
                     .ActiveWorldInteraction()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .ToSql(),
                 _ => throw new InvalidOperationException(
                     "Scoped active-world-interaction query requested for GameplayScope.None"),
@@ -570,7 +578,7 @@ namespace Arena.Network
                     .From
                     .ActiveWorldObstacle()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped active-world-obstacle query requested for GameplayScope.None"),
             };
@@ -592,7 +600,7 @@ namespace Arena.Network
                     .From
                     .WorldDoorState()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .ToSql(),
                 _ => throw new InvalidOperationException(
                     "Scoped world-door-state query requested for GameplayScope.None"),
@@ -615,7 +623,7 @@ namespace Arena.Network
                     .From
                     .WorldTrapState()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .ToSql(),
                 _ => throw new InvalidOperationException(
                     "Scoped world-trap-state query requested for GameplayScope.None"),
@@ -637,7 +645,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.SpecialMovementRuntime(), (world, runtime) => world.Identity.Eq(runtime.Owner))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped special-movement query requested for GameplayScope.None"),
@@ -659,7 +667,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.MovementActionState(), (world, action) => world.Identity.Eq(action.Owner))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped movement-action query requested for GameplayScope.None"),
@@ -681,7 +689,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.StatusEffect(), (world, effect) => world.Identity.Eq(effect.Target))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped status-effect query requested for GameplayScope.None"),
@@ -703,7 +711,7 @@ namespace Arena.Network
                     .From
                     .NpcInstance()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.StatusEffect(), (npc, effect) => npc.Identity.Eq(effect.Target))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped NPC status-effect query requested for GameplayScope.None"),
@@ -725,7 +733,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.CombatEngagement(), (world, engagement) => world.Identity.Eq(engagement.Owner))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped combat-engagement query requested for GameplayScope.None"),
@@ -747,7 +755,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.CombatEvent(), (world, spellEvent) => world.Identity.Eq(spellEvent.Caster))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped spell-event query requested for GameplayScope.None"),
@@ -769,7 +777,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.CombatEffectEvent(), (world, effect) => world.Identity.Eq(effect.Source))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped player-source combat-effect query requested for GameplayScope.None"),
@@ -791,7 +799,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.CombatEffectEvent(), (world, effect) => world.Identity.Eq(effect.Target))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped player-target combat-effect query requested for GameplayScope.None"),
@@ -813,7 +821,7 @@ namespace Arena.Network
                     .From
                     .NpcInstance()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.CombatEffectEvent(), (npc, effect) => npc.Identity.Eq(effect.Source))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped NPC-source combat-effect query requested for GameplayScope.None"),
@@ -835,7 +843,7 @@ namespace Arena.Network
                     .From
                     .NpcInstance()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.CombatEffectEvent(), (npc, effect) => npc.Identity.Eq(effect.Target))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped NPC-target combat-effect query requested for GameplayScope.None"),
@@ -857,7 +865,7 @@ namespace Arena.Network
                     .From
                     .NpcInstance()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.CombatEvent(), (npc, combatEvent) => npc.Identity.Eq(combatEvent.Caster))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped NPC combat-event query requested for GameplayScope.None"),
@@ -883,7 +891,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(
                         qb.From.CombatEvent(),
                         (world, combatEvent) => world.Identity.Eq(combatEvent.Hit))
@@ -908,7 +916,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.ProjectilePresentationEvent(), (world, projectileEvent) => world.Identity.Eq(projectileEvent.Caster))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped projectile-presentation-event query requested for GameplayScope.None"),
@@ -930,7 +938,7 @@ namespace Arena.Network
                     .From
                     .NpcInstance()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.ProjectilePresentationEvent(), (npc, projectileEvent) => npc.Identity.Eq(projectileEvent.Caster))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped NPC projectile-presentation-event query requested for GameplayScope.None"),
@@ -952,7 +960,7 @@ namespace Arena.Network
                     .From
                     .PlayerWorld()
                     .Where(c => c.WorldKind.Eq("INSTANCE"))
-                    .Where(c => c.InstanceId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
                     .RightSemijoin(qb.From.PlayerEvent(), (world, playerEvent) => world.Identity.Eq(playerEvent.PlayerId))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped player-event query requested for GameplayScope.None"),

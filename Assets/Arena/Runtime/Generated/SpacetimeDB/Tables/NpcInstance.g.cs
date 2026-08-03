@@ -44,6 +44,15 @@ namespace SpacetimeDB.Types
 
             public readonly IdentityUniqueIndex Identity;
 
+            public sealed class InstanceScopeIdIndex : BTreeIndexBase<ulong>
+            {
+                protected override ulong GetKey(NpcInstance row) => row.InstanceScopeId;
+
+                public InstanceScopeIdIndex(NpcInstanceHandle table) : base(table) { }
+            }
+
+            public readonly InstanceScopeIdIndex InstanceScopeId;
+
             public sealed class SpawnedByIndex : BTreeIndexBase<SpacetimeDB.Identity>
             {
                 protected override SpacetimeDB.Identity GetKey(NpcInstance row) => row.SpawnedBy;
@@ -76,6 +85,7 @@ namespace SpacetimeDB.Types
                 CombatTeamId = new(this);
                 Faction = new(this);
                 Identity = new(this);
+                InstanceScopeId = new(this);
                 SpawnedBy = new(this);
                 TemplateId = new(this);
                 VisualId = new(this);
@@ -99,6 +109,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<NpcInstance, string> DisplayName { get; }
         public global::SpacetimeDB.Col<NpcInstance, string> WorldKind { get; }
         public global::SpacetimeDB.Col<NpcInstance, ulong> InstanceId { get; }
+        public global::SpacetimeDB.Col<NpcInstance, ulong> InstanceScopeId { get; }
         public global::SpacetimeDB.Col<NpcInstance, string> OpenWorldSceneName { get; }
         public global::SpacetimeDB.Col<NpcInstance, float> HomeX { get; }
         public global::SpacetimeDB.Col<NpcInstance, float> HomeY { get; }
@@ -117,6 +128,7 @@ namespace SpacetimeDB.Types
             DisplayName = new global::SpacetimeDB.Col<NpcInstance, string>(tableName, "display_name");
             WorldKind = new global::SpacetimeDB.Col<NpcInstance, string>(tableName, "world_kind");
             InstanceId = new global::SpacetimeDB.Col<NpcInstance, ulong>(tableName, "instance_id");
+            InstanceScopeId = new global::SpacetimeDB.Col<NpcInstance, ulong>(tableName, "instance_scope_id");
             OpenWorldSceneName = new global::SpacetimeDB.Col<NpcInstance, string>(tableName, "open_world_scene_name");
             HomeX = new global::SpacetimeDB.Col<NpcInstance, float>(tableName, "home_x");
             HomeY = new global::SpacetimeDB.Col<NpcInstance, float>(tableName, "home_y");
@@ -133,6 +145,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.IxCol<NpcInstance, string> VisualId { get; }
         public global::SpacetimeDB.IxCol<NpcInstance, string> Faction { get; }
         public global::SpacetimeDB.IxCol<NpcInstance, string> CombatTeamId { get; }
+        public global::SpacetimeDB.IxCol<NpcInstance, ulong> InstanceScopeId { get; }
 
         public NpcInstanceIxCols(string tableName)
         {
@@ -142,6 +155,7 @@ namespace SpacetimeDB.Types
             VisualId = new global::SpacetimeDB.IxCol<NpcInstance, string>(tableName, "visual_id");
             Faction = new global::SpacetimeDB.IxCol<NpcInstance, string>(tableName, "faction");
             CombatTeamId = new global::SpacetimeDB.IxCol<NpcInstance, string>(tableName, "combat_team_id");
+            InstanceScopeId = new global::SpacetimeDB.IxCol<NpcInstance, ulong>(tableName, "instance_scope_id");
         }
     }
 }

@@ -1,10 +1,11 @@
 use spacetimedb::{table, Identity, ReducerContext, Table, Timestamp};
 
-use crate::arena::{arena_seed_for_identity, open_world_scene_name_for_identity};
+use crate::arena::{
+    arena_seed_for_identity, instance_uses_flat_layout, open_world_scene_name_for_identity,
+};
 use crate::arena::{resolve_player_world_context, ResolvedWorldContext, WorldRayHit};
 use crate::combat::actor_snapshot::CombatActorSnapshot;
 use crate::combat::timestamp_to_micros;
-use crate::practice::is_training_instance;
 use crate::spells::WorldObstacleSecondaryTunables;
 use crate::world_collision::surface_height_for_world_at_y_with_layout_for_scene;
 
@@ -23,6 +24,9 @@ pub struct ActiveWorldObstacle {
     pub visual_resource_path: String,
     pub world_kind: String,
     pub instance_id: Option<u64>,
+    /// Query-safe scalar mirror of `instance_id`; zero means open world.
+    #[index(btree)]
+    pub instance_scope_id: u64,
     pub open_world_scene_name: String,
     pub root_x: f32,
     pub root_y: f32,
@@ -68,7 +72,7 @@ pub(crate) fn spawn_world_obstacle(
     let arena_seed = arena_seed_for_identity(ctx, caster);
     let flat_ground_only = matches!(
         &world_context,
-        ResolvedWorldContext::Instance(instance_id) if is_training_instance(ctx, *instance_id)
+        ResolvedWorldContext::Instance(instance_id) if instance_uses_flat_layout(ctx, *instance_id)
     );
     let scene_name = open_world_scene_name_for_identity(ctx, caster);
     let root_y = surface_height_for_world_at_y_with_layout_for_scene(
@@ -105,6 +109,7 @@ pub(crate) fn spawn_world_obstacle(
         visual_resource_path: tunables.visual_resource_path.clone(),
         world_kind,
         instance_id,
+        instance_scope_id: instance_id.unwrap_or_default(),
         open_world_scene_name,
         root_x,
         root_y,
@@ -459,6 +464,7 @@ mod tests {
             visual_resource_path: "CombatVFX/playground/test".to_string(),
             world_kind: "OPEN".to_string(),
             instance_id: None,
+            instance_scope_id: 0,
             open_world_scene_name: "Oasis_Day".to_string(),
             root_x: 0.0,
             root_y: 0.0,

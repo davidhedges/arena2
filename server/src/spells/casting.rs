@@ -12,6 +12,7 @@ use crate::action_prediction::{
 use crate::action_snapshot::{
     validate_authoritative_action_snapshot, ActionSnapshotFallback, ActionSnapshotRequest,
 };
+use crate::arena::instance_uses_flat_layout;
 #[cfg(feature = "spellcasting_terminal_harness")]
 use crate::arena::upsert_player_world;
 use crate::arena::{
@@ -55,7 +56,6 @@ use crate::player_intent::PlayerIntent;
 #[cfg(feature = "spellcasting_terminal_harness")]
 use crate::player_physics::PlayerPhysics;
 use crate::player_physics::{commit_player_physics, PhysicsWriteMode};
-use crate::practice::is_training_instance;
 use crate::progression::{
     ability_catalog as _, active_selectable_ability_for_authored_action,
     authored_npc_spell_ability_id, derived_combat_profile_id_for_owner,
@@ -1297,7 +1297,7 @@ pub(crate) fn special_movement_uses_air_path(
     cast_state: &CombatActorSnapshot,
 ) -> bool {
     let arena_seed = arena_seed_for_identity(ctx, owner);
-    let flat_ground_only = uses_flat_training_collision(ctx, owner);
+    let flat_ground_only = identity_uses_flat_layout(ctx, owner);
     let open_world_scene_name = open_world_scene_name_for_identity(ctx, owner);
     let cast_state_ground_y = surface_height_for_world_at_y_with_layout_for_scene(
         arena_seed,
@@ -3029,7 +3029,7 @@ pub(crate) fn horizontal_movement_duration_ms(
         .max(min_duration_ms as f32) as u64
 }
 
-fn uses_flat_training_collision(ctx: &ReducerContext, identity: Identity) -> bool {
+fn identity_uses_flat_layout(ctx: &ReducerContext, identity: Identity) -> bool {
     let Some(world) = ctx.db.player_world().identity().find(identity) else {
         return false;
     };
@@ -3038,7 +3038,7 @@ fn uses_flat_training_collision(ctx: &ReducerContext, identity: Identity) -> boo
         return false;
     };
 
-    is_training_instance(ctx, instance_id)
+    instance_uses_flat_layout(ctx, instance_id)
 }
 
 pub(crate) fn bake_linear_special_movement(
@@ -3064,7 +3064,7 @@ pub(crate) fn bake_linear_special_movement(
     }
 
     let arena_seed = arena_seed_for_identity(ctx, owner);
-    let flat_ground_only = uses_flat_training_collision(ctx, owner);
+    let flat_ground_only = identity_uses_flat_layout(ctx, owner);
     let open_world_scene_name = open_world_scene_name_for_identity(ctx, owner);
     let step_length = SPECIAL_MOVEMENT_BAKE_STEP_METERS.max(0.01);
     let steps = (total_distance / step_length).ceil().max(1.0) as u32;

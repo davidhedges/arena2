@@ -44,6 +44,15 @@ namespace SpacetimeDB.Types
 
             public readonly ContainerKindIndex ContainerKind;
 
+            public sealed class InstanceScopeIdIndex : BTreeIndexBase<ulong>
+            {
+                protected override ulong GetKey(InventoryContainer row) => row.InstanceScopeId;
+
+                public InstanceScopeIdIndex(InventoryContainerHandle table) : base(table) { }
+            }
+
+            public readonly InstanceScopeIdIndex InstanceScopeId;
+
             public sealed class OwnerKeyIndex : BTreeIndexBase<string>
             {
                 protected override string GetKey(InventoryContainer row) => row.OwnerKey;
@@ -58,6 +67,7 @@ namespace SpacetimeDB.Types
                 AnchorKey = new(this);
                 ContainerId = new(this);
                 ContainerKind = new(this);
+                InstanceScopeId = new(this);
                 OwnerKey = new(this);
             }
 
@@ -77,6 +87,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<InventoryContainer, SpacetimeDB.Identity> AnchorIdentity { get; }
         public global::SpacetimeDB.Col<InventoryContainer, string> WorldKind { get; }
         public global::SpacetimeDB.Col<InventoryContainer, ulong> InstanceId { get; }
+        public global::SpacetimeDB.Col<InventoryContainer, ulong> InstanceScopeId { get; }
         public global::SpacetimeDB.Col<InventoryContainer, string> OpenWorldSceneName { get; }
         public global::SpacetimeDB.Col<InventoryContainer, float> PosX { get; }
         public global::SpacetimeDB.Col<InventoryContainer, float> PosY { get; }
@@ -98,6 +109,7 @@ namespace SpacetimeDB.Types
             AnchorIdentity = new global::SpacetimeDB.Col<InventoryContainer, SpacetimeDB.Identity>(tableName, "anchor_identity");
             WorldKind = new global::SpacetimeDB.Col<InventoryContainer, string>(tableName, "world_kind");
             InstanceId = new global::SpacetimeDB.Col<InventoryContainer, ulong>(tableName, "instance_id");
+            InstanceScopeId = new global::SpacetimeDB.Col<InventoryContainer, ulong>(tableName, "instance_scope_id");
             OpenWorldSceneName = new global::SpacetimeDB.Col<InventoryContainer, string>(tableName, "open_world_scene_name");
             PosX = new global::SpacetimeDB.Col<InventoryContainer, float>(tableName, "pos_x");
             PosY = new global::SpacetimeDB.Col<InventoryContainer, float>(tableName, "pos_y");
@@ -117,6 +129,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.IxCol<InventoryContainer, string> ContainerKind { get; }
         public global::SpacetimeDB.IxCol<InventoryContainer, string> OwnerKey { get; }
         public global::SpacetimeDB.IxCol<InventoryContainer, string> AnchorKey { get; }
+        public global::SpacetimeDB.IxCol<InventoryContainer, ulong> InstanceScopeId { get; }
 
         public InventoryContainerIxCols(string tableName)
         {
@@ -124,6 +137,7 @@ namespace SpacetimeDB.Types
             ContainerKind = new global::SpacetimeDB.IxCol<InventoryContainer, string>(tableName, "container_kind");
             OwnerKey = new global::SpacetimeDB.IxCol<InventoryContainer, string>(tableName, "owner_key");
             AnchorKey = new global::SpacetimeDB.IxCol<InventoryContainer, string>(tableName, "anchor_key");
+            InstanceScopeId = new global::SpacetimeDB.IxCol<InventoryContainer, ulong>(tableName, "instance_scope_id");
         }
     }
 }

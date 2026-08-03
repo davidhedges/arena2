@@ -133,6 +133,13 @@ pub fn client_disconnected(ctx: &ReducerContext) -> Result<(), String> {
     // Never abort the disconnect transaction on ancillary cleanup errors: an
     // early `?` here would roll back the entire teardown and leave every
     // per-identity row alive for the next session (netcode audit R1).
+    if let Err(error) = crate::survival::teardown_survival_for_owner(ctx, identity, "disconnect") {
+        log::error!(
+            "[DISCONNECT] Player {} survival cleanup failed; continuing: {}",
+            &identity.to_hex()[..8],
+            error
+        );
+    }
     if let Err(error) = despawn_all_playground_targets_for_owner(ctx, identity) {
         log::error!(
             "[DISCONNECT] Player {} playground-target cleanup failed; continuing: {}",

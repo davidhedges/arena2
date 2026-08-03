@@ -60,6 +60,9 @@ pub struct WorldTrapState {
     pub trap_definition_id: String,
     pub world_kind: String,
     pub instance_id: Option<u64>,
+    /// Query-safe scalar mirror of `instance_id`; zero means open world.
+    #[index(btree)]
+    pub instance_scope_id: u64,
     pub open_world_scene_name: String,
     /// The one authoritative phase anchor. Everything else — telegraph, hazard
     /// window, client scrub — is derived from it.
@@ -478,6 +481,7 @@ fn insert_trap_state(
         trap_definition_id: definition.trap_definition_id.clone(),
         world_kind: scope.world_kind.clone(),
         instance_id: scope.instance_id,
+        instance_scope_id: scope.instance_id.unwrap_or_default(),
         open_world_scene_name: scope.open_world_scene_name.clone(),
         cycle_started_at: now,
         cycle_ends_at_micros: timestamp_to_micros(cycle_ends_at),

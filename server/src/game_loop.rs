@@ -34,8 +34,8 @@ use crate::arena::player_open_world_scene as _;
 use crate::arena::player_world as _;
 use crate::arena::{
     arena_seed_for_identity, backfill_player_open_world_scene_rows, backfill_player_world_rows,
-    despawn_legacy_default_dummies, open_world_scene_name_for_identity, MATCH_PHASE_COUNTDOWN,
-    MATCH_PHASE_IN_PROGRESS,
+    despawn_legacy_default_dummies, instance_uses_flat_layout, open_world_scene_name_for_identity,
+    MATCH_PHASE_COUNTDOWN, MATCH_PHASE_IN_PROGRESS,
 };
 use crate::auto_attack::tick_auto_attacks;
 use crate::combat::actor_snapshot::CombatActorSnapshotSet;
@@ -78,7 +78,7 @@ use crate::player_input::{
 use crate::player_intent::PlayerIntent;
 use crate::player_physics::{commit_player_physics, PhysicsWriteMode, PlayerPhysics};
 use crate::playground_targets::is_playground_target;
-use crate::practice::{is_training_instance, tick_practice};
+use crate::practice::tick_practice;
 use crate::progression::{
     backfill_character_action_bar_rows, backfill_sword_and_shield_visible_action_bar_rows,
     clear_generic_fixed_action_bar_assignments, migrate_generic_spell_action_bar_assignments,
@@ -93,6 +93,7 @@ use crate::spells::{
     resolve_special_movement_y, sync_spell_definitions, tick_active_casts,
     tick_bespoke_spells_with_snapshots, tick_persistent_areas,
 };
+use crate::survival::tick_survival;
 use crate::tick_metrics::{
     profiling_enabled as tick_profiling_enabled, record_table_write, PhaseStopwatch, ScopeTimer,
     TableWriteKind,
@@ -937,7 +938,10 @@ fn run_pre_tick_housekeeping_phase(
         stopwatch_active,
         PRE_TICK_SUBPHASE_NAMES[PRE_SUB_PRACTICE],
         &mut subphase_micros[PRE_SUB_PRACTICE],
-        || tick_practice(ctx, now),
+        || {
+            tick_survival(ctx, now);
+            tick_practice(ctx, now)
+        },
     )?;
     // Cancel invalid movement actions before authored displacement is sampled.
     timed_subphase(
@@ -1265,7 +1269,7 @@ fn try_tick_dummy_player(
         return Some(false);
     }
 
-    let flat_ground_only = uses_flat_training_collision(ctx, identity);
+    let flat_ground_only = identity_uses_flat_layout(ctx, identity);
     let ground_y = surface_height_for_world_at_y_with_layout(
         arena_seed_for_identity(ctx, identity),
         flat_ground_only,
@@ -1532,7 +1536,7 @@ fn simulate_non_dummy_player_kinematics(
     physics.updated_at = now;
 }
 
-fn uses_flat_training_collision(ctx: &ReducerContext, identity: Identity) -> bool {
+fn identity_uses_flat_layout(ctx: &ReducerContext, identity: Identity) -> bool {
     let Some(world) = ctx.db.player_world().identity().find(identity) else {
         return false;
     };
@@ -1541,7 +1545,7 @@ fn uses_flat_training_collision(ctx: &ReducerContext, identity: Identity) -> boo
         return false;
     };
 
-    is_training_instance(ctx, instance_id)
+    instance_uses_flat_layout(ctx, instance_id)
 }
 
 fn sync_player_movement_context(
@@ -1636,7 +1640,7 @@ fn tick_special_movement_runtimes(ctx: &ReducerContext, now: Timestamp) {
             finished = true;
         }
         let arena_seed = arena_seed_for_identity(ctx, runtime.owner);
-        let flat_ground_only = uses_flat_training_collision(ctx, runtime.owner);
+        let flat_ground_only = identity_uses_flat_layout(ctx, runtime.owner);
         let open_world_scene_name = open_world_scene_name_for_identity(ctx, runtime.owner);
         let ground_y = surface_height_for_world_at_y_with_layout_for_scene(
             arena_seed,
@@ -2075,7 +2079,7 @@ fn tick_player(
         &mut physics,
         &step_intent,
         arena_seed_for_identity(ctx, identity),
-        uses_flat_training_collision(ctx, identity),
+        identity_uses_flat_layout(ctx, identity),
         open_world_scene_name_for_identity(ctx, identity),
         now,
         dt,

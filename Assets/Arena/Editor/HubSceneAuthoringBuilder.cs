@@ -345,9 +345,11 @@ namespace Arena.Editor
             SetTopLeft(list, new Vector2(22f, -64f), new Vector2(316f, 160f));
 
             OpenWorldTravelCatalog.Destination[] destinations = OpenWorldTravelCatalog.All;
+            Button survivalButton = CreateButton(list, "Mode_Survival", new Vector2(0f, 1f), Vector2.zero, new Vector2(316f, 30f), new Color(0.22f, 0.18f, 0.10f, 0.96f), true);
+            CreateTextAt(survivalButton.transform, "Label", "Survival Mode", 13, FontStyles.Bold, TextAlignmentOptions.Left, new Vector2(14f, 0f), new Vector2(260f, 18f), Color.white, new Vector2(0f, 0.5f));
             for (int i = 0; i < destinations.Length; i++)
             {
-                Button button = CreateButton(list, $"Travel_{destinations[i].SceneName}", new Vector2(0f, 1f), new Vector2(0f, -i * 38f), new Vector2(316f, 30f), new Color(0.17f, 0.18f, 0.21f, 0.96f), true);
+                Button button = CreateButton(list, $"Travel_{destinations[i].SceneName}", new Vector2(0f, 1f), new Vector2(0f, -(i + 1) * 38f), new Vector2(316f, 30f), new Color(0.17f, 0.18f, 0.21f, 0.96f), true);
                 CreateTextAt(button.transform, "Label", destinations[i].DisplayName, 13, FontStyles.Bold, TextAlignmentOptions.Left, new Vector2(14f, 0f), new Vector2(260f, 18f), Color.white, new Vector2(0f, 0.5f));
             }
 

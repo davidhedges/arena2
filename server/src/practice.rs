@@ -8,8 +8,8 @@ use crate::actor_lifecycle::{
     ActorSpawnSpec as LifecycleActorSpawnSpec, ActorWorldAssignment, ActorWorldCleanup,
 };
 use crate::arena::{
-    create_arena_instance_with_options, join_identity_into_instance, upsert_player_world,
-    ArenaInstance,
+    create_arena_instance_with_kind, join_identity_into_instance, upsert_player_world,
+    ArenaInstance, INSTANCE_KIND_TRAINING,
 };
 use crate::combat::{
     clear_combat_engagement_for_identity, clear_statuses_for_identity, new_dummy_player_state,
@@ -304,7 +304,8 @@ fn ensure_training_instance(ctx: &ReducerContext) -> u64 {
         return arena_id;
     }
 
-    let arena_id = create_arena_instance_with_options(ctx, TRAINING_MAX_PLAYERS, true);
+    let arena_id =
+        create_arena_instance_with_kind(ctx, TRAINING_MAX_PLAYERS, INSTANCE_KIND_TRAINING);
     let Some(arena) = ctx.db.arena_instance().id().find(arena_id) else {
         return arena_id;
     };

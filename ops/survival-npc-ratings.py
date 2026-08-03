@@ -22,6 +22,8 @@ Usage:
     ops/survival-npc-ratings.py                 # tier table
     ops/survival-npc-ratings.py --all           # every template, ranked
     ops/survival-npc-ratings.py --json out.json # machine-readable roster
+    ops/survival-npc-ratings.py --check         # fail if server artifact drifted
+    ops/survival-npc-ratings.py --write-artifact
 """
 
 import argparse
@@ -33,6 +35,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 NPC_CATALOG = REPO / "server/src/npc_catalog.shared.json"
 PROGRESSION_CATALOG = REPO / "server/src/progression_catalog.shared.json"
+RATINGS_ARTIFACT = REPO / "server/src/survival_ratings.shared.json"
 
 MIN_CYCLE_MS = 400
 
@@ -156,10 +159,36 @@ def assign_tiers(roster, cuts):
         r["tier"] = TIER_NAMES[tier]
 
 
+def artifact_document(roster):
+    """Return the compact contract consumed by survival.rs."""
+    return {
+        "schema_version": 1,
+        "roster": [
+            {
+                "template_id": row["template_id"],
+                "rating": row["rating"],
+                "gold_value": row["gold_value"],
+            }
+            for row in roster
+        ],
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--all", action="store_true", help="print every template, ranked")
     parser.add_argument("--json", metavar="PATH", help="write the rated roster as JSON")
+    artifact_group = parser.add_mutually_exclusive_group()
+    artifact_group.add_argument(
+        "--check",
+        action="store_true",
+        help="fail when the checked-in server ratings artifact differs from regeneration",
+    )
+    artifact_group.add_argument(
+        "--write-artifact",
+        action="store_true",
+        help="regenerate the checked-in server ratings artifact",
+    )
     args = parser.parse_args()
 
     roster = build_roster()
@@ -201,7 +230,28 @@ def main():
         Path(args.json).write_text(json.dumps({"medians": medians, "tier_cuts": cuts, "roster": roster}, indent=2))
         print(f"\nwrote {args.json}")
 
-    return 1 if (zero_dps or unresolved) else 0
+    generated_artifact = artifact_document(roster)
+    artifact_drifted = False
+    if args.check:
+        try:
+            checked_in_artifact = json.loads(RATINGS_ARTIFACT.read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            print(f"\nERROR: cannot read {RATINGS_ARTIFACT.relative_to(REPO)}: {error}")
+            artifact_drifted = True
+        else:
+            artifact_drifted = checked_in_artifact != generated_artifact
+            if artifact_drifted:
+                print(
+                    "\nERROR: survival ratings artifact has drifted; run "
+                    "ops/survival-npc-ratings.py --write-artifact"
+                )
+            else:
+                print(f"\n{RATINGS_ARTIFACT.relative_to(REPO)} is current")
+    elif args.write_artifact:
+        RATINGS_ARTIFACT.write_text(json.dumps(generated_artifact, indent=2) + "\n")
+        print(f"\nwrote {RATINGS_ARTIFACT.relative_to(REPO)}")
+
+    return 1 if (zero_dps or unresolved or artifact_drifted) else 0
 
 
 if __name__ == "__main__":

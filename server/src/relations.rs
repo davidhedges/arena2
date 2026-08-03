@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 use spacetimedb::{Identity, ReducerContext};
 
 use crate::arena::{
-    players_share_world_context, ArenaInstance, MATCH_PHASE_COUNTDOWN, MATCH_PHASE_IN_PROGRESS,
+    players_share_world_context, ArenaInstance, INSTANCE_KIND_ARENA, MATCH_PHASE_COUNTDOWN,
+    MATCH_PHASE_IN_PROGRESS,
 };
 use crate::npcs::{npc_relation_profile, NpcFaction, NpcRelationProfile};
 use crate::party::same_party;
@@ -257,7 +258,7 @@ fn match_context_makes_hostile(ctx: &ReducerContext, source: Identity, target: I
 }
 
 fn arena_is_hostile_match_context(arena: &ArenaInstance) -> bool {
-    !arena.is_practice
+    arena.instance_kind == INSTANCE_KIND_ARENA
         && (arena.phase == MATCH_PHASE_COUNTDOWN || arena.phase == MATCH_PHASE_IN_PROGRESS)
 }
 

@@ -45,6 +45,7 @@ mod progression;
 mod relations;
 mod resources;
 mod spells;
+mod survival;
 mod tick_metrics;
 #[cfg(test)]
 mod vfx_generation;

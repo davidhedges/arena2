@@ -29,6 +29,8 @@ namespace SpacetimeDB.Types
         public string WorldKind;
         [DataMember(Name = "instance_id")]
         public ulong? InstanceId;
+        [DataMember(Name = "instance_scope_id")]
+        public ulong InstanceScopeId;
         [DataMember(Name = "open_world_scene_name")]
         public string OpenWorldSceneName;
         [DataMember(Name = "pos_x")]
@@ -59,6 +61,7 @@ namespace SpacetimeDB.Types
             SpacetimeDB.Identity? AnchorIdentity,
             string WorldKind,
             ulong? InstanceId,
+            ulong InstanceScopeId,
             string OpenWorldSceneName,
             float PosX,
             float PosY,
@@ -79,6 +82,7 @@ namespace SpacetimeDB.Types
             this.AnchorIdentity = AnchorIdentity;
             this.WorldKind = WorldKind;
             this.InstanceId = InstanceId;
+            this.InstanceScopeId = InstanceScopeId;
             this.OpenWorldSceneName = OpenWorldSceneName;
             this.PosX = PosX;
             this.PosY = PosY;

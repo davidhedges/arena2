@@ -27,6 +27,8 @@ namespace SpacetimeDB.Types
         public SpacetimeDB.Identity? WinnerId;
         [DataMember(Name = "ended_at")]
         public SpacetimeDB.Timestamp? EndedAt;
+        [DataMember(Name = "instance_kind")]
+        public string InstanceKind;
         [DataMember(Name = "is_practice")]
         public bool IsPractice;
         [DataMember(Name = "countdown_started_at")]
@@ -40,6 +42,7 @@ namespace SpacetimeDB.Types
             string Phase,
             SpacetimeDB.Identity? WinnerId,
             SpacetimeDB.Timestamp? EndedAt,
+            string InstanceKind,
             bool IsPractice,
             SpacetimeDB.Timestamp? CountdownStartedAt
         )
@@ -51,6 +54,7 @@ namespace SpacetimeDB.Types
             this.Phase = Phase;
             this.WinnerId = WinnerId;
             this.EndedAt = EndedAt;
+            this.InstanceKind = InstanceKind;
             this.IsPractice = IsPractice;
             this.CountdownStartedAt = CountdownStartedAt;
         }
@@ -58,6 +62,7 @@ namespace SpacetimeDB.Types
         public ArenaInstance()
         {
             this.Phase = "";
+            this.InstanceKind = "";
         }
     }
 }

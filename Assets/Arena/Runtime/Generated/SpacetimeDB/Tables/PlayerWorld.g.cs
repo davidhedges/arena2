@@ -26,9 +26,19 @@ namespace SpacetimeDB.Types
 
             public readonly IdentityUniqueIndex Identity;
 
+            public sealed class InstanceScopeIdIndex : BTreeIndexBase<ulong>
+            {
+                protected override ulong GetKey(PlayerWorld row) => row.InstanceScopeId;
+
+                public InstanceScopeIdIndex(PlayerWorldHandle table) : base(table) { }
+            }
+
+            public readonly InstanceScopeIdIndex InstanceScopeId;
+
             internal PlayerWorldHandle(DbConnection conn) : base(conn)
             {
                 Identity = new(this);
+                InstanceScopeId = new(this);
             }
 
             protected override object GetPrimaryKey(PlayerWorld row) => row.Identity;
@@ -42,6 +52,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<PlayerWorld, SpacetimeDB.Identity> Identity { get; }
         public global::SpacetimeDB.Col<PlayerWorld, string> WorldKind { get; }
         public global::SpacetimeDB.Col<PlayerWorld, ulong> InstanceId { get; }
+        public global::SpacetimeDB.Col<PlayerWorld, ulong> InstanceScopeId { get; }
         public global::SpacetimeDB.Col<PlayerWorld, string> OpenWorldSceneName { get; }
 
         public PlayerWorldCols(string tableName)
@@ -49,6 +60,7 @@ namespace SpacetimeDB.Types
             Identity = new global::SpacetimeDB.Col<PlayerWorld, SpacetimeDB.Identity>(tableName, "identity");
             WorldKind = new global::SpacetimeDB.Col<PlayerWorld, string>(tableName, "world_kind");
             InstanceId = new global::SpacetimeDB.Col<PlayerWorld, ulong>(tableName, "instance_id");
+            InstanceScopeId = new global::SpacetimeDB.Col<PlayerWorld, ulong>(tableName, "instance_scope_id");
             OpenWorldSceneName = new global::SpacetimeDB.Col<PlayerWorld, string>(tableName, "open_world_scene_name");
         }
     }
@@ -56,10 +68,12 @@ namespace SpacetimeDB.Types
     public sealed class PlayerWorldIxCols
     {
         public global::SpacetimeDB.IxCol<PlayerWorld, SpacetimeDB.Identity> Identity { get; }
+        public global::SpacetimeDB.IxCol<PlayerWorld, ulong> InstanceScopeId { get; }
 
         public PlayerWorldIxCols(string tableName)
         {
             Identity = new global::SpacetimeDB.IxCol<PlayerWorld, SpacetimeDB.Identity>(tableName, "identity");
+            InstanceScopeId = new global::SpacetimeDB.IxCol<PlayerWorld, ulong>(tableName, "instance_scope_id");
         }
     }
 }

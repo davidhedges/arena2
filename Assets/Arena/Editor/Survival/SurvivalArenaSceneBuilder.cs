@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using DungeonLab.Editor;
 using UnityEditor;
@@ -41,6 +42,21 @@ namespace Arena.Editor.Survival
     {
         internal const string SceneName = "SurvivalArena";
         internal const string ScenePath = "Assets/Arena/Content/Scenes/SurvivalArena.unity";
+        private const string ServerLayoutPath = "server/src/survival_arena_layout.shared.json";
+
+        [Serializable]
+        private sealed class ServerLayoutFile
+        {
+            public float arena_radius = 0f;
+            public ServerSpawnPointFile[] edge_spawn_points = Array.Empty<ServerSpawnPointFile>();
+        }
+
+        [Serializable]
+        private sealed class ServerSpawnPointFile
+        {
+            public float x = 0f;
+            public float z = 0f;
+        }
 
         /// <summary>
         /// The instance scene the camera rig and UI are copied from.
@@ -203,6 +219,13 @@ namespace Arena.Editor.Survival
         private const float DeckY = 0f;
 
         /// <summary>
+        /// Keeps an NPC's centre safely on the deck while still presenting it
+        /// inside the entrance threshold. This must agree with
+        /// survival_arena_layout.shared.json.
+        /// </summary>
+        private const float NpcSpawnInset = 2f;
+
+        /// <summary>
         /// Deck tessellation. Linear fog is interpolated from the vertices, so
         /// this tracks the deck's size rather than being a fixed count — held at
         /// one cell per 2m, the density the 40x40 deck had.
@@ -294,6 +317,7 @@ namespace Arena.Editor.Survival
 
         private static void Rebuild()
         {
+            ValidateServerLayoutContract();
             int seed = ResolveSeed();
             CavernDepthProfile depth = CavernDepthProfile.Evaluate(ArenaDepth01);
 
@@ -377,6 +401,44 @@ namespace Arena.Editor.Survival
             }
 
             return parsed;
+        }
+
+        private static void ValidateServerLayoutContract()
+        {
+            if (!File.Exists(ServerLayoutPath))
+                throw new InvalidOperationException($"Survival server layout '{ServerLayoutPath}' is missing.");
+
+            ServerLayoutFile? layout = JsonUtility.FromJson<ServerLayoutFile>(File.ReadAllText(ServerLayoutPath));
+            if (layout == null)
+                throw new InvalidOperationException($"Survival server layout '{ServerLayoutPath}' is invalid JSON.");
+            if (Mathf.Abs(layout.arena_radius - DeckHalfExtent) > 0.001f)
+            {
+                throw new InvalidOperationException(
+                    $"Survival server radius {layout.arena_radius:0.###} does not match the authored " +
+                    $"deck half-extent {DeckHalfExtent:0.###}.");
+            }
+            if (layout.edge_spawn_points.Length != EntranceSides.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Survival server layout has {layout.edge_spawn_points.Length} spawn points; " +
+                    $"the scene has {EntranceSides.Length} entrances.");
+            }
+
+            for (int index = 0; index < EntranceSides.Length; index++)
+            {
+                (string name, float yaw) = EntranceSides[index];
+                Vector3 outward = Quaternion.Euler(0f, yaw, 0f) * Vector3.back;
+                Vector3 expected = outward * (DeckHalfExtent - NpcSpawnInset);
+                ServerSpawnPointFile actual = layout.edge_spawn_points[index];
+                if (Mathf.Abs(actual.x - expected.x) > 0.001f
+                    || Mathf.Abs(actual.z - expected.z) > 0.001f)
+                {
+                    throw new InvalidOperationException(
+                        $"Survival {name} entrance expects server spawn " +
+                        $"({expected.x:0.###}, {expected.z:0.###}) but the layout contains " +
+                        $"({actual.x:0.###}, {actual.z:0.###}).");
+                }
+            }
         }
 
         // ------------------------------------------------------------ the deck
@@ -637,6 +699,8 @@ namespace Arena.Editor.Survival
                     clone.transform.position =
                         edgeCentre - rotation * new Vector3(0f, surfaceY, deckFacingZ);
 
+                    CreateNpcSpawnMarker(parent, name, outward);
+
                     wallsBottom = Mathf.Min(wallsBottom, MeasureWallsBottom(clone));
                 }
             }
@@ -650,6 +714,18 @@ namespace Arena.Editor.Survival
                 return FallbackLavaY;
 
             return wallsBottom;
+        }
+
+        private static void CreateNpcSpawnMarker(Transform parent, string entranceName, Vector3 outward)
+        {
+            // Presentation-only marker for the server-authored point in
+            // survival_arena_layout.shared.json. Looking inward mirrors the
+            // yaw the survival director derives from each spawn position.
+            GameObject marker = new($"Survival NPC Spawn {entranceName} (server-authoritative)");
+            marker.transform.SetParent(parent, worldPositionStays: false);
+            marker.transform.localPosition = outward * (DeckHalfExtent - NpcSpawnInset)
+                                             + Vector3.up * DeckY;
+            marker.transform.localRotation = Quaternion.LookRotation(-outward, Vector3.up);
         }
 
         /// <summary>
