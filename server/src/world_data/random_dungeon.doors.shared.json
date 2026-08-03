@@ -3,46 +3,19 @@
   "world_definition_key": "RANDOM_DUNGEON",
   "doors": [
     {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:10:29:8",
+      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:14:34:2",
       "world_definition_key": "RANDOM_DUNGEON",
       "interaction_anchor": {
-        "x": -34.0,
-        "y": 9.25,
-        "z": 48.0
+        "x": -26.0,
+        "y": 29.25,
+        "z": 76.0
       },
       "max_interaction_distance": 4.25,
       "closed_blocker": {
         "center": {
-          "x": -34.0,
-          "y": 9.75,
-          "z": 48.0
-        },
-        "size": {
-          "x": 3.550001,
-          "y": 3.5,
-          "z": 0.35
-        },
-        "yaw_degrees": 270.0
-      },
-      "default_open": true,
-      "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "close_interaction_profile_id": "WORLD_DOOR_INSTANT",
-      "definition_version": 1
-    },
-    {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:16:29:2",
-      "world_definition_key": "RANDOM_DUNGEON",
-      "interaction_anchor": {
-        "x": -6.0,
-        "y": 9.25,
-        "z": 48.0
-      },
-      "max_interaction_distance": 4.25,
-      "closed_blocker": {
-        "center": {
-          "x": -6.0,
-          "y": 9.75,
-          "z": 48.0
+          "x": -26.0,
+          "y": 29.75,
+          "z": 76.0
         },
         "size": {
           "x": 3.550001,
@@ -57,26 +30,26 @@
       "definition_version": 1
     },
     {
-      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:19:5:8",
+      "door_definition_id": "RANDOM_DUNGEON:GATEWAY:37:13:4",
       "world_definition_key": "RANDOM_DUNGEON",
       "interaction_anchor": {
-        "x": 2.0,
-        "y": -2.75,
-        "z": -48.0
+        "x": 64.0,
+        "y": 13.25,
+        "z": -10.0
       },
       "max_interaction_distance": 4.25,
       "closed_blocker": {
         "center": {
-          "x": 2.0,
-          "y": -2.25,
-          "z": -48.0
+          "x": 64.0,
+          "y": 13.75,
+          "z": -10.0
         },
         "size": {
-          "x": 3.550001,
+          "x": 3.55,
           "y": 3.5,
           "z": 0.35
         },
-        "yaw_degrees": 270.0
+        "yaw_degrees": 180.0
       },
       "default_open": true,
       "open_interaction_profile_id": "WORLD_DOOR_INSTANT",
