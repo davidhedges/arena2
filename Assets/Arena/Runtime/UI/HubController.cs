@@ -98,7 +98,11 @@ namespace Arena.UI
         private void OnEnable()
         {
             if (Application.isPlaying)
+            {
                 RuntimeUiEscapeRouter.Register(this);
+                if (GetComponent<HubScreen>() == null)
+                    gameObject.AddComponent<HubScreen>();
+            }
             RemoveGeneratedCombinedCharacterPreview();
             Resolve();
             WireButtons();

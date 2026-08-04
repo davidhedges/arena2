@@ -70,9 +70,9 @@ namespace Arena.Editor
         {
             bool changed = false;
             changed |= SetLocalPosition(root.Find("StageRoot/ShowcaseAnchor"), new Vector3(0f, ShowcaseLift, 0f));
-            changed |= SetLocalPosition(root.Find("StageRoot/HeroPlatform"), new Vector3(0f, ShowcaseLift - 0.08f, 0f));
-            changed |= SetLocalPosition(root.Find("StageRoot/PlatformRedRing"), new Vector3(0f, ShowcaseLift - 0.14f, 0f));
             changed |= RemoveAuthoredRuntimeAvatarModel(root);
+            changed |= EnsureApprovedHubScreen(root);
+            changed |= DisableLegacyAuthoredPresentation(root);
 
             if (changed)
                 EditorSceneManager.MarkSceneDirty(root.gameObject.scene);
@@ -89,6 +89,47 @@ namespace Arena.Editor
             return true;
         }
 
+        private static bool EnsureApprovedHubScreen(Transform root)
+        {
+            if (root.GetComponent<HubScreen>() != null)
+                return false;
+
+            Undo.AddComponent<HubScreen>(root.gameObject);
+            return true;
+        }
+
+        private static bool DisableLegacyAuthoredPresentation(Transform root)
+        {
+            bool changed = SetActive(root.Find("HubCanvas"), false);
+            Transform? stage = root.Find("StageRoot");
+            if (stage == null)
+                return changed;
+
+            foreach (Transform child in stage)
+            {
+                bool keep =
+                    string.Equals(child.name, "ShowcaseAnchor", System.StringComparison.Ordinal) ||
+                    string.Equals(child.name, "KeyLight", System.StringComparison.Ordinal) ||
+                    string.Equals(child.name, "ColdFill", System.StringComparison.Ordinal) ||
+                    string.Equals(child.name, "RedRim", System.StringComparison.Ordinal) ||
+                    string.Equals(child.name, "HubBackgroundPlane", System.StringComparison.Ordinal);
+                changed |= SetActive(child, keep);
+            }
+
+            return changed;
+        }
+
+        private static bool SetActive(Transform? transform, bool active)
+        {
+            if (transform == null || transform.gameObject.activeSelf == active)
+                return false;
+
+            Undo.RecordObject(transform.gameObject, "Sync approved Hub presentation");
+            transform.gameObject.SetActive(active);
+            EditorUtility.SetDirty(transform.gameObject);
+            return true;
+        }
+
         private static void Build(Scene scene)
         {
             RemoveRuntimePlayerObjects(scene);
@@ -96,10 +137,9 @@ namespace Arena.Editor
             GameObject root = new GameObject(RootName);
             Undo.RegisterCreatedObjectUndo(root, "Create authored Hub");
             root.AddComponent<HubController>();
+            root.AddComponent<HubScreen>();
 
             BuildStage(root.transform);
-            BuildCanvas(root.transform);
-            AttachShowcaseRotator(root.transform);
             EnsureEventSystem();
             ConfigureCamera();
             ConfigureExistingDirectionalLight();
@@ -213,27 +253,6 @@ namespace Arena.Editor
         private static void BuildStage(Transform root)
         {
             Transform stage = CreateWorld(root, "StageRoot");
-            Material dark = MaterialFor("HubScene_DarkStone", new Color(0.08f, 0.08f, 0.09f));
-            Material mid = MaterialFor("HubScene_MidStone", new Color(0.14f, 0.14f, 0.16f));
-            Material red = MaterialFor("HubScene_BannerRed", new Color(0.34f, 0.03f, 0.02f));
-            Material ember = MaterialFor("HubScene_Ember", new Color(1.0f, 0.34f, 0.10f), emission: 1.8f);
-
-            Primitive(stage, "HeroPlatform", PrimitiveType.Cylinder, new Vector3(0f, ShowcaseLift - 0.08f, 0f), new Vector3(3.0f, 0.10f, 3.0f), dark);
-            Primitive(stage, "PlatformRedRing", PrimitiveType.Cylinder, new Vector3(0f, ShowcaseLift - 0.14f, 0f), new Vector3(3.24f, 0.02f, 3.24f), red);
-            Primitive(stage, "RearWall", PrimitiveType.Cube, new Vector3(0f, 2.4f, 5.2f), new Vector3(9.8f, 5.2f, 0.8f), mid);
-            Primitive(stage, "RearGateDark", PrimitiveType.Cube, new Vector3(0f, 2.1f, 4.72f), new Vector3(3.4f, 4.2f, 0.32f), dark);
-            Primitive(stage, "LeftRuin", PrimitiveType.Cube, new Vector3(-5.9f, 2.0f, 2.7f), new Vector3(1.5f, 4.8f, 3.2f), mid);
-            Primitive(stage, "RightRuin", PrimitiveType.Cube, new Vector3(5.9f, 2.0f, 2.7f), new Vector3(1.5f, 4.8f, 3.2f), mid);
-            Primitive(stage, "CenterBanner", PrimitiveType.Cube, new Vector3(0f, 3.55f, 4.25f), new Vector3(0.72f, 3.2f, 0.07f), red);
-            Primitive(stage, "LeftBanner", PrimitiveType.Cube, new Vector3(-3.0f, 3.15f, 4.35f), new Vector3(0.54f, 2.35f, 0.07f), red);
-            Primitive(stage, "RightBanner", PrimitiveType.Cube, new Vector3(3.0f, 3.15f, 4.35f), new Vector3(0.54f, 2.35f, 0.07f), red);
-
-            for (int i = 0; i < 10; i++)
-            {
-                float side = i % 2 == 0 ? -1f : 1f;
-                float depth = 1.8f + (i / 2) * 0.58f;
-                Primitive(stage, $"Candle_{i}", PrimitiveType.Cylinder, new Vector3(side * (2.3f + i * 0.08f), 0.16f, depth), new Vector3(0.055f, 0.18f, 0.055f), ember);
-            }
 
             Transform anchor = CreateWorld(stage, "ShowcaseAnchor");
             anchor.localPosition = new Vector3(0f, ShowcaseLift, 0f);
@@ -242,8 +261,6 @@ namespace Arena.Editor
             Light(stage, "KeyLight", LightType.Spot, new Vector3(1.8f, 3.6f, -2.8f), new Vector3(38f, -28f, 0f), new Color(1f, 0.84f, 0.72f), 1.9f, 18f, 62f);
             Light(stage, "ColdFill", LightType.Spot, new Vector3(-2.7f, 3.0f, -2.1f), new Vector3(32f, 36f, 0f), new Color(0.55f, 0.68f, 0.95f), 0.9f, 18f, 70f);
             Light(stage, "RedRim", LightType.Spot, new Vector3(0f, 3.6f, 3.0f), new Vector3(54f, 180f, 0f), new Color(1f, 0.28f, 0.14f), 1.6f, 18f, 58f);
-            Light(stage, "EmberLeft", LightType.Point, new Vector3(-2.7f, 0.5f, 2.6f), Vector3.zero, new Color(1f, 0.38f, 0.16f), 2.0f, 4.2f, 0f);
-            Light(stage, "EmberRight", LightType.Point, new Vector3(2.7f, 0.5f, 2.6f), Vector3.zero, new Color(1f, 0.38f, 0.16f), 2.0f, 4.2f, 0f);
         }
 
         private static void BuildProgressBar(RectTransform parent, Vector2 position, float fillWidth, float totalWidth)

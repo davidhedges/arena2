@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arena — PvP Hub (browser approval spec)</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="hub.css">
+<style>
+/* Browser-only viewport scaffold. The Hub itself lives in hub.css and uses
+ * the 1920x1080 reference canvas that will be translated to UI Toolkit. */
+@font-face {
+  font-family: "Cinzel";
+  font-weight: 400 900;
+  src: url("../../../Assets/Arena/Content/UI/Fonts/Cinzel.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Alegreya";
+  font-weight: 400 900;
+  src: url("../../../Assets/Arena/Content/UI/Fonts/Alegreya.ttf") format("truetype");
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #07090b; overflow: hidden; }
+body { color: #e7e1d3; font-family: "Alegreya", Georgia, serif; }
+button { border: 0; padding: 0; }
+
+.sc-shell { height: 100%; display: flex; flex-direction: column; }
+.sc-toolbar {
+  height: 42px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background: #0b0d10;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+.sc-brand {
+  margin-right: 14px;
+  color: #d9b56a;
+  font-family: "Cinzel", serif;
+  letter-spacing: 2px;
+}
+.sc-note { color: #8f8b82; }
+.sc-note strong { color: #d8d4ca; font-weight: 400; }
+.sc-resolution { margin-left: auto; color: #696b70; }
+.sc-stagewrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.sc-stage {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  flex: none;
+  transform-origin: center center;
+  overflow: hidden;
+}
+</style>
+</head>
+<body>
+<div class="sc-shell">
+  <div class="sc-toolbar">
+    <span class="sc-brand">ARENA · HUB SPEC</span>
+    <span class="sc-note"><strong>Browser approval view</strong> · the open center is the live Unity player-model layer, not a missing background asset</span>
+    <span class="sc-resolution">1920 × 1080</span>
+  </div>
+
+  <div class="sc-stagewrap">
+    <main class="sc-stage" id="Stage">
+      <section class="hub-screen" id="HubScreen" aria-label="Arena player hub">
+        <div class="hub-background" id="HubBackground"></div>
+        <div class="hub-background-veil"></div>
+        <div class="hub-floor-shade"></div>
+
+        <!-- The runtime avatar is rendered by the Unity scene between the
+             background and this screen-space UI. These stage marks remain. -->
+        <div class="showcase" id="PlayerShowcase" aria-label="Live player showcase area">
+          <div class="showcase-focus showcase-focus--outer"></div>
+          <div class="showcase-focus showcase-focus--inner"></div>
+          <div class="showcase-mark showcase-mark--left"></div>
+          <div class="showcase-mark showcase-mark--right"></div>
+        </div>
+
+        <section class="profile-panel panel-surface" id="ProfilePanel" aria-labelledby="ProfileHeading">
+          <div class="corner corner--tl"></div>
+          <div class="corner corner--tr"></div>
+          <div class="corner corner--bl"></div>
+          <div class="corner corner--br"></div>
+          <div class="panel-accent"></div>
+
+          <div class="profile-content">
+            <div class="section-kicker" id="ProfileHeading">COMPETITOR</div>
+            <div class="profile-name" id="PlayerName">AELRIC</div>
+
+            <div class="rank-block">
+              <div class="rank-emblem" aria-hidden="true">
+                <div class="rank-emblem-diamond"></div>
+                <div class="rank-emblem-core">II</div>
+              </div>
+              <div class="rank-copy">
+                <div class="rank-label">ELO RANK</div>
+                <div class="rank-name" id="EloRank">BRONZE II</div>
+                <div class="rank-rating" id="EloRating">1,148 ELO</div>
+              </div>
+            </div>
+
+            <div class="rank-progress" aria-label="ELO progress">
+              <div class="rank-progress-fill"></div>
+              <div class="rank-progress-gem"></div>
+            </div>
+            <div class="progress-copy">
+              <span>52 ELO TO BRONZE I</span>
+              <span class="progress-value">68%</span>
+            </div>
+
+            <div class="section-rule"></div>
+            <div class="section-title">ACTIVE LOADOUT</div>
+
+            <div class="loadout-list" id="LoadoutList">
+              <div class="loadout-row">
+                <div class="loadout-icon loadout-icon--steel"><span>W</span></div>
+                <div class="loadout-copy">
+                  <div class="loadout-type">DISCIPLINE</div>
+                  <div class="loadout-name">SWORD &amp; SHIELD</div>
+                </div>
+                <div class="loadout-index">01</div>
+              </div>
+              <div class="loadout-row">
+                <div class="loadout-icon loadout-icon--fire"><span>F</span></div>
+                <div class="loadout-copy">
+                  <div class="loadout-type">PRIMARY SCHOOL</div>
+                  <div class="loadout-name">FIRE</div>
+                </div>
+                <div class="loadout-index">02</div>
+              </div>
+              <div class="loadout-row">
+                <div class="loadout-icon loadout-icon--frost"><span>C</span></div>
+                <div class="loadout-copy">
+                  <div class="loadout-type">SECONDARY SCHOOL</div>
+                  <div class="loadout-name">FROST</div>
+                </div>
+                <div class="loadout-index">03</div>
+              </div>
+            </div>
+
+            <div class="section-rule"></div>
+            <div class="section-title">RANKED RECORD</div>
+            <div class="record-row">
+              <div class="record-stat">
+                <div class="record-value" id="RankedRecord">18–12</div>
+                <div class="record-label">WINS / LOSSES</div>
+              </div>
+              <div class="record-divider"></div>
+              <div class="record-stat">
+                <div class="record-value">60%</div>
+                <div class="record-label">WIN RATE</div>
+              </div>
+              <div class="record-divider"></div>
+              <div class="record-stat">
+                <div class="record-value">3</div>
+                <div class="record-label">WIN STREAK</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="match-panel panel-surface" id="MatchPanel" aria-labelledby="MatchHeading">
+          <div class="corner corner--tl"></div>
+          <div class="corner corner--tr"></div>
+          <div class="corner corner--bl"></div>
+          <div class="corner corner--br"></div>
+          <div class="match-content">
+            <div class="section-kicker">PVP MATCHMAKING</div>
+            <div class="match-title" id="MatchHeading">ENTER THE ARENA</div>
+            <div class="match-subtitle">Prove your skill. Rise through the ranks.</div>
+
+            <div class="queue-summary">
+              <div class="queue-icon" aria-hidden="true">
+                <div class="queue-blade queue-blade--left"></div>
+                <div class="queue-blade queue-blade--right"></div>
+              </div>
+              <div class="queue-copy">
+                <div class="queue-label">SELECTED QUEUE</div>
+                <div class="queue-name" id="QueueName">RANKED</div>
+              </div>
+              <div class="queue-chevron">›</div>
+            </div>
+
+            <button class="match-button" id="FindMatchButton" type="button">
+              <span class="button-cap button-cap--left"></span>
+              <span class="button-copy">
+                <span class="button-title">FIND MATCH</span>
+                <span class="button-subtitle">RANKED MATCHMAKING</span>
+              </span>
+              <span class="button-cap button-cap--right"></span>
+            </button>
+
+            <button class="practice-button" id="PracticeButton" type="button">
+              <span class="practice-cross">×</span>
+              <span>PRACTICE</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="party-bar panel-surface" id="PartyBar" aria-label="Party">
+          <div class="party-icon" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div class="party-label">PARTY</div>
+          <div class="party-status"><span class="party-dot"></span>OPEN</div>
+          <div class="party-count">1 / 4</div>
+          <button class="party-add" id="PartyAddButton" type="button" aria-label="Invite player">+</button>
+        </section>
+
+        <div class="prototype-toast" id="Toast" role="status"></div>
+
+        <header class="topbar" id="TopBar">
+          <div class="brand-block" aria-label="Arena">
+            <div class="brand-mark" aria-hidden="true">
+              <div class="brand-diamond"></div>
+              <div class="brand-spear brand-spear--one"></div>
+              <div class="brand-spear brand-spear--two"></div>
+            </div>
+            <div class="brand-word">ARENA</div>
+          </div>
+
+          <nav class="primary-nav" aria-label="Hub sections">
+            <button class="nav-item is-active" id="NavPlay" type="button"><span>PLAY</span><span class="nav-gem"></span></button>
+            <button class="nav-item" id="NavDisciplines" type="button"><span>DISCIPLINES</span><span class="nav-gem"></span></button>
+            <button class="nav-item" id="NavEquipment" type="button"><span>EQUIPMENT</span><span class="nav-gem"></span></button>
+            <button class="nav-item" id="NavAppearance" type="button"><span>APPEARANCE</span><span class="nav-gem"></span></button>
+            <button class="nav-item" id="NavCareer" type="button"><span>CAREER</span><span class="nav-gem"></span></button>
+            <button class="nav-item" id="NavStore" type="button"><span>STORE</span><span class="nav-gem"></span></button>
+          </nav>
+
+          <div class="topbar-tools">
+            <div class="currency currency--gold"><span class="currency-gem">G</span><span>1,250</span></div>
+            <div class="currency currency--arcane"><span class="currency-gem">A</span><span>340</span></div>
+            <button class="tool-button" id="SocialButton" type="button" aria-label="Social"><span class="tool-people">●●</span></button>
+            <button class="tool-button" id="InboxButton" type="button" aria-label="Inbox"><span class="tool-envelope">◇</span></button>
+            <button class="tool-button" id="SettingsButton" type="button" aria-label="Settings"><span class="tool-cog">✦</span></button>
+            <button class="tool-button tool-button--exit" id="ExitButton" type="button" aria-label="Exit"><span>↥</span></button>
+          </div>
+        </header>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script src="hub.js"></script>
+</body>
+</html>

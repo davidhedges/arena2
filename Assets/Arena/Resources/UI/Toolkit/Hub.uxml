@@ -1,0 +1,189 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- One-way translation of docs/ui-prototypes/hub after owner approval.
+         The camera renders Hub_background and the live local avatar below this
+         screen-space document; PlayerShowcase is the invisible drag surface. -->
+    <Style src="Hub.uss" />
+
+    <ui:VisualElement name="HubScreen" class="hub-screen">
+        <ui:VisualElement name="HubBackgroundVeil" class="hub-background-veil" picking-mode="Ignore" />
+        <ui:VisualElement name="HubFloorShade" class="hub-floor-shade" picking-mode="Ignore" />
+
+        <ui:VisualElement name="PlayerShowcase" class="showcase">
+            <ui:VisualElement class="showcase-focus showcase-focus--outer" picking-mode="Ignore" />
+            <ui:VisualElement class="showcase-focus showcase-focus--inner" picking-mode="Ignore" />
+            <ui:VisualElement class="showcase-mark showcase-mark--left" picking-mode="Ignore" />
+            <ui:VisualElement class="showcase-mark showcase-mark--right" picking-mode="Ignore" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="ProfilePanel" class="profile-panel panel-surface">
+            <ui:VisualElement class="corner corner--tl" picking-mode="Ignore" />
+            <ui:VisualElement class="corner corner--tr" picking-mode="Ignore" />
+            <ui:VisualElement class="corner corner--bl" picking-mode="Ignore" />
+            <ui:VisualElement class="corner corner--br" picking-mode="Ignore" />
+            <ui:VisualElement class="panel-accent" picking-mode="Ignore" />
+
+            <ui:VisualElement class="profile-content">
+                <ui:Label class="section-kicker" text="COMPETITOR" />
+                <ui:Label name="PlayerName" class="profile-name" text="AELRIC" />
+
+                <ui:VisualElement class="rank-block">
+                    <ui:VisualElement class="rank-emblem" picking-mode="Ignore">
+                        <ui:VisualElement class="rank-emblem-diamond" />
+                        <ui:Label class="rank-emblem-core" text="II" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="rank-copy">
+                        <ui:Label class="rank-label" text="ELO RANK" />
+                        <ui:Label name="EloRank" class="rank-name" text="BRONZE II" />
+                        <ui:Label name="EloRating" class="rank-rating" text="1,148 ELO" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="rank-progress" picking-mode="Ignore">
+                    <ui:VisualElement name="EloProgressFill" class="rank-progress-fill" />
+                    <ui:VisualElement class="rank-progress-gem" />
+                </ui:VisualElement>
+                <ui:VisualElement class="progress-copy">
+                    <ui:Label name="EloProgressCopy" text="52 ELO TO BRONZE I" />
+                    <ui:Label class="progress-value" text="68%" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="section-rule" picking-mode="Ignore" />
+                <ui:Label class="section-title" text="ACTIVE LOADOUT" />
+
+                <ui:VisualElement name="LoadoutList" class="loadout-list">
+                    <ui:VisualElement class="loadout-row">
+                        <ui:VisualElement class="loadout-icon loadout-icon--steel" picking-mode="Ignore">
+                            <ui:Label class="loadout-glyph" text="W" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="loadout-copy">
+                            <ui:Label class="loadout-type" text="DISCIPLINE" />
+                            <ui:Label name="LoadoutDisciplineName" class="loadout-name" text="SWORD &amp; SHIELD" />
+                        </ui:VisualElement>
+                        <ui:Label class="loadout-index" text="01" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="loadout-row">
+                        <ui:VisualElement class="loadout-icon loadout-icon--fire" picking-mode="Ignore">
+                            <ui:Label class="loadout-glyph" text="F" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="loadout-copy">
+                            <ui:Label class="loadout-type" text="PRIMARY SCHOOL" />
+                            <ui:Label class="loadout-name" text="FIRE" />
+                        </ui:VisualElement>
+                        <ui:Label class="loadout-index" text="02" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="loadout-row">
+                        <ui:VisualElement class="loadout-icon loadout-icon--frost" picking-mode="Ignore">
+                            <ui:Label class="loadout-glyph" text="C" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="loadout-copy">
+                            <ui:Label class="loadout-type" text="SECONDARY SCHOOL" />
+                            <ui:Label class="loadout-name" text="FROST" />
+                        </ui:VisualElement>
+                        <ui:Label class="loadout-index" text="03" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="section-rule" picking-mode="Ignore" />
+                <ui:Label class="section-title" text="RANKED RECORD" />
+                <ui:VisualElement class="record-row">
+                    <ui:VisualElement class="record-stat">
+                        <ui:Label name="RankedRecord" class="record-value" text="18–12" />
+                        <ui:Label class="record-label" text="WINS / LOSSES" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="record-divider" picking-mode="Ignore" />
+                    <ui:VisualElement class="record-stat">
+                        <ui:Label class="record-value" text="60%" />
+                        <ui:Label class="record-label" text="WIN RATE" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="record-divider" picking-mode="Ignore" />
+                    <ui:VisualElement class="record-stat">
+                        <ui:Label class="record-value" text="3" />
+                        <ui:Label class="record-label" text="WIN STREAK" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="MatchPanel" class="match-panel panel-surface">
+            <ui:VisualElement class="corner corner--tl" picking-mode="Ignore" />
+            <ui:VisualElement class="corner corner--tr" picking-mode="Ignore" />
+            <ui:VisualElement class="corner corner--bl" picking-mode="Ignore" />
+            <ui:VisualElement class="corner corner--br" picking-mode="Ignore" />
+            <ui:VisualElement class="match-content">
+                <ui:Label class="section-kicker" text="PVP MATCHMAKING" />
+                <ui:Label class="match-title" text="ENTER THE ARENA" />
+                <ui:Label class="match-subtitle" text="Prove your skill. Rise through the ranks." />
+
+                <ui:Button name="QueueButton" class="queue-summary">
+                    <ui:VisualElement class="queue-icon" picking-mode="Ignore">
+                        <ui:VisualElement class="queue-blade queue-blade--left" />
+                        <ui:VisualElement class="queue-blade queue-blade--right" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="queue-copy" picking-mode="Ignore">
+                        <ui:Label class="queue-label" text="SELECTED QUEUE" />
+                        <ui:Label name="QueueName" class="queue-name" text="RANKED" />
+                    </ui:VisualElement>
+                    <ui:Label class="queue-chevron" text="›" picking-mode="Ignore" />
+                </ui:Button>
+
+                <ui:Button name="FindMatchButton" class="match-button">
+                    <ui:VisualElement class="button-cap button-cap--left" picking-mode="Ignore" />
+                    <ui:VisualElement class="button-copy" picking-mode="Ignore">
+                        <ui:Label class="button-title" text="FIND MATCH" />
+                        <ui:Label class="button-subtitle" text="RANKED MATCHMAKING" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="button-cap button-cap--right" picking-mode="Ignore" />
+                </ui:Button>
+
+                <ui:Button name="PracticeButton" class="practice-button">
+                    <ui:Label class="practice-cross" text="×" picking-mode="Ignore" />
+                    <ui:Label text="PRACTICE" picking-mode="Ignore" />
+                </ui:Button>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="PartyBar" class="party-bar panel-surface">
+            <ui:VisualElement class="party-icon" picking-mode="Ignore">
+                <ui:VisualElement class="party-person" />
+                <ui:VisualElement class="party-person" />
+                <ui:VisualElement class="party-person" />
+            </ui:VisualElement>
+            <ui:Label class="party-label" text="PARTY" />
+            <ui:VisualElement class="party-status">
+                <ui:VisualElement class="party-dot" />
+                <ui:Label text="OPEN" />
+            </ui:VisualElement>
+            <ui:Label name="PartyCount" class="party-count" text="1 / 4" />
+            <ui:Button name="PartyAddButton" class="party-add" text="+" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="TopBar" class="topbar">
+            <ui:VisualElement class="brand-block" picking-mode="Ignore">
+                <ui:VisualElement class="brand-mark">
+                    <ui:VisualElement class="brand-diamond" />
+                    <ui:VisualElement class="brand-spear brand-spear--one" />
+                    <ui:VisualElement class="brand-spear brand-spear--two" />
+                </ui:VisualElement>
+                <ui:Label class="brand-word" text="ARENA" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="primary-nav">
+                <ui:Button name="NavPlay" class="nav-item is-active"><ui:Label text="PLAY" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+                <ui:Button name="NavDisciplines" class="nav-item"><ui:Label text="DISCIPLINES" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+                <ui:Button name="NavEquipment" class="nav-item"><ui:Label text="EQUIPMENT" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+                <ui:Button name="NavAppearance" class="nav-item"><ui:Label text="APPEARANCE" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+                <ui:Button name="NavCareer" class="nav-item"><ui:Label text="CAREER" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+                <ui:Button name="NavStore" class="nav-item"><ui:Label text="STORE" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="topbar-tools">
+                <ui:VisualElement class="currency currency--gold"><ui:VisualElement class="currency-gem"><ui:Label class="currency-glyph" text="G" /></ui:VisualElement><ui:Label text="1,250" /></ui:VisualElement>
+                <ui:VisualElement class="currency currency--arcane"><ui:VisualElement class="currency-gem"><ui:Label class="currency-glyph" text="A" /></ui:VisualElement><ui:Label text="340" /></ui:VisualElement>
+                <ui:Button name="SocialButton" class="tool-button"><ui:Label class="tool-people" text="●●" picking-mode="Ignore" /></ui:Button>
+                <ui:Button name="InboxButton" class="tool-button"><ui:Label class="tool-envelope" text="◇" picking-mode="Ignore" /></ui:Button>
+                <ui:Button name="SettingsButton" class="tool-button"><ui:Label class="tool-cog" text="✦" picking-mode="Ignore" /></ui:Button>
+                <ui:Button name="ExitButton" class="tool-button tool-button--exit"><ui:Label text="↥" picking-mode="Ignore" /></ui:Button>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
