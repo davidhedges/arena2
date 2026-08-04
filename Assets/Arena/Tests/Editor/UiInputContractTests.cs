@@ -531,6 +531,19 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void SurvivalShop_ReservesEnoughHeightAndASeparatePriceRowInOfferCards()
+        {
+            string uss = File.ReadAllText("Assets/Arena/Resources/UI/Toolkit/SurvivalShop.uss");
+
+            Assert.That(uss, Does.Contain("height: 200px;"));
+            Assert.That(uss, Does.Contain(".offer-detail"));
+            Assert.That(uss, Does.Contain("flex-grow: 1;"));
+            Assert.That(uss, Does.Contain(".offer-price"));
+            Assert.That(uss, Does.Contain("margin-top: 6px;"));
+            Assert.That(uss, Does.Not.Contain("margin-top: auto;"));
+        }
+
+        [Test]
         public void BuffAndDebuffIcons_UseSharedTooltipPresenter()
         {
             string hud = File.ReadAllText(HudControllerPath);
