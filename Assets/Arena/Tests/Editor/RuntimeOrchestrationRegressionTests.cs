@@ -181,6 +181,47 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void RuntimeSceneTransitionQueue_WaitsOneFrameAndCoalescesAuthoritativeRequests()
+        {
+            Type stateType = RequireRuntimeType("Arena.Entity.DeferredSceneTransitionState");
+            object state = Activator.CreateInstance(stateType, nonPublic: true)!;
+            MethodInfo request = RequireMethod(stateType, "Request", typeof(string), typeof(int));
+            MethodInfo tryDequeue = RequireMethod(
+                stateType,
+                "TryDequeue",
+                typeof(int),
+                typeof(bool),
+                typeof(string).MakeByRefType());
+
+            request.Invoke(state, new object[] { "SurvivalArena", 100 });
+            var sameFrame = new object?[] { 100, false, null };
+            Assert.That(tryDequeue.Invoke(state, sameFrame), Is.False);
+
+            request.Invoke(state, new object[] { "Oasis_Day", 100 });
+            var blockedByInFlightLoad = new object?[] { 101, true, null };
+            Assert.That(tryDequeue.Invoke(state, blockedByInFlightLoad), Is.False);
+
+            var followingFrame = new object?[] { 101, false, null };
+            Assert.That(tryDequeue.Invoke(state, followingFrame), Is.True);
+            Assert.That(followingFrame[2], Is.EqualTo("Oasis_Day"));
+
+            var consumed = new object?[] { 102, false, null };
+            Assert.That(tryDequeue.Invoke(state, consumed), Is.False);
+
+            string coordinatorSource = File.ReadAllText(
+                "Assets/Arena/Runtime/Entity/LocalWorldRuntimeCoordinator.cs");
+            Assert.That(
+                coordinatorSource,
+                Does.Contain("requestSceneLoad ?? RuntimeSceneTransitionQueue.Request"));
+            Assert.That(coordinatorSource, Does.Not.Contain("loadScene ?? SceneManager.LoadScene"));
+
+            string queueSource = File.ReadAllText(
+                "Assets/Arena/Runtime/Entity/RuntimeSceneTransitionQueue.cs");
+            Assert.That(queueSource, Does.Contain("SceneManager.LoadSceneAsync"));
+            Assert.That(queueSource, Does.Not.Contain("SceneManager.LoadScene("));
+        }
+
+        [Test]
         public void MatchStateCache_RecognizesSurvivalRegardlessOfSubscriptionArrivalOrder()
         {
             Type cacheType = RequireRuntimeType("Arena.Match.MatchStateCache");

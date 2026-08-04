@@ -93,7 +93,7 @@ namespace Arena.Entity
         private readonly Action<ulong?> _onLocalPlayerWorldUpdate;
         private readonly Action<NetworkManager.GameplayScope> _setGameplayScope;
         private readonly Func<string> _getActiveSceneName;
-        private readonly Action<string> _loadScene;
+        private readonly Action<string> _requestSceneLoad;
         private readonly string _matchSceneName;
         private readonly string _survivalSceneName;
 
@@ -109,7 +109,7 @@ namespace Arena.Entity
             Action<ulong?>? onLocalPlayerWorldUpdate = null,
             Action<NetworkManager.GameplayScope>? setGameplayScope = null,
             Func<string>? getActiveSceneName = null,
-            Action<string>? loadScene = null,
+            Action<string>? requestSceneLoad = null,
             string matchSceneName = "ArenaMatch",
             string survivalSceneName = LocalWorldSceneDecider.DefaultSurvivalSceneName)
         {
@@ -117,7 +117,11 @@ namespace Arena.Entity
             _onLocalPlayerWorldUpdate = onLocalPlayerWorldUpdate ?? MatchStateCache.Instance.OnLocalPlayerWorldUpdate;
             _setGameplayScope = setGameplayScope ?? (scope => NetworkManager.Instance?.SetGameplayScope(scope));
             _getActiveSceneName = getActiveSceneName ?? (() => SceneManager.GetActiveScene().name);
-            _loadScene = loadScene ?? SceneManager.LoadScene;
+            // PlayerWorld updates are delivered inside DbConnection.FrameTick.
+            // A Survival death can enqueue Object.Destroy calls later in that
+            // same dispatch, so loading synchronously here races Unity's
+            // delayed destruction against its scene preload thread.
+            _requestSceneLoad = requestSceneLoad ?? RuntimeSceneTransitionQueue.Request;
             _matchSceneName = matchSceneName;
             _survivalSceneName = survivalSceneName;
         }
@@ -279,11 +283,11 @@ namespace Arena.Entity
                 return false;
 
             if (row.InstanceId.HasValue)
-                Debug.Log($"[EntityRegistry] Loading {targetScene} for {instanceKind} instance {row.InstanceId.Value}.");
+                Debug.Log($"[EntityRegistry] Queueing {targetScene} for {instanceKind} instance {row.InstanceId.Value}.");
             else
-                Debug.Log("[EntityRegistry] Loading Arena (open world).");
+                Debug.Log($"[EntityRegistry] Queueing {targetScene} (open world).");
 
-            _loadScene(targetScene);
+            _requestSceneLoad(targetScene);
             return true;
         }
 
