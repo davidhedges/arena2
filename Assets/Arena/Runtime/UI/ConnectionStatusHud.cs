@@ -81,7 +81,10 @@ namespace Arena.UI
             rt.anchoredPosition = new Vector2(-18f, 18f);
 
             _dot = go.AddComponent<Image>();
-            _dot.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob.psd");
+            // Unity 6 no longer ships UI/Skin/Knob.psd. A null Image sprite
+            // uses the built-in white texture and avoids an error on every
+            // Play-mode startup; at 14 px the solid marker remains legible.
+            _dot.sprite = null;
             _dot.color = DisconnectedColor;
             _dot.raycastTarget = false;
         }

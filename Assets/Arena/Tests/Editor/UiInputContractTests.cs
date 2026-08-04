@@ -54,6 +54,8 @@ namespace Arena.Tests.Editor
         private const string NetworkCallbackBinderPath = "Assets/Arena/Runtime/Network/NetworkCallbackBinder.cs";
         private const string PlayerEntityPath = "Assets/Arena/Runtime/Entity/PlayerEntity.cs";
         private const string CombatAnimationSetBinderPath = "Assets/Arena/Runtime/Presentation/Animation/CombatAnimationSetBinder.cs";
+        private const string ConnectionStatusHudPath = "Assets/Arena/Runtime/UI/ConnectionStatusHud.cs";
+        private const string NhAvatarPath = "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Scripts/NHAvatar.cs";
 
         [Test]
         public void RuntimeUiCode_UsesSharedInputSystemEventBootstrap()
@@ -76,6 +78,20 @@ namespace Arena.Tests.Editor
                 directInputModuleUsages,
                 Is.Empty,
                 $"Runtime UI must use {RuntimeUiEventSystemPath} instead of configuring InputSystemUIInputModule inline.");
+        }
+
+        [Test]
+        public void PlayModeBootstrap_AvoidsRemovedSkinSpriteAndMissingAvatarControllerErrors()
+        {
+            string connectionHud = File.ReadAllText(ConnectionStatusHudPath);
+            Assert.That(connectionHud, Does.Not.Contain("UI/Skin/Knob.psd\");"));
+            Assert.That(connectionHud, Does.Contain("_dot.sprite = null;"));
+
+            string avatar = File.ReadAllText(NhAvatarPath);
+            Assert.That(
+                avatar,
+                Does.Contain("_animator == null || _animator.runtimeAnimatorController == null"));
+            Assert.That(avatar, Does.Contain("_animationClips = new List<AnimationClip>();"));
         }
 
         [Test]

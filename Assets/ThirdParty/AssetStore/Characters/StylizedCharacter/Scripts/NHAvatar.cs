@@ -76,6 +76,14 @@ namespace NHance.Assets.Scripts
                 _animator = GetComponent<Animator>();
             if(_animator == null)
                 _animator = GetComponentInChildren<Animator>();
+            if (_animator == null || _animator.runtimeAnimatorController == null)
+            {
+                // Arena also uses NHAvatar as an appearance assembler on
+                // preview instances that intentionally have no controller.
+                // The animation picker is optional in that configuration.
+                _animationClips = new List<AnimationClip>();
+                return;
+            }
             _animationClips = _animator.runtimeAnimatorController.animationClips.ToList();
             NormalizeAnimationIndex();
         }
