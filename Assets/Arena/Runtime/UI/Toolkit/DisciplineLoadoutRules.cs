@@ -16,7 +16,7 @@ namespace Arena.UI
         public const int AbilityPointBudget = 25;
 
         public static bool CanBePrimary(int availableAbilityCount)
-            => availableAbilityCount >= PrimaryAbilityMinimum;
+            => availableAbilityCount > 0;
 
         public static bool CanAddSecondary(int selectedSecondaryCount)
             => selectedSecondaryCount < SecondaryDisciplineMaximum;

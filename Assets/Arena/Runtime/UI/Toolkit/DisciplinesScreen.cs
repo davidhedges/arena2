@@ -792,7 +792,7 @@ namespace Arena.UI
                 .ToList();
             if (eligible.Count == 0)
             {
-                ShowToast("No discipline currently has eight authored abilities.");
+                ShowToast("No discipline abilities are currently available.");
                 return;
             }
 

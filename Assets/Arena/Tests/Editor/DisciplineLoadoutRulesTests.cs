@@ -12,10 +12,12 @@ namespace Arena.Tests.Editor
             .Load("Assembly-CSharp")
             .GetType("Arena.UI.DisciplineLoadoutRules", throwOnError: true)!;
 
-        [TestCase(7, false)]
+        [TestCase(0, false)]
+        [TestCase(1, true)]
+        [TestCase(7, true)]
         [TestCase(8, true)]
         [TestCase(35, true)]
-        public void PrimaryDiscipline_RequiresAtLeastEightAuthoredAbilities(
+        public void PrimaryDiscipline_RequiresAtLeastOneAuthoredAbility(
             int availableAbilityCount,
             bool expected)
         {

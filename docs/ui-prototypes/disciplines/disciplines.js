@@ -224,7 +224,7 @@
 
   function primaryEligibleDisciplines() {
     return data.disciplines.filter(function (discipline) {
-      return (data.abilitiesByDiscipline[discipline.id] || []).length >= 8;
+      return (data.abilitiesByDiscipline[discipline.id] || []).length > 0;
     });
   }
 
@@ -559,7 +559,7 @@
   function cyclePrimary(direction) {
     var eligible = primaryEligibleDisciplines();
     if (eligible.length === 0) {
-      showToast("No discipline currently has the required eight authored abilities.");
+      showToast("No discipline abilities are currently available.");
       return;
     }
     var index = eligible.findIndex(function (discipline) { return discipline.id === state.primaryId; });
