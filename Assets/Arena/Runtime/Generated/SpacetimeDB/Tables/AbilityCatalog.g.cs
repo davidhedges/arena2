@@ -26,9 +26,19 @@ namespace SpacetimeDB.Types
 
             public readonly AbilityIdUniqueIndex AbilityId;
 
+            public sealed class DisciplineIdIndex : BTreeIndexBase<string>
+            {
+                protected override string GetKey(AbilityCatalog row) => row.DisciplineId;
+
+                public DisciplineIdIndex(AbilityCatalogHandle table) : base(table) { }
+            }
+
+            public readonly DisciplineIdIndex DisciplineId;
+
             internal AbilityCatalogHandle(DbConnection conn) : base(conn)
             {
                 AbilityId = new(this);
+                DisciplineId = new(this);
             }
 
             protected override object GetPrimaryKey(AbilityCatalog row) => row.AbilityId;
@@ -41,6 +51,7 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.Col<AbilityCatalog, string> AbilityId { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> ActorScope { get; }
+        public global::SpacetimeDB.Col<AbilityCatalog, string> DisciplineId { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> CombatProfileId { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> AbilityKind { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> ActionId { get; }
@@ -54,6 +65,7 @@ namespace SpacetimeDB.Types
         {
             AbilityId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "ability_id");
             ActorScope = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "actor_scope");
+            DisciplineId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "discipline_id");
             CombatProfileId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "combat_profile_id");
             AbilityKind = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "ability_kind");
             ActionId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "action_id");
@@ -68,10 +80,12 @@ namespace SpacetimeDB.Types
     public sealed class AbilityCatalogIxCols
     {
         public global::SpacetimeDB.IxCol<AbilityCatalog, string> AbilityId { get; }
+        public global::SpacetimeDB.IxCol<AbilityCatalog, string> DisciplineId { get; }
 
         public AbilityCatalogIxCols(string tableName)
         {
             AbilityId = new global::SpacetimeDB.IxCol<AbilityCatalog, string>(tableName, "ability_id");
+            DisciplineId = new global::SpacetimeDB.IxCol<AbilityCatalog, string>(tableName, "discipline_id");
         }
     }
 }

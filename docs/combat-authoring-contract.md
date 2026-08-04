@@ -35,6 +35,32 @@ abilities or default action-bar assignments.
 
 It does not own melee clip timing, melee phased clips, VFX implementation, or server code for new behavior kinds.
 
+### Discipline Ownership
+
+Every player ability row authors exactly one `discipline_id`. Discipline ownership
+controls build eligibility; it is independent from `combat_profile_id`, damage type,
+and VFX school.
+
+Weapon-profile abilities use their profile's discipline:
+
+- `DAGGERS` → `SUBTLETY`
+- `TWO_HANDED_SWORD` → `WAR`
+- `SWORD_AND_SHIELD` → `ZEAL`
+- `ARCHER_BOW` → `PRECISION`
+- `STAFF` → `ARCANA`
+
+Profile-neutral spells use one of the consolidated spell-school disciplines:
+
+- `BLIGHT`: Necromancy, Shadow, and Necrotic spell themes
+- `RUIN`: Fire, Cold, and Lightning spell themes
+- `DIVINITY`: Holy spell themes
+- `ARCANA`: Arcane spell themes
+- `PRIMAL`: Air/Wind spell themes, plus non-damaging natural-world spells such as `STONESPIRE`
+
+Keep granular authored `damage_type` and presentation `vfx_school` values intact.
+For example, a `RUIN` spell may still deal `FIRE`, `COLD`, or `LIGHTNING` damage.
+Those fields do not determine build ownership at runtime; `discipline_id` does.
+
 ### Combat Animation Sets
 
 Files: `Assets/Arena/Resources/CombatAnimationSets/*.asset`
@@ -94,6 +120,7 @@ For selectable abilities, `action_id` is the `ability_id`. Do not put an ability
 ## Glossary
 
 - `ability_id`: player-facing ability row id in `abilities[]`.
+- `discipline_id`: the single discipline that owns a player ability for build eligibility.
 - `gameplay.kind`: ability category, currently `MELEE`, `SPELL`, `MOVEMENT`, `AUTO_ATTACK_REPLACEMENT`, or `COMBAT_MODE_TOGGLE`.
 - `ability_kind`: derived public table compatibility field. Do not author it in `progression_catalog.shared.json`.
 - authored strike id: design-facing melee strike id authored in a combat animation set. Melee ability `action_id` values point here.
@@ -125,7 +152,7 @@ For selectable abilities, `action_id` is the `ability_id`. Do not put an ability
 
 1. Author or select a melee strike in the class combat profile's combat animation set.
 2. Re-export `server/src/melee_manifest.shared.json`.
-3. Add an `abilities[]` row with `gameplay.kind: "MELEE"`.
+3. Add an `abilities[]` row with `gameplay.kind: "MELEE"` and the discipline required by its combat profile.
 4. Set the ability `action_id` to the authored strike id, not the runtime slot id.
 5. Put melee damage/range/cooldown/defense tuning inside `gameplay`; keep player-facing resource cost at the ability row level.
 6. Add an `ABILITY` presentation row.
@@ -135,13 +162,14 @@ For selectable abilities, `action_id` is the `ability_id`. Do not put an ability
 ### Selectable Spell
 
 1. Add or update an `abilities[]` row with `gameplay.kind: "SPELL"`.
-2. Set the ability `action_id` to the spell id.
-3. Put spell cooldown/cast/targeting/resource details inside `gameplay`.
-4. Put spell delivery behavior inside `gameplay.delivery`.
-5. Add a spell animation entry for every class combat profile that exposes the spell.
-6. Add an `ABILITY` presentation row, and a `SPELL` presentation row when the spell is directly presented.
-7. Add or update default loadout placement through ActionRef-compatible assignment data.
-8. Run the server tests.
+2. Set `discipline_id` to the owning weapon discipline or consolidated spell-school discipline.
+3. Set the ability `action_id` to the spell id.
+4. Put spell cooldown/cast/targeting/resource details inside `gameplay`.
+5. Put spell delivery behavior inside `gameplay.delivery`.
+6. Add a spell animation entry for every class combat profile that exposes the spell.
+7. Add an `ABILITY` presentation row, and a `SPELL` presentation row when the spell is directly presented.
+8. Add or update default loadout placement through ActionRef-compatible assignment data.
+9. Run the server tests.
 
 ### Movement Delivery Ability
 
@@ -166,7 +194,7 @@ Movement delivery abilities are class-owned gameplay abilities that move the cas
 
 ### Auto-Attack
 
-Auto-attacks are intrinsic combat-profile behavior. Author the strike identity in the combat animation set, export the melee manifest, and tune gameplay in `auto_attacks[]`. Do not expose auto-attacks as selectable loadout abilities.
+Auto-attacks are intrinsic combat-profile behavior. Author the strike identity in the combat animation set, export the melee manifest, and tune gameplay plus profile-derived `discipline_id` in `auto_attacks[]`. Do not expose auto-attacks as selectable loadout abilities.
 
 Per-hit primary resource gain is intrinsic auto-attack behavior. Selectable melee resource changes should come from authored costs or explicit behavior, not generic hit gain.
 

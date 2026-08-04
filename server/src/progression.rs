@@ -78,7 +78,13 @@ pub(crate) const DISCIPLINE_SUBTLETY: &str = "SUBTLETY";
 pub(crate) const DISCIPLINE_WAR: &str = "WAR";
 pub(crate) const DISCIPLINE_ZEAL: &str = "ZEAL";
 pub(crate) const DISCIPLINE_PRECISION: &str = "PRECISION";
+pub(crate) const DISCIPLINE_BLIGHT: &str = "BLIGHT";
+pub(crate) const DISCIPLINE_RUIN: &str = "RUIN";
+pub(crate) const DISCIPLINE_DIVINITY: &str = "DIVINITY";
 pub(crate) const DISCIPLINE_ARCANA: &str = "ARCANA";
+pub(crate) const DISCIPLINE_PRIMAL: &str = "PRIMAL";
+const DISCIPLINE_KIND_WEAPON: &str = "WEAPON";
+const DISCIPLINE_KIND_SPELL_SCHOOL: &str = "SPELL_SCHOOL";
 pub(crate) const RESOURCE_KIND_STAMINA: &str = "STAMINA";
 pub(crate) const COMBAT_MODE_SHORT_DRAW: &str = "SHORT_DRAW";
 pub(crate) const COMBAT_MODE_FULL_DRAW: &str = "FULL_DRAW";
@@ -143,7 +149,10 @@ struct CombatProfileDefinition {
 struct CombatDisciplineDefinition {
     discipline_id: String,
     display_name: String,
+    discipline_kind: String,
+    #[serde(default)]
     combat_profile_id: String,
+    #[serde(default)]
     primary_resource_kind: String,
     #[serde(default)]
     inactive_resource_tick: bool,
@@ -207,6 +216,8 @@ struct StatScalingDefinition {
 struct AbilityDefinition {
     ability_id: String,
     actor_scope: String,
+    #[serde(default)]
+    discipline_id: String,
     combat_profile_id: String,
     gameplay: AbilityGameplayDefinition,
     action_id: String,
@@ -746,6 +757,7 @@ struct MeleeTargetingDefinition {
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct AutoAttackDefinition {
+    discipline_id: String,
     combat_profile_id: String,
     #[serde(default)]
     mode_id: String,
@@ -1194,6 +1206,7 @@ pub struct CombatProfileCatalog {
 pub struct CombatDisciplineCatalog {
     #[primary_key]
     pub discipline_id: String,
+    pub discipline_kind: String,
     #[index(btree)]
     pub combat_profile_id: String,
     pub display_name: String,
@@ -1291,6 +1304,8 @@ pub struct AbilityCatalog {
     #[primary_key]
     pub ability_id: String,
     pub actor_scope: String,
+    #[index(btree)]
+    pub discipline_id: String,
     pub combat_profile_id: String,
     pub ability_kind: String,
     pub action_id: String,
@@ -1361,6 +1376,7 @@ pub struct MeleeGapCloseCatalog {
 pub struct AutoAttackCatalog {
     #[primary_key]
     pub key: String,
+    pub discipline_id: String,
     pub combat_profile_id: String,
     pub mode_id: String,
     pub action_id: String,
@@ -1943,6 +1959,17 @@ fn resolved_combat_profile_id_for_ability_definition(
         None
     } else {
         Some(combat_profile_id)
+    }
+}
+
+fn discipline_id_for_combat_profile(combat_profile_id: &str) -> Option<&'static str> {
+    match normalize_identifier(combat_profile_id).as_str() {
+        COMBAT_PROFILE_DAGGERS => Some(DISCIPLINE_SUBTLETY),
+        COMBAT_PROFILE_TWO_HANDED_SWORD => Some(DISCIPLINE_WAR),
+        COMBAT_PROFILE_SWORD_AND_SHIELD => Some(DISCIPLINE_ZEAL),
+        COMBAT_PROFILE_ARCHER_BOW => Some(DISCIPLINE_PRECISION),
+        "STAFF" => Some(DISCIPLINE_ARCANA),
+        _ => None,
     }
 }
 
@@ -2832,6 +2859,7 @@ fn sync_combat_discipline_catalog(ctx: &ReducerContext) {
         let discipline_id = normalize_identifier(definition.discipline_id.as_str());
         let row = CombatDisciplineCatalog {
             discipline_id: discipline_id.clone(),
+            discipline_kind: normalize_identifier(definition.discipline_kind.as_str()),
             combat_profile_id: normalize_identifier(definition.combat_profile_id.as_str()),
             display_name: definition.display_name.clone(),
             primary_resource_kind: normalize_identifier(definition.primary_resource_kind.as_str()),
@@ -3064,6 +3092,7 @@ fn sync_ability_catalog(ctx: &ReducerContext) {
         let row = AbilityCatalog {
             ability_id: ability_id.clone(),
             actor_scope: normalize_identifier(definition.actor_scope.as_str()),
+            discipline_id: normalize_identifier(definition.discipline_id.as_str()),
             combat_profile_id: resolved_combat_profile_id_for_ability_definition(definition)
                 .unwrap_or_default(),
             ability_kind: ability_gameplay_kind(definition),
@@ -3380,6 +3409,7 @@ fn sync_auto_attack_catalog(ctx: &ReducerContext) {
         let key = auto_attack_catalog_key(definition);
         let row = AutoAttackCatalog {
             key: key.clone(),
+            discipline_id: normalize_identifier(definition.discipline_id.as_str()),
             combat_profile_id: normalize_identifier(definition.combat_profile_id.as_str()),
             mode_id: normalize_identifier(definition.mode_id.as_str()),
             action_id: AuthoredActionId::new(definition.action_id.as_str()).into_string(),
@@ -4346,10 +4376,15 @@ fn validate_combat_discipline_catalog() {
         DISCIPLINE_WAR.to_string(),
         DISCIPLINE_ZEAL.to_string(),
         DISCIPLINE_PRECISION.to_string(),
+        DISCIPLINE_BLIGHT.to_string(),
+        DISCIPLINE_RUIN.to_string(),
+        DISCIPLINE_DIVINITY.to_string(),
         DISCIPLINE_ARCANA.to_string(),
+        DISCIPLINE_PRIMAL.to_string(),
     ]);
     for discipline in &progression_catalog().combat_disciplines {
         let discipline_id = normalize_identifier(discipline.discipline_id.as_str());
+        let discipline_kind = normalize_identifier(discipline.discipline_kind.as_str());
         let combat_profile_id = normalize_identifier(discipline.combat_profile_id.as_str());
         let resource_kind = normalize_identifier(discipline.primary_resource_kind.as_str());
         assert!(
@@ -4361,30 +4396,69 @@ fn validate_combat_discipline_catalog() {
             "duplicate combat discipline '{}'",
             discipline_id
         );
-        assert!(
-            known_profiles.contains(combat_profile_id.as_str()),
-            "combat discipline '{}' references unknown combat profile '{}'",
-            discipline_id,
-            discipline.combat_profile_id
+        let (expected_kind, expected_profile_id) = match discipline_id.as_str() {
+            DISCIPLINE_SUBTLETY => (DISCIPLINE_KIND_WEAPON, COMBAT_PROFILE_DAGGERS),
+            DISCIPLINE_WAR => (DISCIPLINE_KIND_WEAPON, COMBAT_PROFILE_TWO_HANDED_SWORD),
+            DISCIPLINE_ZEAL => (DISCIPLINE_KIND_WEAPON, COMBAT_PROFILE_SWORD_AND_SHIELD),
+            DISCIPLINE_PRECISION => (DISCIPLINE_KIND_WEAPON, COMBAT_PROFILE_ARCHER_BOW),
+            DISCIPLINE_ARCANA => (DISCIPLINE_KIND_SPELL_SCHOOL, "STAFF"),
+            DISCIPLINE_BLIGHT | DISCIPLINE_RUIN | DISCIPLINE_DIVINITY | DISCIPLINE_PRIMAL => {
+                (DISCIPLINE_KIND_SPELL_SCHOOL, "")
+            }
+            _ => panic!("unsupported combat discipline '{}'", discipline_id),
+        };
+        assert_eq!(
+            discipline_kind, expected_kind,
+            "combat discipline '{}' must use discipline_kind '{}'",
+            discipline_id, expected_kind
         );
-        assert!(
-            profile_ids.insert(combat_profile_id.clone()),
-            "combat profile '{}' is assigned to multiple disciplines",
-            combat_profile_id
+        assert_eq!(
+            combat_profile_id, expected_profile_id,
+            "combat discipline '{}' must use combat_profile_id '{}'",
+            discipline_id, expected_profile_id
         );
-        assert!(
-            known_resources.contains(resource_kind.as_str()),
-            "combat discipline '{}' references unknown resource '{}'",
-            discipline_id,
-            discipline.primary_resource_kind
-        );
-        assert!(
-            resource_kind == RESOURCE_KIND_STAMINA,
-            "combat discipline '{}' must use the shared standard resource policy '{}', found '{}'",
-            discipline_id,
-            RESOURCE_KIND_STAMINA,
-            discipline.primary_resource_kind
-        );
+        if combat_profile_id.is_empty() {
+            assert_eq!(
+                discipline_kind, DISCIPLINE_KIND_SPELL_SCHOOL,
+                "only spell-school disciplines may omit combat_profile_id"
+            );
+        } else {
+            assert!(
+                known_profiles.contains(combat_profile_id.as_str()),
+                "combat discipline '{}' references unknown combat profile '{}'",
+                discipline_id,
+                discipline.combat_profile_id
+            );
+            assert!(
+                profile_ids.insert(combat_profile_id.clone()),
+                "combat profile '{}' is assigned to multiple disciplines",
+                combat_profile_id
+            );
+        }
+        if discipline_kind == DISCIPLINE_KIND_WEAPON {
+            assert!(
+                known_resources.contains(resource_kind.as_str()),
+                "combat discipline '{}' references unknown resource '{}'",
+                discipline_id,
+                discipline.primary_resource_kind
+            );
+            assert_eq!(
+                resource_kind, RESOURCE_KIND_STAMINA,
+                "weapon discipline '{}' must use the shared standard resource policy '{}'",
+                discipline_id, RESOURCE_KIND_STAMINA
+            );
+        } else {
+            assert!(
+                resource_kind.is_empty(),
+                "spell-school discipline '{}' must not own a primary resource; costs belong to abilities",
+                discipline_id
+            );
+            assert!(
+                !discipline.inactive_resource_tick,
+                "spell-school discipline '{}' must not author inactive resource ticking",
+                discipline_id
+            );
+        }
     }
     assert_eq!(
         discipline_ids, expected_disciplines,
@@ -4462,6 +4536,16 @@ fn validate_auto_attack_catalog() {
         );
 
         let mode_id = normalize_identifier(attack.mode_id.as_str());
+        let discipline_id = normalize_identifier(attack.discipline_id.as_str());
+        let expected_discipline_id = discipline_id_for_combat_profile(
+            normalize_identifier(attack.combat_profile_id.as_str()).as_str(),
+        )
+        .expect("auto attack combat profile must have a discipline");
+        assert_eq!(
+            discipline_id, expected_discipline_id,
+            "auto attack '{}' must belong to discipline '{}' for combat profile '{}'",
+            attack.action_id, expected_discipline_id, attack.combat_profile_id
+        );
         if !mode_id.is_empty() {
             let mode_key = combat_mode_key(attack.combat_profile_id.as_str(), mode_id.as_str());
             assert!(
@@ -4514,18 +4598,55 @@ fn validate_ability_catalog() {
         .iter()
         .map(|profile| normalize_identifier(profile.combat_profile_id.as_str()))
         .collect();
+    let discipline_kinds: HashMap<_, _> = progression_catalog()
+        .combat_disciplines
+        .iter()
+        .map(|discipline| {
+            (
+                normalize_identifier(discipline.discipline_id.as_str()),
+                normalize_identifier(discipline.discipline_kind.as_str()),
+            )
+        })
+        .collect();
 
     for ability in &progression_catalog().abilities {
         let ability_id = normalize_identifier(ability.ability_id.as_str());
         let actor_scope =
             validated_ability_actor_scope(ability_id.as_str(), ability.actor_scope.as_str());
         let explicit_combat_profile_id = normalize_identifier(ability.combat_profile_id.as_str());
+        let discipline_id = normalize_identifier(ability.discipline_id.as_str());
         if !explicit_combat_profile_id.is_empty() {
             assert!(
                 known_profiles.contains(explicit_combat_profile_id.as_str()),
                 "ability '{ability_id}' references unknown combat_profile_id '{}'",
                 ability.combat_profile_id
             );
+        }
+
+        if actor_scope != "NPC" {
+            let discipline_kind =
+                discipline_kinds
+                    .get(discipline_id.as_str())
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "player ability '{ability_id}' references unknown discipline_id '{}'",
+                            ability.discipline_id
+                        )
+                    });
+            if let Some(expected_discipline_id) =
+                discipline_id_for_combat_profile(explicit_combat_profile_id.as_str())
+            {
+                assert_eq!(
+                    discipline_id, expected_discipline_id,
+                    "player ability '{ability_id}' must belong to discipline '{}' for combat profile '{}'",
+                    expected_discipline_id, explicit_combat_profile_id
+                );
+            } else {
+                assert_eq!(
+                    discipline_kind, DISCIPLINE_KIND_SPELL_SCHOOL,
+                    "profile-neutral player ability '{ability_id}' must belong to a spell-school discipline"
+                );
+            }
         }
 
         let ability_kind = ability_gameplay_kind(ability);
@@ -10181,6 +10302,99 @@ mod tests {
                         == "SPELL_ORBITING_BLADES"
                     && presentation.display_name == "Sparks"
             }));
+    }
+
+    #[test]
+    fn existing_profile_neutral_spells_use_consolidated_disciplines() {
+        let catalog = progression_catalog();
+        let expected_groups = [
+            (
+                "ARCANA",
+                &[
+                    "SPELL_INSTANT_BEAM",
+                    "SPELL_MAGIC_MISSILE",
+                    "SPELL_NOVA",
+                    "SPELL_NEGATE",
+                    "SPELL_COLLAPSE",
+                    "SPELL_DISPEL_MAGIC",
+                    "SPELL_TELEPORT",
+                    "SPELL_SILENCE",
+                    "SPELL_MANA_SHIELD",
+                    "SPELL_SHIMMER",
+                ][..],
+            ),
+            (
+                "BLIGHT",
+                &[
+                    "SPELL_BOOMERANG_ORB",
+                    "SPELL_WITHERING_ORB",
+                    "SPELL_NECROTIC_AURA",
+                ][..],
+            ),
+            (
+                "DIVINITY",
+                &[
+                    "SPELL_RESTORATION",
+                    "SPELL_PROTECTION",
+                    "SPELL_BLINDING_LIGHT",
+                    "SPELL_CELESTIAL_MANTLE",
+                ][..],
+            ),
+            (
+                "PRIMAL",
+                &["SPELL_GUST_OF_WIND", "SPELL_BUFFET", "SPELL_STONESPIRE"][..],
+            ),
+            (
+                "RUIN",
+                &[
+                    "SPELL_FIREBALL",
+                    "SPELL_FLAMING_ORB",
+                    "SPELL_BOLT",
+                    "SPELL_ICICLE",
+                    "SPELL_ORBITING_BLADES",
+                    "SPELL_METEOR",
+                    "SPELL_LIGHTNING",
+                    "SPELL_ERUPTION",
+                    "SPELL_FROST_NEEDLE",
+                    "SPELL_ICE_SPIKES",
+                    "SPELL_ELECTROCUTE",
+                    "SPELL_FROZEN_SPLINTERS",
+                    "SPELL_FROST_NOVA",
+                    "SPELL_GLACIAL_SPIKE",
+                    "SPELL_FROZEN_GRASP",
+                    "SPELL_CAUTERIZE",
+                    "SPELL_FLASHFIRE",
+                ][..],
+            ),
+        ];
+
+        for (discipline_id, ability_ids) in expected_groups {
+            for ability_id in ability_ids {
+                let ability = catalog
+                    .abilities
+                    .iter()
+                    .find(|ability| ability.ability_id == *ability_id)
+                    .unwrap_or_else(|| panic!("expected profile-neutral spell {ability_id}"));
+                assert_eq!(ability.actor_scope, "PLAYER");
+                assert_eq!(ability_gameplay_kind(ability), "SPELL");
+                assert!(ability.combat_profile_id.is_empty());
+                assert_eq!(ability.discipline_id, discipline_id);
+            }
+        }
+
+        let stonespire = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_STONESPIRE")
+            .expect("Stonespire should remain authored");
+        assert_eq!(stonespire.discipline_id, "PRIMAL");
+        assert_eq!(ability_delivery_kind(stonespire), "WORLD_OBSTACLE");
+        assert!(stonespire
+            .gameplay
+            .delivery
+            .as_ref()
+            .and_then(|delivery| delivery.get("damage_type"))
+            .is_none());
     }
 
     #[test]

@@ -50,6 +50,7 @@ namespace SpacetimeDB.Types
     public sealed class CombatDisciplineCatalogCols
     {
         public global::SpacetimeDB.Col<CombatDisciplineCatalog, string> DisciplineId { get; }
+        public global::SpacetimeDB.Col<CombatDisciplineCatalog, string> DisciplineKind { get; }
         public global::SpacetimeDB.Col<CombatDisciplineCatalog, string> CombatProfileId { get; }
         public global::SpacetimeDB.Col<CombatDisciplineCatalog, string> DisplayName { get; }
         public global::SpacetimeDB.Col<CombatDisciplineCatalog, string> PrimaryResourceKind { get; }
@@ -60,6 +61,7 @@ namespace SpacetimeDB.Types
         public CombatDisciplineCatalogCols(string tableName)
         {
             DisciplineId = new global::SpacetimeDB.Col<CombatDisciplineCatalog, string>(tableName, "discipline_id");
+            DisciplineKind = new global::SpacetimeDB.Col<CombatDisciplineCatalog, string>(tableName, "discipline_kind");
             CombatProfileId = new global::SpacetimeDB.Col<CombatDisciplineCatalog, string>(tableName, "combat_profile_id");
             DisplayName = new global::SpacetimeDB.Col<CombatDisciplineCatalog, string>(tableName, "display_name");
             PrimaryResourceKind = new global::SpacetimeDB.Col<CombatDisciplineCatalog, string>(tableName, "primary_resource_kind");

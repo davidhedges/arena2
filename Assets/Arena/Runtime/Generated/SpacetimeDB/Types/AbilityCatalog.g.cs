@@ -17,6 +17,8 @@ namespace SpacetimeDB.Types
         public string AbilityId;
         [DataMember(Name = "actor_scope")]
         public string ActorScope;
+        [DataMember(Name = "discipline_id")]
+        public string DisciplineId;
         [DataMember(Name = "combat_profile_id")]
         public string CombatProfileId;
         [DataMember(Name = "ability_kind")]
@@ -37,6 +39,7 @@ namespace SpacetimeDB.Types
         public AbilityCatalog(
             string AbilityId,
             string ActorScope,
+            string DisciplineId,
             string CombatProfileId,
             string AbilityKind,
             string ActionId,
@@ -49,6 +52,7 @@ namespace SpacetimeDB.Types
         {
             this.AbilityId = AbilityId;
             this.ActorScope = ActorScope;
+            this.DisciplineId = DisciplineId;
             this.CombatProfileId = CombatProfileId;
             this.AbilityKind = AbilityKind;
             this.ActionId = ActionId;
@@ -63,6 +67,7 @@ namespace SpacetimeDB.Types
         {
             this.AbilityId = "";
             this.ActorScope = "";
+            this.DisciplineId = "";
             this.CombatProfileId = "";
             this.AbilityKind = "";
             this.ActionId = "";

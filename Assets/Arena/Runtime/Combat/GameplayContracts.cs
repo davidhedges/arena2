@@ -527,7 +527,17 @@ namespace Arena.Combat
         public const string War = "WAR";
         public const string Zeal = "ZEAL";
         public const string Precision = "PRECISION";
+        public const string Blight = "BLIGHT";
+        public const string Ruin = "RUIN";
+        public const string Divinity = "DIVINITY";
         public const string Arcana = "ARCANA";
+        public const string Primal = "PRIMAL";
+    }
+
+    public static class CombatDisciplineKinds
+    {
+        public const string Weapon = "WEAPON";
+        public const string SpellSchool = "SPELL_SCHOOL";
     }
 
     public static class AbilityKinds

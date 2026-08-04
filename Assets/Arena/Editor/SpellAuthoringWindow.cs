@@ -28,13 +28,15 @@ namespace Arena.Editor
         private readonly List<AbilityDefinition> _spellAbilities = new();
         private readonly List<CombatVfxCueDefinition> _selectedAbilityCues = new();
         private readonly List<string> _knownTemplateIds = new();
+        private readonly List<string> _knownDisciplineIds = new();
 
         private ProgressionCatalogDocument? _catalog;
         private Vector2 _scroll;
         private int _selectedSpellIndex;
-        private string _draftAbilityId = "WARRIOR_NEW_SPELL";
+        private string _draftAbilityId = "SPELL_NEW_SPELL";
         private string _draftSpellId = "NEW_SPELL";
-        private string _draftCombatProfileId = "TWO_HANDED_SWORD";
+        private string _draftDisciplineId = "ARCANA";
+        private string _draftCombatProfileId = string.Empty;
         private string _draftDisplayName = "New Spell";
         private string _draftCastVfxId = "VFX_CAST_HAND_01";
         private string _draftProjectileVfxId = "VFX_PROJECTILE_01";
@@ -120,6 +122,7 @@ namespace Arena.Editor
             AbilityDefinition selected = _spellAbilities[_selectedSpellIndex];
             string abilityId = Normalize(selected.ability_id);
             string spellId = Normalize(selected.action_id);
+            string disciplineId = Normalize(selected.discipline_id);
             string combatProfileId = Normalize(selected.combat_profile_id);
             string deliveryKind = Normalize(selected.gameplay.delivery.kind);
             _selectedAbilityCues.Clear();
@@ -136,6 +139,7 @@ namespace Arena.Editor
             {
                 EditorGUILayout.TextField("Ability Id", abilityId);
                 EditorGUILayout.TextField("Spell Id", spellId);
+                EditorGUILayout.TextField("Discipline", disciplineId);
                 EditorGUILayout.TextField("Combat Profile", combatProfileId);
                 EditorGUILayout.TextField("Display Name", selected.display_name);
                 EditorGUILayout.IntField("Cast Time Ms", selected.gameplay.cast_time_ms);
@@ -404,6 +408,21 @@ namespace Arena.Editor
 
             _draftAbilityId = NormalizeEditorText(EditorGUILayout.TextField("Ability Id", _draftAbilityId));
             _draftSpellId = NormalizeEditorText(EditorGUILayout.TextField("Spell Id", _draftSpellId));
+            if (_knownDisciplineIds.Count > 0)
+            {
+                int disciplineIndex = Mathf.Max(0, _knownDisciplineIds.FindIndex(id =>
+                    string.Equals(id, Normalize(_draftDisciplineId), StringComparison.Ordinal)));
+                disciplineIndex = EditorGUILayout.Popup(
+                    "Discipline",
+                    disciplineIndex,
+                    _knownDisciplineIds.ToArray());
+                _draftDisciplineId = _knownDisciplineIds[disciplineIndex];
+            }
+            else
+            {
+                _draftDisciplineId = NormalizeEditorText(
+                    EditorGUILayout.TextField("Discipline", _draftDisciplineId));
+            }
             _draftCombatProfileId = NormalizeEditorText(EditorGUILayout.TextField("Combat Profile Id", _draftCombatProfileId));
             _draftDisplayName = EditorGUILayout.TextField("Display Name", _draftDisplayName);
             _draftCastVfxId = DrawVfxTemplateField("Cast VFX Id", _draftCastVfxId);
@@ -506,6 +525,7 @@ namespace Arena.Editor
             AbilityDefinition selected = _spellAbilities[Mathf.Clamp(_selectedSpellIndex, 0, _spellAbilities.Count - 1)];
             _draftAbilityId = Normalize(selected.ability_id);
             _draftSpellId = Normalize(selected.action_id);
+            _draftDisciplineId = Normalize(selected.discipline_id);
             _draftCombatProfileId = Normalize(selected.combat_profile_id);
             _draftDisplayName = selected.display_name;
         }
@@ -516,10 +536,12 @@ namespace Arena.Editor
             builder.AppendLine("\"abilities\": [");
             builder.AppendLine("  {");
             builder.AppendLine($"    \"ability_id\": \"{Normalize(_draftAbilityId)}\",");
+            builder.AppendLine("    \"actor_scope\": \"PLAYER\",");
+            builder.AppendLine($"    \"discipline_id\": \"{Normalize(_draftDisciplineId)}\",");
             builder.AppendLine($"    \"combat_profile_id\": \"{Normalize(_draftCombatProfileId)}\",");
             builder.AppendLine($"    \"action_id\": \"{Normalize(_draftSpellId)}\",");
             builder.AppendLine($"    \"display_name\": \"{EscapeJson(_draftDisplayName)}\",");
-            builder.AppendLine("    \"resource_kind\": \"RAGE\",");
+            builder.AppendLine("    \"resource_kind\": \"MANA\",");
             builder.AppendLine("    \"sort_order\": 1000,");
             builder.AppendLine("    \"gameplay\": {");
             builder.AppendLine("      \"kind\": \"SPELL\",");
@@ -610,6 +632,7 @@ namespace Arena.Editor
             _spellAbilities.Clear();
             _selectedAbilityCues.Clear();
             _knownTemplateIds.Clear();
+            _knownDisciplineIds.Clear();
 
             string absolutePath = SpellPresentationEditorData.AbsoluteProgressionCatalogPath;
             if (!File.Exists(absolutePath))
@@ -635,6 +658,12 @@ namespace Arena.Editor
                 _loadErrors.Add($"Failed to parse '{SpellPresentationEditorData.ProgressionCatalogPath}'.");
                 return;
             }
+
+            _knownDisciplineIds.AddRange(_catalog.combat_disciplines
+                .OrderBy(discipline => discipline.sort_order)
+                .ThenBy(discipline => Normalize(discipline.discipline_id), StringComparer.Ordinal)
+                .Select(discipline => Normalize(discipline.discipline_id))
+                .Where(id => !string.IsNullOrWhiteSpace(id)));
 
             foreach (CombatAnimationSet animationSet in SpellPresentationEditorData.LoadCombatAnimationSets())
             {
@@ -688,14 +717,23 @@ namespace Arena.Editor
         [Serializable]
         private sealed class ProgressionCatalogDocument
         {
+            public List<CombatDisciplineDefinition> combat_disciplines = new();
             public List<AbilityDefinition> abilities = new();
             public List<CombatVfxCueDefinition> combat_vfx_cues = new();
+        }
+
+        [Serializable]
+        private sealed class CombatDisciplineDefinition
+        {
+            public string discipline_id = string.Empty;
+            public int sort_order = 0;
         }
 
         [Serializable]
         private sealed class AbilityDefinition
         {
             public string ability_id = string.Empty;
+            public string discipline_id = string.Empty;
             public string combat_profile_id = string.Empty;
             public string action_id = string.Empty;
             public string display_name = string.Empty;

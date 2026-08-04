@@ -15,6 +15,8 @@ namespace SpacetimeDB.Types
     {
         [DataMember(Name = "key")]
         public string Key;
+        [DataMember(Name = "discipline_id")]
+        public string DisciplineId;
         [DataMember(Name = "combat_profile_id")]
         public string CombatProfileId;
         [DataMember(Name = "mode_id")]
@@ -48,6 +50,7 @@ namespace SpacetimeDB.Types
 
         public AutoAttackCatalog(
             string Key,
+            string DisciplineId,
             string CombatProfileId,
             string ModeId,
             string ActionId,
@@ -66,6 +69,7 @@ namespace SpacetimeDB.Types
         )
         {
             this.Key = Key;
+            this.DisciplineId = DisciplineId;
             this.CombatProfileId = CombatProfileId;
             this.ModeId = ModeId;
             this.ActionId = ActionId;
@@ -86,6 +90,7 @@ namespace SpacetimeDB.Types
         public AutoAttackCatalog()
         {
             this.Key = "";
+            this.DisciplineId = "";
             this.CombatProfileId = "";
             this.ModeId = "";
             this.ActionId = "";

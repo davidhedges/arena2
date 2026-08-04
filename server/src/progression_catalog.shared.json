@@ -30,6 +30,7 @@
     {
       "discipline_id": "SUBTLETY",
       "display_name": "Subtlety",
+      "discipline_kind": "WEAPON",
       "combat_profile_id": "DAGGERS",
       "primary_resource_kind": "STAMINA",
       "inactive_resource_tick": true,
@@ -39,6 +40,7 @@
     {
       "discipline_id": "WAR",
       "display_name": "War",
+      "discipline_kind": "WEAPON",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "primary_resource_kind": "STAMINA",
       "inactive_resource_tick": true,
@@ -48,6 +50,7 @@
     {
       "discipline_id": "ZEAL",
       "display_name": "Zeal",
+      "discipline_kind": "WEAPON",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "primary_resource_kind": "STAMINA",
       "inactive_resource_tick": true,
@@ -57,6 +60,7 @@
     {
       "discipline_id": "PRECISION",
       "display_name": "Precision",
+      "discipline_kind": "WEAPON",
       "combat_profile_id": "ARCHER_BOW",
       "primary_resource_kind": "STAMINA",
       "inactive_resource_tick": true,
@@ -64,13 +68,54 @@
       "sort_order": 40
     },
     {
+      "discipline_id": "BLIGHT",
+      "display_name": "Blight",
+      "discipline_kind": "SPELL_SCHOOL",
+      "combat_profile_id": "",
+      "primary_resource_kind": "",
+      "inactive_resource_tick": false,
+      "inactive_decay_delay_ms": 0,
+      "sort_order": 100
+    },
+    {
+      "discipline_id": "RUIN",
+      "display_name": "Ruin",
+      "discipline_kind": "SPELL_SCHOOL",
+      "combat_profile_id": "",
+      "primary_resource_kind": "",
+      "inactive_resource_tick": false,
+      "inactive_decay_delay_ms": 0,
+      "sort_order": 110
+    },
+    {
+      "discipline_id": "DIVINITY",
+      "display_name": "Divinity",
+      "discipline_kind": "SPELL_SCHOOL",
+      "combat_profile_id": "",
+      "primary_resource_kind": "",
+      "inactive_resource_tick": false,
+      "inactive_decay_delay_ms": 0,
+      "sort_order": 120
+    },
+    {
       "discipline_id": "ARCANA",
       "display_name": "Arcana",
+      "discipline_kind": "SPELL_SCHOOL",
       "combat_profile_id": "STAFF",
-      "primary_resource_kind": "STAMINA",
-      "inactive_resource_tick": true,
+      "primary_resource_kind": "",
+      "inactive_resource_tick": false,
       "inactive_decay_delay_ms": 0,
-      "sort_order": 50
+      "sort_order": 130
+    },
+    {
+      "discipline_id": "PRIMAL",
+      "display_name": "Primal",
+      "discipline_kind": "SPELL_SCHOOL",
+      "combat_profile_id": "",
+      "primary_resource_kind": "",
+      "inactive_resource_tick": false,
+      "inactive_decay_delay_ms": 0,
+      "sort_order": 140
     }
   ],
   "combat_modes": [
@@ -362,6 +407,7 @@
     {
       "ability_id": "WARRIOR_HEW",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",
       "display_name": "Hew",
@@ -387,6 +433,7 @@
     {
       "ability_id": "WARRIOR_HEW_2",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "gameplay": {
         "kind": "MELEE",
@@ -411,6 +458,7 @@
     {
       "ability_id": "WARRIOR_MAIM",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_MAIM",
       "display_name": "Maim",
@@ -445,6 +493,7 @@
     {
       "ability_id": "WARRIOR_GROUND_TO_AIR_PLACEHOLDER",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_1_3_GROUND_TO_AIR",
       "display_name": "Ground to Air",
@@ -469,6 +518,7 @@
     {
       "ability_id": "WARRIOR_AIR_TO_GROUND_PLACEHOLDER",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "gameplay": {
         "kind": "MELEE",
@@ -493,6 +543,7 @@
     {
       "ability_id": "WARRIOR_CRUSHING_BLOW",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "CRUSHING_BLOW",
       "display_name": "Crushing Blow",
@@ -517,6 +568,7 @@
     {
       "ability_id": "WARRIOR_CATACLYSM",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "CATACLYSM",
       "display_name": "Cataclysm",
@@ -557,6 +609,7 @@
     {
       "ability_id": "WARRIOR_BUZZSAW",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "BUZZSAW",
       "display_name": "Buzzsaw",
@@ -581,6 +634,7 @@
     {
       "ability_id": "WARRIOR_SKYFALL_4",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "gameplay": {
         "kind": "MELEE",
@@ -605,6 +659,7 @@
     {
       "ability_id": "WARRIOR_WHIRLWIND",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WHIRLWIND",
       "display_name": "Whirlwind",
@@ -635,6 +690,7 @@
     {
       "ability_id": "WARRIOR_SUNDER",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_4_4_LUNGING_SLASH",
       "display_name": "Sunder",
@@ -659,6 +715,7 @@
     {
       "ability_id": "WARRIOR_CLEAVE",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_2_1_SPIN",
       "display_name": "Cleave",
@@ -683,6 +740,7 @@
     {
       "ability_id": "WARRIOR_BUTCHER",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_3_1_LOW_TO_HIGH",
       "display_name": "Butcher",
@@ -711,6 +769,7 @@
     {
       "ability_id": "WARRIOR_CARVE",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_CARVE",
       "display_name": "Carve",
@@ -753,6 +812,7 @@
     {
       "ability_id": "WARRIOR_DREAD_STRIKE",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_DREAD_STRIKE",
       "display_name": "Heavy Swing",
@@ -769,6 +829,7 @@
     {
       "ability_id": "WARRIOR_EARTHSHATTER",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "COMBO_ATTACK_3_4_AIR_TO_GROUND",
       "display_name": "Earthshatter",
@@ -810,6 +871,7 @@
     {
       "ability_id": "SPELL_FIREBALL",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "FIREBALL",
       "display_name": "Fireball",
@@ -857,6 +919,7 @@
     {
       "ability_id": "SPELL_FLAMING_ORB",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "FLAMING_ORB",
       "display_name": "Flaming Orb",
@@ -898,6 +961,7 @@
     {
       "ability_id": "SPELL_BOLT",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "BOLT",
       "display_name": "Bolt",
@@ -939,6 +1003,7 @@
     {
       "ability_id": "WARRIOR_GROUND_SLASH",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "GROUND_SLASH",
       "display_name": "Ground Slash",
@@ -977,6 +1042,7 @@
     {
       "ability_id": "SPELL_ICICLE",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "ICICLE",
       "display_name": "Icicle",
@@ -1015,6 +1081,7 @@
     {
       "ability_id": "SPELL_ORBITING_BLADES",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "ORBITING_BLADES",
       "display_name": "Sparks",
@@ -1059,6 +1126,7 @@
     {
       "ability_id": "SPELL_METEOR",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "METEOR",
       "display_name": "Meteor",
@@ -1104,6 +1172,7 @@
     {
       "ability_id": "SPELL_LIGHTNING",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "LIGHTNING",
       "display_name": "Lightning",
@@ -1137,6 +1206,7 @@
     {
       "ability_id": "SPELL_ERUPTION",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "ERUPTION",
       "display_name": "Eruption",
@@ -1171,6 +1241,7 @@
     {
       "ability_id": "SPELL_FROST_NEEDLE",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "FROST_NEEDLE",
       "display_name": "Frost Needle",
@@ -1205,6 +1276,7 @@
     {
       "ability_id": "SPELL_ICE_SPIKES",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "ICE_SPIKES",
       "display_name": "Ice Spikes",
@@ -1246,6 +1318,7 @@
     {
       "ability_id": "SPELL_BOOMERANG_ORB",
       "actor_scope": "PLAYER",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "BOOMERANG_ORB",
       "display_name": "Boomerang Orb",
@@ -1294,6 +1367,7 @@
     {
       "ability_id": "SPELL_WITHERING_ORB",
       "actor_scope": "PLAYER",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "WITHERING_ORB",
       "display_name": "Withering Orb",
@@ -1342,6 +1416,7 @@
     {
       "ability_id": "SPELL_INSTANT_BEAM",
       "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
       "combat_profile_id": "",
       "action_id": "INSTANT_BEAM",
       "display_name": "Beam",
@@ -1376,6 +1451,7 @@
     {
       "ability_id": "SPELL_ELECTROCUTE",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "ELECTROCUTE",
       "display_name": "Electrocute",
@@ -1408,6 +1484,7 @@
     {
       "ability_id": "SPELL_FROZEN_SPLINTERS",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "FROZEN_SPLINTERS",
       "display_name": "Frozen Splinters",
@@ -1447,6 +1524,7 @@
     {
       "ability_id": "SPELL_MAGIC_MISSILE",
       "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
       "combat_profile_id": "",
       "action_id": "MAGIC_MISSILE",
       "display_name": "Magic Missile",
@@ -1494,6 +1572,7 @@
     {
       "ability_id": "SPELL_RESTORATION",
       "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
       "combat_profile_id": "",
       "action_id": "RESTORATION",
       "display_name": "Restoration",
@@ -1529,6 +1608,7 @@
     {
       "ability_id": "SPELL_PROTECTION",
       "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
       "combat_profile_id": "",
       "action_id": "PROTECTION",
       "display_name": "Protection",
@@ -1568,6 +1648,7 @@
     {
       "ability_id": "SPELL_FROST_NOVA",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "FROST_NOVA",
       "display_name": "Frost Nova",
@@ -1605,6 +1686,7 @@
     {
       "ability_id": "SPELL_NOVA",
       "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
       "combat_profile_id": "",
       "action_id": "NOVA",
       "display_name": "Nova",
@@ -1636,6 +1718,7 @@
     {
       "ability_id": "SPELL_NEGATE",
       "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
       "combat_profile_id": "",
       "action_id": "NEGATE",
       "display_name": "Negate",
@@ -1668,6 +1751,7 @@
     {
       "ability_id": "SPELL_BLINDING_LIGHT",
       "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
       "combat_profile_id": "",
       "action_id": "BLINDING_LIGHT",
       "display_name": "Blinding Light",
@@ -1703,6 +1787,7 @@
     {
       "ability_id": "SPELL_GLACIAL_SPIKE",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "GLACIAL_SPIKE",
       "display_name": "Glacial Spike",
@@ -1740,6 +1825,7 @@
     {
       "ability_id": "SPELL_FROZEN_GRASP",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "FROZEN_GRASP",
       "display_name": "Frozen Grasp",
@@ -1777,6 +1863,7 @@
     {
       "ability_id": "SPELL_NECROTIC_AURA",
       "actor_scope": "PLAYER",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "NECROTIC_AURA",
       "display_name": "Necrotic Aura",
@@ -1811,6 +1898,7 @@
     {
       "ability_id": "SPELL_GUST_OF_WIND",
       "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
       "combat_profile_id": "",
       "action_id": "GUST_OF_WIND",
       "display_name": "Gust of Wind",
@@ -1853,6 +1941,7 @@
     {
       "ability_id": "SPELL_BUFFET",
       "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
       "combat_profile_id": "",
       "action_id": "BUFFET",
       "display_name": "Buffet",
@@ -1890,6 +1979,7 @@
     {
       "ability_id": "SPELL_CAUTERIZE",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "CAUTERIZE",
       "display_name": "Cauterize",
@@ -1924,6 +2014,7 @@
     {
       "ability_id": "SPELL_CELESTIAL_MANTLE",
       "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
       "combat_profile_id": "",
       "action_id": "CELESTIAL_MANTLE",
       "display_name": "Celestial Mantle",
@@ -1963,6 +2054,7 @@
     {
       "ability_id": "SPELL_FLASHFIRE",
       "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
       "combat_profile_id": "",
       "action_id": "FLASHFIRE",
       "display_name": "Flashfire",
@@ -1997,6 +2089,7 @@
     {
       "ability_id": "SPELL_COLLAPSE",
       "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
       "combat_profile_id": "",
       "action_id": "COLLAPSE",
       "display_name": "Collapse",
@@ -2033,6 +2126,7 @@
     {
       "ability_id": "SPELL_DISPEL_MAGIC",
       "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
       "combat_profile_id": "",
       "action_id": "DISPEL_MAGIC",
       "display_name": "Dispel Magic",
@@ -2067,6 +2161,7 @@
     {
       "ability_id": "SPELL_TELEPORT",
       "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
       "combat_profile_id": "",
       "action_id": "TELEPORT",
       "display_name": "Teleport",
@@ -2096,6 +2191,7 @@
     {
       "ability_id": "SPELL_SILENCE",
       "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
       "combat_profile_id": "",
       "action_id": "SILENCE",
       "display_name": "Silence",
@@ -2138,6 +2234,7 @@
     {
       "ability_id": "SPELL_MANA_SHIELD",
       "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
       "combat_profile_id": "",
       "action_id": "MANA_SHIELD",
       "display_name": "Mana Shield",
@@ -2181,6 +2278,7 @@
     {
       "ability_id": "SPELL_SHIMMER",
       "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
       "combat_profile_id": "",
       "action_id": "SHIMMER",
       "display_name": "Shimmer",
@@ -2222,6 +2320,7 @@
     {
       "ability_id": "SPELL_STONESPIRE",
       "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
       "combat_profile_id": "",
       "action_id": "STONESPIRE",
       "display_name": "Stonespire",
@@ -2271,6 +2370,7 @@
     {
       "ability_id": "WARRIOR_MOMENTUM",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "MOMENTUM",
       "display_name": "Momentum",
@@ -2306,6 +2406,7 @@
     {
       "ability_id": "WARRIOR_FORTIFY",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "FORTIFY",
       "display_name": "Fortify",
@@ -2343,6 +2444,7 @@
     {
       "ability_id": "WARRIOR_IRON_WILL",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "IRON_WILL",
       "display_name": "Iron Will",
@@ -2377,6 +2479,7 @@
     {
       "ability_id": "WARRIOR_DEFIANCE",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "DEFIANCE",
       "display_name": "Defiance",
@@ -2412,6 +2515,7 @@
     {
       "ability_id": "WARRIOR_BATTLE_CRY",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "BATTLE_CRY",
       "display_name": "Battle Cry",
@@ -2450,6 +2554,7 @@
     {
       "ability_id": "WARRIOR_GIANT_SWING",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "GIANT_SWING",
       "display_name": "Giant Swing",
@@ -2485,6 +2590,7 @@
     {
       "ability_id": "WARRIOR_FRENZY",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "FRENZY",
       "display_name": "Frenzy",
@@ -2520,6 +2626,7 @@
     {
       "ability_id": "WARRIOR_BLOODLUST",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "BLOODLUST",
       "display_name": "Bloodlust",
@@ -2535,6 +2642,7 @@
     {
       "ability_id": "WARRIOR_ENRAGE",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "ENRAGE",
       "display_name": "Enrage",
@@ -2571,6 +2679,7 @@
     {
       "ability_id": "WARRIOR_SECOND_WIND",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "SECOND_WIND",
       "display_name": "Second Wind",
@@ -2598,6 +2707,7 @@
     {
       "ability_id": "WARRIOR_BERSERKING",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "BERSERKING",
       "display_name": "Berserking",
@@ -2633,6 +2743,7 @@
     {
       "ability_id": "WARRIOR_BATTLE_TRANCE",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "BATTLE_TRANCE",
       "display_name": "Battle Trance",
@@ -2668,6 +2779,7 @@
     {
       "ability_id": "WARRIOR_FEAST",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "FEAST",
       "display_name": "Feast",
@@ -2702,6 +2814,7 @@
     {
       "ability_id": "WARRIOR_SHOCKWAVE",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "SHOCKWAVE",
       "display_name": "Shockwave",
@@ -2737,6 +2850,7 @@
     {
       "ability_id": "WARRIOR_INTIMIDATE",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "INTIMIDATE",
       "display_name": "Intimidate",
@@ -2773,6 +2887,7 @@
     {
       "ability_id": "WARRIOR_CHARGE",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_CHARGE",
       "display_name": "Charge",
@@ -2826,6 +2941,7 @@
     {
       "ability_id": "WARRIOR_IMPALE",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_IMPALE",
       "display_name": "Impale",
@@ -2878,6 +2994,7 @@
     {
       "ability_id": "WARRIOR_DISENGAGE_STRIKE",
       "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "WARRIOR_DISENGAGE_STRIKE",
       "display_name": "Disengage Strike",
@@ -2918,6 +3035,7 @@
     {
       "ability_id": "PALADIN_SHIELD_PUMMEL",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_LIGHT_COMBO_3",
       "display_name": "Shield Bash",
@@ -2952,6 +3070,7 @@
     {
       "ability_id": "PALADIN_VINDICATOR_SLASH",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_UTILITY_2",
       "display_name": "Vindicator Slash",
@@ -2976,6 +3095,7 @@
     {
       "ability_id": "PALADIN_GUARDIAN_RUSH",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_UTILITY_3",
       "display_name": "Guardian Rush",
@@ -3000,6 +3120,7 @@
     {
       "ability_id": "PALADIN_RETRIBUTION",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_UTILITY_4",
       "display_name": "Retribution",
@@ -3024,6 +3145,7 @@
     {
       "ability_id": "PALADIN_REBUKE",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_FINISHER_1",
       "display_name": "Rebuke",
@@ -3064,6 +3186,7 @@
     {
       "ability_id": "PALADIN_HALLOWED_THRUST",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_FINISHER_1",
       "display_name": "Hallowed Thrust",
@@ -3088,6 +3211,7 @@
     {
       "ability_id": "PALADIN_SACRED_THRUST",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SWORD_AND_SHIELD_ALT_LIGHT_3",
       "display_name": "Sacred Thrust",
@@ -3119,6 +3243,7 @@
     {
       "ability_id": "PALADIN_SERRATED_BLADES",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SERRATED_BLADES",
       "display_name": "Serrated Blades",
@@ -3155,6 +3280,7 @@
     {
       "ability_id": "PALADIN_CHARGE",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "PALADIN_CHARGE",
       "display_name": "Charge",
@@ -3201,6 +3327,7 @@
     {
       "ability_id": "PALADIN_AVENGE",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "PALADIN_AVENGE",
       "display_name": "Avenge",
@@ -3253,6 +3380,7 @@
     {
       "ability_id": "PALADIN_AIR_TO_GROUND_1",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "AIR_TO_GROUND_1",
       "display_name": "Lunging Strike",
@@ -3289,6 +3417,7 @@
     {
       "ability_id": "PALADIN_AIR_TO_GROUND_3",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "AIR_TO_GROUND_3",
       "display_name": "Shield Slam",
@@ -3335,6 +3464,7 @@
     {
       "ability_id": "PALADIN_CONSECRATE",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "CONSECRATE",
       "display_name": "Consecrate",
@@ -3376,6 +3506,7 @@
     {
       "ability_id": "PALADIN_CLEANSING_TOUCH",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "CLEANSING_TOUCH",
       "display_name": "Cleansing Touch",
@@ -3409,6 +3540,7 @@
     {
       "ability_id": "PALADIN_ABSOLUTION",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "ABSOLUTION",
       "display_name": "Absolution",
@@ -3439,6 +3571,7 @@
     {
       "ability_id": "PALADIN_FERVOR",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "FERVOR",
       "display_name": "Fervor",
@@ -3476,6 +3609,7 @@
     {
       "ability_id": "PALADIN_MANA_FONT",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "MANA_FONT",
       "display_name": "Mana Font",
@@ -3513,6 +3647,7 @@
     {
       "ability_id": "PALADIN_STAMINA_FONT",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "STAMINA_FONT",
       "display_name": "Stamina Font",
@@ -3550,6 +3685,7 @@
     {
       "ability_id": "PALADIN_THORNS_AURA",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "THORNS_AURA",
       "display_name": "Thorns Aura",
@@ -3587,6 +3723,7 @@
     {
       "ability_id": "PALADIN_WARDING_AURA",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "WARDING_AURA",
       "display_name": "Warding Aura",
@@ -3624,6 +3761,7 @@
     {
       "ability_id": "PALADIN_AURA_OF_VENGEANCE",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "AURA_OF_VENGEANCE",
       "display_name": "Aura of Vengeance",
@@ -3660,6 +3798,7 @@
     {
       "ability_id": "PALADIN_BLESSED_SHIELD",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "BLESSED_SHIELD",
       "display_name": "Blessed Shield",
@@ -3704,6 +3843,7 @@
     {
       "ability_id": "PALADIN_BLADE_BARRIER",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "BLADE_BARRIER",
       "display_name": "Blade Barrier",
@@ -3741,6 +3881,7 @@
     {
       "ability_id": "PALADIN_RADIANT_BURST",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "RADIANT_BURST",
       "display_name": "Radiant Burst",
@@ -3778,6 +3919,7 @@
     {
       "ability_id": "PALADIN_SACRED_FLAME",
       "actor_scope": "PLAYER",
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "SACRED_FLAME",
       "display_name": "Sacred Flame",
@@ -3820,6 +3962,7 @@
     {
       "ability_id": "ARCHER_POWER_SHOT",
       "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
       "combat_profile_id": "ARCHER_BOW",
       "action_id": "ARCHER_POWER_SHOT",
       "display_name": "Power Shot",
@@ -3844,6 +3987,7 @@
     {
       "ability_id": "ARCHER_RAIN_SHOT",
       "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
       "combat_profile_id": "ARCHER_BOW",
       "action_id": "ARCHER_RAIN_SHOT",
       "display_name": "Rain Shot",
@@ -3868,6 +4012,7 @@
     {
       "ability_id": "ARCHER_EVASIVE_SHOT",
       "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
       "combat_profile_id": "ARCHER_BOW",
       "action_id": "ARCHER_EVASIVE_SHOT",
       "display_name": "Evasive Shot",
@@ -3892,6 +4037,7 @@
     {
       "ability_id": "ARCHER_AIR_SHOT",
       "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
       "combat_profile_id": "ARCHER_BOW",
       "action_id": "ARCHER_AIR_SHOT",
       "display_name": "Air Shot",
@@ -3916,6 +4062,7 @@
     {
       "ability_id": "ARCHER_DRAW_MODE_TOGGLE",
       "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
       "combat_profile_id": "ARCHER_BOW",
       "action_id": "TOGGLE_DRAW_MODE",
       "display_name": "Draw Mode",
@@ -3932,6 +4079,7 @@
     {
       "ability_id": "DAGGER_QUICK_CUT",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_QUICK_CUT",
       "display_name": "Quick Cut",
@@ -3957,6 +4105,7 @@
     {
       "ability_id": "DAGGER_SLICE",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_SLICE",
       "display_name": "Slice",
@@ -3981,6 +4130,7 @@
     {
       "ability_id": "DAGGER_RIPOSTE",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_RIPOSTE",
       "display_name": "Riposte",
@@ -4005,6 +4155,7 @@
     {
       "ability_id": "DAGGER_DASHING_CUT",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_DASHING_CUT",
       "display_name": "Dashing Cut",
@@ -4041,6 +4192,7 @@
     {
       "ability_id": "DAGGER_ROUNDHOUSE",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_ROUNDHOUSE",
       "display_name": "Roundhouse",
@@ -4065,6 +4217,7 @@
     {
       "ability_id": "DAGGER_GUT_RIPPER",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_COMBO_ATTACK_04_01",
       "display_name": "Gut Ripper",
@@ -4107,6 +4260,7 @@
     {
       "ability_id": "DAGGER_SPINNING_SLASH",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_COMBO_ATTACK_03_01",
       "display_name": "Spinning Slash",
@@ -4136,6 +4290,7 @@
     {
       "ability_id": "DAGGER_CROSSCUT",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_COMBO_ATTACK_02_04",
       "display_name": "Crosscut",
@@ -4160,6 +4315,7 @@
     {
       "ability_id": "DAGGER_BLADE_FLURRY",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_COMBO_ATTACK_02_02",
       "display_name": "Blade Flurry",
@@ -4184,6 +4340,7 @@
     {
       "ability_id": "DAGGER_DEADLY_FLOURISH",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_COMBO_ATTACK_02_01",
       "display_name": "Deadly Flourish",
@@ -4208,6 +4365,7 @@
     {
       "ability_id": "DAGGER_PURSUE",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_COMBO_ATTACK_01_04",
       "display_name": "Pursue",
@@ -4244,6 +4402,7 @@
     {
       "ability_id": "DAGGER_DOWNWARD_SLASH",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_DOWNWARD_SLASH",
       "display_name": "Downward Slash",
@@ -4268,6 +4427,7 @@
     {
       "ability_id": "DAGGER_COUP_DE_GRACE",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_COUP_DE_GRACE",
       "display_name": "Coup de Grâce",
@@ -4302,6 +4462,7 @@
     {
       "ability_id": "DAGGER_PRECISION_STRIKE",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_PRECISION_STRIKE",
       "display_name": "Precision Strike",
@@ -4326,6 +4487,7 @@
     {
       "ability_id": "DAGGER_EVISCERATE",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_EVISCERATE",
       "display_name": "Eviscerate",
@@ -4350,6 +4512,7 @@
     {
       "ability_id": "DAGGER_VITAL_STRIKE",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_VITAL_STRIKE",
       "display_name": "Vital Strike",
@@ -4374,6 +4537,7 @@
     {
       "ability_id": "DAGGER_DEATH_CROSS",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_DEATH_CROSS",
       "display_name": "Death Cross",
@@ -4398,6 +4562,7 @@
     {
       "ability_id": "DAGGER_DIVING_STRIKE",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_DIVING_STRIKE",
       "display_name": "Diving Strike",
@@ -4434,6 +4599,7 @@
     {
       "ability_id": "DAGGER_DISEMBOWEL",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_DISEMBOWEL",
       "display_name": "Disembowel",
@@ -4458,6 +4624,7 @@
     {
       "ability_id": "DAGGER_FLAY",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_FLAY",
       "display_name": "Flay",
@@ -4488,6 +4655,7 @@
     {
       "ability_id": "DAGGER_FLURRY",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "DAGGER_FLURRY",
       "display_name": "Flurry",
@@ -4518,6 +4686,7 @@
     {
       "ability_id": "DAGGER_STEALTH",
       "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "TOGGLE_STEALTH",
       "display_name": "Stealth",
@@ -4534,6 +4703,7 @@
     {
       "ability_id": "STAFF_STRIKE",
       "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
       "combat_profile_id": "STAFF",
       "action_id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",
       "display_name": "Staff Strike",
@@ -4559,6 +4729,7 @@
     {
       "ability_id": "STAFF_SWEEP",
       "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
       "combat_profile_id": "STAFF",
       "action_id": "COMBO_ATTACK_2_1_SPIN",
       "display_name": "Staff Sweep",
@@ -4588,6 +4759,7 @@
     {
       "ability_id": "STAFF_THRUST",
       "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
       "combat_profile_id": "STAFF",
       "action_id": "COMBO_ATTACK_4_4_LUNGING_SLASH",
       "display_name": "Staff Thrust",
@@ -5647,6 +5819,7 @@
   ],
   "auto_attacks": [
     {
+      "discipline_id": "ZEAL",
       "combat_profile_id": "SWORD_AND_SHIELD",
       "action_id": "AUTO_ATTACK_1",
       "base_damage": 25,
@@ -5660,6 +5833,7 @@
       "applies_stagger": false
     },
     {
+      "discipline_id": "WAR",
       "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "AUTO_ATTACK_1",
       "base_damage": 25,
@@ -5673,6 +5847,7 @@
       "applies_stagger": false
     },
     {
+      "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "AUTO_ATTACK_1",
       "base_damage": 18,
@@ -5686,6 +5861,7 @@
       "applies_stagger": false
     },
     {
+      "discipline_id": "ARCANA",
       "combat_profile_id": "STAFF",
       "action_id": "AUTO_ATTACK_1",
       "base_damage": 22,
@@ -5699,6 +5875,7 @@
       "applies_stagger": false
     },
     {
+      "discipline_id": "PRECISION",
       "combat_profile_id": "ARCHER_BOW",
       "mode_id": "SHORT_DRAW",
       "action_id": "AUTO_ATTACK_1",
@@ -5713,6 +5890,7 @@
       "applies_stagger": false
     },
     {
+      "discipline_id": "PRECISION",
       "combat_profile_id": "ARCHER_BOW",
       "mode_id": "FULL_DRAW",
       "action_id": "AUTO_ATTACK_1",
