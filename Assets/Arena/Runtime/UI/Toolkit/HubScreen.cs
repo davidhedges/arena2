@@ -35,6 +35,8 @@ namespace Arena.UI
         private Label? _playerName;
         private Label? _loadoutDisciplineName;
         private Label? _partyCount;
+        private Button? _navDisciplines;
+        private DisciplinesScreen? _disciplinesScreen;
         private Transform? _showcaseAnchor;
         private Camera? _hubCamera;
         private GameObject? _backgroundPlane;
@@ -63,6 +65,13 @@ namespace Arena.UI
         private void OnDestroy()
         {
             UnbindShowcaseDrag();
+            if (_navDisciplines != null)
+                _navDisciplines.clicked -= OpenDisciplines;
+            if (_disciplinesScreen != null)
+            {
+                _disciplinesScreen.Closed -= OnDisciplinesClosed;
+                Destroy(_disciplinesScreen.gameObject);
+            }
             if (_panelSettings != null)
                 Destroy(_panelSettings);
             if (_backgroundMaterial != null)
@@ -230,12 +239,33 @@ namespace Arena.UI
             _playerName = _root.Q<Label>("PlayerName");
             _loadoutDisciplineName = _root.Q<Label>("LoadoutDisciplineName");
             _partyCount = _root.Q<Label>("PartyCount");
+            _navDisciplines = _root.Q<Button>("NavDisciplines");
 
             BindShowcaseDrag();
+
+            _disciplinesScreen = DisciplinesScreen.Ensure(transform);
+            _disciplinesScreen.Closed += OnDisciplinesClosed;
+            if (_navDisciplines != null)
+                _navDisciplines.clicked += OpenDisciplines;
 
             Button? settingsButton = _root.Q<Button>("SettingsButton");
             if (settingsButton != null)
                 settingsButton.clicked += SystemMenuScreen.OpenFromEscape;
+        }
+
+        private void OpenDisciplines()
+        {
+            if (_root == null || _disciplinesScreen == null)
+                return;
+
+            _root.style.display = DisplayStyle.None;
+            _disciplinesScreen.Open();
+        }
+
+        private void OnDisciplinesClosed()
+        {
+            if (_root != null)
+                _root.style.display = DisplayStyle.Flex;
         }
 
         private void BindShowcaseDrag()

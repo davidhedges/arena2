@@ -1,0 +1,183 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <!-- One-way translation of docs/ui-prototypes/disciplines. Collection
+         contents are built from the replicated progression catalogs by
+         DisciplinesScreen.cs. This screen intentionally has no bright corner
+         ornaments on its cards or panels. -->
+    <Style src="Disciplines.uss" />
+
+    <ui:VisualElement name="DisciplinesScreen" class="disciplines-screen">
+        <ui:VisualElement class="screen-background" picking-mode="Ignore" />
+        <ui:VisualElement class="screen-veil" picking-mode="Ignore" />
+
+        <ui:VisualElement name="TopBar" class="topbar">
+            <ui:Button name="NavPlay" class="brand-block">
+                <ui:VisualElement class="brand-mark" picking-mode="Ignore">
+                    <ui:VisualElement class="brand-diamond" />
+                    <ui:VisualElement class="brand-spear brand-spear--one" />
+                    <ui:VisualElement class="brand-spear brand-spear--two" />
+                </ui:VisualElement>
+                <ui:Label class="brand-word" text="ARENA" picking-mode="Ignore" />
+            </ui:Button>
+
+            <ui:VisualElement class="primary-nav">
+                <ui:Button name="NavPlayTab" class="nav-item"><ui:Label text="PLAY" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+                <ui:Button name="NavDisciplines" class="nav-item is-active"><ui:Label text="DISCIPLINES" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+                <ui:Button class="nav-item"><ui:Label text="EQUIPMENT" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+                <ui:Button class="nav-item"><ui:Label text="APPEARANCE" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+                <ui:Button class="nav-item"><ui:Label text="CAREER" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+                <ui:Button class="nav-item"><ui:Label text="STORE" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="topbar-tools">
+                <ui:VisualElement class="currency currency--gold"><ui:VisualElement class="currency-gem"><ui:Label class="currency-glyph" text="G" /></ui:VisualElement><ui:Label text="1,250" /></ui:VisualElement>
+                <ui:VisualElement class="currency currency--arcane"><ui:VisualElement class="currency-gem"><ui:Label class="currency-glyph" text="A" /></ui:VisualElement><ui:Label text="340" /></ui:VisualElement>
+                <ui:Button class="tool-button"><ui:Label class="tool-people" text="●●" picking-mode="Ignore" /></ui:Button>
+                <ui:Button class="tool-button"><ui:Label class="tool-envelope" text="◇" picking-mode="Ignore" /></ui:Button>
+                <ui:Button name="SettingsButton" class="tool-button"><ui:Label class="tool-cog" text="✦" picking-mode="Ignore" /></ui:Button>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="page-heading" picking-mode="Ignore">
+            <ui:Label class="heading-kicker" text="BUILD CONFIGURATION" />
+            <ui:Label class="page-title" text="MASTER YOUR DISCIPLINES" />
+            <ui:Label class="page-subtitle" text="Shape your combat identity. Choose one primary path and up to two supporting disciplines." />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="screen-columns">
+            <ui:VisualElement class="left-panel panel-surface">
+                <ui:VisualElement class="primary-picker">
+                    <ui:VisualElement class="section-heading-row">
+                        <ui:VisualElement>
+                            <ui:Label class="section-kicker" text="COMBAT IDENTITY" />
+                            <ui:Label class="section-heading" text="PRIMARY DISCIPLINE" />
+                        </ui:VisualElement>
+                        <ui:Label class="section-limit" text="CHOOSE 1" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PrimaryCard" class="primary-card">
+                        <ui:Button name="PreviousPrimary" class="primary-cycle" text="‹" />
+                        <ui:VisualElement name="PrimaryIcon" class="primary-emblem" picking-mode="Ignore" />
+                        <ui:VisualElement class="primary-copy" picking-mode="Ignore">
+                            <ui:Label name="PrimaryName" class="primary-name" text="WAR" />
+                            <ui:Label name="PrimaryDescription" class="primary-description" text="Relentless pressure with a greatsword." />
+                            <ui:Label class="primary-change-hint" text="USE ARROWS TO CHANGE" />
+                        </ui:VisualElement>
+                        <ui:Button name="NextPrimary" class="primary-cycle" text="›" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="secondary-picker">
+                    <ui:VisualElement class="section-heading-row">
+                        <ui:VisualElement>
+                            <ui:Label class="section-kicker" text="SUPPORTING PATHS" />
+                            <ui:Label class="section-heading" text="SECONDARY DISCIPLINES" />
+                        </ui:VisualElement>
+                        <ui:Label name="SecondaryCount" class="section-limit" text="2 / 2 ACTIVE" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="SecondaryDisciplineGrid" class="discipline-grid" />
+                    <ui:Label name="SecondaryHelp" class="selection-help" text="Choose up to two. Each active secondary requires at least one ability." />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="points-panel">
+                    <ui:VisualElement class="points-heading-row">
+                        <ui:VisualElement>
+                            <ui:Label class="section-kicker" text="CHARACTER GROWTH" />
+                            <ui:Label class="section-heading" text="ABILITY POINTS" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="points-remaining" picking-mode="Ignore">
+                            <ui:Label name="PointsRemaining" class="points-remaining-value" text="0" />
+                            <ui:Label class="points-remaining-copy" text="REMAINING" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="point-rule" picking-mode="Ignore"><ui:VisualElement name="PointRuleFill" class="point-rule-fill" /></ui:VisualElement>
+                    <ui:VisualElement name="StatList" class="stat-list" />
+                    <ui:VisualElement class="points-footer">
+                        <ui:Label name="PointsAllocated" text="25 / 25 ALLOCATED" />
+                        <ui:Button name="ResetPoints" class="text-button" text="RESET" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="abilities-panel panel-surface">
+                <ui:VisualElement class="abilities-heading">
+                    <ui:VisualElement>
+                        <ui:Label class="section-kicker" text="LOADOUT AUTHORING" />
+                        <ui:Label class="section-heading" text="SELECT ABILITIES" />
+                    </ui:VisualElement>
+                    <ui:Label name="CatalogSource" class="catalog-source" text="◆ LIVE PROGRESSION CATALOG" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="ability-section ability-section--primary">
+                    <ui:VisualElement class="ability-section-heading">
+                        <ui:VisualElement>
+                            <ui:Label name="PrimaryAbilityHeading" class="ability-heading-title" text="WAR · PRIMARY" />
+                            <ui:Label class="ability-heading-copy" text="Select at least 8 abilities from your primary discipline." />
+                        </ui:VisualElement>
+                        <ui:Label name="PrimaryAbilityCounter" class="selection-counter" text="8 / 8 MIN" />
+                    </ui:VisualElement>
+                    <ui:ScrollView name="PrimaryAbilityGrid" class="ability-grid ability-grid--primary" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="ability-section ability-section--secondary">
+                    <ui:VisualElement class="ability-section-heading">
+                        <ui:VisualElement>
+                            <ui:Label class="ability-heading-title" text="SECONDARY ABILITIES" />
+                            <ui:Label class="ability-heading-copy" text="Each active secondary discipline requires at least 1 ability." />
+                        </ui:VisualElement>
+                        <ui:Label name="SecondaryAbilityCounter" class="selection-counter" text="2 SELECTED" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="SecondaryAbilityGroups" class="secondary-ability-groups" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement class="summary-panel panel-surface">
+                <ui:VisualElement class="summary-heading" picking-mode="Ignore">
+                    <ui:Label class="section-kicker" text="PROVISIONAL LOADOUT" />
+                    <ui:Label class="summary-title" text="YOUR DISCIPLINES" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="summary-primary">
+                    <ui:Label class="summary-label" text="PRIMARY" />
+                    <ui:VisualElement class="summary-primary-content">
+                        <ui:VisualElement name="SummaryPrimaryIcon" class="summary-primary-emblem" picking-mode="Ignore" />
+                        <ui:VisualElement picking-mode="Ignore">
+                            <ui:Label name="SummaryPrimaryName" class="summary-primary-name" text="WAR" />
+                            <ui:Label name="SummaryPrimaryKind" class="summary-primary-kind" text="WEAPON DISCIPLINE" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="summary-secondary">
+                    <ui:Label class="summary-label" text="SECONDARY" />
+                    <ui:VisualElement name="SummarySecondaryList" class="summary-secondary-list" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="requirements">
+                    <ui:Label class="summary-label" text="REQUIREMENTS" />
+                    <ui:VisualElement name="RequirementList" class="requirement-list" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="summary-totals">
+                    <ui:Label class="summary-label" text="SUMMARY" />
+                    <ui:VisualElement class="summary-row"><ui:Label text="Primary abilities" /><ui:Label name="SummaryPrimaryAbilities" class="summary-value" text="8" /></ui:VisualElement>
+                    <ui:VisualElement class="summary-row"><ui:Label text="Secondary abilities" /><ui:Label name="SummarySecondaryAbilities" class="summary-value" text="2" /></ui:VisualElement>
+                    <ui:VisualElement class="summary-row"><ui:Label text="Disciplines active" /><ui:Label name="SummaryDisciplines" class="summary-value" text="3 / 3" /></ui:VisualElement>
+                    <ui:VisualElement class="summary-rule" picking-mode="Ignore" />
+                    <ui:VisualElement class="summary-row summary-row--total"><ui:Label text="Ability points" /><ui:Label name="SummaryPoints" class="summary-value" text="25 / 25" /></ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="save-area">
+                    <ui:Label name="SaveStatus" class="save-status" text="✓  All requirements met" />
+                    <ui:Button name="SaveLoadout" class="save-button" text="◆  SAVE LOADOUT  ◆" />
+                    <ui:Button name="BackButton" class="back-button" text="BACK TO HUB" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="AbilityTooltip" class="ability-tooltip" picking-mode="Ignore">
+            <ui:Label name="TooltipName" class="tooltip-name" />
+            <ui:Label name="TooltipMeta" class="tooltip-meta" />
+            <ui:Label name="TooltipDescription" class="tooltip-description" />
+        </ui:VisualElement>
+        <ui:Label name="Toast" class="prototype-toast" />
+    </ui:VisualElement>
+</ui:UXML>

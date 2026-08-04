@@ -23,7 +23,6 @@
   }
 
   var pendingLinks = [
-    ["NavDisciplines", "Disciplines UI will be designed separately."],
     ["NavEquipment", "Equipment UI will be designed separately."],
     ["NavAppearance", "Appearance UI will be designed separately."],
     ["NavCareer", "Career UI will be designed separately."],
@@ -44,6 +43,10 @@
 
   document.getElementById("NavPlay").addEventListener("click", function () {
     showToast("You are already on Play.");
+  });
+
+  document.getElementById("NavDisciplines").addEventListener("click", function () {
+    window.location.href = "../disciplines/";
   });
 
   document.getElementById("QueueName").parentElement.parentElement.addEventListener("click", function () {

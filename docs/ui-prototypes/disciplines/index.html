@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arena — Disciplines (browser approval spec)</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="disciplines.css">
+<style>
+/* Browser-only viewport scaffold. The 1920x1080 stage below is the fixed
+ * reference canvas for a later one-way UI Toolkit translation. */
+@font-face {
+  font-family: "Cinzel";
+  font-weight: 400 900;
+  src: url("../../../Assets/Arena/Content/UI/Fonts/Cinzel.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Alegreya";
+  font-weight: 400 900;
+  src: url("../../../Assets/Arena/Content/UI/Fonts/Alegreya.ttf") format("truetype");
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #07090b; overflow: hidden; }
+body { color: #e7e1d3; font-family: "Alegreya", Georgia, serif; }
+button, a { color: inherit; font: inherit; }
+
+.sc-shell { height: 100%; display: flex; flex-direction: column; }
+.sc-toolbar {
+  height: 42px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background: #0b0d10;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+.sc-brand {
+  margin-right: 14px;
+  color: #d9b56a;
+  font-family: "Cinzel", serif;
+  letter-spacing: 2px;
+}
+.sc-note { color: #8f8b82; }
+.sc-note strong { color: #d8d4ca; font-weight: 400; }
+.sc-resolution { margin-left: auto; color: #696b70; }
+.sc-stagewrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.sc-stage {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  flex: none;
+  transform-origin: center center;
+  overflow: hidden;
+}
+</style>
+</head>
+<body>
+<div class="sc-shell">
+  <div class="sc-toolbar">
+    <span class="sc-brand">ARENA · DISCIPLINES SPEC</span>
+    <span class="sc-note"><strong>Browser approval view</strong> · interactions are provisional and do not mutate progression</span>
+    <span class="sc-resolution">1920 × 1080</span>
+  </div>
+
+  <div class="sc-stagewrap">
+    <main class="sc-stage" id="Stage">
+      <section class="disciplines-screen" id="DisciplinesScreen" aria-label="Manage disciplines and ability points">
+        <div class="screen-background"></div>
+        <div class="screen-veil"></div>
+        <div class="screen-vignette"></div>
+
+        <header class="topbar" id="TopBar">
+          <a class="brand-block" href="../hub/" aria-label="Arena hub">
+            <span class="brand-mark" aria-hidden="true">
+              <span class="brand-diamond"></span>
+              <span class="brand-spear brand-spear--one"></span>
+              <span class="brand-spear brand-spear--two"></span>
+            </span>
+            <span class="brand-word">ARENA</span>
+          </a>
+
+          <nav class="primary-nav" aria-label="Hub sections">
+            <a class="nav-item" id="NavPlay" href="../hub/"><span>PLAY</span><span class="nav-gem"></span></a>
+            <a class="nav-item is-active" id="NavDisciplines" href="./" aria-current="page"><span>DISCIPLINES</span><span class="nav-gem"></span></a>
+            <button class="nav-item pending-link" type="button" data-message="Equipment UI will be designed separately."><span>EQUIPMENT</span><span class="nav-gem"></span></button>
+            <button class="nav-item pending-link" type="button" data-message="Appearance UI will be designed separately."><span>APPEARANCE</span><span class="nav-gem"></span></button>
+            <button class="nav-item pending-link" type="button" data-message="Career UI will be designed separately."><span>CAREER</span><span class="nav-gem"></span></button>
+            <button class="nav-item pending-link" type="button" data-message="Store UI will be designed separately."><span>STORE</span><span class="nav-gem"></span></button>
+          </nav>
+
+          <div class="topbar-tools">
+            <div class="currency currency--gold"><span class="currency-gem">G</span><span>1,250</span></div>
+            <div class="currency currency--arcane"><span class="currency-gem">A</span><span>340</span></div>
+            <button class="tool-button pending-link" type="button" aria-label="Social" data-message="Social UI is not part of this screen."><span class="tool-people">●●</span></button>
+            <button class="tool-button pending-link" type="button" aria-label="Inbox" data-message="Inbox UI is not part of this screen."><span class="tool-envelope">◇</span></button>
+            <button class="tool-button pending-link" type="button" aria-label="Settings" data-message="Settings UI is not part of this screen."><span class="tool-cog">✦</span></button>
+          </div>
+        </header>
+
+        <div class="page-heading">
+          <div class="heading-kicker">BUILD CONFIGURATION</div>
+          <h1>MASTER YOUR DISCIPLINES</h1>
+          <p>Shape your combat identity. Choose one primary path and up to two supporting disciplines.</p>
+        </div>
+
+        <div class="screen-columns">
+          <aside class="left-panel panel-surface" aria-label="Discipline and ability point choices">
+            <section class="primary-picker" aria-labelledby="PrimaryHeading">
+              <div class="section-heading-row">
+                <div>
+                  <div class="section-kicker">COMBAT IDENTITY</div>
+                  <h2 id="PrimaryHeading">PRIMARY DISCIPLINE</h2>
+                </div>
+                <div class="section-limit">CHOOSE 1</div>
+              </div>
+
+              <div class="primary-card" id="PrimaryCard">
+                <button class="primary-cycle primary-cycle--left" id="PreviousPrimary" type="button" aria-label="Previous primary discipline">‹</button>
+                <div class="primary-emblem discipline-emblem" id="PrimaryEmblem" aria-hidden="true">
+                  <img id="PrimaryIcon" alt="">
+                </div>
+                <div class="primary-copy">
+                  <div class="primary-name" id="PrimaryName">WAR</div>
+                  <div class="primary-description" id="PrimaryDescription">Relentless pressure with a greatsword.</div>
+                  <div class="primary-change-hint">USE ARROWS TO CHANGE</div>
+                </div>
+                <button class="primary-cycle primary-cycle--right" id="NextPrimary" type="button" aria-label="Next primary discipline">›</button>
+              </div>
+            </section>
+
+            <section class="secondary-picker" aria-labelledby="SecondaryHeading">
+              <div class="section-heading-row section-heading-row--compact">
+                <div>
+                  <div class="section-kicker">SUPPORTING PATHS</div>
+                  <h2 id="SecondaryHeading">SECONDARY DISCIPLINES</h2>
+                </div>
+                <div class="section-limit"><span id="SecondaryCount">2</span> / 2 ACTIVE</div>
+              </div>
+              <div class="discipline-grid" id="DisciplineGrid"></div>
+              <div class="selection-help" id="SecondaryHelp">Choose up to two. Each active secondary requires at least one ability.</div>
+            </section>
+
+            <section class="points-panel" aria-labelledby="PointsHeading">
+              <div class="points-heading-row">
+                <div>
+                  <div class="section-kicker">CHARACTER GROWTH</div>
+                  <h2 id="PointsHeading">ABILITY POINTS</h2>
+                </div>
+                <div class="points-remaining">
+                  <span id="PointsRemaining">0</span>
+                  <small>REMAINING</small>
+                </div>
+              </div>
+              <div class="point-rule"><span id="PointRuleFill"></span></div>
+              <div class="stat-list" id="StatList"></div>
+              <div class="points-footer">
+                <span><strong id="PointsAllocated">25</strong> / <span id="PointsBudget">25</span> ALLOCATED</span>
+                <button class="text-button" id="ResetPoints" type="button">RESET</button>
+              </div>
+            </section>
+          </aside>
+
+          <section class="abilities-panel panel-surface" aria-labelledby="AbilitiesHeading">
+            <header class="abilities-heading">
+              <div>
+                <div class="section-kicker">LOADOUT AUTHORING</div>
+                <h2 id="AbilitiesHeading">SELECT ABILITIES</h2>
+              </div>
+              <div class="catalog-source"><span class="source-dot"></span> LIVE PROGRESSION CATALOG</div>
+            </header>
+
+            <section class="ability-section ability-section--primary" aria-labelledby="PrimaryAbilitiesHeading">
+              <div class="ability-section-heading">
+                <div>
+                  <h3 id="PrimaryAbilitiesHeading"><span id="PrimaryAbilityDiscipline">WAR</span> · PRIMARY</h3>
+                  <p>Select at least 8 abilities from your primary discipline.</p>
+                </div>
+                <div class="selection-counter" id="PrimaryAbilityCounter">8 <span>/ 8 MIN</span></div>
+              </div>
+              <div class="ability-grid ability-grid--primary" id="PrimaryAbilityGrid"></div>
+            </section>
+
+            <section class="ability-section ability-section--secondary" aria-labelledby="SecondaryAbilitiesHeading">
+              <div class="ability-section-heading">
+                <div>
+                  <h3 id="SecondaryAbilitiesHeading">SECONDARY ABILITIES</h3>
+                  <p>Each active secondary discipline requires at least 1 ability.</p>
+                </div>
+                <div class="selection-counter" id="SecondaryAbilityCounter">2 <span>SELECTED</span></div>
+              </div>
+              <div class="secondary-ability-groups" id="SecondaryAbilityGroups"></div>
+            </section>
+          </section>
+
+          <aside class="summary-panel panel-surface" aria-labelledby="SummaryHeading">
+            <header class="summary-heading">
+              <div class="section-kicker">PROVISIONAL LOADOUT</div>
+              <h2 id="SummaryHeading">YOUR DISCIPLINES</h2>
+            </header>
+
+            <section class="summary-primary">
+              <div class="summary-label">PRIMARY</div>
+              <div class="summary-primary-content">
+                <div class="summary-primary-emblem discipline-emblem" id="SummaryPrimaryEmblem" aria-hidden="true"><img id="SummaryPrimaryIcon" alt=""></div>
+                <div>
+                  <div class="summary-primary-name" id="SummaryPrimaryName">WAR</div>
+                  <div class="summary-primary-kind" id="SummaryPrimaryKind">WEAPON DISCIPLINE</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="summary-secondary">
+              <div class="summary-label">SECONDARY</div>
+              <div class="summary-secondary-list" id="SummarySecondaryList"></div>
+            </section>
+
+            <section class="requirements" aria-labelledby="RequirementsHeading">
+              <div class="summary-label" id="RequirementsHeading">REQUIREMENTS</div>
+              <div class="requirement-list" id="RequirementList"></div>
+            </section>
+
+            <section class="summary-totals">
+              <div class="summary-label">SUMMARY</div>
+              <div class="summary-row"><span>Primary abilities</span><strong id="SummaryPrimaryAbilities">8</strong></div>
+              <div class="summary-row"><span>Secondary abilities</span><strong id="SummarySecondaryAbilities">2</strong></div>
+              <div class="summary-row"><span>Disciplines active</span><strong id="SummaryDisciplines">3 / 3</strong></div>
+              <div class="summary-rule"></div>
+              <div class="summary-row summary-row--total"><span>Ability points</span><strong id="SummaryPoints">25 / 25</strong></div>
+            </section>
+
+            <div class="save-area">
+              <div class="save-status" id="SaveStatus" role="status" aria-live="polite">
+                <span class="save-status-icon" id="SaveStatusIcon">✓</span>
+                <span id="SaveStatusCopy">All requirements met</span>
+              </div>
+              <button class="save-button" id="SaveLoadout" type="button">
+                <span class="save-button-gem"></span>
+                <span>SAVE LOADOUT</span>
+                <span class="save-button-gem"></span>
+              </button>
+              <a class="back-button" href="../hub/">BACK TO HUB</a>
+            </div>
+          </aside>
+        </div>
+
+        <div class="ability-tooltip" id="AbilityTooltip" role="tooltip" aria-hidden="true"></div>
+        <div class="prototype-toast" id="Toast" role="status" aria-live="polite"></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script src="disciplines.js"></script>
+</body>
+</html>
