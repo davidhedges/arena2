@@ -21,6 +21,11 @@ namespace Arena.UI
         private const string QualityPrefKey = "arena.settings.quality";
         private const string FullscreenPrefKey = "arena.settings.fullscreen";
 
+        // TODO(graphics-quality-menu): expose 30 / 60 / 120 / Unlimited as a
+        // frame-limit selector. Sixty is the safe default for laptop thermals;
+        // Application.targetFrameRate is effective on desktop while VSync is off.
+        private const int DefaultTargetFrameRate = 60;
+
         private const string OpenClass = "is-open";
         private const string SelectedClass = "is-selected";
         private const long WindowTransitionMs = 130;
@@ -62,6 +67,7 @@ namespace Arena.UI
         /// <summary>Applies persisted client settings on startup, before any UI exists.</summary>
         private static void ApplySavedSettings()
         {
+            Application.targetFrameRate = DefaultTargetFrameRate;
             AudioListener.volume = Mathf.Clamp01(PlayerPrefs.GetFloat(VolumePrefKey, 1f));
             if (PlayerPrefs.HasKey(VsyncPrefKey))
                 QualitySettings.vSyncCount = PlayerPrefs.GetInt(VsyncPrefKey, 1) != 0 ? 1 : 0;

@@ -737,7 +737,9 @@ namespace Arena.Editor.Survival
         /// from its own angle — parallel shadows from four directions, in a
         /// scene whose whole lighting premise is one underglow from below.
         /// Point lights stay: they are local, and read as the entrance being lit
-        /// from within.
+        /// from within. Their real-time shadows do not stay. A point-light
+        /// shadow renders six cube faces, so the entrance's sixty local lights
+        /// otherwise overwhelm URP's additional-light shadow atlas.
         ///
         /// COLLIDERS, for the reason the whole scene authors none — survival
         /// movement is the server's flat layout mirrored by
@@ -751,8 +753,23 @@ namespace Arena.Editor.Survival
             foreach (Light light in entrance.GetComponentsInChildren<Light>(includeInactive: true))
             {
                 if (light.type == LightType.Directional)
+                {
                     UnityEngine.Object.DestroyImmediate(light.gameObject);
+                    continue;
+                }
+
+                // TODO(graphics-quality-menu): a future High/Ultra preset may
+                // opt a small, curated set of hero lights back into shadows.
+                // Never restore shadows wholesale on all entrance point lights.
+                if (light.type == LightType.Point)
+                    light.shadows = LightShadows.None;
             }
+
+            // SurvivalLightingBudget replaces these identical always-running
+            // Animator graphs with one shared 15 Hz light-intensity sample.
+            foreach (Animator animator in entrance.GetComponentsInChildren<Animator>(includeInactive: true))
+                if (animator.GetComponent<Light>() != null)
+                    animator.enabled = false;
 
             foreach (Collider collider in entrance.GetComponentsInChildren<Collider>(includeInactive: true))
                 UnityEngine.Object.DestroyImmediate(collider);

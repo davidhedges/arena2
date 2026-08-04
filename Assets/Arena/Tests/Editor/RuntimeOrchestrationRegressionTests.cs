@@ -317,7 +317,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void SurvivalArena_IsBuildRegisteredWithFourAuthoredEntrances()
+        public void SurvivalArena_IsBuildRegisteredWithFourAuthoredEntrancesAndLaptopSafeLighting()
         {
             const string scenePath = "Assets/Arena/Content/Scenes/SurvivalArena.unity";
             Assert.That(File.Exists(scenePath), Is.True);
@@ -328,6 +328,36 @@ namespace Arena.Tests.Editor
             string scene = File.ReadAllText(scenePath);
             foreach (string side in new[] { "North", "East", "South", "West" })
                 Assert.That(scene, Does.Contain($"m_Name: Level Entrance {side}"));
+
+            Assert.That(scene, Does.Not.Contain("m_Shadows:\n    m_Type: 1"));
+            Assert.That(scene, Does.Not.Contain("m_Shadows:\n    m_Type: 2"));
+            Assert.That(CountOccurrences(scene, "  m_Enabled: 0\n"), Is.EqualTo(56));
+            Assert.That(
+                CountOccurrences(scene, "guid: 8ab8340ffd685fb479daac555f516852"),
+                Is.EqualTo(56));
+
+            Type lightingBudget = RequireRuntimeType("Arena.World.SurvivalLightingBudget");
+            Assert.That(
+                lightingBudget.GetField(
+                        "FlickerUpdatesPerSecond",
+                        BindingFlags.Static | BindingFlags.NonPublic)!
+                    .GetRawConstantValue(),
+                Is.EqualTo(15f));
+        }
+
+        [Test]
+        public void SystemMenu_DefaultsToSixtyFramesPerSecond()
+        {
+            Type systemMenu = RequireRuntimeType("Arena.UI.SystemMenuScreen");
+            Assert.That(
+                systemMenu.GetField(
+                        "DefaultTargetFrameRate",
+                        BindingFlags.Static | BindingFlags.NonPublic)!
+                    .GetRawConstantValue(),
+                Is.EqualTo(60));
+
+            string source = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/SystemMenuScreen.cs");
+            Assert.That(source, Does.Contain("Application.targetFrameRate = DefaultTargetFrameRate;"));
         }
 
         [Test]
@@ -1242,6 +1272,19 @@ namespace Arena.Tests.Editor
         private static Type RequireRuntimeType(string fullName)
             => RuntimeAssembly.GetType(fullName, throwOnError: true)
                ?? throw new InvalidOperationException($"Type {fullName} not found in Assembly-CSharp.");
+
+        private static int CountOccurrences(string value, string needle)
+        {
+            int count = 0;
+            int start = 0;
+            while ((start = value.IndexOf(needle, start, StringComparison.Ordinal)) >= 0)
+            {
+                count++;
+                start += needle.Length;
+            }
+
+            return count;
+        }
 
         private static Type RequireLoadedType(string fullName)
         {
