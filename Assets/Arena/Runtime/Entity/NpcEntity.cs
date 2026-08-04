@@ -21,7 +21,7 @@ namespace Arena.Entity
         private readonly NameTag _nameTag;
         private readonly WorldHealthBar _worldHealthBar;
         private readonly NpcAnimationController _animationController;
-        private NpcVisualProfile? _visualProfile;
+        private readonly NpcVisualProfile _visualProfile;
         private float _presentationVerticalOffset;
         private readonly Dictionary<string, int> _effectCounts = new(StringComparer.OrdinalIgnoreCase);
         private readonly Renderer[] _renderers;
@@ -77,13 +77,25 @@ namespace Arena.Entity
             "INTIMIDATED",
         };
 
-        public NpcEntity(NpcInstance instance, NpcPhysics? physics, NpcState? state, UnityEngine.Object prefabAsset)
+        public NpcEntity(
+            NpcInstance instance,
+            NpcPhysics? physics,
+            NpcState? state,
+            NpcVisualProfile visualProfile)
         {
             Identity = instance.Identity;
             _instance = instance;
             _state = state;
+            _visualProfile = visualProfile
+                ?? throw new ArgumentNullException(nameof(visualProfile));
 
+            UnityEngine.Object prefabAsset = _visualProfile.Prefab
+                ?? throw new InvalidOperationException(
+                    $"NPC visual profile '{_visualProfile.name}' has no prefab.");
             GameObject = InstantiateRoot(prefabAsset);
+            // Do not expose a partially configured instance. The registry
+            // activates it only after state and presentation setup complete.
+            GameObject.SetActive(false);
             GameObject.name = $"NPC_{SafeName(instance.DisplayName)}_{instance.Identity}";
             _renderers = GameObject.GetComponentsInChildren<Renderer>(includeInactive: true);
             CaptureBaseMaterialColors();
@@ -92,9 +104,13 @@ namespace Arena.Entity
             _nameTag.SetName(instance.DisplayName);
             _worldHealthBar = WorldHealthBar.Create(GameObject.transform, isLocalPlayer: false);
             _animationController = NpcAnimationController.Attach(GameObject);
-            ConfigureAnimationProfile(instance.VisualId);
+            ConfigureAnimationProfile(_visualProfile);
             if (state != null)
+            {
                 _worldHealthBar.SetHealth(state.Hp, state.MaxHp);
+                if (!state.Alive)
+                    _animationController.PlayDeath();
+            }
 
             if (physics != null)
                 ApplyPhysics(physics);
@@ -108,7 +124,6 @@ namespace Arena.Entity
 
             GameObject.name = $"NPC_{SafeName(instance.DisplayName)}_{instance.Identity}";
             _nameTag.SetName(instance.DisplayName);
-            ConfigureAnimationProfile(instance.VisualId);
             RefreshHardCrowdControlAnimation();
         }
 
@@ -244,12 +259,11 @@ namespace Arena.Entity
             out Transform transform,
             out bool authored)
         {
-            if (_visualProfile != null)
-                return _visualProfile.TryResolveVfxAnchor(GameObject, anchor, out transform, out authored);
-
-            authored = false;
-            transform = null!;
-            return false;
+            return _visualProfile.TryResolveVfxAnchor(
+                GameObject,
+                anchor,
+                out transform,
+                out authored);
         }
 
         public Vector3 GetRenderPosition()
@@ -370,26 +384,11 @@ namespace Arena.Entity
             }
         }
 
-        private void ConfigureAnimationProfile(string visualId)
+        private void ConfigureAnimationProfile(NpcVisualProfile profile)
         {
-            if (NpcVisualCatalog.TryLoadDefault(out NpcVisualCatalog catalog, out _)
-                && catalog.TryGetEntry(visualId, out NpcVisualCatalogEntry entry))
-            {
-                _visualProfile = entry.profile;
-                _presentationVerticalOffset = entry.profile != null
-                    ? entry.profile.PresentationVerticalOffset
-                    : 0f;
-                _animationController.SetVisualProfile(entry.profile);
-                _animationController.SetStatusReactions(entry.profile != null
-                    ? entry.profile.StatusReactions
-                    : entry.statusReactions);
-                return;
-            }
-
-            _visualProfile = null;
-            _presentationVerticalOffset = 0f;
-            _animationController.SetVisualProfile(null);
-            _animationController.SetStatusReactions(null);
+            _presentationVerticalOffset = profile.PresentationVerticalOffset;
+            _animationController.SetVisualProfile(profile);
+            _animationController.SetStatusReactions(profile.StatusReactions);
         }
 
         private void RefreshHardCrowdControlAnimation()

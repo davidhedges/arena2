@@ -30,7 +30,7 @@ namespace Arena.Editor
     [CustomEditor(typeof(NpcVisualProfile))]
     public sealed class NpcVisualProfileEditor : UnityEditor.Editor
     {
-        private const string OutputFolder = "Assets/Arena/Content/NPC/VisualProfiles";
+        private const string OutputFolder = "Assets/Arena/Resources/NpcVisualProfiles";
 
         public override void OnInspectorGUI()
         {

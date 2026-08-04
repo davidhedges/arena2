@@ -2,6 +2,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
@@ -12,7 +13,7 @@ namespace Arena.Tests.Editor
 {
     public sealed class NpcVisualProfileTests
     {
-        private const string ProfileFolder = "Assets/Arena/Content/NPC/VisualProfiles";
+        private const string ProfileFolder = "Assets/Arena/Resources/NpcVisualProfiles";
 
         [Test]
         public void EveryFirstPartyProfile_ResolvesAuthoredAnimatorStatesAndSockets()
@@ -49,7 +50,7 @@ namespace Arena.Tests.Editor
         {
             Type catalogType = RequireType("Arena.Entity.NpcVisualCatalog");
             UnityEngine.Object catalog = AssetDatabase.LoadAssetAtPath(
-                "Assets/Arena/Resources/NpcVisualCatalog.asset",
+                "Assets/Arena/Content/NPC/NpcVisualCatalog.asset",
                 catalogType);
             Assert.That(catalog, Is.Not.Null);
             var errors = (ICollection)catalogType.GetMethod("ValidateEntries")!.Invoke(catalog, null)!;
@@ -79,11 +80,71 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void VisualProfiles_AreIndividuallyAddressableAndHeavyCatalogIsEditorOnly()
+        {
+            const string editorCatalog = "Assets/Arena/Content/NPC/NpcVisualCatalog.asset";
+            const string oldRuntimeCatalog = "Assets/Arena/Resources/NpcVisualCatalog.asset";
+            Assert.That(File.Exists(editorCatalog), Is.True);
+            Assert.That(File.Exists(oldRuntimeCatalog), Is.False);
+
+            Type catalogType = RequireType("Arena.Entity.NpcVisualCatalog");
+            UnityEngine.Object catalog = AssetDatabase.LoadAssetAtPath(editorCatalog, catalogType);
+            Assert.That(catalog, Is.Not.Null);
+
+            var serialized = new SerializedObject(catalog);
+            SerializedProperty entries = serialized.FindProperty("entries");
+            string[] profileGuids = AssetDatabase.FindAssets(
+                "t:NpcVisualProfile",
+                new[] { ProfileFolder });
+            Assert.That(profileGuids.Length, Is.EqualTo(entries.arraySize));
+
+            for (int index = 0; index < entries.arraySize; index++)
+            {
+                SerializedProperty entry = entries.GetArrayElementAtIndex(index);
+                string visualId = entry.FindPropertyRelative("visualId").stringValue;
+                UnityEngine.Object profile =
+                    entry.FindPropertyRelative("profile").objectReferenceValue;
+                Assert.That(profile, Is.Not.Null, visualId);
+                Assert.That(
+                    AssetDatabase.GetAssetPath(profile),
+                    Is.EqualTo($"{ProfileFolder}/{visualId}.asset"),
+                    visualId);
+            }
+
+            Type cacheType = RequireType("Arena.Entity.NpcVisualResourceCache");
+            MethodInfo resourcePathFor = cacheType.GetMethod(
+                "ResourcePathFor",
+                BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(cacheType.FullName, "ResourcePathFor");
+            Assert.That(
+                resourcePathFor.Invoke(null, new object[] { " slime_man_bl " }),
+                Is.EqualTo("NpcVisualProfiles/SLIME_MAN_BL"));
+        }
+
+        [Test]
+        public void NpcSpawnPresentation_WaitsForACompleteVisualAndUnloadsAtIdle()
+        {
+            string cache = File.ReadAllText(
+                "Assets/Arena/Runtime/Entity/NpcVisualResourceCache.cs");
+            string entity = File.ReadAllText(
+                "Assets/Arena/Runtime/Entity/NpcEntity.cs");
+            string registry = File.ReadAllText(
+                "Assets/Arena/Runtime/Entity/EntityRegistry.cs");
+
+            Assert.That(cache, Does.Contain("Resources.LoadAsync<NpcVisualProfile>"));
+            Assert.That(entity, Does.Contain("GameObject.SetActive(false);"));
+            Assert.That(registry, Does.Contain("yield return request;"));
+            Assert.That(registry, Does.Contain("entity.GameObject.SetActive(true);"));
+            Assert.That(registry, Does.Contain("Resources.UnloadUnusedAssets()"));
+            Assert.That(registry, Does.Not.Contain("NpcVisualCatalog.TryLoadDefault"));
+        }
+
+        [Test]
         public void ExemplarProfile_AppliesExplicitMissingSocketFallbackPolicies()
         {
             Type profileType = RequireType("Arena.Entity.NpcVisualProfile");
             UnityEngine.Object profile = AssetDatabase.LoadAssetAtPath(
-                "Assets/Arena/Content/NPC/VisualProfiles/SkeletonWizard_Gn_VisualProfile.asset",
+                "Assets/Arena/Resources/NpcVisualProfiles/SKELETON_WIZARD_GN.asset",
                 profileType);
             Assert.That(profile, Is.Not.Null);
 
@@ -166,7 +227,7 @@ namespace Arena.Tests.Editor
         {
             Type profileType = RequireType("Arena.Entity.NpcVisualProfile");
             UnityEngine.Object profile = AssetDatabase.LoadAssetAtPath(
-                "Assets/Arena/Content/NPC/VisualProfiles/SlimeMan_Bl_VisualProfile.asset",
+                "Assets/Arena/Resources/NpcVisualProfiles/SLIME_MAN_BL.asset",
                 profileType);
             Assert.That(profile, Is.Not.Null);
 

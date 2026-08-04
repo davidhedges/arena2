@@ -10,7 +10,8 @@ namespace Arena.Entity
     [CreateAssetMenu(menuName = "Arena/NPC Visual Catalog", fileName = "NpcVisualCatalog")]
     public sealed class NpcVisualCatalog : ScriptableObject
     {
-        private const string DefaultResourcePath = "NpcVisualCatalog";
+        internal const string EditorCatalogPath =
+            "Assets/Arena/Content/NPC/NpcVisualCatalog.asset";
 
         [SerializeField] private List<NpcVisualCatalogEntry> entries = new();
 
@@ -20,19 +21,26 @@ namespace Arena.Entity
 
         public static bool TryLoadDefault(out NpcVisualCatalog catalog, out string error)
         {
+#if UNITY_EDITOR
             if (_cachedDefault == null)
-                _cachedDefault = Resources.Load<NpcVisualCatalog>(DefaultResourcePath);
+                _cachedDefault = UnityEditor.AssetDatabase.LoadAssetAtPath<NpcVisualCatalog>(
+                    EditorCatalogPath);
 
             if (_cachedDefault == null)
             {
                 catalog = null!;
-                error = $"Resources/{DefaultResourcePath} was not found.";
+                error = $"{EditorCatalogPath} was not found.";
                 return false;
             }
 
             catalog = _cachedDefault;
             error = string.Empty;
             return true;
+#else
+            catalog = null!;
+            error = "The direct-reference NPC catalog is editor-only; runtime visuals load by resource key.";
+            return false;
+#endif
         }
 
         public bool TryGetPrefab(string visualId, out UnityEngine.Object prefab)
@@ -70,6 +78,20 @@ namespace Arena.Entity
 
                 if (entry.ResolvePrefab() == null)
                     errors.Add($"Visual '{key}' has no resolvable prefab.");
+
+#if UNITY_EDITOR
+                if (entry.profile != null && !string.IsNullOrEmpty(key))
+                {
+                    string actualPath = UnityEditor.AssetDatabase.GetAssetPath(entry.profile);
+                    string expectedPath =
+                        $"Assets/Arena/Resources/{NpcVisualResourceCache.ResourcePathFor(key)}.asset";
+                    if (!string.Equals(actualPath, expectedPath, StringComparison.Ordinal))
+                    {
+                        errors.Add(
+                            $"Visual '{key}' profile must be at '{expectedPath}', not '{actualPath}'.");
+                    }
+                }
+#endif
             }
 
             return errors;

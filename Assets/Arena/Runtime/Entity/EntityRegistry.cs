@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -42,6 +43,7 @@ namespace Arena.Entity
         private const string DefenseBlockKind = "BLOCK";
         private const string DefenseParryKind = "PARRY";
         private const string CoupDeGraceGapCloseKind = "MELEE_GAP_CLOSE:DAGGER_COUP_DE_GRACE";
+        private const float NpcVisualUnloadIdleDelaySeconds = 2f;
 
         public static EntityRegistry Instance { get; private set; } = null!;
 
@@ -57,6 +59,9 @@ namespace Arena.Entity
 
         private readonly Dictionary<Identity, PlayerEntity> _players = new();
         private readonly Dictionary<Identity, NpcEntity> _npcs = new();
+        private readonly Dictionary<Identity, PendingNpcSpawn> _pendingNpcSpawns = new();
+        private readonly Dictionary<Identity, NpcVisualResourceCache.Lease> _npcVisualLeases = new();
+        private readonly NpcVisualResourceCache _npcVisualCache = new();
         private readonly Dictionary<Identity, ActiveWorldInteraction>
             _activeWorldInteractions = new();
         private readonly Dictionary<Identity, long> _lastDefenseStartMicros = new();
@@ -66,6 +71,7 @@ namespace Arena.Entity
 
         private PlayerEntity? _localPlayerEntity;
         private EquipmentAppearanceCatalog? _equipmentAppearanceCatalog;
+        private Coroutine? _npcVisualUnloadCoroutine;
 
         public PlayerEntity? LocalPlayerEntity
         {
@@ -122,6 +128,18 @@ namespace Arena.Entity
             }
         }
 
+        private sealed class PendingNpcSpawn
+        {
+            internal NpcInstance LatestInstance;
+            internal readonly string VisualId;
+
+            internal PendingNpcSpawn(NpcInstance instance)
+            {
+                LatestInstance = instance;
+                VisualId = NormalizeVisualId(instance.VisualId);
+            }
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
@@ -165,7 +183,9 @@ namespace Arena.Entity
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
             ClearAllPlayers();
-            ClearAllNpcs();
+            CancelScheduledNpcVisualUnload();
+            ClearAllNpcs(scheduleVisualUnload: false);
+            _npcVisualCache.ReleaseUnusedProfiles();
             if (Instance == this)
                 Instance = null!;
         }
@@ -513,11 +533,7 @@ namespace Arena.Entity
 
         public void OnNpcInstanceDelete(EventContext ctx, NpcInstance row)
         {
-            if (!_npcs.TryGetValue(row.Identity, out var entity))
-                return;
-
-            entity.Destroy();
-            _npcs.Remove(row.Identity);
+            RemoveNpcPresentation(row.Identity);
         }
 
         public void OnNpcPhysicsInsert(EventContext ctx, NpcPhysics row)
@@ -534,11 +550,7 @@ namespace Arena.Entity
 
         public void OnNpcPhysicsDelete(EventContext ctx, NpcPhysics row)
         {
-            if (!_npcs.TryGetValue(row.Identity, out var entity))
-                return;
-
-            entity.Destroy();
-            _npcs.Remove(row.Identity);
+            RemoveNpcPresentation(row.Identity);
         }
 
         public void OnNpcStateInsert(EventContext ctx, NpcState row)
@@ -553,9 +565,7 @@ namespace Arena.Entity
 
         public void OnNpcStateDelete(EventContext ctx, NpcState row)
         {
-            if (_npcs.TryGetValue(row.Identity, out var entity))
-                entity.Destroy();
-            _npcs.Remove(row.Identity);
+            RemoveNpcPresentation(row.Identity);
         }
 
         public void OnPlayerOpenWorldSceneInsert(EventContext ctx, PlayerOpenWorldScene row)
@@ -979,43 +989,148 @@ namespace Arena.Entity
         {
             if (ShouldSuppressPresentationInCurrentScene())
             {
-                if (_npcs.Count > 0)
+                if (_npcs.Count > 0 || _pendingNpcSpawns.Count > 0)
                     ClearAllNpcs();
                 return;
             }
 
-            if (_npcs.TryGetValue(row.Identity, out var existing) && !existing.IsDestroyed)
+            if (TryGetLiveNpc(row.Identity, out NpcEntity existing))
             {
-                existing.ApplyInstance(row);
-                return;
+                if (string.Equals(
+                        NormalizeVisualId(existing.VisualId),
+                        NormalizeVisualId(row.VisualId),
+                        System.StringComparison.Ordinal))
+                {
+                    existing.ApplyInstance(row);
+                    return;
+                }
+
+                RemoveNpcPresentation(row.Identity);
+            }
+
+            string visualId = NormalizeVisualId(row.VisualId);
+            if (_pendingNpcSpawns.TryGetValue(row.Identity, out PendingNpcSpawn? pending))
+            {
+                if (string.Equals(pending.VisualId, visualId, System.StringComparison.Ordinal))
+                {
+                    pending.LatestInstance = row;
+                    return;
+                }
+
+                // Replacing the dictionary value invalidates the old load
+                // coroutine without trying to cancel Unity's shared request.
+                _pendingNpcSpawns.Remove(row.Identity);
+            }
+
+            CancelScheduledNpcVisualUnload();
+            pending = new PendingNpcSpawn(row);
+            _pendingNpcSpawns[row.Identity] = pending;
+            StartCoroutine(SpawnNpcWhenVisualReady(row.Identity, pending));
+        }
+
+        private IEnumerator SpawnNpcWhenVisualReady(
+            Identity identity,
+            PendingNpcSpawn pending)
+        {
+            if (!_npcVisualCache.TryBeginLoad(
+                    pending.VisualId,
+                    out string normalizedVisualId,
+                    out ResourceRequest request,
+                    out string loadError))
+            {
+                Debug.LogWarning(
+                    $"[EntityRegistry] Cannot load NPC '{pending.LatestInstance.TemplateId}': {loadError}");
+                RemovePendingNpcSpawn(identity, pending);
+                yield break;
+            }
+
+            yield return request;
+
+            if (!IsCurrentPendingNpcSpawn(identity, pending))
+            {
+                ScheduleNpcVisualUnloadIfIdle();
+                yield break;
+            }
+
+            if (!_npcVisualCache.TryAcquireCompleted(
+                    normalizedVisualId,
+                    out NpcVisualResourceCache.Lease lease,
+                    out loadError))
+            {
+                Debug.LogWarning(
+                    $"[EntityRegistry] Cannot load NPC '{pending.LatestInstance.TemplateId}' " +
+                    $"visual '{pending.VisualId}': {loadError}");
+                RemovePendingNpcSpawn(identity, pending);
+                yield break;
+            }
+
+            if (ShouldSuppressPresentationInCurrentScene())
+            {
+                lease.Dispose();
+                RemovePendingNpcSpawn(identity, pending);
+                yield break;
             }
 
             var conn = NetworkManager.Instance?.Conn;
-            NpcPhysics? physics = conn?.Db.NpcPhysics.Identity.Find(row.Identity);
-            NpcState? state = conn?.Db.NpcState.Identity.Find(row.Identity);
-
-            if (!NpcVisualCatalog.TryLoadDefault(out var catalog, out string catalogError))
+            NpcInstance latest = pending.LatestInstance;
+            if (conn != null)
             {
-                Debug.LogWarning($"[EntityRegistry] Cannot spawn NPC '{row.TemplateId}': {catalogError}");
-                return;
+                NpcInstance? authoritative = conn.Db.NpcInstance.Identity.Find(identity);
+                if (authoritative == null)
+                {
+                    lease.Dispose();
+                    RemovePendingNpcSpawn(identity, pending);
+                    yield break;
+                }
+                latest = authoritative;
             }
 
-            if (!catalog.TryGetPrefab(row.VisualId, out var prefab))
+            if (!string.Equals(
+                    NormalizeVisualId(latest.VisualId),
+                    pending.VisualId,
+                    System.StringComparison.Ordinal))
             {
-                Debug.LogWarning($"[EntityRegistry] Cannot spawn NPC '{row.TemplateId}': visual '{row.VisualId}' has no prefab.");
-                return;
+                lease.Dispose();
+                RemovePendingNpcSpawn(identity, pending, scheduleUnload: false);
+                SpawnOrUpdateNpc(latest);
+                yield break;
             }
 
+            NpcEntity? entity = null;
+            bool leaseTransferred = false;
             try
             {
-                var entity = new NpcEntity(row, physics, state, prefab);
-                entity.GameObject.SetActive(!ShouldSuppressPresentationInCurrentScene());
-                _npcs[row.Identity] = entity;
-                Debug.Log($"[EntityRegistry] Spawned NPC {row.DisplayName} {row.Identity} template={row.TemplateId} visual={row.VisualId}");
+                NpcPhysics? physics = conn?.Db.NpcPhysics.Identity.Find(identity);
+                NpcState? state = conn?.Db.NpcState.Identity.Find(identity);
+                entity = new NpcEntity(latest, physics, state, lease.Profile);
+
+                if (conn != null)
+                {
+                    foreach (StatusEffect effect in conn.Db.StatusEffect.Target.Filter(identity))
+                        entity.ApplyStatusEffect(effect.EffectKind);
+                }
+
+                entity.GameObject.SetActive(true);
+                RemovePendingNpcSpawn(identity, pending, scheduleUnload: false);
+                _npcs[identity] = entity;
+                _npcVisualLeases[identity] = lease;
+                leaseTransferred = true;
+                Debug.Log(
+                    $"[EntityRegistry] Spawned fully loaded NPC {latest.DisplayName} {identity} " +
+                    $"template={latest.TemplateId} visual={latest.VisualId}");
             }
             catch (System.Exception error)
             {
-                Debug.LogWarning($"[EntityRegistry] Cannot spawn NPC '{row.TemplateId}' visual: {error.Message}");
+                entity?.Destroy();
+                Debug.LogWarning(
+                    $"[EntityRegistry] Cannot spawn NPC '{pending.LatestInstance.TemplateId}' " +
+                    $"visual: {error.Message}");
+            }
+            finally
+            {
+                if (!leaseTransferred)
+                    lease.Dispose();
+                RemovePendingNpcSpawn(identity, pending);
             }
         }
 
@@ -1931,12 +2046,19 @@ namespace Arena.Entity
             LocalDefensePrediction.Reset();
         }
 
-        private void ClearAllNpcs()
+        private void ClearAllNpcs(bool scheduleVisualUnload = true)
         {
             foreach (var entity in _npcs.Values)
                 entity.Destroy();
 
             _npcs.Clear();
+            _pendingNpcSpawns.Clear();
+            foreach (NpcVisualResourceCache.Lease lease in _npcVisualLeases.Values)
+                lease.Dispose();
+            _npcVisualLeases.Clear();
+
+            if (scheduleVisualUnload)
+                ScheduleNpcVisualUnloadIfIdle();
         }
 
         private void RefreshPlayerPresentationForScene(string sceneName)
@@ -1980,10 +2102,89 @@ namespace Arena.Entity
             if (!entity.IsDestroyed)
                 return true;
 
-            _npcs.Remove(id);
+            RemoveNpcPresentation(id, destroyEntity: false);
             entity = null!;
             return false;
         }
+
+        private void RemoveNpcPresentation(Identity identity, bool destroyEntity = true)
+        {
+            _pendingNpcSpawns.Remove(identity);
+
+            if (_npcs.TryGetValue(identity, out NpcEntity? entity))
+            {
+                if (destroyEntity)
+                    entity.Destroy();
+                _npcs.Remove(identity);
+            }
+
+            if (_npcVisualLeases.TryGetValue(
+                    identity,
+                    out NpcVisualResourceCache.Lease? lease))
+            {
+                lease.Dispose();
+                _npcVisualLeases.Remove(identity);
+            }
+
+            ScheduleNpcVisualUnloadIfIdle();
+        }
+
+        private bool IsCurrentPendingNpcSpawn(
+            Identity identity,
+            PendingNpcSpawn pending)
+        {
+            return _pendingNpcSpawns.TryGetValue(identity, out PendingNpcSpawn? current)
+                && ReferenceEquals(current, pending);
+        }
+
+        private void RemovePendingNpcSpawn(
+            Identity identity,
+            PendingNpcSpawn pending,
+            bool scheduleUnload = true)
+        {
+            if (IsCurrentPendingNpcSpawn(identity, pending))
+                _pendingNpcSpawns.Remove(identity);
+
+            if (scheduleUnload)
+                ScheduleNpcVisualUnloadIfIdle();
+        }
+
+        private void ScheduleNpcVisualUnloadIfIdle()
+        {
+            if (_npcs.Count != 0 || _pendingNpcSpawns.Count != 0)
+                return;
+
+            CancelScheduledNpcVisualUnload();
+            if (isActiveAndEnabled)
+                _npcVisualUnloadCoroutine = StartCoroutine(UnloadNpcVisualsAfterIdleDelay());
+            else
+                _npcVisualCache.ReleaseUnusedProfiles();
+        }
+
+        private IEnumerator UnloadNpcVisualsAfterIdleDelay()
+        {
+            yield return new WaitForSecondsRealtime(NpcVisualUnloadIdleDelaySeconds);
+            _npcVisualUnloadCoroutine = null;
+            if (_npcs.Count != 0 || _pendingNpcSpawns.Count != 0)
+                yield break;
+
+            _npcVisualCache.ReleaseUnusedProfiles();
+            yield return Resources.UnloadUnusedAssets();
+        }
+
+        private void CancelScheduledNpcVisualUnload()
+        {
+            if (_npcVisualUnloadCoroutine == null)
+                return;
+
+            StopCoroutine(_npcVisualUnloadCoroutine);
+            _npcVisualUnloadCoroutine = null;
+        }
+
+        private static string NormalizeVisualId(string? value)
+            => string.IsNullOrWhiteSpace(value)
+                ? string.Empty
+                : value.Trim().ToUpperInvariant();
 
         private void RemovePlayerReference(Identity id, PlayerEntity entity)
         {
