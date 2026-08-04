@@ -22,6 +22,7 @@ namespace Arena.Interaction
         private const float HoverRangeSlackMeters = 2f;
         private const float OcclusionToleranceMeters = 0.2f;
         private const int RaycastCapacity = 64;
+        private const string VerboseTraceSymbol = "ARENA_VERBOSE_RUNTIME_TRACES";
 
         private static readonly RaycastHit[] RaycastHits = new RaycastHit[RaycastCapacity];
         private static readonly RaycastHitDistanceComparer HitComparer = new();
@@ -40,7 +41,7 @@ namespace Arena.Interaction
             bool gateOpen = ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene();
             WorldPointerInteractionRouter? existing =
                 FindAnyObjectByType<WorldPointerInteractionRouter>();
-            Debug.Log(
+            Trace(
                 $"[WorldInteraction] router bootstrap scene="
                 + $"'{SceneManager.GetActiveScene().path}' gate={gateOpen} "
                 + $"existing={existing != null}.");
@@ -66,7 +67,7 @@ namespace Arena.Interaction
             _gesture = new WorldPointerGestureClassifier(
                 MaxClickDurationSeconds,
                 MaxClickDistancePixels);
-            Debug.Log(
+            Trace(
                 $"[WorldInteraction] router awake object='{name}'.",
                 this);
         }
@@ -103,14 +104,7 @@ namespace Arena.Interaction
             TraceRuntimeState(
                 $"ready: scene='{SceneManager.GetActiveScene().path}', "
                 + $"camera={Camera.main != null}, cursorLocked={input.CursorLocked}");
-            int hitboxCount = WorldInteractionHitbox.ActiveHitboxes.Count;
-            if (_lastHitboxCount != hitboxCount)
-            {
-                _lastHitboxCount = hitboxCount;
-                Debug.Log(
-                    $"[WorldInteraction] active hitbox count={hitboxCount}.",
-                    this);
-            }
+            TraceHitboxCount();
 
             if (!input.CursorLocked)
                 UpdateHover(localPlayer, input.MousePosition);
@@ -135,7 +129,7 @@ namespace Arena.Interaction
                 if (!consumed)
                     consumed = SpellInputHandler.Instance?.TryCancelAimFromSecondaryWorldAction() == true;
 
-                Debug.Log(
+                Trace(
                     $"[WorldInteraction] right press pointer={Format(input.MousePosition)} "
                     + $"consumed={consumed} cursorLocked={input.CursorLocked}.",
                     this);
@@ -153,7 +147,7 @@ namespace Arena.Interaction
                 input.MousePosition,
                 Time.unscaledTime,
                 blockedOnRelease);
-            Debug.Log(
+            Trace(
                 $"[WorldInteraction] right release pointer={Format(input.MousePosition)} "
                 + $"blockedByUi={blockedOnRelease} result={result}.",
                 this);
@@ -179,7 +173,7 @@ namespace Arena.Interaction
                 out _,
                 out string propDenialReason,
                 out PropScanDiagnostics diagnostics);
-            Debug.Log(
+            Trace(
                 $"[WorldInteraction] click scan pointer={Format(screenPosition)} "
                 + $"candidates={_candidates.Count}; {diagnostics}.",
                 this);
@@ -189,7 +183,7 @@ namespace Arena.Interaction
                     out WorldInteractionCandidate selected))
             {
                 bool dispatched = selected.Dispatch();
-                Debug.Log(
+                Trace(
                     $"[WorldInteraction] dispatch kind={selected.Kind} "
                     + $"id='{selected.StableId}' verb='{selected.Verb}' "
                     + $"maxRange={selected.MaxInteractionDistance:F2} "
@@ -198,14 +192,14 @@ namespace Arena.Interaction
             }
             else if (!string.IsNullOrWhiteSpace(propDenialReason))
             {
-                Debug.Log(
+                Trace(
                     $"[WorldInteraction] click denied: {propDenialReason}",
                     this);
                 LocalInteractionState.ReportDenial(propDenialReason);
             }
             else
             {
-                Debug.Log(
+                Trace(
                     "[WorldInteraction] click produced no selectable candidate.",
                     this);
             }
@@ -440,23 +434,48 @@ namespace Arena.Interaction
             if (_hoveredHitbox == hitbox)
                 return;
 
-            string previous = Describe(_hoveredHitbox);
+            TraceHoverChange(_hoveredHitbox, hitbox);
             _hoveredHitbox?.SetHovered(false);
             _hoveredHitbox = hitbox;
             _hoveredHitbox?.SetHovered(true);
-            Debug.Log(
-                $"[WorldInteraction] hover {previous} -> {Describe(_hoveredHitbox)}; "
-                + $"highlightSlots={_hoveredHitbox?.HighlightSlotCount ?? 0}.",
-                this);
         }
 
+        [System.Diagnostics.Conditional(VerboseTraceSymbol)]
         private void TraceRuntimeState(string state)
         {
             if (string.Equals(_lastRuntimeState, state, StringComparison.Ordinal))
                 return;
 
             _lastRuntimeState = state;
-            Debug.Log($"[WorldInteraction] router state: {state}.", this);
+            Trace($"[WorldInteraction] router state: {state}.", this);
+        }
+
+        [System.Diagnostics.Conditional(VerboseTraceSymbol)]
+        private void TraceHitboxCount()
+        {
+            int hitboxCount = WorldInteractionHitbox.ActiveHitboxes.Count;
+            if (_lastHitboxCount == hitboxCount)
+                return;
+
+            _lastHitboxCount = hitboxCount;
+            Trace($"[WorldInteraction] active hitbox count={hitboxCount}.", this);
+        }
+
+        [System.Diagnostics.Conditional(VerboseTraceSymbol)]
+        private void TraceHoverChange(
+            WorldInteractionHitbox? previous,
+            WorldInteractionHitbox? current)
+        {
+            Trace(
+                $"[WorldInteraction] hover {Describe(previous)} -> {Describe(current)}; "
+                + $"highlightSlots={current?.HighlightSlotCount ?? 0}.",
+                this);
+        }
+
+        [System.Diagnostics.Conditional(VerboseTraceSymbol)]
+        private static void Trace(string message, UnityEngine.Object? context = null)
+        {
+            Debug.Log(message, context);
         }
 
         private static string Describe(WorldInteractionHitbox? hitbox)

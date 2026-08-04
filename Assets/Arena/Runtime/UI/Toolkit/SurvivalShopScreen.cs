@@ -21,6 +21,7 @@ namespace Arena.UI
         private const string OpenClass = "is-open";
         private const string PurchasedClass = "is-purchased";
         private const string IntermissionPhase = "INTERMISSION";
+        private const float RefreshIntervalSeconds = 0.20f;
 
         private static readonly IReadOnlyDictionary<string, ModifierCopy> ModifierCopies =
             new Dictionary<string, ModifierCopy>(StringComparer.Ordinal)
@@ -50,6 +51,7 @@ namespace Arena.UI
         private readonly Dictionary<string, float> _pendingPurchases = new(StringComparer.Ordinal);
         private string _lastSignature = string.Empty;
         private bool _open;
+        private float _nextRefreshTime;
 
         private readonly struct ModifierCopy
         {
@@ -111,8 +113,14 @@ namespace Arena.UI
                 || !ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
             {
                 SetOpen(false);
+                _nextRefreshTime = 0f;
                 return;
             }
+
+            float now = Time.unscaledTime;
+            if (now < _nextRefreshTime)
+                return;
+            _nextRefreshTime = now + RefreshIntervalSeconds;
 
             SurvivalRun? run = conn.Db.SurvivalRun.Owner.Filter(conn.Identity.Value).FirstOrDefault();
             bool shouldOpen = run != null
@@ -134,6 +142,7 @@ namespace Arena.UI
             _connection = conn;
             _pendingPurchases.Clear();
             _lastSignature = string.Empty;
+            _nextRefreshTime = 0f;
             if (_connection != null)
                 _connection.Reducers.OnPurchaseSurvivalOffer += OnPurchaseSurvivalOffer;
         }
@@ -142,6 +151,7 @@ namespace Arena.UI
         {
             _pendingPurchases.Remove(offerId);
             _lastSignature = string.Empty;
+            _nextRefreshTime = 0f;
         }
 
         private void SetOpen(bool open)
@@ -260,6 +270,7 @@ namespace Arena.UI
                 return;
             _pendingPurchases[offerId] = Time.unscaledTime;
             _lastSignature = string.Empty;
+            _nextRefreshTime = 0f;
             _connection.Reducers.PurchaseSurvivalOffer(offerId);
         }
 

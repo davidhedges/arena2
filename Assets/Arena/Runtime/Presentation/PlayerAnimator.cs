@@ -56,6 +56,12 @@ namespace Arena.Presentation
     /// </summary>
     public class PlayerAnimator : MonoBehaviour
     {
+        // Add ARENA_VERBOSE_RUNTIME_TRACES to Scripting Define Symbols only
+        // while actively diagnosing combat or interaction presentation. Using
+        // Conditional removes both the log call and interpolated-string work
+        // from ordinary Editor and development builds.
+        private const string VerboseTraceSymbol = "ARENA_VERBOSE_RUNTIME_TRACES";
+
         // Fixed canonical parameter contract. These hashes are computed once at class load.
         // Never look up parameters by string at runtime — if the controller is missing a
         // parameter, the Set* call silently no-ops, which is intentional and safe.
@@ -2502,8 +2508,7 @@ namespace Arena.Presentation
             return bound;
         }
 
-        [System.Diagnostics.Conditional("UNITY_EDITOR")]
-        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+        [System.Diagnostics.Conditional(VerboseTraceSymbol)]
         private void TraceStrikeBinding(int strikeIndex, int bankSlot, bool bound)
         {
             if (!_isLocalPlayer)
@@ -2517,8 +2522,7 @@ namespace Arena.Presentation
                 $"applied={(applied != null ? applied.name : "<null>")}");
         }
 
-        [System.Diagnostics.Conditional("UNITY_EDITOR")]
-        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+        [System.Diagnostics.Conditional(VerboseTraceSymbol)]
         private void ArmMeleeEntryTrace(in CombatAnimationRequest request, int strikeIndex)
         {
             if (!_isLocalPlayer)
@@ -2553,8 +2557,7 @@ namespace Arena.Presentation
                 $"clip={(clip != null ? clip.name : "<phased-or-null>")}");
         }
 
-        [System.Diagnostics.Conditional("UNITY_EDITOR")]
-        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+        [System.Diagnostics.Conditional(VerboseTraceSymbol)]
         private void FailMeleeEntryTrace(string reason)
         {
             if (!_isLocalPlayer)
@@ -2566,8 +2569,7 @@ namespace Arena.Presentation
             _combatAnimationTraceAwaitingMeleeEntry = false;
         }
 
-        [System.Diagnostics.Conditional("UNITY_EDITOR")]
-        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+        [System.Diagnostics.Conditional(VerboseTraceSymbol)]
         private void TracePendingMeleeEntry()
         {
             if (!_isLocalPlayer || !_combatAnimationTraceAwaitingMeleeEntry || _animator == null)
@@ -2604,8 +2606,7 @@ namespace Arena.Presentation
                 _combatAnimationTraceAwaitingMeleeEntry = false;
         }
 
-        [System.Diagnostics.Conditional("UNITY_EDITOR")]
-        [System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
+        [System.Diagnostics.Conditional(VerboseTraceSymbol)]
         private void TraceCombatAnimation(string message)
         {
             if (!_isLocalPlayer)

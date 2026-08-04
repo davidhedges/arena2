@@ -402,6 +402,68 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void SurvivalUi_UsesBoundedRefreshCadence()
+        {
+            Type survivalHud = RequireRuntimeType("Arena.UI.SurvivalHud");
+            Type survivalShop = RequireRuntimeType("Arena.UI.SurvivalShopScreen");
+
+            Assert.That(
+                survivalHud.GetField(
+                        "RefreshIntervalSeconds",
+                        BindingFlags.Static | BindingFlags.NonPublic)!
+                    .GetRawConstantValue(),
+                Is.EqualTo(0.10f));
+            Assert.That(
+                survivalShop.GetField(
+                        "RefreshIntervalSeconds",
+                        BindingFlags.Static | BindingFlags.NonPublic)!
+                    .GetRawConstantValue(),
+                Is.EqualTo(0.20f));
+
+            string hudSource = File.ReadAllText("Assets/Arena/Runtime/UI/SurvivalHud.cs");
+            string shopSource = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/SurvivalShopScreen.cs");
+            Assert.That(hudSource, Does.Contain("now < _nextRefreshTime"));
+            Assert.That(hudSource, Does.Contain("SetTextIfChanged"));
+            Assert.That(shopSource, Does.Contain("now < _nextRefreshTime"));
+        }
+
+        [Test]
+        public void VerboseRuntimeTraces_AreExplicitOptIn()
+        {
+            Type playerAnimator = RequireRuntimeType("Arena.Presentation.PlayerAnimator");
+            Type pointerRouter = RequireRuntimeType("Arena.Interaction.WorldPointerInteractionRouter");
+
+            Assert.That(
+                playerAnimator.GetField(
+                        "VerboseTraceSymbol",
+                        BindingFlags.Static | BindingFlags.NonPublic)!
+                    .GetRawConstantValue(),
+                Is.EqualTo("ARENA_VERBOSE_RUNTIME_TRACES"));
+            Assert.That(
+                pointerRouter.GetField(
+                        "VerboseTraceSymbol",
+                        BindingFlags.Static | BindingFlags.NonPublic)!
+                    .GetRawConstantValue(),
+                Is.EqualTo("ARENA_VERBOSE_RUNTIME_TRACES"));
+
+            string animatorSource = File.ReadAllText("Assets/Arena/Runtime/Presentation/PlayerAnimator.cs");
+            string pointerSource = File.ReadAllText(
+                "Assets/Arena/Runtime/Interaction/WorldPointerInteractionRouter.cs");
+            Assert.That(
+                CountOccurrences(
+                    animatorSource,
+                    "[System.Diagnostics.Conditional(VerboseTraceSymbol)]"),
+                Is.EqualTo(5));
+            Assert.That(
+                CountOccurrences(
+                    pointerSource,
+                    "[System.Diagnostics.Conditional(VerboseTraceSymbol)]"),
+                Is.EqualTo(4));
+            Assert.That(animatorSource, Does.Not.Contain("[Conditional(\"UNITY_EDITOR\")]"));
+            Assert.That(animatorSource, Does.Not.Contain("[Conditional(\"DEVELOPMENT_BUILD\")]"));
+        }
+
+        [Test]
         public void SpellCastPresentation_ReleaseStartUsesAuthoredOffsetInsideCastWindow()
         {
             Type controllerType = RequireRuntimeType("Arena.Presentation.SpellCastPresentationController");

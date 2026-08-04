@@ -20,6 +20,7 @@ namespace Arena.UI
         private const string IntermissionPhase = "INTERMISSION";
         private const string ActivePhase = "ACTIVE";
         private const string BossPhase = "BOSS";
+        private const float RefreshIntervalSeconds = 0.10f;
 
         private GameObject _runRoot = null!;
         private TextMeshProUGUI _phaseText = null!;
@@ -33,6 +34,7 @@ namespace Arena.UI
 
         private float _readyCooldownUntil;
         private float _dismissCooldownUntil;
+        private float _nextRefreshTime;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -195,15 +197,21 @@ namespace Arena.UI
                 || !conn.Identity.HasValue)
             {
                 HideAll();
+                _nextRefreshTime = 0f;
                 return;
             }
+
+            float now = Time.unscaledTime;
+            if (now < _nextRefreshTime)
+                return;
+            _nextRefreshTime = now + RefreshIntervalSeconds;
 
             SurvivalRun? run = conn.Db.SurvivalRun.Owner.Filter(conn.Identity.Value).FirstOrDefault();
             if (run != null && MatchStateCache.Instance.IsSurvivalMode)
             {
                 RefreshRun(run, conn);
-                _runRoot.SetActive(true);
-                _resultRoot.SetActive(false);
+                SetActiveIfChanged(_runRoot, true);
+                SetActiveIfChanged(_resultRoot, false);
                 return;
             }
 
@@ -212,8 +220,8 @@ namespace Arena.UI
             {
                 SurvivalScore? score = conn.Db.SurvivalScore.Owner.Find(conn.Identity.Value);
                 RefreshResult(result, score, conn);
-                _runRoot.SetActive(false);
-                _resultRoot.SetActive(true);
+                SetActiveIfChanged(_runRoot, false);
+                SetActiveIfChanged(_resultRoot, true);
                 return;
             }
 
@@ -225,12 +233,14 @@ namespace Arena.UI
             bool intermission = string.Equals(run.Phase, IntermissionPhase, StringComparison.Ordinal);
             bool boss = string.Equals(run.Phase, BossPhase, StringComparison.Ordinal);
             uint displayedRound = run.Round == 0 ? 1u : run.Round;
-            _phaseText.text = intermission
+            SetTextIfChanged(_phaseText, intermission
                 ? $"PREPARE FOR ROUND {displayedRound}"
                 : boss
                     ? $"BOSS ROUND {displayedRound}"
-                    : $"ROUND {displayedRound}";
-            _statsText.text = $"GOLD  {run.Gold:N0}     KILLS  {run.Kills:N0}     ALIVE  {run.TotalAlive:N0}";
+                    : $"ROUND {displayedRound}");
+            SetTextIfChanged(
+                _statsText,
+                $"GOLD  {run.Gold:N0}     KILLS  {run.Kills:N0}     ALIVE  {run.TotalAlive:N0}");
 
             if (string.Equals(run.Phase, ActivePhase, StringComparison.Ordinal))
             {
@@ -239,23 +249,24 @@ namespace Arena.UI
                     ? ArenaServerClock.ServerNowMs
                     : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 long remainingSeconds = Math.Max(0L, (long)Math.Ceiling((endMs - nowMs) / 1000.0));
-                _timerText.text = $"{remainingSeconds / 60:00}:{remainingSeconds % 60:00}";
+                SetTextIfChanged(
+                    _timerText,
+                    $"{remainingSeconds / 60:00}:{remainingSeconds % 60:00}");
             }
             else if (boss)
             {
-                _timerText.text = "DEFEAT BOSS";
+                SetTextIfChanged(_timerText, "DEFEAT BOSS");
             }
             else
             {
-                _timerText.text = "READY";
+                SetTextIfChanged(_timerText, "READY");
             }
 
-            _readyButton.GameObject.SetActive(intermission);
-            _readyButton.SetLabel($"START ROUND {displayedRound}");
-            _readyButton.SetInteractable(
-                intermission
-                && conn.Identity.HasValue
-                && Time.unscaledTime >= _readyCooldownUntil);
+            SetActiveIfChanged(_readyButton.GameObject, intermission);
+            SetTextIfChanged(_readyButton.Label, $"START ROUND {displayedRound}");
+            SetInteractableIfChanged(
+                _readyButton,
+                intermission && conn.Identity.HasValue && Time.unscaledTime >= _readyCooldownUntil);
         }
 
         private void RefreshResult(SurvivalResult result, SurvivalScore? score, DbConnection conn)
@@ -263,13 +274,14 @@ namespace Arena.UI
             string bestLine = score == null
                 ? string.Empty
                 : $"\nBEST ROUND  {score.BestRound:N0}     RUNS  {score.RunsPlayed:N0}";
-            _resultText.text =
+            SetTextIfChanged(
+                _resultText,
                 $"ROUND REACHED  {result.RoundReached:N0}\n" +
                 $"KILLS  {result.Kills:N0}     GOLD EARNED  {result.GoldEarned:N0}" +
-                bestLine;
-            _dismissButton.SetInteractable(
-                conn.Identity.HasValue
-                && Time.unscaledTime >= _dismissCooldownUntil);
+                bestLine);
+            SetInteractableIfChanged(
+                _dismissButton,
+                conn.Identity.HasValue && Time.unscaledTime >= _dismissCooldownUntil);
         }
 
         private void ReadyForRound()
@@ -292,8 +304,26 @@ namespace Arena.UI
 
         private void HideAll()
         {
-            _runRoot.SetActive(false);
-            _resultRoot.SetActive(false);
+            SetActiveIfChanged(_runRoot, false);
+            SetActiveIfChanged(_resultRoot, false);
+        }
+
+        private static void SetTextIfChanged(TextMeshProUGUI text, string value)
+        {
+            if (!string.Equals(text.text, value, StringComparison.Ordinal))
+                text.text = value;
+        }
+
+        private static void SetInteractableIfChanged(ArenaButtonHandle button, bool interactable)
+        {
+            if (button.Button.interactable != interactable)
+                button.SetInteractable(interactable);
+        }
+
+        private static void SetActiveIfChanged(GameObject target, bool active)
+        {
+            if (target.activeSelf != active)
+                target.SetActive(active);
         }
     }
 }
