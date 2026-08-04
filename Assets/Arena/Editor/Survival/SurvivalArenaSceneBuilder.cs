@@ -758,9 +758,8 @@ namespace Arena.Editor.Survival
                     continue;
                 }
 
-                // TODO(graphics-quality-menu): a future High/Ultra preset may
-                // opt a small, curated set of hero lights back into shadows.
-                // Never restore shadows wholesale on all entrance point lights.
+                // Runtime graphics settings may opt one curated hero light per
+                // entrance back into shadows. Never restore all point shadows.
                 if (light.type == LightType.Point)
                     light.shadows = LightShadows.None;
             }

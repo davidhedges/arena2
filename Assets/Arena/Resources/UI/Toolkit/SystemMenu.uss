@@ -19,11 +19,10 @@
     display: flex;
 }
 
-/* Height = title-plate overhang end (44) + content padding (18 + 30) +
- * content column (350). Re-derive when rows change. */
+/* Height = the original 442px shell plus three additional 46px setting rows. */
 .system-menu .menu-window {
     width: 400px;
-    height: 442px;
+    height: 580px;
 }
 
 .window-content {

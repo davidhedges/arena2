@@ -1,5 +1,6 @@
 #nullable enable
 
+using Arena.Graphics;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -7,7 +8,7 @@ namespace Arena.UI
 {
     /// <summary>
     /// System menu (Escape with nothing else open): resume, client settings
-    /// (window mode, vsync, quality, master volume), quit. Entirely client-local.
+    /// (window mode, vsync, graphics, master volume), quit. Entirely client-local.
     /// First UI Toolkit screen; the visual source of truth is the prototype at
     /// docs/ui-prototypes/system-menu, translated to SystemMenu.uxml/.uss
     /// (see docs/ui-toolkit-workflow.md). This controller only binds names,
@@ -18,17 +19,11 @@ namespace Arena.UI
     {
         private const string VolumePrefKey = "arena.settings.masterVolume";
         private const string VsyncPrefKey = "arena.settings.vsync";
-        private const string QualityPrefKey = "arena.settings.quality";
         private const string FullscreenPrefKey = "arena.settings.fullscreen";
 
-        // TODO(graphics-quality-menu): expose 30 / 60 / 120 / Unlimited as a
-        // frame-limit selector. Sixty is the safe default for laptop thermals;
-        // Application.targetFrameRate is effective on desktop while VSync is off.
-        private const int DefaultTargetFrameRate = 60;
-
         private const string OpenClass = "is-open";
-        private const string SelectedClass = "is-selected";
         private const long WindowTransitionMs = 130;
+        private static readonly int[] FrameLimits = { 30, 60, 120, -1 };
 
         private static SystemMenuScreen? s_instance;
 
@@ -37,9 +32,10 @@ namespace Arena.UI
         private VisualElement? _window;
         private Button? _windowModeButton;
         private Button? _vsyncButton;
-        private Button? _qualityButton;
-        private VisualElement? _qualityDropdown;
-        private VisualElement? _qualityMenu;
+        private Button? _frameLimitButton;
+        private Button? _textureQualityButton;
+        private Button? _effectsQualityButton;
+        private Button? _lightShadowsButton;
         private VisualElement? _volumeSlider;
         private VisualElement? _volumeFill;
         private Label? _volumeValue;
@@ -67,16 +63,10 @@ namespace Arena.UI
         /// <summary>Applies persisted client settings on startup, before any UI exists.</summary>
         private static void ApplySavedSettings()
         {
-            Application.targetFrameRate = DefaultTargetFrameRate;
+            ArenaGraphicsSettings.EnsureLoaded();
             AudioListener.volume = Mathf.Clamp01(PlayerPrefs.GetFloat(VolumePrefKey, 1f));
             if (PlayerPrefs.HasKey(VsyncPrefKey))
                 QualitySettings.vSyncCount = PlayerPrefs.GetInt(VsyncPrefKey, 1) != 0 ? 1 : 0;
-            if (PlayerPrefs.HasKey(QualityPrefKey))
-            {
-                int quality = PlayerPrefs.GetInt(QualityPrefKey, QualitySettings.GetQualityLevel());
-                if (quality >= 0 && quality < QualitySettings.names.Length)
-                    QualitySettings.SetQualityLevel(quality, applyExpensiveChanges: false);
-            }
             if (PlayerPrefs.HasKey(FullscreenPrefKey))
                 Screen.fullScreen = PlayerPrefs.GetInt(FullscreenPrefKey, Screen.fullScreen ? 1 : 0) != 0;
         }
@@ -136,7 +126,6 @@ namespace Arena.UI
                 return;
 
             _open = open;
-            CloseQualityMenu();
             if (open)
             {
                 if (_panelSettings != null)
@@ -185,9 +174,10 @@ namespace Arena.UI
             _window = _root.Q<VisualElement>("Window");
             _windowModeButton = _root.Q<Button>("WindowModeButton");
             _vsyncButton = _root.Q<Button>("VsyncButton");
-            _qualityButton = _root.Q<Button>("QualityButton");
-            _qualityDropdown = _root.Q<VisualElement>("QualityDropdown");
-            _qualityMenu = _root.Q<VisualElement>("QualityMenu");
+            _frameLimitButton = _root.Q<Button>("FrameLimitButton");
+            _textureQualityButton = _root.Q<Button>("TextureQualityButton");
+            _effectsQualityButton = _root.Q<Button>("EffectsQualityButton");
+            _lightShadowsButton = _root.Q<Button>("LightShadowsButton");
             _volumeSlider = _root.Q<VisualElement>("VolumeSlider");
             _volumeFill = _root.Q<VisualElement>("VolumeFill");
             _volumeValue = _root.Q<Label>("VolumeValue");
@@ -196,39 +186,12 @@ namespace Arena.UI
             _root.Q<Button>("QuitButton")!.clicked += QuitGame;
             _windowModeButton!.clicked += CycleWindowMode;
             _vsyncButton!.clicked += ToggleVsync;
-            _qualityButton!.clicked += ToggleQualityMenu;
+            _frameLimitButton!.clicked += CycleFrameLimit;
+            _textureQualityButton!.clicked += ToggleTextureQuality;
+            _effectsQualityButton!.clicked += ToggleEffectsQuality;
+            _lightShadowsButton!.clicked += ToggleLightShadows;
 
-            BuildQualityItems();
             BindVolumeSlider();
-
-            // Any press outside the dropdown collapses it.
-            _root.RegisterCallback<PointerDownEvent>(evt =>
-            {
-                if (evt.target is VisualElement element &&
-                    _qualityDropdown != null &&
-                    element.FindCommonAncestor(_qualityDropdown) != _qualityDropdown)
-                    CloseQualityMenu();
-            }, TrickleDown.TrickleDown);
-        }
-
-        private void BuildQualityItems()
-        {
-            if (_qualityMenu == null)
-                return;
-
-            string[] names = QualitySettings.names;
-            for (int i = 0; i < names.Length; i++)
-            {
-                int level = i;
-                Label item = new(names[i]);
-                item.AddToClassList("dropdown-item");
-                item.RegisterCallback<ClickEvent>(_ =>
-                {
-                    SelectQuality(level);
-                    CloseQualityMenu();
-                });
-                _qualityMenu.Add(item);
-            }
         }
 
         private void BindVolumeSlider()
@@ -267,39 +230,28 @@ namespace Arena.UI
             OnVolumeChanged(Mathf.Clamp01(t));
         }
 
-        private void ToggleQualityMenu()
-        {
-            if (_qualityDropdown == null)
-                return;
-
-            if (_qualityDropdown.ClassListContains(OpenClass))
-                CloseQualityMenu();
-            else
-                _qualityDropdown.AddToClassList(OpenClass);
-        }
-
-        private void CloseQualityMenu()
-        {
-            _qualityDropdown?.RemoveFromClassList(OpenClass);
-        }
-
         private void RefreshSettingRows()
         {
             if (_windowModeButton != null)
                 _windowModeButton.text = Screen.fullScreen ? "FULLSCREEN" : "WINDOWED";
             if (_vsyncButton != null)
                 _vsyncButton.text = QualitySettings.vSyncCount > 0 ? "ON" : "OFF";
-
-            string[] names = QualitySettings.names;
-            int level = QualitySettings.GetQualityLevel();
-            if (_qualityButton != null)
-            {
-                string label = level >= 0 && level < names.Length ? names[level].ToUpperInvariant() : level.ToString();
-                _qualityButton.text = $"{label}  ▾";
-            }
-            if (_qualityMenu != null)
-                for (int i = 0; i < _qualityMenu.childCount; i++)
-                    _qualityMenu[i].EnableInClassList(SelectedClass, i == level);
+            if (_frameLimitButton != null)
+                _frameLimitButton.text = ArenaGraphicsSettings.FrameLimit < 0
+                    ? "UNLIMITED"
+                    : ArenaGraphicsSettings.FrameLimit.ToString();
+            if (_textureQualityButton != null)
+                _textureQualityButton.text = ArenaGraphicsSettings.TextureQuality == ArenaTextureQuality.Laptop
+                    ? "LAPTOP"
+                    : "FULL";
+            if (_effectsQualityButton != null)
+                _effectsQualityButton.text = ArenaGraphicsSettings.EffectsQuality == ArenaEffectsQuality.Low
+                    ? "LOW"
+                    : "HIGH";
+            if (_lightShadowsButton != null)
+                _lightShadowsButton.text = ArenaGraphicsSettings.LightShadowQuality == ArenaLightShadowQuality.Off
+                    ? "OFF"
+                    : "HERO";
 
             RefreshVolume();
         }
@@ -330,14 +282,38 @@ namespace Arena.UI
             RefreshSettingRows();
         }
 
-        private void SelectQuality(int level)
+        private void CycleFrameLimit()
         {
-            if (level < 0 || level >= QualitySettings.names.Length)
-                return;
+            int current = System.Array.IndexOf(FrameLimits, ArenaGraphicsSettings.FrameLimit);
+            int next = current >= 0 ? (current + 1) % FrameLimits.Length : 0;
+            ArenaGraphicsSettings.SetFrameLimit(FrameLimits[next]);
+            RefreshSettingRows();
+        }
 
-            QualitySettings.SetQualityLevel(level, applyExpensiveChanges: true);
-            PlayerPrefs.SetInt(QualityPrefKey, level);
-            PlayerPrefs.Save();
+        private void ToggleTextureQuality()
+        {
+            ArenaGraphicsSettings.SetTextureQuality(
+                ArenaGraphicsSettings.TextureQuality == ArenaTextureQuality.Laptop
+                    ? ArenaTextureQuality.Full
+                    : ArenaTextureQuality.Laptop);
+            RefreshSettingRows();
+        }
+
+        private void ToggleEffectsQuality()
+        {
+            ArenaGraphicsSettings.SetEffectsQuality(
+                ArenaGraphicsSettings.EffectsQuality == ArenaEffectsQuality.Low
+                    ? ArenaEffectsQuality.High
+                    : ArenaEffectsQuality.Low);
+            RefreshSettingRows();
+        }
+
+        private void ToggleLightShadows()
+        {
+            ArenaGraphicsSettings.SetLightShadowQuality(
+                ArenaGraphicsSettings.LightShadowQuality == ArenaLightShadowQuality.Off
+                    ? ArenaLightShadowQuality.Hero
+                    : ArenaLightShadowQuality.Off);
             RefreshSettingRows();
         }
 

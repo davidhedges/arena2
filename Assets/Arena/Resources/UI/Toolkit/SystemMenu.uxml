@@ -48,13 +48,30 @@
                     </ui:VisualElement>
 
                     <ui:VisualElement class="menu-row">
-                        <ui:Label class="row-label" text="Quality" />
+                        <ui:Label class="row-label" text="Frame Limit" />
                         <ui:VisualElement class="row-control">
-                            <ui:VisualElement name="QualityDropdown" class="dropdown">
-                                <ui:Button name="QualityButton" class="arena-button" text="QUALITY ▾" />
-                                <!-- Items are built by SystemMenuScreen from QualitySettings.names. -->
-                                <ui:VisualElement name="QualityMenu" class="dropdown-menu" />
-                            </ui:VisualElement>
+                            <ui:Button name="FrameLimitButton" class="arena-button" text="60" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="menu-row">
+                        <ui:Label class="row-label" text="Texture Quality" />
+                        <ui:VisualElement class="row-control">
+                            <ui:Button name="TextureQualityButton" class="arena-button" text="LAPTOP" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="menu-row">
+                        <ui:Label class="row-label" text="Effects Animation" />
+                        <ui:VisualElement class="row-control">
+                            <ui:Button name="EffectsQualityButton" class="arena-button" text="LOW" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <ui:VisualElement class="menu-row">
+                        <ui:Label class="row-label" text="Light Shadows" />
+                        <ui:VisualElement class="row-control">
+                            <ui:Button name="LightShadowsButton" class="arena-button" text="OFF" />
                         </ui:VisualElement>
                     </ui:VisualElement>
 

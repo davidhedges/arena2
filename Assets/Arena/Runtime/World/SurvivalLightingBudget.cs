@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using Arena.Graphics;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -16,12 +17,6 @@ namespace Arena.World
         private const string SceneName = "SurvivalArena";
         private const string EntranceRootPrefix = "Level Entrance ";
         private const string AnimatedFireLightName = "pointlight_fire_dungeon";
-
-        // TODO(graphics-quality-menu): fold this into an Effects Animation
-        // quality preset. 15 Hz retains the original subtle fire variation
-        // without evaluating 56 Animator graphs every rendered frame.
-        private const float FlickerUpdatesPerSecond = 15f;
-        private const float FlickerUpdateInterval = 1f / FlickerUpdatesPerSecond;
 
         // The source pack's 1.5167-second ANI_pointlight_fire curve, sampled by
         // one controller and then shared by every matching entrance light.
@@ -44,7 +39,9 @@ namespace Arena.World
             postWrapMode = WrapMode.Loop,
         };
 
+        private readonly List<Light> _entrancePointLights = new(64);
         private readonly List<Light> _animatedFireLights = new(64);
+        private readonly Dictionary<Transform, Light> _heroShadowLightsByEntrance = new(4);
         private float _nextFlickerUpdateAt;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -63,17 +60,22 @@ namespace Arena.World
             Light[] lights = FindObjectsByType<Light>(FindObjectsInactive.Include);
             foreach (Light light in lights)
             {
-                if (light.gameObject.scene != gameObject.scene ||
-                    light.type != LightType.Point ||
-                    !IsInsideEntrance(light.transform))
+                Transform? entrance = FindEntranceRoot(light.transform);
+                if (light.gameObject.scene != gameObject.scene
+                    || light.type != LightType.Point
+                    || entrance == null)
                 {
                     continue;
                 }
 
-                // TODO(graphics-quality-menu): "Additional Light Shadows" should
-                // default Off/Balanced. A future High setting should enable only
-                // a curated handful of hero lights, not all sixty point lights.
+                _entrancePointLights.Add(light);
                 light.shadows = LightShadows.None;
+                if (!_heroShadowLightsByEntrance.TryGetValue(entrance, out Light existing)
+                    || (light.transform.position - entrance.position).sqrMagnitude
+                    < (existing.transform.position - entrance.position).sqrMagnitude)
+                {
+                    _heroShadowLightsByEntrance[entrance] = light;
+                }
 
                 if (!string.Equals(light.gameObject.name, AnimatedFireLightName, StringComparison.Ordinal))
                     continue;
@@ -84,7 +86,14 @@ namespace Arena.World
                 _animatedFireLights.Add(light);
             }
 
+            ArenaGraphicsSettings.Changed += OnGraphicsSettingsChanged;
+            ApplyLightShadowQuality();
             ApplyFlicker(Time.unscaledTime);
+        }
+
+        private void OnDestroy()
+        {
+            ArenaGraphicsSettings.Changed -= OnGraphicsSettingsChanged;
         }
 
         private void Update()
@@ -98,20 +107,42 @@ namespace Arena.World
 
         private void ApplyFlicker(float now)
         {
-            _nextFlickerUpdateAt = now + FlickerUpdateInterval;
+            _nextFlickerUpdateAt = now + 1f / ArenaGraphicsSettings.EffectsAnimationUpdatesPerSecond;
             float intensity = FireFlicker.Evaluate(now);
             foreach (Light light in _animatedFireLights)
                 if (light != null)
                     light.intensity = intensity;
         }
 
-        private static bool IsInsideEntrance(Transform transform)
+        private void OnGraphicsSettingsChanged()
+        {
+            _nextFlickerUpdateAt = 0f;
+            ApplyLightShadowQuality();
+        }
+
+        private void ApplyLightShadowQuality()
+        {
+            foreach (Light light in _entrancePointLights)
+                if (light != null)
+                    light.shadows = LightShadows.None;
+
+            if (ArenaGraphicsSettings.LightShadowQuality != ArenaLightShadowQuality.Hero)
+                return;
+
+            // One representative point light per authored entrance keeps High
+            // mode useful without restoring all 56 six-face point shadows.
+            foreach (Light light in _heroShadowLightsByEntrance.Values)
+                if (light != null)
+                    light.shadows = LightShadows.Soft;
+        }
+
+        private static Transform? FindEntranceRoot(Transform transform)
         {
             for (Transform? current = transform; current != null; current = current.parent)
                 if (current.name.StartsWith(EntranceRootPrefix, StringComparison.Ordinal))
-                    return true;
+                    return current;
 
-            return false;
+            return null;
         }
     }
 }

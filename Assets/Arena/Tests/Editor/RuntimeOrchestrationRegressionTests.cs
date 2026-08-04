@@ -377,28 +377,58 @@ namespace Arena.Tests.Editor
                 CountOccurrences(scene, "guid: 8ab8340ffd685fb479daac555f516852"),
                 Is.EqualTo(56));
 
-            Type lightingBudget = RequireRuntimeType("Arena.World.SurvivalLightingBudget");
+            string lightingBudget = File.ReadAllText(
+                "Assets/Arena/Runtime/World/SurvivalLightingBudget.cs");
             Assert.That(
-                lightingBudget.GetField(
-                        "FlickerUpdatesPerSecond",
-                        BindingFlags.Static | BindingFlags.NonPublic)!
-                    .GetRawConstantValue(),
-                Is.EqualTo(15f));
+                lightingBudget,
+                Does.Contain("ArenaGraphicsSettings.EffectsAnimationUpdatesPerSecond"));
+            Assert.That(lightingBudget, Does.Contain("ArenaLightShadowQuality.Hero"));
+            Assert.That(lightingBudget, Does.Contain("LightShadows.Soft"));
         }
 
         [Test]
-        public void SystemMenu_DefaultsToSixtyFramesPerSecond()
+        public void GraphicsMenu_DefaultsToLaptopSafeValuesAndExposesGlobalControls()
         {
-            Type systemMenu = RequireRuntimeType("Arena.UI.SystemMenuScreen");
+            Type graphicsSettings = RequireRuntimeType("Arena.Graphics.ArenaGraphicsSettings");
             Assert.That(
-                systemMenu.GetField(
-                        "DefaultTargetFrameRate",
+                graphicsSettings.GetField(
+                        "DefaultFrameLimit",
                         BindingFlags.Static | BindingFlags.NonPublic)!
                     .GetRawConstantValue(),
                 Is.EqualTo(60));
+            Assert.That(
+                graphicsSettings.GetField(
+                        "LaptopTextureMipmapLimit",
+                        BindingFlags.Static | BindingFlags.NonPublic)!
+                    .GetRawConstantValue(),
+                Is.EqualTo(1));
+            Assert.That(
+                graphicsSettings.GetField(
+                        "LowEffectsAnimationUpdatesPerSecond",
+                        BindingFlags.Static | BindingFlags.NonPublic)!
+                    .GetRawConstantValue(),
+                Is.EqualTo(15f));
 
-            string source = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/SystemMenuScreen.cs");
-            Assert.That(source, Does.Contain("Application.targetFrameRate = DefaultTargetFrameRate;"));
+            string settingsSource = File.ReadAllText(
+                "Assets/Arena/Runtime/Graphics/ArenaGraphicsSettings.cs");
+            Assert.That(settingsSource, Does.Contain("ArenaTextureQuality.Laptop"));
+            Assert.That(settingsSource, Does.Contain("ArenaEffectsQuality.Low"));
+            Assert.That(settingsSource, Does.Contain("ArenaLightShadowQuality.Off"));
+            Assert.That(
+                settingsSource,
+                Does.Contain("QualitySettings.globalTextureMipmapLimit"));
+
+            string menu = File.ReadAllText("Assets/Arena/Resources/UI/Toolkit/SystemMenu.uxml");
+            foreach (string control in new[]
+                     {
+                         "FrameLimitButton",
+                         "TextureQualityButton",
+                         "EffectsQualityButton",
+                         "LightShadowsButton",
+                     })
+            {
+                Assert.That(menu, Does.Contain($"name=\"{control}\""));
+            }
         }
 
         [Test]
