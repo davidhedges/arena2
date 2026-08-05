@@ -24,7 +24,8 @@ use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WOR
 use crate::player_state::PlayerState;
 use crate::practice::resolve_respawn_pose;
 use crate::progression::{
-    combat_rule_value, derived_combat_profile_id_for_owner, COMBAT_PROFILE_TWO_HANDED_SWORD,
+    combat_rule_value, derived_combat_profile_id_for_owner, subtlety_disabled_target_damage_bonus,
+    COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
@@ -2146,6 +2147,66 @@ pub struct PendingHit {
     pub queued_order: u64,
 }
 
+#[table(accessor = surprise_attack_runtime)]
+pub struct SurpriseAttackRuntime {
+    #[primary_key]
+    pub action_instance_id: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub expires_at: Timestamp,
+    #[index(btree)]
+    pub expires_at_micros: i64,
+}
+
+pub(crate) fn arm_surprise_attack_runtime(
+    ctx: &ReducerContext,
+    owner: Identity,
+    action_instance_id: &str,
+    now: Timestamp,
+) {
+    let action_instance_id = action_instance_id.trim();
+    if action_instance_id.is_empty() {
+        return;
+    }
+    let expires_at = now + Duration::from_secs(10);
+    let row = SurpriseAttackRuntime {
+        action_instance_id: action_instance_id.to_string(),
+        owner,
+        expires_at,
+        expires_at_micros: timestamp_to_micros(expires_at),
+    };
+    if ctx
+        .db
+        .surprise_attack_runtime()
+        .action_instance_id()
+        .find(action_instance_id.to_string())
+        .is_some()
+    {
+        ctx.db
+            .surprise_attack_runtime()
+            .action_instance_id()
+            .update(row);
+    } else {
+        ctx.db.surprise_attack_runtime().insert(row);
+    }
+}
+
+pub(crate) fn prune_surprise_attack_runtimes(ctx: &ReducerContext, now: Timestamp) {
+    let expired: Vec<String> = ctx
+        .db
+        .surprise_attack_runtime()
+        .expires_at_micros()
+        .filter(..=timestamp_to_micros(now))
+        .map(|row| row.action_instance_id)
+        .collect();
+    for action_instance_id in expired {
+        ctx.db
+            .surprise_attack_runtime()
+            .action_instance_id()
+            .delete(action_instance_id);
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DamageDelivery {
     Direct,
@@ -2166,6 +2227,10 @@ impl DamageDelivery {
             _ => Self::Direct,
         }
     }
+}
+
+fn damage_breaks_shroud(delivery: DamageDelivery, resolved_amount: i32) -> bool {
+    delivery == DamageDelivery::Direct && resolved_amount > 0
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2315,6 +2380,10 @@ pub enum StatusEffectKind {
     Berserking,
     BattleTrance,
     TargetedAbilityAvoidance,
+    FindWeakness,
+    BladeTwisting,
+    Disarm,
+    Gouge,
 }
 
 impl StatusEffectKind {
@@ -2352,6 +2421,10 @@ impl StatusEffectKind {
             Self::Berserking => "BERSERKING",
             Self::BattleTrance => "BATTLE_TRANCE",
             Self::TargetedAbilityAvoidance => "TARGETED_ABILITY_AVOIDANCE",
+            Self::FindWeakness => "FIND_WEAKNESS",
+            Self::BladeTwisting => "BLADE_TWISTING",
+            Self::Disarm => "DISARM",
+            Self::Gouge => "GOUGE",
         }
     }
 
@@ -2389,6 +2462,10 @@ impl StatusEffectKind {
             "BERSERKING" => Some(Self::Berserking),
             "BATTLE_TRANCE" => Some(Self::BattleTrance),
             "TARGETED_ABILITY_AVOIDANCE" => Some(Self::TargetedAbilityAvoidance),
+            "FIND_WEAKNESS" => Some(Self::FindWeakness),
+            "BLADE_TWISTING" => Some(Self::BladeTwisting),
+            "DISARM" => Some(Self::Disarm),
+            "GOUGE" => Some(Self::Gouge),
             _ => None,
         }
     }
@@ -2466,6 +2543,10 @@ pub enum StatusPayload {
     Berserking,
     BattleTrance,
     TargetedAbilityAvoidance,
+    FindWeakness,
+    BladeTwisting,
+    Disarm,
+    Gouge,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2598,6 +2679,10 @@ impl AuthoredStatusPayload {
             StatusEffectKind::Berserking => StatusPayload::Berserking,
             StatusEffectKind::BattleTrance => StatusPayload::BattleTrance,
             StatusEffectKind::TargetedAbilityAvoidance => StatusPayload::TargetedAbilityAvoidance,
+            StatusEffectKind::FindWeakness => StatusPayload::FindWeakness,
+            StatusEffectKind::BladeTwisting => StatusPayload::BladeTwisting,
+            StatusEffectKind::Disarm => StatusPayload::Disarm,
+            StatusEffectKind::Gouge => StatusPayload::Gouge,
         }
     }
 
@@ -2701,7 +2786,11 @@ impl AuthoredStatusPayload {
             }
             StatusEffectKind::VengeanceAura
             | StatusEffectKind::Berserking
-            | StatusEffectKind::TargetedAbilityAvoidance => {
+            | StatusEffectKind::TargetedAbilityAvoidance
+            | StatusEffectKind::FindWeakness
+            | StatusEffectKind::BladeTwisting
+            | StatusEffectKind::Disarm
+            | StatusEffectKind::Gouge => {
                 if !slow_is_default
                     || !dot_is_default
                     || !hot_is_default
@@ -2802,6 +2891,10 @@ impl StatusPayload {
             Self::Berserking => StatusEffectKind::Berserking,
             Self::BattleTrance => StatusEffectKind::BattleTrance,
             Self::TargetedAbilityAvoidance => StatusEffectKind::TargetedAbilityAvoidance,
+            Self::FindWeakness => StatusEffectKind::FindWeakness,
+            Self::BladeTwisting => StatusEffectKind::BladeTwisting,
+            Self::Disarm => StatusEffectKind::Disarm,
+            Self::Gouge => StatusEffectKind::Gouge,
         }
     }
 
@@ -2821,7 +2914,11 @@ impl StatusPayload {
             | Self::MeleeAttackModifier
             | Self::Berserking
             | Self::BattleTrance
-            | Self::TargetedAbilityAvoidance => StatusEffectColumns {
+            | Self::TargetedAbilityAvoidance
+            | Self::FindWeakness
+            | Self::BladeTwisting
+            | Self::Disarm
+            | Self::Gouge => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
@@ -3033,6 +3130,10 @@ impl StatusPayload {
             StatusEffectKind::Berserking => Self::Berserking,
             StatusEffectKind::BattleTrance => Self::BattleTrance,
             StatusEffectKind::TargetedAbilityAvoidance => Self::TargetedAbilityAvoidance,
+            StatusEffectKind::FindWeakness => Self::FindWeakness,
+            StatusEffectKind::BladeTwisting => Self::BladeTwisting,
+            StatusEffectKind::Disarm => Self::Disarm,
+            StatusEffectKind::Gouge => Self::Gouge,
         }
     }
 
@@ -3052,7 +3153,11 @@ impl StatusPayload {
             | Self::MeleeAttackModifier
             | Self::Berserking
             | Self::BattleTrance
-            | Self::TargetedAbilityAvoidance => false,
+            | Self::TargetedAbilityAvoidance
+            | Self::FindWeakness
+            | Self::BladeTwisting
+            | Self::Disarm
+            | Self::Gouge => false,
             Self::Slow { slow_pct } => !(MIN_SLOW_PCT..=0.95).contains(&slow_pct),
             Self::MoveSpeed { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0
@@ -3117,7 +3222,11 @@ impl StatusPayload {
             | Self::MeleeAttackModifier
             | Self::Berserking
             | Self::BattleTrance
-            | Self::TargetedAbilityAvoidance => Ok(()),
+            | Self::TargetedAbilityAvoidance
+            | Self::FindWeakness
+            | Self::BladeTwisting
+            | Self::Disarm
+            | Self::Gouge => Ok(()),
             Self::Slow { slow_pct } => {
                 if !(MIN_SLOW_PCT..=0.95).contains(&slow_pct) {
                     return Err(format!("{subject} {path}.slow_pct must be > 0 and <= 0.95"));
@@ -3245,7 +3354,11 @@ impl StatusPayload {
             | Self::MeleeAttackModifier
             | Self::Berserking
             | Self::BattleTrance
-            | Self::TargetedAbilityAvoidance => true,
+            | Self::TargetedAbilityAvoidance
+            | Self::FindWeakness
+            | Self::BladeTwisting
+            | Self::Disarm
+            | Self::Gouge => true,
             Self::Slow { slow_pct } => slow_pct > existing.slow_pct,
             Self::MoveSpeed { modifier_scalar } => {
                 modifier_scalar > existing.modifier_scalar.max(0.0)
@@ -3581,6 +3694,9 @@ impl StatusApplication {
         target_audience: TargetAudience,
         action_key: &str,
     ) -> EffectPacket {
+        let stack_group = self
+            .stack_group(action_key, spell_id)
+            .replace("{SOURCE}", source.to_hex().as_str());
         EffectPacket::ApplyStatus {
             source,
             target,
@@ -3589,7 +3705,7 @@ impl StatusApplication {
             polarity,
             target_audience,
             duration: self.duration(),
-            stack_group: self.stack_group(action_key, spell_id),
+            stack_group,
             max_stacks: self.max_stacks(),
             stack_policy: self.stack_policy(),
             dispel_types: self.dispel_types.clone(),
@@ -4313,6 +4429,11 @@ fn apply_damage_to_player_state(
 
     let mut resolved = resolve_damage_amount(ctx, hit, temporary_modifiers);
     let resolved_amount = resolved.final_amount;
+    let damage_delivery = DamageDelivery::from_wire(hit.damage_delivery.as_str());
+    let is_direct_damage = damage_delivery == DamageDelivery::Direct;
+    if damage_breaks_shroud(damage_delivery, resolved_amount) {
+        crate::progression::break_shroud_on_direct_damage(ctx, target, ctx.timestamp);
+    }
     if hit.amount > 0 {
         mark_harmful_combat_action(ctx, source, target, ctx.timestamp, COMBAT_REASON_DAMAGE);
     }
@@ -4353,11 +4474,10 @@ fn apply_damage_to_player_state(
     }
     grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
     apply_equipment_melee_steal(ctx, hit, hp_damage);
+    queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
     queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
     queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
-    if hp_damage > 0
-        && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
-    {
+    if hp_damage > 0 && is_direct_damage {
         let action_key = if hit.direct_action_key.trim().is_empty() {
             hit.spell_id.as_str()
         } else {
@@ -4423,6 +4543,7 @@ fn apply_damage_to_npc_state(
     ctx.db.npc_state().identity().update(state);
     grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
     apply_equipment_melee_steal(ctx, hit, hp_damage);
+    queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
     queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
     queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
     if hp_damage > 0
@@ -4474,6 +4595,29 @@ fn resolve_damage_amount(
     temporary_modifiers: &TemporaryCombatModifiers,
 ) -> ResolvedEffectAmount {
     let delivery = DamageDelivery::from_wire(hit.damage_delivery.as_str());
+    let casted_ability_hit = damage_comes_from_casted_ability(hit);
+    let find_weakness = casted_ability_hit
+        .then(|| {
+            active_consumable_status_from_source(
+                ctx,
+                hit.target,
+                hit.source,
+                StatusEffectKind::FindWeakness,
+                ctx.timestamp,
+            )
+        })
+        .flatten();
+    let blade_twisting = casted_ability_hit
+        .then(|| {
+            active_consumable_status_from_source(
+                ctx,
+                hit.source,
+                hit.source,
+                StatusEffectKind::BladeTwisting,
+                ctx.timestamp,
+            )
+        })
+        .flatten();
     let resistance_multiplier =
         resistance_multiplier_for_damage_type(ctx, hit, temporary_modifiers);
     let source_equipment_and_stats = if hit.source == Identity::ZERO {
@@ -4493,19 +4637,99 @@ fn resolve_damage_amount(
             * equipment_damage_multiplier_for_hit(hit, source_equipment)
             * resistance_multiplier
             * temporary_modifiers.damage_taken_multiplier_from_source_for(&hit.target, &hit.source)
+            * opportunist_passive_damage_multiplier(ctx, hit, temporary_modifiers)
     };
     let source_crit_chance = source_equipment_and_stats.map(|(_, stats)| stats.crit_chance);
     let additive_crit_chance = source_equipment_and_stats
         .map(|(equipment, _)| equipment_crit_chance_bonus(hit, equipment))
         .unwrap_or(0.0);
-    resolve_effect_amount(
+    let resolved = resolve_effect_amount(
         ctx,
         hit,
         non_crit_multiplier,
         additive_crit_chance,
-        temporary_modifiers.crit_chance_override_for(&hit.source),
+        find_weakness
+            .as_ref()
+            .map(|_| 1.0)
+            .or_else(|| temporary_modifiers.crit_chance_override_for(&hit.source)),
         source_crit_chance,
+        if blade_twisting.is_some() {
+            3.0
+        } else {
+            combat_rule_value(RULE_CRIT_DAMAGE_MULTIPLIER)
+        },
+    );
+    if let Some(effect) = find_weakness {
+        ctx.db.status_effect().status_id().delete(effect.status_id);
+    }
+    if resolved.was_critical {
+        if let Some(effect) = blade_twisting {
+            ctx.db.status_effect().status_id().delete(effect.status_id);
+        }
+    }
+    resolved
+}
+
+fn damage_comes_from_casted_ability(hit: &PendingHit) -> bool {
+    let direct_action_key = hit.direct_action_key.trim();
+    hit.source != Identity::ZERO
+        && hit.amount > 0
+        && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
+        && !direct_action_key.is_empty()
+        && !direct_action_key.contains("melee:auto_attack:")
+        && hit.damage_source_kind.as_str() != DAMAGE_SOURCE_KIND_PERIODIC
+        && hit.damage_source_kind.as_str() != DAMAGE_SOURCE_KIND_TRAP
+}
+
+fn active_consumable_status_from_source(
+    ctx: &ReducerContext,
+    target: Identity,
+    source: Identity,
+    kind: StatusEffectKind,
+    now: Timestamp,
+) -> Option<StatusEffect> {
+    ctx.db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| {
+            effect.source == source
+                && effect.effect_kind == kind.as_str()
+                && now < effect.expires_at
+        })
+        .max_by_key(|effect| effect.status_id)
+}
+
+fn opportunist_passive_damage_multiplier(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    temporary_modifiers: &TemporaryCombatModifiers,
+) -> f32 {
+    let passive_is_active = derived_combat_profile_id_for_owner(ctx, hit.source)
+        .is_some_and(|profile_id| opportunist_passive_is_active_for_profile(profile_id.as_str()));
+    let target_is_disabled =
+        temporary_modifiers.is_disabled(&hit.target) && can_harm(ctx, hit.source, hit.target);
+    disabled_target_damage_multiplier(
+        passive_is_active,
+        target_is_disabled,
+        subtlety_disabled_target_damage_bonus(),
     )
+}
+
+fn opportunist_passive_is_active_for_profile(combat_profile_id: &str) -> bool {
+    combat_profile_id.eq_ignore_ascii_case(COMBAT_PROFILE_DAGGERS)
+}
+
+fn disabled_target_damage_multiplier(
+    passive_is_active: bool,
+    target_is_disabled: bool,
+    bonus: f32,
+) -> f32 {
+    if passive_is_active && target_is_disabled {
+        1.0 + bonus.max(0.0)
+    } else {
+        1.0
+    }
 }
 
 fn resistance_multiplier_for_damage_type(
@@ -4525,6 +4749,63 @@ fn resistance_multiplier_for_damage_type(
             temporary_modifiers.magic_resistance_for(&hit.target)
         };
     (1.0 - (resistance + status_resistance).clamp(0.0, 1.0)).max(0.0)
+}
+
+fn queue_surprise_attack_stun_if_applicable(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    hp_damage: i32,
+) {
+    if hp_damage <= 0
+        || hit.source == Identity::ZERO
+        || DamageDelivery::from_wire(hit.damage_delivery.as_str()) != DamageDelivery::Direct
+    {
+        return;
+    }
+    let action_key = hit.direct_action_key.trim();
+    if action_key.is_empty() {
+        return;
+    }
+    let now = ctx.timestamp;
+    let matches_stealth_action = ctx
+        .db
+        .surprise_attack_runtime()
+        .owner()
+        .filter(hit.source)
+        .any(|runtime| {
+            now < runtime.expires_at
+                && action_key_matches_instance(action_key, runtime.action_instance_id.as_str())
+        });
+    if !matches_stealth_action {
+        return;
+    }
+    let duration = crate::progression::subtlety_surprise_attack_stun_duration();
+    if duration.is_zero() {
+        return;
+    }
+    queue_effects(
+        ctx,
+        vec![EffectPacket::ApplyStatus {
+            source: hit.source,
+            target: hit.target,
+            spell_id: format!("{}:surprise_attacks", hit.spell_id),
+            payload: StatusPayload::Stun,
+            polarity: StatusPolarity::Debuff,
+            target_audience: TargetAudience::Hostile,
+            duration,
+            stack_group: format!("SURPRISE_ATTACKS:{}", hit.source.to_hex()),
+            max_stacks: 1,
+            stack_policy: StackPolicy::Refresh,
+            dispel_types: Vec::new(),
+        }],
+    );
+}
+
+fn action_key_matches_instance(action_key: &str, action_instance_id: &str) -> bool {
+    action_key == action_instance_id
+        || action_key
+            .strip_prefix(action_instance_id)
+            .is_some_and(|suffix| suffix.starts_with(':'))
 }
 
 fn queue_thorns_damage_if_applicable(
@@ -4826,7 +5107,15 @@ fn resolve_heal_amount(
     temporary_modifiers: &TemporaryCombatModifiers,
 ) -> ResolvedEffectAmount {
     let non_crit_multiplier = temporary_modifiers.healing_taken_multiplier_for(&hit.target);
-    resolve_effect_amount(ctx, hit, non_crit_multiplier, 0.0, None, None)
+    resolve_effect_amount(
+        ctx,
+        hit,
+        non_crit_multiplier,
+        0.0,
+        None,
+        None,
+        combat_rule_value(RULE_CRIT_DAMAGE_MULTIPLIER),
+    )
 }
 
 fn resolve_effect_amount(
@@ -4836,6 +5125,7 @@ fn resolve_effect_amount(
     additive_crit_chance: f32,
     crit_chance_override: Option<f32>,
     source_crit_chance: Option<f32>,
+    crit_damage_multiplier: f32,
 ) -> ResolvedEffectAmount {
     let base_amount = hit.amount.max(0);
     let crit_chance = if hit.source == Identity::ZERO {
@@ -4854,7 +5144,7 @@ fn resolve_effect_amount(
         crit_chance,
         stable_hit_roll(hit),
         non_crit_multiplier,
-        combat_rule_value(RULE_CRIT_DAMAGE_MULTIPLIER),
+        crit_damage_multiplier,
     )
 }
 
@@ -5670,6 +5960,7 @@ fn handle_death(ctx: &ReducerContext, state: &mut PlayerState) -> Option<u64> {
         mark_respawn_pending(state, ctx.timestamp);
     }
     clear_statuses_for_target(ctx, state.player_id);
+    crate::spells::clear_recall_slot(ctx, state.player_id);
     clear_combat_engagement_for_identity(ctx, state.player_id);
     clear_combat_stacking_passive_runtime_for_identity(ctx, state.player_id);
 
@@ -6319,6 +6610,9 @@ impl StatusRuntimeView {
                     StatusEffectKind::Berserking => {
                         modifiers.berserking.insert(*target);
                     }
+                    kind if is_hard_crowd_control_kind(kind) => {
+                        modifiers.disabled.insert(*target);
+                    }
                     StatusEffectKind::Root
                     | StatusEffectKind::Stun
                     | StatusEffectKind::Freeze
@@ -6335,7 +6629,11 @@ impl StatusRuntimeView {
                     | StatusEffectKind::TemporaryHitpoints
                     | StatusEffectKind::Silence
                     | StatusEffectKind::BattleTrance
-                    | StatusEffectKind::TargetedAbilityAvoidance => {}
+                    | StatusEffectKind::TargetedAbilityAvoidance
+                    | StatusEffectKind::FindWeakness
+                    | StatusEffectKind::BladeTwisting
+                    | StatusEffectKind::Disarm
+                    | StatusEffectKind::Gouge => {}
                 }
             }
         }
@@ -6361,6 +6659,7 @@ pub struct TemporaryCombatModifiers {
     attack_speed_multiplier_by_target: HashMap<Identity, f32>,
     cast_speed_by_target: HashMap<Identity, f32>,
     berserking: HashSet<Identity>,
+    disabled: HashSet<Identity>,
 }
 
 impl TemporaryCombatModifiers {
@@ -6370,6 +6669,10 @@ impl TemporaryCombatModifiers {
 
     pub fn has_movement_impairing_immunity(&self, identity: &Identity) -> bool {
         self.movement_impairing_immune.contains(identity)
+    }
+
+    pub fn is_disabled(&self, identity: &Identity) -> bool {
+        self.disabled.contains(identity)
     }
 
     pub fn damage_multiplier_for(&self, identity: &Identity, delivery: DamageDelivery) -> f32 {
@@ -6619,15 +6922,17 @@ fn attack_speed_scalar_to_multiplier(modifier_scalar: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        actor_distance_sq, apply_status_update, attack_speed_scalar_to_multiplier,
-        battle_trance_hp_after_damage, bloodlust_passive_spec, due_interval_count,
-        event_prune_cutoff_micros, knockback_stagger_duration, new_status_effect,
+        action_key_matches_instance, actor_distance_sq, apply_status_update,
+        attack_speed_scalar_to_multiplier, battle_trance_hp_after_damage, bloodlust_passive_spec,
+        damage_breaks_shroud, damage_comes_from_casted_ability, disabled_target_damage_multiplier,
+        due_interval_count, event_prune_cutoff_micros, knockback_stagger_duration,
+        new_status_effect, opportunist_passive_is_active_for_profile,
         resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
         resolve_temporary_hitpoint_absorb, resolved_shove_tunables, stacked_slow_pct,
         stagger_shove_tunables, status_has_dispel_type, status_matches_removal_filter_values,
-        AuthoredStatusPayload, DamageDelivery, EffectPacket, MovementModifiers, StackPolicy,
-        StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
-        StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
+        AuthoredStatusPayload, DamageDelivery, EffectPacket, MovementModifiers, PendingHit,
+        StackPolicy, StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload,
+        StatusPolarity, StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
         COMBAT_PROJECTILE_DEFINITIONS, PLAYER_EVENT_RETENTION,
     };
     use crate::movement::FIXED_TICK_MILLIS;
@@ -6692,6 +6997,18 @@ mod tests {
             actor_distance_sq((0.0, 0.0, 0.0), (6.0, 0.0, 8.0)),
             Some(100.0)
         );
+    }
+
+    #[test]
+    fn opportunist_passive_is_profile_active_and_only_bonuses_disabled_targets() {
+        assert!(opportunist_passive_is_active_for_profile("DAGGERS"));
+        assert!(opportunist_passive_is_active_for_profile("daggers"));
+        assert!(!opportunist_passive_is_active_for_profile(
+            "TWO_HANDED_SWORD"
+        ));
+        assert!((disabled_target_damage_multiplier(true, true, 0.15) - 1.15).abs() < 0.0001);
+        assert_eq!(disabled_target_damage_multiplier(false, true, 0.15), 1.0);
+        assert_eq!(disabled_target_damage_multiplier(true, false, 0.15), 1.0);
     }
 
     #[test]
@@ -6789,6 +7106,69 @@ mod tests {
 
         assert_eq!(resolved.final_amount, 120);
         assert!(!resolved.was_critical);
+    }
+
+    #[test]
+    fn blade_twisting_critical_multiplier_deals_triple_damage() {
+        let resolved = resolve_effect_amount_from_roll(100, false, 1.0, 0.5, 1.0, 3.0);
+
+        assert!(resolved.was_critical);
+        assert_eq!(resolved.final_amount, 300);
+    }
+
+    #[test]
+    fn casted_ability_detection_excludes_auto_attacks_and_periodic_damage() {
+        let source = test_identity_number(1);
+        let target = test_identity_number(2);
+        let hit =
+            |direct_action_key: &str, delivery: DamageDelivery, source_kind: &str| PendingHit {
+                hit_id: 0,
+                source,
+                target,
+                spell_id: direct_action_key.to_string(),
+                amount: 10,
+                is_heal: false,
+                damage_type: "PHYSICAL".to_string(),
+                target_audience: "HOSTILE".to_string(),
+                damage_delivery: delivery.as_str().to_string(),
+                damage_source_kind: source_kind.to_string(),
+                direct_action_key: direct_action_key.to_string(),
+                queued_at: Timestamp::UNIX_EPOCH,
+                queued_at_micros: 0,
+                queued_order: 0,
+            };
+
+        assert!(damage_comes_from_casted_ability(&hit(
+            "melee:player_input:abc:hit:0",
+            DamageDelivery::Direct,
+            "MELEE",
+        )));
+        assert!(damage_comes_from_casted_ability(&hit(
+            "spell-instance:p0",
+            DamageDelivery::Direct,
+            "PROJECTILE",
+        )));
+        assert!(!damage_comes_from_casted_ability(&hit(
+            "melee:auto_attack:abc:hit:0",
+            DamageDelivery::Direct,
+            "MELEE",
+        )));
+        assert!(!damage_comes_from_casted_ability(&hit(
+            "dot-instance",
+            DamageDelivery::Periodic,
+            "PERIODIC",
+        )));
+    }
+
+    #[test]
+    fn stealth_action_keys_match_their_direct_and_projectile_impacts() {
+        assert!(action_key_matches_instance("cast-1", "cast-1"));
+        assert!(action_key_matches_instance("cast-1:p0", "cast-1"));
+        assert!(action_key_matches_instance(
+            "melee:player_input:1:hit:0",
+            "melee:player_input:1"
+        ));
+        assert!(!action_key_matches_instance("cast-10:p0", "cast-1"));
     }
 
     #[test]
@@ -6996,6 +7376,13 @@ mod tests {
             (modifiers.damage_multiplier_for(&identity, DamageDelivery::Periodic) - 1.20).abs()
                 < 0.0001
         );
+    }
+
+    #[test]
+    fn shroud_breaks_on_positive_direct_damage_but_not_dot_ticks() {
+        assert!(damage_breaks_shroud(DamageDelivery::Direct, 1));
+        assert!(!damage_breaks_shroud(DamageDelivery::Direct, 0));
+        assert!(!damage_breaks_shroud(DamageDelivery::Periodic, 1));
     }
 
     #[test]
@@ -7809,9 +8196,11 @@ mod tests {
         }
 
         let view = status_runtime_view(effects, &alive_targets, now);
+        let modifiers = view.temporary_combat_modifiers();
 
         for target in alive_targets {
             assert!(view.has_disabling_status(target));
+            assert!(modifiers.is_disabled(&target));
         }
     }
 

@@ -199,8 +199,6 @@ namespace Arena.UI
         private readonly Text[]  _abilityGridChargeText = new Text[ActionBarLayout.CellCount];
         private readonly TooltipTarget[] _abilityGridTooltips = new TooltipTarget[ActionBarLayout.CellCount];
         private readonly ActionBarClickTarget[] _abilityGridClicks = new ActionBarClickTarget[ActionBarLayout.CellCount];
-        private readonly ActionBarDropSlot[] _abilityGridDropSlots = new ActionBarDropSlot[ActionBarLayout.CellCount];
-        private readonly ActionBarDragSource[] _abilityGridDragSources = new ActionBarDragSource[ActionBarLayout.CellCount];
         private readonly ActionBarSlotState[] _abilityGridStates = new ActionBarSlotState[ActionBarLayout.CellCount];
         private readonly Image[] _spellbookGridIcons = new Image[ActionBarLayout.Columns];
         private readonly Image[] _spellbookGridCd = new Image[ActionBarLayout.Columns];
@@ -646,12 +644,9 @@ namespace Arena.UI
                         out _abilityGridChargeText[index],
                         out _abilityGridTooltips[index],
                         out _abilityGridClicks[index],
-                        out _abilityGridDropSlots[index],
-                        out _abilityGridDragSources[index],
+                        out _,
+                        out _,
                         out _abilityGridFlash[index]);
-
-                    if (ActionBarKeymap.TryGetBindingForCell(row, col, out ActionBarSlotBinding binding))
-                        _abilityGridDropSlots[index].Configure(_canvas, binding.SlotId);
                 }
             }
         }
@@ -1615,7 +1610,6 @@ namespace Arena.UI
                     SetActionBarSlotPresentation(_abilityGridCd[index], _abilityGridIcons[index], _abilityGridStates[index], SlotBg, null);
                     _abilityGridTooltips[index].Configure(_canvas, default);
                     _abilityGridClicks[index].Configure(null);
-                    _abilityGridDragSources[index].Configure(_canvas, null, null);
                     SetFillIfChanged(_abilityGridCd[index], 0f);
                     SetColorIfChanged(_abilityGridCd[index], CdOverlay);
                     SetTextIfChanged(_abilityGridText[index], string.Empty);
@@ -1660,13 +1654,6 @@ namespace Arena.UI
                     isVisible ? () => TriggerActionRef(conn, resolved) : null,
                     isVisible && usesHoldInput ? () => ReleaseActionRef(conn, resolved) : null,
                     usesHoldInput);
-                ActiveActionBarAction dragResolved = resolved;
-                string dragSlotId = binding.SlotId;
-                _abilityGridDragSources[index].Configure(
-                    _canvas,
-                    () => ActionBarDragPayload.From(dragResolved, dragSlotId),
-                    HandleHudActionDrop,
-                    onDragStarted: usesHoldInput ? _ => ReleaseActionRef(conn, dragResolved) : null);
                 _abilityGridTooltips[index].Configure(
                     _canvas,
                     ActionTooltipResolver.ResolveForActionRef(conn, owner, resolved),
@@ -1824,17 +1811,6 @@ namespace Arena.UI
         {
             SpellDefinition? spell = conn?.Db.SpellDefinition.Kind.Find(spellId);
             return spell is { RequiresTarget: true, RequiresTargetLos: true };
-        }
-
-        private void HandleHudActionDrop(ActionBarDragPayload payload, string? targetSlotId)
-        {
-            var conn = NetworkManager.Instance?.Conn;
-            var owner = conn?.Identity;
-            if (conn == null || !owner.HasValue)
-                return;
-
-            ActionBarDropApplier.ApplyDrop(conn, payload, targetSlotId);
-            _actionBarStaticDirty = true;
         }
 
         private static List<ItemSpell> ReadEquippedSpellbookSpells(DbConnection? conn, SpacetimeDB.Identity? owner)

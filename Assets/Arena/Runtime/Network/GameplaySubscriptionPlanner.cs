@@ -60,10 +60,13 @@ namespace Arena.Network
                 new QueryBuilder().From.PlayerKnownSpell().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.GlobalCooldown().Where(c => c.Caster.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.SpellCooldown().Where(c => c.Caster.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.RecallSlot().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PredictedActionResult().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.ActiveDiceRoll().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.FixedActionChargeState().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.ActiveCombatDiscipline().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.CharacterDisciplineLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.CharacterDisciplineAbilitySelection().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.CharacterCombatDisciplineWeaponLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.ActiveCombatMode().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 // Local swing scheduling (netcode design review S6): the

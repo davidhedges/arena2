@@ -16,10 +16,9 @@ namespace Arena.UI
 {
     /// <summary>
     /// UI Toolkit translation of docs/ui-prototypes/disciplines. The screen
-    /// reads replicated discipline/ability catalogs and keeps provisional
-    /// choices in memory. The current server foundation does not yet publish a
-    /// character build-allocation table or save reducer, so Save records the
-    /// validated draft only for this Hub session.
+    /// reads replicated discipline/ability catalogs and saves the selected
+    /// primary discipline, secondary disciplines, and action-bar abilities
+    /// authoritatively. Stat allocation remains provisional for this screen.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class DisciplinesScreen : MonoBehaviour, IEscapeCloseable
@@ -48,6 +47,7 @@ namespace Arena.UI
             public string Description = string.Empty;
             public float Cost;
             public uint SortOrder;
+            public bool IsPassive;
             public Sprite? Icon;
         }
 
@@ -120,7 +120,11 @@ namespace Arena.UI
 
         private string _primaryId = string.Empty;
         private string _catalogSignature = string.Empty;
-        private string _savedSnapshot = string.Empty;
+        private string _authoritativeLoadoutSignature = string.Empty;
+        private string _savedLoadoutSnapshot = string.Empty;
+        private string _pendingLoadoutSnapshot = string.Empty;
+        private DbConnection? _connection;
+        private bool _savePending;
         private bool _open;
         private float _nextCatalogRefresh;
         private int _toastGeneration;
@@ -160,12 +164,14 @@ namespace Arena.UI
 
         private void OnDestroy()
         {
+            EnsureConnection(null);
             if (_panelSettings != null)
                 Destroy(_panelSettings);
         }
 
         private void Update()
         {
+            EnsureConnection(NetworkManager.Instance?.Conn);
             if (!_open || Time.unscaledTime < _nextCatalogRefresh)
                 return;
 
@@ -183,6 +189,7 @@ namespace Arena.UI
                 _panelSettings.sortingOrder = RuntimeUiLayer.NextSortingOrder();
             _root.AddToClassList(OpenClass);
             _nextCatalogRefresh = 0f;
+            EnsureConnection(NetworkManager.Instance?.Conn);
             RefreshCatalog(forceRender: true);
         }
 
@@ -271,9 +278,29 @@ namespace Arena.UI
                 button.clicked += callback;
         }
 
+        private void EnsureConnection(DbConnection? conn)
+        {
+            if (ReferenceEquals(conn, _connection))
+                return;
+
+            if (_connection != null)
+                _connection.Reducers.OnSaveCharacterDisciplineLoadout -= OnSaveCharacterDisciplineLoadout;
+
+            _connection = conn;
+            _savePending = false;
+            _pendingLoadoutSnapshot = string.Empty;
+            _catalogSignature = string.Empty;
+            _authoritativeLoadoutSignature = string.Empty;
+            _savedLoadoutSnapshot = string.Empty;
+
+            if (_connection != null)
+                _connection.Reducers.OnSaveCharacterDisciplineLoadout += OnSaveCharacterDisciplineLoadout;
+        }
+
         private void RefreshCatalog(bool forceRender = false)
         {
             DbConnection? conn = NetworkManager.Instance?.Conn;
+            EnsureConnection(conn);
             if (conn == null)
             {
                 if (_disciplines.Count == 0)
@@ -287,11 +314,31 @@ namespace Arena.UI
                 .ToList();
             List<AbilityCatalog> abilityRows = conn.Db.AbilityCatalog.Iter()
                 .Where(row => string.Equals(WireIdentifier.Normalize(row.ActorScope), "PLAYER", StringComparison.Ordinal))
+                .Where(row => HasAbilityTag(row.AbilityTags, "ACTION_BAR_ACTION")
+                    || HasAbilityTag(row.AbilityTags, "PASSIVE"))
                 .OrderBy(row => row.SortOrder)
                 .ThenBy(row => row.AbilityId, StringComparer.Ordinal)
                 .ToList();
 
-            string signature = BuildCatalogSignature(disciplineRows, abilityRows);
+            CharacterDisciplineLoadout? loadout = conn.Identity.HasValue
+                ? conn.Db.CharacterDisciplineLoadout.Owner.Find(conn.Identity.Value)
+                : null;
+            List<CharacterDisciplineAbilitySelection> selectedAbilityRows = conn.Identity.HasValue
+                ? conn.Db.CharacterDisciplineAbilitySelection.Owner.Filter(conn.Identity.Value)
+                    .OrderBy(row => row.SortOrder)
+                    .ThenBy(row => row.AbilityId, StringComparer.Ordinal)
+                    .ToList()
+                : new List<CharacterDisciplineAbilitySelection>();
+            string authoritativeLoadoutSignature = BuildLoadoutSnapshot(loadout, selectedAbilityRows);
+            bool authoritativeLoadoutChanged = !string.Equals(
+                authoritativeLoadoutSignature,
+                _authoritativeLoadoutSignature,
+                StringComparison.Ordinal);
+
+            string signature = BuildCatalogSignature(
+                disciplineRows,
+                abilityRows,
+                authoritativeLoadoutSignature);
             if (!forceRender && string.Equals(signature, _catalogSignature, StringComparison.Ordinal))
                 return;
 
@@ -328,10 +375,11 @@ namespace Arena.UI
                         Resource = WireIdentifier.Normalize(abilityRow.ResourceKind),
                         Cost = abilityRow.ResourceCost,
                         SortOrder = abilityRow.SortOrder,
+                        IsPassive = HasAbilityTag(abilityRow.AbilityTags, "PASSIVE"),
                         Description = descriptions.TryGetValue(abilityId, out string? description)
                             && !string.IsNullOrWhiteSpace(description)
                                 ? description.Trim()
-                                : "Select this ability for your provisional discipline loadout.",
+                                : "Select this ability for your saved discipline loadout.",
                         Icon = ActionIconResolver.Resolve(ActionKinds.Ability, abilityId),
                     });
                 }
@@ -340,13 +388,15 @@ namespace Arena.UI
             }
 
             _catalogSignature = signature;
-            NormalizeDraft(conn);
+            _authoritativeLoadoutSignature = authoritativeLoadoutSignature;
+            NormalizeDraft(conn, loadout, selectedAbilityRows, authoritativeLoadoutChanged);
             RenderAll();
         }
 
         private static string BuildCatalogSignature(
             IEnumerable<CombatDisciplineCatalog> disciplines,
-            IEnumerable<AbilityCatalog> abilities)
+            IEnumerable<AbilityCatalog> abilities,
+            string authoritativeLoadoutSignature)
         {
             StringBuilder builder = new();
             foreach (CombatDisciplineCatalog discipline in disciplines)
@@ -354,10 +404,15 @@ namespace Arena.UI
             builder.Append('|');
             foreach (AbilityCatalog ability in abilities)
                 builder.Append(ability.DisciplineId).Append(':').Append(ability.AbilityId).Append(':').Append(ability.SortOrder).Append(';');
+            builder.Append('|').Append(authoritativeLoadoutSignature);
             return builder.ToString();
         }
 
-        private void NormalizeDraft(DbConnection conn)
+        private void NormalizeDraft(
+            DbConnection conn,
+            CharacterDisciplineLoadout? loadout,
+            IReadOnlyList<CharacterDisciplineAbilitySelection> selectedAbilityRows,
+            bool authoritativeLoadoutChanged)
         {
             foreach (DisciplineView discipline in _disciplines)
             {
@@ -370,6 +425,26 @@ namespace Arena.UI
                 HashSet<string> available = discipline.Abilities.Select(ability => ability.Id)
                     .ToHashSet(StringComparer.Ordinal);
                 selected.RemoveWhere(id => !available.Contains(id));
+            }
+
+            if (loadout != null && authoritativeLoadoutChanged)
+            {
+                _primaryId = WireIdentifier.Normalize(loadout.PrimaryDisciplineId);
+                _secondaryIds.Clear();
+                AddAuthoritativeSecondary(loadout.SecondaryDisciplineId1);
+                AddAuthoritativeSecondary(loadout.SecondaryDisciplineId2);
+                foreach (HashSet<string> selected in _selectedAbilities.Values)
+                    selected.Clear();
+                foreach (CharacterDisciplineAbilitySelection selection in selectedAbilityRows)
+                {
+                    string disciplineId = WireIdentifier.Normalize(selection.DisciplineId);
+                    string abilityId = WireIdentifier.Normalize(selection.AbilityId);
+                    if (FindDiscipline(disciplineId)?.Abilities.Any(ability => ability.Id == abilityId) == true)
+                        SelectedSet(disciplineId).Add(abilityId);
+                }
+                _savedLoadoutSnapshot = BuildLoadoutSnapshot(loadout, selectedAbilityRows);
+                _savePending = false;
+                _pendingLoadoutSnapshot = string.Empty;
             }
 
             if (string.IsNullOrWhiteSpace(_primaryId)
@@ -393,13 +468,17 @@ namespace Arena.UI
 
                 if (next != null && SelectedSet(next.Id).Count == 0)
                 {
-                    foreach (AbilityView ability in next.Abilities.Take(DisciplineLoadoutRules.PrimaryAbilityMinimum))
+                    foreach (AbilityView ability in next.Abilities
+                                 .Where(ability => !ability.IsPassive)
+                                 .Take(DisciplineLoadoutRules.PrimaryAbilityMinimum))
                         SelectedSet(next.Id).Add(ability.Id);
                 }
             }
 
             _secondaryIds.RemoveAll(id => id == _primaryId || FindDiscipline(id) == null);
-            if (_secondaryIds.Count == 0)
+            if (loadout != null && authoritativeLoadoutChanged && selectedAbilityRows.Count == 0)
+                SeedMinimumAbilitySelections();
+            if (loadout == null && _secondaryIds.Count == 0)
             {
                 foreach (string preferred in new[] { "SUBTLETY", "RUIN" })
                 {
@@ -407,11 +486,50 @@ namespace Arena.UI
                     if (discipline == null || discipline.Id == _primaryId || discipline.Abilities.Count == 0)
                         continue;
                     _secondaryIds.Add(discipline.Id);
-                    SelectedSet(discipline.Id).Add(discipline.Abilities[0].Id);
+                    AbilityView? first = discipline.Abilities.FirstOrDefault(ability => !ability.IsPassive);
+                    if (first != null)
+                        SelectedSet(discipline.Id).Add(first.Id);
                     if (_secondaryIds.Count >= DisciplineLoadoutRules.SecondaryDisciplineMaximum)
                         break;
                 }
             }
+        }
+
+        private void SeedMinimumAbilitySelections()
+        {
+            DisciplineView? primary = FindDiscipline(_primaryId);
+            if (primary != null && SelectedSet(primary.Id).Count == 0)
+            {
+                foreach (AbilityView ability in primary.Abilities
+                             .Where(ability => !ability.IsPassive)
+                             .Take(DisciplineLoadoutRules.PrimaryAbilityMinimum))
+                {
+                    SelectedSet(primary.Id).Add(ability.Id);
+                }
+            }
+
+            foreach (string secondaryId in _secondaryIds)
+            {
+                DisciplineView? secondary = FindDiscipline(secondaryId);
+                if (secondary == null || SelectedSet(secondaryId).Count > 0)
+                    continue;
+                AbilityView? first = secondary.Abilities.FirstOrDefault(ability => !ability.IsPassive);
+                if (first != null)
+                    SelectedSet(secondaryId).Add(first.Id);
+            }
+        }
+
+        private void AddAuthoritativeSecondary(string? disciplineId)
+        {
+            string normalized = WireIdentifier.Normalize(disciplineId);
+            if (string.IsNullOrEmpty(normalized)
+                || normalized == _primaryId
+                || _secondaryIds.Contains(normalized, StringComparer.Ordinal)
+                || FindDiscipline(normalized) == null)
+            {
+                return;
+            }
+            _secondaryIds.Add(normalized);
         }
 
         private void RenderWaitingForCatalog()
@@ -636,27 +754,34 @@ namespace Arena.UI
 
         private Button CreateAbilityTile(AbilityView ability, DisciplineView discipline)
         {
-            bool selected = SelectedSet(discipline.Id).Contains(ability.Id);
+            bool selected = ability.IsPassive || SelectedSet(discipline.Id).Contains(ability.Id);
             Button button = new();
             button.AddToClassList("ability-tile");
             button.EnableInClassList("is-selected", selected);
+            button.EnableInClassList("is-passive", ability.IsPassive);
 
             VisualElement art = new() { pickingMode = PickingMode.Ignore };
             art.AddToClassList("ability-art");
             SetBackground(art, ability.Icon ?? discipline.Icon);
             button.Add(art);
 
-            Label name = new(ability.Name) { pickingMode = PickingMode.Ignore };
+            Label name = new(ability.IsPassive ? $"{ability.Name} · PASSIVE" : ability.Name)
+            {
+                pickingMode = PickingMode.Ignore,
+            };
             name.AddToClassList("ability-name");
             button.Add(name);
 
-            Label check = new("✓") { pickingMode = PickingMode.Ignore };
+            Label check = new(ability.IsPassive ? "◆" : "✓") { pickingMode = PickingMode.Ignore };
             check.AddToClassList("ability-check");
             button.Add(check);
 
-            string disciplineId = discipline.Id;
-            string abilityId = ability.Id;
-            button.clicked += () => ToggleAbility(disciplineId, abilityId);
+            if (!ability.IsPassive)
+            {
+                string disciplineId = discipline.Id;
+                string abilityId = ability.Id;
+                button.clicked += () => ToggleAbility(disciplineId, abilityId);
+            }
             button.RegisterCallback<PointerEnterEvent>(evt => ShowTooltip(evt.position, ability, discipline));
             button.RegisterCallback<PointerMoveEvent>(evt => MoveTooltip(evt.position));
             button.RegisterCallback<PointerLeaveEvent>(_ => HideTooltip());
@@ -755,10 +880,17 @@ namespace Arena.UI
                 {
                     _saveStatus.text = "!  Every secondary needs at least one ability";
                 }
-                else if (!string.IsNullOrEmpty(_savedSnapshot)
-                         && string.Equals(_savedSnapshot, BuildDraftSnapshot(), StringComparison.Ordinal))
+                else if (_savePending)
                 {
-                    _saveStatus.text = "✓  Saved for this Hub session";
+                    _saveStatus.text = "◆  Saving discipline loadout…";
+                }
+                else if (!string.IsNullOrEmpty(_savedLoadoutSnapshot)
+                         && string.Equals(
+                             _savedLoadoutSnapshot,
+                             BuildDraftLoadoutSnapshot(),
+                             StringComparison.Ordinal))
+                {
+                    _saveStatus.text = "✓  Disciplines and abilities saved · stats are session-only";
                 }
                 else if (RemainingPoints() > 0)
                 {
@@ -770,7 +902,7 @@ namespace Arena.UI
                 }
             }
 
-            _saveButton?.SetEnabled(valid);
+            _saveButton?.SetEnabled(valid && !_savePending && _connection != null);
         }
 
         private static VisualElement CreateRequirementRow(bool complete, string copy)
@@ -860,29 +992,131 @@ namespace Arena.UI
             if (!DisciplineLoadoutRules.IsValid(SelectedCount(primary.Id), secondaryCounts))
                 return;
 
-            _savedSnapshot = BuildDraftSnapshot();
+            EnsureConnection(NetworkManager.Instance?.Conn);
+            if (_connection == null || !_connection.Identity.HasValue || _savePending)
+            {
+                ShowToast("Connect to save your discipline loadout.");
+                return;
+            }
+
+            string secondary1 = _secondaryIds.ElementAtOrDefault(0) ?? string.Empty;
+            string secondary2 = _secondaryIds.ElementAtOrDefault(1) ?? string.Empty;
+            List<string> selectedAbilityIds = BuildSelectedAbilityIds();
+            _pendingLoadoutSnapshot = BuildLoadoutSnapshot(
+                _primaryId,
+                secondary1,
+                secondary2,
+                selectedAbilityIds);
+            _savePending = true;
             RenderSummary();
-            ShowToast("Loadout saved for this Hub session.");
+            _connection.Reducers.SaveCharacterDisciplineLoadout(
+                _primaryId,
+                secondary1,
+                secondary2,
+                selectedAbilityIds);
         }
 
-        private string BuildDraftSnapshot()
+        private void OnSaveCharacterDisciplineLoadout(
+            ReducerEventContext ctx,
+            string primaryDisciplineId,
+            string secondaryDisciplineId1,
+            string secondaryDisciplineId2,
+            List<string> selectedAbilityIds)
         {
-            StringBuilder builder = new();
-            builder.Append(_primaryId).Append('|');
-            foreach (string id in _secondaryIds)
-                builder.Append(id).Append(',');
-            builder.Append('|');
-            foreach (string disciplineId in new[] { _primaryId }.Concat(_secondaryIds))
+            if (_connection == null
+                || !_connection.Identity.HasValue
+                || ctx.Event.CallerIdentity != _connection.Identity.Value
+                || !_savePending
+                || !string.Equals(
+                    _pendingLoadoutSnapshot,
+                    BuildLoadoutSnapshot(
+                        primaryDisciplineId,
+                        secondaryDisciplineId1,
+                        secondaryDisciplineId2,
+                        selectedAbilityIds),
+                    StringComparison.Ordinal))
             {
-                builder.Append(disciplineId).Append(':');
-                foreach (string abilityId in SelectedSet(disciplineId).OrderBy(id => id, StringComparer.Ordinal))
-                    builder.Append(abilityId).Append(',');
-                builder.Append(';');
+                return;
             }
-            builder.Append('|');
-            foreach (StatView definition in StatDefinitions)
-                builder.Append(definition.Id).Append(':').Append(_stats[definition.Id]).Append(';');
-            return builder.ToString();
+
+            _savePending = false;
+            if (ctx.Event.Status is Status.Committed)
+            {
+                _savedLoadoutSnapshot = _pendingLoadoutSnapshot;
+                _pendingLoadoutSnapshot = string.Empty;
+                _catalogSignature = string.Empty;
+                _nextCatalogRefresh = 0f;
+                RenderSummary();
+                ShowToast("Discipline loadout saved. Your abilities will carry into gameplay.");
+                return;
+            }
+
+            string reason = ctx.Event.Status switch
+            {
+                Status.Failed(var failure) => failure,
+                Status.OutOfEnergy(var _) => "server was out of reducer energy",
+                _ => "server did not commit the discipline loadout",
+            };
+            _pendingLoadoutSnapshot = string.Empty;
+            Debug.LogError($"[{nameof(DisciplinesScreen)}] Saving discipline loadout failed: {reason}");
+            RenderSummary();
+            ShowToast($"Could not save discipline loadout: {reason}");
+        }
+
+        private List<string> BuildSelectedAbilityIds()
+        {
+            List<string> selectedAbilityIds = new();
+            IEnumerable<string> disciplineIds = new[] { _primaryId }.Concat(_secondaryIds);
+            foreach (string disciplineId in disciplineIds)
+            {
+                DisciplineView? discipline = FindDiscipline(disciplineId);
+                if (discipline == null)
+                    continue;
+                HashSet<string> selected = SelectedSet(discipline.Id);
+                selectedAbilityIds.AddRange(discipline.Abilities
+                    .Where(ability => !ability.IsPassive && selected.Contains(ability.Id))
+                    .Select(ability => ability.Id));
+            }
+            return selectedAbilityIds;
+        }
+
+        private string BuildDraftLoadoutSnapshot()
+        {
+            return BuildLoadoutSnapshot(
+                _primaryId,
+                _secondaryIds.ElementAtOrDefault(0),
+                _secondaryIds.ElementAtOrDefault(1),
+                BuildSelectedAbilityIds());
+        }
+
+        private static string BuildLoadoutSnapshot(
+            CharacterDisciplineLoadout? loadout,
+            IEnumerable<CharacterDisciplineAbilitySelection> selectedAbilities)
+        {
+            return loadout == null
+                ? "NO_AUTHORITATIVE_LOADOUT"
+                : BuildLoadoutSnapshot(
+                    loadout.PrimaryDisciplineId,
+                    loadout.SecondaryDisciplineId1,
+                    loadout.SecondaryDisciplineId2,
+                    selectedAbilities
+                        .OrderBy(row => row.SortOrder)
+                        .ThenBy(row => row.AbilityId, StringComparer.Ordinal)
+                        .Select(row => row.AbilityId));
+        }
+
+        private static string BuildLoadoutSnapshot(
+            string? primaryDisciplineId,
+            string? secondaryDisciplineId1,
+            string? secondaryDisciplineId2,
+            IEnumerable<string> selectedAbilityIds)
+        {
+            return string.Join(
+                "|",
+                WireIdentifier.Normalize(primaryDisciplineId),
+                WireIdentifier.Normalize(secondaryDisciplineId1),
+                WireIdentifier.Normalize(secondaryDisciplineId2),
+                string.Join(",", selectedAbilityIds.Select(WireIdentifier.Normalize)));
         }
 
         private void SetSecondaryHelp(string copy, bool warning)
@@ -899,7 +1133,9 @@ namespace Arena.UI
                 return;
 
             _tooltipName.text = ability.Name.ToUpperInvariant();
-            _tooltipMeta.text = string.IsNullOrWhiteSpace(ability.Resource)
+            _tooltipMeta.text = ability.IsPassive
+                ? $"{discipline.Name.ToUpperInvariant()} PASSIVE ABILITY"
+                : string.IsNullOrWhiteSpace(ability.Resource)
                 ? $"{discipline.Name.ToUpperInvariant()} ABILITY"
                 : $"{ability.Resource} · {ability.Cost:0.#} COST";
             _tooltipDescription.text = ability.Description;
@@ -1027,6 +1263,16 @@ namespace Arena.UI
                 .Select(part => part.Length > 1
                     ? char.ToUpperInvariant(part[0]) + part.Substring(1).ToLowerInvariant()
                     : part.ToUpperInvariant()));
+        }
+
+        private static bool HasAbilityTag(string? encodedTags, string tag)
+        {
+            return (encodedTags ?? string.Empty)
+                .Split('|', StringSplitOptions.RemoveEmptyEntries)
+                .Any(value => string.Equals(
+                    WireIdentifier.Normalize(value),
+                    WireIdentifier.Normalize(tag),
+                    StringComparison.Ordinal));
         }
     }
 }

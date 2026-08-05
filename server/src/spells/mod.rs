@@ -31,6 +31,8 @@ use crate::spells::pending_cast_request as _;
 #[allow(unused_imports)]
 use crate::spells::player_known_spell as _;
 #[allow(unused_imports)]
+use crate::spells::recall_slot as _;
+#[allow(unused_imports)]
 use crate::spells::special_movement_runtime as _;
 #[allow(unused_imports)]
 use crate::spells::spell_cooldown as _;
@@ -54,12 +56,13 @@ pub(crate) use casting::special_movement_uses_air_path_with_ground;
 pub(crate) use casting::{
     approach_line_contact_point_xz, bake_linear_special_movement, begin_active_cast,
     begin_special_movement, begin_special_movement_with_facing_policy, cast_spell_for_server_actor,
-    clear_active_cast, contact_distance_from_radii, fizzle_active_cast_for_interrupt,
-    has_due_pending_area_impacts, horizontal_movement_duration_ms,
-    is_externally_imposed_movement_kind, movement_delivery_destination,
-    resolve_pending_area_impacts, resolve_pending_casts, resolve_special_movement_y,
-    resolved_primary_resource_cost_for_amount, special_movement_uses_air_path, tick_active_casts,
-    tick_persistent_areas, validate_movement_delivery_target, KNOCKBACK_MOVEMENT_KIND,
+    clear_active_cast, clear_recall_slot, contact_distance_from_radii,
+    fizzle_active_cast_for_interrupt, has_due_pending_area_impacts,
+    horizontal_movement_duration_ms, is_externally_imposed_movement_kind,
+    movement_delivery_destination, resolve_pending_area_impacts, resolve_pending_casts,
+    resolve_special_movement_y, resolved_primary_resource_cost_for_amount,
+    special_movement_uses_air_path, tick_active_casts, tick_persistent_areas,
+    validate_movement_delivery_target, KNOCKBACK_MOVEMENT_KIND,
     SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
     SPECIAL_MOVEMENT_FACING_FACE_START, STAGGER_SHOVE_MOVEMENT_KIND,
 };
@@ -291,6 +294,19 @@ pub struct SpellCooldown {
     pub kind: String,
     pub last_cast_at: Timestamp,
     pub duration_ms: u64,
+}
+
+#[table(accessor = recall_slot, public)]
+#[derive(Clone)]
+pub struct RecallSlot {
+    #[primary_key]
+    pub owner: Identity,
+    /// Empty while Recall is armed and waiting for the next eligible spell.
+    pub stored_spell_id: String,
+    pub charge_count: u32,
+    pub charge_pct: f32,
+    pub armed_at: Timestamp,
+    pub stored_at: Timestamp,
 }
 
 #[table(accessor = spell_definition, public)]

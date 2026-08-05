@@ -43,9 +43,11 @@ namespace Arena.Input
         private const float YawDamping = 12f;
         private const long PendingInstantSpellPredictionTtlMs = 5000L;
         private const long PendingLocalSpellEventHoldMs = 250L;
+        private const string RecallSpellId = "RECALL";
 
         // --- Aim mode state ---
         private string? _activeAimSpell;
+        private string? _activeAimTargetingSpell;
         private float _originalYaw;
         private float _currentYaw;
         private bool _yawLocked;
@@ -172,9 +174,10 @@ namespace Arena.Input
         // Aim mode — interactive point targeting
         // ---------------------------------------------------------------
 
-        private void StartAimMode(string spellId, float aimRadius)
+        private void StartAimMode(string spellId, string targetingSpellId, float aimRadius)
         {
             _activeAimSpell = spellId;
+            _activeAimTargetingSpell = targetingSpellId;
 
             // Unlock cursor for free aiming
             Cursor.lockState = CursorLockMode.None;
@@ -199,7 +202,7 @@ namespace Arena.Input
             LocalPlayerInputSource input)
         {
             // Show aim indicator and update position
-            var spellDef = GetSpellDefinition(conn, _activeAimSpell ?? string.Empty);
+            var spellDef = GetSpellDefinition(conn, _activeAimTargetingSpell ?? string.Empty);
             if (!TryGetAimRadius(spellDef, out float aimRadius))
             {
                 CancelAim();
@@ -258,6 +261,7 @@ namespace Arena.Input
 
             string spellId = _activeAimSpell;
             var spellDef = GetSpellDefinition(conn, spellId);
+            var targetingDef = GetSpellDefinition(conn, _activeAimTargetingSpell ?? spellId);
             bool usesGlobalCooldown = UsesGlobalCooldown(conn, spellId);
 
             // Re-check cast gates (can change while aiming)
@@ -311,7 +315,7 @@ namespace Arena.Input
             }
 
             var aimPoint = new Vector3(aimX, aimY, aimZ);
-            if (!IsAimPointWithinMaxDistance(spellDef, aimPoint))
+            if (!IsAimPointWithinMaxDistance(targetingDef, aimPoint))
             {
                 ActionBarTrace.Trace($"spell dispatch rejected: aim point out of range for {spellId}");
                 return;
@@ -350,12 +354,14 @@ namespace Arena.Input
         private void FinishAimMode()
         {
             _activeAimSpell = null;
+            _activeAimTargetingSpell = null;
             _yawLocked = false;
         }
 
         private void CancelAim()
         {
             _activeAimSpell = null;
+            _activeAimTargetingSpell = null;
             _yawLocked = false;
 
             transform.rotation = Quaternion.Euler(0f, _originalYaw * Mathf.Rad2Deg, 0f);
@@ -491,35 +497,38 @@ namespace Arena.Input
                 ActionBarTrace.Trace($"spell dispatch waiting for definition for {spellId}");
                 return false;
             }
-            if (SpellDefinitionContracts.UsesPointTargeting(spellDef))
+            var targetingDef = ResolveRecallTargetingDefinition(conn, localPlayer.Identity, spellId, spellDef);
+            if (SpellDefinitionContracts.UsesPointTargeting(targetingDef))
             {
-                if (!TryGetAimRadius(spellDef, out float aimRadius))
+                if (!TryGetAimRadius(targetingDef, out float aimRadius))
                 {
                     ActionBarTrace.Trace($"spell dispatch waiting for aim radius definition for {spellId}");
                     return false;
                 }
                 // Enter interactive aim mode instead of instant cast
                 ActionBarTrace.Trace($"spell dispatch entered aim mode for {spellId}");
-                StartAimMode(spellId, aimRadius);
+                StartAimMode(spellId, targetingDef.Kind, aimRadius);
                 return true;
             }
 
             ActionBarTrace.Trace($"spell dispatch sending cast request for {spellId}");
-            return TryCastTargeted(conn, spellId);
+            return TryCastTargeted(conn, spellId, targetingDef);
         }
 
-        private bool TryCastTargeted(SpacetimeDB.Types.DbConnection conn, string spellId)
+        private bool TryCastTargeted(
+            SpacetimeDB.Types.DbConnection conn,
+            string spellId,
+            SpacetimeDB.Types.SpellDefinition targetingDef)
         {
             string targetId = TargetSelector.Instance?.SelectedTargetId ?? "";
-            var spellDef = GetSpellDefinition(conn, spellId);
             if (string.IsNullOrEmpty(targetId)
-                && spellDef?.RequiresTarget == true
-                && PartyRelationship.TargetAudienceAllowsSelf(spellDef.TargetAudience))
+                && targetingDef.RequiresTarget
+                && PartyRelationship.TargetAudienceAllowsSelf(targetingDef.TargetAudience))
             {
                 targetId = EntityRegistry.Instance?.LocalPlayerEntity?.Identity.ToString() ?? "";
                 ActionBarTrace.Trace($"spell dispatch defaulted {spellId} target to self");
             }
-            if (string.IsNullOrEmpty(targetId) && spellDef?.RequiresTarget == true)
+            if (string.IsNullOrEmpty(targetId) && targetingDef.RequiresTarget)
             {
                 Debug.LogWarning($"[SpellInput] {spellId} — no target selected (use Tab or click a target)");
                 ActionBarTrace.Trace($"spell dispatch rejected: no target selected for {spellId}");
@@ -530,7 +539,7 @@ namespace Arena.Input
             // reason text as the server's targeting check, denied before the
             // round trip. Permissive by construction; the server stays
             // authoritative for any press that goes through.
-            if (spellDef is { RequiresTarget: true, RequiresTargetLos: true })
+            if (targetingDef is { RequiresTarget: true, RequiresTargetLos: true })
             {
                 PlayerEntity? losLocal = EntityRegistry.Instance?.LocalPlayerEntity;
                 ICombatTargetEntity? losTarget = TargetSelector.Instance?.SelectedTarget;
@@ -548,6 +557,7 @@ namespace Arena.Input
             }
 
             ActionBarTrace.Trace($"sending CastRequest for {spellId} target={targetId}");
+            var spellDef = GetSpellDefinition(conn, spellId);
             CastActionToken token = LocalCombatState.Instance.CreateCastActionToken(spellId);
             SendCastRequest(conn, spellId, targetId, 0f, 0f, 0f, token);
             RecordPredictedSpellStart(
@@ -560,6 +570,27 @@ namespace Arena.Input
             PredictCastTimeSpellHold(spellId, spellDef, targetId, null, token);
             PredictImmediateInstantSpellVisual(conn, spellId, spellDef, targetId, null, token);
             return true;
+        }
+
+        private static SpacetimeDB.Types.SpellDefinition ResolveRecallTargetingDefinition(
+            SpacetimeDB.Types.DbConnection conn,
+            SpacetimeDB.Identity owner,
+            string spellId,
+            SpacetimeDB.Types.SpellDefinition fallback)
+        {
+            if (!string.Equals(
+                    WireIdentifier.Normalize(spellId),
+                    RecallSpellId,
+                    System.StringComparison.Ordinal))
+            {
+                return fallback;
+            }
+
+            RecallSlot? slot = conn.Db.RecallSlot.Owner.Find(owner);
+            if (slot == null || string.IsNullOrWhiteSpace(slot.StoredSpellId))
+                return fallback;
+
+            return GetSpellDefinition(conn, slot.StoredSpellId) ?? fallback;
         }
 
         private static float SpellPrimaryResourceCost(SpacetimeDB.Types.SpellDefinition? spellDef)

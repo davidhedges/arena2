@@ -143,7 +143,7 @@
     {
       "combat_profile_id": "DAGGERS",
       "mode_id": "STEALTHED",
-      "display_name": "Stealthed",
+      "display_name": "Shrouded",
       "is_default": false,
       "sort_order": 20
     }
@@ -2318,6 +2318,37 @@
       }
     },
     {
+      "ability_id": "SPELL_RECALL",
+      "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
+      "combat_profile_id": "",
+      "action_id": "RECALL",
+      "display_name": "Recall",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1027,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 0,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "RECALL",
+          "replay_cooldown_ms": 60000
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_STONESPIRE",
       "actor_scope": "PLAYER",
       "discipline_id": "PRIMAL",
@@ -4425,6 +4456,41 @@
       }
     },
     {
+      "ability_id": "DAGGER_NERVE_STRIKE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DAGGER_NERVE_STRIKE",
+      "display_name": "Nerve Strike",
+      "resource_kind": "STAMINA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 42,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 24,
+        "applies_stagger": false,
+        "range": 2,
+        "cooldown_ms": 650,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS",
+            "status": {
+              "kind": "STUN",
+              "duration_ms": 4000,
+              "status_stack_group": "DAGGER_NERVE_STRIKE_STUN"
+            }
+          }
+        ]
+      }
+    },
+    {
       "ability_id": "DAGGER_COUP_DE_GRACE",
       "actor_scope": "PLAYER",
       "discipline_id": "SUBTLETY",
@@ -4689,7 +4755,7 @@
       "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
       "action_id": "TOGGLE_STEALTH",
-      "display_name": "Stealth",
+      "display_name": "Shroud",
       "resource_kind": "",
       "resource_cost": 0,
       "ability_tags": [
@@ -4697,7 +4763,208 @@
       ],
       "sort_order": 60,
       "gameplay": {
-        "kind": "COMBAT_MODE_TOGGLE"
+        "kind": "COMBAT_MODE_TOGGLE",
+        "cooldown_ms": 60000,
+        "duration_ms": 5000,
+        "break_on_attack": true,
+        "break_on_direct_damage": true
+      }
+    },
+    {
+      "ability_id": "SUBTLETY_OPPORTUNIST",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "OPPORTUNIST",
+      "display_name": "Opportunist",
+      "resource_kind": "STAMINA",
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 61,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "disabled_target_damage_bonus": 0.15
+      }
+    },
+    {
+      "ability_id": "DAGGER_FIND_WEAKNESS",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "FIND_WEAKNESS",
+      "display_name": "Find Weakness",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 62,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 86400000,
+          "max_distance": 12,
+          "damage_type": "PHYSICAL",
+          "status_stack_group": "FIND_WEAKNESS:{SOURCE}",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "FIND_WEAKNESS",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_BLADE_TWISTING",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "BLADE_TWISTING",
+      "display_name": "Blade Twisting",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 63,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 86400000,
+          "damage_type": "PHYSICAL",
+          "status_stack_group": "BLADE_TWISTING",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "BLADE_TWISTING",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "SUBTLETY_SURPRISE_ATTACKS",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "SURPRISE_ATTACKS",
+      "display_name": "Surprise Attacks",
+      "resource_kind": "STAMINA",
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 64,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "stealth_attack_stun_ms": 2000
+      }
+    },
+    {
+      "ability_id": "DAGGER_DISARM",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DISARM",
+      "display_name": "Disarm",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 65,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 4000,
+          "max_distance": 2.5,
+          "damage_type": "PHYSICAL",
+          "status_stack_group": "DISARM",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "DISARM",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_GOUGE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "GOUGE",
+      "display_name": "Gouge",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 66,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 4000,
+          "max_distance": 2.5,
+          "damage_type": "PHYSICAL",
+          "status_stack_group": "GOUGE",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "GOUGE",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
       }
     },
     {
@@ -6353,6 +6620,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_RECALL",
+      "display_name": "Recall",
+      "description": "Arms Recall to store the next non-instant spell you successfully cast. Cast Recall again to release that spell instantly for no mana; Recall then enters a 60-second cooldown.",
+      "sort_order": 105
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_GIANT_SWING",
       "display_name": "Giant Swing",
       "description": "Empowers the next attack to reach farther and stagger enemies hit.",
@@ -6738,6 +7012,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_NERVE_STRIKE",
+      "display_name": "Nerve Strike",
+      "description": "Strikes a vulnerable nerve, stunning the target for 4 seconds.",
+      "sort_order": 230
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_COUP_DE_GRACE",
       "display_name": "Coup de Grâce",
       "description": "Teleports behind a disabled target before delivering a descending execution strike.",
@@ -6802,9 +7083,51 @@
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_STEALTH",
-      "display_name": "Stealth",
-      "description": "Enter or leave the Dagger stealthed stance.",
+      "display_name": "Shroud",
+      "description": "Become shrouded for 5 seconds. Attacking or taking direct damage ends Shroud. 60 second cooldown.",
       "sort_order": 240
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SUBTLETY_OPPORTUNIST",
+      "display_name": "Opportunist",
+      "description": "Deal 15% increased damage to enemies disabled by stun, freeze, fear, intimidation, stagger, or knockdown.",
+      "sort_order": 241
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_FIND_WEAKNESS",
+      "display_name": "Find Weakness",
+      "description": "Mark a hostile target. Your next casted ability against that target is guaranteed to critically strike; auto-attacks do not consume the mark.",
+      "sort_order": 242
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_BLADE_TWISTING",
+      "display_name": "Blade Twisting",
+      "description": "Your next critical strike from a casted ability deals 3x damage instead of 2x; auto-attacks do not consume the effect.",
+      "sort_order": 243
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SUBTLETY_SURPRISE_ATTACKS",
+      "display_name": "Surprise Attacks",
+      "description": "Passive: targets hit by an attack made from Shroud are stunned for 2 seconds.",
+      "sort_order": 244
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_DISARM",
+      "display_name": "Disarm",
+      "description": "Disarm a hostile target for 4 seconds, preventing weapon attacks and hiding their weapon while leaving movement and spellcasting available.",
+      "sort_order": 245
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_GOUGE",
+      "display_name": "Gouge",
+      "description": "Prevent a hostile target from using targeted abilities for 4 seconds. Area effects and self-casts remain available.",
+      "sort_order": 246
     },
     {
       "presentation_kind": "ABILITY",

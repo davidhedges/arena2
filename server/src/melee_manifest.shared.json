@@ -1329,6 +1329,21 @@
                     "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
+                    "id": "DAGGER_NERVE_STRIKE",
+                    "slot_id": "dagger_nerve_strike_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 261
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
                     "id": "DAGGER_PRECISION_STRIKE",
                     "slot_id": "dagger_precision_strike_slot",
                     "hit_windows": [

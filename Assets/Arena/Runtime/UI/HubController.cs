@@ -37,6 +37,7 @@ namespace Arena.UI
         private static readonly Color Transparent = new(0f, 0f, 0f, 0f);
 
         private Transform? _root;
+        private GameObject? _hubCanvas;
         private GameObject? _homeRoot;
         private GameObject? _stageRoot;
         private GameObject? _travelMenu;
@@ -162,6 +163,7 @@ namespace Arena.UI
         private void Resolve()
         {
             _root = transform;
+            _hubCanvas = _root.Find("HubCanvas")?.gameObject;
             _homeRoot = _root.Find("HubCanvas/HomeRoot")?.gameObject;
             _stageRoot = _root.Find("StageRoot")?.gameObject;
             _travelMenu = _root.Find("HubCanvas/HomeRoot/TravelMenu")?.gameObject;
@@ -187,8 +189,7 @@ namespace Arena.UI
                 _playButton.onClick.AddListener(() =>
                 {
                     HubViewState.Show(HubViewScreen.Play);
-                    if (_travelMenu != null)
-                        _travelMenu.SetActive(false);
+                    SetTravelMenuOpen(false);
                     ApplyState();
                 });
             }
@@ -206,7 +207,7 @@ namespace Arena.UI
                 _ctaButton.onClick.AddListener(() =>
                 {
                     if (_travelMenu != null && Application.isPlaying)
-                        _travelMenu.SetActive(!_travelMenu.activeSelf);
+                        SetTravelMenuOpen(!_travelMenu.activeSelf);
                 });
             }
 
@@ -243,6 +244,19 @@ namespace Arena.UI
             }
 
             _wired = _playButton != null && _ctaButton != null;
+        }
+
+        /// <summary>
+        /// Opens the retained destination menu from the current PvP hub's
+        /// Practice action. The rest of the retired hub canvas stays hidden.
+        /// </summary>
+        public void OpenPracticeMenu()
+        {
+            if (!Application.isPlaying)
+                return;
+
+            Resolve();
+            SetTravelMenuOpen(true, bringToFront: true);
         }
 
         private void EnsureTravelConnection()
@@ -356,8 +370,7 @@ namespace Arena.UI
 
             if (ctx.Event.Status is Status.Committed)
             {
-                if (_travelMenu != null)
-                    _travelMenu.SetActive(false);
+                SetTravelMenuOpen(false);
                 return;
             }
 
@@ -397,7 +410,10 @@ namespace Arena.UI
             if (_stageRoot != null)
                 _stageRoot.SetActive(showStage);
             if (_travelMenu != null && (!showHome || !Application.isPlaying))
-                _travelMenu.SetActive(false);
+                SetTravelMenuOpen(false);
+
+            if (Application.isPlaying && GetComponent<HubScreen>() != null)
+                SyncToolkitTravelOverlay(IsTravelMenuOpen, bringToFront: false);
 
             ApplyNavVisual(_playButton, HubViewState.Current == HubViewScreen.Play);
 
@@ -421,11 +437,48 @@ namespace Arena.UI
             Resolve();
             if (IsTravelMenuOpen)
             {
-                _travelMenu!.SetActive(false);
+                SetTravelMenuOpen(false);
                 return true;
             }
 
             return false;
+        }
+
+        private void SetTravelMenuOpen(bool open, bool bringToFront = false)
+        {
+            if (_travelMenu == null)
+                return;
+
+            _travelMenu.SetActive(open);
+            if (GetComponent<HubScreen>() != null)
+                SyncToolkitTravelOverlay(open, bringToFront);
+        }
+
+        private void SyncToolkitTravelOverlay(bool open, bool bringToFront)
+        {
+            if (_hubCanvas == null || _homeRoot == null || _travelMenu == null)
+                return;
+
+            if (!open)
+            {
+                _hubCanvas.SetActive(false);
+                return;
+            }
+
+            // HubScreen replaces the old presentation, but the authored travel
+            // menu and its server-authoritative callbacks remain the canonical
+            // way to enter the legacy scenes. Expose only that retained menu.
+            _hubCanvas.SetActive(true);
+            foreach (Transform child in _hubCanvas.transform)
+                child.gameObject.SetActive(child.gameObject == _homeRoot);
+
+            _homeRoot.SetActive(true);
+            foreach (Transform child in _homeRoot.transform)
+                child.gameObject.SetActive(child.gameObject == _travelMenu);
+
+            _travelMenu.SetActive(true);
+            if (bringToFront)
+                RuntimeUiLayer.BringToFront(_hubCanvas.GetComponent<Canvas>());
         }
 
         private string ResolveCombatProfile()

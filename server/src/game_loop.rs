@@ -42,7 +42,7 @@ use crate::combat::actor_snapshot::CombatActorSnapshotSet;
 use crate::combat::{
     clear_statuses_for_dead_players, expire_combat_engagements, expire_status_effects,
     has_due_pending_effects, normalize_legacy_hot_status_rows, process_periodic_status_ticks,
-    prune_combat_events, resolve_pending_effects, respawn_player,
+    prune_combat_events, prune_surprise_attack_runtimes, resolve_pending_effects, respawn_player,
     sync_combat_projectile_definitions, sync_player_state_derived_stats, tick_auras,
     tick_combat_projectiles_with_snapshots, tick_combat_stacking_passives, tick_emanations,
     MovementModifiers, StatusRuntimeView, TemporaryCombatModifiers,
@@ -81,8 +81,9 @@ use crate::playground_targets::is_playground_target;
 use crate::practice::tick_practice;
 use crate::progression::{
     backfill_character_action_bar_rows, backfill_sword_and_shield_visible_action_bar_rows,
-    clear_generic_fixed_action_bar_assignments, migrate_generic_spell_action_bar_assignments,
-    migrate_renamed_melee_action_bar_assignments, sync_progression_catalogs,
+    clear_generic_fixed_action_bar_assignments, expire_shrouds,
+    migrate_generic_spell_action_bar_assignments, migrate_renamed_melee_action_bar_assignments,
+    sync_progression_catalogs,
 };
 use crate::resources::{
     reset_player_resources_to_full, sync_all_player_resources,
@@ -1118,6 +1119,8 @@ fn run_pre_tick_housekeeping_phase(
         || {
             expire_combat_engagements(ctx, now);
             expire_status_effects(ctx, now);
+            prune_surprise_attack_runtimes(ctx, now);
+            expire_shrouds(ctx, now);
         },
     );
 

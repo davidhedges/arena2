@@ -562,7 +562,7 @@ namespace Arena.Tests.Editor
             Assert.That(staticSqlText, Does.Not.Contain("\"fixed_action_binding_catalog\""));
             Assert.That(staticSqlText, Does.Not.Contain("\"class_catalog\""));
 
-            Assert.That(localSql, Has.Length.EqualTo(24));
+            Assert.That(localSql, Has.Length.EqualTo(27));
             Assert.That(localSql[0], Does.Contain("\"player_world\""));
             Assert.That(localSql[0], Does.Contain(localIdentityKey));
             Assert.That(localSqlText, Does.Contain("\"player_open_world_scene\""));
@@ -571,9 +571,12 @@ namespace Arena.Tests.Editor
             Assert.That(localSqlText, Does.Contain("\"player_known_spell\""));
             Assert.That(localSqlText, Does.Contain("\"global_cooldown\""));
             Assert.That(localSqlText, Does.Contain("\"spell_cooldown\""));
+            Assert.That(localSqlText, Does.Contain("\"recall_slot\""));
             Assert.That(localSqlText, Does.Contain("\"predicted_action_result\""));
             Assert.That(localSqlText, Does.Contain("\"fixed_action_charge_state\""));
             Assert.That(localSqlText, Does.Contain("\"active_combat_discipline\""));
+            Assert.That(localSqlText, Does.Contain("\"character_discipline_loadout\""));
+            Assert.That(localSqlText, Does.Contain("\"character_discipline_ability_selection\""));
             Assert.That(localSqlText, Does.Contain("\"character_combat_discipline_weapon_loadout\""));
             Assert.That(localSqlText, Does.Contain("\"active_combat_mode\""));
             Assert.That(localSqlText, Does.Contain("\"auto_attack_state\""));

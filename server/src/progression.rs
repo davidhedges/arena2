@@ -19,7 +19,7 @@ use crate::inventory::{
 use crate::melee::sync_melee_attack_modifier_catalog;
 use crate::player::Player;
 use crate::relations::TARGET_AUDIENCE_HOSTILE;
-use crate::spells::player_knows_spell;
+use crate::spells::{is_on_named_cooldown, player_knows_spell, stamp_named_cooldown_for_duration};
 
 #[allow(unused_imports)]
 use crate::player::player as _;
@@ -41,6 +41,10 @@ use crate::progression::auto_attack_catalog as _;
 use crate::progression::character_action_bar_assignment as _;
 #[allow(unused_imports)]
 use crate::progression::character_combat_discipline_weapon_loadout as _;
+#[allow(unused_imports)]
+use crate::progression::character_discipline_ability_selection as _;
+#[allow(unused_imports)]
+use crate::progression::character_discipline_loadout as _;
 #[allow(unused_imports)]
 use crate::progression::combat_discipline_catalog as _;
 #[allow(unused_imports)]
@@ -67,6 +71,9 @@ const FIXED_ACTION_DODGE: &str = "DODGE";
 const FIXED_ACTION_PARRY: &str = "PARRY";
 const ACTION_KIND_COMBAT_DISCIPLINE_SWITCH: &str = "COMBAT_DISCIPLINE_SWITCH";
 pub(crate) const GLOBAL_ACTION_BAR_PROFILE: &str = "GLOBAL";
+const PRIMARY_DISCIPLINE_ABILITY_MINIMUM: usize = 8;
+const SECONDARY_DISCIPLINE_ABILITY_MINIMUM: usize = 1;
+const MAX_DISCIPLINE_LOADOUT_ABILITIES: usize = 128;
 const RULE_DEFAULT_GLOBAL_COOLDOWN_MS: &str = "DEFAULT_GLOBAL_COOLDOWN_MS";
 const FALLBACK_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 1500;
 const MAX_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 60_000;
@@ -93,12 +100,13 @@ pub(crate) const COMBAT_MODE_STEALTHED: &str = "STEALTHED";
 pub(crate) const AUTO_ATTACK_MOVEMENT_ALLOW_MOVING: &str = "ALLOW_MOVING";
 pub(crate) const AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE: &str =
     "RESET_CADENCE_ON_VOLUNTARY_MOVE";
-#[cfg(test)]
 const ABILITY_KIND_COMBAT_MODE_TOGGLE: &str = "COMBAT_MODE_TOGGLE";
 #[cfg(test)]
 const ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID: &str = "ARCHER_DRAW_MODE_TOGGLE";
-#[cfg(test)]
-const DAGGER_STEALTH_ABILITY_ID: &str = "DAGGER_STEALTH";
+// Keep the original wire ID stable so existing action-bar assignments survive the rename.
+const DAGGER_SHROUD_ABILITY_ID: &str = "DAGGER_STEALTH";
+const SUBTLETY_OPPORTUNIST_ABILITY_ID: &str = "SUBTLETY_OPPORTUNIST";
+const SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID: &str = "SUBTLETY_SURPRISE_ATTACKS";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct AllocatedStatTotals {
@@ -246,6 +254,16 @@ struct AbilityGameplayDefinition {
     #[serde(default)]
     minimum_range: Option<f32>,
     cooldown_ms: Option<u64>,
+    #[serde(default)]
+    duration_ms: Option<u64>,
+    #[serde(default)]
+    break_on_attack: bool,
+    #[serde(default)]
+    break_on_direct_damage: bool,
+    #[serde(default)]
+    disabled_target_damage_bonus: f32,
+    #[serde(default)]
+    stealth_attack_stun_ms: u64,
     uses_global_cooldown: Option<bool>,
     #[serde(default)]
     global_cooldown_ms: Option<u64>,
@@ -1247,6 +1265,29 @@ pub struct ActiveCombatDiscipline {
     pub changed_at: Timestamp,
 }
 
+#[table(accessor = character_discipline_loadout, public)]
+pub struct CharacterDisciplineLoadout {
+    #[primary_key]
+    pub owner: Identity,
+    pub primary_discipline_id: String,
+    pub secondary_discipline_id_1: String,
+    pub secondary_discipline_id_2: String,
+    pub updated_at: Timestamp,
+}
+
+#[table(accessor = character_discipline_ability_selection, public)]
+pub struct CharacterDisciplineAbilitySelection {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    #[index(btree)]
+    pub discipline_id: String,
+    pub ability_id: String,
+    pub sort_order: u32,
+    pub updated_at: Timestamp,
+}
+
 #[table(accessor = character_combat_discipline_weapon_loadout, public)]
 pub struct CharacterCombatDisciplineWeaponLoadout {
     #[primary_key]
@@ -1299,6 +1340,7 @@ pub struct StatScalingCatalog {
     pub sort_order: u32,
 }
 
+#[derive(Clone)]
 #[table(accessor = ability_catalog, public)]
 pub struct AbilityCatalog {
     #[primary_key]
@@ -1648,6 +1690,102 @@ pub fn clear_character_action_bar_slot(
     Ok(())
 }
 
+fn shroud_ability_definition() -> &'static AbilityDefinition {
+    ability_definition(DAGGER_SHROUD_ABILITY_ID)
+        .expect("Subtlety Shroud ability must remain authored")
+}
+
+fn shroud_is_active(active: &ActiveCombatMode) -> bool {
+    active.combat_profile_id == COMBAT_PROFILE_DAGGERS && active.mode_id == COMBAT_MODE_STEALTHED
+}
+
+fn shroud_has_expired(changed_at: Timestamp, now: Timestamp, duration_ms: u64) -> bool {
+    now >= changed_at + Duration::from_millis(duration_ms.max(1))
+}
+
+fn exit_active_shroud(ctx: &ReducerContext, owner: Identity, now: Timestamp) -> bool {
+    let Some(active) = ctx.db.active_combat_mode().owner().find(owner) else {
+        return false;
+    };
+    if !shroud_is_active(&active) {
+        return false;
+    }
+
+    upsert_active_combat_mode(
+        ctx,
+        ActiveCombatMode {
+            owner,
+            combat_profile_id: COMBAT_PROFILE_DAGGERS.to_string(),
+            mode_id: COMBAT_MODE_READY.to_string(),
+            changed_at: now,
+        },
+    );
+    true
+}
+
+pub(crate) fn arm_surprise_attacks_from_shroud(
+    ctx: &ReducerContext,
+    owner: Identity,
+    action_instance_id: &str,
+    now: Timestamp,
+) -> bool {
+    let shrouded = ctx
+        .db
+        .active_combat_mode()
+        .owner()
+        .find(owner)
+        .is_some_and(|active| shroud_is_active(&active));
+    if !shrouded
+        || !character_has_selected_discipline(ctx, owner, DISCIPLINE_SUBTLETY)
+        || subtlety_surprise_attack_stun_duration().is_zero()
+    {
+        return false;
+    }
+    crate::combat::arm_surprise_attack_runtime(ctx, owner, action_instance_id, now);
+    true
+}
+
+pub(crate) fn break_shroud_on_attack(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) -> bool {
+    if !shroud_ability_definition().gameplay.break_on_attack {
+        return false;
+    }
+    exit_active_shroud(ctx, owner, now)
+}
+
+pub(crate) fn break_shroud_on_direct_damage(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) -> bool {
+    if !shroud_ability_definition().gameplay.break_on_direct_damage {
+        return false;
+    }
+    exit_active_shroud(ctx, owner, now)
+}
+
+pub(crate) fn expire_shrouds(ctx: &ReducerContext, now: Timestamp) -> usize {
+    let duration_ms = shroud_ability_definition()
+        .gameplay
+        .duration_ms
+        .expect("Subtlety Shroud must define duration_ms");
+    let expired_owners: Vec<_> = ctx
+        .db
+        .active_combat_mode()
+        .iter()
+        .filter(shroud_is_active)
+        .filter(|active| shroud_has_expired(active.changed_at, now, duration_ms))
+        .map(|active| active.owner)
+        .collect();
+    for owner in &expired_owners {
+        exit_active_shroud(ctx, *owner, now);
+    }
+    expired_owners.len()
+}
+
 #[reducer]
 pub fn set_combat_mode(ctx: &ReducerContext, mode_id: String) -> Result<(), String> {
     let owner = ctx.sender();
@@ -1665,6 +1803,27 @@ pub fn set_combat_mode(ctx: &ReducerContext, mode_id: String) -> Result<(), Stri
         if active.combat_profile_id == combat_profile_id && active.mode_id == mode_id {
             return Ok(());
         }
+    }
+
+    let entering_shroud =
+        combat_profile_id == COMBAT_PROFILE_DAGGERS && mode_id == COMBAT_MODE_STEALTHED;
+    if entering_shroud {
+        let shroud = shroud_ability_definition();
+        let cooldown_ms = shroud
+            .gameplay
+            .cooldown_ms
+            .expect("Subtlety Shroud must define cooldown_ms");
+        let cooldown_key = AuthoredActionId::new(shroud.action_id.as_str());
+        if is_on_named_cooldown(ctx, owner, cooldown_key.as_str(), ctx.timestamp) {
+            return Err("Shroud is on cooldown".to_string());
+        }
+        stamp_named_cooldown_for_duration(
+            ctx,
+            owner,
+            cooldown_key.as_str(),
+            Duration::from_millis(cooldown_ms),
+            ctx.timestamp,
+        );
     }
 
     upsert_active_combat_mode(
@@ -1755,6 +1914,54 @@ pub fn set_combat_discipline(ctx: &ReducerContext, discipline_id: String) -> Res
     );
     sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
     ensure_default_character_action_bar_assignments(ctx, owner, ctx.timestamp);
+    sync_persisted_discipline_action_bars(ctx, owner, ctx.timestamp);
+    Ok(())
+}
+
+#[reducer]
+pub fn save_character_discipline_loadout(
+    ctx: &ReducerContext,
+    primary_discipline_id: String,
+    secondary_discipline_id_1: String,
+    secondary_discipline_id_2: String,
+    selected_ability_ids: Vec<String>,
+) -> Result<(), String> {
+    let primary_discipline_id =
+        require_combat_discipline(ctx, primary_discipline_id.as_str())?.discipline_id;
+    let secondary_discipline_id_1 =
+        normalize_selected_secondary_discipline(ctx, secondary_discipline_id_1)?;
+    let secondary_discipline_id_2 =
+        normalize_selected_secondary_discipline(ctx, secondary_discipline_id_2)?;
+    validate_character_discipline_selection(
+        primary_discipline_id.as_str(),
+        secondary_discipline_id_1.as_str(),
+        secondary_discipline_id_2.as_str(),
+    )?;
+
+    let selected_abilities = validate_character_discipline_ability_selection(
+        ctx,
+        primary_discipline_id.as_str(),
+        secondary_discipline_id_1.as_str(),
+        secondary_discipline_id_2.as_str(),
+        selected_ability_ids,
+    )?;
+
+    let owner = ctx.sender();
+    let loadout = CharacterDisciplineLoadout {
+        owner,
+        primary_discipline_id,
+        secondary_discipline_id_1,
+        secondary_discipline_id_2,
+        updated_at: ctx.timestamp,
+    };
+    upsert_character_discipline_loadout(ctx, loadout);
+    replace_character_discipline_ability_selections(
+        ctx,
+        owner,
+        selected_abilities.as_slice(),
+        ctx.timestamp,
+    );
+    sync_selected_discipline_action_bars(ctx, owner, selected_abilities.as_slice(), ctx.timestamp);
     Ok(())
 }
 
@@ -1944,9 +2151,12 @@ pub(crate) fn ensure_default_progression_for_identity(
         return Err("player row not found".to_string());
     };
     ensure_default_combat_discipline_state(ctx, owner, ctx.timestamp);
+    ensure_default_character_discipline_loadout(ctx, owner, ctx.timestamp);
     sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
     clear_generic_fixed_action_bar_assignments_for_owner(ctx, owner, ctx.timestamp);
     ensure_default_character_action_bar_assignments(ctx, owner, ctx.timestamp);
+    ensure_default_character_discipline_ability_selections(ctx, owner, ctx.timestamp);
+    sync_persisted_discipline_action_bars(ctx, owner, ctx.timestamp);
 
     Ok(())
 }
@@ -2022,6 +2232,7 @@ pub(crate) fn sync_progression_for_equipment_change(
     sync_active_combat_mode_for_owner(ctx, owner, now);
     clear_generic_fixed_action_bar_assignments_for_owner(ctx, owner, now);
     ensure_default_character_action_bar_assignments(ctx, owner, now);
+    sync_persisted_discipline_action_bars(ctx, owner, now);
 }
 
 pub(crate) fn resolved_auto_attack_mode_for_owner(
@@ -2171,6 +2382,20 @@ fn upsert_active_combat_discipline(ctx: &ReducerContext, row: ActiveCombatDiscip
     }
 }
 
+fn upsert_character_discipline_loadout(ctx: &ReducerContext, row: CharacterDisciplineLoadout) {
+    if ctx
+        .db
+        .character_discipline_loadout()
+        .owner()
+        .find(row.owner)
+        .is_some()
+    {
+        ctx.db.character_discipline_loadout().owner().update(row);
+    } else {
+        ctx.db.character_discipline_loadout().insert(row);
+    }
+}
+
 fn upsert_combat_discipline_weapon_loadout(
     ctx: &ReducerContext,
     row: CharacterCombatDisciplineWeaponLoadout,
@@ -2203,6 +2428,339 @@ fn require_combat_discipline(
         .discipline_id()
         .find(discipline_id.clone())
         .ok_or_else(|| format!("unknown combat discipline '{}'", discipline_id))
+}
+
+fn normalize_selected_secondary_discipline(
+    ctx: &ReducerContext,
+    discipline_id: String,
+) -> Result<String, String> {
+    let discipline_id = normalize_identifier(discipline_id.as_str());
+    if discipline_id.is_empty() {
+        return Ok(String::new());
+    }
+    Ok(require_combat_discipline(ctx, discipline_id.as_str())?.discipline_id)
+}
+
+fn validate_character_discipline_selection(
+    primary_discipline_id: &str,
+    secondary_discipline_id_1: &str,
+    secondary_discipline_id_2: &str,
+) -> Result<(), String> {
+    if primary_discipline_id.is_empty() {
+        return Err("a primary combat discipline is required".to_string());
+    }
+    if secondary_discipline_id_1 == primary_discipline_id
+        || secondary_discipline_id_2 == primary_discipline_id
+    {
+        return Err("the primary combat discipline cannot also be secondary".to_string());
+    }
+    if !secondary_discipline_id_1.is_empty()
+        && secondary_discipline_id_1 == secondary_discipline_id_2
+    {
+        return Err("secondary combat disciplines must be unique".to_string());
+    }
+    Ok(())
+}
+
+fn validate_character_discipline_ability_selection(
+    ctx: &ReducerContext,
+    primary_discipline_id: &str,
+    secondary_discipline_id_1: &str,
+    secondary_discipline_id_2: &str,
+    selected_ability_ids: Vec<String>,
+) -> Result<Vec<AbilityCatalog>, String> {
+    if selected_ability_ids.len() > MAX_DISCIPLINE_LOADOUT_ABILITIES {
+        return Err(format!(
+            "discipline loadout may contain at most {MAX_DISCIPLINE_LOADOUT_ABILITIES} abilities"
+        ));
+    }
+
+    let selected_discipline_ids: HashSet<String> = [
+        primary_discipline_id,
+        secondary_discipline_id_1,
+        secondary_discipline_id_2,
+    ]
+    .into_iter()
+    .map(normalize_identifier)
+    .filter(|discipline_id| !discipline_id.is_empty())
+    .collect();
+    let mut seen = HashSet::new();
+    let mut selected = Vec::new();
+    let mut counts: HashMap<String, usize> = HashMap::new();
+
+    for ability_id in selected_ability_ids {
+        let ability_id = normalize_identifier(ability_id.as_str());
+        if ability_id.is_empty() || !seen.insert(ability_id.clone()) {
+            continue;
+        }
+
+        let ability = require_ability_catalog_row(ctx, ability_id.as_str())?;
+        let discipline_id = normalize_identifier(ability.discipline_id.as_str());
+        if !selected_discipline_ids.contains(discipline_id.as_str()) {
+            return Err(format!(
+                "ability '{}' does not belong to a selected discipline",
+                ability.ability_id
+            ));
+        }
+        if !ability_catalog_has_tag(&ability, "ACTION_BAR_ACTION") {
+            return Err(format!(
+                "ability '{}' cannot be selected for an action-bar loadout",
+                ability.ability_id
+            ));
+        }
+
+        *counts.entry(discipline_id).or_default() += 1;
+        selected.push(ability);
+    }
+
+    let primary_count = counts
+        .get(&normalize_identifier(primary_discipline_id))
+        .copied()
+        .unwrap_or_default();
+    if primary_count < PRIMARY_DISCIPLINE_ABILITY_MINIMUM {
+        return Err(format!(
+            "primary discipline requires at least {PRIMARY_DISCIPLINE_ABILITY_MINIMUM} selected abilities"
+        ));
+    }
+
+    for secondary_discipline_id in [secondary_discipline_id_1, secondary_discipline_id_2] {
+        let secondary_discipline_id = normalize_identifier(secondary_discipline_id);
+        if secondary_discipline_id.is_empty() {
+            continue;
+        }
+        let count = counts
+            .get(&secondary_discipline_id)
+            .copied()
+            .unwrap_or_default();
+        if count < SECONDARY_DISCIPLINE_ABILITY_MINIMUM {
+            return Err(format!(
+                "secondary discipline '{}' requires at least {SECONDARY_DISCIPLINE_ABILITY_MINIMUM} selected ability",
+                secondary_discipline_id
+            ));
+        }
+    }
+
+    Ok(selected)
+}
+
+fn ability_catalog_has_tag(ability: &AbilityCatalog, required_tag: &str) -> bool {
+    let required_tag = normalize_identifier(required_tag);
+    ability
+        .ability_tags
+        .split(',')
+        .map(normalize_identifier)
+        .any(|tag| tag == required_tag)
+}
+
+fn discipline_ability_selection_key(owner: Identity, ability_id: &str) -> String {
+    format!("{}:{}", owner.to_hex(), normalize_identifier(ability_id))
+}
+
+fn replace_character_discipline_ability_selections(
+    ctx: &ReducerContext,
+    owner: Identity,
+    selected_abilities: &[AbilityCatalog],
+    now: Timestamp,
+) {
+    let stale_keys: Vec<String> = ctx
+        .db
+        .character_discipline_ability_selection()
+        .owner()
+        .filter(owner)
+        .map(|row| row.key)
+        .collect();
+    for key in stale_keys {
+        ctx.db
+            .character_discipline_ability_selection()
+            .key()
+            .delete(key);
+    }
+
+    for (index, ability) in selected_abilities.iter().enumerate() {
+        ctx.db.character_discipline_ability_selection().insert(
+            CharacterDisciplineAbilitySelection {
+                key: discipline_ability_selection_key(owner, ability.ability_id.as_str()),
+                owner,
+                discipline_id: normalize_identifier(ability.discipline_id.as_str()),
+                ability_id: normalize_identifier(ability.ability_id.as_str()),
+                sort_order: index as u32,
+                updated_at: now,
+            },
+        );
+    }
+}
+
+fn sync_selected_discipline_action_bars(
+    ctx: &ReducerContext,
+    owner: Identity,
+    selected_abilities: &[AbilityCatalog],
+    now: Timestamp,
+) {
+    let mut existing_placements: Vec<(String, String, String, String)> = ctx
+        .db
+        .character_action_bar_assignment()
+        .owner()
+        .filter(owner)
+        .filter(|assignment| assignment.combat_profile_id != GLOBAL_ACTION_BAR_PROFILE)
+        .filter_map(|assignment| {
+            let action_ref = action_ref_for_character_action_bar_assignment(&assignment);
+            action_ref.is_ability().then_some((
+                assignment.key,
+                normalize_identifier(assignment.combat_profile_id.as_str()),
+                canonical_action_bar_slot_id(assignment.slot_id.as_str()),
+                action_ref.id,
+            ))
+        })
+        .collect();
+    existing_placements.sort_by_key(|(_, profile_id, slot_id, _)| {
+        (profile_id.clone(), slot_sort_key_for_id(slot_id.as_str()))
+    });
+    let mut existing_slot_by_ability = HashMap::new();
+    for (_, profile_id, slot_id, ability_id) in &existing_placements {
+        existing_slot_by_ability
+            .entry((profile_id.clone(), ability_id.clone()))
+            .or_insert_with(|| slot_id.clone());
+    }
+    for (key, _, _, _) in existing_placements {
+        ctx.db.character_action_bar_assignment().key().delete(key);
+    }
+
+    let mut profile_ids = Vec::new();
+    for ability in selected_abilities {
+        let explicit_profile = normalize_identifier(ability.combat_profile_id.as_str());
+        if !explicit_profile.is_empty() && !profile_ids.contains(&explicit_profile) {
+            profile_ids.push(explicit_profile);
+        }
+
+        let discipline_id = normalize_identifier(ability.discipline_id.as_str());
+        let discipline_profile = ctx
+            .db
+            .combat_discipline_catalog()
+            .discipline_id()
+            .find(discipline_id)
+            .map(|discipline| normalize_identifier(discipline.combat_profile_id.as_str()))
+            .unwrap_or_default();
+        if !discipline_profile.is_empty() && !profile_ids.contains(&discipline_profile) {
+            profile_ids.push(discipline_profile);
+        }
+    }
+    if let Some(active_profile) = derived_combat_profile_id_for_owner(ctx, owner) {
+        if !active_profile.is_empty() && !profile_ids.contains(&active_profile) {
+            profile_ids.push(active_profile);
+        }
+    }
+
+    let slot_ids = selectable_slot_ids();
+    for profile_id in profile_ids {
+        let mut profile_ability_ids = Vec::new();
+        for ability in selected_abilities {
+            let ability_profile = normalize_identifier(ability.combat_profile_id.as_str());
+            let applies_to_profile = ability_profile == profile_id
+                || (ability_profile.is_empty()
+                    && ability.ability_kind.eq_ignore_ascii_case("SPELL"));
+            if applies_to_profile && !profile_ability_ids.contains(&ability.ability_id) {
+                profile_ability_ids.push(ability.ability_id.clone());
+            }
+        }
+
+        let mut placements = Vec::new();
+        let mut placed_ability_ids = HashSet::new();
+        let mut used_slot_ids = HashSet::new();
+        for ability_id in &profile_ability_ids {
+            let Some(slot_id) =
+                existing_slot_by_ability.get(&(profile_id.clone(), ability_id.clone()))
+            else {
+                continue;
+            };
+            if slot_ids.contains(slot_id) && used_slot_ids.insert(slot_id.clone()) {
+                placements.push((slot_id.clone(), ability_id.clone()));
+                placed_ability_ids.insert(ability_id.clone());
+            }
+        }
+        for ability_id in &profile_ability_ids {
+            if placed_ability_ids.contains(ability_id) {
+                continue;
+            }
+            let Some(slot_id) = slot_ids
+                .iter()
+                .find(|slot_id| !used_slot_ids.contains(*slot_id))
+            else {
+                break;
+            };
+            used_slot_ids.insert(slot_id.clone());
+            placed_ability_ids.insert(ability_id.clone());
+            placements.push((slot_id.clone(), ability_id.clone()));
+        }
+
+        for (slot_id, ability_id) in placements {
+            upsert_character_action_bar_assignment(
+                ctx,
+                owner,
+                profile_id.as_str(),
+                slot_id.as_str(),
+                &ActionRef::ability(ability_id.as_str()),
+                now,
+            );
+        }
+    }
+}
+
+fn sync_persisted_discipline_action_bars(ctx: &ReducerContext, owner: Identity, now: Timestamp) {
+    let mut selection_rows: Vec<CharacterDisciplineAbilitySelection> = ctx
+        .db
+        .character_discipline_ability_selection()
+        .owner()
+        .filter(owner)
+        .collect();
+    selection_rows.sort_by_key(|row| (row.sort_order, row.ability_id.clone()));
+    let selected_abilities: Vec<AbilityCatalog> = selection_rows
+        .into_iter()
+        .filter_map(|selection| {
+            ctx.db
+                .ability_catalog()
+                .ability_id()
+                .find(normalize_identifier(selection.ability_id.as_str()))
+        })
+        .collect();
+    if !selected_abilities.is_empty() {
+        sync_selected_discipline_action_bars(ctx, owner, selected_abilities.as_slice(), now);
+    }
+}
+
+fn character_discipline_loadout_contains(
+    loadout: &CharacterDisciplineLoadout,
+    discipline_id: &str,
+) -> bool {
+    let discipline_id = normalize_identifier(discipline_id);
+    !discipline_id.is_empty()
+        && (loadout.primary_discipline_id == discipline_id
+            || loadout.secondary_discipline_id_1 == discipline_id
+            || loadout.secondary_discipline_id_2 == discipline_id)
+}
+
+#[allow(dead_code)]
+pub(crate) fn character_has_selected_discipline(
+    ctx: &ReducerContext,
+    owner: Identity,
+    discipline_id: &str,
+) -> bool {
+    ctx.db
+        .character_discipline_loadout()
+        .owner()
+        .find(owner)
+        .is_some_and(|loadout| character_discipline_loadout_contains(&loadout, discipline_id))
+}
+
+pub(crate) fn character_has_selected_ability(
+    ctx: &ReducerContext,
+    owner: Identity,
+    ability_id: &str,
+) -> bool {
+    ctx.db
+        .character_discipline_ability_selection()
+        .key()
+        .find(discipline_ability_selection_key(owner, ability_id))
+        .is_some()
 }
 
 fn combat_discipline_for_profile(
@@ -2306,6 +2864,156 @@ fn ensure_default_combat_discipline_state(ctx: &ReducerContext, owner: Identity,
             },
         );
     }
+}
+
+fn ensure_default_character_discipline_loadout(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) {
+    if ctx
+        .db
+        .character_discipline_loadout()
+        .owner()
+        .find(owner)
+        .is_some()
+    {
+        return;
+    }
+
+    let primary_discipline_id = ctx
+        .db
+        .active_combat_discipline()
+        .owner()
+        .find(owner)
+        .map(|row| row.discipline_id)
+        .or_else(|| {
+            ctx.db
+                .combat_discipline_catalog()
+                .discipline_id()
+                .find(DISCIPLINE_WAR.to_string())
+                .map(|row| row.discipline_id)
+        });
+    let Some(primary_discipline_id) = primary_discipline_id else {
+        return;
+    };
+
+    upsert_character_discipline_loadout(
+        ctx,
+        CharacterDisciplineLoadout {
+            owner,
+            primary_discipline_id,
+            secondary_discipline_id_1: String::new(),
+            secondary_discipline_id_2: String::new(),
+            updated_at: now,
+        },
+    );
+}
+
+fn ensure_default_character_discipline_ability_selections(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) {
+    if ctx
+        .db
+        .character_discipline_ability_selection()
+        .owner()
+        .filter(owner)
+        .next()
+        .is_some()
+    {
+        return;
+    }
+
+    let Some(loadout) = ctx.db.character_discipline_loadout().owner().find(owner) else {
+        return;
+    };
+    let discipline_requirements = [
+        (
+            normalize_identifier(loadout.primary_discipline_id.as_str()),
+            PRIMARY_DISCIPLINE_ABILITY_MINIMUM,
+        ),
+        (
+            normalize_identifier(loadout.secondary_discipline_id_1.as_str()),
+            SECONDARY_DISCIPLINE_ABILITY_MINIMUM,
+        ),
+        (
+            normalize_identifier(loadout.secondary_discipline_id_2.as_str()),
+            SECONDARY_DISCIPLINE_ABILITY_MINIMUM,
+        ),
+    ];
+
+    let mut catalog_abilities: Vec<AbilityCatalog> = ctx.db.ability_catalog().iter().collect();
+    catalog_abilities.sort_by_key(|ability| {
+        (
+            ability.sort_order,
+            normalize_identifier(ability.ability_id.as_str()),
+        )
+    });
+    let mut assigned_abilities: Vec<(String, String)> = ctx
+        .db
+        .character_action_bar_assignment()
+        .owner()
+        .filter(owner)
+        .filter_map(|assignment| {
+            let action_ref = action_ref_for_character_action_bar_assignment(&assignment);
+            action_ref
+                .is_ability()
+                .then_some((assignment.slot_id, action_ref.id))
+        })
+        .collect();
+    assigned_abilities.sort_by_key(|(slot_id, _)| slot_sort_key_for_id(slot_id.as_str()));
+    let assigned_ability_ids: Vec<String> = assigned_abilities
+        .into_iter()
+        .map(|(_, ability_id)| ability_id)
+        .collect();
+
+    let mut selected = Vec::new();
+    let mut selected_ids = HashSet::new();
+    for (discipline_id, minimum) in discipline_requirements {
+        if discipline_id.is_empty() {
+            continue;
+        }
+
+        let mut selected_for_discipline = 0usize;
+        for ability_id in &assigned_ability_ids {
+            if selected_for_discipline >= minimum {
+                break;
+            }
+            let Some(ability) = catalog_abilities.iter().find(|ability| {
+                ability.ability_id == *ability_id
+                    && normalize_identifier(ability.discipline_id.as_str()) == discipline_id
+                    && ability_catalog_has_tag(ability, "ACTION_BAR_ACTION")
+            }) else {
+                continue;
+            };
+            if selected_ids.insert(ability.ability_id.clone()) {
+                selected.push(ability.clone());
+                selected_for_discipline = selected_for_discipline.saturating_add(1);
+            }
+        }
+
+        for ability in &catalog_abilities {
+            if selected_for_discipline >= minimum {
+                break;
+            }
+            if normalize_identifier(ability.discipline_id.as_str()) != discipline_id
+                || !ability_catalog_has_tag(ability, "ACTION_BAR_ACTION")
+            {
+                continue;
+            }
+            if selected_ids.insert(ability.ability_id.clone()) {
+                selected.push(ability.clone());
+                selected_for_discipline = selected_for_discipline.saturating_add(1);
+            }
+        }
+    }
+
+    if selected.is_empty() {
+        return;
+    }
+    replace_character_discipline_ability_selections(ctx, owner, selected.as_slice(), now);
 }
 
 fn combat_discipline_weapon_loadout_key(owner: Identity, discipline_id: &str) -> String {
@@ -2428,7 +3136,8 @@ fn ability_catalog_is_active_for_owner(
     }
 
     if ability.ability_kind.eq_ignore_ascii_case("SPELL") {
-        return player_knows_spell(ctx, owner, ability.action_id.as_str());
+        return player_knows_spell(ctx, owner, ability.action_id.as_str())
+            || character_has_selected_ability(ctx, owner, ability.ability_id.as_str());
     }
 
     false
@@ -4038,13 +4747,17 @@ fn validate_character_action_bar_ref(
             if is_spell
                 && !matches_combat_profile
                 && !player_knows_spell(ctx, owner, ability.action_id.as_str())
+                && !character_has_selected_ability(ctx, owner, ability.ability_id.as_str())
             {
                 return Err(format!(
                     "spell ability '{}' requires learned spell '{}'",
                     ability.ability_id, ability.action_id
                 ));
             }
-            if is_spell && !matches_combat_profile {
+            if is_spell
+                && !matches_combat_profile
+                && !character_has_selected_ability(ctx, owner, ability.ability_id.as_str())
+            {
                 require_available_spell_slot_for_assignment(
                     ctx,
                     owner,
@@ -4119,6 +4832,10 @@ fn character_action_bar_assignment_is_enabled(
         return true;
     }
     if ability_catalog_matches_combat_profile(ctx, ability, combat_profile_id) {
+        return true;
+    }
+
+    if character_has_selected_ability(ctx, owner, ability.ability_id.as_str()) {
         return true;
     }
 
@@ -4650,6 +5367,95 @@ fn validate_ability_catalog() {
         }
 
         let ability_kind = ability_gameplay_kind(ability);
+        let disabled_target_damage_bonus = ability.gameplay.disabled_target_damage_bonus;
+        let stealth_attack_stun_ms = ability.gameplay.stealth_attack_stun_ms;
+        assert!(
+            disabled_target_damage_bonus.is_finite()
+                && (0.0..=1.0).contains(&disabled_target_damage_bonus),
+            "ability '{ability_id}' must author disabled_target_damage_bonus between 0 and 1"
+        );
+        if disabled_target_damage_bonus > 0.0 {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author disabled_target_damage_bonus for PASSIVE gameplay"
+            );
+        }
+        if stealth_attack_stun_ms > 0 {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author stealth_attack_stun_ms for PASSIVE gameplay"
+            );
+        }
+        if ability_id == SUBTLETY_OPPORTUNIST_ABILITY_ID {
+            assert_eq!(
+                discipline_id, DISCIPLINE_SUBTLETY,
+                "Opportunist must remain a Subtlety passive"
+            );
+            assert_eq!(ability_kind, "PASSIVE", "Opportunist must remain passive");
+            assert!(
+                (disabled_target_damage_bonus - 0.15).abs() < 0.0001,
+                "Opportunist must grant 15% increased damage against disabled targets"
+            );
+            assert!(
+                ability
+                    .ability_tags
+                    .iter()
+                    .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
+                "Opportunist must carry the PASSIVE ability tag"
+            );
+        }
+        if ability_id == SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID {
+            assert_eq!(
+                discipline_id, DISCIPLINE_SUBTLETY,
+                "Surprise Attacks must remain a Subtlety passive"
+            );
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "Surprise Attacks must remain passive"
+            );
+            assert_eq!(
+                stealth_attack_stun_ms, 2_000,
+                "Surprise Attacks must stun stealth-attack targets for 2 seconds"
+            );
+            assert!(
+                ability
+                    .ability_tags
+                    .iter()
+                    .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
+                "Surprise Attacks must carry the PASSIVE ability tag"
+            );
+        }
+        let authors_timed_mode_lifecycle = ability.gameplay.duration_ms.is_some()
+            || ability.gameplay.break_on_attack
+            || ability.gameplay.break_on_direct_damage;
+        if authors_timed_mode_lifecycle {
+            assert_eq!(
+                ability_kind, ABILITY_KIND_COMBAT_MODE_TOGGLE,
+                "ability '{ability_id}' may only author timed mode lifecycle fields for COMBAT_MODE_TOGGLE gameplay"
+            );
+        }
+        if ability_id == DAGGER_SHROUD_ABILITY_ID {
+            assert_eq!(
+                ability_kind, ABILITY_KIND_COMBAT_MODE_TOGGLE,
+                "Subtlety Shroud must remain a combat-mode ability"
+            );
+            assert!(
+                ability.gameplay.cooldown_ms.is_some_and(|value| value > 0),
+                "Subtlety Shroud must define a positive cooldown_ms"
+            );
+            assert!(
+                ability.gameplay.duration_ms.is_some_and(|value| value > 0),
+                "Subtlety Shroud must define a positive duration_ms"
+            );
+            assert!(
+                ability.gameplay.break_on_attack,
+                "Subtlety Shroud must break on attack"
+            );
+            assert!(
+                ability.gameplay.break_on_direct_damage,
+                "Subtlety Shroud must break on direct damage"
+            );
+        }
         assert!(
             ability_kind == "SPELL"
                 || actor_scope == "NPC"
@@ -5421,6 +6227,31 @@ fn ability_gameplay_kind(ability: &AbilityDefinition) -> String {
     normalize_identifier(ability.gameplay.kind.as_str())
 }
 
+pub(crate) fn subtlety_disabled_target_damage_bonus() -> f32 {
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == SUBTLETY_OPPORTUNIST_ABILITY_ID
+        })
+        .map(|ability| ability.gameplay.disabled_target_damage_bonus.max(0.0))
+        .unwrap_or(0.0)
+}
+
+pub(crate) fn subtlety_surprise_attack_stun_duration() -> Duration {
+    Duration::from_millis(
+        progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| {
+                normalize_identifier(ability.ability_id.as_str())
+                    == SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID
+            })
+            .map(|ability| ability.gameplay.stealth_attack_stun_ms)
+            .unwrap_or(0),
+    )
+}
+
 fn canonical_action_bar_slot_id(value: &str) -> String {
     match normalize_identifier(value).as_str() {
         "BOTTOM_01" => "SLOT_0_0".to_string(),
@@ -5445,6 +6276,7 @@ fn encode_tags(tags: &[String]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use spacetimedb::{Identity, Timestamp};
     use std::collections::{HashMap, HashSet};
     use std::time::Duration;
 
@@ -5464,20 +6296,23 @@ mod tests {
         ability_gameplay_kind, ability_is_compatible_with_slot, action_presentation_key,
         action_ref_for_action_bar_default, authored_status_presentation_ids,
         canonical_action_bar_slot_id, character_action_bar_assignment_is_generic_fixed_action,
-        combat_rule_value, combat_vfx_cue_key, derived_spell_action_presentation_rows,
-        melee_channel_for_ability_id, melee_impact_effects_for_ability_id, normalize_identifier,
+        character_discipline_loadout_contains, combat_rule_value, combat_vfx_cue_key,
+        derived_spell_action_presentation_rows, melee_channel_for_ability_id,
+        melee_impact_effects_for_ability_id, normalize_identifier,
         normalize_optional_target_audience, primary_resource_gain_on_action_accept,
         progression_catalog, projectile_body_vfx_id_for_spell,
         resolved_combat_profile_id_for_ability_definition, resolved_melee_targeting_for_catalog,
-        selectable_slot_ids, validate_auto_attack_catalog, validate_combat_mode_catalog,
-        validate_progression_catalog_authoring_contract, AbilityDefinition, ActionKind,
-        CharacterActionBarAssignment, CombatVfxPresentationManifest, FixedActionId,
-        MeleeChannelRuntime, MeleeImpactEffectRuntime, ABILITY_KIND_COMBAT_MODE_TOGGLE,
-        ACTION_KIND_FIXED, ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID, AUTO_ATTACK_MOVEMENT_ALLOW_MOVING,
+        selectable_slot_ids, shroud_has_expired, validate_auto_attack_catalog,
+        validate_combat_mode_catalog, validate_progression_catalog_authoring_contract,
+        AbilityDefinition, ActionKind, CharacterActionBarAssignment, CharacterDisciplineLoadout,
+        CombatVfxPresentationManifest, FixedActionId, MeleeChannelRuntime,
+        MeleeImpactEffectRuntime, ABILITY_KIND_COMBAT_MODE_TOGGLE, ACTION_KIND_FIXED,
+        ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID, AUTO_ATTACK_MOVEMENT_ALLOW_MOVING,
         AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE, COMBAT_MODE_FULL_DRAW, COMBAT_MODE_READY,
         COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED, COMBAT_PROFILE_ARCHER_BOW,
         COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_SWORD_AND_SHIELD, COMBAT_PROFILE_TWO_HANDED_SWORD,
-        DAGGER_STEALTH_ABILITY_ID, GLOBAL_ACTION_BAR_PROFILE, RESOURCE_KIND_STAMINA,
+        DAGGER_SHROUD_ABILITY_ID, GLOBAL_ACTION_BAR_PROFILE, RESOURCE_KIND_STAMINA,
+        SUBTLETY_OPPORTUNIST_ABILITY_ID, SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID,
     };
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
 
@@ -8422,7 +9257,7 @@ mod tests {
     }
 
     #[test]
-    fn dagger_stealth_mode_is_authored_as_profile_toggle() {
+    fn dagger_shroud_is_authored_as_timed_breakable_profile_mode() {
         validate_combat_mode_catalog();
 
         let catalog = progression_catalog();
@@ -8437,27 +9272,32 @@ mod tests {
         assert!(dagger_modes.contains(COMBAT_MODE_READY));
         assert!(dagger_modes.contains(COMBAT_MODE_STEALTHED));
 
-        let stealth = catalog
+        let shroud = catalog
             .abilities
             .iter()
             .find(|ability| {
-                normalize_identifier(ability.ability_id.as_str()) == DAGGER_STEALTH_ABILITY_ID
+                normalize_identifier(ability.ability_id.as_str()) == DAGGER_SHROUD_ABILITY_ID
             })
-            .expect("Dagger stealth toggle ability");
+            .expect("Dagger Shroud ability");
         assert_eq!(
-            normalize_identifier(stealth.combat_profile_id.as_str()),
+            normalize_identifier(shroud.combat_profile_id.as_str()),
             COMBAT_PROFILE_DAGGERS
         );
         assert_eq!(
-            ability_gameplay_kind(stealth),
+            ability_gameplay_kind(shroud),
             ABILITY_KIND_COMBAT_MODE_TOGGLE
         );
+        assert_eq!(shroud.display_name, "Shroud");
+        assert_eq!(shroud.gameplay.cooldown_ms, Some(60_000));
+        assert_eq!(shroud.gameplay.duration_ms, Some(5_000));
+        assert!(shroud.gameplay.break_on_attack);
+        assert!(shroud.gameplay.break_on_direct_damage);
         assert!(
-            stealth
+            shroud
                 .ability_tags
                 .iter()
                 .any(|tag| normalize_identifier(tag.as_str()) == "ACTION_BAR_ACTION"),
-            "Dagger stealth should be an action-bar action"
+            "Dagger Shroud should be an action-bar action"
         );
         assert!(
             catalog
@@ -8468,10 +9308,25 @@ mod tests {
                         == COMBAT_PROFILE_DAGGERS
                         && canonical_action_bar_slot_id(assignment.slot_id.as_str()) == "SLOT_1_1"
                         && normalize_identifier(assignment.ability_id.as_str())
-                            == DAGGER_STEALTH_ABILITY_ID
+                            == DAGGER_SHROUD_ABILITY_ID
                 }),
-            "Dagger stealth should have an action-bar slot assignment"
+            "Dagger Shroud should have an action-bar slot assignment"
         );
+    }
+
+    #[test]
+    fn shroud_expires_at_its_authored_five_second_boundary() {
+        let changed_at = Timestamp::UNIX_EPOCH + Duration::from_secs(10);
+        assert!(!shroud_has_expired(
+            changed_at,
+            changed_at + Duration::from_millis(4_999),
+            5_000,
+        ));
+        assert!(shroud_has_expired(
+            changed_at,
+            changed_at + Duration::from_secs(5),
+            5_000,
+        ));
     }
 
     #[test]
@@ -8490,6 +9345,7 @@ mod tests {
             ("DAGGER_DEADLY_FLOURISH", "DAGGER_COMBO_ATTACK_02_01"),
             ("DAGGER_PURSUE", "DAGGER_COMBO_ATTACK_01_04"),
             ("DAGGER_DOWNWARD_SLASH", "DAGGER_DOWNWARD_SLASH"),
+            ("DAGGER_NERVE_STRIKE", "DAGGER_NERVE_STRIKE"),
             ("DAGGER_COUP_DE_GRACE", "DAGGER_COUP_DE_GRACE"),
             ("DAGGER_PRECISION_STRIKE", "DAGGER_PRECISION_STRIKE"),
             ("DAGGER_EVISCERATE", "DAGGER_EVISCERATE"),
@@ -8610,6 +9466,39 @@ mod tests {
                         && normalize_identifier(assignment.ability_id.as_str()) == ability_id
                 }));
         }
+    }
+
+    #[test]
+    fn dagger_nerve_strike_authors_four_second_stun() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_NERVE_STRIKE")
+            .expect("DAGGER_NERVE_STRIKE must exist");
+
+        assert_eq!(ability.discipline_id, "SUBTLETY");
+        assert_eq!(ability.combat_profile_id, COMBAT_PROFILE_DAGGERS);
+        assert_eq!(ability.action_id, "DAGGER_NERVE_STRIKE");
+        assert_eq!(ability.display_name, "Nerve Strike");
+        assert_eq!(ability_gameplay_kind(ability), "MELEE");
+        assert_eq!(
+            melee_impact_effects_for_ability_id("DAGGER_NERVE_STRIKE"),
+            vec![MeleeImpactEffectRuntime::ApplyStatus {
+                status: StatusApplication::new(
+                    StatusPayload::Stun,
+                    Duration::from_secs(4),
+                    Some("DAGGER_NERVE_STRIKE_STUN".to_string()),
+                    StatusStackGroupDefault::ActionSuffix("STUN"),
+                    1,
+                    StackPolicy::Refresh,
+                ),
+            }]
+        );
+        assert!(catalog.action_presentations.iter().any(|presentation| {
+            action_presentation_key(presentation) == "ABILITY:DAGGER_NERVE_STRIKE"
+                && presentation.display_name == "Nerve Strike"
+        }));
     }
 
     #[test]
@@ -10829,6 +11718,179 @@ mod tests {
             .any(|assignment| {
                 action_ref_for_action_bar_default(assignment).id == "WARRIOR_BLOODLUST"
             }));
+    }
+
+    #[test]
+    fn subtlety_opportunist_authors_disabled_target_damage_passive() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == SUBTLETY_OPPORTUNIST_ABILITY_ID)
+            .expect("expected Subtlety Opportunist perk");
+
+        assert_eq!(
+            normalize_identifier(ability.discipline_id.as_str()),
+            "SUBTLETY"
+        );
+        assert_eq!(ability.display_name, "Opportunist");
+        assert_eq!(ability_gameplay_kind(ability), "PASSIVE");
+        assert!((ability.gameplay.disabled_target_damage_bonus - 0.15).abs() < 0.0001);
+        assert!(ability
+            .ability_tags
+            .iter()
+            .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+        assert!(catalog.action_presentations.iter().any(|presentation| {
+            action_presentation_key(presentation)
+                == format!("ABILITY:{SUBTLETY_OPPORTUNIST_ABILITY_ID}")
+                && presentation.display_name == "Opportunist"
+        }));
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                action_ref_for_action_bar_default(assignment).id == SUBTLETY_OPPORTUNIST_ABILITY_ID
+            }));
+    }
+
+    #[test]
+    fn subtlety_utility_abilities_author_requested_status_contracts() {
+        let expected = [
+            ("DAGGER_FIND_WEAKNESS", "FIND_WEAKNESS", 86_400_000_u64),
+            ("DAGGER_BLADE_TWISTING", "BLADE_TWISTING", 86_400_000_u64),
+            ("DAGGER_DISARM", "DISARM", 4_000_u64),
+            ("DAGGER_GOUGE", "GOUGE", 4_000_u64),
+        ];
+        for (ability_id, status_kind, duration_ms) in expected {
+            let ability = progression_catalog()
+                .abilities
+                .iter()
+                .find(|ability| ability.ability_id == ability_id)
+                .unwrap_or_else(|| panic!("expected {ability_id}"));
+            assert_eq!(ability_gameplay_kind(ability), "SPELL");
+            assert_eq!(ability.combat_profile_id, COMBAT_PROFILE_DAGGERS);
+            let delivery = ability
+                .gameplay
+                .delivery
+                .as_ref()
+                .and_then(serde_json::Value::as_object)
+                .expect("utility ability delivery");
+            assert_eq!(
+                delivery.get("kind").and_then(serde_json::Value::as_str),
+                Some("APPLY_STATUS")
+            );
+            assert_eq!(
+                delivery
+                    .get("duration_ms")
+                    .and_then(serde_json::Value::as_u64),
+                Some(duration_ms)
+            );
+            assert_eq!(
+                delivery
+                    .get("status")
+                    .and_then(serde_json::Value::as_object)
+                    .and_then(|status| status.get("kind"))
+                    .and_then(serde_json::Value::as_str),
+                Some(status_kind)
+            );
+        }
+
+        let animation_ids = parse_spell_ids_from_animation_set_asset(
+            animation_set_asset_for_combat_profile(COMBAT_PROFILE_DAGGERS),
+        );
+        for spell_id in ["FIND_WEAKNESS", "BLADE_TWISTING", "DISARM", "GOUGE"] {
+            assert!(
+                animation_ids.contains(spell_id),
+                "Dagger animation set must map {spell_id}"
+            );
+        }
+    }
+
+    #[test]
+    fn surprise_attacks_authors_two_second_subtlety_passive() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID)
+            .expect("expected Surprise Attacks passive");
+        assert_eq!(ability_gameplay_kind(ability), "PASSIVE");
+        assert_eq!(ability.gameplay.stealth_attack_stun_ms, 2_000);
+        assert!(ability
+            .ability_tags
+            .iter()
+            .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+        assert!(!progression_catalog()
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                action_ref_for_action_bar_default(assignment).id
+                    == SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID
+            }));
+    }
+
+    #[test]
+    fn arcana_recall_authors_the_store_and_replay_contract() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_RECALL")
+            .expect("expected Arcana Recall spell");
+        assert_eq!(normalize_identifier(&ability.discipline_id), "ARCANA");
+        assert_eq!(normalize_identifier(&ability.action_id), "RECALL");
+        assert_eq!(ability_gameplay_kind(ability), "SPELL");
+        assert_eq!(ability.gameplay.cast_time_ms, Some(0));
+        assert_eq!(ability.gameplay.cooldown_ms, Some(0));
+        assert_eq!(ability.gameplay.resource_cost, Some(0.0));
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .expect("Recall delivery");
+        assert_eq!(
+            delivery.get("kind").and_then(serde_json::Value::as_str),
+            Some("RECALL")
+        );
+        assert_eq!(
+            delivery
+                .get("replay_cooldown_ms")
+                .and_then(serde_json::Value::as_u64),
+            Some(60_000)
+        );
+        assert!(progression_catalog()
+            .action_presentations
+            .iter()
+            .any(|presentation| {
+                action_presentation_key(presentation) == "ABILITY:SPELL_RECALL"
+                    && presentation.display_name == "Recall"
+            }));
+    }
+
+    #[test]
+    fn discipline_perks_apply_from_primary_or_either_secondary_slot() {
+        for (primary, secondary_1, secondary_2) in [
+            ("SUBTLETY", "WAR", "RUIN"),
+            ("WAR", "SUBTLETY", "RUIN"),
+            ("WAR", "RUIN", "SUBTLETY"),
+        ] {
+            let loadout = CharacterDisciplineLoadout {
+                owner: Identity::ZERO,
+                primary_discipline_id: primary.to_string(),
+                secondary_discipline_id_1: secondary_1.to_string(),
+                secondary_discipline_id_2: secondary_2.to_string(),
+                updated_at: Timestamp::UNIX_EPOCH,
+            };
+            assert!(character_discipline_loadout_contains(&loadout, "SUBTLETY"));
+        }
+
+        let loadout = CharacterDisciplineLoadout {
+            owner: Identity::ZERO,
+            primary_discipline_id: "WAR".to_string(),
+            secondary_discipline_id_1: "RUIN".to_string(),
+            secondary_discipline_id_2: "ZEAL".to_string(),
+            updated_at: Timestamp::UNIX_EPOCH,
+        };
+        assert!(!character_discipline_loadout_contains(&loadout, "SUBTLETY"));
     }
 
     #[test]

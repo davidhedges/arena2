@@ -150,6 +150,7 @@ pub(crate) enum SpellBehavior {
     SelfResource,
     SelfTeleport,
     WorldObstacle,
+    Recall,
 }
 
 impl SpellBehavior {
@@ -169,6 +170,7 @@ impl SpellBehavior {
             Self::SelfResource => "SELF_RESOURCE",
             Self::SelfTeleport => "SELF_TELEPORT",
             Self::WorldObstacle => "WORLD_OBSTACLE",
+            Self::Recall => "RECALL",
         }
     }
 }
@@ -292,6 +294,7 @@ pub(crate) struct SpellSecondaryTunables {
     pub aura: Option<AuraSecondaryTunables>,
     pub emanation: Option<EmanationSecondaryTunables>,
     pub world_obstacle: Option<WorldObstacleSecondaryTunables>,
+    pub recall: Option<RecallSecondaryTunables>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -569,6 +572,11 @@ pub(crate) struct WorldObstacleSecondaryTunables {
     pub collider_local_rotation: [f32; 4],
     pub collider_size: [f32; 3],
     pub visual_resource_path: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct RecallSecondaryTunables {
+    pub replay_cooldown: Duration,
 }
 
 #[derive(Clone, Debug, PartialEq)]

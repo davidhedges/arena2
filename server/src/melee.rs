@@ -35,9 +35,9 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect as _;
 use crate::combat::{
-    combat_projectile_definition_for_id, has_active_disabling_status, has_active_status_group,
-    has_due_pending_effects, hostile_targeted_ability_misses, mark_harmful_combat_action,
-    queue_effects, remove_active_status_group, resolve_pending_effects,
+    combat_projectile_definition_for_id, has_active_disabling_status, has_active_status,
+    has_active_status_group, has_due_pending_effects, hostile_targeted_ability_misses,
+    mark_harmful_combat_action, queue_effects, remove_active_status_group, resolve_pending_effects,
     status_matches_removal_filter, ActiveCombatProjectile, CombatEvent, CombatProjectileDefinition,
     DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StackPolicy,
     StatusDispelType, StatusEffectKind, StatusPayload, StatusPolarity, COMBAT_EVENT_AREA_IMPACT,
@@ -911,6 +911,7 @@ pub(crate) fn commit_server_actor_targeted_melee(
         || !target.alive
         || source.player_id == target.player_id
         || has_active_disabling_status(ctx, commitment.source, now)
+        || has_active_status(ctx, commitment.source, StatusEffectKind::Disarm, now)
         || !players_share_world_context(ctx, commitment.source, commitment.target)
         || !target_audience_allows(
             ctx,
@@ -1154,7 +1155,8 @@ pub(crate) fn tick_active_melee_channels(ctx: &ReducerContext, now: Timestamp) {
                         state.voluntary_move_epoch,
                     )
             })
-            || has_active_disabling_status(ctx, row.owner, now);
+            || has_active_disabling_status(ctx, row.owner, now)
+            || has_active_status(ctx, row.owner, StatusEffectKind::Disarm, now);
         if canceled {
             finish_active_melee_channel(ctx, row, now, true);
         } else if now_micros >= row.ends_at_micros {
@@ -3458,6 +3460,15 @@ fn perform_melee_attack_for_internal(
     if has_active_disabling_status(ctx, caster, ctx.timestamp) {
         return Ok(MeleeAttackDispatch::Rejected(ActionRejectReason::Disabled));
     }
+    if has_active_status(ctx, caster, StatusEffectKind::Disarm, ctx.timestamp) {
+        return Ok(MeleeAttackDispatch::Rejected(ActionRejectReason::Disabled));
+    }
+    if policy.authorization == MeleeAuthorization::ActionBar
+        && gameplay.targeting.requires_target()
+        && has_active_status(ctx, caster, StatusEffectKind::Gouge, ctx.timestamp)
+    {
+        return Ok(MeleeAttackDispatch::Rejected(ActionRejectReason::Disabled));
+    }
     if ctx.db.active_melee_channel().owner().find(caster).is_some() {
         return Ok(MeleeAttackDispatch::Rejected(ActionRejectReason::Busy));
     }
@@ -3939,6 +3950,9 @@ fn perform_melee_attack_for_internal(
     } else {
         (0.0, 0.0)
     };
+
+    crate::progression::arm_surprise_attacks_from_shroud(ctx, caster, spell_id.as_str(), now);
+    crate::progression::break_shroud_on_attack(ctx, caster, now);
 
     if let Some(gap_close) = resolved_gap_close {
         let movement_start =
@@ -4574,7 +4588,10 @@ fn resolve_pending_projectile_release(
     let Some(caster) = actor_snapshot_for(ctx, row.source) else {
         return;
     };
-    if !caster.alive || has_active_disabling_status(ctx, row.source, now) {
+    if !caster.alive
+        || has_active_disabling_status(ctx, row.source, now)
+        || has_active_status(ctx, row.source, StatusEffectKind::Disarm, now)
+    {
         emit_projectile_release_fizzle(ctx, row, &caster, now);
         return;
     }
@@ -4858,6 +4875,9 @@ fn normalize_vec3(x: f32, y: f32, z: f32) -> Option<(f32, f32, f32)> {
 }
 
 fn resolve_pending_melee_impact(ctx: &ReducerContext, row: &PendingMeleeImpact, now: Timestamp) {
+    if has_active_status(ctx, row.source, StatusEffectKind::Disarm, now) {
+        return;
+    }
     let actor_snapshots = CombatActorSnapshotSet::collect(ctx);
     if row.target == Identity::ZERO {
         resolve_pending_melee_hit_volume(ctx, row, now, &actor_snapshots);

@@ -89,8 +89,9 @@ use super::manifest::{
 use super::{
     normalize_vec3, player_knows_spell, ActiveBespokeSpell, ActiveCast, ActivePersistentArea,
     CastPredictionCorrelation, ChannelCastRuntime, PendingAreaImpact, PendingCastCancel,
-    PendingCastRequest, SpecialMovementRuntime, SpellBehavior, SpellId, EVENT_AREA_IMPACT,
-    EVENT_CAST, EVENT_CONTACT, EVENT_FIZZLE, EVENT_IMPACT, EVENT_RELEASE, EVENT_UPDATE,
+    PendingCastRequest, RecallSlot, SpecialMovementRuntime, SpellBehavior, SpellId,
+    EVENT_AREA_IMPACT, EVENT_CAST, EVENT_CONTACT, EVENT_FIZZLE, EVENT_IMPACT, EVENT_RELEASE,
+    EVENT_UPDATE,
 };
 use crate::combat::scene_query::aoe_hits_player;
 
@@ -126,6 +127,8 @@ use crate::spells::pending_area_impact as _;
 use crate::spells::pending_cast_cancel as _;
 #[allow(unused_imports)]
 use crate::spells::pending_cast_request as _;
+#[allow(unused_imports)]
+use crate::spells::recall_slot as _;
 use crate::spells::special_movement_runtime as _;
 
 const TARGET_FACING_ARC_RADIANS: f32 = std::f32::consts::PI;
@@ -135,6 +138,21 @@ const SPECIAL_MOVEMENT_AIR_PATH_GROUND_CLEARANCE: f32 = 0.10;
 // sequence-indexed child id shape so multi-projectile delivery can add p1/p2
 // rows without changing action identity or cue resolution contracts.
 const PROJECTILE_SEQUENCE_INDEX_V1: u32 = 0;
+const RECALL_ACTION_ID: &str = "RECALL";
+
+fn is_recall_spell(spell_kind: &SpellId) -> bool {
+    spell_kind.as_str() == RECALL_ACTION_ID
+}
+
+fn recall_capture_is_eligible(definition: &SpellDefinition) -> bool {
+    definition.kind.as_str() != RECALL_ACTION_ID
+        && definition.cast_time > Duration::ZERO
+        && definition.behavior != SpellBehavior::Channel
+}
+
+fn recall_slot_has_stored_spell(slot: &RecallSlot) -> bool {
+    !slot.stored_spell_id.trim().is_empty()
+}
 
 fn resolved_initial_primary_resource_cost_for_action(
     ctx: &ReducerContext,
@@ -487,6 +505,20 @@ pub(crate) fn queue_pending_cast_request(
         log_cast_rejected(caster, spell_kind, "active_disabling_status", "");
         return Ok(());
     }
+    if gouge_blocks_targeted_spell(ctx, caster, definition, target_id, ctx.timestamp) {
+        record_spell_prediction_result(
+            ctx,
+            caster,
+            "",
+            predicted_cast_id.as_str(),
+            client_action_seq,
+            SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::Disabled,
+            ctx.timestamp,
+        );
+        log_cast_rejected(caster, spell_kind, "targeted_abilities_disabled", "");
+        return Ok(());
+    }
     if cast_state_for(ctx, caster) == CastState::Casting {
         record_spell_prediction_result(
             ctx,
@@ -812,6 +844,20 @@ fn execute_cast_intent(
             ctx.timestamp,
         );
         log_cast_rejected(caster, spell_kind, "active_disabling_status", "");
+        return Ok(());
+    }
+    if gouge_blocks_targeted_spell(ctx, caster, definition, target_id, ctx.timestamp) {
+        record_spell_prediction_result(
+            ctx,
+            caster,
+            "",
+            predicted_cast_id.as_str(),
+            client_action_seq,
+            SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::Disabled,
+            ctx.timestamp,
+        );
+        log_cast_rejected(caster, spell_kind, "targeted_abilities_disabled", "");
         return Ok(());
     }
     let uses_global_cooldown = definition.uses_global_cooldown;
@@ -1208,7 +1254,9 @@ fn execute_cast_intent(
     if uses_global_cooldown {
         stamp_global_cooldown_for_duration(ctx, caster, definition.global_cooldown, now);
     }
-    stamp_cooldown(ctx, caster, spell_kind, now);
+    if !is_recall_spell(spell_kind) {
+        stamp_cooldown(ctx, caster, spell_kind, now);
+    }
     Ok(())
 }
 
@@ -2044,6 +2092,15 @@ pub(crate) fn tick_active_casts(ctx: &ReducerContext, now: Timestamp) -> Result<
         if (has_active_disabling_status(ctx, caster, now)
             && !definition.is_some_and(spell_can_be_cast_while_disabled))
             || has_active_status(ctx, caster, StatusEffectKind::Silence, now)
+            || definition.is_some_and(|definition| {
+                gouge_blocks_targeted_spell(
+                    ctx,
+                    caster,
+                    definition,
+                    active_cast.target_id.as_str(),
+                    now,
+                )
+            })
         {
             fizzle_active_cast_row_for_interrupt(
                 ctx,
@@ -2226,12 +2283,169 @@ fn spell_can_be_cast_while_disabled(definition: &SpellDefinition) -> bool {
         && definition.targeting == super::manifest::SpellTargeting::Self_
 }
 
+fn gouge_blocks_targeted_spell(
+    ctx: &ReducerContext,
+    caster: Identity,
+    definition: &SpellDefinition,
+    target_id: &str,
+    now: Timestamp,
+) -> bool {
+    let target_is_self = Identity::from_hex(target_id).is_ok_and(|target| target == caster);
+    targeted_ability_is_blocked(
+        has_active_status(ctx, caster, StatusEffectKind::Gouge, now),
+        definition.targeting,
+        target_is_self,
+    )
+}
+
+fn targeted_ability_is_blocked(
+    gouged: bool,
+    targeting: super::manifest::SpellTargeting,
+    target_is_self: bool,
+) -> bool {
+    gouged && targeting == super::manifest::SpellTargeting::Target && !target_is_self
+}
+
 fn reject_unless(can_start: bool, reason: ActionRejectReason) -> Option<ActionRejectReason> {
     if can_start {
         None
     } else {
         Some(reason)
     }
+}
+
+fn arm_recall_slot(ctx: &ReducerContext, caster: Identity, now: Timestamp) {
+    if ctx.db.recall_slot().owner().find(caster).is_some() {
+        return;
+    }
+    ctx.db.recall_slot().insert(RecallSlot {
+        owner: caster,
+        stored_spell_id: String::new(),
+        charge_count: 1,
+        charge_pct: 1.0,
+        armed_at: now,
+        stored_at: Timestamp::UNIX_EPOCH,
+    });
+}
+
+pub(crate) fn clear_recall_slot(ctx: &ReducerContext, caster: Identity) {
+    ctx.db.recall_slot().owner().delete(caster);
+}
+
+fn capture_recall_spell_if_armed(
+    ctx: &ReducerContext,
+    caster: Identity,
+    spell_kind: &SpellId,
+    charge_count: u32,
+    charge_pct: f32,
+    now: Timestamp,
+) -> bool {
+    let Some(definition) = super::catalog::spell_definition(spell_kind) else {
+        return false;
+    };
+    if !recall_capture_is_eligible(definition) {
+        return false;
+    }
+    let Some(mut slot) = ctx.db.recall_slot().owner().find(caster) else {
+        return false;
+    };
+    if recall_slot_has_stored_spell(&slot) {
+        return false;
+    }
+    slot.stored_spell_id = spell_kind.as_str().to_string();
+    slot.charge_count = charge_count.max(1);
+    slot.charge_pct = if charge_pct.is_finite() {
+        charge_pct.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    slot.stored_at = now;
+    ctx.db.recall_slot().owner().update(slot);
+    true
+}
+
+#[allow(clippy::too_many_arguments)]
+fn cast_recall(
+    ctx: &ReducerContext,
+    state: &CombatActorSnapshot,
+    caster: Identity,
+    recall_kind: &SpellId,
+    target_id: &str,
+    aim_x: f32,
+    aim_y: f32,
+    aim_z: f32,
+    mode: CastExecutionMode,
+    action_instance_id: &str,
+) -> Result<Option<ActionRejectReason>, String> {
+    let Some(slot) = ctx.db.recall_slot().owner().find(caster) else {
+        if mode == CastExecutionMode::Execute {
+            arm_recall_slot(ctx, caster, ctx.timestamp);
+        }
+        return Ok(None);
+    };
+    if !recall_slot_has_stored_spell(&slot) {
+        return Ok(None);
+    }
+
+    let stored_kind = SpellId::new(slot.stored_spell_id.as_str())
+        .map_err(|error| format!("stored Recall spell id is invalid: {error}"))?;
+    let Some(stored_definition) = super::catalog::spell_definition(&stored_kind) else {
+        return Ok(Some(ActionRejectReason::InvalidInput));
+    };
+    if !recall_capture_is_eligible(stored_definition) {
+        return Ok(Some(ActionRejectReason::InvalidInput));
+    }
+    if gouge_blocks_targeted_spell(ctx, caster, stored_definition, target_id, ctx.timestamp) {
+        return Ok(Some(ActionRejectReason::Disabled));
+    }
+
+    let stored_ability_id = ability_id_for_spell(ctx, caster, &stored_kind);
+    if mode == CastExecutionMode::Execute {
+        mark_harmful_targeted_spell_start(ctx, caster, &stored_kind, target_id, ctx.timestamp);
+        clear_interruptible_defense_for_owner(ctx, caster);
+    }
+    let reject_reason = process_spell_cast(
+        ctx,
+        state,
+        caster,
+        &stored_kind,
+        target_id,
+        aim_x,
+        aim_y,
+        aim_z,
+        mode,
+        slot.charge_count,
+        slot.charge_pct,
+        action_instance_id,
+        stored_ability_id.as_str(),
+    )?;
+    if reject_reason.is_some() || mode != CastExecutionMode::Execute {
+        return Ok(reject_reason);
+    }
+
+    if stored_definition.target_audience == TargetAudience::Hostile {
+        crate::progression::arm_surprise_attacks_from_shroud(
+            ctx,
+            caster,
+            action_instance_id,
+            ctx.timestamp,
+        );
+        crate::progression::break_shroud_on_attack(ctx, caster, ctx.timestamp);
+    }
+    try_arm_auto_attack_for_spell_start(ctx, caster, &stored_kind, target_id, ctx.timestamp);
+    clear_recall_slot(ctx, caster);
+    let replay_cooldown = super::catalog::spell_definition(recall_kind)
+        .and_then(|definition| definition.secondary.recall)
+        .map(|recall| recall.replay_cooldown)
+        .ok_or_else(|| "RECALL must define replay cooldown tunables".to_string())?;
+    stamp_named_cooldown_for_duration(
+        ctx,
+        caster,
+        recall_kind.as_str(),
+        replay_cooldown,
+        ctx.timestamp,
+    );
+    Ok(None)
 }
 
 fn process_spell_cast(
@@ -2251,6 +2465,21 @@ fn process_spell_cast(
 ) -> Result<Option<ActionRejectReason>, String> {
     let definition = super::catalog::spell_definition(spell_kind)
         .expect("validated spell id must resolve to a definition");
+
+    if definition.behavior == SpellBehavior::Recall {
+        return cast_recall(
+            ctx,
+            state,
+            caster,
+            spell_kind,
+            target_id,
+            aim_x,
+            aim_y,
+            aim_z,
+            mode,
+            action_instance_id,
+        );
+    }
 
     if matches!(
         definition.behavior,
@@ -2827,6 +3056,13 @@ fn emit_spell_cast_accepted_event(
     ability_id: &str,
     now: Timestamp,
 ) {
+    if super::catalog::spell_definition(spell_kind)
+        .is_some_and(|definition| definition.target_audience == TargetAudience::Hostile)
+    {
+        crate::progression::arm_surprise_attacks_from_shroud(ctx, caster, action_instance_id, now);
+        crate::progression::break_shroud_on_attack(ctx, caster, now);
+    }
+
     let origin = actor_snapshot_for(ctx, caster)
         .map(|state| Vec3::new(state.pos_x, state.pos_y + state.hit_height, state.pos_z))
         .unwrap_or_else(|| Vec3::new(0.0, 0.0, 0.0));
@@ -4042,6 +4278,14 @@ fn finish_active_cast(
         active_cast.ability_id.as_str(),
     )?;
     if cast_reject_reason.is_none() {
+        capture_recall_spell_if_armed(
+            ctx,
+            active_cast.caster,
+            kind,
+            active_cast.charge_count,
+            charge_pct,
+            now,
+        );
         stamp_cooldown(ctx, active_cast.caster, kind, now);
         clear_active_cast(ctx, active_cast.caster);
     } else {
@@ -8060,16 +8304,19 @@ mod tests {
         has_movement_intent, has_voluntary_movement_after_cast, horizontal_movement_duration_ms,
         is_generic_area_spell, is_target_within_facing_arc,
         normal_cast_time_spell_refunds_gcd_on_self_cancel, projectile_release_uses_live_facing,
+        recall_capture_is_eligible, recall_slot_has_stored_spell,
         remaining_dot_damage_from_schedule, resolve_generic_area_center,
         resolve_special_movement_y, spell_primary_resource_cost_for_action,
-        valid_cast_action_token, violates_active_cast_lifetime_mobility_requirement_for_tick,
+        targeted_ability_is_blocked, valid_cast_action_token,
+        violates_active_cast_lifetime_mobility_requirement_for_tick,
         violates_cast_mobility_requirement, ActiveCastTerminalOutcome, CastExecutionMode,
         CombatActorSnapshot, CombatAreaShape, CurvedTargetProjectileTunables, SpellBehavior,
         SpellId, Vec3, FACING_DOT_EPSILON, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y, TARGET_FACING_ARC_RADIANS,
     };
     use crate::combat::scene_query::is_direction_within_facing_arc;
-    use crate::spells::ActiveCast;
+    use crate::spells::manifest::SpellTargeting;
+    use crate::spells::{ActiveCast, RecallSlot};
     use core::time::Duration;
     use spacetimedb::{Identity, Timestamp};
 
@@ -8591,6 +8838,35 @@ mod tests {
     }
 
     #[test]
+    fn gouge_blocks_only_non_self_targeted_spells() {
+        assert!(targeted_ability_is_blocked(
+            true,
+            SpellTargeting::Target,
+            false,
+        ));
+        assert!(!targeted_ability_is_blocked(
+            true,
+            SpellTargeting::Target,
+            true,
+        ));
+        assert!(!targeted_ability_is_blocked(
+            true,
+            SpellTargeting::Point,
+            false,
+        ));
+        assert!(!targeted_ability_is_blocked(
+            true,
+            SpellTargeting::Self_,
+            true,
+        ));
+        assert!(!targeted_ability_is_blocked(
+            false,
+            SpellTargeting::Target,
+            false,
+        ));
+    }
+
+    #[test]
     fn non_instant_casts_require_grounded_and_stationary() {
         let idle = test_intent(0.0, 0.0, false);
         let moving = test_intent(1.0, 0.0, false);
@@ -8731,5 +9007,55 @@ mod tests {
         let cost = spell_primary_resource_cost_for_action(&spell_id("MOMENTUM"));
 
         assert!((cost.amount - 20.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn recall_capture_skips_instant_and_channeled_spells() {
+        let icicle = crate::spells::spell_definition_by_str("ICICLE").expect("ICICLE should exist");
+        let teleport =
+            crate::spells::spell_definition_by_str("TELEPORT").expect("TELEPORT should exist");
+        let magic_missile = crate::spells::spell_definition_by_str("MAGIC_MISSILE")
+            .expect("MAGIC_MISSILE should exist");
+        let recall = crate::spells::spell_definition_by_str("RECALL").expect("RECALL should exist");
+
+        assert!(recall_capture_is_eligible(icicle));
+        assert!(!recall_capture_is_eligible(teleport));
+        assert!(!recall_capture_is_eligible(magic_missile));
+        assert!(!recall_capture_is_eligible(recall));
+    }
+
+    #[test]
+    fn recall_slot_is_armed_until_a_spell_id_is_stored() {
+        let mut slot = RecallSlot {
+            owner: Identity::ZERO,
+            stored_spell_id: String::new(),
+            charge_count: 1,
+            charge_pct: 1.0,
+            armed_at: Timestamp::UNIX_EPOCH,
+            stored_at: Timestamp::UNIX_EPOCH,
+        };
+
+        assert!(!recall_slot_has_stored_spell(&slot));
+        slot.stored_spell_id = "ICICLE".to_string();
+        assert!(recall_slot_has_stored_spell(&slot));
+    }
+
+    #[test]
+    fn recall_replay_path_bypasses_original_cost_cast_time_and_cooldown() {
+        let source = include_str!("casting.rs");
+        let start = source
+            .find("fn cast_recall(")
+            .expect("cast_recall should exist");
+        let end = source[start..]
+            .find("\nfn process_spell_cast(")
+            .map(|offset| start + offset)
+            .expect("process_spell_cast should follow cast_recall");
+        let body = &source[start..end];
+
+        assert!(body.contains("process_spell_cast("));
+        assert!(body.contains("stamp_named_cooldown_for_duration("));
+        assert!(!body.contains("commit_primary_resource_for_spell("));
+        assert!(!body.contains("stamp_cooldown("));
+        assert!(!body.contains("begin_active_cast("));
     }
 }

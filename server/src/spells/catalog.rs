@@ -19,9 +19,10 @@ use super::manifest::{
     DirectTargetSecondaryTunables, EmanationSecondaryTunables, ImpactEffect,
     InstantBeamChargeScaling, InstantBeamSecondaryTunables, MeteorSkyOrigin,
     OrbitCasterProjectileTunables, PersistentAreaSecondaryTunables, ProjectileMotionTunables,
-    ProjectileSecondaryTunables, RemoveStatusDefinition, RemoveStatusSecondaryTunables,
-    SpellBehavior, SpellCastMobility, SpellDefinition, SpellId, SpellParryBehavior,
-    SpellSecondaryTunables, SpellTargeting, WorldObstacleSecondaryTunables, SPELL_METEOR,
+    ProjectileSecondaryTunables, RecallSecondaryTunables, RemoveStatusDefinition,
+    RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility, SpellDefinition, SpellId,
+    SpellParryBehavior, SpellSecondaryTunables, SpellTargeting, WorldObstacleSecondaryTunables,
+    SPELL_METEOR,
 };
 
 const PROGRESSION_CATALOG_JSON: &str = include_str!("../progression_catalog.shared.json");
@@ -241,6 +242,9 @@ enum SpellCatalogDelivery {
         distance: f32,
     },
     SelfResource {},
+    Recall {
+        replay_cooldown_ms: u64,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -1279,6 +1283,13 @@ impl SpellCatalogRow {
                 definition.behavior = SpellBehavior::SelfResource;
                 definition.block_behavior = BlockBehavior::Unblockable;
             }
+            SpellCatalogDelivery::Recall { replay_cooldown_ms } => {
+                definition.behavior = SpellBehavior::Recall;
+                definition.block_behavior = BlockBehavior::Unblockable;
+                definition.secondary.recall = Some(RecallSecondaryTunables {
+                    replay_cooldown: Duration::from_millis(replay_cooldown_ms),
+                });
+            }
             SpellCatalogDelivery::SelfTeleport { distance } => {
                 definition.behavior = SpellBehavior::SelfTeleport;
                 definition.max_distance = distance;
@@ -1776,6 +1787,14 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
             }
             ensure_positive_f32(def.kind.as_str(), "delivery.distance", def.max_distance)?;
         }
+        SpellBehavior::Recall => {
+            if def.targeting != SpellTargeting::Self_ || def.requires_target {
+                return Err(format!(
+                    "{} RECALL must use SELF targeting without a target requirement",
+                    def.kind.as_str()
+                ));
+            }
+        }
         _ if def.apply_status.is_some() => {
             return Err(format!(
                 "{} non-APPLY_STATUS spell must not define apply_status",
@@ -1878,6 +1897,12 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
     if def.behavior != SpellBehavior::WorldObstacle && def.secondary.world_obstacle.is_some() {
         return Err(format!(
             "{} must not define world-obstacle secondary data",
+            def.kind.as_str()
+        ));
+    }
+    if def.behavior != SpellBehavior::Recall && def.secondary.recall.is_some() {
+        return Err(format!(
+            "{} must not define recall secondary data",
             def.kind.as_str()
         ));
     }
@@ -2479,6 +2504,35 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 ));
             }
         }
+        SpellBehavior::Recall => {
+            let Some(recall) = def.secondary.recall else {
+                return Err(format!(
+                    "{} RECALL must define secondary recall data",
+                    def.kind.as_str()
+                ));
+            };
+            if def.targeting != SpellTargeting::Self_ || def.requires_target {
+                return Err(format!(
+                    "{} RECALL must use SELF targeting without a target requirement",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_duration(
+                def.kind.as_str(),
+                "delivery.replay_cooldown_ms",
+                recall.replay_cooldown,
+            )?;
+            let expected = SpellSecondaryTunables {
+                recall: Some(recall),
+                ..SpellSecondaryTunables::default()
+            };
+            if def.secondary != expected {
+                return Err(format!(
+                    "{} RECALL must only define recall secondary spell tunables",
+                    def.kind.as_str()
+                ));
+            }
+        }
     }
     Ok(())
 }
@@ -2821,7 +2875,8 @@ fn validate_apply_status_kind_for_self(
         | StatusEffectKind::TemporaryHitpoints
         | StatusEffectKind::Berserking
         | StatusEffectKind::BattleTrance
-        | StatusEffectKind::TargetedAbilityAvoidance => Ok(()),
+        | StatusEffectKind::TargetedAbilityAvoidance
+        | StatusEffectKind::BladeTwisting => Ok(()),
         other => Err(format!(
             "{spell_id} SELF APPLY_STATUS status '{}' is not supported",
             other.as_str()
@@ -2842,7 +2897,10 @@ fn validate_apply_status_kind_for_target(
         | StatusEffectKind::Knockdown
         | StatusEffectKind::Slow
         | StatusEffectKind::Dot
-        | StatusEffectKind::Silence => Ok(()),
+        | StatusEffectKind::Silence
+        | StatusEffectKind::FindWeakness
+        | StatusEffectKind::Disarm
+        | StatusEffectKind::Gouge => Ok(()),
         other => Err(format!(
             "{spell_id} TARGET APPLY_STATUS status '{}' is not supported",
             other.as_str()
@@ -2952,6 +3010,7 @@ mod tests {
                 "SILENCE",
                 "MANA_SHIELD",
                 "SHIMMER",
+                "RECALL",
                 "STONESPIRE",
                 "MOMENTUM",
                 "FORTIFY",
@@ -2981,6 +3040,10 @@ mod tests {
                 "BLADE_BARRIER",
                 "RADIANT_BURST",
                 "SACRED_FLAME",
+                "FIND_WEAKNESS",
+                "BLADE_TWISTING",
+                "DISARM",
+                "GOUGE",
                 "IMP_FIRE_BOLT",
                 "DEEP_SEA_LIZARD_TIDAL_BOLT",
                 "SKELETON_REAPER_SOUL_BOLT",
@@ -3000,6 +3063,26 @@ mod tests {
                 "FAB_SHADOW_BOLT",
                 "FAB_DRAGON_BREATH",
             ]
+        );
+    }
+
+    #[test]
+    fn recall_authors_a_zero_cost_arm_with_a_one_minute_replay_cooldown() {
+        let definition = spell_definition_by_str("RECALL").expect("RECALL should exist");
+
+        assert_eq!(definition.behavior, SpellBehavior::Recall);
+        assert_eq!(definition.targeting, SpellTargeting::Self_);
+        assert_eq!(definition.target_audience, TargetAudience::SelfOnly);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cooldown, Duration::ZERO);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert_eq!(
+            definition
+                .secondary
+                .recall
+                .expect("RECALL should define replay tunables")
+                .replay_cooldown,
+            Duration::from_secs(60)
         );
     }
 

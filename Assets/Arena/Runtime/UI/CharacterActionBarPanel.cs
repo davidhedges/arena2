@@ -472,10 +472,6 @@ namespace Arena.UI
                         hasAction ? Color.white : ArenaUiTheme.MutedText,
                         iconSprite,
                         _canvas,
-                        slotId,
-                        () => ActionBarDragPayload.From(resolved, slotId),
-                        HandleActionDrop,
-                        () => AssignSelectedActionToSlot(slotId),
                         tooltipData: tooltip);
                     SetRect((RectTransform)cell.transform, position, ActionBarLayout.SlotVector, new Vector2(0f, 0f), new Vector2(0f, 0f));
                     _barCells.Add(cell);
@@ -716,7 +712,8 @@ namespace Arena.UI
                 return string.Equals(abilityProfile, normalizedProfile, StringComparison.OrdinalIgnoreCase);
 
             return string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal)
-                && SpellbookResolver.AbilityIsKnownIfSpell(conn, owner, ability);
+                && (DisciplineAbilitySelectionResolver.IsSelected(conn, owner, ability.AbilityId)
+                    || SpellbookResolver.AbilityIsKnownIfSpell(conn, owner, ability));
         }
 
         private static string DisabledReasonForAbility(
@@ -739,7 +736,7 @@ namespace Arena.UI
             }
 
             if (IsSpellAbility(ability))
-                return "Not learned or equipped";
+                return "Not selected, learned, or equipped";
 
             return "Unavailable";
         }
@@ -789,14 +786,16 @@ namespace Arena.UI
             sb.Append(combatProfile).Append('|');
             sb.Append("weapon_filter:").Append(weaponFilterKey).Append('|');
             sb.Append("spell_slots:").Append(assignedSpellSlots).Append('/').Append(spellSlotCapacity).Append('|');
-            foreach (CharacterActionBarAssignment assignment in conn.Db.CharacterActionBarAssignment.Owner.Filter(owner)
-                         .Where(row => ActionBarAssignmentScope.MatchesCombatProfile(row, combatProfile))
-                         .OrderBy(row => row.SlotId, StringComparer.Ordinal))
-                sb.Append(assignment.CombatProfileId).Append(':')
-                    .Append(assignment.SlotId).Append(':')
-                    .Append(assignment.ActionKind).Append(':')
-                    .Append(assignment.ActionId).Append(':')
-                    .Append(assignment.AbilityId).Append(';');
+            sb.Append("discipline_abilities:");
+            foreach (CharacterDisciplineAbilitySelection selection in
+                     conn.Db.CharacterDisciplineAbilitySelection.Owner.Filter(owner)
+                         .OrderBy(row => row.SortOrder)
+                         .ThenBy(row => row.AbilityId, StringComparer.Ordinal))
+            {
+                sb.Append(selection.SortOrder).Append(':')
+                    .Append(selection.DisciplineId).Append(':')
+                    .Append(selection.AbilityId).Append(';');
+            }
             sb.Append("|spellbook:");
             foreach (ItemSpell spell in ReadEquippedSpellbookSpells(conn, owner))
                 sb.Append(spell.SlotIndex).Append(':')

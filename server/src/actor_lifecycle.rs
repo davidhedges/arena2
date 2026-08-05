@@ -13,7 +13,7 @@ use crate::player_intent::PlayerIntent;
 use crate::player_physics::PlayerPhysics;
 use crate::player_state::PlayerState;
 use crate::resources::clear_player_resources;
-use crate::spells::clear_active_cast;
+use crate::spells::{clear_active_cast, clear_recall_slot};
 use crate::world_obstacles::clear_world_obstacles_for_owner;
 
 #[allow(unused_imports)]
@@ -58,6 +58,8 @@ use crate::spells::pending_area_impact as _;
 use crate::spells::pending_cast_cancel as _;
 #[allow(unused_imports)]
 use crate::spells::pending_cast_request as _;
+#[allow(unused_imports)]
+use crate::spells::recall_slot as _;
 #[allow(unused_imports)]
 use crate::spells::special_movement_runtime as _;
 
@@ -171,6 +173,7 @@ pub(crate) fn clear_transient_actor_state(ctx: &ReducerContext, identity: Identi
     // Active cast plus channel runtime, special-movement runtime, and
     // cast-prediction correlation.
     clear_active_cast(ctx, identity);
+    clear_recall_slot(ctx, identity);
     // Ordinary cast cleanup preserves externally imposed movement. Actor
     // teardown never does: reconnect/despawn cannot retain any live track.
     ctx.db.special_movement_runtime().owner().delete(identity);
@@ -322,9 +325,10 @@ mod tests {
     /// Per-identity transient tables (or the helpers that own their deletion)
     /// that the unified teardown must cover. Add every new transient table's
     /// accessor here AND to `clear_transient_actor_state`.
-    const TRANSIENT_TEARDOWN_MARKERS: [&str; 20] = [
+    const TRANSIENT_TEARDOWN_MARKERS: [&str; 21] = [
         "clear_player_combat_state",
         "clear_active_cast",
+        "clear_recall_slot",
         "clear_movement_action_for_owner",
         "clear_pending_player_commands",
         "clear_world_obstacles_for_owner",

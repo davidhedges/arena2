@@ -298,12 +298,14 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void ActiveActionBarResolver_MapsRuntimeActionsThroughEquipmentResolvedProfile()
+        public void ActiveActionBarResolver_DerivesVisibleSlotsFromOrderedDisciplineSelections()
         {
             string contracts = File.ReadAllText(GameplayContractsPath);
-            Assert.That(contracts, Does.Contain("conn.Db.CharacterActionBarAssignment.Owner.Filter(owner.Value)"));
+            Assert.That(contracts, Does.Contain("TryGetDisciplineSelectionIndex"));
+            Assert.That(contracts, Does.Contain("ResolveAbilityIdForActionBarSlot"));
+            Assert.That(contracts, Does.Contain("conn.Db.CharacterDisciplineAbilitySelection.Owner.Filter(owner.Value)"));
+            Assert.That(contracts, Does.Contain("selection.SortOrder == (uint)selectionIndex"));
             Assert.That(contracts, Does.Contain("CombatProfileResolver.ResolveForOwner(conn, owner)"));
-            Assert.That(contracts, Does.Contain("ActionBarAssignmentScope.MatchesCombatProfile"));
             Assert.That(contracts, Does.Contain("SpellSlotResolver.IsSpellAssignmentEnabled"));
             Assert.That(contracts, Does.Not.Contain("TryResolveActiveSpec"));
             Assert.That(contracts, Does.Not.Contain("ResolveSelectableActionFromAssignment"));
@@ -312,7 +314,7 @@ namespace Arena.Tests.Editor
             Assert.That(
                 contracts,
                 Does.Not.Contain("ResolveForClass"),
-                "Action bar runtime action resolution must follow equipped gear, not the old class profile.");
+                "Action bar runtime availability must follow equipped gear, not the old class profile.");
             Assert.That(contracts, Does.Not.Contain("ClassCatalog"));
             Assert.That(
                 contracts,
@@ -347,6 +349,17 @@ namespace Arena.Tests.Editor
                 spellInput,
                 Does.Not.Contain("NewestPendingTick"),
                 "Stationary cast requests must not stamp the last pending movement tick; frame-perfect movement-cancel/recast can otherwise leave a later voluntary movement tick that cancels the new cast.");
+        }
+
+        [Test]
+        public void RecallDispatch_UsesTheStoredSpellTargetingContract()
+        {
+            string spellInput = File.ReadAllText(SpellInputHandlerPath);
+
+            Assert.That(spellInput, Does.Contain("ResolveRecallTargetingDefinition"));
+            Assert.That(spellInput, Does.Contain("conn.Db.RecallSlot.Owner.Find(owner)"));
+            Assert.That(spellInput, Does.Contain("StartAimMode(spellId, targetingDef.Kind, aimRadius)"));
+            Assert.That(spellInput, Does.Contain("TryCastTargeted(conn, spellId, targetingDef)"));
         }
 
         [Test]
@@ -467,6 +480,8 @@ namespace Arena.Tests.Editor
             Assert.That(panel, Does.Contain("ActionBarSlotViewFactory.Create"));
             Assert.That(panel, Does.Contain("ActionBarLayout.GridSize"));
             Assert.That(panel, Does.Contain("ActiveActionBarResolver.ResolveActiveSelectableAction"));
+            Assert.That(panel, Does.Contain("CharacterDisciplineAbilitySelection.Owner.Filter(owner)"));
+            Assert.That(panel, Does.Not.Contain("() => ActionBarDragPayload.From(resolved, slotId)"));
             Assert.That(panel, Does.Contain("SpellbookResolver.AbilityIsKnownIfSpell"));
             Assert.That(panel, Does.Contain("SpellSlotResolver.Capacity"));
             Assert.That(panel, Does.Contain("SpellSlotResolver.AssignedSpellCount"));
@@ -529,6 +544,21 @@ namespace Arena.Tests.Editor
             string builder = File.ReadAllText("Assets/Arena/Editor/HubSceneAuthoringBuilder.cs");
             Assert.That(builder, Does.Contain("\"Mode_Survival\""));
             Assert.That(builder, Does.Contain("\"Survival Mode\""));
+        }
+
+        [Test]
+        public void HubPracticeButton_OpensRetainedDestinationMenuWithoutRestoringLegacyHub()
+        {
+            string screen = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/HubScreen.cs");
+            Assert.That(screen, Does.Contain("_root.Q<Button>(\"PracticeButton\")"));
+            Assert.That(screen, Does.Contain("_practiceButton.clicked += OpenPracticeMenu"));
+            Assert.That(screen, Does.Contain("_hubController?.OpenPracticeMenu()"));
+
+            string hub = File.ReadAllText(HubControllerPath);
+            Assert.That(hub, Does.Contain("public void OpenPracticeMenu()"));
+            Assert.That(hub, Does.Contain("SetTravelMenuOpen(true, bringToFront: true)"));
+            Assert.That(hub, Does.Contain("child.gameObject.SetActive(child.gameObject == _travelMenu)"));
+            Assert.That(hub, Does.Contain("RuntimeUiLayer.BringToFront"));
         }
 
         [Test]

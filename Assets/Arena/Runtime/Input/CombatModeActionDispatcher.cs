@@ -3,6 +3,7 @@
 using System;
 using Arena.Combat;
 using Arena.Debugging;
+using Arena.Simulation;
 using SpacetimeDB;
 using SpacetimeDB.Types;
 
@@ -32,6 +33,15 @@ namespace Arena.Input
             string nextMode = ResolveNextMode(currentMode, modes);
             if (string.IsNullOrWhiteSpace(nextMode))
                 return false;
+            if (string.Equals(nextMode, CombatModeIds.Stealthed, StringComparison.Ordinal)
+                && LocalCombatState.Instance.SpellCooldowns.TryGetValue(action.ActionId, out var cooldown)
+                && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                    < cooldown.lastCastMs + cooldown.durationMs)
+            {
+                ActionBarTrace.Trace(
+                    $"combat mode toggle rejected ability={action.AbilityId} profile={combatProfile} reason=cooldown");
+                return false;
+            }
 
             conn.Reducers.SetCombatMode(nextMode);
             ActionBarTrace.Trace(

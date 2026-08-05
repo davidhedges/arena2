@@ -33,9 +33,19 @@ namespace Arena.UI
         private VisualElement? _root;
         private VisualElement? _showcase;
         private Label? _playerName;
-        private Label? _loadoutDisciplineName;
+        private VisualElement? _loadoutPrimaryRow;
+        private VisualElement? _loadoutSecondary1Row;
+        private VisualElement? _loadoutSecondary2Row;
+        private Label? _loadoutPrimaryName;
+        private Label? _loadoutSecondary1Name;
+        private Label? _loadoutSecondary2Name;
+        private Label? _loadoutPrimaryGlyph;
+        private Label? _loadoutSecondary1Glyph;
+        private Label? _loadoutSecondary2Glyph;
         private Label? _partyCount;
+        private Button? _practiceButton;
         private Button? _navDisciplines;
+        private HubController? _hubController;
         private DisciplinesScreen? _disciplinesScreen;
         private Transform? _showcaseAnchor;
         private Camera? _hubCamera;
@@ -65,6 +75,8 @@ namespace Arena.UI
         private void OnDestroy()
         {
             UnbindShowcaseDrag();
+            if (_practiceButton != null)
+                _practiceButton.clicked -= OpenPracticeMenu;
             if (_navDisciplines != null)
                 _navDisciplines.clicked -= OpenDisciplines;
             if (_disciplinesScreen != null)
@@ -237,20 +249,37 @@ namespace Arena.UI
 
             _showcase = _root.Q<VisualElement>("PlayerShowcase");
             _playerName = _root.Q<Label>("PlayerName");
-            _loadoutDisciplineName = _root.Q<Label>("LoadoutDisciplineName");
+            _loadoutPrimaryRow = _root.Q<VisualElement>("LoadoutPrimaryRow");
+            _loadoutSecondary1Row = _root.Q<VisualElement>("LoadoutSecondary1Row");
+            _loadoutSecondary2Row = _root.Q<VisualElement>("LoadoutSecondary2Row");
+            _loadoutPrimaryName = _root.Q<Label>("LoadoutPrimaryName");
+            _loadoutSecondary1Name = _root.Q<Label>("LoadoutSecondary1Name");
+            _loadoutSecondary2Name = _root.Q<Label>("LoadoutSecondary2Name");
+            _loadoutPrimaryGlyph = _root.Q<Label>("LoadoutPrimaryGlyph");
+            _loadoutSecondary1Glyph = _root.Q<Label>("LoadoutSecondary1Glyph");
+            _loadoutSecondary2Glyph = _root.Q<Label>("LoadoutSecondary2Glyph");
             _partyCount = _root.Q<Label>("PartyCount");
+            _practiceButton = _root.Q<Button>("PracticeButton");
             _navDisciplines = _root.Q<Button>("NavDisciplines");
+            _hubController = GetComponent<HubController>();
 
             BindShowcaseDrag();
 
             _disciplinesScreen = DisciplinesScreen.Ensure(transform);
             _disciplinesScreen.Closed += OnDisciplinesClosed;
+            if (_practiceButton != null)
+                _practiceButton.clicked += OpenPracticeMenu;
             if (_navDisciplines != null)
                 _navDisciplines.clicked += OpenDisciplines;
 
             Button? settingsButton = _root.Q<Button>("SettingsButton");
             if (settingsButton != null)
                 settingsButton.clicked += SystemMenuScreen.OpenFromEscape;
+        }
+
+        private void OpenPracticeMenu()
+        {
+            _hubController?.OpenPracticeMenu();
         }
 
         private void OpenDisciplines()
@@ -266,6 +295,7 @@ namespace Arena.UI
         {
             if (_root != null)
                 _root.style.display = DisplayStyle.Flex;
+            RefreshBoundData();
         }
 
         private void BindShowcaseDrag()
@@ -345,32 +375,88 @@ namespace Arena.UI
             if (_playerName != null && !string.IsNullOrWhiteSpace(player?.Username))
                 _playerName.text = player.Username.Trim().ToUpperInvariant();
 
-            if (_loadoutDisciplineName != null)
-                _loadoutDisciplineName.text = ResolveDisciplineDisplayName(conn, identity.Value);
+            RefreshDisciplineLoadout(conn, identity.Value);
 
             if (_partyCount != null)
                 _partyCount.text = $"{ResolvePartyCount(conn, identity.Value)} / 4";
         }
 
-        private static string ResolveDisciplineDisplayName(DbConnection conn, Identity identity)
+        private void RefreshDisciplineLoadout(DbConnection conn, Identity identity)
         {
-            ActiveCombatDiscipline? active = conn.Db.ActiveCombatDiscipline.Owner.Find(identity);
-            if (active != null && !string.IsNullOrWhiteSpace(active.DisciplineId))
+            CharacterDisciplineLoadout? loadout = conn.Db.CharacterDisciplineLoadout.Owner.Find(identity);
+            if (loadout != null && !string.IsNullOrWhiteSpace(loadout.PrimaryDisciplineId))
             {
-                CombatDisciplineCatalog? discipline =
-                    conn.Db.CombatDisciplineCatalog.DisciplineId.Find(
-                        WireIdentifier.Normalize(active.DisciplineId));
-                if (!string.IsNullOrWhiteSpace(discipline?.DisplayName))
-                    return discipline.DisplayName.Trim().ToUpperInvariant();
+                BindDisciplineRow(
+                    conn,
+                    _loadoutPrimaryRow,
+                    _loadoutPrimaryName,
+                    _loadoutPrimaryGlyph,
+                    loadout.PrimaryDisciplineId,
+                    visibleWhenEmpty: true);
+                BindDisciplineRow(
+                    conn,
+                    _loadoutSecondary1Row,
+                    _loadoutSecondary1Name,
+                    _loadoutSecondary1Glyph,
+                    loadout.SecondaryDisciplineId1,
+                    visibleWhenEmpty: false);
+                BindDisciplineRow(
+                    conn,
+                    _loadoutSecondary2Row,
+                    _loadoutSecondary2Name,
+                    _loadoutSecondary2Glyph,
+                    loadout.SecondaryDisciplineId2,
+                    visibleWhenEmpty: false);
+                return;
             }
 
-            string profileId = CombatProfileResolver.ResolveForOwner(conn, identity);
-            CombatProfileCatalog? profile =
-                conn.Db.CombatProfileCatalog.CombatProfileId.Find(
-                    WireIdentifier.Normalize(profileId));
-            return !string.IsNullOrWhiteSpace(profile?.DisplayName)
-                ? profile.DisplayName.Trim().ToUpperInvariant()
-                : "SWORD & SHIELD";
+            ActiveCombatDiscipline? active = conn.Db.ActiveCombatDiscipline.Owner.Find(identity);
+            BindDisciplineRow(
+                conn,
+                _loadoutPrimaryRow,
+                _loadoutPrimaryName,
+                _loadoutPrimaryGlyph,
+                active?.DisciplineId,
+                visibleWhenEmpty: true);
+            SetRowVisible(_loadoutSecondary1Row, false);
+            SetRowVisible(_loadoutSecondary2Row, false);
+        }
+
+        private static void BindDisciplineRow(
+            DbConnection conn,
+            VisualElement? row,
+            Label? name,
+            Label? glyph,
+            string? disciplineId,
+            bool visibleWhenEmpty)
+        {
+            string normalizedId = WireIdentifier.Normalize(disciplineId);
+            bool hasDiscipline = !string.IsNullOrWhiteSpace(normalizedId);
+            SetRowVisible(row, hasDiscipline || visibleWhenEmpty);
+            if (!hasDiscipline)
+            {
+                if (name != null)
+                    name.text = "UNSELECTED";
+                if (glyph != null)
+                    glyph.text = "—";
+                return;
+            }
+
+            CombatDisciplineCatalog? discipline =
+                conn.Db.CombatDisciplineCatalog.DisciplineId.Find(normalizedId);
+            string displayName = !string.IsNullOrWhiteSpace(discipline?.DisplayName)
+                ? discipline.DisplayName.Trim().ToUpperInvariant()
+                : normalizedId.Replace('_', ' ');
+            if (name != null)
+                name.text = displayName;
+            if (glyph != null)
+                glyph.text = displayName.Substring(0, 1);
+        }
+
+        private static void SetRowVisible(VisualElement? row, bool visible)
+        {
+            if (row != null)
+                row.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         private static int ResolvePartyCount(DbConnection conn, Identity identity)

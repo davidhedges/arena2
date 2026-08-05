@@ -628,6 +628,33 @@ namespace Arena.Combat
 
         public static IReadOnlyList<ActionBarSlotBinding> SelectableBindings => Bindings;
 
+        public static bool TryGetDisciplineSelectionIndex(string? slotId, out int selectionIndex)
+        {
+            string normalizedSlotId = WireIdentifier.Normalize(slotId);
+            selectionIndex = 0;
+            foreach (ActionBarSlotBinding binding in Bindings)
+            {
+                // The shifted bindings are legacy third-row slots. The visible
+                // combat bar is the two unshifted rows; the separate shifted
+                // row remains reserved for the spellbook and discipline bar.
+                if (binding.RequiresShift)
+                    continue;
+
+                if (string.Equals(
+                        WireIdentifier.Normalize(binding.SlotId),
+                        normalizedSlotId,
+                        StringComparison.Ordinal))
+                {
+                    return true;
+                }
+
+                selectionIndex++;
+            }
+
+            selectionIndex = -1;
+            return false;
+        }
+
         public static string KeyLabelForCell(int row, int col)
         {
             foreach (ActionBarSlotBinding binding in Bindings)
@@ -936,6 +963,55 @@ namespace Arena.Combat
         }
     }
 
+    public static class DisciplineAbilitySelectionResolver
+    {
+        public static bool IsSelected(
+            DbConnection? conn,
+            SpacetimeDB.Identity? owner,
+            string? abilityId)
+        {
+            if (conn == null || !owner.HasValue || string.IsNullOrWhiteSpace(abilityId))
+                return false;
+
+            string normalizedAbilityId = WireIdentifier.Normalize(abilityId);
+            foreach (CharacterDisciplineAbilitySelection selection in
+                     conn.Db.CharacterDisciplineAbilitySelection.Owner.Filter(owner.Value))
+            {
+                if (string.Equals(
+                        WireIdentifier.Normalize(selection.AbilityId),
+                        normalizedAbilityId,
+                        StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static string ResolveAbilityIdForActionBarSlot(
+            DbConnection? conn,
+            SpacetimeDB.Identity? owner,
+            string? slotId)
+        {
+            if (conn == null
+                || !owner.HasValue
+                || !ActionBarKeymap.TryGetDisciplineSelectionIndex(slotId, out int selectionIndex))
+            {
+                return string.Empty;
+            }
+
+            foreach (CharacterDisciplineAbilitySelection selection in
+                     conn.Db.CharacterDisciplineAbilitySelection.Owner.Filter(owner.Value))
+            {
+                if (selection.SortOrder == (uint)selectionIndex)
+                    return WireIdentifier.Normalize(selection.AbilityId);
+            }
+
+            return string.Empty;
+        }
+    }
+
     public readonly struct ActiveActionBarAction
     {
         public readonly string SlotId;
@@ -1046,7 +1122,8 @@ namespace Arena.Combat
                 slotId,
                 assignment?.ActionKind,
                 assignment?.ActionId,
-                assignment?.AbilityId);
+                assignment?.AbilityId,
+                deriveAvailabilityFromDisciplineSelection: false);
         }
 
         public static ActiveActionBarAction ResolveActiveSelectableAction(
@@ -1057,28 +1134,19 @@ namespace Arena.Combat
             if (conn == null || !owner.HasValue || string.IsNullOrWhiteSpace(slotId))
                 return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
 
-            string normalizedSlotId = WireIdentifier.Normalize(slotId);
-            string combatProfile = CombatProfileResolver.ResolveForOwner(conn, owner.Value);
-            CharacterActionBarAssignment? assignment = null;
-            foreach (CharacterActionBarAssignment row in conn.Db.CharacterActionBarAssignment.Owner.Filter(owner.Value))
-            {
-                if (!ActionBarAssignmentScope.MatchesCombatProfile(row, combatProfile))
-                    continue;
-
-                if (!string.Equals(row.SlotId, normalizedSlotId, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                assignment = row;
-                break;
-            }
+            string selectedAbilityId = DisciplineAbilitySelectionResolver.ResolveAbilityIdForActionBarSlot(
+                conn,
+                owner,
+                slotId);
 
             return ResolveSelectableActionFromRefs(
                 conn,
                 owner,
                 slotId,
-                assignment?.ActionKind,
-                assignment?.ActionId,
-                assignment?.AbilityId);
+                ActionKinds.Ability,
+                selectedAbilityId,
+                selectedAbilityId,
+                deriveAvailabilityFromDisciplineSelection: true);
         }
 
         public static ActiveActionBarAction ResolveEquippedSpellbookAction(
@@ -1131,7 +1199,8 @@ namespace Arena.Combat
             string slotId,
             string? assignedActionKind,
             string? assignedActionId,
-            string? assignedAbilityId)
+            string? assignedAbilityId,
+            bool deriveAvailabilityFromDisciplineSelection)
         {
             if (conn == null || string.IsNullOrWhiteSpace(slotId))
                 return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
@@ -1198,17 +1267,32 @@ namespace Arena.Combat
                     string.Empty,
                     actionRefId);
             bool isSpell = string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal);
-            if (!CombatProfileResolver.AbilityMatchesOwner(conn, owner, ability)
-                && !(isSpell && SpellbookResolver.KnowsSpell(conn, owner, ability.ActionId)))
+            bool selectedForDisciplineLoadout = DisciplineAbilitySelectionResolver.IsSelected(
+                conn,
+                owner,
+                ability.AbilityId);
+            bool abilityMatchesOwner = CombatProfileResolver.AbilityMatchesOwner(conn, owner, ability);
+            bool availableThroughSpellbookOrSelection = isSpell
+                && (selectedForDisciplineLoadout
+                    || SpellbookResolver.KnowsSpell(conn, owner, ability.ActionId));
+            if (!abilityMatchesOwner
+                && !availableThroughSpellbookOrSelection
+                && !(deriveAvailabilityFromDisciplineSelection && selectedForDisciplineLoadout))
             {
                 return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
             }
             if (isSpell
-                && !CombatProfileResolver.AbilityMatchesOwner(conn, owner, ability)
+                && !abilityMatchesOwner
+                && !selectedForDisciplineLoadout
                 && !SpellSlotResolver.IsSpellAssignmentEnabled(conn, owner, normalizedSlotId))
             {
                 return new ActiveActionBarAction(slotId, string.Empty, string.Empty, string.Empty, string.Empty);
             }
+
+            string abilityProfile = CombatProfileResolver.ResolveForAbility(conn, ability);
+            bool isAvailable = !deriveAvailabilityFromDisciplineSelection
+                || string.IsNullOrWhiteSpace(abilityProfile)
+                || abilityMatchesOwner;
 
             string runtimeActionId = AbilityKinds.UsesRawActionId(ability.AbilityKind)
                 ? WireIdentifier.Normalize(ability.ActionId)
@@ -1231,7 +1315,8 @@ namespace Arena.Combat
                 runtimeActionId,
                 displayName,
                 ability.ResourceKind,
-                ability.ResourceCost);
+                ability.ResourceCost,
+                isAvailable: isAvailable);
         }
 
         private static ActiveActionBarAction ResolveCombatDisciplineSwitch(

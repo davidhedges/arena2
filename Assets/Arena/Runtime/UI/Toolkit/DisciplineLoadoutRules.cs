@@ -5,8 +5,8 @@ using System.Collections.Generic;
 namespace Arena.UI
 {
     /// <summary>
-    /// Pure validation shared by the Disciplines UI and edit-mode tests.
-    /// Persistence is intentionally outside this presentation slice.
+    /// Pure validation shared by the Disciplines UI, its authoritative save
+    /// reducer, and edit-mode tests.
     /// </summary>
     public static class DisciplineLoadoutRules
     {

@@ -51,33 +51,33 @@
                 <ui:Label class="section-title" text="ACTIVE LOADOUT" />
 
                 <ui:VisualElement name="LoadoutList" class="loadout-list">
-                    <ui:VisualElement class="loadout-row">
-                        <ui:VisualElement class="loadout-icon loadout-icon--steel" picking-mode="Ignore">
-                            <ui:Label class="loadout-glyph" text="W" />
+                    <ui:VisualElement name="LoadoutPrimaryRow" class="loadout-row">
+                        <ui:VisualElement name="LoadoutPrimaryIcon" class="loadout-icon loadout-icon--steel" picking-mode="Ignore">
+                            <ui:Label name="LoadoutPrimaryGlyph" class="loadout-glyph" text="W" />
                         </ui:VisualElement>
                         <ui:VisualElement class="loadout-copy">
-                            <ui:Label class="loadout-type" text="DISCIPLINE" />
-                            <ui:Label name="LoadoutDisciplineName" class="loadout-name" text="SWORD &amp; SHIELD" />
+                            <ui:Label class="loadout-type" text="PRIMARY DISCIPLINE" />
+                            <ui:Label name="LoadoutPrimaryName" class="loadout-name" text="SWORD &amp; SHIELD" />
                         </ui:VisualElement>
                         <ui:Label class="loadout-index" text="01" />
                     </ui:VisualElement>
-                    <ui:VisualElement class="loadout-row">
-                        <ui:VisualElement class="loadout-icon loadout-icon--fire" picking-mode="Ignore">
-                            <ui:Label class="loadout-glyph" text="F" />
+                    <ui:VisualElement name="LoadoutSecondary1Row" class="loadout-row">
+                        <ui:VisualElement name="LoadoutSecondary1Icon" class="loadout-icon loadout-icon--fire" picking-mode="Ignore">
+                            <ui:Label name="LoadoutSecondary1Glyph" class="loadout-glyph" text="F" />
                         </ui:VisualElement>
                         <ui:VisualElement class="loadout-copy">
-                            <ui:Label class="loadout-type" text="PRIMARY SCHOOL" />
-                            <ui:Label class="loadout-name" text="FIRE" />
+                            <ui:Label class="loadout-type" text="SECONDARY DISCIPLINE" />
+                            <ui:Label name="LoadoutSecondary1Name" class="loadout-name" text="FIRE" />
                         </ui:VisualElement>
                         <ui:Label class="loadout-index" text="02" />
                     </ui:VisualElement>
-                    <ui:VisualElement class="loadout-row">
-                        <ui:VisualElement class="loadout-icon loadout-icon--frost" picking-mode="Ignore">
-                            <ui:Label class="loadout-glyph" text="C" />
+                    <ui:VisualElement name="LoadoutSecondary2Row" class="loadout-row">
+                        <ui:VisualElement name="LoadoutSecondary2Icon" class="loadout-icon loadout-icon--frost" picking-mode="Ignore">
+                            <ui:Label name="LoadoutSecondary2Glyph" class="loadout-glyph" text="C" />
                         </ui:VisualElement>
                         <ui:VisualElement class="loadout-copy">
-                            <ui:Label class="loadout-type" text="SECONDARY SCHOOL" />
-                            <ui:Label class="loadout-name" text="FROST" />
+                            <ui:Label class="loadout-type" text="SECONDARY DISCIPLINE" />
+                            <ui:Label name="LoadoutSecondary2Name" class="loadout-name" text="FROST" />
                         </ui:VisualElement>
                         <ui:Label class="loadout-index" text="03" />
                     </ui:VisualElement>

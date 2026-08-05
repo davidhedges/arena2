@@ -195,6 +195,7 @@ namespace Arena.Entity
         public void ApplyStatusEffect(string effectKind)
         {
             _effectCounts[effectKind] = (_effectCounts.TryGetValue(effectKind, out var n) ? n : 0) + 1;
+            RefreshWeaponStatusVisibility();
             RefreshEffectTint();
         }
 
@@ -204,7 +205,23 @@ namespace Arena.Entity
                 _effectCounts[effectKind] = n - 1;
             else
                 _effectCounts.Remove(effectKind);
+            RefreshWeaponStatusVisibility();
             RefreshEffectTint();
+        }
+
+        private void RefreshWeaponStatusVisibility()
+        {
+            bool disarmed = false;
+            foreach (var effect in _effectCounts)
+            {
+                if (effect.Value > 0
+                    && string.Equals(effect.Key, "DISARM", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    disarmed = true;
+                    break;
+                }
+            }
+            _weaponAttachments?.SetExternallyHidden(disarmed);
         }
 
         private static readonly Dictionary<string, Color> EffectColors = new()

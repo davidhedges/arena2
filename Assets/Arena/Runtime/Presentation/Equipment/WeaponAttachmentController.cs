@@ -18,6 +18,7 @@ namespace Arena.Presentation
         private readonly List<AttachedVisual> _spawnedVisuals = new();
         private readonly List<TemporaryAnimatedProp> _temporaryAnimatedProps = new();
         private readonly HashSet<string> _temporarilyHiddenItemIds = new(StringComparer.OrdinalIgnoreCase);
+        private bool _externallyHidden;
         private readonly HashSet<string> _missingMountWarnings = new(StringComparer.Ordinal);
         private bool _inCombat;
 
@@ -165,6 +166,16 @@ namespace Arena.Presentation
             RefreshAttachments();
             if (changed)
                 VisualVersion++;
+        }
+
+        public void SetExternallyHidden(bool hidden)
+        {
+            if (_externallyHidden == hidden)
+                return;
+
+            _externallyHidden = hidden;
+            RefreshAttachments();
+            VisualVersion++;
         }
 
         public void PlayScalePulse(
@@ -571,7 +582,9 @@ namespace Arena.Presentation
             if (_mounts == null)
                 return;
 
-            if (!IsVisibleForState(visual) || _temporarilyHiddenItemIds.Contains(visual.ItemId))
+            if (_externallyHidden
+                || !IsVisibleForState(visual)
+                || _temporarilyHiddenItemIds.Contains(visual.ItemId))
             {
                 if (visual.Instance.activeSelf)
                     visual.Instance.SetActive(false);
