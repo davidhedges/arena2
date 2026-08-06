@@ -22,6 +22,7 @@ namespace Arena.Editor
         private const string RootName = "HubSceneRoot";
         private const float ShowcaseAvatarHeight = 2.85f;
         private const float ShowcaseLift = 0.92f;
+        private const float ShowcaseDefaultYaw = 2f;
 
         static HubSceneAuthoringBuilder()
         {
@@ -500,7 +501,7 @@ namespace Arena.Editor
 
             Transform showcase = CreateWorld(anchor, "HubShowcaseAvatar");
             showcase.localPosition = Vector3.zero;
-            showcase.localRotation = Quaternion.Euler(0f, 182f, 0f);
+            showcase.localRotation = Quaternion.Euler(0f, ShowcaseDefaultYaw, 0f);
             showcase.localScale = Vector3.one;
         }
 
