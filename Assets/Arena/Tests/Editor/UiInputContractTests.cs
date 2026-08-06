@@ -366,6 +366,24 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void FriendlyTargetedSpells_DefaultToSelfWhenSelectionIsOutsideAudience()
+        {
+            string spellInput = File.ReadAllText(SpellInputHandlerPath);
+
+            Assert.That(
+                spellInput,
+                Does.Contain("!PartyRelationship.TargetAudienceAllowsLocal("),
+                "A selected hostile must not override the self fallback for a friendly targeted spell.");
+            Assert.That(
+                spellInput,
+                Does.Contain("ICombatTargetEntity? losTarget = resolvedTarget;"),
+                "The advisory LOS check must use the self-substituted target, not the incompatible selection.");
+            Assert.That(
+                spellInput,
+                Does.Not.Contain("ICombatTargetEntity? losTarget = TargetSelector.Instance?.SelectedTarget;"));
+        }
+
+        [Test]
         public void RecallDispatch_UsesTheStoredSpellTargetingContract()
         {
             string spellInput = File.ReadAllText(SpellInputHandlerPath);
@@ -548,20 +566,39 @@ namespace Arena.Tests.Editor
         public void EquipmentScreen_UsesAuthoritativeWholeSetSelectionAndLiveShowcase()
         {
             string screen = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/EquipmentScreen.cs");
+            string hubScreen = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/HubScreen.cs");
             string uxml = File.ReadAllText("Assets/Arena/Resources/UI/Toolkit/Equipment.uxml");
             string planner = File.ReadAllText(GameplaySubscriptionPlannerPath);
             string hub = File.ReadAllText(HubControllerPath);
+            string entityRegistry = File.ReadAllText(EntityRegistryPath);
+            string serverInventory = File.ReadAllText(ServerInventoryPath);
+            string avatarAssembler = File.ReadAllText(
+                "Assets/Arena/Runtime/Presentation/Appearance/CharacterAvatarAssembler.cs");
+            string hubBuilder = File.ReadAllText("Assets/Arena/Editor/HubSceneAuthoringBuilder.cs");
 
             Assert.That(screen, Does.Contain("Reducers.EquipArmorSet"));
             Assert.That(screen, Does.Contain("OnEquipArmorSet"));
             Assert.That(screen, Does.Contain("SetShowcaseArmorPreview"));
+            Assert.That(screen, Does.Contain("CompleteArmorPieces"));
             Assert.That(uxml, Does.Contain("name=\"TierLight\""));
             Assert.That(uxml, Does.Contain("name=\"TierMedium\""));
             Assert.That(uxml, Does.Contain("name=\"TierHeavy\""));
             Assert.That(uxml, Does.Contain("name=\"PlayerShowcase\""));
+            Assert.That(uxml, Does.Contain("<ui:ScrollView name=\"SetList\""));
             Assert.That(planner, Does.Contain("From.ArmorSetDefinition()"));
             Assert.That(planner, Does.Contain("From.ActiveArmorSet()"));
+            Assert.That(planner, Does.Contain("From.PlayerEquipmentPresentation()"));
             Assert.That(hub, Does.Contain("ResolveLocalArmorAppearance"));
+            Assert.That(hub, Does.Contain("ShowcaseCameraFacingYaw = 180f"));
+            Assert.That(hubBuilder, Does.Contain("ShowcaseDefaultYaw = 180f"));
+            Assert.That(screen, Does.Contain("_hubController.RotateShowcaseFromPointerDelta(deltaX)"));
+            Assert.That(hubScreen, Does.Contain("_hubController.RotateShowcaseFromPointerDelta(deltaX)"));
+            Assert.That(hub, Does.Contain("internal void RotateShowcaseFromPointerDelta(float deltaX)"));
+            Assert.That(serverInventory, Does.Contain("upsert_active_armor_set(ctx, owner, spec)"));
+            Assert.That(serverInventory, Does.Contain("sync_equipment_presentation_for_owner(ctx, owner)"));
+            Assert.That(entityRegistry, Does.Contain("ApplyOwnerArmorPresentation(owner, presentation)"));
+            Assert.That(entityRegistry, Does.Contain("entity.SetEquippedArmorItemDefIdsBySlot"));
+            Assert.That(avatarAssembler, Does.Contain("for (int i = 0; i < ArmorEquipmentSlots.Length; i++)"));
         }
 
         [Test]

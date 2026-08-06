@@ -19,6 +19,49 @@ namespace Arena.EditorTools
         private const string OutfitCatalogPath = CatalogFolder + "/OutfitCatalog.asset";
         private const string EquipmentAppearanceCatalogPath = CatalogFolder + "/EquipmentAppearanceCatalog.asset";
         private static readonly bool IncludePeasantStarterHatAndCape = false;
+        private static readonly CompleteArmorVisualSetSpec[] CompleteArmorVisualSets =
+        {
+            new("FMAGE_BL", "FMage", "Bl"),
+            new("FMAGE_GN", "FMage", "Gn"),
+            new("FMAGE_RD", "FMage", "Rd"),
+            new("WARLOCK_GN", "Warlock", "Gn"),
+            new("WARLOCK_PE", "Warlock", "Pe"),
+            new("WARLOCK_VT", "Warlock", "Vt"),
+            new("WIZARD_PE", "Wizard", "Pe"),
+            new("WIZARD_VT", "Wizard", "Vt"),
+            new("BARBARIAN_BL", "Barbarian", "Bl"),
+            new("BARBARIAN_GN", "Barbarian", "Gn"),
+            new("BARBARIAN_RD", "Barbarian", "Rd"),
+            new("HUNTER_BL", "Hunter", "Bl"),
+            new("HUNTER_GN", "Hunter", "Gn"),
+            new("HUNTER_PE", "Hunter", "Pe"),
+            new("HUNTER_RD", "Hunter", "Rd"),
+            new("NRANGER_BL", "NRanger", "Bl"),
+            new("NRANGER_RD", "NRanger", "Rd"),
+            new("RANGER_GN", "Ranger", "Gn"),
+            new("RANGER_PE", "Ranger", "Pe"),
+            new("RANGER_RD", "Ranger", "Rd"),
+            new("REAPER_BL", "Reaper", "Bl"),
+            new("REAPER_CN", "Reaper", "Cn"),
+            new("REAPER_GN", "Reaper", "Gn"),
+            new("ROGUE_BL", "Rogue", "Bl"),
+            new("ROGUE_GN", "Rogue", "Gn"),
+            new("ROGUE_RD", "Rogue", "Rd"),
+            new("DK_BL", "DK", "Bl"),
+            new("DK_GN", "DK", "Gn"),
+            new("DK_RD", "DK", "Rd"),
+            new("DUNGPLATE_BL", "DungPlate", "Bl"),
+            new("DUNGPLATE_PE", "DungPlate", "Pe"),
+            new("DUNGPLATE_RD", "DungPlate", "Rd"),
+            new("NWARRIOR_RD", "NWarrior", "Rd"),
+            new("PALADIN_BL", "Paladin", "Bl"),
+            new("PALADIN_GN", "Paladin", "Gn"),
+            new("PALADIN_GR", "Paladin", "Gr"),
+            new("PALADIN_RD", "Paladin", "Rd"),
+            new("WARRIOR_GN", "Warrior", "Gn"),
+            new("WARRIOR_PE", "Warrior", "Pe"),
+            new("WARRIOR_RD", "Warrior", "Rd"),
+        };
 
         [MenuItem("Arena/Appearance/Rebuild Default Catalog Assets")]
         public static void RebuildDefaultCatalogAssetsFromMenu()
@@ -114,6 +157,10 @@ namespace Arena.EditorTools
             List<EquipmentAppearanceCatalog.Entry> equipmentAppearanceEntries = BuildEquipmentAppearanceEntries();
             ValidateEquipmentAppearanceEntries(equipmentAppearanceEntries);
             equipmentAppearanceCatalog.SetEntriesForEditor(equipmentAppearanceEntries);
+            List<EquipmentAppearanceCatalog.ArmorSetVisualEntry> armorSetVisualEntries =
+                BuildCompleteArmorSetVisualEntries();
+            ValidateArmorSetVisualEntries(armorSetVisualEntries);
+            equipmentAppearanceCatalog.SetArmorSetsForEditor(armorSetVisualEntries);
             List<EquipmentAppearanceCatalog.WeaponVisualEntry> weaponVisualEntries = BuildWeaponVisualEntries();
             ValidateWeaponVisualEntries(weaponVisualEntries);
             equipmentAppearanceCatalog.SetWeaponVisualsForEditor(weaponVisualEntries);
@@ -131,6 +178,7 @@ namespace Arena.EditorTools
         {
             ValidateSupportedStylizedCharacterImport();
             ValidateEquipmentAppearanceEntries(BuildEquipmentAppearanceEntries());
+            ValidateArmorSetVisualEntries(BuildCompleteArmorSetVisualEntries());
             EditorUtility.DisplayDialog(
                 "Character Appearance Sources Valid",
                 "Default character appearance source assets are valid.",
@@ -291,6 +339,87 @@ namespace Arena.EditorTools
             AddHumanMaleApprenticeEquipmentVisualSet(entries);
             AddHumanMalePeasantEquipmentVisualSet(entries);
             return entries;
+        }
+
+        private static List<EquipmentAppearanceCatalog.ArmorSetVisualEntry> BuildCompleteArmorSetVisualEntries()
+        {
+            var entries = new List<EquipmentAppearanceCatalog.ArmorSetVisualEntry>(CompleteArmorVisualSets.Length);
+            const string prefix = "Hu_M";
+            for (int i = 0; i < CompleteArmorVisualSets.Length; i++)
+            {
+                CompleteArmorVisualSetSpec spec = CompleteArmorVisualSets[i];
+                string chestSkinPath = EquipmentPath(
+                    "ChestSkin",
+                    $"ChestSkin_{spec.Family}_U_{spec.Color}.prefab");
+                var chestItems = new List<EquipmentAppearanceCatalog.EquipmentItem>();
+                if (File.Exists(chestSkinPath))
+                    chestItems.Add(EquipmentItem(ItemTypeEnum.ChestSkin, chestSkinPath));
+                chestItems.Add(EquipmentItem(
+                    ItemTypeEnum.Chest,
+                    EquipmentPath("Chest", $"{prefix}_Chest_{spec.Family}_{spec.Color}.prefab")));
+
+                string pantsSkinPath = FirstExistingEquipmentPath(
+                    "PantsSkin",
+                    $"Pants_{spec.Family}_U_{spec.Color}.prefab",
+                    $"Pants_{spec.Family}_M_{spec.Color}.prefab",
+                    $"Pants_{spec.Family}_{spec.Color}.prefab");
+                string authoredPantsPath = EquipmentPath(
+                    "Pants",
+                    $"{prefix}_Pants_{spec.Family}_{spec.Color}.prefab");
+                string pantsPath = File.Exists(authoredPantsPath)
+                    ? authoredPantsPath
+                    : EquipmentPath("Pants", $"{prefix}_Pants.prefab");
+
+                entries.Add(new EquipmentAppearanceCatalog.ArmorSetVisualEntry
+                {
+                    armorSetId = spec.ArmorSetId,
+                    raceId = CharacterAppearanceIds.RaceHuman,
+                    sexId = CharacterAppearanceIds.SexMale,
+                    enabled = true,
+                    slots = new List<EquipmentAppearanceCatalog.ArmorSetSlotVisual>
+                    {
+                        ArmorSetSlot("HEAD", EquipmentItem(ItemTypeEnum.Helmet, EquipmentPath("Helmet", $"{prefix}_Helm_{spec.Family}_{spec.Color}.prefab"))),
+                        ArmorSetSlot("SHOULDER", EquipmentItem(ItemTypeEnum.Shoulders, EquipmentPath("Shoulder", $"{prefix}_Shoulders_{spec.Family}_{spec.Color}.prefab"))),
+                        ArmorSetSlot("CAPE", EquipmentItem(ItemTypeEnum.Cape, EquipmentPath("Cape", $"{prefix}_Cape_{spec.Family}_{spec.Color}.prefab"))),
+                        new() { equipSlot = "CHEST", items = chestItems },
+                        ArmorSetSlot(
+                            "LEGS",
+                            EquipmentItem(ItemTypeEnum.PantsSkin, pantsSkinPath),
+                            EquipmentItem(ItemTypeEnum.Pants, pantsPath)),
+                        ArmorSetSlot("BOOTS", EquipmentItem(ItemTypeEnum.Boots, EquipmentPath("Boots", $"{prefix}_Boots_{spec.Family}_{spec.Color}.prefab"))),
+                        ArmorSetSlot(
+                            "GLOVES",
+                            EquipmentItem(ItemTypeEnum.GlovesSkin, EquipmentPath("GlovesSkin", $"GlovesSkin_{spec.Family}_{spec.Color}.prefab")),
+                            EquipmentItem(ItemTypeEnum.Gloves, EquipmentPath("Gloves", $"{prefix}_Gloves_{spec.Family}_{spec.Color}.prefab"))),
+                    },
+                });
+            }
+
+            return entries;
+        }
+
+        private static EquipmentAppearanceCatalog.ArmorSetSlotVisual ArmorSetSlot(
+            string equipSlot,
+            params EquipmentAppearanceCatalog.EquipmentItem[] items)
+        {
+            return new EquipmentAppearanceCatalog.ArmorSetSlotVisual
+            {
+                equipSlot = equipSlot,
+                items = new List<EquipmentAppearanceCatalog.EquipmentItem>(items),
+            };
+        }
+
+        private static string FirstExistingEquipmentPath(string folder, params string[] fileNames)
+        {
+            for (int i = 0; i < fileNames.Length; i++)
+            {
+                string path = EquipmentPath(folder, fileNames[i]);
+                if (File.Exists(path))
+                    return path;
+            }
+
+            throw new InvalidOperationException(
+                $"No supported {folder} asset exists for candidates: {string.Join(", ", fileNames)}");
         }
 
         private static List<EquipmentAppearanceCatalog.WeaponVisualEntry> BuildWeaponVisualEntries()
@@ -517,6 +646,20 @@ namespace Arena.EditorTools
             public bool UsePlainPantsMesh { get; }
         }
 
+        private readonly struct CompleteArmorVisualSetSpec
+        {
+            public CompleteArmorVisualSetSpec(string armorSetId, string family, string color)
+            {
+                ArmorSetId = armorSetId;
+                Family = family;
+                Color = color;
+            }
+
+            public string ArmorSetId { get; }
+            public string Family { get; }
+            public string Color { get; }
+        }
+
         private static EquipmentAppearanceCatalog.EquipmentItem EquipmentItem(
             ItemTypeEnum expectedItemType,
             string path)
@@ -589,6 +732,43 @@ namespace Arena.EditorTools
                     if (item.item.Type != item.expectedItemType)
                         throw new InvalidOperationException(
                             $"Equipment appearance entry '{entry.itemDefId}' expected item type {item.expectedItemType} but found {item.item.Type} on '{item.item.name}'.");
+                }
+            }
+        }
+
+        private static void ValidateArmorSetVisualEntries(
+            IReadOnlyList<EquipmentAppearanceCatalog.ArmorSetVisualEntry> entries)
+        {
+            var setIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int setIndex = 0; setIndex < entries.Count; setIndex++)
+            {
+                EquipmentAppearanceCatalog.ArmorSetVisualEntry entry = entries[setIndex];
+                if (entry == null || string.IsNullOrWhiteSpace(entry.armorSetId))
+                    throw new InvalidOperationException($"Armor-set visual entry {setIndex} has no set id.");
+                if (!setIds.Add(entry.armorSetId))
+                    throw new InvalidOperationException($"Duplicate armor-set visual entry: {entry.armorSetId}");
+                if (entry.slots == null || entry.slots.Count != 7)
+                    throw new InvalidOperationException(
+                        $"Armor-set visual entry '{entry.armorSetId}' must define all seven armor slots.");
+
+                var slots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int slotIndex = 0; slotIndex < entry.slots.Count; slotIndex++)
+                {
+                    EquipmentAppearanceCatalog.ArmorSetSlotVisual slot = entry.slots[slotIndex];
+                    if (slot == null || string.IsNullOrWhiteSpace(slot.equipSlot) || !slots.Add(slot.equipSlot))
+                        throw new InvalidOperationException(
+                            $"Armor-set visual entry '{entry.armorSetId}' has a missing or duplicate slot.");
+                    if (slot.items == null || slot.items.Count == 0)
+                        throw new InvalidOperationException(
+                            $"Armor-set visual entry '{entry.armorSetId}' slot '{slot.equipSlot}' has no visual items.");
+
+                    for (int itemIndex = 0; itemIndex < slot.items.Count; itemIndex++)
+                    {
+                        EquipmentAppearanceCatalog.EquipmentItem item = slot.items[itemIndex];
+                        if (item == null || item.item == null || item.item.Type != item.expectedItemType)
+                            throw new InvalidOperationException(
+                                $"Armor-set visual entry '{entry.armorSetId}' slot '{slot.equipSlot}' has an invalid visual item.");
+                    }
                 }
             }
         }

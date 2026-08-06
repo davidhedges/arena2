@@ -29,6 +29,23 @@ namespace Arena.Presentation.Appearance
         }
 
         [Serializable]
+        public sealed class ArmorSetSlotVisual
+        {
+            public string equipSlot = string.Empty;
+            public List<EquipmentItem> items = new();
+        }
+
+        [Serializable]
+        public sealed class ArmorSetVisualEntry
+        {
+            public string armorSetId = string.Empty;
+            public string raceId = string.Empty;
+            public string sexId = string.Empty;
+            public bool enabled = true;
+            public List<ArmorSetSlotVisual> slots = new();
+        }
+
+        [Serializable]
         public sealed class WeaponVisualEntry
         {
             public string itemDefId = string.Empty;
@@ -40,8 +57,10 @@ namespace Arena.Presentation.Appearance
         }
 
         [SerializeField] private List<Entry> entries = new();
+        [SerializeField] private List<ArmorSetVisualEntry> armorSets = new();
         [SerializeField] private List<WeaponVisualEntry> weaponVisuals = new();
         public IReadOnlyList<Entry> Entries => entries;
+        public IReadOnlyList<ArmorSetVisualEntry> ArmorSets => armorSets;
         public IReadOnlyList<WeaponVisualEntry> WeaponVisuals => weaponVisuals;
 
         public bool TryGetItems(
@@ -68,6 +87,43 @@ namespace Arena.Presentation.Appearance
                     && CharacterAppearanceIds.Normalize(candidate.sexId) == normalizedSex)
                 {
                     entry = candidate;
+                    return true;
+                }
+            }
+
+            for (int setIndex = 0; setIndex < armorSets.Count; setIndex++)
+            {
+                ArmorSetVisualEntry set = armorSets[setIndex];
+                if (set == null
+                    || !set.enabled
+                    || CharacterAppearanceIds.Normalize(set.raceId) != normalizedRace
+                    || CharacterAppearanceIds.Normalize(set.sexId) != normalizedSex)
+                {
+                    continue;
+                }
+
+                string normalizedSetId = CharacterAppearanceIds.Normalize(set.armorSetId);
+                if (normalizedItem != $"ARMOR_SET_{normalizedSetId}_{normalizedSlot}")
+                    continue;
+
+                for (int slotIndex = 0; slotIndex < set.slots.Count; slotIndex++)
+                {
+                    ArmorSetSlotVisual slot = set.slots[slotIndex];
+                    if (slot == null
+                        || CharacterAppearanceIds.Normalize(slot.equipSlot) != normalizedSlot)
+                    {
+                        continue;
+                    }
+
+                    entry = new Entry
+                    {
+                        itemDefId = normalizedItem,
+                        equipSlot = normalizedSlot,
+                        raceId = normalizedRace,
+                        sexId = normalizedSex,
+                        enabled = true,
+                        items = slot.items,
+                    };
                     return true;
                 }
             }
@@ -111,6 +167,11 @@ namespace Arena.Presentation.Appearance
         public void SetEntriesForEditor(List<Entry> replacement)
         {
             entries = replacement ?? new List<Entry>();
+        }
+
+        public void SetArmorSetsForEditor(List<ArmorSetVisualEntry> replacement)
+        {
+            armorSets = replacement ?? new List<ArmorSetVisualEntry>();
         }
 
         public void SetWeaponVisualsForEditor(List<WeaponVisualEntry> replacement)

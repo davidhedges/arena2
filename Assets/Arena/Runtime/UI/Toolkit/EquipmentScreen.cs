@@ -23,7 +23,6 @@ namespace Arena.UI
         private const string RuntimeObjectName = "EquipmentScreenRuntime";
         private const string OpenClass = "is-open";
         private const float CatalogRefreshInterval = 0.5f;
-        private const float ShowcaseDegreesPerPixel = 0.4f;
 
         private sealed class SetPresentation
         {
@@ -110,7 +109,7 @@ namespace Arena.UI
         private readonly List<ArmorSetDefinition> _sets = new();
         private PanelSettings? _panelSettings;
         private VisualElement? _root;
-        private VisualElement? _setList;
+        private ScrollView? _setList;
         private VisualElement? _showcase;
         private Label? _setCount;
         private Label? _showcaseTier;
@@ -132,7 +131,6 @@ namespace Arena.UI
         private Button? _equipButton;
         private Label? _toast;
         private HubController? _hubController;
-        private Transform? _showcaseAnchor;
         private DbConnection? _connection;
         private string _tier = "LIGHT";
         private string _selectedSetId = string.Empty;
@@ -252,7 +250,7 @@ namespace Arena.UI
                 return;
             }
 
-            _setList = _root.Q<VisualElement>("SetList");
+            _setList = _root.Q<ScrollView>("SetList");
             _showcase = _root.Q<VisualElement>("PlayerShowcase");
             _setCount = _root.Q<Label>("SetCount");
             _showcaseTier = _root.Q<Label>("ShowcaseTier");
@@ -291,7 +289,6 @@ namespace Arena.UI
 
             _hubController = FindObjectsByType<HubController>(FindObjectsInactive.Include)
                 .FirstOrDefault(candidate => candidate.gameObject.scene == gameObject.scene);
-            _showcaseAnchor = _hubController?.transform.Find("StageRoot/ShowcaseAnchor");
             BindShowcaseDrag();
         }
 
@@ -414,7 +411,7 @@ namespace Arena.UI
             foreach (ArmorSetDefinition set in visibleSets)
             {
                 string setId = WireIdentifier.Normalize(set.ArmorSetId);
-                SetPresentation presentation = PresentationFor(setId);
+                SetPresentation presentation = PresentationFor(set);
                 Button card = new() { name = $"ArmorSet_{setId}" };
                 card.AddToClassList("set-card");
                 card.EnableInClassList("is-selected", setId == _selectedSetId);
@@ -458,7 +455,7 @@ namespace Arena.UI
             string setId = WireIdentifier.Normalize(set.ArmorSetId);
             string tier = WireIdentifier.Normalize(set.ArmorTier);
             string displayName = DisplayName(set).ToUpperInvariant();
-            SetPresentation presentation = PresentationFor(setId);
+            SetPresentation presentation = PresentationFor(set);
             bool equipped = setId == _activeSetId;
             bool hasMovePenalty = set.MoveSpeedModifier < -0.0001f;
             bool hasCastPenalty = set.CastSpeedModifier < -0.0001f;
@@ -614,8 +611,12 @@ namespace Arena.UI
             if (!_open || _selectedSetId == _lastPreviewSetId)
                 return;
 
+            ArmorSetDefinition? selected = FindSet(_selectedSetId);
+            if (selected == null)
+                return;
+
             _lastPreviewSetId = _selectedSetId;
-            _hubController?.SetShowcaseArmorPreview(PresentationFor(_selectedSetId).ArmorBySlot);
+            _hubController?.SetShowcaseArmorPreview(PresentationFor(selected).ArmorBySlot);
         }
 
         private void ClearShowcasePreview()
@@ -624,12 +625,43 @@ namespace Arena.UI
             _hubController?.SetShowcaseArmorPreview(null);
         }
 
-        private static SetPresentation PresentationFor(string? setId)
+        private static SetPresentation PresentationFor(ArmorSetDefinition set)
         {
-            string normalized = WireIdentifier.Normalize(setId);
-            return Presentations.TryGetValue(normalized, out SetPresentation? presentation)
-                ? presentation
-                : Presentations["PEASANT"];
+            string normalized = WireIdentifier.Normalize(set.ArmorSetId);
+            if (Presentations.TryGetValue(normalized, out SetPresentation? presentation))
+                return presentation;
+
+            string tier = WireIdentifier.Normalize(set.ArmorTier);
+            return tier switch
+            {
+                "HEAVY" => new SetPresentation(
+                    "⬟",
+                    "MAXIMUM PROTECTION",
+                    "Complete plate armor built for maximum physical and magical protection.",
+                    CompleteArmorPieces(normalized)),
+                "MEDIUM" => new SetPresentation(
+                    "◆",
+                    "BALANCED PROTECTION",
+                    "Complete layered armor that provides reliable protection without mobility penalties.",
+                    CompleteArmorPieces(normalized)),
+                _ => new SetPresentation(
+                    "◇",
+                    "UNRESTRICTED MOBILITY",
+                    "Complete light armor that leaves movement and spellcasting unimpeded.",
+                    CompleteArmorPieces(normalized)),
+            };
+        }
+
+        private static IReadOnlyDictionary<string, string> CompleteArmorPieces(string armorSetId)
+        {
+            return ArmorPieces(
+                ("HEAD", $"ARMOR_SET_{armorSetId}_HEAD"),
+                ("SHOULDER", $"ARMOR_SET_{armorSetId}_SHOULDER"),
+                ("CAPE", $"ARMOR_SET_{armorSetId}_CAPE"),
+                ("CHEST", $"ARMOR_SET_{armorSetId}_CHEST"),
+                ("LEGS", $"ARMOR_SET_{armorSetId}_LEGS"),
+                ("BOOTS", $"ARMOR_SET_{armorSetId}_BOOTS"),
+                ("GLOVES", $"ARMOR_SET_{armorSetId}_GLOVES"));
         }
 
         private static string DisplayName(ArmorSetDefinition set)
@@ -705,13 +737,13 @@ namespace Arena.UI
 
         private void OnShowcasePointerMove(PointerMoveEvent evt)
         {
-            if (!_draggingShowcase || evt.pointerId != _dragPointerId || _showcaseAnchor == null)
+            if (!_draggingShowcase || evt.pointerId != _dragPointerId || _hubController == null)
                 return;
 
             Vector2 position = new(evt.position.x, evt.position.y);
             float deltaX = position.x - _lastPointerPosition.x;
             _lastPointerPosition = position;
-            _showcaseAnchor.Rotate(Vector3.up, -deltaX * ShowcaseDegreesPerPixel, Space.World);
+            _hubController.RotateShowcaseFromPointerDelta(deltaX);
             evt.StopPropagation();
         }
 

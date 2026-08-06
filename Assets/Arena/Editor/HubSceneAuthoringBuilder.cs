@@ -22,7 +22,7 @@ namespace Arena.Editor
         private const string RootName = "HubSceneRoot";
         private const float ShowcaseAvatarHeight = 2.85f;
         private const float ShowcaseLift = 0.92f;
-        private const float ShowcaseDefaultYaw = 2f;
+        private const float ShowcaseDefaultYaw = 180f;
 
         static HubSceneAuthoringBuilder()
         {
@@ -71,6 +71,9 @@ namespace Arena.Editor
         {
             bool changed = false;
             changed |= SetLocalPosition(root.Find("StageRoot/ShowcaseAnchor"), new Vector3(0f, ShowcaseLift, 0f));
+            changed |= SetLocalRotation(
+                root.Find("StageRoot/ShowcaseAnchor/HubShowcaseAvatar"),
+                Quaternion.Euler(0f, ShowcaseDefaultYaw, 0f));
             changed |= RemoveAuthoredRuntimeAvatarModel(root);
             changed |= EnsureApprovedHubScreen(root);
             changed |= DisableLegacyAuthoredPresentation(root);
@@ -86,6 +89,17 @@ namespace Arena.Editor
 
             Undo.RecordObject(transform, "Sync authored Hub layout");
             transform.localPosition = localPosition;
+            EditorUtility.SetDirty(transform);
+            return true;
+        }
+
+        private static bool SetLocalRotation(Transform? transform, Quaternion localRotation)
+        {
+            if (transform == null || Quaternion.Angle(transform.localRotation, localRotation) < 0.01f)
+                return false;
+
+            Undo.RecordObject(transform, "Sync authored Hub showcase rotation");
+            transform.localRotation = localRotation;
             EditorUtility.SetDirty(transform);
             return true;
         }

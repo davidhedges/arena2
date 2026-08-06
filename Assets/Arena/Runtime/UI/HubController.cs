@@ -24,6 +24,8 @@ namespace Arena.UI
         private const string HubSceneName = "Hub";
         private const string SurvivalButtonName = "Mode_Survival";
         private const string SurvivalDisplayName = "Survival Mode";
+        private const float ShowcaseCameraFacingYaw = 180f;
+        private const float ShowcaseDegreesPerPixel = 0.4f;
 
         // All hub styling flows through the shared theme so the baked scene and
         // the procedural windows read as one system.
@@ -169,6 +171,8 @@ namespace Arena.UI
             _stageRoot = _root.Find("StageRoot")?.gameObject;
             _travelMenu = _root.Find("HubCanvas/HomeRoot/TravelMenu")?.gameObject;
             _showcaseAvatar = _root.Find("StageRoot/ShowcaseAnchor/HubShowcaseAvatar")?.gameObject;
+            if (_showcaseAvatar != null)
+                _showcaseAvatar.transform.localRotation = Quaternion.Euler(0f, ShowcaseCameraFacingYaw, 0f);
             if (Application.isPlaying)
                 StarterAssetsRuntimeStripper.StripFrom(_showcaseAvatar);
             _playButton = _root.Find("HubCanvas/TopBar/NavRow/PlayButton")?.GetComponent<Button>();
@@ -610,6 +614,18 @@ namespace Arena.UI
             _lastShowcaseAppearanceSignature = string.Empty;
             _lastFailedShowcaseAppearanceSignature = string.Empty;
             ApplyShowcaseAppearance();
+        }
+
+        internal void RotateShowcaseFromPointerDelta(float deltaX)
+        {
+            Transform? showcaseAnchor = _root?.Find("StageRoot/ShowcaseAnchor");
+            if (showcaseAnchor == null)
+                return;
+
+            showcaseAnchor.Rotate(
+                Vector3.up,
+                -deltaX * ShowcaseDegreesPerPixel,
+                Space.World);
         }
 
         private static IReadOnlyDictionary<string, string> ResolveLocalArmorAppearance()

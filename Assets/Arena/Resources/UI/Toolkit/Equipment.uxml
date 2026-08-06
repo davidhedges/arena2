@@ -82,7 +82,7 @@
                     </ui:VisualElement>
                     <ui:Label name="SetCount" class="set-count" text="0 SETS" />
                 </ui:VisualElement>
-                <ui:VisualElement name="SetList" class="set-list" />
+                <ui:ScrollView name="SetList" class="set-list" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" />
 
                 <ui:VisualElement class="whole-set-note" picking-mode="Ignore">
                     <ui:Label class="note-glyph" text="◆" />

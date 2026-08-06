@@ -447,6 +447,105 @@ struct ArmorSetSpec {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+struct CompleteArmorSetSpec {
+    armor_set_id: &'static str,
+    display_name: &'static str,
+    armor_tier: &'static str,
+    sort_order: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ResolvedArmorSetSpec {
+    Core(&'static ArmorSetSpec),
+    Complete(&'static CompleteArmorSetSpec),
+}
+
+impl ResolvedArmorSetSpec {
+    fn armor_set_id(self) -> &'static str {
+        match self {
+            Self::Core(spec) => spec.armor_set_id,
+            Self::Complete(spec) => spec.armor_set_id,
+        }
+    }
+
+    fn display_name(self) -> &'static str {
+        match self {
+            Self::Core(spec) => spec.display_name,
+            Self::Complete(spec) => spec.display_name,
+        }
+    }
+
+    fn armor_tier(self) -> &'static str {
+        match self {
+            Self::Core(spec) => spec.armor_tier,
+            Self::Complete(spec) => spec.armor_tier,
+        }
+    }
+
+    fn physical_resistance(self) -> f32 {
+        match self {
+            Self::Core(spec) => spec.physical_resistance,
+            Self::Complete(_) => armor_tier_resistance(self.armor_tier()),
+        }
+    }
+
+    fn magical_resistance(self) -> f32 {
+        match self {
+            Self::Core(spec) => spec.magical_resistance,
+            Self::Complete(_) => armor_tier_resistance(self.armor_tier()),
+        }
+    }
+
+    fn move_speed_modifier(self) -> f32 {
+        match self {
+            Self::Core(spec) => spec.move_speed_modifier,
+            Self::Complete(_) if self.armor_tier() == ARMOR_TIER_HEAVY => {
+                -HEAVY_ARMOR_MOVE_SPEED_PENALTY
+            }
+            Self::Complete(_) => 0.0,
+        }
+    }
+
+    fn cast_speed_modifier(self) -> f32 {
+        match self {
+            Self::Core(spec) => spec.cast_speed_modifier,
+            Self::Complete(_) if self.armor_tier() == ARMOR_TIER_HEAVY => {
+                -HEAVY_ARMOR_CAST_SPEED_PENALTY
+            }
+            Self::Complete(_) => 0.0,
+        }
+    }
+
+    fn piece_count(self) -> usize {
+        match self {
+            Self::Core(spec) => spec.pieces.len(),
+            Self::Complete(_) => ARMOR_EQUIPMENT_SLOT_IDS.len(),
+        }
+    }
+
+    fn item_def_id_for_slot(self, slot_id: &str) -> Option<String> {
+        match self {
+            Self::Core(spec) => {
+                armor_set_piece_for_slot(spec, slot_id).map(|piece| piece.item_def_id.to_string())
+            }
+            Self::Complete(_) if ARMOR_EQUIPMENT_SLOT_IDS.contains(&slot_id) => Some(format!(
+                "ARMOR_SET_{}_{}",
+                self.armor_set_id(),
+                normalize_id(slot_id)
+            )),
+            Self::Complete(_) => None,
+        }
+    }
+
+    fn sort_order(self) -> u32 {
+        match self {
+            Self::Core(spec) => spec.sort_order,
+            Self::Complete(spec) => spec.sort_order,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct ItemAffixDefinitionSpec {
     affix_id: &'static str,
     display_name: &'static str,
@@ -688,6 +787,112 @@ const ARMOR_SET_SPECS: &[ArmorSetSpec] = &[
         GILDED_ARMOR_PIECES,
         50,
     ),
+];
+
+// Complete human-male armor variants already shipped in the character pack.
+// The five core sets above keep their stable item ids; these variants use the
+// deterministic ARMOR_SET_<SET>_<SLOT> item-id convention.
+const COMPLETE_ARMOR_SET_SPECS: &[CompleteArmorSetSpec] = &[
+    complete_armor_set("FMAGE_BL", "Blue Mage Vestments", ARMOR_TIER_LIGHT, 70),
+    complete_armor_set("FMAGE_GN", "Green Mage Vestments", ARMOR_TIER_LIGHT, 71),
+    complete_armor_set("FMAGE_RD", "Red Mage Vestments", ARMOR_TIER_LIGHT, 72),
+    complete_armor_set(
+        "WARLOCK_GN",
+        "Green Warlock Vestments",
+        ARMOR_TIER_LIGHT,
+        80,
+    ),
+    complete_armor_set(
+        "WARLOCK_PE",
+        "Purple Warlock Vestments",
+        ARMOR_TIER_LIGHT,
+        81,
+    ),
+    complete_armor_set(
+        "WARLOCK_VT",
+        "Violet Warlock Vestments",
+        ARMOR_TIER_LIGHT,
+        82,
+    ),
+    complete_armor_set("WIZARD_PE", "Purple Wizard Vestments", ARMOR_TIER_LIGHT, 90),
+    complete_armor_set("WIZARD_VT", "Violet Wizard Vestments", ARMOR_TIER_LIGHT, 91),
+    complete_armor_set(
+        "BARBARIAN_BL",
+        "Blue Barbarian Leathers",
+        ARMOR_TIER_MEDIUM,
+        200,
+    ),
+    complete_armor_set(
+        "BARBARIAN_GN",
+        "Green Barbarian Leathers",
+        ARMOR_TIER_MEDIUM,
+        201,
+    ),
+    complete_armor_set(
+        "BARBARIAN_RD",
+        "Red Barbarian Leathers",
+        ARMOR_TIER_MEDIUM,
+        202,
+    ),
+    complete_armor_set("HUNTER_BL", "Blue Hunter Leathers", ARMOR_TIER_MEDIUM, 210),
+    complete_armor_set("HUNTER_GN", "Green Hunter Leathers", ARMOR_TIER_MEDIUM, 211),
+    complete_armor_set(
+        "HUNTER_PE",
+        "Purple Hunter Leathers",
+        ARMOR_TIER_MEDIUM,
+        212,
+    ),
+    complete_armor_set("HUNTER_RD", "Red Hunter Leathers", ARMOR_TIER_MEDIUM, 213),
+    complete_armor_set(
+        "NRANGER_BL",
+        "Blue Northern Ranger Leathers",
+        ARMOR_TIER_MEDIUM,
+        220,
+    ),
+    complete_armor_set(
+        "NRANGER_RD",
+        "Red Northern Ranger Leathers",
+        ARMOR_TIER_MEDIUM,
+        221,
+    ),
+    complete_armor_set("RANGER_GN", "Green Ranger Leathers", ARMOR_TIER_MEDIUM, 230),
+    complete_armor_set(
+        "RANGER_PE",
+        "Purple Ranger Leathers",
+        ARMOR_TIER_MEDIUM,
+        231,
+    ),
+    complete_armor_set("RANGER_RD", "Red Ranger Leathers", ARMOR_TIER_MEDIUM, 232),
+    complete_armor_set("REAPER_BL", "Blue Reaper Leathers", ARMOR_TIER_MEDIUM, 240),
+    complete_armor_set("REAPER_CN", "Cyan Reaper Leathers", ARMOR_TIER_MEDIUM, 241),
+    complete_armor_set("REAPER_GN", "Green Reaper Leathers", ARMOR_TIER_MEDIUM, 242),
+    complete_armor_set("ROGUE_BL", "Blue Rogue Leathers", ARMOR_TIER_MEDIUM, 250),
+    complete_armor_set("ROGUE_GN", "Green Rogue Leathers", ARMOR_TIER_MEDIUM, 251),
+    complete_armor_set("ROGUE_RD", "Red Rogue Leathers", ARMOR_TIER_MEDIUM, 252),
+    complete_armor_set("DK_BL", "Blue Death Knight Plate", ARMOR_TIER_HEAVY, 400),
+    complete_armor_set("DK_GN", "Green Death Knight Plate", ARMOR_TIER_HEAVY, 401),
+    complete_armor_set("DK_RD", "Red Death Knight Plate", ARMOR_TIER_HEAVY, 402),
+    complete_armor_set("DUNGPLATE_BL", "Blue Dungeon Plate", ARMOR_TIER_HEAVY, 410),
+    complete_armor_set(
+        "DUNGPLATE_PE",
+        "Purple Dungeon Plate",
+        ARMOR_TIER_HEAVY,
+        411,
+    ),
+    complete_armor_set("DUNGPLATE_RD", "Red Dungeon Plate", ARMOR_TIER_HEAVY, 412),
+    complete_armor_set(
+        "NWARRIOR_RD",
+        "Red Northern Warplate",
+        ARMOR_TIER_HEAVY,
+        420,
+    ),
+    complete_armor_set("PALADIN_BL", "Blue Paladin Plate", ARMOR_TIER_HEAVY, 430),
+    complete_armor_set("PALADIN_GN", "Green Paladin Plate", ARMOR_TIER_HEAVY, 431),
+    complete_armor_set("PALADIN_GR", "Gray Paladin Plate", ARMOR_TIER_HEAVY, 432),
+    complete_armor_set("PALADIN_RD", "Red Paladin Plate", ARMOR_TIER_HEAVY, 433),
+    complete_armor_set("WARRIOR_GN", "Green Warrior Plate", ARMOR_TIER_HEAVY, 440),
+    complete_armor_set("WARRIOR_PE", "Purple Warrior Plate", ARMOR_TIER_HEAVY, 441),
+    complete_armor_set("WARRIOR_RD", "Red Warrior Plate", ARMOR_TIER_HEAVY, 442),
 ];
 
 const LEGACY_STARTER_WEAPON_DEFINITION_IDS: &[&str] = &[
@@ -1569,6 +1774,47 @@ const fn armor_set(
     }
 }
 
+const fn complete_armor_set(
+    armor_set_id: &'static str,
+    display_name: &'static str,
+    armor_tier: &'static str,
+    sort_order: u32,
+) -> CompleteArmorSetSpec {
+    CompleteArmorSetSpec {
+        armor_set_id,
+        display_name,
+        armor_tier,
+        sort_order,
+    }
+}
+
+fn armor_set_catalog() -> impl Iterator<Item = ResolvedArmorSetSpec> {
+    ARMOR_SET_SPECS
+        .iter()
+        .map(ResolvedArmorSetSpec::Core)
+        .chain(
+            COMPLETE_ARMOR_SET_SPECS
+                .iter()
+                .map(ResolvedArmorSetSpec::Complete),
+        )
+}
+
+fn armor_tier_resistance(armor_tier: &str) -> f32 {
+    match normalize_id(armor_tier).as_str() {
+        ARMOR_TIER_MEDIUM => MEDIUM_ARMOR_RESISTANCE,
+        ARMOR_TIER_HEAVY => HEAVY_ARMOR_RESISTANCE,
+        _ => LIGHT_ARMOR_RESISTANCE,
+    }
+}
+
+fn armor_kind_for_tier(armor_tier: &str) -> &'static str {
+    match normalize_id(armor_tier).as_str() {
+        ARMOR_TIER_MEDIUM => ARMOR_KIND_LEATHER,
+        ARMOR_TIER_HEAVY => ARMOR_KIND_HEAVY,
+        _ => ARMOR_KIND_CLOTH,
+    }
+}
+
 const fn jewelry(
     item_def_id: &'static str,
     display_name: &'static str,
@@ -2442,19 +2688,32 @@ pub(crate) fn sync_item_definitions(ctx: &ReducerContext) {
                 0.0
             },
         };
-        match ctx
-            .db
-            .item_definition()
-            .item_def_id()
-            .find(row.item_def_id.clone())
-        {
-            Some(existing) if existing == row => {}
-            Some(_) => {
-                ctx.db.item_definition().item_def_id().update(row);
-            }
-            None => {
-                ctx.db.item_definition().insert(row);
-            }
+        upsert_item_definition(ctx, row);
+    }
+    for set in COMPLETE_ARMOR_SET_SPECS {
+        for slot_id in ARMOR_EQUIPMENT_SLOT_IDS {
+            let item_def_id = format!("ARMOR_SET_{}_{}", set.armor_set_id, slot_id);
+            let row = ItemDefinition {
+                item_def_id: item_def_id.clone(),
+                display_name: format!("{} {}", set.display_name, armor_slot_display_name(slot_id)),
+                item_kind: ITEM_KIND_ARMOR.to_string(),
+                rarity: "COMMON".to_string(),
+                icon_id: item_def_id.to_ascii_lowercase(),
+                max_stack: 1,
+                width: 1,
+                height: 1,
+                equip_slot: slot_id.to_string(),
+                weapon_kind: String::new(),
+                hand_requirement: HAND_REQUIREMENT_NONE.to_string(),
+                unique_equipped: false,
+                combat_profile_id: String::new(),
+                armor_kind: armor_kind_for_tier(set.armor_tier).to_string(),
+                physical_resistance: 0.0,
+                consumable_effect_kind: String::new(),
+                consumable_resource_kind: String::new(),
+                consumable_amount: 0.0,
+            };
+            upsert_item_definition(ctx, row);
         }
     }
     reconcile_weapon_inventory_slot_footprints(ctx);
@@ -2462,18 +2721,48 @@ pub(crate) fn sync_item_definitions(ctx: &ReducerContext) {
     sync_armor_set_definitions(ctx);
 }
 
+fn upsert_item_definition(ctx: &ReducerContext, row: ItemDefinition) {
+    match ctx
+        .db
+        .item_definition()
+        .item_def_id()
+        .find(row.item_def_id.clone())
+    {
+        Some(existing) if existing == row => {}
+        Some(_) => {
+            ctx.db.item_definition().item_def_id().update(row);
+        }
+        None => {
+            ctx.db.item_definition().insert(row);
+        }
+    }
+}
+
+fn armor_slot_display_name(slot_id: &str) -> &'static str {
+    match slot_id {
+        EQUIP_SLOT_HEAD => "Helm",
+        EQUIP_SLOT_SHOULDER => "Shoulders",
+        EQUIP_SLOT_CAPE => "Cape",
+        EQUIP_SLOT_CHEST => "Chest",
+        EQUIP_SLOT_LEGS => "Leggings",
+        EQUIP_SLOT_BOOTS => "Boots",
+        EQUIP_SLOT_GLOVES => "Gloves",
+        _ => "Armor",
+    }
+}
+
 fn sync_armor_set_definitions(ctx: &ReducerContext) {
-    for spec in ARMOR_SET_SPECS {
+    for spec in armor_set_catalog() {
         let row = ArmorSetDefinition {
-            armor_set_id: spec.armor_set_id.to_string(),
-            display_name: spec.display_name.to_string(),
-            armor_tier: spec.armor_tier.to_string(),
-            physical_resistance: spec.physical_resistance,
-            magical_resistance: spec.magical_resistance,
-            move_speed_modifier: spec.move_speed_modifier,
-            cast_speed_modifier: spec.cast_speed_modifier,
-            piece_count: spec.pieces.len() as u32,
-            sort_order: spec.sort_order,
+            armor_set_id: spec.armor_set_id().to_string(),
+            display_name: spec.display_name().to_string(),
+            armor_tier: spec.armor_tier().to_string(),
+            physical_resistance: spec.physical_resistance(),
+            magical_resistance: spec.magical_resistance(),
+            move_speed_modifier: spec.move_speed_modifier(),
+            cast_speed_modifier: spec.cast_speed_modifier(),
+            piece_count: spec.piece_count() as u32,
+            sort_order: spec.sort_order(),
         };
         match ctx
             .db
@@ -2491,9 +2780,8 @@ fn sync_armor_set_definitions(ctx: &ReducerContext) {
         }
     }
 
-    let authored_ids: std::collections::HashSet<&str> = ARMOR_SET_SPECS
-        .iter()
-        .map(|spec| spec.armor_set_id)
+    let authored_ids: std::collections::HashSet<&str> = armor_set_catalog()
+        .map(|spec| spec.armor_set_id())
         .collect();
     let stale_ids: Vec<String> = ctx
         .db
@@ -2625,6 +2913,7 @@ pub(crate) fn begin_survival_inventory(
         .owner()
         .find(owner)
         .ok_or_else(|| "Player equipment is not initialized".to_string())?;
+    let selected_armor_spec = armor_set_for_equipment(ctx, &equipment);
 
     let mut placements: Vec<SurvivalPlacementSnapshot> = ctx
         .db
@@ -2680,9 +2969,20 @@ pub(crate) fn begin_survival_inventory(
     touch_container(ctx, bag);
 
     let starter_equipment = seed_baseline_equipment(ctx, owner, emptied, false, false);
-    let starter_item_ids: Vec<String> = equipment_item_ids(&starter_equipment)
+    let mut starter_item_ids: Vec<String> = equipment_item_ids(&starter_equipment)
         .map(str::to_string)
         .collect();
+    let run_equipment = if let Some(spec) = selected_armor_spec {
+        let equipped = apply_armor_set_to_equipment(ctx, owner, starter_equipment, spec)?;
+        ctx.db.equipment_loadout().owner().update(equipped.clone());
+        sync_equipment_presentation_for_owner(ctx, owner);
+        equipped
+    } else {
+        starter_equipment
+    };
+    starter_item_ids.extend(equipment_item_ids(&run_equipment).map(str::to_string));
+    starter_item_ids.sort();
+    starter_item_ids.dedup();
     for item_instance_id in starter_item_ids {
         ctx.db
             .survival_run_item()
@@ -3232,10 +3532,10 @@ pub(crate) fn equipment_modifier_totals_for_owner(
     }
 
     if let Some(spec) = armor_set_for_equipment(ctx, &equipment) {
-        totals.physical_resistance += spec.physical_resistance;
-        totals.magic_resistance += spec.magical_resistance;
-        totals.armor_move_speed_penalty = (-spec.move_speed_modifier).max(0.0);
-        totals.armor_cast_speed_penalty = (-spec.cast_speed_modifier).max(0.0);
+        totals.physical_resistance += spec.physical_resistance();
+        totals.magic_resistance += spec.magical_resistance();
+        totals.armor_move_speed_penalty = (-spec.move_speed_modifier()).max(0.0);
+        totals.armor_cast_speed_penalty = (-spec.cast_speed_modifier()).max(0.0);
     }
 
     if let Some(run) = ctx.db.survival_run().owner().filter(owner).next() {
@@ -5393,11 +5693,10 @@ fn is_item_definition_equipped_except(
     })
 }
 
-fn require_armor_set_spec(armor_set_id: &str) -> Result<&'static ArmorSetSpec, String> {
+fn require_armor_set_spec(armor_set_id: &str) -> Result<ResolvedArmorSetSpec, String> {
     let armor_set_id = normalize_id(armor_set_id);
-    ARMOR_SET_SPECS
-        .iter()
-        .find(|spec| spec.armor_set_id == armor_set_id)
+    armor_set_catalog()
+        .find(|spec| spec.armor_set_id() == armor_set_id)
         .ok_or_else(|| format!("unknown armor set '{}'", armor_set_id))
 }
 
@@ -5411,27 +5710,24 @@ fn armor_set_piece_for_slot<'a>(
 fn equipment_matches_armor_set(
     ctx: &ReducerContext,
     equipment: &EquipmentLoadout,
-    spec: &ArmorSetSpec,
+    spec: ResolvedArmorSetSpec,
 ) -> bool {
     ARMOR_EQUIPMENT_SLOT_IDS.iter().all(|slot_id| {
-        let expected_item_def_id =
-            armor_set_piece_for_slot(spec, slot_id).map(|piece| piece.item_def_id);
+        let expected_item_def_id = spec.item_def_id_for_slot(slot_id);
         let actual_item_def_id = equipment_item_at_slot(equipment, slot_id)
             .and_then(|item_instance_id| {
                 item_definition_for_instance(ctx, item_instance_id.as_str())
             })
             .map(|definition| definition.item_def_id);
-        actual_item_def_id.as_deref() == expected_item_def_id
+        actual_item_def_id == expected_item_def_id
     })
 }
 
 fn armor_set_for_equipment(
     ctx: &ReducerContext,
     equipment: &EquipmentLoadout,
-) -> Option<&'static ArmorSetSpec> {
-    ARMOR_SET_SPECS
-        .iter()
-        .find(|spec| equipment_matches_armor_set(ctx, equipment, spec))
+) -> Option<ResolvedArmorSetSpec> {
+    armor_set_catalog().find(|spec| equipment_matches_armor_set(ctx, equipment, *spec))
 }
 
 fn armor_set_item_instance_id(owner: Identity, armor_set_id: &str, slot_id: &str) -> String {
@@ -5446,20 +5742,21 @@ fn armor_set_item_instance_id(owner: Identity, armor_set_id: &str, slot_id: &str
 fn ensure_armor_set_item_instance(
     ctx: &ReducerContext,
     owner: Identity,
-    spec: &ArmorSetSpec,
-    piece: &ArmorSetPieceSpec,
+    spec: ResolvedArmorSetSpec,
+    slot_id: &str,
+    item_def_id: &str,
 ) -> Result<String, String> {
-    let definition = require_item_definition(ctx, piece.item_def_id)?;
-    if definition.item_kind != ITEM_KIND_ARMOR
-        || definition.equip_slot != normalize_id(piece.slot_id)
-    {
+    let definition = require_item_definition(ctx, item_def_id)?;
+    if definition.item_kind != ITEM_KIND_ARMOR || definition.equip_slot != normalize_id(slot_id) {
         return Err(format!(
             "armor set '{}' has invalid item '{}' for slot '{}'",
-            spec.armor_set_id, piece.item_def_id, piece.slot_id
+            spec.armor_set_id(),
+            item_def_id,
+            slot_id
         ));
     }
 
-    let item_instance_id = armor_set_item_instance_id(owner, spec.armor_set_id, piece.slot_id);
+    let item_instance_id = armor_set_item_instance_id(owner, spec.armor_set_id(), slot_id);
     let row = ItemInstance {
         item_instance_id: item_instance_id.clone(),
         item_def_id: definition.item_def_id,
@@ -5498,11 +5795,17 @@ fn apply_armor_set_to_equipment(
     ctx: &ReducerContext,
     owner: Identity,
     mut equipment: EquipmentLoadout,
-    spec: &ArmorSetSpec,
+    spec: ResolvedArmorSetSpec,
 ) -> Result<EquipmentLoadout, String> {
     for slot_id in ARMOR_EQUIPMENT_SLOT_IDS {
-        let item_instance_id = match armor_set_piece_for_slot(spec, slot_id) {
-            Some(piece) => Some(ensure_armor_set_item_instance(ctx, owner, spec, piece)?),
+        let item_instance_id = match spec.item_def_id_for_slot(slot_id) {
+            Some(item_def_id) => Some(ensure_armor_set_item_instance(
+                ctx,
+                owner,
+                spec,
+                slot_id,
+                item_def_id.as_str(),
+            )?),
             None => None,
         };
         set_equipment_slot(&mut equipment, slot_id, item_instance_id)?;
@@ -5512,12 +5815,12 @@ fn apply_armor_set_to_equipment(
     Ok(equipment)
 }
 
-fn upsert_active_armor_set(ctx: &ReducerContext, owner: Identity, spec: &ArmorSetSpec) {
+fn upsert_active_armor_set(ctx: &ReducerContext, owner: Identity, spec: ResolvedArmorSetSpec) {
     let existing = ctx.db.active_armor_set().owner().find(owner);
     let row = ActiveArmorSet {
         owner,
-        armor_set_id: spec.armor_set_id.to_string(),
-        armor_tier: spec.armor_tier.to_string(),
+        armor_set_id: spec.armor_set_id().to_string(),
+        armor_tier: spec.armor_tier().to_string(),
         revision: existing
             .as_ref()
             .map(|row| row.revision.saturating_add(1))
@@ -5539,9 +5842,8 @@ fn ensure_active_armor_set_for_owner(
     let (equipment, spec) = match armor_set_for_equipment(ctx, equipment) {
         Some(spec) => (None, spec),
         None => {
-            let spec = ARMOR_SET_SPECS
-                .iter()
-                .find(|spec| spec.armor_set_id == ARMOR_SET_PEASANT)
+            let spec = armor_set_catalog()
+                .find(|spec| spec.armor_set_id() == ARMOR_SET_PEASANT)
                 .expect("peasant armor set must be authored");
             match apply_armor_set_to_equipment(ctx, owner, equipment.clone(), spec) {
                 Ok(repaired) => (Some(repaired), spec),
@@ -5562,7 +5864,7 @@ fn ensure_active_armor_set_for_owner(
     }
     let active = ctx.db.active_armor_set().owner().find(owner);
     if active.as_ref().is_some_and(|row| {
-        row.armor_set_id == spec.armor_set_id && row.armor_tier == spec.armor_tier
+        row.armor_set_id == spec.armor_set_id() && row.armor_tier == spec.armor_tier()
     }) {
         return;
     }
@@ -6089,6 +6391,11 @@ mod tests {
         );
         assert!(
             source_function(&source, "pub(crate) fn sync_item_definitions")
+                .contains("upsert_item_definition(ctx, row)"),
+            "item publication must route every definition through the idempotent upsert"
+        );
+        assert!(
+            source_function(&source, "fn upsert_item_definition")
                 .contains("Some(existing) if existing == row => {}"),
             "unchanged item definitions must not be rewritten"
         );
@@ -6462,30 +6769,67 @@ mod tests {
             ]
         );
 
-        for spec in ARMOR_SET_SPECS {
-            assert_eq!(spec.physical_resistance, spec.magical_resistance);
-            let unique_slots: std::collections::HashSet<_> =
-                spec.pieces.iter().map(|piece| piece.slot_id).collect();
-            assert_eq!(unique_slots.len(), spec.pieces.len());
-            match spec.armor_tier {
+        let catalog = armor_set_catalog().collect::<Vec<_>>();
+        assert_eq!(catalog.len(), 45);
+        assert_eq!(
+            catalog
+                .iter()
+                .filter(|spec| spec.armor_tier() == ARMOR_TIER_LIGHT)
+                .count(),
+            10
+        );
+        assert_eq!(
+            catalog
+                .iter()
+                .filter(|spec| spec.armor_tier() == ARMOR_TIER_MEDIUM)
+                .count(),
+            19
+        );
+        assert_eq!(
+            catalog
+                .iter()
+                .filter(|spec| spec.armor_tier() == ARMOR_TIER_HEAVY)
+                .count(),
+            16
+        );
+
+        let unique_set_ids: std::collections::HashSet<_> =
+            catalog.iter().map(|spec| spec.armor_set_id()).collect();
+        assert_eq!(unique_set_ids.len(), catalog.len());
+
+        let mut unique_item_ids = std::collections::HashSet::new();
+        for spec in catalog {
+            assert_eq!(spec.physical_resistance(), spec.magical_resistance());
+            let unique_slots: std::collections::HashSet<_> = ARMOR_EQUIPMENT_SLOT_IDS
+                .iter()
+                .filter_map(|slot_id| {
+                    spec.item_def_id_for_slot(slot_id).map(|item_def_id| {
+                        assert!(unique_item_ids.insert(item_def_id));
+                        *slot_id
+                    })
+                })
+                .collect();
+            assert_eq!(unique_slots.len(), spec.piece_count());
+            match spec.armor_tier() {
                 ARMOR_TIER_LIGHT => {
-                    assert_eq!(spec.physical_resistance, 0.0);
-                    assert_eq!(spec.move_speed_modifier, 0.0);
-                    assert_eq!(spec.cast_speed_modifier, 0.0);
+                    assert_eq!(spec.physical_resistance(), 0.0);
+                    assert_eq!(spec.move_speed_modifier(), 0.0);
+                    assert_eq!(spec.cast_speed_modifier(), 0.0);
                 }
                 ARMOR_TIER_MEDIUM => {
-                    assert_eq!(spec.physical_resistance, 0.20);
-                    assert_eq!(spec.move_speed_modifier, 0.0);
-                    assert_eq!(spec.cast_speed_modifier, 0.0);
+                    assert_eq!(spec.physical_resistance(), 0.20);
+                    assert_eq!(spec.move_speed_modifier(), 0.0);
+                    assert_eq!(spec.cast_speed_modifier(), 0.0);
                 }
                 ARMOR_TIER_HEAVY => {
-                    assert_eq!(spec.physical_resistance, 0.40);
-                    assert_eq!(spec.move_speed_modifier, -0.10);
-                    assert_eq!(spec.cast_speed_modifier, -0.20);
+                    assert_eq!(spec.physical_resistance(), 0.40);
+                    assert_eq!(spec.move_speed_modifier(), -0.10);
+                    assert_eq!(spec.cast_speed_modifier(), -0.20);
                 }
                 other => panic!("unexpected armor tier {other}"),
             }
         }
+        assert_eq!(unique_item_ids.len(), 312);
     }
 
     #[test]
@@ -6844,6 +7188,26 @@ mod tests {
             expected_json
         );
         assert_eq!(restored.revision, 42);
+    }
+
+    #[test]
+    fn survival_run_reapplies_the_selected_armor_set_and_tracks_all_temporary_items() {
+        let source =
+            fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/inventory.rs"))
+                .expect("inventory.rs should be readable");
+        let body = source_function(&source, "pub(crate) fn begin_survival_inventory");
+        let capture_selected_set = body.find("armor_set_for_equipment").unwrap();
+        let clear_equipment = body.find("clear_equipment_loadout").unwrap();
+        let reapply_selected_set = body.find("apply_armor_set_to_equipment").unwrap();
+        let sync_presentation = body.rfind("sync_equipment_presentation_for_owner").unwrap();
+
+        assert!(capture_selected_set < clear_equipment);
+        assert!(clear_equipment < reapply_selected_set);
+        assert!(reapply_selected_set < sync_presentation);
+        assert!(body.contains(
+            "starter_item_ids.extend(equipment_item_ids(&run_equipment).map(str::to_string))"
+        ));
+        assert!(body.contains("starter_item_ids.dedup()"));
     }
 
     #[test]

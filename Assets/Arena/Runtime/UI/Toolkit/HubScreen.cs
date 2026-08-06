@@ -26,7 +26,6 @@ namespace Arena.UI
         private const string BackgroundResourcePath = "Hub/Hub_background";
         private const string BackgroundObjectName = "HubBackgroundPlane";
         private const float BackgroundDistance = 30f;
-        private const float ShowcaseDegreesPerPixel = 0.4f;
         private const float DataRefreshInterval = 0.25f;
 
         private PanelSettings? _panelSettings;
@@ -49,7 +48,6 @@ namespace Arena.UI
         private HubController? _hubController;
         private DisciplinesScreen? _disciplinesScreen;
         private EquipmentScreen? _equipmentScreen;
-        private Transform? _showcaseAnchor;
         private Camera? _hubCamera;
         private GameObject? _backgroundPlane;
         private Material? _backgroundMaterial;
@@ -151,7 +149,6 @@ namespace Arena.UI
                 child.gameObject.SetActive(keep);
             }
 
-            _showcaseAnchor = stage.Find("ShowcaseAnchor");
             _hubCamera = Camera.main ?? FindAnyObjectByType<Camera>();
             _backgroundTexture = Resources.Load<Texture2D>(BackgroundResourcePath);
             if (_backgroundTexture == null)
@@ -368,16 +365,13 @@ namespace Arena.UI
 
         private void OnShowcasePointerMove(PointerMoveEvent evt)
         {
-            if (!_draggingShowcase || evt.pointerId != _dragPointerId || _showcaseAnchor == null)
+            if (!_draggingShowcase || evt.pointerId != _dragPointerId || _hubController == null)
                 return;
 
             Vector2 position = new(evt.position.x, evt.position.y);
             float deltaX = position.x - _lastPointerPosition.x;
             _lastPointerPosition = position;
-            _showcaseAnchor.Rotate(
-                Vector3.up,
-                -deltaX * ShowcaseDegreesPerPixel,
-                Space.World);
+            _hubController.RotateShowcaseFromPointerDelta(deltaX);
             evt.StopPropagation();
         }
 

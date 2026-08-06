@@ -11,6 +11,17 @@ namespace Arena.Presentation.Appearance
 {
     public sealed class CharacterAvatarAssembler : MonoBehaviour
     {
+        private static readonly string[] ArmorEquipmentSlots =
+        {
+            "HEAD",
+            "SHOULDER",
+            "CAPE",
+            "CHEST",
+            "LEGS",
+            "BOOTS",
+            "GLOVES",
+        };
+
         [SerializeField] private Transform? avatarParent;
         [SerializeField] private AvatarBaseCatalog? baseCatalog;
         [SerializeField] private AvatarPartCatalog? partCatalog;
@@ -228,7 +239,6 @@ namespace Arena.Presentation.Appearance
             if (!catalogs.OutfitCatalog.TryGetOutfit(selection.outfitId, out OutfitCatalog.Entry outfit))
                 throw new InvalidOperationException($"Outfit '{selection.outfitId}' is not available.");
 
-            var explicitlyAppliedSlots = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < outfit.items.Count; i++)
             {
                 OutfitCatalog.OutfitItem slot = outfit.items[i];
@@ -242,28 +252,36 @@ namespace Arena.Presentation.Appearance
                 }
 
                 if (equippedArmorBySlot != null)
-                {
-                    if (!equippedArmorBySlot.TryGetValue(equipSlot, out string itemDefId))
-                        continue;
-
-                    if (!explicitlyAppliedSlots.Add(equipSlot))
-                        continue;
-
-                    if (catalogs.EquipmentAppearanceCatalog != null
-                        && catalogs.EquipmentAppearanceCatalog.TryGetItems(
-                            itemDefId,
-                            equipSlot,
-                            selection.raceId,
-                            selection.sexId,
-                            out EquipmentAppearanceCatalog.Entry equipmentEntry))
-                    {
-                        ApplyEquipmentEntry(avatar, equipmentEntry);
-                    }
-
                     continue;
-                }
 
                 ApplyValidatedOutfitItem(avatar, slot, selection.outfitId);
+            }
+
+            if (equippedArmorBySlot == null)
+                return;
+
+            if (catalogs.EquipmentAppearanceCatalog == null)
+                throw new InvalidOperationException("An equipment appearance catalog is required for equipped armor.");
+
+            for (int i = 0; i < ArmorEquipmentSlots.Length; i++)
+            {
+                string equipSlot = ArmorEquipmentSlots[i];
+                if (!equippedArmorBySlot.TryGetValue(equipSlot, out string itemDefId))
+                    continue;
+
+                if (!catalogs.EquipmentAppearanceCatalog.TryGetItems(
+                        itemDefId,
+                        equipSlot,
+                        selection.raceId,
+                        selection.sexId,
+                        out EquipmentAppearanceCatalog.Entry equipmentEntry))
+                {
+                    throw new InvalidOperationException(
+                        $"No equipment visual is available for '{itemDefId}' in slot '{equipSlot}' " +
+                        $"for {selection.raceId}/{selection.sexId}.");
+                }
+
+                ApplyEquipmentEntry(avatar, equipmentEntry);
             }
         }
 

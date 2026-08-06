@@ -520,12 +520,17 @@ namespace Arena.Input
             string spellId,
             SpacetimeDB.Types.SpellDefinition targetingDef)
         {
-            string targetId = TargetSelector.Instance?.SelectedTargetId ?? "";
-            if (string.IsNullOrEmpty(targetId)
-                && targetingDef.RequiresTarget
-                && PartyRelationship.TargetAudienceAllowsSelf(targetingDef.TargetAudience))
+            ICombatTargetEntity? resolvedTarget = TargetSelector.Instance?.SelectedTarget;
+            string targetId = resolvedTarget?.TargetIdentity.ToString() ?? "";
+            if (targetingDef.RequiresTarget
+                && PartyRelationship.TargetAudienceAllowsSelf(targetingDef.TargetAudience)
+                && (resolvedTarget == null
+                    || !PartyRelationship.TargetAudienceAllowsLocal(
+                        resolvedTarget,
+                        targetingDef.TargetAudience)))
             {
-                targetId = EntityRegistry.Instance?.LocalPlayerEntity?.Identity.ToString() ?? "";
+                resolvedTarget = EntityRegistry.Instance?.LocalPlayerEntity;
+                targetId = resolvedTarget?.TargetIdentity.ToString() ?? "";
                 ActionBarTrace.Trace($"spell dispatch defaulted {spellId} target to self");
             }
             if (string.IsNullOrEmpty(targetId) && targetingDef.RequiresTarget)
@@ -542,7 +547,7 @@ namespace Arena.Input
             if (targetingDef is { RequiresTarget: true, RequiresTargetLos: true })
             {
                 PlayerEntity? losLocal = EntityRegistry.Instance?.LocalPlayerEntity;
-                ICombatTargetEntity? losTarget = TargetSelector.Instance?.SelectedTarget;
+                ICombatTargetEntity? losTarget = resolvedTarget;
                 if (losLocal != null
                     && losTarget != null
                     && AdvisoryTargetLineOfSight.IsPressBlocked(losLocal, losTarget))

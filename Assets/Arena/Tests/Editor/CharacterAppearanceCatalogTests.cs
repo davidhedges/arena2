@@ -91,6 +91,65 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void EquipmentAppearanceCatalog_ContainsEveryShippedCompleteArmorSetVisual()
+        {
+            object equipmentCatalog = LoadRequiredAsset(
+                EquipmentAppearanceCatalogPath,
+                "Arena.Presentation.Appearance.EquipmentAppearanceCatalog");
+            object[] armorSets = ((IEnumerable)RequireProperty(equipmentCatalog, "ArmorSets")
+                    .GetValue(equipmentCatalog)!)
+                .Cast<object>()
+                .ToArray();
+            string[] expectedSlots = { "HEAD", "SHOULDER", "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES" };
+
+            Assert.That(armorSets.Length, Is.EqualTo(40));
+            Assert.That(
+                armorSets.Select(entry => RequireField<string>(entry, "armorSetId")).Distinct().Count(),
+                Is.EqualTo(armorSets.Length));
+
+            MethodInfo tryGetItems = RequireMethod(equipmentCatalog.GetType(), "TryGetItems");
+            foreach (object armorSet in armorSets)
+            {
+                string armorSetId = RequireField<string>(armorSet, "armorSetId");
+                Assert.That(RequireField<bool>(armorSet, "enabled"), Is.True, armorSetId);
+                Assert.That(RequireField<string>(armorSet, "raceId"), Is.EqualTo("HUMAN"), armorSetId);
+                Assert.That(RequireField<string>(armorSet, "sexId"), Is.EqualTo("MALE"), armorSetId);
+
+                object[] slots = RequireField<IList>(armorSet, "slots").Cast<object>().ToArray();
+                Assert.That(
+                    slots.Select(slot => RequireField<string>(slot, "equipSlot")).OrderBy(slot => slot),
+                    Is.EqualTo(expectedSlots.OrderBy(slot => slot)),
+                    armorSetId);
+
+                foreach (object slot in slots)
+                {
+                    string equipSlot = RequireField<string>(slot, "equipSlot");
+                    IList items = RequireField<IList>(slot, "items");
+                    Assert.That(items.Count, Is.GreaterThan(0), $"{armorSetId}/{equipSlot}");
+                    foreach (object itemVisual in items)
+                    {
+                        Component item = RequireField<Component>(itemVisual, "item");
+                        object expectedType = RequireField<object>(itemVisual, "expectedItemType");
+                        Assert.That(
+                            GetMemberValue(item, "Type"),
+                            Is.EqualTo(expectedType),
+                            $"{armorSetId}/{equipSlot}/{item.name} has the wrong NHItem type.");
+                    }
+
+                    object?[] args =
+                    {
+                        $"ARMOR_SET_{armorSetId}_{equipSlot}", equipSlot, "HUMAN", "MALE", null,
+                    };
+                    Assert.That(
+                        (bool)tryGetItems.Invoke(equipmentCatalog, args)!,
+                        Is.True,
+                        $"The runtime lookup cannot resolve {armorSetId}/{equipSlot}.");
+                    Assert.That(args[4], Is.Not.Null);
+                }
+            }
+        }
+
+        [Test]
         public void RuntimeAvatarController_SignatureFor_IsStableAndIncludesSavedOutfit()
         {
             object row = CreateAppearanceRow("human_male_archer_starter");

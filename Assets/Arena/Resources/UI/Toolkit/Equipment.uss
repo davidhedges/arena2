@@ -183,9 +183,14 @@
     flex-direction: column;
 }
 
+.set-list .unity-scroll-view__content-viewport { overflow: hidden; }
+
+.set-list .unity-scroll-view__content-container { flex-direction: column; }
+
 .set-card {
     position: relative;
     height: 108px;
+    flex-shrink: 0;
     margin-bottom: 10px;
     flex-direction: row;
     align-items: center;
