@@ -30,6 +30,7 @@ namespace SpacetimeDB.Types
             AddTable(AbilityCatalog = new(conn));
             AddTable(ActionBarSlotCatalog = new(conn));
             AddTable(ActionPresentationCatalog = new(conn));
+            AddTable(ActiveArmorSet = new(conn));
             AddTable(ActiveCast = new(conn));
             AddTable(ActiveCombatDiscipline = new(conn));
             AddTable(ActiveCombatMode = new(conn));
@@ -38,6 +39,7 @@ namespace SpacetimeDB.Types
             AddTable(ActiveWorldInteraction = new(conn));
             AddTable(ActiveWorldObstacle = new(conn));
             AddTable(ArenaInstance = new(conn));
+            AddTable(ArmorSetDefinition = new(conn));
             AddTable(AutoAttackCatalog = new(conn));
             AddTable(AutoAttackState = new(conn));
             AddTable(CharacterActionBarAssignment = new(conn));
@@ -609,6 +611,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.AbilityCatalog().ToSql(),
             new QueryBuilder().From.ActionBarSlotCatalog().ToSql(),
             new QueryBuilder().From.ActionPresentationCatalog().ToSql(),
+            new QueryBuilder().From.ActiveArmorSet().ToSql(),
             new QueryBuilder().From.ActiveCast().ToSql(),
             new QueryBuilder().From.ActiveCombatDiscipline().ToSql(),
             new QueryBuilder().From.ActiveCombatMode().ToSql(),
@@ -617,6 +620,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.ActiveWorldInteraction().ToSql(),
             new QueryBuilder().From.ActiveWorldObstacle().ToSql(),
             new QueryBuilder().From.ArenaInstance().ToSql(),
+            new QueryBuilder().From.ArmorSetDefinition().ToSql(),
             new QueryBuilder().From.AutoAttackCatalog().ToSql(),
             new QueryBuilder().From.AutoAttackState().ToSql(),
             new QueryBuilder().From.CharacterActionBarAssignment().ToSql(),
@@ -698,6 +702,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<AbilityCatalog, AbilityCatalogCols, AbilityCatalogIxCols> AbilityCatalog() => new("ability_catalog", new AbilityCatalogCols("ability_catalog"), new AbilityCatalogIxCols("ability_catalog"));
         public global::SpacetimeDB.Table<ActionBarSlotCatalog, ActionBarSlotCatalogCols, ActionBarSlotCatalogIxCols> ActionBarSlotCatalog() => new("action_bar_slot_catalog", new ActionBarSlotCatalogCols("action_bar_slot_catalog"), new ActionBarSlotCatalogIxCols("action_bar_slot_catalog"));
         public global::SpacetimeDB.Table<ActionPresentationCatalog, ActionPresentationCatalogCols, ActionPresentationCatalogIxCols> ActionPresentationCatalog() => new("action_presentation_catalog", new ActionPresentationCatalogCols("action_presentation_catalog"), new ActionPresentationCatalogIxCols("action_presentation_catalog"));
+        public global::SpacetimeDB.Table<ActiveArmorSet, ActiveArmorSetCols, ActiveArmorSetIxCols> ActiveArmorSet() => new("active_armor_set", new ActiveArmorSetCols("active_armor_set"), new ActiveArmorSetIxCols("active_armor_set"));
         public global::SpacetimeDB.Table<ActiveCast, ActiveCastCols, ActiveCastIxCols> ActiveCast() => new("active_cast", new ActiveCastCols("active_cast"), new ActiveCastIxCols("active_cast"));
         public global::SpacetimeDB.Table<ActiveCombatDiscipline, ActiveCombatDisciplineCols, ActiveCombatDisciplineIxCols> ActiveCombatDiscipline() => new("active_combat_discipline", new ActiveCombatDisciplineCols("active_combat_discipline"), new ActiveCombatDisciplineIxCols("active_combat_discipline"));
         public global::SpacetimeDB.Table<ActiveCombatMode, ActiveCombatModeCols, ActiveCombatModeIxCols> ActiveCombatMode() => new("active_combat_mode", new ActiveCombatModeCols("active_combat_mode"), new ActiveCombatModeIxCols("active_combat_mode"));
@@ -706,6 +711,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<ActiveWorldInteraction, ActiveWorldInteractionCols, ActiveWorldInteractionIxCols> ActiveWorldInteraction() => new("active_world_interaction", new ActiveWorldInteractionCols("active_world_interaction"), new ActiveWorldInteractionIxCols("active_world_interaction"));
         public global::SpacetimeDB.Table<ActiveWorldObstacle, ActiveWorldObstacleCols, ActiveWorldObstacleIxCols> ActiveWorldObstacle() => new("active_world_obstacle", new ActiveWorldObstacleCols("active_world_obstacle"), new ActiveWorldObstacleIxCols("active_world_obstacle"));
         public global::SpacetimeDB.Table<ArenaInstance, ArenaInstanceCols, ArenaInstanceIxCols> ArenaInstance() => new("arena_instance", new ArenaInstanceCols("arena_instance"), new ArenaInstanceIxCols("arena_instance"));
+        public global::SpacetimeDB.Table<ArmorSetDefinition, ArmorSetDefinitionCols, ArmorSetDefinitionIxCols> ArmorSetDefinition() => new("armor_set_definition", new ArmorSetDefinitionCols("armor_set_definition"), new ArmorSetDefinitionIxCols("armor_set_definition"));
         public global::SpacetimeDB.Table<AutoAttackCatalog, AutoAttackCatalogCols, AutoAttackCatalogIxCols> AutoAttackCatalog() => new("auto_attack_catalog", new AutoAttackCatalogCols("auto_attack_catalog"), new AutoAttackCatalogIxCols("auto_attack_catalog"));
         public global::SpacetimeDB.Table<AutoAttackState, AutoAttackStateCols, AutoAttackStateIxCols> AutoAttackState() => new("auto_attack_state", new AutoAttackStateCols("auto_attack_state"), new AutoAttackStateIxCols("auto_attack_state"));
         public global::SpacetimeDB.Table<CharacterActionBarAssignment, CharacterActionBarAssignmentCols, CharacterActionBarAssignmentIxCols> CharacterActionBarAssignment() => new("character_action_bar_assignment", new CharacterActionBarAssignmentCols("character_action_bar_assignment"), new CharacterActionBarAssignmentIxCols("character_action_bar_assignment"));
@@ -883,6 +889,7 @@ namespace SpacetimeDB.Types
                 Reducer.DespawnPlaygroundTarget args => Reducers.InvokeDespawnPlaygroundTarget(eventContext, args),
                 Reducer.DismissDiceRoll args => Reducers.InvokeDismissDiceRoll(eventContext, args),
                 Reducer.DismissSurvivalResult args => Reducers.InvokeDismissSurvivalResult(eventContext, args),
+                Reducer.EquipArmorSet args => Reducers.InvokeEquipArmorSet(eventContext, args),
                 Reducer.EquipItem args => Reducers.InvokeEquipItem(eventContext, args),
                 Reducer.InviteToParty args => Reducers.InvokeInviteToParty(eventContext, args),
                 Reducer.JoinInstance args => Reducers.InvokeJoinInstance(eventContext, args),

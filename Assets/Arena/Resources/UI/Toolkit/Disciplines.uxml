@@ -22,7 +22,7 @@
             <ui:VisualElement class="primary-nav">
                 <ui:Button name="NavPlayTab" class="nav-item"><ui:Label text="PLAY" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
                 <ui:Button name="NavDisciplines" class="nav-item is-active"><ui:Label text="DISCIPLINES" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
-                <ui:Button class="nav-item"><ui:Label text="EQUIPMENT" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
+                <ui:Button name="NavEquipment" class="nav-item"><ui:Label text="EQUIPMENT" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
                 <ui:Button class="nav-item"><ui:Label text="APPEARANCE" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
                 <ui:Button class="nav-item"><ui:Label text="CAREER" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>
                 <ui:Button class="nav-item"><ui:Label text="STORE" picking-mode="Ignore" /><ui:VisualElement class="nav-gem" picking-mode="Ignore" /></ui:Button>

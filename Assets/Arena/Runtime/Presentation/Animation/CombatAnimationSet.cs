@@ -1008,6 +1008,8 @@ namespace Arena.Presentation
         public bool drivePhasesFromSpecialMovement;
         [Tooltip("Only for phased channeled attacks. When enabled, Start plays once, Loop holds while the authoritative combat action is active, and End plays when that action releases or fizzles.")]
         public bool drivePhasesFromCombatLifecycle;
+        [Tooltip("Deterministic bindings from semantic slots on the selected animation clips to registered VFX ids. Timing and transforms stay on the shared clip track.")]
+        public List<CombatAnimationVfxBinding> animationVfxBindings;
 
         public bool UsesPhasedPresentation => presentationMode == WeaponMeleePresentationMode.Phased;
 
@@ -1396,6 +1398,10 @@ namespace Arena.Presentation
         [Tooltip("Authored melee attacks for this animation set.")]
         public List<WeaponMeleeAttackAuthoring> meleeAttacks = new();
 
+        [Header("Animation VFX Slots")]
+        [Tooltip("Reusable semantic VFX timing and transform tracks keyed by animation clip and slot id. Attacks decide whether and which VFX fills each slot.")]
+        public List<CombatAnimationVfxTrack> animationVfxTracks = new();
+
         [Header("Auto Attack")]
         [Tooltip("Design-facing authored strike id used for this combat profile's intrinsic repeating auto-attack. Defaults to Strike 1 if left empty.")]
         public string autoAttackAuthoredStrikeId = "";
@@ -1605,6 +1611,60 @@ namespace Arena.Presentation
             if (zeroBasedIndex >= 0 && zeroBasedIndex < meleeAttacks.Count)
                 return meleeAttacks[zeroBasedIndex].clip;
             return null;
+        }
+
+        public IReadOnlyList<CombatAnimationVfxBinding> GetStrikeAnimationVfxBindings(int strikeIndex)
+        {
+            if (strikeIndex <= 0)
+                return Array.Empty<CombatAnimationVfxBinding>();
+
+            EnsureMeleeAttackListInitialized();
+            int zeroBasedIndex = strikeIndex - 1;
+            if (zeroBasedIndex < 0 || zeroBasedIndex >= meleeAttacks.Count)
+                return Array.Empty<CombatAnimationVfxBinding>();
+
+            List<CombatAnimationVfxBinding>? bindings = meleeAttacks[zeroBasedIndex].animationVfxBindings;
+            return bindings != null
+                ? bindings
+                : Array.Empty<CombatAnimationVfxBinding>();
+        }
+
+        public IEnumerable<CombatAnimationVfxTrack> GetAnimationVfxTracks(AnimationClip? clip)
+        {
+            if (clip == null || animationVfxTracks == null)
+                yield break;
+
+            for (int index = 0; index < animationVfxTracks.Count; index++)
+            {
+                CombatAnimationVfxTrack? track = animationVfxTracks[index];
+                if (track != null && ReferenceEquals(track.clip, clip))
+                    yield return track;
+            }
+        }
+
+        public bool TryGetAnimationVfxTrack(
+            AnimationClip? clip,
+            string slotId,
+            out CombatAnimationVfxTrack track)
+        {
+            string normalizedSlotId = CombatAnimationVfxTrack.NormalizeSlotId(slotId);
+            if (clip != null && !string.IsNullOrEmpty(normalizedSlotId) && animationVfxTracks != null)
+            {
+                for (int index = 0; index < animationVfxTracks.Count; index++)
+                {
+                    CombatAnimationVfxTrack? candidate = animationVfxTracks[index];
+                    if (candidate != null
+                        && ReferenceEquals(candidate.clip, clip)
+                        && string.Equals(candidate.NormalizedSlotId, normalizedSlotId, StringComparison.Ordinal))
+                    {
+                        track = candidate;
+                        return true;
+                    }
+                }
+            }
+
+            track = null!;
+            return false;
         }
 
         public float GetStrikeTimingReferenceLengthSeconds(int strikeIndex)
@@ -2218,6 +2278,7 @@ namespace Arena.Presentation
                 visualInterruptibleAtSeconds = 0f,
                 phasedGround = default,
                 phasedAir = default,
+                animationVfxBindings = new List<CombatAnimationVfxBinding>(),
             };
         }
 

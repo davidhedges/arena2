@@ -288,6 +288,7 @@ namespace Arena.EditorTools
             for (int i = 0; i < visualSets.Length; i++)
                 AddHumanMaleEquipmentVisualSet(entries, visualSets[i]);
 
+            AddHumanMaleApprenticeEquipmentVisualSet(entries);
             AddHumanMalePeasantEquipmentVisualSet(entries);
             return entries;
         }
@@ -427,6 +428,45 @@ namespace Arena.EditorTools
                 "PEASANT_GLOVES",
                 "GLOVES",
                 EquipmentItem(ItemTypeEnum.GlovesSkin, EquipmentPath("GlovesSkin", $"GlovesSkin_{family}_{color}.prefab"))));
+        }
+
+        private static void AddHumanMaleApprenticeEquipmentVisualSet(
+            List<EquipmentAppearanceCatalog.Entry> entries)
+        {
+            const string prefix = "Hu_M";
+            const string family = "Wizard";
+            const string color = "Bl";
+
+            entries.Add(EquipmentVisual(
+                "APPRENTICE_HOOD",
+                "HEAD",
+                EquipmentItem(ItemTypeEnum.Helmet, EquipmentPath("Helmet", $"{prefix}_Helm_{family}_{color}.prefab"))));
+            entries.Add(EquipmentVisual(
+                "APPRENTICE_MANTLE",
+                "SHOULDER",
+                EquipmentItem(ItemTypeEnum.Shoulders, EquipmentPath("Shoulder", $"{prefix}_Shoulders_{family}_{color}.prefab"))));
+            entries.Add(EquipmentVisual(
+                "APPRENTICE_CLOAK",
+                "CAPE",
+                EquipmentItem(ItemTypeEnum.Cape, EquipmentPath("Cape", $"{prefix}_Cape_{family}_{color}.prefab"))));
+            entries.Add(EquipmentVisual(
+                "APPRENTICE_ROBE",
+                "CHEST",
+                EquipmentItem(ItemTypeEnum.Chest, EquipmentPath("Chest", $"{prefix}_Chest_{family}_{color}.prefab"))));
+            entries.Add(EquipmentVisual(
+                "APPRENTICE_TROUSERS",
+                "LEGS",
+                EquipmentItem(ItemTypeEnum.PantsSkin, EquipmentPath("PantsSkin", $"Pants_{family}_M_{color}.prefab")),
+                EquipmentItem(ItemTypeEnum.Pants, EquipmentPath("Pants", $"{prefix}_Pants_{family}_{color}.prefab"))));
+            entries.Add(EquipmentVisual(
+                "APPRENTICE_BOOTS",
+                "BOOTS",
+                EquipmentItem(ItemTypeEnum.Boots, EquipmentPath("Boots", $"{prefix}_Boots_{family}_{color}.prefab"))));
+            entries.Add(EquipmentVisual(
+                "APPRENTICE_GLOVES",
+                "GLOVES",
+                EquipmentItem(ItemTypeEnum.GlovesSkin, EquipmentPath("GlovesSkin", $"GlovesSkin_{family}_{color}.prefab")),
+                EquipmentItem(ItemTypeEnum.Gloves, EquipmentPath("Gloves", $"{prefix}_Gloves_{family}_{color}.prefab"))));
         }
 
         private static string EquipmentPath(string folder, string fileName)

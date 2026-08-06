@@ -1059,7 +1059,7 @@
                     "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
-                    "id": "DAGGER_COMBO_ATTACK_02_01",
+                    "id": "DAGGER_DEADLY_FLOURISH",
                     "slot_id": "dagger_combo_attack_02_01_slot",
                     "hit_windows": [
                         {
@@ -1429,11 +1429,11 @@
                     "slot_id": "dagger_diving_strike_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 737
+                            "impact_delay_ms": 684
                         }
                     ],
                     "recovery_ms": 350,
-                    "is_gap_closer": true,
+                    "is_gap_closer": false,
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
@@ -1462,28 +1462,28 @@
                             "impact_delay_ms": 44
                         },
                         {
-                            "impact_delay_ms": 204
+                            "impact_delay_ms": 195
                         },
                         {
-                            "impact_delay_ms": 352
+                            "impact_delay_ms": 344
                         },
                         {
-                            "impact_delay_ms": 412
+                            "impact_delay_ms": 403
                         },
                         {
-                            "impact_delay_ms": 412
+                            "impact_delay_ms": 403
                         },
                         {
-                            "impact_delay_ms": 412
+                            "impact_delay_ms": 403
                         },
                         {
-                            "impact_delay_ms": 412
+                            "impact_delay_ms": 403
                         },
                         {
-                            "impact_delay_ms": 528
+                            "impact_delay_ms": 520
                         },
                         {
-                            "impact_delay_ms": 746
+                            "impact_delay_ms": 738
                         }
                     ],
                     "recovery_ms": 350,
@@ -1501,25 +1501,25 @@
                             "impact_delay_ms": 107
                         },
                         {
-                            "impact_delay_ms": 269
+                            "impact_delay_ms": 247
                         },
                         {
-                            "impact_delay_ms": 431
+                            "impact_delay_ms": 409
                         },
                         {
-                            "impact_delay_ms": 574
+                            "impact_delay_ms": 553
                         },
                         {
-                            "impact_delay_ms": 749
+                            "impact_delay_ms": 727
                         },
                         {
-                            "impact_delay_ms": 829
+                            "impact_delay_ms": 807
                         },
                         {
-                            "impact_delay_ms": 829
+                            "impact_delay_ms": 807
                         },
                         {
-                            "impact_delay_ms": 1103
+                            "impact_delay_ms": 1081
                         }
                     ],
                     "recovery_ms": 400,

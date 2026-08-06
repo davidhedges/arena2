@@ -1,0 +1,629 @@
+/* Arena Equipment — one-way UI Toolkit translation of the approved browser
+ * spec at docs/ui-prototypes/equipment. Shared Hub chrome comes from
+ * Disciplines.uss; the transparent center exposes the live showcase avatar. */
+
+.equipment-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: none;
+    overflow: hidden;
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Alegreya.ttf");
+}
+
+.equipment-screen.is-open { display: flex; }
+
+.equipment-screen Label,
+.equipment-screen Button {
+    margin: 0;
+    padding: 0;
+}
+
+.equipment-screen Button {
+    border-width: 0;
+    border-radius: 0;
+    background-image: none;
+}
+
+.equipment-veil {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(4, 6, 8, 0.54);
+}
+
+.equipment-vignette {
+    position: absolute;
+    top: 96px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-top-width: 1px;
+    border-top-color: rgba(229, 185, 99, 0.10);
+    border-right-width: 44px;
+    border-right-color: rgba(3, 4, 5, 0.32);
+    border-bottom-width: 34px;
+    border-bottom-color: rgba(3, 4, 5, 0.38);
+    border-left-width: 44px;
+    border-left-color: rgba(3, 4, 5, 0.32);
+}
+
+.equipment-columns { align-items: stretch; }
+
+.selection-panel {
+    width: 438px;
+    flex-shrink: 0;
+    padding: 20px;
+}
+
+.details-panel {
+    width: 458px;
+    flex-shrink: 0;
+    padding-top: 22px;
+    padding-right: 26px;
+    padding-bottom: 20px;
+    padding-left: 26px;
+}
+
+.panel-heading,
+.set-list-heading {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+}
+
+.section-heading,
+.details-name {
+    margin-top: 3px;
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 17px;
+    letter-spacing: 1.8px;
+}
+
+.availability {
+    padding-bottom: 2px;
+    color: #7FBC87;
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+.tier-toggle {
+    height: 96px;
+    margin-top: 16px;
+    flex-direction: row;
+}
+
+.tier-button {
+    position: relative;
+    width: 127px;
+    height: 96px;
+    margin-right: 8px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.025);
+    color: var(--arena-text-muted);
+    border-width: 1px;
+    border-color: rgba(231, 225, 211, 0.12);
+}
+
+.tier-button--last { margin-right: 0; }
+
+.tier-button:hover {
+    background-color: rgba(197, 143, 42, 0.08);
+    color: var(--arena-text);
+    border-color: rgba(228, 179, 74, 0.38);
+}
+
+.tier-button.is-selected {
+    background-color: rgba(73, 52, 23, 0.60);
+    color: var(--arena-gold-text);
+    border-color: rgba(228, 179, 74, 0.78);
+}
+
+.tier-selected-gem {
+    position: absolute;
+    left: 58px;
+    bottom: -4px;
+    width: 7px;
+    height: 7px;
+    rotate: 45deg;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.tier-button.is-selected .tier-selected-gem { background-color: var(--arena-ember-bright); }
+
+.tier-glyph {
+    height: 31px;
+    color: #C4BDAF;
+    font-size: 25px;
+}
+
+.tier-glyph--medium { color: #A88256; }
+.tier-glyph--heavy { color: #B6BCC3; }
+
+.tier-name {
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 12px;
+    letter-spacing: 1.5px;
+}
+
+.tier-note {
+    margin-top: 3px;
+    color: var(--arena-text-dim);
+    font-size: 9px;
+    letter-spacing: 1px;
+}
+
+.section-rule {
+    height: 1px;
+    margin-top: 20px;
+    margin-bottom: 18px;
+    background-color: rgba(218, 182, 108, 0.22);
+}
+
+.set-count {
+    padding-bottom: 2px;
+    color: var(--arena-text-dim);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+.set-list {
+    height: 358px;
+    margin-top: 14px;
+    flex-direction: column;
+}
+
+.set-card {
+    position: relative;
+    height: 108px;
+    margin-bottom: 10px;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.025);
+    color: var(--arena-text-muted);
+    border-width: 1px;
+    border-color: rgba(231, 225, 211, 0.12);
+}
+
+.set-card:hover {
+    background-color: rgba(255, 255, 255, 0.045);
+    border-color: rgba(218, 182, 108, 0.38);
+}
+
+.set-card.is-selected {
+    background-color: rgba(65, 46, 22, 0.54);
+    color: var(--arena-text);
+    border-color: rgba(228, 179, 74, 0.75);
+}
+
+.set-sigil {
+    width: 64px;
+    height: 64px;
+    margin-left: 16px;
+    margin-right: 14px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    rotate: 45deg;
+    background-color: rgba(10, 12, 14, 0.82);
+    color: #C5C8CC;
+    border-width: 1px;
+    border-color: rgba(174, 159, 128, 0.48);
+}
+
+.set-sigil-glyph {
+    rotate: -45deg;
+    font-size: 24px;
+}
+
+.set-copy {
+    min-width: 0;
+    flex-grow: 1;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.set-meta {
+    color: var(--arena-gold-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 9px;
+    letter-spacing: 1.6px;
+}
+
+.set-name {
+    margin-top: 5px;
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+
+.set-effects {
+    margin-top: 3px;
+    color: var(--arena-text-dim);
+    font-size: 12px;
+}
+
+.set-check {
+    width: 34px;
+    color: rgba(231, 225, 211, 0.28);
+    font-size: 15px;
+    -unity-text-align: middle-center;
+}
+
+.set-card.is-selected .set-check { color: var(--arena-ember-bright); }
+
+.whole-set-note {
+    height: 63px;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(197, 143, 42, 0.06);
+    border-width: 1px;
+    border-color: rgba(197, 143, 42, 0.18);
+}
+
+.note-glyph {
+    width: 48px;
+    color: var(--arena-ember);
+    -unity-text-align: middle-center;
+}
+
+.note-copy { flex-direction: column; }
+
+.note-title {
+    color: var(--arena-gold-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 10px;
+    letter-spacing: 1.5px;
+}
+
+.note-body {
+    margin-top: 4px;
+    color: var(--arena-text-muted);
+    font-size: 12px;
+}
+
+.showcase-panel {
+    position: relative;
+    min-width: 0;
+    margin-left: 16px;
+    margin-right: 16px;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.showcase-focus {
+    position: absolute;
+    left: 50%;
+    top: 49%;
+    border-width: 1px;
+    border-color: rgba(212, 170, 88, 0.24);
+    rotate: 45deg;
+}
+
+.showcase-focus--outer {
+    width: 430px;
+    height: 430px;
+    margin-left: -215px;
+    margin-top: -230px;
+}
+
+.showcase-focus--inner {
+    width: 310px;
+    height: 310px;
+    margin-left: -155px;
+    margin-top: -170px;
+    border-color: rgba(212, 170, 88, 0.12);
+}
+
+.showcase-mark {
+    position: absolute;
+    top: 46%;
+    width: 84px;
+    height: 1px;
+    background-color: rgba(224, 179, 74, 0.38);
+}
+
+.showcase-mark--left { left: 58px; }
+.showcase-mark--right { right: 58px; }
+
+.showcase-mark-gem {
+    position: absolute;
+    top: -4px;
+    width: 9px;
+    height: 9px;
+    rotate: 45deg;
+    border-width: 1px;
+    border-color: rgba(224, 179, 74, 0.58);
+}
+
+.showcase-mark-gem--left { right: -4px; }
+.showcase-mark-gem--right { left: -4px; }
+
+.showcase-cycle {
+    position: absolute;
+    top: 44%;
+    width: 54px;
+    height: 72px;
+    background-color: rgba(7, 9, 11, 0.74);
+    color: var(--arena-gold-text);
+    border-width: 1px;
+    border-color: rgba(197, 143, 42, 0.28);
+    font-size: 42px;
+}
+
+.showcase-cycle:hover {
+    background-color: rgba(64, 45, 19, 0.78);
+    border-color: rgba(228, 179, 74, 0.65);
+}
+
+.showcase-cycle--left { left: 2px; }
+.showcase-cycle--right { right: 2px; }
+
+.showcase-caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 36px;
+    align-items: center;
+}
+
+.showcase-tier {
+    color: var(--arena-gold-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 10px;
+    letter-spacing: 3px;
+}
+
+.showcase-name {
+    margin-top: 5px;
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 25px;
+    letter-spacing: 3px;
+}
+
+.showcase-help {
+    margin-top: 7px;
+    color: var(--arena-text-dim);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+}
+
+.details-heading {
+    height: 91px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(218, 182, 108, 0.20);
+}
+
+.details-name {
+    font-size: 20px;
+    letter-spacing: 2px;
+}
+
+.details-flavor {
+    margin-top: 6px;
+    color: var(--arena-text-muted);
+    font-size: 13px;
+    white-space: normal;
+}
+
+.protection-summary {
+    height: 92px;
+    flex-direction: row;
+    align-items: center;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(218, 182, 108, 0.20);
+}
+
+.summary-emblem {
+    width: 56px;
+    height: 56px;
+    margin-right: 16px;
+    align-items: center;
+    justify-content: center;
+    rotate: 45deg;
+    background-color: rgba(64, 48, 27, 0.52);
+    color: #C8CBD0;
+    border-width: 1px;
+    border-color: rgba(218, 182, 108, 0.56);
+    font-size: 22px;
+}
+
+.summary-emblem Label { rotate: -45deg; }
+
+.summary-copy {
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+.summary-tier {
+    color: var(--arena-text-dim);
+    font-size: 10px;
+    letter-spacing: 1.4px;
+}
+
+.summary-headline {
+    margin-top: 5px;
+    color: var(--arena-gold-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+.equipped-chip {
+    padding-top: 5px;
+    padding-right: 8px;
+    padding-bottom: 5px;
+    padding-left: 8px;
+    color: #7FBC87;
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 9px;
+    letter-spacing: 1px;
+    border-width: 1px;
+    border-color: rgba(78, 143, 88, 0.44);
+}
+
+.equipped-chip.is-hidden { display: none; }
+
+.effect-heading {
+    height: 38px;
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding-bottom: 7px;
+    color: var(--arena-text-dim);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 9px;
+    letter-spacing: 1.5px;
+}
+
+.effect-heading--tradeoffs { height: 39px; }
+
+.effect-row {
+    height: 68px;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.022);
+    border-left-width: 2px;
+    border-left-color: rgba(231, 225, 211, 0.16);
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(231, 225, 211, 0.07);
+}
+
+.effect-row--positive { border-left-color: #527F59; }
+.effect-row--negative { border-left-color: #A04E43; }
+.effect-row.is-hidden { display: none; }
+
+.effect-icon {
+    width: 49px;
+    flex-shrink: 0;
+    color: var(--arena-text-muted);
+    font-size: 19px;
+    -unity-text-align: middle-center;
+}
+
+.effect-copy {
+    min-width: 0;
+    flex-grow: 1;
+    flex-direction: column;
+}
+
+.effect-title {
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+.effect-description {
+    margin-top: 4px;
+    color: var(--arena-text-dim);
+    font-size: 11px;
+}
+
+.effect-value {
+    width: 64px;
+    color: #84BC8B;
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 15px;
+    -unity-text-align: middle-center;
+}
+
+.effect-row--negative .effect-value { color: #D07A6C; }
+
+.no-tradeoffs {
+    display: none;
+    height: 68px;
+    align-items: center;
+    justify-content: center;
+    color: var(--arena-text-dim);
+    font-size: 12px;
+    border-width: 1px;
+    border-color: rgba(231, 225, 211, 0.08);
+}
+
+.no-tradeoffs.is-visible { display: flex; }
+
+.loadout-meta {
+    height: 66px;
+    margin-top: 14px;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(197, 143, 42, 0.05);
+    border-width: 1px;
+    border-color: rgba(197, 143, 42, 0.16);
+}
+
+.loadout-meta-block {
+    width: 50%;
+    align-items: center;
+}
+
+.loadout-meta-primary {
+    border-right-width: 1px;
+    border-right-color: rgba(231, 225, 211, 0.12);
+}
+
+.meta-label {
+    color: var(--arena-text-dim);
+    font-size: 9px;
+    letter-spacing: 1.4px;
+}
+
+.meta-value {
+    margin-top: 4px;
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 11px;
+    letter-spacing: 1px;
+}
+
+.equip-button {
+    width: 100%;
+    height: 50px;
+    margin-top: 14px;
+    background-color: #BD8524;
+    color: #201706;
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 12px;
+    letter-spacing: 2px;
+    border-width: 1px;
+    border-color: #E2B95D;
+}
+
+.equip-button:hover { background-color: #D39A34; }
+
+.equip-button.is-equipped {
+    background-color: rgba(68, 94, 68, 0.62);
+    color: #B9D5BD;
+    border-color: rgba(105, 159, 112, 0.65);
+}
+
+.equip-button.is-pending {
+    background-color: rgba(101, 76, 34, 0.72);
+    color: var(--arena-gold-text);
+}
+
+.back-button {
+    width: 100%;
+    height: 28px;
+    margin-top: 5px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--arena-text-dim);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+.back-button:hover { color: var(--arena-text); }

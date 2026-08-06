@@ -22,6 +22,8 @@ namespace Arena.Presentation.VFX
             [Min(0f)] public float scale = 1f;
             [Tooltip("Position offset applied to FOLLOW_ANCHOR and FOLLOW_GROUND_POSITION VFX.")]
             public Vector3 localPositionOffset = Vector3.zero;
+            [Tooltip("Prefab-space rotation correction composed after cue or animation-slot rotation.")]
+            public Vector3 localEulerAngles = Vector3.zero;
             [Tooltip("Projectile-body scale multiplier at the end of its travel lifetime. Zero or one preserves the authored scale.")]
             [Range(0f, 1f)] public float scaleMultiplierAtLifetimeEnd = 1f;
         }
@@ -33,7 +35,8 @@ namespace Arena.Presentation.VFX
                 GameObject prefab,
                 float scale,
                 float scaleMultiplierAtLifetimeEnd = 1f,
-                Vector3 localPositionOffset = default)
+                Vector3 localPositionOffset = default,
+                Vector3 localEulerAngles = default)
             {
                 VfxId = vfxId;
                 Prefab = prefab;
@@ -42,6 +45,7 @@ namespace Arena.Presentation.VFX
                     ? Mathf.Clamp01(scaleMultiplierAtLifetimeEnd)
                     : 1f;
                 LocalPositionOffset = localPositionOffset;
+                LocalRotation = Quaternion.Euler(localEulerAngles);
             }
 
             public string VfxId { get; }
@@ -49,6 +53,7 @@ namespace Arena.Presentation.VFX
             public float Scale { get; }
             public float ScaleMultiplierAtLifetimeEnd { get; }
             public Vector3 LocalPositionOffset { get; }
+            public Quaternion LocalRotation { get; }
         }
 
         private static CombatVFXRegistry? _sharedRegistry;
@@ -139,7 +144,8 @@ namespace Arena.Presentation.VFX
                         prefab,
                         entry.scale,
                         entry.scaleMultiplierAtLifetimeEnd,
-                        entry.localPositionOffset);
+                        entry.localPositionOffset,
+                        entry.localEulerAngles);
                 }
             }
         }

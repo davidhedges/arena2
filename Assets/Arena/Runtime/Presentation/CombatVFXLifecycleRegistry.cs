@@ -295,7 +295,10 @@ namespace Arena.Presentation
             }
 
             GameObject prefab = template.Prefab;
-            GameObject instance = Object.Instantiate(prefab, position, rotation);
+            GameObject instance = Object.Instantiate(
+                prefab,
+                position,
+                rotation * template.LocalRotation);
             instance.name = $"{prefab.name}_{cue.Key}";
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             DebugSpawnedPrefabCount++;

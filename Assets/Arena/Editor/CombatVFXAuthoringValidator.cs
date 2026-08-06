@@ -109,6 +109,7 @@ namespace Arena.Editor
             ValidateSpellAnimationTiming(catalog, errors);
             ValidateSpellCastAnimationMap(catalog, errors);
             ValidateCueAnchorContract(catalog, errors);
+            ValidateAnimationVfxSlots(errors);
             ValidateGreatswordCombatAnimationEvents(errors);
 
             return errors;
@@ -482,6 +483,206 @@ namespace Arena.Editor
                 ValidateGreatswordSpellReleaseEvents(animationSet, errors);
                 ValidateGreatswordMeleeEvents(animationSet, errors);
                 ValidateGreatswordStaggerEvents(animationSet, errors);
+            }
+        }
+
+        private static void ValidateAnimationVfxSlots(List<string> errors)
+        {
+            foreach (CombatAnimationSet animationSet in Resources.LoadAll<CombatAnimationSet>("CombatAnimationSets"))
+            {
+                var trackKeys = new HashSet<string>(StringComparer.Ordinal);
+                if (animationSet.animationVfxTracks != null)
+                {
+                    for (int trackIndex = 0; trackIndex < animationSet.animationVfxTracks.Count; trackIndex++)
+                    {
+                        CombatAnimationVfxTrack? track = animationSet.animationVfxTracks[trackIndex];
+                        string context = $"CombatAnimationSet '{animationSet.name}' animation VFX track {trackIndex + 1}";
+                        if (track == null)
+                        {
+                            errors.Add($"{context} is null.");
+                            continue;
+                        }
+
+                        if (track.clip == null)
+                        {
+                            errors.Add($"{context} has no clip.");
+                            continue;
+                        }
+
+                        string slotId = track.NormalizedSlotId;
+                        if (string.IsNullOrEmpty(slotId))
+                            errors.Add($"{context} on clip '{ClipLabel(track.clip)}' has an empty Slot Id.");
+                        else if (!trackKeys.Add(
+                            $"{AssetDatabase.GetAssetPath(track.clip)}:{track.clip.name}:{slotId}"))
+                            errors.Add($"{context} duplicates Clip + Slot Id '{track.clip.name} + {slotId}'.");
+
+                        if (track.startTimeSeconds < 0f
+                            || track.startTimeSeconds > track.clip.length + 0.0001f)
+                        {
+                            errors.Add(
+                                $"{context} start time {track.startTimeSeconds:0.000}s is outside clip '{track.clip.name}' ({track.clip.length:0.000}s).");
+                        }
+
+                        if (track.endTimeSeconds > track.clip.length + 0.0001f)
+                        {
+                            errors.Add(
+                                $"{context} end time {track.endTimeSeconds:0.000}s exceeds clip '{track.clip.name}' ({track.clip.length:0.000}s).");
+                        }
+
+                        if (Mathf.Approximately(track.localScale.x, 0f)
+                            || Mathf.Approximately(track.localScale.y, 0f)
+                            || Mathf.Approximately(track.localScale.z, 0f))
+                        {
+                            errors.Add($"{context} local scale components must be non-zero.");
+                        }
+
+                        ValidateAnimationVfxBladeMarker(animationSet, track, errors);
+                    }
+                }
+
+                if (animationSet.meleeAttacks == null)
+                    continue;
+
+                for (int attackIndex = 0; attackIndex < animationSet.meleeAttacks.Count; attackIndex++)
+                {
+                    WeaponMeleeAttackAuthoring attack = animationSet.meleeAttacks[attackIndex];
+                    if (attack.animationVfxBindings == null)
+                        continue;
+
+                    string attackId = attack.combat.AuthoredStrikeIdOrDefault;
+                    var boundSlots = new HashSet<string>(StringComparer.Ordinal);
+                    for (int bindingIndex = 0; bindingIndex < attack.animationVfxBindings.Count; bindingIndex++)
+                    {
+                        CombatAnimationVfxBinding binding = attack.animationVfxBindings[bindingIndex];
+                        string slotId = binding.NormalizedSlotId;
+                        string vfxId = binding.NormalizedVfxId;
+                        string context =
+                            $"CombatAnimationSet '{animationSet.name}' melee '{attackId}' animation VFX binding {bindingIndex + 1}";
+                        if (string.IsNullOrEmpty(slotId))
+                        {
+                            errors.Add($"{context} has an empty Slot Id.");
+                            continue;
+                        }
+
+                        if (!boundSlots.Add(slotId))
+                            errors.Add($"{context} duplicates Slot Id '{slotId}'.");
+                        if (string.IsNullOrEmpty(vfxId))
+                        {
+                            errors.Add($"{context} has an empty VFX Id. Remove the authored binding to disable the slot.");
+                            continue;
+                        }
+
+                        if (CombatVFXTemplateRegistry.IsScriptedTemplate(vfxId))
+                        {
+                            errors.Add($"{context} references scripted template '{vfxId}'; animation VFX slots require a registry prefab.");
+                            continue;
+                        }
+
+                        CombatVFXRegistry.Template? template = CombatVFXTemplateRegistry.ResolveTemplate(vfxId);
+                        if (template == null)
+                        {
+                            errors.Add($"{context} references unresolved registry prefab '{vfxId}'.");
+                            continue;
+                        }
+
+                        bool foundMatchingTrack = false;
+                        foreach (CombatAnimationVfxTrack track in animationSet.animationVfxTracks ?? new List<CombatAnimationVfxTrack>())
+                        {
+                            if (track == null
+                                || !string.Equals(track.NormalizedSlotId, slotId, StringComparison.Ordinal)
+                                || !AttackReferencesClip(attack, track.clip))
+                            {
+                                continue;
+                            }
+
+                            foundMatchingTrack = true;
+                            if (!track.HasFiniteWindow && PrefabHasLoopingParticleSystem(template.Prefab))
+                            {
+                                errors.Add(
+                                    $"{context} fills natural-lifetime track '{slotId}' with looping prefab '{vfxId}'. Author an End Time so interruption and normal completion cannot leak the effect.");
+                            }
+                        }
+
+                        if (!foundMatchingTrack)
+                        {
+                            errors.Add(
+                                $"{context} has no matching Clip + Slot Id track on this attack's selected animation clips.");
+                        }
+                    }
+                }
+            }
+        }
+
+        private static bool AttackReferencesClip(
+            WeaponMeleeAttackAuthoring attack,
+            AnimationClip? clip)
+        {
+            if (clip == null)
+                return false;
+            if (ReferenceEquals(attack.clip, clip))
+                return true;
+
+            return attack.UsesPhasedPresentation
+                && (ReferenceEquals(attack.phasedGround.start, clip)
+                    || ReferenceEquals(attack.phasedGround.loop, clip)
+                    || ReferenceEquals(attack.phasedGround.end, clip)
+                    || ReferenceEquals(attack.phasedAir.start, clip)
+                    || ReferenceEquals(attack.phasedAir.loop, clip)
+                    || ReferenceEquals(attack.phasedAir.end, clip));
+        }
+
+        private static bool PrefabHasLoopingParticleSystem(GameObject prefab)
+        {
+            ParticleSystem[] systems = prefab.GetComponentsInChildren<ParticleSystem>(true);
+            for (int index = 0; index < systems.Length; index++)
+            {
+                if (systems[index].main.loop)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static void ValidateAnimationVfxBladeMarker(
+            CombatAnimationSet animationSet,
+            CombatAnimationVfxTrack track,
+            List<string> errors)
+        {
+            string markerName = track.anchor switch
+            {
+                CombatAnimationVfxAnchor.MainWeaponBladeStart =>
+                    CombatAnimationVfxAnchorUtility.BladeStartMarkerName,
+                CombatAnimationVfxAnchor.MainWeaponBladeEnd =>
+                    CombatAnimationVfxAnchorUtility.BladeEndMarkerName,
+                _ => string.Empty,
+            };
+            if (string.IsNullOrEmpty(markerName))
+                return;
+
+            bool foundMainHandVisual = false;
+            foreach (WeaponVisualBinding binding in animationSet.VisualBindings)
+            {
+                if (binding.prefab == null
+                    || !string.Equals(
+                        AvatarWeaponMounts.CanonicalizeMountId(binding.drawnMountId),
+                        AvatarWeaponMounts.MainHandMountId,
+                        StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                foundMainHandVisual = true;
+                if (FindDescendant(binding.prefab.transform, markerName) == null)
+                {
+                    errors.Add(
+                        $"CombatAnimationSet '{animationSet.name}' animation VFX track '{track.NormalizedSlotId}' uses {track.anchor}, but main-hand visual '{binding.prefab.name}' is missing '{markerName}'.");
+                }
+            }
+
+            if (!foundMainHandVisual)
+            {
+                errors.Add(
+                    $"CombatAnimationSet '{animationSet.name}' animation VFX track '{track.NormalizedSlotId}' uses {track.anchor}, but the set has no authored main-hand visual to provide '{markerName}'.");
             }
         }
 

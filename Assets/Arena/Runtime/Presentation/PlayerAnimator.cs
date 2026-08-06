@@ -219,6 +219,7 @@ namespace Arena.Presentation
         private MeleeAnimationGhostLayer? _meleeGhostLayer;
         private AnimatedAutoAttackGhostLayer? _animatedAutoAttackGhostLayer;
         private LingeringShadeGhostLayer? _lingeringShadeGhostLayer;
+        private CombatAnimationVfxPlayer? _meleeAnimationVfxPlayer;
         private int _animatedAutoAttackGhostVisualVersion = -1;
         private CombatAnimationSet? _animationSet;
         private SharedActionProfile? _sharedActionProfile;
@@ -274,6 +275,13 @@ namespace Arena.Presentation
                 ClearPresentationForForcedStatus,
                 ClearPresentationForStagger,
                 CutRejectedActionPresentationScoped);
+
+        private CombatAnimationVfxPlayer MeleeAnimationVfxPlayer =>
+            _meleeAnimationVfxPlayer ??= new CombatAnimationVfxPlayer(
+                this,
+                () => _animator,
+                () => _motionSource ?? transform,
+                ResolveWeaponAttachments);
 
         private readonly struct ActiveMovementActionPresentation
         {
@@ -425,6 +433,7 @@ namespace Arena.Presentation
         /// </summary>
         public void ApplyAnimationSet(CombatAnimationSet set)
         {
+            _meleeAnimationVfxPlayer?.Clear();
             _animationSet = set;
             if (_animator == null) return;
             EnsureOverrideController();
@@ -2263,12 +2272,20 @@ namespace Arena.Presentation
                 _animationSet,
                 grounded,
                 appliedCatchupSeconds);
+            if (_animationSet != null)
+            {
+                MeleeAnimationVfxPlayer.Begin(
+                    _animationSet,
+                    strikeIndex,
+                    request.AnimationVfxBindings);
+            }
             _activeMeleePresentationDispatchedFrame = Time.frameCount;
             ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: false);
         }
 
         private void ClearActiveMeleePresentation()
         {
+            _meleeAnimationVfxPlayer?.Clear();
             ResetPendingMeleeActionTriggers();
             bool wasPhased = _actionPlayback.ClearActiveMeleePresentation();
             _activeMeleePresentationDispatchedFrame = -1;
@@ -3544,6 +3561,8 @@ namespace Arena.Presentation
                 _actionPlayback.MarkActiveSpellPresentationEntered();
             }
 
+            UpdateMeleeAnimationVfx();
+
             if (_actionPlayback.ActiveBaseCombatAnimationCategory == CombatAnimationCategory.AutoAttack
                 && _actionPlayback.ActiveMeleePresentationEntered
                 && !IsMeleePresentationStateActive())
@@ -3570,6 +3589,58 @@ namespace Arena.Presentation
             animator.SetBool(JumpHash, _wasGrounded && !presentationGrounded);
             animator.SetBool(FreeFallHash, !presentationGrounded);
             _wasGrounded = presentationGrounded;
+        }
+
+        private void OnDisable()
+        {
+            _meleeAnimationVfxPlayer?.Clear();
+        }
+
+        private void UpdateMeleeAnimationVfx()
+        {
+            if (_meleeAnimationVfxPlayer == null
+                || !_actionPlayback.ActiveMeleePresentation.HasValue
+                || !_actionPlayback.ActiveMeleePresentationEntered)
+            {
+                return;
+            }
+
+            ActiveMeleePresentation active =
+                _actionPlayback.ActiveMeleePresentation.GetValueOrDefault();
+            AnimationClip? clip;
+            float normalizedTime;
+            if (active.IsPhased)
+            {
+                clip = GetCurrentPhasedMeleeClip();
+                normalizedTime = GetPhasedMeleeCurrentNormalizedTime();
+            }
+            else
+            {
+                clip = _animationSet?.GetStrikeClip(active.StrikeIndex);
+                if (!TryGetActiveMeleePresentationTiming(
+                        active,
+                        out _,
+                        out _,
+                        out normalizedTime))
+                {
+                    return;
+                }
+            }
+
+            if (clip == null)
+                return;
+
+            float sampledNormalizedTime = Mathf.Max(0f, normalizedTime);
+            _meleeAnimationVfxPlayer.Update(
+                clip,
+                sampledNormalizedTime * Mathf.Max(0f, clip.length));
+        }
+
+        private WeaponAttachmentController? ResolveWeaponAttachments()
+        {
+            if (_weaponAttachments == null)
+                _weaponAttachments = GetComponent<WeaponAttachmentController>();
+            return _weaponAttachments;
         }
 
         private static bool ResolvePresentationGrounded(bool gameplayGrounded) => gameplayGrounded;

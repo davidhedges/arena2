@@ -47,6 +47,12 @@ namespace Arena.Presentation
         public readonly string ConsumedModifierStatusKind;
         public readonly string ConsumedModifierStackGroup;
         public readonly bool DrivePhasesFromSpecialMovement;
+        /// <summary>
+        /// Optional request-time replacement for the attack-authored animation
+        /// VFX bindings. Null uses the attack bindings; an empty array disables
+        /// every semantic slot for this presentation.
+        /// </summary>
+        public readonly CombatAnimationVfxBinding[]? AnimationVfxBindings;
         public bool HasConsumedModifier =>
             !string.IsNullOrWhiteSpace(ConsumedModifierStatusKind) &&
             !string.IsNullOrWhiteSpace(ConsumedModifierStackGroup);
@@ -62,7 +68,8 @@ namespace Arena.Presentation
             Vector3? facingTargetPoint = null,
             string? consumedModifierStatusKind = null,
             string? consumedModifierStackGroup = null,
-            bool drivePhasesFromSpecialMovement = false)
+            bool drivePhasesFromSpecialMovement = false,
+            CombatAnimationVfxBinding[]? animationVfxBindings = null)
         {
             ActionId = actionId ?? string.Empty;
             Category = category;
@@ -76,6 +83,9 @@ namespace Arena.Presentation
             ConsumedModifierStatusKind = WireIdentifier.Normalize(consumedModifierStatusKind);
             ConsumedModifierStackGroup = WireIdentifier.Normalize(consumedModifierStackGroup);
             DrivePhasesFromSpecialMovement = drivePhasesFromSpecialMovement;
+            AnimationVfxBindings = animationVfxBindings == null
+                ? null
+                : (CombatAnimationVfxBinding[])animationVfxBindings.Clone();
         }
 
         public static CombatAnimationRequest PredictedMeleeSkill(
@@ -84,7 +94,8 @@ namespace Arena.Presentation
             string? source = CombatEventSources.PlayerInput,
             string? consumedModifierStatusKind = null,
             string? consumedModifierStackGroup = null,
-            bool drivePhasesFromSpecialMovement = false)
+            bool drivePhasesFromSpecialMovement = false,
+            CombatAnimationVfxBinding[]? animationVfxBindings = null)
         {
             return new CombatAnimationRequest(
                 actionId,
@@ -96,7 +107,8 @@ namespace Arena.Presentation
                 startedAtMs,
                 consumedModifierStatusKind: consumedModifierStatusKind,
                 consumedModifierStackGroup: consumedModifierStackGroup,
-                drivePhasesFromSpecialMovement: drivePhasesFromSpecialMovement);
+                drivePhasesFromSpecialMovement: drivePhasesFromSpecialMovement,
+                animationVfxBindings: animationVfxBindings);
         }
 
         public static CombatAnimationRequest PredictedSpell(
@@ -139,7 +151,8 @@ namespace Arena.Presentation
             Vector3? facingTargetPoint = null,
             string? consumedModifierStatusKind = null,
             string? consumedModifierStackGroup = null,
-            bool drivePhasesFromSpecialMovement = false)
+            bool drivePhasesFromSpecialMovement = false,
+            CombatAnimationVfxBinding[]? animationVfxBindings = null)
         {
             return new CombatAnimationRequest(
                 actionId,
@@ -152,7 +165,8 @@ namespace Arena.Presentation
                 facingTargetPoint,
                 consumedModifierStatusKind,
                 consumedModifierStackGroup,
-                drivePhasesFromSpecialMovement);
+                drivePhasesFromSpecialMovement,
+                animationVfxBindings);
         }
 
         public static CombatAnimationRequest AuthoritativeSpell(
@@ -191,10 +205,13 @@ namespace Arena.Presentation
             string specialMovement = DrivePhasesFromSpecialMovement
                 ? " specialMovementPhased=True"
                 : string.Empty;
+            string animationVfx = AnimationVfxBindings != null
+                ? $" animationVfxBindings={AnimationVfxBindings.Length}"
+                : string.Empty;
             string spellPhase = Category == CombatAnimationCategory.Spell
                 ? $" spellPhase={SpellPhase}"
                 : string.Empty;
-            return $"action={ActionId} category={Category}{spellPhase} authority={Authority} playback={Playback} source={Source ?? "-"} startedAtMs={StartedAtMs}{facing}{modifier}{specialMovement}";
+            return $"action={ActionId} category={Category}{spellPhase} authority={Authority} playback={Playback} source={Source ?? "-"} startedAtMs={StartedAtMs}{facing}{modifier}{specialMovement}{animationVfx}";
         }
     }
 }

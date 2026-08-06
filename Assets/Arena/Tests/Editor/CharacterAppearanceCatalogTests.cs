@@ -76,6 +76,21 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void EquipmentAppearanceCatalog_ContainsCompleteApprenticeSetVisuals()
+        {
+            object equipmentCatalog = LoadRequiredAsset(EquipmentAppearanceCatalogPath, "Arena.Presentation.Appearance.EquipmentAppearanceCatalog");
+            object[] entries = Entries(equipmentCatalog).Cast<object>().ToArray();
+
+            AssertEquipmentVisual(entries, "APPRENTICE_HOOD", "HEAD");
+            AssertEquipmentVisual(entries, "APPRENTICE_MANTLE", "SHOULDER");
+            AssertEquipmentVisual(entries, "APPRENTICE_CLOAK", "CAPE");
+            AssertEquipmentVisual(entries, "APPRENTICE_ROBE", "CHEST");
+            AssertEquipmentVisual(entries, "APPRENTICE_TROUSERS", "LEGS");
+            AssertEquipmentVisual(entries, "APPRENTICE_BOOTS", "BOOTS");
+            AssertEquipmentVisual(entries, "APPRENTICE_GLOVES", "GLOVES");
+        }
+
+        [Test]
         public void RuntimeAvatarController_SignatureFor_IsStableAndIncludesSavedOutfit()
         {
             object row = CreateAppearanceRow("human_male_archer_starter");

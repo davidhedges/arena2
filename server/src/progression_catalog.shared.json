@@ -4373,7 +4373,7 @@
       "actor_scope": "PLAYER",
       "discipline_id": "SUBTLETY",
       "combat_profile_id": "DAGGERS",
-      "action_id": "DAGGER_COMBO_ATTACK_02_01",
+      "action_id": "DAGGER_DEADLY_FLOURISH",
       "display_name": "Deadly Flourish",
       "resource_kind": "STAMINA",
       "resource_cost": 30,

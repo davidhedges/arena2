@@ -50,6 +50,7 @@ use crate::derived_stats::{
     derived_combat_stats_for_owner, scale_cast_duration,
     scale_fortify_temporary_hitpoints_from_allocations,
 };
+use crate::inventory::equipment_modifier_totals_for_owner;
 use crate::lingering_shade::arm_lingering_shade_for_voluntary_movement;
 #[allow(unused_imports)]
 use crate::npcs::npc_instance as _;
@@ -1054,7 +1055,8 @@ fn execute_cast_intent(
     let cast_time = scale_cast_duration(
         definition.cast_time,
         derived_stats.cast_speed_multiplier
-            * temporary_modifiers.cast_speed_multiplier_for(&caster),
+            * temporary_modifiers.cast_speed_multiplier_for(&caster)
+            * equipment_modifier_totals_for_owner(ctx, caster).cast_speed_multiplier(),
     );
     if cast_time > Duration::ZERO {
         let reject_reason = process_spell_cast(

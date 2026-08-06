@@ -45,8 +45,10 @@ namespace Arena.UI
         private Label? _partyCount;
         private Button? _practiceButton;
         private Button? _navDisciplines;
+        private Button? _navEquipment;
         private HubController? _hubController;
         private DisciplinesScreen? _disciplinesScreen;
+        private EquipmentScreen? _equipmentScreen;
         private Transform? _showcaseAnchor;
         private Camera? _hubCamera;
         private GameObject? _backgroundPlane;
@@ -79,10 +81,19 @@ namespace Arena.UI
                 _practiceButton.clicked -= OpenPracticeMenu;
             if (_navDisciplines != null)
                 _navDisciplines.clicked -= OpenDisciplines;
+            if (_navEquipment != null)
+                _navEquipment.clicked -= OpenEquipment;
             if (_disciplinesScreen != null)
             {
                 _disciplinesScreen.Closed -= OnDisciplinesClosed;
+                _disciplinesScreen.EquipmentRequested -= OpenEquipment;
                 Destroy(_disciplinesScreen.gameObject);
+            }
+            if (_equipmentScreen != null)
+            {
+                _equipmentScreen.Closed -= OnEquipmentClosed;
+                _equipmentScreen.DisciplinesRequested -= OpenDisciplines;
+                Destroy(_equipmentScreen.gameObject);
             }
             if (_panelSettings != null)
                 Destroy(_panelSettings);
@@ -261,16 +272,23 @@ namespace Arena.UI
             _partyCount = _root.Q<Label>("PartyCount");
             _practiceButton = _root.Q<Button>("PracticeButton");
             _navDisciplines = _root.Q<Button>("NavDisciplines");
+            _navEquipment = _root.Q<Button>("NavEquipment");
             _hubController = GetComponent<HubController>();
 
             BindShowcaseDrag();
 
             _disciplinesScreen = DisciplinesScreen.Ensure(transform);
             _disciplinesScreen.Closed += OnDisciplinesClosed;
+            _disciplinesScreen.EquipmentRequested += OpenEquipment;
+            _equipmentScreen = EquipmentScreen.Ensure(transform);
+            _equipmentScreen.Closed += OnEquipmentClosed;
+            _equipmentScreen.DisciplinesRequested += OpenDisciplines;
             if (_practiceButton != null)
                 _practiceButton.clicked += OpenPracticeMenu;
             if (_navDisciplines != null)
                 _navDisciplines.clicked += OpenDisciplines;
+            if (_navEquipment != null)
+                _navEquipment.clicked += OpenEquipment;
 
             Button? settingsButton = _root.Q<Button>("SettingsButton");
             if (settingsButton != null)
@@ -292,6 +310,22 @@ namespace Arena.UI
         }
 
         private void OnDisciplinesClosed()
+        {
+            if (_root != null)
+                _root.style.display = DisplayStyle.Flex;
+            RefreshBoundData();
+        }
+
+        private void OpenEquipment()
+        {
+            if (_root == null || _equipmentScreen == null)
+                return;
+
+            _root.style.display = DisplayStyle.None;
+            _equipmentScreen.Open();
+        }
+
+        private void OnEquipmentClosed()
         {
             if (_root != null)
                 _root.style.display = DisplayStyle.Flex;

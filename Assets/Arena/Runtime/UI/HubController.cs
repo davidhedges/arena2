@@ -58,6 +58,7 @@ namespace Arena.UI
         private string _lastCombatProfile = string.Empty;
         private string _lastShowcaseAppearanceSignature = string.Empty;
         private string _lastFailedShowcaseAppearanceSignature = string.Empty;
+        private Dictionary<string, string>? _showcaseArmorPreviewBySlot;
 
         private readonly struct HubLayoutMetrics
         {
@@ -531,9 +532,12 @@ namespace Arena.UI
                 return;
 
             CharacterAppearance? appearance = ResolveLocalAppearance();
-            string signature = appearance != null
+            string baseSignature = appearance != null
                 ? RuntimeAvatarController.SignatureFor(appearance)
                 : "STARTER_DEFAULT|HUMAN|MALE|GEAR";
+            IReadOnlyDictionary<string, string> armorBySlot =
+                _showcaseArmorPreviewBySlot ?? ResolveLocalArmorAppearance();
+            string signature = BuildShowcaseAppearanceSignature(baseSignature, armorBySlot);
             if (string.Equals(_lastShowcaseAppearanceSignature, signature, System.StringComparison.Ordinal) &&
                 _showcaseAvatarBinding != null)
             {
@@ -563,9 +567,14 @@ namespace Arena.UI
                 ? _showcaseAvatarController.Apply(appearance, out binding, out error)
                 : _showcaseAvatarController.ApplyStarterDefault(out binding, out error);
             if (applied)
+                applied = _showcaseAvatarController.SetEquipmentAppearanceOverride(
+                    armorBySlot,
+                    out binding,
+                    out error);
+            if (applied)
             {
                 _showcaseAvatarBinding = binding;
-                _lastShowcaseAppearanceSignature = appearance != null ? binding.AppearanceSignature : signature;
+                _lastShowcaseAppearanceSignature = signature;
                 _lastFailedShowcaseAppearanceSignature = string.Empty;
                 _lastCombatProfile = string.Empty;
                 StarterAssetsRuntimeStripper.StripFrom(binding.AvatarRoot);
@@ -579,6 +588,72 @@ namespace Arena.UI
                 _lastShowcaseAppearanceSignature = string.Empty;
                 _showcaseAvatar.SetActive(true);
             }
+        }
+
+        internal void SetShowcaseArmorPreview(IReadOnlyDictionary<string, string>? armorBySlot)
+        {
+            if (armorBySlot == null)
+            {
+                _showcaseArmorPreviewBySlot = null;
+            }
+            else
+            {
+                _showcaseArmorPreviewBySlot = armorBySlot
+                    .Where(pair => !string.IsNullOrWhiteSpace(pair.Key)
+                        && !string.IsNullOrWhiteSpace(pair.Value))
+                    .ToDictionary(
+                        pair => CharacterAppearanceIds.Normalize(pair.Key),
+                        pair => CharacterAppearanceIds.Normalize(pair.Value),
+                        System.StringComparer.Ordinal);
+            }
+
+            _lastShowcaseAppearanceSignature = string.Empty;
+            _lastFailedShowcaseAppearanceSignature = string.Empty;
+            ApplyShowcaseAppearance();
+        }
+
+        private static IReadOnlyDictionary<string, string> ResolveLocalArmorAppearance()
+        {
+            var armorBySlot = new Dictionary<string, string>(System.StringComparer.Ordinal);
+            DbConnection? connection = NetworkManager.Instance?.Conn;
+            Identity? identity = connection?.Identity;
+            if (connection == null || !identity.HasValue)
+                return armorBySlot;
+
+            PlayerEquipmentPresentation? presentation =
+                connection.Db.PlayerEquipmentPresentation.Owner.Find(identity.Value);
+            if (presentation == null)
+                return armorBySlot;
+
+            AddArmorPiece(armorBySlot, "HEAD", presentation.HeadItemDefId);
+            AddArmorPiece(armorBySlot, "SHOULDER", presentation.ShoulderItemDefId);
+            AddArmorPiece(armorBySlot, "CAPE", presentation.CapeItemDefId);
+            AddArmorPiece(armorBySlot, "CHEST", presentation.ChestItemDefId);
+            AddArmorPiece(armorBySlot, "LEGS", presentation.LegsItemDefId);
+            AddArmorPiece(armorBySlot, "BOOTS", presentation.BootsItemDefId);
+            AddArmorPiece(armorBySlot, "GLOVES", presentation.GlovesItemDefId);
+            return armorBySlot;
+        }
+
+        private static void AddArmorPiece(
+            IDictionary<string, string> armorBySlot,
+            string slotId,
+            string? itemDefId)
+        {
+            if (!string.IsNullOrWhiteSpace(itemDefId))
+                armorBySlot[slotId] = CharacterAppearanceIds.Normalize(itemDefId);
+        }
+
+        private static string BuildShowcaseAppearanceSignature(
+            string baseSignature,
+            IReadOnlyDictionary<string, string> armorBySlot)
+        {
+            List<string> parts = armorBySlot
+                .Select(pair =>
+                    $"{CharacterAppearanceIds.Normalize(pair.Key)}:{CharacterAppearanceIds.Normalize(pair.Value)}")
+                .OrderBy(part => part, System.StringComparer.Ordinal)
+                .ToList();
+            return $"{baseSignature}|gear={string.Join(",", parts)}";
         }
 
         private Transform GetShowcaseHost()

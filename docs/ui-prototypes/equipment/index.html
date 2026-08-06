@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arena — Equipment (browser approval spec)</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="equipment.css">
+<style>
+@font-face {
+  font-family: "Cinzel";
+  font-weight: 400 900;
+  src: url("../../../Assets/Arena/Content/UI/Fonts/Cinzel.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Alegreya";
+  font-weight: 400 900;
+  src: url("../../../Assets/Arena/Content/UI/Fonts/Alegreya.ttf") format("truetype");
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #07090b; overflow: hidden; }
+body { color: #e7e1d3; font-family: "Alegreya", Georgia, serif; }
+button, a { color: inherit; font: inherit; }
+.sc-shell { height: 100%; display: flex; flex-direction: column; }
+.sc-toolbar {
+  height: 42px; flex: none; display: flex; align-items: center; padding: 0 16px;
+  background: #0b0d10; border-bottom: 1px solid rgba(255,255,255,0.08);
+  font-size: 12px; letter-spacing: 0.5px;
+}
+.sc-brand { margin-right: 14px; color: #d9b56a; font-family: "Cinzel", serif; letter-spacing: 2px; }
+.sc-note { color: #8f8b82; }
+.sc-note strong { color: #d8d4ca; font-weight: 400; }
+.sc-resolution { margin-left: auto; color: #696b70; }
+.sc-stagewrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.sc-stage { position: relative; width: 1920px; height: 1080px; flex: none; transform-origin: center center; overflow: hidden; }
+</style>
+</head>
+<body>
+<div class="sc-shell">
+  <div class="sc-toolbar">
+    <span class="sc-brand">ARENA · EQUIPMENT SPEC</span>
+    <span class="sc-note"><strong>Browser approval view</strong> · choose a tier, preview a complete set, then equip it as one loadout</span>
+    <span class="sc-resolution">1920 × 1080</span>
+  </div>
+
+  <div class="sc-stagewrap">
+    <main class="sc-stage" id="Stage">
+      <section class="equipment-screen" id="EquipmentScreen" aria-label="Choose an armor set">
+        <div class="screen-background"></div>
+        <div class="screen-veil"></div>
+        <div class="screen-vignette"></div>
+
+        <header class="topbar" id="TopBar">
+          <a class="brand-block" href="../hub/" aria-label="Arena hub">
+            <span class="brand-mark" aria-hidden="true">
+              <span class="brand-diamond"></span>
+              <span class="brand-spear brand-spear--one"></span>
+              <span class="brand-spear brand-spear--two"></span>
+            </span>
+            <span class="brand-word">ARENA</span>
+          </a>
+
+          <nav class="primary-nav" aria-label="Hub sections">
+            <a class="nav-item" href="../hub/"><span>PLAY</span><span class="nav-gem"></span></a>
+            <a class="nav-item" href="../disciplines/"><span>DISCIPLINES</span><span class="nav-gem"></span></a>
+            <a class="nav-item is-active" href="./" aria-current="page"><span>EQUIPMENT</span><span class="nav-gem"></span></a>
+            <button class="nav-item pending-link" type="button" data-message="Appearance UI will be designed separately."><span>APPEARANCE</span><span class="nav-gem"></span></button>
+            <button class="nav-item pending-link" type="button" data-message="Career UI will be designed separately."><span>CAREER</span><span class="nav-gem"></span></button>
+            <button class="nav-item pending-link" type="button" data-message="Store UI will be designed separately."><span>STORE</span><span class="nav-gem"></span></button>
+          </nav>
+
+          <div class="topbar-tools">
+            <div class="currency currency--gold"><span class="currency-gem"><span class="currency-glyph">G</span></span><span>1,250</span></div>
+            <div class="currency currency--arcane"><span class="currency-gem"><span class="currency-glyph">A</span></span><span>340</span></div>
+            <button class="tool-button" type="button" aria-label="Social"><span class="tool-people">●●</span></button>
+            <button class="tool-button" type="button" aria-label="Inbox"><span class="tool-envelope">◇</span></button>
+            <button class="tool-button" type="button" aria-label="Settings"><span class="tool-cog">✦</span></button>
+          </div>
+        </header>
+
+        <div class="page-heading">
+          <div class="heading-kicker">ARMOR LOADOUT</div>
+          <h1>CHOOSE YOUR ARMOR</h1>
+          <p>Balance protection and mobility. Armor is equipped as a complete set.</p>
+        </div>
+
+        <div class="screen-columns">
+          <aside class="selection-panel panel-surface" aria-label="Armor set selection">
+            <div class="panel-heading">
+              <div>
+                <div class="section-kicker">PROTECTION CLASS</div>
+                <h2>ARMOR TIER</h2>
+              </div>
+              <span class="availability">ALL AVAILABLE</span>
+            </div>
+
+            <div class="tier-toggle" id="TierToggle" role="group" aria-label="Armor tier">
+              <button class="tier-button" type="button" data-tier="LIGHT">
+                <span class="tier-selected-gem"></span>
+                <span class="tier-glyph tier-glyph--light">◇</span>
+                <span class="tier-copy"><strong>LIGHT</strong><small>UNRESTRICTED</small></span>
+              </button>
+              <button class="tier-button" type="button" data-tier="MEDIUM">
+                <span class="tier-selected-gem"></span>
+                <span class="tier-glyph tier-glyph--medium">◆</span>
+                <span class="tier-copy"><strong>MEDIUM</strong><small>LEATHER</small></span>
+              </button>
+              <button class="tier-button tier-button--last is-selected" type="button" data-tier="HEAVY">
+                <span class="tier-selected-gem"></span>
+                <span class="tier-glyph tier-glyph--heavy">⬟</span>
+                <span class="tier-copy"><strong>HEAVY</strong><small>PLATE</small></span>
+              </button>
+            </div>
+
+            <div class="section-rule"></div>
+            <div class="set-list-heading">
+              <div>
+                <div class="section-kicker">COMPLETE LOADOUTS</div>
+                <h2>ARMOR SET</h2>
+              </div>
+              <span id="SetCount">2 SETS</span>
+            </div>
+            <div class="set-list" id="SetList"></div>
+
+            <div class="whole-set-note">
+              <span class="note-glyph">◆</span>
+              <span class="note-copy"><strong>WHOLE-SET EQUIPMENT</strong><small>Pieces cannot be mixed individually.</small></span>
+            </div>
+          </aside>
+
+          <section class="showcase-panel" id="PlayerShowcase" aria-label="Live character armor showcase">
+            <button class="showcase-cycle showcase-cycle--left" id="PreviousSet" type="button" aria-label="Previous armor set">‹</button>
+            <button class="showcase-cycle showcase-cycle--right" id="NextSet" type="button" aria-label="Next armor set">›</button>
+            <div class="showcase-focus showcase-focus--outer"></div>
+            <div class="showcase-focus showcase-focus--inner"></div>
+            <div class="showcase-mark showcase-mark--left"><span class="showcase-mark-gem showcase-mark-gem--left"></span></div>
+            <div class="showcase-mark showcase-mark--right"><span class="showcase-mark-gem showcase-mark-gem--right"></span></div>
+            <div class="avatar-reservation" aria-hidden="true">
+              <span class="avatar-head"></span>
+              <span class="avatar-shoulders"></span>
+              <span class="avatar-body"></span>
+              <span class="avatar-legs"></span>
+            </div>
+            <div class="showcase-caption">
+              <span class="showcase-tier" id="ShowcaseTier">HEAVY ARMOR</span>
+              <strong id="ShowcaseName">GILDED WARPLATE</strong>
+              <small>LIVE CHARACTER PREVIEW · DRAG TO ROTATE</small>
+            </div>
+          </section>
+
+          <aside class="details-panel panel-surface" aria-label="Selected armor effects">
+            <div class="details-heading">
+              <div class="section-kicker">SELECTED LOADOUT</div>
+              <h2 id="DetailsName">GILDED WARPLATE</h2>
+              <p id="DetailsFlavor">Ornate plate built to absorb punishing blows and hostile magic.</p>
+            </div>
+
+            <div class="protection-summary">
+              <div class="summary-emblem"><span id="SummaryGlyph">⬟</span></div>
+              <div class="summary-copy">
+                <small id="SummaryTier">HEAVY ARMOR</small>
+                <strong id="SummaryHeadline">MAXIMUM PROTECTION</strong>
+              </div>
+              <div class="equipped-chip" id="EquippedChip">EQUIPPED</div>
+            </div>
+
+            <div class="effect-heading"><span>DEFENSE</span><span>SET EFFECT</span></div>
+            <div class="effect-row effect-row--positive">
+              <span class="effect-icon">🛡</span>
+              <span class="effect-copy"><strong>PHYSICAL RESISTANCE</strong><small>Reduces incoming physical damage</small></span>
+              <span class="effect-value" id="PhysicalResistance">+40%</span>
+            </div>
+            <div class="effect-row effect-row--positive">
+              <span class="effect-icon">✦</span>
+              <span class="effect-copy"><strong>MAGICAL RESISTANCE</strong><small>Reduces incoming magical damage</small></span>
+              <span class="effect-value" id="MagicalResistance">+40%</span>
+            </div>
+
+            <div class="effect-heading effect-heading--tradeoffs"><span>TRADEOFFS</span><span>SET EFFECT</span></div>
+            <div class="effect-row effect-row--negative" id="MoveSpeedRow">
+              <span class="effect-icon">➤</span>
+              <span class="effect-copy"><strong>MOVE SPEED</strong><small>Slower ground movement</small></span>
+              <span class="effect-value" id="MoveSpeed">−10%</span>
+            </div>
+            <div class="effect-row effect-row--negative" id="CastSpeedRow">
+              <span class="effect-icon">⌛</span>
+              <span class="effect-copy"><strong>CAST SPEED</strong><small>Instant casts are unaffected</small></span>
+              <span class="effect-value" id="CastSpeed">−20%</span>
+            </div>
+            <div class="no-tradeoffs" id="NoTradeoffs">No movement or casting penalties.</div>
+
+            <div class="loadout-meta">
+              <span class="loadout-meta-primary"><small>LOADOUT</small><strong id="PieceCount">7 / 7 PIECES</strong></span>
+              <span><small>AVAILABILITY</small><strong>UNLOCKED</strong></span>
+            </div>
+
+            <button class="equip-button" id="EquipButton" type="button">◆&nbsp;&nbsp; EQUIPPED &nbsp;&nbsp;◆</button>
+            <button class="back-button" type="button">BACK TO HUB</button>
+          </aside>
+        </div>
+
+        <div class="prototype-toast" id="Toast" role="status"></div>
+      </section>
+    </main>
+  </div>
+</div>
+<script src="equipment.js"></script>
+</body>
+</html>

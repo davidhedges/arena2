@@ -545,6 +545,26 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void EquipmentScreen_UsesAuthoritativeWholeSetSelectionAndLiveShowcase()
+        {
+            string screen = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/EquipmentScreen.cs");
+            string uxml = File.ReadAllText("Assets/Arena/Resources/UI/Toolkit/Equipment.uxml");
+            string planner = File.ReadAllText(GameplaySubscriptionPlannerPath);
+            string hub = File.ReadAllText(HubControllerPath);
+
+            Assert.That(screen, Does.Contain("Reducers.EquipArmorSet"));
+            Assert.That(screen, Does.Contain("OnEquipArmorSet"));
+            Assert.That(screen, Does.Contain("SetShowcaseArmorPreview"));
+            Assert.That(uxml, Does.Contain("name=\"TierLight\""));
+            Assert.That(uxml, Does.Contain("name=\"TierMedium\""));
+            Assert.That(uxml, Does.Contain("name=\"TierHeavy\""));
+            Assert.That(uxml, Does.Contain("name=\"PlayerShowcase\""));
+            Assert.That(planner, Does.Contain("From.ArmorSetDefinition()"));
+            Assert.That(planner, Does.Contain("From.ActiveArmorSet()"));
+            Assert.That(hub, Does.Contain("ResolveLocalArmorAppearance"));
+        }
+
+        [Test]
         public void HubDestinationMenu_ExposesServerAuthoritativeSurvivalEntry()
         {
             string hub = File.ReadAllText(HubControllerPath);

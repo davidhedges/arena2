@@ -130,6 +130,7 @@ namespace Arena.UI
         private int _toastGeneration;
 
         public event Action? Closed;
+        public event Action? EquipmentRequested;
 
         public int EscapeClosePriority => 115;
         public bool IsEscapeCloseable => _open;
@@ -265,6 +266,7 @@ namespace Arena.UI
             BindButton("BackButton", Close);
             BindButton("NavPlay", Close);
             BindButton("NavPlayTab", Close);
+            BindButton("NavEquipment", RequestEquipment);
 
             Button? settings = _root.Q<Button>("SettingsButton");
             if (settings != null)
@@ -276,6 +278,12 @@ namespace Arena.UI
             Button? button = _root?.Q<Button>(name);
             if (button != null)
                 button.clicked += callback;
+        }
+
+        private void RequestEquipment()
+        {
+            Close();
+            EquipmentRequested?.Invoke();
         }
 
         private void EnsureConnection(DbConnection? conn)

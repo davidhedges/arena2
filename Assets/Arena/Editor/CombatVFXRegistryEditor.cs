@@ -60,7 +60,7 @@ namespace Arena.Editor
                 string prefabName = prefab != null ? prefab.name : "<null>";
                 Debug.Log(
                     $"{vfxId} -> {prefabName} ({prefabPath}) scale={entry.scale:0.###} "
-                    + $"localPositionOffset={entry.localPositionOffset}",
+                    + $"localPositionOffset={entry.localPositionOffset} localEulerAngles={entry.localEulerAngles}",
                     registry);
             }
         }

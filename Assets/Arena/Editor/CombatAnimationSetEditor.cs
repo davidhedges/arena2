@@ -39,7 +39,7 @@ namespace Arena.Editor
             "runStopCombat",
             "locomotionModeOverrides",
         };
-        private const float PreviewHeight = 280f;
+        private const float PreviewHeight = 200f;
         private const float PreviewMinDistance = 0.5f;
         private const float PreviewMaxDistance = 2.5f;
 
@@ -108,6 +108,18 @@ namespace Arena.Editor
             public AnimationClip Clip { get; }
         }
 
+        private readonly struct CombatVfxPreviewOption
+        {
+            public CombatVfxPreviewOption(string vfxId, string label)
+            {
+                VfxId = vfxId;
+                Label = label;
+            }
+
+            public string VfxId { get; }
+            public string Label { get; }
+        }
+
         private static readonly string ExportPath =
             Path.GetFullPath(Path.Combine(Application.dataPath, "..", "server", "src", "melee_manifest.shared.json"));
         private static readonly string BackupRootPath =
@@ -140,6 +152,7 @@ namespace Arena.Editor
         private Vector2 _attackPreviewOrbit = new(25f, -12f);
         private float _attackPreviewDistanceMultiplier = 1f;
         private readonly List<AnimationClip> _startupTrimChangedClips = new();
+        private readonly List<GameObject> _attackPreviewVfxInstances = new();
 
         private sealed class AnimatedPropRequirement
         {
@@ -202,6 +215,7 @@ namespace Arena.Editor
             EditorGUI.BeginChangeCheck();
             DrawAnimationSetProperties();
             DrawMeleeAttackAuthoringSection(set);
+            DrawAnimationVfxTrackAuthoringSection();
             bool inspectorChanged = EditorGUI.EndChangeCheck();
             serializedObject.ApplyModifiedProperties();
             if (inspectorChanged)
@@ -212,6 +226,7 @@ namespace Arena.Editor
                 InvalidateAvatarValidationCache(set);
                 for (int clipIndex = 0; clipIndex < _startupTrimChangedClips.Count; clipIndex++)
                     ScheduleStartupTrimSynchronization(set, _startupTrimChangedClips[clipIndex]);
+                SampleAttackPreview();
             }
 
             DrawOptionalMeleeAnimationPreviewPane(set);
@@ -797,7 +812,7 @@ namespace Arena.Editor
 
         private static string[] BuildDefaultInspectorExclusions()
         {
-            return new[] { "m_Script", "meleeAttacks" };
+            return new[] { "m_Script", "meleeAttacks", "animationVfxTracks" };
         }
 
         private void DrawAnimationSetProperties()
@@ -952,6 +967,7 @@ namespace Arena.Editor
                 SerializedProperty phasedGroundProperty = attackProperty.FindPropertyRelative("phasedGround");
                 SerializedProperty phasedAirProperty = attackProperty.FindPropertyRelative("phasedAir");
                 SerializedProperty drivePhasesFromSpecialMovementProperty = attackProperty.FindPropertyRelative("drivePhasesFromSpecialMovement");
+                SerializedProperty animationVfxBindingsProperty = attackProperty.FindPropertyRelative("animationVfxBindings");
 
                 int strikeIndex = attackIndex + 1;
                 var strike = set.GetStrikeCombat(strikeIndex);
@@ -1073,10 +1089,46 @@ namespace Arena.Editor
                     MessageType.None);
 
                 EditorGUILayout.Space(4);
+                EditorGUILayout.LabelField("Animation VFX Bindings", EditorStyles.boldLabel);
+                EditorGUILayout.PropertyField(
+                    animationVfxBindingsProperty,
+                    new GUIContent(
+                        "Slot Bindings",
+                        "This attack deterministically chooses which registered VFX fills each semantic animation slot. Leave the list empty for no animation-synchronous VFX."),
+                    true);
+
+                EditorGUILayout.Space(4);
                 EditorGUILayout.LabelField("Combat", EditorStyles.boldLabel);
                 EditorGUILayout.PropertyField(combatProperty, new GUIContent("Combat"), true);
                 EditorGUILayout.EndVertical();
             }
+        }
+
+        private void DrawAnimationVfxTrackAuthoringSection()
+        {
+            EditorGUILayout.Space(8);
+            string foldoutKey = BuildSessionKey("animation-vfx-tracks-foldout");
+            bool expanded = SessionState.GetBool(foldoutKey, false);
+            expanded = EditorGUILayout.Foldout(
+                expanded,
+                "Animation VFX Slot Tracks",
+                true,
+                EditorStyles.foldoutHeader);
+            SessionState.SetBool(foldoutKey, expanded);
+            if (!expanded)
+                return;
+
+            EditorGUILayout.HelpBox(
+                "Author timing and transforms once per Clip + Slot Id. Multiple attacks that share the clip reuse this calibration; each attack's Slot Bindings decide whether and which effect appears.",
+                MessageType.Info);
+            SerializedProperty? tracksProperty = serializedObject.FindProperty("animationVfxTracks");
+            if (tracksProperty == null)
+            {
+                EditorGUILayout.HelpBox("Could not resolve animationVfxTracks on this asset.", MessageType.Error);
+                return;
+            }
+
+            EditorGUILayout.PropertyField(tracksProperty, new GUIContent("Tracks"), true);
         }
 
         private void DrawMeleeAnimationPreviewPane(CombatAnimationSet set)
@@ -1161,14 +1213,6 @@ namespace Arena.Editor
             EnsureAttackPreview(set, previewSelectionKey, previewClip);
             UpdateAttackPreviewPlayback(previewClip);
 
-            Rect previewRect = GUILayoutUtility.GetRect(
-                10f,
-                PreviewHeight,
-                GUILayout.ExpandWidth(true),
-                GUILayout.MinHeight(PreviewHeight));
-            DrawAttackPreview(previewRect);
-            HandleAttackPreviewCameraInput(previewRect);
-
             using (new EditorGUILayout.HorizontalScope())
             {
                 string playLabel = _attackPreviewPlaying ? "Pause" : "Play";
@@ -1183,6 +1227,12 @@ namespace Arena.Editor
                     _attackPreviewTime = ResolveAttackPreviewStartTime();
                     SampleAttackPreview();
                 }
+
+                string loopKey = BuildSessionKey("animation-preview.loop");
+                bool loop = SessionState.GetBool(loopKey, true);
+                bool nextLoop = GUILayout.Toggle(loop, "Loop", "Button", GUILayout.Width(52f));
+                if (nextLoop != loop)
+                    SessionState.SetBool(loopKey, nextLoop);
 
                 GUILayout.Label(
                     $"{_attackPreviewTime:0.000}s / {previewClip.length:0.000}s",
@@ -1202,8 +1252,332 @@ namespace Arena.Editor
                 SampleAttackPreview();
             }
 
+            if (previewSelectionKey > 0)
+                DrawAnimationVfxPreviewTools(set, previewClip, previewSelectionKey);
+
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField("Preview Viewport", EditorStyles.miniBoldLabel);
+            Rect previewRect = GUILayoutUtility.GetRect(
+                10f,
+                PreviewHeight,
+                GUILayout.ExpandWidth(true),
+                GUILayout.MinHeight(PreviewHeight));
+            DrawAttackPreview(previewRect);
+            HandleAttackPreviewCameraInput(previewRect);
+
             if (_attackPreviewPlaying)
                 Repaint();
+        }
+
+        private void DrawAnimationVfxPreviewTools(
+            CombatAnimationSet set,
+            AnimationClip previewClip,
+            int strikeIndex)
+        {
+            var matchingTracks = new List<CombatAnimationVfxTrack>();
+            foreach (CombatAnimationVfxTrack track in set.GetAnimationVfxTracks(previewClip))
+                matchingTracks.Add(track);
+
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField("Animation VFX Preview", EditorStyles.boldLabel);
+            if (matchingTracks.Count == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "This clip has no animation VFX yet. Choose a registered prefab below, play or scrub to the desired slash frame, then create it in one step.",
+                    MessageType.None);
+                if (TryDrawCombatVfxPreviewPicker(
+                        "Effect",
+                        currentVfxId: string.Empty,
+                        out string newVfxId)
+                    && GUILayout.Button("Create Slash Effect At Current Frame"))
+                {
+                    CreateAnimationVfxTrackAndBinding(
+                        set,
+                        previewClip,
+                        strikeIndex,
+                        newVfxId);
+                }
+                return;
+            }
+
+            string selectedTrackKey = BuildAnimationVfxPreviewTrackSessionKey(previewClip);
+            int selectedTrackIndex = ResolveSelectedAnimationVfxPreviewTrackIndex(
+                previewClip,
+                matchingTracks.Count);
+            string[] trackLabels = new string[matchingTracks.Count];
+            for (int index = 0; index < matchingTracks.Count; index++)
+            {
+                CombatAnimationVfxTrack track = matchingTracks[index];
+                trackLabels[index] =
+                    $"{track.NormalizedSlotId} ({track.startTimeSeconds:0.000}s)";
+            }
+
+            int nextSelectedTrackIndex = EditorGUILayout.Popup("Track", selectedTrackIndex, trackLabels);
+            if (nextSelectedTrackIndex != selectedTrackIndex)
+            {
+                selectedTrackIndex = nextSelectedTrackIndex;
+                _attackPreviewPlaying = false;
+                _attackPreviewTime = ResolveVisibleAnimationVfxPreviewTime(
+                    matchingTracks[selectedTrackIndex],
+                    previewClip);
+                SampleAttackPreview();
+                Repaint();
+            }
+            SessionState.SetInt(selectedTrackKey, selectedTrackIndex);
+            CombatAnimationVfxTrack selectedTrack = matchingTracks[selectedTrackIndex];
+
+            WeaponMeleeAttackAuthoring attack = set.meleeAttacks[strikeIndex - 1];
+            bool hasBinding = TryResolvePreviewVfxId(
+                attack,
+                selectedTrack.NormalizedSlotId,
+                out string vfxId);
+            EditorGUILayout.HelpBox(
+                hasBinding && !string.IsNullOrEmpty(vfxId)
+                    ? $"Attack {strikeIndex} fills {selectedTrack.NormalizedSlotId} with {vfxId}. Scrubbing at or after Start Time previews the registered prefab."
+                    : $"Attack {strikeIndex} does not fill {selectedTrack.NormalizedSlotId}, so this animation plays without that effect.",
+                hasBinding && !string.IsNullOrEmpty(vfxId) ? MessageType.Info : MessageType.Warning);
+
+            EditorGUI.BeginChangeCheck();
+            bool hasRegistryChoice = TryDrawCombatVfxPreviewPicker(
+                "Effect",
+                vfxId,
+                out string selectedVfxId);
+            bool selectedEffectChanged = EditorGUI.EndChangeCheck();
+            if (hasRegistryChoice
+                && ((hasBinding && selectedEffectChanged)
+                    || (!hasBinding && GUILayout.Button("Bind Selected Effect To This Attack"))))
+            {
+                Undo.RecordObject(set, "Bind Animation VFX Effect");
+                SetAttackAnimationVfxBinding(
+                    set,
+                    strikeIndex,
+                    selectedTrack.NormalizedSlotId,
+                    selectedVfxId);
+                CommitAnimationVfxTrackEdit(set, "animation-vfx-binding");
+                vfxId = selectedVfxId;
+                hasBinding = true;
+            }
+
+            EditorGUILayout.LabelField("Live VFX Transform", EditorStyles.boldLabel);
+            EditorGUI.BeginChangeCheck();
+            Vector3 localPosition = EditorGUILayout.Vector3Field(
+                "Local Position",
+                selectedTrack.localPosition);
+            Vector3 localEulerAngles = EditorGUILayout.Vector3Field(
+                "Local Rotation",
+                selectedTrack.localEulerAngles);
+            Vector3 localScale = EditorGUILayout.Vector3Field(
+                "Local Scale",
+                selectedTrack.localScale);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(set, "Tune Animation VFX Transform");
+                selectedTrack.localPosition = localPosition;
+                selectedTrack.localEulerAngles = localEulerAngles;
+                selectedTrack.localScale = SanitizeAnimationVfxScale(localScale);
+                CommitAnimationVfxTrackEdit(set, "animation-vfx-transform");
+            }
+
+            EditorGUILayout.HelpBox(
+                "Edit Position, Rotation, and Scale while watching the preview below. Changes are sampled immediately. Drag the preview itself to orbit the camera.",
+                MessageType.None);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Jump To Effect"))
+                {
+                    _attackPreviewPlaying = false;
+                    _attackPreviewTime = ResolveVisibleAnimationVfxPreviewTime(
+                        selectedTrack,
+                        previewClip);
+                    SampleAttackPreview();
+                    Repaint();
+                }
+
+                if (GUILayout.Button("Set Start To Timeline"))
+                {
+                    Undo.RecordObject(set, "Set Animation VFX Start");
+                    selectedTrack.startTimeSeconds = Mathf.Clamp(
+                        _attackPreviewTime,
+                        0f,
+                        previewClip.length);
+                    CommitAnimationVfxTrackEdit(set, "animation-vfx-start");
+                }
+
+                if (GUILayout.Button("Set End To Timeline"))
+                {
+                    Undo.RecordObject(set, "Set Animation VFX End");
+                    selectedTrack.endTimeSeconds = Mathf.Clamp(
+                        _attackPreviewTime,
+                        0f,
+                        previewClip.length);
+                    CommitAnimationVfxTrackEdit(set, "animation-vfx-end");
+                }
+            }
+
+            if (GUILayout.Button("Reset Local Transform"))
+            {
+                Undo.RecordObject(set, "Reset Animation VFX Transform");
+                selectedTrack.localPosition = Vector3.zero;
+                selectedTrack.localEulerAngles = Vector3.zero;
+                selectedTrack.localScale = Vector3.one;
+                CommitAnimationVfxTrackEdit(set, "animation-vfx-transform-reset");
+            }
+
+            EditorGUILayout.LabelField(
+                selectedTrack.HasFiniteWindow
+                    ? $"Window: {selectedTrack.startTimeSeconds:0.000}s–{selectedTrack.endTimeSeconds:0.000}s"
+                    : $"Spawn: {selectedTrack.startTimeSeconds:0.000}s; prefab finishes naturally",
+                EditorStyles.miniLabel);
+        }
+
+        private void CommitAnimationVfxTrackEdit(CombatAnimationSet set, string reason)
+        {
+            CombatAnimationSetProtection.MarkTrustedMutation(set, reason);
+            EditorUtility.SetDirty(set);
+            ScheduleAnimationSetPersist(set, reason);
+            serializedObject.UpdateIfRequiredOrScript();
+            SampleAttackPreview();
+            Repaint();
+        }
+
+        private int ResolveSelectedAnimationVfxPreviewTrackIndex(
+            AnimationClip previewClip,
+            int trackCount)
+        {
+            return Mathf.Clamp(
+                SessionState.GetInt(BuildAnimationVfxPreviewTrackSessionKey(previewClip), 0),
+                0,
+                Mathf.Max(0, trackCount - 1));
+        }
+
+        private string BuildAnimationVfxPreviewTrackSessionKey(AnimationClip previewClip)
+        {
+            return BuildSessionKey(
+                $"attack-preview.vfx-track.{GlobalObjectId.GetGlobalObjectIdSlow(previewClip)}");
+        }
+
+        private static float ResolveVisibleAnimationVfxPreviewTime(
+            CombatAnimationVfxTrack track,
+            AnimationClip previewClip)
+        {
+            float visibleOffset = Mathf.Min(0.016f, Mathf.Max(0f, previewClip.length * 0.01f));
+            float time = Mathf.Max(0f, track.startTimeSeconds) + visibleOffset;
+            if (track.HasFiniteWindow)
+                time = Mathf.Min(time, Mathf.Max(track.startTimeSeconds, track.endTimeSeconds - 0.001f));
+            return Mathf.Clamp(time, 0f, previewClip.length);
+        }
+
+        private bool TryDrawCombatVfxPreviewPicker(
+            string label,
+            string currentVfxId,
+            out string selectedVfxId)
+        {
+            var options = new List<CombatVfxPreviewOption>();
+            CombatVFXRegistry? registry = CombatVFXRegistry.LoadShared();
+            if (registry != null)
+            {
+                foreach (CombatVFXRegistry.Entry entry in registry.Entries)
+                {
+                    string vfxId = WireIdentifier.Normalize(entry.vfxId);
+                    if (entry.prefab == null || string.IsNullOrEmpty(vfxId))
+                        continue;
+
+                    string prefabName = entry.prefab switch
+                    {
+                        GameObject gameObject => gameObject.name,
+                        Component component => component.gameObject.name,
+                        _ => entry.prefab.name,
+                    };
+                    options.Add(new CombatVfxPreviewOption(
+                        vfxId,
+                        $"{vfxId} — {prefabName}"));
+                }
+            }
+
+            if (options.Count == 0)
+            {
+                selectedVfxId = string.Empty;
+                EditorGUILayout.HelpBox(
+                    "CombatVFXRegistry has no prefab entries. Register the slash prefab there first.",
+                    MessageType.Warning);
+                return false;
+            }
+
+            string normalizedCurrentId = WireIdentifier.Normalize(currentVfxId);
+            int selectedIndex = 0;
+            for (int index = 0; index < options.Count; index++)
+            {
+                if (string.Equals(options[index].VfxId, normalizedCurrentId, StringComparison.Ordinal))
+                {
+                    selectedIndex = index;
+                    break;
+                }
+            }
+
+            string[] labels = new string[options.Count];
+            for (int index = 0; index < options.Count; index++)
+                labels[index] = options[index].Label;
+            selectedIndex = EditorGUILayout.Popup(label, selectedIndex, labels);
+            selectedVfxId = options[selectedIndex].VfxId;
+            return true;
+        }
+
+        private void CreateAnimationVfxTrackAndBinding(
+            CombatAnimationSet set,
+            AnimationClip previewClip,
+            int strikeIndex,
+            string vfxId)
+        {
+            Undo.RecordObject(set, "Create Animation Slash VFX");
+            set.animationVfxTracks ??= new List<CombatAnimationVfxTrack>();
+            var track = new CombatAnimationVfxTrack
+            {
+                clip = previewClip,
+                slotId = "SLASH_PRIMARY",
+                startTimeSeconds = Mathf.Clamp(_attackPreviewTime, 0f, previewClip.length),
+                endTimeSeconds = 0f,
+                anchor = CombatAnimationVfxAnchor.CharacterRoot,
+                attachment = CombatAnimationVfxAttachment.FollowAnchor,
+                localPosition = Vector3.zero,
+                localEulerAngles = Vector3.zero,
+                localScale = Vector3.one,
+            };
+            set.animationVfxTracks.Add(track);
+            SetAttackAnimationVfxBinding(set, strikeIndex, track.NormalizedSlotId, vfxId);
+            SessionState.SetInt(BuildAnimationVfxPreviewTrackSessionKey(previewClip), 0);
+            _attackPreviewPlaying = false;
+            _attackPreviewTime = ResolveVisibleAnimationVfxPreviewTime(track, previewClip);
+            CommitAnimationVfxTrackEdit(set, "animation-vfx-create");
+        }
+
+        private static void SetAttackAnimationVfxBinding(
+            CombatAnimationSet set,
+            int strikeIndex,
+            string slotId,
+            string vfxId)
+        {
+            if (strikeIndex <= 0 || strikeIndex > set.MeleeAttackCount)
+                return;
+
+            WeaponMeleeAttackAuthoring attack = set.meleeAttacks[strikeIndex - 1];
+            attack.animationVfxBindings ??= new List<CombatAnimationVfxBinding>();
+            string normalizedSlotId = CombatAnimationVfxTrack.NormalizeSlotId(slotId);
+            for (int index = attack.animationVfxBindings.Count - 1; index >= 0; index--)
+            {
+                if (string.Equals(
+                        attack.animationVfxBindings[index].NormalizedSlotId,
+                        normalizedSlotId,
+                        StringComparison.Ordinal))
+                {
+                    attack.animationVfxBindings.RemoveAt(index);
+                }
+            }
+
+            attack.animationVfxBindings.Add(new CombatAnimationVfxBinding(
+                normalizedSlotId,
+                WireIdentifier.Normalize(vfxId)));
+            set.meleeAttacks[strikeIndex - 1] = attack;
         }
 
         private bool TryDrawMeleePreviewSelection(
@@ -1442,6 +1816,7 @@ namespace Arena.Editor
 
         private void DestroyAttackPreview()
         {
+            DestroyAttackPreviewVfx();
             DestroyAttackPreviewGraph();
 
             if (_attackPreviewUtility != null)
@@ -1517,10 +1892,14 @@ namespace Arena.Editor
             float delta = Mathf.Max(0f, (float)(now - _attackPreviewLastEditorTime));
             _attackPreviewLastEditorTime = now;
             _attackPreviewTime += delta;
+            bool loopPlayback = previewClip.isLooping
+                || SessionState.GetBool(BuildSessionKey("animation-preview.loop"), true);
             if (_attackPreviewTime > previewClip.length)
-                _attackPreviewTime = previewClip.isLooping ? Mathf.Repeat(_attackPreviewTime, previewClip.length) : previewClip.length;
+                _attackPreviewTime = loopPlayback
+                    ? Mathf.Repeat(_attackPreviewTime, previewClip.length)
+                    : previewClip.length;
 
-            if (!previewClip.isLooping && Mathf.Approximately(_attackPreviewTime, previewClip.length))
+            if (!loopPlayback && Mathf.Approximately(_attackPreviewTime, previewClip.length))
                 _attackPreviewPlaying = false;
 
             SampleAttackPreview();
@@ -1536,10 +1915,137 @@ namespace Arena.Editor
             {
                 _attackPreviewPlayable.SetTime(_attackPreviewTime);
                 _attackPreviewGraph.Evaluate(0f);
+            }
+            else
+            {
+                _attackPreviewClip.SampleAnimation(_attackPreviewInstance, _attackPreviewTime);
+            }
+
+            SampleAttackPreviewVfx();
+        }
+
+        private void SampleAttackPreviewVfx()
+        {
+            DestroyAttackPreviewVfx();
+            if (_attackPreviewSet == null
+                || _attackPreviewInstance == null
+                || _attackPreviewAnimator == null
+                || _attackPreviewClip == null
+                || _attackPreviewStrikeIndex <= 0
+                || _attackPreviewStrikeIndex > _attackPreviewSet.MeleeAttackCount)
+            {
                 return;
             }
 
-            _attackPreviewClip.SampleAnimation(_attackPreviewInstance, _attackPreviewTime);
+            WeaponMeleeAttackAuthoring attack =
+                _attackPreviewSet.meleeAttacks[_attackPreviewStrikeIndex - 1];
+            WeaponAttachmentController? attachments =
+                _attackPreviewInstance.GetComponentInChildren<WeaponAttachmentController>(true);
+            foreach (CombatAnimationVfxTrack track in _attackPreviewSet.GetAnimationVfxTracks(_attackPreviewClip))
+            {
+                if (!TryResolvePreviewVfxId(attack, track.NormalizedSlotId, out string vfxId)
+                    || string.IsNullOrEmpty(vfxId)
+                    || _attackPreviewTime < track.startTimeSeconds
+                    || (track.HasFiniteWindow && _attackPreviewTime >= track.endTimeSeconds))
+                {
+                    continue;
+                }
+
+                CombatVFXRegistry.Template? template = CombatVFXTemplateRegistry.ResolveTemplate(vfxId);
+                if (template == null)
+                    continue;
+
+                Transform anchor = CombatAnimationVfxAnchorUtility.Resolve(
+                    track.anchor,
+                    _attackPreviewInstance.transform,
+                    _attackPreviewAnimator,
+                    attachments);
+                GameObject instance = Instantiate(template.Prefab);
+                instance.name = $"{template.Prefab.name}_{track.NormalizedSlotId}_Preview";
+                Vector3 localPosition = track.localPosition + template.LocalPositionOffset;
+                Quaternion localRotation =
+                    Quaternion.Euler(track.localEulerAngles) * template.LocalRotation;
+                if (track.attachment == CombatAnimationVfxAttachment.FollowAnchor)
+                {
+                    instance.transform.SetParent(anchor, false);
+                    instance.transform.localPosition = localPosition;
+                    instance.transform.localRotation = localRotation;
+                }
+                else
+                {
+                    instance.transform.SetPositionAndRotation(
+                        anchor.TransformPoint(localPosition),
+                        anchor.rotation * localRotation);
+                    instance.transform.SetParent(_attackPreviewInstance.transform, true);
+                }
+
+                instance.transform.localScale = Vector3.Scale(
+                    instance.transform.localScale,
+                    SanitizeAnimationVfxScale(track.localScale));
+                VFXUtils.ApplyPrefabPresentationScale(instance, template.Scale);
+                SetHideFlagsRecursive(instance, HideFlags.HideAndDontSave);
+
+                float elapsedSeconds = Mathf.Max(0f, _attackPreviewTime - track.startTimeSeconds);
+                ParticleSystem[] systems = instance.GetComponentsInChildren<ParticleSystem>(true);
+                for (int index = 0; index < systems.Length; index++)
+                {
+                    systems[index].Simulate(
+                        elapsedSeconds,
+                        withChildren: false,
+                        restart: true,
+                        fixedTimeStep: true);
+                }
+
+                _attackPreviewVfxInstances.Add(instance);
+            }
+        }
+
+        private void DestroyAttackPreviewVfx()
+        {
+            for (int index = 0; index < _attackPreviewVfxInstances.Count; index++)
+            {
+                if (_attackPreviewVfxInstances[index] != null)
+                    DestroyImmediate(_attackPreviewVfxInstances[index]);
+            }
+
+            _attackPreviewVfxInstances.Clear();
+        }
+
+        private static bool TryResolvePreviewVfxId(
+            WeaponMeleeAttackAuthoring attack,
+            string slotId,
+            out string vfxId)
+        {
+            vfxId = string.Empty;
+            if (attack.animationVfxBindings == null)
+                return false;
+
+            string normalizedSlotId = CombatAnimationVfxTrack.NormalizeSlotId(slotId);
+            bool found = false;
+            for (int index = 0; index < attack.animationVfxBindings.Count; index++)
+            {
+                CombatAnimationVfxBinding binding = attack.animationVfxBindings[index];
+                if (!string.Equals(
+                        binding.NormalizedSlotId,
+                        normalizedSlotId,
+                        StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                found = true;
+                vfxId = binding.NormalizedVfxId;
+            }
+
+            return found;
+        }
+
+        private static Vector3 SanitizeAnimationVfxScale(Vector3 scale)
+        {
+            return new Vector3(
+                Mathf.Approximately(scale.x, 0f) ? 1f : scale.x,
+                Mathf.Approximately(scale.y, 0f) ? 1f : scale.y,
+                Mathf.Approximately(scale.z, 0f) ? 1f : scale.z);
         }
 
         private float ResolveAttackPreviewStartTime()
@@ -1573,7 +2079,9 @@ namespace Arena.Editor
             if (Event.current.type != EventType.Repaint)
                 return;
 
-            Bounds bounds = CalculateAttackPreviewBounds(_attackPreviewInstance);
+            Bounds bounds = CalculateAttackPreviewBounds(
+                _attackPreviewInstance,
+                _attackPreviewVfxInstances);
             Camera camera = _attackPreviewUtility.camera;
             camera.clearFlags = CameraClearFlags.Color;
             camera.backgroundColor = new Color(0.16f, 0.16f, 0.16f, 1f);
@@ -1594,7 +2102,9 @@ namespace Arena.Editor
             GUI.DrawTexture(previewRect, texture, ScaleMode.StretchToFill, false);
         }
 
-        private static Bounds CalculateAttackPreviewBounds(GameObject previewInstance)
+        private static Bounds CalculateAttackPreviewBounds(
+            GameObject previewInstance,
+            IReadOnlyList<GameObject> ignoredRoots)
         {
             Renderer[] renderers = previewInstance.GetComponentsInChildren<Renderer>(false);
             bool hasBounds = false;
@@ -1603,6 +2113,8 @@ namespace Arena.Editor
             {
                 Renderer renderer = renderers[i];
                 if (renderer == null || !renderer.enabled)
+                    continue;
+                if (IsDescendantOfAny(renderer.transform, ignoredRoots))
                     continue;
 
                 if (!hasBounds)
@@ -1617,6 +2129,20 @@ namespace Arena.Editor
             }
 
             return hasBounds ? bounds : new Bounds(Vector3.up, Vector3.one * 2f);
+        }
+
+        private static bool IsDescendantOfAny(
+            Transform transform,
+            IReadOnlyList<GameObject> roots)
+        {
+            for (int index = 0; index < roots.Count; index++)
+            {
+                GameObject root = roots[index];
+                if (root != null && (transform == root.transform || transform.IsChildOf(root.transform)))
+                    return true;
+            }
+
+            return false;
         }
 
         private void HandleAttackPreviewCameraInput(Rect previewRect)

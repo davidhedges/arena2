@@ -547,6 +547,7 @@ namespace Arena.Tests.Editor
             Assert.That(staticSqlText, Does.Contain("\"combat_profile_catalog\""));
             Assert.That(staticSqlText, Does.Contain("\"combat_mode_catalog\""));
             Assert.That(staticSqlText, Does.Contain("\"action_bar_slot_catalog\""));
+            Assert.That(staticSqlText, Does.Contain("\"armor_set_definition\""));
             Assert.That(staticSqlText, Does.Contain("\"spell_definition\""));
             Assert.That(staticSqlText, Does.Contain("\"melee_definition\""));
             Assert.That(staticSqlText, Does.Contain("\"melee_ability_catalog\""));
@@ -562,7 +563,7 @@ namespace Arena.Tests.Editor
             Assert.That(staticSqlText, Does.Not.Contain("\"fixed_action_binding_catalog\""));
             Assert.That(staticSqlText, Does.Not.Contain("\"class_catalog\""));
 
-            Assert.That(localSql, Has.Length.EqualTo(27));
+            Assert.That(localSql, Has.Length.EqualTo(28));
             Assert.That(localSql[0], Does.Contain("\"player_world\""));
             Assert.That(localSql[0], Does.Contain(localIdentityKey));
             Assert.That(localSqlText, Does.Contain("\"player_open_world_scene\""));
@@ -583,6 +584,7 @@ namespace Arena.Tests.Editor
             Assert.That(localSqlText, Does.Contain("\"party_invite\""));
             Assert.That(localSqlText, Does.Contain("\"equipment_loadout\""));
             Assert.That(localSqlText, Does.Contain("\"player_equipment_presentation\""));
+            Assert.That(localSqlText, Does.Contain("\"active_armor_set\""));
             Assert.That(localSqlText, Does.Contain("\"inventory_container\""));
             Assert.That(localSqlText, Does.Contain("\"inventory_slot\""));
             Assert.That(localSqlText, Does.Contain("\"item_instance\""));
