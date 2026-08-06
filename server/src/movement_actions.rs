@@ -13,9 +13,12 @@ use crate::action_snapshot::{
 use crate::auto_attack::arm_auto_attack_if_unarmed_with_cadence;
 use crate::combat::{has_active_disabling_status, mark_harmful_combat_action};
 use crate::defense::clear_interruptible_defense_for_owner;
+use crate::lingering_shade::arm_lingering_shade_for_voluntary_movement;
 use crate::movement::FIXED_TICK_MILLIS;
 use crate::progression::{
-    primary_resource_gain_on_action_accept, AbilityCatalog, MovementDeliveryRuntime,
+    character_has_selected_discipline, primary_resource_gain_on_action_accept,
+    subtlety_dodge_recharge_time_reduction, AbilityCatalog, MovementDeliveryRuntime,
+    DISCIPLINE_SUBTLETY,
 };
 use crate::resources::{
     can_pay_action_resource_cost, grant_primary_resource_amount, pay_action_resource_cost,
@@ -341,6 +344,17 @@ pub fn start_dodge(
 
     clear_interruptible_defense_for_owner(ctx, owner);
 
+    arm_lingering_shade_for_voluntary_movement(
+        ctx,
+        owner,
+        ACTION_KIND_DODGE,
+        "",
+        SpellVec3::new(start_x, start_y, start_z),
+        baked.end,
+        snapshot.facing_yaw,
+        now,
+    );
+
     crate::spells::begin_special_movement_with_facing_policy(
         ctx,
         owner,
@@ -580,6 +594,16 @@ pub(crate) fn launch_movement_delivery(
     };
 
     clear_interruptible_defense_for_owner(ctx, owner);
+    arm_lingering_shade_for_voluntary_movement(
+        ctx,
+        owner,
+        action_id.as_str(),
+        ability.ability_id.as_str(),
+        movement_start,
+        baked.end,
+        cast_state.facing_yaw,
+        now,
+    );
     crate::spells::begin_special_movement(
         ctx,
         owner,
@@ -668,10 +692,12 @@ pub(crate) fn reset_dodge_charge_state_to_full(
     now: Timestamp,
 ) {
     clear_fixed_action_charge_recoveries(ctx, owner, Some(ACTION_KIND_DODGE));
-    upsert_fixed_action_charge_state(
+    let row = sync_fixed_action_charge_state(
         ctx,
         full_fixed_action_charge_state(owner, ACTION_KIND_DODGE, now),
+        now,
     );
+    upsert_fixed_action_charge_state(ctx, row);
 }
 
 pub(crate) fn sync_all_fixed_action_charge_states(ctx: &ReducerContext, now: Timestamp) {
@@ -769,7 +795,8 @@ fn sync_fixed_action_charge_state(
     row: FixedActionChargeState,
     now: Timestamp,
 ) -> FixedActionChargeState {
-    let (max_charges, recharge_duration_ms) = fixed_action_charge_config(row.action_id.as_str());
+    let (max_charges, recharge_duration_ms) =
+        fixed_action_charge_config_for_owner(ctx, row.owner, row.action_id.as_str());
     let recharge_duration_ms = recharge_duration_ms.max(1);
     let mut recoveries = fixed_action_charge_recoveries(ctx, row.owner, row.action_id.as_str());
     if recoveries.is_empty() && row.current_charges < max_charges {
@@ -923,10 +950,47 @@ fn fixed_action_charge_key(owner: Identity, action_id: &str) -> String {
 }
 
 fn fixed_action_charge_config(action_id: &str) -> (u32, u64) {
+    fixed_action_charge_config_with_dodge_recharge_reduction(action_id, 0.0)
+}
+
+fn fixed_action_charge_config_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+    action_id: &str,
+) -> (u32, u64) {
+    let dodge_recharge_time_reduction = if action_id == ACTION_KIND_DODGE
+        && character_has_selected_discipline(ctx, owner, DISCIPLINE_SUBTLETY)
+    {
+        subtlety_dodge_recharge_time_reduction()
+    } else {
+        0.0
+    };
+    fixed_action_charge_config_with_dodge_recharge_reduction(
+        action_id,
+        dodge_recharge_time_reduction,
+    )
+}
+
+fn fixed_action_charge_config_with_dodge_recharge_reduction(
+    action_id: &str,
+    dodge_recharge_time_reduction: f32,
+) -> (u32, u64) {
     match action_id {
-        ACTION_KIND_DODGE => (DODGE_MAX_CHARGES, DODGE_RECHARGE_MS),
+        ACTION_KIND_DODGE => (
+            DODGE_MAX_CHARGES,
+            reduced_dodge_recharge_duration_ms(dodge_recharge_time_reduction),
+        ),
         _ => (0, 1),
     }
+}
+
+fn reduced_dodge_recharge_duration_ms(reduction: f32) -> u64 {
+    let reduction = if reduction.is_finite() {
+        reduction.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    ((DODGE_RECHARGE_MS as f64 * (1.0 - reduction as f64)).round() as u64).max(1)
 }
 
 #[derive(Clone, Copy)]
@@ -1308,5 +1372,20 @@ mod tests {
         assert_eq!(row.max_charges, DODGE_MAX_CHARGES);
         assert_eq!(row.recharge_duration_ms, DODGE_RECHARGE_MS);
         assert!(!row.is_recharging);
+    }
+
+    #[test]
+    fn fleet_footed_reduces_dodge_recharge_time_by_twenty_percent() {
+        let (base_max_charges, recharge_duration_ms) =
+            fixed_action_charge_config_with_dodge_recharge_reduction(ACTION_KIND_DODGE, 0.0);
+        let (fleet_footed_max_charges, fleet_footed_recharge_duration_ms) =
+            fixed_action_charge_config_with_dodge_recharge_reduction(ACTION_KIND_DODGE, 0.2);
+
+        assert_eq!(fleet_footed_max_charges, base_max_charges);
+        assert_eq!(fleet_footed_recharge_duration_ms, 8_000);
+        assert_eq!(
+            fleet_footed_recharge_duration_ms,
+            recharge_duration_ms * 4 / 5
+        );
     }
 }

@@ -26,6 +26,7 @@ mod derived_stats;
 mod dice;
 pub(crate) mod game_loop;
 mod inventory;
+mod lingering_shade;
 mod melee;
 mod movement;
 mod movement_actions;

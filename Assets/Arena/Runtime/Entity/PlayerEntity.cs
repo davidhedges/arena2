@@ -374,6 +374,8 @@ namespace Arena.Entity
         public void TriggerBlockHit() => _animator?.TriggerBlockHit();
         public void TriggerDodge(MovementActionState row) => _animator?.TriggerDodge(row);
         public void SetSpecialMovementRuntime(SpecialMovementRuntime row) => SimState.SetSpecialMovementRuntime(row);
+        public void SetLingeringShadeState(LingeringShadeState row) => _animator?.SetLingeringShadeState(row);
+        public void ClearLingeringShadeState() => _animator?.ClearLingeringShadeState();
         public void ClearSpecialMovementRuntime()
         {
             SimState.ClearSpecialMovementRuntime();

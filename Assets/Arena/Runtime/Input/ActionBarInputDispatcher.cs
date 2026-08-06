@@ -160,7 +160,13 @@ namespace Arena.Input
             string keyLabel,
             string slotId)
         {
-            if (conn == null || !action.CanTrigger)
+            if (conn == null)
+                return false;
+
+            if (LingeringShadeInput.TryConsumeRecast(conn, action))
+                return true;
+
+            if (!action.CanTrigger)
                 return false;
 
             if (action.IsCombatDisciplineSwitch)

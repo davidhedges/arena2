@@ -105,8 +105,11 @@ const ABILITY_KIND_COMBAT_MODE_TOGGLE: &str = "COMBAT_MODE_TOGGLE";
 const ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID: &str = "ARCHER_DRAW_MODE_TOGGLE";
 // Keep the original wire ID stable so existing action-bar assignments survive the rename.
 const DAGGER_SHROUD_ABILITY_ID: &str = "DAGGER_STEALTH";
+const SUBTLETY_FLEET_FOOTED_ABILITY_ID: &str = "SUBTLETY_FLEET_FOOTED";
+const SUBTLETY_LINGERING_SHADE_ABILITY_ID: &str = "SUBTLETY_LINGERING_SHADE";
 const SUBTLETY_OPPORTUNIST_ABILITY_ID: &str = "SUBTLETY_OPPORTUNIST";
 const SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID: &str = "SUBTLETY_SURPRISE_ATTACKS";
+const SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID: &str = "SUBTLETY_TACTICAL_ADVANTAGE";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct AllocatedStatTotals {
@@ -263,6 +266,12 @@ struct AbilityGameplayDefinition {
     #[serde(default)]
     disabled_target_damage_bonus: f32,
     #[serde(default)]
+    behind_target_damage_bonus: f32,
+    #[serde(default)]
+    dodge_recharge_time_reduction: f32,
+    #[serde(default)]
+    movement_return: Option<MovementReturnDefinition>,
+    #[serde(default)]
     stealth_attack_stun_ms: u64,
     uses_global_cooldown: Option<bool>,
     #[serde(default)]
@@ -304,6 +313,12 @@ struct AbilityGameplayDefinition {
     arms_auto_attack_on_cast: bool,
     #[serde(default)]
     delivery: Option<serde_json::Value>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MovementReturnDefinition {
+    window_ms: u64,
 }
 
 #[derive(Clone, Deserialize)]
@@ -5368,6 +5383,9 @@ fn validate_ability_catalog() {
 
         let ability_kind = ability_gameplay_kind(ability);
         let disabled_target_damage_bonus = ability.gameplay.disabled_target_damage_bonus;
+        let behind_target_damage_bonus = ability.gameplay.behind_target_damage_bonus;
+        let dodge_recharge_time_reduction = ability.gameplay.dodge_recharge_time_reduction;
+        let movement_return = ability.gameplay.movement_return.as_ref();
         let stealth_attack_stun_ms = ability.gameplay.stealth_attack_stun_ms;
         assert!(
             disabled_target_damage_bonus.is_finite()
@@ -5378,6 +5396,38 @@ fn validate_ability_catalog() {
             assert_eq!(
                 ability_kind, "PASSIVE",
                 "ability '{ability_id}' may only author disabled_target_damage_bonus for PASSIVE gameplay"
+            );
+        }
+        assert!(
+            behind_target_damage_bonus.is_finite()
+                && (0.0..=1.0).contains(&behind_target_damage_bonus),
+            "ability '{ability_id}' must author behind_target_damage_bonus between 0 and 1"
+        );
+        if behind_target_damage_bonus > 0.0 {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author behind_target_damage_bonus for PASSIVE gameplay"
+            );
+        }
+        assert!(
+            dodge_recharge_time_reduction.is_finite()
+                && (0.0..1.0).contains(&dodge_recharge_time_reduction),
+            "ability '{ability_id}' must author dodge_recharge_time_reduction between 0 inclusive and 1 exclusive"
+        );
+        if dodge_recharge_time_reduction > 0.0 {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author dodge_recharge_time_reduction for PASSIVE gameplay"
+            );
+        }
+        if let Some(movement_return) = movement_return {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author movement_return for PASSIVE gameplay"
+            );
+            assert!(
+                (1..=10_000).contains(&movement_return.window_ms),
+                "ability '{ability_id}' must author movement_return.window_ms between 1 and 10000"
             );
         }
         if stealth_attack_stun_ms > 0 {
@@ -5423,6 +5473,67 @@ fn validate_ability_catalog() {
                     .iter()
                     .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
                 "Surprise Attacks must carry the PASSIVE ability tag"
+            );
+        }
+        if ability_id == SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID {
+            assert_eq!(
+                discipline_id, DISCIPLINE_SUBTLETY,
+                "Tactical Advantage must remain a Subtlety passive"
+            );
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "Tactical Advantage must remain passive"
+            );
+            assert!(
+                (behind_target_damage_bonus - 0.15).abs() < 0.0001,
+                "Tactical Advantage must grant 15% increased damage from behind"
+            );
+            assert!(
+                ability
+                    .ability_tags
+                    .iter()
+                    .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
+                "Tactical Advantage must carry the PASSIVE ability tag"
+            );
+        }
+        if ability_id == SUBTLETY_FLEET_FOOTED_ABILITY_ID {
+            assert_eq!(
+                discipline_id, DISCIPLINE_SUBTLETY,
+                "Fleet Footed must remain a Subtlety passive"
+            );
+            assert_eq!(ability_kind, "PASSIVE", "Fleet Footed must remain passive");
+            assert!(
+                (dodge_recharge_time_reduction - 0.2).abs() < 0.0001,
+                "Fleet Footed must reduce Dodge recharge time by 20%"
+            );
+            assert!(
+                ability
+                    .ability_tags
+                    .iter()
+                    .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
+                "Fleet Footed must carry the PASSIVE ability tag"
+            );
+        }
+        if ability_id == SUBTLETY_LINGERING_SHADE_ABILITY_ID {
+            assert_eq!(
+                discipline_id, DISCIPLINE_SUBTLETY,
+                "Lingering Shade must remain a Subtlety passive"
+            );
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "Lingering Shade must remain passive"
+            );
+            assert_eq!(
+                movement_return.map(|definition| definition.window_ms),
+                Some(3_000),
+                "Lingering Shade must provide a 3 second movement return window"
+            );
+            assert!(
+                ability
+                    .ability_tags
+                    .iter()
+                    .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
+                "Lingering Shade must carry the PASSIVE ability tag"
             );
         }
         let authors_timed_mode_lifecycle = ability.gameplay.duration_ms.is_some()
@@ -6238,6 +6349,44 @@ pub(crate) fn subtlety_disabled_target_damage_bonus() -> f32 {
         .unwrap_or(0.0)
 }
 
+pub(crate) fn subtlety_behind_target_damage_bonus() -> f32 {
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str())
+                == SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID
+        })
+        .map(|ability| ability.gameplay.behind_target_damage_bonus.max(0.0))
+        .unwrap_or(0.0)
+}
+
+pub(crate) fn subtlety_dodge_recharge_time_reduction() -> f32 {
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == SUBTLETY_FLEET_FOOTED_ABILITY_ID
+        })
+        .map(|ability| ability.gameplay.dodge_recharge_time_reduction)
+        .unwrap_or(0.0)
+}
+
+pub(crate) fn subtlety_movement_return_window() -> Duration {
+    Duration::from_millis(
+        progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| {
+                normalize_identifier(ability.ability_id.as_str())
+                    == SUBTLETY_LINGERING_SHADE_ABILITY_ID
+            })
+            .and_then(|ability| ability.gameplay.movement_return.as_ref())
+            .map(|definition| definition.window_ms)
+            .unwrap_or(0),
+    )
+}
+
 pub(crate) fn subtlety_surprise_attack_stun_duration() -> Duration {
     Duration::from_millis(
         progression_catalog()
@@ -6312,7 +6461,9 @@ mod tests {
         COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED, COMBAT_PROFILE_ARCHER_BOW,
         COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_SWORD_AND_SHIELD, COMBAT_PROFILE_TWO_HANDED_SWORD,
         DAGGER_SHROUD_ABILITY_ID, GLOBAL_ACTION_BAR_PROFILE, RESOURCE_KIND_STAMINA,
+        SUBTLETY_FLEET_FOOTED_ABILITY_ID, SUBTLETY_LINGERING_SHADE_ABILITY_ID,
         SUBTLETY_OPPORTUNIST_ABILITY_ID, SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID,
+        SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID,
     };
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
 
@@ -11750,6 +11901,114 @@ mod tests {
             .iter()
             .any(|assignment| {
                 action_ref_for_action_bar_default(assignment).id == SUBTLETY_OPPORTUNIST_ABILITY_ID
+            }));
+    }
+
+    #[test]
+    fn tactical_advantage_authors_behind_target_damage_passive() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID)
+            .expect("expected Tactical Advantage passive");
+
+        assert_eq!(
+            normalize_identifier(ability.discipline_id.as_str()),
+            "SUBTLETY"
+        );
+        assert_eq!(ability.display_name, "Tactical Advantage");
+        assert_eq!(ability_gameplay_kind(ability), "PASSIVE");
+        assert!((ability.gameplay.behind_target_damage_bonus - 0.15).abs() < 0.0001);
+        assert!(ability
+            .ability_tags
+            .iter()
+            .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+        assert!(catalog.action_presentations.iter().any(|presentation| {
+            action_presentation_key(presentation)
+                == format!("ABILITY:{SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID}")
+                && presentation.display_name == "Tactical Advantage"
+        }));
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                action_ref_for_action_bar_default(assignment).id
+                    == SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID
+            }));
+    }
+
+    #[test]
+    fn fleet_footed_authors_dodge_recharge_reduction_passive() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == SUBTLETY_FLEET_FOOTED_ABILITY_ID)
+            .expect("expected Fleet Footed passive");
+
+        assert_eq!(
+            normalize_identifier(ability.discipline_id.as_str()),
+            "SUBTLETY"
+        );
+        assert_eq!(ability.display_name, "Fleet Footed");
+        assert_eq!(ability_gameplay_kind(ability), "PASSIVE");
+        assert!((ability.gameplay.dodge_recharge_time_reduction - 0.2).abs() < 0.0001);
+        assert!(ability
+            .ability_tags
+            .iter()
+            .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+        assert!(catalog.action_presentations.iter().any(|presentation| {
+            action_presentation_key(presentation)
+                == format!("ABILITY:{SUBTLETY_FLEET_FOOTED_ABILITY_ID}")
+                && presentation.display_name == "Fleet Footed"
+        }));
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                action_ref_for_action_bar_default(assignment).id == SUBTLETY_FLEET_FOOTED_ABILITY_ID
+            }));
+    }
+
+    #[test]
+    fn lingering_shade_authors_three_second_movement_return_passive() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == SUBTLETY_LINGERING_SHADE_ABILITY_ID)
+            .expect("expected Lingering Shade passive");
+
+        assert_eq!(
+            normalize_identifier(ability.discipline_id.as_str()),
+            "SUBTLETY"
+        );
+        assert_eq!(ability.display_name, "Lingering Shade");
+        assert_eq!(ability_gameplay_kind(ability), "PASSIVE");
+        assert_eq!(
+            ability
+                .gameplay
+                .movement_return
+                .as_ref()
+                .map(|definition| definition.window_ms),
+            Some(3_000)
+        );
+        assert!(ability
+            .ability_tags
+            .iter()
+            .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+        assert!(catalog.action_presentations.iter().any(|presentation| {
+            action_presentation_key(presentation)
+                == format!("ABILITY:{SUBTLETY_LINGERING_SHADE_ABILITY_ID}")
+                && presentation.display_name == "Lingering Shade"
+        }));
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| {
+                action_ref_for_action_bar_default(assignment).id
+                    == SUBTLETY_LINGERING_SHADE_ABILITY_ID
             }));
     }
 

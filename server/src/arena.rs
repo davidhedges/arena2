@@ -721,6 +721,7 @@ pub(crate) fn upsert_player_world(
     world_kind: &str,
     instance_id: Option<u64>,
 ) {
+    let previous_world = ctx.db.player_world().identity().find(identity);
     let normalized_world_kind = if world_kind_is_instance(world_kind) {
         WORLD_KIND_INSTANCE
     } else {
@@ -737,7 +738,16 @@ pub(crate) fn upsert_player_world(
         String::new()
     };
 
-    if let Some(mut world) = ctx.db.player_world().identity().find(identity) {
+    let world_changed = previous_world.as_ref().is_some_and(|world| {
+        world.world_kind != normalized_world_kind
+            || world.instance_id != normalized_instance_id
+            || world.open_world_scene_name != open_world_scene_name
+    });
+    if world_changed {
+        crate::lingering_shade::clear_lingering_shade_for_owner(ctx, identity);
+    }
+
+    if let Some(mut world) = previous_world {
         world.world_kind = normalized_world_kind.to_string();
         world.instance_id = normalized_instance_id;
         world.instance_scope_id = normalized_instance_id.unwrap_or_default();

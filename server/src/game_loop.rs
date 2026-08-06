@@ -55,6 +55,7 @@ use crate::inventory::{
     equipment_modifier_totals_for_owner, sync_item_definitions, tick_equipment_periodic_effects,
     EquipmentModifierTotals,
 };
+use crate::lingering_shade::expire_lingering_shades;
 use crate::melee::{
     has_due_pending_melee_impacts, has_due_pending_projectile_releases,
     resolve_pending_melee_impacts, resolve_pending_projectile_releases, sync_melee_definitions,
@@ -1190,6 +1191,7 @@ fn run_player_simulation_phase(
 
 fn run_post_tick_maintenance_phase(ctx: &ReducerContext, now: Timestamp) {
     prune_due_npc_corpse_despawns(ctx, now);
+    expire_lingering_shades(ctx, now);
     expire_world_obstacles(ctx, now);
     expire_world_traps(ctx, now);
     if should_prune_events(now) {

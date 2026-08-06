@@ -67,6 +67,7 @@ namespace SpacetimeDB.Types
             AddTable(ItemDefinition = new(conn));
             AddTable(ItemInstance = new(conn));
             AddTable(ItemSpell = new(conn));
+            AddTable(LingeringShadeState = new(conn));
             AddTable(MatchParticipantStats = new(conn));
             AddTable(MeleeAbilityCatalog = new(conn));
             AddTable(MeleeAttackModifierCatalog = new(conn));
@@ -645,6 +646,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.ItemDefinition().ToSql(),
             new QueryBuilder().From.ItemInstance().ToSql(),
             new QueryBuilder().From.ItemSpell().ToSql(),
+            new QueryBuilder().From.LingeringShadeState().ToSql(),
             new QueryBuilder().From.MatchParticipantStats().ToSql(),
             new QueryBuilder().From.MeleeAbilityCatalog().ToSql(),
             new QueryBuilder().From.MeleeAttackModifierCatalog().ToSql(),
@@ -733,6 +735,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<ItemDefinition, ItemDefinitionCols, ItemDefinitionIxCols> ItemDefinition() => new("item_definition", new ItemDefinitionCols("item_definition"), new ItemDefinitionIxCols("item_definition"));
         public global::SpacetimeDB.Table<ItemInstance, ItemInstanceCols, ItemInstanceIxCols> ItemInstance() => new("item_instance", new ItemInstanceCols("item_instance"), new ItemInstanceIxCols("item_instance"));
         public global::SpacetimeDB.Table<ItemSpell, ItemSpellCols, ItemSpellIxCols> ItemSpell() => new("item_spell", new ItemSpellCols("item_spell"), new ItemSpellIxCols("item_spell"));
+        public global::SpacetimeDB.Table<LingeringShadeState, LingeringShadeStateCols, LingeringShadeStateIxCols> LingeringShadeState() => new("lingering_shade_state", new LingeringShadeStateCols("lingering_shade_state"), new LingeringShadeStateIxCols("lingering_shade_state"));
         public global::SpacetimeDB.Table<MatchParticipantStats, MatchParticipantStatsCols, MatchParticipantStatsIxCols> MatchParticipantStats() => new("match_participant_stats", new MatchParticipantStatsCols("match_participant_stats"), new MatchParticipantStatsIxCols("match_participant_stats"));
         public global::SpacetimeDB.Table<MeleeAbilityCatalog, MeleeAbilityCatalogCols, MeleeAbilityCatalogIxCols> MeleeAbilityCatalog() => new("melee_ability_catalog", new MeleeAbilityCatalogCols("melee_ability_catalog"), new MeleeAbilityCatalogIxCols("melee_ability_catalog"));
         public global::SpacetimeDB.Table<MeleeAttackModifierCatalog, MeleeAttackModifierCatalogCols, MeleeAttackModifierCatalogIxCols> MeleeAttackModifierCatalog() => new("melee_attack_modifier_catalog", new MeleeAttackModifierCatalogCols("melee_attack_modifier_catalog"), new MeleeAttackModifierCatalogIxCols("melee_attack_modifier_catalog"));
@@ -905,6 +908,7 @@ namespace SpacetimeDB.Types
                 Reducer.ReadyForNextSurvivalRound args => Reducers.InvokeReadyForNextSurvivalRound(eventContext, args),
                 Reducer.ReleaseCastRequest args => Reducers.InvokeReleaseCastRequest(eventContext, args),
                 Reducer.RequestDiceRollPreview args => Reducers.InvokeRequestDiceRollPreview(eventContext, args),
+                Reducer.ReturnToLingeringShade args => Reducers.InvokeReturnToLingeringShade(eventContext, args),
                 Reducer.RunKnockbackProbeShove args => Reducers.InvokeRunKnockbackProbeShove(eventContext, args),
                 Reducer.RunProjectileLoadHarness args => Reducers.InvokeRunProjectileLoadHarness(eventContext, args),
                 Reducer.RunStatusRuntimeHarness args => Reducers.InvokeRunStatusRuntimeHarness(eventContext, args),

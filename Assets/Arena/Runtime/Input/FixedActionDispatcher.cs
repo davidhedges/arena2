@@ -91,6 +91,9 @@ namespace Arena.Input
                 return false;
             }
 
+            if (LingeringShadeInput.TryConsumeFixedRecast(conn, actionId))
+                return true;
+
             if (!IsEnabled(actionId, conn))
             {
                 TraceDisabledReason(actionId, conn);

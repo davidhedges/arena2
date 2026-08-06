@@ -4968,6 +4968,59 @@
       }
     },
     {
+      "ability_id": "SUBTLETY_TACTICAL_ADVANTAGE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "TACTICAL_ADVANTAGE",
+      "display_name": "Tactical Advantage",
+      "resource_kind": "STAMINA",
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 67,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "behind_target_damage_bonus": 0.15
+      }
+    },
+    {
+      "ability_id": "SUBTLETY_FLEET_FOOTED",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "FLEET_FOOTED",
+      "display_name": "Fleet Footed",
+      "resource_kind": "STAMINA",
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 68,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "dodge_recharge_time_reduction": 0.2
+      }
+    },
+    {
+      "ability_id": "SUBTLETY_LINGERING_SHADE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "LINGERING_SHADE",
+      "display_name": "Lingering Shade",
+      "resource_kind": "STAMINA",
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 69,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "movement_return": {
+          "window_ms": 3000
+        }
+      }
+    },
+    {
       "ability_id": "STAFF_STRIKE",
       "actor_scope": "PLAYER",
       "discipline_id": "ARCANA",
@@ -7128,6 +7181,27 @@
       "display_name": "Gouge",
       "description": "Prevent a hostile target from using targeted abilities for 4 seconds. Area effects and self-casts remain available.",
       "sort_order": 246
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SUBTLETY_TACTICAL_ADVANTAGE",
+      "display_name": "Tactical Advantage",
+      "description": "Passive: deal 15% increased damage while behind the target.",
+      "sort_order": 247
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SUBTLETY_FLEET_FOOTED",
+      "display_name": "Fleet Footed",
+      "description": "Passive: reduce Dodge recharge time by 20%.",
+      "sort_order": 248
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SUBTLETY_LINGERING_SHADE",
+      "display_name": "Lingering Shade",
+      "description": "Passive: using Dodge, a gap closer, or a teleport leaves a shade at your starting location for 3 seconds. Recast that ability at no cost to return. Only one shade can exist at a time.",
+      "sort_order": 249
     },
     {
       "presentation_kind": "ABILITY",

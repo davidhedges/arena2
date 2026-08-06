@@ -3,6 +3,7 @@ use spacetimedb::{Identity, ReducerContext, Table};
 use crate::arena::{clear_player_world, upsert_player_world};
 use crate::combat::clear_player_combat_state;
 use crate::inventory::clear_inventory_for_owner;
+use crate::lingering_shade::clear_lingering_shade_for_owner;
 use crate::movement_actions::{
     clear_fixed_action_charge_states_for_owner, clear_movement_action_for_owner,
     ensure_dodge_charge_state,
@@ -174,6 +175,7 @@ pub(crate) fn clear_transient_actor_state(ctx: &ReducerContext, identity: Identi
     // cast-prediction correlation.
     clear_active_cast(ctx, identity);
     clear_recall_slot(ctx, identity);
+    clear_lingering_shade_for_owner(ctx, identity);
     // Ordinary cast cleanup preserves externally imposed movement. Actor
     // teardown never does: reconnect/despawn cannot retain any live track.
     ctx.db.special_movement_runtime().owner().delete(identity);
@@ -325,10 +327,11 @@ mod tests {
     /// Per-identity transient tables (or the helpers that own their deletion)
     /// that the unified teardown must cover. Add every new transient table's
     /// accessor here AND to `clear_transient_actor_state`.
-    const TRANSIENT_TEARDOWN_MARKERS: [&str; 21] = [
+    const TRANSIENT_TEARDOWN_MARKERS: [&str; 22] = [
         "clear_player_combat_state",
         "clear_active_cast",
         "clear_recall_slot",
+        "clear_lingering_shade_for_owner",
         "clear_movement_action_for_owner",
         "clear_pending_player_commands",
         "clear_world_obstacles_for_owner",

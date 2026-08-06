@@ -22,6 +22,7 @@ namespace Arena.Entity
         public ActiveCast[] ActiveCastRows = Array.Empty<ActiveCast>();
         public MovementActionState[] MovementActionStateRows = Array.Empty<MovementActionState>();
         public SpecialMovementRuntime[] SpecialMovementRuntimeRows = Array.Empty<SpecialMovementRuntime>();
+        public LingeringShadeState[] LingeringShadeStateRows = Array.Empty<LingeringShadeState>();
     }
 
     internal interface IScopedPlayerCacheSink
@@ -39,6 +40,7 @@ namespace Arena.Entity
         void ApplyActiveCast(ActiveCast row);
         void ApplyMovementActionState(MovementActionState row);
         void ApplySpecialMovementRuntime(SpecialMovementRuntime row);
+        void ApplyLingeringShadeState(LingeringShadeState row);
     }
 
     internal sealed class ScopedPlayerCacheHydrator
@@ -60,6 +62,7 @@ namespace Arena.Entity
                 ActiveCastRows = conn.Db.ActiveCast.Iter().ToArray(),
                 MovementActionStateRows = conn.Db.MovementActionState.Iter().ToArray(),
                 SpecialMovementRuntimeRows = conn.Db.SpecialMovementRuntime.Iter().ToArray(),
+                LingeringShadeStateRows = conn.Db.LingeringShadeState.Iter().ToArray(),
             };
         }
 
@@ -134,6 +137,10 @@ namespace Arena.Entity
             var runtime = snapshot.SpecialMovementRuntimeRows.FirstOrDefault(row => row.Owner == identity);
             if (runtime != null)
                 sink.ApplySpecialMovementRuntime(runtime);
+
+            var shade = snapshot.LingeringShadeStateRows.FirstOrDefault(row => row.Owner == identity);
+            if (shade != null)
+                sink.ApplyLingeringShadeState(shade);
         }
     }
 }

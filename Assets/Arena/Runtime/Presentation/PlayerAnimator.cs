@@ -218,6 +218,7 @@ namespace Arena.Presentation
         private WeaponAttachmentController? _weaponAttachments;
         private MeleeAnimationGhostLayer? _meleeGhostLayer;
         private AnimatedAutoAttackGhostLayer? _animatedAutoAttackGhostLayer;
+        private LingeringShadeGhostLayer? _lingeringShadeGhostLayer;
         private int _animatedAutoAttackGhostVisualVersion = -1;
         private CombatAnimationSet? _animationSet;
         private SharedActionProfile? _sharedActionProfile;
@@ -378,6 +379,10 @@ namespace Arena.Presentation
             if (_animatedAutoAttackGhostLayer == null)
                 _animatedAutoAttackGhostLayer = gameObject.AddComponent<AnimatedAutoAttackGhostLayer>();
             _animatedAutoAttackGhostLayer.SetSource(_animator, _motionSource);
+            _lingeringShadeGhostLayer = GetComponent<LingeringShadeGhostLayer>();
+            if (_lingeringShadeGhostLayer == null)
+                _lingeringShadeGhostLayer = gameObject.AddComponent<LingeringShadeGhostLayer>();
+            _lingeringShadeGhostLayer.SetSource(_animator);
             _animatedAutoAttackGhostVisualVersion = -1;
             _lastFacingYawDegrees = GetFacingYawDegrees();
         }
@@ -401,6 +406,7 @@ namespace Arena.Presentation
             _weaponAttachments ??= GetComponent<WeaponAttachmentController>();
             _meleeGhostLayer?.SetSourceRoot(_motionSource);
             _animatedAutoAttackGhostLayer?.SetSource(_animator, _motionSource);
+            _lingeringShadeGhostLayer?.SetSource(_animator);
             _animatedAutoAttackGhostVisualVersion = -1;
 
             if (_overrideController == null)
@@ -432,6 +438,7 @@ namespace Arena.Presentation
             _actionPlayback.ResetBanks(set);
             CancelPhasedMeleePlayback();
             _animatedAutoAttackGhostLayer?.InvalidateVisualClone();
+            _lingeringShadeGhostLayer?.InvalidateVisualClone();
             TraceCombatAnimation(
                 $"animation-set-applied id={set.AnimationSetIdOrDefault} strikes={set.MeleeAttackCount}");
         }
@@ -1617,7 +1624,19 @@ namespace Arena.Presentation
                 return;
 
             _animatedAutoAttackGhostLayer.InvalidateVisualClone();
+            _lingeringShadeGhostLayer?.InvalidateVisualClone();
             _animatedAutoAttackGhostVisualVersion = visualVersion;
+        }
+
+        public void SetLingeringShadeState(LingeringShadeState row)
+        {
+            SyncAnimatedAutoAttackGhostVisuals();
+            _lingeringShadeGhostLayer?.Show(row);
+        }
+
+        public void ClearLingeringShadeState()
+        {
+            _lingeringShadeGhostLayer?.Clear();
         }
 
         private void PlaySpellAnimation(in CombatAnimationRequest request)

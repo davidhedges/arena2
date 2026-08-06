@@ -683,6 +683,26 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void GameplaySubscriptionPlanner_ScopesLingeringShadesByTheirCapturedWorld()
+        {
+            Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
+            Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
+            Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
+            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, 0UL, "Oasis_Day")!;
+            object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
+                .Invoke(null, new[] { row, null })!;
+
+            string[] scopedSql = (string[])RequireMethod(plannerType, "BuildScopedQuerySqls", gameplayScopeType)
+                .Invoke(null, new[] { scope })!;
+            string scopedSqlText = string.Join("\n", scopedSql);
+
+            Assert.That(scopedSqlText, Does.Contain("\"lingering_shade_state\""));
+            Assert.That(scopedSqlText, Does.Contain("\"lingering_shade_state\".\"world_kind\" = 'OPEN'"));
+            Assert.That(scopedSqlText, Does.Contain(
+                "\"lingering_shade_state\".\"open_world_scene_name\" = 'Oasis_Day'"));
+        }
+
+        [Test]
         public void GameplaySubscriptionPlanner_ScopesDoorAndInteractionRowsToTheVisibleWorld()
         {
             Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");

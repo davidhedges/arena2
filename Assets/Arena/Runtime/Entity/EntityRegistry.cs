@@ -757,6 +757,32 @@ namespace Arena.Entity
             }
         }
 
+        public void OnLingeringShadeStateInsert(EventContext ctx, LingeringShadeState row)
+        {
+            ApplyLingeringShadeState(row);
+        }
+
+        public void OnLingeringShadeStateUpdate(
+            EventContext ctx,
+            LingeringShadeState oldRow,
+            LingeringShadeState newRow)
+        {
+            ApplyLingeringShadeState(newRow);
+        }
+
+        public void OnLingeringShadeStateDelete(EventContext ctx, LingeringShadeState row)
+        {
+            if (TryGetLivePlayer(row.Owner, out var entity))
+                entity.ClearLingeringShadeState();
+        }
+
+        private void ApplyLingeringShadeState(LingeringShadeState row)
+        {
+            ArenaServerClock.RecordObservedServerTimestampMicros(row.CreatedAt.MicrosecondsSinceUnixEpoch);
+            if (TryGetLivePlayer(row.Owner, out var entity))
+                entity.SetLingeringShadeState(row);
+        }
+
         // -------------------------------------------------------------------
         // PlayerResource table callbacks (class resources)
         // -------------------------------------------------------------------
@@ -2216,5 +2242,6 @@ namespace Arena.Entity
         void IScopedPlayerCacheSink.ApplyActiveCast(ActiveCast row) => OnActiveCastInsert(default!, row);
         void IScopedPlayerCacheSink.ApplyMovementActionState(MovementActionState row) => OnMovementActionStateInsert(default!, row);
         void IScopedPlayerCacheSink.ApplySpecialMovementRuntime(SpecialMovementRuntime row) => OnSpecialMovementRuntimeInsert(default!, row);
+        void IScopedPlayerCacheSink.ApplyLingeringShadeState(LingeringShadeState row) => OnLingeringShadeStateInsert(default!, row);
     }
 }

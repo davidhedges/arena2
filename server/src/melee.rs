@@ -51,6 +51,7 @@ use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
     DefenseResolution, DefensibleCombatHit,
 };
+use crate::lingering_shade::arm_lingering_shade_for_voluntary_movement;
 use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::progression::{
     active_action_bar_assignment_debug_summary, active_selectable_ability_for_authored_action,
@@ -3985,6 +3986,16 @@ fn perform_melee_attack_for_internal(
                 movement_facing_yaw,
                 SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
             );
+            arm_lingering_shade_for_voluntary_movement(
+                ctx,
+                caster,
+                runtime_action_id.as_str(),
+                gameplay.ability_id.as_deref().unwrap_or_default(),
+                movement_start,
+                gap_close.end,
+                movement_facing_yaw,
+                now,
+            );
         }
     }
 
@@ -4464,6 +4475,16 @@ fn start_melee_timed_movement(
         row.yaw_start,
         row.facing_policy.as_str(),
         row.collision_policy.as_str(),
+    );
+    arm_lingering_shade_for_voluntary_movement(
+        ctx,
+        row.owner,
+        row.action_kind.as_str(),
+        row.ability_id.as_str(),
+        start,
+        baked.end,
+        row.yaw_start,
+        now,
     );
 }
 

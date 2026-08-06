@@ -139,6 +139,7 @@ namespace Arena.Network
                 BuildScopedWorldTrapStateQuery(new QueryBuilder(), scope),
                 BuildScopedMovementActionStateQuery(new QueryBuilder(), scope),
                 BuildScopedSpecialMovementRuntimeQuery(new QueryBuilder(), scope),
+                BuildScopedLingeringShadeStateQuery(new QueryBuilder(), scope),
                 BuildScopedStatusEffectQuery(new QueryBuilder(), scope),
                 BuildScopedNpcStatusEffectQuery(new QueryBuilder(), scope),
                 BuildScopedPlayerSourceCombatEffectEventQuery(new QueryBuilder(), scope),
@@ -652,6 +653,26 @@ namespace Arena.Network
                     .RightSemijoin(qb.From.SpecialMovementRuntime(), (world, runtime) => world.Identity.Eq(runtime.Owner))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped special-movement query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedLingeringShadeStateQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .LingeringShadeState()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .LingeringShadeState()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped lingering-shade query requested for GameplayScope.None"),
             };
         }
 

@@ -24,8 +24,9 @@ use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WOR
 use crate::player_state::PlayerState;
 use crate::practice::resolve_respawn_pose;
 use crate::progression::{
-    combat_rule_value, derived_combat_profile_id_for_owner, subtlety_disabled_target_damage_bonus,
-    COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD,
+    character_has_selected_discipline, combat_rule_value, derived_combat_profile_id_for_owner,
+    subtlety_behind_target_damage_bonus, subtlety_disabled_target_damage_bonus,
+    COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD, DISCIPLINE_SUBTLETY,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
@@ -4638,6 +4639,7 @@ fn resolve_damage_amount(
             * resistance_multiplier
             * temporary_modifiers.damage_taken_multiplier_from_source_for(&hit.target, &hit.source)
             * opportunist_passive_damage_multiplier(ctx, hit, temporary_modifiers)
+            * tactical_advantage_passive_damage_multiplier(ctx, hit)
     };
     let source_crit_chance = source_equipment_and_stats.map(|(_, stats)| stats.crit_chance);
     let additive_crit_chance = source_equipment_and_stats
@@ -4726,6 +4728,70 @@ fn disabled_target_damage_multiplier(
     bonus: f32,
 ) -> f32 {
     if passive_is_active && target_is_disabled {
+        1.0 + bonus.max(0.0)
+    } else {
+        1.0
+    }
+}
+
+fn tactical_advantage_passive_damage_multiplier(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
+    let passive_is_active = character_has_selected_discipline(ctx, hit.source, DISCIPLINE_SUBTLETY);
+    let attacker_is_behind = can_harm(ctx, hit.source, hit.target)
+        && actor_snapshot::actor_snapshot_for(ctx, hit.source)
+            .zip(actor_snapshot::actor_snapshot_for(ctx, hit.target))
+            .is_some_and(|(attacker, target)| {
+                attacker_is_behind_target(
+                    attacker.pos_x,
+                    attacker.pos_z,
+                    target.pos_x,
+                    target.pos_z,
+                    target.facing_yaw,
+                )
+            });
+    behind_target_damage_multiplier(
+        passive_is_active,
+        attacker_is_behind,
+        subtlety_behind_target_damage_bonus(),
+    )
+}
+
+fn attacker_is_behind_target(
+    attacker_x: f32,
+    attacker_z: f32,
+    target_x: f32,
+    target_z: f32,
+    target_facing_yaw: f32,
+) -> bool {
+    if !attacker_x.is_finite()
+        || !attacker_z.is_finite()
+        || !target_x.is_finite()
+        || !target_z.is_finite()
+        || !target_facing_yaw.is_finite()
+    {
+        return false;
+    }
+
+    let to_attacker_x = attacker_x - target_x;
+    let to_attacker_z = attacker_z - target_z;
+    let distance_sq = to_attacker_x * to_attacker_x + to_attacker_z * to_attacker_z;
+    if distance_sq <= 0.000001 {
+        return false;
+    }
+
+    let inv_distance = distance_sq.sqrt().recip();
+    let direction_x = to_attacker_x * inv_distance;
+    let direction_z = to_attacker_z * inv_distance;
+    let target_forward_x = target_facing_yaw.sin();
+    let target_forward_z = target_facing_yaw.cos();
+    target_forward_x * direction_x + target_forward_z * direction_z < -0.0001
+}
+
+fn behind_target_damage_multiplier(
+    passive_is_active: bool,
+    attacker_is_behind: bool,
+    bonus: f32,
+) -> f32 {
+    if passive_is_active && attacker_is_behind {
         1.0 + bonus.max(0.0)
     } else {
         1.0
@@ -5960,6 +6026,7 @@ fn handle_death(ctx: &ReducerContext, state: &mut PlayerState) -> Option<u64> {
         mark_respawn_pending(state, ctx.timestamp);
     }
     clear_statuses_for_target(ctx, state.player_id);
+    crate::lingering_shade::clear_lingering_shade_for_owner(ctx, state.player_id);
     crate::spells::clear_recall_slot(ctx, state.player_id);
     clear_combat_engagement_for_identity(ctx, state.player_id);
     clear_combat_stacking_passive_runtime_for_identity(ctx, state.player_id);
@@ -6923,7 +6990,8 @@ fn attack_speed_scalar_to_multiplier(modifier_scalar: f32) -> f32 {
 mod tests {
     use super::{
         action_key_matches_instance, actor_distance_sq, apply_status_update,
-        attack_speed_scalar_to_multiplier, battle_trance_hp_after_damage, bloodlust_passive_spec,
+        attack_speed_scalar_to_multiplier, attacker_is_behind_target,
+        battle_trance_hp_after_damage, behind_target_damage_multiplier, bloodlust_passive_spec,
         damage_breaks_shroud, damage_comes_from_casted_ability, disabled_target_damage_multiplier,
         due_interval_count, event_prune_cutoff_micros, knockback_stagger_duration,
         new_status_effect, opportunist_passive_is_active_for_profile,
@@ -7009,6 +7077,28 @@ mod tests {
         assert!((disabled_target_damage_multiplier(true, true, 0.15) - 1.15).abs() < 0.0001);
         assert_eq!(disabled_target_damage_multiplier(false, true, 0.15), 1.0);
         assert_eq!(disabled_target_damage_multiplier(true, false, 0.15), 1.0);
+    }
+
+    #[test]
+    fn tactical_advantage_recognizes_the_targets_rear_half_plane() {
+        assert!(attacker_is_behind_target(0.0, -1.0, 0.0, 0.0, 0.0));
+        assert!(!attacker_is_behind_target(0.0, 1.0, 0.0, 0.0, 0.0));
+        assert!(!attacker_is_behind_target(1.0, 0.0, 0.0, 0.0, 0.0));
+        assert!(!attacker_is_behind_target(0.0, 0.0, 0.0, 0.0, 0.0));
+        assert!(attacker_is_behind_target(
+            -1.0,
+            0.0,
+            0.0,
+            0.0,
+            std::f32::consts::FRAC_PI_2,
+        ));
+    }
+
+    #[test]
+    fn tactical_advantage_bonuses_damage_only_when_active_and_behind() {
+        assert!((behind_target_damage_multiplier(true, true, 0.15) - 1.15).abs() < 0.0001);
+        assert_eq!(behind_target_damage_multiplier(false, true, 0.15), 1.0);
+        assert_eq!(behind_target_damage_multiplier(true, false, 0.15), 1.0);
     }
 
     #[test]

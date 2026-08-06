@@ -146,7 +146,7 @@ namespace Arena.Presentation
             return true;
         }
 
-        private sealed class GhostActor
+        internal sealed class GhostActor
         {
             private readonly Dictionary<Transform, Transform> _transformMap = new();
             private readonly List<MaterialBinding> _materials = new();
@@ -156,6 +156,8 @@ namespace Arena.Presentation
             private RuntimeAnimatorController? _overrideSourceController;
             private readonly Dictionary<string, AnimationClip> _strikeOverrides = new();
             private Transform? _sourceAnimatorTransform;
+            private Color _materialTint;
+            private bool _solidSilhouette;
 
             public bool Active { get; private set; }
             public float Elapsed { get; private set; }
@@ -167,13 +169,16 @@ namespace Arena.Presentation
                 int bankSlot,
                 AnimationClip? strikeClip,
                 Color materialTint,
-                float alpha)
+                float alpha,
+                bool solidSilhouette = false)
             {
                 if (_root == null
                     || _animator == null
-                    || !ReferenceEquals(_sourceAnimatorTransform, sourceAnimator.transform))
+                    || !ReferenceEquals(_sourceAnimatorTransform, sourceAnimator.transform)
+                    || _materialTint != materialTint
+                    || _solidSilhouette != solidSilhouette)
                 {
-                    RebuildVisualClone(sourceAnimator, materialTint);
+                    RebuildVisualClone(sourceAnimator, materialTint, solidSilhouette);
                 }
 
                 if (_root == null || _animator == null)
@@ -198,7 +203,56 @@ namespace Arena.Presentation
                 return true;
             }
 
+            public bool PrepareCombatIdleFromSource(
+                Animator sourceAnimator,
+                Vector3 position,
+                Quaternion facing,
+                Color materialTint,
+                float alpha)
+            {
+                if (_root == null
+                    || _animator == null
+                    || !ReferenceEquals(_sourceAnimatorTransform, sourceAnimator.transform)
+                    || _materialTint != materialTint
+                    || !_solidSilhouette)
+                {
+                    RebuildVisualClone(sourceAnimator, materialTint, solidSilhouette: true);
+                }
+
+                if (_root == null || _animator == null || sourceAnimator.runtimeAnimatorController == null)
+                    return false;
+
+                _root.transform.SetPositionAndRotation(position, facing);
+                _root.transform.localScale = Vector3.one;
+                _root.SetActive(true);
+
+                _animator.runtimeAnimatorController = sourceAnimator.runtimeAnimatorController;
+                _animator.avatar = sourceAnimator.avatar;
+                _animator.applyRootMotion = false;
+                _animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                _animator.Rebind();
+                _animator.Update(0f);
+
+                ApplyAlpha(alpha);
+                Elapsed = 0f;
+                Active = true;
+                return true;
+            }
+
             public void PlayStrike(int bankSlot)
+            {
+                if (_animator == null)
+                    return;
+
+                PlayCombatIdle();
+                _animator.ResetTrigger(TriggerStrike1Hash);
+                _animator.ResetTrigger(TriggerStrike2Hash);
+                _animator.ResetTrigger(TriggerStrike3Hash);
+                _animator.ResetTrigger(TriggerStrike4Hash);
+                _animator.SetTrigger(ResolveStrikeTriggerHash(bankSlot));
+            }
+
+            public void PlayCombatIdle()
             {
                 if (_animator == null)
                     return;
@@ -207,11 +261,6 @@ namespace Arena.Presentation
                 _animator.Play(IdleCombatStateHash, BaseLayerIndex, 0f);
                 PlayLayerIfAvailable(_animator, UpperBodyLayerIndex, UpperBodyEmptyStateHash);
                 PlayLayerIfAvailable(_animator, MeleeAttackLayerIndex, MeleeAttackEmptyStateHash);
-                _animator.ResetTrigger(TriggerStrike1Hash);
-                _animator.ResetTrigger(TriggerStrike2Hash);
-                _animator.ResetTrigger(TriggerStrike3Hash);
-                _animator.ResetTrigger(TriggerStrike4Hash);
-                _animator.SetTrigger(ResolveStrikeTriggerHash(bankSlot));
             }
 
             public void Tick(float deltaTime, float fadeSeconds, float startAlpha)
@@ -273,7 +322,7 @@ namespace Arena.Presentation
                 _materials.Clear();
             }
 
-            private void Hide()
+            public void Hide()
             {
                 Active = false;
                 Elapsed = 0f;
@@ -281,11 +330,16 @@ namespace Arena.Presentation
                     _root.SetActive(false);
             }
 
-            private void RebuildVisualClone(Animator sourceAnimator, Color materialTint)
+            private void RebuildVisualClone(
+                Animator sourceAnimator,
+                Color materialTint,
+                bool solidSilhouette)
             {
                 Destroy();
 
                 _sourceAnimatorTransform = sourceAnimator.transform;
+                _materialTint = materialTint;
+                _solidSilhouette = solidSilhouette;
                 _root = CloneTransformHierarchy(sourceAnimator.transform, null);
                 _root.name = GhostRootName;
                 _animator = _root.AddComponent<Animator>();
@@ -294,7 +348,7 @@ namespace Arena.Presentation
                 _animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                 CombatAnimationEventReceiver.EnsureOn(_animator);
 
-                CopyRenderers(sourceAnimator.transform, materialTint);
+                CopyRenderers(sourceAnimator.transform, materialTint, solidSilhouette);
                 _root.SetActive(false);
             }
 
@@ -375,7 +429,10 @@ namespace Arena.Presentation
                 return clone;
             }
 
-            private void CopyRenderers(Transform sourceRoot, Color materialTint)
+            private void CopyRenderers(
+                Transform sourceRoot,
+                Color materialTint,
+                bool solidSilhouette)
             {
                 Renderer[] renderers = sourceRoot.GetComponentsInChildren<Renderer>(includeInactive: false);
                 foreach (Renderer renderer in renderers)
@@ -389,10 +446,10 @@ namespace Arena.Presentation
                     switch (renderer)
                     {
                         case SkinnedMeshRenderer skinned:
-                            CopySkinnedRenderer(skinned, cloneTransform, materialTint);
+                            CopySkinnedRenderer(skinned, cloneTransform, materialTint, solidSilhouette);
                             break;
                         case MeshRenderer meshRenderer:
-                            CopyMeshRenderer(meshRenderer, cloneTransform, materialTint);
+                            CopyMeshRenderer(meshRenderer, cloneTransform, materialTint, solidSilhouette);
                             break;
                     }
                 }
@@ -401,11 +458,12 @@ namespace Arena.Presentation
             private void CopySkinnedRenderer(
                 SkinnedMeshRenderer source,
                 Transform cloneTransform,
-                Color materialTint)
+                Color materialTint,
+                bool solidSilhouette)
             {
                 var clone = cloneTransform.gameObject.AddComponent<SkinnedMeshRenderer>();
                 clone.sharedMesh = source.sharedMesh;
-                clone.sharedMaterials = CreateGhostMaterials(source.sharedMaterials, materialTint);
+                clone.sharedMaterials = CreateGhostMaterials(source.sharedMaterials, materialTint, solidSilhouette);
                 clone.rootBone = source.rootBone != null && _transformMap.TryGetValue(source.rootBone, out Transform mappedRoot)
                     ? mappedRoot
                     : null;
@@ -430,30 +488,37 @@ namespace Arena.Presentation
             private void CopyMeshRenderer(
                 MeshRenderer source,
                 Transform cloneTransform,
-                Color materialTint)
+                Color materialTint,
+                bool solidSilhouette)
             {
                 if (!source.TryGetComponent(out MeshFilter sourceFilter) || sourceFilter.sharedMesh == null)
                     return;
 
                 cloneTransform.gameObject.AddComponent<MeshFilter>().sharedMesh = sourceFilter.sharedMesh;
                 var clone = cloneTransform.gameObject.AddComponent<MeshRenderer>();
-                clone.sharedMaterials = CreateGhostMaterials(source.sharedMaterials, materialTint);
+                clone.sharedMaterials = CreateGhostMaterials(source.sharedMaterials, materialTint, solidSilhouette);
                 clone.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 clone.receiveShadows = false;
             }
 
-            private Material[] CreateGhostMaterials(Material[] sourceMaterials, Color materialTint)
+            private Material[] CreateGhostMaterials(
+                Material[] sourceMaterials,
+                Color materialTint,
+                bool solidSilhouette)
             {
                 if (sourceMaterials == null || sourceMaterials.Length == 0)
-                    return new[] { CreateGhostMaterial(null, materialTint) };
+                    return new[] { CreateGhostMaterial(null, materialTint, solidSilhouette) };
 
                 Material[] materials = new Material[sourceMaterials.Length];
                 for (int i = 0; i < sourceMaterials.Length; i++)
-                    materials[i] = CreateGhostMaterial(sourceMaterials[i], materialTint);
+                    materials[i] = CreateGhostMaterial(sourceMaterials[i], materialTint, solidSilhouette);
                 return materials;
             }
 
-            private Material CreateGhostMaterial(Material? source, Color materialTint)
+            private Material CreateGhostMaterial(
+                Material? source,
+                Color materialTint,
+                bool solidSilhouette)
             {
                 Material material = source != null
                     ? new Material(source)
@@ -461,9 +526,24 @@ namespace Arena.Presentation
 
                 material.name = $"{(source != null ? source.name : "Default")}_animated_auto_attack_ghost";
                 ConfigureTransparentMaterial(material);
-                Color baseColor = ResolveBaseColor(material) * materialTint;
+                if (solidSilhouette)
+                    ConfigureSolidSilhouetteMaterial(material);
+                Color baseColor = solidSilhouette
+                    ? materialTint
+                    : ResolveBaseColor(material) * materialTint;
                 _materials.Add(new MaterialBinding(material, baseColor));
                 return material;
+            }
+
+            private static void ConfigureSolidSilhouetteMaterial(Material material)
+            {
+                if (material.HasProperty("_BaseMap"))
+                    material.SetTexture("_BaseMap", null);
+                if (material.HasProperty("_MainTex"))
+                    material.SetTexture("_MainTex", null);
+                if (material.HasProperty("_EmissionColor"))
+                    material.SetColor("_EmissionColor", Color.black);
+                material.DisableKeyword("_EMISSION");
             }
 
             private static void ConfigureTransparentMaterial(Material material)

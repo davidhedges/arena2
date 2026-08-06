@@ -178,6 +178,10 @@ namespace Arena.Network
             conn.Db.SpecialMovementRuntime.OnUpdate += Delayed<SpecialMovementRuntime>(registry.OnSpecialMovementRuntimeUpdate);
             conn.Db.SpecialMovementRuntime.OnDelete += Delayed<SpecialMovementRuntime>(registry.OnSpecialMovementRuntimeDelete);
 
+            conn.Db.LingeringShadeState.OnInsert += Delayed<LingeringShadeState>(registry.OnLingeringShadeStateInsert);
+            conn.Db.LingeringShadeState.OnUpdate += Delayed<LingeringShadeState>(registry.OnLingeringShadeStateUpdate);
+            conn.Db.LingeringShadeState.OnDelete += Delayed<LingeringShadeState>(registry.OnLingeringShadeStateDelete);
+
             conn.Db.CombatEvent.OnInsert += Delayed<CombatEvent>(registry.OnCombatEventInsert);
             conn.Db.ProjectilePresentationEvent.OnInsert += Delayed<ProjectilePresentationEvent>(registry.OnProjectilePresentationEventInsert);
         }
@@ -250,6 +254,10 @@ namespace Arena.Network
             conn.Db.SpecialMovementRuntime.OnInsert += (_, _) => NetcodeReceiveCounters.Record("special_movement_runtime");
             conn.Db.SpecialMovementRuntime.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("special_movement_runtime");
             conn.Db.SpecialMovementRuntime.OnDelete += (_, _) => NetcodeReceiveCounters.Record("special_movement_runtime");
+
+            conn.Db.LingeringShadeState.OnInsert += (_, _) => NetcodeReceiveCounters.Record("lingering_shade_state");
+            conn.Db.LingeringShadeState.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("lingering_shade_state");
+            conn.Db.LingeringShadeState.OnDelete += (_, _) => NetcodeReceiveCounters.Record("lingering_shade_state");
 
             conn.Db.DefenseState.OnInsert += (_, _) => NetcodeReceiveCounters.Record("defense_state");
             conn.Db.DefenseState.OnUpdate += (_, _, _) => NetcodeReceiveCounters.Record("defense_state");

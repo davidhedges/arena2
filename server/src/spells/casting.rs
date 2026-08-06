@@ -50,12 +50,12 @@ use crate::derived_stats::{
     derived_combat_stats_for_owner, scale_cast_duration,
     scale_fortify_temporary_hitpoints_from_allocations,
 };
+use crate::lingering_shade::arm_lingering_shade_for_voluntary_movement;
 #[allow(unused_imports)]
 use crate::npcs::npc_instance as _;
 use crate::player_intent::PlayerIntent;
 #[cfg(feature = "spellcasting_terminal_harness")]
-use crate::player_physics::PlayerPhysics;
-use crate::player_physics::{commit_player_physics, PhysicsWriteMode};
+use crate::player_physics::{commit_player_physics, PhysicsWriteMode, PlayerPhysics};
 use crate::progression::{
     ability_catalog as _, active_selectable_ability_for_authored_action,
     authored_npc_spell_ability_id, derived_combat_profile_id_for_owner,
@@ -292,6 +292,7 @@ const SPECIAL_MOVEMENT_BAKE_STEP_METERS: f32 = 0.20;
 const SPECIAL_MOVEMENT_BLOCK_EPSILON: f32 = 0.001;
 const SPECIAL_MOVEMENT_FIXED_Y_TERRAIN_EPSILON: f32 = 0.001;
 const SPECIAL_MOVEMENT_PATH_LINEAR: &str = "LINEAR";
+const SPECIAL_MOVEMENT_PATH_INSTANT: &str = "INSTANT";
 pub(crate) const SPECIAL_MOVEMENT_FACING_FACE_PATH: &str = "FACE_PATH";
 pub(crate) const SPECIAL_MOVEMENT_FACING_FACE_START: &str = "FACE_START";
 pub(crate) const SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK: &str = "STOP_AT_BLOCK";
@@ -4868,6 +4869,62 @@ pub(crate) fn begin_special_movement_with_facing_policy(
     facing_policy: &str,
     collision_policy: &str,
 ) -> SpecialMovementRuntime {
+    begin_special_movement_runtime(
+        ctx,
+        owner,
+        kind,
+        SPECIAL_MOVEMENT_PATH_LINEAR,
+        started_at,
+        duration_ms,
+        start,
+        end,
+        facing_yaw_start,
+        facing_policy,
+        collision_policy,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn begin_instant_special_movement(
+    ctx: &ReducerContext,
+    owner: Identity,
+    kind: &str,
+    started_at: Timestamp,
+    start: Vec3,
+    end: Vec3,
+    facing_yaw_start: f32,
+    facing_policy: &str,
+    collision_policy: &str,
+) -> SpecialMovementRuntime {
+    begin_special_movement_runtime(
+        ctx,
+        owner,
+        kind,
+        SPECIAL_MOVEMENT_PATH_INSTANT,
+        started_at,
+        0,
+        start,
+        end,
+        facing_yaw_start,
+        facing_policy,
+        collision_policy,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn begin_special_movement_runtime(
+    ctx: &ReducerContext,
+    owner: Identity,
+    kind: &str,
+    path_mode: &str,
+    started_at: Timestamp,
+    duration_ms: u64,
+    start: Vec3,
+    end: Vec3,
+    facing_yaw_start: f32,
+    facing_policy: &str,
+    collision_policy: &str,
+) -> SpecialMovementRuntime {
     let runtime = SpecialMovementRuntime {
         owner,
         runtime_id: format!(
@@ -4877,7 +4934,7 @@ pub(crate) fn begin_special_movement_with_facing_policy(
             started_at.to_micros_since_unix_epoch()
         ),
         kind: kind.to_string(),
-        path_mode: SPECIAL_MOVEMENT_PATH_LINEAR.to_string(),
+        path_mode: path_mode.to_string(),
         started_at,
         duration_ms,
         start_x: start.x,
@@ -7495,17 +7552,27 @@ fn cast_self_teleport(
     )
     .end;
 
-    if let Some(mut physics) = ctx.db.player_physics().identity().find(caster) {
-        physics.pos_x = destination.x;
-        physics.pos_y = destination.y;
-        physics.pos_z = destination.z;
-        physics.vel_x = 0.0;
-        physics.vel_y = 0.0;
-        physics.vel_z = 0.0;
-        physics.grounded = true;
-        physics.updated_at = ctx.timestamp;
-        commit_player_physics(ctx, physics, PhysicsWriteMode::Force, "spell_self_teleport");
-    }
+    begin_instant_special_movement(
+        ctx,
+        caster,
+        kind.as_str(),
+        ctx.timestamp,
+        origin,
+        destination,
+        state.facing_yaw,
+        SPECIAL_MOVEMENT_FACING_FACE_START,
+        SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+    );
+    arm_lingering_shade_for_voluntary_movement(
+        ctx,
+        caster,
+        kind.as_str(),
+        ability_id,
+        origin,
+        destination,
+        state.facing_yaw,
+        ctx.timestamp,
+    );
 
     for (event_type, point) in [(EVENT_RELEASE, origin), (EVENT_IMPACT, destination)] {
         emit_spell_combat_event(

@@ -53,6 +53,7 @@ namespace Arena.UI
         private static readonly Color LosBlockedOverlay = new(0.02f, 0.02f, 0.02f, 0.62f);
         private static readonly Color CdOverlay     = new(0f, 0f, 0f, 0.7f);
         private static readonly Color GcdOverlay    = new(0f, 0f, 0f, 0.4f);
+        private static readonly Color ShadeReturnOverlay = new(0.12f, 0.02f, 0.18f, 0.78f);
         private static readonly Color CastGold      = Hex("#FFD100");
         private static readonly Color CastOrange    = Hex("#FF8800");
         private static readonly Color CastBg        = Hex("#222222");
@@ -1468,7 +1469,7 @@ namespace Arena.UI
                 CombatModeIds.ShortDraw => "SD",
                 CombatModeIds.FullDraw => "FD",
                 CombatModeIds.Ready => "RD",
-                CombatModeIds.Stealthed => "ST",
+                CombatModeIds.Stealthed => "SH",
                 _ => modeId.Length >= 2 ? modeId[..2] : modeId,
             };
         }
@@ -1647,6 +1648,7 @@ namespace Arena.UI
                     isVisible,
                     resolved.IsFixed,
                     resolved.ActionId,
+                    resolved.AbilityId,
                     !resolved.IsCombatModeToggleAbility && UsesGlobalCooldown(resolved.ActionId, string.Empty),
                     ResolveRequiresTargetLos(conn, resolved));
                 SetActionBarSlotPresentation(_abilityGridCd[index], _abilityGridIcons[index], _abilityGridStates[index], slotColor, iconSprite);
@@ -1706,6 +1708,7 @@ namespace Arena.UI
                     isVisible,
                     false,
                     resolved.ActionId,
+                    resolved.AbilityId,
                     false,
                     ResolveRequiresTargetLos(conn, resolved));
                 SetActionBarSlotPresentation(
@@ -1769,6 +1772,7 @@ namespace Arena.UI
                     true,
                     false,
                     spellId,
+                    resolved.AbilityId,
                     UsesGlobalCooldown(spellId, string.Empty),
                     ResolveSpellRequiresTargetLos(conn, spellId));
                 SetActionBarSlotPresentation(
@@ -1940,6 +1944,23 @@ namespace Arena.UI
                     continue;
                 }
 
+                if (TryRenderLingeringShadeReturn(
+                        NetworkManager.Instance?.Conn,
+                        state,
+                        out float shadeFraction,
+                        out float shadeRemainingSeconds))
+                {
+                    SetFillIfChanged(overlay, shadeFraction);
+                    SetColorIfChanged(overlay, ShadeReturnOverlay);
+                    SetTextIfChanged(
+                        cooldownText,
+                        shadeRemainingSeconds > 1f
+                            ? $"{shadeRemainingSeconds:F0}"
+                            : $"{shadeRemainingSeconds:F1}");
+                    SetTextIfChanged(chargeText, string.Empty);
+                    continue;
+                }
+
                 if (state.IsFixed)
                 {
                     RenderFixedActionState(
@@ -1986,6 +2007,34 @@ namespace Arena.UI
                 SetTextIfChanged(cooldownText, remSec > 1f ? $"{remSec:F0}" : string.Empty);
                 SetTextIfChanged(chargeText, string.Empty);
             }
+        }
+
+        private static bool TryRenderLingeringShadeReturn(
+            DbConnection? conn,
+            ActionBarSlotState state,
+            out float fraction,
+            out float remainingSeconds)
+        {
+            fraction = 0f;
+            remainingSeconds = 0f;
+            if (!LingeringShadeInput.TryGetMatchingAnchor(
+                    conn,
+                    state.ActionId,
+                    state.AbilityId,
+                    out LingeringShadeState? anchor)
+                || anchor == null)
+            {
+                return false;
+            }
+
+            long remainingMs = LingeringShadeInput.RemainingMilliseconds(anchor);
+            long durationMs = Math.Max(
+                1L,
+                (anchor.ExpiresAt.MicrosecondsSinceUnixEpoch
+                    - anchor.CreatedAt.MicrosecondsSinceUnixEpoch) / 1000L);
+            fraction = Mathf.Clamp01(remainingMs / (float)durationMs);
+            remainingSeconds = remainingMs / 1000f;
+            return remainingMs > 0L;
         }
 
         private static void RenderFixedActionState(
@@ -2351,6 +2400,7 @@ namespace Arena.UI
             public readonly bool IsVisible;
             public readonly bool IsFixed;
             public readonly string ActionId;
+            public readonly string AbilityId;
             public readonly bool UsesGlobalCooldown;
             public readonly bool RequiresTargetLos;
 
@@ -2360,6 +2410,7 @@ namespace Arena.UI
                 bool isVisible,
                 bool isFixed,
                 string actionId,
+                string abilityId,
                 bool usesGlobalCooldown,
                 bool requiresTargetLos)
             {
@@ -2368,12 +2419,13 @@ namespace Arena.UI
                 IsVisible = isVisible;
                 IsFixed = isFixed;
                 ActionId = actionId;
+                AbilityId = abilityId;
                 UsesGlobalCooldown = usesGlobalCooldown;
                 RequiresTargetLos = requiresTargetLos;
             }
 
             public static ActionBarSlotState Empty(string keyLabel) =>
-                new(keyLabel, string.Empty, false, false, string.Empty, false, false);
+                new(keyLabel, string.Empty, false, false, string.Empty, string.Empty, false, false);
         }
 
         private static (bool isVisible, string label, Color color) ResolvePrimaryResourcePresentation(PlayerEntity player)
