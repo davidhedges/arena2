@@ -41,6 +41,7 @@ namespace Arena.Tests.Editor
         private const string NovaCastPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Arcane Explosion.prefab.meta";
         private const string NovaHitPrefabMetaPath = "Assets/ThirdParty/AssetStore/VFX/Piloto Studio/Super Realistic FX Bundle/ARPG Realistic Essentials Fire/Prefabs/Melee/Green_Fire/Hit_Nova_Light_green.prefab.meta";
         private const string BuffetHitPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Hits/Air/1) Wind Blast 1.prefab.meta";
+        private const string LingeringShadeReturnPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Realistic Ink Spells 1/shadow_in.prefab.meta";
         private const string LightningPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/Electric/8) Vertical Lightning blue 1.prefab.meta";
         private const string NegateArcaneShockPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/ARPG Realistic Arcane 1/Simple/ARPG_Arcane_Shock_Calling.prefab.meta";
         private const string MeteorPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/VFX_SingleComet01_Fire_Arena.prefab.meta";
@@ -228,6 +229,19 @@ namespace Arena.Tests.Editor
             string registry = File.ReadAllText(CombatVfxRegistryPath);
             Assert.That(registry, Does.Contain("vfxId: VFX_BUFFET_IMPACT_01"));
             Assert.That(registry, Does.Contain($"guid: {hitPrefabGuid}"));
+        }
+
+        [Test]
+        public void LingeringShadeReturnVfx_UsesAuthoredShadowInPrefab()
+        {
+            string prefabGuid = File.ReadLines(LingeringShadeReturnPrefabMetaPath)
+                .First(line => line.StartsWith("guid: ", StringComparison.Ordinal))
+                .Substring("guid: ".Length)
+                .Trim();
+
+            string registry = File.ReadAllText(CombatVfxRegistryPath);
+            Assert.That(registry, Does.Contain("vfxId: VFX_LINGERING_SHADE_RETURN_01"));
+            Assert.That(registry, Does.Contain($"guid: {prefabGuid}"));
         }
 
         [Test]

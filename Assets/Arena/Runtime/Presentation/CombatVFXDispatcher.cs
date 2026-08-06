@@ -30,6 +30,10 @@ namespace Arena.Presentation
         private const string TriggerSpellParry = "SPELL_PARRY";
         private const string TriggerSpellFizzle = "SPELL_FIZZLE";
         private const string TriggerEmanationActive = "EMANATION_ACTIVE";
+        private const string TriggerSpecialMovementStart = "SPECIAL_MOVEMENT_START";
+        private const string TriggerSpecialMovementArrival = "SPECIAL_MOVEMENT_ARRIVAL";
+        private const string LingeringShadeReturnMovementKind = "LINGERING_SHADE_RETURN";
+        private const string LingeringShadeAbilityId = "SUBTLETY_LINGERING_SHADE";
         private const string AttachModeSpawnWorld = "SPAWN_WORLD";
         private const string AttachModeFollowAnchor = "FOLLOW_ANCHOR";
         private const string AttachModeFollowGroundPosition = "FOLLOW_GROUND_POSITION";
@@ -54,6 +58,8 @@ namespace Arena.Presentation
         private const string SpellBehaviorArea = "AREA";
         private const string ProjectileMotionBoomerangCaster = "BOOMERANG_CASTER";
         private const long PredictedSpellVfxTtlMs = 5000L;
+        private const float DefaultPlayerChestHeight = 1.15f;
+        private const float PlayerChestHeightFraction = 0.68f;
 
         private static CombatVFXDispatcher? _instance;
 
@@ -187,6 +193,7 @@ namespace Arena.Presentation
             CueResolver.MarkDirty();
             _projectileDeliveredSpellImpactByActionKind.Clear();
             conn.Db.CombatEvent.OnInsert += OnCombatEventInsert;
+            conn.Db.SpecialMovementRuntime.OnInsert += OnSpecialMovementRuntimeInsertForVfx;
             conn.Db.ProjectilePresentationEvent.OnInsert += OnProjectilePresentationEventInsert;
             conn.Db.PredictedActionResult.OnInsert += OnPredictedActionResultInsert;
             conn.Db.ActiveCast.OnDelete += OnActiveCastDeleteForVfx;
@@ -515,6 +522,96 @@ namespace Arena.Presentation
             _ = ctx;
             CueResolver.MarkDirty();
             _projectileDeliveredSpellImpactByActionKind.Clear();
+        }
+
+        private void OnSpecialMovementRuntimeInsertForVfx(
+            EventContext ctx,
+            SpecialMovementRuntime row)
+        {
+            _ = ctx;
+            if (!string.Equals(
+                    WireIdentifier.Normalize(row.Kind),
+                    LingeringShadeReturnMovementKind,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (EntityRegistry.Instance == null
+                || !EntityRegistry.Instance.TryGetEntity(row.Owner, out PlayerEntity caster))
+            {
+                return;
+            }
+
+            Quaternion facing = Quaternion.Euler(0f, row.FacingYawStart * Mathf.Rad2Deg, 0f);
+            Vector3 chestLocalOffset = ResolvePlayerChestLocalOffset(caster);
+            Vector3 origin = ResolveSpecialMovementEndpoint(
+                new Vector3(row.StartX, row.StartY, row.StartZ),
+                facing,
+                chestLocalOffset);
+            Vector3 point = ResolveSpecialMovementEndpoint(
+                new Vector3(row.EndX, row.EndY, row.EndZ),
+                facing,
+                chestLocalOffset);
+            Vector3 direction = facing * Vector3.forward;
+
+            DispatchSpecialMovementFact(row, TriggerSpecialMovementStart, origin, direction, point);
+            DispatchSpecialMovementFact(row, TriggerSpecialMovementArrival, origin, direction, point);
+        }
+
+        private void DispatchSpecialMovementFact(
+            SpecialMovementRuntime row,
+            string trigger,
+            Vector3 origin,
+            Vector3 direction,
+            Vector3 point)
+        {
+            var fact = new CombatVfxFact(
+                trigger,
+                string.Empty,
+                LingeringShadeAbilityId,
+                string.Empty,
+                -1,
+                row.Owner,
+                default,
+                row.RuntimeId,
+                row.Kind,
+                origin,
+                direction,
+                point,
+                0f,
+                Vector3.Distance(origin, point),
+                CombatEventScalarKinds.None,
+                0f,
+                0,
+                1,
+                isSpell: false);
+            DispatchFact(fact);
+        }
+
+        private static Vector3 ResolvePlayerChestLocalOffset(PlayerEntity caster)
+        {
+            Transform root = caster.GetPresentationRoot();
+            if ((caster.TryGetSocketTransform(HumanBodyBones.UpperChest, out Transform chest)
+                    || caster.TryGetSocketTransform(HumanBodyBones.Chest, out chest))
+                && root != null)
+            {
+                Vector3 worldOffset = chest.position - root.position;
+                return Quaternion.Inverse(root.rotation) * worldOffset;
+            }
+
+            float chestHeight = caster.HitHeight > 0f
+                ? caster.HitHeight * PlayerChestHeightFraction
+                : DefaultPlayerChestHeight;
+            return Vector3.up * chestHeight;
+        }
+
+        internal static Vector3 ResolveSpecialMovementEndpoint(
+            Vector3 rootPosition,
+            Quaternion facing,
+            Vector3 localOffset)
+        {
+            return rootPosition + facing * localOffset;
         }
 
         private void OnPredictedActionResultInsert(EventContext ctx, PredictedActionResult row)
@@ -1362,6 +1459,7 @@ namespace Arena.Presentation
                 return;
 
             conn.Db.CombatEvent.OnInsert -= OnCombatEventInsert;
+            conn.Db.SpecialMovementRuntime.OnInsert -= OnSpecialMovementRuntimeInsertForVfx;
             conn.Db.ProjectilePresentationEvent.OnInsert -= OnProjectilePresentationEventInsert;
             conn.Db.PredictedActionResult.OnInsert -= OnPredictedActionResultInsert;
             conn.Db.ActiveCast.OnDelete -= OnActiveCastDeleteForVfx;

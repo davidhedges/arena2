@@ -50,6 +50,18 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void CombatVfxDispatcher_RoutesSpecialMovementThroughNormalCuePipeline()
+        {
+            string source = File.ReadAllText(DispatcherPath);
+
+            Assert.That(source, Does.Contain("SpecialMovementRuntime.OnInsert += OnSpecialMovementRuntimeInsertForVfx"));
+            Assert.That(source, Does.Contain("TriggerSpecialMovementStart"));
+            Assert.That(source, Does.Contain("TriggerSpecialMovementArrival"));
+            Assert.That(source, Does.Contain("DispatchFact(fact);"));
+            Assert.That(source, Does.Not.Contain("Resources.Load<GameObject>(\"CombatVFX/playground/Realistic Ink Spells 1/shadow_in\")"));
+        }
+
+        [Test]
         public void CombatVfxDispatcher_CachesProjectileDeliveredSpellImpactClassification()
         {
             string source = File.ReadAllText(DispatcherPath);

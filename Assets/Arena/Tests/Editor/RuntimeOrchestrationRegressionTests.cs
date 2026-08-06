@@ -703,6 +703,80 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void LingeringShadeReturnVfx_UsesNormalAbilityCueResolutionForBothEndpoints()
+        {
+            object departure = CreateCombatVfxCue(
+                "shade-departure",
+                "ABILITY",
+                "SUBTLETY_LINGERING_SHADE",
+                "SPECIAL_MOVEMENT_START",
+                "ORIGIN",
+                "VFX_LINGERING_SHADE_RETURN_01",
+                "SPAWN_WORLD",
+                "ONE_SHOT",
+                0,
+                8);
+            object arrival = CreateCombatVfxCue(
+                "shade-arrival",
+                "ABILITY",
+                "SUBTLETY_LINGERING_SHADE",
+                "SPECIAL_MOVEMENT_ARRIVAL",
+                "IMPACT_POINT",
+                "VFX_LINGERING_SHADE_RETURN_01",
+                "SPAWN_WORLD",
+                "ONE_SHOT",
+                0,
+                9);
+
+            Assert.That(
+                ResolveCombatVfxCueIds(
+                    false,
+                    "SPECIAL_MOVEMENT_START",
+                    string.Empty,
+                    "SUBTLETY_LINGERING_SHADE",
+                    string.Empty,
+                    -1,
+                    departure,
+                    arrival),
+                Is.EqualTo(new[] { "VFX_LINGERING_SHADE_RETURN_01" }));
+            Assert.That(
+                ResolveCombatVfxCueIds(
+                    false,
+                    "SPECIAL_MOVEMENT_ARRIVAL",
+                    string.Empty,
+                    "SUBTLETY_LINGERING_SHADE",
+                    string.Empty,
+                    -1,
+                    departure,
+                    arrival),
+                Is.EqualTo(new[] { "VFX_LINGERING_SHADE_RETURN_01" }));
+        }
+
+        [Test]
+        public void SpecialMovementVfxEndpoint_RotatesModelChestOffsetAtAuthoritativePosition()
+        {
+            Type dispatcherType = RequireRuntimeType("Arena.Presentation.CombatVFXDispatcher");
+            Vector3 position = (Vector3)RequireMethod(
+                    dispatcherType,
+                    "ResolveSpecialMovementEndpoint",
+                    typeof(Vector3),
+                    typeof(Quaternion),
+                    typeof(Vector3))
+                .Invoke(
+                    null,
+                    new object[]
+                    {
+                        new Vector3(10f, 2f, 30f),
+                        Quaternion.Euler(0f, 90f, 0f),
+                        new Vector3(0f, 1.2f, 0.25f),
+                    })!;
+
+            Assert.That(position.x, Is.EqualTo(10.25f).Within(0.0001f));
+            Assert.That(position.y, Is.EqualTo(3.2f).Within(0.0001f));
+            Assert.That(position.z, Is.EqualTo(30f).Within(0.0001f));
+        }
+
+        [Test]
         public void GameplaySubscriptionPlanner_ScopesDoorAndInteractionRowsToTheVisibleWorld()
         {
             Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
