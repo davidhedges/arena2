@@ -7512,6 +7512,7 @@ mod tests {
             "CASTER",
             "CASTER_OVERHEAD",
             "TARGET",
+            "TARGET_BACK",
             "ORIGIN",
             "AREA_ORIGIN",
             "IMPACT_POINT",
@@ -7754,12 +7755,12 @@ mod tests {
                         cue.vfx_id
                     ),
                     V::TargetAnchorPreImpact => format!(
-                        "combat VFX cue '{}' uses TARGET anchor on {}; TARGET is only valid once an impact/block/parry/fizzle target is known",
-                        cue.vfx_id, trigger
+                        "combat VFX cue '{}' uses target anchor '{}' on {}; target anchors are only valid once an impact/block/parry/fizzle target is known",
+                        cue.vfx_id, anchor, trigger
                     ),
                     V::WorldImpactTargetAnchor => format!(
-                        "combat VFX cue '{}' is a world-spawned {} cue using TARGET; use IMPACT_POINT for detached hit VFX or FOLLOW_ANCHOR for an effect that intentionally tracks the target",
-                        cue.vfx_id, trigger
+                        "combat VFX cue '{}' is a world-spawned {} cue using target anchor '{}'; use IMPACT_POINT for detached hit VFX or FOLLOW_ANCHOR for an effect that intentionally tracks the target",
+                        cue.vfx_id, trigger, anchor
                     ),
                 };
                 errors.push(CombatAuthoringError::new(
@@ -8637,7 +8638,7 @@ mod tests {
                     && normalize_identifier(cue.trigger.as_str()) == "SPELL_IMPACT"
             })
             .expect("Celestial Mantle target wing VFX cue should be authored");
-        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET_BACK");
         assert_eq!(
             normalize_identifier(cue.attach_mode.as_str()),
             "FOLLOW_ANCHOR"

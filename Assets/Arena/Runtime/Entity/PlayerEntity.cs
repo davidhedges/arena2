@@ -733,6 +733,15 @@ namespace Arena.Entity
             return false;
         }
 
+        public bool TryGetVfxSocket(string socketId, out Transform socket)
+        {
+            if (_avatarBinding != null && _avatarBinding.TryGetVfxSocket(socketId, out socket))
+                return true;
+
+            socket = null!;
+            return false;
+        }
+
         public LocalPlayerStateProvider? GetLocalStateProvider()
         {
             if (IsDestroyed) return null;

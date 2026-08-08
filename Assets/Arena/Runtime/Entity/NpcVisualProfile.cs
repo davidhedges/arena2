@@ -112,7 +112,8 @@ namespace Arena.Entity
             string normalized = NormalizeAnchor(anchor);
             return string.Equals(normalized, "LEFT_HAND", StringComparison.Ordinal)
                 || string.Equals(normalized, "RIGHT_HAND", StringComparison.Ordinal)
-                || string.Equals(normalized, "TARGET", StringComparison.Ordinal);
+                || string.Equals(normalized, "TARGET", StringComparison.Ordinal)
+                || string.Equals(normalized, "TARGET_BACK", StringComparison.Ordinal);
         }
     }
 

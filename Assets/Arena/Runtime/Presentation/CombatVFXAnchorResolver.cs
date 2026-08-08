@@ -2,6 +2,7 @@
 using System;
 using Arena.Combat;
 using Arena.Entity;
+using Arena.Presentation.Appearance;
 using SpacetimeDB;
 using SpacetimeDB.Types;
 using UnityEngine;
@@ -13,6 +14,7 @@ namespace Arena.Presentation
         private const string AnchorCaster = "CASTER";
         private const string AnchorCasterOverhead = "CASTER_OVERHEAD";
         private const string AnchorTarget = "TARGET";
+        private const string AnchorTargetBack = "TARGET_BACK";
         private const string AnchorOrigin = "ORIGIN";
         private const string AnchorAreaOrigin = "AREA_ORIGIN";
         private const string AnchorImpactPoint = "IMPACT_POINT";
@@ -91,6 +93,29 @@ namespace Arena.Presentation
                     return true;
                 if (authored)
                     return false;
+                return TryResolveEntityTransform(fact.Hit, out transform);
+            }
+            if (string.Equals(anchor, AnchorTargetBack, StringComparison.Ordinal))
+            {
+                if (TryResolveNpcAnchor(fact.Hit, anchor, out transform, out bool authored))
+                    return true;
+                if (authored)
+                    return false;
+                if (TryResolvePlayerVfxSocket(fact.Hit, AvatarVfxSockets.BackSocketId, out transform))
+                    return true;
+
+                // Compatibility fallback for avatars assembled before semantic VFX sockets existed.
+                if (TryResolveHumanoidBone(fact.Hit, HumanBodyBones.UpperChest, out transform)
+                    || TryResolveHumanoidBone(fact.Hit, HumanBodyBones.Chest, out transform)
+                    || TryResolveHumanoidBone(fact.Hit, HumanBodyBones.Spine, out transform))
+                {
+                    return true;
+                }
+
+                // Generic-rig NPCs already author TARGET sockets. Use that profile-specific target
+                // transform before the presentation root when no TARGET_BACK socket is authored.
+                if (TryResolveNpcAnchor(fact.Hit, AnchorTarget, out transform, out _))
+                    return true;
                 return TryResolveEntityTransform(fact.Hit, out transform);
             }
             if (string.Equals(anchor, AnchorLeftHand, StringComparison.Ordinal))
@@ -183,6 +208,22 @@ namespace Arena.Presentation
             if (EntityRegistry.Instance != null
                 && EntityRegistry.Instance.TryGetEntity(identity, out PlayerEntity entity)
                 && entity.TryGetWeaponMount(mountId, out transform))
+            {
+                return true;
+            }
+
+            transform = null!;
+            return false;
+        }
+
+        private static bool TryResolvePlayerVfxSocket(
+            Identity identity,
+            string socketId,
+            out Transform transform)
+        {
+            if (EntityRegistry.Instance != null
+                && EntityRegistry.Instance.TryGetEntity(identity, out PlayerEntity entity)
+                && entity.TryGetVfxSocket(socketId, out transform))
             {
                 return true;
             }

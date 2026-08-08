@@ -92,6 +92,8 @@ namespace Arena.Presentation
         CharacterFx = 10,
         /// <summary>Persistent field attached to a caster or hostile target.</summary>
         PersistentField = 11,
+        /// <summary>Duration-bound visual attached to an animated socket on the confirmed target.</summary>
+        TargetAttachment = 12,
     }
 
     /// <summary>
@@ -109,6 +111,7 @@ namespace Arena.Presentation
         AreaOrigin = 5,
         Target = 6,
         Origin = 7,
+        TargetBack = 8,
     }
 
     /// <summary>
@@ -308,6 +311,7 @@ namespace Arena.Presentation
         public const string AnchorImpactPoint = "IMPACT_POINT";
         public const string AnchorAreaOrigin = "AREA_ORIGIN";
         public const string AnchorTarget = "TARGET";
+        public const string AnchorTargetBack = "TARGET_BACK";
         public const string AnchorOrigin = "ORIGIN";
 
         private const string DeliveryProjectile = "PROJECTILE";
@@ -401,7 +405,13 @@ namespace Arena.Presentation
                 case SpellVfxArchetype.Beam:
                     return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.Beam };
                 case SpellVfxArchetype.TargetHit:
-                    return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.Impact };
+                    return new[]
+                    {
+                        SpellVfxSlot.CastGlow,
+                        SpellVfxSlot.CharacterFx,
+                        SpellVfxSlot.Impact,
+                        SpellVfxSlot.TargetAttachment,
+                    };
                 case SpellVfxArchetype.SelfFx:
                     return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.SelfFlash };
                 // Aura buffs persist, but their aura_ground visual is only a brief ground flourish.
@@ -625,6 +635,16 @@ namespace Arena.Presentation
                         duration: CueDurationPolicy.Zero,
                         projectileSequenceIndex: null);
 
+                case SpellVfxSlot.TargetAttachment:
+                    return new CueWiring(
+                        trigger: TriggerSpellImpact,
+                        anchor: CueAnchor.TargetBack,
+                        attachMode: AttachFollowAnchor,
+                        vfxRole: RoleAttached,
+                        lifecycle: LifecycleDuration,
+                        duration: CueDurationPolicy.PalettePositive,
+                        projectileSequenceIndex: null);
+
                 default:
                     // Unreachable for the enum's defined members; keeps the switch total.
                     return new CueWiring(
@@ -655,6 +675,7 @@ namespace Arena.Presentation
                 CueAnchor.AreaOrigin => AnchorAreaOrigin,
                 CueAnchor.Target => AnchorTarget,
                 CueAnchor.Origin => AnchorOrigin,
+                CueAnchor.TargetBack => AnchorTargetBack,
                 _ => AnchorCaster,
             };
 
@@ -732,8 +753,8 @@ namespace Arena.Presentation
             if (f.Role == RoleOneShot && f.Lifecycle == LifecycleDuration && f.DurationIsZero)
                 violations.Add(CueFieldViolation.OneShotDurationZero);
 
-            // Rule 15 — TARGET anchor only valid post-impact.
-            if (f.Anchor == AnchorTarget
+            // Rule 15 — target-entity anchors are only valid post-impact.
+            if (IsTargetAnchor(f.Anchor)
                 && (f.Trigger == TriggerSpellCast || f.Trigger == TriggerSpellRelease))
             {
                 violations.Add(CueFieldViolation.TargetAnchorPreImpact);
@@ -748,7 +769,7 @@ namespace Arena.Presentation
                 || f.Trigger == TriggerSpellImpact
                 || f.Trigger == "SPELL_BLOCK"
                 || f.Trigger == "SPELL_PARRY";
-            if (f.Anchor == AnchorTarget && worldSpawn && pointImpactTrigger)
+            if (IsTargetAnchor(f.Anchor) && worldSpawn && pointImpactTrigger)
                 violations.Add(CueFieldViolation.WorldImpactTargetAnchor);
 
             return violations;
@@ -787,5 +808,8 @@ namespace Arena.Presentation
 
         private static bool IsHandAnchor(string anchor)
             => anchor == AnchorLeftHand || anchor == AnchorRightHand;
+
+        private static bool IsTargetAnchor(string anchor)
+            => anchor == AnchorTarget || anchor == AnchorTargetBack;
     }
 }

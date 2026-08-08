@@ -269,6 +269,8 @@ namespace Arena.Tests.Editor
             Assert.That(characterFx, Is.EqualTo("CharacterFx"));
             Assert.That(TryParseSlotKey("character_fx/body_rings", out string characterVariant), Is.True);
             Assert.That(characterVariant, Is.EqualTo("CharacterFx"));
+            Assert.That(TryParseSlotKey("target_attachment", out string targetAttachment), Is.True);
+            Assert.That(targetAttachment, Is.EqualTo("TargetAttachment"));
             Assert.That(TryParseSlotKey("not_a_slot", out _), Is.False);
         }
 

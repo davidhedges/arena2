@@ -8239,9 +8239,9 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "SPELL_CELESTIAL_MANTLE",
-      "slot": "character_fx",
+      "slot": "target_attachment",
       "trigger": "SPELL_IMPACT",
-      "anchor": "TARGET",
+      "anchor": "TARGET_BACK",
       "vfx_id": "VFX_CELESTIAL_MANTLE_WINGS_01",
       "attach_mode": "FOLLOW_ANCHOR",
       "vfx_role": "ATTACHED",

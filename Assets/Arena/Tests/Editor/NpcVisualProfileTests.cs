@@ -170,6 +170,16 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void SharedNpcSocketVocabulary_SupportsTargetBack()
+        {
+            Type profileType = RequireType("Arena.Entity.NpcVisualProfile");
+            MethodInfo supports = profileType.GetMethod("SupportsVfxAnchor", BindingFlags.Public | BindingFlags.Static)
+                ?? throw new MissingMethodException(profileType.FullName, "SupportsVfxAnchor");
+
+            Assert.That(supports.Invoke(null, new object[] { "TARGET_BACK" }), Is.EqualTo(true));
+        }
+
+        [Test]
         public void FreezeCurrentPoseFallback_FreezesAndRestoresAnimatorSpeed()
         {
             Type profileType = RequireType("Arena.Entity.NpcVisualProfile");

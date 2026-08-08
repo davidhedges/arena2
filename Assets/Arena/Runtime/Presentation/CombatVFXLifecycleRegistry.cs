@@ -20,6 +20,7 @@ namespace Arena.Presentation
         private const string LifecycleUntilTerminalEvent = "UNTIL_TERMINAL_EVENT";
         private const string LifecycleUntilCastEnd = "UNTIL_CAST_END";
         private const string LifecycleUntilRadialEffectEnd = "UNTIL_RADIAL_EFFECT_END";
+        private const string AnchorTargetBack = "TARGET_BACK";
         private const float GroundYOffset = 0.03f;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -257,6 +258,19 @@ namespace Arena.Presentation
 #endif
         }
 
+        /// <summary>
+        /// Anchors backed by an authored <see cref="Appearance.AvatarVfxSockets"/> marker. Those
+        /// sockets own their placement, so attached VFX inherit the socket basis instead of
+        /// freezing the world rotation they spawned with.
+        /// </summary>
+        private static bool IsAvatarSocketAnchor(string anchor)
+        {
+            return string.Equals(
+                WireIdentifier.Normalize(anchor),
+                AnchorTargetBack,
+                System.StringComparison.Ordinal);
+        }
+
         private IEnumerator SpawnAfterDelay(
             CombatVFXRegistry.Template template,
             CombatVfxCueCatalog cue,
@@ -305,8 +319,23 @@ namespace Arena.Presentation
 #endif
             if (followAnchor != null && !followsGroundPosition)
             {
-                instance.transform.SetParent(followAnchor, true);
-                instance.transform.localPosition = template.LocalPositionOffset;
+                if (IsAvatarSocketAnchor(cue.Anchor))
+                {
+                    // An authored avatar socket already carries its own calibration, so the
+                    // instance adopts the socket's basis outright and then bends and turns with
+                    // the bone it hangs off.
+                    instance.transform.SetParent(followAnchor, false);
+                    instance.transform.SetLocalPositionAndRotation(
+                        template.LocalPositionOffset,
+                        template.LocalRotation);
+                }
+                else
+                {
+                    // Every other anchor keeps the world rotation it spawned with and rides the
+                    // anchor from there; hand and weapon cues are tuned against that basis.
+                    instance.transform.SetParent(followAnchor, true);
+                    instance.transform.localPosition = template.LocalPositionOffset;
+                }
             }
 
             VFXUtils.ApplyPrefabPresentationScale(instance, template.Scale);

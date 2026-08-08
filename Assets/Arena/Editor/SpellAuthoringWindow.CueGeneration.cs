@@ -415,7 +415,8 @@ namespace Arena.Editor
             => slot == SpellVfxSlot.Muzzle
                 || slot == SpellVfxSlot.ProjectileTrail
                 || slot == SpellVfxSlot.CharacterFx
-                || slot == SpellVfxSlot.SelfFlash;
+                || slot == SpellVfxSlot.SelfFlash
+                || slot == SpellVfxSlot.TargetAttachment;
 
         private static bool TryBuildGeneratedSlotKey(
             SpellVfxSlot slot,
@@ -799,6 +800,7 @@ namespace Arena.Editor
                 SpellVfxSlot.AuraGround => "aura_ground",
                 SpellVfxSlot.CharacterFx => "character_fx",
                 SpellVfxSlot.PersistentField => "persistent_field",
+                SpellVfxSlot.TargetAttachment => "target_attachment",
                 _ => slot.ToString().ToLowerInvariant(),
             };
 
@@ -894,6 +896,7 @@ namespace Arena.Editor
                 case "aura_ground": slot = SpellVfxSlot.AuraGround; return true;
                 case "character_fx": slot = SpellVfxSlot.CharacterFx; return true;
                 case "persistent_field": slot = SpellVfxSlot.PersistentField; return true;
+                case "target_attachment": slot = SpellVfxSlot.TargetAttachment; return true;
                 default:
                     slot = default;
                     return false;
@@ -923,6 +926,14 @@ namespace Arena.Editor
             AnchorClass anchorClass = ClassifyAnchor(Normalize(cue.anchor));
             bool attached = string.Equals(role, SpellVfxGenerator.RoleAttached, System.StringComparison.Ordinal);
             bool oneShot = string.Equals(role, SpellVfxGenerator.RoleOneShot, System.StringComparison.Ordinal);
+
+            if (attached
+                && string.Equals(Normalize(cue.anchor), SpellVfxGenerator.AnchorTargetBack, System.StringComparison.Ordinal)
+                && string.Equals(trigger, SpellVfxGenerator.TriggerSpellImpact, System.StringComparison.Ordinal))
+            {
+                slot = SpellVfxSlot.TargetAttachment;
+                return true;
+            }
 
             if (attached && anchorClass == AnchorClass.Hand
                 && string.Equals(trigger, SpellVfxGenerator.TriggerSpellCast, System.StringComparison.Ordinal))
@@ -984,6 +995,7 @@ namespace Arena.Editor
                 case SpellVfxGenerator.AnchorImpactPoint:
                 case SpellVfxGenerator.AnchorAreaOrigin:
                 case SpellVfxGenerator.AnchorTarget:
+                case SpellVfxGenerator.AnchorTargetBack:
                 case SpellVfxGenerator.AnchorGroundUnderCaster:
                 case SpellVfxGenerator.AnchorOrigin:
                 case "GROUND_UNDER_TARGET":

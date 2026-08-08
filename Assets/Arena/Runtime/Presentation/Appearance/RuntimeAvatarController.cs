@@ -7,18 +7,183 @@ using UnityEngine;
 
 namespace Arena.Presentation.Appearance
 {
+    [Serializable]
+    public sealed class AvatarVfxSocketDefinition
+    {
+        public string socketId = string.Empty;
+        public Transform? socket;
+    }
+
+    /// <summary>
+    /// Semantic VFX sockets owned by a visible avatar. Runtime effects resolve these ids instead
+    /// of depending on publisher-specific bone names or weapon-mount calibration.
+    /// </summary>
+    [DisallowMultipleComponent]
+    public sealed class AvatarVfxSockets : MonoBehaviour
+    {
+        public const string BackSocketId = "back";
+        public const string BackMarkerName = "ArenaVFX_Back";
+
+        // Preserve the established Celestial Mantle placement while moving its parent from the
+        // presentation root to an animated torso bone. The marker owns avatar calibration; the
+        // VFX registry can therefore keep the prefab at socket-local zero.
+        internal static readonly Vector3 BackReferenceLocalPosition = new(0f, 1.1f, -0.25f);
+
+        [SerializeField] private List<AvatarVfxSocketDefinition> sockets = new();
+
+        private readonly Dictionary<string, Transform> _socketLookup =
+            new(StringComparer.Ordinal);
+
+        public IReadOnlyList<AvatarVfxSocketDefinition> SocketDefinitions => sockets;
+
+        private void Awake()
+        {
+            RebuildLookup();
+        }
+
+        private void OnValidate()
+        {
+            RebuildLookup();
+        }
+
+        public bool TryGetSocket(string socketId, out Transform socket)
+        {
+            if (_socketLookup.Count == 0)
+                RebuildLookup();
+
+            string normalized = NormalizeSocketId(socketId);
+            if (!string.IsNullOrEmpty(normalized)
+                && _socketLookup.TryGetValue(normalized, out Transform resolved))
+            {
+                socket = resolved;
+                return true;
+            }
+
+            socket = null!;
+            return false;
+        }
+
+        public void SetOrReplaceSocket(string socketId, Transform socket)
+        {
+            string normalized = NormalizeSocketId(socketId);
+            if (string.IsNullOrEmpty(normalized) || socket == null)
+                return;
+
+            for (int i = 0; i < sockets.Count; i++)
+            {
+                AvatarVfxSocketDefinition definition = sockets[i];
+                if (definition != null
+                    && string.Equals(NormalizeSocketId(definition.socketId), normalized, StringComparison.Ordinal))
+                {
+                    definition.socketId = normalized;
+                    definition.socket = socket;
+                    RebuildLookup();
+                    return;
+                }
+            }
+
+            sockets.Add(new AvatarVfxSocketDefinition
+            {
+                socketId = normalized,
+                socket = socket,
+            });
+            RebuildLookup();
+        }
+
+        public static AvatarVfxSockets EnsureOn(GameObject avatarRoot, Animator animator)
+        {
+            // Unity's fake-null makes `??` unusable on GetComponent results; compare with the
+            // overloaded == so a missing component actually falls through to AddComponent.
+            AvatarVfxSockets existing = avatarRoot.GetComponent<AvatarVfxSockets>();
+            AvatarVfxSockets result = existing != null
+                ? existing
+                : avatarRoot.AddComponent<AvatarVfxSockets>();
+
+            Transform? backParent = ResolveNamedDescendant(avatarRoot.transform, "spine_03")
+                ?? ResolveHumanoidBone(animator, HumanBodyBones.UpperChest)
+                ?? ResolveHumanoidBone(animator, HumanBodyBones.Chest)
+                ?? ResolveHumanoidBone(animator, HumanBodyBones.Spine);
+            if (backParent == null)
+                return result;
+
+            Transform? marker = backParent.Find(BackMarkerName);
+            if (marker == null)
+            {
+                marker = new GameObject(BackMarkerName).transform;
+                marker.SetParent(backParent, false);
+                marker.position = avatarRoot.transform.TransformPoint(BackReferenceLocalPosition);
+                marker.rotation = avatarRoot.transform.rotation;
+                marker.localScale = Vector3.one;
+            }
+
+            result.SetOrReplaceSocket(BackSocketId, marker);
+            return result;
+        }
+
+        private static Transform? ResolveHumanoidBone(Animator? animator, HumanBodyBones bone)
+        {
+            if (animator == null || !animator.isHuman)
+                return null;
+
+            try
+            {
+                return animator.GetBoneTransform(bone);
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        }
+
+        private static Transform? ResolveNamedDescendant(Transform root, string transformName)
+        {
+            Transform[] descendants = root.GetComponentsInChildren<Transform>(includeInactive: true);
+            for (int i = 0; i < descendants.Length; i++)
+            {
+                if (string.Equals(descendants[i].name, transformName, StringComparison.Ordinal))
+                    return descendants[i];
+            }
+
+            return null;
+        }
+
+        private void RebuildLookup()
+        {
+            _socketLookup.Clear();
+            for (int i = 0; i < sockets.Count; i++)
+            {
+                AvatarVfxSocketDefinition definition = sockets[i];
+                if (definition == null || definition.socket == null)
+                    continue;
+
+                string normalized = NormalizeSocketId(definition.socketId);
+                if (!string.IsNullOrEmpty(normalized) && !_socketLookup.ContainsKey(normalized))
+                    _socketLookup.Add(normalized, definition.socket);
+            }
+        }
+
+        private static string NormalizeSocketId(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                ? string.Empty
+                : value.Trim().ToLowerInvariant();
+        }
+    }
+
     public sealed class RuntimeAvatarBinding
     {
         public RuntimeAvatarBinding(
             GameObject avatarRoot,
             Animator animator,
             AvatarWeaponMounts mounts,
+            AvatarVfxSockets vfxSockets,
             Renderer[] renderers,
             string appearanceSignature)
         {
             AvatarRoot = avatarRoot;
             Animator = animator;
             Mounts = mounts;
+            VfxSockets = vfxSockets;
             Renderers = renderers;
             AppearanceSignature = appearanceSignature;
         }
@@ -26,6 +191,7 @@ namespace Arena.Presentation.Appearance
         public GameObject AvatarRoot { get; }
         public Animator Animator { get; }
         public AvatarWeaponMounts Mounts { get; }
+        public AvatarVfxSockets VfxSockets { get; }
         public Renderer[] Renderers { get; internal set; }
         public string AppearanceSignature { get; }
 
@@ -44,6 +210,11 @@ namespace Arena.Presentation.Appearance
         public bool TryGetMount(string mountId, out Transform mount)
         {
             return Mounts.TryGetMount(mountId, out mount);
+        }
+
+        public bool TryGetVfxSocket(string socketId, out Transform socket)
+        {
+            return VfxSockets.TryGetSocket(socketId, out socket);
         }
     }
 
@@ -304,10 +475,12 @@ namespace Arena.Presentation.Appearance
                 return false;
             }
 
+            AvatarVfxSockets vfxSockets = AvatarVfxSockets.EnsureOn(_activeAvatar, animator);
             binding = new RuntimeAvatarBinding(
                 _activeAvatar,
                 animator,
                 mounts,
+                vfxSockets,
                 CollectEnabledRenderers(_activeAvatar),
                 appearanceSignature);
             error = string.Empty;

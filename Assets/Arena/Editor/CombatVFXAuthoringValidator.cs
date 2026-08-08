@@ -16,6 +16,7 @@ namespace Arena.Editor
         private const float ReleaseTimingToleranceSeconds = 0.05f;
         private const string AnchorLeftHand = "LEFT_HAND";
         private const string AnchorRightHand = "RIGHT_HAND";
+        private const string AnchorTargetBack = "TARGET_BACK";
         private const string AnchorWeaponMainHand = "WEAPON_MAIN_HAND";
         private const string AnchorWeaponOffHand = "WEAPON_OFF_HAND";
         private const string AnchorWeaponBladeStart = "WEAPON_BLADE_START";
@@ -1043,6 +1044,7 @@ namespace Arena.Editor
         {
             bool requiresLeftHand = false;
             bool requiresRightHand = false;
+            bool requiresTargetBack = false;
             bool requiresMainWeapon = false;
             bool requiresOffWeapon = false;
             bool requiresBladeMarkers = false;
@@ -1052,6 +1054,7 @@ namespace Arena.Editor
                 string anchor = WireIdentifier.Normalize(cue.anchor);
                 requiresLeftHand |= string.Equals(anchor, AnchorLeftHand, StringComparison.Ordinal);
                 requiresRightHand |= string.Equals(anchor, AnchorRightHand, StringComparison.Ordinal);
+                requiresTargetBack |= string.Equals(anchor, AnchorTargetBack, StringComparison.Ordinal);
                 requiresMainWeapon |= string.Equals(anchor, AnchorWeaponMainHand, StringComparison.Ordinal)
                     || string.Equals(anchor, AnchorWeaponBladeStart, StringComparison.Ordinal)
                     || string.Equals(anchor, AnchorWeaponBladeEnd, StringComparison.Ordinal);
@@ -1062,6 +1065,7 @@ namespace Arena.Editor
 
             if (!requiresLeftHand
                 && !requiresRightHand
+                && !requiresTargetBack
                 && !requiresMainWeapon
                 && !requiresOffWeapon
                 && !requiresBladeMarkers)
@@ -1072,14 +1076,14 @@ namespace Arena.Editor
             GameObject? runtimeAvatarPrefab = RuntimeAvatarPrefabResolver.LoadRuntimePlayerPrefab();
             if (runtimeAvatarPrefab == null)
             {
-                errors.Add("combat_vfx_cues require hand or weapon anchors, but no runtime player prefab resolves from Resources.");
+                errors.Add("combat_vfx_cues require skeletal or weapon anchors, but no runtime player prefab resolves from Resources.");
                 return;
             }
 
             Animator? animator = runtimeAvatarPrefab.GetComponentInChildren<Animator>(true);
-            if ((requiresLeftHand || requiresRightHand) && animator == null)
+            if ((requiresLeftHand || requiresRightHand || requiresTargetBack) && animator == null)
             {
-                errors.Add($"runtime avatar prefab '{runtimeAvatarPrefab.name}' has no Animator, but combat_vfx_cues require hand anchors.");
+                errors.Add($"runtime avatar prefab '{runtimeAvatarPrefab.name}' has no Animator, but combat_vfx_cues require skeletal anchors.");
             }
             else if (animator != null)
             {
@@ -1087,6 +1091,14 @@ namespace Arena.Editor
                     errors.Add($"runtime avatar prefab '{runtimeAvatarPrefab.name}' does not resolve humanoid bone LeftHand required by combat_vfx_cues.");
                 if (requiresRightHand && !TryGetHumanoidBone(animator, HumanBodyBones.RightHand, out _))
                     errors.Add($"runtime avatar prefab '{runtimeAvatarPrefab.name}' does not resolve humanoid bone RightHand required by combat_vfx_cues.");
+                if (requiresTargetBack
+                    && FindDescendant(runtimeAvatarPrefab.transform, "spine_03") == null
+                    && !TryGetHumanoidBone(animator, HumanBodyBones.UpperChest, out _)
+                    && !TryGetHumanoidBone(animator, HumanBodyBones.Chest, out _)
+                    && !TryGetHumanoidBone(animator, HumanBodyBones.Spine, out _))
+                {
+                    errors.Add($"runtime avatar prefab '{runtimeAvatarPrefab.name}' does not resolve a torso bone required by TARGET_BACK combat_vfx_cues.");
+                }
             }
 
             AvatarWeaponMounts? mounts = runtimeAvatarPrefab.GetComponentInChildren<AvatarWeaponMounts>(true);

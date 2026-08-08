@@ -361,6 +361,20 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void TargetAttachment_FollowsTheConfirmedTargetsAnimatedBackSocket()
+        {
+            Assert.That(RequestedSlotNames("TargetHit"), Does.Contain("TargetAttachment"));
+
+            object attachment = Wire("TargetHit", "TargetAttachment", "Instant", false, false);
+            Assert.That(WireStr(attachment, "Trigger"), Is.EqualTo("SPELL_IMPACT"));
+            Assert.That(WireStr(attachment, "Anchor"), Is.EqualTo("TargetBack"));
+            Assert.That(WireStr(attachment, "AttachMode"), Is.EqualTo("FOLLOW_ANCHOR"));
+            Assert.That(WireStr(attachment, "VfxRole"), Is.EqualTo("ATTACHED"));
+            Assert.That(WireStr(attachment, "Lifecycle"), Is.EqualTo("DURATION"));
+            Assert.That(WireStr(attachment, "Duration"), Is.EqualTo("PalettePositive"));
+        }
+
+        [Test]
         public void BeamLifecycle_ChannelIsUntilCastEnd()
         {
             // Decision 8: channel beam ends on ActiveCast-delete.
@@ -554,6 +568,9 @@ namespace Arena.Tests.Editor
             Assert.That(
                 CheckRules(Fields("SPELL_IMPACT", "TARGET", "SPAWN_WORLD", "ONE_SHOT", "DURATION", false, false)),
                 Does.Not.Contain("TargetAnchorPreImpact")); // post-impact: legal
+            Assert.That(
+                CheckRules(Fields("SPELL_RELEASE", "TARGET_BACK", "FOLLOW_ANCHOR", "ATTACHED", "DURATION", false, false)),
+                Does.Contain("TargetAnchorPreImpact"));
         }
 
         [Test]
@@ -568,6 +585,9 @@ namespace Arena.Tests.Editor
             Assert.That(
                 CheckRules(Fields("SPELL_IMPACT", "TARGET", "FOLLOW_ANCHOR", "ATTACHED", "DURATION", false, false)),
                 Does.Not.Contain("WorldImpactTargetAnchor"));
+            Assert.That(
+                CheckRules(Fields("SPELL_IMPACT", "TARGET_BACK", "SPAWN_WORLD", "ATTACHED", "DURATION", false, false)),
+                Does.Contain("WorldImpactTargetAnchor"));
         }
     }
 }

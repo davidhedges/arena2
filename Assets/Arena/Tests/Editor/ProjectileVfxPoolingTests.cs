@@ -56,15 +56,17 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void FollowAnchorVfx_AppliesRegistryLocalPositionOffset()
+        public void FollowAnchorVfx_AppliesRegistryLocalTransform()
         {
             string registry = File.ReadAllText(VfxRegistryPath);
             string lifecycle = File.ReadAllText(LifecycleRegistryPath);
 
             Assert.That(registry, Does.Contain("public Vector3 localPositionOffset = Vector3.zero"));
             Assert.That(registry, Does.Contain("public Vector3 LocalPositionOffset { get; }"));
-            Assert.That(lifecycle, Does.Contain("if (followAnchor != null)"));
-            Assert.That(lifecycle, Does.Contain("instance.transform.localPosition = template.LocalPositionOffset"));
+            Assert.That(lifecycle, Does.Contain("if (followAnchor != null && !followsGroundPosition)"));
+            Assert.That(lifecycle, Does.Contain("template.LocalPositionOffset"));
+            Assert.That(lifecycle, Does.Contain("template.LocalRotation"));
+            Assert.That(lifecycle, Does.Contain("SetLocalPositionAndRotation"));
         }
 
         [Test]

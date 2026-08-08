@@ -1287,6 +1287,39 @@ namespace Arena.Tests.Editor
             Assert.That(ResolveCombatVfxAnchorPosition(identity, "GROUND_UNDER_CASTER", origin, impact), Is.EqualTo(origin + Vector3.up * 0.03f));
         }
 
+        [Test]
+        public void AvatarVfxSockets_BackSocketPreservesPlacementAndInheritsTorsoRotation()
+        {
+            Type socketsType = RequireRuntimeType("Arena.Presentation.Appearance.AvatarVfxSockets");
+            var root = new GameObject("AnchorResolverAvatar");
+            root.transform.SetPositionAndRotation(new Vector3(3f, 0f, 5f), Quaternion.Euler(0f, 35f, 0f));
+            Animator animator = root.AddComponent<Animator>();
+            var spine = new GameObject("spine_03");
+            spine.transform.SetParent(root.transform, false);
+            spine.transform.localPosition = new Vector3(0f, 1.45f, 0f);
+
+            Component sockets = (Component)RequireMethod(
+                    socketsType,
+                    "EnsureOn",
+                    typeof(GameObject),
+                    typeof(Animator))
+                .Invoke(null, new object[] { root, animator })!;
+            object?[] resolveArgs = { "back", null };
+            Assert.That(
+                RequireMethod(socketsType, "TryGetSocket", typeof(string), typeof(Transform).MakeByRefType())
+                    .Invoke(sockets, resolveArgs),
+                Is.EqualTo(true));
+
+            Transform socket = (Transform)resolveArgs[1]!;
+            Vector3 expectedPosition = root.transform.TransformPoint(new Vector3(0f, 1.1f, -0.25f));
+            Assert.That(Vector3.Distance(socket.position, expectedPosition), Is.LessThan(0.0001f));
+            Assert.That(Quaternion.Angle(socket.rotation, root.transform.rotation), Is.LessThan(0.001f));
+
+            Quaternion initialRotation = socket.rotation;
+            spine.transform.localRotation = Quaternion.Euler(25f, 0f, 0f);
+            Assert.That(Quaternion.Angle(socket.rotation, initialRotation), Is.GreaterThan(20f));
+        }
+
         private static object GetLocalCombatState()
         {
             Type stateType = RequireRuntimeType("Arena.Simulation.LocalCombatState");
