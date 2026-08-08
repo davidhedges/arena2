@@ -2,6 +2,9 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 namespace Arena.UI
 {
@@ -74,6 +77,43 @@ namespace Arena.UI
 
         private static bool IsDestroyed(IEscapeCloseable closeable)
             => closeable is Object unityObject && unityObject == null;
+    }
+
+    /// <summary>
+    /// Pumps Escape into the shared closeable stack even in non-gameplay scenes
+    /// such as the Hub, where the combat input handlers are not present.
+    /// Gameplay-specific Escape fallbacks still run when no overlay closes.
+    /// </summary>
+    [DefaultExecutionOrder(-950)]
+    internal sealed class RuntimeUiEscapeInputDriver : MonoBehaviour
+    {
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (FindAnyObjectByType<RuntimeUiEscapeInputDriver>() != null)
+                return;
+
+            GameObject host = new(nameof(RuntimeUiEscapeInputDriver));
+            DontDestroyOnLoad(host);
+            host.AddComponent<RuntimeUiEscapeInputDriver>();
+        }
+
+        private void Update()
+        {
+            if (RuntimeUiEscapeRouter.EscapeConsumedThisFrame || !WasEscapePressedThisFrame())
+                return;
+
+            RuntimeUiEscapeRouter.TryCloseTopmost();
+        }
+
+        private static bool WasEscapePressedThisFrame()
+        {
+#if ENABLE_INPUT_SYSTEM
+            return Keyboard.current?.escapeKey.wasPressedThisFrame == true;
+#else
+            return UnityEngine.Input.GetKeyDown(KeyCode.Escape);
+#endif
+        }
     }
 
     public static class RuntimeUiLayer

@@ -11,6 +11,7 @@ namespace Arena.Tests.Editor
     public sealed class UiInputContractTests
     {
         private const string RuntimeUiEventSystemPath = "Assets/Arena/Runtime/UI/RuntimeUiEventSystem.cs";
+        private const string RuntimeUiEscapeRouterPath = "Assets/Arena/Runtime/UI/RuntimeUiEscapeRouter.cs";
         private const string ActionBarInputDispatcherPath = "Assets/Arena/Runtime/Input/ActionBarInputDispatcher.cs";
         private const string SpellInputHandlerPath = "Assets/Arena/Runtime/Input/SpellInputHandler.cs";
         private const string MeleeInputHandlerPath = "Assets/Arena/Runtime/Input/MeleeInputHandler.cs";
@@ -591,6 +592,7 @@ namespace Arena.Tests.Editor
             Assert.That(hub, Does.Contain("ResolveLocalArmorAppearance"));
             Assert.That(hub, Does.Contain("ShowcaseCameraFacingYaw = 180f"));
             Assert.That(hubBuilder, Does.Contain("ShowcaseDefaultYaw = 180f"));
+            Assert.That(hub, Does.Contain("FaceShowcaseTowardCamera(_showcaseAvatarController.VisualRoot)"));
             Assert.That(screen, Does.Contain("_hubController.RotateShowcaseFromPointerDelta(deltaX)"));
             Assert.That(hubScreen, Does.Contain("_hubController.RotateShowcaseFromPointerDelta(deltaX)"));
             Assert.That(hub, Does.Contain("internal void RotateShowcaseFromPointerDelta(float deltaX)"));
@@ -630,6 +632,13 @@ namespace Arena.Tests.Editor
             Assert.That(hub, Does.Contain("SetTravelMenuOpen(true, bringToFront: true)"));
             Assert.That(hub, Does.Contain("child.gameObject.SetActive(child.gameObject == _travelMenu)"));
             Assert.That(hub, Does.Contain("RuntimeUiLayer.BringToFront"));
+            Assert.That(hub, Does.Contain("RuntimeUiEscapeRouter.Register(this)"));
+            Assert.That(hub, Does.Contain("public bool TryCloseForEscape()"));
+
+            string escapeRouter = File.ReadAllText(RuntimeUiEscapeRouterPath);
+            Assert.That(escapeRouter, Does.Contain("class RuntimeUiEscapeInputDriver"));
+            Assert.That(escapeRouter, Does.Contain("Keyboard.current?.escapeKey.wasPressedThisFrame"));
+            Assert.That(escapeRouter, Does.Contain("RuntimeUiEscapeRouter.TryCloseTopmost()"));
         }
 
         [Test]

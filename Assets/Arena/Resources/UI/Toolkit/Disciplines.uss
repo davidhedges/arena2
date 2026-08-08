@@ -660,10 +660,10 @@
 
 .ability-tile {
     position: relative;
-    width: 137px;
-    height: 136px;
-    margin-right: 8px;
-    margin-bottom: 8px;
+    width: 98px;
+    height: 106px;
+    margin-right: 7px;
+    margin-bottom: 7px;
     flex-shrink: 0;
     align-items: center;
     background-color: rgba(12, 14, 17, 0.94);
@@ -675,9 +675,9 @@
 .ability-tile.is-selected { border-color: #E4B34A; background-color: rgba(197, 143, 42, 0.10); }
 
 .ability-art {
-    width: 96px;
-    height: 96px;
-    margin-top: 7px;
+    width: 72px;
+    height: 72px;
+    margin-top: 5px;
     flex-shrink: 0;
     background-color: #08090B;
     border-width: 1px;
@@ -689,12 +689,12 @@
 
 .ability-name {
     width: 100%;
-    margin-top: 5px;
+    margin-top: 3px;
     padding-left: 4px;
     padding-right: 4px;
     overflow: hidden;
     color: var(--arena-text-muted);
-    font-size: 12px;
+    font-size: 10px;
     -unity-text-align: middle-center;
     white-space: nowrap;
 }
@@ -702,11 +702,11 @@
 .ability-tile.is-selected .ability-name { color: #E8D4AA; }
 
 .ability-check {
-    top: 5px;
-    right: 5px;
-    width: 20px;
-    height: 20px;
-    font-size: 13px;
+    top: 3px;
+    right: 3px;
+    width: 17px;
+    height: 17px;
+    font-size: 11px;
 }
 
 .secondary-ability-groups {
@@ -758,17 +758,6 @@
 .secondary-group-count.is-incomplete { color: #D46B50; }
 
 .ability-grid--secondary { height: 254px; padding-top: 7px; }
-
-.ability-grid--secondary .ability-tile {
-    width: 98px;
-    height: 106px;
-    margin-right: 7px;
-    margin-bottom: 7px;
-}
-
-.ability-grid--secondary .ability-art { width: 72px; height: 72px; margin-top: 5px; }
-.ability-grid--secondary .ability-name { margin-top: 3px; font-size: 10px; }
-.ability-grid--secondary .ability-check { top: 3px; right: 3px; width: 17px; height: 17px; font-size: 11px; }
 
 .secondary-empty {
     width: 100%;

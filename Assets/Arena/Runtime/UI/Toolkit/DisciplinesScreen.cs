@@ -746,7 +746,7 @@ namespace Arena.UI
                 ScrollView grid = new(ScrollViewMode.Vertical)
                 {
                     horizontalScrollerVisibility = ScrollerVisibility.Hidden,
-                    verticalScrollerVisibility = ScrollerVisibility.Auto,
+                    verticalScrollerVisibility = ScrollerVisibility.Hidden,
                 };
                 grid.AddToClassList("ability-grid");
                 grid.AddToClassList("ability-grid--secondary");

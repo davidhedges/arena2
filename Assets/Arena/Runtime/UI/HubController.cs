@@ -171,8 +171,8 @@ namespace Arena.UI
             _stageRoot = _root.Find("StageRoot")?.gameObject;
             _travelMenu = _root.Find("HubCanvas/HomeRoot/TravelMenu")?.gameObject;
             _showcaseAvatar = _root.Find("StageRoot/ShowcaseAnchor/HubShowcaseAvatar")?.gameObject;
-            if (_showcaseAvatar != null)
-                _showcaseAvatar.transform.localRotation = Quaternion.Euler(0f, ShowcaseCameraFacingYaw, 0f);
+            FaceShowcaseTowardCamera(_showcaseAvatar?.transform);
+            FaceShowcaseTowardCamera(_showcaseAvatarController?.VisualRoot);
             if (Application.isPlaying)
                 StarterAssetsRuntimeStripper.StripFrom(_showcaseAvatar);
             _playButton = _root.Find("HubCanvas/TopBar/NavRow/PlayButton")?.GetComponent<Button>();
@@ -577,6 +577,7 @@ namespace Arena.UI
                     out error);
             if (applied)
             {
+                FaceShowcaseTowardCamera(_showcaseAvatarController.VisualRoot);
                 _showcaseAvatarBinding = binding;
                 _lastShowcaseAppearanceSignature = signature;
                 _lastFailedShowcaseAppearanceSignature = string.Empty;
@@ -592,6 +593,12 @@ namespace Arena.UI
                 _lastShowcaseAppearanceSignature = string.Empty;
                 _showcaseAvatar.SetActive(true);
             }
+        }
+
+        private static void FaceShowcaseTowardCamera(Transform? target)
+        {
+            if (target != null)
+                target.localRotation = Quaternion.Euler(0f, ShowcaseCameraFacingYaw, 0f);
         }
 
         internal void SetShowcaseArmorPreview(IReadOnlyDictionary<string, string>? armorBySlot)

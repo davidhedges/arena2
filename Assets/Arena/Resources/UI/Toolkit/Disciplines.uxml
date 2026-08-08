@@ -114,7 +114,7 @@
                         </ui:VisualElement>
                         <ui:Label name="PrimaryAbilityCounter" class="selection-counter" text="8 / 8 MIN" />
                     </ui:VisualElement>
-                    <ui:ScrollView name="PrimaryAbilityGrid" class="ability-grid ability-grid--primary" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" />
+                    <ui:ScrollView name="PrimaryAbilityGrid" class="ability-grid ability-grid--primary" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Hidden" />
                 </ui:VisualElement>
 
                 <ui:VisualElement class="ability-section ability-section--secondary">

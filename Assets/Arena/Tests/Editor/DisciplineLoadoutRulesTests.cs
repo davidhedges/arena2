@@ -53,9 +53,13 @@ namespace Arena.Tests.Editor
             Assert.That(hub, Does.Contain("_root.Q<Button>(\"NavDisciplines\")"));
             Assert.That(hub, Does.Contain("_disciplinesScreen.Open()"));
             Assert.That(uxml, Does.Contain("name=\"PrimaryAbilityGrid\""));
+            Assert.That(uxml, Does.Contain("vertical-scroller-visibility=\"Hidden\""));
             Assert.That(uxml, Does.Contain("name=\"SecondaryAbilityGroups\""));
             Assert.That(uss, Does.Not.Contain(".corner"));
             Assert.That(uss, Does.Not.Contain("+.secondary-group"));
+
+            string screen = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs");
+            Assert.That(screen, Does.Contain("verticalScrollerVisibility = ScrollerVisibility.Hidden"));
         }
 
         [Test]
