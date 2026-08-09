@@ -339,6 +339,7 @@ namespace Arena.Presentation
             }
 
             VFXUtils.ApplyPrefabPresentationScale(instance, template.Scale);
+            FulminationArcVFX.ConfigureIfNeeded(cue.VfxId, instance, context);
 
             string lifecycle = WireIdentifier.Normalize(cue.Lifecycle);
             if (string.Equals(lifecycle, LifecycleParticleSystem, System.StringComparison.Ordinal))

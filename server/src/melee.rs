@@ -57,8 +57,9 @@ use crate::progression::{
     active_action_bar_assignment_debug_summary, active_selectable_ability_for_authored_action,
     derived_combat_profile_id_for_owner, melee_channel_for_ability_id,
     melee_impact_effects_for_ability_id, melee_timed_movement_for_ability_id,
-    primary_resource_gain_on_action_accept, resolved_auto_attack_mode_for_owner, AbilityCatalog,
-    AutoAttackCatalog, AutoAttackReplacementCatalog, MeleeAbilityCatalog, MeleeChannelRuntime,
+    primary_resource_gain_on_action_accept, resolved_auto_attack_mode_for_owner,
+    ruin_flaming_weapon_on_hit_for_owner, AbilityCatalog, AutoAttackCatalog,
+    AutoAttackReplacementCatalog, MeleeAbilityCatalog, MeleeChannelRuntime, MeleeFireOnHitRuntime,
     MeleeGapCloseCatalog, MeleeTimedMovementRuntime,
 };
 use crate::relations::{can_harm, combat_relation, target_audience_allows, TargetAudience};
@@ -5362,6 +5363,8 @@ fn resolve_pending_melee_target_impact(
             row.direct_action_key.clone()
         },
     }];
+    let flaming_weapon = ruin_flaming_weapon_on_hit_for_owner(ctx, row.source);
+    push_flaming_weapon_effects(&mut effects, row, row.target, flaming_weapon.as_ref());
     push_stagger_effect_if_applicable(
         ctx,
         &mut effects,
@@ -5391,6 +5394,7 @@ fn resolve_pending_melee_target_impact(
         target_snapshot.pos_x,
         target_snapshot.pos_y,
         target_snapshot.pos_z,
+        flaming_weapon.as_ref(),
     );
     queue_effects(ctx, effects);
     grant_primary_resource_for_melee_event_hit(
@@ -5469,6 +5473,7 @@ fn push_melee_impact_area_effects(
     impact_x: f32,
     impact_y: f32,
     impact_z: f32,
+    flaming_weapon: Option<&MeleeFireOnHitRuntime>,
 ) {
     if row.impact_area_radius <= 0.0 || primary_damage <= 0 {
         return;
@@ -5535,7 +5540,55 @@ fn push_melee_impact_area_effects(
                 short_identity(player.player_id)
             ),
         });
+        if player.player_id != row.target {
+            push_flaming_weapon_effects(effects, row, player.player_id, flaming_weapon);
+        }
     }
+}
+
+fn push_flaming_weapon_effects(
+    effects: &mut Vec<EffectPacket>,
+    row: &PendingMeleeImpact,
+    target: Identity,
+    tuning: Option<&MeleeFireOnHitRuntime>,
+) {
+    let Some(tuning) = tuning else {
+        return;
+    };
+
+    let effect_key = format!(
+        "{}:flaming_weapon:{}:{}",
+        row.spell_id,
+        row.hit_index,
+        target.to_hex()
+    );
+    effects.push(EffectPacket::Damage {
+        amount: tuning.bonus_damage,
+        damage_type: DamageType::Fire,
+        source: row.source,
+        target,
+        spell_id: format!("{effect_key}:fire"),
+        delivery: DamageDelivery::Direct,
+        source_kind: DAMAGE_SOURCE_KIND_MELEE.to_string(),
+        direct_action_key: format!("{effect_key}:fire"),
+    });
+    effects.push(EffectPacket::ApplyStatus {
+        source: row.source,
+        target,
+        spell_id: format!("{effect_key}:burn"),
+        payload: StatusPayload::Dot {
+            tick_damage: tuning.burn_tick_damage,
+            damage_type: DamageType::Fire,
+            tick_interval: tuning.burn_tick_interval,
+        },
+        polarity: StatusPolarity::Debuff,
+        target_audience: TargetAudience::Hostile,
+        duration: tuning.burn_duration,
+        stack_group: format!("{}:{}", tuning.burn_status_stack_group, row.source.to_hex()),
+        max_stacks: tuning.burn_max_stacks,
+        stack_policy: StackPolicy::AddStackRefresh,
+        dispel_types: tuning.burn_dispel_types.clone(),
+    });
 }
 
 fn push_melee_impact_effects(
@@ -6035,12 +6088,13 @@ mod tests {
         melee_channel_movement_canceled, melee_channel_tick_delays,
         melee_hit_volume_contains_player, melee_manifest, melee_target_impact_point_y,
         pending_melee_impact_range, positive_projectile_override,
-        projectile_max_distance_for_policy, push_melee_impact_status_effects,
-        push_stagger_effect_with_duration_if_applicable, resolve_gap_close_destination,
-        resolve_melee_action_reference, resolve_melee_action_reference_in_strikes,
-        resolved_hit_window_damages, scaled_auto_attack_cadence_ms, scaled_impact_area_damage,
-        scheduled_melee_impact_at, strike_total_duration_ms, timed_melee_movement_destination,
-        yaw_toward_xz, AerialExecutionMode, AirborneTargetingMode, ComboInputDecision,
+        projectile_max_distance_for_policy, push_flaming_weapon_effects,
+        push_melee_impact_status_effects, push_stagger_effect_with_duration_if_applicable,
+        resolve_gap_close_destination, resolve_melee_action_reference,
+        resolve_melee_action_reference_in_strikes, resolved_hit_window_damages,
+        scaled_auto_attack_cadence_ms, scaled_impact_area_damage, scheduled_melee_impact_at,
+        strike_total_duration_ms, timed_melee_movement_destination, yaw_toward_xz,
+        AerialExecutionMode, AirborneTargetingMode, ComboInputDecision,
         ConsumedMeleeAttackModifier, GapCloseActorSnapshot, GapClosePreCommitDecision,
         MeleeAuthorization, PendingMeleeImpact, ResolvedMeleeAttackModifiers,
         ResolvedMeleeGapClose, ResolvedMeleeTargeting, SpellVec3, StaggerDirection, StrikeData,
@@ -6059,7 +6113,7 @@ mod tests {
     };
     use crate::player::{DEFAULT_COMBAT_PROFILE, TWO_HANDED_SWORD_COMBAT_PROFILE};
     use crate::player_state::PlayerState;
-    use crate::progression::{MeleeChannelRuntime, MeleeGapCloseCatalog};
+    use crate::progression::{MeleeChannelRuntime, MeleeFireOnHitRuntime, MeleeGapCloseCatalog};
 
     const TEST_GAP_CLOSE_DESTINATION_EPSILON_METERS: f32 = 0.10;
 
@@ -6969,6 +7023,118 @@ mod tests {
         assert_eq!(*max_stacks, 1);
         assert_eq!(*stack_policy, StackPolicy::Refresh);
         assert_eq!(dispel_types, &vec![StatusDispelType::Bleed]);
+    }
+
+    #[test]
+    fn flaming_weapon_adds_direct_fire_damage_and_source_scoped_burning_stack() {
+        let source = test_identity_with_byte(1);
+        let target = test_identity_with_byte(2);
+        let now = Timestamp::UNIX_EPOCH;
+        let row = PendingMeleeImpact {
+            impact_id: 0,
+            source,
+            event_source: "test".to_string(),
+            target,
+            spell_id: "test:flaming_weapon".to_string(),
+            kind: "SWORD_AND_SHIELD_LIGHT_COMBO_1".to_string(),
+            ability_id: "PALADIN_SHIELD_PUMMEL".to_string(),
+            hit_index: 2,
+            damage: 35,
+            damage_type: DamageType::Physical.as_str().to_string(),
+            target_health_damage_scaling_min_multiplier: 1.0,
+            target_health_damage_scaling_max_multiplier: 1.0,
+            range: 2.5,
+            impact_at: now,
+            active_until: now,
+            recovery_until: now,
+            parry_behavior: "PARRYABLE".to_string(),
+            block_behavior: "BLOCKABLE".to_string(),
+            airborne_targeting_mode: "ANY_TARGET".to_string(),
+            targeting_kind: "TARGET".to_string(),
+            targeting_radius: 0.0,
+            targeting_angle_degrees: 0.0,
+            applies_stagger: false,
+            grants_primary_resource_on_hit: false,
+            impact_area_radius: 0.0,
+            impact_area_damage: 0,
+            impact_area_include_primary_target: false,
+            target_audience: String::new(),
+            requires_present_time_facing: false,
+            present_time_facing_arc_radians: 0.0,
+            requires_present_time_los: false,
+            impact_event_max_distance: 0.0,
+            direct_action_key: String::new(),
+            view_delay_micros: 0,
+            resolve_at_micros: 0,
+            targeting_width: 0.0,
+        };
+        let tuning = MeleeFireOnHitRuntime {
+            bonus_damage: 5,
+            burn_duration: Duration::from_secs(5),
+            burn_tick_interval: Duration::from_secs(1),
+            burn_tick_damage: 1,
+            burn_max_stacks: 5,
+            burn_status_stack_group: "FLAMING_WEAPON_BURN".to_string(),
+            burn_dispel_types: vec![StatusDispelType::Magic],
+        };
+
+        let mut effects = Vec::new();
+        push_flaming_weapon_effects(&mut effects, &row, target, Some(&tuning));
+
+        assert_eq!(effects.len(), 2);
+        let EffectPacket::Damage {
+            amount,
+            damage_type,
+            source: effect_source,
+            target: effect_target,
+            delivery,
+            source_kind,
+            ..
+        } = &effects[0]
+        else {
+            panic!("expected Flaming Weapon fire damage effect");
+        };
+        assert_eq!(*amount, 5);
+        assert_eq!(*damage_type, DamageType::Fire);
+        assert_eq!(*effect_source, source);
+        assert_eq!(*effect_target, target);
+        assert_eq!(*delivery, crate::combat::DamageDelivery::Direct);
+        assert_eq!(source_kind, crate::combat::DAMAGE_SOURCE_KIND_MELEE);
+
+        let EffectPacket::ApplyStatus {
+            source: effect_source,
+            target: effect_target,
+            payload,
+            polarity,
+            duration,
+            stack_group,
+            max_stacks,
+            stack_policy,
+            dispel_types,
+            ..
+        } = &effects[1]
+        else {
+            panic!("expected Flaming Weapon Burning effect");
+        };
+        assert_eq!(*effect_source, source);
+        assert_eq!(*effect_target, target);
+        assert_eq!(
+            *payload,
+            StatusPayload::Dot {
+                tick_damage: 1,
+                damage_type: DamageType::Fire,
+                tick_interval: Duration::from_secs(1),
+            }
+        );
+        assert_eq!(*polarity, StatusPolarity::Debuff);
+        assert_eq!(*duration, Duration::from_secs(5));
+        assert_eq!(
+            stack_group,
+            &format!("FLAMING_WEAPON_BURN:{}", source.to_hex())
+        );
+        assert_eq!(*max_stacks, 5);
+        assert_eq!(*stack_policy, StackPolicy::AddStackRefresh);
+        assert_eq!(dispel_types, &vec![StatusDispelType::Magic]);
     }
 
     #[test]

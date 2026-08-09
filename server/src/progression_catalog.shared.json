@@ -357,6 +357,16 @@
       "combat_rule_id": "MAX_EQUIPMENT_KNOCKBACK_RESISTANCE",
       "scalar_value": 0.6,
       "sort_order": 90
+    },
+    {
+      "combat_rule_id": "FULMINATION_ARC_RADIUS_METERS",
+      "scalar_value": 10,
+      "sort_order": 100
+    },
+    {
+      "combat_rule_id": "FULMINATION_ARC_DAMAGE_MULTIPLIER",
+      "scalar_value": 1,
+      "sort_order": 110
     }
   ],
   "stat_scalings": [
@@ -2087,6 +2097,231 @@
       }
     },
     {
+      "ability_id": "RUIN_FLAMING_WEAPON",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "FLAMING_WEAPON",
+      "display_name": "Flaming Weapon",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1021,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "melee_fire_on_hit": {
+          "bonus_damage": 5,
+          "burn_duration_ms": 5000,
+          "burn_tick_interval_ms": 1000,
+          "burn_tick_damage": 1,
+          "burn_max_stacks": 5,
+          "burn_status_stack_group": "FLAMING_WEAPON_BURN",
+          "burn_dispel_types": [
+            "MAGIC"
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "RUIN_FRACTURE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "FRACTURE",
+      "display_name": "Fracture",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1029,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "frozen_melee_first_hit_damage_bonus": 0.5
+      }
+    },
+    {
+      "ability_id": "SPELL_FLASH_FREEZE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "FLASH_FREEZE",
+      "display_name": "Flash Freeze",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1030,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 1000,
+          "max_distance": 30,
+          "damage_type": "COLD",
+          "status_stack_group": "FREEZE",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "FREEZE",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_DEEPENING_COLD",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "DEEPENING_COLD",
+      "display_name": "Deepening Cold",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1031,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 3000,
+          "max_distance": 30,
+          "damage_type": "COLD",
+          "status_stack_group": "DEEPENING_COLD_SLOW",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "SLOW",
+            "modifier_scalar": 0,
+            "slow_pct": 0.1,
+            "max_stacks": 3,
+            "stack_policy": "ADD_STACK_REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          },
+          "staged_applications": [
+            {
+              "delay_ms": 1000,
+              "duration_ms": 2000,
+              "status_stack_group": "DEEPENING_COLD_SLOW",
+              "status": {
+                "kind": "SLOW",
+                "modifier_scalar": 0,
+                "slow_pct": 0.1,
+                "max_stacks": 3,
+                "stack_policy": "ADD_STACK_REFRESH",
+                "dispel_types": [
+                  "MAGIC"
+                ]
+              }
+            },
+            {
+              "delay_ms": 2000,
+              "duration_ms": 1000,
+              "status_stack_group": "DEEPENING_COLD_SLOW",
+              "status": {
+                "kind": "SLOW",
+                "modifier_scalar": 0,
+                "slow_pct": 0.1,
+                "max_stacks": 3,
+                "stack_policy": "ADD_STACK_REFRESH",
+                "dispel_types": [
+                  "MAGIC"
+                ]
+              }
+            },
+            {
+              "delay_ms": 3000,
+              "duration_ms": 2000,
+              "status_stack_group": "FREEZE",
+              "status": {
+                "kind": "FREEZE",
+                "modifier_scalar": 0,
+                "max_stacks": 1,
+                "stack_policy": "REFRESH",
+                "dispel_types": [
+                  "MAGIC"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_FULMINATION",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "FULMINATION",
+      "display_name": "Fulmination",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1032,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 8000,
+          "max_distance": 30,
+          "damage_type": "LIGHTNING",
+          "status_stack_group": "FULMINATION",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "FULMINATION",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_COLLAPSE",
       "actor_scope": "PLAYER",
       "discipline_id": "ARCANA",
@@ -2345,6 +2580,37 @@
         "delivery": {
           "kind": "RECALL",
           "replay_cooldown_ms": 60000
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_TRANSPOSE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
+      "combat_profile_id": "",
+      "action_id": "TRANSPOSE",
+      "display_name": "Transpose",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1028,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "ANY",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "TRANSPOSE",
+          "max_distance": 18
         }
       }
     },
@@ -6680,6 +6946,48 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_TRANSPOSE",
+      "display_name": "Transpose",
+      "description": "Instantly swaps positions with the target and cancels any movement the target has in progress.",
+      "sort_order": 106
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "RUIN_FLAMING_WEAPON",
+      "display_name": "Flaming Weapon",
+      "description": "Passive: melee attacks deal 5 bonus fire damage and apply Burning for 5 seconds. Burning deals 1 fire damage per stack each second, stacking up to 5 times.",
+      "sort_order": 107
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "RUIN_FRACTURE",
+      "display_name": "Fracture",
+      "description": "Passive: the first melee attack against a target frozen by your spells deals 50% increased damage and removes Freeze.",
+      "sort_order": 108
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_FLASH_FREEZE",
+      "display_name": "Flash Freeze",
+      "description": "Instantly freezes the target for 1 second, preventing movement and actions.",
+      "sort_order": 109
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_DEEPENING_COLD",
+      "display_name": "Deepening Cold",
+      "description": "Instantly slows the target by 10%, deepening by another 10% each second for 3 seconds before freezing them for 2 seconds.",
+      "sort_order": 110
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_FULMINATION",
+      "display_name": "Fulmination",
+      "description": "Afflicts the target for 8 seconds. Direct melee hits arc their confirmed damage as lightning to one random enemy within 10 meters.",
+      "sort_order": 111
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_GIANT_SWING",
       "display_name": "Giant Swing",
       "description": "Empowers the next attack to reach farther and stagger enemies hit.",
@@ -7303,6 +7611,13 @@
     },
     {
       "presentation_kind": "STATUS",
+      "presentation_id": "FLAMING_WEAPON_BURN",
+      "display_name": "Burning",
+      "description": "Takes stacking fire damage over time.",
+      "sort_order": 10056
+    },
+    {
+      "presentation_kind": "STATUS",
       "presentation_id": "PALADIN_SACRED_FLAME_DOT",
       "display_name": "Sacred Flame",
       "description": "Takes holy damage over time.",
@@ -7377,6 +7692,20 @@
       "display_name": "Frozen",
       "description": "Frozen solid and unable to move or act.",
       "sort_order": 10060
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "DEEPENING_COLD_SLOW",
+      "display_name": "Deepening Cold",
+      "description": "Movement speed is increasingly reduced as the cold deepens.",
+      "sort_order": 10061
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "FULMINATION",
+      "display_name": "Fulmination",
+      "description": "Direct melee hits arc lightning to a nearby enemy.",
+      "sort_order": 10062
     },
     {
       "presentation_kind": "STATUS",
@@ -8202,6 +8531,58 @@
     },
     {
       "owner_kind": "ABILITY",
+      "owner_id": "SPELL_FLASH_FREEZE",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_GLACIAL_SPIKE_TARGET_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 193
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_DEEPENING_COLD",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_GLACIAL_SPIKE_TARGET_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 207
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_FULMINATION",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_LIGHTNING_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1200,
+      "sort_order": 208
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_FULMINATION",
+      "slot": "arc",
+      "trigger": "AREA_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_FULMINATION_ARC_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 209
+    },
+    {
+      "owner_kind": "ABILITY",
       "owner_id": "SPELL_FROZEN_GRASP",
       "trigger": "AREA_IMPACT",
       "anchor": "AREA_ORIGIN",
@@ -8339,6 +8720,32 @@
       "lifecycle": "DURATION",
       "duration_ms": 700,
       "sort_order": 204
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_TRANSPOSE",
+      "slot": "departure",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ARCANE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 205
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_TRANSPOSE",
+      "slot": "arrival",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ARCANE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 206
     },
     {
       "owner_kind": "ABILITY",

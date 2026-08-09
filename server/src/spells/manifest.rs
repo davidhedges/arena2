@@ -149,6 +149,7 @@ pub(crate) enum SpellBehavior {
     Emanation,
     SelfResource,
     SelfTeleport,
+    Transpose,
     WorldObstacle,
     Recall,
 }
@@ -169,6 +170,7 @@ impl SpellBehavior {
             Self::Emanation => "EMANATION",
             Self::SelfResource => "SELF_RESOURCE",
             Self::SelfTeleport => "SELF_TELEPORT",
+            Self::Transpose => "TRANSPOSE",
             Self::WorldObstacle => "WORLD_OBSTACLE",
             Self::Recall => "RECALL",
         }
@@ -521,9 +523,18 @@ pub(crate) struct InstantBeamChargeScaling {
     pub max_charges: u32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ApplyStatusSecondaryTunables {
     pub parry_behavior: SpellParryBehavior,
+    pub staged_applications: Vec<StagedStatusApplicationTunables>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct StagedStatusApplicationTunables {
+    pub delay: Duration,
+    pub duration: Duration,
+    pub status_stack_group: Option<String>,
+    pub status: ApplyStatusDefinition,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -624,12 +635,16 @@ mod tests {
     use std::collections::HashSet;
     use std::time::Duration;
 
-    use crate::combat::{StackPolicy, StatusDispelType, StatusEffectKind};
+    use crate::combat::{
+        DamageType, StackPolicy, StatusDispelType, StatusEffectKind, StatusPayload, StatusPolarity,
+    };
     use crate::relations::TargetAudience;
 
     use crate::spells::spell_definition_by_str;
 
-    use super::{spell_definitions, ImpactEffect, SpellCastMobility, SpellId};
+    use super::{
+        spell_definitions, ImpactEffect, SpellBehavior, SpellCastMobility, SpellId, SpellTargeting,
+    };
 
     fn definition(id: &str) -> &'static super::SpellDefinition {
         spell_definition_by_str(id).expect("spell should exist in catalog")
@@ -1195,6 +1210,39 @@ mod tests {
         assert_eq!(status.duration(), Duration::from_millis(1_200));
         assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);
         assert!(!definition.generates_primary_resource_on_cast);
+    }
+
+    #[test]
+    fn flash_freeze_catalog_matches_instant_one_second_magic_freeze() {
+        let definition = definition("FLASH_FREEZE");
+
+        assert_eq!(definition.kind.as_str(), "FLASH_FREEZE");
+        assert_eq!(definition.cooldown, Duration::from_secs(12));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.duration, 1.0);
+        assert_eq!(definition.max_distance, 30.0);
+        assert_eq!(definition.damage_type, DamageType::Cold);
+        assert_eq!(definition.status_stack_group.as_deref(), Some("FREEZE"));
+        assert_eq!(
+            definition.apply_status_polarity,
+            Some(StatusPolarity::Debuff)
+        );
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Flash Freeze should apply a status");
+        assert_eq!(status.payload(), StatusPayload::Freeze);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert_eq!(status.dispel_types, vec![StatusDispelType::Magic]);
+        assert!((definition.primary_resource_cost - 20.0).abs() < 0.0001);
+        assert!(!definition.arms_auto_attack_on_cast);
     }
 
     #[test]

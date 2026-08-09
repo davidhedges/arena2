@@ -25,8 +25,9 @@ use crate::player_state::PlayerState;
 use crate::practice::resolve_respawn_pose;
 use crate::progression::{
     character_has_selected_discipline, combat_rule_value, derived_combat_profile_id_for_owner,
-    subtlety_behind_target_damage_bonus, subtlety_disabled_target_damage_bonus,
-    COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD, DISCIPLINE_SUBTLETY,
+    ruin_fracture_melee_damage_bonus, subtlety_behind_target_damage_bonus,
+    subtlety_disabled_target_damage_bonus, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD,
+    DISCIPLINE_RUIN, DISCIPLINE_SUBTLETY,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
@@ -136,6 +137,8 @@ const RULE_KNOCKBACK_MAX_DISTANCE_METERS: &str = "KNOCKBACK_MAX_DISTANCE_METERS"
 const RULE_KNOCKBACK_MIN_EFFECTIVE_DISTANCE_METERS: &str =
     "KNOCKBACK_MIN_EFFECTIVE_DISTANCE_METERS";
 const RULE_MAX_EQUIPMENT_KNOCKBACK_RESISTANCE: &str = "MAX_EQUIPMENT_KNOCKBACK_RESISTANCE";
+const RULE_FULMINATION_ARC_RADIUS_METERS: &str = "FULMINATION_ARC_RADIUS_METERS";
+const RULE_FULMINATION_ARC_DAMAGE_MULTIPLIER: &str = "FULMINATION_ARC_DAMAGE_MULTIPLIER";
 const EFFECT_TYPE_DAMAGE: &str = "DAMAGE";
 const EFFECT_TYPE_HEAL: &str = "HEAL";
 pub(crate) const DAMAGE_SOURCE_KIND_MELEE: &str = "MELEE";
@@ -143,6 +146,9 @@ pub(crate) const DAMAGE_SOURCE_KIND_SPELL: &str = "SPELL";
 pub(crate) const DAMAGE_SOURCE_KIND_PROJECTILE: &str = "PROJECTILE";
 pub(crate) const DAMAGE_SOURCE_KIND_PERIODIC: &str = "PERIODIC";
 pub(crate) const DAMAGE_SOURCE_KIND_TRAP: &str = "TRAP";
+const DAMAGE_SOURCE_KIND_FULMINATION_ARC: &str = "FULMINATION_ARC";
+const FULMINATION_SPELL_ID: &str = "FULMINATION";
+const FULMINATION_ABILITY_ID: &str = "SPELL_FULMINATION";
 const DEFAULT_COMBAT_ENGAGEMENT_DURATION: Duration = Duration::from_secs(5);
 const COMBAT_REASON_DAMAGE: &str = "DAMAGE";
 const COMBAT_REASON_DEBUFF: &str = "DEBUFF";
@@ -2385,6 +2391,7 @@ pub enum StatusEffectKind {
     BladeTwisting,
     Disarm,
     Gouge,
+    Fulmination,
 }
 
 impl StatusEffectKind {
@@ -2426,6 +2433,7 @@ impl StatusEffectKind {
             Self::BladeTwisting => "BLADE_TWISTING",
             Self::Disarm => "DISARM",
             Self::Gouge => "GOUGE",
+            Self::Fulmination => "FULMINATION",
         }
     }
 
@@ -2467,6 +2475,7 @@ impl StatusEffectKind {
             "BLADE_TWISTING" => Some(Self::BladeTwisting),
             "DISARM" => Some(Self::Disarm),
             "GOUGE" => Some(Self::Gouge),
+            "FULMINATION" => Some(Self::Fulmination),
             _ => None,
         }
     }
@@ -2548,6 +2557,7 @@ pub enum StatusPayload {
     BladeTwisting,
     Disarm,
     Gouge,
+    Fulmination,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2684,6 +2694,7 @@ impl AuthoredStatusPayload {
             StatusEffectKind::BladeTwisting => StatusPayload::BladeTwisting,
             StatusEffectKind::Disarm => StatusPayload::Disarm,
             StatusEffectKind::Gouge => StatusPayload::Gouge,
+            StatusEffectKind::Fulmination => StatusPayload::Fulmination,
         }
     }
 
@@ -2791,7 +2802,8 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::FindWeakness
             | StatusEffectKind::BladeTwisting
             | StatusEffectKind::Disarm
-            | StatusEffectKind::Gouge => {
+            | StatusEffectKind::Gouge
+            | StatusEffectKind::Fulmination => {
                 if !slow_is_default
                     || !dot_is_default
                     || !hot_is_default
@@ -2896,6 +2908,7 @@ impl StatusPayload {
             Self::BladeTwisting => StatusEffectKind::BladeTwisting,
             Self::Disarm => StatusEffectKind::Disarm,
             Self::Gouge => StatusEffectKind::Gouge,
+            Self::Fulmination => StatusEffectKind::Fulmination,
         }
     }
 
@@ -2919,7 +2932,8 @@ impl StatusPayload {
             | Self::FindWeakness
             | Self::BladeTwisting
             | Self::Disarm
-            | Self::Gouge => StatusEffectColumns {
+            | Self::Gouge
+            | Self::Fulmination => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
@@ -3135,6 +3149,7 @@ impl StatusPayload {
             StatusEffectKind::BladeTwisting => Self::BladeTwisting,
             StatusEffectKind::Disarm => Self::Disarm,
             StatusEffectKind::Gouge => Self::Gouge,
+            StatusEffectKind::Fulmination => Self::Fulmination,
         }
     }
 
@@ -3158,7 +3173,8 @@ impl StatusPayload {
             | Self::FindWeakness
             | Self::BladeTwisting
             | Self::Disarm
-            | Self::Gouge => false,
+            | Self::Gouge
+            | Self::Fulmination => false,
             Self::Slow { slow_pct } => !(MIN_SLOW_PCT..=0.95).contains(&slow_pct),
             Self::MoveSpeed { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0
@@ -3227,7 +3243,8 @@ impl StatusPayload {
             | Self::FindWeakness
             | Self::BladeTwisting
             | Self::Disarm
-            | Self::Gouge => Ok(()),
+            | Self::Gouge
+            | Self::Fulmination => Ok(()),
             Self::Slow { slow_pct } => {
                 if !(MIN_SLOW_PCT..=0.95).contains(&slow_pct) {
                     return Err(format!("{subject} {path}.slow_pct must be > 0 and <= 0.95"));
@@ -3359,7 +3376,8 @@ impl StatusPayload {
             | Self::FindWeakness
             | Self::BladeTwisting
             | Self::Disarm
-            | Self::Gouge => true,
+            | Self::Gouge
+            | Self::Fulmination => true,
             Self::Slow { slow_pct } => slow_pct > existing.slow_pct,
             Self::MoveSpeed { modifier_scalar } => {
                 modifier_scalar > existing.modifier_scalar.max(0.0)
@@ -3768,22 +3786,34 @@ pub enum EffectPacket {
 
 pub fn queue_effects(ctx: &ReducerContext, effects: Vec<EffectPacket>) {
     for effect in effects {
-        queue_effect(ctx, effect);
+        queue_effect_at(ctx, effect, ctx.timestamp);
     }
 }
 
-fn queue_effect(ctx: &ReducerContext, effect: EffectPacket) {
+pub(crate) fn queue_delayed_status_effect(
+    ctx: &ReducerContext,
+    effect: EffectPacket,
+    queued_at: Timestamp,
+) {
+    if !matches!(&effect, EffectPacket::ApplyStatus { .. }) {
+        log::warn!("[COMBAT] Rejected non-status packet from delayed status queue");
+        return;
+    }
+    queue_effect_at(ctx, effect, queued_at);
+}
+
+fn queue_effect_at(ctx: &ReducerContext, effect: EffectPacket, queued_at: Timestamp) {
     if let EffectPacket::InterruptCast {
         source,
         target,
         spell_id,
     } = &effect
     {
-        apply_interrupt_cast(ctx, ctx.timestamp, *source, *target, spell_id.as_str());
+        apply_interrupt_cast(ctx, queued_at, *source, *target, spell_id.as_str());
         return;
     }
 
-    let (queued_at, queued_at_micros) = with_micros(ctx.timestamp);
+    let (queued_at, queued_at_micros) = with_micros(queued_at);
     let queued_order = next_pending_effect_order(ctx);
     match effect {
         EffectPacket::Damage {
@@ -4405,15 +4435,25 @@ fn apply_damage(
         return false;
     }
 
+    // Death handling clears status rows, so retain whether this landed melee
+    // hit was allowed to proc Fulmination before mutating the target.
+    let fulmination_active = target_has_active_fulmination(ctx, hit, ctx.timestamp);
+
     if let Some(state) = ctx.db.player_state().player_id().find(target) {
-        return apply_damage_to_player_state(ctx, hit, temporary_modifiers, state);
+        return apply_damage_to_player_state(
+            ctx,
+            hit,
+            temporary_modifiers,
+            state,
+            fulmination_active,
+        );
     }
 
     let Some(npc_state) = ctx.db.npc_state().identity().find(target) else {
         return false;
     };
 
-    apply_damage_to_npc_state(ctx, hit, temporary_modifiers, npc_state)
+    apply_damage_to_npc_state(ctx, hit, temporary_modifiers, npc_state, fulmination_active)
 }
 
 fn apply_damage_to_player_state(
@@ -4421,6 +4461,7 @@ fn apply_damage_to_player_state(
     hit: &PendingHit,
     temporary_modifiers: &TemporaryCombatModifiers,
     mut state: PlayerState,
+    fulmination_active: bool,
 ) -> bool {
     let source = hit.source;
     let target = hit.target;
@@ -4478,6 +4519,7 @@ fn apply_damage_to_player_state(
     queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
     queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
     queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
+    queue_fulmination_arc_if_applicable(ctx, hit, hp_damage, fulmination_active);
     if hp_damage > 0 && is_direct_damage {
         let action_key = if hit.direct_action_key.trim().is_empty() {
             hit.spell_id.as_str()
@@ -4504,6 +4546,7 @@ fn apply_damage_to_npc_state(
     hit: &PendingHit,
     temporary_modifiers: &TemporaryCombatModifiers,
     mut state: crate::npcs::NpcState,
+    fulmination_active: bool,
 ) -> bool {
     let source = hit.source;
     let target = hit.target;
@@ -4547,6 +4590,7 @@ fn apply_damage_to_npc_state(
     queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
     queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
     queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
+    queue_fulmination_arc_if_applicable(ctx, hit, hp_damage, fulmination_active);
     if hp_damage > 0
         && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
     {
@@ -4596,6 +4640,24 @@ fn resolve_damage_amount(
     temporary_modifiers: &TemporaryCombatModifiers,
 ) -> ResolvedEffectAmount {
     let delivery = DamageDelivery::from_wire(hit.damage_delivery.as_str());
+    if hit.damage_source_kind.as_str() == DAMAGE_SOURCE_KIND_FULMINATION_ARC {
+        // The proc amount is already derived from confirmed melee HP damage.
+        // Apply only the secondary target's mitigation/vulnerability and do
+        // not scale or crit the copied amount a second time.
+        let target_multiplier =
+            resistance_multiplier_for_damage_type(ctx, hit, temporary_modifiers)
+                * temporary_modifiers
+                    .damage_taken_multiplier_from_source_for(&hit.target, &hit.source);
+        return resolve_effect_amount(
+            ctx,
+            hit,
+            target_multiplier,
+            0.0,
+            Some(0.0),
+            None,
+            combat_rule_value(RULE_CRIT_DAMAGE_MULTIPLIER),
+        );
+    }
     let casted_ability_hit = damage_comes_from_casted_ability(hit);
     let find_weakness = casted_ability_hit
         .then(|| {
@@ -4619,6 +4681,7 @@ fn resolve_damage_amount(
             )
         })
         .flatten();
+    let fracture_freezes = active_fracture_freezes_for_melee_attack(ctx, hit);
     let resistance_multiplier =
         resistance_multiplier_for_damage_type(ctx, hit, temporary_modifiers);
     let source_equipment_and_stats = if hit.source == Identity::ZERO {
@@ -4640,6 +4703,10 @@ fn resolve_damage_amount(
             * temporary_modifiers.damage_taken_multiplier_from_source_for(&hit.target, &hit.source)
             * opportunist_passive_damage_multiplier(ctx, hit, temporary_modifiers)
             * tactical_advantage_passive_damage_multiplier(ctx, hit)
+            * fracture_melee_damage_multiplier(
+                !fracture_freezes.is_empty(),
+                ruin_fracture_melee_damage_bonus(),
+            )
     };
     let source_crit_chance = source_equipment_and_stats.map(|(_, stats)| stats.crit_chance);
     let additive_crit_chance = source_equipment_and_stats
@@ -4669,7 +4736,253 @@ fn resolve_damage_amount(
             ctx.db.status_effect().status_id().delete(effect.status_id);
         }
     }
+    // Fracture shatters every qualifying overlapping Freeze after resolving
+    // this hit, so no later packet can receive another first-hit bonus from
+    // the same frozen state.
+    for effect in fracture_freezes {
+        ctx.db.status_effect().status_id().delete(effect.status_id);
+    }
     resolved
+}
+
+fn active_fracture_freezes_for_melee_attack(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+) -> Vec<StatusEffect> {
+    if !melee_attack_can_trigger_fracture(hit) {
+        return Vec::new();
+    }
+
+    // Ownership belongs to the caster who applied Freeze; the melee attack
+    // itself may come from that caster or one of their allies.
+    ctx.db
+        .status_effect()
+        .target()
+        .filter(hit.target)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::Freeze.as_str()
+                && effect.polarity == StatusPolarity::Debuff.as_str()
+                && effect.source != Identity::ZERO
+                && ctx.timestamp < effect.expires_at
+                && character_has_selected_discipline(ctx, effect.source, DISCIPLINE_RUIN)
+        })
+        .collect()
+}
+
+fn melee_attack_can_trigger_fracture(hit: &PendingHit) -> bool {
+    hit.source != Identity::ZERO
+        && hit.amount > 0
+        && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
+        && hit.damage_source_kind.as_str() == DAMAGE_SOURCE_KIND_MELEE
+}
+
+fn fracture_melee_damage_multiplier(has_qualifying_freeze: bool, bonus: f32) -> f32 {
+    if has_qualifying_freeze && bonus.is_finite() {
+        1.0 + bonus.max(0.0)
+    } else {
+        1.0
+    }
+}
+
+fn target_has_active_fulmination(ctx: &ReducerContext, hit: &PendingHit, now: Timestamp) -> bool {
+    melee_attack_can_trigger_fulmination(hit)
+        && ctx
+            .db
+            .status_effect()
+            .target()
+            .filter(hit.target)
+            .any(|effect| {
+                effect.effect_kind == StatusEffectKind::Fulmination.as_str()
+                    && effect.polarity == StatusPolarity::Debuff.as_str()
+                    && now < effect.expires_at
+            })
+}
+
+fn melee_attack_can_trigger_fulmination(hit: &PendingHit) -> bool {
+    hit.source != Identity::ZERO
+        && hit.amount > 0
+        && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
+        && hit.damage_source_kind.as_str() == DAMAGE_SOURCE_KIND_MELEE
+}
+
+fn queue_fulmination_arc_if_applicable(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    confirmed_hp_damage: i32,
+    fulmination_active: bool,
+) {
+    if !fulmination_active || confirmed_hp_damage <= 0 {
+        return;
+    }
+
+    let radius = combat_rule_value(RULE_FULMINATION_ARC_RADIUS_METERS);
+    let arc_damage = fulmination_arc_damage(
+        confirmed_hp_damage,
+        combat_rule_value(RULE_FULMINATION_ARC_DAMAGE_MULTIPLIER),
+    );
+    if !radius.is_finite() || radius <= 0.0 || arc_damage <= 0 {
+        return;
+    }
+
+    let snapshots = actor_snapshot::CombatActorSnapshotSet::collect(ctx);
+    let actors = snapshots.as_slice();
+    let Some(primary_index) = snapshots.index_by_id().get(&hit.target).copied() else {
+        return;
+    };
+    let primary = actors[primary_index];
+    let primary_point = actor_center(&primary);
+    let mut candidate_indices = Vec::new();
+    snapshots.query_disc_indices(primary.pos_x, primary.pos_z, radius, &mut candidate_indices);
+    let mut candidates: Vec<actor_snapshot::CombatActorSnapshot> = candidate_indices
+        .into_iter()
+        .filter_map(|index| actors.get(index).copied())
+        .filter(|candidate| {
+            candidate.alive
+                && candidate.player_id != hit.source
+                && candidate.player_id != hit.target
+                && players_share_world_context(ctx, hit.source, candidate.player_id)
+                && can_harm(ctx, hit.source, candidate.player_id)
+                && point_within_radius(primary_point, actor_center(candidate), radius)
+        })
+        .collect();
+    candidates.sort_by_key(|candidate| candidate.player_id.to_byte_array());
+
+    let Some(secondary) = deterministic_fulmination_candidate_index(hit, candidates.len())
+        .and_then(|index| candidates.get(index).copied())
+    else {
+        return;
+    };
+
+    let secondary_point = actor_center(&secondary);
+    let (dir_x, dir_y, dir_z) = normalized_direction(primary_point, secondary_point);
+    let action_instance_id = format!(
+        "fulmination_arc:{}:{}",
+        hit.queued_at_micros, hit.queued_order
+    );
+    emit_fulmination_arc_event(
+        ctx,
+        action_instance_id.as_str(),
+        hit.source,
+        secondary.player_id,
+        primary_point,
+        secondary_point,
+        (dir_x, dir_y, dir_z),
+        radius,
+        arc_damage,
+    );
+    queue_effects(
+        ctx,
+        vec![EffectPacket::Damage {
+            amount: arc_damage,
+            damage_type: DamageType::Lightning,
+            source: hit.source,
+            target: secondary.player_id,
+            spell_id: FULMINATION_SPELL_ID.to_string(),
+            delivery: DamageDelivery::Direct,
+            source_kind: DAMAGE_SOURCE_KIND_FULMINATION_ARC.to_string(),
+            direct_action_key: String::new(),
+        }],
+    );
+}
+
+fn actor_center(actor: &actor_snapshot::CombatActorSnapshot) -> (f32, f32, f32) {
+    (
+        actor.pos_x,
+        actor.pos_y + actor.hit_height.max(0.0) * 0.5,
+        actor.pos_z,
+    )
+}
+
+fn point_within_radius(from: (f32, f32, f32), to: (f32, f32, f32), radius: f32) -> bool {
+    let dx = to.0 - from.0;
+    let dy = to.1 - from.1;
+    let dz = to.2 - from.2;
+    dx.mul_add(dx, dy.mul_add(dy, dz * dz)) <= radius * radius
+}
+
+fn normalized_direction(from: (f32, f32, f32), to: (f32, f32, f32)) -> (f32, f32, f32) {
+    let dx = to.0 - from.0;
+    let dy = to.1 - from.1;
+    let dz = to.2 - from.2;
+    let len_sq = dx.mul_add(dx, dy.mul_add(dy, dz * dz));
+    if len_sq <= 0.0001 {
+        return (0.0, 0.0, 0.0);
+    }
+    let inv_len = len_sq.sqrt().recip();
+    (dx * inv_len, dy * inv_len, dz * inv_len)
+}
+
+fn fulmination_arc_damage(confirmed_hp_damage: i32, multiplier: f32) -> i32 {
+    if confirmed_hp_damage <= 0 || !multiplier.is_finite() || multiplier <= 0.0 {
+        return 0;
+    }
+    ((confirmed_hp_damage as f32) * multiplier)
+        .round()
+        .clamp(0.0, i32::MAX as f32) as i32
+}
+
+fn deterministic_fulmination_candidate_index(
+    hit: &PendingHit,
+    candidate_count: usize,
+) -> Option<usize> {
+    if candidate_count == 0 {
+        return None;
+    }
+    let mut hash = 0xcbf29ce484222325_u64;
+    hash = fnv1a_update(hash, b"FULMINATION_ARC");
+    hash = fnv1a_update(hash, &hit.source.to_byte_array());
+    hash = fnv1a_update(hash, &hit.target.to_byte_array());
+    hash = fnv1a_update(hash, hit.spell_id.as_bytes());
+    hash = fnv1a_update(hash, &hit.queued_order.to_le_bytes());
+    hash = fnv1a_update(hash, &hit.queued_at_micros.to_le_bytes());
+    Some((hash % candidate_count as u64) as usize)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_fulmination_arc_event(
+    ctx: &ReducerContext,
+    action_instance_id: &str,
+    caster: Identity,
+    arc_target: Identity,
+    origin: (f32, f32, f32),
+    point: (f32, f32, f32),
+    direction: (f32, f32, f32),
+    radius: f32,
+    damage: i32,
+) {
+    ctx.db.combat_event().insert(CombatEvent {
+        event_id: 0,
+        action_instance_id: action_instance_id.to_string(),
+        action_kind: FULMINATION_SPELL_ID.to_string(),
+        ability_id: FULMINATION_ABILITY_ID.to_string(),
+        hit_index: -1,
+        event_type: COMBAT_EVENT_AREA_IMPACT.to_string(),
+        source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
+        caster,
+        hit: arc_target,
+        origin_x: origin.0,
+        origin_y: origin.1,
+        origin_z: origin.2,
+        dir_x: direction.0,
+        dir_y: direction.1,
+        dir_z: direction.2,
+        speed: 0.0,
+        max_distance: radius,
+        scalar_kind: COMBAT_SCALAR_NONE.to_string(),
+        scalar_value: 0.0,
+        sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
+        sequence_index: 0,
+        sequence_count: 1,
+        point_x: point.0,
+        point_y: point.1,
+        point_z: point.2,
+        created_at: ctx.timestamp,
+        created_at_micros: timestamp_to_micros(ctx.timestamp),
+        damage,
+        metadata_kind: COMBAT_METADATA_NONE.to_string(),
+        metadata_key: String::new(),
+        metadata_value: String::new(),
+    });
 }
 
 fn damage_comes_from_casted_ability(hit: &PendingHit) -> bool {
@@ -6700,7 +7013,8 @@ impl StatusRuntimeView {
                     | StatusEffectKind::FindWeakness
                     | StatusEffectKind::BladeTwisting
                     | StatusEffectKind::Disarm
-                    | StatusEffectKind::Gouge => {}
+                    | StatusEffectKind::Gouge
+                    | StatusEffectKind::Fulmination => {}
                 }
             }
         }
@@ -6992,9 +7306,12 @@ mod tests {
         action_key_matches_instance, actor_distance_sq, apply_status_update,
         attack_speed_scalar_to_multiplier, attacker_is_behind_target,
         battle_trance_hp_after_damage, behind_target_damage_multiplier, bloodlust_passive_spec,
-        damage_breaks_shroud, damage_comes_from_casted_ability, disabled_target_damage_multiplier,
-        due_interval_count, event_prune_cutoff_micros, knockback_stagger_duration,
-        new_status_effect, opportunist_passive_is_active_for_profile,
+        damage_breaks_shroud, damage_comes_from_casted_ability,
+        deterministic_fulmination_candidate_index, disabled_target_damage_multiplier,
+        due_interval_count, event_prune_cutoff_micros, fracture_melee_damage_multiplier,
+        fulmination_arc_damage, knockback_stagger_duration, melee_attack_can_trigger_fracture,
+        melee_attack_can_trigger_fulmination, new_status_effect,
+        opportunist_passive_is_active_for_profile, point_within_radius,
         resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
         resolve_temporary_hitpoint_absorb, resolved_shove_tunables, stacked_slow_pct,
         stagger_shove_tunables, status_has_dispel_type, status_matches_removal_filter_values,
@@ -7248,6 +7565,153 @@ mod tests {
             DamageDelivery::Periodic,
             "PERIODIC",
         )));
+    }
+
+    #[test]
+    fn fracture_only_bonuses_the_first_direct_melee_attack() {
+        let source = test_identity_number(1);
+        let target = test_identity_number(2);
+        let hit = |damage_type: &str,
+                   delivery: DamageDelivery,
+                   source_kind: &str,
+                   amount: i32,
+                   source: Identity| PendingHit {
+            hit_id: 0,
+            source,
+            target,
+            spell_id: "fracture-test".to_string(),
+            amount,
+            is_heal: false,
+            damage_type: damage_type.to_string(),
+            target_audience: "HOSTILE".to_string(),
+            damage_delivery: delivery.as_str().to_string(),
+            damage_source_kind: source_kind.to_string(),
+            direct_action_key: "fracture-test:hit:0".to_string(),
+            queued_at: Timestamp::UNIX_EPOCH,
+            queued_at_micros: 0,
+            queued_order: 0,
+        };
+
+        assert!(melee_attack_can_trigger_fracture(&hit(
+            "PHYSICAL",
+            DamageDelivery::Direct,
+            "MELEE",
+            20,
+            source,
+        )));
+        assert!(melee_attack_can_trigger_fracture(&hit(
+            "COLD",
+            DamageDelivery::Direct,
+            "MELEE",
+            20,
+            source,
+        )));
+        assert!(!melee_attack_can_trigger_fracture(&hit(
+            "PHYSICAL",
+            DamageDelivery::Direct,
+            "SPELL",
+            20,
+            source,
+        )));
+        assert!(!melee_attack_can_trigger_fracture(&hit(
+            "PHYSICAL",
+            DamageDelivery::Periodic,
+            "MELEE",
+            20,
+            source,
+        )));
+        assert!(!melee_attack_can_trigger_fracture(&hit(
+            "PHYSICAL",
+            DamageDelivery::Direct,
+            "MELEE",
+            0,
+            source,
+        )));
+        assert!(!melee_attack_can_trigger_fracture(&hit(
+            "PHYSICAL",
+            DamageDelivery::Direct,
+            "MELEE",
+            20,
+            Identity::ZERO,
+        )));
+        assert!((fracture_melee_damage_multiplier(true, 0.5) - 1.5).abs() < 0.0001);
+        assert_eq!(fracture_melee_damage_multiplier(false, 0.5), 1.0);
+        assert_eq!(fracture_melee_damage_multiplier(true, f32::NAN), 1.0);
+    }
+
+    #[test]
+    fn fulmination_only_arcs_from_confirmed_direct_melee_damage() {
+        let source = test_identity_number(1);
+        let target = test_identity_number(2);
+        let hit = |delivery: DamageDelivery, source_kind: &str, amount: i32, source: Identity| {
+            PendingHit {
+                hit_id: 0,
+                source,
+                target,
+                spell_id: "fulmination-test".to_string(),
+                amount,
+                is_heal: false,
+                damage_type: "PHYSICAL".to_string(),
+                target_audience: "HOSTILE".to_string(),
+                damage_delivery: delivery.as_str().to_string(),
+                damage_source_kind: source_kind.to_string(),
+                direct_action_key: "fulmination-test:hit:0".to_string(),
+                queued_at: Timestamp::UNIX_EPOCH,
+                queued_at_micros: 42,
+                queued_order: 7,
+            }
+        };
+
+        let qualifying = hit(DamageDelivery::Direct, "MELEE", 20, source);
+        assert!(melee_attack_can_trigger_fulmination(&qualifying));
+        assert!(!melee_attack_can_trigger_fulmination(&hit(
+            DamageDelivery::Periodic,
+            "MELEE",
+            20,
+            source,
+        )));
+        assert!(!melee_attack_can_trigger_fulmination(&hit(
+            DamageDelivery::Direct,
+            "SPELL",
+            20,
+            source,
+        )));
+        assert!(!melee_attack_can_trigger_fulmination(&hit(
+            DamageDelivery::Direct,
+            "FULMINATION_ARC",
+            20,
+            source,
+        )));
+        assert!(!melee_attack_can_trigger_fulmination(&hit(
+            DamageDelivery::Direct,
+            "MELEE",
+            0,
+            source,
+        )));
+        assert!(!melee_attack_can_trigger_fulmination(&hit(
+            DamageDelivery::Direct,
+            "MELEE",
+            20,
+            Identity::ZERO,
+        )));
+
+        assert_eq!(fulmination_arc_damage(20, 1.0), 20);
+        assert_eq!(fulmination_arc_damage(21, 0.5), 11);
+        assert_eq!(fulmination_arc_damage(20, f32::NAN), 0);
+        assert_eq!(fulmination_arc_damage(0, 1.0), 0);
+        assert_eq!(
+            deterministic_fulmination_candidate_index(&qualifying, 0),
+            None
+        );
+        let selected = deterministic_fulmination_candidate_index(&qualifying, 3)
+            .expect("three candidates should select one");
+        assert!(selected < 3);
+        assert_eq!(
+            deterministic_fulmination_candidate_index(&qualifying, 3),
+            Some(selected)
+        );
+        assert!(point_within_radius((0.0, 1.0, 0.0), (6.0, 1.0, 8.0), 10.0));
+        assert!(!point_within_radius((0.0, 1.0, 0.0), (6.1, 1.0, 8.0), 10.0));
     }
 
     #[test]
@@ -7852,6 +8316,11 @@ mod tests {
                 StatusPayload::BattleTrance,
                 StatusEffectKind::BattleTrance,
                 StatusPayload::BattleTrance,
+            ),
+            (
+                StatusPayload::Fulmination,
+                StatusEffectKind::Fulmination,
+                StatusPayload::Fulmination,
             ),
         ];
 

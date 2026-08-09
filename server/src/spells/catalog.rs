@@ -21,8 +21,8 @@ use super::manifest::{
     OrbitCasterProjectileTunables, PersistentAreaSecondaryTunables, ProjectileMotionTunables,
     ProjectileSecondaryTunables, RecallSecondaryTunables, RemoveStatusDefinition,
     RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility, SpellDefinition, SpellId,
-    SpellParryBehavior, SpellSecondaryTunables, SpellTargeting, WorldObstacleSecondaryTunables,
-    SPELL_METEOR,
+    SpellParryBehavior, SpellSecondaryTunables, SpellTargeting, StagedStatusApplicationTunables,
+    WorldObstacleSecondaryTunables, SPELL_METEOR,
 };
 
 const PROGRESSION_CATALOG_JSON: &str = include_str!("../progression_catalog.shared.json");
@@ -76,6 +76,16 @@ struct WorldObstacleColliderRow {
     local_center: Vector3Row,
     local_rotation: QuaternionRow,
     size: Vector3Row,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct StagedStatusApplicationRow {
+    delay_ms: u64,
+    duration_ms: u64,
+    #[serde(default)]
+    status_stack_group: Option<String>,
+    status: ApplyStatusDefinition,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -186,6 +196,8 @@ enum SpellCatalogDelivery {
         #[serde(default)]
         parry_behavior: Option<SpellParryBehavior>,
         status: ApplyStatusDefinition,
+        #[serde(default)]
+        staged_applications: Vec<StagedStatusApplicationRow>,
     },
     RemoveStatus {
         #[serde(default)]
@@ -240,6 +252,9 @@ enum SpellCatalogDelivery {
     },
     SelfTeleport {
         distance: f32,
+    },
+    Transpose {
+        max_distance: f32,
     },
     SelfResource {},
     Recall {
@@ -1154,6 +1169,7 @@ impl SpellCatalogRow {
                 block_behavior,
                 parry_behavior,
                 status,
+                staged_applications,
             } => {
                 definition.behavior = SpellBehavior::ApplyStatus;
                 definition.duration = Duration::from_millis(duration_ms).as_secs_f32();
@@ -1166,6 +1182,15 @@ impl SpellCatalogRow {
                 definition.apply_status_polarity = Some(polarity);
                 definition.secondary.apply_status = Some(ApplyStatusSecondaryTunables {
                     parry_behavior: parry_behavior.unwrap_or(SpellParryBehavior::Unparryable),
+                    staged_applications: staged_applications
+                        .into_iter()
+                        .map(|application| StagedStatusApplicationTunables {
+                            delay: Duration::from_millis(application.delay_ms),
+                            duration: Duration::from_millis(application.duration_ms),
+                            status_stack_group: application.status_stack_group,
+                            status: application.status,
+                        })
+                        .collect(),
                 });
             }
             SpellCatalogDelivery::RemoveStatus {
@@ -1293,6 +1318,11 @@ impl SpellCatalogRow {
             SpellCatalogDelivery::SelfTeleport { distance } => {
                 definition.behavior = SpellBehavior::SelfTeleport;
                 definition.max_distance = distance;
+                definition.block_behavior = BlockBehavior::Unblockable;
+            }
+            SpellCatalogDelivery::Transpose { max_distance } => {
+                definition.behavior = SpellBehavior::Transpose;
+                definition.max_distance = max_distance;
                 definition.block_behavior = BlockBehavior::Unblockable;
             }
         }
@@ -1787,6 +1817,15 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
             }
             ensure_positive_f32(def.kind.as_str(), "delivery.distance", def.max_distance)?;
         }
+        SpellBehavior::Transpose => {
+            if def.targeting != SpellTargeting::Target || !def.requires_target {
+                return Err(format!(
+                    "{} TRANSPOSE must use required TARGET targeting",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
+        }
         SpellBehavior::Recall => {
             if def.targeting != SpellTargeting::Self_ || def.requires_target {
                 return Err(format!(
@@ -2140,7 +2179,7 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
             ensure_no_secondary(def, true, true, false, true, true, true)?;
         }
         SpellBehavior::ApplyStatus => {
-            let Some(apply_status) = def.secondary.apply_status else {
+            let Some(apply_status) = def.secondary.apply_status.as_ref() else {
                 return Err(format!(
                     "{} APPLY_STATUS must define secondary apply-status data",
                     def.kind.as_str()
@@ -2159,6 +2198,50 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 "delivery.duration_ms",
                 Duration::from_secs_f32(def.duration),
             )?;
+            if !apply_status.staged_applications.is_empty()
+                && def.targeting != SpellTargeting::Target
+            {
+                return Err(format!(
+                    "{} staged APPLY_STATUS applications require TARGET targeting",
+                    def.kind.as_str()
+                ));
+            }
+            let mut previous_delay = Duration::ZERO;
+            for (index, staged) in apply_status.staged_applications.iter().enumerate() {
+                ensure_positive_duration(
+                    def.kind.as_str(),
+                    format!("delivery.staged_applications[{index}].delay_ms").as_str(),
+                    staged.delay,
+                )?;
+                ensure_positive_duration(
+                    def.kind.as_str(),
+                    format!("delivery.staged_applications[{index}].duration_ms").as_str(),
+                    staged.duration,
+                )?;
+                if staged.delay <= previous_delay {
+                    return Err(format!(
+                        "{} delivery.staged_applications delays must be strictly increasing",
+                        def.kind.as_str()
+                    ));
+                }
+                if staged
+                    .status_stack_group
+                    .as_deref()
+                    .is_some_and(|group| group.trim().is_empty())
+                {
+                    return Err(format!(
+                        "{} delivery.staged_applications[{index}].status_stack_group must not be empty",
+                        def.kind.as_str()
+                    ));
+                }
+                validate_apply_status(
+                    def,
+                    staged.status.clone(),
+                    def.apply_status_polarity
+                        .expect("validated APPLY_STATUS spell must define polarity"),
+                )?;
+                previous_delay = staged.delay;
+            }
             ensure_no_secondary(def, true, true, true, false, true, true)?;
         }
         SpellBehavior::RemoveStatus => {
@@ -2421,6 +2504,14 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
             if def.secondary != SpellSecondaryTunables::default() {
                 return Err(format!(
                     "{} SELF_TELEPORT must not define secondary spell tunables",
+                    def.kind.as_str()
+                ));
+            }
+        }
+        SpellBehavior::Transpose => {
+            if def.secondary != SpellSecondaryTunables::default() {
+                return Err(format!(
+                    "{} TRANSPOSE must not define secondary spell tunables",
                     def.kind.as_str()
                 ));
             }
@@ -2900,7 +2991,8 @@ fn validate_apply_status_kind_for_target(
         | StatusEffectKind::Silence
         | StatusEffectKind::FindWeakness
         | StatusEffectKind::Disarm
-        | StatusEffectKind::Gouge => Ok(()),
+        | StatusEffectKind::Gouge
+        | StatusEffectKind::Fulmination => Ok(()),
         other => Err(format!(
             "{spell_id} TARGET APPLY_STATUS status '{}' is not supported",
             other.as_str()
@@ -3004,6 +3096,9 @@ mod tests {
                 "CAUTERIZE",
                 "CELESTIAL_MANTLE",
                 "FLASHFIRE",
+                "FLASH_FREEZE",
+                "DEEPENING_COLD",
+                "FULMINATION",
                 "COLLAPSE",
                 "DISPEL_MAGIC",
                 "TELEPORT",
@@ -3011,6 +3106,7 @@ mod tests {
                 "MANA_SHIELD",
                 "SHIMMER",
                 "RECALL",
+                "TRANSPOSE",
                 "STONESPIRE",
                 "MOMENTUM",
                 "FORTIFY",
@@ -3449,6 +3545,18 @@ mod tests {
         assert_eq!(teleport.target_audience, TargetAudience::SelfOnly);
         assert_eq!(teleport.cast_time, Duration::ZERO);
         assert_eq!(teleport.max_distance, 15.0);
+
+        let transpose = spell_definition_by_str("TRANSPOSE")
+            .expect("TRANSPOSE should derive from the shared catalog");
+        assert_eq!(transpose.behavior, SpellBehavior::Transpose);
+        assert_eq!(transpose.targeting, SpellTargeting::Target);
+        assert_eq!(transpose.target_audience, TargetAudience::Any);
+        assert!(transpose.requires_target);
+        assert!(transpose.requires_target_los);
+        assert_eq!(transpose.cast_time, Duration::ZERO);
+        assert_eq!(transpose.cooldown, Duration::from_secs(30));
+        assert_eq!(transpose.max_distance, 18.0);
+        assert_eq!(transpose.block_behavior, BlockBehavior::Unblockable);
 
         let silence = spell_definition_by_str("SILENCE")
             .expect("SILENCE should derive from the shared catalog");
@@ -4852,5 +4960,26 @@ mod tests {
         assert!(validate_definition(&definition)
             .expect_err("Meteor should keep bespoke travel timing")
             .contains("impact_delay_ms"));
+    }
+
+    #[test]
+    fn staged_apply_status_delays_must_be_strictly_increasing() {
+        let mut row = spell_rows_from_json(PROGRESSION_CATALOG_JSON)
+            .expect("catalog should load")
+            .into_iter()
+            .find(|row| row.kind.as_str() == "DEEPENING_COLD")
+            .expect("Deepening Cold row should exist");
+        if let SpellCatalogDelivery::ApplyStatus {
+            staged_applications,
+            ..
+        } = &mut row.delivery
+        {
+            staged_applications[1].delay_ms = staged_applications[0].delay_ms;
+        }
+        let definition = row.into_definition().expect("row should convert");
+
+        assert!(validate_definition(&definition)
+            .expect_err("non-increasing staged status delays should fail")
+            .contains("strictly increasing"));
     }
 }

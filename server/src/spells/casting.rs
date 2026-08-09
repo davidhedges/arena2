@@ -35,12 +35,13 @@ use crate::combat::scene_query::{
 use crate::combat::status_effect;
 use crate::combat::{
     active_emanation_for_owner, has_active_disabling_status, has_active_status,
-    hostile_targeted_ability_misses, mark_harmful_combat_action, queue_effects, set_active_aura,
-    status_matches_removal_filter, temporary_combat_modifiers, timestamp_to_micros,
-    toggle_active_emanation, ActiveCombatProjectile, CombatEvent, DamageDelivery, DamageType,
-    EffectPacket, ProjectilePresentationEvent, StatusApplication, StatusEffect, StatusEffectKind,
-    StatusPayload, StatusPolarity, StatusStackGroupDefault, COMBAT_EVENT_MISS,
-    COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SPELL,
+    hostile_targeted_ability_misses, mark_harmful_combat_action, queue_delayed_status_effect,
+    queue_effects, set_active_aura, status_matches_removal_filter, temporary_combat_modifiers,
+    timestamp_to_micros, toggle_active_emanation, ActiveCombatProjectile, CombatEvent,
+    DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StatusApplication,
+    StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity, StatusStackGroupDefault,
+    COMBAT_EVENT_MISS, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
+    DAMAGE_SOURCE_KIND_SPELL,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -52,10 +53,9 @@ use crate::derived_stats::{
 };
 use crate::inventory::equipment_modifier_totals_for_owner;
 use crate::lingering_shade::arm_lingering_shade_for_voluntary_movement;
-#[allow(unused_imports)]
-use crate::npcs::npc_instance as _;
+use crate::movement_actions::clear_movement_action_for_owner;
+use crate::npcs::{clear_npc_forced_movement, NpcPhysics};
 use crate::player_intent::PlayerIntent;
-#[cfg(feature = "spellcasting_terminal_harness")]
 use crate::player_physics::{commit_player_physics, PhysicsWriteMode, PlayerPhysics};
 use crate::progression::{
     ability_catalog as _, active_selectable_ability_for_authored_action,
@@ -104,6 +104,12 @@ use crate::combat::active_combat_projectile as _;
 use crate::combat::combat_event as _;
 #[allow(unused_imports)]
 use crate::combat::projectile_presentation_event as _;
+#[allow(unused_imports)]
+use crate::melee::pending_melee_timed_movement as _;
+#[allow(unused_imports)]
+use crate::npcs::npc_instance as _;
+#[allow(unused_imports)]
+use crate::npcs::npc_physics as _;
 #[allow(unused_imports)]
 use crate::player_intent::player_intent as _;
 #[allow(unused_imports)]
@@ -2495,6 +2501,7 @@ fn process_spell_cast(
             | SpellBehavior::Emanation
             | SpellBehavior::SelfResource
             | SpellBehavior::SelfTeleport
+            | SpellBehavior::Transpose
             | SpellBehavior::WorldObstacle
     ) {
         if mode == CastExecutionMode::Execute {
@@ -2600,6 +2607,21 @@ fn process_spell_cast(
                         ability_id,
                     );
                 }
+                SpellBehavior::Transpose => {
+                    return Ok(reject_unless(
+                        cast_transpose(
+                            ctx,
+                            caster,
+                            state,
+                            spell_kind,
+                            target_id,
+                            mode,
+                            action_instance_id,
+                            ability_id,
+                        )?,
+                        ActionRejectReason::InvalidTarget,
+                    ));
+                }
                 SpellBehavior::WorldObstacle => {
                     cast_world_obstacle(
                         ctx,
@@ -2648,6 +2670,12 @@ fn process_spell_cast(
         }
         if definition.behavior == SpellBehavior::Emanation {
             return Ok(None);
+        }
+        if definition.behavior == SpellBehavior::Transpose {
+            return Ok(reject_unless(
+                cast_transpose(ctx, caster, state, spell_kind, target_id, mode, "", "")?,
+                ActionRejectReason::InvalidTarget,
+            ));
         }
         return Ok(None);
     }
@@ -7398,11 +7426,13 @@ fn apply_status_to_target(
         },
     );
 
-    let parry_behavior = definition
+    let apply_status_tunables = definition
         .secondary
         .apply_status
+        .as_ref()
         .expect("validated APPLY_STATUS spell must define secondary apply-status data")
-        .parry_behavior;
+        .clone();
+    let parry_behavior = apply_status_tunables.parry_behavior;
     if definition.requires_target
         && hostile_targeted_ability_misses(ctx, caster, target.player_id, now)
     {
@@ -7483,6 +7513,32 @@ fn apply_status_to_target(
             definition.kind.as_str(),
         )],
     );
+
+    for staged in apply_status_tunables.staged_applications {
+        let application = apply_status_application_for_caster(
+            ctx,
+            caster,
+            kind,
+            staged.status,
+            staged.duration,
+            staged.status_stack_group,
+            StatusStackGroupDefault::EffectKind,
+        );
+        queue_delayed_status_effect(
+            ctx,
+            application.to_effect_packet_for_audience(
+                caster,
+                target.player_id,
+                spell_id.as_str(),
+                definition
+                    .apply_status_polarity
+                    .expect("APPLY_STATUS spells must define polarity"),
+                definition.target_audience,
+                definition.kind.as_str(),
+            ),
+            now + staged.delay,
+        );
+    }
 
     Ok(())
 }
@@ -7598,6 +7654,220 @@ fn cast_self_teleport(
             },
         );
     }
+}
+
+#[derive(Clone, Copy)]
+struct TransposePosition {
+    x: f32,
+    y: f32,
+    z: f32,
+    grounded: bool,
+}
+
+enum TransposeActorPhysics {
+    Player(PlayerPhysics),
+    Npc(NpcPhysics),
+}
+
+impl TransposeActorPhysics {
+    fn position(&self) -> TransposePosition {
+        match self {
+            Self::Player(physics) => TransposePosition {
+                x: physics.pos_x,
+                y: physics.pos_y,
+                z: physics.pos_z,
+                grounded: physics.grounded,
+            },
+            Self::Npc(physics) => TransposePosition {
+                x: physics.pos_x,
+                y: physics.pos_y,
+                z: physics.pos_z,
+                grounded: true,
+            },
+        }
+    }
+}
+
+fn transpose_actor_physics(
+    ctx: &ReducerContext,
+    identity: Identity,
+) -> Option<TransposeActorPhysics> {
+    ctx.db
+        .player_physics()
+        .identity()
+        .find(identity)
+        .map(TransposeActorPhysics::Player)
+        .or_else(|| {
+            ctx.db
+                .npc_physics()
+                .identity()
+                .find(identity)
+                .map(TransposeActorPhysics::Npc)
+        })
+}
+
+fn cancel_authored_movement_for_transpose(ctx: &ReducerContext, identity: Identity) {
+    let has_active_movement_delivery = ctx
+        .db
+        .active_cast()
+        .caster()
+        .find(identity)
+        .and_then(|active_cast| SpellId::new(active_cast.kind.as_str()).ok())
+        .is_some_and(|kind| movement_delivery_for_action_id(kind.as_str()).is_some());
+    if has_active_movement_delivery {
+        clear_active_cast(ctx, identity);
+    }
+    ctx.db.special_movement_runtime().owner().delete(identity);
+    clear_movement_action_for_owner(ctx, identity);
+    ctx.db
+        .pending_melee_timed_movement()
+        .owner()
+        .delete(identity);
+    clear_npc_forced_movement(ctx, identity);
+}
+
+fn commit_transpose_position(
+    ctx: &ReducerContext,
+    physics: TransposeActorPhysics,
+    destination: TransposePosition,
+    now: Timestamp,
+) {
+    match physics {
+        TransposeActorPhysics::Player(mut physics) => {
+            physics.pos_x = destination.x;
+            physics.pos_y = destination.y;
+            physics.pos_z = destination.z;
+            physics.vel_x = 0.0;
+            physics.vel_y = 0.0;
+            physics.vel_z = 0.0;
+            physics.grounded = destination.grounded;
+            physics.updated_at = now;
+            commit_player_physics(ctx, physics, PhysicsWriteMode::Force, "cast_transpose");
+        }
+        TransposeActorPhysics::Npc(mut physics) => {
+            physics.pos_x = destination.x;
+            physics.pos_y = destination.y;
+            physics.pos_z = destination.z;
+            physics.updated_at = now;
+            ctx.db.npc_physics().identity().update(physics.clone());
+            crate::combat::position_history::record_position_sample(
+                ctx,
+                physics.identity,
+                physics.pos_x,
+                physics.pos_y,
+                physics.pos_z,
+                physics.yaw,
+                now,
+            );
+            crate::combat::position_history::stamp_rewind_barrier(ctx, physics.identity, now);
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn cast_transpose(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &CombatActorSnapshot,
+    kind: &SpellId,
+    target_id: &str,
+    mode: CastExecutionMode,
+    action_instance_id: &str,
+    ability_id: &str,
+) -> Result<bool, String> {
+    let definition = super::catalog::spell_definition(kind)
+        .expect("validated TRANSPOSE spell must resolve to a definition");
+    if definition.targeting != super::manifest::SpellTargeting::Target
+        || !definition.requires_target
+    {
+        return Ok(false);
+    }
+
+    let Some(target) = resolve_target(ctx, caster, target_id) else {
+        return Ok(false);
+    };
+    if target.player_id == caster
+        || !target_audience_allows(ctx, caster, target.player_id, definition.target_audience)
+    {
+        return Ok(false);
+    }
+    let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
+    if !is_target_within_facing_arc(state, &check_target, TARGET_FACING_ARC_RADIANS)
+        || (definition.requires_target_los && !has_line_of_sight(ctx, state, &check_target))
+        || distance_to_target(state, &check_target) > definition.max_distance
+    {
+        return Ok(false);
+    }
+    if mode != CastExecutionMode::Execute {
+        return Ok(true);
+    }
+
+    let Some(caster_snapshot) = actor_snapshot_for(ctx, caster) else {
+        return Ok(false);
+    };
+    let Some(caster_physics) = transpose_actor_physics(ctx, caster) else {
+        return Ok(false);
+    };
+    let Some(target_physics) = transpose_actor_physics(ctx, target.player_id) else {
+        return Ok(false);
+    };
+    let caster_position = caster_physics.position();
+    let target_position = target_physics.position();
+    let origin = Vec3::new(caster_position.x, caster_position.y, caster_position.z);
+    let point = Vec3::new(target_position.x, target_position.y, target_position.z);
+    let direction = normalize_vec3(point.x - origin.x, point.y - origin.y, point.z - origin.z)
+        .map(|(x, y, z)| Vec3::new(x, y, z))
+        .unwrap_or_else(|| default_forward_direction(&caster_snapshot));
+    let now = ctx.timestamp;
+
+    emit_spell_combat_event(
+        ctx,
+        SpellCombatEventPayload {
+            action_instance_id,
+            ability_id,
+            kind,
+            event_type: EVENT_RELEASE,
+            caster,
+            hit: target.player_id,
+            origin,
+            direction,
+            speed: 0.0,
+            max_distance: definition.max_distance,
+            scalar: SpellCombatEventScalar::None,
+            sequence_index: 0,
+            sequence_count: 1,
+            point: origin,
+            now,
+        },
+    );
+
+    cancel_authored_movement_for_transpose(ctx, caster);
+    cancel_authored_movement_for_transpose(ctx, target.player_id);
+    commit_transpose_position(ctx, caster_physics, target_position, now);
+    commit_transpose_position(ctx, target_physics, caster_position, now);
+
+    emit_spell_combat_event(
+        ctx,
+        SpellCombatEventPayload {
+            action_instance_id,
+            ability_id,
+            kind,
+            event_type: EVENT_IMPACT,
+            caster,
+            hit: target.player_id,
+            origin,
+            direction,
+            speed: 0.0,
+            max_distance: definition.max_distance,
+            scalar: SpellCombatEventScalar::None,
+            sequence_index: 0,
+            sequence_count: 1,
+            point,
+            now,
+        },
+    );
+
+    Ok(true)
 }
 
 fn cast_aura(ctx: &ReducerContext, caster: Identity, kind: &SpellId, ability_id: &str) {
@@ -8720,6 +8990,50 @@ mod tests {
     fn charge_actions_no_longer_resolve_as_movement_delivery() {
         assert!(movement_delivery_for_action_id("WARRIOR_CHARGE").is_none());
         assert!(movement_delivery_for_action_id("PALADIN_CHARGE").is_none());
+    }
+
+    #[test]
+    fn transpose_runtime_swaps_both_actors_and_cancels_all_authored_movement() {
+        let source = include_str!("casting.rs");
+        let cancellation = source
+            .split_once("fn cancel_authored_movement_for_transpose")
+            .expect("Transpose movement cancellation helper")
+            .1
+            .split_once("fn commit_transpose_position")
+            .expect("Transpose position commit helper follows cancellation")
+            .0;
+        for marker in [
+            "movement_delivery_for_action_id",
+            "clear_active_cast",
+            "special_movement_runtime()",
+            "clear_movement_action_for_owner",
+            "pending_melee_timed_movement()",
+            "clear_npc_forced_movement",
+        ] {
+            assert!(
+                cancellation.contains(marker),
+                "Transpose cancellation must cover {marker}"
+            );
+        }
+
+        let execution = source
+            .split_once("fn cast_transpose")
+            .expect("Transpose cast runtime")
+            .1
+            .split_once("fn cast_aura")
+            .expect("Transpose runtime ends before aura runtime")
+            .0;
+        for marker in [
+            "cancel_authored_movement_for_transpose(ctx, caster)",
+            "cancel_authored_movement_for_transpose(ctx, target.player_id)",
+            "commit_transpose_position(ctx, caster_physics, target_position, now)",
+            "commit_transpose_position(ctx, target_physics, caster_position, now)",
+        ] {
+            assert!(
+                execution.contains(marker),
+                "Transpose execution must retain {marker}"
+            );
+        }
     }
 
     #[test]
