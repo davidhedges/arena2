@@ -96,6 +96,7 @@ namespace Arena.Combat
         public const string BehaviorInstantBeam = "INSTANT_BEAM";
         public const string BehaviorChannel = "CHANNEL";
         public const string BehaviorEmanation = "EMANATION";
+        public const string BehaviorImmolation = "IMMOLATION";
         public const string BehaviorChargedRelease = "CHARGE";
         public const string TargetingPoint = "POINT";
         public const string TargetingSelf = "SELF";

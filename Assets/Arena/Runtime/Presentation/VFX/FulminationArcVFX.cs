@@ -16,8 +16,8 @@ namespace Arena.Presentation.VFX
         internal const string MainArcName = "main arc";
 
         // The main arc ParticleSystem is authored with a five-unit Y size.
-        private const float AuthoredArcLength = 5f;
-        private const float MinimumArcLength = 0.001f;
+        private const float AuthoredParticleLength = 5f;
+        private const float CoincidentPointEpsilon = 0.001f;
 
         internal static void ConfigureIfNeeded(
             string vfxId,
@@ -40,7 +40,7 @@ namespace Arena.Presentation.VFX
 
             Vector3 connector = fulminatedTargetPoint - impactPoint;
             float distance = connector.magnitude;
-            if (!float.IsFinite(distance) || distance <= MinimumArcLength)
+            if (!float.IsFinite(distance) || distance <= CoincidentPointEpsilon)
             {
                 mainArc.gameObject.SetActive(false);
                 return false;
@@ -55,9 +55,26 @@ namespace Arena.Presentation.VFX
             float parentYScale = mainArc.parent != null
                 ? Mathf.Abs(mainArc.parent.lossyScale.y)
                 : 1f;
-            if (!float.IsFinite(parentYScale) || parentYScale <= MinimumArcLength)
+            if (!float.IsFinite(parentYScale) || parentYScale <= CoincidentPointEpsilon)
                 parentYScale = 1f;
-            localScale.y = distance / (AuthoredArcLength * parentYScale);
+
+            // Stretch billboards apply lengthScale on top of the particle's Y size.
+            // Account for that authored multiplier instead of treating the five-unit
+            // particle size as the final visible length; otherwise this prefab's -2
+            // multiplier makes the centered connector twice as long as its endpoints.
+            float authoredVisibleLength = AuthoredParticleLength;
+            if (mainArc.TryGetComponent(out ParticleSystemRenderer renderer)
+                && renderer.renderMode == ParticleSystemRenderMode.Stretch)
+            {
+                float stretchMultiplier = Mathf.Abs(renderer.lengthScale);
+                if (float.IsFinite(stretchMultiplier)
+                    && stretchMultiplier > CoincidentPointEpsilon)
+                {
+                    authoredVisibleLength *= stretchMultiplier;
+                }
+            }
+
+            localScale.y = distance / (authoredVisibleLength * parentYScale);
             mainArc.localScale = localScale;
 
             // Instantiate may have honored playOnAwake before configuration. Clear only

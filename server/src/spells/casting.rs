@@ -34,10 +34,13 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect;
 use crate::combat::{
-    active_emanation_for_owner, has_active_disabling_status, has_active_status,
-    hostile_targeted_ability_misses, mark_harmful_combat_action, queue_delayed_status_effect,
-    queue_effects, set_active_aura, status_matches_removal_filter, temporary_combat_modifiers,
-    timestamp_to_micros, toggle_active_emanation, ActiveCombatProjectile, CombatEvent,
+    active_emanation_for_owner, arm_quickening_after_movement_ability,
+    consume_active_immolation_damage, consume_quickening_for_cast, has_active_disabling_status,
+    has_active_status, hostile_targeted_ability_misses, mark_harmful_combat_action,
+    queue_delayed_status_effect, queue_effects, quickening_cast_speed_multiplier_for_owner,
+    rime_effect_packet_for_frost_spell, set_active_aura, status_matches_removal_filter,
+    status_removal_is_blocked_by_rime, temporary_combat_modifiers, timestamp_to_micros,
+    toggle_active_emanation, toggle_active_immolation, ActiveCombatProjectile, CombatEvent,
     DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StatusApplication,
     StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity, StatusStackGroupDefault,
     COMBAT_EVENT_MISS, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
@@ -60,9 +63,9 @@ use crate::player_physics::{commit_player_physics, PhysicsWriteMode, PlayerPhysi
 use crate::progression::{
     ability_catalog as _, active_selectable_ability_for_authored_action,
     authored_npc_spell_ability_id, derived_combat_profile_id_for_owner,
-    movement_delivery_for_action_id, MovementDeliveryRuntime,
+    movement_delivery_for_action_id, spell_ability_id_for_action_id, MovementDeliveryRuntime,
 };
-use crate::relations::{target_audience_allows, TargetAudience};
+use crate::relations::{can_harm, target_audience_allows, TargetAudience};
 use crate::resources::{
     can_pay_action_resource_cost, grant_primary_resource_amount, pay_action_resource_cost,
     resolve_ability_action_resource_cost_amount, ResolvedActionResourceCost,
@@ -1058,11 +1061,17 @@ fn execute_cast_intent(
 
     let derived_stats = derived_combat_stats_for_owner(ctx, caster);
     let temporary_modifiers = temporary_combat_modifiers(ctx, now);
+    let quickening_multiplier = if quickening_applies_to_cast_time(definition.cast_time) {
+        quickening_cast_speed_multiplier_for_owner(ctx, caster, now)
+    } else {
+        1.0
+    };
     let cast_time = scale_cast_duration(
         definition.cast_time,
         derived_stats.cast_speed_multiplier
             * temporary_modifiers.cast_speed_multiplier_for(&caster)
-            * equipment_modifier_totals_for_owner(ctx, caster).cast_speed_multiplier(),
+            * equipment_modifier_totals_for_owner(ctx, caster).cast_speed_multiplier()
+            * quickening_multiplier,
     );
     if cast_time > Duration::ZERO {
         let reject_reason = process_spell_cast(
@@ -1093,6 +1102,7 @@ fn execute_cast_intent(
             );
             return Ok(());
         }
+        consume_quickening_for_cast(ctx, caster, now);
         mark_harmful_targeted_spell_start(ctx, caster, spell_kind, target_id, now);
         clear_interruptible_defense_for_owner(ctx, caster);
         let active_cast = begin_active_cast(
@@ -1267,6 +1277,10 @@ fn execute_cast_intent(
         stamp_cooldown(ctx, caster, spell_kind, now);
     }
     Ok(())
+}
+
+fn quickening_applies_to_cast_time(cast_time: Duration) -> bool {
+    cast_time > Duration::ZERO
 }
 
 fn commit_primary_resource_for_spell(
@@ -2499,6 +2513,7 @@ fn process_spell_cast(
             | SpellBehavior::ConsumeStatus
             | SpellBehavior::Aura
             | SpellBehavior::Emanation
+            | SpellBehavior::Immolation
             | SpellBehavior::SelfResource
             | SpellBehavior::SelfTeleport
             | SpellBehavior::Transpose
@@ -2587,6 +2602,9 @@ fn process_spell_cast(
                 SpellBehavior::Emanation => {
                     cast_emanation(ctx, caster, spell_kind, ability_id);
                 }
+                SpellBehavior::Immolation => {
+                    cast_immolation(ctx, caster, spell_kind, ability_id);
+                }
                 SpellBehavior::SelfResource => {
                     cast_self_resource(
                         ctx,
@@ -2669,6 +2687,9 @@ fn process_spell_cast(
             return Ok(None);
         }
         if definition.behavior == SpellBehavior::Emanation {
+            return Ok(None);
+        }
+        if definition.behavior == SpellBehavior::Immolation {
             return Ok(None);
         }
         if definition.behavior == SpellBehavior::Transpose {
@@ -2822,8 +2843,8 @@ fn process_spell_cast(
     }
 
     if definition.behavior == SpellBehavior::Channel {
-        return Ok(validate_targeted_channel_cast(
-            ctx, state, caster, spell_kind, target_id, definition,
+        return Ok(validate_channel_cast(
+            ctx, state, caster, spell_kind, target_id, aim_x, aim_y, aim_z, definition,
         ));
     }
 
@@ -3592,6 +3613,62 @@ fn spawn_tracking_projectile(
         projectile_instance_id.as_str(),
         PROJECTILE_SEQUENCE_INDEX_V1,
     )
+}
+
+pub(crate) fn fire_chain_reaction_spell(
+    ctx: &ReducerContext,
+    caster: Identity,
+    target: Identity,
+    action_id: &str,
+) -> Result<bool, String> {
+    let kind = SpellId::new(action_id)
+        .map_err(|_| format!("invalid Chain Reaction proc action '{action_id}'"))?;
+    let definition = super::catalog::spell_definition(&kind)
+        .ok_or_else(|| format!("unknown Chain Reaction proc spell '{action_id}'"))?;
+    if definition.behavior != SpellBehavior::Projectile
+        || definition.targeting != super::manifest::SpellTargeting::Target
+        || !definition.requires_target
+    {
+        return Err(format!(
+            "Chain Reaction proc '{}' must remain a targeted projectile spell",
+            kind.as_str()
+        ));
+    }
+
+    let Some(caster_state) = actor_snapshot_for(ctx, caster) else {
+        return Ok(false);
+    };
+    let Some(target_state) = actor_snapshot_for(ctx, target) else {
+        return Ok(false);
+    };
+    if !caster_state.alive
+        || !target_state.alive
+        || !players_share_world_context(ctx, caster, target)
+        || !can_harm(ctx, caster, target)
+        || !target_audience_allows(ctx, caster, target, definition.target_audience)
+        || distance_to_target(&caster_state, &target_state) > definition.max_distance
+        || (definition.requires_target_los && !has_line_of_sight(ctx, &caster_state, &target_state))
+    {
+        return Ok(false);
+    }
+
+    let ability_id = spell_ability_id_for_action_id(kind.as_str()).ok_or_else(|| {
+        format!(
+            "Chain Reaction proc '{}' has no spell ability",
+            kind.as_str()
+        )
+    })?;
+    let action_instance_id = format!("chain_reaction:{}", next_spell_instance_id(ctx, caster));
+    spawn_tracking_projectile(
+        ctx,
+        caster,
+        &caster_state,
+        &target_state,
+        &kind,
+        action_instance_id.as_str(),
+        ability_id.as_str(),
+    )?;
+    Ok(true)
 }
 
 fn curved_target_control_point(
@@ -5052,6 +5129,27 @@ struct ElectrocuteChannelState {
     target_id: Identity,
 }
 
+#[allow(clippy::too_many_arguments)]
+fn validate_channel_cast(
+    ctx: &ReducerContext,
+    state: &CombatActorSnapshot,
+    caster: Identity,
+    spell_kind: &SpellId,
+    target_id: &str,
+    aim_x: f32,
+    aim_y: f32,
+    aim_z: f32,
+    definition: &SpellDefinition,
+) -> Option<ActionRejectReason> {
+    if definition.secondary.channel_area.is_some() {
+        return resolve_generic_area_center(definition, state, aim_x, aim_y, aim_z)
+            .is_none()
+            .then_some(ActionRejectReason::InvalidInput);
+    }
+
+    validate_targeted_channel_cast(ctx, state, caster, spell_kind, target_id, definition)
+}
+
 fn validate_targeted_channel_cast(
     ctx: &ReducerContext,
     state: &CombatActorSnapshot,
@@ -5118,6 +5216,10 @@ fn start_channel(
         return start_projectile_channel(ctx, active_cast, caster_state, now);
     }
 
+    if definition.secondary.channel_area.is_some() {
+        return start_area_channel(ctx, active_cast, caster_state, definition, now);
+    }
+
     if !apply_generic_channel_heal(
         ctx,
         active_cast,
@@ -5169,7 +5271,9 @@ fn tick_channel(
     if now < runtime.last_update_at + update_interval {
         return Ok(true);
     }
-    if definition.secondary.channel.is_some() && now >= active_cast.ends_at {
+    if (definition.secondary.channel.is_some() || definition.secondary.channel_area.is_some())
+        && now >= active_cast.ends_at
+    {
         return Ok(true);
     }
 
@@ -5190,6 +5294,13 @@ fn tick_channel(
         return Ok(false);
     }
 
+    if definition.secondary.channel_area.is_some()
+        && !apply_area_channel_tick(ctx, active_cast, caster_state, definition, false, now)
+    {
+        stop_channel(ctx, active_cast, caster_state, now, None);
+        return Ok(false);
+    }
+
     if definition.secondary.channel_projectile.is_some()
         && !spawn_channel_projectile(ctx, active_cast, caster_state, now)?
     {
@@ -5201,6 +5312,249 @@ fn tick_channel(
     next_runtime.last_update_at = now;
     ctx.db.channel_cast_runtime().caster().update(next_runtime);
     Ok(true)
+}
+
+fn start_area_channel(
+    ctx: &ReducerContext,
+    active_cast: &ActiveCast,
+    caster_state: &CombatActorSnapshot,
+    definition: &SpellDefinition,
+    now: Timestamp,
+) -> Result<bool, String> {
+    if !apply_area_channel_tick(ctx, active_cast, caster_state, definition, true, now) {
+        return Ok(false);
+    }
+
+    ctx.db.channel_cast_runtime().insert(ChannelCastRuntime {
+        caster: active_cast.caster,
+        spell_instance_id: active_cast.cast_id.clone(),
+        last_update_at: now,
+    });
+    Ok(true)
+}
+
+fn apply_area_channel_tick(
+    ctx: &ReducerContext,
+    active_cast: &ActiveCast,
+    caster_state: &CombatActorSnapshot,
+    definition: &SpellDefinition,
+    is_first_tick: bool,
+    now: Timestamp,
+) -> bool {
+    let Some(channel_area) = definition.secondary.channel_area.as_ref() else {
+        return false;
+    };
+    let Some(area_center) = resolve_generic_area_center(
+        definition,
+        caster_state,
+        active_cast.aim_x,
+        active_cast.aim_y,
+        active_cast.aim_z,
+    ) else {
+        return false;
+    };
+
+    let caster_origin = Vec3::new(
+        caster_state.pos_x,
+        caster_state.pos_y + caster_state.hit_height * 0.5,
+        caster_state.pos_z,
+    );
+    if is_first_tick {
+        emit_spell_combat_event(
+            ctx,
+            SpellCombatEventPayload {
+                action_instance_id: active_cast.cast_id.as_str(),
+                ability_id: active_cast.ability_id.as_str(),
+                kind: &definition.kind,
+                event_type: EVENT_RELEASE,
+                caster: active_cast.caster,
+                hit: Identity::ZERO,
+                origin: caster_origin,
+                direction: Vec3::new(0.0, 1.0, 0.0),
+                speed: 0.0,
+                max_distance: definition.max_distance,
+                scalar: SpellCombatEventScalar::None,
+                sequence_index: 0,
+                sequence_count: 1,
+                point: area_center,
+                now,
+            },
+        );
+        emit_spell_combat_event(
+            ctx,
+            SpellCombatEventPayload {
+                action_instance_id: active_cast.cast_id.as_str(),
+                ability_id: active_cast.ability_id.as_str(),
+                kind: &definition.kind,
+                event_type: EVENT_AREA_IMPACT,
+                caster: active_cast.caster,
+                hit: Identity::ZERO,
+                origin: area_center,
+                direction: Vec3::new(0.0, 1.0, 0.0),
+                speed: 0.0,
+                max_distance: channel_area.radius,
+                scalar: SpellCombatEventScalar::None,
+                sequence_index: 0,
+                sequence_count: 1,
+                point: area_center,
+                now,
+            },
+        );
+    } else {
+        emit_spell_combat_event(
+            ctx,
+            SpellCombatEventPayload {
+                action_instance_id: active_cast.cast_id.as_str(),
+                ability_id: active_cast.ability_id.as_str(),
+                kind: &definition.kind,
+                event_type: EVENT_UPDATE,
+                caster: active_cast.caster,
+                hit: Identity::ZERO,
+                origin: area_center,
+                direction: Vec3::new(0.0, 1.0, 0.0),
+                speed: 0.0,
+                max_distance: channel_area.radius,
+                scalar: SpellCombatEventScalar::None,
+                sequence_index: 0,
+                sequence_count: 1,
+                point: area_center,
+                now,
+            },
+        );
+    }
+
+    let snapshots = CombatActorSnapshotSet::collect(ctx);
+    let actors = snapshots.as_slice();
+    let mut candidate_indices = Vec::new();
+    snapshots.query_disc_indices(
+        area_center.x,
+        area_center.z,
+        channel_area.radius,
+        &mut candidate_indices,
+    );
+
+    let rime_duration = channel_area
+        .impact_effects
+        .iter()
+        .filter_map(|effect| effect.as_status().map(|status| status.duration()))
+        .max()
+        .unwrap_or_else(|| seconds_to_duration(definition.update_interval));
+    let mut effects = Vec::new();
+    for target in candidate_indices
+        .iter()
+        .filter_map(|index| actors.get(*index))
+    {
+        if !target.alive
+            || !players_share_world_context(ctx, active_cast.caster, target.player_id)
+            || !target_audience_allows(
+                ctx,
+                active_cast.caster,
+                target.player_id,
+                definition.target_audience,
+            )
+            || !aoe_hits_player(
+                area_center.x,
+                area_center.y,
+                area_center.z,
+                channel_area.radius,
+                target,
+            )
+        {
+            continue;
+        }
+
+        if resolve_blockable_spell_hit(
+            ctx,
+            active_cast.cast_id.as_str(),
+            active_cast.ability_id.as_str(),
+            &definition.kind,
+            active_cast.caster,
+            target,
+            caster_origin.x,
+            caster_origin.y,
+            caster_origin.z,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            channel_area.radius,
+            target.pos_x,
+            target.pos_y,
+            target.pos_z,
+            definition.damage,
+            definition.block_behavior.as_str(),
+            now,
+        ) {
+            continue;
+        }
+
+        let direction = area_contact_direction(
+            area_center.x,
+            area_center.z,
+            caster_state.pos_x,
+            caster_state.pos_z,
+            target,
+        );
+        if definition.damage > 0 {
+            emit_spell_combat_event_with_damage(
+                ctx,
+                SpellCombatEventPayload {
+                    action_instance_id: active_cast.cast_id.as_str(),
+                    ability_id: active_cast.ability_id.as_str(),
+                    kind: &definition.kind,
+                    event_type: EVENT_CONTACT,
+                    caster: active_cast.caster,
+                    hit: target.player_id,
+                    origin: area_center,
+                    direction,
+                    speed: 0.0,
+                    max_distance: channel_area.radius,
+                    scalar: SpellCombatEventScalar::None,
+                    sequence_index: 0,
+                    sequence_count: 1,
+                    point: Vec3::new(target.pos_x, target.pos_y, target.pos_z),
+                    now,
+                },
+                definition.damage,
+            );
+            effects.push(EffectPacket::Damage {
+                amount: definition.damage,
+                damage_type: definition.damage_type,
+                source: active_cast.caster,
+                target: target.player_id,
+                spell_id: active_cast.cast_id.clone(),
+                delivery: DamageDelivery::Periodic,
+                source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
+                direct_action_key: String::new(),
+            });
+        }
+        if definition.damage_type == DamageType::Cold {
+            if let Some(rime) = rime_effect_packet_for_frost_spell(
+                ctx,
+                active_cast.caster,
+                target.player_id,
+                rime_duration,
+            ) {
+                effects.push(rime);
+            }
+        }
+        push_impact_effect_packets(
+            &mut effects,
+            channel_area.impact_effects.as_slice(),
+            active_cast.caster,
+            target.player_id,
+            active_cast.cast_id.as_str(),
+            definition.kind.as_str(),
+            definition.damage > 0,
+            direction.x,
+            direction.z,
+        );
+    }
+
+    if !effects.is_empty() {
+        queue_effects(ctx, effects);
+    }
+    true
 }
 
 fn apply_generic_channel_heal(
@@ -6074,6 +6428,16 @@ fn cast_generic_area(
         return Ok(());
     };
     let area_shape = area_shape_for(definition);
+    let resolved_damage = if definition
+        .secondary
+        .area
+        .as_ref()
+        .is_some_and(|area| area.consume_caster_burns)
+    {
+        consume_caster_burn_damage(ctx, caster, now)
+    } else {
+        definition.damage
+    };
 
     let spell_id = action_instance_id.to_string();
 
@@ -6140,6 +6504,7 @@ fn cast_generic_area(
             // Instant sweep: resolve is the press transaction, so the press's
             // frozen view delay is readable directly — no pending-row freeze.
             view_delay_micros: press_view_delay_micros(ctx, caster),
+            damage: resolved_damage,
             now,
         },
     );
@@ -6160,6 +6525,7 @@ struct AreaImpactResolution<'a> {
     /// candidate victim's area membership is tested against its pose at
     /// `now − view_delay_micros` when the sweep-rewind switch is on.
     view_delay_micros: i64,
+    damage: i32,
     now: Timestamp,
 }
 
@@ -6234,6 +6600,7 @@ fn resolve_pending_area_impact(ctx: &ReducerContext, row: &PendingAreaImpact, no
             // Delayed sweep: resolve is a later tick, so use the delay frozen
             // onto the pending row at cast time (G3).
             view_delay_micros: row.view_delay_micros,
+            damage: definition.damage,
             now,
         },
     );
@@ -6285,7 +6652,7 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
             point: impact.area_center,
             now: impact.now,
         },
-        impact.definition.damage,
+        impact.damage,
     );
 
     // S10 (docs/sweep-projectile-rewind-design-2026-07-05.md §2.1-2.3):
@@ -6368,13 +6735,13 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
             impact.area_center.x,
             impact.area_center.y,
             impact.area_center.z,
-            impact.definition.damage,
+            impact.damage,
             impact.definition.block_behavior.as_str(),
             impact.now,
         ) {
             continue;
         }
-        if impact.definition.damage > 0 {
+        if impact.damage > 0 {
             let contact_direction = area_contact_direction(
                 impact.area_center.x,
                 impact.area_center.z,
@@ -6401,11 +6768,11 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
                     point: Vec3::new(player.pos_x, player.pos_y, player.pos_z),
                     now: impact.now,
                 },
-                impact.definition.damage,
+                impact.damage,
             );
         }
         effects.push(EffectPacket::Damage {
-            amount: impact.definition.damage,
+            amount: impact.damage,
             damage_type: impact.definition.damage_type,
             source: impact.caster,
             target: player.player_id,
@@ -6429,7 +6796,7 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
                 player.player_id,
                 impact.spell_id,
                 impact.definition.kind.as_str(),
-                impact.definition.damage > 0,
+                impact.damage > 0,
                 contact_direction.x,
                 contact_direction.z,
             );
@@ -7500,19 +7867,29 @@ fn apply_status_to_target(
         0,
     );
 
-    queue_effects(
-        ctx,
-        vec![application.to_effect_packet_for_audience(
+    let polarity = definition
+        .apply_status_polarity
+        .expect("APPLY_STATUS spells must define polarity");
+    let mut effects = Vec::new();
+    if definition.damage_type == DamageType::Cold && polarity == StatusPolarity::Debuff {
+        if let Some(rime) = rime_effect_packet_for_frost_spell(
+            ctx,
             caster,
             target.player_id,
-            spell_id.as_str(),
-            definition
-                .apply_status_polarity
-                .expect("APPLY_STATUS spells must define polarity"),
-            definition.target_audience,
-            definition.kind.as_str(),
-        )],
-    );
+            application.duration(),
+        ) {
+            effects.push(rime);
+        }
+    }
+    effects.push(application.to_effect_packet_for_audience(
+        caster,
+        target.player_id,
+        spell_id.as_str(),
+        polarity,
+        definition.target_audience,
+        definition.kind.as_str(),
+    ));
+    queue_effects(ctx, effects);
 
     for staged in apply_status_tunables.staged_applications {
         let application = apply_status_application_for_caster(
@@ -7524,19 +7901,28 @@ fn apply_status_to_target(
             staged.status_stack_group,
             StatusStackGroupDefault::EffectKind,
         );
+        let queued_at = now + staged.delay;
+        if definition.damage_type == DamageType::Cold && polarity == StatusPolarity::Debuff {
+            if let Some(rime) = rime_effect_packet_for_frost_spell(
+                ctx,
+                caster,
+                target.player_id,
+                application.duration(),
+            ) {
+                queue_delayed_status_effect(ctx, rime, queued_at);
+            }
+        }
         queue_delayed_status_effect(
             ctx,
             application.to_effect_packet_for_audience(
                 caster,
                 target.player_id,
                 spell_id.as_str(),
-                definition
-                    .apply_status_polarity
-                    .expect("APPLY_STATUS spells must define polarity"),
+                polarity,
                 definition.target_audience,
                 definition.kind.as_str(),
             ),
-            now + staged.delay,
+            queued_at,
         );
     }
 
@@ -7621,6 +8007,7 @@ fn cast_self_teleport(
         SPECIAL_MOVEMENT_FACING_FACE_START,
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
     );
+    arm_quickening_after_movement_ability(ctx, caster, ctx.timestamp);
     arm_lingering_shade_for_voluntary_movement(
         ctx,
         caster,
@@ -7845,6 +8232,7 @@ fn cast_transpose(
     cancel_authored_movement_for_transpose(ctx, target.player_id);
     commit_transpose_position(ctx, caster_physics, target_position, now);
     commit_transpose_position(ctx, target_physics, caster_position, now);
+    arm_quickening_after_movement_ability(ctx, caster, now);
 
     emit_spell_combat_event(
         ctx,
@@ -7892,6 +8280,24 @@ fn cast_emanation(ctx: &ReducerContext, caster: Identity, kind: &SpellId, abilit
         kind.as_str(),
         ability_id,
         emanation.pulse_interval,
+        ctx.timestamp,
+    );
+}
+
+fn cast_immolation(ctx: &ReducerContext, caster: Identity, kind: &SpellId, ability_id: &str) {
+    let Some(definition) = super::catalog::spell_definition(kind) else {
+        return;
+    };
+    debug_assert_eq!(definition.behavior, SpellBehavior::Immolation);
+    let Some(immolation) = definition.secondary.immolation.as_ref() else {
+        return;
+    };
+    toggle_active_immolation(
+        ctx,
+        caster,
+        kind.as_str(),
+        ability_id,
+        immolation,
         ctx.timestamp,
     );
 }
@@ -8324,6 +8730,27 @@ fn consume_status_heal_amount_from_stacks(
     heal_per_stack.saturating_mul(consumed_stacks)
 }
 
+fn consume_caster_burn_damage(ctx: &ReducerContext, caster: Identity, now: Timestamp) -> i32 {
+    let mut damage = consume_active_immolation_damage(ctx, caster, now);
+    let burning_statuses: Vec<_> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(caster)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::Dot.as_str()
+                && DamageType::from_wire(effect.damage_type.as_str()) == DamageType::Fire
+                && !status_removal_is_blocked_by_rime(ctx, effect, now)
+        })
+        .collect();
+
+    for effect in burning_statuses {
+        damage = damage.saturating_add(remaining_dot_damage(&effect, now));
+        ctx.db.status_effect().status_id().delete(effect.status_id);
+    }
+    damage
+}
+
 fn remaining_dot_damage(effect: &StatusEffect, now: Timestamp) -> i32 {
     if effect.effect_kind != StatusEffectKind::Dot.as_str()
         || effect.tick_amount <= 0
@@ -8643,7 +9070,7 @@ mod tests {
         has_movement_intent, has_voluntary_movement_after_cast, horizontal_movement_duration_ms,
         is_generic_area_spell, is_target_within_facing_arc,
         normal_cast_time_spell_refunds_gcd_on_self_cancel, projectile_release_uses_live_facing,
-        recall_capture_is_eligible, recall_slot_has_stored_spell,
+        quickening_applies_to_cast_time, recall_capture_is_eligible, recall_slot_has_stored_spell,
         remaining_dot_damage_from_schedule, resolve_generic_area_center,
         resolve_special_movement_y, spell_primary_resource_cost_for_action,
         targeted_ability_is_blocked, valid_cast_action_token,
@@ -9113,6 +9540,13 @@ mod tests {
         let momentum =
             crate::spells::spell_definition_by_str("MOMENTUM").expect("Momentum should exist");
         assert!(!normal_cast_time_spell_refunds_gcd_on_self_cancel(momentum));
+    }
+
+    #[test]
+    fn quickening_consumes_only_for_non_instant_spell_cast_times() {
+        assert!(!quickening_applies_to_cast_time(Duration::ZERO));
+        assert!(quickening_applies_to_cast_time(Duration::from_millis(1)));
+        assert!(quickening_applies_to_cast_time(Duration::from_secs(2)));
     }
 
     #[test]

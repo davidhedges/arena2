@@ -325,6 +325,7 @@ namespace Arena.Presentation
         private const string DeliverySelfResource = "SELF_RESOURCE";
         private const string DeliveryAura = "AURA";
         private const string DeliveryEmanation = "EMANATION";
+        private const string DeliveryImmolation = "IMMOLATION";
         private const string DeliveryPersistentArea = "PERSISTENT_AREA";
 
         private const string TargetingSelf = "SELF";
@@ -362,6 +363,7 @@ namespace Arena.Presentation
                 case DeliveryAura:
                     return SpellVfxArchetype.Aura;
                 case DeliveryEmanation:
+                case DeliveryImmolation:
                     return SpellVfxArchetype.Emanation;
                 case DeliveryPersistentArea:
                     return SpellVfxArchetype.TargetField;

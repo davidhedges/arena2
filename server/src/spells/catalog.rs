@@ -15,14 +15,14 @@ use crate::relations::{default_spell_target_audience, TargetAudience};
 use super::manifest::{
     ApplyStatusDefinition, ApplyStatusSecondaryTunables, AreaSecondaryTunables,
     AuraSecondaryTunables, BespokeRuntimeSpell, BlockBehavior, BoomerangCasterProjectileTunables,
-    ChannelSecondaryTunables, ConsumeStatusSecondaryTunables, CurvedTargetProjectileTunables,
-    DirectTargetSecondaryTunables, EmanationSecondaryTunables, ImpactEffect,
-    InstantBeamChargeScaling, InstantBeamSecondaryTunables, MeteorSkyOrigin,
-    OrbitCasterProjectileTunables, PersistentAreaSecondaryTunables, ProjectileMotionTunables,
-    ProjectileSecondaryTunables, RecallSecondaryTunables, RemoveStatusDefinition,
-    RemoveStatusSecondaryTunables, SpellBehavior, SpellCastMobility, SpellDefinition, SpellId,
-    SpellParryBehavior, SpellSecondaryTunables, SpellTargeting, StagedStatusApplicationTunables,
-    WorldObstacleSecondaryTunables, SPELL_METEOR,
+    ChannelAreaSecondaryTunables, ChannelSecondaryTunables, ConsumeStatusSecondaryTunables,
+    CurvedTargetProjectileTunables, DirectTargetSecondaryTunables, EmanationSecondaryTunables,
+    ImmolationSecondaryTunables, ImpactEffect, InstantBeamChargeScaling,
+    InstantBeamSecondaryTunables, MeteorSkyOrigin, OrbitCasterProjectileTunables,
+    PersistentAreaSecondaryTunables, ProjectileMotionTunables, ProjectileSecondaryTunables,
+    RecallSecondaryTunables, RemoveStatusDefinition, RemoveStatusSecondaryTunables, SpellBehavior,
+    SpellCastMobility, SpellDefinition, SpellId, SpellParryBehavior, SpellSecondaryTunables,
+    SpellTargeting, StagedStatusApplicationTunables, WorldObstacleSecondaryTunables, SPELL_METEOR,
 };
 
 const PROGRESSION_CATALOG_JSON: &str = include_str!("../progression_catalog.shared.json");
@@ -142,6 +142,8 @@ enum SpellCatalogDelivery {
         sky_origin: Option<MeteorSkyOriginRow>,
         #[serde(default)]
         impact_effects: Vec<ImpactEffectRow>,
+        #[serde(default)]
+        consume_caster_burns: bool,
     },
     PersistentArea {
         max_distance: f32,
@@ -177,6 +179,8 @@ enum SpellCatalogDelivery {
         update_interval_seconds: f32,
         duration_seconds: f32,
         block_behavior: BlockBehavior,
+        #[serde(default)]
+        area: Option<ChannelAreaTuningRow>,
         #[serde(default)]
         projectile: Option<ProjectileTuningRow>,
     },
@@ -243,6 +247,15 @@ enum SpellCatalogDelivery {
         #[serde(default)]
         impact_effects: Vec<ImpactEffectRow>,
     },
+    Immolation {
+        damage_interval_ms: u64,
+        stack_interval_ms: u64,
+        stack_duration_ms: u64,
+        max_stacks: u32,
+        max_health_damage_per_stack: f32,
+        damage_amp_per_stack: f32,
+        status_stack_group: String,
+    },
     WorldObstacle {
         forward_distance: f32,
         duration_ms: u64,
@@ -260,6 +273,14 @@ enum SpellCatalogDelivery {
     Recall {
         replay_cooldown_ms: u64,
     },
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ChannelAreaTuningRow {
+    radius: f32,
+    #[serde(default)]
+    impact_effects: Vec<ImpactEffectRow>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -1046,6 +1067,7 @@ impl SpellCatalogRow {
                 block_behavior,
                 sky_origin,
                 impact_effects,
+                consume_caster_burns,
             } => {
                 let area_shape = resolve_area_shape(
                     spell_id.as_str(),
@@ -1071,6 +1093,7 @@ impl SpellCatalogRow {
                     sky_origin: sky_origin.map(Into::into),
                     shape: area_shape,
                     impact_effects: impact_effects.into_iter().map(Into::into).collect(),
+                    consume_caster_burns,
                 });
             }
             SpellCatalogDelivery::PersistentArea {
@@ -1123,6 +1146,7 @@ impl SpellCatalogRow {
                 update_interval_seconds,
                 duration_seconds,
                 block_behavior,
+                area,
                 projectile,
             } => {
                 definition.behavior = SpellBehavior::Channel;
@@ -1135,6 +1159,13 @@ impl SpellCatalogRow {
                 if heal != 0 {
                     definition.secondary.channel =
                         Some(ChannelSecondaryTunables { heal_amount: heal });
+                }
+                if let Some(area) = area {
+                    definition.radius = area.radius;
+                    definition.secondary.channel_area = Some(ChannelAreaSecondaryTunables {
+                        radius: area.radius,
+                        impact_effects: area.impact_effects.into_iter().map(Into::into).collect(),
+                    });
                 }
                 if let Some(projectile) = projectile {
                     definition.speed = projectile.speed;
@@ -1270,6 +1301,30 @@ impl SpellCatalogRow {
                     radius,
                     pulse_interval: Duration::from_millis(pulse_interval_ms),
                     impact_effects: impact_effects.into_iter().map(Into::into).collect(),
+                });
+            }
+            SpellCatalogDelivery::Immolation {
+                damage_interval_ms,
+                stack_interval_ms,
+                stack_duration_ms,
+                max_stacks,
+                max_health_damage_per_stack,
+                damage_amp_per_stack,
+                status_stack_group,
+            } => {
+                definition.behavior = SpellBehavior::Immolation;
+                definition.damage_type = DamageType::Fire;
+                definition.update_interval = damage_interval_ms as f32 / 1000.0;
+                definition.block_behavior = BlockBehavior::Unblockable;
+                definition.status_stack_group = Some(status_stack_group.clone());
+                definition.secondary.immolation = Some(ImmolationSecondaryTunables {
+                    damage_interval: Duration::from_millis(damage_interval_ms),
+                    stack_interval: Duration::from_millis(stack_interval_ms),
+                    stack_duration: Duration::from_millis(stack_duration_ms),
+                    max_stacks,
+                    max_health_damage_per_stack,
+                    damage_amp_per_stack,
+                    status_stack_group,
                 });
             }
             SpellCatalogDelivery::WorldObstacle {
@@ -1927,6 +1982,12 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
             def.kind.as_str()
         ));
     }
+    if def.behavior != SpellBehavior::Immolation && def.secondary.immolation.is_some() {
+        return Err(format!(
+            "{} must not define immolation secondary data",
+            def.kind.as_str()
+        ));
+    }
     if def.behavior != SpellBehavior::PersistentArea && def.secondary.persistent_area.is_some() {
         return Err(format!(
             "{} must not define persistent-area secondary data",
@@ -2096,6 +2157,26 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     "{} METEOR must define a STUN impact effect",
                     def.kind.as_str()
                 ));
+            }
+            if area.consume_caster_burns {
+                if def.targeting != SpellTargeting::Self_ || def.requires_target {
+                    return Err(format!(
+                        "{} burn-consuming AREA must use SELF targeting without a target requirement",
+                        def.kind.as_str()
+                    ));
+                }
+                if area.impact_delay_ms != 0 || def.damage != 0 {
+                    return Err(format!(
+                        "{} burn-consuming AREA must be immediate and use dynamic damage",
+                        def.kind.as_str()
+                    ));
+                }
+                if def.damage_type != DamageType::Fire {
+                    return Err(format!(
+                        "{} burn-consuming AREA must deal FIRE damage",
+                        def.kind.as_str()
+                    ));
+                }
             }
             ensure_no_secondary(def, true, false, true, true, true, true)?;
         }
@@ -2427,13 +2508,74 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 ));
             }
         }
-        SpellBehavior::Channel => {
-            if def.targeting != SpellTargeting::Target || !def.requires_target {
+        SpellBehavior::Immolation => {
+            let Some(immolation) = def.secondary.immolation.as_ref() else {
                 return Err(format!(
-                    "{} CHANNEL must use required TARGET targeting",
+                    "{} IMMOLATION must define secondary immolation data",
+                    def.kind.as_str()
+                ));
+            };
+            if def.targeting != SpellTargeting::Self_ || def.requires_target {
+                return Err(format!(
+                    "{} IMMOLATION must use SELF targeting without a target requirement",
                     def.kind.as_str()
                 ));
             }
+            if def.target_audience != TargetAudience::SelfOnly {
+                return Err(format!(
+                    "{} IMMOLATION must use SELF_ONLY target_audience",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_duration(
+                def.kind.as_str(),
+                "delivery.damage_interval_ms",
+                immolation.damage_interval,
+            )?;
+            ensure_positive_duration(
+                def.kind.as_str(),
+                "delivery.stack_interval_ms",
+                immolation.stack_interval,
+            )?;
+            ensure_positive_duration(
+                def.kind.as_str(),
+                "delivery.stack_duration_ms",
+                immolation.stack_duration,
+            )?;
+            if immolation.max_stacks == 0 {
+                return Err(format!(
+                    "{} delivery.max_stacks must be at least 1",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(
+                def.kind.as_str(),
+                "delivery.max_health_damage_per_stack",
+                immolation.max_health_damage_per_stack,
+            )?;
+            ensure_positive_f32(
+                def.kind.as_str(),
+                "delivery.damage_amp_per_stack",
+                immolation.damage_amp_per_stack,
+            )?;
+            if immolation.status_stack_group.trim().is_empty() {
+                return Err(format!(
+                    "{} delivery.status_stack_group must not be empty",
+                    def.kind.as_str()
+                ));
+            }
+            let expected = SpellSecondaryTunables {
+                immolation: Some(immolation.clone()),
+                ..SpellSecondaryTunables::default()
+            };
+            if def.secondary != expected {
+                return Err(format!(
+                    "{} IMMOLATION must only define immolation secondary spell tunables",
+                    def.kind.as_str()
+                ));
+            }
+        }
+        SpellBehavior::Channel => {
             ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
             ensure_positive_f32(
                 def.kind.as_str(),
@@ -2476,8 +2618,46 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     def.kind.as_str()
                 ));
             }
+            if let Some(area) = def.secondary.channel_area.as_ref() {
+                if def.targeting != SpellTargeting::Point || def.requires_target {
+                    return Err(format!(
+                        "{} area CHANNEL must use POINT targeting without a target requirement",
+                        def.kind.as_str()
+                    ));
+                }
+                if heal_amount > 0 || def.secondary.channel_projectile.is_some() {
+                    return Err(format!(
+                        "{} area CHANNEL cannot define healing or projectile data",
+                        def.kind.as_str()
+                    ));
+                }
+                ensure_positive_f32(def.kind.as_str(), "delivery.area.radius", area.radius)?;
+                if let Some(aim_radius) = def.aim_radius {
+                    if (aim_radius - area.radius).abs() > 0.001 {
+                        return Err(format!(
+                            "{} POINT area CHANNEL aim_radius must match delivery.area.radius",
+                            def.kind.as_str()
+                        ));
+                    }
+                }
+                if def.damage <= 0 && area.impact_effects.is_empty() {
+                    return Err(format!(
+                        "{} area CHANNEL must define positive damage or at least one impact effect",
+                        def.kind.as_str()
+                    ));
+                }
+                for effect in &area.impact_effects {
+                    validate_impact_effect(def, effect)?;
+                }
+            } else if def.targeting != SpellTargeting::Target || !def.requires_target {
+                return Err(format!(
+                    "{} CHANNEL must use required TARGET targeting unless it defines delivery.area",
+                    def.kind.as_str()
+                ));
+            }
             let expected = SpellSecondaryTunables {
                 channel: def.secondary.channel,
+                channel_area: def.secondary.channel_area.clone(),
                 channel_projectile: def.secondary.channel_projectile.clone(),
                 ..SpellSecondaryTunables::default()
             };
@@ -2905,9 +3085,13 @@ fn validate_apply_status(
             }
             match polarity {
                 StatusPolarity::Debuff => {
-                    if def.target_audience != TargetAudience::Hostile {
+                    let is_any_target_fulmination = def.kind.as_str() == "FULMINATION"
+                        && status.kind == StatusEffectKind::Fulmination
+                        && def.target_audience == TargetAudience::Any;
+                    if def.target_audience != TargetAudience::Hostile && !is_any_target_fulmination
+                    {
                         return Err(format!(
-                            "{} TARGET DEBUFF must use HOSTILE target_audience",
+                            "{} TARGET DEBUFF must use HOSTILE target_audience (FULMINATION may use ANY)",
                             def.kind.as_str()
                         ));
                     }
@@ -3081,6 +3265,7 @@ mod tests {
                 "INSTANT_BEAM",
                 "ELECTROCUTE",
                 "FROZEN_SPLINTERS",
+                "BLIZZARD",
                 "MAGIC_MISSILE",
                 "RESTORATION",
                 "PROTECTION",
@@ -3096,6 +3281,8 @@ mod tests {
                 "CAUTERIZE",
                 "CELESTIAL_MANTLE",
                 "FLASHFIRE",
+                "IMMOLATION",
+                "COMBUSTION",
                 "FLASH_FREEZE",
                 "DEEPENING_COLD",
                 "FULMINATION",
@@ -3160,6 +3347,44 @@ mod tests {
                 "FAB_DRAGON_BREATH",
             ]
         );
+    }
+
+    #[test]
+    fn ruin_immolation_and_combustion_author_requested_deliveries() {
+        let immolation = spell_definition_by_str("IMMOLATION")
+            .expect("IMMOLATION should derive from the shared catalog");
+        assert_eq!(immolation.behavior, SpellBehavior::Immolation);
+        assert_eq!(immolation.targeting, SpellTargeting::Self_);
+        assert_eq!(immolation.target_audience, TargetAudience::SelfOnly);
+        assert!(!immolation.requires_target);
+        assert_eq!(immolation.cast_time, Duration::ZERO);
+        assert!(!immolation.uses_global_cooldown);
+        let immolation_tunables = immolation
+            .secondary
+            .immolation
+            .as_ref()
+            .expect("IMMOLATION should define toggle tunables");
+        assert_eq!(immolation_tunables.damage_interval, Duration::from_secs(1));
+        assert_eq!(immolation_tunables.stack_interval, Duration::from_secs(3));
+        assert_eq!(immolation_tunables.stack_duration, Duration::from_secs(6));
+        assert_eq!(immolation_tunables.max_stacks, 10);
+        assert_eq!(immolation_tunables.max_health_damage_per_stack, 0.01);
+        assert_eq!(immolation_tunables.damage_amp_per_stack, 0.05);
+        assert_eq!(immolation_tunables.status_stack_group, "IMMOLATION");
+
+        let combustion = spell_definition_by_str("COMBUSTION")
+            .expect("COMBUSTION should derive from the shared catalog");
+        assert_eq!(combustion.behavior, SpellBehavior::Area);
+        assert_eq!(combustion.targeting, SpellTargeting::Self_);
+        assert_eq!(combustion.target_audience, TargetAudience::Hostile);
+        assert_eq!(combustion.damage_type, DamageType::Fire);
+        assert_eq!(combustion.damage, 0);
+        assert_eq!(combustion.radius, 4.6);
+        assert!(combustion
+            .secondary
+            .area
+            .as_ref()
+            .is_some_and(|area| area.consume_caster_burns));
     }
 
     #[test]
@@ -3277,6 +3502,7 @@ mod tests {
             "INSTANT_BEAM",
             "ELECTROCUTE",
             "FROZEN_SPLINTERS",
+            "BLIZZARD",
             "MAGIC_MISSILE",
             "PROTECTION",
             "FROST_NOVA",

@@ -52,6 +52,10 @@ namespace Arena.Presentation
             tm.text           = "...";
 
             var comp = labelGo.AddComponent<NameTag>();
+            // Awake is deferred while the parent hierarchy is inactive. NPC
+            // visuals are configured in that state, so initialize the required
+            // reference explicitly before callers can set the name.
+            comp._textMesh = tm;
 
             // Keep name tags wired for future use, but hide world-space labels while the HUD
             // unit frames carry identity and health presentation.

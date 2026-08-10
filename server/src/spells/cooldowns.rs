@@ -106,6 +106,44 @@ pub(crate) fn clear_actor_cooldowns(ctx: &ReducerContext, actor: Identity) {
     ctx.db.global_cooldown().caster().delete(actor);
 }
 
+/// Advances every active authored ability cooldown without touching the global
+/// cooldown. Preserving each row's original duration keeps client cooldown
+/// fractions stable while moving its completion time earlier.
+pub(crate) fn advance_active_ability_cooldowns(
+    ctx: &ReducerContext,
+    caster: Identity,
+    amount: Duration,
+    now: Timestamp,
+) {
+    if amount.is_zero() {
+        return;
+    }
+
+    let cooldowns: Vec<_> = ctx.db.spell_cooldown().caster().filter(caster).collect();
+    for mut cooldown in cooldowns {
+        let ends_at = cooldown.last_cast_at + Duration::from_millis(cooldown.duration_ms.max(1));
+        if now >= ends_at {
+            continue;
+        }
+        if cooldown_ready_after_advance(ends_at, now, amount) {
+            ctx.db.spell_cooldown().key().delete(cooldown.key);
+            continue;
+        }
+
+        cooldown.last_cast_at = Timestamp::from_micros_since_unix_epoch(
+            cooldown
+                .last_cast_at
+                .to_micros_since_unix_epoch()
+                .saturating_sub(amount.as_micros().min(i64::MAX as u128) as i64),
+        );
+        ctx.db.spell_cooldown().key().update(cooldown);
+    }
+}
+
+fn cooldown_ready_after_advance(ends_at: Timestamp, now: Timestamp, amount: Duration) -> bool {
+    now + amount >= ends_at
+}
+
 pub(crate) fn is_on_global_cooldown(
     ctx: &ReducerContext,
     caster: Identity,
@@ -169,7 +207,7 @@ fn global_cooldown_started_at_matches(gcd: Option<&GlobalCooldown>, started_at: 
 
 #[cfg(test)]
 mod tests {
-    use super::{global_cooldown_started_at_matches, GlobalCooldown};
+    use super::{cooldown_ready_after_advance, global_cooldown_started_at_matches, GlobalCooldown};
     use spacetimedb::{Identity, Timestamp};
     use std::time::Duration;
 
@@ -188,5 +226,20 @@ mod tests {
             started_at + Duration::from_millis(1)
         ));
         assert!(!global_cooldown_started_at_matches(None, started_at));
+    }
+
+    #[test]
+    fn acceleration_finishes_short_remaining_cooldowns_and_keeps_longer_ones_active() {
+        let now = Timestamp::UNIX_EPOCH + Duration::from_secs(10);
+        assert!(cooldown_ready_after_advance(
+            now + Duration::from_millis(900),
+            now,
+            Duration::from_secs(1)
+        ));
+        assert!(!cooldown_ready_after_advance(
+            now + Duration::from_millis(1_001),
+            now,
+            Duration::from_secs(1)
+        ));
     }
 }

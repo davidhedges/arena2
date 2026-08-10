@@ -111,6 +111,11 @@ const SUBTLETY_OPPORTUNIST_ABILITY_ID: &str = "SUBTLETY_OPPORTUNIST";
 const SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID: &str = "SUBTLETY_SURPRISE_ATTACKS";
 const SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID: &str = "SUBTLETY_TACTICAL_ADVANTAGE";
 const RUIN_FLAMING_WEAPON_ABILITY_ID: &str = "RUIN_FLAMING_WEAPON";
+const RUIN_FURNACE_ABILITY_ID: &str = "RUIN_FURNACE";
+const RUIN_ACCELERATION_ABILITY_ID: &str = "RUIN_ACCELERATION";
+const RUIN_QUICKENING_ABILITY_ID: &str = "RUIN_QUICKENING";
+const RUIN_CHAIN_REACTION_ABILITY_ID: &str = "RUIN_CHAIN_REACTION";
+const RUIN_RIME_ABILITY_ID: &str = "RUIN_RIME";
 const RUIN_FRACTURE_ABILITY_ID: &str = "RUIN_FRACTURE";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -277,6 +282,18 @@ struct AbilityGameplayDefinition {
     stealth_attack_stun_ms: u64,
     #[serde(default)]
     melee_fire_on_hit: Option<MeleeFireOnHitDefinition>,
+    #[serde(default)]
+    fire_damage_taken_mana_restore_ratio: f32,
+    #[serde(default)]
+    critical_strike_cooldown_reduction_ms: u64,
+    #[serde(default)]
+    movement_spell_cast_time_reduction: f32,
+    #[serde(default)]
+    movement_spell_cast_time_buff_duration_ms: u64,
+    #[serde(default)]
+    critical_spell_proc_action_id: String,
+    #[serde(default)]
+    frost_spell_debuff_protection: bool,
     #[serde(default)]
     frozen_melee_first_hit_damage_bonus: f32,
     uses_global_cooldown: Option<bool>,
@@ -1222,6 +1239,8 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::BattleTrance,
         StatusEffectKind::TargetedAbilityAvoidance,
         StatusEffectKind::Fulmination,
+        StatusEffectKind::Quickening,
+        StatusEffectKind::Rime,
     ]
     .into_iter()
     .map(|kind| kind.as_str().to_string())
@@ -5424,6 +5443,17 @@ fn validate_ability_catalog() {
         let movement_return = ability.gameplay.movement_return.as_ref();
         let stealth_attack_stun_ms = ability.gameplay.stealth_attack_stun_ms;
         let melee_fire_on_hit = ability.gameplay.melee_fire_on_hit.as_ref();
+        let fire_damage_taken_mana_restore_ratio =
+            ability.gameplay.fire_damage_taken_mana_restore_ratio;
+        let critical_strike_cooldown_reduction_ms =
+            ability.gameplay.critical_strike_cooldown_reduction_ms;
+        let movement_spell_cast_time_reduction =
+            ability.gameplay.movement_spell_cast_time_reduction;
+        let movement_spell_cast_time_buff_duration_ms =
+            ability.gameplay.movement_spell_cast_time_buff_duration_ms;
+        let critical_spell_proc_action_id =
+            normalize_identifier(ability.gameplay.critical_spell_proc_action_id.as_str());
+        let frost_spell_debuff_protection = ability.gameplay.frost_spell_debuff_protection;
         let frozen_melee_first_hit_damage_bonus =
             ability.gameplay.frozen_melee_first_hit_damage_bonus;
         assert!(
@@ -5537,6 +5567,165 @@ fn validate_ability_catalog() {
             assert_eq!(
                 melee_fire_on_hit.burn_dispel_types,
                 vec![StatusDispelType::Magic]
+            );
+        }
+        assert!(
+            fire_damage_taken_mana_restore_ratio.is_finite()
+                && (0.0..=1.0).contains(&fire_damage_taken_mana_restore_ratio),
+            "ability '{ability_id}' must author fire_damage_taken_mana_restore_ratio between 0 and 1"
+        );
+        if fire_damage_taken_mana_restore_ratio > 0.0 {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author fire_damage_taken_mana_restore_ratio for PASSIVE gameplay"
+            );
+        }
+        if ability_id == RUIN_FURNACE_ABILITY_ID {
+            assert_eq!(
+                discipline_id, DISCIPLINE_RUIN,
+                "Furnace must remain a Ruin passive"
+            );
+            assert_eq!(ability_kind, "PASSIVE", "Furnace must remain passive");
+            assert!(
+                ability
+                    .ability_tags
+                    .iter()
+                    .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
+                "Furnace must carry the PASSIVE ability tag"
+            );
+            assert!(
+                (fire_damage_taken_mana_restore_ratio - 1.0).abs() < 0.0001,
+                "Furnace must restore mana equal to confirmed fire damage taken"
+            );
+        }
+        if critical_strike_cooldown_reduction_ms > 0 {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author critical_strike_cooldown_reduction_ms for PASSIVE gameplay"
+            );
+            assert!(
+                critical_strike_cooldown_reduction_ms <= 60_000,
+                "ability '{ability_id}' critical_strike_cooldown_reduction_ms must not exceed 60000"
+            );
+        }
+        if ability_id == RUIN_ACCELERATION_ABILITY_ID {
+            assert_eq!(
+                discipline_id, DISCIPLINE_RUIN,
+                "Acceleration must remain a Ruin passive"
+            );
+            assert_eq!(ability_kind, "PASSIVE", "Acceleration must remain passive");
+            assert!(
+                ability
+                    .ability_tags
+                    .iter()
+                    .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
+                "Acceleration must carry the PASSIVE ability tag"
+            );
+            assert_eq!(
+                critical_strike_cooldown_reduction_ms, 1_000,
+                "Acceleration must advance active ability cooldowns by 1 second"
+            );
+        }
+        assert!(
+            movement_spell_cast_time_reduction.is_finite()
+                && (0.0..1.0).contains(&movement_spell_cast_time_reduction),
+            "ability '{ability_id}' must author movement_spell_cast_time_reduction between 0 inclusive and 1 exclusive"
+        );
+        if movement_spell_cast_time_reduction > 0.0 || movement_spell_cast_time_buff_duration_ms > 0
+        {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author movement spell cast-time tuning for PASSIVE gameplay"
+            );
+            assert!(
+                movement_spell_cast_time_reduction > 0.0
+                    && movement_spell_cast_time_buff_duration_ms > 0,
+                "ability '{ability_id}' must author both movement spell cast-time reduction and buff duration"
+            );
+            assert!(
+                movement_spell_cast_time_buff_duration_ms <= 60_000,
+                "ability '{ability_id}' movement spell cast-time buff duration must not exceed 60000"
+            );
+        }
+        if ability_id == RUIN_QUICKENING_ABILITY_ID {
+            assert_eq!(
+                discipline_id, DISCIPLINE_RUIN,
+                "Quickening must remain a Ruin passive"
+            );
+            assert_eq!(ability_kind, "PASSIVE", "Quickening must remain passive");
+            assert!(
+                ability
+                    .ability_tags
+                    .iter()
+                    .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
+                "Quickening must carry the PASSIVE ability tag"
+            );
+            assert!(
+                (movement_spell_cast_time_reduction - 0.5).abs() < 0.0001,
+                "Quickening must reduce the next non-instant spell's cast time by 50%"
+            );
+            assert_eq!(
+                movement_spell_cast_time_buff_duration_ms, 5_000,
+                "Quickening must last 5 seconds"
+            );
+        }
+        if !critical_spell_proc_action_id.is_empty() {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author critical_spell_proc_action_id for PASSIVE gameplay"
+            );
+            assert!(
+                progression_catalog().abilities.iter().any(|candidate| {
+                    normalize_identifier(candidate.action_id.as_str())
+                        == critical_spell_proc_action_id
+                        && ability_gameplay_kind(candidate) == "SPELL"
+                }),
+                "ability '{ability_id}' critical_spell_proc_action_id must reference an authored spell action"
+            );
+        }
+        if ability_id == RUIN_CHAIN_REACTION_ABILITY_ID {
+            assert_eq!(
+                discipline_id, DISCIPLINE_RUIN,
+                "Chain Reaction must remain a Ruin passive"
+            );
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "Chain Reaction must remain passive"
+            );
+            assert!(
+                ability
+                    .ability_tags
+                    .iter()
+                    .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
+                "Chain Reaction must carry the PASSIVE ability tag"
+            );
+            assert_eq!(
+                critical_spell_proc_action_id, "BOLT",
+                "Chain Reaction must proc the authored Bolt spell"
+            );
+        }
+        if frost_spell_debuff_protection {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author frost_spell_debuff_protection for PASSIVE gameplay"
+            );
+        }
+        if ability_id == RUIN_RIME_ABILITY_ID {
+            assert_eq!(
+                discipline_id, DISCIPLINE_RUIN,
+                "Rime must remain a Ruin passive"
+            );
+            assert_eq!(ability_kind, "PASSIVE", "Rime must remain passive");
+            assert!(
+                ability
+                    .ability_tags
+                    .iter()
+                    .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
+                "Rime must carry the PASSIVE ability tag"
+            );
+            assert!(
+                frost_spell_debuff_protection,
+                "Rime must protect debuffs after frost-spell impacts"
             );
         }
         assert!(
@@ -6578,6 +6767,108 @@ pub(crate) fn ruin_fracture_melee_damage_bonus() -> f32 {
         .unwrap_or(0.0)
 }
 
+pub(crate) fn ruin_furnace_mana_restore_ratio_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> f32 {
+    if !character_has_selected_discipline(ctx, owner, DISCIPLINE_RUIN) {
+        return 0.0;
+    }
+
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == RUIN_FURNACE_ABILITY_ID
+        })
+        .map(|ability| ability.gameplay.fire_damage_taken_mana_restore_ratio)
+        .filter(|ratio| ratio.is_finite())
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0)
+}
+
+pub(crate) fn ruin_acceleration_cooldown_reduction_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Duration {
+    if !character_has_selected_discipline(ctx, owner, DISCIPLINE_RUIN) {
+        return Duration::ZERO;
+    }
+
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == RUIN_ACCELERATION_ABILITY_ID
+        })
+        .map(|ability| {
+            Duration::from_millis(ability.gameplay.critical_strike_cooldown_reduction_ms)
+        })
+        .unwrap_or(Duration::ZERO)
+}
+
+pub(crate) fn ruin_quickening_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<(f32, Duration)> {
+    if !character_has_selected_discipline(ctx, owner, DISCIPLINE_RUIN) {
+        return None;
+    }
+
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == RUIN_QUICKENING_ABILITY_ID
+        })
+        .and_then(|ability| {
+            let reduction = ability.gameplay.movement_spell_cast_time_reduction;
+            let duration_ms = ability.gameplay.movement_spell_cast_time_buff_duration_ms;
+            (reduction.is_finite() && reduction > 0.0 && reduction < 1.0 && duration_ms > 0)
+                .then_some((reduction, Duration::from_millis(duration_ms)))
+        })
+}
+
+pub(crate) fn ruin_chain_reaction_spell_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<String> {
+    if !character_has_selected_discipline(ctx, owner, DISCIPLINE_RUIN) {
+        return None;
+    }
+
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == RUIN_CHAIN_REACTION_ABILITY_ID
+        })
+        .map(|ability| {
+            normalize_identifier(ability.gameplay.critical_spell_proc_action_id.as_str())
+        })
+        .filter(|action_id| !action_id.is_empty())
+}
+
+pub(crate) fn ruin_rime_protects_debuffs_for_owner(ctx: &ReducerContext, owner: Identity) -> bool {
+    character_has_selected_discipline(ctx, owner, DISCIPLINE_RUIN)
+        && progression_catalog().abilities.iter().any(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == RUIN_RIME_ABILITY_ID
+                && ability.gameplay.frost_spell_debuff_protection
+        })
+}
+
+pub(crate) fn spell_ability_id_for_action_id(action_id: &str) -> Option<String> {
+    let normalized_action_id = normalize_identifier(action_id);
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            ability_gameplay_kind(ability) == "SPELL"
+                && normalize_identifier(ability.action_id.as_str()) == normalized_action_id
+        })
+        .map(|ability| normalize_identifier(ability.ability_id.as_str()))
+}
+
 fn canonical_action_bar_slot_id(value: &str) -> String {
     match normalize_identifier(value).as_str() {
         "BOTTOM_01" => "SLOT_0_0".to_string(),
@@ -6616,7 +6907,7 @@ mod tests {
     use crate::melee::{auto_attack_reference_for_profile, profile_supports_action_reference};
     use crate::progression::melee_timed_movement_for_ability_id;
     use crate::resources::RESOURCE_KIND_MANA;
-    use crate::spells::spell_definition_by_str;
+    use crate::spells::{spell_definition_by_str, SpellTargeting};
 
     use super::{
         ability_gameplay_kind, ability_is_compatible_with_slot, action_presentation_key,
@@ -8888,6 +9179,270 @@ mod tests {
     }
 
     #[test]
+    fn ruin_furnace_authors_fire_damage_to_mana_passive() {
+        let catalog = progression_catalog();
+        let furnace = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "RUIN_FURNACE")
+            .expect("Furnace ability should be authored");
+        assert_eq!(
+            normalize_identifier(furnace.discipline_id.as_str()),
+            DISCIPLINE_RUIN
+        );
+        assert!(furnace.combat_profile_id.is_empty());
+        assert_eq!(furnace.action_id, "FURNACE");
+        assert_eq!(ability_gameplay_kind(furnace), "PASSIVE");
+        assert!(furnace
+            .ability_tags
+            .iter()
+            .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+        assert!((furnace.gameplay.fire_damage_taken_mana_restore_ratio - 1.0).abs() < 0.0001);
+
+        let presentation = catalog
+            .action_presentations
+            .iter()
+            .find(|presentation| presentation.presentation_id == "RUIN_FURNACE")
+            .expect("Furnace should have ability presentation text");
+        assert_eq!(presentation.display_name, "Furnace");
+        assert_eq!(
+            presentation.description,
+            "Passive: fire damage taken restores an equal amount of mana."
+        );
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| assignment.ability_id == "RUIN_FURNACE"));
+    }
+
+    #[test]
+    fn ruin_lightning_passives_author_acceleration_quickening_and_chain_reaction() {
+        let catalog = progression_catalog();
+        let acceleration = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "RUIN_ACCELERATION")
+            .expect("Acceleration ability should be authored");
+        assert_eq!(acceleration.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(ability_gameplay_kind(acceleration), "PASSIVE");
+        assert_eq!(
+            acceleration.gameplay.critical_strike_cooldown_reduction_ms,
+            1_000
+        );
+
+        let quickening = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "RUIN_QUICKENING")
+            .expect("Quickening ability should be authored");
+        assert_eq!(quickening.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(ability_gameplay_kind(quickening), "PASSIVE");
+        assert!((quickening.gameplay.movement_spell_cast_time_reduction - 0.5).abs() < 0.0001);
+        assert_eq!(
+            quickening
+                .gameplay
+                .movement_spell_cast_time_buff_duration_ms,
+            5_000
+        );
+
+        let chain_reaction = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "RUIN_CHAIN_REACTION")
+            .expect("Chain Reaction ability should be authored");
+        assert_eq!(chain_reaction.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(ability_gameplay_kind(chain_reaction), "PASSIVE");
+        assert_eq!(
+            normalize_identifier(
+                chain_reaction
+                    .gameplay
+                    .critical_spell_proc_action_id
+                    .as_str()
+            ),
+            "BOLT"
+        );
+
+        for presentation_id in [
+            "RUIN_ACCELERATION",
+            "RUIN_QUICKENING",
+            "RUIN_CHAIN_REACTION",
+        ] {
+            assert!(catalog
+                .action_presentations
+                .iter()
+                .any(|presentation| presentation.presentation_id == presentation_id));
+            assert!(!catalog
+                .combat_profile_action_bar_defaults
+                .iter()
+                .any(|assignment| assignment.ability_id == presentation_id));
+        }
+        assert!(authored_status_presentation_ids(catalog).contains("QUICKENING"));
+    }
+
+    #[test]
+    fn ruin_rime_authors_frost_debuff_protection_meta_status() {
+        let catalog = progression_catalog();
+        let rime = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "RUIN_RIME")
+            .expect("Rime ability should be authored");
+        assert_eq!(rime.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(rime.action_id, "RIME");
+        assert_eq!(ability_gameplay_kind(rime), "PASSIVE");
+        assert!(rime.gameplay.frost_spell_debuff_protection);
+        assert!(rime
+            .ability_tags
+            .iter()
+            .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| assignment.ability_id == "RUIN_RIME"));
+
+        let ability_presentation = catalog
+            .action_presentations
+            .iter()
+            .find(|presentation| {
+                presentation.presentation_kind == "ABILITY"
+                    && presentation.presentation_id == "RUIN_RIME"
+            })
+            .expect("Rime should have ability presentation text");
+        assert_eq!(ability_presentation.display_name, "Rime");
+        assert!(authored_status_presentation_ids(catalog).contains("RIME"));
+    }
+
+    #[test]
+    fn ruin_blizzard_authors_point_area_channel_and_persistent_ice_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_BLIZZARD")
+            .expect("Blizzard ability should be authored");
+        assert_eq!(ability.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(ability.action_id, "BLIZZARD");
+        assert_eq!(ability_gameplay_kind(ability), "SPELL");
+
+        let definition = spell_definition_by_str("BLIZZARD")
+            .expect("Blizzard should derive a runtime spell definition");
+        assert_eq!(definition.behavior.as_str(), "CHANNEL");
+        assert_eq!(definition.targeting, SpellTargeting::Point);
+        assert!(!definition.requires_target);
+        assert_eq!(definition.damage_type, DamageType::Cold);
+        assert!((definition.radius - 4.0).abs() < 0.0001);
+
+        let area = definition
+            .secondary
+            .channel_area
+            .as_ref()
+            .expect("Blizzard should author channel-area tunables");
+        let slow = area
+            .impact_effects
+            .iter()
+            .find_map(|effect| effect.as_status())
+            .expect("Blizzard should apply an area slow");
+        assert_eq!(slow.payload(), StatusPayload::Slow { slow_pct: 0.5 });
+
+        let field_cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_BLIZZARD"
+                    && normalize_identifier(cue.vfx_id.as_str()) == "VFX_BLIZZARD_AREA_01"
+            })
+            .expect("Blizzard should author its icicle-rain field cue");
+        assert_eq!(
+            normalize_identifier(field_cue.trigger.as_str()),
+            "AREA_IMPACT"
+        );
+        assert_eq!(
+            normalize_identifier(field_cue.anchor.as_str()),
+            "AREA_ORIGIN"
+        );
+        assert_eq!(
+            normalize_identifier(field_cue.lifecycle.as_str()),
+            "UNTIL_CAST_END"
+        );
+    }
+
+    #[test]
+    fn ruin_immolation_and_combustion_author_shared_stack_and_detonation_contracts() {
+        let catalog = progression_catalog();
+        let immolation = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_IMMOLATION")
+            .expect("Immolation ability should be authored");
+        assert_eq!(immolation.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(immolation.action_id, "IMMOLATION");
+        assert_eq!(ability_gameplay_kind(immolation), "SPELL");
+        assert_eq!(ability_delivery_kind(immolation), "IMMOLATION");
+        assert_eq!(immolation.gameplay.cast_time_ms, Some(0));
+        assert_eq!(immolation.gameplay.targeting, "SELF");
+        let immolation_delivery = immolation
+            .gameplay
+            .delivery
+            .as_ref()
+            .expect("Immolation should define delivery tuning");
+        assert_eq!(
+            immolation_delivery
+                .get("damage_interval_ms")
+                .and_then(serde_json::Value::as_u64),
+            Some(1_000)
+        );
+        assert_eq!(
+            immolation_delivery
+                .get("stack_interval_ms")
+                .and_then(serde_json::Value::as_u64),
+            Some(3_000)
+        );
+        assert_eq!(
+            immolation_delivery
+                .get("stack_duration_ms")
+                .and_then(serde_json::Value::as_u64),
+            Some(6_000)
+        );
+        assert_eq!(
+            immolation_delivery
+                .get("max_stacks")
+                .and_then(serde_json::Value::as_u64),
+            Some(10)
+        );
+        assert!(authored_status_presentation_ids(catalog).contains("IMMOLATION"));
+
+        let combustion = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_COMBUSTION")
+            .expect("Combustion ability should be authored");
+        assert_eq!(combustion.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(combustion.action_id, "COMBUSTION");
+        assert_eq!(ability_gameplay_kind(combustion), "SPELL");
+        assert_eq!(ability_delivery_kind(combustion), "AREA");
+        assert_eq!(combustion.gameplay.cast_time_ms, Some(0));
+        assert_eq!(combustion.gameplay.targeting, "SELF");
+        assert_eq!(combustion.gameplay.target_audience, "HOSTILE");
+        let combustion_delivery = combustion
+            .gameplay
+            .delivery
+            .as_ref()
+            .expect("Combustion should define delivery tuning");
+        assert_eq!(
+            combustion_delivery
+                .get("consume_caster_burns")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            combustion_delivery
+                .get("radius")
+                .and_then(serde_json::Value::as_f64),
+            Some(4.6)
+        );
+    }
+
+    #[test]
     fn ruin_fracture_flash_freeze_and_deepening_cold_author_shatter_combo() {
         let catalog = progression_catalog();
         let fracture = catalog
@@ -9038,7 +9593,7 @@ mod tests {
     }
 
     #[test]
-    fn ruin_fulmination_authors_melee_arc_debuff_and_tunables() {
+    fn ruin_fulmination_authors_any_target_melee_arc_debuff_and_tunables() {
         let catalog = progression_catalog();
         let fulmination = catalog
             .abilities
@@ -9054,6 +9609,10 @@ mod tests {
         assert_eq!(fulmination.gameplay.cast_time_ms, Some(0));
         assert_eq!(fulmination.gameplay.cooldown_ms, Some(12_000));
         assert_eq!(fulmination.gameplay.resource_cost, Some(20.0));
+        assert_eq!(
+            normalize_identifier(fulmination.gameplay.target_audience.as_str()),
+            "ANY"
+        );
 
         let definition = spell_definition_by_str("FULMINATION")
             .expect("Fulmination should derive a spell definition");
@@ -9065,6 +9624,7 @@ mod tests {
         assert_eq!(definition.duration, 8.0);
         assert_eq!(definition.max_distance, 30.0);
         assert_eq!(definition.damage_type, DamageType::Lightning);
+        assert_eq!(definition.target_audience.as_str(), "ANY");
         assert_eq!(
             definition.status_stack_group.as_deref(),
             Some("FULMINATION")
@@ -11747,6 +12307,7 @@ mod tests {
             ("SPELL_ICICLE", "ICICLE", "COLD"),
             ("SPELL_ELECTROCUTE", "ELECTROCUTE", "LIGHTNING"),
             ("SPELL_FROZEN_SPLINTERS", "FROZEN_SPLINTERS", "COLD"),
+            ("SPELL_BLIZZARD", "BLIZZARD", "COLD"),
             ("SPELL_MAGIC_MISSILE", "MAGIC_MISSILE", "ARCANE"),
             ("SPELL_BOOMERANG_ORB", "BOOMERANG_ORB", "SHADOW"),
             ("SPELL_LIGHTNING", "LIGHTNING", "LIGHTNING"),
@@ -11867,6 +12428,7 @@ mod tests {
                     "SPELL_ICE_SPIKES",
                     "SPELL_ELECTROCUTE",
                     "SPELL_FROZEN_SPLINTERS",
+                    "SPELL_BLIZZARD",
                     "SPELL_FROST_NOVA",
                     "SPELL_GLACIAL_SPIKE",
                     "SPELL_FROZEN_GRASP",

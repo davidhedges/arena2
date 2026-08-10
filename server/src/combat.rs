@@ -25,9 +25,11 @@ use crate::player_state::PlayerState;
 use crate::practice::resolve_respawn_pose;
 use crate::progression::{
     character_has_selected_discipline, combat_rule_value, derived_combat_profile_id_for_owner,
-    ruin_fracture_melee_damage_bonus, subtlety_behind_target_damage_bonus,
-    subtlety_disabled_target_damage_bonus, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD,
-    DISCIPLINE_RUIN, DISCIPLINE_SUBTLETY,
+    ruin_acceleration_cooldown_reduction_for_owner, ruin_chain_reaction_spell_for_owner,
+    ruin_fracture_melee_damage_bonus, ruin_furnace_mana_restore_ratio_for_owner,
+    ruin_quickening_for_owner, ruin_rime_protects_debuffs_for_owner,
+    subtlety_behind_target_damage_bonus, subtlety_disabled_target_damage_bonus,
+    COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD, DISCIPLINE_RUIN, DISCIPLINE_SUBTLETY,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
@@ -36,13 +38,14 @@ use crate::resources::{
     current_primary_resource_amount_for_kind, grant_primary_resource_amount,
     grant_primary_resource_amount_for_kind, grant_primary_resource_for_damage_dealt,
     grant_primary_resource_for_damage_taken, pay_action_resource_cost,
-    spend_primary_resource_amount_for_kind,
+    spend_primary_resource_amount_for_kind, RESOURCE_KIND_MANA,
 };
 use crate::spells::{
-    bake_linear_special_movement, begin_special_movement_with_facing_policy,
-    fizzle_active_cast_for_interrupt, horizontal_movement_duration_ms,
-    is_externally_imposed_movement_kind, resolved_primary_resource_cost_for_amount,
-    spell_definition_by_str, SpellBehavior, SpellVec3, KNOCKBACK_MOVEMENT_KIND,
+    advance_active_ability_cooldowns, bake_linear_special_movement,
+    begin_special_movement_with_facing_policy, fizzle_active_cast_for_interrupt,
+    horizontal_movement_duration_ms, is_externally_imposed_movement_kind,
+    resolved_primary_resource_cost_for_amount, spell_definition_by_str,
+    ImmolationSecondaryTunables, SpellBehavior, SpellVec3, KNOCKBACK_MOVEMENT_KIND,
     SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_FACING_FACE_START,
     STAGGER_SHOVE_MOVEMENT_KIND,
 };
@@ -147,8 +150,14 @@ pub(crate) const DAMAGE_SOURCE_KIND_PROJECTILE: &str = "PROJECTILE";
 pub(crate) const DAMAGE_SOURCE_KIND_PERIODIC: &str = "PERIODIC";
 pub(crate) const DAMAGE_SOURCE_KIND_TRAP: &str = "TRAP";
 const DAMAGE_SOURCE_KIND_FULMINATION_ARC: &str = "FULMINATION_ARC";
+const CHAIN_REACTION_ACTION_PREFIX: &str = "chain_reaction:";
+const QUICKENING_STATUS_GROUP: &str = "QUICKENING";
+const QUICKENING_SPELL_ID: &str = "RUIN_QUICKENING";
+const RIME_STATUS_GROUP: &str = "RIME";
+const RIME_SPELL_ID: &str = "RUIN_RIME";
 const FULMINATION_SPELL_ID: &str = "FULMINATION";
 const FULMINATION_ABILITY_ID: &str = "SPELL_FULMINATION";
+const DAMAGE_SOURCE_KIND_IMMOLATION: &str = "IMMOLATION";
 const DEFAULT_COMBAT_ENGAGEMENT_DURATION: Duration = Duration::from_secs(5);
 const COMBAT_REASON_DAMAGE: &str = "DAMAGE";
 const COMBAT_REASON_DEBUFF: &str = "DEBUFF";
@@ -1581,6 +1590,68 @@ pub(crate) fn active_emanation_for_owner(
         .find(active_radial_effect_key(owner, SpellBehavior::Emanation))
 }
 
+pub(crate) fn active_immolation_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<ActiveRadialEffect> {
+    ctx.db
+        .active_radial_effect()
+        .key()
+        .find(active_radial_effect_key(owner, SpellBehavior::Immolation))
+}
+
+pub(crate) fn toggle_active_immolation(
+    ctx: &ReducerContext,
+    owner: Identity,
+    spell_id: &str,
+    ability_id: &str,
+    immolation: &ImmolationSecondaryTunables,
+    now: Timestamp,
+) {
+    let key = active_radial_effect_key(owner, SpellBehavior::Immolation);
+    let normalized_spell_id = spell_id.trim().to_ascii_uppercase();
+    if let Some(mut existing) = ctx.db.active_radial_effect().key().find(key.clone()) {
+        if existing.spell_id == normalized_spell_id && !existing.ability_id.trim().is_empty() {
+            existing.ability_id.clear();
+            ctx.db.active_radial_effect().key().update(existing);
+            return;
+        }
+        if existing.spell_id == normalized_spell_id {
+            let stacks = immolation_status(ctx, owner, immolation)
+                .map(|effect| effect.stacks)
+                .unwrap_or(1);
+            existing.ability_id = ability_id.trim().to_ascii_uppercase();
+            existing.activated_at = now;
+            ctx.db.active_radial_effect().key().update(existing);
+            set_immolation_status_stacks(
+                ctx,
+                owner,
+                normalized_spell_id.as_str(),
+                immolation,
+                stacks,
+                now,
+            );
+            return;
+        }
+        clear_immolation(ctx, &existing);
+    }
+
+    let row = ActiveRadialEffect {
+        key: key.clone(),
+        owner,
+        spell_id: normalized_spell_id.clone(),
+        ability_id: ability_id.trim().to_ascii_uppercase(),
+        activated_at: now,
+        next_pulse_at: now + immolation.damage_interval.max(Duration::from_millis(1)),
+    };
+    if ctx.db.active_radial_effect().key().find(key).is_some() {
+        ctx.db.active_radial_effect().key().update(row);
+    } else {
+        ctx.db.active_radial_effect().insert(row);
+    }
+    set_immolation_status_stacks(ctx, owner, normalized_spell_id.as_str(), immolation, 1, now);
+}
+
 pub(crate) fn toggle_active_emanation(
     ctx: &ReducerContext,
     owner: Identity,
@@ -1731,6 +1802,241 @@ pub fn tick_emanations(ctx: &ReducerContext, now: Timestamp) {
         }
         active.next_pulse_at = now + emanation.pulse_interval.max(Duration::from_millis(1));
         ctx.db.active_radial_effect().key().update(active);
+    }
+}
+
+pub fn tick_immolations(ctx: &ReducerContext, now: Timestamp) {
+    let active_rows: Vec<_> = ctx
+        .db
+        .active_radial_effect()
+        .iter()
+        .filter(|row| radial_effect_behavior(ctx, row) == Some(SpellBehavior::Immolation))
+        .collect();
+
+    for mut active in active_rows {
+        let Some(state) = ctx.db.player_state().player_id().find(active.owner) else {
+            clear_immolation(ctx, &active);
+            continue;
+        };
+        if !state.alive {
+            clear_immolation(ctx, &active);
+            continue;
+        }
+        let Some(definition) = spell_definition_by_str(active.spell_id.as_str()) else {
+            clear_immolation(ctx, &active);
+            continue;
+        };
+        let Some(immolation) = definition.secondary.immolation.as_ref() else {
+            clear_immolation(ctx, &active);
+            continue;
+        };
+        let Some(mut status) = immolation_status(ctx, active.owner, immolation) else {
+            clear_immolation(ctx, &active);
+            continue;
+        };
+
+        let damage_interval = immolation.damage_interval.max(Duration::from_millis(1));
+        let mut damage = 0_i32;
+        while active.next_pulse_at <= now && active.next_pulse_at <= status.expires_at {
+            damage = damage.saturating_add(immolation_damage_for_stacks(
+                state.max_hp,
+                immolation.max_health_damage_per_stack,
+                status.stacks,
+            ));
+            active.next_pulse_at += damage_interval;
+        }
+        if damage > 0 {
+            queue_effects(
+                ctx,
+                vec![EffectPacket::Damage {
+                    amount: damage,
+                    damage_type: DamageType::Fire,
+                    source: Identity::ZERO,
+                    target: active.owner,
+                    spell_id: active.spell_id.clone(),
+                    delivery: DamageDelivery::Periodic,
+                    source_kind: DAMAGE_SOURCE_KIND_IMMOLATION.to_string(),
+                    direct_action_key: String::new(),
+                }],
+            );
+        }
+        if !active.ability_id.trim().is_empty() {
+            let stack_interval = immolation.stack_interval.max(Duration::from_millis(1));
+            let next_stack_at = active.activated_at + stack_interval;
+            let gained = due_interval_count(now, next_stack_at, stack_interval);
+            if gained > 0 {
+                let stacks = status
+                    .stacks
+                    .saturating_add(gained)
+                    .min(immolation.max_stacks.max(1));
+                set_immolation_status_stacks(
+                    ctx,
+                    active.owner,
+                    active.spell_id.as_str(),
+                    immolation,
+                    stacks,
+                    now,
+                );
+                active.activated_at =
+                    advance_timestamp_by_intervals(active.activated_at, stack_interval, gained);
+                status = immolation_status(ctx, active.owner, immolation)
+                    .expect("refreshing Immolation must preserve its status row");
+            }
+        }
+        if now >= status.expires_at && active.next_pulse_at > status.expires_at {
+            clear_immolation(ctx, &active);
+            continue;
+        }
+        ctx.db.active_radial_effect().key().update(active);
+    }
+}
+
+pub(crate) fn consume_active_immolation_damage(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) -> i32 {
+    let Some(active) = active_immolation_for_owner(ctx, owner) else {
+        return 0;
+    };
+    let damage = spell_definition_by_str(active.spell_id.as_str())
+        .and_then(|definition| definition.secondary.immolation.as_ref())
+        .and_then(|immolation| {
+            let max_hp = ctx.db.player_state().player_id().find(owner)?.max_hp;
+            let status = immolation_status(ctx, owner, immolation)?;
+            let tick_count = immolation_remaining_tick_count(
+                active.next_pulse_at,
+                status.expires_at,
+                immolation.damage_interval,
+                now,
+            );
+            Some(
+                immolation_damage_for_stacks(
+                    max_hp,
+                    immolation.max_health_damage_per_stack,
+                    status.stacks,
+                )
+                .saturating_mul(tick_count.min(i32::MAX as u32) as i32),
+            )
+        })
+        .unwrap_or(0);
+    clear_immolation(ctx, &active);
+    damage
+}
+
+fn immolation_remaining_tick_count(
+    next_pulse_at: Timestamp,
+    expires_at: Timestamp,
+    damage_interval: Duration,
+    now: Timestamp,
+) -> u32 {
+    if now > expires_at || next_pulse_at > expires_at {
+        return 0;
+    }
+    let interval_micros = damage_interval.as_micros().max(1);
+    let remaining_micros = i128::from(timestamp_to_micros(expires_at))
+        .saturating_sub(i128::from(timestamp_to_micros(next_pulse_at)))
+        .max(0) as u128;
+    1_u32.saturating_add((remaining_micros / interval_micros).min(u128::from(u32::MAX - 1)) as u32)
+}
+
+fn immolation_damage_for_stacks(max_hp: i32, max_health_damage_per_stack: f32, stacks: u32) -> i32 {
+    if max_hp <= 0 || max_health_damage_per_stack <= 0.0 || stacks == 0 {
+        return 0;
+    }
+    ((max_hp as f32) * max_health_damage_per_stack * stacks as f32)
+        .round()
+        .clamp(1.0, i32::MAX as f32) as i32
+}
+
+fn set_immolation_status_stacks(
+    ctx: &ReducerContext,
+    owner: Identity,
+    spell_id: &str,
+    immolation: &ImmolationSecondaryTunables,
+    stacks: u32,
+    now: Timestamp,
+) {
+    let stacks = stacks.min(immolation.max_stacks).max(1);
+    let payload = StatusPayload::DamageAmp {
+        modifier_scalar: immolation.damage_amp_per_stack * stacks as f32,
+    };
+    let expires_at = now + immolation.stack_duration.max(Duration::from_millis(1));
+    if let Some(mut existing) = immolation_status(ctx, owner, immolation) {
+        apply_status_update(
+            &mut existing,
+            owner,
+            spell_id,
+            StatusPolarity::Buff,
+            StackPolicy::Refresh,
+            payload,
+            now,
+            expires_at,
+            immolation.max_stacks,
+            Some(stacks),
+            String::new(),
+        );
+        ctx.db.status_effect().status_id().update(existing);
+    } else {
+        let mut effect = new_status_effect(
+            owner,
+            owner,
+            StatusPolarity::Buff,
+            immolation.status_stack_group.as_str(),
+            immolation.max_stacks,
+            StackPolicy::Refresh,
+            spell_id,
+            payload,
+            now,
+            expires_at,
+            String::new(),
+        );
+        effect.stacks = stacks;
+        ctx.db.status_effect().insert(effect);
+    }
+}
+
+fn immolation_status(
+    ctx: &ReducerContext,
+    owner: Identity,
+    immolation: &ImmolationSecondaryTunables,
+) -> Option<StatusEffect> {
+    let mut matches: Vec<_> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(owner)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::DamageAmp.as_str()
+                && effect.stack_group == immolation.status_stack_group
+        })
+        .collect();
+    matches.sort_by_key(|effect| effect.status_id);
+    matches.into_iter().next()
+}
+
+fn clear_immolation(ctx: &ReducerContext, active: &ActiveRadialEffect) {
+    ctx.db
+        .active_radial_effect()
+        .key()
+        .delete(active.key.clone());
+    clear_immolation_status(ctx, active.owner, active.spell_id.as_str());
+}
+
+fn clear_immolation_status(ctx: &ReducerContext, owner: Identity, spell_id: &str) {
+    let status_ids: Vec<_> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(owner)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::DamageAmp.as_str()
+                && effect.spell_id.eq_ignore_ascii_case(spell_id)
+        })
+        .map(|effect| effect.status_id)
+        .collect();
+    for status_id in status_ids {
+        ctx.db.status_effect().status_id().delete(status_id);
     }
 }
 
@@ -2392,6 +2698,8 @@ pub enum StatusEffectKind {
     Disarm,
     Gouge,
     Fulmination,
+    Quickening,
+    Rime,
 }
 
 impl StatusEffectKind {
@@ -2434,6 +2742,8 @@ impl StatusEffectKind {
             Self::Disarm => "DISARM",
             Self::Gouge => "GOUGE",
             Self::Fulmination => "FULMINATION",
+            Self::Quickening => "QUICKENING",
+            Self::Rime => "RIME",
         }
     }
 
@@ -2476,6 +2786,8 @@ impl StatusEffectKind {
             "DISARM" => Some(Self::Disarm),
             "GOUGE" => Some(Self::Gouge),
             "FULMINATION" => Some(Self::Fulmination),
+            "QUICKENING" => Some(Self::Quickening),
+            "RIME" => Some(Self::Rime),
             _ => None,
         }
     }
@@ -2558,6 +2870,8 @@ pub enum StatusPayload {
     Disarm,
     Gouge,
     Fulmination,
+    Quickening,
+    Rime,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2695,6 +3009,8 @@ impl AuthoredStatusPayload {
             StatusEffectKind::Disarm => StatusPayload::Disarm,
             StatusEffectKind::Gouge => StatusPayload::Gouge,
             StatusEffectKind::Fulmination => StatusPayload::Fulmination,
+            StatusEffectKind::Quickening => StatusPayload::Quickening,
+            StatusEffectKind::Rime => StatusPayload::Rime,
         }
     }
 
@@ -2803,7 +3119,9 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::BladeTwisting
             | StatusEffectKind::Disarm
             | StatusEffectKind::Gouge
-            | StatusEffectKind::Fulmination => {
+            | StatusEffectKind::Fulmination
+            | StatusEffectKind::Quickening
+            | StatusEffectKind::Rime => {
                 if !slow_is_default
                     || !dot_is_default
                     || !hot_is_default
@@ -2909,6 +3227,8 @@ impl StatusPayload {
             Self::Disarm => StatusEffectKind::Disarm,
             Self::Gouge => StatusEffectKind::Gouge,
             Self::Fulmination => StatusEffectKind::Fulmination,
+            Self::Quickening => StatusEffectKind::Quickening,
+            Self::Rime => StatusEffectKind::Rime,
         }
     }
 
@@ -2933,7 +3253,9 @@ impl StatusPayload {
             | Self::BladeTwisting
             | Self::Disarm
             | Self::Gouge
-            | Self::Fulmination => StatusEffectColumns {
+            | Self::Fulmination
+            | Self::Quickening
+            | Self::Rime => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
@@ -3150,6 +3472,8 @@ impl StatusPayload {
             StatusEffectKind::Disarm => Self::Disarm,
             StatusEffectKind::Gouge => Self::Gouge,
             StatusEffectKind::Fulmination => Self::Fulmination,
+            StatusEffectKind::Quickening => Self::Quickening,
+            StatusEffectKind::Rime => Self::Rime,
         }
     }
 
@@ -3174,7 +3498,9 @@ impl StatusPayload {
             | Self::BladeTwisting
             | Self::Disarm
             | Self::Gouge
-            | Self::Fulmination => false,
+            | Self::Fulmination
+            | Self::Quickening
+            | Self::Rime => false,
             Self::Slow { slow_pct } => !(MIN_SLOW_PCT..=0.95).contains(&slow_pct),
             Self::MoveSpeed { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0
@@ -3244,7 +3570,9 @@ impl StatusPayload {
             | Self::BladeTwisting
             | Self::Disarm
             | Self::Gouge
-            | Self::Fulmination => Ok(()),
+            | Self::Fulmination
+            | Self::Quickening
+            | Self::Rime => Ok(()),
             Self::Slow { slow_pct } => {
                 if !(MIN_SLOW_PCT..=0.95).contains(&slow_pct) {
                     return Err(format!("{subject} {path}.slow_pct must be > 0 and <= 0.95"));
@@ -3377,7 +3705,9 @@ impl StatusPayload {
             | Self::BladeTwisting
             | Self::Disarm
             | Self::Gouge
-            | Self::Fulmination => true,
+            | Self::Fulmination
+            | Self::Quickening
+            | Self::Rime => true,
             Self::Slow { slow_pct } => slow_pct > existing.slow_pct,
             Self::MoveSpeed { modifier_scalar } => {
                 modifier_scalar > existing.modifier_scalar.max(0.0)
@@ -3518,6 +3848,7 @@ pub(crate) fn status_matches_removal_filter(
         polarity,
         dispel_types,
         status_is_projected_by_active_radial_effect(ctx, effect),
+        status_removal_is_blocked_by_rime(ctx, effect, ctx.timestamp),
     )
 }
 
@@ -3527,8 +3858,10 @@ fn status_matches_removal_filter_values(
     polarity: Option<StatusPolarity>,
     filter_dispel_types: &[StatusDispelType],
     is_projected_by_active_radial_effect: bool,
+    is_protected_by_rime: bool,
 ) -> bool {
     if is_projected_by_active_radial_effect
+        || is_protected_by_rime
         || polarity.is_some_and(|polarity| effect_polarity != polarity.as_str())
     {
         return false;
@@ -4174,6 +4507,7 @@ impl DuePendingEffect {
             Self::RemoveStatus(row) => {
                 apply_pending_remove_status_fields(
                     ctx,
+                    now,
                     row.target,
                     row.status_kind.as_str(),
                     row.stack_group.as_str(),
@@ -4407,6 +4741,7 @@ fn apply_pending_status_fields(
 
 fn apply_pending_remove_status_fields(
     ctx: &ReducerContext,
+    now: Timestamp,
     target: Identity,
     status_kind: &str,
     stack_group: &str,
@@ -4414,11 +4749,7 @@ fn apply_pending_remove_status_fields(
     let Some(kind) = StatusEffectKind::from_wire(status_kind) else {
         return;
     };
-    if stack_group.is_empty() {
-        remove_status_kind(ctx, target, kind);
-        return;
-    }
-    remove_status_group(ctx, target, kind, stack_group);
+    remove_status_by_ability(ctx, target, kind, stack_group, now);
 }
 
 fn apply_damage(
@@ -4435,9 +4766,9 @@ fn apply_damage(
         return false;
     }
 
-    // Death handling clears status rows, so retain whether this landed melee
-    // hit was allowed to proc Fulmination before mutating the target.
-    let fulmination_active = target_has_active_fulmination(ctx, hit, ctx.timestamp);
+    // Death handling clears status rows, so retain the Fulmination owner before
+    // mutating the target. The owner defines which nearby actors are enemies.
+    let fulmination_source = active_fulmination_source(ctx, hit, ctx.timestamp);
 
     if let Some(state) = ctx.db.player_state().player_id().find(target) {
         return apply_damage_to_player_state(
@@ -4445,7 +4776,7 @@ fn apply_damage(
             hit,
             temporary_modifiers,
             state,
-            fulmination_active,
+            fulmination_source,
         );
     }
 
@@ -4453,7 +4784,7 @@ fn apply_damage(
         return false;
     };
 
-    apply_damage_to_npc_state(ctx, hit, temporary_modifiers, npc_state, fulmination_active)
+    apply_damage_to_npc_state(ctx, hit, temporary_modifiers, npc_state, fulmination_source)
 }
 
 fn apply_damage_to_player_state(
@@ -4461,7 +4792,7 @@ fn apply_damage_to_player_state(
     hit: &PendingHit,
     temporary_modifiers: &TemporaryCombatModifiers,
     mut state: PlayerState,
-    fulmination_active: bool,
+    fulmination_source: Option<Identity>,
 ) -> bool {
     let source = hit.source;
     let target = hit.target;
@@ -4488,6 +4819,18 @@ fn apply_damage_to_player_state(
     resolved.final_amount = hp_damage;
     state.hp -= hp_damage;
     grant_primary_resource_for_damage_taken(ctx, target, hp_damage, ctx.timestamp);
+    let furnace_mana = furnace_mana_restore_amount(
+        hp_damage,
+        DamageType::from_wire(hit.damage_type.as_str()),
+        ruin_furnace_mana_restore_ratio_for_owner(ctx, target),
+    );
+    grant_primary_resource_amount_for_kind(
+        ctx,
+        target,
+        RESOURCE_KIND_MANA,
+        furnace_mana,
+        ctx.timestamp,
+    );
     let (battle_trance_hp, _) = battle_trance_hp_after_damage(
         state.hp,
         has_active_status(ctx, target, StatusEffectKind::BattleTrance, ctx.timestamp),
@@ -4506,7 +4849,11 @@ fn apply_damage_to_player_state(
         );
     }
 
+    let target_survived = state.alive;
     ctx.db.player_state().player_id().update(state);
+    if target_survived {
+        arm_rime_after_frost_spell_hit(ctx, hit, ctx.timestamp);
+    }
     if player_was_defeated {
         crate::survival::end_survival_run_for_player_death(ctx, target);
     }
@@ -4519,7 +4866,7 @@ fn apply_damage_to_player_state(
     queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
     queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
     queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
-    queue_fulmination_arc_if_applicable(ctx, hit, hp_damage, fulmination_active);
+    queue_fulmination_arc_if_applicable(ctx, hit, hp_damage, fulmination_source);
     if hp_damage > 0 && is_direct_damage {
         let action_key = if hit.direct_action_key.trim().is_empty() {
             hit.spell_id.as_str()
@@ -4541,12 +4888,251 @@ fn battle_trance_hp_after_damage(hp_after_damage: i32, battle_trance_active: boo
     }
 }
 
+fn furnace_mana_restore_amount(
+    confirmed_hp_damage: i32,
+    damage_type: DamageType,
+    restore_ratio: f32,
+) -> f32 {
+    if confirmed_hp_damage <= 0
+        || damage_type != DamageType::Fire
+        || !restore_ratio.is_finite()
+        || restore_ratio <= 0.0
+    {
+        return 0.0;
+    }
+
+    confirmed_hp_damage as f32 * restore_ratio
+}
+
+pub(crate) fn rime_effect_packet_for_frost_spell(
+    ctx: &ReducerContext,
+    source: Identity,
+    target: Identity,
+    lifetime: Duration,
+) -> Option<EffectPacket> {
+    if lifetime.is_zero()
+        || source == Identity::ZERO
+        || source == target
+        || !ruin_rime_protects_debuffs_for_owner(ctx, source)
+    {
+        return None;
+    }
+
+    Some(EffectPacket::ApplyStatus {
+        source,
+        target,
+        spell_id: RIME_SPELL_ID.to_string(),
+        payload: StatusPayload::Rime,
+        polarity: StatusPolarity::Debuff,
+        target_audience: TargetAudience::Hostile,
+        duration: lifetime,
+        stack_group: RIME_STATUS_GROUP.to_string(),
+        max_stacks: 1,
+        stack_policy: StackPolicy::Refresh,
+        dispel_types: Vec::new(),
+    })
+}
+
+fn arm_rime_after_frost_spell_hit(ctx: &ReducerContext, hit: &PendingHit, now: Timestamp) {
+    if !frost_spell_hit_can_apply_rime(hit)
+        || !ruin_rime_protects_debuffs_for_owner(ctx, hit.source)
+    {
+        return;
+    }
+
+    apply_status_internal(
+        ctx,
+        now,
+        hit.source,
+        hit.target,
+        RIME_SPELL_ID,
+        StatusPayload::Rime,
+        StatusPolarity::Debuff,
+        Duration::from_millis(FIXED_TICK_MILLIS.max(1)),
+        RIME_STATUS_GROUP,
+        1,
+        StackPolicy::Refresh,
+        TargetAudience::Hostile,
+        Vec::new(),
+        false,
+    );
+    refresh_rime_lifetime_from_active_debuffs(ctx, hit.target, now);
+}
+
+fn frost_spell_hit_can_apply_rime(hit: &PendingHit) -> bool {
+    DamageType::from_wire(hit.damage_type.as_str()) == DamageType::Cold
+        && damage_comes_from_casted_ability(hit)
+        && matches!(
+            hit.damage_source_kind.as_str(),
+            DAMAGE_SOURCE_KIND_SPELL | DAMAGE_SOURCE_KIND_PROJECTILE
+        )
+}
+
+fn active_rime_status(
+    ctx: &ReducerContext,
+    target: Identity,
+    now: Timestamp,
+) -> Option<StatusEffect> {
+    ctx.db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::Rime.as_str()
+                && effect.stack_group == RIME_STATUS_GROUP
+                && now < effect.expires_at
+        })
+        .max_by_key(|effect| effect.status_id)
+}
+
+pub(crate) fn status_removal_is_blocked_by_rime(
+    ctx: &ReducerContext,
+    effect: &StatusEffect,
+    now: Timestamp,
+) -> bool {
+    effect.polarity == StatusPolarity::Debuff.as_str()
+        && now < effect.expires_at
+        && active_rime_status(ctx, effect.target, now).is_some()
+}
+
+fn extend_active_rime_through(
+    ctx: &ReducerContext,
+    target: Identity,
+    expires_at: Timestamp,
+    now: Timestamp,
+) {
+    let Some(mut rime) = active_rime_status(ctx, target, now) else {
+        return;
+    };
+    if expires_at <= rime.expires_at {
+        return;
+    }
+    set_status_expires_at(&mut rime, expires_at);
+    ctx.db.status_effect().status_id().update(rime);
+}
+
+fn extend_rime_for_applied_debuff(
+    ctx: &ReducerContext,
+    target: Identity,
+    kind: StatusEffectKind,
+    polarity: StatusPolarity,
+    expires_at: Timestamp,
+    now: Timestamp,
+) {
+    if polarity == StatusPolarity::Debuff && kind != StatusEffectKind::Rime {
+        extend_active_rime_through(ctx, target, expires_at, now);
+    }
+}
+
+fn refresh_rime_lifetime_from_active_debuffs(
+    ctx: &ReducerContext,
+    target: Identity,
+    now: Timestamp,
+) {
+    let Some(mut rime) = active_rime_status(ctx, target, now) else {
+        return;
+    };
+    let grace_expires_at = now + Duration::from_millis(FIXED_TICK_MILLIS.max(1));
+    let expires_at = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| {
+            effect.status_id != rime.status_id
+                && effect.polarity == StatusPolarity::Debuff.as_str()
+                && now < effect.expires_at
+        })
+        .map(|effect| effect.expires_at)
+        .max()
+        .unwrap_or(grace_expires_at)
+        .max(grace_expires_at);
+    set_status_expires_at(&mut rime, expires_at);
+    ctx.db.status_effect().status_id().update(rime);
+}
+
+pub(crate) fn arm_quickening_after_movement_ability(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) {
+    let Some((_, duration)) = ruin_quickening_for_owner(ctx, owner) else {
+        return;
+    };
+    apply_status_internal(
+        ctx,
+        now,
+        owner,
+        owner,
+        QUICKENING_SPELL_ID,
+        StatusPayload::Quickening,
+        StatusPolarity::Buff,
+        duration,
+        QUICKENING_STATUS_GROUP,
+        1,
+        StackPolicy::Refresh,
+        TargetAudience::SelfOnly,
+        Vec::new(),
+        false,
+    );
+}
+
+pub(crate) fn quickening_cast_speed_multiplier_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) -> f32 {
+    let Some((reduction, _)) = ruin_quickening_for_owner(ctx, owner) else {
+        return 1.0;
+    };
+    if active_quickening_status(ctx, owner, now).is_none() {
+        return 1.0;
+    }
+    quickening_cast_speed_multiplier(reduction, true)
+}
+
+fn quickening_cast_speed_multiplier(reduction: f32, active: bool) -> f32 {
+    if !active || !reduction.is_finite() || reduction <= 0.0 {
+        return 1.0;
+    }
+    1.0 / (1.0 - reduction.clamp(0.0, 0.99))
+}
+
+pub(crate) fn consume_quickening_for_cast(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) -> bool {
+    let Some(effect) = active_quickening_status(ctx, owner, now) else {
+        return false;
+    };
+    ctx.db.status_effect().status_id().delete(effect.status_id);
+    true
+}
+
+fn active_quickening_status(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) -> Option<StatusEffect> {
+    ctx.db
+        .status_effect()
+        .target()
+        .filter(owner)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::Quickening.as_str()
+                && effect.stack_group == QUICKENING_STATUS_GROUP
+                && now < effect.expires_at
+        })
+        .max_by_key(|effect| effect.status_id)
+}
+
 fn apply_damage_to_npc_state(
     ctx: &ReducerContext,
     hit: &PendingHit,
     temporary_modifiers: &TemporaryCombatModifiers,
     mut state: crate::npcs::NpcState,
-    fulmination_active: bool,
+    fulmination_source: Option<Identity>,
 ) -> bool {
     let source = hit.source;
     let target = hit.target;
@@ -4584,13 +5170,17 @@ fn apply_damage_to_npc_state(
         schedule_npc_corpse_despawn(ctx, target, ctx.timestamp);
     }
 
+    let target_survived = state.alive;
     ctx.db.npc_state().identity().update(state);
+    if target_survived {
+        arm_rime_after_frost_spell_hit(ctx, hit, ctx.timestamp);
+    }
     grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
     apply_equipment_melee_steal(ctx, hit, hp_damage);
     queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
     queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
     queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
-    queue_fulmination_arc_if_applicable(ctx, hit, hp_damage, fulmination_active);
+    queue_fulmination_arc_if_applicable(ctx, hit, hp_damage, fulmination_source);
     if hp_damage > 0
         && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
     {
@@ -4729,20 +5319,67 @@ fn resolve_damage_amount(
         },
     );
     if let Some(effect) = find_weakness {
-        ctx.db.status_effect().status_id().delete(effect.status_id);
+        if !status_removal_is_blocked_by_rime(ctx, &effect, ctx.timestamp) {
+            ctx.db.status_effect().status_id().delete(effect.status_id);
+        }
     }
     if resolved.was_critical {
         if let Some(effect) = blade_twisting {
             ctx.db.status_effect().status_id().delete(effect.status_id);
         }
     }
-    // Fracture shatters every qualifying overlapping Freeze after resolving
-    // this hit, so no later packet can receive another first-hit bonus from
-    // the same frozen state.
+    // Fracture shatters qualifying overlapping Freezes after resolving this
+    // hit. Rime deliberately blocks that ability-driven removal, so a Rimed
+    // Freeze can continue granting its first-hit interaction until it expires.
     for effect in fracture_freezes {
-        ctx.db.status_effect().status_id().delete(effect.status_id);
+        if !status_removal_is_blocked_by_rime(ctx, &effect, ctx.timestamp) {
+            ctx.db.status_effect().status_id().delete(effect.status_id);
+        }
     }
+    trigger_critical_strike_passives(ctx, hit, resolved.was_critical);
     resolved
+}
+
+fn trigger_critical_strike_passives(ctx: &ReducerContext, hit: &PendingHit, was_critical: bool) {
+    if !was_critical || hit.source == Identity::ZERO {
+        return;
+    }
+
+    let cooldown_reduction = ruin_acceleration_cooldown_reduction_for_owner(ctx, hit.source);
+    advance_active_ability_cooldowns(ctx, hit.source, cooldown_reduction, ctx.timestamp);
+
+    if !spell_critical_can_trigger_chain_reaction(hit) {
+        return;
+    }
+    let Some(proc_action_id) = ruin_chain_reaction_spell_for_owner(ctx, hit.source) else {
+        return;
+    };
+    if let Err(err) = crate::spells::fire_chain_reaction_spell(
+        ctx,
+        hit.source,
+        hit.target,
+        proc_action_id.as_str(),
+    ) {
+        log::warn!(
+            "[CHAIN_REACTION] source={} target={} proc={} rejected: {}",
+            hit.source.to_hex(),
+            hit.target.to_hex(),
+            proc_action_id,
+            err
+        );
+    }
+}
+
+fn spell_critical_can_trigger_chain_reaction(hit: &PendingHit) -> bool {
+    damage_comes_from_casted_ability(hit)
+        && matches!(
+            hit.damage_source_kind.as_str(),
+            DAMAGE_SOURCE_KIND_SPELL | DAMAGE_SOURCE_KIND_PROJECTILE
+        )
+        && !hit
+            .direct_action_key
+            .trim()
+            .starts_with(CHAIN_REACTION_ACTION_PREFIX)
 }
 
 fn active_fracture_freezes_for_melee_attack(
@@ -4784,18 +5421,27 @@ fn fracture_melee_damage_multiplier(has_qualifying_freeze: bool, bonus: f32) -> 
     }
 }
 
-fn target_has_active_fulmination(ctx: &ReducerContext, hit: &PendingHit, now: Timestamp) -> bool {
-    melee_attack_can_trigger_fulmination(hit)
-        && ctx
-            .db
-            .status_effect()
-            .target()
-            .filter(hit.target)
-            .any(|effect| {
-                effect.effect_kind == StatusEffectKind::Fulmination.as_str()
-                    && effect.polarity == StatusPolarity::Debuff.as_str()
-                    && now < effect.expires_at
-            })
+fn active_fulmination_source(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    now: Timestamp,
+) -> Option<Identity> {
+    if !melee_attack_can_trigger_fulmination(hit) {
+        return None;
+    }
+
+    ctx.db
+        .status_effect()
+        .target()
+        .filter(hit.target)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::Fulmination.as_str()
+                && effect.polarity == StatusPolarity::Debuff.as_str()
+                && effect.source != Identity::ZERO
+                && now < effect.expires_at
+        })
+        .max_by_key(|effect| effect.status_id)
+        .map(|effect| effect.source)
 }
 
 fn melee_attack_can_trigger_fulmination(hit: &PendingHit) -> bool {
@@ -4809,9 +5455,13 @@ fn queue_fulmination_arc_if_applicable(
     ctx: &ReducerContext,
     hit: &PendingHit,
     confirmed_hp_damage: i32,
-    fulmination_active: bool,
+    fulmination_source: Option<Identity>,
 ) {
-    if !fulmination_active || confirmed_hp_damage <= 0 {
+    let Some(fulmination_source) = fulmination_source else {
+        return;
+    };
+    if confirmed_hp_damage <= 0 || !players_share_world_context(ctx, fulmination_source, hit.target)
+    {
         return;
     }
 
@@ -4838,10 +5488,10 @@ fn queue_fulmination_arc_if_applicable(
         .filter_map(|index| actors.get(index).copied())
         .filter(|candidate| {
             candidate.alive
-                && candidate.player_id != hit.source
+                && candidate.player_id != fulmination_source
                 && candidate.player_id != hit.target
-                && players_share_world_context(ctx, hit.source, candidate.player_id)
-                && can_harm(ctx, hit.source, candidate.player_id)
+                && players_share_world_context(ctx, fulmination_source, candidate.player_id)
+                && can_harm(ctx, fulmination_source, candidate.player_id)
                 && point_within_radius(primary_point, actor_center(candidate), radius)
         })
         .collect();
@@ -4862,7 +5512,7 @@ fn queue_fulmination_arc_if_applicable(
     emit_fulmination_arc_event(
         ctx,
         action_instance_id.as_str(),
-        hit.source,
+        fulmination_source,
         secondary.player_id,
         primary_point,
         secondary_point,
@@ -4875,7 +5525,7 @@ fn queue_fulmination_arc_if_applicable(
         vec![EffectPacket::Damage {
             amount: arc_damage,
             damage_type: DamageType::Lightning,
-            source: hit.source,
+            source: fulmination_source,
             target: secondary.player_id,
             spell_id: FULMINATION_SPELL_ID.to_string(),
             delivery: DamageDelivery::Direct,
@@ -5718,9 +6368,13 @@ fn apply_status_internal(
     if source != Identity::ZERO && !players_share_world_context(ctx, source, target) {
         return;
     }
-    if source != Identity::ZERO
-        && !can_apply_status_polarity(ctx, source, target, polarity, target_audience)
-    {
+    let target_audience_allowed = source == Identity::ZERO
+        || if fulmination_uses_any_target_audience(kind, target_audience) {
+            target_audience_allows(ctx, source, target, target_audience)
+        } else {
+            can_apply_status_polarity(ctx, source, target, polarity, target_audience)
+        };
+    if !target_audience_allowed {
         return;
     }
 
@@ -5728,7 +6382,13 @@ fn apply_status_internal(
     if marks_combat {
         match polarity {
             StatusPolarity::Debuff => {
-                mark_harmful_combat_action(ctx, source, target, now, COMBAT_REASON_DEBUFF);
+                if fulmination_uses_any_target_audience(kind, target_audience)
+                    && !can_harm(ctx, source, target)
+                {
+                    mark_helpful_combat_assist(ctx, source, target, now);
+                } else {
+                    mark_harmful_combat_action(ctx, source, target, now, COMBAT_REASON_DEBUFF);
+                }
             }
             StatusPolarity::Buff => {
                 mark_helpful_combat_assist(ctx, source, target, now);
@@ -5763,6 +6423,7 @@ fn apply_status_internal(
                     encode_status_dispel_types(&dispel_types),
                 );
                 ctx.db.status_effect().status_id().update(existing);
+                extend_rime_for_applied_debuff(ctx, target, kind, polarity, expires_at, now);
                 apply_status_side_effects(ctx, now, source, target, kind);
                 return;
             }
@@ -5784,6 +6445,7 @@ fn apply_status_internal(
                     encode_status_dispel_types(&dispel_types),
                 );
                 ctx.db.status_effect().status_id().update(existing);
+                extend_rime_for_applied_debuff(ctx, target, kind, polarity, expires_at, now);
                 apply_status_side_effects(ctx, now, source, target, kind);
                 return;
             }
@@ -5807,6 +6469,7 @@ fn apply_status_internal(
                     encode_status_dispel_types(&dispel_types),
                 );
                 ctx.db.status_effect().status_id().update(existing);
+                extend_rime_for_applied_debuff(ctx, target, kind, polarity, expires_at, now);
                 apply_status_side_effects(ctx, now, source, target, kind);
                 return;
             }
@@ -5826,7 +6489,15 @@ fn apply_status_internal(
         expires_at,
         encode_status_dispel_types(&dispel_types),
     ));
+    extend_rime_for_applied_debuff(ctx, target, kind, polarity, expires_at, now);
     apply_status_side_effects(ctx, now, source, target, kind);
+}
+
+fn fulmination_uses_any_target_audience(
+    kind: StatusEffectKind,
+    target_audience: TargetAudience,
+) -> bool {
+    kind == StatusEffectKind::Fulmination && target_audience == TargetAudience::Any
 }
 
 fn apply_status_side_effects(
@@ -6286,13 +6957,23 @@ fn remove_status_group(
     }
 }
 
-fn remove_status_kind(ctx: &ReducerContext, target: Identity, kind: StatusEffectKind) {
+fn remove_status_by_ability(
+    ctx: &ReducerContext,
+    target: Identity,
+    kind: StatusEffectKind,
+    stack_group: &str,
+    now: Timestamp,
+) {
     let remove_ids: Vec<u64> = ctx
         .db
         .status_effect()
         .target()
         .filter(target)
-        .filter(|effect| effect.effect_kind == kind.as_str())
+        .filter(|effect| {
+            effect.effect_kind == kind.as_str()
+                && (stack_group.is_empty() || effect.stack_group == stack_group)
+                && !status_removal_is_blocked_by_rime(ctx, effect, now)
+        })
         .map(|effect| effect.status_id)
         .collect();
 
@@ -6675,6 +7356,33 @@ pub fn expire_status_effects(ctx: &ReducerContext, now: Timestamp) {
         .status_effect()
         .expires_at_micros()
         .delete(..=now_micros);
+    prune_orphaned_rime_statuses(ctx, now);
+}
+
+fn prune_orphaned_rime_statuses(ctx: &ReducerContext, now: Timestamp) {
+    let rime_statuses: Vec<StatusEffect> = ctx
+        .db
+        .status_effect()
+        .effect_kind()
+        .filter(StatusEffectKind::Rime.as_str())
+        .filter(|effect| now < effect.expires_at)
+        .collect();
+
+    for rime in rime_statuses {
+        let has_protected_debuff =
+            ctx.db
+                .status_effect()
+                .target()
+                .filter(rime.target)
+                .any(|effect| {
+                    effect.status_id != rime.status_id
+                        && effect.polarity == StatusPolarity::Debuff.as_str()
+                        && now < effect.expires_at
+                });
+        if !has_protected_debuff {
+            ctx.db.status_effect().status_id().delete(rime.status_id);
+        }
+    }
 }
 
 fn expire_statuses_for_target(ctx: &ReducerContext, target: Identity, now: Timestamp) {
@@ -7014,7 +7722,9 @@ impl StatusRuntimeView {
                     | StatusEffectKind::BladeTwisting
                     | StatusEffectKind::Disarm
                     | StatusEffectKind::Gouge
-                    | StatusEffectKind::Fulmination => {}
+                    | StatusEffectKind::Fulmination
+                    | StatusEffectKind::Quickening
+                    | StatusEffectKind::Rime => {}
                 }
             }
         }
@@ -7309,16 +8019,20 @@ mod tests {
         damage_breaks_shroud, damage_comes_from_casted_ability,
         deterministic_fulmination_candidate_index, disabled_target_damage_multiplier,
         due_interval_count, event_prune_cutoff_micros, fracture_melee_damage_multiplier,
-        fulmination_arc_damage, knockback_stagger_duration, melee_attack_can_trigger_fracture,
-        melee_attack_can_trigger_fulmination, new_status_effect,
+        frost_spell_hit_can_apply_rime, fulmination_arc_damage,
+        fulmination_uses_any_target_audience, furnace_mana_restore_amount,
+        immolation_damage_for_stacks, immolation_remaining_tick_count, knockback_stagger_duration,
+        melee_attack_can_trigger_fracture, melee_attack_can_trigger_fulmination, new_status_effect,
         opportunist_passive_is_active_for_profile, point_within_radius,
-        resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
-        resolve_temporary_hitpoint_absorb, resolved_shove_tunables, stacked_slow_pct,
-        stagger_shove_tunables, status_has_dispel_type, status_matches_removal_filter_values,
-        AuthoredStatusPayload, DamageDelivery, EffectPacket, MovementModifiers, PendingHit,
-        StackPolicy, StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload,
-        StatusPolarity, StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
-        COMBAT_PROJECTILE_DEFINITIONS, PLAYER_EVENT_RETENTION,
+        quickening_cast_speed_multiplier, resolve_effect_amount_from_roll,
+        resolve_mana_shield_absorb, resolve_temporary_hitpoint_absorb, resolved_shove_tunables,
+        spell_critical_can_trigger_chain_reaction, stacked_slow_pct, stagger_shove_tunables,
+        status_has_dispel_type, status_matches_removal_filter_values, AuthoredStatusPayload,
+        DamageDelivery, DamageType, EffectPacket, MovementModifiers, PendingHit, StackPolicy,
+        StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
+        StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
+        COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PROJECTILE,
+        DAMAGE_SOURCE_KIND_SPELL, PLAYER_EVENT_RETENTION,
     };
     use crate::movement::FIXED_TICK_MILLIS;
     use crate::relations::TargetAudience;
@@ -7334,6 +8048,38 @@ mod tests {
 
     fn test_identity_number(value: u8) -> Identity {
         Identity::from_hex(&format!("{value:064x}")).expect("test identity hex should be valid")
+    }
+
+    #[test]
+    fn immolation_damage_scales_from_max_health_and_stacks() {
+        assert_eq!(immolation_damage_for_stacks(100, 0.01, 1), 1);
+        assert_eq!(immolation_damage_for_stacks(100, 0.01, 10), 10);
+        assert_eq!(immolation_damage_for_stacks(125, 0.01, 10), 13);
+        assert_eq!(immolation_damage_for_stacks(0, 0.01, 10), 0);
+    }
+
+    #[test]
+    fn immolation_six_second_stack_group_counts_all_pending_ticks_together() {
+        let start = Timestamp::UNIX_EPOCH;
+        let expires_at = start + Duration::from_secs(6);
+        assert_eq!(
+            immolation_remaining_tick_count(
+                start + Duration::from_secs(1),
+                expires_at,
+                Duration::from_secs(1),
+                start,
+            ),
+            6
+        );
+        assert_eq!(
+            immolation_remaining_tick_count(
+                start + Duration::from_secs(7),
+                expires_at,
+                Duration::from_secs(1),
+                start,
+            ),
+            0
+        );
     }
 
     fn test_status_effect(
@@ -7446,12 +8192,14 @@ mod tests {
             Some(StatusPolarity::Debuff),
             &[],
             false,
+            false,
         ));
         assert!(!status_matches_removal_filter_values(
             "BUFF",
             "",
             Some(StatusPolarity::Debuff),
             &[],
+            false,
             false,
         ));
     }
@@ -7464,6 +8212,27 @@ mod tests {
             Some(StatusPolarity::Debuff),
             &[],
             true,
+            false,
+        ));
+    }
+
+    #[test]
+    fn rime_protection_excludes_debuffs_from_ability_removal_filters() {
+        assert!(!status_matches_removal_filter_values(
+            "DEBUFF",
+            "BLEED",
+            Some(StatusPolarity::Debuff),
+            &[StatusDispelType::Bleed],
+            false,
+            true,
+        ));
+        assert!(status_matches_removal_filter_values(
+            "BUFF",
+            "MAGIC",
+            Some(StatusPolarity::Buff),
+            &[StatusDispelType::Magic],
+            false,
+            false,
         ));
     }
 
@@ -7568,6 +8337,108 @@ mod tests {
     }
 
     #[test]
+    fn quickening_halves_cast_time_without_affecting_inactive_casts() {
+        assert!((quickening_cast_speed_multiplier(0.5, true) - 2.0).abs() < 0.0001);
+        assert_eq!(quickening_cast_speed_multiplier(0.5, false), 1.0);
+        assert_eq!(quickening_cast_speed_multiplier(0.0, true), 1.0);
+    }
+
+    #[test]
+    fn chain_reaction_accepts_spell_crits_but_rejects_melee_and_its_own_proc() {
+        let source = test_identity_number(1);
+        let target = test_identity_number(2);
+        let hit = |direct_action_key: &str, source_kind: &str| PendingHit {
+            hit_id: 0,
+            source,
+            target,
+            spell_id: direct_action_key.to_string(),
+            amount: 10,
+            is_heal: false,
+            damage_type: "LIGHTNING".to_string(),
+            target_audience: "HOSTILE".to_string(),
+            damage_delivery: DamageDelivery::Direct.as_str().to_string(),
+            damage_source_kind: source_kind.to_string(),
+            direct_action_key: direct_action_key.to_string(),
+            queued_at: Timestamp::UNIX_EPOCH,
+            queued_at_micros: 0,
+            queued_order: 0,
+        };
+
+        assert!(spell_critical_can_trigger_chain_reaction(&hit(
+            "spell-instance:p0",
+            DAMAGE_SOURCE_KIND_PROJECTILE,
+        )));
+        assert!(spell_critical_can_trigger_chain_reaction(&hit(
+            "spell-instance:beam",
+            DAMAGE_SOURCE_KIND_SPELL,
+        )));
+        assert!(!spell_critical_can_trigger_chain_reaction(&hit(
+            "melee:player_input:abc:hit:0",
+            DAMAGE_SOURCE_KIND_MELEE,
+        )));
+        assert!(!spell_critical_can_trigger_chain_reaction(&hit(
+            "chain_reaction:spell:p0",
+            DAMAGE_SOURCE_KIND_PROJECTILE,
+        )));
+    }
+
+    #[test]
+    fn rime_accepts_direct_frost_spells_but_rejects_other_damage_sources() {
+        let source = test_identity_number(1);
+        let target = test_identity_number(2);
+        let hit = |damage_type: &str,
+                   delivery: DamageDelivery,
+                   source_kind: &str,
+                   direct_action_key: &str| PendingHit {
+            hit_id: 0,
+            source,
+            target,
+            spell_id: "RIME_TRIGGER_TEST".to_string(),
+            amount: 10,
+            is_heal: false,
+            damage_type: damage_type.to_string(),
+            target_audience: "HOSTILE".to_string(),
+            damage_delivery: delivery.as_str().to_string(),
+            damage_source_kind: source_kind.to_string(),
+            direct_action_key: direct_action_key.to_string(),
+            queued_at: Timestamp::UNIX_EPOCH,
+            queued_at_micros: 0,
+            queued_order: 0,
+        };
+
+        assert!(frost_spell_hit_can_apply_rime(&hit(
+            "COLD",
+            DamageDelivery::Direct,
+            DAMAGE_SOURCE_KIND_SPELL,
+            "spell-instance:beam",
+        )));
+        assert!(frost_spell_hit_can_apply_rime(&hit(
+            "COLD",
+            DamageDelivery::Direct,
+            DAMAGE_SOURCE_KIND_PROJECTILE,
+            "spell-instance:p0",
+        )));
+        assert!(!frost_spell_hit_can_apply_rime(&hit(
+            "FIRE",
+            DamageDelivery::Direct,
+            DAMAGE_SOURCE_KIND_SPELL,
+            "spell-instance:beam",
+        )));
+        assert!(!frost_spell_hit_can_apply_rime(&hit(
+            "COLD",
+            DamageDelivery::Periodic,
+            DAMAGE_SOURCE_KIND_SPELL,
+            "spell-instance:dot",
+        )));
+        assert!(!frost_spell_hit_can_apply_rime(&hit(
+            "COLD",
+            DamageDelivery::Direct,
+            DAMAGE_SOURCE_KIND_MELEE,
+            "melee:player_input:abc:hit:0",
+        )));
+    }
+
+    #[test]
     fn fracture_only_bonuses_the_first_direct_melee_attack() {
         let source = test_identity_number(1);
         let target = test_identity_number(2);
@@ -7663,6 +8534,18 @@ mod tests {
         };
 
         let qualifying = hit(DamageDelivery::Direct, "MELEE", 20, source);
+        assert!(fulmination_uses_any_target_audience(
+            StatusEffectKind::Fulmination,
+            TargetAudience::Any,
+        ));
+        assert!(!fulmination_uses_any_target_audience(
+            StatusEffectKind::Fulmination,
+            TargetAudience::Hostile,
+        ));
+        assert!(!fulmination_uses_any_target_audience(
+            StatusEffectKind::Gouge,
+            TargetAudience::Any,
+        ));
         assert!(melee_attack_can_trigger_fulmination(&qualifying));
         assert!(!melee_attack_can_trigger_fulmination(&hit(
             DamageDelivery::Periodic,
@@ -7712,6 +8595,18 @@ mod tests {
         );
         assert!(point_within_radius((0.0, 1.0, 0.0), (6.0, 1.0, 8.0), 10.0));
         assert!(!point_within_radius((0.0, 1.0, 0.0), (6.1, 1.0, 8.0), 10.0));
+    }
+
+    #[test]
+    fn furnace_restores_mana_only_from_confirmed_fire_hp_damage() {
+        assert_eq!(furnace_mana_restore_amount(30, DamageType::Fire, 1.0), 30.0);
+        assert_eq!(furnace_mana_restore_amount(21, DamageType::Fire, 0.5), 10.5);
+        assert_eq!(furnace_mana_restore_amount(30, DamageType::Cold, 1.0), 0.0);
+        assert_eq!(furnace_mana_restore_amount(0, DamageType::Fire, 1.0), 0.0);
+        assert_eq!(
+            furnace_mana_restore_amount(30, DamageType::Fire, f32::NAN),
+            0.0
+        );
     }
 
     #[test]

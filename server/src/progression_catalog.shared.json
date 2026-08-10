@@ -1532,6 +1532,57 @@
       }
     },
     {
+      "ability_id": "SPELL_BLIZZARD",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "BLIZZARD",
+      "display_name": "Blizzard",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1006,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 8000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "POINT",
+        "requires_target": false,
+        "requires_target_los": false,
+        "aim_radius": 4,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "CHANNEL",
+          "max_distance": 15,
+          "damage": 10,
+          "damage_type": "COLD",
+          "resource_cost_per_second": 20,
+          "update_interval_seconds": 0.5,
+          "duration_seconds": 4,
+          "block_behavior": "UNBLOCKABLE",
+          "area": {
+            "radius": 4,
+            "impact_effects": [
+              {
+                "kind": "SLOW",
+                "duration_ms": 1000,
+                "slow_pct": 0.5,
+                "status_stack_group": "BLIZZARD_SLOW",
+                "max_stacks": 1,
+                "stack_policy": "REFRESH",
+                "dispel_types": [
+                  "MAGIC"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_MAGIC_MISSILE",
       "actor_scope": "PLAYER",
       "discipline_id": "ARCANA",
@@ -2125,6 +2176,168 @@
       }
     },
     {
+      "ability_id": "RUIN_FURNACE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "FURNACE",
+      "display_name": "Furnace",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1022,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "fire_damage_taken_mana_restore_ratio": 1
+      }
+    },
+    {
+      "ability_id": "SPELL_IMMOLATION",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "IMMOLATION",
+      "display_name": "Immolation",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1023,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1,
+        "uses_global_cooldown": false,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "IMMOLATION",
+          "damage_interval_ms": 1000,
+          "stack_interval_ms": 3000,
+          "stack_duration_ms": 6000,
+          "max_stacks": 10,
+          "max_health_damage_per_stack": 0.01,
+          "damage_amp_per_stack": 0.05,
+          "status_stack_group": "IMMOLATION"
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_COMBUSTION",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "COMBUSTION",
+      "display_name": "Combustion",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1024,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "HOSTILE",
+        "requires_target": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "damage": 0,
+          "damage_type": "FIRE",
+          "radius": 4.6,
+          "block_behavior": "UNBLOCKABLE",
+          "consume_caster_burns": true,
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "RUIN_ACCELERATION",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "ACCELERATION",
+      "display_name": "Acceleration",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1025,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "critical_strike_cooldown_reduction_ms": 1000
+      }
+    },
+    {
+      "ability_id": "RUIN_QUICKENING",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "QUICKENING",
+      "display_name": "Quickening",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1026,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "movement_spell_cast_time_reduction": 0.5,
+        "movement_spell_cast_time_buff_duration_ms": 5000
+      }
+    },
+    {
+      "ability_id": "RUIN_CHAIN_REACTION",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "CHAIN_REACTION",
+      "display_name": "Chain Reaction",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1027,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "critical_spell_proc_action_id": "BOLT"
+      }
+    },
+    {
+      "ability_id": "RUIN_RIME",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "RIME",
+      "display_name": "Rime",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1028,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "frost_spell_debuff_protection": true
+      }
+    },
+    {
       "ability_id": "RUIN_FRACTURE",
       "actor_scope": "PLAYER",
       "discipline_id": "RUIN",
@@ -2297,7 +2510,7 @@
         "cast_time_ms": 0,
         "cast_mobility": "MOBILE",
         "targeting": "TARGET",
-        "target_audience": "HOSTILE",
+        "target_audience": "ANY",
         "requires_target": true,
         "requires_target_los": true,
         "resource_cost": 20,
@@ -6806,6 +7019,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_BLIZZARD",
+      "display_name": "Blizzard",
+      "description": "Channels a blizzard over the targeted area for 4 seconds, dealing frost damage every 0.5 seconds and slowing enemies by 50%.",
+      "sort_order": 86
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_MAGIC_MISSILE",
       "display_name": "Magic Missile",
       "description": "Channels a rapid stream of arcane missiles into the target.",
@@ -6960,31 +7180,80 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "RUIN_FURNACE",
+      "display_name": "Furnace",
+      "description": "Passive: fire damage taken restores an equal amount of mana.",
+      "sort_order": 108
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_IMMOLATION",
+      "display_name": "Immolation",
+      "description": "Toggle on to gain an Immolation stack immediately and every 3 seconds, up to 10. Each stack deals 1% of maximum health as fire damage each second and increases all damage dealt by 5%. Gaining a stack refreshes the shared 6-second duration; all stacks expire together.",
+      "sort_order": 109
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_COMBUSTION",
+      "display_name": "Combustion",
+      "description": "Consumes all Immolation stacks and burning effects on the caster, detonating their remaining fire damage against enemies within 4.6 meters.",
+      "sort_order": 110
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "RUIN_ACCELERATION",
+      "display_name": "Acceleration",
+      "description": "Passive: critical strikes surge with lightning, advancing all active ability cooldowns by 1 second.",
+      "sort_order": 111
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "RUIN_QUICKENING",
+      "display_name": "Quickening",
+      "description": "Passive: using a movement ability surrounds you with quickening lightning for 5 seconds. Your next non-instant spell has 50% reduced cast time and consumes Quickening; instant spells do not consume it.",
+      "sort_order": 112
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "RUIN_CHAIN_REACTION",
+      "display_name": "Chain Reaction",
+      "description": "Passive: critical strikes with spells instantly fire a free Bolt at the same target. The triggered Bolt ignores its cost, cast time, global cooldown, and ability cooldown and cannot trigger Chain Reaction again.",
+      "sort_order": 113
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "RUIN_RIME",
+      "display_name": "Rime",
+      "description": "Passive: impacts from your frost spells Rime the target's debuffs, preventing abilities from removing them. Rimed debuffs still expire naturally, and only one Rime can affect a target at a time.",
+      "sort_order": 114
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "RUIN_FRACTURE",
       "display_name": "Fracture",
       "description": "Passive: the first melee attack against a target frozen by your spells deals 50% increased damage and removes Freeze.",
-      "sort_order": 108
+      "sort_order": 115
     },
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_FLASH_FREEZE",
       "display_name": "Flash Freeze",
       "description": "Instantly freezes the target for 1 second, preventing movement and actions.",
-      "sort_order": 109
+      "sort_order": 116
     },
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_DEEPENING_COLD",
       "display_name": "Deepening Cold",
       "description": "Instantly slows the target by 10%, deepening by another 10% each second for 3 seconds before freezing them for 2 seconds.",
-      "sort_order": 110
+      "sort_order": 117
     },
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_FULMINATION",
       "display_name": "Fulmination",
       "description": "Afflicts the target for 8 seconds. Direct melee hits arc their confirmed damage as lightning to one random enemy within 10 meters.",
-      "sort_order": 111
+      "sort_order": 118
     },
     {
       "presentation_kind": "ABILITY",
@@ -7709,10 +7978,31 @@
     },
     {
       "presentation_kind": "STATUS",
+      "presentation_id": "IMMOLATION",
+      "display_name": "Immolation",
+      "description": "Deals increasing fire damage to the caster while increasing all damage dealt by 5% per stack.",
+      "sort_order": 10063
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "QUICKENING",
+      "display_name": "Quickening",
+      "description": "The next non-instant spell has 50% reduced cast time. Instant spells do not consume this effect.",
+      "sort_order": 10064
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "RIME",
+      "display_name": "Rimed",
+      "description": "Debuffs on this target cannot be removed by abilities and still expire naturally.",
+      "sort_order": 10065
+    },
+    {
+      "presentation_kind": "STATUS",
       "presentation_id": "STUN",
       "display_name": "Stunned",
       "description": "Unable to move or act.",
-      "sort_order": 10065
+      "sort_order": 10066
     },
     {
       "presentation_kind": "STATUS",
@@ -8425,6 +8715,32 @@
       "lifecycle": "UNTIL_CAST_END",
       "duration_ms": 0,
       "sort_order": 190
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_BLIZZARD",
+      "slot": "persistent_field",
+      "trigger": "AREA_IMPACT",
+      "anchor": "AREA_ORIGIN",
+      "vfx_id": "VFX_BLIZZARD_AREA_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_CAST_END",
+      "duration_ms": 0,
+      "sort_order": 191
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_BLIZZARD",
+      "slot": "cast_glow",
+      "trigger": "SPELL_CAST",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_ICE_CAST_HAND_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_CAST_END",
+      "duration_ms": 0,
+      "sort_order": 192
     },
     {
       "owner_kind": "ABILITY",

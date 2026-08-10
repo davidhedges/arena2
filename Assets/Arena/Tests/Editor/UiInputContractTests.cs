@@ -20,6 +20,7 @@ namespace Arena.Tests.Editor
         private const string FixedActionDispatcherPath = "Assets/Arena/Runtime/Input/FixedActionDispatcher.cs";
         private const string LocalPlayerInputSourcePath = "Assets/Arena/Runtime/Input/LocalPlayerInputSource.cs";
         private const string HudControllerPath = "Assets/Arena/Runtime/UI/HUDController.cs";
+        private const string StatusTooltipResolverPath = "Assets/Arena/Runtime/Combat/StatusTooltipResolver.cs";
         private const string HubControllerPath = "Assets/Arena/Runtime/UI/HubController.cs";
         private const string CharacterCreationControllerPath = "Assets/Arena/Runtime/UI/CharacterCreationController.cs";
         private const string ActionTooltipResolverPath = "Assets/Arena/Runtime/Combat/ActionTooltipResolver.cs";
@@ -33,6 +34,7 @@ namespace Arena.Tests.Editor
         private const string ActionBarSlotTextureAssetPath = "Assets/Arena/Resources/UI/ActionBar/slot.png";
         private const string UnitFrameTextureAssetPath = "Assets/Arena/Resources/UI/UnitFrame/UnitFrame.png";
         private const string CombatVfxRegistryPath = "Assets/Arena/Resources/CombatVFX/CombatVFXRegistry.asset";
+        private const string BlizzardVfxPrefabPath = "Assets/Arena/Resources/CombatVFX/playground/Icicle_Rain 1.prefab";
         private const string CombatVfxRegistrySourcePath = "Assets/Arena/Runtime/Presentation/VFX/CombatVFXRegistry.cs";
         private const string CombatVfxRegistryEditorPath = "Assets/Arena/Editor/CombatVFXRegistryEditor.cs";
         private const string CombatVfxTemplateRegistryPath = "Assets/Arena/Runtime/Presentation/CombatVFXTemplateRegistry.cs";
@@ -682,6 +684,31 @@ namespace Arena.Tests.Editor
             Assert.That(tooltip, Does.Contain("public static class TooltipPresenter"));
             Assert.That(tooltip, Does.Not.Contain("ActionTooltipPresenter"));
             Assert.That(tooltip, Does.Not.Contain("StatusTooltipPresenter"));
+        }
+
+        [Test]
+        public void RimedDebuffs_UseAnIcyPaneAndExplainAbilityRemovalProtection()
+        {
+            string hud = File.ReadAllText(HudControllerPath);
+            Assert.That(hud, Does.Contain("HasActiveRime(_tmpDebuff)"));
+            Assert.That(hud, Does.Contain("new GameObject(\"RimedPane\")"));
+            Assert.That(hud, Does.Contain("rimeLabel.text = \"RIMED\""));
+
+            string tooltip = File.ReadAllText(StatusTooltipResolverPath);
+            Assert.That(tooltip, Does.Contain("Rimed: cannot be removed by abilities; expires naturally."));
+        }
+
+        [Test]
+        public void Blizzard_UsesTheAuthoredIcicleRainAreaPrefab()
+        {
+            Assert.That(File.Exists(BlizzardVfxPrefabPath), Is.True);
+
+            string prefabMeta = File.ReadAllText(BlizzardVfxPrefabPath + ".meta");
+            Assert.That(prefabMeta, Does.Contain("guid: 257b0b8c164454f4ebe7b7b4b6c045db"));
+
+            string registry = File.ReadAllText(CombatVfxRegistryPath);
+            Assert.That(registry, Does.Contain("vfxId: VFX_BLIZZARD_AREA_01"));
+            Assert.That(registry, Does.Contain("guid: 257b0b8c164454f4ebe7b7b4b6c045db"));
         }
 
         private static IEnumerable<string> FindFilesContaining(IEnumerable<string> paths, string needle)

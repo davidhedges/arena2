@@ -9,7 +9,10 @@ namespace Arena.Combat
 {
     public static class StatusTooltipResolver
     {
-        public static TooltipData Resolve(DbConnection? conn, StatusEffect status)
+        public static TooltipData Resolve(
+            DbConnection? conn,
+            StatusEffect status,
+            bool isRimed = false)
         {
             ActionPresentationCatalog? presentation =
                 ActionPresentation.FindPresentation(
@@ -29,18 +32,30 @@ namespace Arena.Combat
                 ? presentation.DisplayName
                 : TitleCaseStatusKind(status.EffectKind);
 
+            string description = !string.IsNullOrWhiteSpace(presentation?.Description)
+                ? presentation.Description
+                : ResolveFallbackDescription(status);
+            if (isRimed)
+            {
+                const string protection = "Rimed: cannot be removed by abilities; expires naturally.";
+                description = string.IsNullOrWhiteSpace(description)
+                    ? protection
+                    : $"{description} {protection}";
+            }
+
             return new TooltipData(
                 name,
-                FormatSubtitle(status),
-                !string.IsNullOrWhiteSpace(presentation?.Description)
-                    ? presentation.Description
-                    : ResolveFallbackDescription(status));
+                FormatSubtitle(status, isRimed),
+                description);
         }
 
-        private static string FormatSubtitle(StatusEffect status)
+        private static string FormatSubtitle(StatusEffect status, bool isRimed)
         {
             List<string> parts = new();
             parts.Add(FormatPolarity(status.Polarity));
+
+            if (isRimed)
+                parts.Add("Rimed");
 
             if (status.Stacks > 1)
                 parts.Add($"{status.Stacks} stacks");

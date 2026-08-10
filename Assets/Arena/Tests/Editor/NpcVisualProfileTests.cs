@@ -140,6 +140,33 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void NameTag_CanSetNameBeforeInactiveNpcRootIsActivated()
+        {
+            Type nameTagType = RequireType("Arena.Presentation.NameTag");
+            MethodInfo create = nameTagType.GetMethod(
+                "Create",
+                BindingFlags.Public | BindingFlags.Static)
+                ?? throw new MissingMethodException(nameTagType.FullName, "Create");
+            MethodInfo setName = nameTagType.GetMethod("SetName")
+                ?? throw new MissingMethodException(nameTagType.FullName, "SetName");
+            var root = new GameObject("InactiveNpcRoot");
+            root.SetActive(false);
+
+            try
+            {
+                object nameTag = create.Invoke(null, new object[] { root.transform, false })!;
+
+                Assert.DoesNotThrow(() => setName.Invoke(nameTag, new object[] { "Test NPC" }));
+                TextMesh textMesh = root.transform.Find("NameTag").GetComponent<TextMesh>();
+                Assert.That(textMesh.text, Is.EqualTo("Test NPC"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void ExemplarProfile_AppliesExplicitMissingSocketFallbackPolicies()
         {
             Type profileType = RequireType("Arena.Entity.NpcVisualProfile");

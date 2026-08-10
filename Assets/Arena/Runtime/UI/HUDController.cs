@@ -33,6 +33,7 @@ namespace Arena.UI
     {
         private const string UnitFrameSpritePath = "UI/UnitFrame/UnitFrame";
         private const string TemporaryHitpointsStatusKind = "TEMPORARY_HITPOINTS";
+        private const string RimeStatusKind = "RIME";
 
         // --- Colors (WoW-inspired) ---
         private static readonly Color FrameBg       = Hex("#1a1a1a");
@@ -1264,8 +1265,8 @@ namespace Arena.UI
                     _tmpDebuff.Add(se);
             }
 
-            SyncRow(buffRow, buffIcons, _tmpBuff, true);
-            SyncRow(debuffRow, debuffIcons, _tmpDebuff, false);
+            SyncRow(buffRow, buffIcons, _tmpBuff, true, false);
+            SyncRow(debuffRow, debuffIcons, _tmpDebuff, false, HasActiveRime(_tmpDebuff));
         }
 
         private void RefreshDebuffIcons(SpacetimeDB.Identity id, Transform debuffRow, List<GameObject> debuffIcons)
@@ -1283,11 +1284,11 @@ namespace Arena.UI
                     _tmpDebuff.Add(se);
             }
 
-            SyncRow(debuffRow, debuffIcons, _tmpDebuff, false);
+            SyncRow(debuffRow, debuffIcons, _tmpDebuff, false, HasActiveRime(_tmpDebuff));
         }
 
         private void SyncRow(Transform row, List<GameObject> pool,
-            List<StatusEffect> effects, bool isBuff)
+            List<StatusEffect> effects, bool isBuff, bool isRimed)
         {
             while (pool.Count < effects.Count)
                 pool.Add(MakeIcon(row, isBuff));
@@ -1302,6 +1303,7 @@ namespace Arena.UI
                 var se = effects[i];
                 if (_statusIconViews.TryGetValue(pool[i], out StatusIconView view))
                 {
+                    SetActiveIfChanged(view.RimePane, isRimed);
                     SetTextIfChanged(view.Label, se.EffectKind.Length >= 2
                         ? se.EffectKind[..2].ToUpper()
                         : se.EffectKind.ToUpper());
@@ -1309,11 +1311,11 @@ namespace Arena.UI
                     long expMs = se.ExpiresAtMicros / 1000L;
                     float left = Mathf.Max(0f, (expMs - nowMs) / 1000f);
                     SetTextIfChanged(view.Time, left > 1f ? $"{left:F0}" : left > 0.1f ? $"{left:F1}" : "");
-                    string tooltipKey = $"{se.StatusId}:{se.EffectKind}:{se.Stacks}:{se.AbsorbAmount}:{se.ExpiresAtMicros}";
+                    string tooltipKey = $"{se.StatusId}:{se.EffectKind}:{se.Stacks}:{se.AbsorbAmount}:{se.ExpiresAtMicros}:{isRimed}";
                     if (!string.Equals(view.TooltipKey, tooltipKey, StringComparison.Ordinal))
                     {
                         view.TooltipKey = tooltipKey;
-                        view.Tooltip.Configure(_canvas, StatusTooltipResolver.Resolve(NetworkManager.Instance?.Conn, se), pollHover: true);
+                        view.Tooltip.Configure(_canvas, StatusTooltipResolver.Resolve(NetworkManager.Instance?.Conn, se, isRimed), pollHover: true);
                     }
                 }
             }
@@ -1322,6 +1324,21 @@ namespace Arena.UI
         private static bool IsBuffPolarity(string polarity) =>
             string.Equals(WireIdentifier.Normalize(polarity), "BUFF", StringComparison.Ordinal)
             || string.Equals(polarity, "positive", StringComparison.OrdinalIgnoreCase);
+
+        private static bool HasActiveRime(List<StatusEffect> debuffs)
+        {
+            for (int i = 0; i < debuffs.Count; i++)
+            {
+                if (string.Equals(
+                    WireIdentifier.Normalize(debuffs[i].EffectKind),
+                    RimeStatusKind,
+                    StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         private GameObject MakeIcon(Transform parent, bool isBuff)
         {
@@ -1337,6 +1354,29 @@ namespace Arena.UI
             var ol = go.AddComponent<Outline>();
             ol.effectColor   = isBuff ? new Color(0.3f, 0.6f, 0.3f) : new Color(0.6f, 0.3f, 0.3f);
             ol.effectDistance = new Vector2(1, 1);
+
+            var rimePane = new GameObject("RimedPane");
+            rimePane.transform.SetParent(go.transform, false);
+            var rimePaneRect = rimePane.AddComponent<RectTransform>();
+            rimePaneRect.anchorMin = Vector2.zero;
+            rimePaneRect.anchorMax = Vector2.one;
+            rimePaneRect.sizeDelta = Vector2.zero;
+            rimePaneRect.anchoredPosition = Vector2.zero;
+            var rimePaneImage = rimePane.AddComponent<Image>();
+            rimePaneImage.color = new Color(0.08f, 0.55f, 1f, 0.22f);
+            rimePaneImage.raycastTarget = false;
+            var rimeOutline = rimePane.AddComponent<Outline>();
+            rimeOutline.effectColor = new Color(0.45f, 0.9f, 1f, 1f);
+            rimeOutline.effectDistance = new Vector2(2f, -2f);
+            rimeOutline.useGraphicAlpha = false;
+
+            var rimeLabel = Label(rimePane.transform, "RimedLabel",
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(IconSz - 2f, 7f), new Vector2(0f, -1f),
+                6, new Color(0.72f, 0.95f, 1f), TextAnchor.UpperCenter);
+            rimeLabel.fontStyle = FontStyle.Bold;
+            rimeLabel.text = "RIMED";
+            rimePane.SetActive(false);
 
             Text label = Label(go.transform, "Lbl", stretch: true,
                 fontSize: 10, alignment: TextAnchor.MiddleCenter);
@@ -1355,7 +1395,7 @@ namespace Arena.UI
 
             var tooltip = go.AddComponent<TooltipTarget>();
             tooltip.Configure(_canvas, default, pollHover: true);
-            _statusIconViews[go] = new StatusIconView(label, stack, time, tooltip);
+            _statusIconViews[go] = new StatusIconView(label, stack, time, rimePane, tooltip);
 
             return go;
         }
@@ -2960,14 +3000,21 @@ namespace Arena.UI
             public readonly Text Label;
             public readonly Text Stack;
             public readonly Text Time;
+            public readonly GameObject RimePane;
             public readonly TooltipTarget Tooltip;
             public string TooltipKey = string.Empty;
 
-            public StatusIconView(Text label, Text stack, Text time, TooltipTarget tooltip)
+            public StatusIconView(
+                Text label,
+                Text stack,
+                Text time,
+                GameObject rimePane,
+                TooltipTarget tooltip)
             {
                 Label = label;
                 Stack = stack;
                 Time = time;
+                RimePane = rimePane;
                 Tooltip = tooltip;
             }
         }

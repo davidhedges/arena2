@@ -227,6 +227,7 @@ namespace Arena.Tests.Editor
             // AURA is supported (decision 11): all spell types generate.
             Assert.That(DeriveArchetype(Facts("AURA", "SELF")), Is.EqualTo("Aura")); // PALADIN_FERVOR
             Assert.That(DeriveArchetype(Facts("EMANATION", "SELF")), Is.EqualTo("Emanation")); // NECROTIC_AURA
+            Assert.That(DeriveArchetype(Facts("IMMOLATION", "SELF")), Is.EqualTo("Emanation"));
             Assert.That(DeriveArchetype(Facts("PERSISTENT_AREA", "TARGET")), Is.EqualTo("TargetField")); // BLADE_BARRIER
         }
 

@@ -35,9 +35,10 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect as _;
 use crate::combat::{
-    combat_projectile_definition_for_id, has_active_disabling_status, has_active_status,
-    has_active_status_group, has_due_pending_effects, hostile_targeted_ability_misses,
-    mark_harmful_combat_action, queue_effects, remove_active_status_group, resolve_pending_effects,
+    arm_quickening_after_movement_ability, combat_projectile_definition_for_id,
+    has_active_disabling_status, has_active_status, has_active_status_group,
+    has_due_pending_effects, hostile_targeted_ability_misses, mark_harmful_combat_action,
+    queue_effects, remove_active_status_group, resolve_pending_effects,
     status_matches_removal_filter, ActiveCombatProjectile, CombatEvent, CombatProjectileDefinition,
     DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StackPolicy,
     StatusDispelType, StatusEffectKind, StatusPayload, StatusPolarity, COMBAT_EVENT_AREA_IMPACT,
@@ -3955,6 +3956,9 @@ fn perform_melee_attack_for_internal(
 
     crate::progression::arm_surprise_attacks_from_shroud(ctx, caster, spell_id.as_str(), now);
     crate::progression::break_shroud_on_attack(ctx, caster, now);
+    if resolved_gap_close.is_some() || timed_movement.is_some() {
+        arm_quickening_after_movement_ability(ctx, caster, now);
+    }
 
     if let Some(gap_close) = resolved_gap_close {
         let movement_start =

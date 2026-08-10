@@ -147,6 +147,7 @@ pub(crate) enum SpellBehavior {
     ConsumeStatus,
     Aura,
     Emanation,
+    Immolation,
     SelfResource,
     SelfTeleport,
     Transpose,
@@ -168,6 +169,7 @@ impl SpellBehavior {
             Self::ConsumeStatus => "CONSUME_STATUS",
             Self::Aura => "AURA",
             Self::Emanation => "EMANATION",
+            Self::Immolation => "IMMOLATION",
             Self::SelfResource => "SELF_RESOURCE",
             Self::SelfTeleport => "SELF_TELEPORT",
             Self::Transpose => "TRANSPOSE",
@@ -286,6 +288,7 @@ pub(crate) struct SpellSecondaryTunables {
     pub direct_target: Option<DirectTargetSecondaryTunables>,
     pub projectile: Option<ProjectileSecondaryTunables>,
     pub channel: Option<ChannelSecondaryTunables>,
+    pub channel_area: Option<ChannelAreaSecondaryTunables>,
     pub channel_projectile: Option<ProjectileSecondaryTunables>,
     pub area: Option<AreaSecondaryTunables>,
     pub persistent_area: Option<PersistentAreaSecondaryTunables>,
@@ -295,6 +298,7 @@ pub(crate) struct SpellSecondaryTunables {
     pub consume_status: Option<ConsumeStatusSecondaryTunables>,
     pub aura: Option<AuraSecondaryTunables>,
     pub emanation: Option<EmanationSecondaryTunables>,
+    pub immolation: Option<ImmolationSecondaryTunables>,
     pub world_obstacle: Option<WorldObstacleSecondaryTunables>,
     pub recall: Option<RecallSecondaryTunables>,
 }
@@ -309,6 +313,12 @@ pub(crate) struct DirectTargetSecondaryTunables {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ChannelSecondaryTunables {
     pub heal_amount: i32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ChannelAreaSecondaryTunables {
+    pub radius: f32,
+    pub impact_effects: Vec<ImpactEffect>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -503,6 +513,7 @@ pub(crate) struct AreaSecondaryTunables {
     pub sky_origin: Option<MeteorSkyOrigin>,
     pub shape: CombatAreaShape,
     pub impact_effects: Vec<ImpactEffect>,
+    pub consume_caster_burns: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -572,6 +583,17 @@ pub(crate) struct EmanationSecondaryTunables {
     pub radius: f32,
     pub pulse_interval: Duration,
     pub impact_effects: Vec<ImpactEffect>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ImmolationSecondaryTunables {
+    pub damage_interval: Duration,
+    pub stack_interval: Duration,
+    pub stack_duration: Duration,
+    pub max_stacks: u32,
+    pub max_health_damage_per_stack: f32,
+    pub damage_amp_per_stack: f32,
+    pub status_stack_group: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -808,6 +830,7 @@ mod tests {
             "INSTANT_BEAM",
             "ELECTROCUTE",
             "FROZEN_SPLINTERS",
+            "BLIZZARD",
             "MAGIC_MISSILE",
         ] {
             assert_eq!(
@@ -833,6 +856,7 @@ mod tests {
 
         for id in [
             "METEOR",
+            "BLIZZARD",
             "FROST_NOVA",
             "NOVA",
             "NEGATE",
@@ -1269,6 +1293,49 @@ mod tests {
             .expect("Frozen Splinters should define channel projectile data");
         assert_eq!(projectile.motion.kind(), "LINEAR");
         assert_eq!(projectile.parry_behavior.as_str(), "PARRYABLE");
+    }
+
+    #[test]
+    fn blizzard_catalog_matches_point_area_channel_defaults() {
+        let definition = definition("BLIZZARD");
+
+        assert_eq!(definition.cooldown, Duration::from_secs(8));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior, SpellBehavior::Channel);
+        assert_eq!(definition.targeting, SpellTargeting::Point);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(!definition.requires_target);
+        assert!(!definition.requires_target_los);
+        assert_eq!(
+            definition.cast_mobility,
+            SpellCastMobility::GroundedStationary
+        );
+        assert_eq!(definition.damage, 10);
+        assert_eq!(definition.damage_type, DamageType::Cold);
+        assert!((definition.max_distance - 15.0).abs() < 0.0001);
+        assert!((definition.radius - 4.0).abs() < 0.0001);
+        assert!((definition.primary_resource_cost - 20.0).abs() < 0.0001);
+        assert!((definition.update_interval - 0.5).abs() < 0.0001);
+        assert!((definition.duration - 4.0).abs() < 0.0001);
+        assert!(!definition.arms_auto_attack_on_cast);
+
+        let area = definition
+            .secondary
+            .channel_area
+            .as_ref()
+            .expect("Blizzard should define channel-area data");
+        assert!((area.radius - 4.0).abs() < 0.0001);
+        let slow = area
+            .impact_effects
+            .iter()
+            .find_map(ImpactEffect::as_status)
+            .expect("Blizzard should apply a slow");
+        assert_eq!(slow.payload(), StatusPayload::Slow { slow_pct: 0.5 });
+        assert_eq!(slow.duration(), Duration::from_secs(1));
+        assert_eq!(slow.explicit_stack_group(), Some("BLIZZARD_SLOW"));
+        assert_eq!(slow.max_stacks(), 1);
+        assert_eq!(slow.stack_policy(), StackPolicy::Refresh);
+        assert_eq!(slow.dispel_types(), &[StatusDispelType::Magic]);
     }
 
     #[test]

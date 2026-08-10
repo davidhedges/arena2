@@ -631,7 +631,7 @@ namespace Arena.Input
             string spellId,
             SpacetimeDB.Types.SpellDefinition? spellDef)
         {
-            if (IsActiveEmanationToggleOff(conn, entity.Identity, spellId, spellDef))
+            if (IsActiveRadialToggleOff(conn, entity.Identity, spellId, spellDef))
                 return true;
 
             float cost = SpellStartResourceCost(spellDef);
@@ -678,7 +678,7 @@ namespace Arena.Input
                 ? SpellResourceKind(conn, localPlayer, spellId)
                 : "MANA";
             bool togglingOff = localPlayer != null
-                && IsActiveEmanationToggleOff(conn, localPlayer.Identity, spellId, spellDef);
+                && IsActiveRadialToggleOff(conn, localPlayer.Identity, spellId, spellDef);
             PredictedActionLedger ledger = LocalCombatState.Instance.PredictActionStart(
                 localPlayer,
                 spellId,
@@ -697,17 +697,21 @@ namespace Arena.Input
         private static bool ShouldReserveResourceAtCastStart(SpacetimeDB.Types.SpellDefinition spellDef)
             => spellDef.CastTimeMs == 0UL;
 
-        private static bool IsActiveEmanationToggleOff(
+        private static bool IsActiveRadialToggleOff(
             SpacetimeDB.Types.DbConnection conn,
             SpacetimeDB.Identity owner,
             string spellId,
             SpacetimeDB.Types.SpellDefinition? spellDef)
         {
             if (spellDef == null
-                || !string.Equals(
-                    spellDef.Behavior,
-                    SpellDefinitionContracts.BehaviorEmanation,
-                    System.StringComparison.Ordinal))
+                || (!string.Equals(
+                        spellDef.Behavior,
+                        SpellDefinitionContracts.BehaviorEmanation,
+                        System.StringComparison.Ordinal)
+                    && !string.Equals(
+                        spellDef.Behavior,
+                        SpellDefinitionContracts.BehaviorImmolation,
+                        System.StringComparison.Ordinal)))
             {
                 return false;
             }
@@ -715,10 +719,11 @@ namespace Arena.Input
             string normalizedSpellId = WireIdentifier.Normalize(spellId);
             foreach (SpacetimeDB.Types.ActiveRadialEffect row in conn.Db.ActiveRadialEffect.Owner.Filter(owner))
             {
-                if (string.Equals(
-                    WireIdentifier.Normalize(row.SpellId),
-                    normalizedSpellId,
-                    System.StringComparison.Ordinal))
+                if (!string.IsNullOrWhiteSpace(row.AbilityId)
+                    && string.Equals(
+                        WireIdentifier.Normalize(row.SpellId),
+                        normalizedSpellId,
+                        System.StringComparison.Ordinal))
                 {
                     return true;
                 }

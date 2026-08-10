@@ -11,7 +11,9 @@ use crate::action_snapshot::{
     validate_authoritative_action_snapshot, ActionSnapshotRequest, MAX_ACTION_INPUT_TICK_DRIFT,
 };
 use crate::auto_attack::arm_auto_attack_if_unarmed_with_cadence;
-use crate::combat::{has_active_disabling_status, mark_harmful_combat_action};
+use crate::combat::{
+    arm_quickening_after_movement_ability, has_active_disabling_status, mark_harmful_combat_action,
+};
 use crate::defense::clear_interruptible_defense_for_owner;
 use crate::lingering_shade::arm_lingering_shade_for_voluntary_movement;
 use crate::movement::FIXED_TICK_MILLIS;
@@ -615,6 +617,7 @@ pub(crate) fn launch_movement_delivery(
         cast_state.facing_yaw,
         collision_policy,
     );
+    arm_quickening_after_movement_ability(ctx, owner, now);
     crate::spells::begin_active_cast(
         ctx,
         owner,
