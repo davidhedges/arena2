@@ -12,6 +12,7 @@ use spacetimedb::{
 };
 
 const SERVICE_CONFIG_ID: u8 = 0;
+const PROVISIONER_WAKEUP_ID: u8 = 0;
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(60);
 const PENDING_TICKET_TTL: Duration = Duration::from_secs(2 * 60);
 const TERMINAL_TICKET_RETENTION: Duration = Duration::from_secs(5 * 60);
@@ -46,6 +47,14 @@ pub struct HubServiceConfig {
     pub module_owner: Identity,
     pub provisioner_identity: Identity,
     pub updated_at: Timestamp,
+}
+
+/// Private state behind the provisioner-only wakeup view.
+#[table(accessor = provisioner_wakeup_state)]
+pub struct ProvisionerWakeupState {
+    #[primary_key]
+    pub singleton_id: u8,
+    pub sequence: u64,
 }
 
 #[table(accessor = match_ticket)]
@@ -96,6 +105,12 @@ pub struct MyHubPlayer {
     pub display_name: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+}
+
+/// Carries no ticket/player data; changing `sequence` only wakes the service.
+#[derive(SpacetimeType)]
+pub struct ProvisionerWakeup {
+    pub sequence: u64,
 }
 
 /// Public projection of only the calling player's current match control state.
@@ -158,6 +173,26 @@ pub fn my_match_status(ctx: &ViewContext) -> Option<MyMatchStatus> {
     })
 }
 
+/// Only the configured provisioner can observe match-work wakeups.
+#[view(accessor = provisioner_wakeup, public)]
+pub fn provisioner_wakeup(ctx: &ViewContext) -> Option<ProvisionerWakeup> {
+    let config = ctx
+        .db
+        .hub_service_config()
+        .singleton_id()
+        .find(SERVICE_CONFIG_ID)?;
+    if ctx.sender() != config.provisioner_identity {
+        return None;
+    }
+    ctx.db
+        .provisioner_wakeup_state()
+        .singleton_id()
+        .find(PROVISIONER_WAKEUP_ID)
+        .map(|state| ProvisionerWakeup {
+            sequence: state.sequence,
+        })
+}
+
 #[reducer(init)]
 pub fn init(ctx: &ReducerContext) -> Result<(), String> {
     ctx.db.hub_service_config().insert(HubServiceConfig {
@@ -166,6 +201,12 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
         provisioner_identity: ctx.sender(),
         updated_at: ctx.timestamp,
     });
+    ctx.db
+        .provisioner_wakeup_state()
+        .insert(ProvisionerWakeupState {
+            singleton_id: PROVISIONER_WAKEUP_ID,
+            sequence: 0,
+        });
     ctx.db.hub_maintenance_timer().insert(HubMaintenanceTimer {
         scheduled_id: 0,
         scheduled_at: ScheduleAt::Interval(MAINTENANCE_INTERVAL.into()),
@@ -229,6 +270,7 @@ pub fn request_unranked_2v2_bot_match(
         lease_until: None,
         failure_code: None,
     });
+    bump_provisioner_wakeup(ctx);
     Ok(())
 }
 
@@ -549,6 +591,23 @@ fn ensure_hub_player(ctx: &ReducerContext, identity: Identity) {
     });
 }
 
+fn bump_provisioner_wakeup(ctx: &ReducerContext) {
+    let table = ctx.db.provisioner_wakeup_state();
+    if let Some(mut state) = table.singleton_id().find(PROVISIONER_WAKEUP_ID) {
+        state.sequence = next_wakeup_sequence(Some(state.sequence));
+        table.singleton_id().update(state);
+    } else {
+        table.insert(ProvisionerWakeupState {
+            singleton_id: PROVISIONER_WAKEUP_ID,
+            sequence: next_wakeup_sequence(None),
+        });
+    }
+}
+
+fn next_wakeup_sequence(current: Option<u64>) -> u64 {
+    current.unwrap_or(0).saturating_add(1)
+}
+
 fn require_service_config(ctx: &ReducerContext) -> Result<HubServiceConfig, String> {
     ctx.db
         .hub_service_config()
@@ -762,6 +821,13 @@ mod tests {
                 RequestDecision::Idempotent
             );
         }
+    }
+
+    #[test]
+    fn wakeup_sequence_initializes_and_advances_monotonically() {
+        assert_eq!(next_wakeup_sequence(None), 1);
+        assert_eq!(next_wakeup_sequence(Some(1)), 2);
+        assert_eq!(next_wakeup_sequence(Some(u64::MAX)), u64::MAX);
     }
 
     #[test]

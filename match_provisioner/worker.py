@@ -20,7 +20,9 @@ from pathlib import Path
 import re
 import signal
 import sqlite3
+import subprocess
 import sys
+import threading
 import time
 from typing import Any, Callable, Protocol
 import urllib.error
@@ -105,7 +107,7 @@ class Config:
     lease_seconds: int
     allocation_seconds: int
     hard_ttl_seconds: int
-    poll_seconds: int
+    reconcile_seconds: int
     cleanup_retry_seconds: int
     cleaned_retention_seconds: int
     match_build_id: str | None = None
@@ -168,7 +170,9 @@ class Config:
             hard_ttl_seconds=_env_int(
                 "ARENA_PROVISIONER_HARD_TTL_SECONDS", 1800, 120, 14_400
             ),
-            poll_seconds=_env_int("ARENA_PROVISIONER_POLL_SECONDS", 2, 1, 60),
+            reconcile_seconds=_env_int(
+                "ARENA_PROVISIONER_RECONCILE_SECONDS", 30, 5, 300
+            ),
             cleanup_retry_seconds=_env_int(
                 "ARENA_PROVISIONER_CLEANUP_RETRY_SECONDS", 5, 1, 300
             ),
@@ -180,6 +184,10 @@ class Config:
         if config.hard_ttl_seconds < config.allocation_seconds:
             raise ProvisionerError(
                 "ARENA_PROVISIONER_HARD_TTL_SECONDS must not be shorter than the allocation window"
+            )
+        if config.reconcile_seconds >= config.lease_seconds:
+            raise ProvisionerError(
+                "ARENA_PROVISIONER_RECONCILE_SECONDS must be shorter than the lease duration"
             )
         return config
 
@@ -512,6 +520,115 @@ def ticket_log_id(ticket_id: str) -> str:
 def log_event(event: str, **fields: Any) -> None:
     payload = {"event": event, "time": int(time.time()), **fields}
     print(json.dumps(payload, sort_keys=True, separators=(",", ":")), flush=True)
+
+
+class HubWakeupSubscriber:
+    """Coalescing event source backed by a SpacetimeDB CLI subscription."""
+
+    RESTART_SECONDS = 5.0
+    QUERY = "SELECT * FROM provisioner_wakeup"
+
+    def __init__(self, server: str, database: str):
+        self.server = server
+        self.database = database
+        self._wakeup = threading.Event()
+        self._stop = threading.Event()
+        self._process_lock = threading.Lock()
+        self._process: subprocess.Popen[str] | None = None
+        self._thread = threading.Thread(
+            target=self._run,
+            name="arena-hub-wakeup",
+            daemon=True,
+        )
+
+    def command(self) -> list[str]:
+        return [
+            "spacetime",
+            "subscribe",
+            "--yes",
+            "--confirmed",
+            "true",
+            "--print-initial-update",
+            "--server",
+            self.server,
+            self.database,
+            self.QUERY,
+        ]
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def wait(self, timeout_seconds: float, stopping: threading.Event) -> bool:
+        deadline = time.monotonic() + timeout_seconds
+        while not stopping.is_set():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            if self._wakeup.wait(min(0.25, remaining)):
+                self._wakeup.clear()
+                return True
+        return False
+
+    def request_stop(self) -> None:
+        self._stop.set()
+
+    def close(self) -> None:
+        self.request_stop()
+        with self._process_lock:
+            process = self._process
+        if process is not None and process.poll() is None:
+            process.terminate()
+        self._thread.join(timeout=2.0)
+        if self._thread.is_alive():
+            with self._process_lock:
+                process = self._process
+            if process is not None and process.poll() is None:
+                process.kill()
+            self._thread.join(timeout=2.0)
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            process: subprocess.Popen[str] | None = None
+            try:
+                process = subprocess.Popen(
+                    self.command(),
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                )
+                with self._process_lock:
+                    self._process = process
+                log_event("wakeup_subscription_started", database=self.database)
+                if process.stdout is None:
+                    raise ProvisionerError("wakeup subscription has no output stream")
+                for line in process.stdout:
+                    if self._stop.is_set():
+                        break
+                    # Subscription table updates are emitted as one-line JSON.
+                    # CLI notices and warnings are intentionally not wakeups.
+                    if line.lstrip().startswith("{"):
+                        self._wakeup.set()
+                exit_code = process.wait()
+                if not self._stop.is_set():
+                    log_event(
+                        "wakeup_subscription_disconnected",
+                        exit_code=exit_code,
+                        retry_seconds=self.RESTART_SECONDS,
+                    )
+            except (OSError, ProvisionerError) as error:
+                if not self._stop.is_set():
+                    log_event(
+                        "wakeup_subscription_failed",
+                        error=str(error)[:400],
+                        retry_seconds=self.RESTART_SECONDS,
+                    )
+            finally:
+                with self._process_lock:
+                    if self._process is process:
+                        self._process = None
+            self._stop.wait(self.RESTART_SECONDS)
 
 
 class Provisioner:
@@ -1347,29 +1464,48 @@ def _run(config: Config, once: bool) -> int:
     store = AllocationStore(config.state_path)
     api = HttpApi(config.management_url, config.token)
     provisioner = Provisioner(config, api, store)
-    stopping = False
+    stopping = threading.Event()
+    wakeup = None if once else HubWakeupSubscriber(
+        config.management_url,
+        config.hub_database,
+    )
 
     def request_stop(_signum: int, _frame: Any) -> None:
-        nonlocal stopping
-        stopping = True
+        stopping.set()
+        if wakeup is not None:
+            wakeup.request_stop()
 
     signal.signal(signal.SIGINT, request_stop)
     signal.signal(signal.SIGTERM, request_stop)
     try:
-        while not stopping:
+        if wakeup is not None:
+            wakeup.start()
+        trigger = "startup"
+        while not stopping.is_set():
             try:
                 counts = provisioner.run_once()
-                log_event("provisioner_cycle", counts=counts)
+                log_event("provisioner_cycle", counts=counts, trigger=trigger)
             except ProvisionerError as error:
-                log_event("provisioner_cycle_failed", error=str(error)[:400])
+                log_event(
+                    "provisioner_cycle_failed",
+                    error=str(error)[:400],
+                    trigger=trigger,
+                )
                 if once:
                     return 1
             if once:
                 return 0
-            deadline = time.monotonic() + config.poll_seconds
-            while not stopping and time.monotonic() < deadline:
-                time.sleep(min(0.25, deadline - time.monotonic()))
+            if wakeup is None:
+                return 1
+            received_wakeup = wakeup.wait(config.reconcile_seconds, stopping)
+            if stopping.is_set():
+                break
+            trigger = "subscription" if received_wakeup else "reconciliation"
+            if received_wakeup:
+                log_event("provisioner_wakeup_received")
     finally:
+        if wakeup is not None:
+            wakeup.close()
         lock.close()
     return 0
 
@@ -1377,7 +1513,7 @@ def _run(config: Config, once: bool) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command")
-    run_parser = subparsers.add_parser("run", help="poll and reconcile match work")
+    run_parser = subparsers.add_parser("run", help="subscribe and reconcile match work")
     run_parser.add_argument("--once", action="store_true", help="run one cycle and exit")
     subparsers.add_parser("status", help="print local allocation-ledger counts")
     args = parser.parse_args(argv)

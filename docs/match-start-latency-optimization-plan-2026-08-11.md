@@ -2,7 +2,7 @@
 
 Date: 2026-08-11
 
-Status: **APPROVED — Steps 1–3 complete; Steps 4–6 pending**
+Status: **APPROVED — Steps 1–4 complete; Steps 5–6 pending**
 
 ## 1. Scope
 
@@ -219,6 +219,35 @@ Exit gate:
 - a newly committed ticket wakes the provisioner promptly;
 - restart recovery and lease reconciliation still pass;
 - idle management-query traffic is materially lower.
+
+Step 4 completion record (2026-08-12):
+
+- Added one private Hub wakeup singleton projected through a public view that
+  returns data only to the configured provisioner identity. The projection
+  contains one monotonic sequence number and exposes no ticket, player,
+  assignment, or database information.
+- A successfully inserted, non-idempotent match ticket advances the sequence.
+  Repeated client request IDs and rejected duplicate requests do not generate
+  more provisioning work.
+- The local provisioner keeps one authenticated `spacetime subscribe` process
+  on that view. Updates are coalesced through a process-local event, so a burst
+  produces one authoritative private Hub snapshot rather than one snapshot per
+  notification. A failed subscription restarts after five seconds.
+- Replaced the two-second idle poll with a 30-second reconciliation sweep. The
+  configured sweep is required to remain shorter than the ticket lease, and it
+  still owns restart recovery, retry/lease work, terminal-match detection, and
+  cleanup. With no active work, base Hub snapshot traffic falls from 30 to 2
+  snapshots per minute (120 to 8 SQL requests per minute), a 15x reduction.
+- The additive local Hub migration used `delete-data=never`. A disposable live
+  proof was claimed 27.1 ms after ticket creation and reached Hub `READY` in
+  522.4 ms. Its optimized WASM publish took 451.5 ms. Subsequent idle cycles
+  occurred at the expected 30-second cadence and the fallback sweep deleted
+  the expired test database.
+- Verification passed: 9 Hub tests, 16 provisioner tests (including restart,
+  leases, timed fallback/coalescing, exact cleanup, and failure recovery), Hub
+  schema build and binding generation, and both Unity C# project builds. CI now
+  runs the Hub and provisioner suites with the existing PvP validation. Unity
+  batch mode and remote deployment were not used.
 
 ### Step 5 — Add a PvP-specific initial subscription
 

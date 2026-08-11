@@ -137,10 +137,12 @@ ARENA_ENABLE_LOCAL_DIRECT_MODE=0 ops/republish-local-clear.sh
 
 The compatibility switch is refused for non-local servers.
 
-`match_provisioner/` is the external, local-only Phase 3 control-plane worker.
-It polls private Hub tickets, publishes the already-built match WASM, invokes
-the one-shot match bootstrap, and deletes the exact database after termination
-or timeout. Its small SQLite recovery ledger defaults to the ignored
+`match_provisioner/` is the external, local-only control-plane worker. It
+subscribes to a provisioner-only Hub wakeup view, queries private tickets after
+a wakeup, publishes the already-built match WASM, invokes the one-shot match
+bootstrap, and deletes the exact database after termination or timeout. A
+slower reconciliation sweep covers restarts, missed events, leases, and
+cleanup. Its small SQLite recovery ledger defaults to the ignored
 `Library/ArenaMatchProvisioner/` directory. Configuration and safety behavior
 are documented in `match_provisioner/README.md` and
 `match_provisioner/local.env.example`.

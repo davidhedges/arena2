@@ -30,6 +30,7 @@ namespace Arena.HubDb
         {
             AddTable(MyHubPlayer = new(conn));
             AddTable(MyMatchStatus = new(conn));
+            AddTable(ProvisionerWakeup = new(conn));
         }
     }
 
@@ -528,6 +529,7 @@ namespace Arena.HubDb
         {
             new QueryBuilder().From.MyHubPlayer().ToSql(),
             new QueryBuilder().From.MyMatchStatus().ToSql(),
+            new QueryBuilder().From.ProvisionerWakeup().ToSql(),
         }
         ;
     }
@@ -536,6 +538,7 @@ namespace Arena.HubDb
     {
         public global::SpacetimeDB.Table<MyHubPlayer, MyHubPlayerCols, MyHubPlayerIxCols> MyHubPlayer() => new("my_hub_player", new MyHubPlayerCols("my_hub_player"), new MyHubPlayerIxCols("my_hub_player"));
         public global::SpacetimeDB.Table<MyMatchStatus, MyMatchStatusCols, MyMatchStatusIxCols> MyMatchStatus() => new("my_match_status", new MyMatchStatusCols("my_match_status"), new MyMatchStatusIxCols("my_match_status"));
+        public global::SpacetimeDB.Table<ProvisionerWakeup, ProvisionerWakeupCols, ProvisionerWakeupIxCols> ProvisionerWakeup() => new("provisioner_wakeup", new ProvisionerWakeupCols("provisioner_wakeup"), new ProvisionerWakeupIxCols("provisioner_wakeup"));
     }
 
     public sealed class TypedSubscriptionBuilder

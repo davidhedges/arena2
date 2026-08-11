@@ -1,8 +1,9 @@
 # Local match provisioner
 
-This is the Phase 3 local control-plane worker. It watches private tickets in
-`arena-hub-local`, publishes the already-built match WASM into one database per
-ticket, bootstraps that database, and records the ready assignment in the Hub.
+This is the local control-plane worker. It subscribes to a provisioner-only,
+data-free Hub wakeup view, reads private tickets through the loopback management
+API, publishes the already-built match WASM into one database per ticket,
+bootstraps that database, and records the ready assignment in the Hub.
 It then deletes the exact database identity after match termination,
 cancellation, allocation timeout, or the hard lifetime limit.
 
@@ -14,6 +15,10 @@ The worker is intentionally local-only:
 - client assignments contain only the public `ws://`/`wss://` endpoint and
   database identity;
 - the WASM is read once at process start and is never compiled per match;
+- wakeup updates are coalesced, so a burst of requests causes one authoritative
+  Hub snapshot instead of one query set per notification;
+- a 30-second reconciliation sweep recovers subscription interruptions,
+  restarts, leases, terminal matches, and cleanup work;
 - the SQLite ledger stores the exact created database identity before
   bootstrap/assignment so a restart can safely reconcile partial work;
 - deletion requires both that recorded identity and ownership by the Hub's

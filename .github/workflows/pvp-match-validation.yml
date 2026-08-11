@@ -5,9 +5,13 @@ on:
     paths:
       - ".github/workflows/pvp-match-validation.yml"
       - "match-server/**"
+      - "hub-server/**"
+      - "match_provisioner/**"
       - "server/**"
       - "ops/build-match-spacetimedb.sh"
       - "ops/check-match-wasm-size.sh"
+      - "ops/run-local-match-provisioner.sh"
+      - "docs/match-start-latency-optimization-plan-2026-08-11.md"
   workflow_dispatch:
 
 jobs:
@@ -54,6 +58,12 @@ jobs:
           cargo test --manifest-path match-server/Cargo.toml bot_matches::tests
           cargo test --manifest-path match-server/Cargo.toml match_contract::tests
           cargo test --manifest-path match-server/Cargo.toml arena_map_01_layout_is_flat_and_has_no_invisible_example_obstacles
+
+      - name: Test Hub and provisioner control plane
+        run: |
+          set -euo pipefail
+          cargo test --manifest-path hub-server/Cargo.toml
+          python3 -m unittest match_provisioner.test_worker
 
       - name: Build optimized module and generate bindings
         env:

@@ -7,6 +7,8 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import threading
+import time
 import unittest
 from typing import Any
 
@@ -14,6 +16,7 @@ from match_provisioner.worker import (
     Allocation,
     AllocationStore,
     Config,
+    HubWakeupSubscriber,
     Provisioner,
     ProvisionerError,
     allocation_keys,
@@ -230,7 +233,7 @@ class ProvisionerTests(unittest.TestCase):
             lease_seconds=90,
             allocation_seconds=120,
             hard_ttl_seconds=1_800,
-            poll_seconds=1,
+            reconcile_seconds=30,
             cleanup_retry_seconds=5,
             cleaned_retention_seconds=86_400,
         )
@@ -293,6 +296,32 @@ class ProvisionerTests(unittest.TestCase):
             with self.subTest(unsafe=unsafe):
                 with self.assertRaises(ProvisionerError):
                     _validate_management_url(unsafe)
+
+    def test_wakeup_subscription_uses_the_authenticated_provisioner_view(self) -> None:
+        subscriber = HubWakeupSubscriber(
+            "http://127.0.0.1:3000", "arena-hub-local"
+        )
+        command = subscriber.command()
+
+        self.assertNotIn("--anonymous", command)
+        self.assertIn("--print-initial-update", command)
+        self.assertEqual(command[-1], "SELECT * FROM provisioner_wakeup")
+
+    def test_wakeup_wait_is_prompt_coalescing_and_has_a_timed_fallback(self) -> None:
+        subscriber = HubWakeupSubscriber(
+            "http://127.0.0.1:3000", "arena-hub-local"
+        )
+        stopping = threading.Event()
+        subscriber._wakeup.set()
+        subscriber._wakeup.set()
+
+        self.assertTrue(subscriber.wait(1.0, stopping))
+        started = time.monotonic()
+        self.assertFalse(subscriber.wait(0.02, stopping))
+        self.assertGreaterEqual(time.monotonic() - started, 0.015)
+
+        stopping.set()
+        self.assertFalse(subscriber.wait(1.0, stopping))
 
     def test_allocation_keys_are_deterministic_safe_and_ticket_distinct(self) -> None:
         first = allocation_keys("ticket-one", "arena-match")
