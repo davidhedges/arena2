@@ -1,21 +1,13 @@
 {
-  "arena_radius": 60.0,
-  "center_flatten_radius": 20.0,
+  "arena_radius": 30.0,
+  "center_flatten_radius": 30.0,
   "ruin_wall_height": 4.5,
-  "ruin_wall_segments": [
-    { "x": 0.0, "z": -9.0, "half_x": 7.6, "half_z": 0.6 },
-    { "x": 0.0, "z": 9.0, "half_x": 7.6, "half_z": 0.6 },
-    { "x": -9.0, "z": 0.0, "half_x": 0.6, "half_z": 7.6 },
-    { "x": 9.0, "z": 0.0, "half_x": 0.6, "half_z": 7.6 }
-  ],
+  "ruin_wall_segments": [],
   "platform_half_x": 6.0,
   "platform_half_z": 5.0,
   "platform_center_height_offset": 3.2,
   "platform_half_height": 1.0,
-  "platforms": [
-    { "x": -26.0, "z": 18.0 },
-    { "x": 26.0, "z": -18.0 }
-  ],
+  "platforms": [],
   "ramp_half_x": 4.2,
   "ramp_half_z": 5.0,
   "ramp_center_height_offset": 1.5,
@@ -24,11 +16,8 @@
   "ramp_rot_z_abs": 0.34,
   "ramp_top_center_offset": 0.37710188,
   "ramp_top_slope_delta": 1.3339484,
-  "ramps": [
-    { "x": -17.0, "z": 18.0, "side": -1.0 },
-    { "x": 17.0, "z": -18.0, "side": 1.0 }
-  ],
+  "ramps": [],
   "pillar_collider_radius": 0.75,
-  "pillar_count": 12,
+  "pillar_count": 0,
   "pillar_hash_step": 2654435769
 }

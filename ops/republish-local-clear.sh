@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARENA_DATABASE="${ARENA_DATABASE:-arena}"
 ARENA_DELETE_DATA="${ARENA_DELETE_DATA:-always}"
 ARENA_GENERATE_BINDINGS="${ARENA_GENERATE_BINDINGS:-1}"
+ARENA_ENABLE_LOCAL_DIRECT_MODE="${ARENA_ENABLE_LOCAL_DIRECT_MODE:-1}"
 ARENA_PROJECTILE_LOAD_HARNESS="${ARENA_PROJECTILE_LOAD_HARNESS:-0}"
 ARENA_VERIFY_DOTNET="${ARENA_VERIFY_DOTNET:-1}"
 ARENA_SERVER="${ARENA_SERVER:-local}"
@@ -32,6 +33,19 @@ case "$ARENA_DELETE_DATA" in
 esac
 
 publish_args=(--delete-data="$delete_data_mode" --yes -s "$ARENA_SERVER")
+
+case "$ARENA_ENABLE_LOCAL_DIRECT_MODE" in
+    0|1)
+        ;;
+    *)
+        echo "Invalid ARENA_ENABLE_LOCAL_DIRECT_MODE='$ARENA_ENABLE_LOCAL_DIRECT_MODE' (expected 0 or 1)." >&2
+        exit 2
+        ;;
+esac
+if [ "$ARENA_ENABLE_LOCAL_DIRECT_MODE" = "1" ] && [ "$ARENA_SERVER" != "local" ]; then
+    echo "Temporary local-direct mode may only be enabled on the local server." >&2
+    exit 2
+fi
 
 if ! command -v spacetime >/dev/null 2>&1; then
     echo "spacetime CLI is required."
@@ -96,6 +110,11 @@ spacetime call -s "$ARENA_SERVER" "$ARENA_DATABASE" publish_melee_definitions
 echo "Re-syncing item definitions and affixes..."
 spacetime call -s "$ARENA_SERVER" "$ARENA_DATABASE" publish_item_definitions
 
+if [ "$ARENA_ENABLE_LOCAL_DIRECT_MODE" = "1" ]; then
+    echo "Enabling temporary local-direct compatibility mode..."
+    spacetime call -s "$ARENA_SERVER" "$ARENA_DATABASE" enable_local_direct_mode
+fi
+
 echo "Verifying live shared-data contracts..."
 python3 "$ROOT_DIR/ops/verify-spacetimedb-contracts.py" \
     --database "$ARENA_DATABASE" \
@@ -125,4 +144,4 @@ if [ "$ARENA_VERIFY_DOTNET" = "1" ] && [ -f "$ROOT_DIR/Assembly-CSharp.csproj" ]
     dotnet build "$ROOT_DIR/Assembly-CSharp.csproj"
 fi
 
-echo "Republished '$ARENA_DATABASE' (delete-data=$delete_data_mode, bindings=$ARENA_GENERATE_BINDINGS, harness=$ARENA_PROJECTILE_LOAD_HARNESS)."
+echo "Republished '$ARENA_DATABASE' (delete-data=$delete_data_mode, bindings=$ARENA_GENERATE_BINDINGS, harness=$ARENA_PROJECTILE_LOAD_HARNESS, local-direct=$ARENA_ENABLE_LOCAL_DIRECT_MODE)."

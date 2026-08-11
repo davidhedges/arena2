@@ -1,0 +1,14 @@
+[package]
+name = "arena-hub"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+log = "0.4"
+# Keep the Hub contract on the same SDK release already locked by `server/`.
+# A broad `2.0` range currently resolves to newer 2.x releases that the
+# project's checked-in Unity SDK and 2.1 CLI have not adopted yet.
+spacetimedb = "=2.0.5"

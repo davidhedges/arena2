@@ -52,6 +52,12 @@ namespace Arena.Combat
             if (source == target)
                 return ClientCombatRelation.Self;
 
+            // Roster teams are authoritative inside the bot match. Resolve
+            // them before the generic dummy/arena rules so the ally dummy is
+            // assistable and only the opposing team is hostile.
+            if (TryMatchRelation(source, target, out var matchRelation))
+                return matchRelation;
+
             // Playground-only override for targeting and party-frame testing. This is
             // not a general faction, NPC, or bot relationship system.
             if (TryPlaygroundRelation(source, target, out var playgroundRelation))
@@ -181,6 +187,28 @@ namespace Arena.Combat
             relation = kind == PlaygroundKindPartyMember && ArePartyMembers(source, target)
                 ? ClientCombatRelation.PartyAlly
                 : ClientCombatRelation.Neutral;
+            return true;
+        }
+
+        private static bool TryMatchRelation(
+            Identity source,
+            Identity target,
+            out ClientCombatRelation relation)
+        {
+            relation = ClientCombatRelation.Neutral;
+            var conn = NetworkManager.Instance?.Conn;
+            MatchParticipant? sourceParticipant = conn?.Db.MatchParticipant.Identity.Find(source);
+            MatchParticipant? targetParticipant = conn?.Db.MatchParticipant.Identity.Find(target);
+            if (sourceParticipant == null
+                || targetParticipant == null
+                || sourceParticipant.InstanceId != targetParticipant.InstanceId)
+            {
+                return false;
+            }
+
+            relation = sourceParticipant.TeamId == targetParticipant.TeamId
+                ? ClientCombatRelation.PartyAlly
+                : ClientCombatRelation.Hostile;
             return true;
         }
 

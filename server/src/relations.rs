@@ -91,6 +91,17 @@ pub(crate) fn combat_relation(
         return CombatRelation::Self_;
     }
 
+    // A roster-backed match owns its team relationships. This must precede
+    // the generic dummy and arena rules because bot allies are dummy actors
+    // and ordinary arena actors otherwise default to hostile.
+    if let Some(same_team) = crate::bot_matches::participant_team_pair(ctx, source, target) {
+        return if same_team {
+            CombatRelation::PartyAlly
+        } else {
+            CombatRelation::Hostile
+        };
+    }
+
     let source_npc = npc_relation_profile(ctx, source);
     let target_npc = npc_relation_profile(ctx, target);
     match (source_npc.as_ref(), target_npc.as_ref()) {

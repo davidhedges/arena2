@@ -55,6 +55,31 @@ pub struct Player {
 pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     let identity = ctx.sender();
     let now = ctx.timestamp;
+    let admission = crate::match_contract::admit_connection(ctx, identity)?;
+    if matches!(
+        &admission,
+        crate::match_contract::ConnectionAdmission::Service
+    ) {
+        log::info!(
+            "[CONNECT] Match owner/service {} connected without spawning a player",
+            &identity.to_hex()[..8]
+        );
+        return Ok(());
+    }
+    let reserved_display_name = match &admission {
+        crate::match_contract::ConnectionAdmission::Reserved(reservation) => {
+            Some(reservation.display_name.clone())
+        }
+        _ => None,
+    };
+    let is_reserved_match_player = reserved_display_name.is_some();
+    if matches!(
+        &admission,
+        crate::match_contract::ConnectionAdmission::LocalDirect
+    ) {
+        crate::game_loop::ensure_game_loop_schedule(ctx);
+        crate::game_loop::ensure_game_loop_watchdog_schedule(ctx);
+    }
 
     // Hot module updates do not re-run init. Reconcile the authored catalogs
     // before any player-facing progression/inventory setup reads them so new
@@ -71,7 +96,9 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
         // session resumes so nothing fires into the fresh session.
         clear_transient_actor_state(ctx, identity);
         despawn_dead_npcs_for_owner(ctx, identity);
-        if ctx.db.player_world().identity().find(identity).is_none() {
+        if is_reserved_match_player {
+            crate::match_contract::start_reserved_player_match(ctx, identity)?;
+        } else if ctx.db.player_world().identity().find(identity).is_none() {
             set_player_open_world(ctx, identity)?;
         } else {
             ensure_player_open_world_scene(ctx, identity);
@@ -94,7 +121,8 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
         ctx,
         ActorSpawnSpec {
             identity,
-            username: format!("Player_{}", &identity.to_hex()[..8]),
+            username: reserved_display_name
+                .unwrap_or_else(|| format!("Player_{}", &identity.to_hex()[..8])),
             pos_x: spawn_x,
             pos_y: spawn_y,
             pos_z: spawn_z,
@@ -105,11 +133,15 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
             grounded: true,
             last_processed_tick: 0,
             state: player_state,
-            world: Some(ActorWorldAssignment::Open),
+            world: (!is_reserved_match_player).then_some(ActorWorldAssignment::Open),
         },
     )?;
 
-    set_player_open_world(ctx, identity)?;
+    if is_reserved_match_player {
+        crate::match_contract::start_reserved_player_match(ctx, identity)?;
+    } else {
+        set_player_open_world(ctx, identity)?;
+    }
     ensure_default_progression_for_identity(ctx, identity)?;
     ensure_default_character_appearance_for_identity(ctx, identity)?;
     ensure_player_inventory_for_identity(ctx, identity);
@@ -130,12 +162,33 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
 #[reducer(client_disconnected)]
 pub fn client_disconnected(ctx: &ReducerContext) -> Result<(), String> {
     let identity = ctx.sender();
+    if crate::match_contract::is_provisioned(ctx) {
+        if let Err(error) = crate::match_contract::handle_provisioned_disconnect(ctx, identity) {
+            log::error!(
+                "[DISCONNECT] Provisioned match cleanup for {} failed; continuing: {}",
+                &identity.to_hex()[..8],
+                error
+            );
+        }
+        log::info!(
+            "[DISCONNECT] Provisioned match connection {} removed without entering the legacy world path",
+            &identity.to_hex()[..8]
+        );
+        return Ok(());
+    }
     // Never abort the disconnect transaction on ancillary cleanup errors: an
     // early `?` here would roll back the entire teardown and leave every
     // per-identity row alive for the next session (netcode audit R1).
     if let Err(error) = crate::survival::teardown_survival_for_owner(ctx, identity, "disconnect") {
         log::error!(
             "[DISCONNECT] Player {} survival cleanup failed; continuing: {}",
+            &identity.to_hex()[..8],
+            error
+        );
+    }
+    if let Err(error) = crate::bot_matches::teardown_owned_bot_match(ctx, identity) {
+        log::error!(
+            "[DISCONNECT] Player {} bot-match cleanup failed; continuing: {}",
             &identity.to_hex()[..8],
             error
         );

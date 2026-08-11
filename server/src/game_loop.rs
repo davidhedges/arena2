@@ -28,6 +28,7 @@ use crate::action_prediction::prune_predicted_action_results;
 use crate::appearance::backfill_character_appearance_rows;
 #[allow(unused_imports)]
 use crate::arena::arena_instance as _;
+#[cfg(not(feature = "pvp_match"))]
 #[allow(unused_imports)]
 use crate::arena::player_open_world_scene as _;
 #[allow(unused_imports)]
@@ -568,6 +569,9 @@ impl PlayerTickContexts {
 }
 
 pub(crate) fn ensure_game_loop_schedule(ctx: &ReducerContext) {
+    if !crate::match_contract::simulation_should_run(ctx) {
+        return;
+    }
     if ctx.db.game_loop_timer().iter().next().is_some() {
         return;
     }
@@ -587,6 +591,9 @@ pub(crate) fn ensure_game_loop_schedule(ctx: &ReducerContext) {
 }
 
 pub(crate) fn ensure_game_loop_watchdog_schedule(ctx: &ReducerContext) {
+    if !crate::match_contract::simulation_should_run(ctx) {
+        return;
+    }
     if ctx.db.game_loop_watchdog().iter().next().is_some() {
         return;
     }
@@ -595,6 +602,31 @@ pub(crate) fn ensure_game_loop_watchdog_schedule(ctx: &ReducerContext) {
         scheduled_id: 0,
         scheduled_at: ScheduleAt::Interval(GAME_LOOP_WATCHDOG_INTERVAL.into()),
     });
+}
+
+pub(crate) fn stop_game_loop_schedule(ctx: &ReducerContext) {
+    let tick_ids: Vec<u64> = ctx
+        .db
+        .game_loop_timer()
+        .iter()
+        .map(|row| row.scheduled_id)
+        .collect();
+    for scheduled_id in tick_ids {
+        ctx.db.game_loop_timer().scheduled_id().delete(scheduled_id);
+    }
+
+    let watchdog_ids: Vec<u64> = ctx
+        .db
+        .game_loop_watchdog()
+        .iter()
+        .map(|row| row.scheduled_id)
+        .collect();
+    for scheduled_id in watchdog_ids {
+        ctx.db
+            .game_loop_watchdog()
+            .scheduled_id()
+            .delete(scheduled_id);
+    }
 }
 
 /// Re-arms the fixed-rate chain. Called FIRST inside game_tick so the next
@@ -808,6 +840,10 @@ pub fn game_loop_watchdog_tick(
     ctx: &ReducerContext,
     _timer: GameLoopWatchdog,
 ) -> Result<(), String> {
+    if !crate::match_contract::simulation_should_run(ctx) {
+        stop_game_loop_schedule(ctx);
+        return Ok(());
+    }
     let overdue_ids: Vec<u64> = ctx
         .db
         .game_loop_timer()
@@ -835,11 +871,12 @@ pub fn game_loop_watchdog_tick(
     Ok(())
 }
 
-/// Module initialization - starts the game loop.
+/// Module initialization captures authority and authored state but leaves a
+/// fresh database idle. The loop begins only after local-direct selection or
+/// admission of the reserved provisioned player.
 #[reducer(init)]
 pub fn init(ctx: &ReducerContext) -> Result<(), String> {
-    ensure_game_loop_schedule(ctx);
-    ensure_game_loop_watchdog_schedule(ctx);
+    crate::match_contract::initialize_match_module(ctx);
     crate::contract_version::sync_contract_versions(ctx);
     bootstrap_server_state(ctx);
     despawn_legacy_default_dummies(ctx);
@@ -859,7 +896,7 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
         );
     }
 
-    log::info!("[INIT] Game loop started at 30.3Hz (33ms tick)");
+    log::info!("[INIT] Match database initialized idle; no game-loop schedule exists");
     if tick_profiling_enabled() {
         if crate::tick_metrics::WALL_CLOCK_AVAILABLE {
             log::info!(
@@ -2144,6 +2181,10 @@ fn tick_player(
 /// - helpers may structure the logic, but they execute only inside this reducer
 #[reducer]
 pub fn game_tick(ctx: &ReducerContext, timer: GameLoopTimer) -> Result<(), String> {
+    if !crate::match_contract::simulation_should_run(ctx) {
+        stop_game_loop_schedule(ctx);
+        return Ok(());
+    }
     // Fixed-rate chain first: the next link commits with this tick's writes.
     // (A returned Err would roll the link back too — the watchdog re-seeds
     // that case within a second.)
@@ -2225,6 +2266,11 @@ pub fn game_tick(ctx: &ReducerContext, timer: GameLoopTimer) -> Result<(), Strin
         }
     }
 
+    if !crate::match_contract::simulation_should_run(ctx) {
+        stop_game_loop_schedule(ctx);
+        log::info!("[GAME_LOOP] Match reached a terminal phase; tick chain stopped");
+    }
+
     Ok(())
 }
 
@@ -2249,6 +2295,7 @@ fn tick_countdowns(ctx: &ReducerContext, now: Timestamp) {
             arena.phase = MATCH_PHASE_IN_PROGRESS.to_string();
             arena.countdown_started_at = None;
             ctx.db.arena_instance().id().update(arena);
+            crate::match_contract::mark_in_progress(ctx);
         }
     }
 }

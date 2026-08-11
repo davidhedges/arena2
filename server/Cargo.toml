@@ -8,6 +8,7 @@ crate-type = ["cdylib"]
 
 [features]
 default = []
+pvp_match = []
 projectile_load_harness = []
 spellcasting_terminal_harness = []
 

@@ -32,6 +32,77 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void NetworkCredentials_AreClusterScopedAcrossHubAndMatchSpellings()
+        {
+            Type configType = RequireRuntimeType("Arena.Network.NetworkEnvironmentConfig");
+            MethodInfo scopeForServer = RequireMethod(
+                configType,
+                "CredentialScopeForServer",
+                typeof(string));
+
+            string localhostWs = (string)scopeForServer.Invoke(null, new object[]
+            {
+                "ws://localhost:3000",
+            })!;
+            string loopbackHttp = (string)scopeForServer.Invoke(null, new object[]
+            {
+                "http://127.0.0.1:3000",
+            })!;
+            string otherPort = (string)scopeForServer.Invoke(null, new object[]
+            {
+                "ws://localhost:3001",
+            })!;
+
+            Assert.That(localhostWs, Is.EqualTo(loopbackHttp));
+            Assert.That(otherPort, Is.Not.EqualTo(localhostWs));
+        }
+
+        [Test]
+        public void UnityMatchHandoff_ValidatesAssignmentBeforeSendingHostToken()
+        {
+            string environment = File.ReadAllText(
+                "Assets/Arena/Runtime/Network/NetworkEnvironmentConfig.cs");
+            string hub = File.ReadAllText(
+                "Assets/Arena/Runtime/Network/HubNetworkManager.cs");
+            string handoff = File.ReadAllText(
+                "Assets/Arena/Runtime/Network/MatchHandoffCoordinator.cs");
+            string match = File.ReadAllText(
+                "Assets/Arena/Runtime/Network/NetworkManager.cs");
+
+            Assert.That(environment, Does.Contain("cluster|{CredentialScopeForServer(endpoint.ServerUri)}"));
+            Assert.That(environment, Does.Contain("LegacyCredentialAccounts(endpoint)"));
+            Assert.That(hub, Does.Contain("From.MyHubPlayer().ToSql()"));
+            Assert.That(hub, Does.Contain("From.MyMatchStatus().ToSql()"));
+            Assert.That(hub, Does.Contain("Guid.NewGuid().ToString(\"N\")"));
+            Assert.That(handoff, Does.Contain("MatchAssignmentValidator.TryValidate("));
+            Assert.That(handoff, Does.Contain("CredentialScopeForServer(status.ServerUri)"));
+            Assert.That(handoff, Does.Contain("_hub.DisconnectForMatchHandoff()"));
+            Assert.That(match, Does.Contain("identity != _expectedProvisionedIdentity"));
+            Assert.That(match, Does.Contain("ProvisionedMatchReady?.Invoke(_localIdentity)"));
+        }
+
+        [Test]
+        public void MatchStartupTiming_CoversRequestProvisioningConnectionAndSceneLoad()
+        {
+            string hub = File.ReadAllText(
+                "Assets/Arena/Runtime/Network/HubNetworkManager.cs");
+            string handoff = File.ReadAllText(
+                "Assets/Arena/Runtime/Network/MatchHandoffCoordinator.cs");
+            string match = File.ReadAllText(
+                "Assets/Arena/Runtime/Network/NetworkManager.cs");
+
+            Assert.That(hub, Does.Contain("row.CreatedAt.MicrosecondsSinceUnixEpoch"));
+            Assert.That(hub, Does.Contain("row.ReadyAt?.MicrosecondsSinceUnixEpoch"));
+            Assert.That(handoff, Does.Contain("[MatchStartupTiming]"));
+            Assert.That(handoff, Does.Contain("BeginRequest()"));
+            Assert.That(handoff, Does.Contain("ObserveHubStatus(status)"));
+            Assert.That(handoff, Does.Contain("CompleteSceneLoad()"));
+            Assert.That(match, Does.Contain("Record(\"match_transport_connected\")"));
+            Assert.That(match, Does.Contain("Record(\"static_subscription_applied\")"));
+            Assert.That(match, Does.Contain("Record(\"local_subscription_applied\")"));
+        }
+
+        [Test]
         public void GameplayScope_FromPlayerWorld_MapsOpenWorldRows()
         {
             Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
@@ -90,6 +161,16 @@ namespace Arena.Tests.Editor
                 Assert.That(sql, Does.Contain($"\"{table}\".\"instance_scope_id\" = 42"));
                 Assert.That(sql, Does.Not.Contain($"\"{table}\".\"instance_id\" = 42"));
             }
+
+            foreach (string table in new[]
+                     {
+                         "arena_match",
+                         "match_participant",
+                         "match_participant_stats",
+                     })
+            {
+                Assert.That(sql, Does.Contain($"\"{table}\".\"instance_id\" = 42"));
+            }
         }
 
         [Test]
@@ -117,27 +198,27 @@ namespace Arena.Tests.Editor
                 typeof(string),
                 typeof(string));
 
-            object? training = method.Invoke(null, new object?[] { "TrainingGround", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
-            object? characterCreation = method.Invoke(null, new object?[] { "CharacterCreation", null, null, "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
-            object? groundSlashDemo = method.Invoke(null, new object?[] { "VFXGraph_GroundSlash", null, null, "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
-            object? pilotoHolyDemo = method.Invoke(null, new object?[] { "Holy & Paladin Spells Bundle", null, null, "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
-            object? unknownInstanceKind = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, null, "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
-            object? enterArenaInstance = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, "ARENA", "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
-            object? enterSurvivalInstance = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
-            object? enterSurvivalFromHub = method.Invoke(null, new object?[] { "Hub", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
-            object? preserveHubForOpenWorld = method.Invoke(null, new object?[] { "Hub", null, null, "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
-            object? preserveLoadedSurvival = method.Invoke(null, new object?[] { "SurvivalArena", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
-            object? enterOpenWorld = method.Invoke(null, new object?[] { "ArenaMatch", null, null, "Arena_VerdantStand_Blockout", "ArenaMatch", "SurvivalArena" });
-            object? preserveLoadedOpenWorld = method.Invoke(null, new object?[] { "Oasis_Day", null, null, "Golden_Valley_Sunny", "ArenaMatch", "SurvivalArena" });
+            object? training = method.Invoke(null, new object?[] { "TrainingGround", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? characterCreation = method.Invoke(null, new object?[] { "CharacterCreation", null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? groundSlashDemo = method.Invoke(null, new object?[] { "VFXGraph_GroundSlash", null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? pilotoHolyDemo = method.Invoke(null, new object?[] { "Holy & Paladin Spells Bundle", null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? unknownInstanceKind = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? enterArenaInstance = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, "ARENA", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? enterSurvivalInstance = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? enterSurvivalFromHub = method.Invoke(null, new object?[] { "Hub", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? preserveHubForOpenWorld = method.Invoke(null, new object?[] { "Hub", null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? preserveLoadedSurvival = method.Invoke(null, new object?[] { "Arena_Map_01", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? enterOpenWorld = method.Invoke(null, new object?[] { "Arena_Map_01", null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? preserveLoadedOpenWorld = method.Invoke(null, new object?[] { "Oasis_Day", null, null, "Golden_Valley_Sunny", "Arena_Map_01", "Arena_Map_01" });
 
             Assert.That(training, Is.Null);
             Assert.That(characterCreation, Is.Null);
             Assert.That(groundSlashDemo, Is.Null);
             Assert.That(pilotoHolyDemo, Is.Null);
             Assert.That(unknownInstanceKind, Is.Null);
-            Assert.That(enterArenaInstance, Is.EqualTo("ArenaMatch"));
-            Assert.That(enterSurvivalInstance, Is.EqualTo("SurvivalArena"));
-            Assert.That(enterSurvivalFromHub, Is.EqualTo("SurvivalArena"));
+            Assert.That(enterArenaInstance, Is.EqualTo("Arena_Map_01"));
+            Assert.That(enterSurvivalInstance, Is.EqualTo("Arena_Map_01"));
+            Assert.That(enterSurvivalFromHub, Is.EqualTo("Arena_Map_01"));
             Assert.That(preserveHubForOpenWorld, Is.Null);
             Assert.That(preserveLoadedSurvival, Is.Null);
             Assert.That(enterOpenWorld, Is.EqualTo("Arena_VerdantStand_Blockout"));
@@ -145,7 +226,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void LocalWorldRuntimeCoordinator_WaitsForKindThenLoadsDedicatedSurvivalScene()
+        public void LocalWorldRuntimeCoordinator_WaitsForKindThenLoadsSharedArenaMap()
         {
             Type coordinatorType = RequireRuntimeType("Arena.Entity.LocalWorldRuntimeCoordinator");
             Type worldContextType = RequireRuntimeType("Arena.Input.LocalMovementWorldContext");
@@ -177,7 +258,7 @@ namespace Arena.Tests.Editor
             SetField(arenaInstance, "InstanceKind", "SURVIVAL");
             RequireMethod(coordinatorType, "OnArenaInstanceInsert", arenaInstanceType).Invoke(coordinator, new[] { arenaInstance });
 
-            Assert.That(loadedScenes, Is.EqualTo(new[] { "SurvivalArena" }));
+            Assert.That(loadedScenes, Is.EqualTo(new[] { "Arena_Map_01" }));
         }
 
         [Test]
@@ -193,7 +274,7 @@ namespace Arena.Tests.Editor
                 typeof(bool),
                 typeof(string).MakeByRefType());
 
-            request.Invoke(state, new object[] { "SurvivalArena", 100 });
+            request.Invoke(state, new object[] { "Arena_Map_01", 100 });
             var sameFrame = new object?[] { 100, false, null };
             Assert.That(tryDequeue.Invoke(state, sameFrame), Is.False);
 
@@ -322,10 +403,10 @@ namespace Arena.Tests.Editor
                 "Frost & Ice Spells Bundle",
                 "Assets/ThirdParty/AssetStore/VFX/Piloto Studio/Elemental VFX Mega Bundle/Frost/Frost & Ice Spells Bundle.unity",
             });
-            object? arenaMatch = method.Invoke(null, new object[]
+            object? arenaMap01 = method.Invoke(null, new object[]
             {
-                "ArenaMatch",
-                "Assets/Arena/Content/Scenes/ArenaMatch.unity",
+                "Arena_Map_01",
+                "Assets/Arena/Content/Scenes/Arena_Map_01.unity",
             });
             object? openWorldSceneInPlayerBuild = method.Invoke(null, new object[]
             {
@@ -337,12 +418,17 @@ namespace Arena.Tests.Editor
                 "Holy & Paladin Spells Bundle",
                 "Assets/ThirdParty/AssetStore/VFX/Piloto Studio/Elemental VFX Mega Bundle/Holy/Holy & Paladin Spells Bundle.unity",
             });
-            object? sceneGateArenaMatch = sceneGateMethod.Invoke(null, new object[]
+            object? sceneGateArenaMap01 = sceneGateMethod.Invoke(null, new object[]
+            {
+                "Arena_Map_01",
+                "Assets/Arena/Content/Scenes/Arena_Map_01.unity",
+            });
+            object? sceneGateRetiredArenaMatch = sceneGateMethod.Invoke(null, new object[]
             {
                 "ArenaMatch",
-                "Assets/Arena/Content/Scenes/ArenaMatch.unity",
+                string.Empty,
             });
-            object? sceneGateSurvivalArena = sceneGateMethod.Invoke(null, new object[]
+            object? sceneGateRetiredSurvivalArena = sceneGateMethod.Invoke(null, new object[]
             {
                 "SurvivalArena",
                 string.Empty,
@@ -350,18 +436,21 @@ namespace Arena.Tests.Editor
 
             Assert.That(pilotoHolyDemo, Is.False);
             Assert.That(pilotoFrostDemo, Is.False);
-            Assert.That(arenaMatch, Is.True);
+            Assert.That(arenaMap01, Is.True);
             Assert.That(openWorldSceneInPlayerBuild, Is.True);
             Assert.That(sceneGatePilotoHolyDemo, Is.False);
-            Assert.That(sceneGateArenaMatch, Is.True);
-            Assert.That(sceneGateSurvivalArena, Is.True);
+            Assert.That(sceneGateArenaMap01, Is.True);
+            Assert.That(sceneGateRetiredArenaMatch, Is.False);
+            Assert.That(sceneGateRetiredSurvivalArena, Is.False);
         }
 
         [Test]
-        public void SurvivalArena_IsBuildRegisteredWithFourAuthoredEntrancesAndLaptopSafeLighting()
+        public void ArenaMap01_IsBuildRegisteredWithFourAuthoredEntrancesAndLaptopSafeLighting()
         {
-            const string scenePath = "Assets/Arena/Content/Scenes/SurvivalArena.unity";
+            const string scenePath = "Assets/Arena/Content/Scenes/Arena_Map_01.unity";
             Assert.That(File.Exists(scenePath), Is.True);
+            Assert.That(File.Exists("Assets/Arena/Content/Scenes/ArenaMatch.unity"), Is.False);
+            Assert.That(File.Exists("Assets/Arena/Content/Scenes/SurvivalArena.unity"), Is.False);
 
             string buildSettings = File.ReadAllText("ProjectSettings/EditorBuildSettings.asset");
             Assert.That(buildSettings, Does.Contain($"path: {scenePath}"));
@@ -378,12 +467,27 @@ namespace Arena.Tests.Editor
                 Is.EqualTo(56));
 
             string lightingBudget = File.ReadAllText(
-                "Assets/Arena/Runtime/World/SurvivalLightingBudget.cs");
+                "Assets/Arena/Runtime/World/ArenaMap01LightingBudget.cs");
             Assert.That(
                 lightingBudget,
                 Does.Contain("ArenaGraphicsSettings.EffectsAnimationUpdatesPerSecond"));
             Assert.That(lightingBudget, Does.Contain("ArenaLightShadowQuality.Hero"));
             Assert.That(lightingBudget, Does.Contain("LightShadows.Soft"));
+
+            string mapCatalog = File.ReadAllText(
+                "Assets/Arena/Runtime/World/ArenaMapCatalog.cs");
+            Assert.That(mapCatalog, Does.Contain("ArenaMap01Id = \"ARENA_MAP_01\""));
+            Assert.That(mapCatalog, Does.Contain("ArenaMap01SceneName = \"Arena_Map_01\""));
+
+            string serverLayout = File.ReadAllText("server/src/arena_layout.shared.json");
+            string clientLayout = File.ReadAllText(
+                "Assets/Arena/Resources/SharedData/arena_layout.shared.json");
+            Assert.That(clientLayout, Is.EqualTo(serverLayout));
+            Assert.That(serverLayout, Does.Contain("\"arena_radius\": 30.0"));
+            Assert.That(serverLayout, Does.Contain("\"ruin_wall_segments\": []"));
+            Assert.That(serverLayout, Does.Contain("\"platforms\": []"));
+            Assert.That(serverLayout, Does.Contain("\"ramps\": []"));
+            Assert.That(serverLayout, Does.Contain("\"pillar_count\": 0"));
         }
 
         [Test]
@@ -595,6 +699,62 @@ namespace Arena.Tests.Editor
             Assert.That(localSqlText, Does.Not.Contain("\"inventory_container\".\"owner\" = 0x"));
             Assert.That(localSqlText, Does.Not.Contain("\"item_instance\".\"current_owner\" = 0x"));
             Assert.That(localSqlText, Does.Not.Contain("\"character_progression\""));
+        }
+
+        [Test]
+        public void GameplaySubscriptionPlanner_PvpMatchQueriesReferenceOnlyDedicatedSchemaTables()
+        {
+            Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
+            Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
+            Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
+            object localIdentity = CreateIdentity(1);
+            object row = Activator.CreateInstance(
+                playerWorldType,
+                localIdentity,
+                "INSTANCE",
+                42UL,
+                42UL,
+                string.Empty)!;
+            object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
+                .Invoke(null, new[] { row, null })!;
+
+            string[] staticSql = (string[])RequireMethod(plannerType, "BuildPvpMatchStaticQuerySqls")
+                .Invoke(null, Array.Empty<object>())!;
+            string[] localSql = (string[])RequireMethod(
+                    plannerType,
+                    "BuildPvpMatchLocalQuerySqls",
+                    localIdentity.GetType())
+                .Invoke(null, new[] { localIdentity })!;
+            string[] scopedSql = (string[])RequireMethod(
+                    plannerType,
+                    "BuildPvpMatchScopedQuerySqls",
+                    gameplayScopeType)
+                .Invoke(null, new[] { scope })!;
+
+            string sql = string.Join("\n", staticSql.Concat(localSql).Concat(scopedSql));
+            foreach (string unavailableTable in new[]
+                     {
+                         "party",
+                         "party_member",
+                         "party_invite",
+                         "playground_target",
+                         "player_open_world_scene",
+                         "active_dice_roll",
+                         "survival_run",
+                         "survival_result",
+                         "survival_score",
+                         "survival_shop_offer",
+                         "active_world_interaction",
+                         "world_door_state",
+                         "world_trap_state",
+                     })
+            {
+                Assert.That(sql, Does.Not.Contain($"\"{unavailableTable}\""));
+            }
+
+            Assert.That(sql, Does.Contain("\"arena_match\""));
+            Assert.That(sql, Does.Contain("\"match_participant\""));
+            Assert.That(sql, Does.Contain("\"active_world_obstacle\""));
         }
 
         [Test]
@@ -1396,8 +1556,8 @@ namespace Arena.Tests.Editor
                 null,
                 getActiveSceneName,
                 loadScene,
-                "ArenaMatch",
-                "SurvivalArena",
+                "Arena_Map_01",
+                "Arena_Map_01",
             });
         }
 

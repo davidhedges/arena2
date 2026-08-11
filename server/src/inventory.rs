@@ -21,12 +21,16 @@ use crate::relations::TargetAudience;
 use crate::resources::grant_primary_resource_amount_for_kind;
 use crate::spells::{is_on_global_cooldown, stamp_global_cooldown_for_duration};
 
+#[cfg(not(feature = "pvp_match"))]
 #[allow(unused_imports)]
 use crate::survival::survival_run as _;
+#[cfg(not(feature = "pvp_match"))]
 #[allow(unused_imports)]
 use crate::survival::survival_run_item as _;
+#[cfg(not(feature = "pvp_match"))]
 #[allow(unused_imports)]
 use crate::survival::survival_stash as _;
+#[cfg(not(feature = "pvp_match"))]
 #[allow(unused_imports)]
 use crate::survival::survival_upgrade as _;
 
@@ -2575,6 +2579,7 @@ pub fn equip_item(
 #[reducer]
 pub fn equip_armor_set(ctx: &ReducerContext, armor_set_id: String) -> Result<(), String> {
     let owner = ctx.sender();
+    #[cfg(not(feature = "pvp_match"))]
     if ctx.db.survival_stash().owner().find(owner).is_some() {
         return Err("armor sets cannot be changed during a survival run".to_string());
     }
@@ -2898,6 +2903,7 @@ pub(crate) fn ensure_player_inventory_for_identity(ctx: &ReducerContext, owner: 
     sync_progression_for_equipment_change(ctx, owner, ctx.timestamp);
 }
 
+#[cfg(not(feature = "pvp_match"))]
 pub(crate) fn begin_survival_inventory(
     ctx: &ReducerContext,
     owner: Identity,
@@ -2996,6 +3002,7 @@ pub(crate) fn begin_survival_inventory(
     Ok(())
 }
 
+#[cfg(not(feature = "pvp_match"))]
 pub(crate) fn restore_survival_inventory(
     ctx: &ReducerContext,
     owner: Identity,
@@ -3538,13 +3545,16 @@ pub(crate) fn equipment_modifier_totals_for_owner(
         totals.armor_cast_speed_penalty = (-spec.cast_speed_modifier()).max(0.0);
     }
 
-    if let Some(run) = ctx.db.survival_run().owner().filter(owner).next() {
-        for upgrade in ctx.db.survival_upgrade().arena_id().filter(run.arena_id) {
-            apply_modifier_value(
-                &mut totals,
-                upgrade.modifier_id.as_str(),
-                upgrade.total_value,
-            );
+    #[cfg(not(feature = "pvp_match"))]
+    {
+        if let Some(run) = ctx.db.survival_run().owner().filter(owner).next() {
+            for upgrade in ctx.db.survival_upgrade().arena_id().filter(run.arena_id) {
+                apply_modifier_value(
+                    &mut totals,
+                    upgrade.modifier_id.as_str(),
+                    upgrade.total_value,
+                );
+            }
         }
     }
 

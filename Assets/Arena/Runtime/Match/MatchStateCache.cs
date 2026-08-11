@@ -25,6 +25,7 @@ namespace Arena.Match
         private bool _clientFallbackEnded;
         private Identity? _clientFallbackWinnerId;
         private readonly Dictionary<ulong, ArenaInstance> _instancesById = new();
+        private readonly Dictionary<ulong, ArenaMatch> _matchesById = new();
 
         public MatchPhase Phase
             => _clientFallbackEnded && _serverPhase != MatchPhase.Ended
@@ -33,6 +34,9 @@ namespace Arena.Match
 
         public Identity? WinnerId
             => _serverWinnerId ?? (_clientFallbackEnded ? _clientFallbackWinnerId : null);
+
+        public byte? WinnerTeamId { get; private set; }
+        public bool IsTeamMatch { get; private set; }
 
         public ulong? LocalInstanceId { get; private set; }
 
@@ -62,11 +66,17 @@ namespace Arena.Match
             {
                 ApplyInstance(instance);
             }
+            if (instanceId.HasValue
+                && _matchesById.TryGetValue(instanceId.Value, out ArenaMatch arenaMatch))
+            {
+                ApplyArenaMatch(arenaMatch);
+            }
         }
 
         internal void ResetForNetworkReconnect()
         {
             _instancesById.Clear();
+            _matchesById.Clear();
             LocalInstanceId = null;
             Reset();
         }
@@ -90,6 +100,40 @@ namespace Arena.Match
             _instancesById.Remove(row.Id);
             if (row.Id == LocalInstanceId)
                 Reset();
+        }
+
+        public void OnArenaMatchInsert(EventContext ctx, ArenaMatch row)
+        {
+            _matchesById[row.InstanceId] = row;
+            ApplyArenaMatch(row);
+        }
+
+        public void OnArenaMatchUpdate(EventContext ctx, ArenaMatch old, ArenaMatch row)
+        {
+            _matchesById[row.InstanceId] = row;
+            ApplyArenaMatch(row);
+        }
+
+        public void OnArenaMatchDelete(EventContext ctx, ArenaMatch row)
+        {
+            _matchesById.Remove(row.InstanceId);
+            if (row.InstanceId == LocalInstanceId)
+            {
+                WinnerTeamId = null;
+                IsTeamMatch = false;
+            }
+        }
+
+        private void ApplyArenaMatch(ArenaMatch row)
+        {
+            if (row.InstanceId != LocalInstanceId)
+                return;
+
+            IsTeamMatch = string.Equals(
+                row.Ruleset,
+                "TEAM_ELIMINATION",
+                System.StringComparison.OrdinalIgnoreCase);
+            WinnerTeamId = row.WinnerTeamId;
         }
 
         private void ApplyInstance(ArenaInstance row)
@@ -119,6 +163,8 @@ namespace Arena.Match
             _clientFallbackWinnerId = null;
             _hasInstanceData = false;
             _instanceKind    = string.Empty;
+            WinnerTeamId = null;
+            IsTeamMatch = false;
             CountdownStartedAt = null;
         }
 

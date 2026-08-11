@@ -39,6 +39,7 @@ namespace SpacetimeDB.Types
             AddTable(ActiveWorldInteraction = new(conn));
             AddTable(ActiveWorldObstacle = new(conn));
             AddTable(ArenaInstance = new(conn));
+            AddTable(ArenaMatch = new(conn));
             AddTable(ArmorSetDefinition = new(conn));
             AddTable(AutoAttackCatalog = new(conn));
             AddTable(AutoAttackState = new(conn));
@@ -70,6 +71,7 @@ namespace SpacetimeDB.Types
             AddTable(ItemInstance = new(conn));
             AddTable(ItemSpell = new(conn));
             AddTable(LingeringShadeState = new(conn));
+            AddTable(MatchParticipant = new(conn));
             AddTable(MatchParticipantStats = new(conn));
             AddTable(MeleeAbilityCatalog = new(conn));
             AddTable(MeleeAttackModifierCatalog = new(conn));
@@ -620,6 +622,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.ActiveWorldInteraction().ToSql(),
             new QueryBuilder().From.ActiveWorldObstacle().ToSql(),
             new QueryBuilder().From.ArenaInstance().ToSql(),
+            new QueryBuilder().From.ArenaMatch().ToSql(),
             new QueryBuilder().From.ArmorSetDefinition().ToSql(),
             new QueryBuilder().From.AutoAttackCatalog().ToSql(),
             new QueryBuilder().From.AutoAttackState().ToSql(),
@@ -651,6 +654,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.ItemInstance().ToSql(),
             new QueryBuilder().From.ItemSpell().ToSql(),
             new QueryBuilder().From.LingeringShadeState().ToSql(),
+            new QueryBuilder().From.MatchParticipant().ToSql(),
             new QueryBuilder().From.MatchParticipantStats().ToSql(),
             new QueryBuilder().From.MeleeAbilityCatalog().ToSql(),
             new QueryBuilder().From.MeleeAttackModifierCatalog().ToSql(),
@@ -711,6 +715,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<ActiveWorldInteraction, ActiveWorldInteractionCols, ActiveWorldInteractionIxCols> ActiveWorldInteraction() => new("active_world_interaction", new ActiveWorldInteractionCols("active_world_interaction"), new ActiveWorldInteractionIxCols("active_world_interaction"));
         public global::SpacetimeDB.Table<ActiveWorldObstacle, ActiveWorldObstacleCols, ActiveWorldObstacleIxCols> ActiveWorldObstacle() => new("active_world_obstacle", new ActiveWorldObstacleCols("active_world_obstacle"), new ActiveWorldObstacleIxCols("active_world_obstacle"));
         public global::SpacetimeDB.Table<ArenaInstance, ArenaInstanceCols, ArenaInstanceIxCols> ArenaInstance() => new("arena_instance", new ArenaInstanceCols("arena_instance"), new ArenaInstanceIxCols("arena_instance"));
+        public global::SpacetimeDB.Table<ArenaMatch, ArenaMatchCols, ArenaMatchIxCols> ArenaMatch() => new("arena_match", new ArenaMatchCols("arena_match"), new ArenaMatchIxCols("arena_match"));
         public global::SpacetimeDB.Table<ArmorSetDefinition, ArmorSetDefinitionCols, ArmorSetDefinitionIxCols> ArmorSetDefinition() => new("armor_set_definition", new ArmorSetDefinitionCols("armor_set_definition"), new ArmorSetDefinitionIxCols("armor_set_definition"));
         public global::SpacetimeDB.Table<AutoAttackCatalog, AutoAttackCatalogCols, AutoAttackCatalogIxCols> AutoAttackCatalog() => new("auto_attack_catalog", new AutoAttackCatalogCols("auto_attack_catalog"), new AutoAttackCatalogIxCols("auto_attack_catalog"));
         public global::SpacetimeDB.Table<AutoAttackState, AutoAttackStateCols, AutoAttackStateIxCols> AutoAttackState() => new("auto_attack_state", new AutoAttackStateCols("auto_attack_state"), new AutoAttackStateIxCols("auto_attack_state"));
@@ -742,6 +747,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<ItemInstance, ItemInstanceCols, ItemInstanceIxCols> ItemInstance() => new("item_instance", new ItemInstanceCols("item_instance"), new ItemInstanceIxCols("item_instance"));
         public global::SpacetimeDB.Table<ItemSpell, ItemSpellCols, ItemSpellIxCols> ItemSpell() => new("item_spell", new ItemSpellCols("item_spell"), new ItemSpellIxCols("item_spell"));
         public global::SpacetimeDB.Table<LingeringShadeState, LingeringShadeStateCols, LingeringShadeStateIxCols> LingeringShadeState() => new("lingering_shade_state", new LingeringShadeStateCols("lingering_shade_state"), new LingeringShadeStateIxCols("lingering_shade_state"));
+        public global::SpacetimeDB.Table<MatchParticipant, MatchParticipantCols, MatchParticipantIxCols> MatchParticipant() => new("match_participant", new MatchParticipantCols("match_participant"), new MatchParticipantIxCols("match_participant"));
         public global::SpacetimeDB.Table<MatchParticipantStats, MatchParticipantStatsCols, MatchParticipantStatsIxCols> MatchParticipantStats() => new("match_participant_stats", new MatchParticipantStatsCols("match_participant_stats"), new MatchParticipantStatsIxCols("match_participant_stats"));
         public global::SpacetimeDB.Table<MeleeAbilityCatalog, MeleeAbilityCatalogCols, MeleeAbilityCatalogIxCols> MeleeAbilityCatalog() => new("melee_ability_catalog", new MeleeAbilityCatalogCols("melee_ability_catalog"), new MeleeAbilityCatalogIxCols("melee_ability_catalog"));
         public global::SpacetimeDB.Table<MeleeAttackModifierCatalog, MeleeAttackModifierCatalogCols, MeleeAttackModifierCatalogIxCols> MeleeAttackModifierCatalog() => new("melee_attack_modifier_catalog", new MeleeAttackModifierCatalogCols("melee_attack_modifier_catalog"), new MeleeAttackModifierCatalogIxCols("melee_attack_modifier_catalog"));
@@ -865,6 +871,7 @@ namespace SpacetimeDB.Types
             var eventContext = (ReducerEventContext)context;
             return reducer switch
             {
+                Reducer.AbortMatch args => Reducers.InvokeAbortMatch(eventContext, args),
                 Reducer.AcceptPartyInvite args => Reducers.InvokeAcceptPartyInvite(eventContext, args),
                 Reducer.ArmAutoAttackReplacement args => Reducers.InvokeArmAutoAttackReplacement(eventContext, args),
                 Reducer.ArmAutoAttackTarget args => Reducers.InvokeArmAutoAttackTarget(eventContext, args),
@@ -873,6 +880,7 @@ namespace SpacetimeDB.Types
                 Reducer.AssignCombatDisciplineWeaponLoadout args => Reducers.InvokeAssignCombatDisciplineWeaponLoadout(eventContext, args),
                 Reducer.AssignEquippedSpellbookSpell args => Reducers.InvokeAssignEquippedSpellbookSpell(eventContext, args),
                 Reducer.BeginWorldDoorAction args => Reducers.InvokeBeginWorldDoorAction(eventContext, args),
+                Reducer.BootstrapUnranked2V2BotMatch args => Reducers.InvokeBootstrapUnranked2V2BotMatch(eventContext, args),
                 Reducer.CancelActiveCastRequest args => Reducers.InvokeCancelActiveCastRequest(eventContext, args),
                 Reducer.CancelWorldInteraction args => Reducers.InvokeCancelWorldInteraction(eventContext, args),
                 Reducer.CastRequest args => Reducers.InvokeCastRequest(eventContext, args),
@@ -889,6 +897,7 @@ namespace SpacetimeDB.Types
                 Reducer.DespawnPlaygroundTarget args => Reducers.InvokeDespawnPlaygroundTarget(eventContext, args),
                 Reducer.DismissDiceRoll args => Reducers.InvokeDismissDiceRoll(eventContext, args),
                 Reducer.DismissSurvivalResult args => Reducers.InvokeDismissSurvivalResult(eventContext, args),
+                Reducer.EnableLocalDirectMode args => Reducers.InvokeEnableLocalDirectMode(eventContext, args),
                 Reducer.EquipArmorSet args => Reducers.InvokeEquipArmorSet(eventContext, args),
                 Reducer.EquipItem args => Reducers.InvokeEquipItem(eventContext, args),
                 Reducer.InviteToParty args => Reducers.InvokeInviteToParty(eventContext, args),
@@ -935,6 +944,7 @@ namespace SpacetimeDB.Types
                 Reducer.StartMatch args => Reducers.InvokeStartMatch(eventContext, args),
                 Reducer.StartParry args => Reducers.InvokeStartParry(eventContext, args),
                 Reducer.StartSurvivalRun args => Reducers.InvokeStartSurvivalRun(eventContext, args),
+                Reducer.StartUnranked2V2BotMatch args => Reducers.InvokeStartUnranked2V2BotMatch(eventContext, args),
                 Reducer.StopBlock args => Reducers.InvokeStopBlock(eventContext, args),
                 Reducer.StopParry args => Reducers.InvokeStopParry(eventContext, args),
                 Reducer.UnequipItem args => Reducers.InvokeUnequipItem(eventContext, args),

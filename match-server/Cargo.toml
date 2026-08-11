@@ -1,0 +1,29 @@
+[package]
+name = "arena-pvp-match"
+version = "0.1.0"
+edition = "2021"
+build = "../server/build.rs"
+
+[lib]
+name = "arena_match"
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[features]
+default = ["pvp_match"]
+pvp_match = []
+projectile_load_harness = []
+spellcasting_terminal_harness = []
+
+[dependencies]
+spacetimedb = "=2.0.5"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+incremental = false

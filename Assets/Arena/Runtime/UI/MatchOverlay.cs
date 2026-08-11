@@ -13,11 +13,12 @@ namespace Arena.UI
 {
     /// <summary>
     /// Full-screen overlay shown when an arena match ends.
-    /// Displays the winner's name. Hidden at all other times.
+    /// Displays the local result and authoritative match stats.
     ///
     /// Refreshed by MatchController when match phase changes.
     ///
-    /// INVARIANT: No network writes. Read-only presentation.
+    /// Legacy/direct instances return through leave_instance. Disposable PvP
+    /// matches return by disconnecting so their database can be reclaimed.
     /// </summary>
     public class MatchOverlay : MonoBehaviour
     {
@@ -43,8 +44,11 @@ namespace Arena.UI
         private TextMeshProUGUI _winnerLine = null!;
         private RectTransform _statsRoot = null!;
         private ArenaButtonHandle _leaveButton;
-        private ArenaButtonHandle _playAgainButton;
         private readonly List<GameObject> _statRows = new();
+        private DbConnection? _leaveConnection;
+        private bool _returnPending;
+        private bool _handoffReturnPending;
+        private string _returnError = string.Empty;
 
         // Countdown view
         private GameObject _countdownRoot = null!;
@@ -110,28 +114,15 @@ namespace Arena.UI
             _leaveButton = ArenaUiKit.MakeButton(
                 footer,
                 "LeaveButton",
-                "Leave Match",
-                ArenaButtonStyle.Danger,
+                "Return to Hub",
+                ArenaButtonStyle.Primary,
                 OnLeaveMatchPressed);
             RectTransform leaveRect = _leaveButton.Rect;
             leaveRect.anchorMin = new Vector2(0.5f, 0.5f);
             leaveRect.anchorMax = new Vector2(0.5f, 0.5f);
-            leaveRect.pivot = new Vector2(1f, 0.5f);
+            leaveRect.pivot = new Vector2(0.5f, 0.5f);
             leaveRect.sizeDelta = new Vector2(200f, ArenaUiTheme.ButtonHeight);
-            leaveRect.anchoredPosition = new Vector2(-8f, 0f);
-
-            _playAgainButton = ArenaUiKit.MakeButton(
-                footer,
-                "PlayAgainButton",
-                "Play Again",
-                ArenaButtonStyle.Primary,
-                OnPlayAgainPressed);
-            RectTransform playAgainRect = _playAgainButton.Rect;
-            playAgainRect.anchorMin = new Vector2(0.5f, 0.5f);
-            playAgainRect.anchorMax = new Vector2(0.5f, 0.5f);
-            playAgainRect.pivot = new Vector2(0f, 0.5f);
-            playAgainRect.sizeDelta = new Vector2(200f, ArenaUiTheme.ButtonHeight);
-            playAgainRect.anchoredPosition = new Vector2(8f, 0f);
+            leaveRect.anchoredPosition = Vector2.zero;
 
             // Countdown overlay — shown during pre-match countdown, hidden otherwise.
             _countdownRoot = new GameObject("CountdownRoot");
@@ -156,7 +147,15 @@ namespace Arena.UI
             _countdownRoot.SetActive(false);
 
             _root.SetActive(false);
+            BindLeaveConnection(NetworkManager.Instance?.Conn);
             Refresh(MatchStateCache.Instance);
+        }
+
+        private void OnDestroy()
+        {
+            BindLeaveConnection(null);
+            if (Instance == this)
+                Instance = null;
         }
 
         private void BuildStatsHeader()
@@ -237,24 +236,26 @@ namespace Arena.UI
                 return;
             }
 
-            string winnerName = "Unknown";
-            if (cache.WinnerId.HasValue &&
-                EntityRegistry.Instance != null &&
-                EntityRegistry.Instance.TryGetEntity(cache.WinnerId.Value, out var winner))
-            {
-                winnerName = string.IsNullOrEmpty(winner.Username) ? "???" : winner.Username;
-            }
-            _winnerLine.text = $"{winnerName} wins!";
+            _winnerLine.text = ResolveOutcomeLabel(cache);
+            if (!string.IsNullOrWhiteSpace(_returnError))
+                _winnerLine.text += $"\n{_returnError}";
             RebuildStats(cache);
             bool connected = NetworkManager.Instance?.IsConnected == true && cache.LocalInstanceId.HasValue;
-            _leaveButton.SetInteractable(connected);
-            _playAgainButton.SetInteractable(connected);
+            _leaveButton.SetInteractable(connected && !_returnPending && !_handoffReturnPending);
 
             _root.SetActive(true);
         }
 
         private void Update()
         {
+            BindLeaveConnection(NetworkManager.Instance?.Conn);
+            if (string.Equals(
+                    UnityEngine.SceneManagement.SceneManager.GetActiveScene().name,
+                    "Hub",
+                    System.StringComparison.Ordinal))
+            {
+                _handoffReturnPending = false;
+            }
             if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
             {
                 _root.SetActive(false);
@@ -292,7 +293,10 @@ namespace Arena.UI
             if (!cache.LocalInstanceId.HasValue)
                 return;
 
-            var rows = BuildRows(cache.LocalInstanceId.Value, cache.WinnerId);
+            var rows = BuildRows(
+                cache.LocalInstanceId.Value,
+                cache.WinnerId,
+                cache.WinnerTeamId);
             for (int i = 0; i < rows.Count; i++)
             {
                 var row = MakeStatsRow(rows[i], i);
@@ -300,7 +304,10 @@ namespace Arena.UI
             }
         }
 
-        private List<StatsRowData> BuildRows(ulong instanceId, Identity? winnerId)
+        private List<StatsRowData> BuildRows(
+            ulong instanceId,
+            Identity? winnerId,
+            byte? winnerTeamId)
         {
             var result = new List<StatsRowData>();
             var statsByPlayer = new Dictionary<Identity, MatchParticipantStats>();
@@ -309,6 +316,37 @@ namespace Arena.UI
             {
                 foreach (var stats in conn.Db.MatchParticipantStats.InstanceId.Filter(instanceId))
                     statsByPlayer[stats.PlayerId] = stats;
+            }
+
+            if (conn != null)
+            {
+                var roster = new List<MatchParticipant>(
+                    conn.Db.MatchParticipant.InstanceId.Filter(instanceId));
+                if (roster.Count > 0)
+                {
+                    foreach (var participant in roster)
+                    {
+                        statsByPlayer.TryGetValue(participant.Identity, out var stats);
+                        string name = ResolvePlayerName(conn, participant.Identity);
+                        result.Add(new StatsRowData(
+                            $"TEAM {participant.TeamId + 1}  ·  {name}",
+                            stats?.DamageDone ?? 0,
+                            stats?.Kills ?? 0,
+                            stats?.HpRemaining ?? 0,
+                            stats?.HealingDone ?? 0,
+                            winnerTeamId.HasValue && participant.TeamId == winnerTeamId.Value,
+                            conn.Identity.HasValue && participant.Identity == conn.Identity.Value,
+                            participant.TeamId,
+                            participant.TeamSlot));
+                    }
+
+                    result.Sort((a, b) =>
+                    {
+                        int teamCmp = a.TeamId.CompareTo(b.TeamId);
+                        return teamCmp != 0 ? teamCmp : a.TeamSlot.CompareTo(b.TeamSlot);
+                    });
+                    return result;
+                }
             }
 
             var seen = new HashSet<Identity>();
@@ -325,7 +363,9 @@ namespace Arena.UI
                         stats?.HpRemaining ?? 0,
                         stats?.HealingDone ?? 0,
                         winnerId.HasValue && entity.Identity == winnerId.Value,
-                        conn != null && entity.Identity == conn.Identity));
+                        conn?.Identity.HasValue == true && entity.Identity == conn.Identity.Value,
+                        byte.MaxValue,
+                        byte.MaxValue));
                 }
             }
 
@@ -341,7 +381,9 @@ namespace Arena.UI
                     stats.HpRemaining,
                     stats.HealingDone,
                     winnerId.HasValue && stats.PlayerId == winnerId.Value,
-                    conn != null && stats.PlayerId == conn.Identity));
+                    conn?.Identity.HasValue == true && stats.PlayerId == conn.Identity.Value,
+                    byte.MaxValue,
+                    byte.MaxValue));
             }
 
             result.Sort((a, b) =>
@@ -411,25 +453,110 @@ namespace Arena.UI
 
         private void OnLeaveMatchPressed()
         {
-            var conn = NetworkManager.Instance?.Conn;
-            if (conn == null)
+            BindLeaveConnection(NetworkManager.Instance?.Conn);
+            if (_leaveConnection == null
+                || !_leaveConnection.Identity.HasValue
+                || _returnPending
+                || _handoffReturnPending)
                 return;
 
+            MatchHandoffCoordinator? handoff = MatchHandoffCoordinator.Instance;
+            if (handoff != null && handoff.ReturnToHub())
+            {
+                _handoffReturnPending = true;
+                _returnError = string.Empty;
+                _leaveButton.SetInteractable(false);
+                return;
+            }
+
+            _returnPending = true;
+            _returnError = string.Empty;
             _leaveButton.SetInteractable(false);
-            _playAgainButton.SetInteractable(false);
-            conn.Reducers.LeaveInstance();
+            RuntimeSceneTransitionQueue.BeginExplicitHubReturn();
+            _leaveConnection.Reducers.LeaveInstance();
         }
 
-        private void OnPlayAgainPressed()
+        private void BindLeaveConnection(DbConnection? connection)
         {
-            var conn = NetworkManager.Instance?.Conn;
-            if (conn == null)
+            if (ReferenceEquals(_leaveConnection, connection))
                 return;
 
-            _leaveButton.SetInteractable(false);
-            _playAgainButton.SetInteractable(false);
-            conn.Reducers.LeaveInstance();
-            // LobbyController will show automatically once LocalInstanceId clears.
+            if (_leaveConnection != null)
+                _leaveConnection.Reducers.OnLeaveInstance -= OnLeaveInstance;
+            if (_returnPending)
+                RuntimeSceneTransitionQueue.CancelExplicitHubReturn();
+            _leaveConnection = connection;
+            _returnPending = false;
+            if (_leaveConnection != null)
+                _leaveConnection.Reducers.OnLeaveInstance += OnLeaveInstance;
+        }
+
+        private void OnLeaveInstance(ReducerEventContext context)
+        {
+            if (_leaveConnection == null
+                || !_leaveConnection.Identity.HasValue
+                || context.Event.CallerIdentity != _leaveConnection.Identity.Value
+                || !_returnPending)
+            {
+                return;
+            }
+
+            if (context.Event.Status is Status.Committed)
+            {
+                RuntimeSceneTransitionQueue.RequestExplicitHubReturn();
+                return;
+            }
+
+            _returnPending = false;
+            RuntimeSceneTransitionQueue.CancelExplicitHubReturn();
+            _returnError = context.Event.Status switch
+            {
+                Status.Failed(var failure) => $"Return failed: {failure}",
+                Status.OutOfEnergy(var _) => "Return failed: server was out of reducer energy.",
+                _ => "Return failed: the server did not commit the request.",
+            };
+            Refresh(MatchStateCache.Instance);
+        }
+
+        private static string ResolveOutcomeLabel(MatchStateCache cache)
+        {
+            var conn = NetworkManager.Instance?.Conn;
+            if (cache.IsTeamMatch)
+            {
+                if (!cache.WinnerTeamId.HasValue)
+                    return "DRAW";
+
+                MatchParticipant? localParticipant = conn?.Identity.HasValue == true
+                    ? conn.Db.MatchParticipant.Identity.Find(conn.Identity.Value)
+                    : null;
+                if (localParticipant == null)
+                    return $"TEAM {cache.WinnerTeamId.Value + 1} WINS";
+
+                return localParticipant.TeamId == cache.WinnerTeamId.Value
+                    ? "VICTORY"
+                    : "DEFEAT";
+            }
+
+            if (!cache.WinnerId.HasValue)
+                return "DRAW";
+            return conn?.Identity.HasValue == true && cache.WinnerId.Value == conn.Identity.Value
+                ? "VICTORY"
+                : "DEFEAT";
+        }
+
+        private static string ResolvePlayerName(DbConnection conn, Identity identity)
+        {
+            if (EntityRegistry.Instance != null
+                && EntityRegistry.Instance.TryGetEntity(identity, out var entity)
+                && !string.IsNullOrWhiteSpace(entity.Username))
+            {
+                return entity.Username;
+            }
+
+            Player? player = conn.Db.Player.Identity.Find(identity);
+            return string.IsNullOrWhiteSpace(player?.Username)
+                ? ShortIdentity(identity)
+                : player.Username;
         }
 
         private static string ShortIdentity(Identity identity)
@@ -447,7 +574,9 @@ namespace Arena.UI
                 int hpRemaining,
                 int healingDone,
                 bool isWinner,
-                bool isLocal)
+                bool isLocal,
+                byte teamId,
+                byte teamSlot)
             {
                 Name = name;
                 DamageDone = damageDone;
@@ -456,6 +585,8 @@ namespace Arena.UI
                 HealingDone = healingDone;
                 IsWinner = isWinner;
                 IsLocal = isLocal;
+                TeamId = teamId;
+                TeamSlot = teamSlot;
             }
 
             public string Name { get; }
@@ -465,6 +596,8 @@ namespace Arena.UI
             public int HealingDone { get; }
             public bool IsWinner { get; }
             public bool IsLocal { get; }
+            public byte TeamId { get; }
+            public byte TeamSlot { get; }
         }
     }
 }

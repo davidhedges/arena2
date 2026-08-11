@@ -33,6 +33,8 @@ Thumbs.db
 
 # Rust server build artifacts
 server/target/
+hub-server/target/
+match-server/target/
 /arena game.app/
 /arenagame.app/
 *_BurstDebugInformation_DoNotShip/

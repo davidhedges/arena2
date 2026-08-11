@@ -67,8 +67,14 @@ namespace Arena.UI
         private Button? _format2v2;
         private Button? _format3v3;
         private Button? _format10v10;
+        private Label? _format2v2Name;
+        private Label? _format3v3Name;
+        private Label? _format10v10Name;
+        private Label? _format3v3Type;
+        private Label? _format10v10Type;
         private Label? _selectionValue;
         private Button? _queueConfirm;
+        private Label? _queueConfirmTitle;
         private Label? _queueConfirmSubtitle;
         private HubController? _hubController;
         private DisciplinesScreen? _disciplinesScreen;
@@ -81,10 +87,11 @@ namespace Arena.UI
         private int _dragPointerId = -1;
         private Vector2 _lastPointerPosition;
         private float _nextDataRefresh;
-        private MatchFormat _selectedFormat = MatchFormat.ThreeVersusThree;
-        private bool _rankedQueue = true;
+        private MatchFormat _selectedFormat = MatchFormat.TwoVersusTwo;
         private bool _matchOverlayOpen;
-        private bool _searching;
+        private MatchHandoffCoordinator? _matchHandoff;
+
+        private bool IsMatchRequestPending => _matchHandoff?.IsMatchRequestPending == true;
 
         public int EscapeClosePriority => 130;
         public bool IsEscapeCloseable => _matchOverlayOpen;
@@ -98,6 +105,7 @@ namespace Arena.UI
             }
 
             RuntimeUiEventSystem.Ensure();
+            _matchHandoff = MatchHandoffCoordinator.EnsureInstance();
             HideLegacyHubCanvas();
             PrepareCameraLayer();
             BuildUi();
@@ -138,11 +146,13 @@ namespace Arena.UI
 
         private void Update()
         {
+            _matchHandoff ??= MatchHandoffCoordinator.Instance;
             if (!IsActiveHubScene() || Time.unscaledTime < _nextDataRefresh)
                 return;
 
             _nextDataRefresh = Time.unscaledTime + DataRefreshInterval;
             RefreshBoundData();
+            RefreshMatchmakingPresentation();
         }
 
         private void LateUpdate()
@@ -319,8 +329,14 @@ namespace Arena.UI
             _format2v2 = _root.Q<Button>("Format2v2");
             _format3v3 = _root.Q<Button>("Format3v3");
             _format10v10 = _root.Q<Button>("Format10v10");
+            _format2v2Name = _format2v2?.Q<Label>(className: "format-name");
+            _format3v3Name = _format3v3?.Q<Label>(className: "format-name");
+            _format10v10Name = _format10v10?.Q<Label>(className: "format-name");
+            _format3v3Type = _format3v3?.Q<Label>(className: "format-type");
+            _format10v10Type = _format10v10?.Q<Label>(className: "format-type");
             _selectionValue = _root.Q<Label>("SelectionValue");
             _queueConfirm = _root.Q<Button>("QueueConfirm");
+            _queueConfirmTitle = _queueConfirm?.Q<Label>(className: "queue-confirm-title");
             _queueConfirmSubtitle = _root.Q<Label>("QueueConfirmSubtitle");
             _hubController = GetComponent<HubController>();
 
@@ -347,8 +363,6 @@ namespace Arena.UI
 
         private void BindMatchmakingControls()
         {
-            if (_queueButton != null)
-                _queueButton.clicked += ToggleQueueMode;
             if (_findMatchButton != null)
                 _findMatchButton.clicked += OnFindMatchClicked;
             if (_overlayScrim != null)
@@ -357,10 +371,6 @@ namespace Arena.UI
                 _dialogClose.clicked += CloseMatchOverlay;
             if (_format2v2 != null)
                 _format2v2.clicked += Select2v2;
-            if (_format3v3 != null)
-                _format3v3.clicked += Select3v3;
-            if (_format10v10 != null)
-                _format10v10.clicked += Select10v10;
             if (_queueConfirm != null)
                 _queueConfirm.clicked += ConfirmMatchSearch;
 
@@ -369,8 +379,6 @@ namespace Arena.UI
 
         private void UnbindMatchmakingControls()
         {
-            if (_queueButton != null)
-                _queueButton.clicked -= ToggleQueueMode;
             if (_findMatchButton != null)
                 _findMatchButton.clicked -= OnFindMatchClicked;
             if (_overlayScrim != null)
@@ -379,31 +387,14 @@ namespace Arena.UI
                 _dialogClose.clicked -= CloseMatchOverlay;
             if (_format2v2 != null)
                 _format2v2.clicked -= Select2v2;
-            if (_format3v3 != null)
-                _format3v3.clicked -= Select3v3;
-            if (_format10v10 != null)
-                _format10v10.clicked -= Select10v10;
             if (_queueConfirm != null)
                 _queueConfirm.clicked -= ConfirmMatchSearch;
         }
 
-        private void ToggleQueueMode()
-        {
-            if (_searching)
-                return;
-
-            _rankedQueue = !_rankedQueue;
-            RefreshMatchmakingPresentation();
-        }
-
         private void OnFindMatchClicked()
         {
-            if (_searching)
-            {
-                _searching = false;
-                RefreshMatchmakingPresentation();
+            if (IsMatchRequestPending)
                 return;
-            }
 
             OpenMatchOverlay();
         }
@@ -428,7 +419,7 @@ namespace Arena.UI
 
         private void CloseMatchOverlay()
         {
-            if (!_matchOverlayOpen)
+            if (!_matchOverlayOpen || IsMatchRequestPending)
                 return;
 
             _matchOverlayOpen = false;
@@ -438,7 +429,7 @@ namespace Arena.UI
 
         public bool TryCloseForEscape()
         {
-            if (!_matchOverlayOpen)
+            if (!_matchOverlayOpen || IsMatchRequestPending)
                 return false;
 
             CloseMatchOverlay();
@@ -446,51 +437,96 @@ namespace Arena.UI
         }
 
         private void Select2v2() => SelectMatchFormat(MatchFormat.TwoVersusTwo);
-        private void Select3v3() => SelectMatchFormat(MatchFormat.ThreeVersusThree);
-        private void Select10v10() => SelectMatchFormat(MatchFormat.TenVersusTen);
 
         private void SelectMatchFormat(MatchFormat format)
         {
+            if (format != MatchFormat.TwoVersusTwo || IsMatchRequestPending)
+                return;
+
             _selectedFormat = format;
             RefreshMatchmakingPresentation();
         }
 
         private void ConfirmMatchSearch()
         {
-            _searching = true;
-            CloseMatchOverlay();
+            _matchHandoff ??= MatchHandoffCoordinator.EnsureInstance();
+            if (IsMatchRequestPending)
+                return;
+            _matchHandoff.RequestUnranked2V2BotMatch();
             RefreshMatchmakingPresentation();
         }
 
         private void RefreshMatchmakingPresentation()
         {
-            string queueLabel = _rankedQueue ? "RANKED" : "CASUAL";
-            string queueTitle = _rankedQueue ? "Ranked" : "Casual";
+            const string queueLabel = "UNRANKED";
+            const string queueTitle = "Unranked";
             string formatLabel = GetMatchFormatLabel(_selectedFormat);
+            bool pending = IsMatchRequestPending;
+            bool canRequest = _matchHandoff?.CanRequestMatch == true;
+            string handoffStatus = _matchHandoff?.StatusMessage ?? "CONNECTING TO HUB…";
 
             if (_queueName != null)
                 _queueName.text = queueLabel;
             if (_queueButton != null)
             {
-                _queueButton.tooltip = $"Switch to {(_rankedQueue ? "Casual" : "Ranked")} matchmaking";
-                _queueButton.SetEnabled(!_searching);
+                _queueButton.tooltip = "The first playable queue is unranked.";
+                _queueButton.SetEnabled(false);
             }
 
             if (_findMatchButton != null)
-                _findMatchButton.EnableInClassList(SearchingClass, _searching);
+            {
+                _findMatchButton.EnableInClassList(SearchingClass, pending);
+                _findMatchButton.SetEnabled(!pending && canRequest);
+            }
             if (_findMatchTitle != null)
-                _findMatchTitle.text = _searching ? $"SEARCHING {formatLabel}…" : "FIND MATCH";
+                _findMatchTitle.text = pending ? "STARTING MATCH…" : "PLAY 2V2";
             if (_findMatchSubtitle != null)
-                _findMatchSubtitle.text = _searching
-                    ? $"{queueLabel} · CLICK TO CANCEL"
-                    : $"{queueLabel} MATCHMAKING";
+                _findMatchSubtitle.text = $"{queueLabel} BOT MATCH";
 
             if (_dialogQueueName != null)
                 _dialogQueueName.text = queueTitle;
             if (_selectionValue != null)
                 _selectionValue.text = $"{queueLabel} · {formatLabel}";
             if (_queueConfirmSubtitle != null)
-                _queueConfirmSubtitle.text = $"FIND A {queueLabel} {formatLabel} MATCH";
+                _queueConfirmSubtitle.text = string.IsNullOrWhiteSpace(handoffStatus)
+                    ? "YOU + AN ALLY DUMMY VS TWO ENEMY DUMMIES"
+                    : handoffStatus;
+            if (_queueConfirmTitle != null)
+            {
+                _queueConfirmTitle.text = pending
+                    ? "STARTING MATCH…"
+                    : "START 2V2 BOT MATCH";
+            }
+            if (_queueConfirm != null)
+            {
+                _queueConfirm.SetEnabled(
+                    !pending && canRequest);
+            }
+
+            if (_format2v2 != null)
+            {
+                if (_format2v2Name != null)
+                    _format2v2Name.text = "2V2";
+                _format2v2.SetEnabled(!pending);
+            }
+            if (_format3v3 != null)
+            {
+                if (_format3v3Name != null)
+                    _format3v3Name.text = "3V3";
+                if (_format3v3Type != null)
+                    _format3v3Type.text = "COMING SOON";
+                _format3v3.tooltip = "3v3 is not part of this first playable slice.";
+                _format3v3.SetEnabled(false);
+            }
+            if (_format10v10 != null)
+            {
+                if (_format10v10Name != null)
+                    _format10v10Name.text = "10V10";
+                if (_format10v10Type != null)
+                    _format10v10Type.text = "COMING SOON";
+                _format10v10.tooltip = "10v10 is not part of this first playable slice.";
+                _format10v10.SetEnabled(false);
+            }
 
             _format2v2?.EnableInClassList(
                 SelectedClass,
@@ -613,14 +649,22 @@ namespace Arena.UI
 
         private void RefreshBoundData()
         {
+            HubPlayerSnapshot? hubPlayer = HubNetworkManager.Instance?.Player;
+            if (_playerName != null
+                && hubPlayer.HasValue
+                && !string.IsNullOrWhiteSpace(hubPlayer.Value.DisplayName))
+            {
+                _playerName.text = hubPlayer.Value.DisplayName.Trim().ToUpperInvariant();
+            }
+
             DbConnection? conn = NetworkManager.Instance?.Conn;
             Identity? identity = conn?.Identity;
             if (conn == null || !identity.HasValue)
+            {
+                if (_partyCount != null)
+                    _partyCount.text = "1 / 4";
                 return;
-
-            Player? player = conn.Db.Player.Identity.Find(identity.Value);
-            if (_playerName != null && !string.IsNullOrWhiteSpace(player?.Username))
-                _playerName.text = player.Username.Trim().ToUpperInvariant();
+            }
 
             RefreshDisciplineLoadout(conn, identity.Value);
 

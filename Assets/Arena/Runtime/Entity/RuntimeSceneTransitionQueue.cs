@@ -21,6 +21,7 @@ namespace Arena.Entity
     internal sealed class RuntimeSceneTransitionQueue : MonoBehaviour
     {
         private static RuntimeSceneTransitionQueue? s_instance;
+        private static bool s_explicitHubReturnPending;
 
         private readonly DeferredSceneTransitionState _state = new();
         private AsyncOperation? _loadOperation;
@@ -29,6 +30,21 @@ namespace Arena.Entity
         private static void ResetStatics()
         {
             s_instance = null;
+            s_explicitHubReturnPending = false;
+        }
+
+        internal static bool IsExplicitHubReturnPending => s_explicitHubReturnPending;
+
+        internal static void BeginExplicitHubReturn()
+            => s_explicitHubReturnPending = true;
+
+        internal static void CancelExplicitHubReturn()
+            => s_explicitHubReturnPending = false;
+
+        internal static void RequestExplicitHubReturn()
+        {
+            s_explicitHubReturnPending = true;
+            Request("Hub");
         }
 
         internal static void Request(string sceneName)
@@ -84,6 +100,8 @@ namespace Arena.Entity
             if (_loadOperation == null)
             {
                 Debug.LogError($"[SceneTransition] Unity did not create an async load for '{sceneName}'.");
+                if (string.Equals(sceneName, "Hub", StringComparison.Ordinal))
+                    s_explicitHubReturnPending = false;
                 return;
             }
 
@@ -95,6 +113,8 @@ namespace Arena.Entity
             operation.completed -= OnLoadCompleted;
             if (_loadOperation == operation)
                 _loadOperation = null;
+            if (string.Equals(SceneManager.GetActiveScene().name, "Hub", StringComparison.Ordinal))
+                s_explicitHubReturnPending = false;
         }
     }
 

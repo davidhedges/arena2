@@ -58,6 +58,8 @@ namespace Arena.Match
 
         private MatchPhase _lastPhase = MatchPhase.Waiting;
         private Identity? _lastWinnerId;
+        private byte? _lastWinnerTeamId;
+        private bool _lastIsTeamMatch;
         private bool _lastIsArenaMode;
         private ulong? _lastLocalInstanceId;
         private ulong? _trackedInstanceId;
@@ -76,6 +78,8 @@ namespace Arena.Match
 
             if (cache.Phase == _lastPhase &&
                 cache.WinnerId == _lastWinnerId &&
+                cache.WinnerTeamId == _lastWinnerTeamId &&
+                cache.IsTeamMatch == _lastIsTeamMatch &&
                 cache.IsArenaMode == _lastIsArenaMode &&
                 cache.LocalInstanceId == _lastLocalInstanceId)
             {
@@ -84,6 +88,8 @@ namespace Arena.Match
 
             _lastPhase = cache.Phase;
             _lastWinnerId = cache.WinnerId;
+            _lastWinnerTeamId = cache.WinnerTeamId;
+            _lastIsTeamMatch = cache.IsTeamMatch;
             _lastIsArenaMode = cache.IsArenaMode;
             _lastLocalInstanceId = cache.LocalInstanceId;
             MatchOverlay.Instance?.Refresh(cache);

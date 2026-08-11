@@ -5,6 +5,10 @@ Status: design approved, unimplemented. Owner rulings recorded in §11.
 Revised 2026-08-03 after a design review; all ten findings verified against the
 tree and resolved — see §1.1. Slice 0 (instance kind) was added as a result.
 
+Implementation note (2026-08-12): the authored scene created by this design is
+now the mode-neutral `Arena_Map_01` map. Survival still owns its rules and may
+select that map, but it no longer owns the Unity scene identity.
+
 ## Outcome
 
 A solo, round-based survival mode. NPCs spawn into a flat arena and aggro the
@@ -23,7 +27,7 @@ Measured against the tree at `a55f7f69`.
 | Need | Existing seam | State |
 |---|---|---|
 | Private per-player world | `PracticeInstance` + `ArenaInstance` + `PlayerWorld` | reuse **shape**, but survival needs its own instance kind — §1.1 F1 |
-| Client scene load | `world_kind == INSTANCE` → `ArenaMatch` scene | reuse, but the arena's **geometry is not flat** — §1.1 F3 |
+| Client scene load | `world_kind == INSTANCE` → `Arena_Map_01` map | shared map identity; Survival rules remain separate |
 | NPC roster | 92 templates / 329 appearances, `max_hp` `move_speed` `aggro_radius` `attack_windup_ms` | reuse as-is |
 | Ability damage | `gameplay.base_damage` (MELEE), `gameplay.delivery.damage` (SPELL) | reuse as-is |
 | Permanent aggro | `NpcTargetOverride` — absolute, un-droppable pin | reuse, needs internal entry point **and ownership fix** — §1.1 F2 |

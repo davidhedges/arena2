@@ -53,11 +53,16 @@ use crate::world_collision::{
     resolve_world_spawn_position, resolve_world_spawn_position_with_layout_for_scene,
 };
 
+#[cfg_attr(feature = "pvp_match", path = "combat/actor_snapshot.rs")]
 pub(crate) mod actor_snapshot;
+#[cfg_attr(feature = "pvp_match", path = "combat/position_history.rs")]
 pub(crate) mod position_history;
 #[cfg(feature = "projectile_load_harness")]
+#[cfg_attr(feature = "pvp_match", path = "combat/projectile_load_harness.rs")]
 mod projectile_load_harness;
+#[cfg_attr(feature = "pvp_match", path = "combat/projectiles.rs")]
 mod projectiles;
+#[cfg_attr(feature = "pvp_match", path = "combat/scene_query.rs")]
 pub(crate) mod scene_query;
 #[allow(unused_imports)]
 pub(crate) use projectiles::{
@@ -7128,6 +7133,10 @@ fn last_alive_non_eliminated_in_instance(
 }
 
 fn conclude_match_if_needed(ctx: &ReducerContext, instance_id: u64) {
+    if crate::bot_matches::conclude_team_match_if_needed(ctx, instance_id) {
+        return;
+    }
+
     if count_alive_non_eliminated_in_instance(ctx, instance_id) > 1 {
         return;
     }
@@ -7147,7 +7156,7 @@ fn conclude_match_if_needed(ctx: &ReducerContext, instance_id: u64) {
     snapshot_match_hp_remaining(ctx, instance_id);
 }
 
-fn snapshot_match_hp_remaining(ctx: &ReducerContext, instance_id: u64) {
+pub(crate) fn snapshot_match_hp_remaining(ctx: &ReducerContext, instance_id: u64) {
     let participants: Vec<(Identity, i32)> = ctx
         .db
         .player_world()

@@ -24,7 +24,6 @@ namespace Arena.Entity
     internal static class LocalWorldSceneDecider
     {
         internal const string SurvivalInstanceKind = "SURVIVAL";
-        internal const string DefaultSurvivalSceneName = "SurvivalArena";
 
         private static readonly HashSet<string> NonGameplayScenes = new(StringComparer.Ordinal)
         {
@@ -110,8 +109,8 @@ namespace Arena.Entity
             Action<NetworkManager.GameplayScope>? setGameplayScope = null,
             Func<string>? getActiveSceneName = null,
             Action<string>? requestSceneLoad = null,
-            string matchSceneName = "ArenaMatch",
-            string survivalSceneName = LocalWorldSceneDecider.DefaultSurvivalSceneName)
+            string matchSceneName = ArenaMapCatalog.DefaultSceneName,
+            string survivalSceneName = ArenaMapCatalog.DefaultSceneName)
         {
             _worldContext = worldContext;
             _onLocalPlayerWorldUpdate = onLocalPlayerWorldUpdate ?? MatchStateCache.Instance.OnLocalPlayerWorldUpdate;
@@ -272,13 +271,20 @@ namespace Arena.Entity
             _onLocalPlayerWorldUpdate(row.InstanceId);
             _setGameplayScope(LocalWorldScopeResolver.Resolve(row, currentOpenWorldSceneName));
 
-            string? targetScene = LocalWorldSceneDecider.DetermineTargetScene(
-                activeSceneName,
-                row.InstanceId,
-                instanceKind,
-                currentOpenWorldSceneName,
-                _matchSceneName,
-                _survivalSceneName);
+            // Legacy/direct instances first commit LeaveInstance and then
+            // explicitly load Hub. Provisioned PvP uses the same guard while
+            // its handoff coordinator disconnects the disposable database.
+            // Suppress the ordinary OPEN-world redirect during either return.
+            string? targetScene = RuntimeSceneTransitionQueue.IsExplicitHubReturnPending
+                                  && !row.InstanceId.HasValue
+                ? null
+                : LocalWorldSceneDecider.DetermineTargetScene(
+                    activeSceneName,
+                    row.InstanceId,
+                    instanceKind,
+                    currentOpenWorldSceneName,
+                    _matchSceneName,
+                    _survivalSceneName);
             if (targetScene == null)
                 return false;
 

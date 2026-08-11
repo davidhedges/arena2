@@ -39,6 +39,21 @@ Assets/Arena/Content/
                     art, ops/gen_ui_theme_art.py) and Fonts/ (OFL serif faces).
 ```
 
+### Multiplayer map identity
+
+`Assets/Arena/Content/Scenes/Arena_Map_01.unity` is an authored map, not a
+game mode. Its stable catalog identity is `ARENA_MAP_01` in `ArenaMapCatalog`.
+Competitive PvP and the temporary Survival mode currently select the same map
+asset, but retain separate server rules, lifecycle, actors, and subscriptions.
+Removing Survival must therefore not remove or rename the map.
+
+The retired `ArenaMatch` example scene is not a runtime or authoring dependency.
+The matching client/server `arena_layout.shared.json` files describe this map's
+flat PvP boundary and intentionally contain no invisible ruin, platform, ramp,
+or pillar blockers. Before a second authored arena ships, the selected map ID
+must be carried by the Hub assignment and match bootstrap instead of silently
+assuming the catalog default.
+
 UI Toolkit runtime assets (UXML/USS/theme, loaded via `Resources.Load`) live in
 `Assets/Arena/Resources/UI/Toolkit/`; web prototype specs live in
 `docs/ui-prototypes/`. See `docs/ui-toolkit-workflow.md` for the pipeline.
@@ -84,6 +99,83 @@ spacetime generate --yes --lang csharp --bin-path server/target/wasm32-unknown-u
 ```
 
 Do not generate with `--module-path server` — that builds default features and drops the harness surface from the generated output.
+
+`hub-server/` is the separate persistent Hub control-plane module. It has no
+gameplay simulation loop. Its generated Unity bindings live in
+`Assets/Arena/Runtime/Generated/HubSpacetimeDB/` under the distinct
+`Arena.HubDb` C# namespace. Build and regenerate them with:
+
+```bash
+ops/build-hub-spacetimedb.sh
+```
+
+Publish the Hub to the local data-preserving development database with:
+
+```bash
+ops/republish-local-hub.sh
+```
+
+The defaults target `arena-hub-local`, preserve existing data, and start the
+local SpacetimeDB process when needed. They never publish to the remote host.
+
+`match-server/` is the disposable PvP match module. It reuses authoritative
+gameplay code from `server/` while excluding survival, training/playground,
+Hub-party, random-dungeon interaction/trap schemas, and embedded open-world
+collision payloads. Its private
+`match_contract.rs` state captures the module owner, one-shot provisioned 2v2
+configuration, and the reserved player identity. A freshly published match
+database stays inert until its owner bootstraps it. The existing direct local
+workflow is a temporary explicit compatibility mode:
+
+```bash
+# Existing local direct-connect workflow (the script default).
+ops/republish-local-clear.sh
+
+# Fresh inert database intended for owner bootstrap.
+ARENA_ENABLE_LOCAL_DIRECT_MODE=0 ops/republish-local-clear.sh
+```
+
+The compatibility switch is refused for non-local servers.
+
+`match_provisioner/` is the external, local-only Phase 3 control-plane worker.
+It polls private Hub tickets, publishes the already-built match WASM, invokes
+the one-shot match bootstrap, and deletes the exact database after termination
+or timeout. Its small SQLite recovery ledger defaults to the ignored
+`Library/ArenaMatchProvisioner/` directory. Configuration and safety behavior
+are documented in `match_provisioner/README.md` and
+`match_provisioner/local.env.example`.
+
+Run it continuously or for one reconciliation cycle with:
+
+```bash
+ops/run-local-match-provisioner.sh run
+ops/run-local-match-provisioner.sh run --once
+ops/run-local-match-provisioner.sh status
+```
+
+The runner uses the current local SpacetimeDB CLI identity unless
+`ARENA_PROVISIONER_TOKEN` is supplied explicitly. It never compiles per match.
+
+Build its guarded, size-optimized cached artifact and dedicated `Arena.MatchDb`
+bindings with:
+
+```bash
+ops/build-match-spacetimedb.sh
+```
+
+The Phase 4 Unity connection boundary is split across:
+
+- `HubNetworkManager.cs`: persistent Hub transport, two caller-only view
+  subscriptions, idempotent request submission, and schema-free UI snapshots;
+- `MatchHandoffCoordinator.cs`: assignment validation, Hub/match overlap,
+  timeout/rollback, and disposable-match return;
+- `NetworkManager.cs`: the dynamically assigned gameplay database, contract
+  checks, gameplay subscriptions, callbacks, clocks, and runtime caches.
+
+Identity tokens are keyed by SpacetimeDB host/cluster in
+`NetworkEnvironmentConfig.cs`, not by database. Keep that invariant when
+adding databases: a match may reuse a token only after its assignment is
+validated as the same cluster.
 
 ## Development Build Cleanup
 

@@ -115,6 +115,13 @@ namespace Arena.Network
         private DbConnection? _conn;
         private Identity _localIdentity;
         private bool _hasLocalIdentity;
+        private bool _isProvisionedMatchConnection;
+        private Identity _expectedProvisionedIdentity;
+        private bool _hasExpectedProvisionedIdentity;
+        private string _provisionedMatchId = string.Empty;
+        private string _provisionedMatchBuildId = string.Empty;
+        private bool _provisionedFailureReported;
+        private int _connectionGeneration;
         private float _nextClockPingRealtime;
         private NetworkEnvironmentEndpoint _activeEndpoint = NetworkEnvironmentConfig.EndpointFor(NetworkEnvironmentKind.Local);
 
@@ -129,6 +136,14 @@ namespace Arena.Network
 
         public bool IsConnected { get; private set; }
         public string? ContractCompatibilityError { get; private set; }
+        internal bool IsProvisionedMatchConnection => _isProvisionedMatchConnection;
+        internal Identity? LocalIdentity => _hasLocalIdentity ? _localIdentity : null;
+        internal string ProvisionedMatchId => _provisionedMatchId;
+        internal string ProvisionedMatchBuildId => _provisionedMatchBuildId;
+
+        internal event Action<Identity>? ProvisionedMatchReady;
+        internal event Action<string>? ProvisionedMatchFailed;
+        internal event Action<string>? ProvisionedMatchDisconnected;
 
         // The transport is deliberately hidden until shared movement/collision
         // contracts verify. Reducer callers therefore fail closed during the
@@ -139,15 +154,21 @@ namespace Arena.Network
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
-            if (Instance != null) return;
-
             Scene activeScene = SceneManager.GetActiveScene();
             if (!ShouldBootstrapForScene(activeScene.name, activeScene.path))
                 return;
 
+            EnsureInstance();
+        }
+
+        internal static NetworkManager EnsureInstance()
+        {
+            if (Instance != null)
+                return Instance;
+
             var go = new GameObject("NetworkManager");
             DontDestroyOnLoad(go);
-            go.AddComponent<NetworkManager>();
+            return go.AddComponent<NetworkManager>();
         }
 
         internal static bool ShouldBootstrapForScene(string sceneName, string scenePath)
@@ -164,12 +185,24 @@ namespace Arena.Network
 
         private void Start()
         {
+            // Hub owns its own small control-plane connection. The gameplay
+            // connection is opened only after an assignment is ready.
+            if (string.Equals(SceneManager.GetActiveScene().name, "Hub", StringComparison.Ordinal))
+                return;
+
             ConnectToResolvedEndpoint();
         }
 
         internal void ReconnectToSelectedEnvironment()
         {
             useSerializedEndpointOverride = false;
+            if (string.Equals(SceneManager.GetActiveScene().name, "Hub", StringComparison.Ordinal))
+            {
+                DisconnectCurrentConnection();
+                HubNetworkManager.EnsureInstance().ReconnectToSelectedEnvironment();
+                return;
+            }
+
             ConnectToResolvedEndpoint();
         }
 
@@ -178,34 +211,82 @@ namespace Arena.Network
             Connect(NetworkEnvironmentConfig.ResolveEndpoint(
                 useSerializedEndpointOverride,
                 serverUri,
-                moduleName));
+                moduleName),
+                isProvisionedMatch: false,
+                expectedIdentity: null,
+                matchId: string.Empty,
+                matchBuildId: string.Empty);
         }
 
-        private void Connect(NetworkEnvironmentEndpoint endpoint)
+        internal void ConnectToProvisionedMatch(
+            string serverUri,
+            string databaseIdentity,
+            Identity expectedIdentity,
+            string matchId,
+            string matchBuildId)
+        {
+            Connect(
+                new NetworkEnvironmentEndpoint(
+                    NetworkEnvironmentKind.Custom,
+                    "Provisioned Match",
+                    serverUri,
+                    databaseIdentity),
+                isProvisionedMatch: true,
+                expectedIdentity,
+                matchId,
+                matchBuildId);
+        }
+
+        internal void DisconnectProvisionedMatch()
+        {
+            if (_isProvisionedMatchConnection)
+                DisconnectCurrentConnection();
+        }
+
+        private void Connect(
+            NetworkEnvironmentEndpoint endpoint,
+            bool isProvisionedMatch,
+            Identity? expectedIdentity,
+            string matchId,
+            string matchBuildId)
         {
             DisconnectCurrentConnection();
             ContractCompatibilityError = null;
 
             _activeEndpoint = endpoint;
+            _isProvisionedMatchConnection = isProvisionedMatch;
+            _hasExpectedProvisionedIdentity = expectedIdentity.HasValue;
+            _expectedProvisionedIdentity = expectedIdentity.GetValueOrDefault();
+            _provisionedMatchId = matchId;
+            _provisionedMatchBuildId = matchBuildId;
+            _provisionedFailureReported = false;
+            if (isProvisionedMatch)
+                MatchStartupTiming.Record("match_connect_started");
             Debug.LogWarning(
                 $"[NetworkManager] Connecting to {endpoint.ServerUri} " +
                 $"module={endpoint.ModuleName} env={endpoint.DisplayName}");
 
             string? token = NetworkEnvironmentConfig.LoadAuthToken(endpoint);
 
+            int generation = ++_connectionGeneration;
             _conn = DbConnection.Builder()
                 .WithUri(endpoint.ServerUri)
                 .WithDatabaseName(endpoint.ModuleName)
                 .WithToken(token)
-                .OnConnect(OnConnected)
-                .OnConnectError(OnConnectError)
-                .OnDisconnect(OnDisconnected)
+                .OnConnect((conn, identity, issuedToken) =>
+                    OnConnected(generation, conn, identity, issuedToken))
+                .OnConnectError(error => OnConnectError(generation, error))
+                .OnDisconnect((conn, error) => OnDisconnected(generation, conn, error))
                 .Build();
         }
 
-        private void OnConnected(DbConnection conn, Identity identity, string token)
+        private void OnConnected(
+            int generation,
+            DbConnection conn,
+            Identity identity,
+            string token)
         {
-            if (!ReferenceEquals(conn, _conn))
+            if (generation != _connectionGeneration || !ReferenceEquals(conn, _conn))
                 return;
 
             ArenaServerClock.Reset();
@@ -213,6 +294,16 @@ namespace Arena.Network
             IsConnected = false;
             _localIdentity = identity;
             _hasLocalIdentity = true;
+            if (_isProvisionedMatchConnection
+                && (!_hasExpectedProvisionedIdentity || identity != _expectedProvisionedIdentity))
+            {
+                FailProvisionedMatch(
+                    "The match database authenticated a different player identity. "
+                    + "The Hub identity was preserved and the handoff was cancelled.");
+                return;
+            }
+            if (_isProvisionedMatchConnection)
+                MatchStartupTiming.Record("match_transport_connected");
             if (!string.IsNullOrWhiteSpace(token))
                 NetworkEnvironmentConfig.SaveAuthToken(_activeEndpoint, token);
             _requestedGameplayScope = GameplayScope.None;
@@ -308,20 +399,30 @@ namespace Arena.Network
 
         private void SubscribeStaticTables(DbConnection conn)
         {
+            if (_isProvisionedMatchConnection)
+                MatchStartupTiming.Record("static_subscription_started");
+            string[] queries = _isProvisionedMatchConnection
+                ? GameplaySubscriptionPlanner.BuildPvpMatchStaticQuerySqls()
+                : GameplaySubscriptionPlanner.BuildStaticQuerySqls();
             _staticSubscription = conn
                 .SubscriptionBuilder()
                 .OnApplied(OnStaticSubscriptionApplied)
                 .OnError(OnStaticSubscriptionError)
-                .Subscribe(GameplaySubscriptionPlanner.BuildStaticQuerySqls());
+                .Subscribe(queries);
         }
 
         private void SubscribeLocalTables(DbConnection conn, Identity localIdentity)
         {
+            if (_isProvisionedMatchConnection)
+                MatchStartupTiming.Record("local_subscription_started");
+            string[] queries = _isProvisionedMatchConnection
+                ? GameplaySubscriptionPlanner.BuildPvpMatchLocalQuerySqls(localIdentity)
+                : GameplaySubscriptionPlanner.BuildLocalQuerySqls(localIdentity);
             _localSubscription = conn
                 .SubscriptionBuilder()
                 .OnApplied(OnLocalSubscriptionApplied)
                 .OnError(OnLocalSubscriptionError)
-                .Subscribe(GameplaySubscriptionPlanner.BuildLocalQuerySqls(localIdentity));
+                .Subscribe(queries);
         }
 
         private void TryAdvanceGameplayScopeTransition()
@@ -369,11 +470,14 @@ namespace Arena.Network
             GameplayScope scope,
             int generation)
         {
+            string[] queries = _isProvisionedMatchConnection
+                ? GameplaySubscriptionPlanner.BuildPvpMatchScopedQuerySqls(scope)
+                : GameplaySubscriptionPlanner.BuildScopedQuerySqls(scope);
             return conn
                 .SubscriptionBuilder()
                 .OnApplied(_ => OnScopedSubscriptionApplied(scope, generation))
                 .OnError((ctx, error) => OnScopedSubscriptionError(scope, generation, error))
-                .Subscribe(GameplaySubscriptionPlanner.BuildScopedQuerySqls(scope));
+                .Subscribe(queries);
         }
 
         private void OnStaticSubscriptionApplied(SubscriptionEventContext ctx)
@@ -383,10 +487,15 @@ namespace Arena.Network
                 return;
 
             Debug.Log("[NetworkManager] Static subscription applied.");
+            if (_isProvisionedMatchConnection)
+                MatchStartupTiming.Record("static_subscription_applied");
             ContractVersionGuard.ValidationResult result = ContractVersionGuard.Validate(ctx.Db);
             if (!result.IsCompatible)
             {
-                FailContractCompatibility(result.FailureMessage);
+                if (_isProvisionedMatchConnection)
+                    FailProvisionedMatch(result.FailureMessage);
+                else
+                    FailContractCompatibility(result.FailureMessage);
                 return;
             }
 
@@ -394,13 +503,22 @@ namespace Arena.Network
                 return;
 
             ContractCompatibilityError = null;
-            IsConnected = true;
             SubscribeLocalTables(conn, _localIdentity);
         }
 
         private void OnLocalSubscriptionApplied(SubscriptionEventContext ctx)
         {
+            var conn = _conn;
+            if (conn == null || !ReferenceEquals(ctx.Db, conn.Db) || !_hasLocalIdentity)
+                return;
+
+            IsConnected = true;
             Debug.Log("[NetworkManager] Local-player subscription applied.");
+            if (_isProvisionedMatchConnection)
+            {
+                MatchStartupTiming.Record("local_subscription_applied");
+                ProvisionedMatchReady?.Invoke(_localIdentity);
+            }
         }
 
         private void OnScopedSubscriptionApplied(GameplayScope scope, int generation)
@@ -437,7 +555,11 @@ namespace Arena.Network
             if (_conn == null || !ReferenceEquals(ctx.Db, _conn.Db))
                 return;
 
-            FailContractCompatibility($"Unable to verify shared-data contracts: {e.Message}");
+            string message = $"Unable to verify shared-data contracts: {e.Message}";
+            if (_isProvisionedMatchConnection)
+                FailProvisionedMatch(message);
+            else
+                FailContractCompatibility(message);
         }
 
         private void FailContractCompatibility(string message)
@@ -459,6 +581,8 @@ namespace Arena.Network
         private void OnLocalSubscriptionError(ErrorContext ctx, Exception e)
         {
             Debug.LogError($"[NetworkManager] Local subscription error: {e.Message}");
+            if (_isProvisionedMatchConnection)
+                FailProvisionedMatch($"The match's player subscription failed: {e.Message}");
         }
 
         private void OnScopedSubscriptionError(GameplayScope scope, int generation, Exception e)
@@ -476,16 +600,25 @@ namespace Arena.Network
             Debug.LogError($"[NetworkManager] Scoped subscription error for {scope}: {e.Message}");
         }
 
-        private void OnConnectError(Exception e)
+        private void OnConnectError(int generation, Exception e)
         {
-            Debug.LogError($"[NetworkManager] Connection error: {e.Message}");
-        }
-
-        private void OnDisconnected(DbConnection conn, Exception? e)
-        {
-            if (!ReferenceEquals(conn, _conn))
+            if (generation != _connectionGeneration || _conn == null)
                 return;
 
+            Debug.LogError($"[NetworkManager] Connection error: {e.Message}");
+            if (_isProvisionedMatchConnection)
+                FailProvisionedMatch($"Unable to connect to the assigned match: {e.Message}");
+        }
+
+        private void OnDisconnected(int generation, DbConnection conn, Exception? e)
+        {
+            if (generation != _connectionGeneration || !ReferenceEquals(conn, _conn))
+                return;
+
+            bool wasProvisioned = _isProvisionedMatchConnection;
+            bool failureAlreadyReported = _provisionedFailureReported;
+            string disconnectReason = e?.Message ?? "the match transport closed";
+            _conn = null;
             ArenaServerClock.Reset();
             Arena.Simulation.ServerTimeDelayBudget.Reset();
             Arena.Debugging.NetworkCallbackDelay.ResetForNetworkReconnect();
@@ -495,6 +628,28 @@ namespace Arena.Network
             LocalInteractionState.Instance.ResetForNetworkReconnect();
             ResetConnectionState();
             Debug.Log($"[NetworkManager] Disconnected: {e?.Message ?? "clean"}");
+            if (wasProvisioned && !failureAlreadyReported)
+                ProvisionedMatchDisconnected?.Invoke(disconnectReason);
+        }
+
+        private void FailProvisionedMatch(string message)
+        {
+            if (!_isProvisionedMatchConnection || _provisionedFailureReported)
+                return;
+
+            _provisionedFailureReported = true;
+            IsConnected = false;
+            ContractCompatibilityError = message;
+            Debug.LogError($"[NetworkManager] Provisioned match handoff failed. {message}");
+            ProvisionedMatchFailed?.Invoke(message);
+            try
+            {
+                _conn?.Disconnect();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[NetworkManager] Match disconnect after handoff failure failed: {e.Message}");
+            }
         }
 
         private void Update()
@@ -508,7 +663,8 @@ namespace Arena.Network
 
             SendClockPingIfDue();
 
-            // Instance management is handled by LobbyController UI.
+            // Instance creation is initiated by the Hub; authoritative
+            // PlayerWorld callbacks drive scene and subscription changes.
         }
 
         private void OnDestroy()
@@ -521,6 +677,7 @@ namespace Arena.Network
         {
             var conn = _conn;
             _conn = null;
+            _connectionGeneration++;
             ResetConnectionState();
             EntityRegistry.Instance?.ClearForNetworkReconnect();
             MatchStateCache.Instance.ResetForNetworkReconnect();
@@ -551,6 +708,11 @@ namespace Arena.Network
             _appliedGameplayScope = GameplayScope.None;
             _scopeTransitionInFlight = false;
             _scopeTransitionGeneration = 0;
+            _isProvisionedMatchConnection = false;
+            _hasExpectedProvisionedIdentity = false;
+            _provisionedMatchId = string.Empty;
+            _provisionedMatchBuildId = string.Empty;
+            _provisionedFailureReported = false;
         }
     }
 }

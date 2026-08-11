@@ -3,6 +3,7 @@
 using Arena.Debugging;
 using Arena.Network;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace Arena.UI
@@ -173,6 +174,15 @@ namespace Arena.UI
 
         private static void OnReconnectClicked()
         {
+            if (string.Equals(
+                    SceneManager.GetActiveScene().name,
+                    "Hub",
+                    System.StringComparison.Ordinal))
+            {
+                HubNetworkManager.EnsureInstance().ReconnectToSelectedEnvironment();
+                return;
+            }
+
             NetworkManager manager = NetworkManager.Instance;
             if (manager != null)
                 manager.ReconnectToSelectedEnvironment();
@@ -194,8 +204,20 @@ namespace Arena.UI
             _nextRefreshRealtime = now + RefreshIntervalSeconds;
 
             NetworkManager manager = NetworkManager.Instance;
-            bool connected = manager != null && manager.IsConnected;
-            bool incompatible = manager != null
+            bool isHub = string.Equals(
+                SceneManager.GetActiveScene().name,
+                "Hub",
+                System.StringComparison.Ordinal);
+            HubNetworkManager? hub = HubNetworkManager.Instance;
+            bool completedHandoffStillInHubScene = isHub
+                && MatchHandoffCoordinator.Instance?.State == MatchHandoffState.InMatch
+                && manager?.IsConnected == true;
+            bool connected = isHub
+                ? hub?.IsReady == true || completedHandoffStillInHubScene
+                : manager != null && manager.IsConnected;
+            bool hubFailed = isHub && hub?.State == HubConnectionState.Error;
+            bool incompatible = !isHub
+                                && manager != null
                                 && !string.IsNullOrWhiteSpace(manager.ContractCompatibilityError);
             if (connected && !_wasConnected)
             {
@@ -205,17 +227,25 @@ namespace Arena.UI
             }
             _wasConnected = connected;
 
-            bool bannerVisible = incompatible || (_hasEverConnected && !connected);
+            bool bannerVisible = hubFailed || incompatible || (_hasEverConnected && !connected);
             if (_banner.activeSelf != bannerVisible)
                 _banner.SetActive(bannerVisible);
 
             _bannerLabel.text = incompatible
                 ? "Incompatible client/server data — update client or server"
-                : "Disconnected from server";
+                : hubFailed
+                    ? "Unable to connect to Hub"
+                    : "Disconnected from server";
 
             if (!connected)
             {
                 _dot.color = incompatible ? BadColor : DisconnectedColor;
+                return;
+            }
+
+            if (isHub)
+            {
+                _dot.color = GoodColor;
                 return;
             }
 

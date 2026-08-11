@@ -82,7 +82,7 @@ const RATING_MIN: f32 = 54.0;
 const RATING_MAX: f32 = 316.0;
 const SURVIVAL_OWNER_MAGIC: u128 = 0x6172_656e_6132_5f73_7572_7669_7661_6c01;
 const SURVIVAL_RATINGS_JSON: &str = include_str!("survival_ratings.shared.json");
-const SURVIVAL_LAYOUT_JSON: &str = include_str!("survival_arena_layout.shared.json");
+const ARENA_MAP_01_LAYOUT_JSON: &str = include_str!("arena_map_01_layout.shared.json");
 const SURVIVAL_OFFER_KIND_MODIFIER: &str = "MODIFIER";
 const SURVIVAL_OFFER_KIND_ITEM: &str = "ITEM";
 pub(crate) const SURVIVAL_RUN_ITEM_SOURCE_STARTER: &str = "STARTER";
@@ -253,7 +253,7 @@ struct SurvivalRating {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct SurvivalArenaLayout {
+struct ArenaMap01Layout {
     schema_version: u32,
     arena_radius: f32,
     player_spawn: SurvivalSpawnPoint,
@@ -1457,11 +1457,11 @@ fn survival_ratings() -> &'static [SurvivalRating] {
         .as_slice()
 }
 
-fn survival_layout() -> &'static SurvivalArenaLayout {
-    static LAYOUT: OnceLock<SurvivalArenaLayout> = OnceLock::new();
+fn survival_layout() -> &'static ArenaMap01Layout {
+    static LAYOUT: OnceLock<ArenaMap01Layout> = OnceLock::new();
     LAYOUT.get_or_init(|| {
-        let layout: SurvivalArenaLayout = serde_json::from_str(SURVIVAL_LAYOUT_JSON)
-            .expect("survival_arena_layout.shared.json must remain valid");
+        let layout: ArenaMap01Layout = serde_json::from_str(ARENA_MAP_01_LAYOUT_JSON)
+            .expect("arena_map_01_layout.shared.json must remain valid");
         assert_eq!(layout.schema_version, 1);
         assert!(layout.arena_radius > 0.0);
         assert!(!layout.edge_spawn_points.is_empty());

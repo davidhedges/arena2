@@ -8,7 +8,14 @@ const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 fn main() {
     let manifest_dir =
         PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set"));
-    let src_root = manifest_dir.join("src");
+    // The dedicated PvP module compiles this same authoritative source tree
+    // through match-server/Cargo.toml. Keep shared-content hashes identical
+    // without copying either gameplay code or build logic into that crate.
+    let src_root = if std::env::var("CARGO_PKG_NAME").as_deref() == Ok("arena-pvp-match") {
+        manifest_dir.join("../server/src")
+    } else {
+        manifest_dir.join("src")
+    };
     println!("cargo:rerun-if-changed={}", src_root.display());
     let mut files = Vec::new();
     collect_shared_json(&src_root, &src_root, &mut files);

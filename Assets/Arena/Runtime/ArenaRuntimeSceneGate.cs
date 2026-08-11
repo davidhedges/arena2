@@ -24,8 +24,7 @@ namespace Arena
 
             return string.Equals(sceneName, "Arena", System.StringComparison.Ordinal)
                    || string.Equals(sceneName, "Arena_VerdantStand_Blockout", System.StringComparison.Ordinal)
-                   || string.Equals(sceneName, "ArenaMatch", System.StringComparison.Ordinal)
-                   || string.Equals(sceneName, "SurvivalArena", System.StringComparison.Ordinal)
+                   || ArenaMapCatalog.IsRegisteredSceneName(sceneName)
                    || string.Equals(sceneName, "TrainingGround", System.StringComparison.Ordinal)
                    || string.Equals(sceneName, "Hub", System.StringComparison.Ordinal)
                    || string.Equals(sceneName, "CharacterCreation", System.StringComparison.Ordinal)

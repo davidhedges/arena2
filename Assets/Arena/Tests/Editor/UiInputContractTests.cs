@@ -635,7 +635,7 @@ namespace Arena.Tests.Editor
             Assert.That(hub, Does.Contain("destinationButton.onClick.AddListener(RequestSurvival)"));
             Assert.That(hub, Does.Contain("_travelConnection.Reducers.StartSurvivalRun()"));
             Assert.That(hub, Does.Contain("OnStartSurvivalRun += OnStartSurvivalRun"));
-            Assert.That(hub, Does.Not.Contain("SceneManager.LoadScene(\"SurvivalArena\")"));
+            Assert.That(hub, Does.Not.Contain("SceneManager.LoadScene(\"Arena_Map_01\")"));
 
             string builder = File.ReadAllText("Assets/Arena/Editor/HubSceneAuthoringBuilder.cs");
             Assert.That(builder, Does.Contain("\"Mode_Survival\""));
@@ -643,7 +643,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void HubMatchmakingControls_ExposeApprovedQueueToggleAndFormatOverlay()
+        public void HubMatchmakingControls_ExposeApprovedUnranked2v2BotMatch()
         {
             string screen = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/HubScreen.cs");
             string uxml = File.ReadAllText("Assets/Arena/Resources/UI/Toolkit/Hub.uxml");
@@ -661,13 +661,46 @@ namespace Arena.Tests.Editor
             Assert.That(uss, Does.Contain(".format-option.is-selected"));
             Assert.That(uss, Does.Contain(".match-button.is-searching"));
 
-            Assert.That(screen, Does.Contain("_queueButton.clicked += ToggleQueueMode"));
             Assert.That(screen, Does.Contain("_findMatchButton.clicked += OnFindMatchClicked"));
             Assert.That(screen, Does.Contain("_queueConfirm.clicked += ConfirmMatchSearch"));
-            Assert.That(screen, Does.Contain("MatchFormat.TwoVersusTwo"));
-            Assert.That(screen, Does.Contain("MatchFormat.ThreeVersusThree"));
-            Assert.That(screen, Does.Contain("MatchFormat.TenVersusTen"));
+            Assert.That(screen, Does.Contain("MatchHandoffCoordinator.EnsureInstance()"));
+            Assert.That(screen, Does.Contain("RequestUnranked2V2BotMatch()"));
+            Assert.That(screen, Does.Contain("HubNetworkManager.Instance?.Player"));
+            Assert.That(screen, Does.Not.Contain("Reducers.StartUnranked2V2BotMatch()"));
+            Assert.That(screen, Does.Not.Contain("OnStartUnranked2V2BotMatch"));
+            Assert.That(screen, Does.Contain("START 2V2 BOT MATCH"));
+            Assert.That(screen, Does.Contain("_format3v3Type.text = \"COMING SOON\""));
+            Assert.That(screen, Does.Contain("_format10v10Type.text = \"COMING SOON\""));
+            Assert.That(screen, Does.Contain("_format3v3.SetEnabled(false)"));
+            Assert.That(screen, Does.Contain("_format10v10.SetEnabled(false)"));
+            Assert.That(screen, Does.Not.Contain("ToggleQueueMode"));
             Assert.That(screen, Does.Contain("public bool TryCloseForEscape()"));
+        }
+
+        [Test]
+        public void BotMatchReturn_UsesExplicitHubGuardAndNoInGameLobby()
+        {
+            string overlay = File.ReadAllText("Assets/Arena/Runtime/UI/MatchOverlay.cs");
+            string queue = File.ReadAllText("Assets/Arena/Runtime/Entity/RuntimeSceneTransitionQueue.cs");
+            string coordinator = File.ReadAllText("Assets/Arena/Runtime/Entity/LocalWorldRuntimeCoordinator.cs");
+
+            Assert.That(File.Exists("Assets/Arena/Runtime/UI/LobbyController.cs"), Is.False);
+            Assert.That(overlay, Does.Contain("handoff.ReturnToHub()"));
+            Assert.That(overlay, Does.Contain("RuntimeSceneTransitionQueue.BeginExplicitHubReturn()"));
+            Assert.That(overlay, Does.Contain("RuntimeSceneTransitionQueue.RequestExplicitHubReturn()"));
+            Assert.That(overlay, Does.Contain("RuntimeSceneTransitionQueue.CancelExplicitHubReturn()"));
+            Assert.That(overlay, Does.Contain("Status.Failed(var failure)"));
+            Assert.That(overlay, Does.Not.Contain("Play Again"));
+            Assert.That(queue, Does.Contain("s_explicitHubReturnPending"));
+            Assert.That(queue, Does.Contain("Request(\"Hub\")"));
+            Assert.That(coordinator, Does.Contain("IsExplicitHubReturnPending"));
+            Assert.That(coordinator, Does.Contain("&& !row.InstanceId.HasValue"));
+
+            string handoff = File.ReadAllText(
+                "Assets/Arena/Runtime/Network/MatchHandoffCoordinator.cs");
+            Assert.That(handoff, Does.Contain("DisconnectForMatchHandoff()"));
+            Assert.That(handoff, Does.Contain("DisconnectProvisionedMatch()"));
+            Assert.That(handoff, Does.Contain("RequestExplicitHubReturn()"));
         }
 
         [Test]

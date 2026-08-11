@@ -46,6 +46,15 @@ namespace Arena.Network
             };
         }
 
+        internal static string[] BuildPvpMatchStaticQuerySqls()
+        {
+            return WithoutTables(
+                BuildStaticQuerySqls(),
+                "party",
+                "party_member",
+                "playground_target");
+        }
+
         internal static string[] BuildLocalQuerySqls(Identity localIdentity)
         {
             QueryBuilder qb = new();
@@ -114,6 +123,18 @@ namespace Arena.Network
             };
         }
 
+        internal static string[] BuildPvpMatchLocalQuerySqls(Identity localIdentity)
+        {
+            return WithoutTables(
+                BuildLocalQuerySqls(localIdentity),
+                "player_open_world_scene",
+                "active_dice_roll",
+                "party_invite",
+                "survival_run",
+                "survival_result",
+                "survival_score");
+        }
+
         internal static string[] BuildScopedQuerySqls(NetworkManager.GameplayScope scope)
         {
             if (scope.Kind == NetworkManager.GameplayScopeKind.None)
@@ -162,13 +183,52 @@ namespace Arena.Network
 
             if (scope.Kind == NetworkManager.GameplayScopeKind.Instance)
             {
+                ulong instanceId = scope.InstanceId.GetValueOrDefault();
+                queries.Add(new QueryBuilder().From.ArenaMatch()
+                    .Where(c => c.InstanceId.Eq(instanceId))
+                    .ToSql());
+                queries.Add(new QueryBuilder().From.MatchParticipant()
+                    .Where(c => c.InstanceId.Eq(instanceId))
+                    .ToSql());
                 queries.Add(BuildScopedMatchParticipantStatsQuery(new QueryBuilder(), scope).ToSql());
                 queries.Add(new QueryBuilder().From.SurvivalShopOffer()
-                    .Where(c => c.ArenaId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .Where(c => c.ArenaId.Eq(instanceId))
                     .ToSql());
             }
 
             return queries.ToArray();
+        }
+
+        internal static string[] BuildPvpMatchScopedQuerySqls(NetworkManager.GameplayScope scope)
+        {
+            return WithoutTables(
+                BuildScopedQuerySqls(scope),
+                "active_world_interaction",
+                "world_door_state",
+                "world_trap_state",
+                "survival_shop_offer");
+        }
+
+        private static string[] WithoutTables(string[] queries, params string[] unavailableTables)
+        {
+            var filtered = new List<string>(queries.Length);
+            foreach (string query in queries)
+            {
+                bool unavailable = false;
+                foreach (string table in unavailableTables)
+                {
+                    if (query.IndexOf($"\"{table}\"", StringComparison.Ordinal) >= 0)
+                    {
+                        unavailable = true;
+                        break;
+                    }
+                }
+
+                if (!unavailable)
+                    filtered.Add(query);
+            }
+
+            return filtered.ToArray();
         }
 
         private static string BuildScopedLootContainerQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)

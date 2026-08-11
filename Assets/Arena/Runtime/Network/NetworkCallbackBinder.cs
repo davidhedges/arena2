@@ -88,6 +88,10 @@ namespace Arena.Network
             conn.Db.ArenaInstance.OnUpdate += Delayed<ArenaInstance>(match.OnArenaInstanceUpdate);
             conn.Db.ArenaInstance.OnDelete += Delayed<ArenaInstance>(match.OnArenaInstanceDelete);
 
+            conn.Db.ArenaMatch.OnInsert += Delayed<ArenaMatch>(match.OnArenaMatchInsert);
+            conn.Db.ArenaMatch.OnUpdate += Delayed<ArenaMatch>(match.OnArenaMatchUpdate);
+            conn.Db.ArenaMatch.OnDelete += Delayed<ArenaMatch>(match.OnArenaMatchDelete);
+
             conn.Db.StatusEffect.OnInsert += Delayed<StatusEffect>(registry.OnStatusEffectInsert);
             conn.Db.StatusEffect.OnUpdate += Delayed<StatusEffect>(registry.OnStatusEffectUpdate);
             conn.Db.StatusEffect.OnDelete += Delayed<StatusEffect>(registry.OnStatusEffectDelete);

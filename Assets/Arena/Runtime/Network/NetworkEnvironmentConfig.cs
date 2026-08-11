@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using UnityEngine;
@@ -38,6 +39,8 @@ namespace Arena.Network
     internal static class NetworkEnvironmentConfig
     {
         internal const string DefaultModuleName = "arena";
+        internal const string LocalHubModuleName = "arena-hub-local";
+        internal const string RemoteHubModuleName = "arena-hub";
         internal const string LocalServerUri = "ws://localhost:3000";
         internal const string RemoteServerUri = "wss://arena.meandmyson.org";
 
@@ -68,6 +71,8 @@ namespace Arena.Network
         }
 
         internal static NetworkEnvironmentEndpoint CurrentEndpoint => EndpointFor(CurrentEnvironment);
+
+        internal static NetworkEnvironmentEndpoint CurrentHubEndpoint => HubEndpointFor(CurrentEnvironment);
 
         private static NetworkEnvironmentKind DefaultEnvironment
         {
@@ -105,6 +110,30 @@ namespace Arena.Network
                     LocalServerUri,
                     DefaultModuleName),
             };
+        }
+
+        internal static NetworkEnvironmentEndpoint HubEndpointFor(NetworkEnvironmentKind environment)
+        {
+            NetworkEnvironmentEndpoint gameplay = EndpointFor(environment);
+            return new NetworkEnvironmentEndpoint(
+                gameplay.Kind,
+                $"{gameplay.DisplayName} Hub",
+                gameplay.ServerUri,
+                environment == NetworkEnvironmentKind.Remote
+                    ? RemoteHubModuleName
+                    : LocalHubModuleName);
+        }
+
+        internal static NetworkEnvironmentEndpoint HubEndpointFor(NetworkEnvironmentEndpoint gameplayEndpoint)
+        {
+            string moduleName = gameplayEndpoint.Kind == NetworkEnvironmentKind.Remote
+                ? RemoteHubModuleName
+                : LocalHubModuleName;
+            return new NetworkEnvironmentEndpoint(
+                gameplayEndpoint.Kind,
+                $"{gameplayEndpoint.DisplayName} Hub",
+                gameplayEndpoint.ServerUri,
+                moduleName);
         }
 
         internal static NetworkEnvironmentEndpoint ResolveEndpoint(
@@ -157,10 +186,40 @@ namespace Arena.Network
                 return secureToken;
             }
 
+            // Builds before the Hub/match split stored one token per database.
+            // Prefer the original gameplay identity when upgrading from that
+            // layout, then move it into the host-scoped account. This preserves
+            // one SpacetimeDB identity while moving between databases.
+            foreach (string legacyAccount in LegacyCredentialAccounts(endpoint))
+            {
+                if (SessionAuthTokens.TryGetValue(legacyAccount, out string legacySessionToken)
+                    && !string.IsNullOrWhiteSpace(legacySessionToken))
+                {
+                    SaveMigratedAuthToken(endpoint, account, legacyAccount, legacySessionToken);
+                    return legacySessionToken;
+                }
+
+                if (PlatformCredentialStore.TryLoad(
+                        CredentialService,
+                        legacyAccount,
+                        out string legacySecureToken)
+                    && !string.IsNullOrWhiteSpace(legacySecureToken))
+                {
+                    SaveMigratedAuthToken(endpoint, account, legacyAccount, legacySecureToken);
+                    return legacySecureToken;
+                }
+            }
+
             // One-time migration from both plaintext locations used by older
             // Arena builds and by the SDK helper. The old keys are deleted
             // immediately even if this platform only supports session storage.
-            string legacyToken = PlayerPrefs.GetString(LegacyTokenPrefsKey(endpoint), string.Empty);
+            string legacyToken = string.Empty;
+            foreach (string legacyKey in LegacyTokenPrefsKeys(endpoint))
+            {
+                legacyToken = PlayerPrefs.GetString(legacyKey, string.Empty);
+                if (!string.IsNullOrWhiteSpace(legacyToken))
+                    break;
+            }
             if (string.IsNullOrWhiteSpace(legacyToken))
                 legacyToken = PlayerPrefs.GetString(LegacySdkTokenPrefsKey(), string.Empty);
 
@@ -181,8 +240,20 @@ namespace Arena.Network
             SessionAuthTokens[account] = token;
             DeleteLegacyPlaintextTokens(endpoint);
 
-            if (!PlatformCredentialStore.TrySave(CredentialService, account, token)
-                && !_warnedAboutSessionOnlyTokenStorage)
+            bool savedSecurely = PlatformCredentialStore.TrySave(
+                CredentialService,
+                account,
+                token);
+            if (savedSecurely)
+            {
+                foreach (string legacyAccount in LegacyCredentialAccounts(endpoint))
+                {
+                    SessionAuthTokens.Remove(legacyAccount);
+                    PlatformCredentialStore.TryDelete(CredentialService, legacyAccount);
+                }
+            }
+
+            if (!savedSecurely && !_warnedAboutSessionOnlyTokenStorage)
             {
                 _warnedAboutSessionOnlyTokenStorage = true;
                 Debug.LogWarning(
@@ -196,14 +267,81 @@ namespace Arena.Network
             string account = CredentialAccount(endpoint);
             SessionAuthTokens.Remove(account);
             PlatformCredentialStore.TryDelete(CredentialService, account);
+            foreach (string legacyAccount in LegacyCredentialAccounts(endpoint))
+            {
+                SessionAuthTokens.Remove(legacyAccount);
+                PlatformCredentialStore.TryDelete(CredentialService, legacyAccount);
+            }
             DeleteLegacyPlaintextTokens(endpoint);
         }
 
         private static string CredentialAccount(NetworkEnvironmentEndpoint endpoint)
-            => $"{endpoint.ModuleName}|{endpoint.ServerUri}";
+            => $"cluster|{CredentialScopeForServer(endpoint.ServerUri)}";
 
-        private static string LegacyTokenPrefsKey(NetworkEnvironmentEndpoint endpoint)
-            => LegacyAuthTokenPrefsPrefix + SanitizeKeyPart(CredentialAccount(endpoint));
+        /// <summary>
+        /// Converts HTTP/WebSocket spellings of the same SpacetimeDB host to
+        /// one credential scope. Loopback aliases are also equivalent so the
+        /// local provisioner's 127.0.0.1 assignment reuses a localhost token.
+        /// </summary>
+        internal static string CredentialScopeForServer(string serverUri)
+        {
+            if (!Uri.TryCreate(serverUri?.Trim(), UriKind.Absolute, out Uri? uri))
+                return (serverUri ?? string.Empty).Trim().ToLowerInvariant();
+
+            string host = uri.IsLoopback
+                ? "loopback"
+                : uri.IdnHost.TrimEnd('.').ToLowerInvariant();
+            int port = uri.IsDefaultPort
+                ? DefaultPortFor(uri.Scheme)
+                : uri.Port;
+            return string.Concat(host, ":", port.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static int DefaultPortFor(string scheme)
+            => string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(scheme, "wss", StringComparison.OrdinalIgnoreCase)
+                ? 443
+                : 80;
+
+        private static IEnumerable<string> LegacyCredentialAccounts(NetworkEnvironmentEndpoint endpoint)
+        {
+            // The gameplay module is first because it was the persistent
+            // pre-split connection and therefore owns the identity to retain.
+            string gameplayAccount = LegacyDatabaseCredentialAccount(
+                endpoint.ServerUri,
+                DefaultModuleName);
+            yield return gameplayAccount;
+
+            string endpointAccount = LegacyDatabaseCredentialAccount(
+                endpoint.ServerUri,
+                endpoint.ModuleName);
+            if (!string.Equals(endpointAccount, gameplayAccount, StringComparison.Ordinal))
+                yield return endpointAccount;
+        }
+
+        private static string LegacyDatabaseCredentialAccount(string serverUri, string moduleName)
+            => $"{moduleName}|{serverUri}";
+
+        private static void SaveMigratedAuthToken(
+            NetworkEnvironmentEndpoint endpoint,
+            string account,
+            string legacyAccount,
+            string token)
+        {
+            SessionAuthTokens[account] = token;
+            if (PlatformCredentialStore.TrySave(CredentialService, account, token))
+            {
+                SessionAuthTokens.Remove(legacyAccount);
+                PlatformCredentialStore.TryDelete(CredentialService, legacyAccount);
+            }
+            DeleteLegacyPlaintextTokens(endpoint);
+        }
+
+        private static IEnumerable<string> LegacyTokenPrefsKeys(NetworkEnvironmentEndpoint endpoint)
+        {
+            foreach (string legacyAccount in LegacyCredentialAccounts(endpoint))
+                yield return LegacyAuthTokenPrefsPrefix + SanitizeKeyPart(legacyAccount);
+        }
 
         private static string LegacySdkTokenPrefsKey()
         {
@@ -217,11 +355,13 @@ namespace Arena.Network
         private static void DeleteLegacyPlaintextTokens(NetworkEnvironmentEndpoint endpoint)
         {
             bool changed = false;
-            string endpointKey = LegacyTokenPrefsKey(endpoint);
-            if (PlayerPrefs.HasKey(endpointKey))
+            foreach (string endpointKey in LegacyTokenPrefsKeys(endpoint))
             {
-                PlayerPrefs.DeleteKey(endpointKey);
-                changed = true;
+                if (PlayerPrefs.HasKey(endpointKey))
+                {
+                    PlayerPrefs.DeleteKey(endpointKey);
+                    changed = true;
+                }
             }
 
             string sdkKey = LegacySdkTokenPrefsKey();
