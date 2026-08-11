@@ -181,7 +181,7 @@ button { border: 0; padding: 0; }
             <div class="match-title" id="MatchHeading">ENTER THE ARENA</div>
             <div class="match-subtitle">Prove your skill. Rise through the ranks.</div>
 
-            <div class="queue-summary">
+            <button class="queue-summary" id="QueueToggle" type="button" aria-label="Switch from Ranked to Casual matchmaking">
               <div class="queue-icon" aria-hidden="true">
                 <div class="queue-blade queue-blade--left"></div>
                 <div class="queue-blade queue-blade--right"></div>
@@ -190,10 +190,13 @@ button { border: 0; padding: 0; }
                 <div class="queue-label">SELECTED QUEUE</div>
                 <div class="queue-name" id="QueueName">RANKED</div>
               </div>
-              <div class="queue-chevron">›</div>
-            </div>
+              <div class="queue-action" aria-hidden="true">
+                <span>SWITCH</span>
+                <span class="queue-chevron">↔</span>
+              </div>
+            </button>
 
-            <button class="match-button" id="FindMatchButton" type="button">
+            <button class="match-button" id="FindMatchButton" type="button" aria-haspopup="dialog" aria-expanded="false">
               <span class="button-cap button-cap--left"></span>
               <span class="button-copy">
                 <span class="button-title">FIND MATCH</span>
@@ -247,6 +250,71 @@ button { border: 0; padding: 0; }
             <button class="tool-button tool-button--exit" id="ExitButton" type="button" aria-label="Exit"><span>↥</span></button>
           </div>
         </header>
+
+        <section class="match-overlay" id="MatchOverlay" aria-hidden="true">
+          <button class="overlay-scrim" id="OverlayScrim" type="button" aria-label="Close match format selection"></button>
+          <div class="format-dialog panel-surface" role="dialog" aria-modal="true" aria-labelledby="FormatHeading" aria-describedby="FormatDescription">
+            <div class="corner corner--tl"></div>
+            <div class="corner corner--tr"></div>
+            <div class="corner corner--bl"></div>
+            <div class="corner corner--br"></div>
+            <div class="dialog-accent dialog-accent--left"></div>
+            <div class="dialog-accent dialog-accent--right"></div>
+
+            <button class="dialog-close" id="DialogClose" type="button" aria-label="Close match format selection">×</button>
+
+            <div class="dialog-heading">
+              <div class="section-kicker">PVP MATCHMAKING</div>
+              <h1 class="format-heading" id="FormatHeading">CHOOSE YOUR BATTLE</h1>
+              <p class="format-description" id="FormatDescription">Select a team size for <span id="DialogQueueName">Ranked</span> matchmaking.</p>
+            </div>
+
+            <div class="format-options" role="radiogroup" aria-label="Match format">
+              <button class="format-option" type="button" role="radio" aria-checked="false" data-format="2v2">
+                <span class="format-copy">
+                  <span class="format-name">2V2</span>
+                  <span class="format-type">DUO SKIRMISH</span>
+                  <span class="format-note">Tight teams. Every move counts.</span>
+                </span>
+                <span class="format-check" aria-hidden="true">◆</span>
+              </button>
+
+              <button class="format-option format-option--spaced is-selected" type="button" role="radio" aria-checked="true" data-format="3v3">
+                <span class="format-copy">
+                  <span class="format-name">3V3</span>
+                  <span class="format-type">ARENA STANDARD</span>
+                  <span class="format-note">Balanced combat for coordinated teams.</span>
+                </span>
+                <span class="format-check" aria-hidden="true">◆</span>
+              </button>
+
+              <button class="format-option format-option--spaced" type="button" role="radio" aria-checked="false" data-format="10v10">
+                <span class="format-copy">
+                  <span class="format-name">10V10</span>
+                  <span class="format-type">GRAND MELEE</span>
+                  <span class="format-note">Large-scale battle. Hold the line.</span>
+                </span>
+                <span class="format-check" aria-hidden="true">◆</span>
+              </button>
+            </div>
+
+            <div class="dialog-footer">
+              <div class="selection-summary">
+                <span class="selection-label">YOUR SELECTION</span>
+                <span class="selection-value" id="SelectionValue">RANKED · 3V3</span>
+              </div>
+              <button class="queue-confirm" id="QueueConfirm" type="button">
+                <span class="button-cap button-cap--left"></span>
+                <span class="queue-confirm-copy">
+                  <span class="queue-confirm-title">ENTER QUEUE</span>
+                  <span class="queue-confirm-subtitle" id="QueueConfirmSubtitle">FIND A RANKED 3V3 MATCH</span>
+                </span>
+                <span class="button-cap button-cap--right"></span>
+              </button>
+            </div>
+          </div>
+        </section>
+
       </section>
     </main>
   </div>
