@@ -123,14 +123,17 @@
                         <ui:Label class="queue-label" text="SELECTED QUEUE" />
                         <ui:Label name="QueueName" class="queue-name" text="RANKED" />
                     </ui:VisualElement>
-                    <ui:Label class="queue-chevron" text="›" picking-mode="Ignore" />
+                    <ui:VisualElement class="queue-action" picking-mode="Ignore">
+                        <ui:Label text="SWITCH" />
+                        <ui:Label class="queue-chevron" text="↔" />
+                    </ui:VisualElement>
                 </ui:Button>
 
                 <ui:Button name="FindMatchButton" class="match-button">
                     <ui:VisualElement class="button-cap button-cap--left" picking-mode="Ignore" />
                     <ui:VisualElement class="button-copy" picking-mode="Ignore">
-                        <ui:Label class="button-title" text="FIND MATCH" />
-                        <ui:Label class="button-subtitle" text="RANKED MATCHMAKING" />
+                        <ui:Label name="FindMatchTitle" class="button-title" text="FIND MATCH" />
+                        <ui:Label name="FindMatchSubtitle" class="button-subtitle" text="RANKED MATCHMAKING" />
                     </ui:VisualElement>
                     <ui:VisualElement class="button-cap button-cap--right" picking-mode="Ignore" />
                 </ui:Button>
@@ -183,6 +186,76 @@
                 <ui:Button name="InboxButton" class="tool-button"><ui:Label class="tool-envelope" text="◇" picking-mode="Ignore" /></ui:Button>
                 <ui:Button name="SettingsButton" class="tool-button"><ui:Label class="tool-cog" text="✦" picking-mode="Ignore" /></ui:Button>
                 <ui:Button name="ExitButton" class="tool-button tool-button--exit"><ui:Label text="↥" picking-mode="Ignore" /></ui:Button>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="MatchOverlay" class="match-overlay">
+            <ui:Button name="OverlayScrim" class="overlay-scrim" />
+
+            <ui:VisualElement class="format-dialog panel-surface">
+                <ui:VisualElement class="corner corner--tl" picking-mode="Ignore" />
+                <ui:VisualElement class="corner corner--tr" picking-mode="Ignore" />
+                <ui:VisualElement class="corner corner--bl" picking-mode="Ignore" />
+                <ui:VisualElement class="corner corner--br" picking-mode="Ignore" />
+                <ui:VisualElement class="dialog-accent dialog-accent--left" picking-mode="Ignore" />
+                <ui:VisualElement class="dialog-accent dialog-accent--right" picking-mode="Ignore" />
+
+                <ui:Button name="DialogClose" class="dialog-close" text="×" />
+
+                <ui:VisualElement class="dialog-heading" picking-mode="Ignore">
+                    <ui:Label class="section-kicker" text="PVP MATCHMAKING" />
+                    <ui:Label class="format-heading" text="CHOOSE YOUR BATTLE" />
+                    <ui:VisualElement class="format-description-row">
+                        <ui:Label class="format-description" text="Select a team size for " />
+                        <ui:Label name="DialogQueueName" class="format-description format-description--queue" text="Ranked" />
+                        <ui:Label class="format-description" text=" matchmaking." />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="format-options">
+                    <ui:Button name="Format2v2" class="format-option">
+                        <ui:VisualElement class="format-copy" picking-mode="Ignore">
+                            <ui:Label class="format-name" text="2V2" />
+                            <ui:Label class="format-type" text="DUO SKIRMISH" />
+                            <ui:Label class="format-note" text="Tight teams. Every move counts." />
+                        </ui:VisualElement>
+                        <ui:Label class="format-check" text="◆" picking-mode="Ignore" />
+                    </ui:Button>
+
+                    <ui:Button name="Format3v3" class="format-option format-option--spaced is-selected">
+                        <ui:VisualElement class="format-copy" picking-mode="Ignore">
+                            <ui:Label class="format-name" text="3V3" />
+                            <ui:Label class="format-type" text="ARENA STANDARD" />
+                            <ui:Label class="format-note" text="Balanced combat for coordinated teams." />
+                        </ui:VisualElement>
+                        <ui:Label class="format-check" text="◆" picking-mode="Ignore" />
+                    </ui:Button>
+
+                    <ui:Button name="Format10v10" class="format-option format-option--spaced">
+                        <ui:VisualElement class="format-copy" picking-mode="Ignore">
+                            <ui:Label class="format-name" text="10V10" />
+                            <ui:Label class="format-type" text="GRAND MELEE" />
+                            <ui:Label class="format-note" text="Large-scale battle. Hold the line." />
+                        </ui:VisualElement>
+                        <ui:Label class="format-check" text="◆" picking-mode="Ignore" />
+                    </ui:Button>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="dialog-footer">
+                    <ui:VisualElement class="selection-summary" picking-mode="Ignore">
+                        <ui:Label class="selection-label" text="YOUR SELECTION" />
+                        <ui:Label name="SelectionValue" class="selection-value" text="RANKED · 3V3" />
+                    </ui:VisualElement>
+
+                    <ui:Button name="QueueConfirm" class="queue-confirm">
+                        <ui:VisualElement class="button-cap button-cap--left" picking-mode="Ignore" />
+                        <ui:VisualElement class="queue-confirm-copy" picking-mode="Ignore">
+                            <ui:Label class="queue-confirm-title" text="ENTER QUEUE" />
+                            <ui:Label name="QueueConfirmSubtitle" class="queue-confirm-subtitle" text="FIND A RANKED 3V3 MATCH" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="button-cap button-cap--right" picking-mode="Ignore" />
+                    </ui:Button>
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>

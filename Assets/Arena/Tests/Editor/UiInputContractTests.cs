@@ -129,6 +129,16 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void MeleeInputCode_GapCloseRangeDenialUsesExistingFeedbackPath()
+        {
+            string source = File.ReadAllText(MeleeInputHandlerPath);
+
+            Assert.That(source, Does.Contain("NotifyGapCloseRangeDenial(gapClose, slotId, pressedActionId);"));
+            Assert.That(source, Does.Contain("LocalCombatState.NotifyLocalAdvisoryDenial("));
+            Assert.That(source, Does.Contain("ActionRejectReason.OutOfRange"));
+        }
+
+        [Test]
         public void SpellVfxCode_DoesNotShadowReplicatedSpellGeometry()
         {
             string negate = File.ReadAllText(NegateVfxPath);
@@ -619,6 +629,34 @@ namespace Arena.Tests.Editor
             string builder = File.ReadAllText("Assets/Arena/Editor/HubSceneAuthoringBuilder.cs");
             Assert.That(builder, Does.Contain("\"Mode_Survival\""));
             Assert.That(builder, Does.Contain("\"Survival Mode\""));
+        }
+
+        [Test]
+        public void HubMatchmakingControls_ExposeApprovedQueueToggleAndFormatOverlay()
+        {
+            string screen = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/HubScreen.cs");
+            string uxml = File.ReadAllText("Assets/Arena/Resources/UI/Toolkit/Hub.uxml");
+            string uss = File.ReadAllText("Assets/Arena/Resources/UI/Toolkit/Hub.uss");
+
+            Assert.That(uxml, Does.Contain("name=\"QueueButton\""));
+            Assert.That(uxml, Does.Contain("name=\"MatchOverlay\""));
+            Assert.That(uxml, Does.Contain("name=\"Format2v2\""));
+            Assert.That(uxml, Does.Contain("name=\"Format3v3\""));
+            Assert.That(uxml, Does.Contain("name=\"Format10v10\""));
+            Assert.That(uxml, Does.Contain("name=\"QueueConfirm\""));
+            Assert.That(uxml, Does.Not.Contain("format-emblem"));
+
+            Assert.That(uss, Does.Contain(".match-overlay.is-open"));
+            Assert.That(uss, Does.Contain(".format-option.is-selected"));
+            Assert.That(uss, Does.Contain(".match-button.is-searching"));
+
+            Assert.That(screen, Does.Contain("_queueButton.clicked += ToggleQueueMode"));
+            Assert.That(screen, Does.Contain("_findMatchButton.clicked += OnFindMatchClicked"));
+            Assert.That(screen, Does.Contain("_queueConfirm.clicked += ConfirmMatchSearch"));
+            Assert.That(screen, Does.Contain("MatchFormat.TwoVersusTwo"));
+            Assert.That(screen, Does.Contain("MatchFormat.ThreeVersusThree"));
+            Assert.That(screen, Does.Contain("MatchFormat.TenVersusTen"));
+            Assert.That(screen, Does.Contain("public bool TryCloseForEscape()"));
         }
 
         [Test]

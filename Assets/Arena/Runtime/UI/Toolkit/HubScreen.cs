@@ -20,13 +20,23 @@ namespace Arena.UI
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-20)]
-    public sealed class HubScreen : MonoBehaviour
+    public sealed class HubScreen : MonoBehaviour, IEscapeCloseable
     {
         private const string HubSceneName = "Hub";
         private const string BackgroundResourcePath = "Hub/Hub_background";
         private const string BackgroundObjectName = "HubBackgroundPlane";
+        private const string OpenClass = "is-open";
+        private const string SelectedClass = "is-selected";
+        private const string SearchingClass = "is-searching";
         private const float BackgroundDistance = 30f;
         private const float DataRefreshInterval = 0.25f;
+
+        private enum MatchFormat
+        {
+            TwoVersusTwo,
+            ThreeVersusThree,
+            TenVersusTen,
+        }
 
         private PanelSettings? _panelSettings;
         private VisualElement? _root;
@@ -45,6 +55,21 @@ namespace Arena.UI
         private Button? _practiceButton;
         private Button? _navDisciplines;
         private Button? _navEquipment;
+        private Button? _queueButton;
+        private Label? _queueName;
+        private Button? _findMatchButton;
+        private Label? _findMatchTitle;
+        private Label? _findMatchSubtitle;
+        private VisualElement? _matchOverlay;
+        private Button? _overlayScrim;
+        private Button? _dialogClose;
+        private Label? _dialogQueueName;
+        private Button? _format2v2;
+        private Button? _format3v3;
+        private Button? _format10v10;
+        private Label? _selectionValue;
+        private Button? _queueConfirm;
+        private Label? _queueConfirmSubtitle;
         private HubController? _hubController;
         private DisciplinesScreen? _disciplinesScreen;
         private EquipmentScreen? _equipmentScreen;
@@ -56,6 +81,13 @@ namespace Arena.UI
         private int _dragPointerId = -1;
         private Vector2 _lastPointerPosition;
         private float _nextDataRefresh;
+        private MatchFormat _selectedFormat = MatchFormat.ThreeVersusThree;
+        private bool _rankedQueue = true;
+        private bool _matchOverlayOpen;
+        private bool _searching;
+
+        public int EscapeClosePriority => 130;
+        public bool IsEscapeCloseable => _matchOverlayOpen;
 
         private void Awake()
         {
@@ -72,9 +104,14 @@ namespace Arena.UI
             RefreshBoundData();
         }
 
+        private void OnEnable() => RuntimeUiEscapeRouter.Register(this);
+
+        private void OnDisable() => RuntimeUiEscapeRouter.Unregister(this);
+
         private void OnDestroy()
         {
             UnbindShowcaseDrag();
+            UnbindMatchmakingControls();
             if (_practiceButton != null)
                 _practiceButton.clicked -= OpenPracticeMenu;
             if (_navDisciplines != null)
@@ -270,9 +307,25 @@ namespace Arena.UI
             _practiceButton = _root.Q<Button>("PracticeButton");
             _navDisciplines = _root.Q<Button>("NavDisciplines");
             _navEquipment = _root.Q<Button>("NavEquipment");
+            _queueButton = _root.Q<Button>("QueueButton");
+            _queueName = _root.Q<Label>("QueueName");
+            _findMatchButton = _root.Q<Button>("FindMatchButton");
+            _findMatchTitle = _root.Q<Label>("FindMatchTitle");
+            _findMatchSubtitle = _root.Q<Label>("FindMatchSubtitle");
+            _matchOverlay = _root.Q<VisualElement>("MatchOverlay");
+            _overlayScrim = _root.Q<Button>("OverlayScrim");
+            _dialogClose = _root.Q<Button>("DialogClose");
+            _dialogQueueName = _root.Q<Label>("DialogQueueName");
+            _format2v2 = _root.Q<Button>("Format2v2");
+            _format3v3 = _root.Q<Button>("Format3v3");
+            _format10v10 = _root.Q<Button>("Format10v10");
+            _selectionValue = _root.Q<Label>("SelectionValue");
+            _queueConfirm = _root.Q<Button>("QueueConfirm");
+            _queueConfirmSubtitle = _root.Q<Label>("QueueConfirmSubtitle");
             _hubController = GetComponent<HubController>();
 
             BindShowcaseDrag();
+            BindMatchmakingControls();
 
             _disciplinesScreen = DisciplinesScreen.Ensure(transform);
             _disciplinesScreen.Closed += OnDisciplinesClosed;
@@ -291,6 +344,172 @@ namespace Arena.UI
             if (settingsButton != null)
                 settingsButton.clicked += SystemMenuScreen.OpenFromEscape;
         }
+
+        private void BindMatchmakingControls()
+        {
+            if (_queueButton != null)
+                _queueButton.clicked += ToggleQueueMode;
+            if (_findMatchButton != null)
+                _findMatchButton.clicked += OnFindMatchClicked;
+            if (_overlayScrim != null)
+                _overlayScrim.clicked += CloseMatchOverlay;
+            if (_dialogClose != null)
+                _dialogClose.clicked += CloseMatchOverlay;
+            if (_format2v2 != null)
+                _format2v2.clicked += Select2v2;
+            if (_format3v3 != null)
+                _format3v3.clicked += Select3v3;
+            if (_format10v10 != null)
+                _format10v10.clicked += Select10v10;
+            if (_queueConfirm != null)
+                _queueConfirm.clicked += ConfirmMatchSearch;
+
+            RefreshMatchmakingPresentation();
+        }
+
+        private void UnbindMatchmakingControls()
+        {
+            if (_queueButton != null)
+                _queueButton.clicked -= ToggleQueueMode;
+            if (_findMatchButton != null)
+                _findMatchButton.clicked -= OnFindMatchClicked;
+            if (_overlayScrim != null)
+                _overlayScrim.clicked -= CloseMatchOverlay;
+            if (_dialogClose != null)
+                _dialogClose.clicked -= CloseMatchOverlay;
+            if (_format2v2 != null)
+                _format2v2.clicked -= Select2v2;
+            if (_format3v3 != null)
+                _format3v3.clicked -= Select3v3;
+            if (_format10v10 != null)
+                _format10v10.clicked -= Select10v10;
+            if (_queueConfirm != null)
+                _queueConfirm.clicked -= ConfirmMatchSearch;
+        }
+
+        private void ToggleQueueMode()
+        {
+            if (_searching)
+                return;
+
+            _rankedQueue = !_rankedQueue;
+            RefreshMatchmakingPresentation();
+        }
+
+        private void OnFindMatchClicked()
+        {
+            if (_searching)
+            {
+                _searching = false;
+                RefreshMatchmakingPresentation();
+                return;
+            }
+
+            OpenMatchOverlay();
+        }
+
+        private void OpenMatchOverlay()
+        {
+            if (_matchOverlay == null)
+                return;
+
+            _matchOverlayOpen = true;
+            _matchOverlay.AddToClassList(OpenClass);
+            RefreshMatchmakingPresentation();
+
+            Button? selectedButton = _selectedFormat switch
+            {
+                MatchFormat.TwoVersusTwo => _format2v2,
+                MatchFormat.TenVersusTen => _format10v10,
+                _ => _format3v3,
+            };
+            selectedButton?.Focus();
+        }
+
+        private void CloseMatchOverlay()
+        {
+            if (!_matchOverlayOpen)
+                return;
+
+            _matchOverlayOpen = false;
+            _matchOverlay?.RemoveFromClassList(OpenClass);
+            _findMatchButton?.Focus();
+        }
+
+        public bool TryCloseForEscape()
+        {
+            if (!_matchOverlayOpen)
+                return false;
+
+            CloseMatchOverlay();
+            return true;
+        }
+
+        private void Select2v2() => SelectMatchFormat(MatchFormat.TwoVersusTwo);
+        private void Select3v3() => SelectMatchFormat(MatchFormat.ThreeVersusThree);
+        private void Select10v10() => SelectMatchFormat(MatchFormat.TenVersusTen);
+
+        private void SelectMatchFormat(MatchFormat format)
+        {
+            _selectedFormat = format;
+            RefreshMatchmakingPresentation();
+        }
+
+        private void ConfirmMatchSearch()
+        {
+            _searching = true;
+            CloseMatchOverlay();
+            RefreshMatchmakingPresentation();
+        }
+
+        private void RefreshMatchmakingPresentation()
+        {
+            string queueLabel = _rankedQueue ? "RANKED" : "CASUAL";
+            string queueTitle = _rankedQueue ? "Ranked" : "Casual";
+            string formatLabel = GetMatchFormatLabel(_selectedFormat);
+
+            if (_queueName != null)
+                _queueName.text = queueLabel;
+            if (_queueButton != null)
+            {
+                _queueButton.tooltip = $"Switch to {(_rankedQueue ? "Casual" : "Ranked")} matchmaking";
+                _queueButton.SetEnabled(!_searching);
+            }
+
+            if (_findMatchButton != null)
+                _findMatchButton.EnableInClassList(SearchingClass, _searching);
+            if (_findMatchTitle != null)
+                _findMatchTitle.text = _searching ? $"SEARCHING {formatLabel}…" : "FIND MATCH";
+            if (_findMatchSubtitle != null)
+                _findMatchSubtitle.text = _searching
+                    ? $"{queueLabel} · CLICK TO CANCEL"
+                    : $"{queueLabel} MATCHMAKING";
+
+            if (_dialogQueueName != null)
+                _dialogQueueName.text = queueTitle;
+            if (_selectionValue != null)
+                _selectionValue.text = $"{queueLabel} · {formatLabel}";
+            if (_queueConfirmSubtitle != null)
+                _queueConfirmSubtitle.text = $"FIND A {queueLabel} {formatLabel} MATCH";
+
+            _format2v2?.EnableInClassList(
+                SelectedClass,
+                _selectedFormat == MatchFormat.TwoVersusTwo);
+            _format3v3?.EnableInClassList(
+                SelectedClass,
+                _selectedFormat == MatchFormat.ThreeVersusThree);
+            _format10v10?.EnableInClassList(
+                SelectedClass,
+                _selectedFormat == MatchFormat.TenVersusTen);
+        }
+
+        private static string GetMatchFormatLabel(MatchFormat format)
+            => format switch
+            {
+                MatchFormat.TwoVersusTwo => "2V2",
+                MatchFormat.TenVersusTen => "10V10",
+                _ => "3V3",
+            };
 
         private void OpenPracticeMenu()
         {
