@@ -127,6 +127,7 @@ namespace Arena.Network
 
         private SubscriptionHandle? _staticSubscription;
         private SubscriptionHandle? _localSubscription;
+        private SubscriptionHandle? _pvpInitialSubscription;
         private SubscriptionHandle? _scopedSubscription;
 
         private GameplayScope _requestedGameplayScope = GameplayScope.None;
@@ -326,7 +327,10 @@ namespace Arena.Network
             conn.Reducers.OnPingClock += HandlePingClockResult;
             _nextClockPingRealtime = 0f;
 
-            SubscribeStaticTables(conn);
+            if (_isProvisionedMatchConnection)
+                SubscribePvpMatchInitialTables(conn, identity);
+            else
+                SubscribeStaticTables(conn);
         }
 
         private void SendClockPingIfDue()
@@ -399,11 +403,7 @@ namespace Arena.Network
 
         private void SubscribeStaticTables(DbConnection conn)
         {
-            if (_isProvisionedMatchConnection)
-                MatchStartupTiming.Record("static_subscription_started");
-            string[] queries = _isProvisionedMatchConnection
-                ? GameplaySubscriptionPlanner.BuildPvpMatchStaticQuerySqls()
-                : GameplaySubscriptionPlanner.BuildStaticQuerySqls();
+            string[] queries = GameplaySubscriptionPlanner.BuildStaticQuerySqls();
             _staticSubscription = conn
                 .SubscriptionBuilder()
                 .OnApplied(OnStaticSubscriptionApplied)
@@ -413,11 +413,7 @@ namespace Arena.Network
 
         private void SubscribeLocalTables(DbConnection conn, Identity localIdentity)
         {
-            if (_isProvisionedMatchConnection)
-                MatchStartupTiming.Record("local_subscription_started");
-            string[] queries = _isProvisionedMatchConnection
-                ? GameplaySubscriptionPlanner.BuildPvpMatchLocalQuerySqls(localIdentity)
-                : GameplaySubscriptionPlanner.BuildLocalQuerySqls(localIdentity);
+            string[] queries = GameplaySubscriptionPlanner.BuildLocalQuerySqls(localIdentity);
             _localSubscription = conn
                 .SubscriptionBuilder()
                 .OnApplied(OnLocalSubscriptionApplied)
@@ -425,10 +421,27 @@ namespace Arena.Network
                 .Subscribe(queries);
         }
 
+        private void SubscribePvpMatchInitialTables(DbConnection conn, Identity localIdentity)
+        {
+            MatchStartupTiming.Record("initial_subscription_started");
+            string[] queries = GameplaySubscriptionPlanner.BuildPvpMatchInitialQuerySqls(localIdentity);
+            _pvpInitialSubscription = conn
+                .SubscriptionBuilder()
+                .OnApplied(OnPvpMatchInitialSubscriptionApplied)
+                .OnError(OnPvpMatchInitialSubscriptionError)
+                .Subscribe(queries);
+        }
+
         private void TryAdvanceGameplayScopeTransition()
         {
             var conn = _conn;
             if (conn == null || !_hasLocalIdentity || _scopeTransitionInFlight)
+                return;
+            // PlayerWorld snapshot callbacks arrive before the initial
+            // subscription's OnApplied callback. A provisioned match defers
+            // its separate visibility subscription until contracts and local
+            // entry state have passed the one-round-trip readiness gate.
+            if (_isProvisionedMatchConnection && !IsConnected)
                 return;
 
             if (_scopedSubscription != null && _scopedSubscription.IsEnded)
@@ -487,8 +500,6 @@ namespace Arena.Network
                 return;
 
             Debug.Log("[NetworkManager] Static subscription applied.");
-            if (_isProvisionedMatchConnection)
-                MatchStartupTiming.Record("static_subscription_applied");
             ContractVersionGuard.ValidationResult result = ContractVersionGuard.Validate(ctx.Db);
             if (!result.IsCompatible)
             {
@@ -506,6 +517,36 @@ namespace Arena.Network
             SubscribeLocalTables(conn, _localIdentity);
         }
 
+        private void OnPvpMatchInitialSubscriptionApplied(SubscriptionEventContext ctx)
+        {
+            var conn = _conn;
+            if (conn == null
+                || !ReferenceEquals(ctx.Db, conn.Db)
+                || !_isProvisionedMatchConnection
+                || !_hasLocalIdentity)
+            {
+                return;
+            }
+
+            MatchStartupTiming.Record("initial_subscription_applied");
+            ContractVersionGuard.ValidationResult result = ContractVersionGuard.ValidatePvpMatch(ctx.Db);
+            MatchStartupTiming.Record(
+                "pvp_contracts_validated",
+                $"verified={result.Verified} missing={result.Missing} mismatches={result.Mismatches}");
+            if (!result.IsCompatible)
+            {
+                FailProvisionedMatch(result.FailureMessage);
+                return;
+            }
+
+            ContractCompatibilityError = null;
+            IsConnected = true;
+            Debug.Log("[NetworkManager] PvP initial subscription applied and contracts verified.");
+            TryAdvanceGameplayScopeTransition();
+            MatchStartupTiming.Record("initial_state_accepted");
+            ProvisionedMatchReady?.Invoke(_localIdentity);
+        }
+
         private void OnLocalSubscriptionApplied(SubscriptionEventContext ctx)
         {
             var conn = _conn;
@@ -514,11 +555,6 @@ namespace Arena.Network
 
             IsConnected = true;
             Debug.Log("[NetworkManager] Local-player subscription applied.");
-            if (_isProvisionedMatchConnection)
-            {
-                MatchStartupTiming.Record("local_subscription_applied");
-                ProvisionedMatchReady?.Invoke(_localIdentity);
-            }
         }
 
         private void OnScopedSubscriptionApplied(GameplayScope scope, int generation)
@@ -581,8 +617,15 @@ namespace Arena.Network
         private void OnLocalSubscriptionError(ErrorContext ctx, Exception e)
         {
             Debug.LogError($"[NetworkManager] Local subscription error: {e.Message}");
-            if (_isProvisionedMatchConnection)
-                FailProvisionedMatch($"The match's player subscription failed: {e.Message}");
+        }
+
+        private void OnPvpMatchInitialSubscriptionError(ErrorContext ctx, Exception e)
+        {
+            if (_conn == null || !ReferenceEquals(ctx.Db, _conn.Db))
+                return;
+
+            Debug.LogError($"[NetworkManager] PvP initial subscription error: {e.Message}");
+            FailProvisionedMatch($"The match's initial subscription failed: {e.Message}");
         }
 
         private void OnScopedSubscriptionError(GameplayScope scope, int generation, Exception e)
@@ -703,6 +746,7 @@ namespace Arena.Network
             _hasLocalIdentity = false;
             _staticSubscription = null;
             _localSubscription = null;
+            _pvpInitialSubscription = null;
             _scopedSubscription = null;
             _requestedGameplayScope = GameplayScope.None;
             _appliedGameplayScope = GameplayScope.None;

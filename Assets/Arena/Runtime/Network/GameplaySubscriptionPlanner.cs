@@ -48,11 +48,41 @@ namespace Arena.Network
 
         internal static string[] BuildPvpMatchStaticQuerySqls()
         {
-            return WithoutTables(
-                BuildStaticQuerySqls(),
-                "party",
-                "party_member",
-                "playground_target");
+            // Disposable PvP databases have no party/playground state, world
+            // content, or NPC actors. Keep this list explicit so adding a
+            // table to the all-mode plan cannot silently enlarge match entry.
+            return new[]
+            {
+                new QueryBuilder().From.AbilityCatalog().ToSql(),
+                new QueryBuilder().From.ActionPresentationCatalog().ToSql(),
+                new QueryBuilder().From.CombatVfxCueCatalog().ToSql(),
+                new QueryBuilder().From.CombatProjectileDefinition().ToSql(),
+                new QueryBuilder().From.CombatProfileCatalog().ToSql(),
+                new QueryBuilder().From.CombatDisciplineCatalog().ToSql(),
+                new QueryBuilder().From.CombatModeCatalog().ToSql(),
+                new QueryBuilder().From.ActionBarSlotCatalog().ToSql(),
+                new QueryBuilder().From.ItemDefinition().ToSql(),
+                new QueryBuilder().From.ArmorSetDefinition().ToSql(),
+                new QueryBuilder().From.ItemAffixDefinition().ToSql(),
+                new QueryBuilder().From.SpellDefinition().ToSql(),
+                new QueryBuilder().From.MeleeDefinition().ToSql(),
+                new QueryBuilder().From.MeleeAbilityCatalog().ToSql(),
+                new QueryBuilder().From.MeleeGapCloseCatalog().ToSql(),
+                new QueryBuilder().From.MeleeAttackModifierCatalog().ToSql(),
+                new QueryBuilder().From.AutoAttackCatalog().ToSql(),
+                new QueryBuilder().From.CombatRuleCatalog().ToSql(),
+                new QueryBuilder().From.ResourceCatalog().ToSql(),
+                new QueryBuilder().From.StatScalingCatalog().ToSql(),
+                new QueryBuilder().From.ContractVersion()
+                    .Where(c => c.Key.Eq("arena_layout.shared.json"))
+                    .ToSql(),
+                new QueryBuilder().From.ContractVersion()
+                    .Where(c => c.Key.Eq("gameplay_collision.shared.json"))
+                    .ToSql(),
+                new QueryBuilder().From.ContractVersion()
+                    .Where(c => c.Key.Eq("gameplay_query_collision.shared.json"))
+                    .ToSql(),
+            };
         }
 
         internal static string[] BuildLocalQuerySqls(Identity localIdentity)
@@ -125,14 +155,98 @@ namespace Arena.Network
 
         internal static string[] BuildPvpMatchLocalQuerySqls(Identity localIdentity)
         {
-            return WithoutTables(
-                BuildLocalQuerySqls(localIdentity),
-                "player_open_world_scene",
-                "active_dice_roll",
-                "party_invite",
-                "survival_run",
-                "survival_result",
-                "survival_score");
+            string localIdentityKey = OwnerKeys.For(localIdentity);
+            return new[]
+            {
+                new QueryBuilder().From.PlayerWorld()
+                    .Where(c => c.Identity.Eq(localIdentity))
+                    .ToSql(),
+                // The local PlayerWorld row carries the assigned instance id,
+                // allowing entry to receive exactly its ArenaInstance row
+                // without subscribing to every arena in a generic database.
+                new QueryBuilder().From.PlayerWorld()
+                    .Where(c => c.Identity.Eq(localIdentity))
+                    .RightSemijoin(
+                        new QueryBuilder().From.ArenaInstance(),
+                        (world, arena) => world.InstanceScopeId.Eq(arena.Id))
+                    .ToSql(),
+                new QueryBuilder().From.CharacterActionBarAssignment()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.CharacterAppearance()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.PlayerKnownSpell()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.GlobalCooldown()
+                    .Where(c => c.Caster.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.SpellCooldown()
+                    .Where(c => c.Caster.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.PredictedActionResult()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.FixedActionChargeState()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.ActiveCombatDiscipline()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.CharacterDisciplineLoadout()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.CharacterDisciplineAbilitySelection()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.CharacterCombatDisciplineWeaponLoadout()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.ActiveCombatMode()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.AutoAttackState()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.EquipmentLoadout()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.PlayerEquipmentPresentation()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.ActiveArmorSet()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                // Combat/action-bar resolution needs the local player's item
+                // aggregate. Containers, slots, and unowned world loot do not
+                // participate in a disposable arena match.
+                new QueryBuilder().From.ItemInstance()
+                    .Where(c => c.CurrentOwnerKey.Eq(localIdentityKey))
+                    .ToSql(),
+                new QueryBuilder().From.ItemInstance()
+                    .Where(c => c.CurrentOwnerKey.Eq(localIdentityKey))
+                    .RightSemijoin(
+                        new QueryBuilder().From.ItemSpell(),
+                        (item, spell) => item.ItemInstanceId.Eq(spell.ItemInstanceId))
+                    .ToSql(),
+                new QueryBuilder().From.ItemInstance()
+                    .Where(c => c.CurrentOwnerKey.Eq(localIdentityKey))
+                    .RightSemijoin(
+                        new QueryBuilder().From.ItemAffixInstance(),
+                        (item, affix) => item.ItemInstanceId.Eq(affix.ItemInstanceId))
+                    .ToSql(),
+            };
+        }
+
+        internal static string[] BuildPvpMatchInitialQuerySqls(Identity localIdentity)
+        {
+            string[] staticQueries = BuildPvpMatchStaticQuerySqls();
+            string[] localQueries = BuildPvpMatchLocalQuerySqls(localIdentity);
+            var queries = new List<string>(staticQueries.Length + localQueries.Length);
+            queries.AddRange(staticQueries);
+            queries.AddRange(localQueries);
+            return queries.ToArray();
         }
 
         internal static string[] BuildScopedQuerySqls(NetworkManager.GameplayScope scope)
@@ -206,7 +320,9 @@ namespace Arena.Network
                 "active_world_interaction",
                 "world_door_state",
                 "world_trap_state",
-                "survival_shop_offer");
+                "survival_shop_offer",
+                "inventory_container",
+                "inventory_slot");
         }
 
         private static string[] WithoutTables(string[] queries, params string[] unavailableTables)

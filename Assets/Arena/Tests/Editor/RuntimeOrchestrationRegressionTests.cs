@@ -98,8 +98,10 @@ namespace Arena.Tests.Editor
             Assert.That(handoff, Does.Contain("ObserveHubStatus(status)"));
             Assert.That(handoff, Does.Contain("CompleteSceneLoad()"));
             Assert.That(match, Does.Contain("Record(\"match_transport_connected\")"));
-            Assert.That(match, Does.Contain("Record(\"static_subscription_applied\")"));
-            Assert.That(match, Does.Contain("Record(\"local_subscription_applied\")"));
+            Assert.That(match, Does.Contain("Record(\"initial_subscription_started\")"));
+            Assert.That(match, Does.Contain("Record(\"initial_subscription_applied\")"));
+            Assert.That(match, Does.Contain("\"pvp_contracts_validated\""));
+            Assert.That(match, Does.Contain("Record(\"initial_state_accepted\")"));
         }
 
         [Test]
@@ -718,11 +720,9 @@ namespace Arena.Tests.Editor
             object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
                 .Invoke(null, new[] { row, null })!;
 
-            string[] staticSql = (string[])RequireMethod(plannerType, "BuildPvpMatchStaticQuerySqls")
-                .Invoke(null, Array.Empty<object>())!;
-            string[] localSql = (string[])RequireMethod(
+            string[] initialSql = (string[])RequireMethod(
                     plannerType,
-                    "BuildPvpMatchLocalQuerySqls",
+                    "BuildPvpMatchInitialQuerySqls",
                     localIdentity.GetType())
                 .Invoke(null, new[] { localIdentity })!;
             string[] scopedSql = (string[])RequireMethod(
@@ -731,7 +731,9 @@ namespace Arena.Tests.Editor
                     gameplayScopeType)
                 .Invoke(null, new[] { scope })!;
 
-            string sql = string.Join("\n", staticSql.Concat(localSql).Concat(scopedSql));
+            string sql = string.Join("\n", initialSql.Concat(scopedSql));
+            string initialSqlText = string.Join("\n", initialSql);
+            Assert.That(initialSql, Has.Length.EqualTo(44));
             foreach (string unavailableTable in new[]
                      {
                          "party",
@@ -744,6 +746,12 @@ namespace Arena.Tests.Editor
                          "survival_result",
                          "survival_score",
                          "survival_shop_offer",
+                         "recall_slot",
+                         "inventory_container",
+                         "inventory_slot",
+                         "combat_projectile_tick_metrics",
+                         "npc_template_catalog",
+                         "npc_visual_catalog",
                          "active_world_interaction",
                          "world_door_state",
                          "world_trap_state",
@@ -755,6 +763,69 @@ namespace Arena.Tests.Editor
             Assert.That(sql, Does.Contain("\"arena_match\""));
             Assert.That(sql, Does.Contain("\"match_participant\""));
             Assert.That(sql, Does.Contain("\"active_world_obstacle\""));
+            Assert.That(sql, Does.Contain("\"contract_version\""));
+            Assert.That(sql, Does.Contain("\"arena_instance\""));
+            Assert.That(sql, Does.Contain("\"character_action_bar_assignment\""));
+            Assert.That(sql, Does.Contain("\"equipment_loadout\""));
+            Assert.That(sql, Does.Contain("\"item_instance\""));
+            Assert.That(sql, Does.Contain("\"item_spell\""));
+            Assert.That(sql, Does.Contain("\"item_affix_instance\""));
+            Assert.That(initialSqlText, Does.Contain(
+                $"\"item_instance\".\"current_owner_key\" = '{localIdentity.ToString()!.ToLowerInvariant()}'"));
+            Assert.That(initialSqlText, Does.Not.Contain(
+                "\"item_instance\".\"current_owner_key\" = ''"));
+        }
+
+        [Test]
+        public void NetworkManager_ProvisionedPvpUsesOneInitialSubscriptionBeforeScopedVisibility()
+        {
+            string source = File.ReadAllText(
+                "Assets/Arena/Runtime/Network/NetworkManager.cs");
+
+            Assert.That(source, Does.Contain("SubscribePvpMatchInitialTables(conn, identity);"));
+            Assert.That(source, Does.Contain("BuildPvpMatchInitialQuerySqls(localIdentity)"));
+            Assert.That(source, Does.Contain(".OnApplied(OnPvpMatchInitialSubscriptionApplied)"));
+            Assert.That(source, Does.Contain("ContractVersionGuard.ValidatePvpMatch(ctx.Db)"));
+            Assert.That(source, Does.Contain("if (_isProvisionedMatchConnection && !IsConnected)"));
+            Assert.That(source, Does.Contain("BuildPvpMatchScopedQuerySqls(scope)"));
+
+            int initialMethodStart = source.IndexOf(
+                "private void SubscribePvpMatchInitialTables",
+                StringComparison.Ordinal);
+            int scopeMethodStart = source.IndexOf(
+                "private void TryAdvanceGameplayScopeTransition",
+                StringComparison.Ordinal);
+            Assert.That(initialMethodStart, Is.GreaterThanOrEqualTo(0));
+            Assert.That(scopeMethodStart, Is.GreaterThan(initialMethodStart));
+            string initialMethod = source.Substring(
+                initialMethodStart,
+                scopeMethodStart - initialMethodStart);
+            Assert.That(
+                initialMethod.Split(new[] { ".Subscribe(" }, StringSplitOptions.None).Length - 1,
+                Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ContractVersionGuard_PvpValidationLoadsOnlyArenaPredictionContracts()
+        {
+            string source = File.ReadAllText(
+                "Assets/Arena/Runtime/Network/ContractVersionGuard.cs");
+            int pvpStart = source.IndexOf(
+                "private static IEnumerable<(string serverKey, TextAsset? asset)> ClientPvpSharedFiles()",
+                StringComparison.Ordinal);
+            int genericStart = source.IndexOf(
+                "private static IEnumerable<(string serverKey, TextAsset? asset)> ClientSharedFiles()",
+                StringComparison.Ordinal);
+
+            Assert.That(pvpStart, Is.GreaterThanOrEqualTo(0));
+            Assert.That(genericStart, Is.GreaterThan(pvpStart));
+            string pvpMethod = source.Substring(pvpStart, genericStart - pvpStart);
+            Assert.That(pvpMethod, Does.Contain("SharedData/arena_layout.shared"));
+            Assert.That(pvpMethod, Does.Contain("SharedData/gameplay_collision.shared"));
+            Assert.That(pvpMethod, Does.Contain("SharedData/gameplay_query_collision.shared"));
+            Assert.That(pvpMethod, Does.Not.Contain("Resources.LoadAll"));
+            Assert.That(pvpMethod, Does.Not.Contain("Resources.Load<TextAsset>(\"SharedData/Worlds"));
+            Assert.That(pvpMethod, Does.Not.Contain("Resources.Load<TextAsset>(\"SharedData/WorldInteractions"));
         }
 
         [Test]

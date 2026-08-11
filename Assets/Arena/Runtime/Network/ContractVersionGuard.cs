@@ -46,12 +46,28 @@ namespace Arena.Network
         }
 
         internal static ValidationResult Validate(RemoteTables db)
+            => ValidateFiles(db, ClientSharedFiles());
+
+        internal static ValidationResult ValidatePvpMatch(RemoteTables db)
+            => ValidateFiles(db, ClientPvpSharedFiles());
+
+        private static ValidationResult ValidateFiles(
+            RemoteTables db,
+            IEnumerable<(string serverKey, TextAsset? asset)> files)
         {
             int verified = 0;
             int missing = 0;
             int mismatches = 0;
-            foreach ((string serverKey, TextAsset asset) in ClientSharedFiles())
+            foreach ((string serverKey, TextAsset? asset) in files)
             {
+                if (asset == null)
+                {
+                    missing++;
+                    Debug.LogError(
+                        $"[ContractVersion] client has no bundled shared data for '{serverKey}'.");
+                    continue;
+                }
+
                 ContractVersion? row = db.ContractVersion.Key.Find(serverKey);
                 if (row == null)
                 {
@@ -83,6 +99,22 @@ namespace Arena.Network
             return result;
         }
 
+        private static IEnumerable<(string serverKey, TextAsset? asset)> ClientPvpSharedFiles()
+        {
+            // Load these files directly. Enumerating SharedData/Worlds would
+            // deserialize roughly 179 MB of open-world and dungeon assets that
+            // the lean PvP server neither embeds nor uses.
+            yield return (
+                "arena_layout.shared.json",
+                Resources.Load<TextAsset>("SharedData/arena_layout.shared"));
+            yield return (
+                "gameplay_collision.shared.json",
+                Resources.Load<TextAsset>("SharedData/gameplay_collision.shared"));
+            yield return (
+                "gameplay_query_collision.shared.json",
+                Resources.Load<TextAsset>("SharedData/gameplay_query_collision.shared"));
+        }
+
         /// <summary>
         /// FNV-1a over the file bytes, skipping CR so checkouts with
         /// different line endings hash identically. Mirrors
@@ -103,7 +135,7 @@ namespace Arena.Network
             return hash;
         }
 
-        private static IEnumerable<(string serverKey, TextAsset asset)> ClientSharedFiles()
+        private static IEnumerable<(string serverKey, TextAsset? asset)> ClientSharedFiles()
         {
             // TextAsset names have the ".json" extension stripped; server
             // keys are src-relative paths ("world_data/x.shared.json").

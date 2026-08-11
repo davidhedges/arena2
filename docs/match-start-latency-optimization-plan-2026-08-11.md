@@ -2,7 +2,7 @@
 
 Date: 2026-08-11
 
-Status: **APPROVED — Steps 1–4 complete; Steps 5–6 pending**
+Status: **APPROVED — Steps 1–5 complete; Step 6 pending**
 
 ## 1. Scope
 
@@ -262,6 +262,44 @@ Exit gate:
 - no required combat definition or local state is missing;
 - survival, open-world, playground, and unrelated inventory state is not part
   of the PvP entry payload.
+
+Step 5 completion record (2026-08-12):
+
+- Provisioned PvP connections now apply one explicit 44-query initial
+  subscription instead of the former 25-query static subscription followed by
+  a 26-query local subscription. Generic/open-world connections retain their
+  original two-stage plans.
+- The PvP entry plan includes required combat catalogs, three prediction
+  contract rows, the assigned arena row, local action/cooldown/discipline and
+  equipment state, and the local player's item/spell/affix aggregate. It
+  excludes survival, open-world, playground, party/invite, dice, recall,
+  projectile-metrics, NPC-catalog, inventory-container/slot, and unowned
+  world-loot queries. PvP scoped visibility also excludes loot containers and
+  slots while retaining its actor, physics, combat, match, and event queries.
+- PlayerWorld snapshot callbacks record the requested instance scope, but the
+  separate visibility subscription now waits until the one-round-trip initial
+  subscription and contract gate have passed. Later scope transitions remain
+  unchanged.
+- PvP contract validation directly loads the three arena prediction contracts
+  (`arena_layout`, `gameplay_collision`, and `gameplay_query_collision`),
+  totaling 11,179 bytes, rather than enumerating roughly 179 MB of bundled
+  open-world and dungeon resources. The live validation verified all three
+  stamps in 2.9 ms, down from the 545–857 ms samples that verified 38 files.
+- The interactive match `match-26d58b0493acd8a8a11f0dbd` reached Hub
+  `READY` at 780.0 ms and match initial-state readiness at 1,666.8 ms: an
+  886.8 ms interval, below the 1.0-second Step 5 budget and 55.1% below the
+  1,974.1 ms baseline. The initial subscription itself took 338.1 ms, its
+  scoped instance subscription applied successfully, and there were no
+  subscription or contract errors.
+- The same run reached loaded `Arena_Map_01` at 3,381.7 ms, below the
+  four-second end-to-end target. The user confirmed the map, action bar,
+  movement, targeting, and an ability worked. Scene loading still consumed
+  1,692.0 ms after the request and remains above its separate one-second
+  interval target.
+- Verification passed: both Unity C# projects build with zero errors, the
+  regression assembly covers the one-subscription boundary and exact payload
+  exclusions, and the interactive trace proved required runtime state. Unity
+  batch mode, server republishing, and remote deployment were not used.
 
 ### Step 6 — Benchmark and decide whether a warm pool is justified
 
