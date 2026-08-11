@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using SpacetimeDB.Types;
 using UnityEngine;
+using Arena.World;
 
 namespace Arena.Network
 {
@@ -105,14 +106,14 @@ namespace Arena.Network
             // deserialize roughly 179 MB of open-world and dungeon assets that
             // the lean PvP server neither embeds nor uses.
             yield return (
-                "arena_layout.shared.json",
-                Resources.Load<TextAsset>("SharedData/arena_layout.shared"));
+                "map_data/arena_map_01.layout.shared.json",
+                Resources.Load<TextAsset>(ArenaMapCatalog.ArenaMap01LayoutResourcePath));
             yield return (
-                "gameplay_collision.shared.json",
-                Resources.Load<TextAsset>("SharedData/gameplay_collision.shared"));
+                "map_data/arena_map_01.collision.shared.json",
+                Resources.Load<TextAsset>(ArenaMapCatalog.ArenaMap01MovementCollisionResourcePath));
             yield return (
-                "gameplay_query_collision.shared.json",
-                Resources.Load<TextAsset>("SharedData/gameplay_query_collision.shared"));
+                "map_data/arena_map_01.query_collision.shared.json",
+                Resources.Load<TextAsset>(ArenaMapCatalog.ArenaMap01QueryCollisionResourcePath));
         }
 
         /// <summary>

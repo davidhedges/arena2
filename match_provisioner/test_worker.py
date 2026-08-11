@@ -135,8 +135,9 @@ class FakeApi:
                     "server_uri": str(arguments[3]),
                     "database_identity": str(arguments[4]),
                     "match_build_id": str(arguments[5]),
+                    "map_id": str(arguments[6]),
                     "ready_at": timestamp_arg(1_000),
-                    "expires_at": arguments[6],
+                    "expires_at": arguments[7],
                 }
                 return
             if reducer == "service_mark_failed":
@@ -164,11 +165,12 @@ class FakeApi:
                 "singleton_id": 0,
                 "match_id": str(arguments[0]),
                 "match_build_id": str(arguments[1]),
+                "map_id": str(arguments[2]),
                 "phase": "WAITING",
-                "allocation_expires_at": arguments[3],
+                "allocation_expires_at": arguments[4],
             }
             match_database["reservations"] = [
-                {"player_identity": arguments[4], "display_name": str(arguments[5])}
+                {"player_identity": arguments[5], "display_name": str(arguments[6])}
             ]
             return
         if reducer == "abort_match":
@@ -236,6 +238,7 @@ class ProvisionerTests(unittest.TestCase):
             reconcile_seconds=30,
             cleanup_retry_seconds=5,
             cleaned_retention_seconds=86_400,
+            map_id="ARENA_MAP_01",
         )
         self.store = AllocationStore(self.config.state_path)
 
@@ -429,6 +432,7 @@ class ProvisionerTests(unittest.TestCase):
             "config": {
                 "match_id": match_id,
                 "match_build_id": f"sha256-{hashlib.sha256(self.wasm_path.read_bytes()).hexdigest()[:20]}",
+                "map_id": "ARENA_MAP_01",
                 "phase": "WAITING",
                 "allocation_expires_at": timestamp_arg(self.now + 120),
             },

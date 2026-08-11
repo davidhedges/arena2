@@ -48,11 +48,31 @@ asset, but retain separate server rules, lifecycle, actors, and subscriptions.
 Removing Survival must therefore not remove or rename the map.
 
 The retired `ArenaMatch` example scene is not a runtime or authoring dependency.
-The matching client/server `arena_layout.shared.json` files describe this map's
-flat PvP boundary and intentionally contain no invisible ruin, platform, ramp,
-or pillar blockers. Before a second authored arena ships, the selected map ID
-must be carried by the Hub assignment and match bootstrap instead of silently
-assuming the catalog default.
+The map's immutable runtime inputs are checked in under
+`server/src/map_data/arena_map_01.*.shared.json` and mirrored under
+`Assets/Arena/Resources/SharedData/Maps/`. The layout describes a flat,
+60-by-60-metre square PvP boundary. Its movement and query collision exports
+currently contain no internal blockers, so decorative scene geometry cannot
+silently become an invisible wall. The old global `arena_layout` and
+`gameplay_collision` files have been retired.
+
+The Hub assignment, provisioner bootstrap, match configuration, and
+`ArenaInstance` all carry the selected stable map ID. Unity resolves that ID to
+the scene and the matching layout/collision resources through `ArenaMapCatalog`.
+To add another authored map, add matching entries to the Rust and Unity map
+catalogs and check in its `<data-key>.layout`, `<data-key>.collision`, and
+`<data-key>.query_collision` files; do not add a mode-specific scene switch.
+
+Authored arena collision uses the same deterministic shared bake as Random
+Dungeon. Only explicit objects on the `GameplayCollision` layer are exported;
+ordinary visual colliders are not runtime authority. `Arena_Map_01` deliberately
+has no such proxies today. Rebuilding it records a collision revision and emits
+the paired server/client files. The editor command
+`Arena/Maps/Repair Arena Map 01 Collision From Saved Scene` re-exports a saved
+scene after a stale revision is detected. Movement and query files stay
+separate so a future map can use cheap movement hulls and richer line-of-sight
+geometry without changing the runtime contract. The local Play gate checks the
+revision and repairs/republishes it before entering Play when needed.
 
 UI Toolkit runtime assets (UXML/USS/theme, loaded via `Resources.Load`) live in
 `Assets/Arena/Resources/UI/Toolkit/`; web prototype specs live in

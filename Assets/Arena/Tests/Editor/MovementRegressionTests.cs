@@ -22,12 +22,12 @@ namespace Arena.Tests.Editor
         [Test]
         public void BundledSharedMovementAssets_ArePresent()
         {
-            TextAsset arenaLayout = Resources.Load<TextAsset>("SharedData/arena_layout.shared");
-            TextAsset gameplayCollision = Resources.Load<TextAsset>("SharedData/gameplay_collision.shared");
+            TextAsset arenaLayout = Resources.Load<TextAsset>("SharedData/Maps/arena_map_01.layout.shared");
+            TextAsset gameplayCollision = Resources.Load<TextAsset>("SharedData/Maps/arena_map_01.collision.shared");
 
             Assert.That(arenaLayout, Is.Not.Null);
             Assert.That(gameplayCollision, Is.Not.Null);
-            Assert.That(arenaLayout!.text, Does.Contain("\"arena_radius\""));
+            Assert.That(arenaLayout!.text, Does.Contain("\"boundary_shape\": \"aabb\""));
             Assert.That(gameplayCollision!.text, Does.Contain("\"boxes\""));
         }
 
@@ -54,7 +54,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void ArenaEnvironment_SamplesBundledPlatformHeight()
+        public void ArenaEnvironment_SamplesAuthoredFlatGround()
         {
             object environment = InvokeStaticMethod(
                 "Arena.Input.ArenaMovementEnvironment",
@@ -64,11 +64,42 @@ namespace Arena.Tests.Editor
             float ground = (float)InvokeInstanceMethod(
                 environment,
                 "SampleGroundHeight",
-                -26.0f,
-                18.0f,
+                0.0f,
+                0.0f,
                 10.0f);
 
-            Assert.That(ground, Is.EqualTo(4.2f).Within(PositionTolerance));
+            Assert.That(ground, Is.EqualTo(0.0f).Within(PositionTolerance));
+        }
+
+        [Test]
+        public void ArenaEnvironment_UsesSquareBoundaryAndHasNoStaleInteriorBlockers()
+        {
+            object environment = InvokeStaticMethod(
+                "Arena.Input.ArenaMovementEnvironment",
+                "Shared",
+                12345UL);
+
+            Vector2 interiorCorner = (Vector2)InvokeInstanceMethod(
+                environment,
+                "ResolveHorizontalCollision",
+                25.0f,
+                25.0f,
+                PlayerRadius,
+                PlayerHeight,
+                0.0f);
+            Assert.That(interiorCorner.x, Is.EqualTo(25.0f).Within(PositionTolerance));
+            Assert.That(interiorCorner.y, Is.EqualTo(25.0f).Within(PositionTolerance));
+
+            Vector2 outsideCorner = (Vector2)InvokeInstanceMethod(
+                environment,
+                "ResolveHorizontalCollision",
+                35.0f,
+                35.0f,
+                PlayerRadius,
+                PlayerHeight,
+                0.0f);
+            Assert.That(outsideCorner.x, Is.EqualTo(30.0f - PlayerRadius).Within(PositionTolerance));
+            Assert.That(outsideCorner.y, Is.EqualTo(30.0f - PlayerRadius).Within(PositionTolerance));
         }
 
         [Test]

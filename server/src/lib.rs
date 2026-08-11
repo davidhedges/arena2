@@ -18,6 +18,7 @@ mod actor_lifecycle;
 mod animation_set_test_utils;
 mod appearance;
 mod arena;
+mod arena_maps;
 mod auto_attack;
 mod bot_matches;
 mod combat;

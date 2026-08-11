@@ -41,6 +41,7 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.Col<ArenaInstance, ulong> Id { get; }
         public global::SpacetimeDB.Col<ArenaInstance, ulong> Seed { get; }
+        public global::SpacetimeDB.Col<ArenaInstance, string> MapId { get; }
         public global::SpacetimeDB.Col<ArenaInstance, uint> MaxPlayers { get; }
         public global::SpacetimeDB.Col<ArenaInstance, uint> PlayerCount { get; }
         public global::SpacetimeDB.Col<ArenaInstance, string> Phase { get; }
@@ -54,6 +55,7 @@ namespace SpacetimeDB.Types
         {
             Id = new global::SpacetimeDB.Col<ArenaInstance, ulong>(tableName, "id");
             Seed = new global::SpacetimeDB.Col<ArenaInstance, ulong>(tableName, "seed");
+            MapId = new global::SpacetimeDB.Col<ArenaInstance, string>(tableName, "map_id");
             MaxPlayers = new global::SpacetimeDB.Col<ArenaInstance, uint>(tableName, "max_players");
             PlayerCount = new global::SpacetimeDB.Col<ArenaInstance, uint>(tableName, "player_count");
             Phase = new global::SpacetimeDB.Col<ArenaInstance, string>(tableName, "phase");

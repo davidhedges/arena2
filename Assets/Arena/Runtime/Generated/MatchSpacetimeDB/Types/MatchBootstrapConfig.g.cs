@@ -20,6 +20,8 @@ namespace Arena.MatchDb
         public string MatchId;
         [DataMember(Name = "match_build_id")]
         public string MatchBuildId;
+        [DataMember(Name = "map_id")]
+        public string MapId;
         [DataMember(Name = "queue_kind")]
         public string QueueKind;
         [DataMember(Name = "format")]
@@ -43,6 +45,7 @@ namespace Arena.MatchDb
             byte SingletonId,
             string MatchId,
             string MatchBuildId,
+            string MapId,
             string QueueKind,
             string Format,
             string Ruleset,
@@ -57,6 +60,7 @@ namespace Arena.MatchDb
             this.SingletonId = SingletonId;
             this.MatchId = MatchId;
             this.MatchBuildId = MatchBuildId;
+            this.MapId = MapId;
             this.QueueKind = QueueKind;
             this.Format = Format;
             this.Ruleset = Ruleset;
@@ -72,6 +76,7 @@ namespace Arena.MatchDb
         {
             this.MatchId = "";
             this.MatchBuildId = "";
+            this.MapId = "";
             this.QueueKind = "";
             this.Format = "";
             this.Ruleset = "";

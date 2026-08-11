@@ -28,13 +28,17 @@ namespace Arena.Network
             string matchId,
             string serverUri,
             string databaseIdentity,
-            string matchBuildId)
+            string matchBuildId,
+            string mapId,
+            string sceneName)
         {
             TicketId = ticketId;
             MatchId = matchId;
             ServerUri = serverUri;
             DatabaseIdentity = databaseIdentity;
             MatchBuildId = matchBuildId;
+            MapId = mapId;
+            SceneName = sceneName;
         }
 
         internal string TicketId { get; }
@@ -42,6 +46,8 @@ namespace Arena.Network
         internal string ServerUri { get; }
         internal string DatabaseIdentity { get; }
         internal string MatchBuildId { get; }
+        internal string MapId { get; }
+        internal string SceneName { get; }
     }
 
     internal static class MatchAssignmentValidator
@@ -63,10 +69,18 @@ namespace Arena.Network
             if (string.IsNullOrWhiteSpace(status.TicketId)
                 || string.IsNullOrWhiteSpace(status.MatchId)
                 || string.IsNullOrWhiteSpace(status.MatchBuildId)
+                || string.IsNullOrWhiteSpace(status.MapId)
                 || string.IsNullOrWhiteSpace(status.ServerUri)
                 || string.IsNullOrWhiteSpace(status.DatabaseIdentity))
             {
                 error = "The Hub returned an incomplete match assignment.";
+                return false;
+            }
+
+            string mapId = status.MapId.Trim();
+            if (!ArenaMapCatalog.TryResolveSceneName(mapId, out string sceneName))
+            {
+                error = $"The Hub assigned an unsupported arena map ({mapId}).";
                 return false;
             }
 
@@ -108,7 +122,9 @@ namespace Arena.Network
                 status.MatchId.Trim(),
                 status.ServerUri.Trim(),
                 databaseIdentity.ToLowerInvariant(),
-                status.MatchBuildId.Trim());
+                status.MatchBuildId.Trim(),
+                mapId.ToUpperInvariant(),
+                sceneName);
             error = string.Empty;
             return true;
         }
@@ -278,6 +294,7 @@ namespace Arena.Network
         private float _deadlineRealtime;
         private string? _activeTicketId;
         private string? _ignoredTicketId;
+        private string _activeMatchSceneName = ArenaMapCatalog.DefaultSceneName;
 
         internal MatchHandoffState State { get; private set; } = MatchHandoffState.ConnectingToHub;
         internal string LastError { get; private set; } = string.Empty;
@@ -363,6 +380,7 @@ namespace Arena.Network
             LastError = string.Empty;
             _activeTicketId = null;
             _ignoredTicketId = null;
+            _activeMatchSceneName = ArenaMapCatalog.DefaultSceneName;
             _deadlineRealtime = Time.unscaledTime + AssignmentWaitTimeoutSeconds;
             State = MatchHandoffState.WaitingForAssignment;
             MatchStartupTiming.BeginRequest();
@@ -520,6 +538,7 @@ namespace Arena.Network
             }
 
             _activeTicketId = assignment.TicketId;
+            _activeMatchSceneName = assignment.SceneName;
             State = MatchHandoffState.ConnectingToMatch;
             LastError = string.Empty;
             double assignmentSecondsRemaining =
@@ -559,13 +578,13 @@ namespace Arena.Network
             // the same FrameTick. This idempotent request also covers an
             // out-of-order callback while preserving the subscription gate.
             MatchStartupTiming.Record("scene_requested");
-            RuntimeSceneTransitionQueue.Request(ArenaMapCatalog.DefaultSceneName);
+            RuntimeSceneTransitionQueue.Request(_activeMatchSceneName);
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode _)
         {
             if (State == MatchHandoffState.InMatch
-                && string.Equals(scene.name, ArenaMapCatalog.DefaultSceneName, StringComparison.Ordinal))
+                && string.Equals(scene.name, _activeMatchSceneName, StringComparison.Ordinal))
             {
                 MatchStartupTiming.CompleteSceneLoad();
             }

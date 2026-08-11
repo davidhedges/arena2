@@ -13,12 +13,12 @@ namespace Arena.HubDb
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void ServiceMarkReadyHandler(ReducerEventContext ctx, string ticketId, string leaseId, string matchId, string serverUri, string databaseIdentity, string matchBuildId, SpacetimeDB.Timestamp assignmentExpiresAt);
+        public delegate void ServiceMarkReadyHandler(ReducerEventContext ctx, string ticketId, string leaseId, string matchId, string serverUri, string databaseIdentity, string matchBuildId, string mapId, SpacetimeDB.Timestamp assignmentExpiresAt);
         public event ServiceMarkReadyHandler? OnServiceMarkReady;
 
-        public void ServiceMarkReady(string ticketId, string leaseId, string matchId, string serverUri, string databaseIdentity, string matchBuildId, SpacetimeDB.Timestamp assignmentExpiresAt)
+        public void ServiceMarkReady(string ticketId, string leaseId, string matchId, string serverUri, string databaseIdentity, string matchBuildId, string mapId, SpacetimeDB.Timestamp assignmentExpiresAt)
         {
-            conn.InternalCallReducer(new Reducer.ServiceMarkReady(ticketId, leaseId, matchId, serverUri, databaseIdentity, matchBuildId, assignmentExpiresAt));
+            conn.InternalCallReducer(new Reducer.ServiceMarkReady(ticketId, leaseId, matchId, serverUri, databaseIdentity, matchBuildId, mapId, assignmentExpiresAt));
         }
 
         public bool InvokeServiceMarkReady(ReducerEventContext ctx, Reducer.ServiceMarkReady args)
@@ -43,6 +43,7 @@ namespace Arena.HubDb
                 args.ServerUri,
                 args.DatabaseIdentity,
                 args.MatchBuildId,
+                args.MapId,
                 args.AssignmentExpiresAt
             );
             return true;
@@ -67,6 +68,8 @@ namespace Arena.HubDb
             public string DatabaseIdentity;
             [DataMember(Name = "match_build_id")]
             public string MatchBuildId;
+            [DataMember(Name = "map_id")]
+            public string MapId;
             [DataMember(Name = "assignment_expires_at")]
             public SpacetimeDB.Timestamp AssignmentExpiresAt;
 
@@ -77,6 +80,7 @@ namespace Arena.HubDb
                 string ServerUri,
                 string DatabaseIdentity,
                 string MatchBuildId,
+                string MapId,
                 SpacetimeDB.Timestamp AssignmentExpiresAt
             )
             {
@@ -86,6 +90,7 @@ namespace Arena.HubDb
                 this.ServerUri = ServerUri;
                 this.DatabaseIdentity = DatabaseIdentity;
                 this.MatchBuildId = MatchBuildId;
+                this.MapId = MapId;
                 this.AssignmentExpiresAt = AssignmentExpiresAt;
             }
 
@@ -97,6 +102,7 @@ namespace Arena.HubDb
                 this.ServerUri = "";
                 this.DatabaseIdentity = "";
                 this.MatchBuildId = "";
+                this.MapId = "";
             }
 
             string IReducerArgs.ReducerName => "service_mark_ready";

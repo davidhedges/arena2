@@ -198,20 +198,21 @@ namespace Arena.Tests.Editor
                 typeof(string),
                 typeof(string),
                 typeof(string),
+                typeof(string),
                 typeof(string));
 
-            object? training = method.Invoke(null, new object?[] { "TrainingGround", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
-            object? characterCreation = method.Invoke(null, new object?[] { "CharacterCreation", null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
-            object? groundSlashDemo = method.Invoke(null, new object?[] { "VFXGraph_GroundSlash", null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
-            object? pilotoHolyDemo = method.Invoke(null, new object?[] { "Holy & Paladin Spells Bundle", null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
-            object? unknownInstanceKind = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
-            object? enterArenaInstance = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, "ARENA", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
-            object? enterSurvivalInstance = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
-            object? enterSurvivalFromHub = method.Invoke(null, new object?[] { "Hub", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
-            object? preserveHubForOpenWorld = method.Invoke(null, new object?[] { "Hub", null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
-            object? preserveLoadedSurvival = method.Invoke(null, new object?[] { "Arena_Map_01", 99UL, "SURVIVAL", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
-            object? enterOpenWorld = method.Invoke(null, new object?[] { "Arena_Map_01", null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
-            object? preserveLoadedOpenWorld = method.Invoke(null, new object?[] { "Oasis_Day", null, null, "Golden_Valley_Sunny", "Arena_Map_01", "Arena_Map_01" });
+            object? training = method.Invoke(null, new object?[] { "TrainingGround", 99UL, "SURVIVAL", "ARENA_MAP_01", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? characterCreation = method.Invoke(null, new object?[] { "CharacterCreation", null, null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? groundSlashDemo = method.Invoke(null, new object?[] { "VFXGraph_GroundSlash", null, null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? pilotoHolyDemo = method.Invoke(null, new object?[] { "Holy & Paladin Spells Bundle", null, null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? unknownInstanceKind = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, null, "ARENA_MAP_01", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? enterArenaInstance = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, "ARENA", "ARENA_MAP_01", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? enterSurvivalInstance = method.Invoke(null, new object?[] { "Arena_VerdantStand_Blockout", 99UL, "SURVIVAL", "ARENA_MAP_01", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? enterSurvivalFromHub = method.Invoke(null, new object?[] { "Hub", 99UL, "SURVIVAL", "ARENA_MAP_01", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? preserveHubForOpenWorld = method.Invoke(null, new object?[] { "Hub", null, null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? preserveLoadedSurvival = method.Invoke(null, new object?[] { "Arena_Map_01", 99UL, "SURVIVAL", "ARENA_MAP_01", "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? enterOpenWorld = method.Invoke(null, new object?[] { "Arena_Map_01", null, null, null, "Arena_VerdantStand_Blockout", "Arena_Map_01", "Arena_Map_01" });
+            object? preserveLoadedOpenWorld = method.Invoke(null, new object?[] { "Oasis_Day", null, null, null, "Golden_Valley_Sunny", "Arena_Map_01", "Arena_Map_01" });
 
             Assert.That(training, Is.Null);
             Assert.That(characterCreation, Is.Null);
@@ -258,6 +259,7 @@ namespace Arena.Tests.Editor
             SetField(arenaInstance, "Id", 42UL);
             SetField(arenaInstance, "Seed", 7UL);
             SetField(arenaInstance, "InstanceKind", "SURVIVAL");
+            SetField(arenaInstance, "MapId", "ARENA_MAP_01");
             RequireMethod(coordinatorType, "OnArenaInstanceInsert", arenaInstanceType).Invoke(coordinator, new[] { arenaInstance });
 
             Assert.That(loadedScenes, Is.EqualTo(new[] { "Arena_Map_01" }));
@@ -481,15 +483,41 @@ namespace Arena.Tests.Editor
             Assert.That(mapCatalog, Does.Contain("ArenaMap01Id = \"ARENA_MAP_01\""));
             Assert.That(mapCatalog, Does.Contain("ArenaMap01SceneName = \"Arena_Map_01\""));
 
-            string serverLayout = File.ReadAllText("server/src/arena_layout.shared.json");
+            string serverLayout = File.ReadAllText("server/src/map_data/arena_map_01.layout.shared.json");
             string clientLayout = File.ReadAllText(
-                "Assets/Arena/Resources/SharedData/arena_layout.shared.json");
+                "Assets/Arena/Resources/SharedData/Maps/arena_map_01.layout.shared.json");
             Assert.That(clientLayout, Is.EqualTo(serverLayout));
-            Assert.That(serverLayout, Does.Contain("\"arena_radius\": 30.0"));
+            Assert.That(serverLayout, Does.Contain("\"boundary_shape\": \"aabb\""));
             Assert.That(serverLayout, Does.Contain("\"ruin_wall_segments\": []"));
             Assert.That(serverLayout, Does.Contain("\"platforms\": []"));
             Assert.That(serverLayout, Does.Contain("\"ramps\": []"));
             Assert.That(serverLayout, Does.Contain("\"pillar_count\": 0"));
+
+            string serverCollision = File.ReadAllText(
+                "server/src/map_data/arena_map_01.collision.shared.json");
+            string clientCollision = File.ReadAllText(
+                "Assets/Arena/Resources/SharedData/Maps/arena_map_01.collision.shared.json");
+            string serverQueryCollision = File.ReadAllText(
+                "server/src/map_data/arena_map_01.query_collision.shared.json");
+            string clientQueryCollision = File.ReadAllText(
+                "Assets/Arena/Resources/SharedData/Maps/arena_map_01.query_collision.shared.json");
+            Assert.That(clientCollision, Is.EqualTo(serverCollision));
+            Assert.That(clientQueryCollision, Is.EqualTo(serverQueryCollision));
+            Assert.That(serverCollision, Does.Contain("\"boxes\": []"));
+            Assert.That(serverQueryCollision, Does.Contain("\"boxes\": []"));
+            Assert.That(serverCollision, Does.Contain("\"source_revision\": \"83d8801b"));
+            Assert.That(File.Exists("server/src/arena_layout.shared.json"), Is.False);
+            Assert.That(File.Exists("server/src/gameplay_collision.shared.json"), Is.False);
+            Assert.That(File.Exists("server/src/gameplay_query_collision.shared.json"), Is.False);
+            Assert.That(
+                File.Exists("Assets/Arena/Resources/SharedData/arena_layout.shared.json"),
+                Is.False);
+            Assert.That(
+                File.Exists("Assets/Arena/Resources/SharedData/gameplay_collision.shared.json"),
+                Is.False);
+            Assert.That(
+                File.Exists("Assets/Arena/Resources/SharedData/gameplay_query_collision.shared.json"),
+                Is.False);
         }
 
         [Test]
@@ -820,9 +848,9 @@ namespace Arena.Tests.Editor
             Assert.That(pvpStart, Is.GreaterThanOrEqualTo(0));
             Assert.That(genericStart, Is.GreaterThan(pvpStart));
             string pvpMethod = source.Substring(pvpStart, genericStart - pvpStart);
-            Assert.That(pvpMethod, Does.Contain("SharedData/arena_layout.shared"));
-            Assert.That(pvpMethod, Does.Contain("SharedData/gameplay_collision.shared"));
-            Assert.That(pvpMethod, Does.Contain("SharedData/gameplay_query_collision.shared"));
+            Assert.That(pvpMethod, Does.Contain("ArenaMap01LayoutResourcePath"));
+            Assert.That(pvpMethod, Does.Contain("ArenaMap01MovementCollisionResourcePath"));
+            Assert.That(pvpMethod, Does.Contain("ArenaMap01QueryCollisionResourcePath"));
             Assert.That(pvpMethod, Does.Not.Contain("Resources.LoadAll"));
             Assert.That(pvpMethod, Does.Not.Contain("Resources.Load<TextAsset>(\"SharedData/Worlds"));
             Assert.That(pvpMethod, Does.Not.Contain("Resources.Load<TextAsset>(\"SharedData/WorldInteractions"));

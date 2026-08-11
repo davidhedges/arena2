@@ -160,6 +160,7 @@ MatchAssignment
   server_uri              public client endpoint
   database_identity       exact ephemeral database to connect to
   match_build_id          deployed contract/content version
+  map_id                  stable authored arena identity
   ready_at
   expires_at
 ```
@@ -205,6 +206,7 @@ MatchBootstrapConfig
   singleton_id            primary key
   match_id
   match_build_id
+  map_id
   queue_kind              UNRANKED
   format                  2V2
   ruleset                 TEAM_ELIMINATION

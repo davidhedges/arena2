@@ -2,6 +2,7 @@ use crate::arena::{
     raycast_arena_world_with, resolve_arena_horizontal_collision_y, surface_height_at_y,
     WorldRayHit, WorldRaycastRequest, COLLISION_EPSILON, SURFACE_SNAP_UP,
 };
+use crate::arena_maps::ArenaMapId;
 use crate::movement::GROUND_Y;
 use crate::open_world_scene::{
     default_open_world_scene_profile, open_world_scene_profile_for_scene, OpenWorldSceneProfile,
@@ -25,8 +26,6 @@ use std::sync::{
     OnceLock,
 };
 
-const GAMEPLAY_COLLISION_JSON: &str = include_str!("gameplay_collision.shared.json");
-const GAMEPLAY_QUERY_COLLISION_JSON: &str = include_str!("gameplay_query_collision.shared.json");
 const MAX_QUERY_MESH_TRIANGLES_PER_COLLIDER: usize = 4096;
 const MAX_QUERY_MESH_TRIANGLES_PER_SCENE: usize = 200000;
 const QUERY_MESH_DEGENERATE_TRIANGLE_AREA_SQUARED_EPSILON: f32 = 1.0e-12;
@@ -2437,31 +2436,35 @@ fn open_world_gameplay_movement_mesh_broadphase(
 }
 
 fn load_gameplay_collision_boxes() -> Vec<GameplayCollisionBox> {
-    let file: GameplayCollisionLayoutFile = serde_json::from_str(GAMEPLAY_COLLISION_JSON)
-        .expect("failed to parse gameplay_collision.shared.json");
+    let profile = ArenaMapId::ArenaMap01.profile();
+    let file: GameplayCollisionLayoutFile = serde_json::from_str(profile.movement_collision_json)
+        .expect("failed to parse authored arena movement collision JSON");
 
     let boxes = parse_gameplay_collision_boxes(file);
-    assert_no_full_rotation_movement_boxes(&boxes, "gameplay_collision.shared.json");
+    assert_no_full_rotation_movement_boxes(&boxes, profile.data_key);
     boxes
 }
 
 fn load_gameplay_query_collision_boxes() -> Vec<GameplayCollisionBox> {
-    let file: GameplayCollisionLayoutFile = serde_json::from_str(GAMEPLAY_QUERY_COLLISION_JSON)
-        .expect("failed to parse gameplay_query_collision.shared.json");
+    let file: GameplayCollisionLayoutFile =
+        serde_json::from_str(ArenaMapId::ArenaMap01.profile().query_collision_json)
+            .expect("failed to parse authored arena query collision JSON");
 
     parse_gameplay_collision_boxes(file)
 }
 
 fn load_gameplay_query_meshes() -> GameplayQueryMeshSet {
-    let file: GameplayCollisionLayoutFile = serde_json::from_str(GAMEPLAY_QUERY_COLLISION_JSON)
-        .expect("failed to parse gameplay_query_collision.shared.json");
+    let file: GameplayCollisionLayoutFile =
+        serde_json::from_str(ArenaMapId::ArenaMap01.profile().query_collision_json)
+            .expect("failed to parse authored arena query collision JSON");
 
     parse_gameplay_query_meshes(file)
 }
 
 fn load_gameplay_movement_mesh_hulls() -> Vec<GameplayMovementMeshHull> {
-    let file: GameplayCollisionLayoutFile = serde_json::from_str(GAMEPLAY_COLLISION_JSON)
-        .expect("failed to parse gameplay_collision.shared.json");
+    let file: GameplayCollisionLayoutFile =
+        serde_json::from_str(ArenaMapId::ArenaMap01.profile().movement_collision_json)
+            .expect("failed to parse authored arena movement collision JSON");
 
     parse_gameplay_movement_mesh_hulls(file)
 }
@@ -6578,7 +6581,10 @@ mod tests {
             summary.scene_count as usize,
             super::OPEN_WORLD_SCENE_PROFILES.len()
         );
-        assert!(summary.arena_gameplay_boxes > 0);
+        assert_eq!(
+            summary.arena_gameplay_boxes, 0,
+            "Arena_Map_01 currently has no authored internal collision proxies"
+        );
         assert!(summary.open_world_gameplay_boxes > 0);
         assert!(summary.broadphase_cells > 0);
         assert!(summary.broadphase_index_entries >= summary.broadphase_cells);

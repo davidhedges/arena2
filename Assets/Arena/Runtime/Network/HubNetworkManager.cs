@@ -50,6 +50,7 @@ namespace Arena.Network
             string? serverUri,
             string? databaseIdentity,
             string? matchBuildId,
+            string? mapId,
             long createdAtMicros,
             long updatedAtMicros,
             long ticketExpiresAtMicros,
@@ -63,6 +64,7 @@ namespace Arena.Network
             ServerUri = serverUri;
             DatabaseIdentity = databaseIdentity;
             MatchBuildId = matchBuildId;
+            MapId = mapId;
             CreatedAtMicros = createdAtMicros;
             UpdatedAtMicros = updatedAtMicros;
             TicketExpiresAtMicros = ticketExpiresAtMicros;
@@ -77,6 +79,7 @@ namespace Arena.Network
         internal string? ServerUri { get; }
         internal string? DatabaseIdentity { get; }
         internal string? MatchBuildId { get; }
+        internal string? MapId { get; }
         internal long CreatedAtMicros { get; }
         internal long UpdatedAtMicros { get; }
         internal long TicketExpiresAtMicros { get; }
@@ -389,6 +392,7 @@ namespace Arena.Network
                 row.ServerUri,
                 row.DatabaseIdentity,
                 row.MatchBuildId,
+                row.MapId,
                 row.CreatedAt.MicrosecondsSinceUnixEpoch,
                 row.UpdatedAt.MicrosecondsSinceUnixEpoch,
                 row.ExpiresAt.MicrosecondsSinceUnixEpoch,
@@ -420,6 +424,7 @@ namespace Arena.Network
                     row.ServerUri,
                     row.DatabaseIdentity,
                     row.MatchBuildId,
+                    row.MapId,
                     row.CreatedAt.MicrosecondsSinceUnixEpoch,
                     row.UpdatedAt.MicrosecondsSinceUnixEpoch,
                     row.ExpiresAt.MicrosecondsSinceUnixEpoch,

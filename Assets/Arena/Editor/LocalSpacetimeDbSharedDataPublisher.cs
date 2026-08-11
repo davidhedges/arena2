@@ -144,6 +144,23 @@ namespace Arena.Editor
                 return;
             }
 
+            if (!Maps.ArenaMap01SceneBuilder.IsCollisionRevisionCurrent(
+                    out string arenaCollisionRevisionFailure))
+            {
+                enterPlayWhenReady = true;
+                EditorApplication.isPlaying = false;
+                Debug.LogWarning(
+                    "[SpacetimeDB Auto Publish] Holding Play because Arena_Map_01 " +
+                    $"collision is stale: {arenaCollisionRevisionFailure} Repairing and " +
+                    "republishing automatically.");
+                EditorApplication.delayCall += () =>
+                {
+                    if (!Maps.ArenaMap01SceneBuilder.TryRepairCollisionFromSavedScene())
+                        enterPlayWhenReady = false;
+                };
+                return;
+            }
+
             if (activeRun == null && !publishRequested)
                 return;
 

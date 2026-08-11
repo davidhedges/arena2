@@ -110,6 +110,7 @@ class Config:
     reconcile_seconds: int
     cleanup_retry_seconds: int
     cleaned_retention_seconds: int
+    map_id: str = "ARENA_MAP_01"
     match_build_id: str | None = None
 
     @classmethod
@@ -140,6 +141,11 @@ class Config:
         ):
             raise ProvisionerError(
                 "ARENA_PROVISIONER_MATCH_BUILD_ID must be a 1-96 character safe identifier"
+            )
+        map_id = os.environ.get("ARENA_PROVISIONER_MAP_ID", "ARENA_MAP_01").strip().upper()
+        if not map_id or len(map_id) > 64 or not IDENTIFIER_RE.fullmatch(map_id):
+            raise ProvisionerError(
+                "ARENA_PROVISIONER_MAP_ID must be a 1-64 character safe identifier"
             )
 
         config = cls(
@@ -179,6 +185,7 @@ class Config:
             cleaned_retention_seconds=_env_int(
                 "ARENA_PROVISIONER_CLEANED_RETENTION_SECONDS", 86_400, 60, 604_800
             ),
+            map_id=map_id,
             match_build_id=build_id,
         )
         if config.hard_ttl_seconds < config.allocation_seconds:
@@ -932,6 +939,7 @@ class Provisioner:
                     self.config.client_uri,
                     allocation.database_identity,
                     self.match_build_id,
+                    self.config.map_id,
                     timestamp_arg(allocation.hard_expires_at),
                 ],
             )
@@ -1102,6 +1110,7 @@ class Provisioner:
                 [
                     allocation.match_id,
                     self.match_build_id,
+                    self.config.map_id,
                     seed,
                     timestamp_arg(now + self.config.allocation_seconds),
                     identity_arg(allocation.player_identity),
@@ -1118,6 +1127,7 @@ class Provisioner:
         if (
             str(match_config.get("match_id")) != allocation.match_id
             or str(match_config.get("match_build_id")) != self.match_build_id
+            or str(match_config.get("map_id")) != self.config.map_id
         ):
             raise SafetyError("existing database bootstrap belongs to different match work")
         if allocation.database_identity is None:
@@ -1293,6 +1303,7 @@ class Provisioner:
                 self.config.client_uri,
                 allocation.database_identity,
                 self.match_build_id,
+                self.config.map_id,
                 timestamp_arg(allocation.hard_expires_at),
             ],
         )

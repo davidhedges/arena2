@@ -17,6 +17,8 @@ namespace SpacetimeDB.Types
         public ulong Id;
         [DataMember(Name = "seed")]
         public ulong Seed;
+        [DataMember(Name = "map_id")]
+        public string MapId;
         [DataMember(Name = "max_players")]
         public uint MaxPlayers;
         [DataMember(Name = "player_count")]
@@ -37,6 +39,7 @@ namespace SpacetimeDB.Types
         public ArenaInstance(
             ulong Id,
             ulong Seed,
+            string MapId,
             uint MaxPlayers,
             uint PlayerCount,
             string Phase,
@@ -49,6 +52,7 @@ namespace SpacetimeDB.Types
         {
             this.Id = Id;
             this.Seed = Seed;
+            this.MapId = MapId;
             this.MaxPlayers = MaxPlayers;
             this.PlayerCount = PlayerCount;
             this.Phase = Phase;
@@ -61,6 +65,7 @@ namespace SpacetimeDB.Types
 
         public ArenaInstance()
         {
+            this.MapId = "";
             this.Phase = "";
             this.InstanceKind = "";
         }

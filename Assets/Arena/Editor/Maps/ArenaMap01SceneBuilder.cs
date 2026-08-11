@@ -37,13 +37,28 @@ namespace Arena.Editor.Maps
     {
         internal const string SceneName = "Arena_Map_01";
         internal const string ScenePath = "Assets/Arena/Content/Scenes/Arena_Map_01.unity";
-        private const string ServerLayoutPath = "server/src/arena_map_01_layout.shared.json";
+        internal const string DataKey = "arena_map_01";
+        private const string ServerLayoutPath = "server/src/map_data/arena_map_01.layout.shared.json";
+        private const string BundledCollisionPath =
+            "Assets/Arena/Resources/SharedData/Maps/arena_map_01.collision.shared.json";
+        private const string BundledQueryCollisionPath =
+            "Assets/Arena/Resources/SharedData/Maps/arena_map_01.query_collision.shared.json";
+        private const string CollisionRevisionNamePrefix = "Collision Revision ";
 
         [Serializable]
         private sealed class ServerLayoutFile
         {
-            public float arena_radius = 0f;
+            public string map_id = string.Empty;
+            public string boundary_shape = string.Empty;
+            public float boundary_half_x = 0f;
+            public float boundary_half_z = 0f;
             public ServerSpawnPointFile[] edge_spawn_points = Array.Empty<ServerSpawnPointFile>();
+        }
+
+        [Serializable]
+        private sealed class CollisionRevisionLayout
+        {
+            public string source_revision = string.Empty;
         }
 
         [Serializable]
@@ -366,13 +381,20 @@ namespace Arena.Editor.Maps
             CloneGameplayRig(destination, depth);
             CreateLighting(depth);
             AssertNoColliders(destination);
+            if (!SceneManager.SetActiveScene(destination))
+                throw new InvalidOperationException("Failed to activate the authored arena scene for collision export.");
+            GameplayCollisionExporter.PreparedSharedCollisionBake collisionBake =
+                GameplayCollisionExporter.PrepareSceneSharedCollisionBake(destination);
+            SetCollisionRevisionMetadata(destination, collisionBake.Revision);
 
             EditorSceneManager.MarkSceneDirty(destination);
             if (!EditorSceneManager.SaveScene(destination, ScenePath))
                 throw new InvalidOperationException($"Failed to save arena map scene '{ScenePath}'.");
 
             AddSceneToBuildSettings(ScenePath);
-            SceneManager.SetActiveScene(destination);
+            GameplayCollisionExporter.ExportPreparedActiveSceneArenaMapCollisionData(
+                DataKey,
+                collisionBake);
             AssetDatabase.SaveAssets();
 
             Debug.Log(
@@ -406,10 +428,13 @@ namespace Arena.Editor.Maps
             ServerLayoutFile? layout = JsonUtility.FromJson<ServerLayoutFile>(File.ReadAllText(ServerLayoutPath));
             if (layout == null)
                 throw new InvalidOperationException($"Arena map layout '{ServerLayoutPath}' is invalid JSON.");
-            if (Mathf.Abs(layout.arena_radius - DeckHalfExtent) > 0.001f)
+            if (!string.Equals(layout.map_id, "ARENA_MAP_01", StringComparison.Ordinal)
+                || !string.Equals(layout.boundary_shape, "aabb", StringComparison.Ordinal)
+                || Mathf.Abs(layout.boundary_half_x - DeckHalfExtent) > 0.001f
+                || Mathf.Abs(layout.boundary_half_z - DeckHalfExtent) > 0.001f)
             {
                 throw new InvalidOperationException(
-                    $"Arena map radius {layout.arena_radius:0.###} does not match the authored " +
+                    "Arena map identity or square boundary does not match the authored " +
                     $"deck half-extent {DeckHalfExtent:0.###}.");
             }
             if (layout.edge_spawn_points.Length != EntranceSides.Length)
@@ -1170,6 +1195,125 @@ namespace Arena.Editor.Maps
                 string.Join(", ", colliders.Take(8).Select(collider => collider.gameObject.name)) +
                 ". The arena's movement surface is the server's flat layout; scene collision here can only " +
                 "reach an export and start blocking movement, line of sight or projectiles.");
+        }
+
+        internal static bool IsCollisionRevisionCurrent(out string failure)
+        {
+            if (!File.Exists(ScenePath))
+            {
+                failure = $"scene '{ScenePath}' is missing";
+                return false;
+            }
+
+            string? sceneRevision = File.ReadLines(ScenePath)
+                .Select(line => line.Trim())
+                .Where(line => line.StartsWith("m_Name: ", StringComparison.Ordinal))
+                .Select(line => line.Substring("m_Name: ".Length))
+                .FirstOrDefault(name => name.StartsWith(CollisionRevisionNamePrefix, StringComparison.Ordinal))?
+                .Substring(CollisionRevisionNamePrefix.Length);
+            if (string.IsNullOrWhiteSpace(sceneRevision))
+            {
+                failure = "the saved scene has no collision revision marker";
+                return false;
+            }
+
+            foreach (string path in new[] { BundledCollisionPath, BundledQueryCollisionPath })
+            {
+                if (!File.Exists(path))
+                {
+                    failure = $"'{path}' is missing";
+                    return false;
+                }
+
+                CollisionRevisionLayout? layout =
+                    JsonUtility.FromJson<CollisionRevisionLayout>(File.ReadAllText(path));
+                if (layout == null
+                    || !string.Equals(layout.source_revision, sceneRevision, StringComparison.Ordinal))
+                {
+                    failure = $"'{path}' does not match scene revision {sceneRevision}";
+                    return false;
+                }
+            }
+
+            failure = string.Empty;
+            return true;
+        }
+
+        [MenuItem("Arena/Maps/Repair Arena Map 01 Collision From Saved Scene", false, 190)]
+        private static void RepairCollisionFromSavedSceneMenu()
+        {
+            TryRepairCollisionFromSavedScene();
+        }
+
+        internal static bool TryRepairCollisionFromSavedScene()
+        {
+            if (Application.isBatchMode
+                || EditorApplication.isCompiling
+                || EditorApplication.isUpdating
+                || EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                Debug.LogError(
+                    "[ArenaMap01SceneBuilder] Cannot repair saved collision while Unity is " +
+                    "compiling, importing, or changing Play mode.");
+                return false;
+            }
+
+            Scene previousActiveScene = SceneManager.GetActiveScene();
+            Scene mapScene = SceneManager.GetSceneByPath(ScenePath);
+            bool openedForRepair = !mapScene.IsValid() || !mapScene.isLoaded;
+            try
+            {
+                if (openedForRepair)
+                    mapScene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Additive);
+                if (!mapScene.IsValid() || !mapScene.isLoaded || !SceneManager.SetActiveScene(mapScene))
+                    throw new InvalidOperationException($"Unable to load '{ScenePath}' for collision repair.");
+
+                AssertNoColliders(mapScene);
+                GameplayCollisionExporter.PreparedSharedCollisionBake collisionBake =
+                    GameplayCollisionExporter.PrepareSceneSharedCollisionBake(mapScene);
+                SetCollisionRevisionMetadata(mapScene, collisionBake.Revision);
+                GameplayCollisionExporter.ExportPreparedActiveSceneArenaMapCollisionData(
+                    DataKey,
+                    collisionBake);
+                EditorSceneManager.MarkSceneDirty(mapScene);
+                if (!EditorSceneManager.SaveScene(mapScene, ScenePath))
+                    throw new InvalidOperationException($"Failed to save repaired scene '{ScenePath}'.");
+                AssetDatabase.SaveAssets();
+                Debug.Log(
+                    "[ArenaMap01SceneBuilder] Repaired Arena_Map_01 collision from the saved scene at " +
+                    $"revision {collisionBake.Revision}.");
+                return true;
+            }
+            catch (Exception error)
+            {
+                Debug.LogError("[ArenaMap01SceneBuilder] Collision repair failed: " + error);
+                return false;
+            }
+            finally
+            {
+                if (previousActiveScene.IsValid() && previousActiveScene.isLoaded)
+                    SceneManager.SetActiveScene(previousActiveScene);
+                if (openedForRepair && mapScene.IsValid() && mapScene.isLoaded)
+                    EditorSceneManager.CloseScene(mapScene, removeScene: true);
+            }
+        }
+
+        private static void SetCollisionRevisionMetadata(Scene scene, string revision)
+        {
+            GameObject metadata = scene.GetRootGameObjects()
+                .FirstOrDefault(root => string.Equals(root.name, "Arena Map 01", StringComparison.Ordinal))
+                ?? throw new InvalidOperationException("Arena_Map_01 has no map metadata root.");
+            foreach (Transform child in metadata.transform.Cast<Transform>()
+                         .Where(child => child.name.StartsWith(CollisionRevisionNamePrefix, StringComparison.Ordinal))
+                         .ToArray())
+            {
+                UnityEngine.Object.DestroyImmediate(child.gameObject);
+            }
+
+            GameObject marker = new($"{CollisionRevisionNamePrefix}{revision}");
+            marker.transform.SetParent(metadata.transform, worldPositionStays: false);
+            marker.transform.localPosition = Vector3.zero;
+            EditorSceneManager.MarkSceneDirty(scene);
         }
 
         private static void AddSceneToBuildSettings(string scenePath)

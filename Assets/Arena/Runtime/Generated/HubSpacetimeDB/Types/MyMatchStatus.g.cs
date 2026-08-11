@@ -38,6 +38,8 @@ namespace Arena.HubDb
         public string? DatabaseIdentity;
         [DataMember(Name = "match_build_id")]
         public string? MatchBuildId;
+        [DataMember(Name = "map_id")]
+        public string? MapId;
         [DataMember(Name = "ready_at")]
         public SpacetimeDB.Timestamp? ReadyAt;
         [DataMember(Name = "assignment_expires_at")]
@@ -56,6 +58,7 @@ namespace Arena.HubDb
             string? ServerUri,
             string? DatabaseIdentity,
             string? MatchBuildId,
+            string? MapId,
             SpacetimeDB.Timestamp? ReadyAt,
             SpacetimeDB.Timestamp? AssignmentExpiresAt
         )
@@ -72,6 +75,7 @@ namespace Arena.HubDb
             this.ServerUri = ServerUri;
             this.DatabaseIdentity = DatabaseIdentity;
             this.MatchBuildId = MatchBuildId;
+            this.MapId = MapId;
             this.ReadyAt = ReadyAt;
             this.AssignmentExpiresAt = AssignmentExpiresAt;
         }

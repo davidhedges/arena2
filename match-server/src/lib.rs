@@ -19,6 +19,8 @@ mod animation_set_test_utils;
 mod appearance;
 #[path = "../../server/src/arena.rs"]
 mod arena;
+#[path = "../../server/src/arena_maps.rs"]
+mod arena_maps;
 #[path = "../../server/src/auto_attack.rs"]
 mod auto_attack;
 #[path = "../../server/src/bot_matches.rs"]

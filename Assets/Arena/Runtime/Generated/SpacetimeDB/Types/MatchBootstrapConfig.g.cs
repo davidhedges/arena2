@@ -19,6 +19,8 @@ namespace SpacetimeDB.Types
         public string MatchId;
         [DataMember(Name = "match_build_id")]
         public string MatchBuildId;
+        [DataMember(Name = "map_id")]
+        public string MapId;
         [DataMember(Name = "queue_kind")]
         public string QueueKind;
         [DataMember(Name = "format")]
@@ -42,6 +44,7 @@ namespace SpacetimeDB.Types
             byte SingletonId,
             string MatchId,
             string MatchBuildId,
+            string MapId,
             string QueueKind,
             string Format,
             string Ruleset,
@@ -56,6 +59,7 @@ namespace SpacetimeDB.Types
             this.SingletonId = SingletonId;
             this.MatchId = MatchId;
             this.MatchBuildId = MatchBuildId;
+            this.MapId = MapId;
             this.QueueKind = QueueKind;
             this.Format = Format;
             this.Ruleset = Ruleset;
@@ -71,6 +75,7 @@ namespace SpacetimeDB.Types
         {
             this.MatchId = "";
             this.MatchBuildId = "";
+            this.MapId = "";
             this.QueueKind = "";
             this.Format = "";
             this.Ruleset = "";

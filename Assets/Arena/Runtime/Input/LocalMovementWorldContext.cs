@@ -1,5 +1,6 @@
 #nullable enable
 using UnityEngine.SceneManagement;
+using Arena.World;
 
 namespace Arena.Input
 {
@@ -12,12 +13,14 @@ namespace Arena.Input
         private string _worldKind = "OPEN";
         private ulong? _instanceId;
         private ulong? _arenaSeed;
+        private string _arenaMapId = string.Empty;
         private string _instanceKind = string.Empty;
         private bool _hasWorld;
 
         public string WorldKind => _worldKind;
         public ulong? InstanceId => _instanceId;
         public ulong? ArenaSeed => _arenaSeed;
+        public string ArenaMapId => _arenaMapId;
         public string InstanceKind => _instanceKind;
         public bool HasWorld => _hasWorld;
         public bool IsOpenWorld => _worldKind == "OPEN";
@@ -27,19 +30,28 @@ namespace Arena.Input
             string worldKind,
             ulong? instanceId,
             ulong? arenaSeed = null)
-            => SetWorldWithInstanceKind(worldKind, instanceId, arenaSeed, null);
+            => SetWorldWithInstanceKind(
+                worldKind,
+                instanceId,
+                arenaSeed,
+                null,
+                instanceId.HasValue ? ArenaMapCatalog.DefaultMapId : null);
 
         public void SetWorldWithInstanceKind(
             string worldKind,
             ulong? instanceId,
             ulong? arenaSeed,
-            string? instanceKind)
+            string? instanceKind,
+            string? arenaMapId = null)
         {
             _worldKind = string.IsNullOrWhiteSpace(worldKind) ? "OPEN" : worldKind.ToUpperInvariant();
             _instanceId = instanceId;
             _arenaSeed = instanceId.HasValue ? arenaSeed : null;
             _instanceKind = instanceId.HasValue && !string.IsNullOrWhiteSpace(instanceKind)
                 ? instanceKind!.ToUpperInvariant()
+                : string.Empty;
+            _arenaMapId = instanceId.HasValue && !string.IsNullOrWhiteSpace(arenaMapId)
+                ? arenaMapId!.ToUpperInvariant()
                 : string.Empty;
             _hasWorld = true;
         }
@@ -58,11 +70,20 @@ namespace Arena.Input
                     : instanceKind.ToUpperInvariant();
         }
 
+        public void SetArenaMapForInstance(ulong instanceId, string mapId)
+        {
+            if (_instanceId == instanceId)
+                _arenaMapId = string.IsNullOrWhiteSpace(mapId)
+                    ? string.Empty
+                    : mapId.ToUpperInvariant();
+        }
+
         public void Clear()
         {
             _worldKind = "OPEN";
             _instanceId = null;
             _arenaSeed = null;
+            _arenaMapId = string.Empty;
             _instanceKind = string.Empty;
             _hasWorld = false;
         }
@@ -88,7 +109,13 @@ namespace Arena.Input
                     environment = TrainingGroundMovementEnvironment.Shared;
                     return true;
                 }
-                environment = ArenaMovementEnvironment.Shared(_arenaSeed.Value);
+                if (string.IsNullOrEmpty(_arenaMapId))
+                {
+                    environment = null;
+                    return false;
+                }
+
+                environment = ArenaMovementEnvironment.Shared(_arenaMapId, _arenaSeed.Value);
                 return true;
             }
 

@@ -13,12 +13,12 @@ namespace Arena.MatchDb
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void BootstrapUnranked2V2BotMatchHandler(ReducerEventContext ctx, string matchId, string matchBuildId, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName);
+        public delegate void BootstrapUnranked2V2BotMatchHandler(ReducerEventContext ctx, string matchId, string matchBuildId, string mapId, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName);
         public event BootstrapUnranked2V2BotMatchHandler? OnBootstrapUnranked2V2BotMatch;
 
-        public void BootstrapUnranked2V2BotMatch(string matchId, string matchBuildId, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName)
+        public void BootstrapUnranked2V2BotMatch(string matchId, string matchBuildId, string mapId, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName)
         {
-            conn.InternalCallReducer(new Reducer.BootstrapUnranked2V2BotMatch(matchId, matchBuildId, seed, allocationExpiresAt, reservedPlayerIdentity, reservedDisplayName));
+            conn.InternalCallReducer(new Reducer.BootstrapUnranked2V2BotMatch(matchId, matchBuildId, mapId, seed, allocationExpiresAt, reservedPlayerIdentity, reservedDisplayName));
         }
 
         public bool InvokeBootstrapUnranked2V2BotMatch(ReducerEventContext ctx, Reducer.BootstrapUnranked2V2BotMatch args)
@@ -39,6 +39,7 @@ namespace Arena.MatchDb
                 ctx,
                 args.MatchId,
                 args.MatchBuildId,
+                args.MapId,
                 args.Seed,
                 args.AllocationExpiresAt,
                 args.ReservedPlayerIdentity,
@@ -58,6 +59,8 @@ namespace Arena.MatchDb
             public string MatchId;
             [DataMember(Name = "match_build_id")]
             public string MatchBuildId;
+            [DataMember(Name = "map_id")]
+            public string MapId;
             [DataMember(Name = "seed")]
             public ulong Seed;
             [DataMember(Name = "allocation_expires_at")]
@@ -70,6 +73,7 @@ namespace Arena.MatchDb
             public BootstrapUnranked2V2BotMatch(
                 string MatchId,
                 string MatchBuildId,
+                string MapId,
                 ulong Seed,
                 SpacetimeDB.Timestamp AllocationExpiresAt,
                 SpacetimeDB.Identity ReservedPlayerIdentity,
@@ -78,6 +82,7 @@ namespace Arena.MatchDb
             {
                 this.MatchId = MatchId;
                 this.MatchBuildId = MatchBuildId;
+                this.MapId = MapId;
                 this.Seed = Seed;
                 this.AllocationExpiresAt = AllocationExpiresAt;
                 this.ReservedPlayerIdentity = ReservedPlayerIdentity;
@@ -88,6 +93,7 @@ namespace Arena.MatchDb
             {
                 this.MatchId = "";
                 this.MatchBuildId = "";
+                this.MapId = "";
                 this.ReservedDisplayName = "";
             }
 

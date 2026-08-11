@@ -21,6 +21,7 @@ const MAX_ASSIGNMENT_DURATION: Duration = Duration::from_secs(4 * 60 * 60);
 
 const QUEUE_UNRANKED: &str = "UNRANKED";
 const FORMAT_2V2: &str = "2V2";
+const ARENA_MAP_01_ID: &str = "ARENA_MAP_01";
 
 const STATUS_PENDING: &str = "PENDING";
 const STATUS_CLAIMED: &str = "CLAIMED";
@@ -85,6 +86,7 @@ pub struct MatchAssignment {
     pub server_uri: String,
     pub database_identity: String,
     pub match_build_id: String,
+    pub map_id: String,
     pub ready_at: Timestamp,
     pub expires_at: Timestamp,
 }
@@ -128,6 +130,7 @@ pub struct MyMatchStatus {
     pub server_uri: Option<String>,
     pub database_identity: Option<String>,
     pub match_build_id: Option<String>,
+    pub map_id: Option<String>,
     pub ready_at: Option<Timestamp>,
     pub assignment_expires_at: Option<Timestamp>,
 }
@@ -168,6 +171,7 @@ pub fn my_match_status(ctx: &ViewContext) -> Option<MyMatchStatus> {
         server_uri: assignment.as_ref().map(|row| row.server_uri.clone()),
         database_identity: assignment.as_ref().map(|row| row.database_identity.clone()),
         match_build_id: assignment.as_ref().map(|row| row.match_build_id.clone()),
+        map_id: assignment.as_ref().map(|row| row.map_id.clone()),
         ready_at: assignment.as_ref().map(|row| row.ready_at),
         assignment_expires_at: assignment.map(|row| row.expires_at),
     })
@@ -406,12 +410,17 @@ pub fn service_mark_ready(
     server_uri: String,
     database_identity: String,
     match_build_id: String,
+    map_id: String,
     assignment_expires_at: Timestamp,
 ) -> Result<(), String> {
     require_provisioner(ctx)?;
     let match_id = validate_identifier("match id", match_id, 8, 96)?;
     let database_identity = validate_identifier("database identity", database_identity, 8, 128)?;
     let match_build_id = validate_identifier("match build id", match_build_id, 1, 96)?;
+    let map_id = validate_identifier("map id", map_id, 1, 64)?;
+    if map_id != ARENA_MAP_01_ID {
+        return Err(format!("Unsupported authored arena map {map_id}"));
+    }
     let server_uri = validate_server_uri(server_uri)?;
     validate_future_deadline(
         "assignment deadline",
@@ -438,6 +447,7 @@ pub fn service_mark_ready(
                     && assignment.server_uri == server_uri
                     && assignment.database_identity == database_identity
                     && assignment.match_build_id == match_build_id
+                    && assignment.map_id == map_id
                     && assignment.expires_at == assignment_expires_at
             });
         return same_assignment
@@ -461,6 +471,7 @@ pub fn service_mark_ready(
         server_uri,
         database_identity,
         match_build_id,
+        map_id,
         ready_at: ctx.timestamp,
         expires_at: assignment_expires_at,
     });

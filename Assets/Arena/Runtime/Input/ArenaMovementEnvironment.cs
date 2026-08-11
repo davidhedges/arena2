@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Arena.World;
 
 namespace Arena.Input
 {
@@ -55,7 +56,11 @@ namespace Arena.Input
         [Serializable]
         private sealed class ArenaLayoutFile
         {
-            public float arena_radius;
+            public string map_id = string.Empty;
+            public float ground_y;
+            public string boundary_shape = string.Empty;
+            public float boundary_half_x;
+            public float boundary_half_z;
             public float center_flatten_radius;
             public float ruin_wall_height;
             public ArenaLayoutWallSegmentFile[] ruin_wall_segments = Array.Empty<ArenaLayoutWallSegmentFile>();
@@ -231,30 +236,45 @@ namespace Arena.Input
             public float CosY { get; }
         }
 
-        private static readonly ArenaLayoutFile Layout = LoadArenaLayout();
-        private static readonly GameplayCollisionBox[] GameplayBoxes = LoadGameplayCollisionBoxes();
-        private static readonly Dictionary<ulong, ArenaMovementEnvironment> SharedBySeed = new();
+        private static readonly Dictionary<string, Dictionary<ulong, ArenaMovementEnvironment>> SharedByMapAndSeed =
+            new(StringComparer.Ordinal);
 
         private readonly ulong _seed;
+        private readonly ArenaLayoutFile _layout;
+        private readonly GameplayCollisionBox[] _gameplayBoxes;
         private readonly ArenaWall[] _walls;
         private readonly ArenaPlatform[] _platforms;
         private readonly ArenaRamp[] _ramps;
         private readonly ArenaPillar[] _pillars;
 
         public static ArenaMovementEnvironment Shared(ulong seed)
+            => Shared(ArenaMapCatalog.DefaultMapId, seed);
+
+        public static ArenaMovementEnvironment Shared(string mapId, ulong seed)
         {
-            if (!SharedBySeed.TryGetValue(seed, out ArenaMovementEnvironment? environment))
+            if (!ArenaMapCatalog.TryResolve(mapId, out ArenaMapProfile profile))
+                throw new InvalidOperationException($"Unknown authored arena map '{mapId}'.");
+
+            if (!SharedByMapAndSeed.TryGetValue(profile.MapId, out Dictionary<ulong, ArenaMovementEnvironment>? bySeed))
             {
-                environment = new ArenaMovementEnvironment(seed);
-                SharedBySeed[seed] = environment;
+                bySeed = new Dictionary<ulong, ArenaMovementEnvironment>();
+                SharedByMapAndSeed[profile.MapId] = bySeed;
+            }
+
+            if (!bySeed.TryGetValue(seed, out ArenaMovementEnvironment? environment))
+            {
+                environment = new ArenaMovementEnvironment(profile, seed);
+                bySeed[seed] = environment;
             }
 
             return environment;
         }
 
-        private ArenaMovementEnvironment(ulong seed)
+        private ArenaMovementEnvironment(ArenaMapProfile profile, ulong seed)
         {
             _seed = seed;
+            _layout = LoadArenaLayout(profile);
+            _gameplayBoxes = LoadGameplayCollisionBoxes(profile);
             _walls = BuildWalls(seed);
             _platforms = BuildPlatforms(seed);
             _ramps = BuildRamps(seed);
@@ -309,14 +329,10 @@ namespace Arena.Input
             float outX = desiredX;
             float outZ = desiredZ;
 
-            float maxRadius = Mathf.Max(Layout.arena_radius - playerRadius, 0.0f);
-            float dist = Mathf.Sqrt(outX * outX + outZ * outZ);
-            if (dist > maxRadius && dist > CollisionEpsilon)
-            {
-                float scale = maxRadius / dist;
-                outX *= scale;
-                outZ *= scale;
-            }
+            float maxX = Mathf.Max(_layout.boundary_half_x - playerRadius, 0.0f);
+            float maxZ = Mathf.Max(_layout.boundary_half_z - playerRadius, 0.0f);
+            outX = Mathf.Clamp(outX, -maxX, maxX);
+            outZ = Mathf.Clamp(outZ, -maxZ, maxZ);
 
             for (int iter = 0; iter < 2; iter++)
             {
@@ -385,9 +401,9 @@ namespace Arena.Input
 
             for (int iter = 0; iter < 2; iter++)
             {
-                for (int i = 0; i < GameplayBoxes.Length; i++)
+                for (int i = 0; i < _gameplayBoxes.Length; i++)
                 {
-                    GameplayCollisionBox collider = GameplayBoxes[i];
+                    GameplayCollisionBox collider = _gameplayBoxes[i];
                     if (!GameplayBoxOverlapsPlayerBand(collider, currentY, playerHeight))
                         continue;
 
@@ -416,13 +432,13 @@ namespace Arena.Input
             return new Vector2(outX, outZ);
         }
 
-        private static ArenaWall[] BuildWalls(ulong seed)
+        private ArenaWall[] BuildWalls(ulong seed)
         {
-            float wallHalfHeight = Layout.ruin_wall_height * 0.5f;
-            ArenaWall[] walls = new ArenaWall[Layout.ruin_wall_segments.Length];
-            for (int i = 0; i < Layout.ruin_wall_segments.Length; i++)
+            float wallHalfHeight = _layout.ruin_wall_height * 0.5f;
+            ArenaWall[] walls = new ArenaWall[_layout.ruin_wall_segments.Length];
+            for (int i = 0; i < _layout.ruin_wall_segments.Length; i++)
             {
-                ArenaLayoutWallSegmentFile segment = Layout.ruin_wall_segments[i];
+                ArenaLayoutWallSegmentFile segment = _layout.ruin_wall_segments[i];
                 float baseY = HeightAt(seed, segment.x, segment.z);
                 walls[i] = new ArenaWall(
                     segment.x,
@@ -435,51 +451,51 @@ namespace Arena.Input
             return walls;
         }
 
-        private static ArenaPlatform[] BuildPlatforms(ulong seed)
+        private ArenaPlatform[] BuildPlatforms(ulong seed)
         {
-            ArenaPlatform[] platforms = new ArenaPlatform[Layout.platforms.Length];
-            for (int i = 0; i < Layout.platforms.Length; i++)
+            ArenaPlatform[] platforms = new ArenaPlatform[_layout.platforms.Length];
+            for (int i = 0; i < _layout.platforms.Length; i++)
             {
-                ArenaLayoutPointFile platform = Layout.platforms[i];
-                float centerY = HeightAt(seed, platform.x, platform.z) + Layout.platform_center_height_offset;
+                ArenaLayoutPointFile platform = _layout.platforms[i];
+                float centerY = HeightAt(seed, platform.x, platform.z) + _layout.platform_center_height_offset;
                 platforms[i] = new ArenaPlatform(
                     platform.x,
                     centerY,
                     platform.z,
-                    Layout.platform_half_x,
-                    Layout.platform_half_height,
-                    Layout.platform_half_z);
+                    _layout.platform_half_x,
+                    _layout.platform_half_height,
+                    _layout.platform_half_z);
             }
             return platforms;
         }
 
-        private static ArenaRamp[] BuildRamps(ulong seed)
+        private ArenaRamp[] BuildRamps(ulong seed)
         {
-            ArenaRamp[] ramps = new ArenaRamp[Layout.ramps.Length];
-            for (int i = 0; i < Layout.ramps.Length; i++)
+            ArenaRamp[] ramps = new ArenaRamp[_layout.ramps.Length];
+            for (int i = 0; i < _layout.ramps.Length; i++)
             {
-                ArenaLayoutRampFile ramp = Layout.ramps[i];
+                ArenaLayoutRampFile ramp = _layout.ramps[i];
                 float centerY = RampCenterY(seed, ramp.x, ramp.z, ramp.side);
                 ramps[i] = new ArenaRamp(
                     ramp.x,
                     centerY,
                     ramp.z,
                     ramp.side,
-                    Layout.ramp_half_x,
-                    Layout.ramp_half_z,
-                    Layout.ramp_top_center_offset,
-                    Layout.ramp_top_slope_delta);
+                    _layout.ramp_half_x,
+                    _layout.ramp_half_z,
+                    _layout.ramp_top_center_offset,
+                    _layout.ramp_top_slope_delta);
             }
             return ramps;
         }
 
-        private static ArenaPillar[] BuildPillars(ulong seed)
+        private ArenaPillar[] BuildPillars(ulong seed)
         {
-            ArenaPillar[] pillars = new ArenaPillar[Layout.pillar_count];
-            for (int i = 0; i < Layout.pillar_count; i++)
+            ArenaPillar[] pillars = new ArenaPillar[_layout.pillar_count];
+            for (int i = 0; i < _layout.pillar_count; i++)
             {
                 float jitter = SeededUnit(seed, (ulong)i * 2ul + 1ul);
-                float angle = ((float)i / Layout.pillar_count) * Tau + jitter * 0.35f;
+                float angle = ((float)i / _layout.pillar_count) * Tau + jitter * 0.35f;
                 float ringRadius = 7.0f + SeededUnit(seed, (ulong)i * 2ul + 2ul) * 5.0f;
                 float columnScale = 0.7f + SeededUnit(seed, (ulong)i * 3ul + 7ul) * 0.9f;
                 float x = Mathf.Cos(angle) * ringRadius;
@@ -492,28 +508,28 @@ namespace Arena.Input
                     baseY + height * 0.5f,
                     z,
                     height * 0.5f,
-                    Layout.pillar_collider_radius);
+                    _layout.pillar_collider_radius);
             }
             return pillars;
         }
 
-        private static float RampCenterY(ulong seed, float rampX, float rampZ, float side)
+        private float RampCenterY(ulong seed, float rampX, float rampZ, float side)
         {
             (float anchorX, float anchorZ) = LinkedPlatformAnchor(rampX, rampZ, side);
-            return HeightAt(seed, anchorX, anchorZ) + Layout.ramp_center_height_offset;
+            return HeightAt(seed, anchorX, anchorZ) + _layout.ramp_center_height_offset;
         }
 
-        private static (float, float) LinkedPlatformAnchor(float rampX, float rampZ, float side)
+        private (float, float) LinkedPlatformAnchor(float rampX, float rampZ, float side)
         {
-            float targetDx = side * Layout.ramp_platform_link_x_offset;
+            float targetDx = side * _layout.ramp_platform_link_x_offset;
             bool hasBest = false;
             float bestScore = 0.0f;
             float bestX = rampX + targetDx;
             float bestZ = rampZ;
 
-            for (int i = 0; i < Layout.platforms.Length; i++)
+            for (int i = 0; i < _layout.platforms.Length; i++)
             {
-                ArenaLayoutPointFile platform = Layout.platforms[i];
+                ArenaLayoutPointFile platform = _layout.platforms[i];
                 float dx = platform.x - rampX;
                 if (dx * side <= 0.0f)
                     continue;
@@ -532,17 +548,29 @@ namespace Arena.Input
             return (bestX, bestZ);
         }
 
-        private static ArenaLayoutFile LoadArenaLayout()
-            => MovementSharedDataLoader.LoadRequiredJson<ArenaLayoutFile>(
-                MovementSharedDataLoader.ArenaLayoutResourcePath,
-                "arena layout");
+        private static ArenaLayoutFile LoadArenaLayout(ArenaMapProfile profile)
+        {
+            ArenaLayoutFile layout = MovementSharedDataLoader.LoadRequiredJson<ArenaLayoutFile>(
+                profile.LayoutResourcePath,
+                $"{profile.MapId} arena layout");
+            if (!string.Equals(layout.map_id, profile.MapId, StringComparison.Ordinal)
+                || !string.Equals(layout.boundary_shape, "aabb", StringComparison.Ordinal)
+                || layout.boundary_half_x <= 0.0f
+                || layout.boundary_half_z <= 0.0f)
+            {
+                throw new InvalidOperationException(
+                    $"[ArenaMovementEnvironment] Invalid authored arena layout for {profile.MapId}.");
+            }
 
-        private static GameplayCollisionBox[] LoadGameplayCollisionBoxes()
+            return layout;
+        }
+
+        private static GameplayCollisionBox[] LoadGameplayCollisionBoxes(ArenaMapProfile profile)
         {
             GameplayCollisionLayoutFile file =
                 MovementSharedDataLoader.LoadRequiredJson<GameplayCollisionLayoutFile>(
-                    MovementSharedDataLoader.GameplayCollisionResourcePath,
-                    "gameplay collision");
+                    profile.MovementCollisionResourcePath,
+                    $"{profile.MapId} movement collision");
             GameplayCollisionBoxFile[] files = file.boxes ?? Array.Empty<GameplayCollisionBoxFile>();
             GameplayCollisionBox[] boxes = new GameplayCollisionBox[files.Length];
             for (int i = 0; i < files.Length; i++)
@@ -594,14 +622,14 @@ namespace Arena.Input
             return boxes;
         }
 
-        private static float HeightAt(ulong seed, float x, float z)
+        private float HeightAt(ulong seed, float x, float z)
         {
             // Instance scenes currently share a flat authoritative movement surface.
             // Keep prediction and visibility aligned with that server contract.
             _ = seed;
             _ = x;
             _ = z;
-            return 0.0f;
+            return _layout.ground_y;
         }
 
         private static double ValueNoise(ulong seed, double x, double z, double scale)
@@ -659,12 +687,12 @@ namespace Arena.Input
             return unit * 2.0 - 1.0;
         }
 
-        private static float SeededUnit(ulong seed, ulong offset)
+        private float SeededUnit(ulong seed, ulong offset)
         {
             ulong mixed;
             unchecked
             {
-                mixed = ((seed & JsSafeSeedMask) + offset * Layout.pillar_hash_step) & JsSafeSeedMask;
+                mixed = ((seed & JsSafeSeedMask) + offset * _layout.pillar_hash_step) & JsSafeSeedMask;
             }
             mixed = Math.Max(mixed, 1ul);
             return (mixed % 1000ul) / 999.0f;
@@ -794,8 +822,8 @@ namespace Arena.Input
 
     internal static class MovementSharedDataLoader
     {
-        public const string ArenaLayoutResourcePath = "SharedData/arena_layout.shared";
-        public const string GameplayCollisionResourcePath = "SharedData/gameplay_collision.shared";
+        public const string ArenaLayoutResourcePath = ArenaMapCatalog.ArenaMap01LayoutResourcePath;
+        public const string GameplayCollisionResourcePath = ArenaMapCatalog.ArenaMap01MovementCollisionResourcePath;
         private const string SyncMenuPath = "Arena/Sync Shared Movement Data";
 
         private static bool _validated;

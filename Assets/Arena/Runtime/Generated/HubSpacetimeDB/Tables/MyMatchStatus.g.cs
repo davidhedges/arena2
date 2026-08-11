@@ -40,6 +40,7 @@ namespace Arena.HubDb
         public global::SpacetimeDB.Col<MyMatchStatus, string> ServerUri { get; }
         public global::SpacetimeDB.Col<MyMatchStatus, string> DatabaseIdentity { get; }
         public global::SpacetimeDB.Col<MyMatchStatus, string> MatchBuildId { get; }
+        public global::SpacetimeDB.Col<MyMatchStatus, string> MapId { get; }
         public global::SpacetimeDB.Col<MyMatchStatus, SpacetimeDB.Timestamp> ReadyAt { get; }
         public global::SpacetimeDB.Col<MyMatchStatus, SpacetimeDB.Timestamp> AssignmentExpiresAt { get; }
 
@@ -57,6 +58,7 @@ namespace Arena.HubDb
             ServerUri = new global::SpacetimeDB.Col<MyMatchStatus, string>(tableName, "server_uri");
             DatabaseIdentity = new global::SpacetimeDB.Col<MyMatchStatus, string>(tableName, "database_identity");
             MatchBuildId = new global::SpacetimeDB.Col<MyMatchStatus, string>(tableName, "match_build_id");
+            MapId = new global::SpacetimeDB.Col<MyMatchStatus, string>(tableName, "map_id");
             ReadyAt = new global::SpacetimeDB.Col<MyMatchStatus, SpacetimeDB.Timestamp>(tableName, "ready_at");
             AssignmentExpiresAt = new global::SpacetimeDB.Col<MyMatchStatus, SpacetimeDB.Timestamp>(tableName, "assignment_expires_at");
         }

@@ -15,6 +15,7 @@ use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 #[allow(unused_imports)]
 use crate::arena::arena_instance as _;
+use crate::arena_maps::require_arena_map_id;
 #[allow(unused_imports)]
 use crate::bot_matches::arena_match as _;
 #[allow(unused_imports)]
@@ -61,6 +62,7 @@ pub struct MatchBootstrapConfig {
     pub singleton_id: u8,
     pub match_id: String,
     pub match_build_id: String,
+    pub map_id: String,
     pub queue_kind: String,
     pub format: String,
     pub ruleset: String,
@@ -302,6 +304,7 @@ pub fn bootstrap_unranked_2v2_bot_match(
     ctx: &ReducerContext,
     match_id: String,
     match_build_id: String,
+    map_id: String,
     seed: u64,
     allocation_expires_at: Timestamp,
     reserved_player_identity: Identity,
@@ -339,6 +342,7 @@ pub fn bootstrap_unranked_2v2_bot_match(
 
     let match_id = validate_identifier("match id", match_id, 8, 96)?;
     let match_build_id = validate_identifier("match build id", match_build_id, 1, 96)?;
+    let map_id = require_arena_map_id(map_id.trim())?.as_str().to_string();
     let reserved_display_name = validate_display_name(reserved_display_name)?;
     validate_future_deadline(ctx.timestamp, allocation_expires_at)?;
 
@@ -351,6 +355,7 @@ pub fn bootstrap_unranked_2v2_bot_match(
             singleton_id: SINGLETON_ID,
             match_id,
             match_build_id,
+            map_id: map_id.clone(),
             queue_kind: QUEUE_UNRANKED.to_string(),
             format: FORMAT_2V2.to_string(),
             ruleset: RULESET_TEAM_ELIMINATION.to_string(),
@@ -369,7 +374,12 @@ pub fn bootstrap_unranked_2v2_bot_match(
         reserved_at: ctx.timestamp,
     });
 
-    crate::bot_matches::bootstrap_provisioned_2v2(ctx, reserved_player_identity, seed)?;
+    crate::bot_matches::bootstrap_provisioned_2v2(
+        ctx,
+        reserved_player_identity,
+        seed,
+        map_id.as_str(),
+    )?;
     set_provisioned_phase(ctx, PHASE_WAITING, None)?;
     log::info!(
         "[MATCH_CONTRACT] Bootstrapped match for reserved player {}; waiting without a game tick",

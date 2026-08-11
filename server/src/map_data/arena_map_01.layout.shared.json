@@ -1,5 +1,10 @@
 {
-  "arena_radius": 30.0,
+  "schema_version": 1,
+  "map_id": "ARENA_MAP_01",
+  "ground_y": 0.0,
+  "boundary_shape": "aabb",
+  "boundary_half_x": 30.0,
+  "boundary_half_z": 30.0,
   "center_flatten_radius": 30.0,
   "ruin_wall_height": 4.5,
   "ruin_wall_segments": [],
@@ -19,5 +24,13 @@
   "ramps": [],
   "pillar_collider_radius": 0.75,
   "pillar_count": 0,
-  "pillar_hash_step": 2654435769
+  "pillar_hash_step": 2654435769,
+  "player_spawn": { "x": 0.0, "z": 0.0, "yaw": 0.0 },
+  "edge_spawn_points": [
+    { "x": 0.0, "z": 28.0 },
+    { "x": 28.0, "z": 0.0 },
+    { "x": 0.0, "z": -28.0 },
+    { "x": -28.0, "z": 0.0 }
+  ],
+  "obstacles": []
 }

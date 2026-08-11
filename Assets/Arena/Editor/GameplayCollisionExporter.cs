@@ -37,12 +37,8 @@ namespace Arena.Editor
             "TFD_Fog_",
             "TGV_Fog_",
         };
-        private const string RelativeServerGameplayCollisionPath = "server/src/gameplay_collision.shared.json";
-        private const string RelativeServerGameplayQueryCollisionPath = "server/src/gameplay_query_collision.shared.json";
-        private const string RelativeServerArenaLayoutPath = "server/src/arena_layout.shared.json";
-        private const string RelativeBundledGameplayCollisionPath = "Assets/Arena/Resources/SharedData/gameplay_collision.shared.json";
-        private const string RelativeBundledGameplayQueryCollisionPath = "Assets/Arena/Resources/SharedData/gameplay_query_collision.shared.json";
-        private const string RelativeBundledArenaLayoutPath = "Assets/Arena/Resources/SharedData/arena_layout.shared.json";
+        private const string RelativeServerArenaMapDataDirectory = "server/src/map_data";
+        private const string RelativeBundledArenaMapDataDirectory = "Assets/Arena/Resources/SharedData/Maps";
         private const string RelativeServerWorldDataDirectory = "server/src/world_data";
         private const string RelativeBundledWorldDataDirectory = "Assets/Arena/Resources/SharedData/Worlds";
 
@@ -167,60 +163,14 @@ namespace Arena.Editor
 
         public static void Export()
         {
-            int gameplayLayer = LayerMask.NameToLayer(GameplayCollisionLayer);
-            int queryLayer = LayerMask.NameToLayer(GameplayQueryCollisionLayer);
-            if (gameplayLayer < 0 || queryLayer < 0)
-            {
-                Debug.LogError(
-                    $"[GameplayCollisionExporter] Required layers are missing: " +
-                    $"{GameplayCollisionLayer}={gameplayLayer}, {GameplayQueryCollisionLayer}={queryLayer}.");
-                return;
-            }
-
             Scene activeScene = SceneManager.GetActiveScene();
-            if (!activeScene.IsValid())
+            if (!activeScene.IsValid() || !activeScene.isLoaded)
             {
                 Debug.LogError("[GameplayCollisionExporter] No active scene loaded.");
                 return;
             }
-
-            List<string> gameplayWarnings = new();
-            List<string> gameplayErrors = new();
-            ExportCollisionData gameplayCollision = CollectMovementCollisionDataForLayer(
-                activeScene,
-                gameplayLayer,
-                gameplayWarnings,
-                gameplayErrors,
-                requireArenaEnvironmentVariantSource: false,
-                tiltedBoxExportMode: TiltedBoxExportMode.WorldAabb);
-            WriteExportLayout(RelativeServerGameplayCollisionPath, RelativeBundledGameplayCollisionPath, gameplayCollision);
-
-            List<string> queryWarnings = new();
-            List<string> queryErrors = new();
-            ExportCollisionData queryCollision = CollectQueryCollisionDataForLayer(
-                activeScene,
-                queryLayer,
-                queryWarnings,
-                queryErrors,
-                requireArenaEnvironmentVariantSource: false,
-                tiltedBoxExportMode: TiltedBoxExportMode.FullRotation);
-            WriteExportLayout(
-                RelativeServerGameplayQueryCollisionPath,
-                RelativeBundledGameplayQueryCollisionPath,
-                queryCollision);
-
-            SyncArenaLayoutToBundled(logSummary: false);
-            AssetDatabase.Refresh();
-
-            Debug.Log(
-                $"[GameplayCollisionExporter] Exported arena collision: " +
-                $"{gameplayCollision.Boxes.Count} {GameplayCollisionLayer} box collider(s), " +
-                $"{gameplayCollision.MeshInstances.Count} {GameplayCollisionLayer} mesh instance(s), " +
-                $"{queryCollision.Boxes.Count} {GameplayQueryCollisionLayer} box collider(s), " +
-                $"{queryCollision.MeshInstances.Count} {GameplayQueryCollisionLayer} mesh instance(s) " +
-                $"using {queryCollision.MeshGeometries.Count} shared mesh geometries.");
-            LogExportWarnings(gameplayWarnings.Concat(queryWarnings));
-            LogExportErrors(gameplayErrors.Concat(queryErrors));
+            PreparedSharedCollisionBake bake = PrepareSceneSharedCollisionBake(activeScene);
+            ExportPreparedActiveSceneArenaMapCollisionData(activeScene.name, bake);
         }
 
         [MenuItem("Arena/OpenWorld/Scene Prep/4 Export Active Scene World Data", false, 400)]
@@ -663,11 +613,10 @@ namespace Arena.Editor
         [MenuItem("Arena/OpenWorld/Sync Shared Movement Data", false, 500)]
         public static void SyncSharedMovementData()
         {
-            SyncArenaLayoutToBundled(logSummary: false);
-            SyncGameplayCollisionToBundled(logSummary: false);
+            SyncArenaMapDataToBundled(logSummary: false);
             SyncSceneWorldDataToBundled(logSummary: false);
             AssetDatabase.Refresh();
-            Debug.Log("[GameplayCollisionExporter] Synced arena layout, gameplay collision, and scene world data into bundled Resources assets.");
+            Debug.Log("[GameplayCollisionExporter] Synced authored arena-map and open-world movement data into bundled Resources assets.");
         }
 
         private static float DeltaAngleFromZero(float angle) => Mathf.DeltaAngle(0f, angle);
@@ -748,24 +697,14 @@ namespace Arena.Editor
             return changed;
         }
 
-        private static void SyncArenaLayoutToBundled(bool logSummary)
+        private static void SyncArenaMapDataToBundled(bool logSummary)
         {
-            CopyProjectFile(RelativeServerArenaLayoutPath, RelativeBundledArenaLayoutPath);
+            CopyProjectDirectory(RelativeServerArenaMapDataDirectory, RelativeBundledArenaMapDataDirectory);
             if (logSummary)
             {
                 Debug.Log(
-                    $"[GameplayCollisionExporter] Synced {RelativeServerArenaLayoutPath} -> {RelativeBundledArenaLayoutPath}");
-            }
-        }
-
-        private static void SyncGameplayCollisionToBundled(bool logSummary)
-        {
-            CopyProjectFile(RelativeServerGameplayCollisionPath, RelativeBundledGameplayCollisionPath);
-            CopyProjectFile(RelativeServerGameplayQueryCollisionPath, RelativeBundledGameplayQueryCollisionPath);
-            if (logSummary)
-            {
-                Debug.Log(
-                    $"[GameplayCollisionExporter] Synced arena collision JSON into bundled Resources.");
+                    $"[GameplayCollisionExporter] Synced {RelativeServerArenaMapDataDirectory} -> " +
+                    $"{RelativeBundledArenaMapDataDirectory}");
             }
         }
 
@@ -1673,6 +1612,45 @@ namespace Arena.Editor
             LogExportWarnings(bake.Warnings);
         }
 
+        internal static void ExportPreparedActiveSceneArenaMapCollisionData(
+            string? dataKey,
+            PreparedSharedCollisionBake bake)
+        {
+            if (bake == null)
+                throw new ArgumentNullException(nameof(bake));
+
+            Scene activeScene = SceneManager.GetActiveScene();
+            if (!activeScene.IsValid() ||
+                !activeScene.isLoaded ||
+                activeScene.handle.GetRawData() != bake.SceneHandle)
+            {
+                throw new InvalidOperationException(
+                    "Prepared authored-arena collision must be exported while its source scene remains active and loaded.");
+            }
+
+            string resolvedDataKey = BuildSceneDataKey(
+                string.IsNullOrWhiteSpace(dataKey)
+                    ? activeScene.name ?? string.Empty
+                    : dataKey!);
+            string json = SerializeExportLayout(bake.Movement, bake.Revision);
+            string queryJson = bake.PayloadsIdentical
+                ? json
+                : SerializeExportLayout(bake.Query, bake.Revision);
+            WriteProjectText(ArenaMapServerCollisionPath(resolvedDataKey), json);
+            WriteProjectText(ArenaMapBundledCollisionPath(resolvedDataKey), json);
+            WriteProjectText(ArenaMapServerQueryCollisionPath(resolvedDataKey), queryJson);
+            WriteProjectText(ArenaMapBundledQueryCollisionPath(resolvedDataKey), queryJson);
+            AssetDatabase.Refresh();
+
+            Debug.Log(
+                $"[GameplayCollisionExporter] Exported authored arena collision for '{activeScene.name}' " +
+                $"(key '{resolvedDataKey}', revision {bake.Revision}): " +
+                $"{bake.Movement.Boxes.Count} movement box collider(s), " +
+                $"{bake.Query.Boxes.Count} query box collider(s), and " +
+                $"{bake.Movement.MeshInstances.Count} shared mesh instance(s).");
+            LogExportWarnings(bake.Warnings);
+        }
+
         private static string ComputeCollisionRevision(ExportCollisionData collision)
         {
             string canonicalJson = JsonUtility.ToJson(BuildExportLayout(collision, sourceRevision: null));
@@ -2423,6 +2401,18 @@ namespace Arena.Editor
 
         private static string SceneBundledHeightfieldPath(string dataKey)
             => $"{RelativeBundledWorldDataDirectory}/{dataKey}.heightfield.shared.json";
+
+        private static string ArenaMapServerCollisionPath(string dataKey)
+            => $"{RelativeServerArenaMapDataDirectory}/{dataKey}.collision.shared.json";
+
+        private static string ArenaMapBundledCollisionPath(string dataKey)
+            => $"{RelativeBundledArenaMapDataDirectory}/{dataKey}.collision.shared.json";
+
+        private static string ArenaMapServerQueryCollisionPath(string dataKey)
+            => $"{RelativeServerArenaMapDataDirectory}/{dataKey}.query_collision.shared.json";
+
+        private static string ArenaMapBundledQueryCollisionPath(string dataKey)
+            => $"{RelativeBundledArenaMapDataDirectory}/{dataKey}.query_collision.shared.json";
 
         private static void CopyProjectFile(string relativeSourcePath, string relativeDestinationPath)
         {

@@ -74,13 +74,13 @@ namespace Arena.Network
                 new QueryBuilder().From.ResourceCatalog().ToSql(),
                 new QueryBuilder().From.StatScalingCatalog().ToSql(),
                 new QueryBuilder().From.ContractVersion()
-                    .Where(c => c.Key.Eq("arena_layout.shared.json"))
+                    .Where(c => c.Key.Eq("map_data/arena_map_01.layout.shared.json"))
                     .ToSql(),
                 new QueryBuilder().From.ContractVersion()
-                    .Where(c => c.Key.Eq("gameplay_collision.shared.json"))
+                    .Where(c => c.Key.Eq("map_data/arena_map_01.collision.shared.json"))
                     .ToSql(),
                 new QueryBuilder().From.ContractVersion()
-                    .Where(c => c.Key.Eq("gameplay_query_collision.shared.json"))
+                    .Where(c => c.Key.Eq("map_data/arena_map_01.query_collision.shared.json"))
                     .ToSql(),
             };
         }

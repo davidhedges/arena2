@@ -38,6 +38,7 @@ namespace Arena.Entity
             string activeSceneName,
             ulong? instanceId,
             string? instanceKind,
+            string? instanceMapId,
             string openWorldSceneName,
             string matchSceneName,
             string survivalSceneName)
@@ -57,12 +58,15 @@ namespace Arena.Entity
                 if (string.IsNullOrEmpty(instanceKind))
                     return null;
 
-                string targetSceneName = string.Equals(
-                    instanceKind,
-                    SurvivalInstanceKind,
-                    StringComparison.OrdinalIgnoreCase)
-                    ? survivalSceneName
-                    : matchSceneName;
+                string targetSceneName;
+                if (string.Equals(instanceKind, SurvivalInstanceKind, StringComparison.OrdinalIgnoreCase))
+                {
+                    targetSceneName = survivalSceneName;
+                }
+                else if (!ArenaMapCatalog.TryResolveSceneName(instanceMapId, out targetSceneName))
+                {
+                    return null;
+                }
                 return activeSceneName == targetSceneName ? null : targetSceneName;
             }
 
@@ -89,6 +93,7 @@ namespace Arena.Entity
         private readonly LocalMovementWorldContext _worldContext;
         private readonly Dictionary<ulong, ulong> _arenaSeedsById = new();
         private readonly Dictionary<ulong, string> _arenaKindsById = new();
+        private readonly Dictionary<ulong, string> _arenaMapIdsById = new();
         private readonly Action<ulong?> _onLocalPlayerWorldUpdate;
         private readonly Action<NetworkManager.GameplayScope> _setGameplayScope;
         private readonly Func<string> _getActiveSceneName;
@@ -135,6 +140,7 @@ namespace Arena.Entity
         {
             _arenaSeedsById.Clear();
             _arenaKindsById.Clear();
+            _arenaMapIdsById.Clear();
             _worldContext.Clear();
             _hasLocalIdentity = false;
             _localPlayerWorld = null;
@@ -189,8 +195,10 @@ namespace Arena.Entity
         {
             _arenaSeedsById[row.Id] = row.Seed;
             _arenaKindsById[row.Id] = row.InstanceKind;
+            _arenaMapIdsById[row.Id] = row.MapId;
             _worldContext.SetArenaSeedForInstance(row.Id, row.Seed);
             _worldContext.SetInstanceKindForInstance(row.Id, row.InstanceKind);
+            _worldContext.SetArenaMapForInstance(row.Id, row.MapId);
             RefreshIfLocalPlayerUsesInstance(row.Id);
         }
 
@@ -198,8 +206,10 @@ namespace Arena.Entity
         {
             _arenaSeedsById[row.Id] = row.Seed;
             _arenaKindsById[row.Id] = row.InstanceKind;
+            _arenaMapIdsById[row.Id] = row.MapId;
             _worldContext.SetArenaSeedForInstance(row.Id, row.Seed);
             _worldContext.SetInstanceKindForInstance(row.Id, row.InstanceKind);
+            _worldContext.SetArenaMapForInstance(row.Id, row.MapId);
             RefreshIfLocalPlayerUsesInstance(row.Id);
         }
 
@@ -207,6 +217,7 @@ namespace Arena.Entity
         {
             _arenaSeedsById.Remove(row.Id);
             _arenaKindsById.Remove(row.Id);
+            _arenaMapIdsById.Remove(row.Id);
             if (_worldContext.InstanceId == row.Id)
                 _worldContext.Clear();
         }
@@ -258,14 +269,22 @@ namespace Arena.Entity
             PlayerWorld row = _localPlayerWorld;
             ulong? arenaSeed = null;
             string? instanceKind = null;
+            string? instanceMapId = null;
             if (row.InstanceId.HasValue && _arenaSeedsById.TryGetValue(row.InstanceId.Value, out ulong seed))
                 arenaSeed = seed;
             if (row.InstanceId.HasValue && _arenaKindsById.TryGetValue(row.InstanceId.Value, out string kind))
                 instanceKind = kind;
+            if (row.InstanceId.HasValue && _arenaMapIdsById.TryGetValue(row.InstanceId.Value, out string mapId))
+                instanceMapId = mapId;
             string currentOpenWorldSceneName = ResolveCurrentOpenWorldSceneName(row);
             string activeSceneName = _getActiveSceneName();
 
-            _worldContext.SetWorldWithInstanceKind(row.WorldKind, row.InstanceId, arenaSeed, instanceKind);
+            _worldContext.SetWorldWithInstanceKind(
+                row.WorldKind,
+                row.InstanceId,
+                arenaSeed,
+                instanceKind,
+                instanceMapId);
             if (string.Equals(row.WorldKind, "OPEN", StringComparison.OrdinalIgnoreCase))
                 OpenWorldTravelCatalog.SetCurrentScene(currentOpenWorldSceneName);
             _onLocalPlayerWorldUpdate(row.InstanceId);
@@ -282,6 +301,7 @@ namespace Arena.Entity
                     activeSceneName,
                     row.InstanceId,
                     instanceKind,
+                    instanceMapId,
                     currentOpenWorldSceneName,
                     _matchSceneName,
                     _survivalSceneName);

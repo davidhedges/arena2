@@ -136,7 +136,7 @@ def inserted_rows(update: dict[str, Any] | None, table_name: str) -> list[list[A
 
 
 def parse_match_status(row: list[Any]) -> dict[str, str]:
-    if len(row) < 13:
+    if len(row) < 14:
         raise RuntimeError(f"unexpected my_match_status row length: {len(row)}")
     return {
         "ticket_id": str(row[0]),
@@ -145,6 +145,7 @@ def parse_match_status(row: list[Any]) -> dict[str, str]:
         "server_uri": str(option_value(row[9]) or ""),
         "database_identity": normalize_identity(row[10]),
         "match_build_id": str(option_value(row[11]) or ""),
+        "map_id": str(option_value(row[12]) or ""),
     }
 
 
@@ -182,9 +183,9 @@ def pvp_initial_queries(identity: str) -> list[str]:
     identity_literal = f"0x{identity}"
     queries = [f'SELECT * FROM "{table}"' for table in PVP_STATIC_TABLES]
     for key in (
-        "arena_layout.shared.json",
-        "gameplay_collision.shared.json",
-        "gameplay_query_collision.shared.json",
+        "map_data/arena_map_01.layout.shared.json",
+        "map_data/arena_map_01.collision.shared.json",
+        "map_data/arena_map_01.query_collision.shared.json",
     ):
         queries.append(
             'SELECT * FROM "contract_version" '
@@ -351,6 +352,7 @@ class Benchmark:
                     "server_uri",
                     "database_identity",
                     "match_build_id",
+                    "map_id",
                 )
             ):
                 raise RuntimeError(f"Hub READY assignment is incomplete: {assignment}")
@@ -385,6 +387,7 @@ class Benchmark:
                 "ticket": hashlib.sha256(assignment["ticket_id"].encode()).hexdigest()[:12],
                 "match": assignment["match_id"],
                 "match_build_id": assignment["match_build_id"],
+                "map_id": assignment["map_id"],
                 "request_to_ready_ms": round((ready_at - request_started) * 1000.0, 3),
                 "ready_to_match_transport_ms": round((transport_at - ready_at) * 1000.0, 3),
                 "match_transport_to_initial_state_ms": round((initial_at - transport_at) * 1000.0, 3),

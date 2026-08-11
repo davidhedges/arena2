@@ -12,8 +12,8 @@ use crate::actor_lifecycle::{
     ActorWorldAssignment, ActorWorldCleanup,
 };
 use crate::arena::{
-    create_arena_instance, create_arena_instance_with_seed, join_identity_into_instance_at_spawn,
-    ArenaInstance, MATCH_PHASE_COUNTDOWN, MATCH_PHASE_ENDED,
+    create_arena_instance, create_arena_instance_with_seed_and_map,
+    join_identity_into_instance_at_spawn, ArenaInstance, MATCH_PHASE_COUNTDOWN, MATCH_PHASE_ENDED,
 };
 use crate::combat::{
     new_dummy_player_state, snapshot_match_hp_remaining, DEFAULT_HIT_HEIGHT, DEFAULT_HIT_RADIUS,
@@ -157,6 +157,7 @@ pub(crate) fn bootstrap_provisioned_2v2(
     ctx: &ReducerContext,
     human: Identity,
     seed: u64,
+    map_id: &str,
 ) -> Result<u64, String> {
     validate_fixed_roster_slots()?;
     if ctx.db.match_participant().identity().find(human).is_some()
@@ -164,18 +165,20 @@ pub(crate) fn bootstrap_provisioned_2v2(
     {
         return Err("Provisioned match runtime already exists".to_string());
     }
-    create_fixed_2v2_runtime(ctx, human, Some(seed), false)
+    create_fixed_2v2_runtime(ctx, human, Some((seed, map_id)), false)
 }
 
 fn create_fixed_2v2_runtime(
     ctx: &ReducerContext,
     human: Identity,
-    seed: Option<u64>,
+    provisioned: Option<(u64, &str)>,
     human_is_present: bool,
 ) -> Result<u64, String> {
-    let instance_id = seed.map_or_else(
+    let instance_id = provisioned.map_or_else(
         || create_arena_instance(ctx, MATCH_PLAYER_COUNT),
-        |seed| create_arena_instance_with_seed(ctx, MATCH_PLAYER_COUNT, seed),
+        |(seed, map_id)| {
+            create_arena_instance_with_seed_and_map(ctx, MATCH_PLAYER_COUNT, seed, map_id)
+        },
     );
     let Some(arena) = ctx.db.arena_instance().id().find(instance_id) else {
         return Err("Failed to create the arena instance".to_string());
