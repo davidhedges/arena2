@@ -53,6 +53,21 @@ verification, bootstrap work, Hub-ready work, total provisioner time, and the
 published WASM byte count. Unity logs the corresponding client milestones with
 the `[MatchStartupTiming]` prefix through the loaded `Arena_Map_01` scene.
 
+Run the repeatable local match-start benchmark while the server and provisioner
+are already running:
+
+```bash
+python3 ops/benchmark-local-match-start.py --samples 20
+```
+
+The probe uses the public Hub and match WebSocket APIs, reuses one identity,
+applies the production 44-query PvP initial subscription, cancels every sampled
+ticket, and verifies the provisioner ledger reports every database `CLEANED`.
+Its ticket hashes correlate with the provisioner's `match_startup_timing`
+events for stage-level p50/p95 calculations. It requires the
+`websocket-client` Python package and intentionally does not measure Unity scene
+loading.
+
 Configuration defaults are documented in `local.env.example`. The default
 ledger lives under Unity's ignored `Library/` directory. Cleaned rows are kept
 for one day for local diagnosis and then pruned; active and orphaned rows are

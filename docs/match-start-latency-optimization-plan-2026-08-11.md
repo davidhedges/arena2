@@ -2,7 +2,7 @@
 
 Date: 2026-08-11
 
-Status: **APPROVED — Steps 1–5 complete; Step 6 pending**
+Status: **APPROVED — Steps 1–6 complete**
 
 ## 1. Scope
 
@@ -319,6 +319,59 @@ Exit gate:
 - an unassigned warm database rejects gameplay clients;
 - build changes drain old entries safely;
 - every completed or abandoned match database remains disposable.
+
+Step 6 completion record (2026-08-12):
+
+- Added `ops/benchmark-local-match-start.py`, a serial local probe that reuses
+  one anonymous player identity, requests matches through the public Hub
+  reducer, preserves that identity across the assigned match connection,
+  applies the production 44-query PvP initial subscription, cancels each
+  ticket, and waits for exact-identity cleanup in the provisioner ledger. It
+  emits correlated JSON samples and nearest-rank p50/p95 summaries without
+  adding server telemetry or persistent match history.
+- A 20-sample run used the 2,978,841-byte match artifact with build ID
+  `sha256-7fe3ad16ff5f2b18440f`. All 20 samples reached initial state and all 20
+  disposable databases reached the ledger's `CLEANED` state. A preceding
+  decoder-validation sample and one intentionally failed decoder-development
+  sample were also cleaned; the live ledger ended with zero active rows.
+- Provisioner stage results were:
+
+  | Local interval | p50 | p95 |
+  |---|---:|---:|
+  | Ticket creation to claim | 64.8 ms | 73.3 ms |
+  | Claim through Hub `READY` | 387.1 ms | 479.7 ms |
+  | WASM publish within that interval | 346.7 ms | 432.1 ms |
+  | Ticket creation through Hub `READY` | 447.0 ms | 544.0 ms |
+
+- Headless player-path results were:
+
+  | Local interval | p50 | p95 |
+  |---|---:|---:|
+  | Request sent through observed Hub `READY` | 436.3 ms | 537.3 ms |
+  | Hub `READY` through authenticated match transport | 22.0 ms | 34.1 ms |
+  | Match transport through 44-query initial state | 126.6 ms | 143.3 ms |
+  | Hub `READY` through match initial state | 150.7 ms | 165.3 ms |
+  | Request sent through match initial state | 582.8 ms | 691.4 ms |
+
+- The approved local warm-pool size is **zero**. Publishing remains the largest
+  provisioner stage, but its 432.1 ms p95 does not justify keeping idle
+  databases: claim-to-`READY` is already 76.0% below its two-second budget,
+  `READY`-to-initial-state is 83.5% below its one-second budget, and the prior
+  interactive Step 5 run already met the four-second end-to-end budget. A pool
+  could remove only part of an already sub-budget interval while introducing
+  idle cost, atomic reservation, replenishment, and version-draining failure
+  modes.
+- With pool size zero there are no unassigned warm databases to admit clients
+  or stale warm entries to drain after a build change. Defense in depth remains
+  in the match module: an unconfigured database admits only its owner/service,
+  and a configured database admits only the reserved identity during a live
+  allocation. Its six contract tests pass. The provisioner's 16 tests still
+  cover terminal exact-identity deletion, deletion retry, restart recovery,
+  and refusal to delete ownership/identity mismatches.
+- This is a local decision, not a permanent prohibition. Remote p50/p95 data
+  remains deferred; reconsider a nonzero pool only if that future data misses
+  the budgets and again identifies on-demand publishing as the dominant
+  actionable interval.
 
 ## 5. Deferred work
 
