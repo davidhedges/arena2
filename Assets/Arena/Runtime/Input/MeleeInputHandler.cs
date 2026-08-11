@@ -246,6 +246,7 @@ namespace Arena.Input
                         gapClose != null
                             ? $"melee rejected: {slotId} gap close acquisition out of range dist={horizDist:F2} allowed={strictAllowedDistance:F2} range={strikeRange:F2} target_radius={targetRadius:F2}"
                             : $"melee rejected: {slotId} out of range dist={horizDist:F2} allowed={strictAllowedDistance:F2} range={strikeRange:F2} target_radius={targetRadius:F2}");
+                    NotifyGapCloseMaximumRangeDenial(gapClose, slotId, pressedActionId);
                     return false;
                 }
                 minimumRange = Mathf.Max(0f, gameplay.MinimumRange);
@@ -364,6 +365,20 @@ namespace Arena.Input
                     nowMs);
             }
             return true;
+        }
+
+        private static void NotifyGapCloseMaximumRangeDenial(
+            MeleeGapCloseCatalog? gapClose,
+            string actionId,
+            string pressedActionId)
+        {
+            if (gapClose == null)
+                return;
+
+            LocalCombatState.NotifyLocalAdvisoryDenial(
+                actionId,
+                pressedActionId,
+                ActionRejectReason.OutOfRange);
         }
 
         private static void AlignCoupDeGraceFacing(

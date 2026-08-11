@@ -66,10 +66,11 @@ namespace Arena.EditModeTests
         }
 
         [Test]
-        public void Transition_StartAtExit_WithEndRequested_SkipsLoop()
+        public void Transition_StartAtExit_WithEndRequested_StillEntersLoop()
         {
             // Short dash: the row delete landed while the windup was still in
-            // its start segment.
+            // its start segment. Loop must still enter before End so the authored
+            // three-phase presentation cannot skip its travel clip.
             var result = ResolveTransition(
                 "Start",
                 SegmentTransitionNormalizedTime,
@@ -77,7 +78,7 @@ namespace Arena.EditModeTests
                 endRequested: true);
 
             Assert.That(result.Transitioned, Is.True);
-            Assert.That(result.NextPhase, Is.EqualTo("End"));
+            Assert.That(result.NextPhase, Is.EqualTo("Loop"));
         }
 
         [Test]
@@ -118,6 +119,79 @@ namespace Arena.EditModeTests
         }
 
         [Test]
+        public void ShortArrival_StillVisitsStartLoopEndInOrder()
+        {
+            var start = ResolveTransition(
+                "Start",
+                SegmentTransitionNormalizedTime,
+                releaseAfterStart: false,
+                endRequested: true);
+            Assert.That(start.Transitioned, Is.True);
+            Assert.That(start.NextPhase, Is.EqualTo("Loop"));
+            Assert.That(start.ShouldCancel, Is.False);
+
+            var loop = ResolveTransition(
+                start.NextPhase,
+                normalizedTime: 0.01f,
+                releaseAfterStart: false,
+                endRequested: true);
+            Assert.That(loop.Transitioned, Is.True);
+            Assert.That(loop.NextPhase, Is.EqualTo("End"));
+            Assert.That(loop.ShouldCancel, Is.False);
+
+            var end = ResolveTransition(
+                loop.NextPhase,
+                EndCompleteNormalizedTime,
+                releaseAfterStart: false,
+                endRequested: true);
+            Assert.That(end.Transitioned, Is.True);
+            Assert.That(end.ShouldCancel, Is.True);
+        }
+
+        [TestCase("Start", 0.9f, 0.1f, false)]
+        [TestCase("Loop", 5.0f, 0.1f, false)]
+        [TestCase("End", 0.09f, 0.1f, false)]
+        [TestCase("End", 0.1f, 0.1f, true)]
+        [TestCase("End", 0.7f, 0.75f, false)]
+        [TestCase("End", 0.75f, 0.75f, true)]
+        public void ArrivalDrivenLowerBodyUnlock_UsesAuthoredEndMarker(
+            string phase,
+            float phaseNormalizedTime,
+            float authoredUnlockNormalizedTime,
+            bool expected)
+        {
+            Assert.That(
+                CanReleaseLowerBody(
+                    activeIsPhased: true,
+                    arrivalDriven: true,
+                    phase: phase,
+                    phaseNormalizedTime: phaseNormalizedTime,
+                    authoredUnlockNormalizedTime: authoredUnlockNormalizedTime),
+                Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void NonArrivalMelee_KeepsAuthoredLowerBodyUnlockPolicy()
+        {
+            Assert.That(
+                CanReleaseLowerBody(
+                    activeIsPhased: false,
+                    arrivalDriven: false,
+                    phase: "Start",
+                    phaseNormalizedTime: 0f,
+                    authoredUnlockNormalizedTime: 1f),
+                Is.True);
+            Assert.That(
+                CanReleaseLowerBody(
+                    activeIsPhased: true,
+                    arrivalDriven: false,
+                    phase: "Loop",
+                    phaseNormalizedTime: 0f,
+                    authoredUnlockNormalizedTime: 1f),
+                Is.True);
+        }
+
+        [Test]
         public void PredictedWindupElapsed_CarriesIntoTrackSamplingOffset()
         {
             object controller = Activator.CreateInstance(ControllerType)!;
@@ -132,18 +206,33 @@ namespace Arena.EditModeTests
                     GetBool(controller, "IsPhasedMeleeSpecialMovementDriven"),
                     Is.True);
                 Assert.That(
+                    GetBool(controller, "IsPhasedMeleeSpecialMovementArrivalDriven"),
+                    Is.True);
+                Assert.That(
                     GetBool(controller, "IsPhasedMeleeSpecialMovementEndRequested"),
+                    Is.False);
+                Assert.That(
+                    GetBool(controller, "HasPhasedMeleeSegmentEntered"),
                     Is.False);
 
                 // Predicted windup: the start segment (0.5 s) completes while
                 // the authoritative row is in flight...
                 SetSegment(controller, "Start", stateHash: 11, phaseLengthSeconds: 0.5f);
+                RequireMethod(ControllerType, "MarkPhasedMeleeSegmentEntered")
+                    .Invoke(controller, Array.Empty<object>());
+                Assert.That(
+                    GetBool(controller, "HasPhasedMeleeSegmentEntered"),
+                    Is.True);
                 RequireMethod(ControllerType, "AddCompletedPhasedMeleePhaseSeconds", typeof(float))
                     .Invoke(controller, new object[] { 1f });
 
                 // ...and the loop (the track-sampling era) starts carrying the
                 // full windup elapsed as its offset instead of restarting at 0.
                 SetSegment(controller, "Loop", stateHash: 22, phaseLengthSeconds: 1f);
+                Assert.That(
+                    GetBool(controller, "HasPhasedMeleeSegmentEntered"),
+                    Is.False,
+                    "Every dispatched phase must enter its Animator state before lifecycle cleanup can inspect it.");
                 MethodInfo timing = RequireMethod(
                     ControllerType,
                     "TryGetPhasedMeleePresentationTiming",
@@ -343,6 +432,33 @@ namespace Arena.EditModeTests
                 })!;
         }
 
+        private static bool CanReleaseLowerBody(
+            bool activeIsPhased,
+            bool arrivalDriven,
+            string phase,
+            float phaseNormalizedTime,
+            float authoredUnlockNormalizedTime)
+        {
+            MethodInfo method = RequireMethod(
+                ControllerType,
+                "CanReleaseMeleeLowerBody",
+                typeof(bool),
+                typeof(bool),
+                PhaseType,
+                typeof(float),
+                typeof(float));
+            return (bool)method.Invoke(
+                null,
+                new object[]
+                {
+                    activeIsPhased,
+                    arrivalDriven,
+                    Enum.Parse(PhaseType, phase),
+                    phaseNormalizedTime,
+                    authoredUnlockNormalizedTime,
+                })!;
+        }
+
         private static void BeginSpecialMovementDrivenPhasedMelee(
             object controller,
             AnimationClip start,
@@ -357,8 +473,9 @@ namespace Arena.EditModeTests
                     typeof(AnimationClip),
                     typeof(AnimationClip),
                     typeof(bool),
+                    typeof(bool),
                     typeof(bool))
-                .Invoke(controller, new object[] { 1, start, loop, end, false, true });
+                .Invoke(controller, new object[] { 1, start, loop, end, false, true, true });
         }
 
         private static void SetSegment(object controller, string phase, int stateHash, float phaseLengthSeconds)

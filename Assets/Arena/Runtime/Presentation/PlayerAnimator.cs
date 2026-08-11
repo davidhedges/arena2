@@ -198,6 +198,8 @@ namespace Arena.Presentation
         private const float PhasedMeleeSegmentTransitionNormalizedTime =
             CombatAnimationEvents.PhasedMeleeStartToLoopSafetyNormalizedTime;
         private const float PhasedMeleeEndCompleteNormalizedTime = 0.88f;
+        private const float PhasedMeleeLoopReplayNormalizedTime = 0.8f;
+        private const float SpecialMovementArrivalEndCrossFadeDurationSeconds = 0.08f;
         private const float LandingRecoveryMinNormalizedTime = 0.16f;
         private const float WeaponTransitionRecoveryMinNormalizedTime = 0.18f;
         private const int BaseLayerIndex = 0;
@@ -259,6 +261,7 @@ namespace Arena.Presentation
         private float _worldInteractionReleaseAt;
         private int _activeMeleePresentationDispatchedFrame = -1;
         private int _activeSpellPresentationDispatchedFrame = -1;
+        private int _phasedMeleeSegmentDispatchedFrame = -1;
         private bool _combatAnimationTraceAwaitingMeleeEntry;
         private string _combatAnimationTraceActionId = string.Empty;
         private CombatAnimationCategory _combatAnimationTraceCategory;
@@ -1240,7 +1243,21 @@ namespace Arena.Presentation
 
             if (!_actionPlayback.IsMeleeLowerBodyUnlocked)
             {
-                if (elapsedSeconds < lowerBodyUnlockAtSeconds)
+                bool isArrivalDrivenPhasedMelee = active.IsPhased
+                    && _actionPlayback.IsPhasedMeleeSpecialMovementArrivalDriven;
+                if (isArrivalDrivenPhasedMelee)
+                {
+                    if (!CombatActionPlaybackController.CanReleaseMeleeLowerBody(
+                            activeIsPhased: true,
+                            phasedMeleeArrivalDriven: true,
+                            phase: _actionPlayback.PhasedMeleePhase,
+                            phaseNormalizedTime: normalizedTime,
+                            authoredPhaseUnlockNormalizedTime: ResolveCurrentPhasedMeleeLowerBodyUnlockNormalizedTime()))
+                    {
+                        return;
+                    }
+                }
+                else if (elapsedSeconds < lowerBodyUnlockAtSeconds)
                     return;
                 if (!ShouldReleaseLowerBodyToLocomotion())
                     return;
@@ -1263,6 +1280,18 @@ namespace Arena.Presentation
             return _latestLocomotionRawMagnitude >= StopTriggerThreshold;
         }
 
+        private float ResolveCurrentPhasedMeleeLowerBodyUnlockNormalizedTime()
+        {
+            AnimationClip? clip = GetCurrentPhasedMeleeClip();
+            return clip != null
+                && CombatAnimationEvents.TryGetEventNormalizedTime(
+                    clip,
+                    CombatAnimationEvents.OnLowerBodyUnlock,
+                    out float normalizedTime)
+                ? normalizedTime
+                : 1f;
+        }
+
         private bool TryStartMeleeUpperBodyRecovery(ActiveMeleePresentation active, float normalizedTime)
         {
             if (_animator == null || _overrideController == null || _animationSet == null)
@@ -1277,7 +1306,11 @@ namespace Arena.Presentation
             _overrideController[UpperBodyRecoverySlotName] = desiredClip;
             PlayUpperBodyState(UpperBodyRecoveryAction1StateHash, normalizedTime);
             if (active.IsPhased)
+            {
                 _actionPlayback.EnterPhasedMeleeUpperBodyMode();
+                _actionPlayback.ResetPhasedMeleeSegmentEntry();
+                _phasedMeleeSegmentDispatchedFrame = Time.frameCount;
+            }
             return true;
         }
 
@@ -3020,15 +3053,18 @@ namespace Arena.Presentation
             if (strikeIndex <= 0)
                 return false;
 
+            bool drivesPhasesFromSpecialMovement =
+                phasedMeleeEntry.drivePhasesFromSpecialMovement
+                && request.DrivePhasesFromSpecialMovement;
             _actionPlayback.BeginPhasedMelee(
                 ResolveStrikeBankSlot(strikeIndex),
                 clipSet.Start,
                 clipSet.Loop,
                 clipSet.End,
                 clipSet.ReleaseAfterStart,
-                specialMovementDriven: (phasedMeleeEntry.drivePhasesFromSpecialMovement
-                    && request.DrivePhasesFromSpecialMovement)
-                    || phasedMeleeEntry.drivePhasesFromCombatLifecycle);
+                specialMovementDriven: drivesPhasesFromSpecialMovement
+                    || phasedMeleeEntry.drivePhasesFromCombatLifecycle,
+                specialMovementArrivalDriven: drivesPhasesFromSpecialMovement);
             PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
             ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: true);
             return PlayPhasedMeleeSegment(PhasedMeleePlaybackPhase.Start, 0f);
@@ -3039,6 +3075,12 @@ namespace Arena.Presentation
             if (!_actionPlayback.IsPhasedMeleeActive || _animator == null)
                 return;
 
+            if (!_actionPlayback.HasPhasedMeleeSegmentEntered)
+            {
+                if (!TryMarkPhasedMeleeSegmentEntered())
+                    return;
+            }
+
             if (_actionPlayback.ActiveMeleePresentation.HasValue
                 && _actionPlayback.ActiveMeleePresentation.GetValueOrDefault().IsPhased
                 && !_actionPlayback.ActiveMeleePresentationEntered)
@@ -3048,6 +3090,9 @@ namespace Arena.Presentation
 
             if (!TryGetPhasedMeleePhaseNormalizedTime(out float normalizedTime))
             {
+                TraceCombatAnimation(
+                    $"phased-segment-lost phase={_actionPlayback.PhasedMeleePhase} " +
+                    $"dispatchedFrame={_phasedMeleeSegmentDispatchedFrame} layer={DescribeMeleeLayer()}");
                 CancelPhasedMeleePlayback();
                 return;
             }
@@ -3078,11 +3123,13 @@ namespace Arena.Presentation
             AdvancePhasedMeleeSegment(nextPhase);
         }
 
-        private void AdvancePhasedMeleeSegment(PhasedMeleePlaybackPhase nextPhase)
+        private void AdvancePhasedMeleeSegment(
+            PhasedMeleePlaybackPhase nextPhase,
+            bool blendFromPreviousSegment = false)
         {
             if (TryGetPhasedMeleePhaseNormalizedTime(out float normalizedTime))
                 _actionPlayback.AddCompletedPhasedMeleePhaseSeconds(normalizedTime);
-            if (!PlayPhasedMeleeSegment(nextPhase, 0f))
+            if (!PlayPhasedMeleeSegment(nextPhase, 0f, blendFromPreviousSegment))
             {
                 CancelPhasedMeleePlayback();
                 return;
@@ -3095,8 +3142,13 @@ namespace Arena.Presentation
             if (_animator == null || !_actionPlayback.RequestPhasedMeleeSpecialMovementEnd())
                 return;
 
-            if (_actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.Loop)
-                AdvancePhasedMeleeSegment(PhasedMeleePlaybackPhase.End);
+            if (_actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.Loop
+                && _actionPlayback.HasPhasedMeleeSegmentEntered)
+            {
+                AdvancePhasedMeleeSegment(
+                    PhasedMeleePlaybackPhase.End,
+                    blendFromPreviousSegment: _actionPlayback.IsPhasedMeleeSpecialMovementArrivalDriven);
+            }
         }
 
         public bool RequestCombatLifecycleDrivenPhasedMeleeEnd(string actionId)
@@ -3127,6 +3179,17 @@ namespace Arena.Presentation
 
         private void UpdateSpecialMovementDrivenPhasedMeleePlayback(float normalizedTime)
         {
+            if (_actionPlayback.IsPhasedMeleeSpecialMovementArrivalDriven
+                && _actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.Loop
+                && !_actionPlayback.IsPhasedMeleeSpecialMovementEndRequested
+                && normalizedTime >= PhasedMeleeLoopReplayNormalizedTime)
+            {
+                // Banked strike states auto-exit at 0.9. Re-enter the authored Loop
+                // before that controller transition can expose Empty during a long dash.
+                AdvancePhasedMeleeSegment(PhasedMeleePlaybackPhase.Loop);
+                return;
+            }
+
             float startExitNormalizedTime = _actionPlayback.ResolvePhasedMeleeStartExitNormalizedTime(
                 PhasedMeleeStartOnlyEndTriggerNormalizedTime,
                 PhasedMeleeSegmentTransitionNormalizedTime);
@@ -3150,12 +3213,16 @@ namespace Arena.Presentation
                 return;
             }
 
-            AdvancePhasedMeleeSegment(nextPhase);
+            AdvancePhasedMeleeSegment(
+                nextPhase,
+                blendFromPreviousSegment: nextPhase == PhasedMeleePlaybackPhase.End
+                    && _actionPlayback.IsPhasedMeleeSpecialMovementArrivalDriven);
         }
 
         private bool PlayPhasedMeleeSegment(
             PhasedMeleePlaybackPhase phase,
-            float normalizedTime)
+            float normalizedTime,
+            bool blendFromPreviousSegment = false)
         {
             if (_animator == null || _overrideController == null)
                 return false;
@@ -3174,6 +3241,10 @@ namespace Arena.Presentation
                     clip.length);
                 _overrideController[UpperBodyRecoverySlotName] = clip;
                 PlayUpperBodyState(UpperBodyRecoveryAction1StateHash, normalizedTime);
+                _phasedMeleeSegmentDispatchedFrame = Time.frameCount;
+                TraceCombatAnimation(
+                    $"phased-segment-dispatched phase={phase} clip={clip.name} " +
+                    $"layer=upper-body normalized={normalizedTime:F3}");
                 return true;
             }
 
@@ -3201,11 +3272,51 @@ namespace Arena.Presentation
             int fullPathStateHash = ResolveStrikeFullPathStateHash(segmentBankSlot);
             bool hasFullPathState = fullPathStateHash != 0 && _animator.HasState(MeleeAttackLayerIndex, fullPathStateHash);
             int playStateHash = hasFullPathState ? fullPathStateHash : segmentStateHash;
-            CombatActionPlaybackController.PlayMeleeStrikeState(
-                _animator,
-                MeleeAttackLayerIndex,
-                playStateHash,
-                normalizedTime);
+            if (blendFromPreviousSegment)
+            {
+                CombatActionPlaybackController.CrossFadeMeleeStrikeState(
+                    _animator,
+                    MeleeAttackLayerIndex,
+                    playStateHash,
+                    SpecialMovementArrivalEndCrossFadeDurationSeconds,
+                    normalizedTime);
+            }
+            else
+            {
+                CombatActionPlaybackController.PlayMeleeStrikeState(
+                    _animator,
+                    MeleeAttackLayerIndex,
+                    playStateHash,
+                    normalizedTime);
+            }
+            _phasedMeleeSegmentDispatchedFrame = Time.frameCount;
+            TraceCombatAnimation(
+                $"phased-segment-dispatched phase={phase} clip={clip.name} " +
+                $"state={DescribeStateHash(playStateHash)} blend={blendFromPreviousSegment} " +
+                $"normalized={normalizedTime:F3}");
+            return true;
+        }
+
+        private bool TryMarkPhasedMeleeSegmentEntered()
+        {
+            int layerIndex = _actionPlayback.IsPhasedMeleeUpperBodyMode
+                ? UpperBodyLayerIndex
+                : MeleeAttackLayerIndex;
+            int expectedStateHash = _actionPlayback.IsPhasedMeleeUpperBodyMode
+                ? UpperBodyRecoveryAction1StateHash
+                : _actionPlayback.PhasedMeleeStateHash;
+            if (!HasEnteredExpectedStateOnLayer(
+                    _phasedMeleeSegmentDispatchedFrame,
+                    layerIndex,
+                    expectedStateHash))
+            {
+                return false;
+            }
+
+            _actionPlayback.MarkPhasedMeleeSegmentEntered();
+            TraceCombatAnimation(
+                $"phased-segment-entered phase={_actionPlayback.PhasedMeleePhase} " +
+                $"dispatchedFrame={_phasedMeleeSegmentDispatchedFrame} currentFrame={Time.frameCount}");
             return true;
         }
 
@@ -3270,6 +3381,7 @@ namespace Arena.Presentation
         private void CancelPhasedMeleePlayback(bool clearActivePresentation = true)
         {
             bool wasPhasedActive = _actionPlayback.CancelPhasedMelee();
+            _phasedMeleeSegmentDispatchedFrame = -1;
             if (clearActivePresentation
                 && _actionPlayback.ActiveMeleePresentation.HasValue
                 && _actionPlayback.ActiveMeleePresentation.Value.IsPhased

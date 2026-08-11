@@ -179,7 +179,9 @@ namespace Arena.Presentation
         private float _phasedMeleeElapsedBeforePhase;
         private float _phasedMeleeCurrentPhaseLengthSeconds;
         private float _phasedMeleeTotalLengthSeconds;
+        private bool _phasedMeleeSegmentEntered;
         private bool _phasedMeleeSpecialMovementDriven;
+        private bool _phasedMeleeSpecialMovementArrivalDriven;
         private bool _phasedMeleeSpecialMovementEndRequested;
         private SpellCastHoldPlaybackPhase _spellCastHoldPhase = SpellCastHoldPlaybackPhase.None;
         private int _nextSpellBankSlot = 1;
@@ -197,7 +199,9 @@ namespace Arena.Presentation
         public int PhasedMeleeStateHash => _phasedMeleeStateHash;
         public PhasedMeleePlaybackPhase PhasedMeleePhase => _phasedMeleePhase;
         public float PhasedMeleeTotalLengthSeconds => _phasedMeleeTotalLengthSeconds;
+        public bool HasPhasedMeleeSegmentEntered => _phasedMeleeSegmentEntered;
         public bool IsPhasedMeleeSpecialMovementDriven => _phasedMeleeSpecialMovementDriven;
+        public bool IsPhasedMeleeSpecialMovementArrivalDriven => _phasedMeleeSpecialMovementArrivalDriven;
         public bool IsPhasedMeleeSpecialMovementEndRequested => _phasedMeleeSpecialMovementEndRequested;
         public ActiveMeleePresentation? ActiveMeleePresentation { get; private set; }
         public bool ActiveMeleePresentationEntered { get; private set; }
@@ -378,6 +382,21 @@ namespace Arena.Presentation
             animator.Play(stateHash, meleeLayerIndex, Mathf.Clamp01(normalizedTime));
         }
 
+        public static void CrossFadeMeleeStrikeState(
+            Animator animator,
+            int meleeLayerIndex,
+            int stateHash,
+            float fixedTransitionDurationSeconds,
+            float normalizedTime)
+        {
+            animator.SetLayerWeight(meleeLayerIndex, 1f);
+            animator.CrossFadeInFixedTime(
+                stateHash,
+                Mathf.Max(0f, fixedTransitionDurationSeconds),
+                meleeLayerIndex,
+                Mathf.Clamp01(normalizedTime));
+        }
+
         public bool ResetMeleeLowerBodyUnlock(bool clearUpperBodyRecovery)
         {
             bool shouldClearUpperBodyRecovery = clearUpperBodyRecovery && _meleeUpperBodyRecoveryActive;
@@ -449,6 +468,23 @@ namespace Arena.Presentation
             AnimationClip endClip,
             bool releaseAfterStart,
             bool specialMovementDriven = false)
+            => BeginPhasedMelee(
+                bankSlot,
+                startClip,
+                loopClip,
+                endClip,
+                releaseAfterStart,
+                specialMovementDriven,
+                specialMovementArrivalDriven: false);
+
+        public void BeginPhasedMelee(
+            int bankSlot,
+            AnimationClip startClip,
+            AnimationClip loopClip,
+            AnimationClip endClip,
+            bool releaseAfterStart,
+            bool specialMovementDriven,
+            bool specialMovementArrivalDriven)
         {
             _phasedMeleeBankSlot = bankSlot;
             _phasedMeleeStateHash = 0;
@@ -482,8 +518,11 @@ namespace Arena.Presentation
                 + (releaseAfterStart ? 0f : Mathf.Max(0f, loopClip.length))
                 + Mathf.Max(0f, endClip.length);
             _phasedMeleeSpecialMovementDriven = specialMovementDriven;
+            _phasedMeleeSpecialMovementArrivalDriven =
+                specialMovementDriven && specialMovementArrivalDriven;
             _phasedMeleeSpecialMovementEndRequested = false;
             _phasedMeleeUpperBodyMode = false;
+            _phasedMeleeSegmentEntered = false;
             _phasedMeleeActive = true;
             _phasedMeleeReleaseAfterStart = releaseAfterStart;
             _phasedMeleePhase = PhasedMeleePlaybackPhase.None;
@@ -514,9 +553,31 @@ namespace Arena.Presentation
             _phasedMeleeElapsedBeforePhase = 0f;
             _phasedMeleeCurrentPhaseLengthSeconds = 0f;
             _phasedMeleeTotalLengthSeconds = 0f;
+            _phasedMeleeSegmentEntered = false;
             _phasedMeleeSpecialMovementDriven = false;
+            _phasedMeleeSpecialMovementArrivalDriven = false;
             _phasedMeleeSpecialMovementEndRequested = false;
             return wasActive;
+        }
+
+        /// <summary>
+        /// Arrival-driven phased attacks resolve lower-body release against the current
+        /// phase because their Loop duration is variable. End's authored marker is the
+        /// sole timing authority; after it fires, the same End clip continues on the
+        /// upper body while locomotion can reclaim the legs.
+        /// </summary>
+        public static bool CanReleaseMeleeLowerBody(
+            bool activeIsPhased,
+            bool phasedMeleeArrivalDriven,
+            PhasedMeleePlaybackPhase phase,
+            float phaseNormalizedTime,
+            float authoredPhaseUnlockNormalizedTime)
+        {
+            if (!activeIsPhased || !phasedMeleeArrivalDriven)
+                return true;
+
+            return phase == PhasedMeleePlaybackPhase.End
+                && phaseNormalizedTime >= Mathf.Clamp01(authoredPhaseUnlockNormalizedTime);
         }
 
         public AnimationClip? GetCurrentPhasedMeleeClip() => GetPhasedMeleeClip(_phasedMeleePhase);
@@ -540,7 +601,16 @@ namespace Arena.Presentation
             _phasedMeleePhase = phase;
             _phasedMeleeStateHash = stateHash;
             _phasedMeleeCurrentPhaseLengthSeconds = Mathf.Max(0f, phaseLengthSeconds);
+            _phasedMeleeSegmentEntered = false;
         }
+
+        public void MarkPhasedMeleeSegmentEntered()
+        {
+            if (_phasedMeleeActive && _phasedMeleePhase != PhasedMeleePlaybackPhase.None)
+                _phasedMeleeSegmentEntered = true;
+        }
+
+        public void ResetPhasedMeleeSegmentEntry() => _phasedMeleeSegmentEntered = false;
 
         public void EnterPhasedMeleeUpperBodyMode()
         {
@@ -620,7 +690,10 @@ namespace Arena.Presentation
                 if (normalizedTime < startExitNormalizedTime)
                     return false;
 
-                nextPhase = releaseAfterStart || endRequested
+                // Start/Loop/End sets must enter Loop at least once even if a very short
+                // movement reaches its destination while Start is still playing. The
+                // latched end request advances that entered Loop to End on the next pass.
+                nextPhase = releaseAfterStart
                     ? PhasedMeleePlaybackPhase.End
                     : PhasedMeleePlaybackPhase.Loop;
                 return true;

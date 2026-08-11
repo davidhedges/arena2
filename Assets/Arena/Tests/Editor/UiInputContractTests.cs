@@ -129,13 +129,24 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void MeleeInputCode_GapCloseRangeDenialUsesExistingFeedbackPath()
+        public void MeleeInputCode_GapCloseMaximumRangeDenialUsesExistingFeedbackPath()
         {
             string source = File.ReadAllText(MeleeInputHandlerPath);
 
-            Assert.That(source, Does.Contain("NotifyGapCloseRangeDenial(gapClose, slotId, pressedActionId);"));
+            Assert.That(source, Does.Contain("NotifyGapCloseMaximumRangeDenial(gapClose, slotId, pressedActionId);"));
             Assert.That(source, Does.Contain("LocalCombatState.NotifyLocalAdvisoryDenial("));
             Assert.That(source, Does.Contain("ActionRejectReason.OutOfRange"));
+        }
+
+        [Test]
+        public void HudActionBar_GapCloseRangeGrayOutStaysAdvisory()
+        {
+            string source = File.ReadAllText(HudControllerPath);
+
+            Assert.That(source, Does.Contain("IsGapCloseRangeBlocked("));
+            Assert.That(source, Does.Contain("melee.MinimumRange"));
+            Assert.That(source, Does.Contain("MeleeStrikeGeometry.PassesRangeGate("));
+            Assert.That(source, Does.Contain("isVisible ? () => TriggerActionRef(conn, resolved) : null"));
         }
 
         [Test]

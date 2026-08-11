@@ -49,9 +49,9 @@ namespace Arena.UI
         // denial toast's red, presentation only.
         private static readonly Color RejectFlashColor = new(1f, 0.32f, 0.25f, 0.55f);
         private const float SlotRejectionFlashSeconds = 0.45f;
-        // Advisory LOS gray-out (netcode design review S4): full-slot dim while
-        // the selected target has no line of sight, presentation only.
-        private static readonly Color LosBlockedOverlay = new(0.02f, 0.02f, 0.02f, 0.62f);
+        // Advisory availability gray-out: full-slot dim for locally known LOS
+        // or gap-close range failures, presentation only.
+        private static readonly Color AdvisoryBlockedOverlay = new(0.02f, 0.02f, 0.02f, 0.62f);
         private static readonly Color CdOverlay     = new(0f, 0f, 0f, 0.7f);
         private static readonly Color GcdOverlay    = new(0f, 0f, 0f, 0.4f);
         private static readonly Color ShadeReturnOverlay = new(0.12f, 0.02f, 0.18f, 0.78f);
@@ -1741,7 +1741,6 @@ namespace Arena.UI
                     : resolved.IsAvailable
                         ? ResolveResourceActionBarColor(conn, resolved.ResourceKind)
                         : DisabledSlotBg;
-
                 _disciplineBarStates[index] = new ActionBarSlotState(
                     binding.KeyLabel,
                     iconSprite == null ? label : string.Empty,
@@ -1950,9 +1949,34 @@ namespace Arena.UI
         private void UpdateActionBarCooldownPresentation(long nowMs, float gcdFrac, LocalCombatState combat)
         {
             bool targetLosBlocked = AdvisoryTargetLineOfSight.IsSelectedTargetBlockedCached();
-            UpdateSlotCooldownPresentation(_disciplineBarStates, _disciplineBarCd, _disciplineBarText, _disciplineBarChargeText, nowMs, gcdFrac, combat, targetLosBlocked);
-            UpdateSlotCooldownPresentation(_spellbookGridStates, _spellbookGridCd, _spellbookGridText, _spellbookGridChargeText, nowMs, gcdFrac, combat, targetLosBlocked);
-            UpdateSlotCooldownPresentation(_abilityGridStates, _abilityGridCd, _abilityGridText, _abilityGridChargeText, nowMs, gcdFrac, combat, targetLosBlocked);
+            (bool hasTarget, float horizontalDistance, float radius) targetRange =
+                ResolveSelectedTargetRange();
+            UpdateSlotCooldownPresentation(_disciplineBarStates, _disciplineBarCd, _disciplineBarText, _disciplineBarChargeText, nowMs, gcdFrac, combat, targetLosBlocked, targetRange);
+            UpdateSlotCooldownPresentation(_spellbookGridStates, _spellbookGridCd, _spellbookGridText, _spellbookGridChargeText, nowMs, gcdFrac, combat, targetLosBlocked, targetRange);
+            UpdateSlotCooldownPresentation(_abilityGridStates, _abilityGridCd, _abilityGridText, _abilityGridChargeText, nowMs, gcdFrac, combat, targetLosBlocked, targetRange);
+        }
+
+        private static (bool hasTarget, float horizontalDistance, float radius)
+            ResolveSelectedTargetRange()
+        {
+            PlayerEntity? local = EntityRegistry.Instance?.LocalPlayerEntity;
+            ICombatTargetEntity? target = TargetSelector.Instance?.SelectedTarget;
+            if (local == null
+                || local.IsDestroyed
+                || !local.IsAlive
+                || target == null
+                || target.IsDestroyed
+                || !target.IsAlive)
+            {
+                return (false, 0f, 0f);
+            }
+
+            return (
+                true,
+                MeleeStrikeGeometry.HorizontalDistance(
+                    local.GameObject.transform.position,
+                    target.GetPresentationRoot().position),
+                Mathf.Max(0f, target.HitRadius));
         }
 
         private static void UpdateSlotCooldownPresentation(
@@ -1963,7 +1987,8 @@ namespace Arena.UI
             long nowMs,
             float gcdFrac,
             LocalCombatState combat,
-            bool targetLosBlocked)
+            bool targetLosBlocked,
+            (bool hasTarget, float horizontalDistance, float radius) targetRange)
         {
             for (int index = 0; index < states.Length; index++)
             {
@@ -2033,13 +2058,20 @@ namespace Arena.UI
                     }
                 }
 
-                // Advisory LOS gray-out (S4): only when no cooldown or GCD is
-                // drawing on the overlay, so timing presentation keeps
-                // precedence over the advisory dim.
-                if (frac <= 0f && targetLosBlocked && state.RequiresTargetLos)
+                // Advisory gray-out only: the click/key dispatch remains
+                // configured, so pressing an unavailable gap closer can still
+                // show its denial toast. Cooldown/GCD timing takes precedence.
+                bool gapCloseRangeBlocked = targetRange.hasTarget
+                    && IsGapCloseRangeBlocked(
+                        state,
+                        targetRange.horizontalDistance,
+                        targetRange.radius,
+                        nowMs);
+                if (frac <= 0f
+                    && ((targetLosBlocked && state.RequiresTargetLos) || gapCloseRangeBlocked))
                 {
                     frac = 1f;
-                    col = LosBlockedOverlay;
+                    col = AdvisoryBlockedOverlay;
                 }
 
                 SetFillIfChanged(overlay, frac);
@@ -2047,6 +2079,40 @@ namespace Arena.UI
                 SetTextIfChanged(cooldownText, remSec > 1f ? $"{remSec:F0}" : string.Empty);
                 SetTextIfChanged(chargeText, string.Empty);
             }
+        }
+
+        private static bool IsGapCloseRangeBlocked(
+            ActionBarSlotState state,
+            float targetHorizontalDistance,
+            float targetRadius,
+            long nowMs)
+        {
+            if (!state.IsVisible || state.IsFixed || string.IsNullOrWhiteSpace(state.AbilityId))
+                return false;
+
+            DbConnection? conn = NetworkManager.Instance?.Conn;
+            SpacetimeDB.Identity? owner = conn?.Identity;
+            MeleeGapCloseCatalog? gapClose =
+                conn?.Db.MeleeGapCloseCatalog.AbilityId.Find(state.AbilityId);
+            if (gapClose == null)
+                return false;
+
+            MeleeAbilityCatalog? melee =
+                MeleeGameplayResolver.ResolveForAbilityId(conn, state.AbilityId);
+            if (melee is not { RequiresTarget: true })
+                return false;
+
+            float maximum = MeleeAttackModifierResolver.ResolveEffectiveRange(
+                conn,
+                owner,
+                melee.Range,
+                nowMs);
+            return maximum > 0f
+                && !MeleeStrikeGeometry.PassesRangeGate(
+                    targetHorizontalDistance,
+                    maximum,
+                    Mathf.Max(0f, melee.MinimumRange),
+                    targetRadius);
         }
 
         private static bool TryRenderLingeringShadeReturn(
