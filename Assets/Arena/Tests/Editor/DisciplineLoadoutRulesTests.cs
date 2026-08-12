@@ -87,6 +87,25 @@ namespace Arena.Tests.Editor
             Assert.That(hubUxml, Does.Contain("name=\"LoadoutSecondary2Name\""));
         }
 
+        [Test]
+        public void DisciplineLoadout_PassivesAreExplicitSelectableQuotaChoices()
+        {
+            string screen = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs");
+
+            Assert.That(
+                screen,
+                Does.Contain("bool selected = SelectedSet(discipline.Id).Contains(ability.Id);"));
+            Assert.That(
+                screen,
+                Does.Not.Contain("ability.IsPassive || SelectedSet(discipline.Id).Contains(ability.Id)"));
+            Assert.That(
+                screen,
+                Does.Contain("button.clicked += () => ToggleAbility(disciplineId, abilityId);"));
+            Assert.That(
+                screen,
+                Does.Contain(".Where(ability => selected.Contains(ability.Id))"));
+        }
+
         private static T Invoke<T>(string methodName, params object[] arguments)
         {
             object? result = Rules.GetMethod(methodName)?.Invoke(null, arguments);

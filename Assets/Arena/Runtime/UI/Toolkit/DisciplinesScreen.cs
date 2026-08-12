@@ -15,7 +15,7 @@ namespace Arena.UI
     /// <summary>
     /// UI Toolkit translation of docs/ui-prototypes/disciplines. The screen
     /// reads replicated discipline/ability catalogs and saves the selected
-    /// primary discipline, secondary disciplines, and action-bar abilities
+    /// primary discipline, secondary disciplines, and abilities
     /// authoritatively. Stat allocation remains provisional for this screen.
     /// </summary>
     [DisallowMultipleComponent]
@@ -740,7 +740,7 @@ namespace Arena.UI
 
         private Button CreateAbilityTile(AbilityView ability, DisciplineView discipline)
         {
-            bool selected = ability.IsPassive || SelectedSet(discipline.Id).Contains(ability.Id);
+            bool selected = SelectedSet(discipline.Id).Contains(ability.Id);
             Button button = new();
             button.AddToClassList("ability-tile");
             button.EnableInClassList("is-selected", selected);
@@ -762,12 +762,9 @@ namespace Arena.UI
             check.AddToClassList("ability-check");
             button.Add(check);
 
-            if (!ability.IsPassive)
-            {
-                string disciplineId = discipline.Id;
-                string abilityId = ability.Id;
-                button.clicked += () => ToggleAbility(disciplineId, abilityId);
-            }
+            string disciplineId = discipline.Id;
+            string abilityId = ability.Id;
+            button.clicked += () => ToggleAbility(disciplineId, abilityId);
             button.RegisterCallback<PointerEnterEvent>(evt => ShowTooltip(evt.position, ability, discipline));
             button.RegisterCallback<PointerMoveEvent>(evt => MoveTooltip(evt.position));
             button.RegisterCallback<PointerLeaveEvent>(_ => HideTooltip());
@@ -1038,7 +1035,7 @@ namespace Arena.UI
                     continue;
                 HashSet<string> selected = SelectedSet(discipline.Id);
                 selectedAbilityIds.AddRange(discipline.Abilities
-                    .Where(ability => !ability.IsPassive && selected.Contains(ability.Id))
+                    .Where(ability => selected.Contains(ability.Id))
                     .Select(ability => ability.Id));
             }
             return selectedAbilityIds;

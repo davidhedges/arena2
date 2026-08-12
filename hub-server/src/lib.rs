@@ -1226,13 +1226,9 @@ fn validate_hub_discipline_loadout(
                 ability.ability_id
             ));
         }
-        if !ability
-            .ability_tags
-            .split(',')
-            .any(|tag| tag == "ACTION_BAR_ACTION")
-        {
+        if !ability_tags_allow_discipline_selection(ability.ability_tags.as_str()) {
             return Err(format!(
-                "ability '{}' cannot be selected for an action-bar loadout",
+                "ability '{}' cannot be selected for a discipline loadout",
                 ability.ability_id
             ));
         }
@@ -1255,6 +1251,15 @@ fn validate_hub_discipline_loadout(
         }
     }
     Ok((primary, secondary_1, secondary_2, abilities))
+}
+
+fn ability_tags_allow_discipline_selection(ability_tags: &str) -> bool {
+    ability_tags.split(',').any(|tag| {
+        matches!(
+            normalize_authored_id(tag).as_str(),
+            "ACTION_BAR_ACTION" | "PASSIVE"
+        )
+    })
 }
 
 fn next_loadout_revision(current: Option<u64>) -> u64 {
@@ -1592,6 +1597,16 @@ mod tests {
                     .iter()
                     .any(|tag| tag == "ACTION_BAR_ACTION")
         }));
+    }
+
+    #[test]
+    fn discipline_loadout_selection_accepts_active_and_passive_abilities() {
+        assert!(ability_tags_allow_discipline_selection("ACTION_BAR_ACTION"));
+        assert!(ability_tags_allow_discipline_selection("PASSIVE"));
+        assert!(ability_tags_allow_discipline_selection(
+            "CORE_ABILITY, PASSIVE"
+        ));
+        assert!(!ability_tags_allow_discipline_selection("CORE_ABILITY"));
     }
 
     #[test]

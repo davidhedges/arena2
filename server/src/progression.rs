@@ -2593,9 +2593,9 @@ fn validate_character_discipline_ability_selection(
                 ability.ability_id
             ));
         }
-        if !ability_catalog_has_tag(&ability, "ACTION_BAR_ACTION") {
+        if !ability_tags_allow_discipline_selection(ability.ability_tags.as_str()) {
             return Err(format!(
-                "ability '{}' cannot be selected for an action-bar loadout",
+                "ability '{}' cannot be selected for a discipline loadout",
                 ability.ability_id
             ));
         }
@@ -2632,6 +2632,15 @@ fn validate_character_discipline_ability_selection(
     }
 
     Ok(selected)
+}
+
+fn ability_tags_allow_discipline_selection(ability_tags: &str) -> bool {
+    ability_tags.split(',').any(|tag| {
+        matches!(
+            normalize_identifier(tag).as_str(),
+            "ACTION_BAR_ACTION" | "PASSIVE"
+        )
+    })
 }
 
 fn ability_catalog_has_tag(ability: &AbilityCatalog, required_tag: &str) -> bool {
@@ -6987,7 +6996,8 @@ mod tests {
     use crate::spells::{spell_definition_by_str, SpellTargeting};
 
     use super::{
-        ability_gameplay_kind, ability_is_compatible_with_slot, action_presentation_key,
+        ability_gameplay_kind, ability_is_compatible_with_slot,
+        ability_tags_allow_discipline_selection, action_presentation_key,
         action_ref_for_action_bar_default, authored_status_presentation_ids,
         canonical_action_bar_slot_id, character_action_bar_assignment_is_generic_fixed_action,
         character_discipline_loadout_contains, combat_rule_value, combat_vfx_cue_key,
@@ -7013,6 +7023,16 @@ mod tests {
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
 
     const GAP_CLOSE_TARGET_ARRIVAL_DISTANCE_METERS: f32 = 2.0;
+
+    #[test]
+    fn discipline_loadout_selection_accepts_active_and_passive_abilities() {
+        assert!(ability_tags_allow_discipline_selection("ACTION_BAR_ACTION"));
+        assert!(ability_tags_allow_discipline_selection("PASSIVE"));
+        assert!(ability_tags_allow_discipline_selection(
+            "CORE_ABILITY, PASSIVE"
+        ));
+        assert!(!ability_tags_allow_discipline_selection("CORE_ABILITY"));
+    }
 
     #[test]
     fn knockback_speed_rule_matches_authored_tuning() {
