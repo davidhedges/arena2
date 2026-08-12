@@ -573,8 +573,19 @@ namespace Arena.Network
         private void OnLoadoutInsert(HubEventContext _, HubLoadoutRow row) => ApplyLoadout(row);
         private void OnLoadoutUpdate(HubEventContext _, HubLoadoutRow __, HubLoadoutRow row) => ApplyLoadout(row);
 
-        private void OnLoadoutDelete(HubEventContext _, HubLoadoutRow __)
+        private void OnLoadoutDelete(HubEventContext context, HubLoadoutRow __)
         {
+            // Views do not expose a primary key in the generated client bindings.
+            // Updating the backing row is therefore delivered as an insert of the
+            // replacement followed by a delete of the old projection. The cache is
+            // already fully updated before callbacks run, so retain any replacement
+            // instead of treating the delete callback as proof that the view is empty.
+            foreach (HubLoadoutRow row in context.Db.MyHubLoadout.Iter())
+            {
+                ApplyLoadout(row);
+                return;
+            }
+
             _loadout = null;
             NotifyChanged();
         }
@@ -759,12 +770,6 @@ namespace Arena.Network
                 return;
 
             bool committed = context.Event.Status is Status.Committed;
-            if (committed)
-                ApplyCommittedDisciplineLoadout(
-                    primaryDisciplineId,
-                    secondaryDisciplineId1,
-                    secondaryDisciplineId2,
-                    selectedAbilityIds);
             DisciplineLoadoutSaveCompleted?.Invoke(
                 committed,
                 ReducerFailureMessage(context.Event.Status, "The Hub did not save the discipline loadout."));
@@ -776,51 +781,10 @@ namespace Arena.Network
                 return;
 
             bool committed = context.Event.Status is Status.Committed;
-            if (committed)
-                ApplyCommittedArmorSet(armorSetId);
             ArmorSetSaveCompleted?.Invoke(
                 committed,
                 ReducerFailureMessage(context.Event.Status, "The Hub did not save the armor set."));
         }
-
-        private void ApplyCommittedDisciplineLoadout(
-            string primaryDisciplineId,
-            string secondaryDisciplineId1,
-            string secondaryDisciplineId2,
-            IReadOnlyCollection<string> selectedAbilityIds)
-        {
-            HubLoadoutSnapshot current = _loadout ?? EmptyLoadoutSnapshot();
-            _loadout = new HubLoadoutSnapshot(
-                primaryDisciplineId,
-                secondaryDisciplineId1,
-                secondaryDisciplineId2,
-                selectedAbilityIds.ToArray(),
-                current.ArmorSetId,
-                current.Revision);
-            NotifyChanged();
-        }
-
-        private void ApplyCommittedArmorSet(string armorSetId)
-        {
-            HubLoadoutSnapshot current = _loadout ?? EmptyLoadoutSnapshot();
-            _loadout = new HubLoadoutSnapshot(
-                current.PrimaryDisciplineId,
-                current.SecondaryDisciplineId1,
-                current.SecondaryDisciplineId2,
-                current.SelectedAbilityIds.ToArray(),
-                armorSetId,
-                current.Revision);
-            NotifyChanged();
-        }
-
-        private static HubLoadoutSnapshot EmptyLoadoutSnapshot()
-            => new(
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                Array.Empty<string>(),
-                string.Empty,
-                0UL);
 
         private static string ReducerFailureMessage(Status status, string fallback)
         {

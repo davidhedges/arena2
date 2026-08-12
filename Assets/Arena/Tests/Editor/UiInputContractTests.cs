@@ -680,8 +680,8 @@ namespace Arena.Tests.Editor
             Assert.That(screen, Does.Contain("SetShowcaseArmorPreview"));
             Assert.That(screen, Does.Contain("CompleteArmorPieces"));
             Assert.That(hubNetwork, Does.Contain("From.HubArmorSetDefinition().ToSql()"));
-            Assert.That(hubNetwork, Does.Contain("ApplyCommittedArmorSet(armorSetId)"));
-            Assert.That(hubNetwork, Does.Contain("current.SelectedAbilityIds.ToArray()"));
+            Assert.That(hubNetwork, Does.Contain("context.Db.MyHubLoadout.Iter()"));
+            Assert.That(hubNetwork, Does.Not.Contain("ApplyCommittedArmorSet("));
             Assert.That(uxml, Does.Contain("name=\"TierLight\""));
             Assert.That(uxml, Does.Contain("name=\"TierMedium\""));
             Assert.That(uxml, Does.Contain("name=\"TierHeavy\""));
