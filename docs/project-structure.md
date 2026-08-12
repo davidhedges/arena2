@@ -167,6 +167,18 @@ cleanup. Its small SQLite recovery ledger defaults to the ignored
 are documented in `match_provisioner/README.md` and
 `match_provisioner/local.env.example`.
 
+The canonical local multiplayer entry point—intended for developers and LLM
+agents—is:
+
+```bash
+ops/setup-local-multiplayer.sh
+```
+
+It performs the local Hub publish, cached match build, and background
+provisioner startup in the required order. Its `status` and `stop` subcommands
+manage the same ignored PID/log state under `Library/ArenaLocalMultiplayer/`.
+Prefer it over reproducing the lower-level commands manually.
+
 Run it continuously or for one reconciliation cycle with:
 
 ```bash

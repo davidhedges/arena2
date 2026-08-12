@@ -1,5 +1,24 @@
 # Local match provisioner
 
+## Recommended local setup
+
+From the repository root, use the canonical one-command environment setup:
+
+```bash
+ops/setup-local-multiplayer.sh
+```
+
+It publishes the local Hub, rebuilds the cached disposable-match artifact, and
+runs this worker in the background. Use the same entry point for lifecycle
+operations:
+
+```bash
+ops/setup-local-multiplayer.sh status
+ops/setup-local-multiplayer.sh stop
+```
+
+The lower-level commands below remain useful for debugging individual pieces.
+
 This is the local control-plane worker. It subscribes to a provisioner-only,
 data-free Hub wakeup view, reads private tickets through the loopback management
 API, publishes the already-built match WASM into one database per ticket,

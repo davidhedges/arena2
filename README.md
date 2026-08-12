@@ -8,6 +8,31 @@ Arena is a Unity project backed by a SpacetimeDB module. First-party Unity code 
 - SpacetimeDB CLI available as `spacetime`.
 - Rust toolchain for the SpacetimeDB module.
 
+## Local Multiplayer Quick Start
+
+The canonical one-command setup for Hub matchmaking and disposable 2v2 match
+databases is:
+
+```bash
+ops/setup-local-multiplayer.sh
+```
+
+It starts the local SpacetimeDB server when necessary, safely republishes the
+persistent local Hub, rebuilds the cached match module and bindings, and keeps
+one match provisioner running in the background. It never targets a remote
+server and preserves local Hub data unless `HUB_DELETE_DATA=always` is supplied
+explicitly. Run it once before a local matchmaking session; rerunning it after
+code changes or a reboot is safe.
+
+```bash
+ops/setup-local-multiplayer.sh status
+ops/setup-local-multiplayer.sh stop
+```
+
+The provisioner log and PID are kept under ignored
+`Library/ArenaLocalMultiplayer/`. The `stop` command stops only that worker;
+the shared local SpacetimeDB process remains available to other game modes.
+
 ## First Run
 
 1. Open the repository root in Unity.

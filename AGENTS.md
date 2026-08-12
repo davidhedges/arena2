@@ -16,3 +16,8 @@
 - Once the current item's exit gate passes, stop and report completion. Do not begin optional breadth or the next milestone unless it is already the explicit next plan item.
 - Keep one reviewable implementation per commit. Do not push, publish, or otherwise change remote state unless the user explicitly requests it.
 
+## Local multiplayer environment
+
+- The canonical local Hub + disposable-match + provisioner entry point is `ops/setup-local-multiplayer.sh`.
+- Use its `status` and `stop` subcommands for the background provisioner it manages. Do not reconstruct the startup sequence from lower-level scripts unless diagnosing one of those components.
+- The setup command is local-only and data-preserving by default; never add a remote target or an implicit local data reset.
