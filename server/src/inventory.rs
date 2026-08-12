@@ -4551,6 +4551,57 @@ pub(crate) fn apply_combat_discipline_weapon_loadout(
     Ok(())
 }
 
+/// Disposable PvP matches receive a durable discipline choice but no durable
+/// item-instance inventory. Resolve that choice to the matching weapon already
+/// seeded in the match player's starter inventory, then use the ordinary
+/// equipment/progression synchronization path to activate the discipline.
+pub(crate) fn equip_starter_weapon_for_discipline(
+    ctx: &ReducerContext,
+    owner: Identity,
+    discipline_id: &str,
+) -> Result<(), String> {
+    let item_def_id = starter_weapon_definition_for_discipline(discipline_id).ok_or_else(|| {
+        format!(
+            "combat discipline '{}' has no starter weapon",
+            normalize_id(discipline_id)
+        )
+    })?;
+    let mut item_instance_ids: Vec<String> = ctx
+        .db
+        .item_instance()
+        .iter()
+        .filter(|item| item.current_owner == Some(owner) && item.item_def_id == item_def_id)
+        .map(|item| item.item_instance_id)
+        .collect();
+    item_instance_ids.sort();
+    let item_instance_id = item_instance_ids.into_iter().next().ok_or_else(|| {
+        format!(
+            "starter weapon '{}' is missing for discipline '{}'",
+            item_def_id,
+            normalize_id(discipline_id)
+        )
+    })?;
+
+    apply_combat_discipline_weapon_loadout(
+        ctx,
+        owner,
+        discipline_id,
+        Some(item_instance_id.as_str()),
+        None,
+    )
+}
+
+fn starter_weapon_definition_for_discipline(discipline_id: &str) -> Option<&'static str> {
+    match normalize_id(discipline_id).as_str() {
+        DISCIPLINE_SUBTLETY => Some("TRAINING_DAGGER_PAIR"),
+        DISCIPLINE_WAR => Some("TRAINING_TWO_HAND_SWORD"),
+        DISCIPLINE_ZEAL => Some("TRAINING_SWORD_AND_SHIELD"),
+        DISCIPLINE_PRECISION => Some("TRAINING_BOW"),
+        DISCIPLINE_ARCANA => Some("NEWBIE_STAFF_01"),
+        _ => None,
+    }
+}
+
 fn combat_profile_for_discipline(discipline_id: &str) -> &'static str {
     match normalize_id(discipline_id).as_str() {
         DISCIPLINE_SUBTLETY => COMBAT_PROFILE_DAGGERS,
@@ -6675,6 +6726,33 @@ mod tests {
                 spec.item_def_id
             );
         }
+    }
+
+    #[test]
+    fn every_combat_discipline_resolves_to_an_authored_starter_weapon() {
+        let authored_definitions: std::collections::HashSet<_> = STARTER_ITEM_DEFINITIONS
+            .iter()
+            .map(|definition| definition.item_def_id)
+            .collect();
+        let expected = [
+            (DISCIPLINE_SUBTLETY, "TRAINING_DAGGER_PAIR"),
+            (DISCIPLINE_WAR, "TRAINING_TWO_HAND_SWORD"),
+            (DISCIPLINE_ZEAL, "TRAINING_SWORD_AND_SHIELD"),
+            (DISCIPLINE_PRECISION, "TRAINING_BOW"),
+            (DISCIPLINE_ARCANA, "NEWBIE_STAFF_01"),
+        ];
+
+        for (discipline_id, item_def_id) in expected {
+            assert_eq!(
+                starter_weapon_definition_for_discipline(discipline_id),
+                Some(item_def_id)
+            );
+            assert!(
+                authored_definitions.contains(item_def_id),
+                "{discipline_id} starter weapon {item_def_id} must be authored"
+            );
+        }
+        assert_eq!(starter_weapon_definition_for_discipline("UNKNOWN"), None);
     }
 
     #[test]

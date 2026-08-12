@@ -430,6 +430,11 @@ pub(crate) fn apply_reserved_player_loadout(
             reservation.secondary_discipline_id_2.clone(),
             reservation.selected_ability_ids.clone(),
         )?;
+        crate::inventory::equip_starter_weapon_for_discipline(
+            ctx,
+            reservation.player_identity,
+            reservation.primary_discipline_id.as_str(),
+        )?;
     }
     Ok(())
 }
