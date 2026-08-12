@@ -271,6 +271,10 @@ namespace Arena.Tests.Editor
             Assert.That(characterVariant, Is.EqualTo("CharacterFx"));
             Assert.That(TryParseSlotKey("target_attachment", out string targetAttachment), Is.True);
             Assert.That(targetAttachment, Is.EqualTo("TargetAttachment"));
+            Assert.That(TryParseSlotKey("persistent_character_fx", out string persistentCharacterFx), Is.True);
+            Assert.That(persistentCharacterFx, Is.EqualTo("PersistentCharacterFx"));
+            Assert.That(TryParseSlotKey("max_stack_character_fx", out string maxStackCharacterFx), Is.True);
+            Assert.That(maxStackCharacterFx, Is.EqualTo("MaxStackCharacterFx"));
             Assert.That(TryParseSlotKey("not_a_slot", out _), Is.False);
         }
 

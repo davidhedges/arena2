@@ -9,8 +9,9 @@ ops/setup-local-multiplayer.sh
 ```
 
 It publishes the local Hub, rebuilds the cached disposable-match artifact, and
-runs this worker in the background. Use the same entry point for lifecycle
-operations:
+runs this worker in the background. On macOS it delegates ownership to
+`launchd`, allowing the worker to survive the shell or Codex command that
+performed setup. Use the same entry point for lifecycle operations:
 
 ```bash
 ops/setup-local-multiplayer.sh status
@@ -42,8 +43,11 @@ The worker is intentionally local-only:
   bootstrap/assignment so a restart can safely reconcile partial work;
 - deletion requires both that recorded identity and ownership by the Hub's
   configured provisioner identity;
-- ownership or identity mismatches become visible `ORPHANED` rows and are never
-  deleted automatically.
+- ownership, identity, or match-build mismatches become visible `ORPHANED`
+  ledger rows and are never deleted automatically; their Hub tickets and
+  client-facing assignments are closed immediately so quarantine never blocks
+  another matchmaking request, and quarantined rows do not consume match
+  capacity while reconciliation continues monitoring them.
 
 Build the dedicated match module once:
 

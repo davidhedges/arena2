@@ -53,6 +53,7 @@ class FakeApi:
         self.fail_publish_after_create = False
         self.fail_bootstrap = False
         self.delete_failures = 0
+        self.close_ticket_failures = 0
 
     def add_ticket(self, ticket_id: str, player_identity: str, created_at: int = 1_000) -> None:
         self.tickets[ticket_id] = {
@@ -173,6 +174,9 @@ class FakeApi:
                 ticket["lease_until"] = {"none": []}
                 return
             if reducer == "service_close_ticket":
+                if self.close_ticket_failures:
+                    self.close_ticket_failures -= 1
+                    raise ProvisionerError("injected Hub ticket close failure")
                 if ticket is not None:
                     ticket["status"] = "CLOSED"
                     self.assignments.pop(str(arguments[0]), None)
@@ -545,8 +549,68 @@ class ProvisionerTests(unittest.TestCase):
         self.run_quietly(provisioner)
 
         self.assertEqual(self.store.get("ticket-one").state, "ORPHANED")
+        self.assertEqual(self.api.tickets["ticket-one"]["status"], "CLOSED")
+        self.assertNotIn("ticket-one", self.api.assignments)
         self.assertEqual(self.api.delete_count, 0)
         self.assertIn(allocation.database_identity, self.api.databases)
+
+    def test_changed_match_build_quarantines_database_and_closes_ready_ticket(self) -> None:
+        self.api.add_ticket("ticket-one", PLAYER_ONE)
+        self.run_quietly()
+        allocation = self.store.get("ticket-one")
+        self.assertEqual(self.api.tickets["ticket-one"]["status"], "READY")
+
+        self.wasm_path.write_bytes(b"replacement immutable wasm")
+        self.run_quietly()
+
+        self.assertEqual(self.store.get("ticket-one").state, "ORPHANED")
+        self.assertEqual(self.api.tickets["ticket-one"]["status"], "CLOSED")
+        self.assertNotIn("ticket-one", self.api.assignments)
+        self.assertEqual(self.api.delete_count, 0)
+        self.assertIn(allocation.database_identity, self.api.databases)
+
+    def test_orphaned_allocation_retries_client_facing_ticket_close(self) -> None:
+        self.api.add_ticket("ticket-one", PLAYER_ONE)
+        self.run_quietly()
+        allocation = self.store.get("ticket-one")
+        self.api.databases[allocation.database_identity]["owner_identity"] = OTHER_OWNER
+        self.api.close_ticket_failures = 1
+
+        self.run_quietly()
+        self.assertEqual(self.store.get("ticket-one").state, "ORPHANED")
+        self.assertEqual(self.api.tickets["ticket-one"]["status"], "READY")
+
+        self.now += self.config.cleanup_retry_seconds
+        self.run_quietly()
+
+        self.assertEqual(self.api.tickets["ticket-one"]["status"], "CLOSED")
+        self.assertNotIn("ticket-one", self.api.assignments)
+        self.assertEqual(self.api.delete_count, 0)
+        self.assertIn(allocation.database_identity, self.api.databases)
+
+    def test_orphaned_allocation_does_not_consume_matchmaking_capacity(self) -> None:
+        capacity_one = dataclasses.replace(self.config, max_concurrent_matches=1)
+        provisioner = Provisioner(
+            capacity_one,
+            self.api,
+            self.store,
+            clock=lambda: self.now,
+            lease_factory=lambda: "lease-fixed-0001",
+        )
+        self.api.add_ticket("ticket-one", PLAYER_ONE)
+        self.run_quietly(provisioner)
+        orphan = self.store.get("ticket-one")
+        self.api.databases[orphan.database_identity]["owner_identity"] = OTHER_OWNER
+        self.api.add_ticket("ticket-two", PLAYER_TWO, created_at=1_001)
+
+        self.run_quietly(provisioner)
+
+        self.assertEqual(self.store.get("ticket-one").state, "ORPHANED")
+        self.assertEqual(self.api.tickets["ticket-one"]["status"], "CLOSED")
+        self.assertEqual(self.store.get("ticket-two").state, "READY")
+        self.assertEqual(self.api.tickets["ticket-two"]["status"], "READY")
+        self.assertEqual(self.api.delete_count, 0)
+        self.assertIn(orphan.database_identity, self.api.databases)
 
     def test_token_is_not_written_to_the_ledger(self) -> None:
         self.api.add_ticket("ticket-one", PLAYER_ONE)

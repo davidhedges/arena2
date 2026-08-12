@@ -30,8 +30,10 @@ namespace Arena.Presentation
         private const string TriggerSpellParry = "SPELL_PARRY";
         private const string TriggerSpellFizzle = "SPELL_FIZZLE";
         private const string TriggerEmanationActive = "EMANATION_ACTIVE";
+        private const string TriggerEmanationMaxStacks = "EMANATION_MAX_STACKS";
         private const string TriggerSpecialMovementStart = "SPECIAL_MOVEMENT_START";
         private const string TriggerSpecialMovementArrival = "SPECIAL_MOVEMENT_ARRIVAL";
+        private const string FlamethrowerChannelVfxId = "VFX_FLAMETHROWER_CHANNEL_01";
         private const string LingeringShadeReturnMovementKind = "LINGERING_SHADE_RETURN";
         private const string LingeringShadeAbilityId = "SUBTLETY_LINGERING_SHADE";
         private const string AttachModeSpawnWorld = "SPAWN_WORLD";
@@ -42,6 +44,7 @@ namespace Arena.Presentation
         private const string VfxRoleProjectileTrail = "PROJECTILE_TRAIL";
         private const string VfxRoleTravelBody = "TRAVEL_BODY";
         private const string OwnerKindAbility = "ABILITY";
+        private const string OwnerKindSpell = "SPELL";
         private const string AnchorTarget = "TARGET";
         private const string AnchorGroundUnderTarget = "GROUND_UNDER_TARGET";
         private const string AnchorLeftHand = "LEFT_HAND";
@@ -72,7 +75,23 @@ namespace Arena.Presentation
         private readonly Dictionary<string, PendingPredictedSpellVfx> _pendingSpellVfxByToken = new(StringComparer.Ordinal);
         private readonly Dictionary<string, string> _spellVfxTokenByActionInstance = new(StringComparer.Ordinal);
         private readonly Dictionary<string, bool> _projectileDeliveredSpellImpactByActionKind = new(StringComparer.Ordinal);
-        private readonly HashSet<string> _activeRadialEffectVfxKeys = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, ActiveRadialEffectVfxState> _activeRadialEffectVfxByKey = new(StringComparer.Ordinal);
+
+        private readonly struct ActiveRadialEffectVfxState : IEquatable<ActiveRadialEffectVfxState>
+        {
+            public ActiveRadialEffectVfxState(string trigger, string abilityId)
+            {
+                Trigger = trigger;
+                AbilityId = abilityId;
+            }
+
+            public string Trigger { get; }
+            public string AbilityId { get; }
+
+            public bool Equals(ActiveRadialEffectVfxState other)
+                => string.Equals(Trigger, other.Trigger, StringComparison.Ordinal)
+                    && string.Equals(AbilityId, other.AbilityId, StringComparison.Ordinal);
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -208,6 +227,9 @@ namespace Arena.Presentation
             conn.Db.ActiveRadialEffect.OnInsert += OnActiveRadialEffectInsertForVfx;
             conn.Db.ActiveRadialEffect.OnUpdate += OnActiveRadialEffectUpdateForVfx;
             conn.Db.ActiveRadialEffect.OnDelete += OnActiveRadialEffectDeleteForVfx;
+            conn.Db.StatusEffect.OnInsert += OnStatusEffectInsertForVfx;
+            conn.Db.StatusEffect.OnUpdate += OnStatusEffectUpdateForVfx;
+            conn.Db.StatusEffect.OnDelete += OnStatusEffectDeleteForVfx;
             conn.Db.SpellDefinition.OnInsert += OnSpellDefinitionInsertForVfx;
             conn.Db.SpellDefinition.OnUpdate += OnSpellDefinitionUpdateForVfx;
             conn.Db.SpellDefinition.OnDelete += OnSpellDefinitionDeleteForVfx;
@@ -244,16 +266,14 @@ namespace Arena.Presentation
             // should replace the persistent visual.
             if (string.Equals(oldRow.Key, newRow.Key, StringComparison.Ordinal)
                 && oldRow.Owner.Equals(newRow.Owner)
-                && string.Equals(oldRow.SpellId, newRow.SpellId, StringComparison.Ordinal)
-                && string.Equals(oldRow.AbilityId, newRow.AbilityId, StringComparison.Ordinal))
+                && string.Equals(oldRow.SpellId, newRow.SpellId, StringComparison.Ordinal))
             {
-                if (!_activeRadialEffectVfxKeys.Contains(newRow.Key))
-                    SpawnActiveRadialEffectVfx(newRow);
+                SpawnActiveRadialEffectVfx(newRow);
                 return;
             }
 
             _lifecycle?.DestroyForRadialEffectEnd(oldRow.Key);
-            _activeRadialEffectVfxKeys.Remove(oldRow.Key);
+            _activeRadialEffectVfxByKey.Remove(oldRow.Key);
             SpawnActiveRadialEffectVfx(newRow);
         }
 
@@ -261,13 +281,27 @@ namespace Arena.Presentation
         {
             _ = ctx;
             _lifecycle?.DestroyForRadialEffectEnd(row.Key);
-            _activeRadialEffectVfxKeys.Remove(row.Key);
+            _activeRadialEffectVfxByKey.Remove(row.Key);
         }
 
         private void SpawnActiveRadialEffectVfx(ActiveRadialEffect row)
         {
-            if (_activeRadialEffectVfxKeys.Contains(row.Key))
+            var conn = _subscribedConnection ?? NetworkManager.Instance?.Conn;
+            if (conn == null)
                 return;
+
+            string abilityId = ResolveRadialEffectAbilityId(conn, row);
+            string trigger = ResolveActiveRadialEffectVfxTrigger(conn, row, abilityId);
+            var desiredState = new ActiveRadialEffectVfxState(trigger, abilityId);
+            if (_activeRadialEffectVfxByKey.TryGetValue(row.Key, out ActiveRadialEffectVfxState currentState))
+            {
+                if (currentState.Equals(desiredState))
+                    return;
+
+                _lifecycle?.DestroyForRadialEffectEnd(row.Key);
+                _activeRadialEffectVfxByKey.Remove(row.Key);
+            }
+
             if (EntityRegistry.Instance == null
                 || !EntityRegistry.Instance.TryGetCombatTarget(row.Owner, out ICombatTargetEntity caster))
             {
@@ -277,9 +311,9 @@ namespace Arena.Presentation
             Transform root = caster.GetPresentationRoot();
             Vector3 direction = root.forward;
             var fact = new CombatVfxFact(
-                TriggerEmanationActive,
+                trigger,
                 WireIdentifier.Normalize(row.SpellId),
-                WireIdentifier.Normalize(row.AbilityId),
+                abilityId,
                 string.Empty,
                 -1,
                 row.Owner,
@@ -297,7 +331,143 @@ namespace Arena.Presentation
                 0,
                 true);
             if (DispatchFact(fact))
-                _activeRadialEffectVfxKeys.Add(row.Key);
+                _activeRadialEffectVfxByKey[row.Key] = desiredState;
+        }
+
+        private void OnStatusEffectInsertForVfx(EventContext ctx, StatusEffect row)
+        {
+            _ = ctx;
+            RefreshActiveRadialEffectVfxForStatus(row);
+        }
+
+        private void OnStatusEffectUpdateForVfx(EventContext ctx, StatusEffect oldRow, StatusEffect newRow)
+        {
+            _ = ctx;
+            RefreshActiveRadialEffectVfxForStatus(oldRow);
+            if (!oldRow.Target.Equals(newRow.Target)
+                || !string.Equals(oldRow.SpellId, newRow.SpellId, StringComparison.Ordinal))
+            {
+                RefreshActiveRadialEffectVfxForStatus(newRow);
+            }
+        }
+
+        private void OnStatusEffectDeleteForVfx(EventContext ctx, StatusEffect row)
+        {
+            _ = ctx;
+            RefreshActiveRadialEffectVfxForStatus(row);
+        }
+
+        private void RefreshActiveRadialEffectVfxForStatus(StatusEffect status)
+        {
+            var conn = _subscribedConnection ?? NetworkManager.Instance?.Conn;
+            if (conn == null)
+                return;
+
+            string spellId = WireIdentifier.Normalize(status.SpellId);
+            if (string.IsNullOrWhiteSpace(spellId))
+                return;
+
+            foreach (ActiveRadialEffect row in conn.Db.ActiveRadialEffect.Owner.Filter(status.Target))
+            {
+                if (string.Equals(WireIdentifier.Normalize(row.SpellId), spellId, StringComparison.Ordinal))
+                    SpawnActiveRadialEffectVfx(row);
+            }
+        }
+
+        private static string ResolveActiveRadialEffectVfxTrigger(
+            DbConnection conn,
+            ActiveRadialEffect row,
+            string abilityId)
+        {
+            if (!IsAtAuthoredMaxStacks(conn, row)
+                || !HasRadialEffectCue(conn, row, abilityId, TriggerEmanationMaxStacks))
+            {
+                return TriggerEmanationActive;
+            }
+
+            return TriggerEmanationMaxStacks;
+        }
+
+        private static bool IsAtAuthoredMaxStacks(DbConnection conn, ActiveRadialEffect row)
+        {
+            string spellId = WireIdentifier.Normalize(row.SpellId);
+            foreach (StatusEffect status in conn.Db.StatusEffect.Target.Filter(row.Owner))
+            {
+                if (status.MaxStacks > 1U
+                    && status.Stacks >= status.MaxStacks
+                    && string.Equals(WireIdentifier.Normalize(status.SpellId), spellId, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool HasRadialEffectCue(
+            DbConnection conn,
+            ActiveRadialEffect row,
+            string abilityId,
+            string trigger)
+        {
+            string spellId = WireIdentifier.Normalize(row.SpellId);
+            foreach (CombatVfxCueCatalog cue in conn.Db.CombatVfxCueCatalog.Iter())
+            {
+                if (!string.Equals(WireIdentifier.Normalize(cue.Trigger), trigger, StringComparison.Ordinal))
+                    continue;
+
+                string ownerKind = WireIdentifier.Normalize(cue.OwnerKind);
+                string ownerId = WireIdentifier.Normalize(cue.OwnerId);
+                if ((string.Equals(ownerKind, OwnerKindAbility, StringComparison.Ordinal)
+                        && string.Equals(ownerId, abilityId, StringComparison.Ordinal))
+                    || (string.Equals(ownerKind, OwnerKindSpell, StringComparison.Ordinal)
+                        && string.Equals(ownerId, spellId, StringComparison.Ordinal)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private string ResolveRadialEffectAbilityId(DbConnection conn, ActiveRadialEffect row)
+        {
+            string direct = WireIdentifier.Normalize(row.AbilityId);
+            if (!string.IsNullOrWhiteSpace(direct))
+                return direct;
+
+            // Immolation keeps its radial/status row alive for the shared stack duration after
+            // toggling off and clears ability_id to represent that gameplay state. Preserve the
+            // cue owner selected while it was enabled; the catalog lookup below is the reconnect
+            // fallback when this client did not observe the enabled row.
+            if (_activeRadialEffectVfxByKey.TryGetValue(row.Key, out ActiveRadialEffectVfxState current)
+                && !string.IsNullOrWhiteSpace(current.AbilityId))
+            {
+                return current.AbilityId;
+            }
+
+            string spellId = WireIdentifier.Normalize(row.SpellId);
+            string resolved = string.Empty;
+            uint resolvedSortOrder = uint.MaxValue;
+            foreach (AbilityCatalog ability in conn.Db.AbilityCatalog.Iter())
+            {
+                if (!string.Equals(WireIdentifier.Normalize(ability.AbilityKind), CombatEventSources.Spell, StringComparison.Ordinal)
+                    || !string.Equals(WireIdentifier.Normalize(ability.ActionId), spellId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                string candidate = WireIdentifier.Normalize(ability.AbilityId);
+                if (ability.SortOrder < resolvedSortOrder
+                    || (ability.SortOrder == resolvedSortOrder
+                        && string.CompareOrdinal(candidate, resolved) < 0))
+                {
+                    resolved = candidate;
+                    resolvedSortOrder = ability.SortOrder;
+                }
+            }
+
+            return resolved;
         }
 
         private void OnSpellDefinitionInsertForVfx(EventContext ctx, SpellDefinition row)
@@ -1423,7 +1593,13 @@ namespace Arena.Presentation
             if ((followsTransform || followsGroundPosition) && followAnchor == null)
                 return;
 
+            bool directionalFlamethrower = followsTransform
+                && string.Equals(
+                    WireIdentifier.Normalize(cue.VfxId),
+                    FlamethrowerChannelVfxId,
+                    StringComparison.Ordinal);
             Quaternion rotation = string.Equals(attachMode, AttachModeWorldAlignedToFacing, StringComparison.Ordinal)
+                || directionalFlamethrower
                 ? ResolveWorldAlignedFacingRotation(fact.Direction)
                 : Quaternion.identity;
 
@@ -1474,6 +1650,9 @@ namespace Arena.Presentation
             conn.Db.ActiveRadialEffect.OnInsert -= OnActiveRadialEffectInsertForVfx;
             conn.Db.ActiveRadialEffect.OnUpdate -= OnActiveRadialEffectUpdateForVfx;
             conn.Db.ActiveRadialEffect.OnDelete -= OnActiveRadialEffectDeleteForVfx;
+            conn.Db.StatusEffect.OnInsert -= OnStatusEffectInsertForVfx;
+            conn.Db.StatusEffect.OnUpdate -= OnStatusEffectUpdateForVfx;
+            conn.Db.StatusEffect.OnDelete -= OnStatusEffectDeleteForVfx;
             conn.Db.SpellDefinition.OnInsert -= OnSpellDefinitionInsertForVfx;
             conn.Db.SpellDefinition.OnUpdate -= OnSpellDefinitionUpdateForVfx;
             conn.Db.SpellDefinition.OnDelete -= OnSpellDefinitionDeleteForVfx;
@@ -1484,7 +1663,7 @@ namespace Arena.Presentation
             _cueResolver?.MarkDirty();
             _projectileDeliveredSpellImpactByActionKind.Clear();
             _lifecycle?.DestroyAllRadialEffects();
-            _activeRadialEffectVfxKeys.Clear();
+            _activeRadialEffectVfxByKey.Clear();
         }
 
         private readonly struct CombatVfxFact

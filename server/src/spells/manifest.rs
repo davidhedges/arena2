@@ -1339,6 +1339,35 @@ mod tests {
     }
 
     #[test]
+    fn flamethrower_catalog_matches_targeted_fire_channel_defaults() {
+        let definition = definition("FLAMETHROWER");
+
+        assert_eq!(definition.kind.as_str(), "FLAMETHROWER");
+        assert_eq!(definition.cooldown, Duration::from_millis(1_100));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior, SpellBehavior::Channel);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(
+            definition.cast_mobility,
+            SpellCastMobility::GroundedStationary
+        );
+        assert_eq!(definition.damage, 6);
+        assert_eq!(definition.damage_type, DamageType::Fire);
+        assert!((definition.max_distance - 10.0).abs() < 0.0001);
+        assert!((definition.primary_resource_cost - 18.0).abs() < 0.0001);
+        assert!((definition.update_interval - 0.2).abs() < 0.0001);
+        assert!((definition.duration - 4.0).abs() < 0.0001);
+        assert!(definition.arms_auto_attack_on_cast);
+        assert!(definition.secondary.channel.is_none());
+        assert!(definition.secondary.channel_area.is_none());
+        assert!(definition.secondary.channel_projectile.is_none());
+    }
+
+    #[test]
     fn magic_missile_catalog_matches_channel_projectile_defaults() {
         let definition = definition("MAGIC_MISSILE");
 

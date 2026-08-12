@@ -5240,6 +5240,17 @@ fn start_channel(
         return start_area_channel(ctx, active_cast, caster_state, definition, now);
     }
 
+    if !apply_generic_channel_damage(
+        ctx,
+        active_cast,
+        caster_state,
+        definition,
+        EVENT_RELEASE,
+        now,
+    ) {
+        return Ok(false);
+    }
+
     if !apply_generic_channel_heal(
         ctx,
         active_cast,
@@ -5291,13 +5302,30 @@ fn tick_channel(
     if now < runtime.last_update_at + update_interval {
         return Ok(true);
     }
-    if (definition.secondary.channel.is_some() || definition.secondary.channel_area.is_some())
+    let generic_direct_damage_channel = definition.damage > 0
+        && definition.secondary.channel_area.is_none()
+        && definition.secondary.channel_projectile.is_none();
+    if (definition.secondary.channel.is_some()
+        || definition.secondary.channel_area.is_some()
+        || generic_direct_damage_channel)
         && now >= active_cast.ends_at
     {
         return Ok(true);
     }
 
     if !commit_channel_tick_resource_for_spell(ctx, active_cast.caster, &definition.kind, now) {
+        stop_channel(ctx, active_cast, caster_state, now, None);
+        return Ok(false);
+    }
+
+    if !apply_generic_channel_damage(
+        ctx,
+        active_cast,
+        caster_state,
+        definition,
+        EVENT_UPDATE,
+        now,
+    ) {
         stop_channel(ctx, active_cast, caster_state, now, None);
         return Ok(false);
     }
@@ -5574,6 +5602,137 @@ fn apply_area_channel_tick(
     if !effects.is_empty() {
         queue_effects(ctx, effects);
     }
+    true
+}
+
+fn apply_generic_channel_damage(
+    ctx: &ReducerContext,
+    active_cast: &ActiveCast,
+    caster_state: &CombatActorSnapshot,
+    definition: &SpellDefinition,
+    event_type: &str,
+    now: Timestamp,
+) -> bool {
+    if definition.damage <= 0
+        || definition.secondary.channel_area.is_some()
+        || definition.secondary.channel_projectile.is_some()
+    {
+        return true;
+    }
+    if validate_targeted_channel_cast(
+        ctx,
+        caster_state,
+        active_cast.caster,
+        &definition.kind,
+        active_cast.target_id.as_str(),
+        definition,
+    )
+    .is_some()
+    {
+        return false;
+    }
+    let Some(target) = resolve_target(ctx, caster_state.player_id, active_cast.target_id.as_str())
+    else {
+        return false;
+    };
+
+    let origin = Vec3::new(
+        caster_state.pos_x,
+        caster_state.pos_y + caster_state.hit_height * 0.5,
+        caster_state.pos_z,
+    );
+    let point = Vec3::new(
+        target.pos_x,
+        target.pos_y + target.hit_height * 0.5,
+        target.pos_z,
+    );
+    let dx = point.x - origin.x;
+    let dy = point.y - origin.y;
+    let dz = point.z - origin.z;
+    let distance_sq = dx * dx + dy * dy + dz * dz;
+    let direction = if distance_sq > 0.0001 {
+        let inv_len = 1.0 / distance_sq.sqrt();
+        Vec3::new(dx * inv_len, dy * inv_len, dz * inv_len)
+    } else {
+        default_forward_direction(caster_state)
+    };
+
+    emit_spell_combat_event(
+        ctx,
+        SpellCombatEventPayload {
+            action_instance_id: active_cast.cast_id.as_str(),
+            ability_id: active_cast.ability_id.as_str(),
+            kind: &definition.kind,
+            event_type,
+            caster: active_cast.caster,
+            hit: target.player_id,
+            origin,
+            direction,
+            speed: 0.0,
+            max_distance: definition.max_distance,
+            scalar: SpellCombatEventScalar::None,
+            sequence_index: 0,
+            sequence_count: 1,
+            point,
+            now,
+        },
+    );
+
+    if hostile_targeted_ability_misses(ctx, active_cast.caster, target.player_id, now) {
+        emit_targeted_spell_miss(
+            ctx,
+            active_cast.cast_id.as_str(),
+            active_cast.ability_id.as_str(),
+            &definition.kind,
+            active_cast.caster,
+            target.player_id,
+            origin,
+            direction,
+            0.0,
+            definition.max_distance,
+            point,
+            now,
+        );
+        return true;
+    }
+    if resolve_blockable_spell_hit(
+        ctx,
+        active_cast.cast_id.as_str(),
+        active_cast.ability_id.as_str(),
+        &definition.kind,
+        active_cast.caster,
+        &target,
+        origin.x,
+        origin.y,
+        origin.z,
+        direction.x,
+        direction.y,
+        direction.z,
+        0.0,
+        definition.max_distance,
+        point.x,
+        point.y,
+        point.z,
+        definition.damage,
+        definition.block_behavior.as_str(),
+        now,
+    ) {
+        return true;
+    }
+
+    queue_effects(
+        ctx,
+        vec![EffectPacket::Damage {
+            amount: definition.damage,
+            damage_type: definition.damage_type,
+            source: active_cast.caster,
+            target: target.player_id,
+            spell_id: active_cast.cast_id.clone(),
+            delivery: DamageDelivery::Direct,
+            source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
+            direct_action_key: active_cast.cast_id.clone(),
+        }],
+    );
     true
 }
 

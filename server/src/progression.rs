@@ -8056,6 +8056,7 @@ mod tests {
             "SPELL_PARRY",
             "SPELL_FIZZLE",
             "EMANATION_ACTIVE",
+            "EMANATION_MAX_STACKS",
             "SPECIAL_MOVEMENT_START",
             "SPECIAL_MOVEMENT_ARRIVAL",
         ];
@@ -9567,6 +9568,53 @@ mod tests {
             Some(10)
         );
         assert!(authored_status_presentation_ids(catalog).contains("IMMOLATION"));
+
+        let active_body = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_IMMOLATION"
+                    && normalize_identifier(cue.trigger.as_str()) == "EMANATION_ACTIVE"
+            })
+            .expect("Immolation should author its active-stack body VFX");
+        assert_eq!(
+            normalize_identifier(active_body.vfx_id.as_str()),
+            "VFX_IMMOLATION_BODY_LIGHT_01"
+        );
+        assert_eq!(normalize_identifier(active_body.anchor.as_str()), "CASTER");
+        assert_eq!(
+            normalize_identifier(active_body.attach_mode.as_str()),
+            "FOLLOW_ANCHOR"
+        );
+        assert_eq!(
+            normalize_identifier(active_body.lifecycle.as_str()),
+            "UNTIL_RADIAL_EFFECT_END"
+        );
+
+        let max_stack_body = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_IMMOLATION"
+                    && normalize_identifier(cue.trigger.as_str()) == "EMANATION_MAX_STACKS"
+            })
+            .expect("Immolation should author its max-stack body VFX");
+        assert_eq!(
+            normalize_identifier(max_stack_body.vfx_id.as_str()),
+            "VFX_IMMOLATION_BODY_STRONG_01"
+        );
+        assert_eq!(
+            normalize_identifier(max_stack_body.anchor.as_str()),
+            "CASTER"
+        );
+        assert_eq!(
+            normalize_identifier(max_stack_body.attach_mode.as_str()),
+            "FOLLOW_ANCHOR"
+        );
+        assert_eq!(
+            normalize_identifier(max_stack_body.lifecycle.as_str()),
+            "UNTIL_RADIAL_EFFECT_END"
+        );
 
         let combustion = catalog
             .abilities

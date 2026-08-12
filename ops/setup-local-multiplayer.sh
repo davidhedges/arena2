@@ -11,6 +11,8 @@ PROVISIONER_LOG_PATH="$RUNTIME_DIR/provisioner.log"
 MATCH_WASM_PATH="${ARENA_PROVISIONER_MATCH_WASM:-$ROOT_DIR/match-server/target/wasm32-unknown-unknown/release/arena_match.opt.wasm}"
 PROVISIONER_STATE_DB="${ARENA_PROVISIONER_STATE_DB:-$ROOT_DIR/Library/ArenaMatchProvisioner/state.sqlite3}"
 PROVISIONER_LOCK_PATH="${PROVISIONER_STATE_DB%.*}.lock"
+ROOT_DIR_CHECKSUM="$(printf '%s' "$ROOT_DIR" | cksum)"
+PROVISIONER_LAUNCHD_LABEL="com.arena.local-match-provisioner.${ROOT_DIR_CHECKSUM%% *}"
 
 usage() {
     cat <<'EOF'
@@ -30,6 +32,8 @@ preserved, run:
   HUB_DELETE_DATA=always ops/setup-local-multiplayer.sh setup
 
 Runtime PID/log files live under ignored Library/ArenaLocalMultiplayer/.
+On macOS, the provisioner is owned by launchd so it survives the shell or
+Codex command which performed setup.
 EOF
 }
 
@@ -40,7 +44,35 @@ require_command() {
     fi
 }
 
-managed_provisioner_pid() {
+uses_launchd() {
+    [ "$(uname -s)" = "Darwin" ] && command -v launchctl >/dev/null 2>&1
+}
+
+launchd_provisioner_is_loaded() {
+    uses_launchd && launchctl list "$PROVISIONER_LAUNCHD_LABEL" >/dev/null 2>&1
+}
+
+launchd_provisioner_pid() {
+    local job pid
+    job="$(launchctl list "$PROVISIONER_LAUNCHD_LABEL" 2>/dev/null)" || return 1
+    pid="$(printf '%s\n' "$job" | awk '
+        $1 == "\"PID\"" && $2 == "=" {
+            gsub(/;/, "", $3)
+            print $3
+            exit
+        }
+        NR == 1 && $1 ~ /^[0-9]+$/ {
+            print $1
+            exit
+        }
+    ')"
+    if [[ ! "$pid" =~ ^[0-9]+$ ]] || [ "$pid" -le 1 ]; then
+        return 1
+    fi
+    printf '%s\n' "$pid"
+}
+
+pid_file_provisioner_pid() {
     if [ ! -f "$PROVISIONER_PID_PATH" ]; then
         return 1
     fi
@@ -51,6 +83,15 @@ managed_provisioner_pid() {
         return 1
     fi
     printf '%s\n' "$pid"
+}
+
+managed_provisioner_pid() {
+    local pid
+    if uses_launchd && pid="$(launchd_provisioner_pid)"; then
+        printf '%s\n' "$pid"
+        return 0
+    fi
+    pid_file_provisioner_pid
 }
 
 managed_provisioner_is_running() {
@@ -72,14 +113,17 @@ managed_provisioner_is_running() {
     [[ "$command_line" == *"match_provisioner.worker"* ]]
 }
 
-remove_stale_pid_file() {
+remove_stale_provisioner_state() {
+    if launchd_provisioner_is_loaded && ! managed_provisioner_is_running; then
+        launchctl remove "$PROVISIONER_LAUNCHD_LABEL" >/dev/null 2>&1 || true
+    fi
     if [ -f "$PROVISIONER_PID_PATH" ] && ! managed_provisioner_is_running; then
         rm -f "$PROVISIONER_PID_PATH"
     fi
 }
 
 stop_managed_provisioner() {
-    remove_stale_pid_file
+    remove_stale_provisioner_state
     if ! managed_provisioner_is_running; then
         echo "Local match provisioner is not running under this script."
         return 0
@@ -88,7 +132,11 @@ stop_managed_provisioner() {
     local pid
     pid="$(managed_provisioner_pid)"
     echo "Stopping local match provisioner (pid $pid)..."
-    kill -TERM "$pid"
+    if launchd_provisioner_is_loaded; then
+        launchctl remove "$PROVISIONER_LAUNCHD_LABEL"
+    else
+        kill -TERM "$pid"
+    fi
     for _ in {1..50}; do
         if ! kill -0 "$pid" 2>/dev/null; then
             rm -f "$PROVISIONER_PID_PATH"
@@ -103,9 +151,37 @@ stop_managed_provisioner() {
     return 1
 }
 
+start_launchd_provisioner() {
+    local -a environment_args
+    environment_args=(
+        "PATH=${PATH:-/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
+        "ARENA_PROVISIONER_MATCH_WASM=$MATCH_WASM_PATH"
+        "ARENA_PROVISIONER_STATE_DB=$PROVISIONER_STATE_DB"
+    )
+    if [ -n "${ARENA_PROVISIONER_MANAGEMENT_URL:-}" ]; then
+        environment_args+=("ARENA_PROVISIONER_MANAGEMENT_URL=$ARENA_PROVISIONER_MANAGEMENT_URL")
+    fi
+    if [ -n "${ARENA_PROVISIONER_CLIENT_URI:-}" ]; then
+        environment_args+=("ARENA_PROVISIONER_CLIENT_URI=$ARENA_PROVISIONER_CLIENT_URI")
+    fi
+    if [ -n "${ARENA_PROVISIONER_HUB_DATABASE:-}" ]; then
+        environment_args+=("ARENA_PROVISIONER_HUB_DATABASE=$ARENA_PROVISIONER_HUB_DATABASE")
+    fi
+    if [ -n "${ARENA_PROVISIONER_MAP_ID:-}" ]; then
+        environment_args+=("ARENA_PROVISIONER_MAP_ID=$ARENA_PROVISIONER_MAP_ID")
+    fi
+
+    launchctl submit \
+        -l "$PROVISIONER_LAUNCHD_LABEL" \
+        -o "$PROVISIONER_LOG_PATH" \
+        -e "$PROVISIONER_LOG_PATH" \
+        -- /usr/bin/env "${environment_args[@]}" \
+        "$ROOT_DIR/ops/run-local-match-provisioner.sh" run
+}
+
 start_managed_provisioner() {
     mkdir -p "$RUNTIME_DIR"
-    remove_stale_pid_file
+    remove_stale_provisioner_state
     if managed_provisioner_is_running; then
         echo "Local match provisioner is already running (pid $(managed_provisioner_pid))."
         return 0
@@ -113,29 +189,48 @@ start_managed_provisioner() {
 
     printf '\n[%s] Starting local match provisioner\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
         >> "$PROVISIONER_LOG_PATH"
-    nohup "$ROOT_DIR/ops/run-local-match-provisioner.sh" run \
-        >> "$PROVISIONER_LOG_PATH" 2>&1 </dev/null &
-    local pid=$!
-    printf '%s\n' "$pid" > "$PROVISIONER_PID_PATH"
+    local pid=""
+    if uses_launchd; then
+        start_launchd_provisioner
+    else
+        nohup "$ROOT_DIR/ops/run-local-match-provisioner.sh" run \
+            >> "$PROVISIONER_LOG_PATH" 2>&1 </dev/null &
+        pid=$!
+        printf '%s\n' "$pid" > "$PROVISIONER_PID_PATH"
+    fi
 
     # Give the runner time to validate its token/server and exec Python. A
     # second provisioner holding the ledger lock will fail during this window.
     for _ in {1..40}; do
+        if uses_launchd && pid="$(launchd_provisioner_pid 2>/dev/null)"; then
+            printf '%s\n' "$pid" > "$PROVISIONER_PID_PATH"
+        fi
         if managed_provisioner_is_running; then
             break
         fi
-        if ! kill -0 "$pid" 2>/dev/null; then
+        if ! uses_launchd && ! kill -0 "$pid" 2>/dev/null; then
+            break
+        fi
+        if uses_launchd && ! launchd_provisioner_is_loaded; then
             break
         fi
         sleep 0.25
     done
 
     if managed_provisioner_is_running; then
+        pid="$(managed_provisioner_pid)"
+        printf '%s\n' "$pid" > "$PROVISIONER_PID_PATH"
         echo "Local match provisioner is running in the background (pid $pid)."
+        if uses_launchd; then
+            echo "Provisioner service: $PROVISIONER_LAUNCHD_LABEL"
+        fi
         echo "Provisioner log: $PROVISIONER_LOG_PATH"
         return 0
     fi
 
+    if launchd_provisioner_is_loaded; then
+        launchctl remove "$PROVISIONER_LAUNCHD_LABEL" >/dev/null 2>&1 || true
+    fi
     rm -f "$PROVISIONER_PID_PATH"
     echo "The local match provisioner did not remain running." >&2
     echo "Another manually started provisioner may already own its lock." >&2
@@ -200,6 +295,7 @@ setup_environment() {
     echo "Stop:   ops/setup-local-multiplayer.sh stop"
 }
 
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 command="${1:-setup}"
 case "$command" in
     setup)
@@ -232,3 +328,4 @@ case "$command" in
         exit 2
         ;;
 esac
+fi

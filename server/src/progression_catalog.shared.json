@@ -1532,6 +1532,40 @@
       }
     },
     {
+      "ability_id": "SPELL_FLAMETHROWER",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "FLAMETHROWER",
+      "display_name": "Flamethrower",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1005,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1100,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "requires_target": true,
+        "requires_target_los": true,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "CHANNEL",
+          "max_distance": 10,
+          "damage": 6,
+          "damage_type": "FIRE",
+          "resource_cost_per_second": 18,
+          "update_interval_seconds": 0.2,
+          "duration_seconds": 4,
+          "block_behavior": "BLOCKABLE"
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_FROZEN_SPLINTERS",
       "actor_scope": "PLAYER",
       "discipline_id": "RUIN",
@@ -7077,6 +7111,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_FLAMETHROWER",
+      "display_name": "Flamethrower",
+      "description": "Channels a sustained jet of fire into the target for up to 4 seconds, dealing 6 fire damage every 0.2 seconds.",
+      "sort_order": 86
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_FROZEN_SPLINTERS",
       "display_name": "Frozen Splinters",
       "description": "Channels a rapid stream of cold splinters into the target.",
@@ -8763,6 +8804,32 @@
     },
     {
       "owner_kind": "ABILITY",
+      "owner_id": "SPELL_FLAMETHROWER",
+      "slot": "cast_glow",
+      "trigger": "SPELL_CAST",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_FIRE_CAST_HAND_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_CAST_END",
+      "duration_ms": 0,
+      "sort_order": 193
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_FLAMETHROWER",
+      "slot": "beam",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_FLAMETHROWER_CHANNEL_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_CAST_END",
+      "duration_ms": 0,
+      "sort_order": 194
+    },
+    {
+      "owner_kind": "ABILITY",
       "owner_id": "SPELL_FROZEN_SPLINTERS",
       "slot": "projectile_body",
       "trigger": "SPELL_RELEASE",
@@ -9548,7 +9615,33 @@
     {"owner_kind":"ABILITY","owner_id":"NPC_FAB_SHADOW_BOLT","slot":"impact","trigger":"SPELL_IMPACT","anchor":"IMPACT_POINT","vfx_id":"VFX_ARCANE_HIT_01","attach_mode":"SPAWN_WORLD","vfx_role":"ONE_SHOT","lifecycle":"DURATION","duration_ms":1000,"sort_order":321},
     {"owner_kind":"ABILITY","owner_id":"NPC_FAB_DRAGON_BREATH","slot":"cast_glow","trigger":"SPELL_CAST","anchor":"LEFT_HAND","vfx_id":"VFX_ARCANE_CAST_HAND_01","attach_mode":"FOLLOW_ANCHOR","vfx_role":"ATTACHED","lifecycle":"UNTIL_RELEASE_EVENT","duration_ms":0,"sort_order":322},
     {"owner_kind":"ABILITY","owner_id":"NPC_FAB_DRAGON_BREATH","slot":"projectile_body","trigger":"SPELL_RELEASE","anchor":"LEFT_HAND","vfx_id":"VFX_MAGIC_MISSILE_PROJECTILE_01","attach_mode":"SPAWN_WORLD","vfx_role":"PROJECTILE_BODY","lifecycle":"UNTIL_TERMINAL_EVENT","projectile_sequence_index":0,"duration_ms":0,"sort_order":323},
-    {"owner_kind":"ABILITY","owner_id":"NPC_FAB_DRAGON_BREATH","slot":"impact","trigger":"SPELL_IMPACT","anchor":"IMPACT_POINT","vfx_id":"VFX_ARCANE_HIT_01","attach_mode":"SPAWN_WORLD","vfx_role":"ONE_SHOT","lifecycle":"DURATION","duration_ms":1000,"sort_order":324}
+    {"owner_kind":"ABILITY","owner_id":"NPC_FAB_DRAGON_BREATH","slot":"impact","trigger":"SPELL_IMPACT","anchor":"IMPACT_POINT","vfx_id":"VFX_ARCANE_HIT_01","attach_mode":"SPAWN_WORLD","vfx_role":"ONE_SHOT","lifecycle":"DURATION","duration_ms":1000,"sort_order":324},
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_IMMOLATION",
+      "slot": "persistent_character_fx",
+      "trigger": "EMANATION_ACTIVE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_IMMOLATION_BODY_LIGHT_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_RADIAL_EFFECT_END",
+      "duration_ms": 0,
+      "sort_order": 325
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_IMMOLATION",
+      "slot": "max_stack_character_fx",
+      "trigger": "EMANATION_MAX_STACKS",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_IMMOLATION_BODY_STRONG_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_RADIAL_EFFECT_END",
+      "duration_ms": 0,
+      "sort_order": 326
+    }
   ],
   "combat_profile_action_bar_defaults": [
     {

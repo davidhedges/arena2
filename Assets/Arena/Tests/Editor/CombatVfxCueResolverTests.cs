@@ -50,6 +50,19 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void CombatVfxDispatcher_ReplacesRadialVisualAtAuthoredMaxStacks()
+        {
+            string source = File.ReadAllText(DispatcherPath);
+
+            Assert.That(source, Does.Contain("TriggerEmanationMaxStacks"));
+            Assert.That(source, Does.Contain("status.Stacks >= status.MaxStacks"));
+            Assert.That(source, Does.Contain("RefreshActiveRadialEffectVfxForStatus"));
+            Assert.That(source, Does.Contain("DestroyForRadialEffectEnd(row.Key)"));
+            Assert.That(source, Does.Contain("ResolveRadialEffectAbilityId"));
+            Assert.That(source, Does.Not.Contain("Resources.Load<GameObject>(\"CombatVFX/playground/fire/"));
+        }
+
+        [Test]
         public void CombatVfxDispatcher_RoutesSpecialMovementThroughNormalCuePipeline()
         {
             string source = File.ReadAllText(DispatcherPath);

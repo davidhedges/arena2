@@ -46,6 +46,7 @@ ACTIVE_LEDGER_STATES = {
     "FAILURE_CLEANUP",
     "ORPHANED",
 }
+CAPACITY_LEDGER_STATES = ACTIVE_LEDGER_STATES - {"ORPHANED"}
 
 
 class ProvisionerError(RuntimeError):
@@ -684,7 +685,10 @@ class Provisioner:
             except ProvisionerError as error:
                 self._record_retry(allocation, error, now)
 
-        active_count = len(self.store.active())
+        active_count = sum(
+            allocation.state in CAPACITY_LEDGER_STATES
+            for allocation in self.store.active()
+        )
         capacity = max(0, self.config.max_concurrent_matches - active_count)
         if capacity:
             pending = sorted(
@@ -1000,7 +1004,7 @@ class Provisioner:
                 bootstrap_called=bootstrap_called,
             )
             current = self.store.get(allocation.ticket_id) or allocation
-            self._mark_orphaned(current, error, int(self.clock()))
+            self._mark_orphaned(current, ticket, error, int(self.clock()))
             raise
         except ProvisionerError as error:
             self._log_startup_timing(
@@ -1178,6 +1182,7 @@ class Provisioner:
         if allocation.wasm_sha256 != self.wasm_sha256:
             self._mark_orphaned(
                 allocation,
+                ticket,
                 SafetyError("active allocation was created by a different match WASM build"),
                 now,
             )
@@ -1185,7 +1190,10 @@ class Provisioner:
         if allocation.state == "ORPHANED":
             # Safety failures are intentionally sticky. Automatic deletion or
             # reassignment after an ownership/identity mismatch would defeat
-            # the exact-target guard the ledger exists to provide.
+            # the exact-target guard the ledger exists to provide. The Hub
+            # ticket is independent client-facing state, though, and must be
+            # terminal so a quarantined database cannot block matchmaking.
+            self._close_orphaned_ticket(allocation, ticket)
             info = self.api.database_info(
                 allocation.database_identity or allocation.database_name
             )
@@ -1205,7 +1213,7 @@ class Provisioner:
         try:
             info = self._resolve_database(allocation, service_identity, now)
         except SafetyError as error:
-            self._mark_orphaned(allocation, error, now)
+            self._mark_orphaned(allocation, ticket, error, now)
             return
 
         if info is None:
@@ -1279,7 +1287,7 @@ class Provisioner:
         try:
             self._validate_existing_bootstrap(allocation, match_config)
         except SafetyError as error:
-            self._mark_orphaned(allocation, error, now)
+            self._mark_orphaned(allocation, ticket, error, now)
             return
         phase = str(match_config.get("phase"))
         if phase in TERMINAL_MATCH_PHASES:
@@ -1287,7 +1295,10 @@ class Provisioner:
             return
         if phase not in LIVE_MATCH_PHASES:
             self._mark_orphaned(
-                allocation, SafetyError(f"unknown match phase {phase}"), now
+                allocation,
+                ticket,
+                SafetyError(f"unknown match phase {phase}"),
+                now,
             )
             return
 
@@ -1311,18 +1322,27 @@ class Provisioner:
         if ticket_status == "READY":
             if assignment is None:
                 self._mark_orphaned(
-                    allocation, SafetyError("ready ticket has no assignment"), now
+                    allocation,
+                    ticket,
+                    SafetyError("ready ticket has no assignment"),
+                    now,
                 )
                 return
             assigned_identity = normalize_identity(assignment.get("database_identity"))
             if assigned_identity != normalize_identity(allocation.database_identity):
                 self._mark_orphaned(
-                    allocation, SafetyError("Hub assignment targets a different database"), now
+                    allocation,
+                    ticket,
+                    SafetyError("Hub assignment targets a different database"),
+                    now,
                 )
                 return
             if str(assignment.get("match_id")) != allocation.match_id:
                 self._mark_orphaned(
-                    allocation, SafetyError("Hub assignment has a different match id"), now
+                    allocation,
+                    ticket,
+                    SafetyError("Hub assignment has a different match id"),
+                    now,
                 )
                 return
             self.store.update(
@@ -1424,7 +1444,7 @@ class Provisioner:
                 terminal_phase=terminal_phase,
             )
         except SafetyError as error:
-            self._mark_orphaned(allocation, error, now)
+            self._mark_orphaned(allocation, ticket, error, now)
         except ProvisionerError as error:
             self._record_retry(allocation, error, now, state="CLEANUP")
 
@@ -1460,11 +1480,17 @@ class Provisioner:
                 next_retry_at=0,
             )
         except SafetyError as error:
-            self._mark_orphaned(allocation, error, now)
+            self._mark_orphaned(allocation, ticket, error, now)
         except ProvisionerError as error:
             self._record_retry(allocation, error, now, state="FAILURE_CLEANUP")
 
-    def _mark_orphaned(self, allocation: Allocation, error: Exception, now: int) -> None:
+    def _mark_orphaned(
+        self,
+        allocation: Allocation,
+        ticket: dict[str, Any] | None,
+        error: Exception,
+        now: int,
+    ) -> None:
         self.store.update(
             allocation.ticket_id,
             state="ORPHANED",
@@ -1479,6 +1505,36 @@ class Provisioner:
             match=allocation.match_id,
             error=str(error)[:400],
         )
+        self._close_orphaned_ticket(allocation, ticket)
+
+    def _close_orphaned_ticket(
+        self, allocation: Allocation, ticket: dict[str, Any] | None
+    ) -> None:
+        if ticket is None or str(ticket.get("status")) not in ACTIVE_TICKET_STATUSES:
+            return
+
+        try:
+            self.api.call(
+                self.config.hub_database,
+                "service_close_ticket",
+                [allocation.ticket_id],
+            )
+            log_event(
+                "orphan_ticket_closed",
+                ticket=ticket_log_id(allocation.ticket_id),
+                match=allocation.match_id,
+            )
+        except ProvisionerError as error:
+            # Keep the allocation quarantined and retry on the next reconciliation
+            # pass. Database deletion remains forbidden while the safety failure is
+            # unresolved, but a transient Hub failure must not make that ticket
+            # permanently client-visible.
+            log_event(
+                "orphan_ticket_close_failed",
+                ticket=ticket_log_id(allocation.ticket_id),
+                match=allocation.match_id,
+                error=str(error)[:400],
+            )
 
     def _record_retry(
         self,

@@ -94,6 +94,13 @@ namespace Arena.Presentation
         PersistentField = 11,
         /// <summary>Duration-bound visual attached to an animated socket on the confirmed target.</summary>
         TargetAttachment = 12,
+        /// <summary>Persistent visual attached to the caster while a radial effect is active.</summary>
+        PersistentCharacterFx = 13,
+        /// <summary>
+        /// Persistent caster visual used instead of the base radial-effect visuals while the
+        /// spell-owned status is at its authored maximum stack count.
+        /// </summary>
+        MaxStackCharacterFx = 14,
     }
 
     /// <summary>
@@ -284,6 +291,7 @@ namespace Arena.Presentation
         public const string TriggerMeleeImpact = "MELEE_IMPACT";
         public const string TriggerAreaImpact = "AREA_IMPACT";
         public const string TriggerEmanationActive = "EMANATION_ACTIVE";
+        public const string TriggerEmanationMaxStacks = "EMANATION_MAX_STACKS";
 
         public const string AttachSpawnWorld = "SPAWN_WORLD";
         public const string AttachFollowAnchor = "FOLLOW_ANCHOR";
@@ -420,7 +428,14 @@ namespace Arena.Presentation
                 case SpellVfxArchetype.Aura:
                     return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.AuraGround };
                 case SpellVfxArchetype.Emanation:
-                    return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.PersistentField };
+                    return new[]
+                    {
+                        SpellVfxSlot.CastGlow,
+                        SpellVfxSlot.CharacterFx,
+                        SpellVfxSlot.PersistentField,
+                        SpellVfxSlot.PersistentCharacterFx,
+                        SpellVfxSlot.MaxStackCharacterFx,
+                    };
                 case SpellVfxArchetype.TargetField:
                     return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.PersistentField };
                 default:
@@ -632,6 +647,26 @@ namespace Arena.Presentation
                         trigger: TriggerEmanationActive,
                         anchor: CueAnchor.Caster,
                         attachMode: AttachFollowGroundPosition,
+                        vfxRole: RoleAttached,
+                        lifecycle: LifecycleUntilRadialEffectEnd,
+                        duration: CueDurationPolicy.Zero,
+                        projectileSequenceIndex: null);
+
+                case SpellVfxSlot.PersistentCharacterFx:
+                    return new CueWiring(
+                        trigger: TriggerEmanationActive,
+                        anchor: CueAnchor.Caster,
+                        attachMode: AttachFollowAnchor,
+                        vfxRole: RoleAttached,
+                        lifecycle: LifecycleUntilRadialEffectEnd,
+                        duration: CueDurationPolicy.Zero,
+                        projectileSequenceIndex: null);
+
+                case SpellVfxSlot.MaxStackCharacterFx:
+                    return new CueWiring(
+                        trigger: TriggerEmanationMaxStacks,
+                        anchor: CueAnchor.Caster,
+                        attachMode: AttachFollowAnchor,
                         vfxRole: RoleAttached,
                         lifecycle: LifecycleUntilRadialEffectEnd,
                         duration: CueDurationPolicy.Zero,

@@ -342,7 +342,7 @@ namespace Arena.Editor
                     schoolPalettes, spellOverrides, school, abilityId, slot);
                 if (entries.Count == 0)
                 {
-                    if (!IsOptionalSlot(slot))
+                    if (!IsOptionalSlot(archetype, slot))
                     {
                         slotNotes.Add(
                             $"Slot '{slot}' is requested by the {archetype} archetype but neither the {NoneIfEmpty(school)} "
@@ -408,15 +408,28 @@ namespace Arena.Editor
                 }
             }
 
+            if (archetype == SpellVfxArchetype.Emanation
+                && !rows.Exists(row => row.Slot == SpellVfxSlot.PersistentField
+                    || row.Slot == SpellVfxSlot.PersistentCharacterFx))
+            {
+                slotNotes.Add(
+                    "The Emanation archetype requires either PersistentField or PersistentCharacterFx, "
+                    + "but neither the school palette nor the per-spell override provides one.");
+            }
+
             return rows;
         }
 
-        private static bool IsOptionalSlot(SpellVfxSlot slot)
+        private static bool IsOptionalSlot(SpellVfxArchetype archetype, SpellVfxSlot slot)
             => slot == SpellVfxSlot.Muzzle
                 || slot == SpellVfxSlot.ProjectileTrail
                 || slot == SpellVfxSlot.CharacterFx
                 || slot == SpellVfxSlot.SelfFlash
-                || slot == SpellVfxSlot.TargetAttachment;
+                || slot == SpellVfxSlot.TargetAttachment
+                || (archetype == SpellVfxArchetype.Emanation
+                    && (slot == SpellVfxSlot.PersistentField
+                        || slot == SpellVfxSlot.PersistentCharacterFx))
+                || slot == SpellVfxSlot.MaxStackCharacterFx;
 
         private static bool TryBuildGeneratedSlotKey(
             SpellVfxSlot slot,
@@ -801,6 +814,8 @@ namespace Arena.Editor
                 SpellVfxSlot.CharacterFx => "character_fx",
                 SpellVfxSlot.PersistentField => "persistent_field",
                 SpellVfxSlot.TargetAttachment => "target_attachment",
+                SpellVfxSlot.PersistentCharacterFx => "persistent_character_fx",
+                SpellVfxSlot.MaxStackCharacterFx => "max_stack_character_fx",
                 _ => slot.ToString().ToLowerInvariant(),
             };
 
@@ -897,6 +912,8 @@ namespace Arena.Editor
                 case "character_fx": slot = SpellVfxSlot.CharacterFx; return true;
                 case "persistent_field": slot = SpellVfxSlot.PersistentField; return true;
                 case "target_attachment": slot = SpellVfxSlot.TargetAttachment; return true;
+                case "persistent_character_fx": slot = SpellVfxSlot.PersistentCharacterFx; return true;
+                case "max_stack_character_fx": slot = SpellVfxSlot.MaxStackCharacterFx; return true;
                 default:
                     slot = default;
                     return false;
@@ -932,6 +949,20 @@ namespace Arena.Editor
                 && string.Equals(trigger, SpellVfxGenerator.TriggerSpellImpact, System.StringComparison.Ordinal))
             {
                 slot = SpellVfxSlot.TargetAttachment;
+                return true;
+            }
+
+            if (attached && anchorClass == AnchorClass.Caster
+                && string.Equals(trigger, SpellVfxGenerator.TriggerEmanationMaxStacks, System.StringComparison.Ordinal))
+            {
+                slot = SpellVfxSlot.MaxStackCharacterFx;
+                return true;
+            }
+            if (attached && anchorClass == AnchorClass.Caster
+                && string.Equals(trigger, SpellVfxGenerator.TriggerEmanationActive, System.StringComparison.Ordinal)
+                && string.Equals(Normalize(cue.attach_mode), SpellVfxGenerator.AttachFollowAnchor, System.StringComparison.Ordinal))
+            {
+                slot = SpellVfxSlot.PersistentCharacterFx;
                 return true;
             }
 

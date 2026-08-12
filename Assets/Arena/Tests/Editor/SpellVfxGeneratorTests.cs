@@ -403,7 +403,14 @@ namespace Arena.Tests.Editor
         public void EmanationDefaults_ToAPersistentCasterField()
         {
             Assert.That(RequestedSlotNames("Emanation"),
-                Is.EqualTo(new[] { "CastGlow", "CharacterFx", "PersistentField" }));
+                Is.EqualTo(new[]
+                {
+                    "CastGlow",
+                    "CharacterFx",
+                    "PersistentField",
+                    "PersistentCharacterFx",
+                    "MaxStackCharacterFx",
+                }));
 
             object w = Wire("Emanation", "PersistentField", "Instant", false, false);
             Assert.That(WireStr(w, "Trigger"), Is.EqualTo("EMANATION_ACTIVE"));
@@ -412,6 +419,24 @@ namespace Arena.Tests.Editor
             Assert.That(WireStr(w, "VfxRole"), Is.EqualTo("ATTACHED"));
             Assert.That(WireStr(w, "Lifecycle"), Is.EqualTo("UNTIL_RADIAL_EFFECT_END"));
             Assert.That(WireStr(w, "Duration"), Is.EqualTo("Zero"));
+        }
+
+        [Test]
+        public void EmanationStackCharacterFx_UseMutuallyExclusivePersistentTriggers()
+        {
+            object active = Wire("Emanation", "PersistentCharacterFx", "Instant", false, false);
+            Assert.That(WireStr(active, "Trigger"), Is.EqualTo("EMANATION_ACTIVE"));
+            Assert.That(WireStr(active, "Anchor"), Is.EqualTo("Caster"));
+            Assert.That(WireStr(active, "AttachMode"), Is.EqualTo("FOLLOW_ANCHOR"));
+            Assert.That(WireStr(active, "VfxRole"), Is.EqualTo("ATTACHED"));
+            Assert.That(WireStr(active, "Lifecycle"), Is.EqualTo("UNTIL_RADIAL_EFFECT_END"));
+
+            object max = Wire("Emanation", "MaxStackCharacterFx", "Instant", false, false);
+            Assert.That(WireStr(max, "Trigger"), Is.EqualTo("EMANATION_MAX_STACKS"));
+            Assert.That(WireStr(max, "Anchor"), Is.EqualTo("Caster"));
+            Assert.That(WireStr(max, "AttachMode"), Is.EqualTo("FOLLOW_ANCHOR"));
+            Assert.That(WireStr(max, "VfxRole"), Is.EqualTo("ATTACHED"));
+            Assert.That(WireStr(max, "Lifecycle"), Is.EqualTo("UNTIL_RADIAL_EFFECT_END"));
         }
 
         [Test]

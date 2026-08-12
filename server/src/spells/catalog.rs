@@ -3304,6 +3304,7 @@ mod tests {
                 "WITHERING_ORB",
                 "INSTANT_BEAM",
                 "ELECTROCUTE",
+                "FLAMETHROWER",
                 "FROZEN_SPLINTERS",
                 "BLIZZARD",
                 "MAGIC_MISSILE",

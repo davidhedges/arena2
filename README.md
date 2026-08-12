@@ -22,7 +22,9 @@ persistent local Hub, rebuilds the cached match module and bindings, and keeps
 one match provisioner running in the background. It never targets a remote
 server and preserves local Hub data unless `HUB_DELETE_DATA=always` is supplied
 explicitly. Run it once before a local matchmaking session; rerunning it after
-code changes or a reboot is safe.
+code changes or a reboot is safe. On macOS the provisioner is owned by
+`launchd`, so it remains alive after the shell or Codex command that ran setup
+has exited.
 
 ```bash
 ops/setup-local-multiplayer.sh status
