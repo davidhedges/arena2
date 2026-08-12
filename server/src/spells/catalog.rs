@@ -350,6 +350,10 @@ enum ProjectileMotionRow {
     },
     OrbitCaster {
         projectile_count: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_active_projectiles: Option<u32>,
+        #[serde(default)]
+        consume_on_contact: bool,
         orbit_radius: f32,
         orbit_height: f32,
         angular_speed_deg_per_sec: f32,
@@ -402,6 +406,8 @@ impl<'de> Deserialize<'de> for ProjectileMotionRow {
                     serde_json::from_value(value).map_err(de::Error::custom)?;
                 Ok(Self::OrbitCaster {
                     projectile_count: row.projectile_count,
+                    max_active_projectiles: row.max_active_projectiles,
+                    consume_on_contact: row.consume_on_contact,
                     orbit_radius: row.orbit_radius,
                     orbit_height: row.orbit_height,
                     angular_speed_deg_per_sec: row.angular_speed_deg_per_sec,
@@ -456,6 +462,10 @@ struct OrbitCasterProjectileMotionRow {
     #[serde(rename = "kind")]
     _kind: String,
     projectile_count: u32,
+    #[serde(default)]
+    max_active_projectiles: Option<u32>,
+    #[serde(default)]
+    consume_on_contact: bool,
     orbit_radius: f32,
     orbit_height: f32,
     angular_speed_deg_per_sec: f32,
@@ -1760,6 +1770,8 @@ impl From<ProjectileMotionRow> for ProjectileMotionTunables {
             }),
             ProjectileMotionRow::OrbitCaster {
                 projectile_count,
+                max_active_projectiles,
+                consume_on_contact,
                 orbit_radius,
                 orbit_height,
                 angular_speed_deg_per_sec,
@@ -1770,6 +1782,8 @@ impl From<ProjectileMotionRow> for ProjectileMotionTunables {
                 phase_offset_deg,
             } => Self::OrbitCaster(OrbitCasterProjectileTunables {
                 projectile_count,
+                max_active_projectiles,
+                consume_on_contact,
                 orbit_radius,
                 orbit_height,
                 angular_speed_deg_per_sec,
@@ -2941,6 +2955,20 @@ fn validate_projectile_motion(
                     def.kind.as_str()
                 ));
             }
+            if let Some(max_active_projectiles) = orbit.max_active_projectiles {
+                if max_active_projectiles == 0 {
+                    return Err(format!(
+                        "{} delivery.motion.max_active_projectiles must be positive when authored",
+                        def.kind.as_str()
+                    ));
+                }
+                if max_active_projectiles < orbit.projectile_count {
+                    return Err(format!(
+                        "{} delivery.motion.max_active_projectiles must be >= projectile_count",
+                        def.kind.as_str()
+                    ));
+                }
+            }
             ensure_positive_f32(
                 def.kind.as_str(),
                 "delivery.motion.orbit_radius",
@@ -3294,6 +3322,7 @@ mod tests {
                 "GROUND_SLASH",
                 "ICICLE",
                 "ORBITING_BLADES",
+                "FIERY_ORBS",
                 "METEOR",
                 "LIGHTNING",
                 "CAPACITOR",
@@ -4937,6 +4966,8 @@ mod tests {
             .orbit()
             .expect("Sparks should use orbit-caster projectile motion");
         assert_eq!(orbit.projectile_count, 3);
+        assert_eq!(orbit.max_active_projectiles, None);
+        assert!(!orbit.consume_on_contact);
         assert!((orbit.orbit_radius - 2.0).abs() < 0.0001);
         assert!((orbit.orbit_height - 1.0).abs() < 0.0001);
         assert!((orbit.angular_speed_deg_per_sec - 180.0).abs() < 0.0001);
@@ -4945,6 +4976,22 @@ mod tests {
         assert!((orbit.hit_cooldown_seconds - 0.35).abs() < 0.0001);
         assert_eq!(orbit.max_hits_per_target, 1);
         assert_eq!(orbit.phase_offset_deg, 0.0);
+
+        let fiery_orbs =
+            spell_definition_by_str("FIERY_ORBS").expect("Fiery Orbs should be catalog-authored");
+        assert_eq!(fiery_orbs.targeting, SpellTargeting::Self_);
+        assert!(!fiery_orbs.requires_target);
+        assert_eq!(fiery_orbs.damage, 24);
+        assert_eq!(fiery_orbs.damage_type, DamageType::Fire);
+        let fiery_orbit = fiery_orbs
+            .secondary
+            .projectile
+            .as_ref()
+            .and_then(|projectile| projectile.motion.orbit())
+            .expect("Fiery Orbs should use orbit-caster projectile motion");
+        assert_eq!(fiery_orbit.projectile_count, 1);
+        assert_eq!(fiery_orbit.max_active_projectiles, Some(5));
+        assert!(fiery_orbit.consume_on_contact);
     }
 
     #[test]

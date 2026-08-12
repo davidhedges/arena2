@@ -38,13 +38,13 @@ use crate::combat::{
     consume_active_immolation_damage, consume_quickening_for_cast, has_active_disabling_status,
     has_active_status, hostile_targeted_ability_misses, mark_harmful_combat_action,
     queue_delayed_status_effect, queue_effects, quickening_cast_speed_multiplier_for_owner,
-    rime_effect_packet_for_frost_spell, set_active_aura, status_matches_removal_filter,
-    status_removal_is_blocked_by_rime, temporary_combat_modifiers, timestamp_to_micros,
-    toggle_active_emanation, toggle_active_immolation, ActiveCombatProjectile, CombatEvent,
-    DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StatusApplication,
-    StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity, StatusStackGroupDefault,
-    COMBAT_EVENT_MISS, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
-    DAMAGE_SOURCE_KIND_SPELL,
+    rephase_accumulated_orbit_projectiles, rime_effect_packet_for_frost_spell, set_active_aura,
+    status_matches_removal_filter, status_removal_is_blocked_by_rime, temporary_combat_modifiers,
+    timestamp_to_micros, toggle_active_emanation, toggle_active_immolation, ActiveCombatProjectile,
+    CombatEvent, DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent,
+    StatusApplication, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
+    StatusStackGroupDefault, COMBAT_EVENT_MISS, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
+    COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SPELL,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -2704,6 +2704,22 @@ fn process_spell_cast(
 
     if definition.behavior == SpellBehavior::Projectile {
         if projectile_motion(definition) == Some("ORBIT_CASTER") {
+            let orbit = definition
+                .secondary
+                .projectile
+                .as_ref()
+                .and_then(|projectile| projectile.motion.orbit())
+                .expect("validated ORBIT_CASTER spell must define orbit tunables");
+            if let Some(max_active_projectiles) = orbit.max_active_projectiles {
+                let active_count = active_orbit_projectile_count(ctx, caster, spell_kind);
+                if !orbit_cast_fits_capacity(
+                    active_count,
+                    orbit.projectile_count,
+                    max_active_projectiles,
+                ) {
+                    return Ok(Some(ActionRejectReason::NoCharges));
+                }
+            }
             if mode == CastExecutionMode::Execute {
                 spawn_orbit_projectiles(
                     ctx,
@@ -4028,6 +4044,22 @@ fn spawn_tracking_projectile_instance(
     Ok(())
 }
 
+fn orbit_cast_fits_capacity(active_count: u32, spawn_count: u32, maximum: u32) -> bool {
+    active_count.saturating_add(spawn_count) <= maximum
+}
+
+fn active_orbit_projectile_count(ctx: &ReducerContext, caster: Identity, kind: &SpellId) -> u32 {
+    ctx.db
+        .active_combat_projectile()
+        .caster()
+        .filter(caster)
+        .filter(|projectile| {
+            projectile.motion_kind == "ORBIT_CASTER" && projectile.action_kind == kind.as_str()
+        })
+        .count()
+        .min(u32::MAX as usize) as u32
+}
+
 fn spawn_orbit_projectiles(
     ctx: &ReducerContext,
     caster: Identity,
@@ -4153,6 +4185,19 @@ fn spawn_orbit_projectiles(
                 hit_index: sequence_index,
                 created_at: now,
             });
+    }
+
+    if orbit.max_active_projectiles.is_some() {
+        rephase_accumulated_orbit_projectiles(
+            ctx,
+            caster,
+            kind.as_str(),
+            ability_id,
+            state.pos_x,
+            state.pos_y,
+            state.pos_z,
+            now,
+        );
     }
 
     Ok(())
@@ -9323,8 +9368,9 @@ mod tests {
         defiance_damage_taken_reduction_for_health, fixed_y_terrain_blocks_special_movement,
         has_arrived_at_contact_distance, has_movement_intent, has_voluntary_movement_after_cast,
         horizontal_movement_duration_ms, is_generic_area_spell, is_target_within_facing_arc,
-        normal_cast_time_spell_refunds_gcd_on_self_cancel, projectile_release_uses_live_facing,
-        quickening_applies_to_cast_time, recall_capture_is_eligible, recall_slot_has_stored_spell,
+        normal_cast_time_spell_refunds_gcd_on_self_cancel, orbit_cast_fits_capacity,
+        projectile_release_uses_live_facing, quickening_applies_to_cast_time,
+        recall_capture_is_eligible, recall_slot_has_stored_spell,
         remaining_dot_damage_from_schedule, resolve_generic_area_center,
         resolve_special_movement_y, spell_primary_resource_cost_for_action,
         targeted_ability_is_blocked, valid_cast_action_token,
@@ -10136,5 +10182,13 @@ mod tests {
         assert!(!body.contains("commit_primary_resource_for_spell("));
         assert!(!body.contains("stamp_cooldown("));
         assert!(!body.contains("begin_active_cast("));
+    }
+
+    #[test]
+    fn accumulated_orbit_capacity_allows_one_through_five_and_rejects_sixth() {
+        for active_count in 0..5 {
+            assert!(orbit_cast_fits_capacity(active_count, 1, 5));
+        }
+        assert!(!orbit_cast_fits_capacity(5, 1, 5));
     }
 }

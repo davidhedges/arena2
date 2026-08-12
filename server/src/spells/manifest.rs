@@ -396,6 +396,11 @@ pub(crate) struct CurvedTargetProjectileTunables {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct OrbitCasterProjectileTunables {
     pub projectile_count: u32,
+    /// When present, casts join one persistent orbit group for the same caster and action.
+    /// Existing fixed-batch orbit spells omit this value and retain their authored behavior.
+    pub max_active_projectiles: Option<u32>,
+    /// Whether a successful hostile contact terminates this projectile.
+    pub consume_on_contact: bool,
     pub orbit_radius: f32,
     pub orbit_height: f32,
     pub angular_speed_deg_per_sec: f32,

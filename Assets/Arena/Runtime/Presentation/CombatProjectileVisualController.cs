@@ -15,6 +15,7 @@ namespace Arena.Presentation
         private const string ProjectileMotionOrbitCaster = "ORBIT_CASTER";
         private const string ProjectileMotionBoomerangCaster = "BOOMERANG_CASTER";
         private const string ProjectileMotionCurvedTarget = "CURVED_TARGET";
+        private const float OrbitRetargetSeconds = 0.2f;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         internal static int DebugActiveProjectileVisualCount { get; private set; }
@@ -300,6 +301,16 @@ namespace Arena.Presentation
 
             RouteToVfx(projectileKey, vfx, () =>
             {
+                if (IsOrbitCasterProjectile(row)
+                    && _orbitProjectiles.TryGetValue(projectileKey, out OrbitProjectileMotion existingOrbit))
+                {
+                    // Orbit updates can re-space an accumulated ring. Retarget the local orbit
+                    // simulation instead of snapping the rendered orb across the caster.
+                    existingOrbit.Retarget(row);
+                    _curvedTargetProjectiles.Remove(projectileKey);
+                    return;
+                }
+
                 var position = ApplyLaunchOffset(projectileKey, ResolvePresentationPosition(row));
                 var direction = new Vector3(row.DirX, row.DirY, row.DirZ);
                 if (vfx is WeaponProjectileVFX weaponProjectile
@@ -676,9 +687,11 @@ namespace Arena.Presentation
         {
             public SpacetimeDB.Identity Caster { get; }
             public float AngleRadians { get; private set; }
-            public float Radius { get; }
-            public float Height { get; }
-            private float AngularSpeedRadiansPerSecond { get; }
+            public float Radius { get; private set; }
+            public float Height { get; private set; }
+            private float AngularSpeedRadiansPerSecond { get; set; }
+            private float TargetAngleRadians { get; set; }
+            private float RetargetRemainingSeconds { get; set; }
 
             private OrbitProjectileMotion(
                 SpacetimeDB.Identity caster,
@@ -689,6 +702,7 @@ namespace Arena.Presentation
             {
                 Caster = caster;
                 AngleRadians = angleRadians;
+                TargetAngleRadians = angleRadians;
                 Radius = radius;
                 Height = height;
                 AngularSpeedRadiansPerSecond = angularSpeedRadiansPerSecond;
@@ -706,7 +720,33 @@ namespace Arena.Presentation
 
             public void Advance(float dt)
             {
-                AngleRadians += AngularSpeedRadiansPerSecond * Mathf.Max(0f, dt);
+                float safeDt = Mathf.Max(0f, dt);
+                float angularAdvance = AngularSpeedRadiansPerSecond * safeDt;
+                AngleRadians += angularAdvance;
+                TargetAngleRadians += angularAdvance;
+
+                if (RetargetRemainingSeconds <= 0f)
+                {
+                    TargetAngleRadians = AngleRadians;
+                    return;
+                }
+
+                float blend = Mathf.Clamp01(safeDt / RetargetRemainingSeconds);
+                AngleRadians = Mathf.Lerp(AngleRadians, TargetAngleRadians, blend);
+                RetargetRemainingSeconds = Mathf.Max(0f, RetargetRemainingSeconds - safeDt);
+            }
+
+            public void Retarget(ProjectilePresentationEvent row)
+            {
+                float authoritativeAngle = ResolveAngleRadians(row);
+                float shortestDelta = Mathf.DeltaAngle(
+                    AngleRadians * Mathf.Rad2Deg,
+                    authoritativeAngle * Mathf.Rad2Deg) * Mathf.Deg2Rad;
+                TargetAngleRadians = AngleRadians + shortestDelta;
+                RetargetRemainingSeconds = OrbitRetargetSeconds;
+                Radius = row.OrbitRadius;
+                Height = row.OrbitHeight;
+                AngularSpeedRadiansPerSecond = row.OrbitAngularSpeedDegPerSec * Mathf.Deg2Rad;
             }
 
             private static float ResolveAngleRadians(ProjectilePresentationEvent row)

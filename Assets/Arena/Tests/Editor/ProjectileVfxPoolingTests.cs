@@ -83,5 +83,16 @@ namespace Arena.Tests.Editor
             Assert.That(travelController, Does.Contain("_projectilePool.TryRent(template, null, context.ActionInstanceId)"));
             Assert.That(travelController, Does.Contain("_projectilePool.Dispose();"));
         }
+
+        [Test]
+        public void ProjectileController_SmoothsAuthoritativeOrbitRephasing()
+        {
+            string source = File.ReadAllText(ProjectileControllerPath);
+
+            Assert.That(source, Does.Contain("OrbitRetargetSeconds = 0.2f"));
+            Assert.That(source, Does.Contain("existingOrbit.Retarget(row)"));
+            Assert.That(source, Does.Contain("Mathf.DeltaAngle("));
+            Assert.That(source, Does.Contain("RetargetRemainingSeconds"));
+        }
     }
 }

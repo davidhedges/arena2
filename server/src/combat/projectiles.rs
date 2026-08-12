@@ -100,21 +100,23 @@ pub(crate) fn tick_combat_projectiles_with_snapshots(
     let players = actor_snapshots.as_slice();
     let player_index_by_id = actor_snapshots.index_by_id();
     let mut candidate_indices = Vec::new();
+    let mut orbit_groups_to_rephase = HashSet::new();
     let mut metrics = ProjectileTickMetricsFrame {
         active_projectile_count: projectiles.len().min(u32::MAX as usize) as u32,
         ..Default::default()
     };
 
-    for projectile in projectiles {
-        if ctx
+    for projectile_snapshot in projectiles {
+        // Re-fetch before ticking so rows removed or updated by an earlier projectile interaction
+        // are never overwritten with stale snapshot state.
+        let Some(projectile) = ctx
             .db
             .active_combat_projectile()
             .projectile_instance_id()
-            .find(projectile.projectile_instance_id.clone())
-            .is_none()
-        {
+            .find(projectile_snapshot.projectile_instance_id.clone())
+        else {
             continue;
-        }
+        };
 
         tick_projectile_instance(
             ctx,
@@ -125,7 +127,29 @@ pub(crate) fn tick_combat_projectiles_with_snapshots(
             players,
             player_index_by_id,
             &mut candidate_indices,
+            &mut orbit_groups_to_rephase,
             &mut metrics,
+        );
+    }
+
+    // Reconcile group membership after every projectile has advanced. Rephasing inside the loop
+    // would mix already-ticked and not-yet-ticked row ages and leave a permanent one-tick skew.
+    for (caster_id, action_kind, ability_id) in orbit_groups_to_rephase {
+        let Some(caster) = players
+            .iter()
+            .find(|player| player.player_id == caster_id && player.alive)
+        else {
+            continue;
+        };
+        rephase_accumulated_orbit_projectiles(
+            ctx,
+            caster_id,
+            action_kind.as_str(),
+            ability_id.as_str(),
+            caster.pos_x,
+            caster.pos_y,
+            caster.pos_z,
+            now,
         );
     }
 
@@ -154,6 +178,7 @@ fn tick_projectile_instance(
     players: &[CombatActorSnapshot],
     player_index_by_id: &HashMap<Identity, usize>,
     candidate_indices: &mut Vec<usize>,
+    orbit_groups_to_rephase: &mut HashSet<(Identity, String, String)>,
     metrics: &mut ProjectileTickMetricsFrame,
 ) {
     let spell_definition = if projectile.source_kind == "SPELL" {
@@ -188,6 +213,7 @@ fn tick_projectile_instance(
             players,
             player_index_by_id,
             candidate_indices,
+            orbit_groups_to_rephase,
             metrics,
         );
         return;
@@ -393,9 +419,20 @@ fn tick_orbit_projectile_instance(
     players: &[CombatActorSnapshot],
     player_index_by_id: &HashMap<Identity, usize>,
     candidate_indices: &mut Vec<usize>,
+    orbit_groups_to_rephase: &mut HashSet<(Identity, String, String)>,
     metrics: &mut ProjectileTickMetricsFrame,
 ) {
     let Some(definition) = spell_definition else {
+        fizzle_projectile_and_finish(ctx, now, &projectile, metrics);
+        return;
+    };
+    let Some(orbit_tunables) = definition
+        .secondary
+        .projectile
+        .as_ref()
+        .and_then(|projectile| projectile.motion.orbit())
+        .copied()
+    else {
         fizzle_projectile_and_finish(ctx, now, &projectile, metrics);
         return;
     };
@@ -435,6 +472,13 @@ fn tick_orbit_projectile_instance(
             metrics,
         );
         finish_projectile_without_event(ctx, &projectile);
+        if orbit_tunables.max_active_projectiles.is_some() {
+            orbit_groups_to_rephase.insert((
+                projectile.caster,
+                projectile.action_kind.clone(),
+                projectile.ability_id.clone(),
+            ));
+        }
         return;
     }
 
@@ -448,8 +492,16 @@ fn tick_orbit_projectile_instance(
         players,
         player_index_by_id,
         candidate_indices,
+        orbit_tunables.consume_on_contact,
         metrics,
     ) {
+        if orbit_tunables.max_active_projectiles.is_some() {
+            orbit_groups_to_rephase.insert((
+                projectile.caster,
+                projectile.action_kind.clone(),
+                projectile.ability_id.clone(),
+            ));
+        }
         return;
     }
 
@@ -482,6 +534,106 @@ fn update_orbit_projectile_position(
         * projectile.age;
 }
 
+fn current_orbit_angle(projectile: &ActiveCombatProjectile) -> f32 {
+    projectile.orbit_initial_yaw
+        + projectile.orbit_phase_offset_deg.to_radians()
+        + projectile.orbit_angular_speed_deg_per_sec.to_radians() * projectile.age
+}
+
+fn assign_orbit_angle(
+    projectile: &mut ActiveCombatProjectile,
+    desired_angle: f32,
+    caster_x: f32,
+    caster_y: f32,
+    caster_z: f32,
+) {
+    let accumulated_rotation =
+        projectile.orbit_angular_speed_deg_per_sec.to_radians() * projectile.age;
+    projectile.orbit_initial_yaw = desired_angle - accumulated_rotation;
+    projectile.orbit_phase_offset_deg = 0.0;
+    projectile.pos_x = caster_x + desired_angle.sin() * projectile.orbit_radius;
+    projectile.pos_y = caster_y + projectile.orbit_height;
+    projectile.pos_z = caster_z + desired_angle.cos() * projectile.orbit_radius;
+    projectile.dir_x = desired_angle.cos();
+    projectile.dir_y = 0.0;
+    projectile.dir_z = -desired_angle.sin();
+}
+
+fn evenly_space_orbit_projectiles(
+    projectiles: &mut [ActiveCombatProjectile],
+    caster_x: f32,
+    caster_y: f32,
+    caster_z: f32,
+) {
+    let Some(anchor) = projectiles.first().map(current_orbit_angle) else {
+        return;
+    };
+    let spacing = std::f32::consts::TAU / projectiles.len() as f32;
+    for (index, projectile) in projectiles.iter_mut().enumerate() {
+        assign_orbit_angle(
+            projectile,
+            anchor + spacing * index as f32,
+            caster_x,
+            caster_y,
+            caster_z,
+        );
+    }
+}
+
+/// Evenly spaces the accumulated orbit group identified by caster, action, and ability.
+/// The oldest projectile's current angle anchors the ring so ordinary casts do not reset its spin.
+pub(crate) fn rephase_accumulated_orbit_projectiles(
+    ctx: &ReducerContext,
+    caster: Identity,
+    action_kind: &str,
+    ability_id: &str,
+    caster_x: f32,
+    caster_y: f32,
+    caster_z: f32,
+    now: Timestamp,
+) {
+    let mut projectiles: Vec<ActiveCombatProjectile> = ctx
+        .db
+        .active_combat_projectile()
+        .caster()
+        .filter(caster)
+        .filter(|projectile| {
+            projectile.motion_kind == PROJECTILE_MOTION_ORBIT_CASTER
+                && projectile.action_kind == action_kind
+                && projectile.ability_id == ability_id
+        })
+        .collect();
+    projectiles.sort_by(|left, right| {
+        left.created_at
+            .to_micros_since_unix_epoch()
+            .cmp(&right.created_at.to_micros_since_unix_epoch())
+            .then_with(|| {
+                left.projectile_instance_id
+                    .cmp(&right.projectile_instance_id)
+            })
+    });
+
+    evenly_space_orbit_projectiles(&mut projectiles, caster_x, caster_y, caster_z);
+
+    for projectile in projectiles {
+        ctx.db
+            .active_combat_projectile()
+            .projectile_instance_id()
+            .update(projectile.clone());
+        emit_projectile_event_untracked(
+            ctx,
+            &projectile,
+            COMBAT_EVENT_UPDATE,
+            None,
+            projectile.pos_x,
+            projectile.pos_y,
+            projectile.pos_z,
+            0,
+            now,
+        );
+    }
+}
+
 fn resolve_orbit_projectile_contacts(
     ctx: &ReducerContext,
     now: Timestamp,
@@ -491,6 +643,7 @@ fn resolve_orbit_projectile_contacts(
     players: &[CombatActorSnapshot],
     player_index_by_id: &HashMap<Identity, usize>,
     candidate_indices: &mut Vec<usize>,
+    consume_on_contact: bool,
     metrics: &mut ProjectileTickMetricsFrame,
 ) -> bool {
     actor_snapshots.query_disc_indices(
@@ -625,6 +778,24 @@ fn resolve_orbit_projectile_contacts(
 
         metrics.contacts_resolved = metrics.contacts_resolved.saturating_add(1);
         let impact_damage = projectile_damage_at_current_lifetime(projectile, definition);
+        if consume_on_contact {
+            emit_projectile_event(
+                ctx,
+                projectile,
+                COMBAT_EVENT_IMPACT,
+                Some(target.player_id),
+                projectile.pos_x,
+                projectile.pos_y,
+                projectile.pos_z,
+                impact_damage,
+                now,
+                metrics,
+            );
+            queue_spell_projectile_hit_effects(ctx, projectile, definition, &target);
+            finish_projectile_without_event(ctx, projectile);
+            return true;
+        }
+
         emit_projectile_event_with_metadata(
             ctx,
             projectile,
@@ -2523,6 +2694,35 @@ mod tests {
         assert_eq!(projectile.dir_y, 0.0);
         assert!((projectile.dir_z - -1.0).abs() < 0.0001);
         assert!((projectile.traveled - std::f32::consts::FRAC_PI_2 * 1.5).abs() < 0.0001);
+    }
+
+    #[test]
+    fn accumulated_orbit_projectiles_are_evenly_spaced_despite_different_ages() {
+        let caster_id = test_identity(1);
+        for count in 1..=5 {
+            let mut projectiles: Vec<ActiveCombatProjectile> = (0..count)
+                .map(|index| {
+                    let mut projectile = test_projectile(caster_id);
+                    projectile.projectile_instance_id = format!("test:p{index}");
+                    projectile.age = index as f32 * 0.37;
+                    projectile.orbit_initial_yaw = 0.4 + index as f32 * 0.19;
+                    projectile
+                })
+                .collect();
+
+            evenly_space_orbit_projectiles(&mut projectiles, 3.0, 2.0, -4.0);
+
+            let expected_spacing = std::f32::consts::TAU / count as f32;
+            let anchor = current_orbit_angle(&projectiles[0]);
+            for (index, projectile) in projectiles.iter().enumerate() {
+                let expected_angle = anchor + expected_spacing * index as f32;
+                assert!((current_orbit_angle(projectile) - expected_angle).abs() < 0.0001);
+                assert!((projectile.pos_y - 3.0).abs() < 0.0001);
+                let radial_distance =
+                    ((projectile.pos_x - 3.0).powi(2) + (projectile.pos_z + 4.0).powi(2)).sqrt();
+                assert!((radial_distance - projectile.orbit_radius).abs() < 0.0001);
+            }
+        }
     }
 
     #[test]
