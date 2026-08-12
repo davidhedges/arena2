@@ -4,7 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace Arena.Tests.Editor
 {
@@ -36,6 +38,8 @@ namespace Arena.Tests.Editor
         private const string CombatVfxRegistryPath = "Assets/Arena/Resources/CombatVFX/CombatVFXRegistry.asset";
         private const string BlizzardVfxPrefabPath = "Assets/Arena/Resources/CombatVFX/playground/Icicle_Rain 1.prefab";
         private const string CombatVfxRegistrySourcePath = "Assets/Arena/Runtime/Presentation/VFX/CombatVFXRegistry.cs";
+        private const string CombatPresentationWarmupPath = "Assets/Arena/Runtime/Presentation/CombatPresentationWarmup.cs";
+        private const string CombatProfileIdsPath = "Assets/Arena/Runtime/Presentation/Animation/CombatProfileIds.cs";
         private const string CombatVfxRegistryEditorPath = "Assets/Arena/Editor/CombatVFXRegistryEditor.cs";
         private const string CombatVfxTemplateRegistryPath = "Assets/Arena/Runtime/Presentation/CombatVFXTemplateRegistry.cs";
         private const string NegateVfxPath = "Assets/Arena/Runtime/Presentation/VFX/NegateVFX.cs";
@@ -280,6 +284,75 @@ namespace Arena.Tests.Editor
             Assert.That(editorSource, Does.Contain("[CustomEditor(typeof(CombatVFXRegistry))]"));
             Assert.That(editorSource, Does.Contain("Clear Runtime Cache"));
             Assert.That(editorSource, Does.Contain("Log Resolved VFX Bindings"));
+        }
+
+        [Test]
+        public void CombatPresentationWarmup_MovesFirstUseLoadsOutOfCombatDispatch()
+        {
+            string warmup = File.ReadAllText(CombatPresentationWarmupPath);
+            Assert.That(warmup, Does.Contain("LoadAndRetainPresentationAssets();"));
+            Assert.That(warmup, Does.Contain("Resources.LoadAll<CombatAnimationSet>(\"CombatAnimationSets\")"));
+            Assert.That(warmup, Does.Contain("WarmRegisteredVfxPrefabs"));
+            Assert.That(warmup, Does.Contain("clip.SampleAnimation(avatar, 0f)"));
+            Assert.That(warmup, Does.Contain("animator.Update(0f)"));
+            Assert.That(warmup, Does.Contain("CoreUtils.GetDefaultDepthOnlyFormat()"));
+            Assert.That(warmup, Does.Not.Contain("new RenderTexture(16, 16, 0"));
+            Assert.That(warmup, Does.Contain("renderSubmissionEnabled = false"));
+            Assert.That(warmup, Does.Contain("RenderPipeline.SubmitRenderRequest(camera, request)"));
+            Assert.That(warmup, Does.Contain("DontDestroyOnLoad(gameObject)"));
+
+            string catalog = File.ReadAllText(CombatProfileIdsPath);
+            Assert.That(catalog, Does.Not.Contain("Resources.LoadAll<CombatAnimationSet>"));
+            Assert.That(catalog, Does.Contain("CombatProfileIds.Daggers"));
+            Assert.That(catalog, Does.Contain("CombatProfileIds.Staff"));
+        }
+
+        [Test]
+        public void CombatPresentationWarmup_CollectsNestedPhasedAnimationClips()
+        {
+            var start = new AnimationClip { name = "WarmupStart" };
+            var loop = new AnimationClip { name = "WarmupLoop" };
+            var end = new AnimationClip { name = "WarmupEnd" };
+            Assembly runtimeAssembly = AppDomain.CurrentDomain.Load("Assembly-CSharp");
+            Type setType = runtimeAssembly.GetType("Arena.Presentation.CombatAnimationSet", true)!;
+            Type attackType = runtimeAssembly.GetType("Arena.Presentation.WeaponMeleeAttackAuthoring", true)!;
+            Type phasedType = runtimeAssembly.GetType("Arena.Presentation.WeaponPhasedActionClipSet", true)!;
+            Type modeType = runtimeAssembly.GetType("Arena.Presentation.WeaponMeleePresentationMode", true)!;
+            ScriptableObject set = ScriptableObject.CreateInstance(setType);
+            object attack = Activator.CreateInstance(attackType)!;
+            object phased = Activator.CreateInstance(phasedType)!;
+
+            phasedType.GetField("start")!.SetValue(phased, start);
+            phasedType.GetField("loop")!.SetValue(phased, loop);
+            phasedType.GetField("end")!.SetValue(phased, end);
+            attackType.GetField("presentationMode")!.SetValue(attack, Enum.Parse(modeType, "Phased"));
+            attackType.GetField("phasedGround")!.SetValue(attack, phased);
+            var attacks = (System.Collections.IList)setType.GetField("meleeAttacks")!.GetValue(set)!;
+            attacks.Add(attack);
+
+            try
+            {
+                Type warmupType = runtimeAssembly.GetType(
+                    "Arena.Presentation.CombatPresentationWarmup",
+                    throwOnError: true)!;
+                MethodInfo collect = warmupType.GetMethod(
+                    "CollectAnimationClipsForWarmup",
+                    BindingFlags.Static | BindingFlags.NonPublic)!;
+                var clips = new HashSet<AnimationClip>();
+
+                collect.Invoke(null, new object?[] { set, clips, null });
+
+                Assert.That(clips, Does.Contain(start));
+                Assert.That(clips, Does.Contain(loop));
+                Assert.That(clips, Does.Contain(end));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(set);
+                UnityEngine.Object.DestroyImmediate(start);
+                UnityEngine.Object.DestroyImmediate(loop);
+                UnityEngine.Object.DestroyImmediate(end);
+            }
         }
 
         [Test]

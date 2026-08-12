@@ -29,9 +29,17 @@ namespace Arena.Presentation
     public static class CombatAnimationSetCatalog
     {
         private const string ResourceFolder = "CombatAnimationSets";
+        private static readonly IReadOnlyDictionary<string, string> ResourcePathByCombatProfile =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [CombatProfileIds.SwordAndShield] = $"{ResourceFolder}/SwordAndShield",
+                [CombatProfileIds.TwoHandedSword] = $"{ResourceFolder}/TwoHandedSword",
+                [CombatProfileIds.ArcherBow] = $"{ResourceFolder}/ArcherBow",
+                [CombatProfileIds.Daggers] = $"{ResourceFolder}/Daggers",
+                [CombatProfileIds.Staff] = $"{ResourceFolder}/Staff",
+            };
         private static readonly Dictionary<string, CombatAnimationSet?> SetsByCombatProfile =
             new(StringComparer.OrdinalIgnoreCase);
-        private static bool _loadedAll;
 
         public static CombatAnimationSet? Resolve(string? combatProfileId)
         {
@@ -39,29 +47,28 @@ namespace Arena.Presentation
             if (SetsByCombatProfile.TryGetValue(normalizedCombatProfileId, out CombatAnimationSet? cached))
                 return cached;
 
-            LoadAll();
-            if (SetsByCombatProfile.TryGetValue(normalizedCombatProfileId, out cached))
-                return cached;
+            if (ResourcePathByCombatProfile.TryGetValue(normalizedCombatProfileId, out string resourcePath))
+            {
+                CombatAnimationSet? loaded = Resources.Load<CombatAnimationSet>(resourcePath);
+                RegisterPreloaded(loaded);
+                if (SetsByCombatProfile.TryGetValue(normalizedCombatProfileId, out cached))
+                    return cached;
+            }
 
             SetsByCombatProfile[normalizedCombatProfileId] = null;
             return null;
         }
 
-        private static void LoadAll()
+        internal static void RegisterPreloaded(CombatAnimationSet? set)
         {
-            if (_loadedAll)
+            if (set == null)
                 return;
 
-            foreach (CombatAnimationSet set in Resources.LoadAll<CombatAnimationSet>(ResourceFolder))
-            {
-                string profileId = CombatProfileIds.Normalize(set.CombatProfileIdOrDefault);
-                if (string.IsNullOrWhiteSpace(profileId))
-                    continue;
+            string profileId = CombatProfileIds.Normalize(set.CombatProfileIdOrDefault);
+            if (string.IsNullOrWhiteSpace(profileId))
+                return;
 
-                SetsByCombatProfile[profileId] = set;
-            }
-
-            _loadedAll = true;
+            SetsByCombatProfile[profileId] = set;
         }
     }
 }

@@ -165,6 +165,14 @@ namespace Arena.Presentation
 
             _instance = this;
             DontDestroyOnLoad(gameObject);
+            EnsureRuntimeCaches();
+        }
+
+        private void EnsureRuntimeCaches()
+        {
+            _lifecycle ??= new CombatVFXLifecycleRegistry(this);
+            _projectileVisuals ??= new CombatProjectileVisualController();
+            _travelVisuals ??= new CombatTravelVisualController();
         }
 
         private void Update()
@@ -175,8 +183,8 @@ namespace Arena.Presentation
                 return;
             }
 
-            _lifecycle ??= new CombatVFXLifecycleRegistry(this);
-            _lifecycle.Tick(Time.deltaTime);
+            EnsureRuntimeCaches();
+            _lifecycle!.Tick(Time.deltaTime);
             TravelVisuals.Tick(Time.deltaTime);
             ProjectileVisuals.Tick(Time.deltaTime);
             PrunePredictedSpellVfx(System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());

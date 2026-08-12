@@ -19,8 +19,8 @@ namespace Arena.Presentation
     /// </summary>
     public static class SpellCastAnimationResolver
     {
-        private const string LibraryResource = "SpellCastAnimationLibrary";
-        private const string MapResource = "SpellCastAnimationMap";
+        internal const string LibraryResource = "SpellCastAnimationLibrary";
+        internal const string MapResource = "SpellCastAnimationMap";
 
         private static SpellCastAnimationLibrary? _library;
         private static SpellCastAnimationMap? _map;
@@ -320,6 +320,17 @@ namespace Arena.Presentation
             map ??= Resources.Load<SpellCastAnimationMap>(MapResource);
             _library = library;
             _map = map;
+        }
+
+        internal static void RegisterPreloaded(
+            SpellCastAnimationLibrary? library,
+            SpellCastAnimationMap? map)
+        {
+            if (library != null)
+                _library = library;
+            if (map != null)
+                _map = map;
+            ComposedEntries.Clear();
         }
 
         /// <summary>Editor/test hook: drop cached Resources so a rescan or new map is picked up.</summary>

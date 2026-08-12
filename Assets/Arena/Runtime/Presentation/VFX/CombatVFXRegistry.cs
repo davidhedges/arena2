@@ -12,7 +12,7 @@ namespace Arena.Presentation.VFX
     [CreateAssetMenu(menuName = "Arena/Combat VFX Registry", fileName = "CombatVFXRegistry")]
     public sealed class CombatVFXRegistry : ScriptableObject
     {
-        private const string RegistryResourcePath = "CombatVFX/CombatVFXRegistry";
+        internal const string RegistryResourcePath = "CombatVFX/CombatVFXRegistry";
 
         [Serializable]
         public sealed class Entry
@@ -92,6 +92,16 @@ namespace Arena.Presentation.VFX
             return registry;
         }
 
+        internal static void RegisterPreloaded(CombatVFXRegistry? registry)
+        {
+            if (registry == null)
+                return;
+
+            _sharedRegistry = registry;
+            _missingSharedRegistryLogged = false;
+            registry.EnsureIndex();
+        }
+
         public static GameObject? ResolveSharedPrefab(string vfxId)
         {
             return LoadShared()?.ResolvePrefab(vfxId);
@@ -163,6 +173,13 @@ namespace Arena.Presentation.VFX
         private void OnValidate()
         {
             InvalidateIndex();
+#if UNITY_EDITOR
+            // Resources.Load can invoke OnValidate while the Editor is in Play mode.
+            // Runtime warm-up owns validation-free cache creation; the dedicated
+            // authoring validator remains the place for expensive prefab diagnostics.
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+                return;
+#endif
             var errors = new List<string>();
             CollectAuthoringErrors(errors);
             foreach (string error in errors)
