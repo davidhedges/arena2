@@ -113,9 +113,6 @@ struct ArenaLayoutRamp {
 struct ArenaLayoutConfig {
     map_id: String,
     ground_y: f32,
-    boundary_shape: String,
-    boundary_half_x: f32,
-    boundary_half_z: f32,
     center_flatten_radius: f32,
     ruin_wall_height: f32,
     ruin_wall_segments: Vec<ArenaLayoutWallSegment>,
@@ -145,7 +142,6 @@ fn arena_layout_for_map(map_id: ArenaMapId) -> &'static ArenaLayoutConfig {
             let layout: ArenaLayoutConfig = serde_json::from_str(map_id.profile().layout_json)
                 .expect("arena_map_01.layout.shared.json must remain valid and schema-compatible");
             assert_eq!(layout.map_id, map_id.as_str());
-            assert_eq!(layout.boundary_shape, "aabb");
             layout
         }),
     }
@@ -1131,8 +1127,8 @@ fn value_noise(seed: u64, x: f64, z: f64, scale: f64) -> f64 {
 
 pub fn height_at(_seed: u64, _x: f32, _z: f32) -> f32 {
     // Arena_Map_01 uses a flat authored floor, so the authoritative arena
-    // terrain stays flat. Its boundary and optional blockers come from the
-    // selected authored-arena layout contract.
+    // terrain stays flat. Horizontal blockers come only from explicitly
+    // authored collision, never from the visual deck footprint.
     arena_layout().ground_y
 }
 
@@ -1291,23 +1287,17 @@ mod tests {
     };
 
     #[test]
-    fn arena_map_01_layout_is_flat_and_has_no_invisible_example_obstacles() {
+    fn arena_map_01_layout_is_flat_and_has_no_implicit_or_exported_blockers() {
         let layout = arena_layout();
         assert_eq!(layout.map_id, "ARENA_MAP_01");
-        assert_eq!(layout.boundary_shape, "aabb");
-        assert_eq!(layout.boundary_half_x, 30.0);
-        assert_eq!(layout.boundary_half_z, 30.0);
         assert_eq!(layout.center_flatten_radius, 30.0);
         assert!(layout.ruin_wall_segments.is_empty());
         assert!(layout.platforms.is_empty());
         assert!(layout.ramps.is_empty());
         assert_eq!(layout.pillar_count, 0);
 
-        let interior_corner = resolve_arena_horizontal_collision_y(7, 25.0, 25.0, 0.28, 0.0, 1.8);
-        assert_eq!(interior_corner, (25.0, 25.0));
-        let outside_corner = resolve_arena_horizontal_collision_y(7, 35.0, 35.0, 0.28, 0.0, 1.8);
-        assert!((outside_corner.0 - 29.72).abs() < 0.0001);
-        assert!((outside_corner.1 - 29.72).abs() < 0.0001);
+        let beyond_deck = resolve_arena_horizontal_collision_y(7, 35.0, 35.0, 0.28, 0.0, 1.8);
+        assert_eq!(beyond_deck, (35.0, 35.0));
     }
 
     #[test]
@@ -1509,12 +1499,6 @@ pub fn resolve_arena_horizontal_collision_y(
 ) -> (f32, f32) {
     let mut out_x = x;
     let mut out_z = z;
-
-    let layout = arena_layout();
-    let max_x = (layout.boundary_half_x - player_radius).max(0.0);
-    let max_z = (layout.boundary_half_z - player_radius).max(0.0);
-    out_x = out_x.clamp(-max_x, max_x);
-    out_z = out_z.clamp(-max_z, max_z);
 
     for _ in 0..2 {
         for_each_arena_horizontal_blocker(seed, |blocker| match blocker {

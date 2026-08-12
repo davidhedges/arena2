@@ -49,9 +49,6 @@ namespace Arena.Editor.Maps
         private sealed class ServerLayoutFile
         {
             public string map_id = string.Empty;
-            public string boundary_shape = string.Empty;
-            public float boundary_half_x = 0f;
-            public float boundary_half_z = 0f;
             public ServerSpawnPointFile[] edge_spawn_points = Array.Empty<ServerSpawnPointFile>();
         }
 
@@ -428,14 +425,10 @@ namespace Arena.Editor.Maps
             ServerLayoutFile? layout = JsonUtility.FromJson<ServerLayoutFile>(File.ReadAllText(ServerLayoutPath));
             if (layout == null)
                 throw new InvalidOperationException($"Arena map layout '{ServerLayoutPath}' is invalid JSON.");
-            if (!string.Equals(layout.map_id, "ARENA_MAP_01", StringComparison.Ordinal)
-                || !string.Equals(layout.boundary_shape, "aabb", StringComparison.Ordinal)
-                || Mathf.Abs(layout.boundary_half_x - DeckHalfExtent) > 0.001f
-                || Mathf.Abs(layout.boundary_half_z - DeckHalfExtent) > 0.001f)
+            if (!string.Equals(layout.map_id, "ARENA_MAP_01", StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
-                    "Arena map identity or square boundary does not match the authored " +
-                    $"deck half-extent {DeckHalfExtent:0.###}.");
+                    $"Arena map layout identity is '{layout.map_id}', expected 'ARENA_MAP_01'.");
             }
             if (layout.edge_spawn_points.Length != EntranceSides.Length)
             {

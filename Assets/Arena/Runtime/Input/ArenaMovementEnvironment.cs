@@ -58,9 +58,6 @@ namespace Arena.Input
         {
             public string map_id = string.Empty;
             public float ground_y;
-            public string boundary_shape = string.Empty;
-            public float boundary_half_x;
-            public float boundary_half_z;
             public float center_flatten_radius;
             public float ruin_wall_height;
             public ArenaLayoutWallSegmentFile[] ruin_wall_segments = Array.Empty<ArenaLayoutWallSegmentFile>();
@@ -329,11 +326,6 @@ namespace Arena.Input
             float outX = desiredX;
             float outZ = desiredZ;
 
-            float maxX = Mathf.Max(_layout.boundary_half_x - playerRadius, 0.0f);
-            float maxZ = Mathf.Max(_layout.boundary_half_z - playerRadius, 0.0f);
-            outX = Mathf.Clamp(outX, -maxX, maxX);
-            outZ = Mathf.Clamp(outZ, -maxZ, maxZ);
-
             for (int iter = 0; iter < 2; iter++)
             {
                 for (int i = 0; i < _walls.Length; i++)
@@ -553,10 +545,7 @@ namespace Arena.Input
             ArenaLayoutFile layout = MovementSharedDataLoader.LoadRequiredJson<ArenaLayoutFile>(
                 profile.LayoutResourcePath,
                 $"{profile.MapId} arena layout");
-            if (!string.Equals(layout.map_id, profile.MapId, StringComparison.Ordinal)
-                || !string.Equals(layout.boundary_shape, "aabb", StringComparison.Ordinal)
-                || layout.boundary_half_x <= 0.0f
-                || layout.boundary_half_z <= 0.0f)
+            if (!string.Equals(layout.map_id, profile.MapId, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     $"[ArenaMovementEnvironment] Invalid authored arena layout for {profile.MapId}.");

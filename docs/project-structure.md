@@ -50,10 +50,11 @@ Removing Survival must therefore not remove or rename the map.
 The retired `ArenaMatch` example scene is not a runtime or authoring dependency.
 The map's immutable runtime inputs are checked in under
 `server/src/map_data/arena_map_01.*.shared.json` and mirrored under
-`Assets/Arena/Resources/SharedData/Maps/`. The layout describes a flat,
-60-by-60-metre square PvP boundary. Its movement and query collision exports
-currently contain no internal blockers, so decorative scene geometry cannot
-silently become an invisible wall. The old global `arena_layout` and
+`Assets/Arena/Resources/SharedData/Maps/`. The layout describes a flat movement
+surface but imposes no invisible deck-edge boundary. The authored deck is 60 by
+60 metres and its four entrances extend past that footprint. Movement is
+blocked only by explicit exported collision; its movement and query exports
+currently contain no blockers. The old global `arena_layout` and
 `gameplay_collision` files have been retired.
 
 The Hub assignment, provisioner bootstrap, match configuration, and

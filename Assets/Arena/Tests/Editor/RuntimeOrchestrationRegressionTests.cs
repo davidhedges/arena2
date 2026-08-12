@@ -487,7 +487,8 @@ namespace Arena.Tests.Editor
             string clientLayout = File.ReadAllText(
                 "Assets/Arena/Resources/SharedData/Maps/arena_map_01.layout.shared.json");
             Assert.That(clientLayout, Is.EqualTo(serverLayout));
-            Assert.That(serverLayout, Does.Contain("\"boundary_shape\": \"aabb\""));
+            Assert.That(serverLayout, Does.Not.Contain("boundary_shape"));
+            Assert.That(serverLayout, Does.Not.Contain("boundary_half"));
             Assert.That(serverLayout, Does.Contain("\"ruin_wall_segments\": []"));
             Assert.That(serverLayout, Does.Contain("\"platforms\": []"));
             Assert.That(serverLayout, Does.Contain("\"ramps\": []"));

@@ -27,7 +27,7 @@ namespace Arena.Tests.Editor
 
             Assert.That(arenaLayout, Is.Not.Null);
             Assert.That(gameplayCollision, Is.Not.Null);
-            Assert.That(arenaLayout!.text, Does.Contain("\"boundary_shape\": \"aabb\""));
+            Assert.That(arenaLayout!.text, Does.Contain("\"map_id\": \"ARENA_MAP_01\""));
             Assert.That(gameplayCollision!.text, Does.Contain("\"boxes\""));
         }
 
@@ -72,25 +72,14 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void ArenaEnvironment_UsesSquareBoundaryAndHasNoStaleInteriorBlockers()
+        public void ArenaEnvironment_HasNoImplicitBoundaryOrStaleInteriorBlockers()
         {
             object environment = InvokeStaticMethod(
                 "Arena.Input.ArenaMovementEnvironment",
                 "Shared",
                 12345UL);
 
-            Vector2 interiorCorner = (Vector2)InvokeInstanceMethod(
-                environment,
-                "ResolveHorizontalCollision",
-                25.0f,
-                25.0f,
-                PlayerRadius,
-                PlayerHeight,
-                0.0f);
-            Assert.That(interiorCorner.x, Is.EqualTo(25.0f).Within(PositionTolerance));
-            Assert.That(interiorCorner.y, Is.EqualTo(25.0f).Within(PositionTolerance));
-
-            Vector2 outsideCorner = (Vector2)InvokeInstanceMethod(
+            Vector2 beyondDeck = (Vector2)InvokeInstanceMethod(
                 environment,
                 "ResolveHorizontalCollision",
                 35.0f,
@@ -98,8 +87,8 @@ namespace Arena.Tests.Editor
                 PlayerRadius,
                 PlayerHeight,
                 0.0f);
-            Assert.That(outsideCorner.x, Is.EqualTo(30.0f - PlayerRadius).Within(PositionTolerance));
-            Assert.That(outsideCorner.y, Is.EqualTo(30.0f - PlayerRadius).Within(PositionTolerance));
+            Assert.That(beyondDeck.x, Is.EqualTo(35.0f).Within(PositionTolerance));
+            Assert.That(beyondDeck.y, Is.EqualTo(35.0f).Within(PositionTolerance));
         }
 
         [Test]
