@@ -163,13 +163,19 @@ namespace DungeonLab.Editor
         /// asset; every other caller must claim its own path, or rebuilding one
         /// scene repaints the other. See <see cref="CavernBackdrop"/>.
         /// </param>
+        /// <param name="underglowShadows">
+        /// Shadow mode for the upward directional light. The generated dungeon
+        /// keeps the established shadow-free treatment by default; callers with
+        /// a continuous overhead occluder can opt into shadows explicitly.
+        /// </param>
         internal static void Build(
             Scene destination,
             GameObject dungeonRoot,
             int seed,
             CavernDepthProfile depth,
             bool buildGlowPool = true,
-            string? backdropAssetPath = null)
+            string? backdropAssetPath = null,
+            LightShadows underglowShadows = LightShadows.None)
         {
             if (dungeonRoot == null)
                 throw new ArgumentNullException(nameof(dungeonRoot));
@@ -207,7 +213,16 @@ namespace DungeonLab.Editor
             silhouettes += BuildOverheadField(
                 farVault.transform, seed, depth, centre, ceilingY, glowY, glowSpan, silhouette);
 
-            BuildUnderglow(root.transform, seed, depth, centre, hullRadius, glowY, silhouette, buildGlowPool);
+            BuildUnderglow(
+                root.transform,
+                seed,
+                depth,
+                centre,
+                hullRadius,
+                glowY,
+                silhouette,
+                buildGlowPool,
+                underglowShadows);
 
             // Behind every band: the painted layer the bands parallax against.
             CavernBackdrop.Apply(seed, depth, backdropAssetPath);
@@ -392,7 +407,8 @@ namespace DungeonLab.Editor
             float hullRadius,
             float glowY,
             Material silhouette,
-            bool buildGlowPool)
+            bool buildGlowPool,
+            LightShadows shadows)
         {
             GameObject underglow = new("Underglow");
             underglow.transform.SetParent(parent, worldPositionStays: false);
@@ -411,7 +427,7 @@ namespace DungeonLab.Editor
             light.type = LightType.Directional;
             light.color = depth.GlowColor;
             light.intensity = depth.GlowIntensity;
-            light.shadows = LightShadows.None;
+            light.shadows = shadows;
             light.bounceIntensity = 0f;
 
             if (!buildGlowPool)

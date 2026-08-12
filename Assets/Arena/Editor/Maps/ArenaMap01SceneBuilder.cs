@@ -372,7 +372,10 @@ namespace Arena.Editor.Maps
                 // standing in for exactly this surface, and drawn on top of one
                 // it z-fights and flattens it.
                 buildGlowPool: false,
-                backdropAssetPath: BackdropAssetPath);
+                backdropAssetPath: BackdropAssetPath,
+                // The solid deck must occlude the upward lava light. Hard
+                // shadows work on both the PC and mobile render profiles.
+                underglowShadows: LightShadows.Hard);
 
             CreateSpawnMarker(destination);
             CloneGameplayRig(destination, depth);
@@ -501,7 +504,10 @@ namespace Arena.Editor.Maps
                 parent,
                 "Arena Deck",
                 mesh,
-                PlatformRock(rock, wantsMeshUv: false, "ArenaMap01Deck (Breakup)"));
+                PlatformRock(rock, wantsMeshUv: false, "ArenaMap01Deck (Breakup)"),
+                // This is a zero-thickness plane viewed by the underglow from
+                // below, so its shadow caster must render both faces.
+                shadowCastingMode: ShadowCastingMode.TwoSided);
         }
 
         /// <summary>
@@ -1022,7 +1028,12 @@ namespace Arena.Editor.Maps
         /// line of sight and projectiles. An arena whose premise is "flat and
         /// open" authors none.
         /// </summary>
-        private static void CreateRenderer(Transform parent, string name, Mesh mesh, Material material)
+        private static void CreateRenderer(
+            Transform parent,
+            string name,
+            Mesh mesh,
+            Material material,
+            ShadowCastingMode shadowCastingMode = ShadowCastingMode.Off)
         {
             GameObject surface = new(name);
             surface.transform.SetParent(parent, worldPositionStays: false);
@@ -1033,7 +1044,7 @@ namespace Arena.Editor.Maps
 
             MeshRenderer renderer = surface.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = material;
-            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.shadowCastingMode = shadowCastingMode;
             renderer.receiveShadows = false;
         }
 
