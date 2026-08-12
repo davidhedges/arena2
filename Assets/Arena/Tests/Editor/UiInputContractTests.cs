@@ -607,6 +607,8 @@ namespace Arena.Tests.Editor
             Assert.That(screen, Does.Contain("SetShowcaseArmorPreview"));
             Assert.That(screen, Does.Contain("CompleteArmorPieces"));
             Assert.That(hubNetwork, Does.Contain("From.HubArmorSetDefinition().ToSql()"));
+            Assert.That(hubNetwork, Does.Contain("ApplyCommittedArmorSet(armorSetId)"));
+            Assert.That(hubNetwork, Does.Contain("current.SelectedAbilityIds.ToArray()"));
             Assert.That(uxml, Does.Contain("name=\"TierLight\""));
             Assert.That(uxml, Does.Contain("name=\"TierMedium\""));
             Assert.That(uxml, Does.Contain("name=\"TierHeavy\""));
@@ -617,6 +619,7 @@ namespace Arena.Tests.Editor
             Assert.That(planner, Does.Contain("From.PlayerEquipmentPresentation()"));
             Assert.That(hub, Does.Contain("ResolveLocalArmorAppearance"));
             Assert.That(hub, Does.Contain("EquipmentScreen.ArmorAppearanceFor"));
+            Assert.That(hubScreen, Does.Contain("_hubController?.RefreshShowcaseLoadout()"));
             Assert.That(hub, Does.Contain("ShowcaseCameraFacingYaw = 180f"));
             Assert.That(hubBuilder, Does.Contain("ShowcaseDefaultYaw = 180f"));
             Assert.That(hub, Does.Contain("FaceShowcaseTowardCamera(_showcaseAvatarController.VisualRoot)"));

@@ -637,6 +637,12 @@ namespace Arena.UI
             ApplyShowcaseAppearance();
         }
 
+        internal void RefreshShowcaseLoadout()
+        {
+            _lastCombatProfile = string.Empty;
+            ApplyState();
+        }
+
         internal void RotateShowcaseFromPointerDelta(float deltaX)
         {
             Transform? showcaseAnchor = _root?.Find("StageRoot/ShowcaseAnchor");

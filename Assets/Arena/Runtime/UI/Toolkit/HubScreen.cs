@@ -563,6 +563,7 @@ namespace Arena.UI
         {
             if (_root != null)
                 _root.style.display = DisplayStyle.Flex;
+            _hubController?.RefreshShowcaseLoadout();
             RefreshBoundData();
         }
 
@@ -579,6 +580,7 @@ namespace Arena.UI
         {
             if (_root != null)
                 _root.style.display = DisplayStyle.Flex;
+            _hubController?.RefreshShowcaseLoadout();
             RefreshBoundData();
         }
 

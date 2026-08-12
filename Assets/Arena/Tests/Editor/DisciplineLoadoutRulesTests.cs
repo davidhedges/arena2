@@ -78,7 +78,10 @@ namespace Arena.Tests.Editor
             Assert.That(hubNetwork, Does.Contain("From.MyHubLoadout().ToSql()"));
             Assert.That(hubNetwork, Does.Contain("From.HubCombatDisciplineDefinition().ToSql()"));
             Assert.That(hubNetwork, Does.Contain("From.HubAbilityDefinition().ToSql()"));
+            Assert.That(hubNetwork, Does.Contain("ApplyCommittedDisciplineLoadout("));
+            Assert.That(hubNetwork, Does.Contain("current.ArmorSetId"));
             Assert.That(hub, Does.Contain("HubLoadoutSnapshot? loadout"));
+            Assert.That(hub, Does.Contain("_hubController?.RefreshShowcaseLoadout()"));
             Assert.That(hubUxml, Does.Contain("name=\"LoadoutPrimaryName\""));
             Assert.That(hubUxml, Does.Contain("name=\"LoadoutSecondary1Name\""));
             Assert.That(hubUxml, Does.Contain("name=\"LoadoutSecondary2Name\""));
