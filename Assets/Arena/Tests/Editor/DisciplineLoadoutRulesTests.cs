@@ -85,6 +85,12 @@ namespace Arena.Tests.Editor
             Assert.That(hubUxml, Does.Contain("name=\"LoadoutPrimaryName\""));
             Assert.That(hubUxml, Does.Contain("name=\"LoadoutSecondary1Name\""));
             Assert.That(hubUxml, Does.Contain("name=\"LoadoutSecondary2Name\""));
+            Assert.That(hubUxml, Does.Contain("name=\"LoadoutPrimaryArt\""));
+            Assert.That(hubUxml, Does.Contain("name=\"LoadoutSecondary1Art\""));
+            Assert.That(hubUxml, Does.Contain("name=\"LoadoutSecondary2Art\""));
+            Assert.That(hubUxml, Does.Not.Contain("ACTIVE LOADOUT"));
+            Assert.That(hubUxml, Does.Not.Contain("RANKED RECORD"));
+            Assert.That(hub, Does.Contain("DisciplinesScreen.ResolveDisciplineIcon(normalizedId)"));
         }
 
         [Test]

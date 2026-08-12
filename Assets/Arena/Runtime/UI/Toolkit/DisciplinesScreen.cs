@@ -1167,7 +1167,7 @@ namespace Arena.UI
             element.style.borderLeftColor = color;
         }
 
-        private static Sprite? ResolveDisciplineIcon(string disciplineId)
+        internal static Sprite? ResolveDisciplineIcon(string disciplineId)
         {
             Sprite? switchIcon = ActionIconResolver.Resolve(ActionKinds.CombatDisciplineSwitch, disciplineId);
             if (switchIcon != null)
@@ -1186,7 +1186,7 @@ namespace Arena.UI
                 : ActionIconResolver.Resolve(ActionKinds.Ability, representative);
         }
 
-        private static Color DisciplineColor(string disciplineId) => disciplineId switch
+        internal static Color DisciplineColor(string disciplineId) => disciplineId switch
         {
             "SUBTLETY" => new Color32(159, 120, 194, 255),
             "WAR" => new Color32(213, 161, 72, 255),

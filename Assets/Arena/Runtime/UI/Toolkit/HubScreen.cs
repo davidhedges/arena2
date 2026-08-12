@@ -43,6 +43,12 @@ namespace Arena.UI
         private VisualElement? _loadoutPrimaryRow;
         private VisualElement? _loadoutSecondary1Row;
         private VisualElement? _loadoutSecondary2Row;
+        private VisualElement? _loadoutPrimaryIcon;
+        private VisualElement? _loadoutSecondary1Icon;
+        private VisualElement? _loadoutSecondary2Icon;
+        private VisualElement? _loadoutPrimaryArt;
+        private VisualElement? _loadoutSecondary1Art;
+        private VisualElement? _loadoutSecondary2Art;
         private Label? _loadoutPrimaryName;
         private Label? _loadoutSecondary1Name;
         private Label? _loadoutSecondary2Name;
@@ -305,6 +311,12 @@ namespace Arena.UI
             _loadoutPrimaryRow = _root.Q<VisualElement>("LoadoutPrimaryRow");
             _loadoutSecondary1Row = _root.Q<VisualElement>("LoadoutSecondary1Row");
             _loadoutSecondary2Row = _root.Q<VisualElement>("LoadoutSecondary2Row");
+            _loadoutPrimaryIcon = _root.Q<VisualElement>("LoadoutPrimaryIcon");
+            _loadoutSecondary1Icon = _root.Q<VisualElement>("LoadoutSecondary1Icon");
+            _loadoutSecondary2Icon = _root.Q<VisualElement>("LoadoutSecondary2Icon");
+            _loadoutPrimaryArt = _root.Q<VisualElement>("LoadoutPrimaryArt");
+            _loadoutSecondary1Art = _root.Q<VisualElement>("LoadoutSecondary1Art");
+            _loadoutSecondary2Art = _root.Q<VisualElement>("LoadoutSecondary2Art");
             _loadoutPrimaryName = _root.Q<Label>("LoadoutPrimaryName");
             _loadoutSecondary1Name = _root.Q<Label>("LoadoutSecondary1Name");
             _loadoutSecondary2Name = _root.Q<Label>("LoadoutSecondary2Name");
@@ -674,6 +686,8 @@ namespace Arena.UI
                     hub,
                     _loadoutPrimaryRow,
                     _loadoutPrimaryName,
+                    _loadoutPrimaryIcon,
+                    _loadoutPrimaryArt,
                     _loadoutPrimaryGlyph,
                     saved.PrimaryDisciplineId,
                     visibleWhenEmpty: true);
@@ -681,6 +695,8 @@ namespace Arena.UI
                     hub,
                     _loadoutSecondary1Row,
                     _loadoutSecondary1Name,
+                    _loadoutSecondary1Icon,
+                    _loadoutSecondary1Art,
                     _loadoutSecondary1Glyph,
                     saved.SecondaryDisciplineId1,
                     visibleWhenEmpty: false);
@@ -688,6 +704,8 @@ namespace Arena.UI
                     hub,
                     _loadoutSecondary2Row,
                     _loadoutSecondary2Name,
+                    _loadoutSecondary2Icon,
+                    _loadoutSecondary2Art,
                     _loadoutSecondary2Glyph,
                     saved.SecondaryDisciplineId2,
                     visibleWhenEmpty: false);
@@ -698,6 +716,8 @@ namespace Arena.UI
                 hub,
                 _loadoutPrimaryRow,
                 _loadoutPrimaryName,
+                _loadoutPrimaryIcon,
+                _loadoutPrimaryArt,
                 _loadoutPrimaryGlyph,
                 null,
                 visibleWhenEmpty: true);
@@ -709,6 +729,8 @@ namespace Arena.UI
             HubNetworkManager? hub,
             VisualElement? row,
             Label? name,
+            VisualElement? icon,
+            VisualElement? art,
             Label? glyph,
             string? disciplineId,
             bool visibleWhenEmpty)
@@ -720,6 +742,9 @@ namespace Arena.UI
             {
                 if (name != null)
                     name.text = "UNSELECTED";
+                SetBackground(art, null);
+                if (icon != null)
+                    ApplyBorderColor(icon, new Color32(130, 123, 110, 255));
                 if (glyph != null)
                     glyph.text = "—";
                 return;
@@ -732,8 +757,30 @@ namespace Arena.UI
                 : normalizedId.Replace('_', ' ');
             if (name != null)
                 name.text = displayName;
+            Sprite? sprite = DisciplinesScreen.ResolveDisciplineIcon(normalizedId);
+            SetBackground(art, sprite);
+            if (icon != null)
+                ApplyBorderColor(icon, DisciplinesScreen.DisciplineColor(normalizedId));
             if (glyph != null)
-                glyph.text = displayName.Substring(0, 1);
+                glyph.text = sprite == null ? displayName.Substring(0, 1) : string.Empty;
+        }
+
+        private static void SetBackground(VisualElement? element, Sprite? sprite)
+        {
+            if (element == null)
+                return;
+            if (sprite != null)
+                element.style.backgroundImage = new StyleBackground(sprite);
+            else
+                element.style.backgroundImage = StyleKeyword.None;
+        }
+
+        private static void ApplyBorderColor(VisualElement element, Color color)
+        {
+            element.style.borderTopColor = color;
+            element.style.borderRightColor = color;
+            element.style.borderBottomColor = color;
+            element.style.borderLeftColor = color;
         }
 
         private static void SetRowVisible(VisualElement? row, bool visible)

@@ -48,11 +48,11 @@
                 </ui:VisualElement>
 
                 <ui:VisualElement class="section-rule" picking-mode="Ignore" />
-                <ui:Label class="section-title" text="ACTIVE LOADOUT" />
 
                 <ui:VisualElement name="LoadoutList" class="loadout-list">
                     <ui:VisualElement name="LoadoutPrimaryRow" class="loadout-row">
-                        <ui:VisualElement name="LoadoutPrimaryIcon" class="loadout-icon loadout-icon--steel" picking-mode="Ignore">
+                        <ui:VisualElement name="LoadoutPrimaryIcon" class="loadout-icon" picking-mode="Ignore">
+                            <ui:VisualElement name="LoadoutPrimaryArt" class="loadout-art" />
                             <ui:Label name="LoadoutPrimaryGlyph" class="loadout-glyph" text="W" />
                         </ui:VisualElement>
                         <ui:VisualElement class="loadout-copy">
@@ -62,7 +62,8 @@
                         <ui:Label class="loadout-index" text="01" />
                     </ui:VisualElement>
                     <ui:VisualElement name="LoadoutSecondary1Row" class="loadout-row">
-                        <ui:VisualElement name="LoadoutSecondary1Icon" class="loadout-icon loadout-icon--fire" picking-mode="Ignore">
+                        <ui:VisualElement name="LoadoutSecondary1Icon" class="loadout-icon" picking-mode="Ignore">
+                            <ui:VisualElement name="LoadoutSecondary1Art" class="loadout-art" />
                             <ui:Label name="LoadoutSecondary1Glyph" class="loadout-glyph" text="F" />
                         </ui:VisualElement>
                         <ui:VisualElement class="loadout-copy">
@@ -72,7 +73,8 @@
                         <ui:Label class="loadout-index" text="02" />
                     </ui:VisualElement>
                     <ui:VisualElement name="LoadoutSecondary2Row" class="loadout-row">
-                        <ui:VisualElement name="LoadoutSecondary2Icon" class="loadout-icon loadout-icon--frost" picking-mode="Ignore">
+                        <ui:VisualElement name="LoadoutSecondary2Icon" class="loadout-icon" picking-mode="Ignore">
+                            <ui:VisualElement name="LoadoutSecondary2Art" class="loadout-art" />
                             <ui:Label name="LoadoutSecondary2Glyph" class="loadout-glyph" text="C" />
                         </ui:VisualElement>
                         <ui:VisualElement class="loadout-copy">
@@ -84,7 +86,6 @@
                 </ui:VisualElement>
 
                 <ui:VisualElement class="section-rule" picking-mode="Ignore" />
-                <ui:Label class="section-title" text="RANKED RECORD" />
                 <ui:VisualElement class="record-row">
                     <ui:VisualElement class="record-stat">
                         <ui:Label name="RankedRecord" class="record-value" text="18–12" />

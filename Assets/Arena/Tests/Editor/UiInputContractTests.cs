@@ -740,6 +740,10 @@ namespace Arena.Tests.Editor
             Assert.That(uss, Does.Contain(".match-overlay.is-open"));
             Assert.That(uss, Does.Contain(".format-option.is-selected"));
             Assert.That(uss, Does.Contain(".match-button.is-searching"));
+            Assert.That(uss, Does.Contain(".hub-screen .queue-summary"));
+            Assert.That(uss, Does.Contain(".hub-screen .match-button"));
+            Assert.That(uss, Does.Contain(".hub-screen .practice-button"));
+            Assert.That(uss, Does.Contain("-unity-text-align: middle-left"));
 
             Assert.That(screen, Does.Contain("_findMatchButton.clicked += OnFindMatchClicked"));
             Assert.That(screen, Does.Contain("_queueConfirm.clicked += ConfirmMatchSearch"));
