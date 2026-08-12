@@ -490,6 +490,20 @@ namespace Arena.UI
         {
             if (Application.isPlaying)
             {
+                HubNetworkManager? hub = HubNetworkManager.Instance;
+                HubLoadoutSnapshot? loadout = hub?.Loadout;
+                if (hub != null && loadout.HasValue)
+                {
+                    string primaryId = WireIdentifier.Normalize(loadout.Value.PrimaryDisciplineId);
+                    HubDisciplineSnapshot? discipline = hub.Disciplines.FirstOrDefault(candidate =>
+                        string.Equals(
+                            WireIdentifier.Normalize(candidate.Id),
+                            primaryId,
+                            System.StringComparison.Ordinal));
+                    if (!string.IsNullOrWhiteSpace(discipline?.CombatProfileId))
+                        return discipline.CombatProfileId;
+                }
+
                 DbConnection? conn = NetworkManager.Instance?.Conn;
                 Identity? identity = conn?.Identity;
                 if (conn != null && identity.HasValue)
@@ -637,6 +651,10 @@ namespace Arena.UI
 
         private static IReadOnlyDictionary<string, string> ResolveLocalArmorAppearance()
         {
+            HubLoadoutSnapshot? hubLoadout = HubNetworkManager.Instance?.Loadout;
+            if (hubLoadout.HasValue && !string.IsNullOrWhiteSpace(hubLoadout.Value.ArmorSetId))
+                return EquipmentScreen.ArmorAppearanceFor(hubLoadout.Value.ArmorSetId);
+
             var armorBySlot = new Dictionary<string, string>(System.StringComparer.Ordinal);
             DbConnection? connection = NetworkManager.Instance?.Conn;
             Identity? identity = connection?.Identity;

@@ -2,8 +2,6 @@
 
 using Arena.Combat;
 using Arena.Network;
-using SpacetimeDB;
-using SpacetimeDB.Types;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -649,7 +647,8 @@ namespace Arena.UI
 
         private void RefreshBoundData()
         {
-            HubPlayerSnapshot? hubPlayer = HubNetworkManager.Instance?.Player;
+            HubNetworkManager? hub = HubNetworkManager.Instance;
+            HubPlayerSnapshot? hubPlayer = hub?.Player;
             if (_playerName != null
                 && hubPlayer.HasValue
                 && !string.IsNullOrWhiteSpace(hubPlayer.Value.DisplayName))
@@ -657,64 +656,55 @@ namespace Arena.UI
                 _playerName.text = hubPlayer.Value.DisplayName.Trim().ToUpperInvariant();
             }
 
-            DbConnection? conn = NetworkManager.Instance?.Conn;
-            Identity? identity = conn?.Identity;
-            if (conn == null || !identity.HasValue)
-            {
-                if (_partyCount != null)
-                    _partyCount.text = "1 / 4";
-                return;
-            }
-
-            RefreshDisciplineLoadout(conn, identity.Value);
+            RefreshDisciplineLoadout(hub);
 
             if (_partyCount != null)
-                _partyCount.text = $"{ResolvePartyCount(conn, identity.Value)} / 4";
+                _partyCount.text = "1 / 4";
         }
 
-        private void RefreshDisciplineLoadout(DbConnection conn, Identity identity)
+        private void RefreshDisciplineLoadout(HubNetworkManager? hub)
         {
-            CharacterDisciplineLoadout? loadout = conn.Db.CharacterDisciplineLoadout.Owner.Find(identity);
-            if (loadout != null && !string.IsNullOrWhiteSpace(loadout.PrimaryDisciplineId))
+            HubLoadoutSnapshot? loadout = hub?.Loadout;
+            if (loadout.HasValue && !string.IsNullOrWhiteSpace(loadout.Value.PrimaryDisciplineId))
             {
+                HubLoadoutSnapshot saved = loadout.Value;
                 BindDisciplineRow(
-                    conn,
+                    hub,
                     _loadoutPrimaryRow,
                     _loadoutPrimaryName,
                     _loadoutPrimaryGlyph,
-                    loadout.PrimaryDisciplineId,
+                    saved.PrimaryDisciplineId,
                     visibleWhenEmpty: true);
                 BindDisciplineRow(
-                    conn,
+                    hub,
                     _loadoutSecondary1Row,
                     _loadoutSecondary1Name,
                     _loadoutSecondary1Glyph,
-                    loadout.SecondaryDisciplineId1,
+                    saved.SecondaryDisciplineId1,
                     visibleWhenEmpty: false);
                 BindDisciplineRow(
-                    conn,
+                    hub,
                     _loadoutSecondary2Row,
                     _loadoutSecondary2Name,
                     _loadoutSecondary2Glyph,
-                    loadout.SecondaryDisciplineId2,
+                    saved.SecondaryDisciplineId2,
                     visibleWhenEmpty: false);
                 return;
             }
 
-            ActiveCombatDiscipline? active = conn.Db.ActiveCombatDiscipline.Owner.Find(identity);
             BindDisciplineRow(
-                conn,
+                hub,
                 _loadoutPrimaryRow,
                 _loadoutPrimaryName,
                 _loadoutPrimaryGlyph,
-                active?.DisciplineId,
+                null,
                 visibleWhenEmpty: true);
             SetRowVisible(_loadoutSecondary1Row, false);
             SetRowVisible(_loadoutSecondary2Row, false);
         }
 
         private static void BindDisciplineRow(
-            DbConnection conn,
+            HubNetworkManager? hub,
             VisualElement? row,
             Label? name,
             Label? glyph,
@@ -733,10 +723,10 @@ namespace Arena.UI
                 return;
             }
 
-            CombatDisciplineCatalog? discipline =
-                conn.Db.CombatDisciplineCatalog.DisciplineId.Find(normalizedId);
-            string displayName = !string.IsNullOrWhiteSpace(discipline?.DisplayName)
-                ? discipline.DisplayName.Trim().ToUpperInvariant()
+            HubDisciplineSnapshot? discipline = hub?.Disciplines.FirstOrDefault(candidate =>
+                string.Equals(WireIdentifier.Normalize(candidate.Id), normalizedId, System.StringComparison.Ordinal));
+            string displayName = !string.IsNullOrWhiteSpace(discipline?.Name)
+                ? discipline.Name.Trim().ToUpperInvariant()
                 : normalizedId.Replace('_', ' ');
             if (name != null)
                 name.text = displayName;
@@ -750,16 +740,5 @@ namespace Arena.UI
                 row.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        private static int ResolvePartyCount(DbConnection conn, Identity identity)
-        {
-            PartyMember? membership = conn.Db.PartyMember.Member.Find(identity);
-            if (membership == null)
-                return 1;
-
-            return Mathf.Clamp(
-                conn.Db.PartyMember.PartyId.Filter(membership.PartyId).Count(),
-                1,
-                4);
-        }
     }
 }

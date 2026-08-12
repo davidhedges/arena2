@@ -8,20 +8,16 @@ using SpacetimeDB;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
 
-namespace Arena.MatchDb
+namespace Arena.HubDb
 {
     [SpacetimeDB.Type]
     [DataContract]
-    public sealed partial class MatchReservation
+    public sealed partial class MatchPlayerLoadoutSnapshot
     {
+        [DataMember(Name = "ticket_id")]
+        public string TicketId;
         [DataMember(Name = "player_identity")]
         public SpacetimeDB.Identity PlayerIdentity;
-        [DataMember(Name = "team_id")]
-        public byte TeamId;
-        [DataMember(Name = "team_slot")]
-        public byte TeamSlot;
-        [DataMember(Name = "display_name")]
-        public string DisplayName;
         [DataMember(Name = "primary_discipline_id")]
         public string PrimaryDisciplineId;
         [DataMember(Name = "secondary_discipline_id_1")]
@@ -32,37 +28,37 @@ namespace Arena.MatchDb
         public System.Collections.Generic.List<string> SelectedAbilityIds;
         [DataMember(Name = "armor_set_id")]
         public string ArmorSetId;
-        [DataMember(Name = "reserved_at")]
-        public SpacetimeDB.Timestamp ReservedAt;
+        [DataMember(Name = "loadout_revision")]
+        public ulong LoadoutRevision;
+        [DataMember(Name = "captured_at")]
+        public SpacetimeDB.Timestamp CapturedAt;
 
-        public MatchReservation(
+        public MatchPlayerLoadoutSnapshot(
+            string TicketId,
             SpacetimeDB.Identity PlayerIdentity,
-            byte TeamId,
-            byte TeamSlot,
-            string DisplayName,
             string PrimaryDisciplineId,
             string SecondaryDisciplineId1,
             string SecondaryDisciplineId2,
             System.Collections.Generic.List<string> SelectedAbilityIds,
             string ArmorSetId,
-            SpacetimeDB.Timestamp ReservedAt
+            ulong LoadoutRevision,
+            SpacetimeDB.Timestamp CapturedAt
         )
         {
+            this.TicketId = TicketId;
             this.PlayerIdentity = PlayerIdentity;
-            this.TeamId = TeamId;
-            this.TeamSlot = TeamSlot;
-            this.DisplayName = DisplayName;
             this.PrimaryDisciplineId = PrimaryDisciplineId;
             this.SecondaryDisciplineId1 = SecondaryDisciplineId1;
             this.SecondaryDisciplineId2 = SecondaryDisciplineId2;
             this.SelectedAbilityIds = SelectedAbilityIds;
             this.ArmorSetId = ArmorSetId;
-            this.ReservedAt = ReservedAt;
+            this.LoadoutRevision = LoadoutRevision;
+            this.CapturedAt = CapturedAt;
         }
 
-        public MatchReservation()
+        public MatchPlayerLoadoutSnapshot()
         {
-            this.DisplayName = "";
+            this.TicketId = "";
             this.PrimaryDisciplineId = "";
             this.SecondaryDisciplineId1 = "";
             this.SecondaryDisciplineId2 = "";

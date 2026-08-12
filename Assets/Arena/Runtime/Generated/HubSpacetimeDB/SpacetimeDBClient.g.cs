@@ -28,6 +28,10 @@ namespace Arena.HubDb
     {
         public RemoteTables(DbConnection conn)
         {
+            AddTable(HubAbilityDefinition = new(conn));
+            AddTable(HubArmorSetDefinition = new(conn));
+            AddTable(HubCombatDisciplineDefinition = new(conn));
+            AddTable(MyHubLoadout = new(conn));
             AddTable(MyHubPlayer = new(conn));
             AddTable(MyMatchStatus = new(conn));
             AddTable(ProvisionerWakeup = new(conn));
@@ -527,6 +531,10 @@ namespace Arena.HubDb
 
         internal static string[] AllTablesSqlQueries() => new string[]
         {
+            new QueryBuilder().From.HubAbilityDefinition().ToSql(),
+            new QueryBuilder().From.HubArmorSetDefinition().ToSql(),
+            new QueryBuilder().From.HubCombatDisciplineDefinition().ToSql(),
+            new QueryBuilder().From.MyHubLoadout().ToSql(),
             new QueryBuilder().From.MyHubPlayer().ToSql(),
             new QueryBuilder().From.MyMatchStatus().ToSql(),
             new QueryBuilder().From.ProvisionerWakeup().ToSql(),
@@ -536,6 +544,10 @@ namespace Arena.HubDb
 
     public sealed class From
     {
+        public global::SpacetimeDB.Table<HubAbilityDefinition, HubAbilityDefinitionCols, HubAbilityDefinitionIxCols> HubAbilityDefinition() => new("hub_ability_definition", new HubAbilityDefinitionCols("hub_ability_definition"), new HubAbilityDefinitionIxCols("hub_ability_definition"));
+        public global::SpacetimeDB.Table<HubArmorSetDefinition, HubArmorSetDefinitionCols, HubArmorSetDefinitionIxCols> HubArmorSetDefinition() => new("hub_armor_set_definition", new HubArmorSetDefinitionCols("hub_armor_set_definition"), new HubArmorSetDefinitionIxCols("hub_armor_set_definition"));
+        public global::SpacetimeDB.Table<HubCombatDisciplineDefinition, HubCombatDisciplineDefinitionCols, HubCombatDisciplineDefinitionIxCols> HubCombatDisciplineDefinition() => new("hub_combat_discipline_definition", new HubCombatDisciplineDefinitionCols("hub_combat_discipline_definition"), new HubCombatDisciplineDefinitionIxCols("hub_combat_discipline_definition"));
+        public global::SpacetimeDB.Table<MyHubLoadout, MyHubLoadoutCols, MyHubLoadoutIxCols> MyHubLoadout() => new("my_hub_loadout", new MyHubLoadoutCols("my_hub_loadout"), new MyHubLoadoutIxCols("my_hub_loadout"));
         public global::SpacetimeDB.Table<MyHubPlayer, MyHubPlayerCols, MyHubPlayerIxCols> MyHubPlayer() => new("my_hub_player", new MyHubPlayerCols("my_hub_player"), new MyHubPlayerIxCols("my_hub_player"));
         public global::SpacetimeDB.Table<MyMatchStatus, MyMatchStatusCols, MyMatchStatusIxCols> MyMatchStatus() => new("my_match_status", new MyMatchStatusCols("my_match_status"), new MyMatchStatusIxCols("my_match_status"));
         public global::SpacetimeDB.Table<ProvisionerWakeup, ProvisionerWakeupCols, ProvisionerWakeupIxCols> ProvisionerWakeup() => new("provisioner_wakeup", new ProvisionerWakeupCols("provisioner_wakeup"), new ProvisionerWakeupIxCols("provisioner_wakeup"));
@@ -622,6 +634,8 @@ namespace Arena.HubDb
             {
                 Reducer.CancelMatchTicket args => Reducers.InvokeCancelMatchTicket(eventContext, args),
                 Reducer.RequestUnranked2V2BotMatch args => Reducers.InvokeRequestUnranked2V2BotMatch(eventContext, args),
+                Reducer.SaveHubArmorSet args => Reducers.InvokeSaveHubArmorSet(eventContext, args),
+                Reducer.SaveHubDisciplineLoadout args => Reducers.InvokeSaveHubDisciplineLoadout(eventContext, args),
                 Reducer.ServiceClaimTicket args => Reducers.InvokeServiceClaimTicket(eventContext, args),
                 Reducer.ServiceCloseTicket args => Reducers.InvokeServiceCloseTicket(eventContext, args),
                 Reducer.ServiceMarkFailed args => Reducers.InvokeServiceMarkFailed(eventContext, args),

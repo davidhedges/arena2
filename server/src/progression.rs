@@ -1996,6 +1996,24 @@ pub fn save_character_discipline_loadout(
     secondary_discipline_id_2: String,
     selected_ability_ids: Vec<String>,
 ) -> Result<(), String> {
+    save_character_discipline_loadout_for_owner(
+        ctx,
+        ctx.sender(),
+        primary_discipline_id,
+        secondary_discipline_id_1,
+        secondary_discipline_id_2,
+        selected_ability_ids,
+    )
+}
+
+pub(crate) fn save_character_discipline_loadout_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+    primary_discipline_id: String,
+    secondary_discipline_id_1: String,
+    secondary_discipline_id_2: String,
+    selected_ability_ids: Vec<String>,
+) -> Result<(), String> {
     let primary_discipline_id =
         require_combat_discipline(ctx, primary_discipline_id.as_str())?.discipline_id;
     let secondary_discipline_id_1 =
@@ -2016,7 +2034,6 @@ pub fn save_character_discipline_loadout(
         selected_ability_ids,
     )?;
 
-    let owner = ctx.sender();
     let loadout = CharacterDisciplineLoadout {
         owner,
         primary_discipline_id,

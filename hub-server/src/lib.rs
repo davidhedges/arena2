@@ -4,8 +4,10 @@
 //! player identity plus the request/assignment state consumed by the future
 //! match provisioner and Unity handoff.
 
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
+use serde::Deserialize;
 use spacetimedb::{
     reducer, table, view, Identity, ReducerContext, ScheduleAt, SpacetimeType, Table, Timestamp,
     ViewContext,
@@ -31,6 +33,16 @@ const STATUS_FAILED: &str = "FAILED";
 const STATUS_CLOSED: &str = "CLOSED";
 
 const FAILURE_TICKET_EXPIRED: &str = "TICKET_EXPIRED";
+const PRIMARY_DISCIPLINE_ABILITY_MINIMUM: usize = 8;
+const SECONDARY_DISCIPLINE_ABILITY_MINIMUM: usize = 1;
+const MAX_DISCIPLINE_LOADOUT_ABILITIES: usize = 128;
+
+const PROGRESSION_CATALOG_JSON: &str =
+    include_str!("../../server/src/progression_catalog.shared.json");
+const HUB_CATALOG_HASH_OFFSET: u64 = 0xcbf29ce484222325;
+const HUB_CATALOG_HASH_PRIME: u64 = 0x100000001b3;
+const PROGRESSION_CATALOG_HASH: u64 =
+    extend_catalog_hash(HUB_CATALOG_HASH_OFFSET, PROGRESSION_CATALOG_JSON.as_bytes());
 
 #[table(accessor = hub_player)]
 pub struct HubPlayer {
@@ -39,6 +51,92 @@ pub struct HubPlayer {
     pub display_name: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+}
+
+/// Durable build selection. Item instances and simulation state deliberately
+/// stay out of the Hub; the currently authored equipment UI selects one stable
+/// armor-set id while disciplines save stable authored ids.
+#[table(accessor = hub_player_loadout)]
+#[derive(Clone)]
+pub struct HubPlayerLoadout {
+    #[primary_key]
+    pub owner: Identity,
+    pub primary_discipline_id: String,
+    pub secondary_discipline_id_1: String,
+    pub secondary_discipline_id_2: String,
+    pub selected_ability_ids: Vec<String>,
+    pub armor_set_id: String,
+    pub revision: u64,
+    pub updated_at: Timestamp,
+}
+
+/// Prevents every Hub connection from reparsing and rescanning the authored
+/// catalogs. The revision is derived from the embedded JSON and armor specs.
+#[table(accessor = hub_catalog_state)]
+struct HubCatalogState {
+    #[primary_key]
+    singleton_id: u8,
+    revision: u64,
+}
+
+/// Frozen at ticket creation so later Hub edits cannot alter a match that is
+/// already being provisioned.
+#[table(accessor = match_player_loadout_snapshot)]
+pub struct MatchPlayerLoadoutSnapshot {
+    #[primary_key]
+    pub ticket_id: String,
+    #[index(btree)]
+    pub player_identity: Identity,
+    pub primary_discipline_id: String,
+    pub secondary_discipline_id_1: String,
+    pub secondary_discipline_id_2: String,
+    pub selected_ability_ids: Vec<String>,
+    pub armor_set_id: String,
+    pub loadout_revision: u64,
+    pub captured_at: Timestamp,
+}
+
+/// Display-only Hub copy of the source-controlled combat catalog. Match
+/// databases remain authoritative for combat behavior and tuning.
+#[table(accessor = hub_combat_discipline_definition, public)]
+#[derive(Clone, PartialEq)]
+pub struct HubCombatDisciplineDefinition {
+    #[primary_key]
+    pub discipline_id: String,
+    pub discipline_kind: String,
+    pub combat_profile_id: String,
+    pub display_name: String,
+    pub sort_order: u32,
+}
+
+#[table(accessor = hub_ability_definition, public)]
+#[derive(Clone, PartialEq)]
+pub struct HubAbilityDefinition {
+    #[primary_key]
+    pub ability_id: String,
+    #[index(btree)]
+    pub discipline_id: String,
+    pub display_name: String,
+    pub resource_kind: String,
+    pub resource_cost: f32,
+    pub ability_tags: String,
+    pub description: String,
+    pub sort_order: u32,
+}
+
+#[table(accessor = hub_armor_set_definition, public)]
+#[derive(Clone, PartialEq)]
+pub struct HubArmorSetDefinition {
+    #[primary_key]
+    pub armor_set_id: String,
+    pub display_name: String,
+    pub armor_tier: String,
+    pub physical_resistance: f32,
+    pub magical_resistance: f32,
+    pub move_speed_modifier: f32,
+    pub cast_speed_modifier: f32,
+    pub piece_count: u32,
+    pub sort_order: u32,
 }
 
 #[table(accessor = hub_service_config)]
@@ -109,6 +207,19 @@ pub struct MyHubPlayer {
     pub updated_at: Timestamp,
 }
 
+/// Public projection of only the caller's durable build selection.
+#[derive(SpacetimeType)]
+pub struct MyHubLoadout {
+    pub owner: Identity,
+    pub primary_discipline_id: String,
+    pub secondary_discipline_id_1: String,
+    pub secondary_discipline_id_2: String,
+    pub selected_ability_ids: Vec<String>,
+    pub armor_set_id: String,
+    pub revision: u64,
+    pub updated_at: Timestamp,
+}
+
 /// Carries no ticket/player data; changing `sequence` only wakes the service.
 #[derive(SpacetimeType)]
 pub struct ProvisionerWakeup {
@@ -146,6 +257,24 @@ pub fn my_hub_player(ctx: &ViewContext) -> Option<MyHubPlayer> {
             display_name: player.display_name,
             created_at: player.created_at,
             updated_at: player.updated_at,
+        })
+}
+
+#[view(accessor = my_hub_loadout, public)]
+pub fn my_hub_loadout(ctx: &ViewContext) -> Option<MyHubLoadout> {
+    ctx.db
+        .hub_player_loadout()
+        .owner()
+        .find(ctx.sender())
+        .map(|loadout| MyHubLoadout {
+            owner: loadout.owner,
+            primary_discipline_id: loadout.primary_discipline_id,
+            secondary_discipline_id_1: loadout.secondary_discipline_id_1,
+            secondary_discipline_id_2: loadout.secondary_discipline_id_2,
+            selected_ability_ids: loadout.selected_ability_ids,
+            armor_set_id: loadout.armor_set_id,
+            revision: loadout.revision,
+            updated_at: loadout.updated_at,
         })
 }
 
@@ -215,6 +344,7 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
         scheduled_id: 0,
         scheduled_at: ScheduleAt::Interval(MAINTENANCE_INTERVAL.into()),
     });
+    ensure_hub_loadout_catalogs(ctx)?;
     log::info!(
         "[HUB_INIT] Persistent Hub initialized; maintenance interval={}s; no gameplay tick",
         MAINTENANCE_INTERVAL.as_secs()
@@ -225,6 +355,91 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
 #[reducer(client_connected)]
 pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     ensure_hub_player(ctx, ctx.sender());
+    // Reconcile display-only authored data after data-preserving publishes,
+    // whose existing databases do not rerun init.
+    ensure_hub_loadout_catalogs(ctx)?;
+    Ok(())
+}
+
+#[reducer]
+pub fn save_hub_discipline_loadout(
+    ctx: &ReducerContext,
+    primary_discipline_id: String,
+    secondary_discipline_id_1: String,
+    secondary_discipline_id_2: String,
+    selected_ability_ids: Vec<String>,
+) -> Result<(), String> {
+    ensure_hub_player(ctx, ctx.sender());
+    let (primary, secondary_1, secondary_2, abilities) = validate_hub_discipline_loadout(
+        ctx,
+        primary_discipline_id,
+        secondary_discipline_id_1,
+        secondary_discipline_id_2,
+        selected_ability_ids,
+    )?;
+    let existing = ctx.db.hub_player_loadout().owner().find(ctx.sender());
+    let row = HubPlayerLoadout {
+        owner: ctx.sender(),
+        primary_discipline_id: primary,
+        secondary_discipline_id_1: secondary_1,
+        secondary_discipline_id_2: secondary_2,
+        selected_ability_ids: abilities,
+        armor_set_id: existing
+            .as_ref()
+            .map(|loadout| loadout.armor_set_id.clone())
+            .unwrap_or_default(),
+        revision: next_loadout_revision(existing.as_ref().map(|loadout| loadout.revision)),
+        updated_at: ctx.timestamp,
+    };
+    if existing.is_some() {
+        ctx.db.hub_player_loadout().owner().update(row);
+    } else {
+        ctx.db.hub_player_loadout().insert(row);
+    }
+    Ok(())
+}
+
+#[reducer]
+pub fn save_hub_armor_set(ctx: &ReducerContext, armor_set_id: String) -> Result<(), String> {
+    ensure_hub_player(ctx, ctx.sender());
+    let armor_set_id = normalize_authored_id(armor_set_id.as_str());
+    if ctx
+        .db
+        .hub_armor_set_definition()
+        .armor_set_id()
+        .find(armor_set_id.clone())
+        .is_none()
+    {
+        return Err(format!("unknown armor set '{armor_set_id}'"));
+    }
+    let existing = ctx.db.hub_player_loadout().owner().find(ctx.sender());
+    let row = HubPlayerLoadout {
+        owner: ctx.sender(),
+        primary_discipline_id: existing
+            .as_ref()
+            .map(|loadout| loadout.primary_discipline_id.clone())
+            .unwrap_or_default(),
+        secondary_discipline_id_1: existing
+            .as_ref()
+            .map(|loadout| loadout.secondary_discipline_id_1.clone())
+            .unwrap_or_default(),
+        secondary_discipline_id_2: existing
+            .as_ref()
+            .map(|loadout| loadout.secondary_discipline_id_2.clone())
+            .unwrap_or_default(),
+        selected_ability_ids: existing
+            .as_ref()
+            .map(|loadout| loadout.selected_ability_ids.clone())
+            .unwrap_or_default(),
+        armor_set_id,
+        revision: next_loadout_revision(existing.as_ref().map(|loadout| loadout.revision)),
+        updated_at: ctx.timestamp,
+    };
+    if existing.is_some() {
+        ctx.db.hub_player_loadout().owner().update(row);
+    } else {
+        ctx.db.hub_player_loadout().insert(row);
+    }
     Ok(())
 }
 
@@ -254,6 +469,7 @@ pub fn request_unranked_2v2_bot_match(
             }
             RequestDecision::ReplaceTerminal => {
                 delete_assignment_for_player(ctx, player_identity);
+                delete_loadout_snapshot_for_ticket(ctx, existing.ticket_id.as_str());
                 ctx.db.match_ticket().ticket_id().delete(existing.ticket_id);
             }
         }
@@ -261,7 +477,7 @@ pub fn request_unranked_2v2_bot_match(
 
     let ticket_id = ticket_id_for(player_identity, client_request_id.as_str());
     ctx.db.match_ticket().insert(MatchTicket {
-        ticket_id,
+        ticket_id: ticket_id.clone(),
         player_identity,
         client_request_id,
         queue_kind: QUEUE_UNRANKED.to_string(),
@@ -274,6 +490,7 @@ pub fn request_unranked_2v2_bot_match(
         lease_until: None,
         failure_code: None,
     });
+    freeze_player_loadout_for_ticket(ctx, ticket_id, player_identity);
     bump_provisioner_wakeup(ctx);
     Ok(())
 }
@@ -582,11 +799,513 @@ pub fn hub_maintenance_tick(
             }
             ExpiryAction::Delete => {
                 delete_assignment_for_player(ctx, ticket.player_identity);
+                delete_loadout_snapshot_for_ticket(ctx, ticket.ticket_id.as_str());
                 ctx.db.match_ticket().ticket_id().delete(ticket.ticket_id);
             }
         }
     }
     Ok(())
+}
+
+#[derive(Deserialize)]
+struct HubProgressionCatalogFile {
+    combat_disciplines: Vec<HubDisciplineAuthoring>,
+    abilities: Vec<HubAbilityAuthoring>,
+    #[serde(default)]
+    action_presentations: Vec<HubActionPresentationAuthoring>,
+}
+
+#[derive(Deserialize)]
+struct HubDisciplineAuthoring {
+    discipline_id: String,
+    discipline_kind: String,
+    combat_profile_id: String,
+    display_name: String,
+    sort_order: u32,
+}
+
+#[derive(Deserialize)]
+struct HubAbilityAuthoring {
+    ability_id: String,
+    actor_scope: String,
+    #[serde(default)]
+    discipline_id: String,
+    display_name: String,
+    resource_kind: String,
+    #[serde(default)]
+    resource_cost: f32,
+    #[serde(default)]
+    ability_tags: Vec<String>,
+    sort_order: u32,
+}
+
+#[derive(Deserialize)]
+struct HubActionPresentationAuthoring {
+    presentation_kind: String,
+    presentation_id: String,
+    #[serde(default)]
+    description: String,
+}
+
+#[derive(Clone, Copy)]
+struct HubArmorSetSpec {
+    armor_set_id: &'static str,
+    display_name: &'static str,
+    armor_tier: &'static str,
+    piece_count: u32,
+    sort_order: u32,
+}
+
+const fn hub_armor_set(
+    armor_set_id: &'static str,
+    display_name: &'static str,
+    armor_tier: &'static str,
+    piece_count: u32,
+    sort_order: u32,
+) -> HubArmorSetSpec {
+    HubArmorSetSpec {
+        armor_set_id,
+        display_name,
+        armor_tier,
+        piece_count,
+        sort_order,
+    }
+}
+
+const HUB_ARMOR_SET_SPECS: &[HubArmorSetSpec] = &[
+    hub_armor_set("PEASANT", "Peasant Attire", "LIGHT", 4, 10),
+    hub_armor_set("APPRENTICE", "Apprentice Vestments", "LIGHT", 7, 20),
+    hub_armor_set("LEATHER", "Ranger Leathers", "MEDIUM", 7, 30),
+    hub_armor_set("IRON", "Iron Warplate", "HEAVY", 7, 40),
+    hub_armor_set("GILDED", "Gilded Warplate", "HEAVY", 7, 50),
+    hub_armor_set("FMAGE_BL", "Blue Mage Vestments", "LIGHT", 7, 70),
+    hub_armor_set("FMAGE_GN", "Green Mage Vestments", "LIGHT", 7, 71),
+    hub_armor_set("FMAGE_RD", "Red Mage Vestments", "LIGHT", 7, 72),
+    hub_armor_set("WARLOCK_GN", "Green Warlock Vestments", "LIGHT", 7, 80),
+    hub_armor_set("WARLOCK_PE", "Purple Warlock Vestments", "LIGHT", 7, 81),
+    hub_armor_set("WARLOCK_VT", "Violet Warlock Vestments", "LIGHT", 7, 82),
+    hub_armor_set("WIZARD_PE", "Purple Wizard Vestments", "LIGHT", 7, 90),
+    hub_armor_set("WIZARD_VT", "Violet Wizard Vestments", "LIGHT", 7, 91),
+    hub_armor_set("BARBARIAN_BL", "Blue Barbarian Leathers", "MEDIUM", 7, 200),
+    hub_armor_set("BARBARIAN_GN", "Green Barbarian Leathers", "MEDIUM", 7, 201),
+    hub_armor_set("BARBARIAN_RD", "Red Barbarian Leathers", "MEDIUM", 7, 202),
+    hub_armor_set("HUNTER_BL", "Blue Hunter Leathers", "MEDIUM", 7, 210),
+    hub_armor_set("HUNTER_GN", "Green Hunter Leathers", "MEDIUM", 7, 211),
+    hub_armor_set("HUNTER_PE", "Purple Hunter Leathers", "MEDIUM", 7, 212),
+    hub_armor_set("HUNTER_RD", "Red Hunter Leathers", "MEDIUM", 7, 213),
+    hub_armor_set(
+        "NRANGER_BL",
+        "Blue Northern Ranger Leathers",
+        "MEDIUM",
+        7,
+        220,
+    ),
+    hub_armor_set(
+        "NRANGER_RD",
+        "Red Northern Ranger Leathers",
+        "MEDIUM",
+        7,
+        221,
+    ),
+    hub_armor_set("RANGER_GN", "Green Ranger Leathers", "MEDIUM", 7, 230),
+    hub_armor_set("RANGER_PE", "Purple Ranger Leathers", "MEDIUM", 7, 231),
+    hub_armor_set("RANGER_RD", "Red Ranger Leathers", "MEDIUM", 7, 232),
+    hub_armor_set("REAPER_BL", "Blue Reaper Leathers", "MEDIUM", 7, 240),
+    hub_armor_set("REAPER_CN", "Cyan Reaper Leathers", "MEDIUM", 7, 241),
+    hub_armor_set("REAPER_GN", "Green Reaper Leathers", "MEDIUM", 7, 242),
+    hub_armor_set("ROGUE_BL", "Blue Rogue Leathers", "MEDIUM", 7, 250),
+    hub_armor_set("ROGUE_GN", "Green Rogue Leathers", "MEDIUM", 7, 251),
+    hub_armor_set("ROGUE_RD", "Red Rogue Leathers", "MEDIUM", 7, 252),
+    hub_armor_set("DK_BL", "Blue Death Knight Plate", "HEAVY", 7, 400),
+    hub_armor_set("DK_GN", "Green Death Knight Plate", "HEAVY", 7, 401),
+    hub_armor_set("DK_RD", "Red Death Knight Plate", "HEAVY", 7, 402),
+    hub_armor_set("DUNGPLATE_BL", "Blue Dungeon Plate", "HEAVY", 7, 410),
+    hub_armor_set("DUNGPLATE_PE", "Purple Dungeon Plate", "HEAVY", 7, 411),
+    hub_armor_set("DUNGPLATE_RD", "Red Dungeon Plate", "HEAVY", 7, 412),
+    hub_armor_set("NWARRIOR_RD", "Red Northern Warplate", "HEAVY", 7, 420),
+    hub_armor_set("PALADIN_BL", "Blue Paladin Plate", "HEAVY", 7, 430),
+    hub_armor_set("PALADIN_GN", "Green Paladin Plate", "HEAVY", 7, 431),
+    hub_armor_set("PALADIN_GR", "Gray Paladin Plate", "HEAVY", 7, 432),
+    hub_armor_set("PALADIN_RD", "Red Paladin Plate", "HEAVY", 7, 433),
+    hub_armor_set("WARRIOR_GN", "Green Warrior Plate", "HEAVY", 7, 440),
+    hub_armor_set("WARRIOR_PE", "Purple Warrior Plate", "HEAVY", 7, 441),
+    hub_armor_set("WARRIOR_RD", "Red Warrior Plate", "HEAVY", 7, 442),
+];
+
+fn ensure_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
+    let revision = hub_catalog_revision();
+    if ctx
+        .db
+        .hub_catalog_state()
+        .singleton_id()
+        .find(0)
+        .is_some_and(|state| state.revision == revision)
+    {
+        return Ok(());
+    }
+
+    sync_hub_loadout_catalogs(ctx)?;
+    let state = HubCatalogState {
+        singleton_id: 0,
+        revision,
+    };
+    if ctx.db.hub_catalog_state().singleton_id().find(0).is_some() {
+        ctx.db.hub_catalog_state().singleton_id().update(state);
+    } else {
+        ctx.db.hub_catalog_state().insert(state);
+    }
+    Ok(())
+}
+
+fn sync_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
+    let authored: HubProgressionCatalogFile = serde_json::from_str(PROGRESSION_CATALOG_JSON)
+        .map_err(|error| format!("Hub progression catalog is invalid: {error}"))?;
+    let descriptions: HashMap<String, String> = authored
+        .action_presentations
+        .into_iter()
+        .filter(|presentation| {
+            normalize_authored_id(presentation.presentation_kind.as_str()) == "ABILITY"
+        })
+        .map(|presentation| {
+            (
+                normalize_authored_id(presentation.presentation_id.as_str()),
+                presentation.description.trim().to_string(),
+            )
+        })
+        .collect();
+
+    let discipline_rows: Vec<HubCombatDisciplineDefinition> = authored
+        .combat_disciplines
+        .into_iter()
+        .map(|discipline| HubCombatDisciplineDefinition {
+            discipline_id: normalize_authored_id(discipline.discipline_id.as_str()),
+            discipline_kind: normalize_authored_id(discipline.discipline_kind.as_str()),
+            combat_profile_id: normalize_authored_id(discipline.combat_profile_id.as_str()),
+            display_name: discipline.display_name.trim().to_string(),
+            sort_order: discipline.sort_order,
+        })
+        .collect();
+    let discipline_ids: HashSet<String> = discipline_rows
+        .iter()
+        .map(|row| row.discipline_id.clone())
+        .collect();
+    for row in discipline_rows {
+        match ctx
+            .db
+            .hub_combat_discipline_definition()
+            .discipline_id()
+            .find(row.discipline_id.clone())
+        {
+            Some(existing) if existing == row => {}
+            Some(_) => {
+                ctx.db
+                    .hub_combat_discipline_definition()
+                    .discipline_id()
+                    .update(row);
+            }
+            None => {
+                ctx.db.hub_combat_discipline_definition().insert(row);
+            }
+        }
+    }
+    let stale_discipline_ids: Vec<String> = ctx
+        .db
+        .hub_combat_discipline_definition()
+        .iter()
+        .map(|row| row.discipline_id)
+        .filter(|id| !discipline_ids.contains(id))
+        .collect();
+    for id in stale_discipline_ids {
+        ctx.db
+            .hub_combat_discipline_definition()
+            .discipline_id()
+            .delete(id);
+    }
+
+    let ability_rows: Vec<HubAbilityDefinition> = authored
+        .abilities
+        .into_iter()
+        .filter(|ability| normalize_authored_id(ability.actor_scope.as_str()) == "PLAYER")
+        .filter(|ability| {
+            ability.ability_tags.iter().any(|tag| {
+                matches!(
+                    normalize_authored_id(tag.as_str()).as_str(),
+                    "ACTION_BAR_ACTION" | "PASSIVE"
+                )
+            })
+        })
+        .map(|ability| {
+            let ability_id = normalize_authored_id(ability.ability_id.as_str());
+            HubAbilityDefinition {
+                description: descriptions.get(&ability_id).cloned().unwrap_or_default(),
+                ability_id,
+                discipline_id: normalize_authored_id(ability.discipline_id.as_str()),
+                display_name: ability.display_name.trim().to_string(),
+                resource_kind: normalize_authored_id(ability.resource_kind.as_str()),
+                resource_cost: ability.resource_cost,
+                ability_tags: ability
+                    .ability_tags
+                    .into_iter()
+                    .map(|tag| normalize_authored_id(tag.as_str()))
+                    .collect::<Vec<_>>()
+                    .join(","),
+                sort_order: ability.sort_order,
+            }
+        })
+        .collect();
+    let ability_ids: HashSet<String> = ability_rows
+        .iter()
+        .map(|row| row.ability_id.clone())
+        .collect();
+    for row in ability_rows {
+        match ctx
+            .db
+            .hub_ability_definition()
+            .ability_id()
+            .find(row.ability_id.clone())
+        {
+            Some(existing) if existing == row => {}
+            Some(_) => {
+                ctx.db.hub_ability_definition().ability_id().update(row);
+            }
+            None => {
+                ctx.db.hub_ability_definition().insert(row);
+            }
+        }
+    }
+    let stale_ability_ids: Vec<String> = ctx
+        .db
+        .hub_ability_definition()
+        .iter()
+        .map(|row| row.ability_id)
+        .filter(|id| !ability_ids.contains(id))
+        .collect();
+    for id in stale_ability_ids {
+        ctx.db.hub_ability_definition().ability_id().delete(id);
+    }
+
+    let armor_rows: Vec<HubArmorSetDefinition> = HUB_ARMOR_SET_SPECS
+        .iter()
+        .map(|spec| {
+            let (resistance, move_speed_modifier, cast_speed_modifier) = match spec.armor_tier {
+                "MEDIUM" => (0.20, 0.0, 0.0),
+                "HEAVY" => (0.40, -0.10, -0.20),
+                _ => (0.0, 0.0, 0.0),
+            };
+            HubArmorSetDefinition {
+                armor_set_id: spec.armor_set_id.to_string(),
+                display_name: spec.display_name.to_string(),
+                armor_tier: spec.armor_tier.to_string(),
+                physical_resistance: resistance,
+                magical_resistance: resistance,
+                move_speed_modifier,
+                cast_speed_modifier,
+                piece_count: spec.piece_count,
+                sort_order: spec.sort_order,
+            }
+        })
+        .collect();
+    let armor_ids: HashSet<String> = armor_rows
+        .iter()
+        .map(|row| row.armor_set_id.clone())
+        .collect();
+    for row in armor_rows {
+        match ctx
+            .db
+            .hub_armor_set_definition()
+            .armor_set_id()
+            .find(row.armor_set_id.clone())
+        {
+            Some(existing) if existing == row => {}
+            Some(_) => {
+                ctx.db.hub_armor_set_definition().armor_set_id().update(row);
+            }
+            None => {
+                ctx.db.hub_armor_set_definition().insert(row);
+            }
+        }
+    }
+    let stale_armor_ids: Vec<String> = ctx
+        .db
+        .hub_armor_set_definition()
+        .iter()
+        .map(|row| row.armor_set_id)
+        .filter(|id| !armor_ids.contains(id))
+        .collect();
+    for id in stale_armor_ids {
+        ctx.db.hub_armor_set_definition().armor_set_id().delete(id);
+    }
+    Ok(())
+}
+
+const fn extend_catalog_hash(mut hash: u64, bytes: &[u8]) -> u64 {
+    let mut index = 0;
+    while index < bytes.len() {
+        hash ^= bytes[index] as u64;
+        hash = hash.wrapping_mul(HUB_CATALOG_HASH_PRIME);
+        index += 1;
+    }
+    hash
+}
+
+fn hub_catalog_revision() -> u64 {
+    HUB_ARMOR_SET_SPECS.iter().fold(PROGRESSION_CATALOG_HASH, |hash, spec| {
+        let hash = extend_catalog_hash(hash, spec.armor_set_id.as_bytes());
+        let hash = extend_catalog_hash(hash, spec.display_name.as_bytes());
+        let hash = extend_catalog_hash(hash, spec.armor_tier.as_bytes());
+        hash ^ ((spec.piece_count as u64) << 32) ^ spec.sort_order as u64
+    })
+}
+
+fn validate_hub_discipline_loadout(
+    ctx: &ReducerContext,
+    primary_discipline_id: String,
+    secondary_discipline_id_1: String,
+    secondary_discipline_id_2: String,
+    selected_ability_ids: Vec<String>,
+) -> Result<(String, String, String, Vec<String>), String> {
+    let primary = normalize_authored_id(primary_discipline_id.as_str());
+    let secondary_1 = normalize_authored_id(secondary_discipline_id_1.as_str());
+    let secondary_2 = normalize_authored_id(secondary_discipline_id_2.as_str());
+    if primary.is_empty()
+        || ctx
+            .db
+            .hub_combat_discipline_definition()
+            .discipline_id()
+            .find(primary.clone())
+            .is_none()
+    {
+        return Err("a known primary combat discipline is required".to_string());
+    }
+    for secondary in [&secondary_1, &secondary_2] {
+        if !secondary.is_empty()
+            && ctx
+                .db
+                .hub_combat_discipline_definition()
+                .discipline_id()
+                .find(secondary.clone())
+                .is_none()
+        {
+            return Err(format!("unknown secondary combat discipline '{secondary}'"));
+        }
+    }
+    if secondary_1 == primary || secondary_2 == primary {
+        return Err("the primary combat discipline cannot also be secondary".to_string());
+    }
+    if !secondary_1.is_empty() && secondary_1 == secondary_2 {
+        return Err("secondary combat disciplines must be unique".to_string());
+    }
+    if selected_ability_ids.len() > MAX_DISCIPLINE_LOADOUT_ABILITIES {
+        return Err(format!(
+            "discipline loadout may contain at most {MAX_DISCIPLINE_LOADOUT_ABILITIES} abilities"
+        ));
+    }
+
+    let selected_disciplines: HashSet<&str> =
+        [primary.as_str(), secondary_1.as_str(), secondary_2.as_str()]
+            .into_iter()
+            .filter(|id| !id.is_empty())
+            .collect();
+    let mut seen = HashSet::new();
+    let mut abilities = Vec::new();
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    for ability_id in selected_ability_ids {
+        let ability_id = normalize_authored_id(ability_id.as_str());
+        if ability_id.is_empty() || !seen.insert(ability_id.clone()) {
+            continue;
+        }
+        let ability = ctx
+            .db
+            .hub_ability_definition()
+            .ability_id()
+            .find(ability_id.clone())
+            .ok_or_else(|| format!("unknown ability '{ability_id}'"))?;
+        if !selected_disciplines.contains(ability.discipline_id.as_str()) {
+            return Err(format!(
+                "ability '{}' does not belong to a selected discipline",
+                ability.ability_id
+            ));
+        }
+        if !ability
+            .ability_tags
+            .split(',')
+            .any(|tag| tag == "ACTION_BAR_ACTION")
+        {
+            return Err(format!(
+                "ability '{}' cannot be selected for an action-bar loadout",
+                ability.ability_id
+            ));
+        }
+        *counts.entry(ability.discipline_id).or_default() += 1;
+        abilities.push(ability_id);
+    }
+    if counts.get(&primary).copied().unwrap_or_default() < PRIMARY_DISCIPLINE_ABILITY_MINIMUM {
+        return Err(format!(
+            "primary discipline requires at least {PRIMARY_DISCIPLINE_ABILITY_MINIMUM} selected abilities"
+        ));
+    }
+    for secondary in [&secondary_1, &secondary_2] {
+        if !secondary.is_empty()
+            && counts.get(secondary).copied().unwrap_or_default()
+                < SECONDARY_DISCIPLINE_ABILITY_MINIMUM
+        {
+            return Err(format!(
+                "secondary discipline '{secondary}' requires at least {SECONDARY_DISCIPLINE_ABILITY_MINIMUM} selected ability"
+            ));
+        }
+    }
+    Ok((primary, secondary_1, secondary_2, abilities))
+}
+
+fn next_loadout_revision(current: Option<u64>) -> u64 {
+    current.unwrap_or(0).saturating_add(1)
+}
+
+fn normalize_authored_id(value: &str) -> String {
+    value.trim().to_ascii_uppercase()
+}
+
+fn freeze_player_loadout_for_ticket(
+    ctx: &ReducerContext,
+    ticket_id: String,
+    player_identity: Identity,
+) {
+    let loadout = ctx.db.hub_player_loadout().owner().find(player_identity);
+    ctx.db
+        .match_player_loadout_snapshot()
+        .insert(MatchPlayerLoadoutSnapshot {
+            ticket_id,
+            player_identity,
+            primary_discipline_id: loadout
+                .as_ref()
+                .map(|row| row.primary_discipline_id.clone())
+                .unwrap_or_default(),
+            secondary_discipline_id_1: loadout
+                .as_ref()
+                .map(|row| row.secondary_discipline_id_1.clone())
+                .unwrap_or_default(),
+            secondary_discipline_id_2: loadout
+                .as_ref()
+                .map(|row| row.secondary_discipline_id_2.clone())
+                .unwrap_or_default(),
+            selected_ability_ids: loadout
+                .as_ref()
+                .map(|row| row.selected_ability_ids.clone())
+                .unwrap_or_default(),
+            armor_set_id: loadout
+                .as_ref()
+                .map(|row| row.armor_set_id.clone())
+                .unwrap_or_default(),
+            loadout_revision: loadout.as_ref().map(|row| row.revision).unwrap_or_default(),
+            captured_at: ctx.timestamp,
+        });
+}
+
+fn delete_loadout_snapshot_for_ticket(ctx: &ReducerContext, ticket_id: &str) {
+    ctx.db
+        .match_player_loadout_snapshot()
+        .ticket_id()
+        .delete(ticket_id.to_string());
 }
 
 fn ensure_hub_player(ctx: &ReducerContext, identity: Identity) {
@@ -839,6 +1558,46 @@ mod tests {
         assert_eq!(next_wakeup_sequence(None), 1);
         assert_eq!(next_wakeup_sequence(Some(1)), 2);
         assert_eq!(next_wakeup_sequence(Some(u64::MAX)), u64::MAX);
+    }
+
+    #[test]
+    fn loadout_revision_initializes_and_advances_monotonically() {
+        assert_eq!(next_loadout_revision(None), 1);
+        assert_eq!(next_loadout_revision(Some(1)), 2);
+        assert_eq!(next_loadout_revision(Some(u64::MAX)), u64::MAX);
+    }
+
+    #[test]
+    fn hub_armor_catalog_ids_are_unique_and_have_supported_tiers() {
+        let ids: HashSet<&str> = HUB_ARMOR_SET_SPECS
+            .iter()
+            .map(|spec| spec.armor_set_id)
+            .collect();
+        assert_eq!(ids.len(), HUB_ARMOR_SET_SPECS.len());
+        assert!(HUB_ARMOR_SET_SPECS.iter().all(|spec| {
+            matches!(spec.armor_tier, "LIGHT" | "MEDIUM" | "HEAVY")
+                && spec.piece_count > 0
+        }));
+    }
+
+    #[test]
+    fn canonical_progression_catalog_parses_for_hub_projection() {
+        let authored: HubProgressionCatalogFile =
+            serde_json::from_str(PROGRESSION_CATALOG_JSON).expect("canonical progression JSON");
+        assert!(!authored.combat_disciplines.is_empty());
+        assert!(authored.abilities.iter().any(|ability| {
+            ability.actor_scope == "PLAYER"
+                && ability
+                    .ability_tags
+                    .iter()
+                    .any(|tag| tag == "ACTION_BAR_ACTION")
+        }));
+    }
+
+    #[test]
+    fn hub_catalog_revision_is_stable_and_nonzero() {
+        assert_ne!(hub_catalog_revision(), 0);
+        assert_eq!(hub_catalog_revision(), hub_catalog_revision());
     }
 
     #[test]

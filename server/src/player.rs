@@ -66,13 +66,16 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
         );
         return Ok(());
     }
-    let reserved_display_name = match &admission {
+    let reservation = match &admission {
         crate::match_contract::ConnectionAdmission::Reserved(reservation) => {
-            Some(reservation.display_name.clone())
+            Some(reservation.clone())
         }
         _ => None,
     };
-    let is_reserved_match_player = reserved_display_name.is_some();
+    let reserved_display_name = reservation
+        .as_ref()
+        .map(|reserved| reserved.display_name.clone());
+    let is_reserved_match_player = reservation.is_some();
     if matches!(
         &admission,
         crate::match_contract::ConnectionAdmission::LocalDirect
@@ -106,6 +109,9 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
         ensure_default_progression_for_identity(ctx, identity)?;
         ensure_default_character_appearance_for_identity(ctx, identity)?;
         ensure_player_inventory_for_identity(ctx, identity);
+        if let Some(reservation) = reservation.as_ref() {
+            crate::match_contract::apply_reserved_player_loadout(ctx, reservation)?;
+        }
         sync_primary_resource_for_player(ctx, identity, now);
         log::info!(
             "[CONNECT] Player {} reconnected with existing actor rows",
@@ -145,6 +151,9 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     ensure_default_progression_for_identity(ctx, identity)?;
     ensure_default_character_appearance_for_identity(ctx, identity)?;
     ensure_player_inventory_for_identity(ctx, identity);
+    if let Some(reservation) = reservation.as_ref() {
+        crate::match_contract::apply_reserved_player_loadout(ctx, reservation)?;
+    }
     sync_primary_resource_for_player(ctx, identity, now);
 
     log::info!(

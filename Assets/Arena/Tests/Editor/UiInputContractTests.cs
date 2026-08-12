@@ -591,6 +591,7 @@ namespace Arena.Tests.Editor
         {
             string screen = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/EquipmentScreen.cs");
             string hubScreen = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/HubScreen.cs");
+            string hubNetwork = File.ReadAllText("Assets/Arena/Runtime/Network/HubNetworkManager.cs");
             string uxml = File.ReadAllText("Assets/Arena/Resources/UI/Toolkit/Equipment.uxml");
             string planner = File.ReadAllText(GameplaySubscriptionPlannerPath);
             string hub = File.ReadAllText(HubControllerPath);
@@ -600,10 +601,12 @@ namespace Arena.Tests.Editor
                 "Assets/Arena/Runtime/Presentation/Appearance/CharacterAvatarAssembler.cs");
             string hubBuilder = File.ReadAllText("Assets/Arena/Editor/HubSceneAuthoringBuilder.cs");
 
-            Assert.That(screen, Does.Contain("Reducers.EquipArmorSet"));
-            Assert.That(screen, Does.Contain("OnEquipArmorSet"));
+            Assert.That(screen, Does.Contain("hub.SaveArmorSet"));
+            Assert.That(screen, Does.Contain("OnArmorSetSaved"));
+            Assert.That(screen, Does.Not.Contain("NetworkManager.Instance?.Conn"));
             Assert.That(screen, Does.Contain("SetShowcaseArmorPreview"));
             Assert.That(screen, Does.Contain("CompleteArmorPieces"));
+            Assert.That(hubNetwork, Does.Contain("From.HubArmorSetDefinition().ToSql()"));
             Assert.That(uxml, Does.Contain("name=\"TierLight\""));
             Assert.That(uxml, Does.Contain("name=\"TierMedium\""));
             Assert.That(uxml, Does.Contain("name=\"TierHeavy\""));
@@ -613,6 +616,7 @@ namespace Arena.Tests.Editor
             Assert.That(planner, Does.Contain("From.ActiveArmorSet()"));
             Assert.That(planner, Does.Contain("From.PlayerEquipmentPresentation()"));
             Assert.That(hub, Does.Contain("ResolveLocalArmorAppearance"));
+            Assert.That(hub, Does.Contain("EquipmentScreen.ArmorAppearanceFor"));
             Assert.That(hub, Does.Contain("ShowcaseCameraFacingYaw = 180f"));
             Assert.That(hubBuilder, Does.Contain("ShowcaseDefaultYaw = 180f"));
             Assert.That(hub, Does.Contain("FaceShowcaseTowardCamera(_showcaseAvatarController.VisualRoot)"));
@@ -665,7 +669,8 @@ namespace Arena.Tests.Editor
             Assert.That(screen, Does.Contain("_queueConfirm.clicked += ConfirmMatchSearch"));
             Assert.That(screen, Does.Contain("MatchHandoffCoordinator.EnsureInstance()"));
             Assert.That(screen, Does.Contain("RequestUnranked2V2BotMatch()"));
-            Assert.That(screen, Does.Contain("HubNetworkManager.Instance?.Player"));
+            Assert.That(screen, Does.Contain("HubNetworkManager? hub = HubNetworkManager.Instance"));
+            Assert.That(screen, Does.Contain("HubPlayerSnapshot? hubPlayer = hub?.Player"));
             Assert.That(screen, Does.Not.Contain("Reducers.StartUnranked2V2BotMatch()"));
             Assert.That(screen, Does.Not.Contain("OnStartUnranked2V2BotMatch"));
             Assert.That(screen, Does.Contain("START 2V2 BOT MATCH"));

@@ -1,6 +1,8 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using SpacetimeDB;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -12,6 +14,10 @@ using HubSubscriptionEventContext = Arena.HubDb.SubscriptionEventContext;
 using HubSubscriptionHandle = Arena.HubDb.SubscriptionHandle;
 using HubPlayerRow = Arena.HubDb.MyHubPlayer;
 using HubMatchStatusRow = Arena.HubDb.MyMatchStatus;
+using HubLoadoutRow = Arena.HubDb.MyHubLoadout;
+using HubDisciplineRow = Arena.HubDb.HubCombatDisciplineDefinition;
+using HubAbilityRow = Arena.HubDb.HubAbilityDefinition;
+using HubArmorSetRow = Arena.HubDb.HubArmorSetDefinition;
 
 namespace Arena.Network
 {
@@ -93,6 +99,125 @@ namespace Arena.Network
                || string.Equals(Status, "READY", StringComparison.Ordinal);
     }
 
+    internal sealed class HubDisciplineSnapshot
+    {
+        internal HubDisciplineSnapshot(
+            string id,
+            string name,
+            string kind,
+            string combatProfileId,
+            uint sortOrder)
+        {
+            Id = id;
+            Name = name;
+            Kind = kind;
+            CombatProfileId = combatProfileId;
+            SortOrder = sortOrder;
+        }
+
+        internal string Id { get; }
+        internal string Name { get; }
+        internal string Kind { get; }
+        internal string CombatProfileId { get; }
+        internal uint SortOrder { get; }
+    }
+
+    internal sealed class HubAbilitySnapshot
+    {
+        internal HubAbilitySnapshot(
+            string id,
+            string disciplineId,
+            string name,
+            string resource,
+            float cost,
+            string tags,
+            string description,
+            uint sortOrder)
+        {
+            Id = id;
+            DisciplineId = disciplineId;
+            Name = name;
+            Resource = resource;
+            Cost = cost;
+            Tags = tags;
+            Description = description;
+            SortOrder = sortOrder;
+        }
+
+        internal string Id { get; }
+        internal string DisciplineId { get; }
+        internal string Name { get; }
+        internal string Resource { get; }
+        internal float Cost { get; }
+        internal string Tags { get; }
+        internal string Description { get; }
+        internal uint SortOrder { get; }
+    }
+
+    internal sealed class HubArmorSetSnapshot
+    {
+        internal HubArmorSetSnapshot(
+            string id,
+            string name,
+            string tier,
+            float physicalResistance,
+            float magicalResistance,
+            float moveSpeedModifier,
+            float castSpeedModifier,
+            uint pieceCount,
+            uint sortOrder)
+        {
+            Id = id;
+            Name = name;
+            Tier = tier;
+            PhysicalResistance = physicalResistance;
+            MagicalResistance = magicalResistance;
+            MoveSpeedModifier = moveSpeedModifier;
+            CastSpeedModifier = castSpeedModifier;
+            PieceCount = pieceCount;
+            SortOrder = sortOrder;
+        }
+
+        internal string Id { get; }
+        internal string Name { get; }
+        internal string Tier { get; }
+        internal string ArmorSetId => Id;
+        internal string DisplayName => Name;
+        internal string ArmorTier => Tier;
+        internal float PhysicalResistance { get; }
+        internal float MagicalResistance { get; }
+        internal float MoveSpeedModifier { get; }
+        internal float CastSpeedModifier { get; }
+        internal uint PieceCount { get; }
+        internal uint SortOrder { get; }
+    }
+
+    internal readonly struct HubLoadoutSnapshot
+    {
+        internal HubLoadoutSnapshot(
+            string primaryDisciplineId,
+            string secondaryDisciplineId1,
+            string secondaryDisciplineId2,
+            IReadOnlyList<string> selectedAbilityIds,
+            string armorSetId,
+            ulong revision)
+        {
+            PrimaryDisciplineId = primaryDisciplineId;
+            SecondaryDisciplineId1 = secondaryDisciplineId1;
+            SecondaryDisciplineId2 = secondaryDisciplineId2;
+            SelectedAbilityIds = selectedAbilityIds;
+            ArmorSetId = armorSetId;
+            Revision = revision;
+        }
+
+        internal string PrimaryDisciplineId { get; }
+        internal string SecondaryDisciplineId1 { get; }
+        internal string SecondaryDisciplineId2 { get; }
+        internal IReadOnlyList<string> SelectedAbilityIds { get; }
+        internal string ArmorSetId { get; }
+        internal ulong Revision { get; }
+    }
+
     /// <summary>
     /// Persistent-control-plane connection. It subscribes only to the two
     /// caller-filtered Hub views and owns no gameplay cache or simulation work.
@@ -107,6 +232,8 @@ namespace Arena.Network
         internal event Action? Changed;
         internal event Action? Ready;
         internal event Action<string>? UnexpectedDisconnect;
+        internal event Action<bool, string>? DisciplineLoadoutSaveCompleted;
+        internal event Action<bool, string>? ArmorSetSaveCompleted;
 
         private HubConnection? _conn;
         private HubSubscriptionHandle? _subscription;
@@ -122,6 +249,10 @@ namespace Arena.Network
         private bool _requestAwaitingConfirmation;
         private HubPlayerSnapshot? _player;
         private HubMatchStatusSnapshot? _matchStatus;
+        private HubLoadoutSnapshot? _loadout;
+        private IReadOnlyList<HubDisciplineSnapshot> _disciplines = Array.Empty<HubDisciplineSnapshot>();
+        private IReadOnlyList<HubAbilitySnapshot> _abilities = Array.Empty<HubAbilitySnapshot>();
+        private IReadOnlyList<HubArmorSetSnapshot> _armorSets = Array.Empty<HubArmorSetSnapshot>();
 
         internal HubConnectionState State { get; private set; } = HubConnectionState.Disconnected;
         internal string LastError { get; private set; } = string.Empty;
@@ -130,6 +261,10 @@ namespace Arena.Network
         internal NetworkEnvironmentEndpoint ActiveEndpoint => _activeEndpoint;
         internal HubPlayerSnapshot? Player => _player;
         internal HubMatchStatusSnapshot? MatchStatus => _matchStatus;
+        internal HubLoadoutSnapshot? Loadout => _loadout;
+        internal IReadOnlyList<HubDisciplineSnapshot> Disciplines => _disciplines;
+        internal IReadOnlyList<HubAbilitySnapshot> Abilities => _abilities;
+        internal IReadOnlyList<HubArmorSetSnapshot> ArmorSets => _armorSets;
         internal bool HasActiveMatchRequest
             => _requestAwaitingConfirmation || (_matchStatus?.IsActive ?? false);
 
@@ -203,6 +338,32 @@ namespace Arena.Network
             return true;
         }
 
+        internal bool SaveDisciplineLoadout(
+            string primaryDisciplineId,
+            string secondaryDisciplineId1,
+            string secondaryDisciplineId2,
+            List<string> selectedAbilityIds)
+        {
+            if (!IsReady || _conn == null)
+                return false;
+
+            _conn.Reducers.SaveHubDisciplineLoadout(
+                primaryDisciplineId,
+                secondaryDisciplineId1,
+                secondaryDisciplineId2,
+                selectedAbilityIds);
+            return true;
+        }
+
+        internal bool SaveArmorSet(string armorSetId)
+        {
+            if (!IsReady || _conn == null)
+                return false;
+
+            _conn.Reducers.SaveHubArmorSet(armorSetId);
+            return true;
+        }
+
         internal void CancelCurrentTicket()
         {
             if (!IsReady || _conn == null || !_matchStatus.HasValue)
@@ -262,6 +423,8 @@ namespace Arena.Network
 
             BindRows(conn);
             conn.Reducers.OnRequestUnranked2V2BotMatch += OnRequestMatchResult;
+            conn.Reducers.OnSaveHubDisciplineLoadout += OnSaveDisciplineLoadoutResult;
+            conn.Reducers.OnSaveHubArmorSet += OnSaveArmorSetResult;
             State = HubConnectionState.Subscribing;
             NotifyChanged();
             _subscription = conn
@@ -272,6 +435,10 @@ namespace Arena.Network
                 {
                     new Arena.HubDb.QueryBuilder().From.MyHubPlayer().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.MyMatchStatus().ToSql(),
+                    new Arena.HubDb.QueryBuilder().From.MyHubLoadout().ToSql(),
+                    new Arena.HubDb.QueryBuilder().From.HubCombatDisciplineDefinition().ToSql(),
+                    new Arena.HubDb.QueryBuilder().From.HubAbilityDefinition().ToSql(),
+                    new Arena.HubDb.QueryBuilder().From.HubArmorSetDefinition().ToSql(),
                 });
         }
 
@@ -324,6 +491,7 @@ namespace Arena.Network
             _hasIdentity = false;
             _player = null;
             _matchStatus = null;
+            ClearLoadoutSnapshots();
             State = expected ? HubConnectionState.Disconnected : HubConnectionState.Error;
             if (!expected)
             {
@@ -343,6 +511,18 @@ namespace Arena.Network
             conn.Db.MyMatchStatus.OnInsert += OnMatchStatusInsert;
             conn.Db.MyMatchStatus.OnUpdate += OnMatchStatusUpdate;
             conn.Db.MyMatchStatus.OnDelete += OnMatchStatusDelete;
+            conn.Db.MyHubLoadout.OnInsert += OnLoadoutInsert;
+            conn.Db.MyHubLoadout.OnUpdate += OnLoadoutUpdate;
+            conn.Db.MyHubLoadout.OnDelete += OnLoadoutDelete;
+            conn.Db.HubCombatDisciplineDefinition.OnInsert += OnDisciplineInsert;
+            conn.Db.HubCombatDisciplineDefinition.OnUpdate += OnDisciplineUpdate;
+            conn.Db.HubCombatDisciplineDefinition.OnDelete += OnDisciplineDelete;
+            conn.Db.HubAbilityDefinition.OnInsert += OnAbilityInsert;
+            conn.Db.HubAbilityDefinition.OnUpdate += OnAbilityUpdate;
+            conn.Db.HubAbilityDefinition.OnDelete += OnAbilityDelete;
+            conn.Db.HubArmorSetDefinition.OnInsert += OnArmorSetInsert;
+            conn.Db.HubArmorSetDefinition.OnUpdate += OnArmorSetUpdate;
+            conn.Db.HubArmorSetDefinition.OnDelete += OnArmorSetDelete;
         }
 
         private void UnbindRows(HubConnection conn)
@@ -353,7 +533,21 @@ namespace Arena.Network
             conn.Db.MyMatchStatus.OnInsert -= OnMatchStatusInsert;
             conn.Db.MyMatchStatus.OnUpdate -= OnMatchStatusUpdate;
             conn.Db.MyMatchStatus.OnDelete -= OnMatchStatusDelete;
+            conn.Db.MyHubLoadout.OnInsert -= OnLoadoutInsert;
+            conn.Db.MyHubLoadout.OnUpdate -= OnLoadoutUpdate;
+            conn.Db.MyHubLoadout.OnDelete -= OnLoadoutDelete;
+            conn.Db.HubCombatDisciplineDefinition.OnInsert -= OnDisciplineInsert;
+            conn.Db.HubCombatDisciplineDefinition.OnUpdate -= OnDisciplineUpdate;
+            conn.Db.HubCombatDisciplineDefinition.OnDelete -= OnDisciplineDelete;
+            conn.Db.HubAbilityDefinition.OnInsert -= OnAbilityInsert;
+            conn.Db.HubAbilityDefinition.OnUpdate -= OnAbilityUpdate;
+            conn.Db.HubAbilityDefinition.OnDelete -= OnAbilityDelete;
+            conn.Db.HubArmorSetDefinition.OnInsert -= OnArmorSetInsert;
+            conn.Db.HubArmorSetDefinition.OnUpdate -= OnArmorSetUpdate;
+            conn.Db.HubArmorSetDefinition.OnDelete -= OnArmorSetDelete;
             conn.Reducers.OnRequestUnranked2V2BotMatch -= OnRequestMatchResult;
+            conn.Reducers.OnSaveHubDisciplineLoadout -= OnSaveDisciplineLoadoutResult;
+            conn.Reducers.OnSaveHubArmorSet -= OnSaveArmorSetResult;
         }
 
         private void OnHubPlayerInsert(HubEventContext _, HubPlayerRow row) => ApplyPlayer(row);
@@ -375,6 +569,25 @@ namespace Arena.Network
             _requestAwaitingConfirmation = false;
             NotifyChanged();
         }
+
+        private void OnLoadoutInsert(HubEventContext _, HubLoadoutRow row) => ApplyLoadout(row);
+        private void OnLoadoutUpdate(HubEventContext _, HubLoadoutRow __, HubLoadoutRow row) => ApplyLoadout(row);
+
+        private void OnLoadoutDelete(HubEventContext _, HubLoadoutRow __)
+        {
+            _loadout = null;
+            NotifyChanged();
+        }
+
+        private void OnDisciplineInsert(HubEventContext _, HubDisciplineRow __) => RefreshCatalogSnapshots();
+        private void OnDisciplineUpdate(HubEventContext _, HubDisciplineRow __, HubDisciplineRow ___) => RefreshCatalogSnapshots();
+        private void OnDisciplineDelete(HubEventContext _, HubDisciplineRow __) => RefreshCatalogSnapshots();
+        private void OnAbilityInsert(HubEventContext _, HubAbilityRow __) => RefreshCatalogSnapshots();
+        private void OnAbilityUpdate(HubEventContext _, HubAbilityRow __, HubAbilityRow ___) => RefreshCatalogSnapshots();
+        private void OnAbilityDelete(HubEventContext _, HubAbilityRow __) => RefreshCatalogSnapshots();
+        private void OnArmorSetInsert(HubEventContext _, HubArmorSetRow __) => RefreshCatalogSnapshots();
+        private void OnArmorSetUpdate(HubEventContext _, HubArmorSetRow __, HubArmorSetRow ___) => RefreshCatalogSnapshots();
+        private void OnArmorSetDelete(HubEventContext _, HubArmorSetRow __) => RefreshCatalogSnapshots();
 
         private void ApplyPlayer(HubPlayerRow row)
         {
@@ -401,6 +614,64 @@ namespace Arena.Network
             _requestAwaitingConfirmation = false;
             if (!string.Equals(row.Status, "FAILED", StringComparison.Ordinal))
                 LastError = string.Empty;
+            NotifyChanged();
+        }
+
+        private void ApplyLoadout(HubLoadoutRow row)
+        {
+            _loadout = new HubLoadoutSnapshot(
+                row.PrimaryDisciplineId,
+                row.SecondaryDisciplineId1,
+                row.SecondaryDisciplineId2,
+                row.SelectedAbilityIds.ToArray(),
+                row.ArmorSetId,
+                row.Revision);
+            NotifyChanged();
+        }
+
+        private void RefreshCatalogSnapshots()
+        {
+            HubConnection? conn = _conn;
+            if (conn == null)
+                return;
+
+            _disciplines = conn.Db.HubCombatDisciplineDefinition.Iter()
+                .OrderBy(row => row.SortOrder)
+                .ThenBy(row => row.DisciplineId, StringComparer.Ordinal)
+                .Select(row => new HubDisciplineSnapshot(
+                    row.DisciplineId,
+                    row.DisplayName,
+                    row.DisciplineKind,
+                    row.CombatProfileId,
+                    row.SortOrder))
+                .ToArray();
+            _abilities = conn.Db.HubAbilityDefinition.Iter()
+                .OrderBy(row => row.SortOrder)
+                .ThenBy(row => row.AbilityId, StringComparer.Ordinal)
+                .Select(row => new HubAbilitySnapshot(
+                    row.AbilityId,
+                    row.DisciplineId,
+                    row.DisplayName,
+                    row.ResourceKind,
+                    row.ResourceCost,
+                    row.AbilityTags,
+                    row.Description,
+                    row.SortOrder))
+                .ToArray();
+            _armorSets = conn.Db.HubArmorSetDefinition.Iter()
+                .OrderBy(row => row.SortOrder)
+                .ThenBy(row => row.ArmorSetId, StringComparer.Ordinal)
+                .Select(row => new HubArmorSetSnapshot(
+                    row.ArmorSetId,
+                    row.DisplayName,
+                    row.ArmorTier,
+                    row.PhysicalResistance,
+                    row.MagicalResistance,
+                    row.MoveSpeedModifier,
+                    row.CastSpeedModifier,
+                    row.PieceCount,
+                    row.SortOrder))
+                .ToArray();
             NotifyChanged();
         }
 
@@ -433,6 +704,20 @@ namespace Arena.Network
                 _requestAwaitingConfirmation = false;
                 break;
             }
+
+            _loadout = null;
+            foreach (HubLoadoutRow row in conn.Db.MyHubLoadout.Iter())
+            {
+                _loadout = new HubLoadoutSnapshot(
+                    row.PrimaryDisciplineId,
+                    row.SecondaryDisciplineId1,
+                    row.SecondaryDisciplineId2,
+                    row.SelectedAbilityIds.ToArray(),
+                    row.ArmorSetId,
+                    row.Revision);
+                break;
+            }
+            RefreshCatalogSnapshots();
         }
 
         private void OnRequestMatchResult(HubReducerEventContext context, string clientRequestId)
@@ -463,6 +748,44 @@ namespace Arena.Network
             NotifyChanged();
         }
 
+        private void OnSaveDisciplineLoadoutResult(
+            HubReducerEventContext context,
+            string primaryDisciplineId,
+            string secondaryDisciplineId1,
+            string secondaryDisciplineId2,
+            List<string> selectedAbilityIds)
+        {
+            if (!_hasIdentity || context.Event.CallerIdentity != _identity)
+                return;
+
+            bool committed = context.Event.Status is Status.Committed;
+            DisciplineLoadoutSaveCompleted?.Invoke(
+                committed,
+                ReducerFailureMessage(context.Event.Status, "The Hub did not save the discipline loadout."));
+        }
+
+        private void OnSaveArmorSetResult(HubReducerEventContext context, string armorSetId)
+        {
+            if (!_hasIdentity || context.Event.CallerIdentity != _identity)
+                return;
+
+            bool committed = context.Event.Status is Status.Committed;
+            ArmorSetSaveCompleted?.Invoke(
+                committed,
+                ReducerFailureMessage(context.Event.Status, "The Hub did not save the armor set."));
+        }
+
+        private static string ReducerFailureMessage(Status status, string fallback)
+        {
+            return status switch
+            {
+                Status.Committed => string.Empty,
+                Status.Failed(var failure) => failure,
+                Status.OutOfEnergy(var _) => "The Hub was temporarily out of reducer energy.",
+                _ => fallback,
+            };
+        }
+
         private void SetError(string message, bool disconnect)
         {
             LastError = message;
@@ -481,6 +804,7 @@ namespace Arena.Network
             _hasIdentity = false;
             _player = null;
             _matchStatus = null;
+            ClearLoadoutSnapshots();
             if (conn == null)
                 return;
 
@@ -493,6 +817,14 @@ namespace Arena.Network
             {
                 Debug.LogWarning($"[HubNetworkManager] Disconnect failed: {error.Message}");
             }
+        }
+
+        private void ClearLoadoutSnapshots()
+        {
+            _loadout = null;
+            _disciplines = Array.Empty<HubDisciplineSnapshot>();
+            _abilities = Array.Empty<HubAbilitySnapshot>();
+            _armorSets = Array.Empty<HubArmorSetSnapshot>();
         }
 
         private void Update()

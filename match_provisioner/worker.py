@@ -670,12 +670,14 @@ class Provisioner:
             ticket = snapshot["tickets"].get(allocation.ticket_id)
             assignment = snapshot["assignments"].get(allocation.ticket_id)
             player = snapshot["players"].get(allocation.player_identity)
+            loadout = snapshot["loadouts"].get(allocation.ticket_id)
             try:
                 self._reconcile_allocation(
                     allocation,
                     ticket,
                     assignment,
                     player,
+                    loadout,
                     service_identity,
                     now,
                 )
@@ -696,8 +698,11 @@ class Provisioner:
             for ticket in pending[:capacity]:
                 player_identity = normalize_identity(ticket["player_identity"])
                 player = snapshot["players"].get(player_identity)
+                loadout = snapshot["loadouts"].get(str(ticket["ticket_id"]))
                 try:
-                    self._claim_and_provision(ticket, player, service_identity, now)
+                    self._claim_and_provision(
+                        ticket, player, loadout, service_identity, now
+                    )
                 except ProvisionerError as error:
                     log_event(
                         "claim_or_provision_failed",
@@ -724,11 +729,19 @@ class Provisioner:
             normalize_identity(row["identity"]): row
             for row in self.api.sql(self.config.hub_database, "SELECT * FROM hub_player")
         }
+        loadouts = {
+            str(row["ticket_id"]): row
+            for row in self.api.sql(
+                self.config.hub_database,
+                "SELECT * FROM match_player_loadout_snapshot",
+            )
+        }
         return {
             "service_identity": service_identity,
             "tickets": tickets,
             "assignments": assignments,
             "players": players,
+            "loadouts": loadouts,
         }
 
     def _new_allocation(self, ticket: dict[str, Any], now: int) -> Allocation:
@@ -761,6 +774,7 @@ class Provisioner:
         self,
         ticket: dict[str, Any],
         player: dict[str, Any] | None,
+        loadout: dict[str, Any] | None,
         service_identity: str,
         now: int,
     ) -> None:
@@ -811,6 +825,7 @@ class Provisioner:
             allocation,
             ticket,
             player,
+            loadout,
             service_identity,
             now,
             ticket_created_micros,
@@ -883,6 +898,7 @@ class Provisioner:
         allocation: Allocation,
         ticket: dict[str, Any],
         player: dict[str, Any] | None,
+        loadout: dict[str, Any] | None,
         service_identity: str,
         now: int,
         ticket_created_micros: int,
@@ -910,6 +926,7 @@ class Provisioner:
                 allocation,
                 ticket,
                 player,
+                loadout,
                 now,
                 timings_ms,
             )
@@ -1079,6 +1096,7 @@ class Provisioner:
         allocation: Allocation,
         ticket: dict[str, Any],
         player: dict[str, Any] | None,
+        loadout: dict[str, Any] | None,
         now: int,
         timings_ms: dict[str, float],
     ) -> bool:
@@ -1097,6 +1115,8 @@ class Provisioner:
 
         if player is None:
             raise ProvisionerError("Hub player snapshot is missing")
+        if loadout is None:
+            raise ProvisionerError("Hub match loadout snapshot is missing")
         display_name = str(player.get("display_name", "")).strip()
         if not display_name:
             raise ProvisionerError("Hub player display name is empty")
@@ -1115,6 +1135,11 @@ class Provisioner:
                     timestamp_arg(now + self.config.allocation_seconds),
                     identity_arg(allocation.player_identity),
                     display_name,
+                    str(loadout.get("primary_discipline_id", "")),
+                    str(loadout.get("secondary_discipline_id_1", "")),
+                    str(loadout.get("secondary_discipline_id_2", "")),
+                    [str(value) for value in loadout.get("selected_ability_ids", [])],
+                    str(loadout.get("armor_set_id", "")),
                 ],
             )
         finally:
@@ -1146,6 +1171,7 @@ class Provisioner:
         ticket: dict[str, Any] | None,
         assignment: dict[str, Any] | None,
         player: dict[str, Any] | None,
+        loadout: dict[str, Any] | None,
         service_identity: str,
         now: int,
     ) -> None:
@@ -1189,7 +1215,18 @@ class Provisioner:
                 "PROVISIONING",
             }:
                 self._claim_lease(allocation, now)
-                self._provision(allocation, ticket, player, service_identity, now)
+                startup_started = time.perf_counter()
+                self._provision(
+                    allocation,
+                    ticket,
+                    player,
+                    loadout,
+                    service_identity,
+                    now,
+                    timestamp_microseconds(ticket["created_at"]),
+                    startup_started,
+                    {},
+                )
                 return
             if ticket is not None and str(ticket.get("status")) == "READY":
                 self.api.call(
@@ -1220,7 +1257,18 @@ class Provisioner:
                 "PROVISIONING",
             } and now < allocation.hard_expires_at:
                 self._claim_lease(allocation, now)
-                self._provision(allocation, ticket, player, service_identity, now)
+                startup_started = time.perf_counter()
+                self._provision(
+                    allocation,
+                    ticket,
+                    player,
+                    loadout,
+                    service_identity,
+                    now,
+                    timestamp_microseconds(ticket["created_at"]),
+                    startup_started,
+                    {},
+                )
             else:
                 self._cleanup_normal(
                     allocation, ticket, service_identity, now, "UNBOOTSTRAPPED"

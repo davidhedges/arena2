@@ -2,8 +2,6 @@
 
 using Arena.Combat;
 using Arena.Network;
-using SpacetimeDB;
-using SpacetimeDB.Types;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -106,7 +104,7 @@ namespace Arena.UI
                         ("GLOVES", "GILDED_GLOVES"))),
             };
 
-        private readonly List<ArmorSetDefinition> _sets = new();
+        private readonly List<HubArmorSetSnapshot> _sets = new();
         private PanelSettings? _panelSettings;
         private VisualElement? _root;
         private ScrollView? _setList;
@@ -131,7 +129,7 @@ namespace Arena.UI
         private Button? _equipButton;
         private Label? _toast;
         private HubController? _hubController;
-        private DbConnection? _connection;
+        private HubNetworkManager? _hubNetwork;
         private string _tier = "LIGHT";
         private string _selectedSetId = string.Empty;
         private string _activeSetId = string.Empty;
@@ -179,6 +177,7 @@ namespace Arena.UI
         {
             RuntimeUiEventSystem.Ensure();
             BuildUi();
+            BindHub(HubNetworkManager.EnsureInstance());
         }
 
         private void OnEnable() => RuntimeUiEscapeRouter.Register(this);
@@ -188,14 +187,13 @@ namespace Arena.UI
         private void OnDestroy()
         {
             UnbindShowcaseDrag();
-            EnsureConnection(null);
+            BindHub(null);
             if (_panelSettings != null)
                 Destroy(_panelSettings);
         }
 
         private void Update()
         {
-            EnsureConnection(NetworkManager.Instance?.Conn);
             if (!_open || Time.unscaledTime < _nextCatalogRefresh)
                 return;
 
@@ -213,7 +211,6 @@ namespace Arena.UI
                 _panelSettings.sortingOrder = RuntimeUiLayer.NextSortingOrder();
             _root.AddToClassList(OpenClass);
             _nextCatalogRefresh = 0f;
-            EnsureConnection(NetworkManager.Instance?.Conn);
             RefreshCatalog(forceSelectionFromActive: true);
         }
 
@@ -305,40 +302,36 @@ namespace Arena.UI
             DisciplinesRequested?.Invoke();
         }
 
-        private void EnsureConnection(DbConnection? connection)
+        private void BindHub(HubNetworkManager? hub)
         {
-            if (ReferenceEquals(connection, _connection))
+            if (ReferenceEquals(hub, _hubNetwork))
                 return;
 
-            if (_connection != null)
-                _connection.Reducers.OnEquipArmorSet -= OnEquipArmorSet;
+            if (_hubNetwork != null)
+                _hubNetwork.ArmorSetSaveCompleted -= OnArmorSetSaved;
 
-            _connection = connection;
+            _hubNetwork = hub;
             _equipPending = false;
             _pendingSetId = string.Empty;
-            if (_connection != null)
-                _connection.Reducers.OnEquipArmorSet += OnEquipArmorSet;
+            if (_hubNetwork != null)
+                _hubNetwork.ArmorSetSaveCompleted += OnArmorSetSaved;
         }
 
         private void RefreshCatalog(bool forceSelectionFromActive = false)
         {
-            DbConnection? connection = NetworkManager.Instance?.Conn;
-            EnsureConnection(connection);
-            if (connection == null)
+            HubNetworkManager? hub = _hubNetwork;
+            if (hub == null || !hub.IsReady)
             {
                 RenderWaitingForCatalog();
                 return;
             }
 
             _sets.Clear();
-            _sets.AddRange(connection.Db.ArmorSetDefinition.Iter()
+            _sets.AddRange(hub.ArmorSets
                 .OrderBy(row => row.SortOrder)
                 .ThenBy(row => row.ArmorSetId, StringComparer.Ordinal));
 
-            ActiveArmorSet? active = connection.Identity.HasValue
-                ? connection.Db.ActiveArmorSet.Owner.Find(connection.Identity.Value)
-                : null;
-            _activeSetId = WireIdentifier.Normalize(active?.ArmorSetId);
+            _activeSetId = WireIdentifier.Normalize(hub.Loadout?.ArmorSetId);
 
             if (_sets.Count == 0)
             {
@@ -347,14 +340,14 @@ namespace Arena.UI
             }
 
             bool missingSelection = FindSet(_selectedSetId) == null;
-            if ((forceSelectionFromActive || missingSelection) && FindSet(_activeSetId) is ArmorSetDefinition activeSet)
+            if ((forceSelectionFromActive || missingSelection) && FindSet(_activeSetId) is HubArmorSetSnapshot activeSet)
             {
                 _selectedSetId = WireIdentifier.Normalize(activeSet.ArmorSetId);
                 _tier = WireIdentifier.Normalize(activeSet.ArmorTier);
             }
             else if (missingSelection)
             {
-                ArmorSetDefinition first = _sets[0];
+                HubArmorSetSnapshot first = _sets[0];
                 _selectedSetId = WireIdentifier.Normalize(first.ArmorSetId);
                 _tier = WireIdentifier.Normalize(first.ArmorTier);
             }
@@ -403,12 +396,12 @@ namespace Arena.UI
             if (_setList == null)
                 return;
 
-            List<ArmorSetDefinition> visibleSets = SetsForTier();
+            List<HubArmorSetSnapshot> visibleSets = SetsForTier();
             _setList.Clear();
             if (_setCount != null)
                 _setCount.text = $"{visibleSets.Count} {(visibleSets.Count == 1 ? "SET" : "SETS")}";
 
-            foreach (ArmorSetDefinition set in visibleSets)
+            foreach (HubArmorSetSnapshot set in visibleSets)
             {
                 string setId = WireIdentifier.Normalize(set.ArmorSetId);
                 SetPresentation presentation = PresentationFor(set);
@@ -448,7 +441,7 @@ namespace Arena.UI
 
         private void RenderDetails()
         {
-            ArmorSetDefinition? set = FindSet(_selectedSetId);
+            HubArmorSetSnapshot? set = FindSet(_selectedSetId);
             if (set == null)
                 return;
 
@@ -500,7 +493,7 @@ namespace Arena.UI
         private void SelectTier(string tier)
         {
             string normalized = WireIdentifier.Normalize(tier);
-            ArmorSetDefinition? first = _sets.FirstOrDefault(set =>
+            HubArmorSetSnapshot? first = _sets.FirstOrDefault(set =>
                 WireIdentifier.Normalize(set.ArmorTier) == normalized);
             if (first == null)
                 return;
@@ -512,7 +505,7 @@ namespace Arena.UI
 
         private void SelectSet(string setId)
         {
-            ArmorSetDefinition? set = FindSet(setId);
+            HubArmorSetSnapshot? set = FindSet(setId);
             if (set == null)
                 return;
 
@@ -523,7 +516,7 @@ namespace Arena.UI
 
         private void CycleSet(int direction)
         {
-            List<ArmorSetDefinition> visibleSets = SetsForTier();
+            List<HubArmorSetSnapshot> visibleSets = SetsForTier();
             if (visibleSets.Count == 0)
                 return;
 
@@ -535,12 +528,12 @@ namespace Arena.UI
             SelectSet(visibleSets[nextIndex].ArmorSetId);
         }
 
-        private List<ArmorSetDefinition> SetsForTier()
+        private List<HubArmorSetSnapshot> SetsForTier()
         {
             return _sets.Where(set => WireIdentifier.Normalize(set.ArmorTier) == _tier).ToList();
         }
 
-        private ArmorSetDefinition? FindSet(string? setId)
+        private HubArmorSetSnapshot? FindSet(string? setId)
         {
             string normalized = WireIdentifier.Normalize(setId);
             return _sets.FirstOrDefault(set =>
@@ -549,7 +542,7 @@ namespace Arena.UI
 
         private void EquipSelectedSet()
         {
-            ArmorSetDefinition? selected = FindSet(_selectedSetId);
+            HubArmorSetSnapshot? selected = FindSet(_selectedSetId);
             if (selected == null)
                 return;
             if (_selectedSetId == _activeSetId)
@@ -558,8 +551,8 @@ namespace Arena.UI
                 return;
             }
 
-            EnsureConnection(NetworkManager.Instance?.Conn);
-            if (_connection == null || !_connection.Identity.HasValue || _equipPending)
+            HubNetworkManager? hub = _hubNetwork;
+            if (hub == null || !hub.IsReady || _equipPending)
             {
                 ShowToast("Connect to equip this armor set.");
                 return;
@@ -568,39 +561,33 @@ namespace Arena.UI
             _pendingSetId = _selectedSetId;
             _equipPending = true;
             RenderDetails();
-            _connection.Reducers.EquipArmorSet(_pendingSetId);
+            if (!hub.SaveArmorSet(_pendingSetId))
+            {
+                _equipPending = false;
+                _pendingSetId = string.Empty;
+                RenderDetails();
+                ShowToast("Connect to equip this armor set.");
+            }
         }
 
-        private void OnEquipArmorSet(ReducerEventContext context, string armorSetId)
+        private void OnArmorSetSaved(bool success, string reason)
         {
-            string normalizedSetId = WireIdentifier.Normalize(armorSetId);
-            if (_connection == null
-                || !_connection.Identity.HasValue
-                || context.Event.CallerIdentity != _connection.Identity.Value
-                || !_equipPending
-                || normalizedSetId != _pendingSetId)
-            {
+            if (!_equipPending)
                 return;
-            }
 
+            string normalizedSetId = _pendingSetId;
             _equipPending = false;
             _pendingSetId = string.Empty;
-            if (context.Event.Status is Status.Committed)
+            if (success)
             {
                 _activeSetId = normalizedSetId;
                 _nextCatalogRefresh = 0f;
                 RenderAll();
-                ArmorSetDefinition? equipped = FindSet(normalizedSetId);
+                HubArmorSetSnapshot? equipped = FindSet(normalizedSetId);
                 ShowToast($"{(equipped == null ? "Armor set" : DisplayName(equipped))} equipped as a complete set.");
                 return;
             }
 
-            string reason = context.Event.Status switch
-            {
-                Status.Failed(var failure) => failure,
-                Status.OutOfEnergy(var _) => "server was out of reducer energy",
-                _ => "server did not commit the armor set",
-            };
             Debug.LogError($"[{nameof(EquipmentScreen)}] Equipping armor set failed: {reason}");
             RenderDetails();
             ShowToast($"Could not equip armor set: {reason}");
@@ -611,7 +598,7 @@ namespace Arena.UI
             if (!_open || _selectedSetId == _lastPreviewSetId)
                 return;
 
-            ArmorSetDefinition? selected = FindSet(_selectedSetId);
+            HubArmorSetSnapshot? selected = FindSet(_selectedSetId);
             if (selected == null)
                 return;
 
@@ -625,7 +612,7 @@ namespace Arena.UI
             _hubController?.SetShowcaseArmorPreview(null);
         }
 
-        private static SetPresentation PresentationFor(ArmorSetDefinition set)
+        private static SetPresentation PresentationFor(HubArmorSetSnapshot set)
         {
             string normalized = WireIdentifier.Normalize(set.ArmorSetId);
             if (Presentations.TryGetValue(normalized, out SetPresentation? presentation))
@@ -664,7 +651,18 @@ namespace Arena.UI
                 ("GLOVES", $"ARMOR_SET_{armorSetId}_GLOVES"));
         }
 
-        private static string DisplayName(ArmorSetDefinition set)
+        internal static IReadOnlyDictionary<string, string> ArmorAppearanceFor(string? armorSetId)
+        {
+            string normalized = WireIdentifier.Normalize(armorSetId);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return new Dictionary<string, string>(StringComparer.Ordinal);
+
+            return Presentations.TryGetValue(normalized, out SetPresentation? presentation)
+                ? presentation.ArmorBySlot
+                : CompleteArmorPieces(normalized);
+        }
+
+        private static string DisplayName(HubArmorSetSnapshot set)
         {
             return string.IsNullOrWhiteSpace(set.DisplayName)
                 ? WireIdentifier.Normalize(set.ArmorSetId).Replace('_', ' ')

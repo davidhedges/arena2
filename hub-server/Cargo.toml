@@ -12,3 +12,5 @@ log = "0.4"
 # A broad `2.0` range currently resolves to newer 2.x releases that the
 # project's checked-in Unity SDK and 2.1 CLI have not adopted yet.
 spacetimedb = "=2.0.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

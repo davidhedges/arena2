@@ -68,12 +68,17 @@ namespace Arena.Tests.Editor
             string screen = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs");
             string subscriptions = File.ReadAllText("Assets/Arena/Runtime/Network/GameplaySubscriptionPlanner.cs");
             string hub = File.ReadAllText("Assets/Arena/Runtime/UI/Toolkit/HubScreen.cs");
+            string hubNetwork = File.ReadAllText("Assets/Arena/Runtime/Network/HubNetworkManager.cs");
             string hubUxml = File.ReadAllText("Assets/Arena/Resources/UI/Toolkit/Hub.uxml");
 
             Assert.That(screen, Does.Contain("BuildSelectedAbilityIds()"));
-            Assert.That(screen, Does.Contain("CharacterDisciplineAbilitySelection.Owner.Filter"));
+            Assert.That(screen, Does.Contain("hub.SaveDisciplineLoadout"));
+            Assert.That(screen, Does.Not.Contain("NetworkManager.Instance?.Conn"));
             Assert.That(subscriptions, Does.Contain("From.CharacterDisciplineAbilitySelection()"));
-            Assert.That(hub, Does.Contain("CharacterDisciplineLoadout.Owner.Find"));
+            Assert.That(hubNetwork, Does.Contain("From.MyHubLoadout().ToSql()"));
+            Assert.That(hubNetwork, Does.Contain("From.HubCombatDisciplineDefinition().ToSql()"));
+            Assert.That(hubNetwork, Does.Contain("From.HubAbilityDefinition().ToSql()"));
+            Assert.That(hub, Does.Contain("HubLoadoutSnapshot? loadout"));
             Assert.That(hubUxml, Does.Contain("name=\"LoadoutPrimaryName\""));
             Assert.That(hubUxml, Does.Contain("name=\"LoadoutSecondary1Name\""));
             Assert.That(hubUxml, Does.Contain("name=\"LoadoutSecondary2Name\""));

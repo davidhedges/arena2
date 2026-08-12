@@ -83,6 +83,11 @@ pub struct MatchReservation {
     pub team_id: u8,
     pub team_slot: u8,
     pub display_name: String,
+    pub primary_discipline_id: String,
+    pub secondary_discipline_id_1: String,
+    pub secondary_discipline_id_2: String,
+    pub selected_ability_ids: Vec<String>,
+    pub armor_set_id: String,
     pub reserved_at: Timestamp,
 }
 
@@ -309,6 +314,11 @@ pub fn bootstrap_unranked_2v2_bot_match(
     allocation_expires_at: Timestamp,
     reserved_player_identity: Identity,
     reserved_display_name: String,
+    primary_discipline_id: String,
+    secondary_discipline_id_1: String,
+    secondary_discipline_id_2: String,
+    selected_ability_ids: Vec<String>,
+    armor_set_id: String,
 ) -> Result<(), String> {
     let mut owner = require_module_owner(ctx)?;
     require_identity(
@@ -344,6 +354,11 @@ pub fn bootstrap_unranked_2v2_bot_match(
     let match_build_id = validate_identifier("match build id", match_build_id, 1, 96)?;
     let map_id = require_arena_map_id(map_id.trim())?.as_str().to_string();
     let reserved_display_name = validate_display_name(reserved_display_name)?;
+    let primary_discipline_id = validate_optional_loadout_id(primary_discipline_id)?;
+    let secondary_discipline_id_1 = validate_optional_loadout_id(secondary_discipline_id_1)?;
+    let secondary_discipline_id_2 = validate_optional_loadout_id(secondary_discipline_id_2)?;
+    let selected_ability_ids = validate_loadout_ability_ids(selected_ability_ids)?;
+    let armor_set_id = validate_optional_loadout_id(armor_set_id)?;
     validate_future_deadline(ctx.timestamp, allocation_expires_at)?;
 
     owner.deployment_mode = MODE_PROVISIONED.to_string();
@@ -371,6 +386,11 @@ pub fn bootstrap_unranked_2v2_bot_match(
         team_id: 0,
         team_slot: 0,
         display_name: reserved_display_name,
+        primary_discipline_id,
+        secondary_discipline_id_1,
+        secondary_discipline_id_2,
+        selected_ability_ids,
+        armor_set_id,
         reserved_at: ctx.timestamp,
     });
 
@@ -385,6 +405,32 @@ pub fn bootstrap_unranked_2v2_bot_match(
         "[MATCH_CONTRACT] Bootstrapped match for reserved player {}; waiting without a game tick",
         &reserved_player_identity.to_hex()[..8]
     );
+    Ok(())
+}
+
+/// Applies the Hub-frozen build only after the ordinary player lifecycle has
+/// seeded progression, inventory, and authored catalogs in this disposable DB.
+pub(crate) fn apply_reserved_player_loadout(
+    ctx: &ReducerContext,
+    reservation: &MatchReservation,
+) -> Result<(), String> {
+    if !reservation.armor_set_id.is_empty() {
+        crate::inventory::equip_armor_set_for_owner(
+            ctx,
+            reservation.player_identity,
+            reservation.armor_set_id.clone(),
+        )?;
+    }
+    if !reservation.primary_discipline_id.is_empty() {
+        crate::progression::save_character_discipline_loadout_for_owner(
+            ctx,
+            reservation.player_identity,
+            reservation.primary_discipline_id.clone(),
+            reservation.secondary_discipline_id_1.clone(),
+            reservation.secondary_discipline_id_2.clone(),
+            reservation.selected_ability_ids.clone(),
+        )?;
+    }
     Ok(())
 }
 
@@ -493,6 +539,28 @@ fn validate_display_name(value: String) -> Result<String, String> {
     Ok(value)
 }
 
+fn validate_optional_loadout_id(value: String) -> Result<String, String> {
+    let normalized = value.trim().to_ascii_uppercase();
+    if normalized.is_empty() {
+        return Ok(normalized);
+    }
+    validate_identifier("loadout id", normalized, 1, 96)
+}
+
+fn validate_loadout_ability_ids(values: Vec<String>) -> Result<Vec<String>, String> {
+    if values.len() > 128 {
+        return Err("loadout may contain at most 128 selected abilities".to_string());
+    }
+    let mut normalized = Vec::with_capacity(values.len());
+    for value in values {
+        let value = validate_optional_loadout_id(value)?;
+        if !value.is_empty() && !normalized.contains(&value) {
+            normalized.push(value);
+        }
+    }
+    Ok(normalized)
+}
+
 fn validate_future_deadline(now: Timestamp, deadline: Timestamp) -> Result<(), String> {
     if deadline <= now {
         return Err("allocation deadline must be in the future".to_string());
@@ -572,6 +640,23 @@ mod tests {
         assert!(validate_identifier("match", "match-0001".to_string(), 8, 96).is_ok());
         assert!(validate_identifier("match", "short".to_string(), 8, 96).is_err());
         assert!(validate_identifier("match", "../../other-db".to_string(), 8, 96).is_err());
+    }
+
+    #[test]
+    fn frozen_loadout_ability_ids_are_bounded_unique_and_path_safe() {
+        assert_eq!(
+            validate_loadout_ability_ids(vec!["WARRIOR_HEW".to_string()]),
+            Ok(vec!["WARRIOR_HEW".to_string()])
+        );
+        assert_eq!(
+            validate_loadout_ability_ids(vec![
+                "WARRIOR_HEW".to_string(),
+                "WARRIOR_HEW".to_string(),
+            ]),
+            Ok(vec!["WARRIOR_HEW".to_string()])
+        );
+        assert!(validate_loadout_ability_ids(vec!["../../ability".to_string()]).is_err());
+        assert!(validate_loadout_ability_ids(vec!["ABILITY".to_string(); 129]).is_err());
     }
 
     #[test]

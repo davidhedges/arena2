@@ -13,12 +13,12 @@ namespace Arena.MatchDb
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void BootstrapUnranked2V2BotMatchHandler(ReducerEventContext ctx, string matchId, string matchBuildId, string mapId, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName);
+        public delegate void BootstrapUnranked2V2BotMatchHandler(ReducerEventContext ctx, string matchId, string matchBuildId, string mapId, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName, string primaryDisciplineId, string secondaryDisciplineId1, string secondaryDisciplineId2, System.Collections.Generic.List<string> selectedAbilityIds, string armorSetId);
         public event BootstrapUnranked2V2BotMatchHandler? OnBootstrapUnranked2V2BotMatch;
 
-        public void BootstrapUnranked2V2BotMatch(string matchId, string matchBuildId, string mapId, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName)
+        public void BootstrapUnranked2V2BotMatch(string matchId, string matchBuildId, string mapId, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName, string primaryDisciplineId, string secondaryDisciplineId1, string secondaryDisciplineId2, System.Collections.Generic.List<string> selectedAbilityIds, string armorSetId)
         {
-            conn.InternalCallReducer(new Reducer.BootstrapUnranked2V2BotMatch(matchId, matchBuildId, mapId, seed, allocationExpiresAt, reservedPlayerIdentity, reservedDisplayName));
+            conn.InternalCallReducer(new Reducer.BootstrapUnranked2V2BotMatch(matchId, matchBuildId, mapId, seed, allocationExpiresAt, reservedPlayerIdentity, reservedDisplayName, primaryDisciplineId, secondaryDisciplineId1, secondaryDisciplineId2, selectedAbilityIds, armorSetId));
         }
 
         public bool InvokeBootstrapUnranked2V2BotMatch(ReducerEventContext ctx, Reducer.BootstrapUnranked2V2BotMatch args)
@@ -43,7 +43,12 @@ namespace Arena.MatchDb
                 args.Seed,
                 args.AllocationExpiresAt,
                 args.ReservedPlayerIdentity,
-                args.ReservedDisplayName
+                args.ReservedDisplayName,
+                args.PrimaryDisciplineId,
+                args.SecondaryDisciplineId1,
+                args.SecondaryDisciplineId2,
+                args.SelectedAbilityIds,
+                args.ArmorSetId
             );
             return true;
         }
@@ -69,6 +74,16 @@ namespace Arena.MatchDb
             public SpacetimeDB.Identity ReservedPlayerIdentity;
             [DataMember(Name = "reserved_display_name")]
             public string ReservedDisplayName;
+            [DataMember(Name = "primary_discipline_id")]
+            public string PrimaryDisciplineId;
+            [DataMember(Name = "secondary_discipline_id_1")]
+            public string SecondaryDisciplineId1;
+            [DataMember(Name = "secondary_discipline_id_2")]
+            public string SecondaryDisciplineId2;
+            [DataMember(Name = "selected_ability_ids")]
+            public System.Collections.Generic.List<string> SelectedAbilityIds;
+            [DataMember(Name = "armor_set_id")]
+            public string ArmorSetId;
 
             public BootstrapUnranked2V2BotMatch(
                 string MatchId,
@@ -77,7 +92,12 @@ namespace Arena.MatchDb
                 ulong Seed,
                 SpacetimeDB.Timestamp AllocationExpiresAt,
                 SpacetimeDB.Identity ReservedPlayerIdentity,
-                string ReservedDisplayName
+                string ReservedDisplayName,
+                string PrimaryDisciplineId,
+                string SecondaryDisciplineId1,
+                string SecondaryDisciplineId2,
+                System.Collections.Generic.List<string> SelectedAbilityIds,
+                string ArmorSetId
             )
             {
                 this.MatchId = MatchId;
@@ -87,6 +107,11 @@ namespace Arena.MatchDb
                 this.AllocationExpiresAt = AllocationExpiresAt;
                 this.ReservedPlayerIdentity = ReservedPlayerIdentity;
                 this.ReservedDisplayName = ReservedDisplayName;
+                this.PrimaryDisciplineId = PrimaryDisciplineId;
+                this.SecondaryDisciplineId1 = SecondaryDisciplineId1;
+                this.SecondaryDisciplineId2 = SecondaryDisciplineId2;
+                this.SelectedAbilityIds = SelectedAbilityIds;
+                this.ArmorSetId = ArmorSetId;
             }
 
             public BootstrapUnranked2V2BotMatch()
@@ -95,6 +120,11 @@ namespace Arena.MatchDb
                 this.MatchBuildId = "";
                 this.MapId = "";
                 this.ReservedDisplayName = "";
+                this.PrimaryDisciplineId = "";
+                this.SecondaryDisciplineId1 = "";
+                this.SecondaryDisciplineId2 = "";
+                this.SelectedAbilityIds = new();
+                this.ArmorSetId = "";
             }
 
             string IReducerArgs.ReducerName => "bootstrap_unranked_2_v_2_bot_match";

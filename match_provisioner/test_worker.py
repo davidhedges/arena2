@@ -44,6 +44,7 @@ class FakeApi:
         self.tickets: dict[str, dict[str, Any]] = {}
         self.assignments: dict[str, dict[str, Any]] = {}
         self.players: dict[str, dict[str, Any]] = {}
+        self.loadouts: dict[str, dict[str, Any]] = {}
         self.databases: dict[str, dict[str, Any]] = {}
         self.database_names: dict[str, str] = {}
         self.calls: list[tuple[str, str, list[Any]]] = []
@@ -74,6 +75,27 @@ class FakeApi:
             "created_at": timestamp_arg(created_at),
             "updated_at": timestamp_arg(created_at),
         }
+        self.loadouts[ticket_id] = {
+            "ticket_id": ticket_id,
+            "player_identity": identity_arg(player_identity),
+            "primary_discipline_id": "WAR",
+            "secondary_discipline_id_1": "RUIN",
+            "secondary_discipline_id_2": "",
+            "selected_ability_ids": [
+                "WARRIOR_HEW",
+                "WARRIOR_MAIM",
+                "WARRIOR_GROUND_TO_AIR",
+                "WARRIOR_AIR_TO_GROUND",
+                "WARRIOR_CRUSHING_BLOW",
+                "WARRIOR_CATACLYSM",
+                "WARRIOR_BUZZSAW",
+                "WARRIOR_SKYFALL",
+                "SPELL_FIREBALL",
+            ],
+            "armor_set_id": "IRON",
+            "loadout_revision": 4,
+            "captured_at": timestamp_arg(created_at),
+        }
 
     def _database(self, name_or_identity: str) -> dict[str, Any] | None:
         identity = self.database_names.get(name_or_identity, name_or_identity)
@@ -97,6 +119,8 @@ class FakeApi:
                 return list(self.assignments.values())
             if table == "hub_player":
                 return list(self.players.values())
+            if table == "match_player_loadout_snapshot":
+                return list(self.loadouts.values())
         match_database = self._database(database)
         if match_database is None:
             raise ProvisionerError("match database does not exist")
@@ -170,7 +194,15 @@ class FakeApi:
                 "allocation_expires_at": arguments[4],
             }
             match_database["reservations"] = [
-                {"player_identity": arguments[5], "display_name": str(arguments[6])}
+                {
+                    "player_identity": arguments[5],
+                    "display_name": str(arguments[6]),
+                    "primary_discipline_id": str(arguments[7]),
+                    "secondary_discipline_id_1": str(arguments[8]),
+                    "secondary_discipline_id_2": str(arguments[9]),
+                    "selected_ability_ids": list(arguments[10]),
+                    "armor_set_id": str(arguments[11]),
+                }
             ]
             return
         if reducer == "abort_match":
@@ -346,6 +378,13 @@ class ProvisionerTests(unittest.TestCase):
         self.assertEqual(self.store.get("ticket-one").state, "READY")
         bootstrap_calls = [call for call in self.api.calls if call[1].startswith("bootstrap_")]
         self.assertEqual(len(bootstrap_calls), 1)
+        bootstrap_args = bootstrap_calls[0][2]
+        frozen = self.api.loadouts["ticket-one"]
+        self.assertEqual(bootstrap_args[7], frozen["primary_discipline_id"])
+        self.assertEqual(bootstrap_args[8], frozen["secondary_discipline_id_1"])
+        self.assertEqual(bootstrap_args[9], frozen["secondary_discipline_id_2"])
+        self.assertEqual(bootstrap_args[10], frozen["selected_ability_ids"])
+        self.assertEqual(bootstrap_args[11], frozen["armor_set_id"])
 
     def test_success_emits_stage_level_startup_timing(self) -> None:
         self.api.add_ticket("ticket-one", PLAYER_ONE)

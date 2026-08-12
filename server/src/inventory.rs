@@ -2584,6 +2584,14 @@ pub fn equip_armor_set(ctx: &ReducerContext, armor_set_id: String) -> Result<(),
         return Err("armor sets cannot be changed during a survival run".to_string());
     }
 
+    equip_armor_set_for_owner(ctx, owner, armor_set_id)
+}
+
+pub(crate) fn equip_armor_set_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+    armor_set_id: String,
+) -> Result<(), String> {
     ensure_player_inventory_for_identity(ctx, owner);
     let spec = require_armor_set_spec(armor_set_id.as_str())?;
     let equipment = ctx
