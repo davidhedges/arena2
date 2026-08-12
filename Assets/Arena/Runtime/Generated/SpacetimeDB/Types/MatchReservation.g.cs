@@ -21,6 +21,16 @@ namespace SpacetimeDB.Types
         public byte TeamSlot;
         [DataMember(Name = "display_name")]
         public string DisplayName;
+        [DataMember(Name = "primary_discipline_id")]
+        public string PrimaryDisciplineId;
+        [DataMember(Name = "secondary_discipline_id_1")]
+        public string SecondaryDisciplineId1;
+        [DataMember(Name = "secondary_discipline_id_2")]
+        public string SecondaryDisciplineId2;
+        [DataMember(Name = "selected_ability_ids")]
+        public System.Collections.Generic.List<string> SelectedAbilityIds;
+        [DataMember(Name = "armor_set_id")]
+        public string ArmorSetId;
         [DataMember(Name = "reserved_at")]
         public SpacetimeDB.Timestamp ReservedAt;
 
@@ -29,6 +39,11 @@ namespace SpacetimeDB.Types
             byte TeamId,
             byte TeamSlot,
             string DisplayName,
+            string PrimaryDisciplineId,
+            string SecondaryDisciplineId1,
+            string SecondaryDisciplineId2,
+            System.Collections.Generic.List<string> SelectedAbilityIds,
+            string ArmorSetId,
             SpacetimeDB.Timestamp ReservedAt
         )
         {
@@ -36,12 +51,22 @@ namespace SpacetimeDB.Types
             this.TeamId = TeamId;
             this.TeamSlot = TeamSlot;
             this.DisplayName = DisplayName;
+            this.PrimaryDisciplineId = PrimaryDisciplineId;
+            this.SecondaryDisciplineId1 = SecondaryDisciplineId1;
+            this.SecondaryDisciplineId2 = SecondaryDisciplineId2;
+            this.SelectedAbilityIds = SelectedAbilityIds;
+            this.ArmorSetId = ArmorSetId;
             this.ReservedAt = ReservedAt;
         }
 
         public MatchReservation()
         {
             this.DisplayName = "";
+            this.PrimaryDisciplineId = "";
+            this.SecondaryDisciplineId1 = "";
+            this.SecondaryDisciplineId2 = "";
+            this.SelectedAbilityIds = new();
+            this.ArmorSetId = "";
         }
     }
 }
