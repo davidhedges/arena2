@@ -17,6 +17,8 @@ use crate::spells::active_bespoke_spell as _;
 #[allow(unused_imports)]
 use crate::spells::active_cast as _;
 #[allow(unused_imports)]
+use crate::spells::capacitor_state as _;
+#[allow(unused_imports)]
 use crate::spells::cast_prediction_correlation as _;
 #[allow(unused_imports)]
 use crate::spells::channel_cast_runtime as _;
@@ -312,6 +314,77 @@ pub struct RecallSlot {
     pub stored_at: Timestamp,
 }
 
+/// Stored lightning critical strikes for the selected Capacitor spell.
+#[table(accessor = capacitor_state, public)]
+#[derive(Clone)]
+pub struct CapacitorState {
+    #[primary_key]
+    pub owner: Identity,
+    pub charge_count: u32,
+    pub charged_at: Timestamp,
+}
+
+const CAPACITOR_ACTION_ID: &str = "CAPACITOR";
+pub(crate) const CAPACITOR_MAX_CHARGES: u32 = 5;
+
+fn next_capacitor_charge_count(current: u32) -> u32 {
+    current.saturating_add(1).min(CAPACITOR_MAX_CHARGES)
+}
+
+pub(crate) fn capacitor_charge_count(ctx: &ReducerContext, owner: Identity) -> u32 {
+    ctx.db
+        .capacitor_state()
+        .owner()
+        .find(owner)
+        .map(|state| state.charge_count.min(CAPACITOR_MAX_CHARGES))
+        .unwrap_or(0)
+}
+
+pub(crate) fn is_capacitor_charged(ctx: &ReducerContext, owner: Identity) -> bool {
+    capacitor_charge_count(ctx, owner) > 0
+}
+
+pub(crate) fn charge_capacitor(ctx: &ReducerContext, owner: Identity, charged_at: Timestamp) {
+    if active_selectable_ability_for_authored_action(
+        ctx,
+        owner,
+        &AuthoredActionId::new(CAPACITOR_ACTION_ID),
+    )
+    .is_none()
+    {
+        return;
+    }
+
+    if let Some(mut state) = ctx.db.capacitor_state().owner().find(owner) {
+        let next_count = next_capacitor_charge_count(state.charge_count);
+        if next_count == state.charge_count {
+            return;
+        }
+        state.charge_count = next_count;
+        state.charged_at = charged_at;
+        ctx.db.capacitor_state().owner().update(state);
+    } else {
+        ctx.db.capacitor_state().insert(CapacitorState {
+            owner,
+            charge_count: 1,
+            charged_at,
+        });
+    }
+}
+
+pub(crate) fn consume_capacitor_charge(ctx: &ReducerContext, owner: Identity) -> Option<u32> {
+    let charge_count = capacitor_charge_count(ctx, owner);
+    if charge_count == 0 {
+        return None;
+    }
+    ctx.db.capacitor_state().owner().delete(owner);
+    Some(charge_count)
+}
+
+pub(crate) fn clear_capacitor_charge(ctx: &ReducerContext, owner: Identity) {
+    ctx.db.capacitor_state().owner().delete(owner);
+}
+
 #[table(accessor = spell_definition, public)]
 pub struct SpellDefinition {
     #[primary_key]
@@ -588,6 +661,14 @@ mod tests {
             SpellBehavior::InstantBeam,
             Duration::from_millis(900)
         ));
+    }
+
+    #[test]
+    fn capacitor_stores_up_to_five_lightning_crits() {
+        assert_eq!(next_capacitor_charge_count(0), 1);
+        assert_eq!(next_capacitor_charge_count(4), 5);
+        assert_eq!(next_capacitor_charge_count(5), 5);
+        assert_eq!(next_capacitor_charge_count(u32::MAX), 5);
     }
 }
 

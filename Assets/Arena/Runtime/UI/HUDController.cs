@@ -705,6 +705,10 @@ namespace Arena.UI
             iconImg.preserveAspect = true;
             iconImg.raycastTarget = false;
             iconImg.enabled = false;
+            Outline readyOutline = iconGo.AddComponent<Outline>();
+            readyOutline.effectColor = CapacitorPresentation.ReadyBorderColor;
+            readyOutline.effectDistance = new Vector2(2f, -2f);
+            readyOutline.enabled = false;
 
             // Keybind label (top-left)
             var kt = Label(slot.transform, "Key",
@@ -1670,7 +1674,10 @@ namespace Arena.UI
 
                 bool isVisible = resolved.HasAssignedAction;
                 string label = isVisible ? resolved.DisplayName : string.Empty;
-                Sprite? iconSprite = isVisible ? ActionIconResolver.ResolveForAction(resolved) : null;
+                bool capacitorCharged = isVisible
+                    && CapacitorPresentation.IsCapacitorAction(resolved)
+                    && CapacitorPresentation.IsCharged(conn, owner);
+                Sprite? iconSprite = isVisible ? ActionIconResolver.ResolveForAction(conn, owner, resolved) : null;
                 Color slotColor = resolved.IsFixed
                     ? (FixedActionDispatcher.IsEnabled(resolved.ActionId, conn)
                         ? FixedActionColor(resolved.ActionId)
@@ -1690,7 +1697,8 @@ namespace Arena.UI
                     resolved.ActionId,
                     resolved.AbilityId,
                     !resolved.IsCombatModeToggleAbility && UsesGlobalCooldown(resolved.ActionId, string.Empty),
-                    ResolveRequiresTargetLos(conn, resolved));
+                    ResolveRequiresTargetLos(conn, resolved),
+                    capacitorCharged);
                 SetActionBarSlotPresentation(_abilityGridCd[index], _abilityGridIcons[index], _abilityGridStates[index], slotColor, iconSprite);
                 _abilityGridClicks[index].Configure(
                     isVisible ? () => TriggerActionRef(conn, resolved) : null,
@@ -1735,7 +1743,10 @@ namespace Arena.UI
                     binding.SlotId);
                 bool isVisible = resolved.HasAssignedAction;
                 string label = isVisible ? resolved.DisplayName : string.Empty;
-                Sprite? iconSprite = isVisible ? ActionIconResolver.ResolveForAction(resolved) : null;
+                bool capacitorCharged = isVisible
+                    && CapacitorPresentation.IsCapacitorAction(resolved)
+                    && CapacitorPresentation.IsCharged(conn, owner);
+                Sprite? iconSprite = isVisible ? ActionIconResolver.ResolveForAction(conn, owner, resolved) : null;
                 Color slotColor = !isVisible
                     ? SlotBg
                     : resolved.IsAvailable
@@ -1749,7 +1760,8 @@ namespace Arena.UI
                     resolved.ActionId,
                     resolved.AbilityId,
                     false,
-                    ResolveRequiresTargetLos(conn, resolved));
+                    ResolveRequiresTargetLos(conn, resolved),
+                    capacitorCharged);
                 SetActionBarSlotPresentation(
                     _disciplineBarCd[index],
                     _disciplineBarIcons[index],
@@ -1797,10 +1809,16 @@ namespace Arena.UI
                     continue;
 
                 AbilityCatalog? ability = FindAbilityForSpell(conn, spellId);
+                bool capacitorCharged = CapacitorPresentation.IsCapacitorAbility(
+                        ability?.AbilityId ?? string.Empty,
+                        spellId)
+                    && CapacitorPresentation.IsCharged(conn, owner);
                 string displayName = ActionPresentation.ResolveDisplayName(conn, owner.Value, spellId, spellId);
                 Sprite? iconSprite = ability == null
                     ? ActionIconResolver.Resolve(ActionKinds.Ability, spellId)
-                    : ActionIconResolver.Resolve(ActionKinds.Ability, ability.AbilityId);
+                    : ActionIconResolver.Resolve(
+                        ActionKinds.Ability,
+                        CapacitorPresentation.ResolvePresentationId(conn, owner, ability.AbilityId, spellId));
                 ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveEquippedSpellbookAction(conn, owner.Value, (uint)col);
                 bool canTrigger = resolved.HasAssignedAction;
                 string keyLabel = SpellbookKeymap.KeyLabelForIndex(col);
@@ -1813,7 +1831,8 @@ namespace Arena.UI
                     spellId,
                     resolved.AbilityId,
                     UsesGlobalCooldown(spellId, string.Empty),
-                    ResolveSpellRequiresTargetLos(conn, spellId));
+                    ResolveSpellRequiresTargetLos(conn, spellId),
+                    capacitorCharged);
                 SetActionBarSlotPresentation(
                     _spellbookGridCd[col],
                     _spellbookGridIcons[col],
@@ -2270,6 +2289,9 @@ namespace Arena.UI
             {
                 icon.sprite = iconSprite;
                 icon.enabled = state.IsVisible && iconSprite != null;
+                Outline? readyOutline = icon.GetComponent<Outline>();
+                if (readyOutline != null)
+                    readyOutline.enabled = state.IsVisible && state.IsCapacitorCharged;
             }
 
             var keyText = slot.Find("Key")?.GetComponent<Text>();
@@ -2509,6 +2531,7 @@ namespace Arena.UI
             public readonly string AbilityId;
             public readonly bool UsesGlobalCooldown;
             public readonly bool RequiresTargetLos;
+            public readonly bool IsCapacitorCharged;
 
             public ActionBarSlotState(
                 string keyLabel,
@@ -2518,7 +2541,8 @@ namespace Arena.UI
                 string actionId,
                 string abilityId,
                 bool usesGlobalCooldown,
-                bool requiresTargetLos)
+                bool requiresTargetLos,
+                bool isCapacitorCharged)
             {
                 KeyLabel = keyLabel;
                 Label = label;
@@ -2528,10 +2552,11 @@ namespace Arena.UI
                 AbilityId = abilityId;
                 UsesGlobalCooldown = usesGlobalCooldown;
                 RequiresTargetLos = requiresTargetLos;
+                IsCapacitorCharged = isCapacitorCharged;
             }
 
             public static ActionBarSlotState Empty(string keyLabel) =>
-                new(keyLabel, string.Empty, false, false, string.Empty, string.Empty, false, false);
+                new(keyLabel, string.Empty, false, false, string.Empty, string.Empty, false, false, false);
         }
 
         private static (bool isVisible, string label, Color color) ResolvePrimaryResourcePresentation(PlayerEntity player)

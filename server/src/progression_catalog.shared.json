@@ -1214,6 +1214,46 @@
       }
     },
     {
+      "ability_id": "SPELL_CAPACITOR",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "CAPACITOR",
+      "display_name": "Capacitor",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1005,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 0,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "max_distance": 18,
+          "damage": 40,
+          "damage_type": "LIGHTNING",
+          "shape": {
+            "kind": "TARGET_COLUMN",
+            "width": 2.5,
+            "vertical_tolerance": 2.5
+          },
+          "block_behavior": "BLOCKABLE",
+          "impact_effects": []
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_ERUPTION",
       "actor_scope": "PLAYER",
       "discipline_id": "RUIN",
@@ -2335,6 +2375,24 @@
       "gameplay": {
         "kind": "PASSIVE",
         "frost_spell_debuff_protection": true
+      }
+    },
+    {
+      "ability_id": "RUIN_POTENTIAL",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "POTENTIAL",
+      "display_name": "Potential",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1029,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "noncritical_lightning_spell_crit_chance_bonus": 0.05
       }
     },
     {
@@ -6921,6 +6979,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_CAPACITOR",
+      "display_name": "Capacitor",
+      "description": "Lightning spell critical strikes store 40 damage, up to five times, and transform Capacitor into Discharge. Discharge releases all stored damage to enemies in an 18-meter by 2.5-meter column through the target.",
+      "sort_order": 82
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_FROST_NEEDLE",
       "display_name": "Frost Needle",
       "description": "Drives a delayed spike of ice through the targeted ground location.",
@@ -7232,6 +7297,13 @@
       "presentation_id": "RUIN_FRACTURE",
       "display_name": "Fracture",
       "description": "Passive: the first melee attack against a target frozen by your spells deals 50% increased damage and removes Freeze.",
+      "sort_order": 115
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "RUIN_POTENTIAL",
+      "display_name": "Potential",
+      "description": "Passive: each non-critical strike with a lightning spell increases your spell critical strike chance by 5 percentage points. Critically striking with any spell resets the bonus to 0%.",
       "sort_order": 115
     },
     {
@@ -8650,6 +8722,19 @@
       "lifecycle": "DURATION",
       "duration_ms": 500,
       "sort_order": 185
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_CAPACITOR",
+      "slot": "beam",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_CAPACITOR_DISCHARGE_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 186
     },
     {
       "owner_kind": "ABILITY",

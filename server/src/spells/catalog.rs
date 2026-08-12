@@ -331,6 +331,10 @@ enum AreaShapeRow {
         angle_degrees: f32,
         vertical_tolerance: f32,
     },
+    TargetColumn {
+        width: f32,
+        vertical_tolerance: f32,
+    },
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1433,6 +1437,29 @@ fn resolve_area_shape(
                 vertical_tolerance: Some(vertical_tolerance),
             })
         }
+        Some(AreaShapeRow::TargetColumn {
+            width,
+            vertical_tolerance,
+        }) => {
+            if radius.is_some() {
+                return Err(format!(
+                    "{spell_id} TARGET_COLUMN AREA delivery must not define radius"
+                ));
+            }
+            if targeting != SpellTargeting::Target || !requires_target {
+                return Err(format!(
+                    "{spell_id} TARGET_COLUMN AREA delivery must use TARGET targeting with a target requirement"
+                ));
+            }
+            ensure_positive_f32(spell_id, "max_distance", max_distance)?;
+            ensure_positive_f32(spell_id, "width", width)?;
+            ensure_positive_f32(spell_id, "vertical_tolerance", vertical_tolerance)?;
+            Ok(CombatAreaShape::Rectangle {
+                length: max_distance,
+                width,
+                vertical_tolerance: Some(vertical_tolerance),
+            })
+        }
     }
 }
 
@@ -2111,9 +2138,21 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     }
                 }
                 SpellTargeting::Target => {
-                    if BespokeRuntimeSpell::from_spell_id(&def.kind).is_none() {
+                    if matches!(area.shape, CombatAreaShape::Rectangle { .. }) {
+                        if !def.requires_target {
+                            return Err(format!(
+                                "{} TARGET column AREA must require a target",
+                                def.kind.as_str()
+                            ));
+                        }
+                        ensure_positive_f32(
+                            def.kind.as_str(),
+                            "delivery.max_distance",
+                            def.max_distance,
+                        )?;
+                    } else if BespokeRuntimeSpell::from_spell_id(&def.kind).is_none() {
                         return Err(format!(
-                            "{} AREA currently supports SELF or POINT targeting",
+                            "{} targeted AREA must use a rectangular column shape",
                             def.kind.as_str()
                         ));
                     }
@@ -3257,6 +3296,7 @@ mod tests {
                 "ORBITING_BLADES",
                 "METEOR",
                 "LIGHTNING",
+                "CAPACITOR",
                 "ERUPTION",
                 "FROST_NEEDLE",
                 "ICE_SPIKES",
@@ -4072,6 +4112,56 @@ mod tests {
                 range: 11.5,
                 angle_degrees: 70.0,
                 vertical_tolerance: Some(2.5)
+            }
+        );
+    }
+
+    #[test]
+    fn catalog_admits_targeted_area_column_without_radius() {
+        let json = r#"{
+            "abilities": [{
+                "ability_id": "SPELL_TEST_COLUMN",
+                "action_id": "TEST_COLUMN",
+                "gameplay": {
+                    "kind": "SPELL",
+                    "cooldown_ms": 0,
+                    "uses_global_cooldown": true,
+                    "cast_time_ms": 0,
+                    "cast_mobility": "MOBILE",
+                    "targeting": "TARGET",
+                    "target_audience": "HOSTILE",
+                    "requires_target": true,
+                    "requires_target_los": true,
+                    "resource_cost": 0.0,
+                    "arms_auto_attack_on_cast": false,
+                    "delivery": {
+                        "kind": "AREA",
+                        "max_distance": 18.0,
+                        "damage": 40,
+                        "damage_type": "LIGHTNING",
+                        "block_behavior": "BLOCKABLE",
+                        "shape": {
+                            "kind": "TARGET_COLUMN",
+                            "width": 2.5,
+                            "vertical_tolerance": 2.5
+                        }
+                    }
+                }
+            }]
+        }"#;
+
+        let definitions =
+            definitions_from_rows(spell_rows_from_json(json).expect("column row should parse"))
+                .expect("targeted area column should load");
+
+        assert_eq!(definitions[0].targeting, SpellTargeting::Target);
+        assert!(definitions[0].requires_target);
+        assert_eq!(
+            definitions[0].secondary.area.as_ref().unwrap().shape,
+            CombatAreaShape::Rectangle {
+                length: 18.0,
+                width: 2.5,
+                vertical_tolerance: Some(2.5),
             }
         );
     }

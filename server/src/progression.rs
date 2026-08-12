@@ -117,6 +117,7 @@ const RUIN_QUICKENING_ABILITY_ID: &str = "RUIN_QUICKENING";
 const RUIN_CHAIN_REACTION_ABILITY_ID: &str = "RUIN_CHAIN_REACTION";
 const RUIN_RIME_ABILITY_ID: &str = "RUIN_RIME";
 const RUIN_FRACTURE_ABILITY_ID: &str = "RUIN_FRACTURE";
+const RUIN_POTENTIAL_ABILITY_ID: &str = "RUIN_POTENTIAL";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct AllocatedStatTotals {
@@ -296,6 +297,8 @@ struct AbilityGameplayDefinition {
     frost_spell_debuff_protection: bool,
     #[serde(default)]
     frozen_melee_first_hit_damage_bonus: f32,
+    #[serde(default)]
+    noncritical_lightning_spell_crit_chance_bonus: f32,
     uses_global_cooldown: Option<bool>,
     #[serde(default)]
     global_cooldown_ms: Option<u64>,
@@ -1982,6 +1985,7 @@ pub fn set_combat_discipline(ctx: &ReducerContext, discipline_id: String) -> Res
             changed_at: ctx.timestamp,
         },
     );
+    crate::combat::clear_potential_state_for_owner(ctx, owner);
     sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
     ensure_default_character_action_bar_assignments(ctx, owner, ctx.timestamp);
     sync_persisted_discipline_action_bars(ctx, owner, ctx.timestamp);
@@ -5473,6 +5477,9 @@ fn validate_ability_catalog() {
         let frost_spell_debuff_protection = ability.gameplay.frost_spell_debuff_protection;
         let frozen_melee_first_hit_damage_bonus =
             ability.gameplay.frozen_melee_first_hit_damage_bonus;
+        let noncritical_lightning_spell_crit_chance_bonus = ability
+            .gameplay
+            .noncritical_lightning_spell_crit_chance_bonus;
         assert!(
             disabled_target_damage_bonus.is_finite()
                 && (0.0..=1.0).contains(&disabled_target_damage_bonus),
@@ -5772,6 +5779,35 @@ fn validate_ability_catalog() {
             assert!(
                 (frozen_melee_first_hit_damage_bonus - 0.5).abs() < 0.0001,
                 "Fracture must grant 50% increased damage to the first qualifying melee hit"
+            );
+        }
+        assert!(
+            noncritical_lightning_spell_crit_chance_bonus.is_finite()
+                && (0.0..=1.0).contains(&noncritical_lightning_spell_crit_chance_bonus),
+            "ability '{ability_id}' must author noncritical_lightning_spell_crit_chance_bonus between 0 and 1"
+        );
+        if noncritical_lightning_spell_crit_chance_bonus > 0.0 {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author noncritical_lightning_spell_crit_chance_bonus for PASSIVE gameplay"
+            );
+        }
+        if ability_id == RUIN_POTENTIAL_ABILITY_ID {
+            assert_eq!(
+                discipline_id, DISCIPLINE_RUIN,
+                "Potential must remain a Ruin passive"
+            );
+            assert_eq!(ability_kind, "PASSIVE", "Potential must remain passive");
+            assert!(
+                ability
+                    .ability_tags
+                    .iter()
+                    .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
+                "Potential must carry the PASSIVE ability tag"
+            );
+            assert!(
+                (noncritical_lightning_spell_crit_chance_bonus - 0.05).abs() < 0.0001,
+                "Potential must grant 5 percentage points of crit chance per eligible strike"
             );
         }
         if ability_id == SUBTLETY_OPPORTUNIST_ABILITY_ID {
@@ -6872,6 +6908,30 @@ pub(crate) fn ruin_rime_protects_debuffs_for_owner(ctx: &ReducerContext, owner: 
             normalize_identifier(ability.ability_id.as_str()) == RUIN_RIME_ABILITY_ID
                 && ability.gameplay.frost_spell_debuff_protection
         })
+}
+
+pub(crate) fn ruin_potential_crit_chance_per_stack_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> f32 {
+    if !character_has_selected_discipline(ctx, owner, DISCIPLINE_RUIN) {
+        return 0.0;
+    }
+
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == RUIN_POTENTIAL_ABILITY_ID
+        })
+        .map(|ability| {
+            ability
+                .gameplay
+                .noncritical_lightning_spell_crit_chance_bonus
+        })
+        .filter(|bonus| bonus.is_finite())
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0)
 }
 
 pub(crate) fn spell_ability_id_for_action_id(action_id: &str) -> Option<String> {
@@ -9233,7 +9293,7 @@ mod tests {
     }
 
     #[test]
-    fn ruin_lightning_passives_author_acceleration_quickening_and_chain_reaction() {
+    fn ruin_lightning_passives_author_acceleration_quickening_chain_reaction_and_potential() {
         let catalog = progression_catalog();
         let acceleration = catalog
             .abilities
@@ -9279,10 +9339,28 @@ mod tests {
             "BOLT"
         );
 
+        let potential = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "RUIN_POTENTIAL")
+            .expect("Potential ability should be authored");
+        assert_eq!(potential.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(potential.action_id, "POTENTIAL");
+        assert_eq!(ability_gameplay_kind(potential), "PASSIVE");
+        assert!(
+            (potential
+                .gameplay
+                .noncritical_lightning_spell_crit_chance_bonus
+                - 0.05)
+                .abs()
+                < 0.0001
+        );
+
         for presentation_id in [
             "RUIN_ACCELERATION",
             "RUIN_QUICKENING",
             "RUIN_CHAIN_REACTION",
+            "RUIN_POTENTIAL",
         ] {
             assert!(catalog
                 .action_presentations
@@ -9294,6 +9372,68 @@ mod tests {
                 .any(|assignment| assignment.ability_id == presentation_id));
         }
         assert!(authored_status_presentation_ids(catalog).contains("QUICKENING"));
+    }
+
+    #[test]
+    fn ruin_capacitor_authors_targeted_lightning_column_and_discharge_vfx() {
+        let catalog = progression_catalog();
+        let capacitor = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_CAPACITOR")
+            .expect("Capacitor ability should be authored");
+        assert_eq!(capacitor.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(capacitor.action_id, "CAPACITOR");
+        assert_eq!(ability_gameplay_kind(capacitor), "SPELL");
+        assert_eq!(ability_delivery_kind(capacitor), "AREA");
+        assert_eq!(
+            normalize_identifier(capacitor.gameplay.targeting.as_str()),
+            "TARGET"
+        );
+        assert_eq!(capacitor.gameplay.requires_target, Some(true));
+        let delivery = capacitor
+            .gameplay
+            .delivery
+            .as_ref()
+            .expect("Capacitor should define area delivery");
+        assert_eq!(
+            delivery
+                .get("max_distance")
+                .and_then(serde_json::Value::as_f64),
+            Some(18.0)
+        );
+        assert_eq!(
+            delivery.get("damage").and_then(serde_json::Value::as_i64),
+            Some(40)
+        );
+        assert_eq!(
+            delivery
+                .get("damage_type")
+                .and_then(serde_json::Value::as_str),
+            Some("LIGHTNING")
+        );
+        let shape = delivery
+            .get("shape")
+            .expect("Capacitor should define a column shape");
+        assert_eq!(
+            shape.get("kind").and_then(serde_json::Value::as_str),
+            Some("TARGET_COLUMN")
+        );
+        assert_eq!(
+            shape.get("width").and_then(serde_json::Value::as_f64),
+            Some(2.5)
+        );
+
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| cue.owner_id == "SPELL_CAPACITOR" && cue.trigger == "SPELL_RELEASE")
+            .expect("Capacitor should author its Discharge release VFX");
+        assert_eq!(cue.vfx_id, "VFX_CAPACITOR_DISCHARGE_01");
+        assert_eq!(
+            normalize_identifier(cue.attach_mode.as_str()),
+            "WORLD_ALIGNED_TO_FACING"
+        );
     }
 
     #[test]

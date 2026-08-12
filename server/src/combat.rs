@@ -27,9 +27,10 @@ use crate::progression::{
     character_has_selected_discipline, combat_rule_value, derived_combat_profile_id_for_owner,
     ruin_acceleration_cooldown_reduction_for_owner, ruin_chain_reaction_spell_for_owner,
     ruin_fracture_melee_damage_bonus, ruin_furnace_mana_restore_ratio_for_owner,
-    ruin_quickening_for_owner, ruin_rime_protects_debuffs_for_owner,
-    subtlety_behind_target_damage_bonus, subtlety_disabled_target_damage_bonus,
-    COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD, DISCIPLINE_RUIN, DISCIPLINE_SUBTLETY,
+    ruin_potential_crit_chance_per_stack_for_owner, ruin_quickening_for_owner,
+    ruin_rime_protects_debuffs_for_owner, subtlety_behind_target_damage_bonus,
+    subtlety_disabled_target_damage_bonus, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD,
+    DISCIPLINE_RUIN, DISCIPLINE_SUBTLETY,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
@@ -103,6 +104,8 @@ use crate::combat::pending_knockback as _;
 use crate::combat::pending_remove_status as _;
 #[allow(unused_imports)]
 use crate::combat::player_event as _;
+#[allow(unused_imports)]
+use crate::combat::potential_state as _;
 #[allow(unused_imports)]
 use crate::combat::status_effect as _;
 #[allow(unused_imports)]
@@ -302,6 +305,7 @@ pub fn clear_player_combat_state(ctx: &ReducerContext, identity: Identity) {
     clear_active_radial_effects_for_owner(ctx, identity);
     clear_combat_engagement_for_identity(ctx, identity);
     clear_combat_stacking_passive_runtime_for_identity(ctx, identity);
+    clear_potential_state_for_owner(ctx, identity);
 }
 
 pub fn new_player_state(player_id: Identity, now: Timestamp) -> PlayerState {
@@ -568,6 +572,19 @@ pub struct CombatStackingPassiveRuntime {
     pub next_stack_at: Timestamp,
     pub last_direct_damage_at: Timestamp,
     pub last_consumed_action_key: String,
+}
+
+#[table(accessor = potential_state)]
+#[derive(Clone)]
+pub struct PotentialState {
+    #[primary_key]
+    pub owner: Identity,
+    pub stacks: u32,
+    pub updated_at: Timestamp,
+}
+
+pub(crate) fn clear_potential_state_for_owner(ctx: &ReducerContext, owner: Identity) {
+    ctx.db.potential_state().owner().delete(owner);
 }
 
 #[table(accessor = active_radial_effect, public)]
@@ -5306,7 +5323,8 @@ fn resolve_damage_amount(
     let source_crit_chance = source_equipment_and_stats.map(|(_, stats)| stats.crit_chance);
     let additive_crit_chance = source_equipment_and_stats
         .map(|(equipment, _)| equipment_crit_chance_bonus(hit, equipment))
-        .unwrap_or(0.0);
+        .unwrap_or(0.0)
+        + potential_crit_chance_bonus_for_hit(ctx, hit);
     let resolved = resolve_effect_amount(
         ctx,
         hit,
@@ -5341,6 +5359,7 @@ fn resolve_damage_amount(
             ctx.db.status_effect().status_id().delete(effect.status_id);
         }
     }
+    update_potential_after_spell_strike(ctx, hit, resolved.was_critical);
     trigger_critical_strike_passives(ctx, hit, resolved.was_critical);
     resolved
 }
@@ -5352,6 +5371,10 @@ fn trigger_critical_strike_passives(ctx: &ReducerContext, hit: &PendingHit, was_
 
     let cooldown_reduction = ruin_acceleration_cooldown_reduction_for_owner(ctx, hit.source);
     advance_active_ability_cooldowns(ctx, hit.source, cooldown_reduction, ctx.timestamp);
+
+    if spell_critical_can_charge_capacitor(hit) {
+        crate::spells::charge_capacitor(ctx, hit.source, ctx.timestamp);
+    }
 
     if !spell_critical_can_trigger_chain_reaction(hit) {
         return;
@@ -5373,6 +5396,21 @@ fn trigger_critical_strike_passives(ctx: &ReducerContext, hit: &PendingHit, was_
             err
         );
     }
+}
+
+const CAPACITOR_ACTION_PREFIX: &str = "capacitor:";
+
+fn spell_critical_can_charge_capacitor(hit: &PendingHit) -> bool {
+    DamageType::from_wire(hit.damage_type.as_str()) == DamageType::Lightning
+        && damage_comes_from_casted_ability(hit)
+        && matches!(
+            hit.damage_source_kind.as_str(),
+            DAMAGE_SOURCE_KIND_SPELL | DAMAGE_SOURCE_KIND_PROJECTILE
+        )
+        && !hit
+            .direct_action_key
+            .trim()
+            .starts_with(CAPACITOR_ACTION_PREFIX)
 }
 
 fn spell_critical_can_trigger_chain_reaction(hit: &PendingHit) -> bool {
@@ -5649,6 +5687,85 @@ fn damage_comes_from_casted_ability(hit: &PendingHit) -> bool {
         && !direct_action_key.contains("melee:auto_attack:")
         && hit.damage_source_kind.as_str() != DAMAGE_SOURCE_KIND_PERIODIC
         && hit.damage_source_kind.as_str() != DAMAGE_SOURCE_KIND_TRAP
+}
+
+fn spell_strike_can_update_potential(hit: &PendingHit) -> bool {
+    damage_comes_from_casted_ability(hit)
+        && matches!(
+            hit.damage_source_kind.as_str(),
+            DAMAGE_SOURCE_KIND_SPELL | DAMAGE_SOURCE_KIND_PROJECTILE
+        )
+}
+
+fn potential_stacks_after_spell_strike(
+    current_stacks: u32,
+    is_spell_strike: bool,
+    is_lightning: bool,
+    was_critical: bool,
+    max_stacks: u32,
+) -> u32 {
+    if !is_spell_strike {
+        current_stacks
+    } else if was_critical {
+        0
+    } else if is_lightning {
+        current_stacks.saturating_add(1).min(max_stacks)
+    } else {
+        current_stacks
+    }
+}
+
+fn potential_crit_chance_bonus_for_hit(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
+    if !spell_strike_can_update_potential(hit) {
+        return 0.0;
+    }
+    let per_stack = ruin_potential_crit_chance_per_stack_for_owner(ctx, hit.source);
+    if per_stack <= 0.0 {
+        return 0.0;
+    }
+    let stacks = ctx
+        .db
+        .potential_state()
+        .owner()
+        .find(hit.source)
+        .map(|state| state.stacks)
+        .unwrap_or(0);
+    (stacks as f32 * per_stack).clamp(0.0, 1.0)
+}
+
+fn update_potential_after_spell_strike(ctx: &ReducerContext, hit: &PendingHit, was_critical: bool) {
+    if !spell_strike_can_update_potential(hit) {
+        return;
+    }
+    let per_stack = ruin_potential_crit_chance_per_stack_for_owner(ctx, hit.source);
+    if per_stack <= 0.0 {
+        clear_potential_state_for_owner(ctx, hit.source);
+        return;
+    }
+
+    let current = ctx.db.potential_state().owner().find(hit.source);
+    let current_stacks = current.as_ref().map(|state| state.stacks).unwrap_or(0);
+    let max_stacks = (1.0 / per_stack).ceil().max(1.0) as u32;
+    let next_stacks = potential_stacks_after_spell_strike(
+        current_stacks,
+        true,
+        DamageType::from_wire(hit.damage_type.as_str()) == DamageType::Lightning,
+        was_critical,
+        max_stacks,
+    );
+    if next_stacks == 0 {
+        clear_potential_state_for_owner(ctx, hit.source);
+    } else if let Some(mut state) = current {
+        state.stacks = next_stacks;
+        state.updated_at = ctx.timestamp;
+        ctx.db.potential_state().owner().update(state);
+    } else {
+        ctx.db.potential_state().insert(PotentialState {
+            owner: hit.source,
+            stacks: next_stacks,
+            updated_at: ctx.timestamp,
+        });
+    }
 }
 
 fn active_consumable_status_from_source(
@@ -7027,6 +7144,7 @@ fn handle_death(ctx: &ReducerContext, state: &mut PlayerState) -> Option<u64> {
     clear_statuses_for_target(ctx, state.player_id);
     crate::lingering_shade::clear_lingering_shade_for_owner(ctx, state.player_id);
     crate::spells::clear_recall_slot(ctx, state.player_id);
+    crate::spells::clear_capacitor_charge(ctx, state.player_id);
     clear_combat_engagement_for_identity(ctx, state.player_id);
     clear_combat_stacking_passive_runtime_for_identity(ctx, state.player_id);
 
@@ -8033,15 +8151,17 @@ mod tests {
         immolation_damage_for_stacks, immolation_remaining_tick_count, knockback_stagger_duration,
         melee_attack_can_trigger_fracture, melee_attack_can_trigger_fulmination, new_status_effect,
         opportunist_passive_is_active_for_profile, point_within_radius,
-        quickening_cast_speed_multiplier, resolve_effect_amount_from_roll,
-        resolve_mana_shield_absorb, resolve_temporary_hitpoint_absorb, resolved_shove_tunables,
-        spell_critical_can_trigger_chain_reaction, stacked_slow_pct, stagger_shove_tunables,
-        status_has_dispel_type, status_matches_removal_filter_values, AuthoredStatusPayload,
-        DamageDelivery, DamageType, EffectPacket, MovementModifiers, PendingHit, StackPolicy,
-        StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
-        StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
-        COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PROJECTILE,
-        DAMAGE_SOURCE_KIND_SPELL, PLAYER_EVENT_RETENTION,
+        potential_stacks_after_spell_strike, quickening_cast_speed_multiplier,
+        resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
+        resolve_temporary_hitpoint_absorb, resolved_shove_tunables,
+        spell_critical_can_charge_capacitor, spell_critical_can_trigger_chain_reaction,
+        stacked_slow_pct, stagger_shove_tunables, status_has_dispel_type,
+        status_matches_removal_filter_values, AuthoredStatusPayload, DamageDelivery, DamageType,
+        EffectPacket, MovementModifiers, PendingHit, StackPolicy, StatusDispelType, StatusEffect,
+        StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
+        TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS,
+        DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PROJECTILE, DAMAGE_SOURCE_KIND_SPELL,
+        PLAYER_EVENT_RETENTION,
     };
     use crate::movement::FIXED_TICK_MILLIS;
     use crate::relations::TargetAudience;
@@ -8389,6 +8509,81 @@ mod tests {
             "chain_reaction:spell:p0",
             DAMAGE_SOURCE_KIND_PROJECTILE,
         )));
+    }
+
+    #[test]
+    fn capacitor_accepts_lightning_spell_crits_but_rejects_other_damage_and_discharge() {
+        let source = test_identity_number(1);
+        let target = test_identity_number(2);
+        let hit = |damage_type: &str, direct_action_key: &str, source_kind: &str| PendingHit {
+            hit_id: 0,
+            source,
+            target,
+            spell_id: direct_action_key.to_string(),
+            amount: 10,
+            is_heal: false,
+            damage_type: damage_type.to_string(),
+            target_audience: "HOSTILE".to_string(),
+            damage_delivery: DamageDelivery::Direct.as_str().to_string(),
+            damage_source_kind: source_kind.to_string(),
+            direct_action_key: direct_action_key.to_string(),
+            queued_at: Timestamp::UNIX_EPOCH,
+            queued_at_micros: 0,
+            queued_order: 0,
+        };
+
+        assert!(spell_critical_can_charge_capacitor(&hit(
+            "LIGHTNING",
+            "spell-instance:p0",
+            DAMAGE_SOURCE_KIND_PROJECTILE,
+        )));
+        assert!(spell_critical_can_charge_capacitor(&hit(
+            "LIGHTNING",
+            "spell-instance:area",
+            DAMAGE_SOURCE_KIND_SPELL,
+        )));
+        assert!(!spell_critical_can_charge_capacitor(&hit(
+            "FIRE",
+            "spell-instance:p0",
+            DAMAGE_SOURCE_KIND_PROJECTILE,
+        )));
+        assert!(!spell_critical_can_charge_capacitor(&hit(
+            "LIGHTNING",
+            "capacitor:spell-instance:area",
+            DAMAGE_SOURCE_KIND_SPELL,
+        )));
+    }
+
+    #[test]
+    fn potential_builds_only_on_noncritical_lightning_spells_and_resets_on_any_spell_crit() {
+        assert_eq!(
+            potential_stacks_after_spell_strike(0, true, true, false, 20),
+            1
+        );
+        assert_eq!(
+            potential_stacks_after_spell_strike(7, true, true, false, 20),
+            8
+        );
+        assert_eq!(
+            potential_stacks_after_spell_strike(20, true, true, false, 20),
+            20
+        );
+        assert_eq!(
+            potential_stacks_after_spell_strike(7, true, false, false, 20),
+            7
+        );
+        assert_eq!(
+            potential_stacks_after_spell_strike(7, false, true, false, 20),
+            7
+        );
+        assert_eq!(
+            potential_stacks_after_spell_strike(7, true, false, true, 20),
+            0
+        );
+        assert_eq!(
+            potential_stacks_after_spell_strike(7, true, true, true, 20),
+            0
+        );
     }
 
     #[test]

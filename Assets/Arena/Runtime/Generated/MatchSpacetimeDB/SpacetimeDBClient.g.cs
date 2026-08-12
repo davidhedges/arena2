@@ -42,6 +42,7 @@ namespace Arena.MatchDb
             AddTable(ArmorSetDefinition = new(conn));
             AddTable(AutoAttackCatalog = new(conn));
             AddTable(AutoAttackState = new(conn));
+            AddTable(CapacitorState = new(conn));
             AddTable(CharacterActionBarAssignment = new(conn));
             AddTable(CharacterAppearance = new(conn));
             AddTable(CharacterCombatDisciplineWeaponLoadout = new(conn));
@@ -612,6 +613,7 @@ namespace Arena.MatchDb
             new QueryBuilder().From.ArmorSetDefinition().ToSql(),
             new QueryBuilder().From.AutoAttackCatalog().ToSql(),
             new QueryBuilder().From.AutoAttackState().ToSql(),
+            new QueryBuilder().From.CapacitorState().ToSql(),
             new QueryBuilder().From.CharacterActionBarAssignment().ToSql(),
             new QueryBuilder().From.CharacterAppearance().ToSql(),
             new QueryBuilder().From.CharacterCombatDisciplineWeaponLoadout().ToSql(),
@@ -692,6 +694,7 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Table<ArmorSetDefinition, ArmorSetDefinitionCols, ArmorSetDefinitionIxCols> ArmorSetDefinition() => new("armor_set_definition", new ArmorSetDefinitionCols("armor_set_definition"), new ArmorSetDefinitionIxCols("armor_set_definition"));
         public global::SpacetimeDB.Table<AutoAttackCatalog, AutoAttackCatalogCols, AutoAttackCatalogIxCols> AutoAttackCatalog() => new("auto_attack_catalog", new AutoAttackCatalogCols("auto_attack_catalog"), new AutoAttackCatalogIxCols("auto_attack_catalog"));
         public global::SpacetimeDB.Table<AutoAttackState, AutoAttackStateCols, AutoAttackStateIxCols> AutoAttackState() => new("auto_attack_state", new AutoAttackStateCols("auto_attack_state"), new AutoAttackStateIxCols("auto_attack_state"));
+        public global::SpacetimeDB.Table<CapacitorState, CapacitorStateCols, CapacitorStateIxCols> CapacitorState() => new("capacitor_state", new CapacitorStateCols("capacitor_state"), new CapacitorStateIxCols("capacitor_state"));
         public global::SpacetimeDB.Table<CharacterActionBarAssignment, CharacterActionBarAssignmentCols, CharacterActionBarAssignmentIxCols> CharacterActionBarAssignment() => new("character_action_bar_assignment", new CharacterActionBarAssignmentCols("character_action_bar_assignment"), new CharacterActionBarAssignmentIxCols("character_action_bar_assignment"));
         public global::SpacetimeDB.Table<CharacterAppearance, CharacterAppearanceCols, CharacterAppearanceIxCols> CharacterAppearance() => new("character_appearance", new CharacterAppearanceCols("character_appearance"), new CharacterAppearanceIxCols("character_appearance"));
         public global::SpacetimeDB.Table<CharacterCombatDisciplineWeaponLoadout, CharacterCombatDisciplineWeaponLoadoutCols, CharacterCombatDisciplineWeaponLoadoutIxCols> CharacterCombatDisciplineWeaponLoadout() => new("character_combat_discipline_weapon_loadout", new CharacterCombatDisciplineWeaponLoadoutCols("character_combat_discipline_weapon_loadout"), new CharacterCombatDisciplineWeaponLoadoutIxCols("character_combat_discipline_weapon_loadout"));

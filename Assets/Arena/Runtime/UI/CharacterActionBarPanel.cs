@@ -379,7 +379,14 @@ namespace Arena.UI
                 Vector2 position = new(
                     col * (ActionBarLayout.SlotSize + AvailableGap),
                     -(cursorY + row * (ActionBarLayout.SlotSize + AvailableGap)));
-                Sprite? iconSprite = ActionIconResolver.ResolveForAvailableAction(action.ActionKind, action.ActionId, action.AbilityId);
+                bool capacitorCharged = CapacitorPresentation.IsCapacitorAbility(action.AbilityId, action.ActionId)
+                    && CapacitorPresentation.IsCharged(conn, owner);
+                Sprite? iconSprite = ActionIconResolver.ResolveForAvailableAction(
+                    conn,
+                    owner,
+                    action.ActionKind,
+                    action.ActionId,
+                    action.AbilityId);
                 TooltipData tooltip = action.IsFixed
                     ? ActionTooltipResolver.ResolveForFixedAction(conn, action.ActionId)
                     : ActionTooltipResolver.ResolveForAbility(conn, owner, conn?.Db.AbilityCatalog.AbilityId.Find(action.AbilityId));
@@ -408,6 +415,7 @@ namespace Arena.UI
                         _lastSignature = string.Empty;
                     } : null,
                     tooltipData: tooltip);
+                ActionBarSlotViewFactory.SetReadyBorder(cell, capacitorCharged);
                 if (!canInteract && iconSprite != null)
                     TintIcon(cell, DisabledActionTextColor);
                 SetRect((RectTransform)cell.transform, position, ActionBarLayout.SlotVector, new Vector2(0f, 1f), new Vector2(0f, 1f));
@@ -459,7 +467,10 @@ namespace Arena.UI
                     string displayName = resolved.DisplayName ?? string.Empty;
                     string actionId = resolved.ActionId ?? string.Empty;
                     string abilityId = resolved.AbilityId ?? string.Empty;
-                    Sprite? iconSprite = hasAction ? ActionIconResolver.ResolveForAction(resolved) : null;
+                    bool capacitorCharged = hasAction
+                        && CapacitorPresentation.IsCapacitorAction(resolved)
+                        && CapacitorPresentation.IsCharged(conn, owner);
+                    Sprite? iconSprite = hasAction ? ActionIconResolver.ResolveForAction(conn, owner, resolved) : null;
                     TooltipData tooltip = hasAction
                         ? ActionTooltipResolver.ResolveForActionRef(conn, owner, resolved)
                         : default;
@@ -473,6 +484,7 @@ namespace Arena.UI
                         iconSprite,
                         _canvas,
                         tooltipData: tooltip);
+                    ActionBarSlotViewFactory.SetReadyBorder(cell, capacitorCharged);
                     SetRect((RectTransform)cell.transform, position, ActionBarLayout.SlotVector, new Vector2(0f, 0f), new Vector2(0f, 0f));
                     _barCells.Add(cell);
                 }
@@ -491,13 +503,18 @@ namespace Arena.UI
                 string spellId = WireIdentifier.Normalize(itemSpell?.SpellId);
                 AbilityCatalog? ability = FindAbilityForSpell(conn, spellId);
                 bool hasSpell = !string.IsNullOrWhiteSpace(spellId);
+                bool capacitorCharged = hasSpell
+                    && CapacitorPresentation.IsCapacitorAbility(ability?.AbilityId ?? string.Empty, spellId)
+                    && CapacitorPresentation.IsCharged(conn, owner);
                 string displayName = hasSpell
                     ? ActionPresentation.ResolveDisplayName(conn, owner, spellId, spellId)
                     : string.Empty;
                 Sprite? iconSprite = hasSpell
                     ? ability == null
                         ? ActionIconResolver.Resolve(ActionKinds.Ability, spellId)
-                        : ActionIconResolver.Resolve(ActionKinds.Ability, ability.AbilityId)
+                        : ActionIconResolver.Resolve(
+                            ActionKinds.Ability,
+                            CapacitorPresentation.ResolvePresentationId(conn, owner, ability.AbilityId, spellId))
                     : null;
                 TooltipData tooltip = hasSpell
                     ? ability == null
@@ -515,6 +532,7 @@ namespace Arena.UI
                     _canvas,
                     SpellbookDropSlotId(col),
                     tooltipData: tooltip);
+                ActionBarSlotViewFactory.SetReadyBorder(cell, capacitorCharged);
                 SetRect((RectTransform)cell.transform, ActionBarLayout.SpellbookCellPosition(col), ActionBarLayout.SlotVector, new Vector2(0f, 0f), new Vector2(0f, 0f));
                 _spellbookCells.Add(cell);
             }
@@ -786,6 +804,7 @@ namespace Arena.UI
             sb.Append(combatProfile).Append('|');
             sb.Append("weapon_filter:").Append(weaponFilterKey).Append('|');
             sb.Append("spell_slots:").Append(assignedSpellSlots).Append('/').Append(spellSlotCapacity).Append('|');
+            sb.Append("capacitor_charges:").Append(CapacitorPresentation.ChargeCount(conn, owner)).Append('|');
             sb.Append("discipline_abilities:");
             foreach (CharacterDisciplineAbilitySelection selection in
                      conn.Db.CharacterDisciplineAbilitySelection.Owner.Filter(owner)

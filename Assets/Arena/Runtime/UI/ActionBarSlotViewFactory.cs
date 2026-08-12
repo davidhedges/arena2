@@ -162,5 +162,17 @@ namespace Arena.UI
             colors.colorMultiplier = 1f;
             button.colors = colors;
         }
+
+        public static void SetReadyBorder(GameObject cell, bool ready)
+        {
+            Transform? icon = cell.transform.Find("Icon");
+            if (icon == null)
+                return;
+
+            Outline outline = ArenaUiKit.EnsureComponent<Outline>(icon.gameObject);
+            outline.effectColor = CapacitorPresentation.ReadyBorderColor;
+            outline.effectDistance = new Vector2(2f, -2f);
+            outline.enabled = ready;
+        }
     }
 }

@@ -149,6 +149,7 @@ const SPECIAL_MOVEMENT_AIR_PATH_GROUND_CLEARANCE: f32 = 0.10;
 // rows without changing action identity or cue resolution contracts.
 const PROJECTILE_SEQUENCE_INDEX_V1: u32 = 0;
 const RECALL_ACTION_ID: &str = "RECALL";
+const CAPACITOR_ACTION_ID: &str = "CAPACITOR";
 
 fn is_recall_spell(spell_kind: &SpellId) -> bool {
     spell_kind.as_str() == RECALL_ACTION_ID
@@ -2823,20 +2824,39 @@ fn process_spell_cast(
     }
 
     if is_generic_area_spell(spell_kind, definition) {
-        if resolve_generic_area_center(definition, state, aim_x, aim_y, aim_z).is_none() {
+        if spell_kind.as_str() == CAPACITOR_ACTION_ID && !super::is_capacitor_charged(ctx, caster) {
+            return Ok(Some(ActionRejectReason::NoCharges));
+        }
+        if definition.targeting == super::manifest::SpellTargeting::Target {
+            if let Err(reason) =
+                validate_targeted_area_cast(ctx, caster, state, definition, target_id)
+            {
+                return Ok(Some(reason));
+            }
+        } else if resolve_generic_area_center(definition, state, aim_x, aim_y, aim_z).is_none() {
             return Ok(Some(ActionRejectReason::InvalidInput));
         }
         if mode == CastExecutionMode::Execute {
+            let capacitor_charge_count = if spell_kind.as_str() == CAPACITOR_ACTION_ID {
+                let Some(charge_count) = super::consume_capacitor_charge(ctx, caster) else {
+                    return Ok(Some(ActionRejectReason::NoCharges));
+                };
+                charge_count
+            } else {
+                1
+            };
             cast_generic_area(
                 ctx,
                 caster,
                 state,
                 spell_kind,
+                target_id,
                 aim_x,
                 aim_y,
                 aim_z,
                 action_instance_id,
                 ability_id,
+                capacitor_charge_count,
             )?;
         }
         return Ok(None);
@@ -6407,11 +6427,13 @@ fn cast_generic_area(
     caster: Identity,
     state: &CombatActorSnapshot,
     kind: &SpellId,
+    target_id: &str,
     aim_x: f32,
     aim_y: f32,
     aim_z: f32,
     action_instance_id: &str,
     ability_id: &str,
+    damage_charge_count: u32,
 ) -> Result<(), String> {
     let now = ctx.timestamp;
     let definition = super::catalog::spell_definition(kind)
@@ -6421,14 +6443,24 @@ fn cast_generic_area(
     let origin_x = state.pos_x;
     let origin_y = state.pos_y;
     let origin_z = state.pos_z;
-    let facing_yaw = state.facing_yaw;
-    let Some(area_center) =
-        resolve_generic_area_center_for_cast(ctx, caster, definition, state, aim_x, aim_y, aim_z)
-    else {
-        return Ok(());
-    };
+    let (area_center, facing_yaw, release_direction) =
+        if definition.targeting == super::manifest::SpellTargeting::Target {
+            let Ok((center, yaw, direction)) =
+                resolve_targeted_area_frame(ctx, caster, state, definition, target_id)
+            else {
+                return Ok(());
+            };
+            (center, yaw, direction)
+        } else {
+            let Some(center) = resolve_generic_area_center_for_cast(
+                ctx, caster, definition, state, aim_x, aim_y, aim_z,
+            ) else {
+                return Ok(());
+            };
+            (center, state.facing_yaw, Vec3::new(0.0, 1.0, 0.0))
+        };
     let area_shape = area_shape_for(definition);
-    let resolved_damage = if definition
+    let base_damage = if definition
         .secondary
         .area
         .as_ref()
@@ -6438,6 +6470,7 @@ fn cast_generic_area(
     } else {
         definition.damage
     };
+    let resolved_damage = capacitor_discharge_damage(base_damage, damage_charge_count);
 
     let spell_id = action_instance_id.to_string();
 
@@ -6451,7 +6484,7 @@ fn cast_generic_area(
             caster,
             hit: Identity::ZERO,
             origin: Vec3::new(origin_x, origin_y, origin_z),
-            direction: Vec3::new(0.0, 1.0, 0.0),
+            direction: release_direction,
             speed: 0.0,
             max_distance: area_shape.query_radius(),
             scalar: SpellCombatEventScalar::None,
@@ -6510,6 +6543,10 @@ fn cast_generic_area(
     );
 
     Ok(())
+}
+
+fn capacitor_discharge_damage(base_damage: i32, charge_count: u32) -> i32 {
+    base_damage.saturating_mul(charge_count.max(1).min(super::CAPACITOR_MAX_CHARGES) as i32)
 }
 
 struct AreaImpactResolution<'a> {
@@ -6779,7 +6816,11 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
             spell_id: impact.spell_id.to_string(),
             delivery: DamageDelivery::Direct,
             source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
-            direct_action_key: impact.spell_id.to_string(),
+            direct_action_key: if impact.kind.as_str() == CAPACITOR_ACTION_ID {
+                format!("capacitor:{}", impact.spell_id)
+            } else {
+                impact.spell_id.to_string()
+            },
         });
         let contact_direction = area_contact_direction(
             impact.area_center.x,
@@ -6916,6 +6957,60 @@ fn resolve_generic_area_center_for_cast(
         center.y = terrain_surface_y_for_caster(ctx, caster, center.x, center.z, state.pos_y);
     }
     Some(center)
+}
+
+fn validate_targeted_area_cast(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &CombatActorSnapshot,
+    definition: &SpellDefinition,
+    target_id: &str,
+) -> Result<(), ActionRejectReason> {
+    resolve_targeted_area_frame(ctx, caster, state, definition, target_id).map(|_| ())
+}
+
+fn resolve_targeted_area_frame(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &CombatActorSnapshot,
+    definition: &SpellDefinition,
+    target_id: &str,
+) -> Result<(Vec3, f32, Vec3), ActionRejectReason> {
+    if !matches!(
+        definition.secondary.area.as_ref().map(|area| area.shape),
+        Some(CombatAreaShape::Rectangle { .. })
+    ) {
+        return Err(ActionRejectReason::InvalidInput);
+    }
+    let target = resolve_target(ctx, caster, target_id).ok_or(ActionRejectReason::InvalidTarget)?;
+    if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
+        return Err(ActionRejectReason::InvalidTarget);
+    }
+    let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
+    if !is_target_within_facing_arc(state, &check_target, TARGET_FACING_ARC_RADIANS) {
+        return Err(ActionRejectReason::NotFacingTarget);
+    }
+    if definition.requires_target_los && !has_line_of_sight(ctx, state, &check_target) {
+        return Err(ActionRejectReason::LineOfSightBlocked);
+    }
+    if distance_to_target(state, &check_target) > definition.max_distance {
+        return Err(ActionRejectReason::OutOfRange);
+    }
+
+    let dx = target.pos_x - state.pos_x;
+    let dz = target.pos_z - state.pos_z;
+    let horizontal_length = (dx * dx + dz * dz).sqrt();
+    let (dir_x, dir_z) = if horizontal_length > 0.0001 {
+        (dx / horizontal_length, dz / horizontal_length)
+    } else {
+        (state.facing_yaw.sin(), state.facing_yaw.cos())
+    };
+    let center_y = terrain_surface_y_for_caster(ctx, caster, state.pos_x, state.pos_z, state.pos_y);
+    Ok((
+        Vec3::new(state.pos_x, center_y, state.pos_z),
+        dir_x.atan2(dir_z),
+        Vec3::new(dir_x, 0.0, dir_z),
+    ))
 }
 
 fn self_origin_area_projects_to_ground(definition: &SpellDefinition) -> bool {
@@ -9064,11 +9159,11 @@ mod tests {
     use super::{
         active_cast_cancel_receive_window_allows, active_cast_interrupt_terminal_policy,
         approach_line_contact_point_xz, area_contact_direction, area_shape_for,
-        consume_status_heal_amount_from_stacks, contact_distance_from_radii,
-        curved_target_control_point, defiance_damage_taken_reduction_for_health,
-        fixed_y_terrain_blocks_special_movement, has_arrived_at_contact_distance,
-        has_movement_intent, has_voluntary_movement_after_cast, horizontal_movement_duration_ms,
-        is_generic_area_spell, is_target_within_facing_arc,
+        capacitor_discharge_damage, consume_status_heal_amount_from_stacks,
+        contact_distance_from_radii, curved_target_control_point,
+        defiance_damage_taken_reduction_for_health, fixed_y_terrain_blocks_special_movement,
+        has_arrived_at_contact_distance, has_movement_intent, has_voluntary_movement_after_cast,
+        horizontal_movement_duration_ms, is_generic_area_spell, is_target_within_facing_arc,
         normal_cast_time_spell_refunds_gcd_on_self_cancel, projectile_release_uses_live_facing,
         quickening_applies_to_cast_time, recall_capture_is_eligible, recall_slot_has_stored_spell,
         remaining_dot_damage_from_schedule, resolve_generic_area_center,
@@ -9111,6 +9206,14 @@ mod tests {
             hit_height: 1.8,
             last_processed_tick: 0,
         }
+    }
+
+    #[test]
+    fn capacitor_discharge_releases_all_stored_damage_at_once() {
+        assert_eq!(capacitor_discharge_damage(40, 1), 40);
+        assert_eq!(capacitor_discharge_damage(40, 3), 120);
+        assert_eq!(capacitor_discharge_damage(40, 5), 200);
+        assert_eq!(capacitor_discharge_damage(40, 99), 200);
     }
 
     fn spell_id(id: &str) -> SpellId {

@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using Arena.Combat;
+using SpacetimeDB.Types;
 using UnityEngine;
 
 namespace Arena.UI
@@ -13,6 +14,12 @@ namespace Arena.UI
         private static readonly Dictionary<string, Sprite?> Cache = new(StringComparer.Ordinal);
 
         public static Sprite? ResolveForAction(ActiveActionBarAction action)
+            => ResolveForAction(null, null, action);
+
+        public static Sprite? ResolveForAction(
+            DbConnection? conn,
+            SpacetimeDB.Identity? owner,
+            ActiveActionBarAction action)
         {
             if (!action.HasAssignedAction)
                 return null;
@@ -23,14 +30,28 @@ namespace Arena.UI
             if (action.IsCombatDisciplineSwitch)
                 return Resolve(ActionKinds.CombatDisciplineSwitch, action.ActionId);
 
-            return Resolve(ActionKinds.Ability, action.AbilityId);
+            return Resolve(
+                ActionKinds.Ability,
+                CapacitorPresentation.ResolvePresentationId(
+                    conn,
+                    owner,
+                    action.AbilityId,
+                    action.ActionId));
         }
 
         public static Sprite? ResolveForAvailableAction(string actionKind, string actionId, string abilityId)
+            => ResolveForAvailableAction(null, null, actionKind, actionId, abilityId);
+
+        public static Sprite? ResolveForAvailableAction(
+            DbConnection? conn,
+            SpacetimeDB.Identity? owner,
+            string actionKind,
+            string actionId,
+            string abilityId)
         {
             string normalizedKind = WireIdentifier.Normalize(actionKind);
             string normalizedId = string.Equals(normalizedKind, ActionKinds.Ability, StringComparison.Ordinal)
-                ? WireIdentifier.Normalize(abilityId)
+                ? CapacitorPresentation.ResolvePresentationId(conn, owner, abilityId, actionId)
                 : WireIdentifier.Normalize(actionId);
             return Resolve(normalizedKind, normalizedId);
         }

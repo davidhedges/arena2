@@ -25,6 +25,11 @@ namespace Arena.Combat
                 return ResolveForFixedAction(conn, action.ActionId);
             if (action.IsCombatDisciplineSwitch)
                 return ResolveForCombatDisciplineSwitch(conn, action);
+            if (CapacitorPresentation.IsCapacitorAction(action)
+                && CapacitorPresentation.IsCharged(conn, owner))
+            {
+                return CapacitorPresentation.DischargeTooltip(conn, owner);
+            }
 
             ActionPresentationCatalog? presentation =
                 ActionPresentation.FindPresentation(conn, PresentationKindAbility, action.AbilityId)
