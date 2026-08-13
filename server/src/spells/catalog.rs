@@ -2672,11 +2672,14 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 ));
             }
             if let Some(area) = def.secondary.channel_area.as_ref() {
-                if def.targeting != SpellTargeting::Point || def.requires_target {
-                    return Err(format!(
-                        "{} area CHANNEL must use POINT targeting without a target requirement",
-                        def.kind.as_str()
-                    ));
+                match def.targeting {
+                    SpellTargeting::Point | SpellTargeting::Self_ if !def.requires_target => {}
+                    _ => {
+                        return Err(format!(
+                            "{} area CHANNEL must use POINT or SELF targeting without a target requirement",
+                            def.kind.as_str()
+                        ));
+                    }
                 }
                 if heal_amount > 0 || def.secondary.channel_projectile.is_some() {
                     return Err(format!(
@@ -2685,7 +2688,10 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     ));
                 }
                 ensure_positive_f32(def.kind.as_str(), "delivery.area.radius", area.radius)?;
-                if let Some(aim_radius) = def.aim_radius {
+                if def.targeting == SpellTargeting::Point {
+                    let aim_radius = def.aim_radius.expect(
+                        "validated POINT targeting must define aim_radius before CHANNEL validation",
+                    );
                     if (aim_radius - area.radius).abs() > 0.001 {
                         return Err(format!(
                             "{} POINT area CHANNEL aim_radius must match delivery.area.radius",

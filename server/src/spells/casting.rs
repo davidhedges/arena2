@@ -5437,6 +5437,14 @@ fn apply_area_channel_tick(
     let Some(channel_area) = definition.secondary.channel_area.as_ref() else {
         return false;
     };
+    let area_shape = channel_area_shape_for(definition, channel_area);
+    let query_radius = area_shape.query_radius();
+    let facing_yaw = caster_state.facing_yaw;
+    let event_direction = if matches!(area_shape, CombatAreaShape::Rectangle { .. }) {
+        area_impact_direction(facing_yaw)
+    } else {
+        Vec3::new(0.0, 1.0, 0.0)
+    };
     let Some(area_center) = resolve_generic_area_center(
         definition,
         caster_state,
@@ -5463,7 +5471,7 @@ fn apply_area_channel_tick(
                 caster: active_cast.caster,
                 hit: Identity::ZERO,
                 origin: caster_origin,
-                direction: Vec3::new(0.0, 1.0, 0.0),
+                direction: event_direction,
                 speed: 0.0,
                 max_distance: definition.max_distance,
                 scalar: SpellCombatEventScalar::None,
@@ -5483,9 +5491,9 @@ fn apply_area_channel_tick(
                 caster: active_cast.caster,
                 hit: Identity::ZERO,
                 origin: area_center,
-                direction: Vec3::new(0.0, 1.0, 0.0),
+                direction: event_direction,
                 speed: 0.0,
-                max_distance: channel_area.radius,
+                max_distance: query_radius,
                 scalar: SpellCombatEventScalar::None,
                 sequence_index: 0,
                 sequence_count: 1,
@@ -5504,9 +5512,9 @@ fn apply_area_channel_tick(
                 caster: active_cast.caster,
                 hit: Identity::ZERO,
                 origin: area_center,
-                direction: Vec3::new(0.0, 1.0, 0.0),
+                direction: event_direction,
                 speed: 0.0,
-                max_distance: channel_area.radius,
+                max_distance: query_radius,
                 scalar: SpellCombatEventScalar::None,
                 sequence_index: 0,
                 sequence_count: 1,
@@ -5522,7 +5530,7 @@ fn apply_area_channel_tick(
     snapshots.query_disc_indices(
         area_center.x,
         area_center.z,
-        channel_area.radius,
+        query_radius,
         &mut candidate_indices,
     );
 
@@ -5545,12 +5553,13 @@ fn apply_area_channel_tick(
                 target.player_id,
                 definition.target_audience,
             )
-            || !aoe_hits_player(
+            || !area_shape.contains_player(
                 area_center.x,
                 area_center.y,
                 area_center.z,
-                channel_area.radius,
+                facing_yaw,
                 target,
+                FACING_DOT_EPSILON,
             )
         {
             continue;
@@ -5570,7 +5579,7 @@ fn apply_area_channel_tick(
             1.0,
             0.0,
             0.0,
-            channel_area.radius,
+            query_radius,
             target.pos_x,
             target.pos_y,
             target.pos_z,
@@ -5601,7 +5610,7 @@ fn apply_area_channel_tick(
                     origin: area_center,
                     direction,
                     speed: 0.0,
-                    max_distance: channel_area.radius,
+                    max_distance: query_radius,
                     scalar: SpellCombatEventScalar::None,
                     sequence_index: 0,
                     sequence_count: 1,
@@ -5648,6 +5657,26 @@ fn apply_area_channel_tick(
         queue_effects(ctx, effects);
     }
     true
+}
+
+fn channel_area_shape_for(
+    definition: &SpellDefinition,
+    channel_area: &super::manifest::ChannelAreaSecondaryTunables,
+) -> CombatAreaShape {
+    // Channel areas already carry a single cross-section extent. Point-targeted channels use it
+    // as a disc radius; self-origin channels use it as the width and vertical tolerance of the
+    // existing forward rectangle shape.
+    if definition.targeting == super::manifest::SpellTargeting::Self_ {
+        return CombatAreaShape::Rectangle {
+            length: definition.max_distance,
+            width: channel_area.radius,
+            vertical_tolerance: Some(channel_area.radius),
+        };
+    }
+
+    CombatAreaShape::Disc {
+        radius: channel_area.radius,
+    }
 }
 
 fn apply_generic_channel_damage(
@@ -9363,7 +9392,7 @@ mod tests {
     use super::{
         active_cast_cancel_receive_window_allows, active_cast_interrupt_terminal_policy,
         approach_line_contact_point_xz, area_contact_direction, area_shape_for,
-        capacitor_discharge_damage, consume_status_heal_amount_from_stacks,
+        capacitor_discharge_damage, channel_area_shape_for, consume_status_heal_amount_from_stacks,
         contact_distance_from_radii, curved_target_control_point,
         defiance_damage_taken_reduction_for_health, fixed_y_terrain_blocks_special_movement,
         has_arrived_at_contact_distance, has_movement_intent, has_voluntary_movement_after_cast,
@@ -9645,6 +9674,34 @@ mod tests {
         assert!((center.x - state.pos_x).abs() < 0.001);
         assert!((center.y - state.pos_y).abs() < 0.001);
         assert!((center.z - state.pos_z).abs() < 0.001);
+    }
+
+    #[test]
+    fn flamethrower_channel_area_is_a_targetless_forward_column() {
+        let definition = crate::spells::spell_definition_by_str("FLAMETHROWER")
+            .expect("Flamethrower should exist");
+        let channel_area = definition
+            .secondary
+            .channel_area
+            .as_ref()
+            .expect("Flamethrower should define channel-area data");
+        let shape = channel_area_shape_for(definition, channel_area);
+
+        assert_eq!(
+            shape,
+            CombatAreaShape::Rectangle {
+                length: 10.0,
+                width: 2.5,
+                vertical_tolerance: Some(2.5),
+            }
+        );
+
+        let front = test_snapshot(0.0, 9.5, 0.0);
+        let side = test_snapshot(2.0, 5.0, 0.0);
+        let behind = test_snapshot(0.0, -0.6, 0.0);
+        assert!(shape.contains_player(0.0, 0.0, 0.0, 0.0, &front, FACING_DOT_EPSILON));
+        assert!(!shape.contains_player(0.0, 0.0, 0.0, 0.0, &side, FACING_DOT_EPSILON));
+        assert!(!shape.contains_player(0.0, 0.0, 0.0, 0.0, &behind, FACING_DOT_EPSILON));
     }
 
     #[test]

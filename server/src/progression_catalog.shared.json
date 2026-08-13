@@ -1596,10 +1596,10 @@
         "uses_global_cooldown": true,
         "cast_time_ms": 0,
         "cast_mobility": "GROUNDED_STATIONARY",
-        "targeting": "TARGET",
-        "requires_target": true,
-        "requires_target_los": true,
-        "arms_auto_attack_on_cast": true,
+        "targeting": "SELF",
+        "requires_target": false,
+        "requires_target_los": false,
+        "arms_auto_attack_on_cast": false,
         "delivery": {
           "kind": "CHANNEL",
           "max_distance": 10,
@@ -1608,7 +1608,10 @@
           "resource_cost_per_second": 18,
           "update_interval_seconds": 0.2,
           "duration_seconds": 4,
-          "block_behavior": "BLOCKABLE"
+          "block_behavior": "BLOCKABLE",
+          "area": {
+            "radius": 2.5
+          }
         }
       }
     },
@@ -7167,7 +7170,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_FLAMETHROWER",
       "display_name": "Flamethrower",
-      "description": "Channels a sustained jet of fire into the target for up to 4 seconds, dealing 6 fire damage every 0.2 seconds.",
+      "description": "Channels a sustained jet of fire in a column in front of the caster for up to 4 seconds, dealing 6 fire damage every 0.2 seconds.",
       "sort_order": 86
     },
     {
