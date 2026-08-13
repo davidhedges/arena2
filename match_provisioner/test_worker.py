@@ -94,10 +94,10 @@ class FakeApi:
                 "SPELL_FIREBALL",
             ],
             "armor_set_id": "IRON",
-            "main_hand_item_def_id": "NH_SWORD_2H_NEWBIE_02",
-            "main_hand_color_id": "CL",
-            "off_hand_item_def_id": "",
-            "off_hand_color_id": "",
+            "main_hand_item_def_id": [0, "NH_SWORD_2H_NEWBIE_02"],
+            "main_hand_color_id": [0, "CL"],
+            "off_hand_item_def_id": [1, []],
+            "off_hand_color_id": [1, []],
             "loadout_revision": 4,
             "captured_at": timestamp_arg(created_at),
         }
@@ -397,10 +397,14 @@ class ProvisionerTests(unittest.TestCase):
         self.assertEqual(bootstrap_args[9], frozen["secondary_discipline_id_2"])
         self.assertEqual(bootstrap_args[10], frozen["selected_ability_ids"])
         self.assertEqual(bootstrap_args[11], frozen["armor_set_id"])
-        self.assertEqual(bootstrap_args[12], frozen["main_hand_item_def_id"])
-        self.assertEqual(bootstrap_args[13], frozen["main_hand_color_id"])
-        self.assertEqual(bootstrap_args[14], frozen["off_hand_item_def_id"])
-        self.assertEqual(bootstrap_args[15], frozen["off_hand_color_id"])
+        self.assertEqual(
+            bootstrap_args[12], unwrap_option(frozen["main_hand_item_def_id"])
+        )
+        self.assertEqual(
+            bootstrap_args[13], unwrap_option(frozen["main_hand_color_id"])
+        )
+        self.assertEqual(bootstrap_args[14], "")
+        self.assertEqual(bootstrap_args[15], "")
 
     def test_success_emits_stage_level_startup_timing(self) -> None:
         self.api.add_ticket("ticket-one", PLAYER_ONE)
