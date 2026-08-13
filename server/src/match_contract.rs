@@ -88,6 +88,10 @@ pub struct MatchReservation {
     pub secondary_discipline_id_2: String,
     pub selected_ability_ids: Vec<String>,
     pub armor_set_id: String,
+    pub main_hand_item_def_id: String,
+    pub main_hand_color_id: String,
+    pub off_hand_item_def_id: String,
+    pub off_hand_color_id: String,
     pub reserved_at: Timestamp,
 }
 
@@ -319,6 +323,10 @@ pub fn bootstrap_unranked_2v2_bot_match(
     secondary_discipline_id_2: String,
     selected_ability_ids: Vec<String>,
     armor_set_id: String,
+    main_hand_item_def_id: String,
+    main_hand_color_id: String,
+    off_hand_item_def_id: String,
+    off_hand_color_id: String,
 ) -> Result<(), String> {
     let mut owner = require_module_owner(ctx)?;
     require_identity(
@@ -359,6 +367,10 @@ pub fn bootstrap_unranked_2v2_bot_match(
     let secondary_discipline_id_2 = validate_optional_loadout_id(secondary_discipline_id_2)?;
     let selected_ability_ids = validate_loadout_ability_ids(selected_ability_ids)?;
     let armor_set_id = validate_optional_loadout_id(armor_set_id)?;
+    let main_hand_item_def_id = validate_optional_loadout_id(main_hand_item_def_id)?;
+    let main_hand_color_id = validate_optional_loadout_id(main_hand_color_id)?;
+    let off_hand_item_def_id = validate_optional_loadout_id(off_hand_item_def_id)?;
+    let off_hand_color_id = validate_optional_loadout_id(off_hand_color_id)?;
     validate_future_deadline(ctx.timestamp, allocation_expires_at)?;
 
     owner.deployment_mode = MODE_PROVISIONED.to_string();
@@ -391,6 +403,10 @@ pub fn bootstrap_unranked_2v2_bot_match(
         secondary_discipline_id_2,
         selected_ability_ids,
         armor_set_id,
+        main_hand_item_def_id,
+        main_hand_color_id,
+        off_hand_item_def_id,
+        off_hand_color_id,
         reserved_at: ctx.timestamp,
     });
 
@@ -430,11 +446,23 @@ pub(crate) fn apply_reserved_player_loadout(
             reservation.secondary_discipline_id_2.clone(),
             reservation.selected_ability_ids.clone(),
         )?;
-        crate::inventory::equip_starter_weapon_for_discipline(
-            ctx,
-            reservation.player_identity,
-            reservation.primary_discipline_id.as_str(),
-        )?;
+        if reservation.main_hand_item_def_id.is_empty() {
+            crate::inventory::equip_starter_weapon_for_discipline(
+                ctx,
+                reservation.player_identity,
+                reservation.primary_discipline_id.as_str(),
+            )?;
+        } else {
+            crate::inventory::equip_weapon_definitions_for_discipline(
+                ctx,
+                reservation.player_identity,
+                reservation.primary_discipline_id.as_str(),
+                reservation.main_hand_item_def_id.as_str(),
+                reservation.main_hand_color_id.as_str(),
+                reservation.off_hand_item_def_id.as_str(),
+                reservation.off_hand_color_id.as_str(),
+            )?;
+        }
     }
     Ok(())
 }

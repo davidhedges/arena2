@@ -30,6 +30,14 @@ namespace Arena.HubDb
         public ulong Revision;
         [DataMember(Name = "updated_at")]
         public SpacetimeDB.Timestamp UpdatedAt;
+        [DataMember(Name = "main_hand_item_def_id")]
+        public string? MainHandItemDefId;
+        [DataMember(Name = "off_hand_item_def_id")]
+        public string? OffHandItemDefId;
+        [DataMember(Name = "main_hand_color_id")]
+        public string? MainHandColorId;
+        [DataMember(Name = "off_hand_color_id")]
+        public string? OffHandColorId;
 
         public HubPlayerLoadout(
             SpacetimeDB.Identity Owner,
@@ -39,7 +47,11 @@ namespace Arena.HubDb
             System.Collections.Generic.List<string> SelectedAbilityIds,
             string ArmorSetId,
             ulong Revision,
-            SpacetimeDB.Timestamp UpdatedAt
+            SpacetimeDB.Timestamp UpdatedAt,
+            string? MainHandItemDefId,
+            string? OffHandItemDefId,
+            string? MainHandColorId,
+            string? OffHandColorId
         )
         {
             this.Owner = Owner;
@@ -50,6 +62,10 @@ namespace Arena.HubDb
             this.ArmorSetId = ArmorSetId;
             this.Revision = Revision;
             this.UpdatedAt = UpdatedAt;
+            this.MainHandItemDefId = MainHandItemDefId;
+            this.OffHandItemDefId = OffHandItemDefId;
+            this.MainHandColorId = MainHandColorId;
+            this.OffHandColorId = OffHandColorId;
         }
 
         public HubPlayerLoadout()

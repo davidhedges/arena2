@@ -1,0 +1,3287 @@
+{
+  "schema_version": 1,
+  "colors": [
+    {
+      "color_id": "DEFAULT",
+      "display_name": "Default",
+      "hex": "#A9A9A9"
+    },
+    {
+      "color_id": "CL",
+      "display_name": "Classic",
+      "hex": "#B69A6A"
+    },
+    {
+      "color_id": "BK",
+      "display_name": "Black",
+      "hex": "#25272B"
+    },
+    {
+      "color_id": "BL",
+      "display_name": "Blue",
+      "hex": "#3E78C5"
+    },
+    {
+      "color_id": "BR",
+      "display_name": "Brown",
+      "hex": "#765038"
+    },
+    {
+      "color_id": "CN",
+      "display_name": "Cyan",
+      "hex": "#39B9C8"
+    },
+    {
+      "color_id": "GN",
+      "display_name": "Green",
+      "hex": "#4D9958"
+    },
+    {
+      "color_id": "GO",
+      "display_name": "Gold",
+      "hex": "#D5A936"
+    },
+    {
+      "color_id": "GR",
+      "display_name": "Gray",
+      "hex": "#858991"
+    },
+    {
+      "color_id": "OR",
+      "display_name": "Orange",
+      "hex": "#D87935"
+    },
+    {
+      "color_id": "PE",
+      "display_name": "Purple",
+      "hex": "#8159AA"
+    },
+    {
+      "color_id": "RD",
+      "display_name": "Red",
+      "hex": "#B84949"
+    },
+    {
+      "color_id": "WH",
+      "display_name": "White",
+      "hex": "#E4E2DC"
+    },
+    {
+      "color_id": "YE",
+      "display_name": "Yellow",
+      "hex": "#D7C746"
+    }
+  ],
+  "families": [
+    {
+      "item_def_id": "TRAINING_DAGGER_PAIR",
+      "display_name": "Training Daggers",
+      "icon_id": "training_dagger_pair",
+      "weapon_kind": "DAGGER_PAIR",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "SUBTLETY",
+      "sort_order": 0,
+      "default_color_id": "DEFAULT",
+      "variants": [
+        {
+          "color_id": "DEFAULT",
+          "prefab_path": "Assets/Arena/Resources/CombatAnimationSets/DaggerMainPackAuthored.prefab",
+          "off_hand_prefab_path": "Assets/Arena/Resources/CombatAnimationSets/DaggerOffPackAuthored.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "TRAINING_TWO_HAND_SWORD",
+      "display_name": "Training Two-Handed Sword",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_SWORD",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 0,
+      "default_color_id": "DEFAULT",
+      "variants": [
+        {
+          "color_id": "DEFAULT",
+          "prefab_path": "Assets/Arena/Resources/CombatAnimationSets/GreatSwordPackAuthored.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "TRAINING_ONE_HAND_SWORD",
+      "display_name": "Training One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 0,
+      "default_color_id": "DEFAULT",
+      "variants": [
+        {
+          "color_id": "DEFAULT",
+          "prefab_path": "Assets/Arena/Resources/CombatAnimationSets/SwordPackAuthored.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "TRAINING_SHIELD",
+      "display_name": "Training Shield",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 0,
+      "default_color_id": "DEFAULT",
+      "variants": [
+        {
+          "color_id": "DEFAULT",
+          "prefab_path": "Assets/Arena/Resources/CombatAnimationSets/ShieldPackAuthored.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "TRAINING_BOW",
+      "display_name": "Training Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 0,
+      "default_color_id": "DEFAULT",
+      "variants": [
+        {
+          "color_id": "DEFAULT",
+          "prefab_path": "Assets/Arena/Resources/CombatAnimationSets/ArcherBowDrawnPackAuthored.prefab",
+          "stowed_prefab_path": "Assets/Arena/Resources/CombatAnimationSets/ArcherBowStowedPackAuthored.prefab",
+          "quiver_prefab_path": "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_DAGGER_1H_FANTASY_01",
+      "display_name": "Fantasy I Daggers",
+      "icon_id": "training_dagger_pair",
+      "weapon_kind": "DAGGER_PAIR",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "SUBTLETY",
+      "sort_order": 1,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Fantasy_01_Bl.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Fantasy_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Fantasy_01_Gn.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Fantasy_01_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Fantasy_01_Pe.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Fantasy_01_Pe.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_DAGGER_1H_FANTASY_02",
+      "display_name": "Fantasy II Daggers",
+      "icon_id": "training_dagger_pair",
+      "weapon_kind": "DAGGER_PAIR",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "SUBTLETY",
+      "sort_order": 2,
+      "default_color_id": "CN",
+      "variants": [
+        {
+          "color_id": "CN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Fantasy_02_Cn.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Fantasy_02_Cn.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Fantasy_02_Gn.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Fantasy_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Fantasy_02_Rd.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Fantasy_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_DAGGER_PAIR_01",
+      "display_name": "Newbie Daggers I",
+      "icon_id": "training_dagger_pair",
+      "weapon_kind": "DAGGER_PAIR",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "SUBTLETY",
+      "sort_order": 3,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_01_Cl.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_01_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_01_Bl.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_01_Gn.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_01_Rd.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_DAGGER_PAIR_02",
+      "display_name": "Newbie Daggers II",
+      "icon_id": "training_dagger_pair",
+      "weapon_kind": "DAGGER_PAIR",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "SUBTLETY",
+      "sort_order": 4,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_02_Cl.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_02_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_02_Bl.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_02_Gn.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_02_Rd.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_DAGGER_PAIR_03",
+      "display_name": "Newbie Daggers III",
+      "icon_id": "training_dagger_pair",
+      "weapon_kind": "DAGGER_PAIR",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "SUBTLETY",
+      "sort_order": 5,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_03_Cl.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_03_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_03_Bl.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_03_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_03_Gn.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_03_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_03_Rd.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Newbie_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_DAGGER_1H_ROGUE",
+      "display_name": "Rogue Daggers",
+      "icon_id": "training_dagger_pair",
+      "weapon_kind": "DAGGER_PAIR",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "SUBTLETY",
+      "sort_order": 6,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Rogue_Bl.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Rogue_Off_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Rogue_Gn.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Rogue_Off_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Rogue_Rd.prefab",
+          "off_hand_prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Dagger/Dagger_1H_Rogue_Off_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_2H_FANTASY_01",
+      "display_name": "Fantasy I Two-Handed Sword",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_SWORD",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 7,
+      "default_color_id": "CN",
+      "variants": [
+        {
+          "color_id": "CN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_01_Cn.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_2H_FANTASY_02",
+      "display_name": "Fantasy II Two-Handed Sword",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_SWORD",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 8,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_02_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_02_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_2H_FANTASY_03",
+      "display_name": "Fantasy III Two-Handed Sword",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_SWORD",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 9,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_03_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_03_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_2H_FANTASY_04",
+      "display_name": "Fantasy IV Two-Handed Sword",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_SWORD",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 10,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_04_Bl.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_04_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_04_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_2H_FANTASY_05",
+      "display_name": "Fantasy V Two-Handed Sword",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_SWORD",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 11,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_05_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_05_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_05_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_2H_FANTASY_06",
+      "display_name": "Fantasy VI Two-Handed Sword",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_SWORD",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 12,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_06_Bl.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_06_Rd.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Fantasy_06_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_2H_GENERIC_01",
+      "display_name": "Generic I Two-Handed Sword",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_SWORD",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 13,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Generic_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Generic_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Generic_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_2H_GENERIC_02",
+      "display_name": "Generic II Two-Handed Sword",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_SWORD",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 14,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Generic_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Generic_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Generic_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_TWO_HAND_SWORD_01",
+      "display_name": "Newbie Two-Handed Sword I",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_SWORD",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 15,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Newbie_01_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Newbie_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Newbie_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Newbie_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_TWO_HAND_SWORD_02",
+      "display_name": "Newbie Two-Handed Sword II",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_SWORD",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 16,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Newbie_02_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Newbie_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Newbie_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Newbie_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_2H_RUNIC_01",
+      "display_name": "Runic I Two-Handed Sword",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_SWORD",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 17,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Runic_01_Bl.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Runic_01_Pe.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Runic_01_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_2H_UD_01",
+      "display_name": "Undead I Two-Handed Sword",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_SWORD",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 18,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Ud_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Ud_01_Gn.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_2H_Ud_01_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_DK",
+      "display_name": "Death Knight Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 19,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_DK_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_DK_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_DK_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_FANTASY_01",
+      "display_name": "Fantasy I Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 20,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_01_Bl.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_01_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_FANTASY_02",
+      "display_name": "Fantasy II Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 21,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_FANTASY_03",
+      "display_name": "Fantasy III Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 22,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_03_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_03_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_FANTASY_04",
+      "display_name": "Fantasy IV Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 23,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_04_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_04_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_04_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_FANTASY_05",
+      "display_name": "Fantasy V Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 24,
+      "default_color_id": "PE",
+      "variants": [
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_05_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_05_Rd.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_05_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_FANTASY_06",
+      "display_name": "Fantasy VI Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 25,
+      "default_color_id": "CN",
+      "variants": [
+        {
+          "color_id": "CN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_06_Cn.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_06_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Fantasy_06_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_GENERIC_01",
+      "display_name": "Generic I Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 26,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_GENERIC_02",
+      "display_name": "Generic II Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 27,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_02_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_02_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_GENERIC_03",
+      "display_name": "Generic III Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 28,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_03_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_03_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_GENERIC_04",
+      "display_name": "Generic IV Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 29,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_04_Bl.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_04_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_04_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_GENERIC_05",
+      "display_name": "Generic V Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 30,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_05_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_05_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_05_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_GENERIC_06",
+      "display_name": "Generic VI Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 31,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_06_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_06_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Generic_06_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_TWO_HAND_AXE_01",
+      "display_name": "Newbie Two-Handed Axe I",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 32,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Newbie_01_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Newbie_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Newbie_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Newbie_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_UD_01",
+      "display_name": "Undead I Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 33,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Ud_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Ud_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Ud_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_2HL_UD_02",
+      "display_name": "Undead II Two-Handed Axe",
+      "icon_id": "newbie_two_hand_axe_01",
+      "weapon_kind": "TWO_HAND_AXE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 34,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Ud_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Ud_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_2HL_Ud_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_HAMMER_2H_FANTASY_01",
+      "display_name": "Fantasy I Two-Handed Hammer",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_HAMMER",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 35,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_2H_Fantasy_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_2H_Fantasy_01_Gn.prefab"
+        },
+        {
+          "color_id": "GO",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_2H_Fantasy_01_Go.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_HAMMER_2H_FANTASY_02",
+      "display_name": "Fantasy II Two-Handed Hammer",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_HAMMER",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 36,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_2H_Fantasy_02_Gn.prefab"
+        },
+        {
+          "color_id": "GO",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_2H_Fantasy_02_Go.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_2H_Fantasy_02_Pe.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_HAMMER_2H_FANTASY_03",
+      "display_name": "Fantasy III Two-Handed Hammer",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_HAMMER",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 37,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_2H_Fantasy_03_Bl.prefab"
+        },
+        {
+          "color_id": "CN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_2H_Fantasy_03_Cn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_2H_Fantasy_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_HAMMER_2H_PALADIN",
+      "display_name": "Paladin Two-Handed Hammer",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "TWO_HAND_HAMMER",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 38,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_2H_Paladin_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_2H_Paladin_Gn.prefab"
+        },
+        {
+          "color_id": "GR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_2H_Paladin_Gr.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_2H_Paladin_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_POLEARM_2HL_FANTASY_01",
+      "display_name": "2HL Fantasy I Polearm",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "POLEARM",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 39,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Polearm/Polearm_2HL_Fantasy_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Polearm/Polearm_2HL_Fantasy_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Polearm/Polearm_2HL_Fantasy_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_POLEARM_2HL_FANTASY_02",
+      "display_name": "2HL Fantasy II Polearm",
+      "icon_id": "training_two_hand_sword",
+      "weapon_kind": "POLEARM",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "WAR",
+      "sort_order": 40,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Polearm/Polearm_2HL_Fantasy_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Polearm/Polearm_2HL_Fantasy_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Polearm/Polearm_2HL_Fantasy_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_FANTASY_01",
+      "display_name": "Fantasy I One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 41,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Fantasy_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Fantasy_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Fantasy_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_FANTASY_02",
+      "display_name": "Fantasy II One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 42,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Fantasy_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Fantasy_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Fantasy_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_FANTASY_03",
+      "display_name": "Fantasy III One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 43,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Fantasy_03_Bl.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Fantasy_03_Rd.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Fantasy_03_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_FOOTMAN",
+      "display_name": "Footman One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 44,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Footman_Bl.prefab"
+        },
+        {
+          "color_id": "GO",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Footman_Go.prefab"
+        },
+        {
+          "color_id": "GR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Footman_Gr.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_GENERIC_01",
+      "display_name": "Generic I One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 45,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_01_Bl.prefab"
+        },
+        {
+          "color_id": "GO",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_01_Go.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_GENERIC_02",
+      "display_name": "Generic II One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 46,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_GENERIC_03",
+      "display_name": "Generic III One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 47,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_03_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_03_Gn.prefab"
+        },
+        {
+          "color_id": "GO",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_03_Go.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_GENERIC_04",
+      "display_name": "Generic IV One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 48,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_04_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_04_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_04_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_GENERIC_05",
+      "display_name": "Generic V One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 49,
+      "default_color_id": "GO",
+      "variants": [
+        {
+          "color_id": "GO",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_05_Go.prefab"
+        },
+        {
+          "color_id": "GR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_05_Gr.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Generic_05_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_ONE_HAND_SWORD_01",
+      "display_name": "Newbie One-Handed Sword I",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 50,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Newbie_01_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Newbie_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Newbie_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Newbie_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_ONE_HAND_SWORD_02",
+      "display_name": "Newbie One-Handed Sword II",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 51,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Newbie_02_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Newbie_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Newbie_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Newbie_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_RUNIC_01",
+      "display_name": "Runic I One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 52,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Runic_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Runic_01_Gn.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Runic_01_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_RUNIC_02",
+      "display_name": "Runic II One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 53,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Runic_02_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Runic_02_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Runic_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_RUNIC_03",
+      "display_name": "Runic III One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 54,
+      "default_color_id": "CN",
+      "variants": [
+        {
+          "color_id": "CN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Runic_03_Cn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Runic_03_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Runic_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_SABER_01",
+      "display_name": "Saber I One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 55,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Saber_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Saber_01_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Saber_01_Pe.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_UD_01",
+      "display_name": "Undead I One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 56,
+      "default_color_id": "OR",
+      "variants": [
+        {
+          "color_id": "OR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Ud_01_Or.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Ud_01_Pe.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Ud_01_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_UD_02",
+      "display_name": "Undead II One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 57,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Ud_02_Bl.prefab"
+        },
+        {
+          "color_id": "OR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Ud_02_Or.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Ud_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_UD_03",
+      "display_name": "Undead III One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 58,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Ud_03_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Ud_03_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Ud_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SWORD_1H_WARRIOR",
+      "display_name": "Warrior One-Handed Sword",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_SWORD",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 59,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Warrior_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Warrior_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Sword/Sword_1H_Warrior_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_FANTASY_01",
+      "display_name": "Fantasy I One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 60,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_01_Bl.prefab"
+        },
+        {
+          "color_id": "CN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_01_Cn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_FANTASY_02",
+      "display_name": "Fantasy II One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 61,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_02_Bl.prefab"
+        },
+        {
+          "color_id": "CN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_02_Cn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_FANTASY_03",
+      "display_name": "Fantasy III One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 62,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_03_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_03_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_FANTASY_04",
+      "display_name": "Fantasy IV One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 63,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_04_Bl.prefab"
+        },
+        {
+          "color_id": "BR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_04_Br.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_04_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_FANTASY_05",
+      "display_name": "Fantasy V One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 64,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_05_Bl.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_05_Rd.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_05_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_FANTASY_06",
+      "display_name": "Fantasy VI One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 65,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_06_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_06_Gn.prefab"
+        },
+        {
+          "color_id": "GO",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Fantasy_06_Go.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_GENERIC_01",
+      "display_name": "Generic I One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 66,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_01_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_01_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_GENERIC_02",
+      "display_name": "Generic II One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 67,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_02_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_02_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_GENERIC_03",
+      "display_name": "Generic III One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 68,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_03_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_03_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_GENERIC_04",
+      "display_name": "Generic IV One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 69,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_04_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_04_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_04_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_GENERIC_05",
+      "display_name": "Generic V One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 70,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_05_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_05_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_05_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_GENERIC_06",
+      "display_name": "Generic VI One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 71,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_06_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_06_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_06_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_GENERIC_07",
+      "display_name": "Generic VII One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 72,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_07_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_07_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_07_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_GENERIC_08",
+      "display_name": "Generic VIII One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 73,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_08_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_08_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_08_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_GENERIC_09",
+      "display_name": "Generic IX One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 74,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_09_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_09_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Generic_09_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_AXE_1H_NEWBIE_01",
+      "display_name": "Newbie I One-Handed Axe",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 75,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Newbie_01_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Newbie_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Newbie_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Newbie_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_ONE_HAND_AXE_02",
+      "display_name": "Newbie One-Handed Axe II",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 76,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Newbie_02_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Newbie_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Newbie_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Newbie_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_ONE_HAND_AXE_03",
+      "display_name": "Newbie One-Handed Axe III",
+      "icon_id": "newbie_one_hand_axe_02",
+      "weapon_kind": "ONE_HAND_AXE",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 77,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Newbie_03_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Newbie_03_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Newbie_03_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Axe/Axe_1H_Newbie_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_HAMMER_1H_FANTASY_01",
+      "display_name": "Fantasy I One-Handed Hammer",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_HAMMER",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 78,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_1H_Fantasy_01_Bl.prefab"
+        },
+        {
+          "color_id": "BR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_1H_Fantasy_01_Br.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Hammer/Hammer_1H_Fantasy_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_FIST_1H_DOUBLECLAW",
+      "display_name": "Double Claw Fist Weapon",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_FIST",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 79,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_DoubleClaw_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_DoubleClaw_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_DoubleClaw_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_FIST_1H_JUNGLECLAW",
+      "display_name": "Jungle Claw Fist Weapon",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_FIST",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 80,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_JungleClaw_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_JungleClaw_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_JungleClaw_Pe.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_FIST_1H_METALCLAW",
+      "display_name": "Metal Claw Fist Weapon",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_FIST",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 81,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_MetalClaw_Bl.prefab"
+        },
+        {
+          "color_id": "BR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_MetalClaw_Br.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_MetalClaw_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_FIST_1H_METALPUNCH",
+      "display_name": "Metal Punch Fist Weapon",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_FIST",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 82,
+      "default_color_id": "BK",
+      "variants": [
+        {
+          "color_id": "BK",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_MetalPunch_Bk.prefab"
+        },
+        {
+          "color_id": "GO",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_MetalPunch_Go.prefab"
+        },
+        {
+          "color_id": "GR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_MetalPunch_Gr.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_FIST_1H_SKELETON_01",
+      "display_name": "Skeleton I Fist Weapon",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_FIST",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 83,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_Skeleton_01_Bl.prefab"
+        },
+        {
+          "color_id": "BR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_Skeleton_01_Br.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_Skeleton_01_Gn.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_FIST_1H_SKELETON_02",
+      "display_name": "Skeleton II Fist Weapon",
+      "icon_id": "training_one_hand_sword",
+      "weapon_kind": "ONE_HAND_FIST",
+      "hand_requirement": "ONE_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 84,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_Skeleton_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_Skeleton_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Fist/Fist_1H_Skeleton_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SHIELD_FANTASY_01",
+      "display_name": "Fantasy I Shield",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 85,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_01_Bl.prefab"
+        },
+        {
+          "color_id": "BR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_01_Br.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SHIELD_FANTASY_02",
+      "display_name": "Fantasy II Shield",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 86,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_02_Bl.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_02_Rd.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_02_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SHIELD_FANTASY_03",
+      "display_name": "Fantasy III Shield",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 87,
+      "default_color_id": "CN",
+      "variants": [
+        {
+          "color_id": "CN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_03_Cn.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_03_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SHIELD_FANTASY_04",
+      "display_name": "Fantasy IV Shield",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 88,
+      "default_color_id": "BR",
+      "variants": [
+        {
+          "color_id": "BR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_04_Br.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_04_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_04_Pe.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SHIELD_FANTASY_05",
+      "display_name": "Fantasy V Shield",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 89,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_05_Bl.prefab"
+        },
+        {
+          "color_id": "BR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_05_Br.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_05_Gn.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SHIELD_FANTASY_06",
+      "display_name": "Fantasy VI Shield",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 90,
+      "default_color_id": "BR",
+      "variants": [
+        {
+          "color_id": "BR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_06_Br.prefab"
+        },
+        {
+          "color_id": "GO",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_06_Go.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_06_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SHIELD_FANTASY_07",
+      "display_name": "Fantasy VII Shield",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 91,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_07_Gn.prefab"
+        },
+        {
+          "color_id": "GO",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_07_Go.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_07_Pe.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SHIELD_FANTASY_08",
+      "display_name": "Fantasy VIII Shield",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 92,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_08_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_08_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_08_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SHIELD_FANTASY_09",
+      "display_name": "Fantasy IX Shield",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 93,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_09_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_09_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Fantasy_09_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SHIELD_FOOTMAN",
+      "display_name": "Footman Shield",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 94,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Footman_Bl.prefab"
+        },
+        {
+          "color_id": "GO",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Footman_Go.prefab"
+        },
+        {
+          "color_id": "GR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Footman_Gr.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_SHIELD_01",
+      "display_name": "Newbie Shield I",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 95,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Newbie_01_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Newbie_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Newbie_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Newbie_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_SHIELD_02",
+      "display_name": "Newbie Shield II",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 96,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Newbie_02_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Newbie_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Newbie_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Newbie_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_SHIELD_03",
+      "display_name": "Newbie Shield III",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 97,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Newbie_03_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Newbie_03_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Newbie_03_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Newbie_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_SHIELD_WARRIOR",
+      "display_name": "Warrior Shield",
+      "icon_id": "training_shield",
+      "weapon_kind": "SHIELD",
+      "hand_requirement": "OFF_HAND",
+      "equip_slot": "OFF_HAND",
+      "primary_discipline_id": "ZEAL",
+      "sort_order": 98,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Warrior_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Warrior_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Shield/Shield_Warrior_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_DEMON_01",
+      "display_name": "Demon I Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 99,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Demon_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Demon_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Demon_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_01",
+      "display_name": "Generic I Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 100,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_02",
+      "display_name": "Generic II Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 101,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_03",
+      "display_name": "Generic III Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 102,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_03_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_03_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_04",
+      "display_name": "Generic IV Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 103,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_04_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_04_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_04_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_05",
+      "display_name": "Generic V Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 104,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_05_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_05_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_05_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_06",
+      "display_name": "Generic VI Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 105,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_06_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_06_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_06_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_07",
+      "display_name": "Generic VII Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 106,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_07_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_07_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_07_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_08",
+      "display_name": "Generic VIII Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 107,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_08_Bl.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_08_Pe.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_08_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_09",
+      "display_name": "Generic IX Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 108,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_09_Bl.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_09_Pe.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_09_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_10",
+      "display_name": "Generic X Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 109,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_10_Bl.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_10_Pe.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_10_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_11",
+      "display_name": "Generic XI Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 110,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_11_Bl.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_11_Pe.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_11_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_12",
+      "display_name": "Generic XII Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 111,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_12_Bl.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_12_Pe.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_12_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_13",
+      "display_name": "Generic XIII Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 112,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_13_Bl.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_13_Pe.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_13_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_GENERIC_14",
+      "display_name": "Generic XIV Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 113,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_14_Bl.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_14_Pe.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_14_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_HUMAN_01",
+      "display_name": "Human I Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 114,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Human_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Human_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Human_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_NARCHER",
+      "display_name": "Northern Archer Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 115,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_NARCHER_OLD",
+      "display_name": "Northern Archer Old Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 116,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Old_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Old_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Old_Pe.prefab"
+        },
+        {
+          "color_id": "WH",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Old_Wh.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_BOW_01",
+      "display_name": "Newbie Bow I",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 117,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_01_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_BOW_02",
+      "display_name": "Newbie Bow II",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 118,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_02_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_BOW_03",
+      "display_name": "Newbie Bow III",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 119,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_03_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_03_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_03_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_RANGER",
+      "display_name": "Ranger Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 120,
+      "default_color_id": "GN",
+      "variants": [
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ranger_Gn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ranger_Pe.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ranger_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_BOW_UD_01",
+      "display_name": "Undead I Bow",
+      "icon_id": "training_bow",
+      "weapon_kind": "BOW",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "PRECISION",
+      "sort_order": 121,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ud_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ud_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ud_01_Rd.prefab"
+        }
+      ]
+    }
+  ]
+}

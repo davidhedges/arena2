@@ -632,3 +632,160 @@
 }
 
 .back-button:hover { color: var(--arena-text); }
+
+.equipment-page-heading { position: absolute; }
+
+.equipment-mode-toggle {
+    position: absolute;
+    right: 36px;
+    top: 18px;
+    height: 34px;
+    flex-direction: row;
+}
+
+.equipment-mode-button {
+    width: 96px;
+    height: 34px;
+    margin-left: 6px;
+    background-color: rgba(8, 10, 12, 0.82);
+    color: var(--arena-text-dim);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    border-width: 1px;
+    border-color: rgba(231, 225, 211, 0.14);
+}
+
+.equipment-mode-button:hover {
+    color: var(--arena-text);
+    border-color: rgba(228, 179, 74, 0.48);
+}
+
+.equipment-mode-button.is-selected {
+    background-color: rgba(73, 52, 23, 0.72);
+    color: var(--arena-gold-text);
+    border-color: rgba(228, 179, 74, 0.78);
+}
+
+.equipment-panel-hidden { display: none; }
+
+.weapon-list {
+    height: 286px;
+    margin-top: 12px;
+    flex-direction: column;
+}
+
+.weapon-list--offhand { height: 154px; }
+.weapon-list .unity-scroll-view__content-viewport { overflow: hidden; }
+.weapon-list .unity-scroll-view__content-container { flex-direction: column; }
+.weapon-section-rule { margin-top: 12px; margin-bottom: 12px; }
+
+.weapon-card {
+    height: 74px;
+    flex-shrink: 0;
+    margin-bottom: 8px;
+    padding-left: 10px;
+    padding-right: 12px;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.025);
+    color: var(--arena-text-muted);
+    border-width: 1px;
+    border-color: rgba(231, 225, 211, 0.12);
+}
+
+.weapon-card:hover {
+    background-color: rgba(255, 255, 255, 0.045);
+    border-color: rgba(218, 182, 108, 0.38);
+}
+
+.weapon-card.is-selected {
+    background-color: rgba(65, 46, 22, 0.54);
+    border-color: rgba(228, 179, 74, 0.75);
+}
+
+.weapon-card-icon {
+    width: 54px;
+    height: 54px;
+    margin-right: 12px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+    background-color: rgba(4, 6, 8, 0.66);
+    border-width: 1px;
+    border-color: rgba(174, 159, 128, 0.26);
+}
+
+.weapon-card-copy { min-width: 0; flex-grow: 1; }
+.weapon-card-name {
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 12px;
+    letter-spacing: 0.8px;
+}
+.weapon-card-meta { margin-top: 4px; color: var(--arena-text-dim); font-size: 10px; }
+.weapon-card-check { width: 22px; color: rgba(231, 225, 211, 0.28); -unity-text-align: middle-center; }
+.weapon-card.is-selected .weapon-card-check { color: var(--arena-ember-bright); }
+
+.weapon-summary {
+    height: 112px;
+    margin-top: 18px;
+    padding-left: 14px;
+    padding-right: 14px;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(197, 143, 42, 0.07);
+    border-width: 1px;
+    border-color: rgba(197, 143, 42, 0.20);
+}
+
+.weapon-details-icon {
+    width: 78px;
+    height: 78px;
+    margin-right: 16px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.weapon-loadout-row {
+    height: 72px;
+    flex-direction: row;
+    align-items: center;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(231, 225, 211, 0.08);
+}
+
+.weapon-color-section {
+    min-height: 54px;
+    padding-top: 8px;
+}
+
+.weapon-color-list {
+    min-height: 32px;
+    margin-top: 5px;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.weapon-color-button {
+    width: 25px;
+    height: 25px;
+    margin-right: 6px;
+    margin-bottom: 5px;
+    padding: 0;
+    border-width: 2px;
+    border-color: rgba(231, 225, 211, 0.22);
+    border-radius: 13px;
+}
+
+.weapon-color-button:hover { border-color: rgba(231, 225, 211, 0.75); }
+.weapon-color-button.is-selected { border-color: var(--arena-ember-bright); }
+
+.weapon-rule-card {
+    margin-top: 18px;
+    padding: 16px;
+    background-color: rgba(197, 143, 42, 0.06);
+    border-width: 1px;
+    border-color: rgba(197, 143, 42, 0.18);
+}
+
+.weapon-details-spacer { flex-grow: 1; }

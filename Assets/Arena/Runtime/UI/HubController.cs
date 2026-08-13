@@ -61,6 +61,11 @@ namespace Arena.UI
         private string _lastShowcaseAppearanceSignature = string.Empty;
         private string _lastFailedShowcaseAppearanceSignature = string.Empty;
         private Dictionary<string, string>? _showcaseArmorPreviewBySlot;
+        private bool _hasShowcaseWeaponPreview;
+        private string _showcaseMainHandPreviewId = string.Empty;
+        private string _showcaseMainHandPreviewColorId = string.Empty;
+        private string _showcaseOffHandPreviewId = string.Empty;
+        private string _showcaseOffHandPreviewColorId = string.Empty;
 
         private readonly struct HubLayoutMetrics
         {
@@ -539,9 +544,72 @@ namespace Arena.UI
             }
 
             attachments.BindMounts(_showcaseAvatarBinding.Mounts);
-            attachments.ApplyAnimationSet(animationSet);
+            IReadOnlyDictionary<string, EquippedWeaponVisual>? weaponVisuals =
+                ResolveShowcaseWeaponVisuals();
+            attachments.ApplyAnimationSet(animationSet, weaponVisuals);
             attachments.SetInCombat(true);
             ApplyShowcaseLoop(_showcaseAvatarBinding.AvatarRoot, animationSet);
+        }
+
+        private IReadOnlyDictionary<string, EquippedWeaponVisual>? ResolveShowcaseWeaponVisuals()
+        {
+            HubNetworkManager? hub = HubNetworkManager.Instance;
+            HubLoadoutSnapshot? loadout = hub?.Loadout;
+            string mainHandId = _hasShowcaseWeaponPreview
+                ? _showcaseMainHandPreviewId
+                : loadout?.MainHandItemDefId ?? string.Empty;
+            string offHandId = _hasShowcaseWeaponPreview
+                ? _showcaseOffHandPreviewId
+                : loadout?.OffHandItemDefId ?? string.Empty;
+            string mainHandColorId = _hasShowcaseWeaponPreview
+                ? _showcaseMainHandPreviewColorId
+                : loadout?.MainHandColorId ?? string.Empty;
+            string offHandColorId = _hasShowcaseWeaponPreview
+                ? _showcaseOffHandPreviewColorId
+                : loadout?.OffHandColorId ?? string.Empty;
+            if (hub == null || (string.IsNullOrWhiteSpace(mainHandId) && string.IsNullOrWhiteSpace(offHandId)))
+                return null;
+
+            if (!CharacterAppearanceCatalogSet.TryLoadDefault(out CharacterAppearanceCatalogSet catalogs, out _)
+                || catalogs.EquipmentAppearanceCatalog == null)
+            {
+                return null;
+            }
+
+            var visuals = new Dictionary<string, EquippedWeaponVisual>(System.StringComparer.Ordinal);
+            AddShowcaseWeaponVisuals(hub, catalogs.EquipmentAppearanceCatalog, mainHandId, mainHandColorId, visuals);
+            AddShowcaseWeaponVisuals(hub, catalogs.EquipmentAppearanceCatalog, offHandId, offHandColorId, visuals);
+            return visuals.Count == 0 ? null : visuals;
+        }
+
+        private static void AddShowcaseWeaponVisuals(
+            HubNetworkManager hub,
+            EquipmentAppearanceCatalog catalog,
+            string itemDefId,
+            string colorId,
+            IDictionary<string, EquippedWeaponVisual> visuals)
+        {
+            HubWeaponSnapshot? weapon = hub.Weapons.FirstOrDefault(candidate =>
+                string.Equals(candidate.ItemDefId, itemDefId, System.StringComparison.Ordinal));
+            if (weapon == null)
+                return;
+
+            foreach (string roleId in EquipmentAppearanceCatalog.WeaponVisualRoleIdsForKind(weapon.WeaponKind))
+            {
+                if (!catalog.TryGetWeaponVisual(
+                        weapon.ItemDefId,
+                        colorId,
+                        roleId,
+                        CharacterAppearanceIds.RaceHuman,
+                        CharacterAppearanceIds.SexMale,
+                        out EquipmentAppearanceCatalog.WeaponVisualEntry entry)
+                    || entry.prefab == null)
+                {
+                    continue;
+                }
+
+                visuals[roleId] = new EquippedWeaponVisual(roleId, weapon.ItemDefId, entry.prefab);
+            }
         }
 
         private void ApplyShowcaseAppearance()
@@ -635,6 +703,21 @@ namespace Arena.UI
             _lastShowcaseAppearanceSignature = string.Empty;
             _lastFailedShowcaseAppearanceSignature = string.Empty;
             ApplyShowcaseAppearance();
+        }
+
+        internal void SetShowcaseWeaponPreview(
+            string? mainHandItemDefId,
+            string? mainHandColorId,
+            string? offHandItemDefId,
+            string? offHandColorId)
+        {
+            _hasShowcaseWeaponPreview = mainHandItemDefId != null || offHandItemDefId != null;
+            _showcaseMainHandPreviewId = mainHandItemDefId?.Trim() ?? string.Empty;
+            _showcaseMainHandPreviewColorId = mainHandColorId?.Trim() ?? string.Empty;
+            _showcaseOffHandPreviewId = offHandItemDefId?.Trim() ?? string.Empty;
+            _showcaseOffHandPreviewColorId = offHandColorId?.Trim() ?? string.Empty;
+            _lastCombatProfile = string.Empty;
+            ApplyState();
         }
 
         internal void RefreshShowcaseLoadout()

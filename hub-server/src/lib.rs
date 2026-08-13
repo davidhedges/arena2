@@ -37,12 +37,40 @@ const PRIMARY_DISCIPLINE_ABILITY_MINIMUM: usize = 8;
 const SECONDARY_DISCIPLINE_ABILITY_MINIMUM: usize = 1;
 const MAX_DISCIPLINE_LOADOUT_ABILITIES: usize = 128;
 
+const DISCIPLINE_SUBTLETY: &str = "SUBTLETY";
+const DISCIPLINE_WAR: &str = "WAR";
+const DISCIPLINE_ZEAL: &str = "ZEAL";
+const DISCIPLINE_PRECISION: &str = "PRECISION";
+
+const EQUIP_SLOT_MAIN_HAND: &str = "MAIN_HAND";
+const EQUIP_SLOT_OFF_HAND: &str = "OFF_HAND";
+const WEAPON_KIND_TWO_HAND_SWORD: &str = "TWO_HAND_SWORD";
+const WEAPON_KIND_ONE_HAND_SWORD: &str = "ONE_HAND_SWORD";
+const WEAPON_KIND_TWO_HAND_AXE: &str = "TWO_HAND_AXE";
+const WEAPON_KIND_ONE_HAND_AXE: &str = "ONE_HAND_AXE";
+const WEAPON_KIND_TWO_HAND_HAMMER: &str = "TWO_HAND_HAMMER";
+const WEAPON_KIND_ONE_HAND_HAMMER: &str = "ONE_HAND_HAMMER";
+const WEAPON_KIND_ONE_HAND_FIST: &str = "ONE_HAND_FIST";
+const WEAPON_KIND_POLEARM: &str = "POLEARM";
+const WEAPON_KIND_SHIELD: &str = "SHIELD";
+const WEAPON_KIND_DAGGER_PAIR: &str = "DAGGER_PAIR";
+const WEAPON_KIND_BOW: &str = "BOW";
+const HAND_REQUIREMENT_ONE_HAND: &str = "ONE_HAND";
+const HAND_REQUIREMENT_TWO_HAND: &str = "TWO_HAND";
+const HAND_REQUIREMENT_OFF_HAND: &str = "OFF_HAND";
+
 const PROGRESSION_CATALOG_JSON: &str =
     include_str!("../../server/src/progression_catalog.shared.json");
+const WEAPON_APPEARANCE_CATALOG_JSON: &str =
+    include_str!("../../Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json");
 const HUB_CATALOG_HASH_OFFSET: u64 = 0xcbf29ce484222325;
 const HUB_CATALOG_HASH_PRIME: u64 = 0x100000001b3;
 const PROGRESSION_CATALOG_HASH: u64 =
     extend_catalog_hash(HUB_CATALOG_HASH_OFFSET, PROGRESSION_CATALOG_JSON.as_bytes());
+const WEAPON_APPEARANCE_CATALOG_HASH: u64 = extend_catalog_hash(
+    PROGRESSION_CATALOG_HASH,
+    WEAPON_APPEARANCE_CATALOG_JSON.as_bytes(),
+);
 
 #[table(accessor = hub_player)]
 pub struct HubPlayer {
@@ -54,8 +82,8 @@ pub struct HubPlayer {
 }
 
 /// Durable build selection. Item instances and simulation state deliberately
-/// stay out of the Hub; the currently authored equipment UI selects one stable
-/// armor-set id while disciplines save stable authored ids.
+/// stay out of the Hub; equipment choices are stable authored definition ids
+/// that the disposable match resolves to fresh item instances.
 #[table(accessor = hub_player_loadout)]
 #[derive(Clone)]
 pub struct HubPlayerLoadout {
@@ -68,6 +96,14 @@ pub struct HubPlayerLoadout {
     pub armor_set_id: String,
     pub revision: u64,
     pub updated_at: Timestamp,
+    #[default(None::<String>)]
+    pub main_hand_item_def_id: Option<String>,
+    #[default(None::<String>)]
+    pub off_hand_item_def_id: Option<String>,
+    #[default(None::<String>)]
+    pub main_hand_color_id: Option<String>,
+    #[default(None::<String>)]
+    pub off_hand_color_id: Option<String>,
 }
 
 /// Prevents every Hub connection from reparsing and rescanning the authored
@@ -94,6 +130,14 @@ pub struct MatchPlayerLoadoutSnapshot {
     pub armor_set_id: String,
     pub loadout_revision: u64,
     pub captured_at: Timestamp,
+    #[default(None::<String>)]
+    pub main_hand_item_def_id: Option<String>,
+    #[default(None::<String>)]
+    pub off_hand_item_def_id: Option<String>,
+    #[default(None::<String>)]
+    pub main_hand_color_id: Option<String>,
+    #[default(None::<String>)]
+    pub off_hand_color_id: Option<String>,
 }
 
 /// Display-only Hub copy of the source-controlled combat catalog. Match
@@ -136,6 +180,38 @@ pub struct HubArmorSetDefinition {
     pub move_speed_modifier: f32,
     pub cast_speed_modifier: f32,
     pub piece_count: u32,
+    pub sort_order: u32,
+}
+
+/// Curated projection of the N-Hance weapon models that have complete Arena
+/// item, icon, animation-role, and attachment support.
+#[table(accessor = hub_weapon_definition, public)]
+#[derive(Clone, PartialEq)]
+pub struct HubWeaponDefinition {
+    #[primary_key]
+    pub item_def_id: String,
+    pub display_name: String,
+    pub icon_id: String,
+    pub weapon_kind: String,
+    pub hand_requirement: String,
+    pub equip_slot: String,
+    #[index(btree)]
+    pub primary_discipline_id: String,
+    pub sort_order: u32,
+}
+
+/// Appearance palettes are separate from gameplay item definitions: one row
+/// per authored model family/color pair, keyed independently for subscription.
+#[table(accessor = hub_weapon_color_definition, public)]
+#[derive(Clone, PartialEq)]
+pub struct HubWeaponColorDefinition {
+    #[primary_key]
+    pub weapon_color_key: String,
+    #[index(btree)]
+    pub item_def_id: String,
+    pub color_id: String,
+    pub display_name: String,
+    pub color_hex: String,
     pub sort_order: u32,
 }
 
@@ -216,6 +292,10 @@ pub struct MyHubLoadout {
     pub secondary_discipline_id_2: String,
     pub selected_ability_ids: Vec<String>,
     pub armor_set_id: String,
+    pub main_hand_item_def_id: String,
+    pub off_hand_item_def_id: String,
+    pub main_hand_color_id: String,
+    pub off_hand_color_id: String,
     pub revision: u64,
     pub updated_at: Timestamp,
 }
@@ -273,6 +353,10 @@ pub fn my_hub_loadout(ctx: &ViewContext) -> Option<MyHubLoadout> {
             secondary_discipline_id_2: loadout.secondary_discipline_id_2,
             selected_ability_ids: loadout.selected_ability_ids,
             armor_set_id: loadout.armor_set_id,
+            main_hand_item_def_id: loadout.main_hand_item_def_id.unwrap_or_default(),
+            off_hand_item_def_id: loadout.off_hand_item_def_id.unwrap_or_default(),
+            main_hand_color_id: loadout.main_hand_color_id.unwrap_or_default(),
+            off_hand_color_id: loadout.off_hand_color_id.unwrap_or_default(),
             revision: loadout.revision,
             updated_at: loadout.updated_at,
         })
@@ -378,6 +462,8 @@ pub fn save_hub_discipline_loadout(
         selected_ability_ids,
     )?;
     let existing = ctx.db.hub_player_loadout().owner().find(ctx.sender());
+    let (main_hand_item_def_id, main_hand_color_id, off_hand_item_def_id, off_hand_color_id) =
+        preserve_or_default_weapon_loadout(primary.as_str(), existing.as_ref());
     let row = HubPlayerLoadout {
         owner: ctx.sender(),
         primary_discipline_id: primary,
@@ -388,6 +474,10 @@ pub fn save_hub_discipline_loadout(
             .as_ref()
             .map(|loadout| loadout.armor_set_id.clone())
             .unwrap_or_default(),
+        main_hand_item_def_id: Some(main_hand_item_def_id),
+        off_hand_item_def_id: Some(off_hand_item_def_id),
+        main_hand_color_id: Some(main_hand_color_id),
+        off_hand_color_id: Some(off_hand_color_id),
         revision: next_loadout_revision(existing.as_ref().map(|loadout| loadout.revision)),
         updated_at: ctx.timestamp,
     };
@@ -432,6 +522,18 @@ pub fn save_hub_armor_set(ctx: &ReducerContext, armor_set_id: String) -> Result<
             .map(|loadout| loadout.selected_ability_ids.clone())
             .unwrap_or_default(),
         armor_set_id,
+        main_hand_item_def_id: existing
+            .as_ref()
+            .and_then(|loadout| loadout.main_hand_item_def_id.clone()),
+        off_hand_item_def_id: existing
+            .as_ref()
+            .and_then(|loadout| loadout.off_hand_item_def_id.clone()),
+        main_hand_color_id: existing
+            .as_ref()
+            .and_then(|loadout| loadout.main_hand_color_id.clone()),
+        off_hand_color_id: existing
+            .as_ref()
+            .and_then(|loadout| loadout.off_hand_color_id.clone()),
         revision: next_loadout_revision(existing.as_ref().map(|loadout| loadout.revision)),
         updated_at: ctx.timestamp,
     };
@@ -440,6 +542,55 @@ pub fn save_hub_armor_set(ctx: &ReducerContext, armor_set_id: String) -> Result<
     } else {
         ctx.db.hub_player_loadout().insert(row);
     }
+    Ok(())
+}
+
+#[reducer]
+pub fn save_hub_weapon_loadout(
+    ctx: &ReducerContext,
+    main_hand_item_def_id: String,
+    main_hand_color_id: String,
+    off_hand_item_def_id: String,
+    off_hand_color_id: String,
+) -> Result<(), String> {
+    ensure_hub_player(ctx, ctx.sender());
+    let existing = ctx
+        .db
+        .hub_player_loadout()
+        .owner()
+        .find(ctx.sender())
+        .ok_or_else(|| "save a primary discipline before equipping weapons".to_string())?;
+    let (main_hand_item_def_id, main_hand_color_id, off_hand_item_def_id, off_hand_color_id) =
+        validate_hub_weapon_loadout(
+            existing.primary_discipline_id.as_str(),
+            main_hand_item_def_id.as_str(),
+            main_hand_color_id.as_str(),
+            off_hand_item_def_id.as_str(),
+            off_hand_color_id.as_str(),
+        )?;
+    if existing.main_hand_item_def_id.as_deref() == Some(main_hand_item_def_id.as_str())
+        && existing.off_hand_item_def_id.as_deref() == Some(off_hand_item_def_id.as_str())
+        && existing.main_hand_color_id.as_deref() == Some(main_hand_color_id.as_str())
+        && existing.off_hand_color_id.as_deref() == Some(off_hand_color_id.as_str())
+    {
+        return Ok(());
+    }
+
+    let row = HubPlayerLoadout {
+        owner: existing.owner,
+        primary_discipline_id: existing.primary_discipline_id,
+        secondary_discipline_id_1: existing.secondary_discipline_id_1,
+        secondary_discipline_id_2: existing.secondary_discipline_id_2,
+        selected_ability_ids: existing.selected_ability_ids,
+        armor_set_id: existing.armor_set_id,
+        main_hand_item_def_id: Some(main_hand_item_def_id),
+        off_hand_item_def_id: Some(off_hand_item_def_id),
+        main_hand_color_id: Some(main_hand_color_id),
+        off_hand_color_id: Some(off_hand_color_id),
+        revision: next_loadout_revision(Some(existing.revision)),
+        updated_at: ctx.timestamp,
+    };
+    ctx.db.hub_player_loadout().owner().update(row);
     Ok(())
 }
 
@@ -847,6 +998,39 @@ struct HubActionPresentationAuthoring {
     description: String,
 }
 
+#[derive(Deserialize)]
+struct HubWeaponAppearanceCatalogFile {
+    schema_version: u32,
+    colors: Vec<HubWeaponColorAuthoring>,
+    families: Vec<HubWeaponFamilyAuthoring>,
+}
+
+#[derive(Deserialize)]
+struct HubWeaponColorAuthoring {
+    color_id: String,
+    display_name: String,
+    hex: String,
+}
+
+#[derive(Clone, Deserialize)]
+struct HubWeaponFamilyAuthoring {
+    item_def_id: String,
+    display_name: String,
+    icon_id: String,
+    weapon_kind: String,
+    hand_requirement: String,
+    equip_slot: String,
+    primary_discipline_id: String,
+    sort_order: u32,
+    default_color_id: String,
+    variants: Vec<HubWeaponVariantAuthoring>,
+}
+
+#[derive(Clone, Deserialize)]
+struct HubWeaponVariantAuthoring {
+    color_id: String,
+}
+
 #[derive(Clone, Copy)]
 struct HubArmorSetSpec {
     armor_set_id: &'static str,
@@ -960,6 +1144,7 @@ fn ensure_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
 fn sync_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
     let authored: HubProgressionCatalogFile = serde_json::from_str(PROGRESSION_CATALOG_JSON)
         .map_err(|error| format!("Hub progression catalog is invalid: {error}"))?;
+    let weapon_catalog = parse_weapon_appearance_catalog()?;
     let descriptions: HashMap<String, String> = authored
         .action_presentations
         .into_iter()
@@ -1135,6 +1320,111 @@ fn sync_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
     for id in stale_armor_ids {
         ctx.db.hub_armor_set_definition().armor_set_id().delete(id);
     }
+
+    let weapon_rows: Vec<HubWeaponDefinition> = weapon_catalog
+        .families
+        .iter()
+        .map(|spec| HubWeaponDefinition {
+            item_def_id: normalize_authored_id(spec.item_def_id.as_str()),
+            display_name: spec.display_name.trim().to_string(),
+            icon_id: spec.icon_id.trim().to_string(),
+            weapon_kind: normalize_authored_id(spec.weapon_kind.as_str()),
+            hand_requirement: normalize_authored_id(spec.hand_requirement.as_str()),
+            equip_slot: normalize_authored_id(spec.equip_slot.as_str()),
+            primary_discipline_id: normalize_authored_id(spec.primary_discipline_id.as_str()),
+            sort_order: spec.sort_order,
+        })
+        .collect();
+    let weapon_ids: HashSet<String> = weapon_rows
+        .iter()
+        .map(|row| row.item_def_id.clone())
+        .collect();
+    for row in weapon_rows {
+        match ctx
+            .db
+            .hub_weapon_definition()
+            .item_def_id()
+            .find(row.item_def_id.clone())
+        {
+            Some(existing) if existing == row => {}
+            Some(_) => {
+                ctx.db.hub_weapon_definition().item_def_id().update(row);
+            }
+            None => {
+                ctx.db.hub_weapon_definition().insert(row);
+            }
+        }
+    }
+    let stale_weapon_ids: Vec<String> = ctx
+        .db
+        .hub_weapon_definition()
+        .iter()
+        .map(|row| row.item_def_id)
+        .filter(|id| !weapon_ids.contains(id))
+        .collect();
+    for id in stale_weapon_ids {
+        ctx.db.hub_weapon_definition().item_def_id().delete(id);
+    }
+
+    let colors_by_id: HashMap<String, &HubWeaponColorAuthoring> = weapon_catalog
+        .colors
+        .iter()
+        .map(|color| (normalize_authored_id(color.color_id.as_str()), color))
+        .collect();
+    let mut color_rows = Vec::new();
+    for family in &weapon_catalog.families {
+        let item_def_id = normalize_authored_id(family.item_def_id.as_str());
+        for (sort_order, variant) in family.variants.iter().enumerate() {
+            let color_id = normalize_authored_id(variant.color_id.as_str());
+            let color = colors_by_id.get(&color_id).ok_or_else(|| {
+                format!("weapon family '{item_def_id}' references unknown color '{color_id}'")
+            })?;
+            color_rows.push(HubWeaponColorDefinition {
+                weapon_color_key: weapon_color_key(item_def_id.as_str(), color_id.as_str()),
+                item_def_id: item_def_id.clone(),
+                color_id,
+                display_name: color.display_name.trim().to_string(),
+                color_hex: color.hex.trim().to_string(),
+                sort_order: sort_order as u32,
+            });
+        }
+    }
+    let color_keys: HashSet<String> = color_rows
+        .iter()
+        .map(|row| row.weapon_color_key.clone())
+        .collect();
+    for row in color_rows {
+        match ctx
+            .db
+            .hub_weapon_color_definition()
+            .weapon_color_key()
+            .find(row.weapon_color_key.clone())
+        {
+            Some(existing) if existing == row => {}
+            Some(_) => {
+                ctx.db
+                    .hub_weapon_color_definition()
+                    .weapon_color_key()
+                    .update(row);
+            }
+            None => {
+                ctx.db.hub_weapon_color_definition().insert(row);
+            }
+        }
+    }
+    let stale_color_keys: Vec<String> = ctx
+        .db
+        .hub_weapon_color_definition()
+        .iter()
+        .map(|row| row.weapon_color_key)
+        .filter(|key| !color_keys.contains(key))
+        .collect();
+    for key in stale_color_keys {
+        ctx.db
+            .hub_weapon_color_definition()
+            .weapon_color_key()
+            .delete(key);
+    }
     Ok(())
 }
 
@@ -1149,12 +1439,227 @@ const fn extend_catalog_hash(mut hash: u64, bytes: &[u8]) -> u64 {
 }
 
 fn hub_catalog_revision() -> u64 {
-    HUB_ARMOR_SET_SPECS.iter().fold(PROGRESSION_CATALOG_HASH, |hash, spec| {
-        let hash = extend_catalog_hash(hash, spec.armor_set_id.as_bytes());
-        let hash = extend_catalog_hash(hash, spec.display_name.as_bytes());
-        let hash = extend_catalog_hash(hash, spec.armor_tier.as_bytes());
-        hash ^ ((spec.piece_count as u64) << 32) ^ spec.sort_order as u64
-    })
+    let armor_hash =
+        HUB_ARMOR_SET_SPECS
+            .iter()
+            .fold(WEAPON_APPEARANCE_CATALOG_HASH, |hash, spec| {
+                let hash = extend_catalog_hash(hash, spec.armor_set_id.as_bytes());
+                let hash = extend_catalog_hash(hash, spec.display_name.as_bytes());
+                let hash = extend_catalog_hash(hash, spec.armor_tier.as_bytes());
+                hash ^ ((spec.piece_count as u64) << 32) ^ spec.sort_order as u64
+            });
+    armor_hash
+}
+
+fn parse_weapon_appearance_catalog() -> Result<HubWeaponAppearanceCatalogFile, String> {
+    let catalog: HubWeaponAppearanceCatalogFile =
+        serde_json::from_str(WEAPON_APPEARANCE_CATALOG_JSON)
+            .map_err(|error| format!("weapon appearance catalog is invalid: {error}"))?;
+    if catalog.schema_version != 1 {
+        return Err(format!(
+            "unsupported weapon appearance schema version {}",
+            catalog.schema_version
+        ));
+    }
+    Ok(catalog)
+}
+
+fn weapon_color_key(item_def_id: &str, color_id: &str) -> String {
+    format!(
+        "{}:{}",
+        normalize_authored_id(item_def_id),
+        normalize_authored_id(color_id)
+    )
+}
+
+fn weapon_spec_contract_is_valid(spec: &HubWeaponFamilyAuthoring) -> bool {
+    match normalize_authored_id(spec.primary_discipline_id.as_str()).as_str() {
+        DISCIPLINE_SUBTLETY => {
+            normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND
+                && normalize_authored_id(spec.weapon_kind.as_str()) == WEAPON_KIND_DAGGER_PAIR
+                && normalize_authored_id(spec.hand_requirement.as_str())
+                    == HAND_REQUIREMENT_TWO_HAND
+        }
+        DISCIPLINE_WAR => {
+            normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND
+                && matches!(
+                    normalize_authored_id(spec.weapon_kind.as_str()).as_str(),
+                    WEAPON_KIND_TWO_HAND_SWORD
+                        | WEAPON_KIND_TWO_HAND_AXE
+                        | WEAPON_KIND_TWO_HAND_HAMMER
+                        | WEAPON_KIND_POLEARM
+                )
+                && normalize_authored_id(spec.hand_requirement.as_str())
+                    == HAND_REQUIREMENT_TWO_HAND
+        }
+        DISCIPLINE_ZEAL => match normalize_authored_id(spec.equip_slot.as_str()).as_str() {
+            EQUIP_SLOT_MAIN_HAND => {
+                matches!(
+                    normalize_authored_id(spec.weapon_kind.as_str()).as_str(),
+                    WEAPON_KIND_ONE_HAND_SWORD
+                        | WEAPON_KIND_ONE_HAND_AXE
+                        | WEAPON_KIND_ONE_HAND_HAMMER
+                        | WEAPON_KIND_ONE_HAND_FIST
+                ) && normalize_authored_id(spec.hand_requirement.as_str())
+                    == HAND_REQUIREMENT_ONE_HAND
+            }
+            EQUIP_SLOT_OFF_HAND => {
+                normalize_authored_id(spec.weapon_kind.as_str()) == WEAPON_KIND_SHIELD
+                    && normalize_authored_id(spec.hand_requirement.as_str())
+                        == HAND_REQUIREMENT_OFF_HAND
+            }
+            _ => false,
+        },
+        DISCIPLINE_PRECISION => {
+            normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND
+                && normalize_authored_id(spec.weapon_kind.as_str()) == WEAPON_KIND_BOW
+                && normalize_authored_id(spec.hand_requirement.as_str())
+                    == HAND_REQUIREMENT_TWO_HAND
+        }
+        _ => false,
+    }
+}
+
+fn weapon_spec(item_def_id: &str) -> Option<HubWeaponFamilyAuthoring> {
+    let normalized = normalize_authored_id(item_def_id);
+    parse_weapon_appearance_catalog()
+        .ok()?
+        .families
+        .into_iter()
+        .find(|spec| normalize_authored_id(spec.item_def_id.as_str()) == normalized)
+}
+
+fn validated_color_id(spec: &HubWeaponFamilyAuthoring, color_id: &str) -> Result<String, String> {
+    let normalized = normalize_authored_id(color_id);
+    if spec
+        .variants
+        .iter()
+        .any(|variant| normalize_authored_id(variant.color_id.as_str()) == normalized)
+    {
+        Ok(normalized)
+    } else {
+        Err(format!(
+            "weapon '{}' does not have color '{}'",
+            spec.item_def_id, normalized
+        ))
+    }
+}
+
+fn default_weapon_loadout(primary_discipline_id: &str) -> (String, String, String, String) {
+    let primary = normalize_authored_id(primary_discipline_id);
+    let catalog = parse_weapon_appearance_catalog().ok();
+    let main_hand = catalog
+        .as_ref()
+        .into_iter()
+        .flat_map(|catalog| catalog.families.iter())
+        .find(|spec| {
+            normalize_authored_id(spec.primary_discipline_id.as_str()) == primary
+                && normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND
+                && weapon_spec_contract_is_valid(spec)
+        });
+    let off_hand = catalog
+        .as_ref()
+        .into_iter()
+        .flat_map(|catalog| catalog.families.iter())
+        .find(|spec| {
+            normalize_authored_id(spec.primary_discipline_id.as_str()) == primary
+                && normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_OFF_HAND
+                && weapon_spec_contract_is_valid(spec)
+        });
+    (
+        main_hand
+            .map(|spec| normalize_authored_id(spec.item_def_id.as_str()))
+            .unwrap_or_default(),
+        main_hand
+            .map(|spec| normalize_authored_id(spec.default_color_id.as_str()))
+            .unwrap_or_default(),
+        off_hand
+            .map(|spec| normalize_authored_id(spec.item_def_id.as_str()))
+            .unwrap_or_default(),
+        off_hand
+            .map(|spec| normalize_authored_id(spec.default_color_id.as_str()))
+            .unwrap_or_default(),
+    )
+}
+
+fn validate_hub_weapon_loadout(
+    primary_discipline_id: &str,
+    main_hand_item_def_id: &str,
+    main_hand_color_id: &str,
+    off_hand_item_def_id: &str,
+    off_hand_color_id: &str,
+) -> Result<(String, String, String, String), String> {
+    let primary = normalize_authored_id(primary_discipline_id);
+    let main_hand = normalize_authored_id(main_hand_item_def_id);
+    let off_hand = normalize_authored_id(off_hand_item_def_id);
+    if !matches!(
+        primary.as_str(),
+        DISCIPLINE_SUBTLETY | DISCIPLINE_WAR | DISCIPLINE_ZEAL | DISCIPLINE_PRECISION
+    ) {
+        return Err(format!(
+            "primary discipline '{primary}' does not support a weapon loadout"
+        ));
+    }
+
+    let main_spec = weapon_spec(main_hand.as_str())
+        .ok_or_else(|| format!("unknown selectable weapon '{main_hand}'"))?;
+    if normalize_authored_id(main_spec.primary_discipline_id.as_str()) != primary
+        || normalize_authored_id(main_spec.equip_slot.as_str()) != EQUIP_SLOT_MAIN_HAND
+        || !weapon_spec_contract_is_valid(&main_spec)
+    {
+        return Err(format!(
+            "weapon '{}' is not allowed for primary discipline '{}'",
+            main_spec.item_def_id, primary
+        ));
+    }
+    let main_color = validated_color_id(&main_spec, main_hand_color_id)?;
+
+    if primary == DISCIPLINE_ZEAL {
+        let off_spec = weapon_spec(off_hand.as_str())
+            .ok_or_else(|| "Zeal requires an authored shield".to_string())?;
+        if normalize_authored_id(off_spec.primary_discipline_id.as_str()) != primary
+            || normalize_authored_id(off_spec.equip_slot.as_str()) != EQUIP_SLOT_OFF_HAND
+            || !weapon_spec_contract_is_valid(&off_spec)
+        {
+            return Err(format!(
+                "off-hand weapon '{}' is not an allowed Zeal shield",
+                off_spec.item_def_id
+            ));
+        }
+        let off_color = validated_color_id(&off_spec, off_hand_color_id)?;
+        return Ok((main_hand, main_color, off_hand, off_color));
+    } else if !off_hand.is_empty() {
+        return Err(format!(
+            "primary discipline '{primary}' cannot equip an off-hand weapon"
+        ));
+    } else if !normalize_authored_id(off_hand_color_id).is_empty() {
+        return Err(format!(
+            "primary discipline '{primary}' cannot select an off-hand color"
+        ));
+    }
+
+    Ok((main_hand, main_color, String::new(), String::new()))
+}
+
+fn preserve_or_default_weapon_loadout(
+    primary_discipline_id: &str,
+    existing: Option<&HubPlayerLoadout>,
+) -> (String, String, String, String) {
+    if let Some(existing) = existing {
+        if let Ok(valid) = validate_hub_weapon_loadout(
+            primary_discipline_id,
+            existing
+                .main_hand_item_def_id
+                .as_deref()
+                .unwrap_or_default(),
+            existing.main_hand_color_id.as_deref().unwrap_or_default(),
+            existing.off_hand_item_def_id.as_deref().unwrap_or_default(),
+            existing.off_hand_color_id.as_deref().unwrap_or_default(),
+        ) {
+            return valid;
+        }
+    }
+    default_weapon_loadout(primary_discipline_id)
 }
 
 fn validate_hub_discipline_loadout(
@@ -1301,6 +1806,18 @@ fn freeze_player_loadout_for_ticket(
                 .as_ref()
                 .map(|row| row.armor_set_id.clone())
                 .unwrap_or_default(),
+            main_hand_item_def_id: loadout
+                .as_ref()
+                .and_then(|row| row.main_hand_item_def_id.clone()),
+            off_hand_item_def_id: loadout
+                .as_ref()
+                .and_then(|row| row.off_hand_item_def_id.clone()),
+            main_hand_color_id: loadout
+                .as_ref()
+                .and_then(|row| row.main_hand_color_id.clone()),
+            off_hand_color_id: loadout
+                .as_ref()
+                .and_then(|row| row.off_hand_color_id.clone()),
             loadout_revision: loadout.as_ref().map(|row| row.revision).unwrap_or_default(),
             captured_at: ctx.timestamp,
         });
@@ -1580,9 +2097,81 @@ mod tests {
             .collect();
         assert_eq!(ids.len(), HUB_ARMOR_SET_SPECS.len());
         assert!(HUB_ARMOR_SET_SPECS.iter().all(|spec| {
-            matches!(spec.armor_tier, "LIGHT" | "MEDIUM" | "HEAVY")
-                && spec.piece_count > 0
+            matches!(spec.armor_tier, "LIGHT" | "MEDIUM" | "HEAVY") && spec.piece_count > 0
         }));
+    }
+
+    #[test]
+    fn hub_weapon_catalog_is_unique_and_enforces_primary_discipline_rules() {
+        let catalog = parse_weapon_appearance_catalog().expect("shared weapon appearance catalog");
+        let ids: HashSet<&str> = catalog
+            .families
+            .iter()
+            .map(|spec| spec.item_def_id.as_str())
+            .collect();
+        assert_eq!(ids.len(), 126);
+        assert_eq!(
+            catalog
+                .families
+                .iter()
+                .map(|family| family.variants.len())
+                .sum::<usize>(),
+            387
+        );
+        assert!(ids.contains("NH_FIST_1H_DOUBLECLAW"));
+        assert!(ids.contains("NH_FIST_1H_METALPUNCH"));
+        for legacy_id in [
+            "TRAINING_DAGGER_PAIR",
+            "TRAINING_TWO_HAND_SWORD",
+            "TRAINING_ONE_HAND_SWORD",
+            "TRAINING_SHIELD",
+            "TRAINING_BOW",
+            "NEWBIE_DAGGER_PAIR_01",
+            "NEWBIE_TWO_HAND_SWORD_01",
+            "NEWBIE_ONE_HAND_SWORD_01",
+            "NEWBIE_SHIELD_01",
+            "NEWBIE_BOW_01",
+        ] {
+            assert!(ids.contains(legacy_id), "missing legacy weapon {legacy_id}");
+        }
+        assert!(catalog.families.iter().all(weapon_spec_contract_is_valid));
+
+        for primary in [
+            DISCIPLINE_SUBTLETY,
+            DISCIPLINE_WAR,
+            DISCIPLINE_ZEAL,
+            DISCIPLINE_PRECISION,
+        ] {
+            let (main_hand, main_color, off_hand, off_color) = default_weapon_loadout(primary);
+            assert!(validate_hub_weapon_loadout(
+                primary,
+                &main_hand,
+                &main_color,
+                &off_hand,
+                &off_color
+            )
+            .is_ok());
+        }
+
+        assert!(
+            validate_hub_weapon_loadout(DISCIPLINE_WAR, "NH_BOW_FANTASY_01", "BL", "", "").is_err()
+        );
+        assert!(validate_hub_weapon_loadout(
+            DISCIPLINE_WAR,
+            "NH_SWORD_2H_FANTASY_01",
+            "NOT_A_COLOR",
+            "",
+            ""
+        )
+        .is_err());
+        assert!(validate_hub_weapon_loadout(
+            DISCIPLINE_SUBTLETY,
+            "NH_DAGGER_1H_FANTASY_01",
+            "BL",
+            "NH_SHIELD_FANTASY_01",
+            "BL"
+        )
+        .is_err());
     }
 
     #[test]

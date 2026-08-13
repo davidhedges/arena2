@@ -1144,6 +1144,10 @@ class Provisioner:
                     str(loadout.get("secondary_discipline_id_2", "")),
                     [str(value) for value in loadout.get("selected_ability_ids", [])],
                     str(loadout.get("armor_set_id", "")),
+                    str(loadout.get("main_hand_item_def_id") or ""),
+                    str(loadout.get("main_hand_color_id") or ""),
+                    str(loadout.get("off_hand_item_def_id") or ""),
+                    str(loadout.get("off_hand_color_id") or ""),
                 ],
             )
         finally:

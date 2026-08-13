@@ -31,10 +31,7 @@ pub(crate) fn update_survival_npc_perception(
 
 pub(crate) fn clear_survival_perception_pause(_ctx: &ReducerContext, _identity: Identity) {}
 
-pub(crate) fn survival_player_is_invulnerable(
-    _ctx: &ReducerContext,
-    _identity: Identity,
-) -> bool {
+pub(crate) fn survival_player_is_invulnerable(_ctx: &ReducerContext, _identity: Identity) -> bool {
     false
 }
 

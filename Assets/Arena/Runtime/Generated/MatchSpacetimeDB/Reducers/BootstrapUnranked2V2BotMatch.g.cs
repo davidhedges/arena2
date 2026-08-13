@@ -13,12 +13,12 @@ namespace Arena.MatchDb
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void BootstrapUnranked2V2BotMatchHandler(ReducerEventContext ctx, string matchId, string matchBuildId, string mapId, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName, string primaryDisciplineId, string secondaryDisciplineId1, string secondaryDisciplineId2, System.Collections.Generic.List<string> selectedAbilityIds, string armorSetId);
+        public delegate void BootstrapUnranked2V2BotMatchHandler(ReducerEventContext ctx, string matchId, string matchBuildId, string mapId, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName, string primaryDisciplineId, string secondaryDisciplineId1, string secondaryDisciplineId2, System.Collections.Generic.List<string> selectedAbilityIds, string armorSetId, string mainHandItemDefId, string mainHandColorId, string offHandItemDefId, string offHandColorId);
         public event BootstrapUnranked2V2BotMatchHandler? OnBootstrapUnranked2V2BotMatch;
 
-        public void BootstrapUnranked2V2BotMatch(string matchId, string matchBuildId, string mapId, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName, string primaryDisciplineId, string secondaryDisciplineId1, string secondaryDisciplineId2, System.Collections.Generic.List<string> selectedAbilityIds, string armorSetId)
+        public void BootstrapUnranked2V2BotMatch(string matchId, string matchBuildId, string mapId, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName, string primaryDisciplineId, string secondaryDisciplineId1, string secondaryDisciplineId2, System.Collections.Generic.List<string> selectedAbilityIds, string armorSetId, string mainHandItemDefId, string mainHandColorId, string offHandItemDefId, string offHandColorId)
         {
-            conn.InternalCallReducer(new Reducer.BootstrapUnranked2V2BotMatch(matchId, matchBuildId, mapId, seed, allocationExpiresAt, reservedPlayerIdentity, reservedDisplayName, primaryDisciplineId, secondaryDisciplineId1, secondaryDisciplineId2, selectedAbilityIds, armorSetId));
+            conn.InternalCallReducer(new Reducer.BootstrapUnranked2V2BotMatch(matchId, matchBuildId, mapId, seed, allocationExpiresAt, reservedPlayerIdentity, reservedDisplayName, primaryDisciplineId, secondaryDisciplineId1, secondaryDisciplineId2, selectedAbilityIds, armorSetId, mainHandItemDefId, mainHandColorId, offHandItemDefId, offHandColorId));
         }
 
         public bool InvokeBootstrapUnranked2V2BotMatch(ReducerEventContext ctx, Reducer.BootstrapUnranked2V2BotMatch args)
@@ -48,7 +48,11 @@ namespace Arena.MatchDb
                 args.SecondaryDisciplineId1,
                 args.SecondaryDisciplineId2,
                 args.SelectedAbilityIds,
-                args.ArmorSetId
+                args.ArmorSetId,
+                args.MainHandItemDefId,
+                args.MainHandColorId,
+                args.OffHandItemDefId,
+                args.OffHandColorId
             );
             return true;
         }
@@ -84,6 +88,14 @@ namespace Arena.MatchDb
             public System.Collections.Generic.List<string> SelectedAbilityIds;
             [DataMember(Name = "armor_set_id")]
             public string ArmorSetId;
+            [DataMember(Name = "main_hand_item_def_id")]
+            public string MainHandItemDefId;
+            [DataMember(Name = "main_hand_color_id")]
+            public string MainHandColorId;
+            [DataMember(Name = "off_hand_item_def_id")]
+            public string OffHandItemDefId;
+            [DataMember(Name = "off_hand_color_id")]
+            public string OffHandColorId;
 
             public BootstrapUnranked2V2BotMatch(
                 string MatchId,
@@ -97,7 +109,11 @@ namespace Arena.MatchDb
                 string SecondaryDisciplineId1,
                 string SecondaryDisciplineId2,
                 System.Collections.Generic.List<string> SelectedAbilityIds,
-                string ArmorSetId
+                string ArmorSetId,
+                string MainHandItemDefId,
+                string MainHandColorId,
+                string OffHandItemDefId,
+                string OffHandColorId
             )
             {
                 this.MatchId = MatchId;
@@ -112,6 +128,10 @@ namespace Arena.MatchDb
                 this.SecondaryDisciplineId2 = SecondaryDisciplineId2;
                 this.SelectedAbilityIds = SelectedAbilityIds;
                 this.ArmorSetId = ArmorSetId;
+                this.MainHandItemDefId = MainHandItemDefId;
+                this.MainHandColorId = MainHandColorId;
+                this.OffHandItemDefId = OffHandItemDefId;
+                this.OffHandColorId = OffHandColorId;
             }
 
             public BootstrapUnranked2V2BotMatch()
@@ -125,6 +145,10 @@ namespace Arena.MatchDb
                 this.SecondaryDisciplineId2 = "";
                 this.SelectedAbilityIds = new();
                 this.ArmorSetId = "";
+                this.MainHandItemDefId = "";
+                this.MainHandColorId = "";
+                this.OffHandItemDefId = "";
+                this.OffHandColorId = "";
             }
 
             string IReducerArgs.ReducerName => "bootstrap_unranked_2_v_2_bot_match";

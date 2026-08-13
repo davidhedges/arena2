@@ -37,6 +37,10 @@ namespace SpacetimeDB.Types
         public ulong Revision;
         [DataMember(Name = "updated_at")]
         public SpacetimeDB.Timestamp UpdatedAt;
+        [DataMember(Name = "main_hand_color_id")]
+        public string MainHandColorId;
+        [DataMember(Name = "off_hand_color_id")]
+        public string OffHandColorId;
 
         public PlayerEquipmentPresentation(
             SpacetimeDB.Identity Owner,
@@ -50,7 +54,9 @@ namespace SpacetimeDB.Types
             string? MainHandItemDefId,
             string? OffHandItemDefId,
             ulong Revision,
-            SpacetimeDB.Timestamp UpdatedAt
+            SpacetimeDB.Timestamp UpdatedAt,
+            string MainHandColorId,
+            string OffHandColorId
         )
         {
             this.Owner = Owner;
@@ -65,10 +71,14 @@ namespace SpacetimeDB.Types
             this.OffHandItemDefId = OffHandItemDefId;
             this.Revision = Revision;
             this.UpdatedAt = UpdatedAt;
+            this.MainHandColorId = MainHandColorId;
+            this.OffHandColorId = OffHandColorId;
         }
 
         public PlayerEquipmentPresentation()
         {
+            this.MainHandColorId = "";
+            this.OffHandColorId = "";
         }
     }
 }

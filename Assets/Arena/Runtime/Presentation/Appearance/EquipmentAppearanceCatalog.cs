@@ -49,6 +49,7 @@ namespace Arena.Presentation.Appearance
         public sealed class WeaponVisualEntry
         {
             public string itemDefId = string.Empty;
+            public string colorId = string.Empty;
             public string visualRoleId = string.Empty;
             public string raceId = string.Empty;
             public string sexId = string.Empty;
@@ -134,12 +135,14 @@ namespace Arena.Presentation.Appearance
 
         public bool TryGetWeaponVisual(
             string? itemDefId,
+            string? colorId,
             string? visualRoleId,
             string? raceId,
             string? sexId,
             out WeaponVisualEntry entry)
         {
             string normalizedItem = CharacterAppearanceIds.Normalize(itemDefId);
+            string normalizedColor = CharacterAppearanceIds.Normalize(colorId);
             string normalizedRole = CharacterAppearanceIds.Normalize(visualRoleId);
             string normalizedRace = CharacterAppearanceIds.Normalize(raceId);
             string normalizedSex = CharacterAppearanceIds.Normalize(sexId);
@@ -151,6 +154,7 @@ namespace Arena.Presentation.Appearance
                     continue;
 
                 if (CharacterAppearanceIds.Normalize(candidate.itemDefId) == normalizedItem
+                    && CharacterAppearanceIds.Normalize(candidate.colorId) == normalizedColor
                     && CharacterAppearanceIds.Normalize(candidate.visualRoleId) == normalizedRole
                     && CharacterAppearanceIds.Normalize(candidate.raceId) == normalizedRace
                     && CharacterAppearanceIds.Normalize(candidate.sexId) == normalizedSex)
@@ -162,6 +166,45 @@ namespace Arena.Presentation.Appearance
 
             entry = null!;
             return false;
+        }
+
+        public static IEnumerable<string> WeaponVisualRoleIdsForKind(string? weaponKind)
+        {
+            switch (CharacterAppearanceIds.Normalize(weaponKind))
+            {
+                case "TWO_HAND_SWORD":
+                case "TWO_HANDED_SWORD":
+                case "TWO_HAND_AXE":
+                case "TWO_HAND_HAMMER":
+                case "POLEARM":
+                    yield return "greatsword";
+                    yield break;
+                case "STAFF":
+                    yield return "staff";
+                    yield break;
+                case "ONE_HAND_SWORD":
+                case "ONE_HAND_AXE":
+                case "ONE_HAND_HAMMER":
+                case "ONE_HAND_FIST":
+                    yield return "sword";
+                    yield break;
+                case "DAGGER_PAIR":
+                    yield return "dagger_main";
+                    yield return "dagger_off";
+                    yield break;
+                case "SWORD_AND_SHIELD":
+                    yield return "sword";
+                    yield return "shield";
+                    yield break;
+                case "SHIELD":
+                    yield return "shield";
+                    yield break;
+                case "BOW":
+                    yield return "bow_drawn";
+                    yield return "bow_stowed";
+                    yield return "quiver";
+                    yield break;
+            }
         }
 
         public void SetEntriesForEditor(List<Entry> replacement)

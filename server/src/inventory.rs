@@ -43,6 +43,8 @@ use crate::inventory::equipment_loadout as _;
 #[allow(unused_imports)]
 use crate::inventory::equipment_periodic_runtime as _;
 #[allow(unused_imports)]
+use crate::inventory::equipped_weapon_appearance as _;
+#[allow(unused_imports)]
 use crate::inventory::inventory_container as _;
 #[allow(unused_imports)]
 use crate::inventory::inventory_counter as _;
@@ -152,6 +154,10 @@ const WEAPON_KIND_TWO_HAND_SWORD: &str = "TWO_HAND_SWORD";
 const WEAPON_KIND_ONE_HAND_SWORD: &str = "ONE_HAND_SWORD";
 const WEAPON_KIND_TWO_HAND_AXE: &str = "TWO_HAND_AXE";
 const WEAPON_KIND_ONE_HAND_AXE: &str = "ONE_HAND_AXE";
+const WEAPON_KIND_TWO_HAND_HAMMER: &str = "TWO_HAND_HAMMER";
+const WEAPON_KIND_ONE_HAND_HAMMER: &str = "ONE_HAND_HAMMER";
+const WEAPON_KIND_ONE_HAND_FIST: &str = "ONE_HAND_FIST";
+const WEAPON_KIND_POLEARM: &str = "POLEARM";
 const WEAPON_KIND_SHIELD: &str = "SHIELD";
 const WEAPON_KIND_SWORD_AND_SHIELD: &str = "SWORD_AND_SHIELD";
 const WEAPON_KIND_DAGGER_PAIR: &str = "DAGGER_PAIR";
@@ -172,6 +178,8 @@ const STARTER_INSIGHT_RING_ITEM_DEF_ID: &str = "BRONZE_RING";
 const STARTER_INSIGHT_RING_AFFIX_ID: &str = "AFFIX_INSIGHT_STARTER";
 pub(crate) const AFFIX_KNOCKBACK_RESISTANCE_MINOR: &str = "AFFIX_KNOCKBACK_RESISTANCE_MINOR";
 const STARTER_INSIGHT_RING_VALUE: f32 = 10.0;
+const WEAPON_APPEARANCE_CATALOG_JSON: &str =
+    include_str!("../../Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json");
 
 pub(crate) const MODIFIER_PHYSICAL_RESISTANCE: &str = "PHYSICAL_RESISTANCE";
 pub(crate) const MODIFIER_MAGIC_RESISTANCE: &str = "MAGIC_RESISTANCE";
@@ -390,6 +398,20 @@ pub struct PlayerEquipmentPresentation {
     pub off_hand_item_def_id: Option<String>,
     pub revision: u64,
     pub updated_at: Timestamp,
+    pub main_hand_color_id: String,
+    pub off_hand_color_id: String,
+}
+
+#[table(accessor = equipped_weapon_appearance)]
+#[derive(Clone)]
+pub struct EquippedWeaponAppearance {
+    #[primary_key]
+    pub owner: Identity,
+    pub main_hand_item_def_id: String,
+    pub main_hand_color_id: String,
+    pub off_hand_item_def_id: String,
+    pub off_hand_color_id: String,
+    pub updated_at: Timestamp,
 }
 
 #[table(accessor = inventory_counter)]
@@ -429,6 +451,31 @@ struct ItemDefinitionSpec {
     consumable_effect_kind: &'static str,
     consumable_resource_kind: &'static str,
     consumable_amount: f32,
+}
+
+#[derive(Deserialize)]
+struct WeaponAppearanceCatalogFile {
+    schema_version: u32,
+    families: Vec<WeaponFamilyAuthoring>,
+}
+
+#[derive(Clone, Deserialize)]
+struct WeaponFamilyAuthoring {
+    item_def_id: String,
+    display_name: String,
+    icon_id: String,
+    weapon_kind: String,
+    hand_requirement: String,
+    equip_slot: String,
+    primary_discipline_id: String,
+    #[allow(dead_code)]
+    default_color_id: String,
+    variants: Vec<WeaponVariantAuthoring>,
+}
+
+#[derive(Clone, Deserialize)]
+struct WeaponVariantAuthoring {
+    color_id: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2673,6 +2720,61 @@ pub fn unequip_item(
     Ok(())
 }
 
+fn parse_weapon_appearance_catalog() -> Result<WeaponAppearanceCatalogFile, String> {
+    let catalog: WeaponAppearanceCatalogFile = serde_json::from_str(WEAPON_APPEARANCE_CATALOG_JSON)
+        .map_err(|error| format!("weapon appearance catalog is invalid: {error}"))?;
+    if catalog.schema_version != 1 {
+        return Err(format!(
+            "unsupported weapon appearance schema version {}",
+            catalog.schema_version
+        ));
+    }
+    Ok(catalog)
+}
+
+fn combat_profile_for_weapon_family(family: &WeaponFamilyAuthoring) -> &'static str {
+    match normalize_id(family.primary_discipline_id.as_str()).as_str() {
+        DISCIPLINE_SUBTLETY => COMBAT_PROFILE_DAGGERS,
+        DISCIPLINE_WAR => COMBAT_PROFILE_TWO_HANDED_SWORD,
+        DISCIPLINE_ZEAL => DEFAULT_COMBAT_PROFILE,
+        DISCIPLINE_PRECISION => COMBAT_PROFILE_ARCHER_BOW,
+        _ => "",
+    }
+}
+
+fn sync_weapon_appearance_item_definitions(ctx: &ReducerContext) {
+    let catalog = match parse_weapon_appearance_catalog() {
+        Ok(catalog) => catalog,
+        Err(error) => {
+            log::error!("[INVENTORY] {error}");
+            return;
+        }
+    };
+    for family in catalog.families {
+        let row = ItemDefinition {
+            item_def_id: normalize_id(family.item_def_id.as_str()),
+            display_name: family.display_name.trim().to_string(),
+            item_kind: ITEM_KIND_WEAPON.to_string(),
+            rarity: "COMMON".to_string(),
+            icon_id: family.icon_id.trim().to_string(),
+            max_stack: 1,
+            width: 1,
+            height: 1,
+            equip_slot: normalize_id(family.equip_slot.as_str()),
+            weapon_kind: normalize_id(family.weapon_kind.as_str()),
+            hand_requirement: normalize_id(family.hand_requirement.as_str()),
+            unique_equipped: false,
+            combat_profile_id: combat_profile_for_weapon_family(&family).to_string(),
+            armor_kind: String::new(),
+            physical_resistance: 0.0,
+            consumable_effect_kind: String::new(),
+            consumable_resource_kind: String::new(),
+            consumable_amount: 0.0,
+        };
+        upsert_item_definition(ctx, row);
+    }
+}
+
 pub(crate) fn sync_item_definitions(ctx: &ReducerContext) {
     for spec in STARTER_ITEM_DEFINITIONS {
         let row = ItemDefinition {
@@ -2703,6 +2805,7 @@ pub(crate) fn sync_item_definitions(ctx: &ReducerContext) {
         };
         upsert_item_definition(ctx, row);
     }
+    sync_weapon_appearance_item_definitions(ctx);
     for set in COMPLETE_ARMOR_SET_SPECS {
         for slot_id in ARMOR_EQUIPMENT_SLOT_IDS {
             let item_def_id = format!("ARMOR_SET_{}_{}", set.armor_set_id, slot_id);
@@ -4591,6 +4694,195 @@ pub(crate) fn equip_starter_weapon_for_discipline(
     )
 }
 
+/// Resolves a Hub-authored cosmetic weapon selection to match-local item
+/// instances. The Hub stores definition ids only; disposable matches retain
+/// ownership of instance identity and revalidate the discipline contract.
+pub(crate) fn equip_weapon_definitions_for_discipline(
+    ctx: &ReducerContext,
+    owner: Identity,
+    discipline_id: &str,
+    main_hand_item_def_id: &str,
+    main_hand_color_id: &str,
+    off_hand_item_def_id: &str,
+    off_hand_color_id: &str,
+) -> Result<(), String> {
+    ensure_player_inventory_for_identity(ctx, owner);
+    let main_hand_definition = require_item_definition(ctx, main_hand_item_def_id)?;
+    let off_hand_definition = if off_hand_item_def_id.trim().is_empty() {
+        None
+    } else {
+        Some(require_item_definition(ctx, off_hand_item_def_id)?)
+    };
+    if !weapon_definition_pair_is_allowed_for_discipline(
+        discipline_id,
+        &main_hand_definition,
+        off_hand_definition.as_ref(),
+    ) {
+        return Err(format!(
+            "weapon definitions '{}' and '{}' are not allowed for primary discipline '{}'",
+            normalize_id(main_hand_item_def_id),
+            normalize_id(off_hand_item_def_id),
+            normalize_id(discipline_id)
+        ));
+    }
+    let main_hand_color_id =
+        require_weapon_family_color(main_hand_item_def_id, main_hand_color_id)?;
+    let off_hand_color_id = if off_hand_item_def_id.trim().is_empty() {
+        if !off_hand_color_id.trim().is_empty() {
+            return Err("an off-hand color requires an off-hand weapon".to_string());
+        }
+        String::new()
+    } else {
+        require_weapon_family_color(off_hand_item_def_id, off_hand_color_id)?
+    };
+
+    let main_hand_item_id = ensure_hub_weapon_item_instance(ctx, owner, &main_hand_definition)?;
+    let off_hand_item_id = off_hand_definition
+        .as_ref()
+        .map(|definition| ensure_hub_weapon_item_instance(ctx, owner, definition))
+        .transpose()?;
+    upsert_equipped_weapon_appearance(
+        ctx,
+        EquippedWeaponAppearance {
+            owner,
+            main_hand_item_def_id: normalize_id(main_hand_item_def_id),
+            main_hand_color_id,
+            off_hand_item_def_id: normalize_id(off_hand_item_def_id),
+            off_hand_color_id,
+            updated_at: ctx.timestamp,
+        },
+    );
+    apply_combat_discipline_weapon_loadout(
+        ctx,
+        owner,
+        discipline_id,
+        Some(main_hand_item_id.as_str()),
+        off_hand_item_id.as_deref(),
+    )?;
+    sync_equipment_presentation_for_owner(ctx, owner);
+    Ok(())
+}
+
+fn require_weapon_family_color(item_def_id: &str, color_id: &str) -> Result<String, String> {
+    let normalized_item_def_id = normalize_id(item_def_id);
+    let normalized_color_id = normalize_id(color_id);
+    let catalog = parse_weapon_appearance_catalog()?;
+    let family = catalog
+        .families
+        .iter()
+        .find(|family| normalize_id(family.item_def_id.as_str()) == normalized_item_def_id)
+        .ok_or_else(|| format!("unknown weapon appearance family '{normalized_item_def_id}'"))?;
+    if family
+        .variants
+        .iter()
+        .any(|variant| normalize_id(variant.color_id.as_str()) == normalized_color_id)
+    {
+        Ok(normalized_color_id)
+    } else {
+        Err(format!(
+            "weapon '{}' does not have color '{}'",
+            normalized_item_def_id, normalized_color_id
+        ))
+    }
+}
+
+fn upsert_equipped_weapon_appearance(ctx: &ReducerContext, row: EquippedWeaponAppearance) {
+    if ctx
+        .db
+        .equipped_weapon_appearance()
+        .owner()
+        .find(row.owner)
+        .is_some()
+    {
+        ctx.db.equipped_weapon_appearance().owner().update(row);
+    } else {
+        ctx.db.equipped_weapon_appearance().insert(row);
+    }
+}
+
+fn weapon_definition_pair_is_allowed_for_discipline(
+    discipline_id: &str,
+    main_hand: &ItemDefinition,
+    off_hand: Option<&ItemDefinition>,
+) -> bool {
+    if main_hand.item_kind != ITEM_KIND_WEAPON {
+        return false;
+    }
+
+    match normalize_id(discipline_id).as_str() {
+        DISCIPLINE_SUBTLETY => {
+            main_hand.weapon_kind == WEAPON_KIND_DAGGER_PAIR
+                && main_hand.hand_requirement == HAND_REQUIREMENT_TWO_HAND
+                && off_hand.is_none()
+        }
+        DISCIPLINE_WAR => {
+            matches!(
+                main_hand.weapon_kind.as_str(),
+                WEAPON_KIND_TWO_HAND_SWORD
+                    | WEAPON_KIND_TWO_HAND_AXE
+                    | WEAPON_KIND_TWO_HAND_HAMMER
+                    | WEAPON_KIND_POLEARM
+            ) && main_hand.hand_requirement == HAND_REQUIREMENT_TWO_HAND
+                && off_hand.is_none()
+        }
+        DISCIPLINE_ZEAL => {
+            matches!(
+                main_hand.weapon_kind.as_str(),
+                WEAPON_KIND_ONE_HAND_SWORD
+                    | WEAPON_KIND_ONE_HAND_AXE
+                    | WEAPON_KIND_ONE_HAND_HAMMER
+                    | WEAPON_KIND_ONE_HAND_FIST
+            ) && main_hand.hand_requirement == HAND_REQUIREMENT_ONE_HAND
+                && off_hand.is_some_and(|definition| {
+                    definition.item_kind == ITEM_KIND_WEAPON
+                        && definition.weapon_kind == WEAPON_KIND_SHIELD
+                        && definition.hand_requirement == HAND_REQUIREMENT_OFF_HAND
+                })
+        }
+        DISCIPLINE_PRECISION => {
+            main_hand.weapon_kind == WEAPON_KIND_BOW
+                && main_hand.hand_requirement == HAND_REQUIREMENT_TWO_HAND
+                && off_hand.is_none()
+        }
+        _ => false,
+    }
+}
+
+fn ensure_hub_weapon_item_instance(
+    ctx: &ReducerContext,
+    owner: Identity,
+    definition: &ItemDefinition,
+) -> Result<String, String> {
+    let mut owned_instance_ids: Vec<String> = ctx
+        .db
+        .item_instance()
+        .iter()
+        .filter(|item| {
+            item.current_owner == Some(owner) && item.item_def_id == definition.item_def_id
+        })
+        .map(|item| item.item_instance_id)
+        .collect();
+    owned_instance_ids.sort();
+    if let Some(item_instance_id) = owned_instance_ids.into_iter().next() {
+        return Ok(item_instance_id);
+    }
+
+    let item_instance_id = format!(
+        "hub-weapon:{}:{}",
+        identity_key(owner),
+        normalize_id(definition.item_def_id.as_str()).to_ascii_lowercase()
+    );
+    ctx.db.item_instance().insert(ItemInstance {
+        item_instance_id: item_instance_id.clone(),
+        item_def_id: definition.item_def_id.clone(),
+        current_owner_key: identity_key(owner),
+        current_owner: Some(owner),
+        quantity: 1,
+        created_at: ctx.timestamp,
+    });
+    Ok(item_instance_id)
+}
+
 fn starter_weapon_definition_for_discipline(discipline_id: &str) -> Option<&'static str> {
     match normalize_id(discipline_id).as_str() {
         DISCIPLINE_SUBTLETY => Some("TRAINING_DAGGER_PAIR"),
@@ -4647,7 +4939,10 @@ fn combat_profile_for_weapon_pair(
 fn is_one_hand_weapon_kind(weapon_kind: &str) -> bool {
     matches!(
         normalize_id(weapon_kind).as_str(),
-        WEAPON_KIND_ONE_HAND_SWORD | WEAPON_KIND_ONE_HAND_AXE
+        WEAPON_KIND_ONE_HAND_SWORD
+            | WEAPON_KIND_ONE_HAND_AXE
+            | WEAPON_KIND_ONE_HAND_HAMMER
+            | WEAPON_KIND_ONE_HAND_FIST
     )
 }
 
@@ -5706,6 +6001,8 @@ fn validate_weapon_equip_request_with_main_hand(
     match definition.weapon_kind.as_str() {
         WEAPON_KIND_TWO_HAND_SWORD
         | WEAPON_KIND_TWO_HAND_AXE
+        | WEAPON_KIND_TWO_HAND_HAMMER
+        | WEAPON_KIND_POLEARM
         | WEAPON_KIND_SWORD_AND_SHIELD
         | WEAPON_KIND_DAGGER_PAIR
         | WEAPON_KIND_BOW
@@ -5715,7 +6012,10 @@ fn validate_weapon_equip_request_with_main_hand(
             }
             Ok(())
         }
-        WEAPON_KIND_ONE_HAND_SWORD | WEAPON_KIND_ONE_HAND_AXE => {
+        WEAPON_KIND_ONE_HAND_SWORD
+        | WEAPON_KIND_ONE_HAND_AXE
+        | WEAPON_KIND_ONE_HAND_HAMMER
+        | WEAPON_KIND_ONE_HAND_FIST => {
             if target_slot != EQUIP_SLOT_MAIN_HAND {
                 return Err("one-hand weapons must be equipped in main hand".to_string());
             }
@@ -6028,6 +6328,19 @@ fn sync_equipment_presentation_for_owner(ctx: &ReducerContext, owner: Identity) 
         .find(owner)
         .map(|row| row.revision.saturating_add(1))
         .unwrap_or(0);
+    let main_hand_item_def_id =
+        item_def_id_for_equipped_instance(ctx, equipment.main_hand_item_id.as_deref());
+    let off_hand_item_def_id =
+        item_def_id_for_equipped_instance(ctx, equipment.off_hand_item_id.as_deref());
+    let weapon_appearance = ctx.db.equipped_weapon_appearance().owner().find(owner);
+    let main_hand_color_id = weapon_appearance.as_ref().and_then(|appearance| {
+        (main_hand_item_def_id.as_deref() == Some(appearance.main_hand_item_def_id.as_str()))
+            .then(|| appearance.main_hand_color_id.clone())
+    });
+    let off_hand_color_id = weapon_appearance.as_ref().and_then(|appearance| {
+        (off_hand_item_def_id.as_deref() == Some(appearance.off_hand_item_def_id.as_str()))
+            .then(|| appearance.off_hand_color_id.clone())
+    });
     let row = PlayerEquipmentPresentation {
         owner,
         head_item_def_id: item_def_id_for_equipped_instance(ctx, equipment.head_item_id.as_deref()),
@@ -6049,16 +6362,12 @@ fn sync_equipment_presentation_for_owner(ctx: &ReducerContext, owner: Identity) 
             ctx,
             equipment.gloves_item_id.as_deref(),
         ),
-        main_hand_item_def_id: item_def_id_for_equipped_instance(
-            ctx,
-            equipment.main_hand_item_id.as_deref(),
-        ),
-        off_hand_item_def_id: item_def_id_for_equipped_instance(
-            ctx,
-            equipment.off_hand_item_id.as_deref(),
-        ),
+        main_hand_item_def_id,
+        off_hand_item_def_id,
         revision,
         updated_at: ctx.timestamp,
+        main_hand_color_id: main_hand_color_id.unwrap_or_default(),
+        off_hand_color_id: off_hand_color_id.unwrap_or_default(),
     };
 
     if ctx
@@ -6489,6 +6798,81 @@ mod tests {
     }
 
     #[test]
+    fn shared_weapon_appearance_catalog_groups_models_and_colors() {
+        let catalog = parse_weapon_appearance_catalog().expect("shared weapon appearance catalog");
+        assert_eq!(catalog.families.len(), 126);
+        assert_eq!(
+            catalog
+                .families
+                .iter()
+                .map(|family| family.variants.len())
+                .sum::<usize>(),
+            387
+        );
+        let family_ids: std::collections::HashSet<_> = catalog
+            .families
+            .iter()
+            .map(|family| normalize_id(family.item_def_id.as_str()))
+            .collect();
+        for legacy_id in [
+            "TRAINING_DAGGER_PAIR",
+            "TRAINING_TWO_HAND_SWORD",
+            "TRAINING_ONE_HAND_SWORD",
+            "TRAINING_SHIELD",
+            "TRAINING_BOW",
+            "NEWBIE_DAGGER_PAIR_01",
+            "NEWBIE_TWO_HAND_SWORD_01",
+            "NEWBIE_ONE_HAND_SWORD_01",
+            "NEWBIE_SHIELD_01",
+            "NEWBIE_BOW_01",
+        ] {
+            assert!(
+                family_ids.contains(legacy_id),
+                "missing legacy weapon {legacy_id}"
+            );
+        }
+        assert!(family_ids.contains("NH_FIST_1H_DOUBLECLAW"));
+        assert!(family_ids.contains("NH_FIST_1H_METALPUNCH"));
+        assert!(catalog.families.iter().all(|family| {
+            family.variants.iter().any(|variant| {
+                normalize_id(variant.color_id.as_str())
+                    == normalize_id(family.default_color_id.as_str())
+            })
+        }));
+    }
+
+    #[test]
+    fn shared_weapon_families_obey_primary_discipline_contracts() {
+        let catalog = parse_weapon_appearance_catalog().expect("shared weapon appearance catalog");
+        for family in catalog.families {
+            let main = item_definition(
+                normalize_id(family.weapon_kind.as_str()).as_str(),
+                normalize_id(family.hand_requirement.as_str()).as_str(),
+            );
+            let shield = item_definition(WEAPON_KIND_SHIELD, HAND_REQUIREMENT_OFF_HAND);
+            let off_hand = (normalize_id(family.primary_discipline_id.as_str()) == DISCIPLINE_ZEAL
+                && normalize_id(family.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND)
+                .then_some(&shield);
+            if normalize_id(family.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND {
+                assert!(weapon_definition_pair_is_allowed_for_discipline(
+                    family.primary_discipline_id.as_str(),
+                    &main,
+                    off_hand
+                ));
+            } else {
+                assert_eq!(
+                    normalize_id(family.weapon_kind.as_str()),
+                    WEAPON_KIND_SHIELD
+                );
+                assert_eq!(
+                    normalize_id(family.primary_discipline_id.as_str()),
+                    DISCIPLINE_ZEAL
+                );
+            }
+        }
+    }
+
+    #[test]
     fn data_preserving_republish_workflows_publish_item_catalogs() {
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -6654,6 +7038,64 @@ mod tests {
             combat_profile_for_weapon_pair(Some(&paired), None),
             DEFAULT_COMBAT_PROFILE
         );
+    }
+
+    #[test]
+    fn primary_disciplines_accept_only_their_authored_weapon_categories() {
+        let daggers = item_definition(WEAPON_KIND_DAGGER_PAIR, HAND_REQUIREMENT_TWO_HAND);
+        let greatsword = item_definition(WEAPON_KIND_TWO_HAND_SWORD, HAND_REQUIREMENT_TWO_HAND);
+        let greataxe = item_definition(WEAPON_KIND_TWO_HAND_AXE, HAND_REQUIREMENT_TWO_HAND);
+        let staff = item_definition(WEAPON_KIND_STAFF, HAND_REQUIREMENT_TWO_HAND);
+        let bow = item_definition(WEAPON_KIND_BOW, HAND_REQUIREMENT_TWO_HAND);
+        let one_hand_sword = item_definition(WEAPON_KIND_ONE_HAND_SWORD, HAND_REQUIREMENT_ONE_HAND);
+        let fist_weapon = item_definition(WEAPON_KIND_ONE_HAND_FIST, HAND_REQUIREMENT_ONE_HAND);
+        let shield = item_definition(WEAPON_KIND_SHIELD, HAND_REQUIREMENT_OFF_HAND);
+
+        assert!(weapon_definition_pair_is_allowed_for_discipline(
+            DISCIPLINE_SUBTLETY,
+            &daggers,
+            None
+        ));
+        assert!(weapon_definition_pair_is_allowed_for_discipline(
+            DISCIPLINE_WAR,
+            &greatsword,
+            None
+        ));
+        assert!(weapon_definition_pair_is_allowed_for_discipline(
+            DISCIPLINE_WAR,
+            &greataxe,
+            None
+        ));
+        assert!(!weapon_definition_pair_is_allowed_for_discipline(
+            DISCIPLINE_WAR,
+            &staff,
+            None
+        ));
+        assert!(!weapon_definition_pair_is_allowed_for_discipline(
+            DISCIPLINE_WAR,
+            &bow,
+            None
+        ));
+        assert!(weapon_definition_pair_is_allowed_for_discipline(
+            DISCIPLINE_ZEAL,
+            &one_hand_sword,
+            Some(&shield)
+        ));
+        assert!(!weapon_definition_pair_is_allowed_for_discipline(
+            DISCIPLINE_ZEAL,
+            &one_hand_sword,
+            None
+        ));
+        assert!(weapon_definition_pair_is_allowed_for_discipline(
+            DISCIPLINE_ZEAL,
+            &fist_weapon,
+            Some(&shield)
+        ));
+        assert!(weapon_definition_pair_is_allowed_for_discipline(
+            DISCIPLINE_PRECISION,
+            &bow,
+            None
+        ));
     }
 
     #[test]

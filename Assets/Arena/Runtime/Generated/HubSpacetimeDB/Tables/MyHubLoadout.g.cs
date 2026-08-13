@@ -34,6 +34,10 @@ namespace Arena.HubDb
         public global::SpacetimeDB.Col<MyHubLoadout, string> SecondaryDisciplineId2 { get; }
         public global::SpacetimeDB.Col<MyHubLoadout, System.Collections.Generic.List<string>> SelectedAbilityIds { get; }
         public global::SpacetimeDB.Col<MyHubLoadout, string> ArmorSetId { get; }
+        public global::SpacetimeDB.Col<MyHubLoadout, string> MainHandItemDefId { get; }
+        public global::SpacetimeDB.Col<MyHubLoadout, string> OffHandItemDefId { get; }
+        public global::SpacetimeDB.Col<MyHubLoadout, string> MainHandColorId { get; }
+        public global::SpacetimeDB.Col<MyHubLoadout, string> OffHandColorId { get; }
         public global::SpacetimeDB.Col<MyHubLoadout, ulong> Revision { get; }
         public global::SpacetimeDB.Col<MyHubLoadout, SpacetimeDB.Timestamp> UpdatedAt { get; }
 
@@ -45,6 +49,10 @@ namespace Arena.HubDb
             SecondaryDisciplineId2 = new global::SpacetimeDB.Col<MyHubLoadout, string>(tableName, "secondary_discipline_id_2");
             SelectedAbilityIds = new global::SpacetimeDB.Col<MyHubLoadout, System.Collections.Generic.List<string>>(tableName, "selected_ability_ids");
             ArmorSetId = new global::SpacetimeDB.Col<MyHubLoadout, string>(tableName, "armor_set_id");
+            MainHandItemDefId = new global::SpacetimeDB.Col<MyHubLoadout, string>(tableName, "main_hand_item_def_id");
+            OffHandItemDefId = new global::SpacetimeDB.Col<MyHubLoadout, string>(tableName, "off_hand_item_def_id");
+            MainHandColorId = new global::SpacetimeDB.Col<MyHubLoadout, string>(tableName, "main_hand_color_id");
+            OffHandColorId = new global::SpacetimeDB.Col<MyHubLoadout, string>(tableName, "off_hand_color_id");
             Revision = new global::SpacetimeDB.Col<MyHubLoadout, ulong>(tableName, "revision");
             UpdatedAt = new global::SpacetimeDB.Col<MyHubLoadout, SpacetimeDB.Timestamp>(tableName, "updated_at");
         }

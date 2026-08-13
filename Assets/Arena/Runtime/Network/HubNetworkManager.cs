@@ -18,6 +18,8 @@ using HubLoadoutRow = Arena.HubDb.MyHubLoadout;
 using HubDisciplineRow = Arena.HubDb.HubCombatDisciplineDefinition;
 using HubAbilityRow = Arena.HubDb.HubAbilityDefinition;
 using HubArmorSetRow = Arena.HubDb.HubArmorSetDefinition;
+using HubWeaponRow = Arena.HubDb.HubWeaponDefinition;
+using HubWeaponColorRow = Arena.HubDb.HubWeaponColorDefinition;
 
 namespace Arena.Network
 {
@@ -192,6 +194,61 @@ namespace Arena.Network
         internal uint SortOrder { get; }
     }
 
+    internal sealed class HubWeaponSnapshot
+    {
+        internal HubWeaponSnapshot(
+            string itemDefId,
+            string displayName,
+            string iconId,
+            string weaponKind,
+            string handRequirement,
+            string equipSlot,
+            string primaryDisciplineId,
+            uint sortOrder)
+        {
+            ItemDefId = itemDefId;
+            DisplayName = displayName;
+            IconId = iconId;
+            WeaponKind = weaponKind;
+            HandRequirement = handRequirement;
+            EquipSlot = equipSlot;
+            PrimaryDisciplineId = primaryDisciplineId;
+            SortOrder = sortOrder;
+        }
+
+        internal string ItemDefId { get; }
+        internal string DisplayName { get; }
+        internal string IconId { get; }
+        internal string WeaponKind { get; }
+        internal string HandRequirement { get; }
+        internal string EquipSlot { get; }
+        internal string PrimaryDisciplineId { get; }
+        internal uint SortOrder { get; }
+    }
+
+    internal sealed class HubWeaponColorSnapshot
+    {
+        internal HubWeaponColorSnapshot(
+            string itemDefId,
+            string colorId,
+            string displayName,
+            string colorHex,
+            uint sortOrder)
+        {
+            ItemDefId = itemDefId;
+            ColorId = colorId;
+            DisplayName = displayName;
+            ColorHex = colorHex;
+            SortOrder = sortOrder;
+        }
+
+        internal string ItemDefId { get; }
+        internal string ColorId { get; }
+        internal string DisplayName { get; }
+        internal string ColorHex { get; }
+        internal uint SortOrder { get; }
+    }
+
     internal readonly struct HubLoadoutSnapshot
     {
         internal HubLoadoutSnapshot(
@@ -200,6 +257,10 @@ namespace Arena.Network
             string secondaryDisciplineId2,
             IReadOnlyList<string> selectedAbilityIds,
             string armorSetId,
+            string mainHandItemDefId,
+            string offHandItemDefId,
+            string mainHandColorId,
+            string offHandColorId,
             ulong revision)
         {
             PrimaryDisciplineId = primaryDisciplineId;
@@ -207,6 +268,10 @@ namespace Arena.Network
             SecondaryDisciplineId2 = secondaryDisciplineId2;
             SelectedAbilityIds = selectedAbilityIds;
             ArmorSetId = armorSetId;
+            MainHandItemDefId = mainHandItemDefId;
+            OffHandItemDefId = offHandItemDefId;
+            MainHandColorId = mainHandColorId;
+            OffHandColorId = offHandColorId;
             Revision = revision;
         }
 
@@ -215,6 +280,10 @@ namespace Arena.Network
         internal string SecondaryDisciplineId2 { get; }
         internal IReadOnlyList<string> SelectedAbilityIds { get; }
         internal string ArmorSetId { get; }
+        internal string MainHandItemDefId { get; }
+        internal string OffHandItemDefId { get; }
+        internal string MainHandColorId { get; }
+        internal string OffHandColorId { get; }
         internal ulong Revision { get; }
     }
 
@@ -234,6 +303,7 @@ namespace Arena.Network
         internal event Action<string>? UnexpectedDisconnect;
         internal event Action<bool, string>? DisciplineLoadoutSaveCompleted;
         internal event Action<bool, string>? ArmorSetSaveCompleted;
+        internal event Action<bool, string>? WeaponLoadoutSaveCompleted;
 
         private HubConnection? _conn;
         private HubSubscriptionHandle? _subscription;
@@ -253,6 +323,8 @@ namespace Arena.Network
         private IReadOnlyList<HubDisciplineSnapshot> _disciplines = Array.Empty<HubDisciplineSnapshot>();
         private IReadOnlyList<HubAbilitySnapshot> _abilities = Array.Empty<HubAbilitySnapshot>();
         private IReadOnlyList<HubArmorSetSnapshot> _armorSets = Array.Empty<HubArmorSetSnapshot>();
+        private IReadOnlyList<HubWeaponSnapshot> _weapons = Array.Empty<HubWeaponSnapshot>();
+        private IReadOnlyList<HubWeaponColorSnapshot> _weaponColors = Array.Empty<HubWeaponColorSnapshot>();
 
         internal HubConnectionState State { get; private set; } = HubConnectionState.Disconnected;
         internal string LastError { get; private set; } = string.Empty;
@@ -265,6 +337,8 @@ namespace Arena.Network
         internal IReadOnlyList<HubDisciplineSnapshot> Disciplines => _disciplines;
         internal IReadOnlyList<HubAbilitySnapshot> Abilities => _abilities;
         internal IReadOnlyList<HubArmorSetSnapshot> ArmorSets => _armorSets;
+        internal IReadOnlyList<HubWeaponSnapshot> Weapons => _weapons;
+        internal IReadOnlyList<HubWeaponColorSnapshot> WeaponColors => _weaponColors;
         internal bool HasActiveMatchRequest
             => _requestAwaitingConfirmation || (_matchStatus?.IsActive ?? false);
 
@@ -364,6 +438,23 @@ namespace Arena.Network
             return true;
         }
 
+        internal bool SaveWeaponLoadout(
+            string mainHandItemDefId,
+            string mainHandColorId,
+            string offHandItemDefId,
+            string offHandColorId)
+        {
+            if (!IsReady || _conn == null)
+                return false;
+
+            _conn.Reducers.SaveHubWeaponLoadout(
+                mainHandItemDefId,
+                mainHandColorId,
+                offHandItemDefId,
+                offHandColorId);
+            return true;
+        }
+
         internal void CancelCurrentTicket()
         {
             if (!IsReady || _conn == null || !_matchStatus.HasValue)
@@ -425,6 +516,7 @@ namespace Arena.Network
             conn.Reducers.OnRequestUnranked2V2BotMatch += OnRequestMatchResult;
             conn.Reducers.OnSaveHubDisciplineLoadout += OnSaveDisciplineLoadoutResult;
             conn.Reducers.OnSaveHubArmorSet += OnSaveArmorSetResult;
+            conn.Reducers.OnSaveHubWeaponLoadout += OnSaveWeaponLoadoutResult;
             State = HubConnectionState.Subscribing;
             NotifyChanged();
             _subscription = conn
@@ -439,6 +531,8 @@ namespace Arena.Network
                     new Arena.HubDb.QueryBuilder().From.HubCombatDisciplineDefinition().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.HubAbilityDefinition().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.HubArmorSetDefinition().ToSql(),
+                    new Arena.HubDb.QueryBuilder().From.HubWeaponDefinition().ToSql(),
+                    new Arena.HubDb.QueryBuilder().From.HubWeaponColorDefinition().ToSql(),
                 });
         }
 
@@ -523,6 +617,12 @@ namespace Arena.Network
             conn.Db.HubArmorSetDefinition.OnInsert += OnArmorSetInsert;
             conn.Db.HubArmorSetDefinition.OnUpdate += OnArmorSetUpdate;
             conn.Db.HubArmorSetDefinition.OnDelete += OnArmorSetDelete;
+            conn.Db.HubWeaponDefinition.OnInsert += OnWeaponInsert;
+            conn.Db.HubWeaponDefinition.OnUpdate += OnWeaponUpdate;
+            conn.Db.HubWeaponDefinition.OnDelete += OnWeaponDelete;
+            conn.Db.HubWeaponColorDefinition.OnInsert += OnWeaponColorInsert;
+            conn.Db.HubWeaponColorDefinition.OnUpdate += OnWeaponColorUpdate;
+            conn.Db.HubWeaponColorDefinition.OnDelete += OnWeaponColorDelete;
         }
 
         private void UnbindRows(HubConnection conn)
@@ -545,9 +645,16 @@ namespace Arena.Network
             conn.Db.HubArmorSetDefinition.OnInsert -= OnArmorSetInsert;
             conn.Db.HubArmorSetDefinition.OnUpdate -= OnArmorSetUpdate;
             conn.Db.HubArmorSetDefinition.OnDelete -= OnArmorSetDelete;
+            conn.Db.HubWeaponDefinition.OnInsert -= OnWeaponInsert;
+            conn.Db.HubWeaponDefinition.OnUpdate -= OnWeaponUpdate;
+            conn.Db.HubWeaponDefinition.OnDelete -= OnWeaponDelete;
+            conn.Db.HubWeaponColorDefinition.OnInsert -= OnWeaponColorInsert;
+            conn.Db.HubWeaponColorDefinition.OnUpdate -= OnWeaponColorUpdate;
+            conn.Db.HubWeaponColorDefinition.OnDelete -= OnWeaponColorDelete;
             conn.Reducers.OnRequestUnranked2V2BotMatch -= OnRequestMatchResult;
             conn.Reducers.OnSaveHubDisciplineLoadout -= OnSaveDisciplineLoadoutResult;
             conn.Reducers.OnSaveHubArmorSet -= OnSaveArmorSetResult;
+            conn.Reducers.OnSaveHubWeaponLoadout -= OnSaveWeaponLoadoutResult;
         }
 
         private void OnHubPlayerInsert(HubEventContext _, HubPlayerRow row) => ApplyPlayer(row);
@@ -599,6 +706,12 @@ namespace Arena.Network
         private void OnArmorSetInsert(HubEventContext _, HubArmorSetRow __) => RefreshCatalogSnapshots();
         private void OnArmorSetUpdate(HubEventContext _, HubArmorSetRow __, HubArmorSetRow ___) => RefreshCatalogSnapshots();
         private void OnArmorSetDelete(HubEventContext _, HubArmorSetRow __) => RefreshCatalogSnapshots();
+        private void OnWeaponInsert(HubEventContext _, HubWeaponRow __) => RefreshCatalogSnapshots();
+        private void OnWeaponUpdate(HubEventContext _, HubWeaponRow __, HubWeaponRow ___) => RefreshCatalogSnapshots();
+        private void OnWeaponDelete(HubEventContext _, HubWeaponRow __) => RefreshCatalogSnapshots();
+        private void OnWeaponColorInsert(HubEventContext _, HubWeaponColorRow __) => RefreshCatalogSnapshots();
+        private void OnWeaponColorUpdate(HubEventContext _, HubWeaponColorRow __, HubWeaponColorRow ___) => RefreshCatalogSnapshots();
+        private void OnWeaponColorDelete(HubEventContext _, HubWeaponColorRow __) => RefreshCatalogSnapshots();
 
         private void ApplyPlayer(HubPlayerRow row)
         {
@@ -636,6 +749,10 @@ namespace Arena.Network
                 row.SecondaryDisciplineId2,
                 row.SelectedAbilityIds.ToArray(),
                 row.ArmorSetId,
+                row.MainHandItemDefId,
+                row.OffHandItemDefId,
+                row.MainHandColorId,
+                row.OffHandColorId,
                 row.Revision);
             NotifyChanged();
         }
@@ -683,6 +800,30 @@ namespace Arena.Network
                     row.PieceCount,
                     row.SortOrder))
                 .ToArray();
+            _weapons = conn.Db.HubWeaponDefinition.Iter()
+                .OrderBy(row => row.SortOrder)
+                .ThenBy(row => row.ItemDefId, StringComparer.Ordinal)
+                .Select(row => new HubWeaponSnapshot(
+                    row.ItemDefId,
+                    row.DisplayName,
+                    row.IconId,
+                    row.WeaponKind,
+                    row.HandRequirement,
+                    row.EquipSlot,
+                    row.PrimaryDisciplineId,
+                    row.SortOrder))
+                .ToArray();
+            _weaponColors = conn.Db.HubWeaponColorDefinition.Iter()
+                .OrderBy(row => row.ItemDefId, StringComparer.Ordinal)
+                .ThenBy(row => row.SortOrder)
+                .ThenBy(row => row.ColorId, StringComparer.Ordinal)
+                .Select(row => new HubWeaponColorSnapshot(
+                    row.ItemDefId,
+                    row.ColorId,
+                    row.DisplayName,
+                    row.ColorHex,
+                    row.SortOrder))
+                .ToArray();
             NotifyChanged();
         }
 
@@ -725,6 +866,10 @@ namespace Arena.Network
                     row.SecondaryDisciplineId2,
                     row.SelectedAbilityIds.ToArray(),
                     row.ArmorSetId,
+                    row.MainHandItemDefId,
+                    row.OffHandItemDefId,
+                    row.MainHandColorId,
+                    row.OffHandColorId,
                     row.Revision);
                 break;
             }
@@ -786,6 +931,22 @@ namespace Arena.Network
                 ReducerFailureMessage(context.Event.Status, "The Hub did not save the armor set."));
         }
 
+        private void OnSaveWeaponLoadoutResult(
+            HubReducerEventContext context,
+            string mainHandItemDefId,
+            string mainHandColorId,
+            string offHandItemDefId,
+            string offHandColorId)
+        {
+            if (!_hasIdentity || context.Event.CallerIdentity != _identity)
+                return;
+
+            bool committed = context.Event.Status is Status.Committed;
+            WeaponLoadoutSaveCompleted?.Invoke(
+                committed,
+                ReducerFailureMessage(context.Event.Status, "The Hub did not save the weapon loadout."));
+        }
+
         private static string ReducerFailureMessage(Status status, string fallback)
         {
             return status switch
@@ -836,6 +997,8 @@ namespace Arena.Network
             _disciplines = Array.Empty<HubDisciplineSnapshot>();
             _abilities = Array.Empty<HubAbilitySnapshot>();
             _armorSets = Array.Empty<HubArmorSetSnapshot>();
+            _weapons = Array.Empty<HubWeaponSnapshot>();
+            _weaponColors = Array.Empty<HubWeaponColorSnapshot>();
         }
 
         private void Update()

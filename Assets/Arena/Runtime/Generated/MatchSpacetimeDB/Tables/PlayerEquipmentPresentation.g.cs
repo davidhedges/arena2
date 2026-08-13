@@ -52,6 +52,8 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Col<PlayerEquipmentPresentation, string> OffHandItemDefId { get; }
         public global::SpacetimeDB.Col<PlayerEquipmentPresentation, ulong> Revision { get; }
         public global::SpacetimeDB.Col<PlayerEquipmentPresentation, SpacetimeDB.Timestamp> UpdatedAt { get; }
+        public global::SpacetimeDB.Col<PlayerEquipmentPresentation, string> MainHandColorId { get; }
+        public global::SpacetimeDB.Col<PlayerEquipmentPresentation, string> OffHandColorId { get; }
 
         public PlayerEquipmentPresentationCols(string tableName)
         {
@@ -67,6 +69,8 @@ namespace Arena.MatchDb
             OffHandItemDefId = new global::SpacetimeDB.Col<PlayerEquipmentPresentation, string>(tableName, "off_hand_item_def_id");
             Revision = new global::SpacetimeDB.Col<PlayerEquipmentPresentation, ulong>(tableName, "revision");
             UpdatedAt = new global::SpacetimeDB.Col<PlayerEquipmentPresentation, SpacetimeDB.Timestamp>(tableName, "updated_at");
+            MainHandColorId = new global::SpacetimeDB.Col<PlayerEquipmentPresentation, string>(tableName, "main_hand_color_id");
+            OffHandColorId = new global::SpacetimeDB.Col<PlayerEquipmentPresentation, string>(tableName, "off_hand_color_id");
         }
     }
 

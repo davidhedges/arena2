@@ -12,8 +12,8 @@ using UnityEngine.UIElements;
 namespace Arena.UI
 {
     /// <summary>
-    /// UI Toolkit translation of docs/ui-prototypes/equipment. Armor choices
-    /// are previews until the authoritative whole-set reducer commits.
+    /// Equipment loadout UI. Armor and discipline-bound weapon choices remain
+    /// previews until their authoritative Hub reducers commit.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class EquipmentScreen : MonoBehaviour, IEscapeCloseable
@@ -21,6 +21,12 @@ namespace Arena.UI
         private const string RuntimeObjectName = "EquipmentScreenRuntime";
         private const string OpenClass = "is-open";
         private const float CatalogRefreshInterval = 0.5f;
+
+        private enum EquipmentMode
+        {
+            Armor,
+            Weapons,
+        }
 
         private sealed class SetPresentation
         {
@@ -105,10 +111,26 @@ namespace Arena.UI
             };
 
         private readonly List<HubArmorSetSnapshot> _sets = new();
+        private readonly List<HubWeaponSnapshot> _weapons = new();
         private PanelSettings? _panelSettings;
         private VisualElement? _root;
         private ScrollView? _setList;
+        private ScrollView? _mainWeaponList;
+        private ScrollView? _offHandWeaponList;
         private VisualElement? _showcase;
+        private VisualElement? _armorSelectionPanel;
+        private VisualElement? _weaponSelectionPanel;
+        private VisualElement? _armorDetailsPanel;
+        private VisualElement? _weaponDetailsPanel;
+        private VisualElement? _offHandSection;
+        private VisualElement? _weaponOffRow;
+        private VisualElement? _weaponDetailsIcon;
+        private VisualElement? _mainWeaponColors;
+        private VisualElement? _offHandWeaponColors;
+        private VisualElement? _offHandWeaponColorSection;
+        private Label? _pageKicker;
+        private Label? _pageTitle;
+        private Label? _pageSubtitle;
         private Label? _setCount;
         private Label? _showcaseTier;
         private Label? _showcaseName;
@@ -128,6 +150,18 @@ namespace Arena.UI
         private Label? _pieceCount;
         private Button? _equipButton;
         private Label? _toast;
+        private Label? _weaponDisciplineName;
+        private Label? _weaponCount;
+        private Label? _weaponRuleNote;
+        private Label? _weaponDetailsName;
+        private Label? _weaponDetailsFlavor;
+        private Label? _weaponDetailsDiscipline;
+        private Label? _weaponDetailsKind;
+        private Label? _weaponMainName;
+        private Label? _weaponOffName;
+        private Label? _weaponDetailsRule;
+        private Label? _weaponEquippedChip;
+        private Button? _equipWeaponButton;
         private HubController? _hubController;
         private HubNetworkManager? _hubNetwork;
         private string _tier = "LIGHT";
@@ -135,7 +169,23 @@ namespace Arena.UI
         private string _activeSetId = string.Empty;
         private string _pendingSetId = string.Empty;
         private string _lastPreviewSetId = string.Empty;
+        private string _primaryDisciplineId = string.Empty;
+        private string _selectedMainHandId = string.Empty;
+        private string _selectedOffHandId = string.Empty;
+        private string _selectedMainHandColorId = string.Empty;
+        private string _selectedOffHandColorId = string.Empty;
+        private string _activeMainHandId = string.Empty;
+        private string _activeOffHandId = string.Empty;
+        private string _activeMainHandColorId = string.Empty;
+        private string _activeOffHandColorId = string.Empty;
+        private string _pendingMainHandId = string.Empty;
+        private string _pendingOffHandId = string.Empty;
+        private string _pendingMainHandColorId = string.Empty;
+        private string _pendingOffHandColorId = string.Empty;
+        private string _lastWeaponPreviewSignature = string.Empty;
         private bool _equipPending;
+        private bool _weaponEquipPending;
+        private EquipmentMode _mode = EquipmentMode.Armor;
         private bool _open;
         private bool _draggingShowcase;
         private int _dragPointerId = -1;
@@ -248,7 +298,22 @@ namespace Arena.UI
             }
 
             _setList = _root.Q<ScrollView>("SetList");
+            _mainWeaponList = _root.Q<ScrollView>("MainWeaponList");
+            _offHandWeaponList = _root.Q<ScrollView>("OffHandWeaponList");
             _showcase = _root.Q<VisualElement>("PlayerShowcase");
+            _armorSelectionPanel = _root.Q<VisualElement>("ArmorSelectionPanel");
+            _weaponSelectionPanel = _root.Q<VisualElement>("WeaponSelectionPanel");
+            _armorDetailsPanel = _root.Q<VisualElement>("ArmorDetailsPanel");
+            _weaponDetailsPanel = _root.Q<VisualElement>("WeaponDetailsPanel");
+            _offHandSection = _root.Q<VisualElement>("OffHandSection");
+            _weaponOffRow = _root.Q<VisualElement>("WeaponOffRow");
+            _weaponDetailsIcon = _root.Q<VisualElement>("WeaponDetailsIcon");
+            _mainWeaponColors = _root.Q<VisualElement>("MainWeaponColors");
+            _offHandWeaponColors = _root.Q<VisualElement>("OffHandWeaponColors");
+            _offHandWeaponColorSection = _root.Q<VisualElement>("OffHandWeaponColorSection");
+            _pageKicker = _root.Q<Label>("PageKicker");
+            _pageTitle = _root.Q<Label>("PageTitle");
+            _pageSubtitle = _root.Q<Label>("PageSubtitle");
             _setCount = _root.Q<Label>("SetCount");
             _showcaseTier = _root.Q<Label>("ShowcaseTier");
             _showcaseName = _root.Q<Label>("ShowcaseName");
@@ -268,6 +333,18 @@ namespace Arena.UI
             _pieceCount = _root.Q<Label>("PieceCount");
             _equipButton = _root.Q<Button>("EquipButton");
             _toast = _root.Q<Label>("Toast");
+            _weaponDisciplineName = _root.Q<Label>("WeaponDisciplineName");
+            _weaponCount = _root.Q<Label>("WeaponCount");
+            _weaponRuleNote = _root.Q<Label>("WeaponRuleNote");
+            _weaponDetailsName = _root.Q<Label>("WeaponDetailsName");
+            _weaponDetailsFlavor = _root.Q<Label>("WeaponDetailsFlavor");
+            _weaponDetailsDiscipline = _root.Q<Label>("WeaponDetailsDiscipline");
+            _weaponDetailsKind = _root.Q<Label>("WeaponDetailsKind");
+            _weaponMainName = _root.Q<Label>("WeaponMainName");
+            _weaponOffName = _root.Q<Label>("WeaponOffName");
+            _weaponDetailsRule = _root.Q<Label>("WeaponDetailsRule");
+            _weaponEquippedChip = _root.Q<Label>("WeaponEquippedChip");
+            _equipWeaponButton = _root.Q<Button>("EquipWeaponButton");
 
             BindButton("TierLight", () => SelectTier("LIGHT"));
             BindButton("TierMedium", () => SelectTier("MEDIUM"));
@@ -275,7 +352,11 @@ namespace Arena.UI
             BindButton("PreviousSet", () => CycleSet(-1));
             BindButton("NextSet", () => CycleSet(1));
             BindButton("EquipButton", EquipSelectedSet);
+            BindButton("EquipWeaponButton", EquipSelectedWeapons);
             BindButton("BackButton", Close);
+            BindButton("WeaponBackButton", Close);
+            BindButton("ArmorMode", () => SelectMode(EquipmentMode.Armor));
+            BindButton("WeaponsMode", () => SelectMode(EquipmentMode.Weapons));
             BindButton("NavPlay", Close);
             BindButton("NavPlayTab", Close);
             BindButton("NavDisciplines", RequestDisciplines);
@@ -308,13 +389,24 @@ namespace Arena.UI
                 return;
 
             if (_hubNetwork != null)
+            {
                 _hubNetwork.ArmorSetSaveCompleted -= OnArmorSetSaved;
+                _hubNetwork.WeaponLoadoutSaveCompleted -= OnWeaponLoadoutSaved;
+            }
 
             _hubNetwork = hub;
             _equipPending = false;
             _pendingSetId = string.Empty;
+            _weaponEquipPending = false;
+            _pendingMainHandId = string.Empty;
+            _pendingOffHandId = string.Empty;
+            _pendingMainHandColorId = string.Empty;
+            _pendingOffHandColorId = string.Empty;
             if (_hubNetwork != null)
+            {
                 _hubNetwork.ArmorSetSaveCompleted += OnArmorSetSaved;
+                _hubNetwork.WeaponLoadoutSaveCompleted += OnWeaponLoadoutSaved;
+            }
         }
 
         private void RefreshCatalog(bool forceSelectionFromActive = false)
@@ -330,8 +422,17 @@ namespace Arena.UI
             _sets.AddRange(hub.ArmorSets
                 .OrderBy(row => row.SortOrder)
                 .ThenBy(row => row.ArmorSetId, StringComparer.Ordinal));
+            _weapons.Clear();
+            _weapons.AddRange(hub.Weapons
+                .OrderBy(row => row.SortOrder)
+                .ThenBy(row => row.ItemDefId, StringComparer.Ordinal));
 
             _activeSetId = WireIdentifier.Normalize(hub.Loadout?.ArmorSetId);
+            _primaryDisciplineId = WireIdentifier.Normalize(hub.Loadout?.PrimaryDisciplineId);
+            _activeMainHandId = WireIdentifier.Normalize(hub.Loadout?.MainHandItemDefId);
+            _activeOffHandId = WireIdentifier.Normalize(hub.Loadout?.OffHandItemDefId);
+            _activeMainHandColorId = WireIdentifier.Normalize(hub.Loadout?.MainHandColorId);
+            _activeOffHandColorId = WireIdentifier.Normalize(hub.Loadout?.OffHandColorId);
 
             if (_sets.Count == 0)
             {
@@ -352,12 +453,17 @@ namespace Arena.UI
                 _tier = WireIdentifier.Normalize(first.ArmorTier);
             }
 
+            NormalizeWeaponSelection(forceSelectionFromActive);
+
             RenderAll();
         }
 
         private void RenderWaitingForCatalog()
         {
+            RenderMode();
             _setList?.Clear();
+            _mainWeaponList?.Clear();
+            _offHandWeaponList?.Clear();
             if (_setCount != null)
                 _setCount.text = "WAITING";
             if (_detailsName != null)
@@ -369,14 +475,66 @@ namespace Arena.UI
                 _equipButton.SetEnabled(false);
                 _equipButton.text = "CONNECTING…";
             }
+            SetText(_weaponDisciplineName, "CONNECTING");
+            SetText(_weaponCount, "WAITING");
+            SetText(_weaponDetailsName, "WEAPON CATALOG");
+            SetText(_weaponDetailsFlavor, "Connecting to the authoritative weapon catalog…");
+            if (_equipWeaponButton != null)
+            {
+                _equipWeaponButton.SetEnabled(false);
+                _equipWeaponButton.text = "CONNECTING…";
+            }
         }
 
         private void RenderAll()
         {
-            RenderTiers();
-            RenderSetList();
-            RenderDetails();
+            RenderMode();
+            if (_mode == EquipmentMode.Armor)
+            {
+                RenderTiers();
+                RenderSetList();
+                RenderDetails();
+            }
+            else
+            {
+                RenderWeaponLists();
+                RenderWeaponDetails();
+            }
             ApplyShowcasePreview();
+        }
+
+        private void SelectMode(EquipmentMode mode)
+        {
+            if (_mode == mode)
+                return;
+
+            _mode = mode;
+            _lastPreviewSetId = string.Empty;
+            _lastWeaponPreviewSignature = string.Empty;
+            if (_mode == EquipmentMode.Armor)
+                _hubController?.SetShowcaseWeaponPreview(null, null, null, null);
+            else
+                _hubController?.SetShowcaseArmorPreview(null);
+            RenderAll();
+        }
+
+        private void RenderMode()
+        {
+            bool weapons = _mode == EquipmentMode.Weapons;
+            _armorSelectionPanel?.EnableInClassList("equipment-panel-hidden", weapons);
+            _armorDetailsPanel?.EnableInClassList("equipment-panel-hidden", weapons);
+            _weaponSelectionPanel?.EnableInClassList("equipment-panel-hidden", !weapons);
+            _weaponDetailsPanel?.EnableInClassList("equipment-panel-hidden", !weapons);
+            SetSelectedClass("ArmorMode", !weapons);
+            SetSelectedClass("WeaponsMode", weapons);
+
+            SetText(_pageKicker, weapons ? "WEAPON LOADOUT" : "ARMOR LOADOUT");
+            SetText(_pageTitle, weapons ? "CHOOSE YOUR WEAPONS" : "CHOOSE YOUR ARMOR");
+            SetText(
+                _pageSubtitle,
+                weapons
+                    ? "Your primary discipline determines the weapons available to equip."
+                    : "Balance protection and mobility. Armor is equipped as a complete set.");
         }
 
         private void RenderTiers()
@@ -516,6 +674,12 @@ namespace Arena.UI
 
         private void CycleSet(int direction)
         {
+            if (_mode == EquipmentMode.Weapons)
+            {
+                CycleMainWeapon(direction);
+                return;
+            }
+
             List<HubArmorSetSnapshot> visibleSets = SetsForTier();
             if (visibleSets.Count == 0)
                 return;
@@ -528,6 +692,20 @@ namespace Arena.UI
             SelectSet(visibleSets[nextIndex].ArmorSetId);
         }
 
+        private void CycleMainWeapon(int direction)
+        {
+            List<HubWeaponSnapshot> mains = WeaponsForSlot("MAIN_HAND");
+            if (mains.Count == 0)
+                return;
+
+            int currentIndex = mains.FindIndex(row =>
+                WireIdentifier.Normalize(row.ItemDefId) == _selectedMainHandId);
+            if (currentIndex < 0)
+                currentIndex = 0;
+            int nextIndex = (currentIndex + direction + mains.Count) % mains.Count;
+            SelectMainWeapon(WireIdentifier.Normalize(mains[nextIndex].ItemDefId));
+        }
+
         private List<HubArmorSetSnapshot> SetsForTier()
         {
             return _sets.Where(set => WireIdentifier.Normalize(set.ArmorTier) == _tier).ToList();
@@ -538,6 +716,362 @@ namespace Arena.UI
             string normalized = WireIdentifier.Normalize(setId);
             return _sets.FirstOrDefault(set =>
                 WireIdentifier.Normalize(set.ArmorSetId) == normalized);
+        }
+
+        private void NormalizeWeaponSelection(bool forceSelectionFromActive)
+        {
+            List<HubWeaponSnapshot> mains = WeaponsForSlot("MAIN_HAND");
+            List<HubWeaponSnapshot> offHands = WeaponsForSlot("OFF_HAND");
+
+            bool selectedMainAllowed = mains.Any(row =>
+                WireIdentifier.Normalize(row.ItemDefId) == _selectedMainHandId);
+            if (forceSelectionFromActive || !selectedMainAllowed)
+            {
+                _selectedMainHandId = mains.Any(row =>
+                        WireIdentifier.Normalize(row.ItemDefId) == _activeMainHandId)
+                    ? _activeMainHandId
+                    : mains.FirstOrDefault()?.ItemDefId ?? string.Empty;
+                _selectedMainHandId = WireIdentifier.Normalize(_selectedMainHandId);
+            }
+
+            bool selectedOffAllowed = offHands.Any(row =>
+                WireIdentifier.Normalize(row.ItemDefId) == _selectedOffHandId);
+            if (forceSelectionFromActive || !selectedOffAllowed)
+            {
+                _selectedOffHandId = offHands.Any(row =>
+                        WireIdentifier.Normalize(row.ItemDefId) == _activeOffHandId)
+                    ? _activeOffHandId
+                    : offHands.FirstOrDefault()?.ItemDefId ?? string.Empty;
+                _selectedOffHandId = WireIdentifier.Normalize(_selectedOffHandId);
+            }
+
+            if (!string.Equals(_primaryDisciplineId, "ZEAL", StringComparison.Ordinal))
+            {
+                _selectedOffHandId = string.Empty;
+                _selectedOffHandColorId = string.Empty;
+            }
+
+            _selectedMainHandColorId = NormalizeSelectedColor(
+                _selectedMainHandId,
+                _selectedMainHandColorId,
+                _selectedMainHandId == _activeMainHandId ? _activeMainHandColorId : string.Empty,
+                forceSelectionFromActive);
+            if (string.Equals(_primaryDisciplineId, "ZEAL", StringComparison.Ordinal))
+            {
+                _selectedOffHandColorId = NormalizeSelectedColor(
+                    _selectedOffHandId,
+                    _selectedOffHandColorId,
+                    _selectedOffHandId == _activeOffHandId ? _activeOffHandColorId : string.Empty,
+                    forceSelectionFromActive);
+            }
+        }
+
+        private string NormalizeSelectedColor(
+            string itemDefId,
+            string selectedColorId,
+            string preferredColorId,
+            bool forcePreferred)
+        {
+            List<HubWeaponColorSnapshot> colors = ColorsForWeapon(itemDefId);
+            if (colors.Count == 0)
+                return string.Empty;
+            string preferred = WireIdentifier.Normalize(preferredColorId);
+            if ((!forcePreferred || !string.IsNullOrWhiteSpace(preferred))
+                && colors.Any(color => WireIdentifier.Normalize(color.ColorId) == preferred))
+            {
+                return preferred;
+            }
+            string selected = WireIdentifier.Normalize(selectedColorId);
+            if (!forcePreferred
+                && colors.Any(color => WireIdentifier.Normalize(color.ColorId) == selected))
+            {
+                return selected;
+            }
+            return WireIdentifier.Normalize(colors[0].ColorId);
+        }
+
+        private List<HubWeaponColorSnapshot> ColorsForWeapon(string? itemDefId)
+        {
+            string normalized = WireIdentifier.Normalize(itemDefId);
+            return (_hubNetwork?.WeaponColors ?? Array.Empty<HubWeaponColorSnapshot>())
+                .Where(color => WireIdentifier.Normalize(color.ItemDefId) == normalized)
+                .OrderBy(color => color.SortOrder)
+                .ThenBy(color => color.ColorId, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private List<HubWeaponSnapshot> WeaponsForSlot(string slotId)
+        {
+            return _weapons.Where(row =>
+                    WireIdentifier.Normalize(row.PrimaryDisciplineId) == _primaryDisciplineId
+                    && WireIdentifier.Normalize(row.EquipSlot) == slotId)
+                .ToList();
+        }
+
+        private HubWeaponSnapshot? FindWeapon(string? itemDefId)
+        {
+            string normalized = WireIdentifier.Normalize(itemDefId);
+            return _weapons.FirstOrDefault(row =>
+                WireIdentifier.Normalize(row.ItemDefId) == normalized);
+        }
+
+        private void RenderWeaponLists()
+        {
+            List<HubWeaponSnapshot> mains = WeaponsForSlot("MAIN_HAND");
+            List<HubWeaponSnapshot> offHands = WeaponsForSlot("OFF_HAND");
+            bool requiresOffHand = string.Equals(_primaryDisciplineId, "ZEAL", StringComparison.Ordinal);
+            _offHandSection?.EnableInClassList("equipment-panel-hidden", !requiresOffHand);
+            _weaponOffRow?.EnableInClassList("equipment-panel-hidden", !requiresOffHand);
+
+            string disciplineName = DisciplineDisplayName();
+            SetText(_weaponDisciplineName, string.IsNullOrWhiteSpace(disciplineName) ? "NO PRIMARY DISCIPLINE" : disciplineName.ToUpperInvariant());
+            SetText(_weaponCount, $"{mains.Count + offHands.Count} AVAILABLE");
+            SetText(_weaponRuleNote, RuleForPrimaryDiscipline());
+
+            PopulateWeaponList(_mainWeaponList, mains, _selectedMainHandId, SelectMainWeapon);
+            PopulateWeaponList(_offHandWeaponList, offHands, _selectedOffHandId, SelectOffHandWeapon);
+        }
+
+        private void PopulateWeaponList(
+            ScrollView? list,
+            IReadOnlyList<HubWeaponSnapshot> weapons,
+            string selectedId,
+            Action<string> select)
+        {
+            if (list == null)
+                return;
+
+            list.Clear();
+            if (weapons.Count == 0)
+            {
+                Label empty = new("No weapons are available for this slot.");
+                empty.AddToClassList("note-body");
+                list.Add(empty);
+                return;
+            }
+
+            foreach (HubWeaponSnapshot weapon in weapons)
+            {
+                string itemDefId = WireIdentifier.Normalize(weapon.ItemDefId);
+                Button card = new() { name = $"Weapon_{itemDefId}" };
+                card.AddToClassList("weapon-card");
+                card.EnableInClassList("is-selected", itemDefId == selectedId);
+
+                VisualElement icon = new();
+                icon.AddToClassList("weapon-card-icon");
+                SetWeaponIcon(icon, weapon.IconId);
+
+                VisualElement copy = new();
+                copy.AddToClassList("weapon-card-copy");
+                Label name = new(WeaponDisplayName(weapon).ToUpperInvariant());
+                name.AddToClassList("weapon-card-name");
+                Label meta = new($"{FriendlyWeaponKind(weapon.WeaponKind)} · {FriendlyHandRequirement(weapon.HandRequirement)}");
+                meta.AddToClassList("weapon-card-meta");
+                copy.Add(name);
+                copy.Add(meta);
+
+                Label check = new(itemDefId == selectedId ? "◆" : "›");
+                check.AddToClassList("weapon-card-check");
+                card.Add(icon);
+                card.Add(copy);
+                card.Add(check);
+                string capturedId = itemDefId;
+                card.clicked += () => select(capturedId);
+                list.Add(card);
+            }
+        }
+
+        private void SelectMainWeapon(string itemDefId)
+        {
+            if (!WeaponsForSlot("MAIN_HAND").Any(row =>
+                    WireIdentifier.Normalize(row.ItemDefId) == itemDefId))
+                return;
+
+            _selectedMainHandId = itemDefId;
+            _selectedMainHandColorId = NormalizeSelectedColor(
+                itemDefId,
+                string.Empty,
+                itemDefId == _activeMainHandId ? _activeMainHandColorId : string.Empty,
+                forcePreferred: true);
+            RenderAll();
+        }
+
+        private void SelectOffHandWeapon(string itemDefId)
+        {
+            if (!WeaponsForSlot("OFF_HAND").Any(row =>
+                    WireIdentifier.Normalize(row.ItemDefId) == itemDefId))
+                return;
+
+            _selectedOffHandId = itemDefId;
+            _selectedOffHandColorId = NormalizeSelectedColor(
+                itemDefId,
+                string.Empty,
+                itemDefId == _activeOffHandId ? _activeOffHandColorId : string.Empty,
+                forcePreferred: true);
+            RenderAll();
+        }
+
+        private void RenderWeaponDetails()
+        {
+            HubWeaponSnapshot? main = FindWeapon(_selectedMainHandId);
+            HubWeaponSnapshot? offHand = FindWeapon(_selectedOffHandId);
+            bool requiresOffHand = string.Equals(_primaryDisciplineId, "ZEAL", StringComparison.Ordinal);
+            bool valid = main != null
+                && !string.IsNullOrWhiteSpace(_selectedMainHandColorId)
+                && (!requiresOffHand
+                    || (offHand != null && !string.IsNullOrWhiteSpace(_selectedOffHandColorId)));
+            bool equipped = valid
+                && _selectedMainHandId == _activeMainHandId
+                && _selectedOffHandId == _activeOffHandId
+                && _selectedMainHandColorId == _activeMainHandColorId
+                && _selectedOffHandColorId == _activeOffHandColorId;
+
+            SetText(_weaponDetailsName, main == null ? "NO WEAPON AVAILABLE" : WeaponDisplayName(main).ToUpperInvariant());
+            SetText(
+                _weaponDetailsFlavor,
+                main == null
+                    ? "Choose Subtlety, War, Zeal, or Precision as your primary discipline to unlock its arsenal."
+                    : $"A curated {FriendlyWeaponKind(main.WeaponKind).ToLowerInvariant()} loadout with complete Arena animation and attachment support.");
+            SetText(_weaponDetailsDiscipline, $"{DisciplineDisplayName().ToUpperInvariant()} PRIMARY");
+            SetText(_weaponDetailsKind, main == null ? "NO WEAPON TYPE" : FriendlyWeaponKind(main.WeaponKind).ToUpperInvariant());
+            SetText(
+                _weaponMainName,
+                main == null ? "None selected" : $"{WeaponDisplayName(main)} · {ColorDisplayName(main.ItemDefId, _selectedMainHandColorId)}");
+            SetText(
+                _weaponOffName,
+                offHand == null ? "None selected" : $"{WeaponDisplayName(offHand)} · {ColorDisplayName(offHand.ItemDefId, _selectedOffHandColorId)}");
+            SetText(_weaponDetailsRule, RuleForPrimaryDiscipline());
+            _weaponEquippedChip?.EnableInClassList("is-hidden", !equipped);
+            SetWeaponIcon(_weaponDetailsIcon, main?.IconId ?? string.Empty);
+            PopulateColorSelector(
+                _mainWeaponColors,
+                _selectedMainHandId,
+                _selectedMainHandColorId,
+                colorId =>
+                {
+                    _selectedMainHandColorId = colorId;
+                    RenderAll();
+                });
+            _offHandWeaponColorSection?.EnableInClassList("equipment-panel-hidden", !requiresOffHand);
+            PopulateColorSelector(
+                _offHandWeaponColors,
+                _selectedOffHandId,
+                _selectedOffHandColorId,
+                colorId =>
+                {
+                    _selectedOffHandColorId = colorId;
+                    RenderAll();
+                });
+
+            if (_equipWeaponButton != null)
+            {
+                _equipWeaponButton.EnableInClassList("is-equipped", equipped);
+                _equipWeaponButton.EnableInClassList("is-pending", _weaponEquipPending);
+                _equipWeaponButton.SetEnabled(valid && !_weaponEquipPending);
+                _equipWeaponButton.text = _weaponEquipPending
+                    ? "◆  EQUIPPING…  ◆"
+                    : equipped
+                        ? "◆  EQUIPPED  ◆"
+                        : "◆  EQUIP WEAPONS  ◆";
+            }
+        }
+
+        private void PopulateColorSelector(
+            VisualElement? container,
+            string itemDefId,
+            string selectedColorId,
+            Action<string> select)
+        {
+            if (container == null)
+                return;
+            container.Clear();
+            foreach (HubWeaponColorSnapshot color in ColorsForWeapon(itemDefId))
+            {
+                string colorId = WireIdentifier.Normalize(color.ColorId);
+                Button swatch = new() { name = $"WeaponColor_{itemDefId}_{colorId}", tooltip = color.DisplayName };
+                swatch.AddToClassList("weapon-color-button");
+                swatch.EnableInClassList("is-selected", colorId == selectedColorId);
+                if (ColorUtility.TryParseHtmlString(color.ColorHex, out Color parsed))
+                    swatch.style.backgroundColor = parsed;
+                swatch.clicked += () => select(colorId);
+                container.Add(swatch);
+            }
+        }
+
+        private string ColorDisplayName(string itemDefId, string colorId)
+        {
+            HubWeaponColorSnapshot? color = ColorsForWeapon(itemDefId).FirstOrDefault(candidate =>
+                WireIdentifier.Normalize(candidate.ColorId) == WireIdentifier.Normalize(colorId));
+            return color?.DisplayName?.Trim() ?? WireIdentifier.Normalize(colorId);
+        }
+
+        private static void SetWeaponIcon(VisualElement? element, string iconId)
+        {
+            if (element == null)
+                return;
+
+            Sprite? sprite = ItemIconResolver.Resolve(iconId);
+            if (sprite == null)
+                element.style.backgroundImage = StyleKeyword.None;
+            else
+                element.style.backgroundImage = new StyleBackground(sprite);
+        }
+
+        private string DisciplineDisplayName()
+        {
+            HubDisciplineSnapshot? discipline = _hubNetwork?.Disciplines.FirstOrDefault(row =>
+                WireIdentifier.Normalize(row.Id) == _primaryDisciplineId);
+            return discipline?.Name?.Trim()
+                ?? _primaryDisciplineId.Replace('_', ' ');
+        }
+
+        private string RuleForPrimaryDiscipline()
+        {
+            return _primaryDisciplineId switch
+            {
+                "SUBTLETY" => "Subtlety equips paired daggers.",
+                "WAR" => "War equips two-handed swords, axes, hammers, and polearms; staves and bows are excluded.",
+                "ZEAL" => "Zeal equips a one-handed sword, axe, hammer, or fist weapon with a shield.",
+                "PRECISION" => "Precision equips bows.",
+                _ => "Choose a supported primary discipline to select weapons.",
+            };
+        }
+
+        private static string WeaponDisplayName(HubWeaponSnapshot weapon)
+        {
+            return string.IsNullOrWhiteSpace(weapon.DisplayName)
+                ? WireIdentifier.Normalize(weapon.ItemDefId).Replace('_', ' ')
+                : weapon.DisplayName.Trim();
+        }
+
+        private static string FriendlyWeaponKind(string weaponKind)
+        {
+            return WireIdentifier.Normalize(weaponKind) switch
+            {
+                "DAGGER_PAIR" => "Paired Daggers",
+                "TWO_HAND_SWORD" => "Two-Handed Sword",
+                "TWO_HAND_AXE" => "Two-Handed Axe",
+                "TWO_HAND_HAMMER" => "Two-Handed Hammer",
+                "POLEARM" => "Polearm",
+                "ONE_HAND_SWORD" => "One-Handed Sword",
+                "ONE_HAND_AXE" => "One-Handed Axe",
+                "ONE_HAND_HAMMER" => "One-Handed Hammer",
+                "ONE_HAND_FIST" => "Fist Weapon",
+                "SHIELD" => "Shield",
+                "BOW" => "Bow",
+                string value => value.Replace('_', ' '),
+            };
+        }
+
+        private static string FriendlyHandRequirement(string handRequirement)
+        {
+            return WireIdentifier.Normalize(handRequirement) switch
+            {
+                "TWO_HAND" => "Two Hands",
+                "ONE_HAND" => "One Hand",
+                "OFF_HAND" => "Off Hand",
+                string value => value.Replace('_', ' '),
+            };
         }
 
         private void EquipSelectedSet()
@@ -593,9 +1127,107 @@ namespace Arena.UI
             ShowToast($"Could not equip armor set: {reason}");
         }
 
+        private void EquipSelectedWeapons()
+        {
+            HubWeaponSnapshot? main = FindWeapon(_selectedMainHandId);
+            bool requiresOffHand = string.Equals(_primaryDisciplineId, "ZEAL", StringComparison.Ordinal);
+            HubWeaponSnapshot? offHand = FindWeapon(_selectedOffHandId);
+            if (main == null || (requiresOffHand && offHand == null))
+            {
+                ShowToast("Choose a complete weapon loadout first.");
+                return;
+            }
+
+            if (_selectedMainHandId == _activeMainHandId
+                && _selectedOffHandId == _activeOffHandId
+                && _selectedMainHandColorId == _activeMainHandColorId
+                && _selectedOffHandColorId == _activeOffHandColorId)
+            {
+                ShowToast("That weapon loadout is already equipped.");
+                return;
+            }
+
+            HubNetworkManager? hub = _hubNetwork;
+            if (hub == null || !hub.IsReady || _weaponEquipPending)
+            {
+                ShowToast("Connect to equip this weapon loadout.");
+                return;
+            }
+
+            _pendingMainHandId = _selectedMainHandId;
+            _pendingOffHandId = requiresOffHand ? _selectedOffHandId : string.Empty;
+            _pendingMainHandColorId = _selectedMainHandColorId;
+            _pendingOffHandColorId = requiresOffHand ? _selectedOffHandColorId : string.Empty;
+            _weaponEquipPending = true;
+            RenderWeaponDetails();
+            if (!hub.SaveWeaponLoadout(
+                    _pendingMainHandId,
+                    _pendingMainHandColorId,
+                    _pendingOffHandId,
+                    _pendingOffHandColorId))
+            {
+                _weaponEquipPending = false;
+                _pendingMainHandId = string.Empty;
+                _pendingOffHandId = string.Empty;
+                _pendingMainHandColorId = string.Empty;
+                _pendingOffHandColorId = string.Empty;
+                RenderWeaponDetails();
+                ShowToast("Connect to equip this weapon loadout.");
+            }
+        }
+
+        private void OnWeaponLoadoutSaved(bool success, string reason)
+        {
+            if (!_weaponEquipPending)
+                return;
+
+            string mainHandId = _pendingMainHandId;
+            string offHandId = _pendingOffHandId;
+            string mainHandColorId = _pendingMainHandColorId;
+            string offHandColorId = _pendingOffHandColorId;
+            _weaponEquipPending = false;
+            _pendingMainHandId = string.Empty;
+            _pendingOffHandId = string.Empty;
+            _pendingMainHandColorId = string.Empty;
+            _pendingOffHandColorId = string.Empty;
+            if (success)
+            {
+                _activeMainHandId = mainHandId;
+                _activeOffHandId = offHandId;
+                _activeMainHandColorId = mainHandColorId;
+                _activeOffHandColorId = offHandColorId;
+                _nextCatalogRefresh = 0f;
+                RenderAll();
+                ShowToast("Weapon loadout equipped.");
+                return;
+            }
+
+            Debug.LogError($"[{nameof(EquipmentScreen)}] Equipping weapon loadout failed: {reason}");
+            RenderWeaponDetails();
+            ShowToast($"Could not equip weapon loadout: {reason}");
+        }
+
         private void ApplyShowcasePreview()
         {
-            if (!_open || _selectedSetId == _lastPreviewSetId)
+            if (!_open)
+                return;
+
+            if (_mode == EquipmentMode.Weapons)
+            {
+                string signature = $"{_selectedMainHandId}|{_selectedMainHandColorId}|{_selectedOffHandId}|{_selectedOffHandColorId}";
+                if (signature == _lastWeaponPreviewSignature)
+                    return;
+
+                _lastWeaponPreviewSignature = signature;
+                _hubController?.SetShowcaseWeaponPreview(
+                    _selectedMainHandId,
+                    _selectedMainHandColorId,
+                    _selectedOffHandId,
+                    _selectedOffHandColorId);
+                return;
+            }
+
+            if (_selectedSetId == _lastPreviewSetId)
                 return;
 
             HubArmorSetSnapshot? selected = FindSet(_selectedSetId);
@@ -609,7 +1241,9 @@ namespace Arena.UI
         private void ClearShowcasePreview()
         {
             _lastPreviewSetId = string.Empty;
+            _lastWeaponPreviewSignature = string.Empty;
             _hubController?.SetShowcaseArmorPreview(null);
+            _hubController?.SetShowcaseWeaponPreview(null, null, null, null);
         }
 
         private static SetPresentation PresentationFor(HubArmorSetSnapshot set)

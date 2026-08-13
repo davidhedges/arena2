@@ -26,6 +26,14 @@ namespace Arena.HubDb
         public System.Collections.Generic.List<string> SelectedAbilityIds;
         [DataMember(Name = "armor_set_id")]
         public string ArmorSetId;
+        [DataMember(Name = "main_hand_item_def_id")]
+        public string MainHandItemDefId;
+        [DataMember(Name = "off_hand_item_def_id")]
+        public string OffHandItemDefId;
+        [DataMember(Name = "main_hand_color_id")]
+        public string MainHandColorId;
+        [DataMember(Name = "off_hand_color_id")]
+        public string OffHandColorId;
         [DataMember(Name = "revision")]
         public ulong Revision;
         [DataMember(Name = "updated_at")]
@@ -38,6 +46,10 @@ namespace Arena.HubDb
             string SecondaryDisciplineId2,
             System.Collections.Generic.List<string> SelectedAbilityIds,
             string ArmorSetId,
+            string MainHandItemDefId,
+            string OffHandItemDefId,
+            string MainHandColorId,
+            string OffHandColorId,
             ulong Revision,
             SpacetimeDB.Timestamp UpdatedAt
         )
@@ -48,6 +60,10 @@ namespace Arena.HubDb
             this.SecondaryDisciplineId2 = SecondaryDisciplineId2;
             this.SelectedAbilityIds = SelectedAbilityIds;
             this.ArmorSetId = ArmorSetId;
+            this.MainHandItemDefId = MainHandItemDefId;
+            this.OffHandItemDefId = OffHandItemDefId;
+            this.MainHandColorId = MainHandColorId;
+            this.OffHandColorId = OffHandColorId;
             this.Revision = Revision;
             this.UpdatedAt = UpdatedAt;
         }
@@ -59,6 +75,10 @@ namespace Arena.HubDb
             this.SecondaryDisciplineId2 = "";
             this.SelectedAbilityIds = new();
             this.ArmorSetId = "";
+            this.MainHandItemDefId = "";
+            this.OffHandItemDefId = "";
+            this.MainHandColorId = "";
+            this.OffHandColorId = "";
         }
     }
 }

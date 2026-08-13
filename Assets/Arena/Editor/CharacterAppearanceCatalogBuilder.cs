@@ -18,6 +18,7 @@ namespace Arena.EditorTools
         private const string PartCatalogPath = CatalogFolder + "/AvatarPartCatalog.asset";
         private const string OutfitCatalogPath = CatalogFolder + "/OutfitCatalog.asset";
         private const string EquipmentAppearanceCatalogPath = CatalogFolder + "/EquipmentAppearanceCatalog.asset";
+        private const string WeaponAppearanceCatalogPath = "Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json";
         private static readonly bool IncludePeasantStarterHatAndCape = false;
         private static readonly CompleteArmorVisualSetSpec[] CompleteArmorVisualSets =
         {
@@ -439,12 +440,12 @@ namespace Arena.EditorTools
 
                 WeaponVisual("TRAINING_DAGGER_PAIR", "dagger_main", "Assets/Arena/Resources/CombatAnimationSets/DaggerMainPackAuthored.prefab"),
                 WeaponVisual("TRAINING_DAGGER_PAIR", "dagger_off", "Assets/Arena/Resources/CombatAnimationSets/DaggerOffPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_DAGGER_PAIR_01", "dagger_main", "Assets/Arena/Resources/CombatAnimationSets/DaggerMainPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_DAGGER_PAIR_01", "dagger_off", "Assets/Arena/Resources/CombatAnimationSets/DaggerOffPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_DAGGER_PAIR_02", "dagger_main", "Assets/Arena/Resources/CombatAnimationSets/DaggerMainPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_DAGGER_PAIR_02", "dagger_off", "Assets/Arena/Resources/CombatAnimationSets/DaggerOffPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_DAGGER_PAIR_03", "dagger_main", "Assets/Arena/Resources/CombatAnimationSets/DaggerMainPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_DAGGER_PAIR_03", "dagger_off", "Assets/Arena/Resources/CombatAnimationSets/DaggerOffPackAuthored.prefab"),
+                WeaponVisual("NEWBIE_DAGGER_PAIR_01", "dagger_main", WeaponPath("Dagger", "Dagger_1H_Newbie_01_Cl.prefab")),
+                WeaponVisual("NEWBIE_DAGGER_PAIR_01", "dagger_off", WeaponPath("Dagger", "Dagger_1H_Newbie_01_Cl.prefab")),
+                WeaponVisual("NEWBIE_DAGGER_PAIR_02", "dagger_main", WeaponPath("Dagger", "Dagger_1H_Newbie_02_Cl.prefab")),
+                WeaponVisual("NEWBIE_DAGGER_PAIR_02", "dagger_off", WeaponPath("Dagger", "Dagger_1H_Newbie_02_Cl.prefab")),
+                WeaponVisual("NEWBIE_DAGGER_PAIR_03", "dagger_main", WeaponPath("Dagger", "Dagger_1H_Newbie_03_Cl.prefab")),
+                WeaponVisual("NEWBIE_DAGGER_PAIR_03", "dagger_off", WeaponPath("Dagger", "Dagger_1H_Newbie_03_Cl.prefab")),
 
                 WeaponVisual("TRAINING_SHIELD", "shield", "Assets/Arena/Resources/CombatAnimationSets/ShieldPackAuthored.prefab"),
                 WeaponVisual("NEWBIE_SHIELD_01", "shield", WeaponPath("Shield", "Shield_Newbie_01_Cl.prefab")),
@@ -472,17 +473,87 @@ namespace Arena.EditorTools
                 WeaponVisual("NEWBIE_STAFF_04", "staff", WeaponPath("Staff", "Staff_Newbie_04_Cl.prefab")),
             };
 
+            WeaponAppearanceCatalogFile catalog = JsonUtility.FromJson<WeaponAppearanceCatalogFile>(
+                File.ReadAllText(WeaponAppearanceCatalogPath));
+            if (catalog == null || catalog.schema_version != 1 || catalog.families == null)
+                throw new InvalidOperationException($"Invalid weapon appearance catalog: {WeaponAppearanceCatalogPath}");
+
+            foreach (WeaponFamilyAuthoring family in catalog.families)
+            {
+                if (family == null || family.variants == null)
+                    throw new InvalidOperationException("Weapon appearance catalog contains an invalid family.");
+                foreach (WeaponVariantAuthoring variant in family.variants)
+                    AddWeaponVariantVisuals(entries, family, variant);
+            }
+
             return entries;
+        }
+
+        private static void AddWeaponVariantVisuals(
+            List<EquipmentAppearanceCatalog.WeaponVisualEntry> entries,
+            WeaponFamilyAuthoring family,
+            WeaponVariantAuthoring variant)
+        {
+            switch (family.weapon_kind)
+            {
+                case "DAGGER_PAIR":
+                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "dagger_main", variant.prefab_path));
+                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "dagger_off", variant.off_hand_prefab_path));
+                    break;
+                case "TWO_HAND_SWORD":
+                case "TWO_HAND_AXE":
+                case "TWO_HAND_HAMMER":
+                case "POLEARM":
+                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "greatsword", variant.prefab_path));
+                    break;
+                case "ONE_HAND_SWORD":
+                case "ONE_HAND_AXE":
+                case "ONE_HAND_HAMMER":
+                case "ONE_HAND_FIST":
+                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "sword", variant.prefab_path));
+                    break;
+                case "SHIELD":
+                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "shield", variant.prefab_path));
+                    break;
+                case "BOW":
+                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "bow_drawn", variant.prefab_path));
+                    entries.Add(WeaponVisual(
+                        family.item_def_id,
+                        variant.color_id,
+                        "bow_stowed",
+                        string.IsNullOrWhiteSpace(variant.stowed_prefab_path)
+                            ? variant.prefab_path
+                            : variant.stowed_prefab_path));
+                    entries.Add(WeaponVisual(
+                        family.item_def_id,
+                        variant.color_id,
+                        "quiver",
+                        string.IsNullOrWhiteSpace(variant.quiver_prefab_path)
+                            ? "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"
+                            : variant.quiver_prefab_path));
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        $"Unsupported weapon kind '{family.weapon_kind}' in {WeaponAppearanceCatalogPath}.");
+            }
         }
 
         private static EquipmentAppearanceCatalog.WeaponVisualEntry WeaponVisual(
             string itemDefId,
             string visualRoleId,
             string path)
+            => WeaponVisual(itemDefId, string.Empty, visualRoleId, path);
+
+        private static EquipmentAppearanceCatalog.WeaponVisualEntry WeaponVisual(
+            string itemDefId,
+            string colorId,
+            string visualRoleId,
+            string path)
         {
             return new EquipmentAppearanceCatalog.WeaponVisualEntry
             {
                 itemDefId = itemDefId,
+                colorId = colorId,
                 visualRoleId = visualRoleId,
                 raceId = CharacterAppearanceIds.RaceHuman,
                 sexId = CharacterAppearanceIds.SexMale,
@@ -788,10 +859,35 @@ namespace Arena.EditorTools
                 if (entry.prefab == null)
                     throw new InvalidOperationException($"Weapon visual entry '{entry.itemDefId}' role '{entry.visualRoleId}' has no prefab.");
 
-                string key = $"{entry.itemDefId}|{entry.visualRoleId}|{entry.raceId}|{entry.sexId}";
+                string key = $"{entry.itemDefId}|{entry.colorId}|{entry.visualRoleId}|{entry.raceId}|{entry.sexId}";
                 if (!keys.Add(key))
                     throw new InvalidOperationException($"Duplicate weapon visual entry: {key}");
             }
+        }
+
+        [Serializable]
+        private sealed class WeaponAppearanceCatalogFile
+        {
+            public int schema_version;
+            public List<WeaponFamilyAuthoring> families = new();
+        }
+
+        [Serializable]
+        private sealed class WeaponFamilyAuthoring
+        {
+            public string item_def_id = string.Empty;
+            public string weapon_kind = string.Empty;
+            public List<WeaponVariantAuthoring> variants = new();
+        }
+
+        [Serializable]
+        private sealed class WeaponVariantAuthoring
+        {
+            public string color_id = string.Empty;
+            public string prefab_path = string.Empty;
+            public string off_hand_prefab_path = string.Empty;
+            public string stowed_prefab_path = string.Empty;
+            public string quiver_prefab_path = string.Empty;
         }
 
         private static NHItem LoadRequiredItem(string path, ItemTypeEnum expectedItemType)

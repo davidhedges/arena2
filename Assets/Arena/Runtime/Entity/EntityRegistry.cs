@@ -1298,7 +1298,9 @@ namespace Arena.Entity
             PlayerEquipmentPresentation newRow)
         {
             return string.Equals(oldRow.MainHandItemDefId, newRow.MainHandItemDefId, System.StringComparison.Ordinal)
-                && string.Equals(oldRow.OffHandItemDefId, newRow.OffHandItemDefId, System.StringComparison.Ordinal);
+                && string.Equals(oldRow.OffHandItemDefId, newRow.OffHandItemDefId, System.StringComparison.Ordinal)
+                && string.Equals(oldRow.MainHandColorId, newRow.MainHandColorId, System.StringComparison.Ordinal)
+                && string.Equals(oldRow.OffHandColorId, newRow.OffHandColorId, System.StringComparison.Ordinal);
         }
 
         private static bool HasSameArmorPresentation(
@@ -1417,8 +1419,18 @@ namespace Arena.Entity
             if (conn == null)
                 return visuals;
 
-            AddWeaponVisuals(conn, _equipmentAppearanceCatalog, presentation.MainHandItemDefId, visuals);
-            AddWeaponVisuals(conn, _equipmentAppearanceCatalog, presentation.OffHandItemDefId, visuals);
+            AddWeaponVisuals(
+                conn,
+                _equipmentAppearanceCatalog,
+                presentation.MainHandItemDefId,
+                presentation.MainHandColorId,
+                visuals);
+            AddWeaponVisuals(
+                conn,
+                _equipmentAppearanceCatalog,
+                presentation.OffHandItemDefId,
+                presentation.OffHandColorId,
+                visuals);
             return visuals;
         }
 
@@ -1463,6 +1475,7 @@ namespace Arena.Entity
             DbConnection conn,
             EquipmentAppearanceCatalog? equipmentAppearanceCatalog,
             string? itemDefId,
+            string? colorId,
             List<EquippedWeaponVisual> visuals)
         {
             if (string.IsNullOrWhiteSpace(itemDefId))
@@ -1473,11 +1486,12 @@ namespace Arena.Entity
                 || !string.Equals(WireIdentifier.Normalize(definition.ItemKind), "WEAPON", System.StringComparison.Ordinal))
                 return;
 
-            foreach (string roleId in WeaponVisualRoleIdsForKind(definition.WeaponKind))
+            foreach (string roleId in EquipmentAppearanceCatalog.WeaponVisualRoleIdsForKind(definition.WeaponKind))
             {
                 if (equipmentAppearanceCatalog == null
                     || !equipmentAppearanceCatalog.TryGetWeaponVisual(
                         definition.ItemDefId,
+                        colorId,
                         roleId,
                         CharacterAppearanceIds.RaceHuman,
                         CharacterAppearanceIds.SexMale,
@@ -1488,41 +1502,6 @@ namespace Arena.Entity
                 }
 
                 visuals.Add(new EquippedWeaponVisual(roleId, definition.ItemDefId, entry.prefab));
-            }
-        }
-
-        private static IEnumerable<string> WeaponVisualRoleIdsForKind(string? weaponKind)
-        {
-            switch (WireIdentifier.Normalize(weaponKind))
-            {
-                case "TWO_HAND_SWORD":
-                case "TWO_HANDED_SWORD":
-                case "TWO_HAND_AXE":
-                    yield return "greatsword";
-                    yield break;
-                case "STAFF":
-                    yield return "staff";
-                    yield break;
-                case "ONE_HAND_SWORD":
-                case "ONE_HAND_AXE":
-                    yield return "sword";
-                    yield break;
-                case "DAGGER_PAIR":
-                    yield return "dagger_main";
-                    yield return "dagger_off";
-                    yield break;
-                case "SWORD_AND_SHIELD":
-                    yield return "sword";
-                    yield return "shield";
-                    yield break;
-                case "SHIELD":
-                    yield return "shield";
-                    yield break;
-                case "BOW":
-                    yield return "bow_drawn";
-                    yield return "bow_stowed";
-                    yield return "quiver";
-                    yield break;
             }
         }
 

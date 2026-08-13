@@ -32,6 +32,14 @@ namespace Arena.HubDb
         public ulong LoadoutRevision;
         [DataMember(Name = "captured_at")]
         public SpacetimeDB.Timestamp CapturedAt;
+        [DataMember(Name = "main_hand_item_def_id")]
+        public string? MainHandItemDefId;
+        [DataMember(Name = "off_hand_item_def_id")]
+        public string? OffHandItemDefId;
+        [DataMember(Name = "main_hand_color_id")]
+        public string? MainHandColorId;
+        [DataMember(Name = "off_hand_color_id")]
+        public string? OffHandColorId;
 
         public MatchPlayerLoadoutSnapshot(
             string TicketId,
@@ -42,7 +50,11 @@ namespace Arena.HubDb
             System.Collections.Generic.List<string> SelectedAbilityIds,
             string ArmorSetId,
             ulong LoadoutRevision,
-            SpacetimeDB.Timestamp CapturedAt
+            SpacetimeDB.Timestamp CapturedAt,
+            string? MainHandItemDefId,
+            string? OffHandItemDefId,
+            string? MainHandColorId,
+            string? OffHandColorId
         )
         {
             this.TicketId = TicketId;
@@ -54,6 +66,10 @@ namespace Arena.HubDb
             this.ArmorSetId = ArmorSetId;
             this.LoadoutRevision = LoadoutRevision;
             this.CapturedAt = CapturedAt;
+            this.MainHandItemDefId = MainHandItemDefId;
+            this.OffHandItemDefId = OffHandItemDefId;
+            this.MainHandColorId = MainHandColorId;
+            this.OffHandColorId = OffHandColorId;
         }
 
         public MatchPlayerLoadoutSnapshot()

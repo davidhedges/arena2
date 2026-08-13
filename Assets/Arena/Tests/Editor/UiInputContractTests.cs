@@ -676,10 +676,13 @@ namespace Arena.Tests.Editor
 
             Assert.That(screen, Does.Contain("hub.SaveArmorSet"));
             Assert.That(screen, Does.Contain("OnArmorSetSaved"));
+            Assert.That(screen, Does.Contain("hub.SaveWeaponLoadout"));
+            Assert.That(screen, Does.Contain("OnWeaponLoadoutSaved"));
             Assert.That(screen, Does.Not.Contain("NetworkManager.Instance?.Conn"));
             Assert.That(screen, Does.Contain("SetShowcaseArmorPreview"));
             Assert.That(screen, Does.Contain("CompleteArmorPieces"));
             Assert.That(hubNetwork, Does.Contain("From.HubArmorSetDefinition().ToSql()"));
+            Assert.That(hubNetwork, Does.Contain("From.HubWeaponDefinition().ToSql()"));
             Assert.That(hubNetwork, Does.Contain("context.Db.MyHubLoadout.Iter()"));
             Assert.That(hubNetwork, Does.Not.Contain("ApplyCommittedArmorSet("));
             Assert.That(uxml, Does.Contain("name=\"TierLight\""));
@@ -687,11 +690,16 @@ namespace Arena.Tests.Editor
             Assert.That(uxml, Does.Contain("name=\"TierHeavy\""));
             Assert.That(uxml, Does.Contain("name=\"PlayerShowcase\""));
             Assert.That(uxml, Does.Contain("<ui:ScrollView name=\"SetList\""));
+            Assert.That(uxml, Does.Contain("<ui:ScrollView name=\"MainWeaponList\""));
+            Assert.That(uxml, Does.Contain("<ui:ScrollView name=\"OffHandWeaponList\""));
+            Assert.That(uxml, Does.Contain("name=\"WeaponsMode\""));
             Assert.That(planner, Does.Contain("From.ArmorSetDefinition()"));
             Assert.That(planner, Does.Contain("From.ActiveArmorSet()"));
             Assert.That(planner, Does.Contain("From.PlayerEquipmentPresentation()"));
             Assert.That(hub, Does.Contain("ResolveLocalArmorAppearance"));
             Assert.That(hub, Does.Contain("EquipmentScreen.ArmorAppearanceFor"));
+            Assert.That(hub, Does.Contain("SetShowcaseWeaponPreview"));
+            Assert.That(hub, Does.Contain("ResolveShowcaseWeaponVisuals"));
             Assert.That(hubScreen, Does.Contain("_hubController?.RefreshShowcaseLoadout()"));
             Assert.That(hub, Does.Contain("ShowcaseCameraFacingYaw = 180f"));
             Assert.That(hubBuilder, Does.Contain("ShowcaseDefaultYaw = 180f"));
