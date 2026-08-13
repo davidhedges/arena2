@@ -715,6 +715,20 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void HubShowcase_CombatCacheIncludesWeaponModelsAndColors()
+        {
+            string hub = File.ReadAllText(HubControllerPath);
+
+            Assert.That(hub, Does.Contain("_lastShowcaseCombatSignature"));
+            Assert.That(hub, Does.Contain("BuildShowcaseCombatSignature("));
+            Assert.That(hub, Does.Contain("selection.MainHandItemDefId"));
+            Assert.That(hub, Does.Contain("selection.MainHandColorId"));
+            Assert.That(hub, Does.Contain("selection.OffHandItemDefId"));
+            Assert.That(hub, Does.Contain("selection.OffHandColorId"));
+            Assert.That(hub, Does.Not.Contain("_lastCombatProfile"));
+        }
+
+        [Test]
         public void HubDestinationMenu_ExposesServerAuthoritativeSurvivalEntry()
         {
             string hub = File.ReadAllText(HubControllerPath);
