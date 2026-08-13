@@ -78,6 +78,7 @@
       "display_name": "Training Daggers",
       "icon_id": "training_dagger_pair",
       "weapon_kind": "DAGGER_PAIR",
+      "placement_profile_id": "LEGACY_ANIMATION_BINDING",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
@@ -96,6 +97,7 @@
       "display_name": "Training Two-Handed Sword",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_SWORD",
+      "placement_profile_id": "LEGACY_ANIMATION_BINDING",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -113,6 +115,7 @@
       "display_name": "Training One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "LEGACY_ANIMATION_BINDING",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -130,6 +133,7 @@
       "display_name": "Training Shield",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "LEGACY_ANIMATION_BINDING",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -147,6 +151,7 @@
       "display_name": "Training Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "LEGACY_ANIMATION_BINDING",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -157,7 +162,8 @@
           "color_id": "DEFAULT",
           "prefab_path": "Assets/Arena/Resources/CombatAnimationSets/ArcherBowDrawnPackAuthored.prefab",
           "stowed_prefab_path": "Assets/Arena/Resources/CombatAnimationSets/ArcherBowStowedPackAuthored.prefab",
-          "quiver_prefab_path": "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"
+          "quiver_prefab_path": "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -166,6 +172,7 @@
       "display_name": "Fantasy I Daggers",
       "icon_id": "training_dagger_pair",
       "weapon_kind": "DAGGER_PAIR",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
@@ -194,6 +201,7 @@
       "display_name": "Fantasy II Daggers",
       "icon_id": "training_dagger_pair",
       "weapon_kind": "DAGGER_PAIR",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
@@ -222,6 +230,7 @@
       "display_name": "Newbie Daggers I",
       "icon_id": "training_dagger_pair",
       "weapon_kind": "DAGGER_PAIR",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
@@ -255,6 +264,7 @@
       "display_name": "Newbie Daggers II",
       "icon_id": "training_dagger_pair",
       "weapon_kind": "DAGGER_PAIR",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
@@ -288,6 +298,7 @@
       "display_name": "Newbie Daggers III",
       "icon_id": "training_dagger_pair",
       "weapon_kind": "DAGGER_PAIR",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
@@ -321,6 +332,7 @@
       "display_name": "Rogue Daggers",
       "icon_id": "training_dagger_pair",
       "weapon_kind": "DAGGER_PAIR",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
@@ -349,6 +361,7 @@
       "display_name": "Fantasy I Two-Handed Sword",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -374,6 +387,7 @@
       "display_name": "Fantasy II Two-Handed Sword",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -399,6 +413,7 @@
       "display_name": "Fantasy III Two-Handed Sword",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -424,6 +439,7 @@
       "display_name": "Fantasy IV Two-Handed Sword",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -449,6 +465,7 @@
       "display_name": "Fantasy V Two-Handed Sword",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -474,6 +491,7 @@
       "display_name": "Fantasy VI Two-Handed Sword",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -499,6 +517,7 @@
       "display_name": "Generic I Two-Handed Sword",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -524,6 +543,7 @@
       "display_name": "Generic II Two-Handed Sword",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -549,6 +569,7 @@
       "display_name": "Newbie Two-Handed Sword I",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -578,6 +599,7 @@
       "display_name": "Newbie Two-Handed Sword II",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -607,6 +629,7 @@
       "display_name": "Runic I Two-Handed Sword",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -632,6 +655,7 @@
       "display_name": "Undead I Two-Handed Sword",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -657,6 +681,7 @@
       "display_name": "Death Knight Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -682,6 +707,7 @@
       "display_name": "Fantasy I Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -707,6 +733,7 @@
       "display_name": "Fantasy II Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -732,6 +759,7 @@
       "display_name": "Fantasy III Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -757,6 +785,7 @@
       "display_name": "Fantasy IV Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -782,6 +811,7 @@
       "display_name": "Fantasy V Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -807,6 +837,7 @@
       "display_name": "Fantasy VI Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -832,6 +863,7 @@
       "display_name": "Generic I Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -857,6 +889,7 @@
       "display_name": "Generic II Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -882,6 +915,7 @@
       "display_name": "Generic III Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -907,6 +941,7 @@
       "display_name": "Generic IV Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -932,6 +967,7 @@
       "display_name": "Generic V Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -957,6 +993,7 @@
       "display_name": "Generic VI Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -982,6 +1019,7 @@
       "display_name": "Newbie Two-Handed Axe I",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -1011,6 +1049,7 @@
       "display_name": "Undead I Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -1036,6 +1075,7 @@
       "display_name": "Undead II Two-Handed Axe",
       "icon_id": "newbie_two_hand_axe_01",
       "weapon_kind": "TWO_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -1061,6 +1101,7 @@
       "display_name": "Fantasy I Two-Handed Hammer",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_HAMMER",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -1086,6 +1127,7 @@
       "display_name": "Fantasy II Two-Handed Hammer",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_HAMMER",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -1111,6 +1153,7 @@
       "display_name": "Fantasy III Two-Handed Hammer",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_HAMMER",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -1136,6 +1179,7 @@
       "display_name": "Paladin Two-Handed Hammer",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "TWO_HAND_HAMMER",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -1165,6 +1209,7 @@
       "display_name": "2HL Fantasy I Polearm",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "POLEARM",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -1190,6 +1235,7 @@
       "display_name": "2HL Fantasy II Polearm",
       "icon_id": "training_two_hand_sword",
       "weapon_kind": "POLEARM",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
@@ -1215,6 +1261,7 @@
       "display_name": "Fantasy I One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1240,6 +1287,7 @@
       "display_name": "Fantasy II One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1265,6 +1313,7 @@
       "display_name": "Fantasy III One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1290,6 +1339,7 @@
       "display_name": "Footman One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1315,6 +1365,7 @@
       "display_name": "Generic I One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1340,6 +1391,7 @@
       "display_name": "Generic II One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1365,6 +1417,7 @@
       "display_name": "Generic III One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1390,6 +1443,7 @@
       "display_name": "Generic IV One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1415,6 +1469,7 @@
       "display_name": "Generic V One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1440,6 +1495,7 @@
       "display_name": "Newbie One-Handed Sword I",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1469,6 +1525,7 @@
       "display_name": "Newbie One-Handed Sword II",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1498,6 +1555,7 @@
       "display_name": "Runic I One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1523,6 +1581,7 @@
       "display_name": "Runic II One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1548,6 +1607,7 @@
       "display_name": "Runic III One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1573,6 +1633,7 @@
       "display_name": "Saber I One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1598,6 +1659,7 @@
       "display_name": "Undead I One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1623,6 +1685,7 @@
       "display_name": "Undead II One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1648,6 +1711,7 @@
       "display_name": "Undead III One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1673,6 +1737,7 @@
       "display_name": "Warrior One-Handed Sword",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_SWORD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1698,6 +1763,7 @@
       "display_name": "Fantasy I One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1723,6 +1789,7 @@
       "display_name": "Fantasy II One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1748,6 +1815,7 @@
       "display_name": "Fantasy III One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1773,6 +1841,7 @@
       "display_name": "Fantasy IV One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1798,6 +1867,7 @@
       "display_name": "Fantasy V One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1823,6 +1893,7 @@
       "display_name": "Fantasy VI One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1848,6 +1919,7 @@
       "display_name": "Generic I One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1873,6 +1945,7 @@
       "display_name": "Generic II One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1898,6 +1971,7 @@
       "display_name": "Generic III One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1923,6 +1997,7 @@
       "display_name": "Generic IV One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1948,6 +2023,7 @@
       "display_name": "Generic V One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1973,6 +2049,7 @@
       "display_name": "Generic VI One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -1998,6 +2075,7 @@
       "display_name": "Generic VII One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2023,6 +2101,7 @@
       "display_name": "Generic VIII One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2048,6 +2127,7 @@
       "display_name": "Generic IX One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2073,6 +2153,7 @@
       "display_name": "Newbie I One-Handed Axe",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2102,6 +2183,7 @@
       "display_name": "Newbie One-Handed Axe II",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2131,6 +2213,7 @@
       "display_name": "Newbie One-Handed Axe III",
       "icon_id": "newbie_one_hand_axe_02",
       "weapon_kind": "ONE_HAND_AXE",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2160,6 +2243,7 @@
       "display_name": "Fantasy I One-Handed Hammer",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_HAMMER",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2185,6 +2269,7 @@
       "display_name": "Double Claw Fist Weapon",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_FIST",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2210,6 +2295,7 @@
       "display_name": "Jungle Claw Fist Weapon",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_FIST",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2235,6 +2321,7 @@
       "display_name": "Metal Claw Fist Weapon",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_FIST",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2260,6 +2347,7 @@
       "display_name": "Metal Punch Fist Weapon",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_FIST",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2285,6 +2373,7 @@
       "display_name": "Skeleton I Fist Weapon",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_FIST",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2310,6 +2399,7 @@
       "display_name": "Skeleton II Fist Weapon",
       "icon_id": "training_one_hand_sword",
       "weapon_kind": "ONE_HAND_FIST",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2335,6 +2425,7 @@
       "display_name": "Fantasy I Shield",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2360,6 +2451,7 @@
       "display_name": "Fantasy II Shield",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2385,6 +2477,7 @@
       "display_name": "Fantasy III Shield",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2410,6 +2503,7 @@
       "display_name": "Fantasy IV Shield",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2435,6 +2529,7 @@
       "display_name": "Fantasy V Shield",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2460,6 +2555,7 @@
       "display_name": "Fantasy VI Shield",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2485,6 +2581,7 @@
       "display_name": "Fantasy VII Shield",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2510,6 +2607,7 @@
       "display_name": "Fantasy VIII Shield",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2535,6 +2633,7 @@
       "display_name": "Fantasy IX Shield",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2560,6 +2659,7 @@
       "display_name": "Footman Shield",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2585,6 +2685,7 @@
       "display_name": "Newbie Shield I",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2614,6 +2715,7 @@
       "display_name": "Newbie Shield II",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2643,6 +2745,7 @@
       "display_name": "Newbie Shield III",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2672,6 +2775,7 @@
       "display_name": "Warrior Shield",
       "icon_id": "training_shield",
       "weapon_kind": "SHIELD",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
@@ -2697,6 +2801,7 @@
       "display_name": "Demon I Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -2705,15 +2810,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Demon_01_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Demon_01_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Demon_01_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Demon_01_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Demon_01_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Demon_01_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -2722,6 +2830,7 @@
       "display_name": "Generic I Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -2730,15 +2839,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_01_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_01_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_01_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_01_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_01_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_01_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -2747,6 +2859,7 @@
       "display_name": "Generic II Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -2755,15 +2868,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_02_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_02_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_02_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_02_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_02_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_02_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -2772,6 +2888,7 @@
       "display_name": "Generic III Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -2780,15 +2897,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_03_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_03_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_03_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_03_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_03_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_03_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -2797,6 +2917,7 @@
       "display_name": "Generic IV Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -2805,15 +2926,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_04_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_04_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_04_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_04_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_04_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_04_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -2822,6 +2946,7 @@
       "display_name": "Generic V Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -2830,15 +2955,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_05_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_05_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_05_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_05_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_05_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_05_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -2847,6 +2975,7 @@
       "display_name": "Generic VI Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -2855,15 +2984,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_06_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_06_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_06_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_06_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_06_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_06_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -2872,6 +3004,7 @@
       "display_name": "Generic VII Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -2880,15 +3013,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_07_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_07_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_07_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_07_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_07_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_07_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -2897,6 +3033,7 @@
       "display_name": "Generic VIII Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -2905,15 +3042,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_08_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_08_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "PE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_08_Pe.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_08_Pe.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "YE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_08_Ye.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_08_Ye.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -2922,6 +3062,7 @@
       "display_name": "Generic IX Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -2930,15 +3071,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_09_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_09_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "PE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_09_Pe.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_09_Pe.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "YE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_09_Ye.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_09_Ye.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -2947,6 +3091,7 @@
       "display_name": "Generic X Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -2955,15 +3100,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_10_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_10_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "PE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_10_Pe.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_10_Pe.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "YE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_10_Ye.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_10_Ye.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -2972,6 +3120,7 @@
       "display_name": "Generic XI Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -2980,15 +3129,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_11_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_11_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "PE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_11_Pe.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_11_Pe.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "YE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_11_Ye.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_11_Ye.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -2997,6 +3149,7 @@
       "display_name": "Generic XII Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -3005,15 +3158,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_12_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_12_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "PE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_12_Pe.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_12_Pe.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "YE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_12_Ye.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_12_Ye.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -3022,6 +3178,7 @@
       "display_name": "Generic XIII Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -3030,15 +3187,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_13_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_13_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "PE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_13_Pe.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_13_Pe.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "YE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_13_Ye.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_13_Ye.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -3047,6 +3207,7 @@
       "display_name": "Generic XIV Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -3055,15 +3216,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_14_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_14_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "PE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_14_Pe.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_14_Pe.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "YE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_14_Ye.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Generic_14_Ye.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -3072,6 +3236,7 @@
       "display_name": "Human I Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -3080,15 +3245,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Human_01_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Human_01_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Human_01_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Human_01_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Human_01_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Human_01_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -3097,6 +3265,7 @@
       "display_name": "Northern Archer Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -3105,15 +3274,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -3122,6 +3294,7 @@
       "display_name": "Northern Archer Old Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -3130,19 +3303,23 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Old_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Old_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Old_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Old_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "PE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Old_Pe.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Old_Pe.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "WH",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Old_Wh.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_NArcher_Old_Wh.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -3151,6 +3328,7 @@
       "display_name": "Newbie Bow I",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -3159,19 +3337,23 @@
       "variants": [
         {
           "color_id": "CL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_01_Cl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_01_Cl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_01_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_01_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_01_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_01_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_01_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_01_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -3180,6 +3362,7 @@
       "display_name": "Newbie Bow II",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -3188,19 +3371,23 @@
       "variants": [
         {
           "color_id": "CL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_02_Cl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_02_Cl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_02_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_02_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_02_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_02_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_02_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_02_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -3209,6 +3396,7 @@
       "display_name": "Newbie Bow III",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -3217,19 +3405,23 @@
       "variants": [
         {
           "color_id": "CL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_03_Cl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_03_Cl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_03_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_03_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_03_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_03_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_03_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Newbie_03_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -3238,6 +3430,7 @@
       "display_name": "Ranger Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -3246,15 +3439,18 @@
       "variants": [
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ranger_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ranger_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "PE",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ranger_Pe.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ranger_Pe.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ranger_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ranger_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     },
@@ -3263,6 +3459,7 @@
       "display_name": "Undead I Bow",
       "icon_id": "training_bow",
       "weapon_kind": "BOW",
+      "placement_profile_id": "NHANCE_NATIVE",
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
@@ -3271,15 +3468,18 @@
       "variants": [
         {
           "color_id": "BL",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ud_01_Bl.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ud_01_Bl.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "GN",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ud_01_Gn.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ud_01_Gn.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         },
         {
           "color_id": "RD",
-          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ud_01_Rd.prefab"
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ud_01_Rd.prefab",
+          "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
         }
       ]
     }

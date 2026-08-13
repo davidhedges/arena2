@@ -32,8 +32,10 @@ namespace Arena.Presentation
             public string StowedMountId = string.Empty;
             public Vector3 CombatLocalPosition;
             public Quaternion CombatLocalRotation;
+            public Vector3 CombatLocalScaleMultiplier = Vector3.one;
             public Vector3 StowedLocalPosition;
             public Quaternion StowedLocalRotation;
+            public Vector3 StowedLocalScaleMultiplier = Vector3.one;
             public float DrawHandoffTime;
             public float SheathHandoffTime;
             public WeaponVisualAttachmentMode AttachmentMode;
@@ -119,12 +121,43 @@ namespace Arena.Presentation
                     ? binding.prefab.name
                     : binding.itemId;
                 GameObject prefab = binding.prefab;
+                string combatMountId = binding.drawnMountId;
+                string stowedMountId = binding.stowedMountId;
+                Vector3 combatLocalPosition = binding.ResolveLocalPosition(inCombat: true);
+                Quaternion combatLocalRotation = binding.ResolveLocalRotation(inCombat: true);
+                Vector3 combatLocalScaleMultiplier = Vector3.one;
+                Vector3 stowedLocalPosition = binding.ResolveLocalPosition(inCombat: false);
+                Quaternion stowedLocalRotation = binding.ResolveLocalRotation(inCombat: false);
+                Vector3 stowedLocalScaleMultiplier = Vector3.one;
                 if (equippedVisualsByRole != null)
                 {
                     if (!equippedVisualsByRole.TryGetValue(itemId, out EquippedWeaponVisual equippedVisual))
                         continue;
 
                     prefab = equippedVisual.Prefab;
+                    if (WeaponAppearancePlacementResolver.TryResolve(
+                            equippedVisual.PlacementProfile,
+                            equippedVisual.RoleId,
+                            inCombat: true,
+                            out WeaponAppearancePlacement combatPlacement))
+                    {
+                        combatMountId = combatPlacement.MountId;
+                        combatLocalPosition = combatPlacement.LocalPosition;
+                        combatLocalRotation = combatPlacement.LocalRotation;
+                        combatLocalScaleMultiplier = combatPlacement.LocalScaleMultiplier;
+                    }
+
+                    if (WeaponAppearancePlacementResolver.TryResolve(
+                            equippedVisual.PlacementProfile,
+                            equippedVisual.RoleId,
+                            inCombat: false,
+                            out WeaponAppearancePlacement stowedPlacement))
+                    {
+                        stowedMountId = stowedPlacement.MountId;
+                        stowedLocalPosition = stowedPlacement.LocalPosition;
+                        stowedLocalRotation = stowedPlacement.LocalRotation;
+                        stowedLocalScaleMultiplier = stowedPlacement.LocalScaleMultiplier;
+                    }
                 }
 
                 var instance = Instantiate(prefab, transform);
@@ -135,12 +168,14 @@ namespace Arena.Presentation
                 var attachedVisual = new AttachedVisual
                 {
                     ItemId = itemId,
-                    CombatMountId = binding.drawnMountId,
-                    StowedMountId = binding.stowedMountId,
-                    CombatLocalPosition = binding.ResolveLocalPosition(inCombat: true),
-                    CombatLocalRotation = binding.ResolveLocalRotation(inCombat: true),
-                    StowedLocalPosition = binding.ResolveLocalPosition(inCombat: false),
-                    StowedLocalRotation = binding.ResolveLocalRotation(inCombat: false),
+                    CombatMountId = combatMountId,
+                    StowedMountId = stowedMountId,
+                    CombatLocalPosition = combatLocalPosition,
+                    CombatLocalRotation = combatLocalRotation,
+                    CombatLocalScaleMultiplier = combatLocalScaleMultiplier,
+                    StowedLocalPosition = stowedLocalPosition,
+                    StowedLocalRotation = stowedLocalRotation,
+                    StowedLocalScaleMultiplier = stowedLocalScaleMultiplier,
                     DrawHandoffTime = binding.ResolveDrawHandoffTime(set.DrawWeaponHandoffTime),
                     SheathHandoffTime = binding.ResolveSheathHandoffTime(set.SheathWeaponHandoffTime),
                     AttachmentMode = binding.attachmentMode,
@@ -684,7 +719,11 @@ namespace Arena.Presentation
             visual.Instance.transform.localRotation = visual.IsInCombat
                 ? visual.CombatLocalRotation
                 : visual.StowedLocalRotation;
-            visual.Instance.transform.localScale = visual.BaseLocalScale * visual.PresentationScale;
+            Vector3 placementScale = visual.IsInCombat
+                ? visual.CombatLocalScaleMultiplier
+                : visual.StowedLocalScaleMultiplier;
+            visual.Instance.transform.localScale = Vector3.Scale(visual.BaseLocalScale, placementScale)
+                * visual.PresentationScale;
         }
 
         private void DestroySpawnedVisuals()

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Arena.Presentation;
 using Arena.Presentation.Appearance;
 using NHance.Assets.Scripts.Enums;
 using NHance.Assets.Scripts.Items;
@@ -428,49 +429,49 @@ namespace Arena.EditorTools
             var entries = new List<EquipmentAppearanceCatalog.WeaponVisualEntry>
             {
                 WeaponVisual("TRAINING_TWO_HAND_SWORD", "greatsword", "Assets/Arena/Resources/CombatAnimationSets/GreatSwordPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_TWO_HAND_SWORD_01", "greatsword", WeaponPath("Sword", "Sword_2H_Newbie_01_Cl.prefab")),
-                WeaponVisual("NEWBIE_TWO_HAND_SWORD_02", "greatsword", WeaponPath("Sword", "Sword_2H_Newbie_02_Cl.prefab")),
-                WeaponVisual("NEWBIE_TWO_HAND_AXE_01", "greatsword", WeaponPath("Axe", "Axe_2HL_Newbie_01_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_TWO_HAND_SWORD_01", "greatsword", WeaponPath("Sword", "Sword_2H_Newbie_01_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_TWO_HAND_SWORD_02", "greatsword", WeaponPath("Sword", "Sword_2H_Newbie_02_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_TWO_HAND_AXE_01", "greatsword", WeaponPath("Axe", "Axe_2HL_Newbie_01_Cl.prefab")),
 
                 WeaponVisual("TRAINING_ONE_HAND_SWORD", "sword", "Assets/Arena/Resources/CombatAnimationSets/SwordPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_ONE_HAND_SWORD_01", "sword", WeaponPath("Sword", "Sword_1H_Newbie_01_Cl.prefab")),
-                WeaponVisual("NEWBIE_ONE_HAND_SWORD_02", "sword", WeaponPath("Sword", "Sword_1H_Newbie_02_Cl.prefab")),
-                WeaponVisual("NEWBIE_ONE_HAND_AXE_02", "sword", WeaponPath("Axe", "Axe_1H_Newbie_02_Cl.prefab")),
-                WeaponVisual("NEWBIE_ONE_HAND_AXE_03", "sword", WeaponPath("Axe", "Axe_1H_Newbie_03_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_ONE_HAND_SWORD_01", "sword", WeaponPath("Sword", "Sword_1H_Newbie_01_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_ONE_HAND_SWORD_02", "sword", WeaponPath("Sword", "Sword_1H_Newbie_02_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_ONE_HAND_AXE_02", "sword", WeaponPath("Axe", "Axe_1H_Newbie_02_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_ONE_HAND_AXE_03", "sword", WeaponPath("Axe", "Axe_1H_Newbie_03_Cl.prefab")),
 
                 WeaponVisual("TRAINING_DAGGER_PAIR", "dagger_main", "Assets/Arena/Resources/CombatAnimationSets/DaggerMainPackAuthored.prefab"),
                 WeaponVisual("TRAINING_DAGGER_PAIR", "dagger_off", "Assets/Arena/Resources/CombatAnimationSets/DaggerOffPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_DAGGER_PAIR_01", "dagger_main", WeaponPath("Dagger", "Dagger_1H_Newbie_01_Cl.prefab")),
-                WeaponVisual("NEWBIE_DAGGER_PAIR_01", "dagger_off", WeaponPath("Dagger", "Dagger_1H_Newbie_01_Cl.prefab")),
-                WeaponVisual("NEWBIE_DAGGER_PAIR_02", "dagger_main", WeaponPath("Dagger", "Dagger_1H_Newbie_02_Cl.prefab")),
-                WeaponVisual("NEWBIE_DAGGER_PAIR_02", "dagger_off", WeaponPath("Dagger", "Dagger_1H_Newbie_02_Cl.prefab")),
-                WeaponVisual("NEWBIE_DAGGER_PAIR_03", "dagger_main", WeaponPath("Dagger", "Dagger_1H_Newbie_03_Cl.prefab")),
-                WeaponVisual("NEWBIE_DAGGER_PAIR_03", "dagger_off", WeaponPath("Dagger", "Dagger_1H_Newbie_03_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_DAGGER_PAIR_01", "dagger_main", WeaponPath("Dagger", "Dagger_1H_Newbie_01_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_DAGGER_PAIR_01", "dagger_off", WeaponPath("Dagger", "Dagger_1H_Newbie_01_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_DAGGER_PAIR_02", "dagger_main", WeaponPath("Dagger", "Dagger_1H_Newbie_02_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_DAGGER_PAIR_02", "dagger_off", WeaponPath("Dagger", "Dagger_1H_Newbie_02_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_DAGGER_PAIR_03", "dagger_main", WeaponPath("Dagger", "Dagger_1H_Newbie_03_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_DAGGER_PAIR_03", "dagger_off", WeaponPath("Dagger", "Dagger_1H_Newbie_03_Cl.prefab")),
 
                 WeaponVisual("TRAINING_SHIELD", "shield", "Assets/Arena/Resources/CombatAnimationSets/ShieldPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_SHIELD_01", "shield", WeaponPath("Shield", "Shield_Newbie_01_Cl.prefab")),
-                WeaponVisual("NEWBIE_SHIELD_02", "shield", WeaponPath("Shield", "Shield_Newbie_02_Cl.prefab")),
-                WeaponVisual("NEWBIE_SHIELD_03", "shield", WeaponPath("Shield", "Shield_Newbie_03_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_SHIELD_01", "shield", WeaponPath("Shield", "Shield_Newbie_01_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_SHIELD_02", "shield", WeaponPath("Shield", "Shield_Newbie_02_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_SHIELD_03", "shield", WeaponPath("Shield", "Shield_Newbie_03_Cl.prefab")),
                 WeaponVisual("TRAINING_SWORD_AND_SHIELD", "sword", "Assets/Arena/Resources/CombatAnimationSets/SwordPackAuthored.prefab"),
                 WeaponVisual("TRAINING_SWORD_AND_SHIELD", "shield", "Assets/Arena/Resources/CombatAnimationSets/ShieldPackAuthored.prefab"),
 
                 WeaponVisual("TRAINING_BOW", "bow_drawn", "Assets/Arena/Resources/CombatAnimationSets/ArcherBowDrawnPackAuthored.prefab"),
                 WeaponVisual("TRAINING_BOW", "bow_stowed", "Assets/Arena/Resources/CombatAnimationSets/ArcherBowStowedPackAuthored.prefab"),
                 WeaponVisual("TRAINING_BOW", "quiver", "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_BOW_01", "bow_drawn", WeaponPath("Bow", "Bow_Newbie_01_Cl.prefab")),
-                WeaponVisual("NEWBIE_BOW_01", "bow_stowed", WeaponPath("Bow", "Bow_Newbie_01_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_BOW_01", "bow_drawn", WeaponPath("Bow", "Bow_Newbie_01_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_BOW_01", "bow_stowed", WeaponPath("Bow", "Bow_Newbie_01_Cl.prefab")),
                 WeaponVisual("NEWBIE_BOW_01", "quiver", "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_BOW_02", "bow_drawn", WeaponPath("Bow", "Bow_Newbie_02_Cl.prefab")),
-                WeaponVisual("NEWBIE_BOW_02", "bow_stowed", WeaponPath("Bow", "Bow_Newbie_02_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_BOW_02", "bow_drawn", WeaponPath("Bow", "Bow_Newbie_02_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_BOW_02", "bow_stowed", WeaponPath("Bow", "Bow_Newbie_02_Cl.prefab")),
                 WeaponVisual("NEWBIE_BOW_02", "quiver", "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_BOW_03", "bow_drawn", WeaponPath("Bow", "Bow_Newbie_03_Cl.prefab")),
-                WeaponVisual("NEWBIE_BOW_03", "bow_stowed", WeaponPath("Bow", "Bow_Newbie_03_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_BOW_03", "bow_drawn", WeaponPath("Bow", "Bow_Newbie_03_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_BOW_03", "bow_stowed", WeaponPath("Bow", "Bow_Newbie_03_Cl.prefab")),
                 WeaponVisual("NEWBIE_BOW_03", "quiver", "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"),
 
                 WeaponVisual("NEWBIE_STAFF_01", "staff", "Assets/Arena/Resources/CombatAnimationSets/StaffPackAuthored.prefab"),
-                WeaponVisual("NEWBIE_STAFF_02", "staff", WeaponPath("Staff", "Staff_Newbie_02_Cl.prefab")),
-                WeaponVisual("NEWBIE_STAFF_03", "staff", WeaponPath("Staff", "Staff_Newbie_03_Cl.prefab")),
-                WeaponVisual("NEWBIE_STAFF_04", "staff", WeaponPath("Staff", "Staff_Newbie_04_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_STAFF_02", "staff", WeaponPath("Staff", "Staff_Newbie_02_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_STAFF_03", "staff", WeaponPath("Staff", "Staff_Newbie_03_Cl.prefab")),
+                NHanceWeaponVisual("NEWBIE_STAFF_04", "staff", WeaponPath("Staff", "Staff_Newbie_04_Cl.prefab")),
             };
 
             WeaponAppearanceCatalogFile catalog = JsonUtility.FromJson<WeaponAppearanceCatalogFile>(
@@ -494,43 +495,50 @@ namespace Arena.EditorTools
             WeaponFamilyAuthoring family,
             WeaponVariantAuthoring variant)
         {
+            WeaponAppearancePlacementProfile placementProfile = ParseWeaponPlacementProfile(
+                family.placement_profile_id,
+                family.item_def_id);
             switch (family.weapon_kind)
             {
                 case "DAGGER_PAIR":
-                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "dagger_main", variant.prefab_path));
-                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "dagger_off", variant.off_hand_prefab_path));
+                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "dagger_main", variant.prefab_path, placementProfile));
+                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "dagger_off", variant.off_hand_prefab_path, placementProfile));
                     break;
                 case "TWO_HAND_SWORD":
                 case "TWO_HAND_AXE":
                 case "TWO_HAND_HAMMER":
                 case "POLEARM":
-                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "greatsword", variant.prefab_path));
+                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "greatsword", variant.prefab_path, placementProfile));
                     break;
                 case "ONE_HAND_SWORD":
                 case "ONE_HAND_AXE":
                 case "ONE_HAND_HAMMER":
                 case "ONE_HAND_FIST":
-                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "sword", variant.prefab_path));
+                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "sword", variant.prefab_path, placementProfile));
                     break;
                 case "SHIELD":
-                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "shield", variant.prefab_path));
+                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "shield", variant.prefab_path, placementProfile));
                     break;
                 case "BOW":
-                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "bow_drawn", variant.prefab_path));
+                    entries.Add(WeaponVisual(family.item_def_id, variant.color_id, "bow_drawn", variant.prefab_path, placementProfile));
                     entries.Add(WeaponVisual(
                         family.item_def_id,
                         variant.color_id,
                         "bow_stowed",
                         string.IsNullOrWhiteSpace(variant.stowed_prefab_path)
                             ? variant.prefab_path
-                            : variant.stowed_prefab_path));
+                            : variant.stowed_prefab_path,
+                        placementProfile));
                     entries.Add(WeaponVisual(
                         family.item_def_id,
                         variant.color_id,
                         "quiver",
                         string.IsNullOrWhiteSpace(variant.quiver_prefab_path)
                             ? "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"
-                            : variant.quiver_prefab_path));
+                            : variant.quiver_prefab_path,
+                        ParseWeaponPlacementProfile(
+                            variant.quiver_placement_profile_id,
+                            $"{family.item_def_id}/{variant.color_id}/quiver")));
                     break;
                 default:
                     throw new InvalidOperationException(
@@ -548,7 +556,8 @@ namespace Arena.EditorTools
             string itemDefId,
             string colorId,
             string visualRoleId,
-            string path)
+            string path,
+            WeaponAppearancePlacementProfile placementProfile = WeaponAppearancePlacementProfile.LegacyAnimationBinding)
         {
             return new EquipmentAppearanceCatalog.WeaponVisualEntry
             {
@@ -559,6 +568,29 @@ namespace Arena.EditorTools
                 sexId = CharacterAppearanceIds.SexMale,
                 enabled = true,
                 prefab = LoadRequired<GameObject>(path),
+                placementProfile = placementProfile,
+            };
+        }
+
+        private static EquipmentAppearanceCatalog.WeaponVisualEntry NHanceWeaponVisual(
+            string itemDefId,
+            string visualRoleId,
+            string path)
+            => WeaponVisual(
+                itemDefId,
+                string.Empty,
+                visualRoleId,
+                path,
+                WeaponAppearancePlacementProfile.NHanceNative);
+
+        private static WeaponAppearancePlacementProfile ParseWeaponPlacementProfile(string profileId, string context)
+        {
+            return profileId switch
+            {
+                "LEGACY_ANIMATION_BINDING" => WeaponAppearancePlacementProfile.LegacyAnimationBinding,
+                "NHANCE_NATIVE" => WeaponAppearancePlacementProfile.NHanceNative,
+                _ => throw new InvalidOperationException(
+                    $"Weapon appearance '{context}' has unsupported placement profile '{profileId}'."),
             };
         }
 
@@ -859,6 +891,42 @@ namespace Arena.EditorTools
                 if (entry.prefab == null)
                     throw new InvalidOperationException($"Weapon visual entry '{entry.itemDefId}' role '{entry.visualRoleId}' has no prefab.");
 
+                string prefabPath = AssetDatabase.GetAssetPath(entry.prefab);
+                bool rawNHanceWeapon = prefabPath.StartsWith(
+                    $"{StylizedCharacterRoot}/Prefabs/Item/Weapon/",
+                    StringComparison.Ordinal);
+                if (rawNHanceWeapon && entry.placementProfile != WeaponAppearancePlacementProfile.NHanceNative)
+                {
+                    throw new InvalidOperationException(
+                        $"Raw N-Hance weapon visual '{entry.itemDefId}/{entry.colorId}/{entry.visualRoleId}' must opt into native placement.");
+                }
+
+                if (rawNHanceWeapon
+                    && (entry.prefab.transform.localPosition.sqrMagnitude > 0.00000001f
+                        || Quaternion.Angle(entry.prefab.transform.localRotation, Quaternion.identity) > 0.001f
+                        || (entry.prefab.transform.localScale - Vector3.one).sqrMagnitude > 0.00000001f))
+                {
+                    throw new InvalidOperationException(
+                        $"Raw N-Hance weapon visual '{entry.itemDefId}/{entry.colorId}/{entry.visualRoleId}' " +
+                        "does not have an identity root and needs an explicit family placement correction.");
+                }
+
+                if (entry.placementProfile == WeaponAppearancePlacementProfile.NHanceNative
+                    && (!WeaponAppearancePlacementResolver.TryResolve(
+                            entry.placementProfile,
+                            entry.visualRoleId,
+                            inCombat: true,
+                            out _)
+                        || !WeaponAppearancePlacementResolver.TryResolve(
+                            entry.placementProfile,
+                            entry.visualRoleId,
+                            inCombat: false,
+                            out _)))
+                {
+                    throw new InvalidOperationException(
+                        $"N-Hance weapon visual '{entry.itemDefId}/{entry.colorId}/{entry.visualRoleId}' has no complete placement mapping.");
+                }
+
                 string key = $"{entry.itemDefId}|{entry.colorId}|{entry.visualRoleId}|{entry.raceId}|{entry.sexId}";
                 if (!keys.Add(key))
                     throw new InvalidOperationException($"Duplicate weapon visual entry: {key}");
@@ -877,6 +945,7 @@ namespace Arena.EditorTools
         {
             public string item_def_id = string.Empty;
             public string weapon_kind = string.Empty;
+            public string placement_profile_id = string.Empty;
             public List<WeaponVariantAuthoring> variants = new();
         }
 
@@ -888,6 +957,7 @@ namespace Arena.EditorTools
             public string off_hand_prefab_path = string.Empty;
             public string stowed_prefab_path = string.Empty;
             public string quiver_prefab_path = string.Empty;
+            public string quiver_placement_profile_id = string.Empty;
         }
 
         private static NHItem LoadRequiredItem(string path, ItemTypeEnum expectedItemType)

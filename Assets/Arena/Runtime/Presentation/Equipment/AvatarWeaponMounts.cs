@@ -157,6 +157,20 @@ namespace Arena.Presentation
         public const string DaggerMainStowedMountId = "dagger_main_stowed";
         public const string DaggerOffStowedMountId = "dagger_off_stowed";
 
+        // Raw N-Hance weapon prefabs are authored at identity under these native
+        // sockets. Keep them separate from Arena's calibrated wrapper mounts.
+        public const string NHanceWeaponRMountId = "nhance_weapon_r";
+        public const string NHanceWeaponLMountId = "nhance_weapon_l";
+        public const string NHanceShieldMountId = "nhance_weapon_shield";
+        public const string NHanceBackLMountId = "nhance_back_l";
+        public const string NHanceBackRMountId = "nhance_back_r";
+        public const string NHanceBackBowMountId = "nhance_back_bow";
+        public const string NHanceBack2HLMountId = "nhance_back_2hl";
+        public const string NHanceQuiverMountId = "nhance_back_quiver";
+        public const string NHanceHipRMountId = "nhance_hip_r";
+        public const string NHanceHipLMountId = "nhance_hip_l";
+        public const string NHanceGreatswordHandMountId = "nhance_greatsword_hand";
+
         public const string LegacyMainHandMountId = "main_hand";
         public const string LegacyOffHandMountId = "off_hand";
         public const string LegacyMainStowedMountId = "main_stowed";
@@ -249,6 +263,29 @@ namespace Arena.Presentation
                 mount = mount,
             });
             RebuildLookup(logWarnings: false);
+        }
+
+        /// <summary>
+        /// Creates a child of an animation-driven mount whose reference-pose world
+        /// transform matches a source-package socket. The local correction then
+        /// follows the animated parent without changing its authored curves.
+        /// </summary>
+        public static Transform? CreateOrUpdateWorldAlignedMountChild(
+            Transform? animatedParent,
+            Transform? referenceSocket,
+            string markerName)
+        {
+            if (animatedParent == null || referenceSocket == null || string.IsNullOrWhiteSpace(markerName))
+                return null;
+
+            Transform marker = animatedParent.Find(markerName);
+            if (marker == null)
+                marker = new GameObject(markerName).transform;
+
+            marker.SetParent(animatedParent, false);
+            marker.SetPositionAndRotation(referenceSocket.position, referenceSocket.rotation);
+            marker.localScale = Vector3.one;
+            return marker;
         }
 
         public static string CanonicalizeMountId(string mountId)

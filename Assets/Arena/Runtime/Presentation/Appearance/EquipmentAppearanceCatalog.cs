@@ -7,6 +7,12 @@ using UnityEngine;
 
 namespace Arena.Presentation.Appearance
 {
+    public enum WeaponAppearancePlacementProfile
+    {
+        LegacyAnimationBinding = 0,
+        NHanceNative = 1,
+    }
+
     [CreateAssetMenu(menuName = "Arena/Appearance/Equipment Appearance Catalog")]
     public sealed class EquipmentAppearanceCatalog : ScriptableObject
     {
@@ -55,6 +61,8 @@ namespace Arena.Presentation.Appearance
             public string sexId = string.Empty;
             public bool enabled = true;
             public GameObject? prefab;
+            [Tooltip("Opt-in placement convention for this prefab. Legacy entries continue to use the animation-set binding unchanged.")]
+            public WeaponAppearancePlacementProfile placementProfile;
         }
 
         [SerializeField] private List<Entry> entries = new();

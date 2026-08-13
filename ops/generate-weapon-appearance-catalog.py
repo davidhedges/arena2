@@ -13,6 +13,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WEAPON_ROOT = REPO_ROOT / "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon"
 DEFAULT_OUTPUT = REPO_ROOT / "Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json"
+LEGACY_PLACEMENT_PROFILE = "LEGACY_ANIMATION_BINDING"
+NHANCE_PLACEMENT_PROFILE = "NHANCE_NATIVE"
 
 COLOR_SPECS = {
     "Default": ("Default", "#A9A9A9"),
@@ -90,6 +92,7 @@ TRAINING_FAMILIES = (
         "display_name": "Training Daggers",
         "icon_id": "training_dagger_pair",
         "weapon_kind": "DAGGER_PAIR",
+        "placement_profile_id": LEGACY_PLACEMENT_PROFILE,
         "hand_requirement": "TWO_HAND",
         "equip_slot": "MAIN_HAND",
         "primary_discipline_id": "SUBTLETY",
@@ -106,6 +109,7 @@ TRAINING_FAMILIES = (
         "display_name": "Training Two-Handed Sword",
         "icon_id": "training_two_hand_sword",
         "weapon_kind": "TWO_HAND_SWORD",
+        "placement_profile_id": LEGACY_PLACEMENT_PROFILE,
         "hand_requirement": "TWO_HAND",
         "equip_slot": "MAIN_HAND",
         "primary_discipline_id": "WAR",
@@ -121,6 +125,7 @@ TRAINING_FAMILIES = (
         "display_name": "Training One-Handed Sword",
         "icon_id": "training_one_hand_sword",
         "weapon_kind": "ONE_HAND_SWORD",
+        "placement_profile_id": LEGACY_PLACEMENT_PROFILE,
         "hand_requirement": "ONE_HAND",
         "equip_slot": "MAIN_HAND",
         "primary_discipline_id": "ZEAL",
@@ -136,6 +141,7 @@ TRAINING_FAMILIES = (
         "display_name": "Training Shield",
         "icon_id": "training_shield",
         "weapon_kind": "SHIELD",
+        "placement_profile_id": LEGACY_PLACEMENT_PROFILE,
         "hand_requirement": "OFF_HAND",
         "equip_slot": "OFF_HAND",
         "primary_discipline_id": "ZEAL",
@@ -151,6 +157,7 @@ TRAINING_FAMILIES = (
         "display_name": "Training Bow",
         "icon_id": "training_bow",
         "weapon_kind": "BOW",
+        "placement_profile_id": LEGACY_PLACEMENT_PROFILE,
         "hand_requirement": "TWO_HAND",
         "equip_slot": "MAIN_HAND",
         "primary_discipline_id": "PRECISION",
@@ -161,6 +168,7 @@ TRAINING_FAMILIES = (
             "prefab_path": "Assets/Arena/Resources/CombatAnimationSets/ArcherBowDrawnPackAuthored.prefab",
             "stowed_prefab_path": "Assets/Arena/Resources/CombatAnimationSets/ArcherBowStowedPackAuthored.prefab",
             "quiver_prefab_path": "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab",
+            "quiver_placement_profile_id": LEGACY_PLACEMENT_PROFILE,
         }],
     },
 )
@@ -276,6 +284,10 @@ def build_catalog() -> dict[str, object]:
             if weapon_kind == "DAGGER_PAIR":
                 off_path = prefab.with_name(f"{family_stem}_Off_{color_id}.prefab")
                 variant["off_hand_prefab_path"] = asset_path(off_path if off_path.is_file() else prefab)
+            if weapon_kind == "BOW":
+                # The bow appearance is raw N-Hance content, but Arena's current
+                # quiver is still a calibrated animation-pack wrapper.
+                variant["quiver_placement_profile_id"] = LEGACY_PLACEMENT_PROFILE
             variants.append(variant)
         default_variant = variants[0]
         item_def_id, authored_display_name = LEGACY_FAMILY_ALIASES.get(
@@ -288,6 +300,7 @@ def build_catalog() -> dict[str, object]:
                 "display_name": authored_display_name,
                 "icon_id": ICON_BY_KIND[weapon_kind],
                 "weapon_kind": weapon_kind,
+                "placement_profile_id": NHANCE_PLACEMENT_PROFILE,
                 "hand_requirement": hand_requirement,
                 "equip_slot": equip_slot,
                 "primary_discipline_id": discipline_id,

@@ -1501,7 +1501,11 @@ namespace Arena.Entity
                     continue;
                 }
 
-                visuals.Add(new EquippedWeaponVisual(roleId, definition.ItemDefId, entry.prefab));
+                visuals.Add(new EquippedWeaponVisual(
+                    roleId,
+                    definition.ItemDefId,
+                    entry.prefab,
+                    entry.placementProfile));
             }
         }
 

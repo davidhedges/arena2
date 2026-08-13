@@ -359,6 +359,16 @@ namespace Arena.Presentation.Appearance
                 ?? ResolveNamedTransform(instance, "pelvis");
             Transform? mainHip = ResolveSocket(nhAvatar, BoneType.HipR) ?? ResolveHumanoidBone(instance, HumanBodyBones.RightUpperLeg);
             Transform? offHip = ResolveSocket(nhAvatar, BoneType.HipL) ?? ResolveHumanoidBone(instance, HumanBodyBones.LeftUpperLeg);
+            Transform? nhanceWeaponR = ResolveSocket(nhAvatar, BoneType.WeaponR);
+            Transform? nhanceWeaponL = ResolveSocket(nhAvatar, BoneType.WeaponL);
+            Transform? nhanceShield = ResolveSocket(nhAvatar, BoneType.Shield);
+            Transform? nhanceBackL = ResolveSocket(nhAvatar, BoneType.BackL);
+            Transform? nhanceBackR = ResolveSocket(nhAvatar, BoneType.BackR);
+            Transform? nhanceBackBow = ResolveSocket(nhAvatar, BoneType.BackBow);
+            Transform? nhanceBack2HL = ResolveSocket(nhAvatar, BoneType.Back2HL);
+            Transform? nhanceQuiver = ResolveSocket(nhAvatar, BoneType.Quiver);
+            Transform? nhanceHipR = ResolveSocket(nhAvatar, BoneType.HipR);
+            Transform? nhanceHipL = ResolveSocket(nhAvatar, BoneType.HipL);
 
             Transform? mainHand = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
                 mainHandParent,
@@ -386,6 +396,10 @@ namespace Arena.Presentation.Appearance
             Transform? greatswordHand = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
                 greatswordAnimatedSocket,
                 ArenaWeaponMountCalibration.GreatswordHand);
+            Transform? nhanceGreatswordHand = AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
+                greatswordAnimatedSocket,
+                nhanceWeaponR,
+                "Arena_NHance_greatsword_hand");
             Transform? greatswordStowed = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
                 backParent,
                 ArenaWeaponMountCalibration.GreatswordStowed);
@@ -414,6 +428,18 @@ namespace Arena.Presentation.Appearance
             SetMount(mounts, AvatarWeaponMounts.StaffStowedMountId, staffStowed);
             SetMount(mounts, AvatarWeaponMounts.DaggerMainStowedMountId, daggerMainStowed);
             SetMount(mounts, AvatarWeaponMounts.DaggerOffStowedMountId, daggerOffStowed);
+
+            SetMount(mounts, AvatarWeaponMounts.NHanceWeaponRMountId, nhanceWeaponR);
+            SetMount(mounts, AvatarWeaponMounts.NHanceWeaponLMountId, nhanceWeaponL);
+            SetMount(mounts, AvatarWeaponMounts.NHanceShieldMountId, nhanceShield);
+            SetMount(mounts, AvatarWeaponMounts.NHanceBackLMountId, nhanceBackL);
+            SetMount(mounts, AvatarWeaponMounts.NHanceBackRMountId, nhanceBackR);
+            SetMount(mounts, AvatarWeaponMounts.NHanceBackBowMountId, nhanceBackBow);
+            SetMount(mounts, AvatarWeaponMounts.NHanceBack2HLMountId, nhanceBack2HL);
+            SetMount(mounts, AvatarWeaponMounts.NHanceQuiverMountId, nhanceQuiver);
+            SetMount(mounts, AvatarWeaponMounts.NHanceHipRMountId, nhanceHipR);
+            SetMount(mounts, AvatarWeaponMounts.NHanceHipLMountId, nhanceHipL);
+            SetMount(mounts, AvatarWeaponMounts.NHanceGreatswordHandMountId, nhanceGreatswordHand);
         }
 
         private static Transform? ResolveSocket(NHAvatar avatar, BoneType boneType)

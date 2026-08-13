@@ -656,7 +656,11 @@ namespace Arena.UI
                     continue;
                 }
 
-                visuals[roleId] = new EquippedWeaponVisual(roleId, weapon.ItemDefId, entry.prefab);
+                visuals[roleId] = new EquippedWeaponVisual(
+                    roleId,
+                    weapon.ItemDefId,
+                    entry.prefab,
+                    entry.placementProfile);
             }
         }
 

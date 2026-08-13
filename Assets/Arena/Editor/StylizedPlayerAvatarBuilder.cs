@@ -363,6 +363,21 @@ namespace Arena.EditorTools
                     ArenaWeaponMountCalibration.GreatswordHand) ??
                 mainHand;
 
+            Transform? nhanceWeaponR = FindDescendant(player.transform, "Weapon_R");
+            Transform? nhanceWeaponL = FindDescendant(player.transform, "Weapon_L");
+            Transform? nhanceShield = FindDescendant(player.transform, "Weapon_Shield");
+            Transform? nhanceBackL = FindDescendant(player.transform, "Back_L");
+            Transform? nhanceBackR = FindDescendant(player.transform, "Back_R");
+            Transform? nhanceBackBow = FindDescendant(player.transform, "Back_Bow");
+            Transform? nhanceBack2HL = FindDescendant(player.transform, "Back_2HL");
+            Transform? nhanceQuiver = FindDescendant(player.transform, "Back_Quiver");
+            Transform? nhanceHipR = FindDescendant(player.transform, "Hip_R");
+            Transform? nhanceHipL = FindDescendant(player.transform, "Hip_L");
+            Transform? nhanceGreatswordHand = AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
+                greatswordAnimatedSocket,
+                nhanceWeaponR,
+                "Arena_NHance_greatsword_hand");
+
             Transform mainBack =
                 CreateTransferredMount(player.transform, animator, legacyMountPoses, AvatarWeaponMounts.MainSheathMountId) ??
                 FindDescendant(chest, PropSwordHolder) ??
@@ -419,6 +434,18 @@ namespace Arena.EditorTools
             mounts.SetOrReplaceMount(AvatarWeaponMounts.DaggerMainStowedMountId, daggerMainStowed);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.DaggerOffStowedMountId, daggerOffStowed);
 
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceWeaponRMountId, nhanceWeaponR);
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceWeaponLMountId, nhanceWeaponL);
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceShieldMountId, nhanceShield);
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceBackLMountId, nhanceBackL);
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceBackRMountId, nhanceBackR);
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceBackBowMountId, nhanceBackBow);
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceBack2HLMountId, nhanceBack2HL);
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceQuiverMountId, nhanceQuiver);
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceHipRMountId, nhanceHipR);
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceHipLMountId, nhanceHipL);
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceGreatswordHandMountId, nhanceGreatswordHand);
+
             Debug.Log(
                 $"[{nameof(StylizedPlayerAvatarBuilder)}] Mounts: " +
                 $"main={BuildPath(player.transform, mainHand)}, " +
@@ -426,6 +453,12 @@ namespace Arena.EditorTools
                 $"greatsword={BuildPath(player.transform, greatswordHand)}, " +
                 $"mainBack={BuildPath(player.transform, mainBack)}, " +
                 $"offBack={BuildPath(player.transform, offBack)}.");
+        }
+
+        private static void SetMountIfPresent(AvatarWeaponMounts mounts, string mountId, Transform? mount)
+        {
+            if (mount != null)
+                mounts.SetOrReplaceMount(mountId, mount);
         }
 
         private static Transform? CreateLegacyPropMount(

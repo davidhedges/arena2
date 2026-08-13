@@ -91,6 +91,90 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void WeaponAppearanceCatalog_OptsOnlyRawNHancePrefabsIntoNativePlacement()
+        {
+            object equipmentCatalog = LoadRequiredAsset(
+                EquipmentAppearanceCatalogPath,
+                "Arena.Presentation.Appearance.EquipmentAppearanceCatalog");
+            object[] visuals = ((IEnumerable)RequireProperty(equipmentCatalog, "WeaponVisuals")
+                    .GetValue(equipmentCatalog)!)
+                .Cast<object>()
+                .ToArray();
+
+            foreach (object visual in visuals)
+            {
+                GameObject prefab = RequireField<GameObject>(visual, "prefab");
+                string path = AssetDatabase.GetAssetPath(prefab);
+                bool rawNHanceWeapon = path.StartsWith(
+                    "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/",
+                    StringComparison.Ordinal);
+                int profile = Convert.ToInt32(RequireField<object>(visual, "placementProfile"));
+                Assert.That(
+                    profile == 1,
+                    Is.EqualTo(rawNHanceWeapon),
+                    $"{RequireField<string>(visual, "itemDefId")}/{RequireField<string>(visual, "colorId")}/" +
+                    $"{RequireField<string>(visual, "visualRoleId")} has the wrong placement profile for {path}.");
+                if (rawNHanceWeapon)
+                {
+                    Assert.That(prefab.transform.localPosition, Is.EqualTo(Vector3.zero), path);
+                    Assert.That(prefab.transform.localRotation, Is.EqualTo(Quaternion.identity), path);
+                    Assert.That(prefab.transform.localScale, Is.EqualTo(Vector3.one), path);
+                }
+            }
+
+            AssertWeaponPlacementProfile(visuals, "TRAINING_ONE_HAND_SWORD", "DEFAULT", "sword", 0);
+            AssertWeaponPlacementProfile(visuals, "NEWBIE_ONE_HAND_SWORD_01", "CL", "sword", 1);
+            AssertWeaponPlacementProfile(visuals, "NEWBIE_BOW_01", "CL", "bow_drawn", 1);
+            AssertWeaponPlacementProfile(visuals, "NEWBIE_BOW_01", "CL", "bow_stowed", 1);
+            AssertWeaponPlacementProfile(visuals, "NEWBIE_BOW_01", "CL", "quiver", 0);
+        }
+
+        [Test]
+        public void NHanceWeaponPlacementProfile_UsesRoleAndStateSpecificNativeMounts()
+        {
+            Type profileType = RequireType("Arena.Presentation.Appearance.WeaponAppearancePlacementProfile");
+            Type resolverType = RequireType("Arena.Presentation.WeaponAppearancePlacementResolver");
+            object nativeProfile = Enum.Parse(profileType, "NHanceNative");
+            object legacyProfile = Enum.Parse(profileType, "LegacyAnimationBinding");
+            MethodInfo tryResolve = RequireMethod(resolverType, "TryResolve");
+
+            AssertResolvedPlacement(tryResolve, nativeProfile, "sword", true, "nhance_weapon_r");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "sword", false, "nhance_back_l");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "shield", true, "nhance_weapon_shield");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "shield", false, "nhance_back_r");
+            AssertResolvedPlacement(
+                tryResolve,
+                nativeProfile,
+                "dagger_main",
+                true,
+                "nhance_weapon_r",
+                new Quaternion(-0.213657289f, -0.975105758f, 0f, 0.059323895f));
+            AssertResolvedPlacement(tryResolve, nativeProfile, "dagger_main", false, "nhance_hip_r");
+            AssertResolvedPlacement(
+                tryResolve,
+                nativeProfile,
+                "dagger_off",
+                true,
+                "nhance_weapon_l",
+                new Quaternion(-0.280249268f, 0.957732224f, 0f, 0.064879383f));
+            AssertResolvedPlacement(tryResolve, nativeProfile, "dagger_off", false, "nhance_hip_l");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "greatsword", true, "nhance_greatsword_hand");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "greatsword", false, "nhance_back_2hl");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "staff", true, "nhance_weapon_r");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "staff", false, "nhance_back_2hl");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "bow_drawn", true, "nhance_weapon_l");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "bow_drawn", false, "nhance_weapon_l");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "bow_stowed", true, "nhance_back_bow");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "bow_stowed", false, "nhance_back_bow");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "quiver", true, "nhance_back_quiver");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "quiver", false, "nhance_back_quiver");
+
+            object?[] legacyArgs = { legacyProfile, "sword", true, null };
+            Assert.That((bool)tryResolve.Invoke(null, legacyArgs)!, Is.False,
+                "Legacy appearances must continue to use their animation-set binding without an override.");
+        }
+
+        [Test]
         public void EquipmentAppearanceCatalog_ContainsEveryShippedCompleteArmorSetVisual()
         {
             object equipmentCatalog = LoadRequiredAsset(
@@ -222,6 +306,24 @@ namespace Arena.Tests.Editor
                 AssertMountExists(archerMounts, "archer_bow_hand");
                 AssertMountExists(archerMounts, "archer_bow_stowed");
                 AssertMountExists(archerMounts, "archer_quiver_stowed");
+                AssertMountExists(archerMounts, "nhance_weapon_r");
+                AssertMountExists(archerMounts, "nhance_weapon_l");
+                AssertMountExists(archerMounts, "nhance_weapon_shield");
+                AssertMountExists(archerMounts, "nhance_back_l");
+                AssertMountExists(archerMounts, "nhance_back_r");
+                AssertMountExists(archerMounts, "nhance_back_bow");
+                AssertMountExists(archerMounts, "nhance_back_2hl");
+                AssertMountExists(archerMounts, "nhance_back_quiver");
+                AssertMountExists(archerMounts, "nhance_hip_r");
+                AssertMountExists(archerMounts, "nhance_hip_l");
+                AssertMountExists(archerMounts, "nhance_greatsword_hand");
+
+                Transform nativeWeaponR = ResolveMount(archerMounts, "nhance_weapon_r");
+                Transform greatswordCorrection = ResolveMount(archerMounts, "nhance_greatsword_hand");
+                Assert.That(Vector3.Distance(greatswordCorrection.position, nativeWeaponR.position), Is.LessThan(0.00001f));
+                Assert.That(Quaternion.Angle(greatswordCorrection.rotation, nativeWeaponR.rotation), Is.LessThan(0.001f));
+                Assert.That(greatswordCorrection.parent, Is.Not.SameAs(nativeWeaponR.parent),
+                    "The greatsword correction must remain under its animation-driven socket.");
             }
             finally
             {
@@ -305,6 +407,51 @@ namespace Arena.Tests.Editor
             MethodInfo tryGetMount = RequireMethod(mounts.GetType(), "TryGetMount");
             object?[] args = { mountId, null };
             Assert.That((bool)tryGetMount.Invoke(mounts, args)!, Is.True, $"Expected mount '{mountId}'.");
+        }
+
+        private static Transform ResolveMount(object mounts, string mountId)
+        {
+            MethodInfo tryGetMount = RequireMethod(mounts.GetType(), "TryGetMount");
+            object?[] args = { mountId, null };
+            Assert.That((bool)tryGetMount.Invoke(mounts, args)!, Is.True, $"Expected mount '{mountId}'.");
+            return (Transform)args[1]!;
+        }
+
+        private static void AssertWeaponPlacementProfile(
+            object[] visuals,
+            string itemDefId,
+            string colorId,
+            string roleId,
+            int expectedProfile)
+        {
+            object? visual = visuals.FirstOrDefault(candidate =>
+                string.Equals(RequireField<string>(candidate, "itemDefId"), itemDefId, StringComparison.Ordinal)
+                && string.Equals(RequireField<string>(candidate, "colorId"), colorId, StringComparison.Ordinal)
+                && string.Equals(RequireField<string>(candidate, "visualRoleId"), roleId, StringComparison.Ordinal));
+            Assert.That(visual, Is.Not.Null, $"Missing weapon appearance {itemDefId}/{colorId}/{roleId}.");
+            Assert.That(Convert.ToInt32(RequireField<object>(visual!, "placementProfile")), Is.EqualTo(expectedProfile));
+        }
+
+        private static void AssertResolvedPlacement(
+            MethodInfo tryResolve,
+            object profile,
+            string roleId,
+            bool inCombat,
+            string expectedMountId,
+            Quaternion? expectedRotation = null)
+        {
+            object?[] args = { profile, roleId, inCombat, null };
+            Assert.That((bool)tryResolve.Invoke(null, args)!, Is.True, $"No placement for {roleId}/{inCombat}.");
+            Assert.That(
+                (string)RequireProperty(args[3]!, "MountId").GetValue(args[3])!,
+                Is.EqualTo(expectedMountId));
+            Assert.That((Vector3)RequireProperty(args[3]!, "LocalPosition").GetValue(args[3])!, Is.EqualTo(Vector3.zero));
+            Quaternion actualRotation = (Quaternion)RequireProperty(args[3]!, "LocalRotation").GetValue(args[3])!;
+            Assert.That(
+                Quaternion.Angle(actualRotation, expectedRotation ?? Quaternion.identity),
+                Is.LessThan(0.001f),
+                $"Unexpected rotation for {roleId}/{inCombat}.");
+            Assert.That((Vector3)RequireProperty(args[3]!, "LocalScaleMultiplier").GetValue(args[3])!, Is.EqualTo(Vector3.one));
         }
 
         private static void RequireAvatarIntegrity(GameObject avatar)
