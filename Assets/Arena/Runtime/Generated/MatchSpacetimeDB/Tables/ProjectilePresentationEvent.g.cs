@@ -103,6 +103,7 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, float> CurveProgress { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, uint> SequenceIndex { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, uint> SequenceCount { get; }
+        public global::SpacetimeDB.Col<ProjectilePresentationEvent, int> Damage { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, bool> Terminal { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, SpacetimeDB.Timestamp> CreatedAt { get; }
         public global::SpacetimeDB.Col<ProjectilePresentationEvent, long> CreatedAtMicros { get; }
@@ -153,6 +154,7 @@ namespace Arena.MatchDb
             CurveProgress = new global::SpacetimeDB.Col<ProjectilePresentationEvent, float>(tableName, "curve_progress");
             SequenceIndex = new global::SpacetimeDB.Col<ProjectilePresentationEvent, uint>(tableName, "sequence_index");
             SequenceCount = new global::SpacetimeDB.Col<ProjectilePresentationEvent, uint>(tableName, "sequence_count");
+            Damage = new global::SpacetimeDB.Col<ProjectilePresentationEvent, int>(tableName, "damage");
             Terminal = new global::SpacetimeDB.Col<ProjectilePresentationEvent, bool>(tableName, "terminal");
             CreatedAt = new global::SpacetimeDB.Col<ProjectilePresentationEvent, SpacetimeDB.Timestamp>(tableName, "created_at");
             CreatedAtMicros = new global::SpacetimeDB.Col<ProjectilePresentationEvent, long>(tableName, "created_at_micros");

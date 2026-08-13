@@ -499,6 +499,7 @@ fn emit_release_event(
             curve_progress: 0.0,
             sequence_index: spec.sequence_index,
             sequence_count: 1,
+            damage: 0,
             terminal: false,
             created_at: ctx.timestamp,
             created_at_micros: timestamp_to_micros(ctx.timestamp),
@@ -540,7 +541,7 @@ fn projectile_spec(
             None,
         ),
         ProjectileBucket::Boomerang => {
-            spell_projectile_spec("BOOMERANG_ORB", "SPELL_BOOMERANG_ORB", index, target, None)
+            spell_projectile_spec("VAMPIRIC_ORB", "SPELL_VAMPIRIC_ORB", index, target, None)
         }
     }
 }

@@ -214,6 +214,10 @@ enum SpellCatalogDelivery {
         polarity: Option<StatusPolarity>,
         #[serde(default)]
         dispel_types: Vec<StatusDispelType>,
+        #[serde(default)]
+        stacks_per_status: u32,
+        #[serde(default)]
+        heal_caster_max_health_fraction: f32,
     },
     ConsumeStatus {
         max_distance: f32,
@@ -313,6 +317,8 @@ struct ProjectileTuningRow {
     #[serde(default = "default_projectile_end_damage_multiplier")]
     damage_multiplier_at_lifetime_end: f32,
     #[serde(default)]
+    damage_target_max_health_fraction: f32,
+    #[serde(default)]
     motion: ProjectileMotionRow,
     #[serde(default)]
     impact_effects: Vec<ImpactEffectRow>,
@@ -366,11 +372,19 @@ enum ProjectileMotionRow {
     },
     BoomerangCaster {
         outbound_distance: f32,
+        #[serde(default)]
+        apex_hold_seconds: f32,
         return_speed: f32,
         lifetime_seconds: f32,
         hit_radius: f32,
         hit_cooldown_seconds: f32,
         max_hits_per_target: u32,
+        #[serde(default)]
+        hitbox_length: f32,
+        #[serde(default)]
+        hitbox_width: f32,
+        #[serde(default)]
+        heal_caster_on_return: bool,
     },
 }
 
@@ -423,11 +437,15 @@ impl<'de> Deserialize<'de> for ProjectileMotionRow {
                     serde_json::from_value(value).map_err(de::Error::custom)?;
                 Ok(Self::BoomerangCaster {
                     outbound_distance: row.outbound_distance,
+                    apex_hold_seconds: row.apex_hold_seconds,
                     return_speed: row.return_speed,
                     lifetime_seconds: row.lifetime_seconds,
                     hit_radius: row.hit_radius,
                     hit_cooldown_seconds: row.hit_cooldown_seconds,
                     max_hits_per_target: row.max_hits_per_target,
+                    hitbox_length: row.hitbox_length,
+                    hitbox_width: row.hitbox_width,
+                    heal_caster_on_return: row.heal_caster_on_return,
                 })
             }
             _ => Err(de::Error::custom(format!(
@@ -483,11 +501,19 @@ struct BoomerangCasterProjectileMotionRow {
     #[serde(rename = "kind")]
     _kind: String,
     outbound_distance: f32,
+    #[serde(default)]
+    apex_hold_seconds: f32,
     return_speed: f32,
     lifetime_seconds: f32,
     hit_radius: f32,
     hit_cooldown_seconds: f32,
     max_hits_per_target: u32,
+    #[serde(default)]
+    hitbox_length: f32,
+    #[serde(default)]
+    hitbox_width: f32,
+    #[serde(default)]
+    heal_caster_on_return: bool,
 }
 
 impl Default for ProjectileMotionRow {
@@ -586,6 +612,26 @@ enum ImpactEffectRow {
         stack_policy: StackPolicy,
     },
     MoveSpeed {
+        duration_ms: u64,
+        modifier_scalar: f32,
+        #[serde(default)]
+        status_stack_group: Option<String>,
+        #[serde(default = "default_one_stack")]
+        max_stacks: u32,
+        #[serde(default = "default_refresh_stack_policy")]
+        stack_policy: StackPolicy,
+    },
+    HealingTakenReduction {
+        duration_ms: u64,
+        modifier_scalar: f32,
+        #[serde(default)]
+        status_stack_group: Option<String>,
+        #[serde(default = "default_one_stack")]
+        max_stacks: u32,
+        #[serde(default = "default_refresh_stack_policy")]
+        stack_policy: StackPolicy,
+    },
+    DamageDealtReduction {
         duration_ms: u64,
         modifier_scalar: f32,
         #[serde(default)]
@@ -1058,6 +1104,7 @@ impl SpellCatalogRow {
                         .unwrap_or(SpellParryBehavior::Unparryable),
                     homing_window_seconds: projectile.homing_window_seconds,
                     damage_multiplier_at_lifetime_end: projectile.damage_multiplier_at_lifetime_end,
+                    damage_target_max_health_fraction: projectile.damage_target_max_health_fraction,
                     impact_effects: projectile
                         .impact_effects
                         .into_iter()
@@ -1195,6 +1242,8 @@ impl SpellCatalogRow {
                         homing_window_seconds: projectile.homing_window_seconds,
                         damage_multiplier_at_lifetime_end: projectile
                             .damage_multiplier_at_lifetime_end,
+                        damage_target_max_health_fraction: projectile
+                            .damage_target_max_health_fraction,
                         impact_effects: projectile
                             .impact_effects
                             .into_iter()
@@ -1244,6 +1293,8 @@ impl SpellCatalogRow {
                 max_count,
                 polarity,
                 dispel_types,
+                stacks_per_status,
+                heal_caster_max_health_fraction,
             } => {
                 definition.behavior = SpellBehavior::RemoveStatus;
                 definition.max_distance = max_distance;
@@ -1259,6 +1310,8 @@ impl SpellCatalogRow {
                     max_count,
                     polarity,
                     dispel_types,
+                    stacks_per_status,
+                    heal_caster_max_health_fraction,
                 });
             }
             SpellCatalogDelivery::ConsumeStatus {
@@ -1638,6 +1691,50 @@ fn status_application_from_impact_effect_row(row: ImpactEffectRow) -> StatusAppl
             max_stacks,
             stack_policy,
         ),
+        ImpactEffectRow::HealingTakenReduction {
+            duration_ms,
+            modifier_scalar,
+            status_stack_group,
+            max_stacks,
+            stack_policy,
+        } => StatusApplication::new(
+            AuthoredStatusPayload::new(
+                StatusEffectKind::HealingTakenReduction,
+                0.0,
+                0,
+                0,
+                0,
+                modifier_scalar,
+            )
+            .payload(),
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::ActionSuffix("HEALING_TAKEN_REDUCTION"),
+            max_stacks,
+            stack_policy,
+        ),
+        ImpactEffectRow::DamageDealtReduction {
+            duration_ms,
+            modifier_scalar,
+            status_stack_group,
+            max_stacks,
+            stack_policy,
+        } => StatusApplication::new(
+            AuthoredStatusPayload::new(
+                StatusEffectKind::DamageDealtReduction,
+                0.0,
+                0,
+                0,
+                0,
+                modifier_scalar,
+            )
+            .payload(),
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::ActionSuffix("DAMAGE_DEALT_REDUCTION"),
+            max_stacks,
+            stack_policy,
+        ),
         ImpactEffectRow::ManaRegen {
             duration_ms,
             modifier_scalar,
@@ -1795,18 +1892,26 @@ impl From<ProjectileMotionRow> for ProjectileMotionTunables {
             }),
             ProjectileMotionRow::BoomerangCaster {
                 outbound_distance,
+                apex_hold_seconds,
                 return_speed,
                 lifetime_seconds,
                 hit_radius,
                 hit_cooldown_seconds,
                 max_hits_per_target,
+                hitbox_length,
+                hitbox_width,
+                heal_caster_on_return,
             } => Self::BoomerangCaster(BoomerangCasterProjectileTunables {
                 outbound_distance,
+                apex_hold_seconds,
                 return_speed,
                 lifetime_seconds,
                 hit_radius,
                 hit_cooldown_seconds,
                 max_hits_per_target,
+                hitbox_length,
+                hitbox_width,
+                heal_caster_on_return,
             }),
         }
     }
@@ -2240,11 +2345,25 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     def.kind.as_str()
                 ));
             };
-            if def.targeting != SpellTargeting::Target || !def.requires_target {
-                return Err(format!(
-                    "{} PERSISTENT_AREA must use required TARGET targeting",
-                    def.kind.as_str()
-                ));
+            match def.targeting {
+                SpellTargeting::Target if def.requires_target => {}
+                SpellTargeting::Point if !def.requires_target => {
+                    let aim_radius = def.aim_radius.expect(
+                        "validated POINT targeting must define aim_radius before PERSISTENT_AREA validation",
+                    );
+                    if (aim_radius - def.radius).abs() > 0.001 {
+                        return Err(format!(
+                            "{} POINT PERSISTENT_AREA aim_radius must match delivery.radius",
+                            def.kind.as_str()
+                        ));
+                    }
+                }
+                _ => {
+                    return Err(format!(
+                        "{} PERSISTENT_AREA must use required TARGET or targetless POINT targeting",
+                        def.kind.as_str()
+                    ));
+                }
             }
             ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
             ensure_positive_f32(def.kind.as_str(), "delivery.radius", def.radius)?;
@@ -2436,6 +2555,17 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                         def.kind.as_str()
                     ));
                 }
+            }
+            ensure_finite_non_negative(
+                def.kind.as_str(),
+                "delivery.heal_caster_max_health_fraction",
+                remove_status.heal_caster_max_health_fraction,
+            )?;
+            if remove_status.heal_caster_max_health_fraction > 1.0 {
+                return Err(format!(
+                    "{} delivery.heal_caster_max_health_fraction must be <= 1",
+                    def.kind.as_str()
+                ));
             }
             ensure_no_secondary(def, true, true, true, true, false, true)?;
         }
@@ -2887,6 +3017,23 @@ fn validate_projectile_motion(
             def.kind.as_str()
         ));
     }
+    ensure_finite_non_negative(
+        def.kind.as_str(),
+        "delivery.damage_target_max_health_fraction",
+        projectile.damage_target_max_health_fraction,
+    )?;
+    if projectile.damage_target_max_health_fraction > 1.0 {
+        return Err(format!(
+            "{} delivery.damage_target_max_health_fraction must be <= 1",
+            def.kind.as_str()
+        ));
+    }
+    if projectile.damage_target_max_health_fraction > 0.0 && def.damage != 0 {
+        return Err(format!(
+            "{} percentage-health projectiles must set delivery.damage to 0",
+            def.kind.as_str()
+        ));
+    }
 
     match &projectile.motion {
         ProjectileMotionTunables::Linear => {
@@ -3012,9 +3159,13 @@ fn validate_projectile_motion(
             )?;
         }
         ProjectileMotionTunables::BoomerangCaster(boomerang) => {
-            if def.targeting != SpellTargeting::Target || !def.requires_target {
+            let valid_targeting = matches!(
+                (def.targeting, def.requires_target),
+                (SpellTargeting::Target, true) | (SpellTargeting::Self_, false)
+            );
+            if !valid_targeting {
                 return Err(format!(
-                    "{} BOOMERANG_CASTER projectile motion must use TARGET targeting with a target requirement",
+                    "{} BOOMERANG_CASTER projectile motion must use required TARGET or untargeted SELF targeting",
                     def.kind.as_str()
                 ));
             }
@@ -3023,6 +3174,11 @@ fn validate_projectile_motion(
                 def.kind.as_str(),
                 "delivery.motion.outbound_distance",
                 boomerang.outbound_distance,
+            )?;
+            ensure_finite_non_negative(
+                def.kind.as_str(),
+                "delivery.motion.apex_hold_seconds",
+                boomerang.apex_hold_seconds,
             )?;
             ensure_positive_f32(
                 def.kind.as_str(),
@@ -3047,6 +3203,22 @@ fn validate_projectile_motion(
             if boomerang.max_hits_per_target == 0 {
                 return Err(format!(
                     "{} delivery.motion.max_hits_per_target must be positive",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_finite_non_negative(
+                def.kind.as_str(),
+                "delivery.motion.hitbox_length",
+                boomerang.hitbox_length,
+            )?;
+            ensure_finite_non_negative(
+                def.kind.as_str(),
+                "delivery.motion.hitbox_width",
+                boomerang.hitbox_width,
+            )?;
+            if (boomerang.hitbox_length > 0.0) != (boomerang.hitbox_width > 0.0) {
+                return Err(format!(
+                    "{} BOOMERANG_CASTER rectangular hitbox requires both hitbox_length and hitbox_width",
                     def.kind.as_str()
                 ));
             }
@@ -3335,7 +3507,7 @@ mod tests {
                 "ERUPTION",
                 "FROST_NEEDLE",
                 "ICE_SPIKES",
-                "BOOMERANG_ORB",
+                "VAMPIRIC_ORB",
                 "WITHERING_ORB",
                 "INSTANT_BEAM",
                 "ELECTROCUTE",
@@ -3352,6 +3524,9 @@ mod tests {
                 "GLACIAL_SPIKE",
                 "FROZEN_GRASP",
                 "NECROTIC_AURA",
+                "DEFILED_GROUND",
+                "REAP",
+                "GRIM_WHEEL",
                 "GUST_OF_WIND",
                 "BUFFET",
                 "CAUTERIZE",
@@ -3507,6 +3682,58 @@ mod tests {
     }
 
     #[test]
+    fn defiled_ground_authors_point_field_and_enemy_penalties() {
+        let definition =
+            spell_definition_by_str("DEFILED_GROUND").expect("DEFILED_GROUND should exist");
+        assert_eq!(definition.behavior, SpellBehavior::PersistentArea);
+        assert_eq!(definition.targeting, SpellTargeting::Point);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(!definition.requires_target);
+        assert_eq!(definition.aim_radius, Some(4.6));
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage_type, DamageType::Necrotic);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.radius, 4.6);
+        assert_eq!(definition.update_interval, 0.25);
+        assert_eq!(definition.duration, 10.0);
+        assert_eq!(definition.primary_resource_cost, 20.0);
+
+        let persistent = definition
+            .secondary
+            .persistent_area
+            .as_ref()
+            .expect("Defiled Ground must define persistent-area tunables");
+        assert_eq!(persistent.pulse_interval, Duration::from_millis(250));
+        assert_eq!(persistent.effect_target_audience, TargetAudience::Hostile);
+        let payloads: Vec<_> = persistent
+            .impact_effects
+            .iter()
+            .filter_map(ImpactEffect::as_status)
+            .map(StatusApplication::payload)
+            .collect();
+        assert_eq!(
+            payloads,
+            vec![
+                StatusPayload::Slow { slow_pct: 0.1 },
+                StatusPayload::HealingTakenReduction {
+                    modifier_scalar: 0.1,
+                },
+                StatusPayload::DamageDealtReduction {
+                    modifier_scalar: 0.1,
+                },
+            ]
+        );
+        assert!(persistent
+            .impact_effects
+            .iter()
+            .all(|effect| effect
+                .as_status()
+                .is_some_and(|status| status.duration() == Duration::from_millis(500)
+                    && status.max_stacks() == 1
+                    && status.stack_policy() == StackPolicy::Refresh)));
+    }
+
+    #[test]
     fn stonespire_authors_temporary_physical_world_obstacle() {
         let definition = spell_definition_by_str("STONESPIRE").expect("STONESPIRE should exist");
         assert_eq!(definition.behavior, SpellBehavior::WorldObstacle);
@@ -3573,7 +3800,7 @@ mod tests {
             "ERUPTION",
             "FROST_NEEDLE",
             "ICE_SPIKES",
-            "BOOMERANG_ORB",
+            "VAMPIRIC_ORB",
             "WITHERING_ORB",
             "INSTANT_BEAM",
             "ELECTROCUTE",
@@ -3588,6 +3815,8 @@ mod tests {
             "GLACIAL_SPIKE",
             "FROZEN_GRASP",
             "FLAMING_ORB",
+            "REAP",
+            "GRIM_WHEEL",
             "GUST_OF_WIND",
             "BUFFET",
             "CELESTIAL_MANTLE",
@@ -5064,9 +5293,62 @@ mod tests {
             .boomerang()
             .expect("boomerang spell should expose boomerang tunables");
         assert!((boomerang.outbound_distance - 8.0).abs() < 0.0001);
+        assert!(boomerang.apex_hold_seconds.abs() < 0.0001);
         assert!((boomerang.return_speed - 14.0).abs() < 0.0001);
         assert!((boomerang.hit_cooldown_seconds - 0.25).abs() < 0.0001);
         assert_eq!(boomerang.max_hits_per_target, 1);
+    }
+
+    #[test]
+    fn blight_spell_family_uses_authored_vampiric_reap_and_grim_wheel_tunables() {
+        let vampiric = spell_definition_by_str("VAMPIRIC_ORB")
+            .expect("Vampiric Orb should be catalog-authored");
+        assert_eq!(vampiric.damage, 0);
+        let vampiric_projectile = vampiric
+            .secondary
+            .projectile
+            .as_ref()
+            .expect("Vampiric Orb should define projectile tunables");
+        assert!((vampiric_projectile.damage_target_max_health_fraction - 0.05).abs() < 0.0001);
+        assert!(
+            vampiric_projectile
+                .motion
+                .boomerang()
+                .expect("Vampiric Orb should use boomerang motion")
+                .heal_caster_on_return
+        );
+
+        let reap = spell_definition_by_str("REAP").expect("Reap should be catalog-authored");
+        assert_eq!(reap.cooldown, Duration::ZERO);
+        assert_eq!(reap.targeting, SpellTargeting::Self_);
+        assert!(!reap.requires_target);
+        let remove_status = reap
+            .secondary
+            .remove_status
+            .as_ref()
+            .expect("Reap should define remove-status tunables");
+        assert_eq!(remove_status.max_count, 1);
+        assert_eq!(remove_status.stacks_per_status, 1);
+        assert!((remove_status.heal_caster_max_health_fraction - 0.05).abs() < 0.0001);
+
+        let grim =
+            spell_definition_by_str("GRIM_WHEEL").expect("Grim Wheel should be catalog-authored");
+        assert_eq!(grim.cooldown, Duration::ZERO);
+        assert_eq!(grim.damage_type, DamageType::Physical);
+        assert_eq!(grim.targeting, SpellTargeting::Self_);
+        assert!(!grim.requires_target);
+        let grim_motion = grim
+            .secondary
+            .projectile
+            .as_ref()
+            .and_then(|projectile| projectile.motion.boomerang())
+            .expect("Grim Wheel should use boomerang motion");
+        assert!((grim_motion.hitbox_length - 3.8).abs() < 0.0001);
+        assert!((grim_motion.hitbox_width - 0.9).abs() < 0.0001);
+        assert!((grim_motion.apex_hold_seconds - 0.6).abs() < 0.0001);
+        assert!((grim_motion.hit_cooldown_seconds - 0.15).abs() < 0.0001);
+        assert_eq!(grim_motion.max_hits_per_target, 64);
+        assert!(!grim_motion.heal_caster_on_return);
     }
 
     #[test]

@@ -20,6 +20,12 @@ namespace Arena.MatchDb
         public SpacetimeDB.Identity Caster;
         [DataMember(Name = "target")]
         public SpacetimeDB.Identity Target;
+        [DataMember(Name = "area_x")]
+        public float AreaX;
+        [DataMember(Name = "area_y")]
+        public float AreaY;
+        [DataMember(Name = "area_z")]
+        public float AreaZ;
         [DataMember(Name = "spell_instance_id")]
         public string SpellInstanceId;
         [DataMember(Name = "kind")]
@@ -37,6 +43,9 @@ namespace Arena.MatchDb
             string Key,
             SpacetimeDB.Identity Caster,
             SpacetimeDB.Identity Target,
+            float AreaX,
+            float AreaY,
+            float AreaZ,
             string SpellInstanceId,
             string Kind,
             string AbilityId,
@@ -48,6 +57,9 @@ namespace Arena.MatchDb
             this.Key = Key;
             this.Caster = Caster;
             this.Target = Target;
+            this.AreaX = AreaX;
+            this.AreaY = AreaY;
+            this.AreaZ = AreaZ;
             this.SpellInstanceId = SpellInstanceId;
             this.Kind = Kind;
             this.AbilityId = AbilityId;

@@ -28,6 +28,8 @@ use crate::combat::active_combat_projectile as _;
 #[allow(unused_imports)]
 use crate::combat::active_combat_projectile_target_state as _;
 #[allow(unused_imports)]
+use crate::combat::projectile_return_heal_runtime as _;
+#[allow(unused_imports)]
 use crate::defense::defense_state as _;
 #[allow(unused_imports)]
 use crate::melee::active_melee_channel as _;
@@ -264,6 +266,10 @@ pub(crate) fn clear_transient_actor_state(ctx: &ReducerContext, identity: Identi
         .map(|row| row.projectile_instance_id.clone())
         .collect();
     ctx.db.active_combat_projectile().caster().delete(identity);
+    ctx.db
+        .projectile_return_heal_runtime()
+        .caster()
+        .delete(identity);
     for projectile_instance_id in caster_projectile_ids {
         ctx.db
             .active_combat_projectile_target_state()
@@ -329,7 +335,7 @@ mod tests {
     /// Per-identity transient tables (or the helpers that own their deletion)
     /// that the unified teardown must cover. Add every new transient table's
     /// accessor here AND to `clear_transient_actor_state`.
-    const TRANSIENT_TEARDOWN_MARKERS: [&str; 24] = [
+    const TRANSIENT_TEARDOWN_MARKERS: [&str; 25] = [
         "clear_player_combat_state",
         "clear_active_cast",
         "clear_recall_slot",
@@ -354,6 +360,7 @@ mod tests {
         "pending_auto_attack_replacement()",
         "active_combat_projectile()",
         "active_combat_projectile_target_state()",
+        "projectile_return_heal_runtime()",
     ];
 
     fn clear_transient_actor_state_body() -> String {

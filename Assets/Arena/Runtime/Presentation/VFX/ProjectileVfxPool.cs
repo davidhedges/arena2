@@ -89,6 +89,8 @@ namespace Arena.Presentation.VFX
             body.transform.localRotation = Quaternion.identity;
             body.transform.localScale = Vector3.one;
             VFXUtils.ApplyPrefabPresentationScale(body, template.Scale);
+            if (template.FollowAuthoritativeProjectileMotion)
+                VFXUtils.ApplyAuthoritativeProjectileParticleMotion(body);
 
             if (trailTemplate != null)
             {
@@ -98,6 +100,8 @@ namespace Arena.Presentation.VFX
                 trail.transform.localRotation = Quaternion.identity;
                 trail.transform.localScale = Vector3.one;
                 VFXUtils.ApplyPrefabPresentationScale(trail, trailTemplate.Scale);
+                if (trailTemplate.FollowAuthoritativeProjectileMotion)
+                    VFXUtils.ApplyAuthoritativeProjectileParticleMotion(trail);
             }
 
             var rental = new Rental(this, key, root, body, body.transform.localScale);

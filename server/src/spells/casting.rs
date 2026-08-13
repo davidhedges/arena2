@@ -38,13 +38,14 @@ use crate::combat::{
     consume_active_immolation_damage, consume_quickening_for_cast, has_active_disabling_status,
     has_active_status, hostile_targeted_ability_misses, mark_harmful_combat_action,
     queue_delayed_status_effect, queue_effects, quickening_cast_speed_multiplier_for_owner,
-    rephase_accumulated_orbit_projectiles, rime_effect_packet_for_frost_spell, set_active_aura,
-    status_matches_removal_filter, status_removal_is_blocked_by_rime, temporary_combat_modifiers,
-    timestamp_to_micros, toggle_active_emanation, toggle_active_immolation, ActiveCombatProjectile,
-    CombatEvent, DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent,
-    StatusApplication, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
-    StatusStackGroupDefault, COMBAT_EVENT_MISS, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
-    COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SPELL,
+    register_projectile_return_heal, rephase_accumulated_orbit_projectiles,
+    rime_effect_packet_for_frost_spell, set_active_aura, status_matches_removal_filter,
+    status_removal_is_blocked_by_rime, temporary_combat_modifiers, timestamp_to_micros,
+    toggle_active_emanation, toggle_active_immolation, ActiveCombatProjectile, CombatEvent,
+    DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StatusApplication,
+    StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity, StatusStackGroupDefault,
+    COMBAT_EVENT_MISS, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
+    DAMAGE_SOURCE_KIND_SPELL,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -113,6 +114,8 @@ use crate::melee::pending_melee_timed_movement as _;
 use crate::npcs::npc_instance as _;
 #[allow(unused_imports)]
 use crate::npcs::npc_physics as _;
+#[allow(unused_imports)]
+use crate::npcs::npc_state as _;
 #[allow(unused_imports)]
 use crate::player_intent::player_intent as _;
 #[allow(unused_imports)]
@@ -2545,6 +2548,9 @@ fn process_spell_cast(
                             state,
                             spell_kind,
                             target_id,
+                            aim_x,
+                            aim_y,
+                            aim_z,
                             mode,
                             action_instance_id,
                             ability_id,
@@ -2662,7 +2668,9 @@ fn process_spell_cast(
         }
         if definition.behavior == SpellBehavior::PersistentArea {
             return Ok(reject_unless(
-                cast_persistent_area(ctx, caster, state, spell_kind, target_id, mode, "", "")?,
+                cast_persistent_area(
+                    ctx, caster, state, spell_kind, target_id, aim_x, aim_y, aim_z, mode, "", "",
+                )?,
                 ActionRejectReason::InvalidTarget,
             ));
         }
@@ -2722,6 +2730,23 @@ fn process_spell_cast(
             }
             if mode == CastExecutionMode::Execute {
                 spawn_orbit_projectiles(
+                    ctx,
+                    caster,
+                    state,
+                    spell_kind,
+                    action_instance_id,
+                    ability_id,
+                )?;
+            }
+            return Ok(None);
+        }
+
+        if projectile_motion(definition) == Some("BOOMERANG_CASTER")
+            && definition.targeting == super::manifest::SpellTargeting::Self_
+            && !definition.requires_target
+        {
+            if mode == CastExecutionMode::Execute {
+                spawn_untargeted_boomerang_projectile(
                     ctx,
                     caster,
                     state,
@@ -3651,6 +3676,41 @@ fn spawn_tracking_projectile(
     )
 }
 
+fn spawn_untargeted_boomerang_projectile(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &CombatActorSnapshot,
+    kind: &SpellId,
+    action_instance_id: &str,
+    ability_id: &str,
+) -> Result<(), String> {
+    let definition = super::catalog::spell_definition(kind)
+        .expect("validated untargeted boomerang spell must resolve to a definition");
+    let outbound_distance = definition
+        .secondary
+        .projectile
+        .as_ref()
+        .and_then(|projectile| projectile.motion.boomerang())
+        .expect("validated untargeted boomerang spell must define motion tunables")
+        .outbound_distance;
+    let launch_target = CombatActorSnapshot {
+        player_id: Identity::ZERO,
+        pos_x: state.pos_x + state.facing_yaw.sin() * outbound_distance,
+        pos_y: state.pos_y,
+        pos_z: state.pos_z + state.facing_yaw.cos() * outbound_distance,
+        ..*state
+    };
+    spawn_tracking_projectile(
+        ctx,
+        caster,
+        state,
+        &launch_target,
+        kind,
+        action_instance_id,
+        ability_id,
+    )
+}
+
 pub(crate) fn fire_chain_reaction_spell(
     ctx: &ReducerContext,
     caster: Identity,
@@ -4040,6 +4100,9 @@ fn spawn_tracking_projectile_instance(
             hit_index: 0,
             created_at: now,
         });
+    if boomerang.is_some_and(|motion| motion.heal_caster_on_return) {
+        register_projectile_return_heal(ctx, projectile_instance_id, caster);
+    }
 
     Ok(())
 }
@@ -4336,6 +4399,7 @@ fn emit_spell_projectile_release_event(
             curve_progress,
             sequence_index: projectile_sequence_index,
             sequence_count: 1,
+            damage: 0,
             terminal: false,
             created_at: now,
             created_at_micros: timestamp_to_micros(now),
@@ -7326,41 +7390,59 @@ fn cast_persistent_area(
     state: &CombatActorSnapshot,
     kind: &SpellId,
     target_id: &str,
+    aim_x: f32,
+    aim_y: f32,
+    aim_z: f32,
     mode: CastExecutionMode,
     action_instance_id: &str,
     ability_id: &str,
 ) -> Result<bool, String> {
     let definition = super::catalog::spell_definition(kind)
         .expect("validated PERSISTENT_AREA spell must resolve to a definition");
-    if definition.targeting != super::manifest::SpellTargeting::Target
-        || !definition.requires_target
-    {
-        return Ok(false);
-    }
-
-    let Some(target) = resolve_target(ctx, caster, target_id) else {
-        return Ok(false);
+    let (target, point) = match definition.targeting {
+        super::manifest::SpellTargeting::Target if definition.requires_target => {
+            let Some(target) = resolve_target(ctx, caster, target_id) else {
+                return Ok(false);
+            };
+            if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
+                return Ok(false);
+            }
+            let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
+            if !is_target_within_facing_arc(state, &check_target, TARGET_FACING_ARC_RADIANS) {
+                return Ok(false);
+            }
+            if definition.requires_target_los && !has_line_of_sight(ctx, state, &check_target) {
+                return Ok(false);
+            }
+            if distance_to_target(state, &check_target) > definition.max_distance {
+                return Ok(false);
+            }
+            let point = Vec3::new(
+                target.pos_x,
+                target.pos_y + target.hit_height * 0.5,
+                target.pos_z,
+            );
+            (Some(target), point)
+        }
+        super::manifest::SpellTargeting::Point if !definition.requires_target => {
+            let Some(mut point) = resolve_generic_area_center_for_cast(
+                ctx, caster, definition, state, aim_x, aim_y, aim_z,
+            ) else {
+                return Ok(false);
+            };
+            point.y = terrain_surface_y_for_caster(ctx, caster, point.x, point.z, state.pos_y);
+            (None, point)
+        }
+        _ => return Ok(false),
     };
-    if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
-        return Ok(false);
-    }
-    let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
-    if !is_target_within_facing_arc(state, &check_target, TARGET_FACING_ARC_RADIANS) {
-        return Ok(false);
-    }
-    if definition.requires_target_los && !has_line_of_sight(ctx, state, &check_target) {
-        return Ok(false);
-    }
-    if distance_to_target(state, &check_target) > definition.max_distance {
-        return Ok(false);
-    }
 
     if mode == CastExecutionMode::Execute {
         start_persistent_area(
             ctx,
             caster,
             state,
-            &target,
+            target.as_ref(),
+            point,
             kind,
             action_instance_id,
             ability_id,
@@ -7374,7 +7456,8 @@ fn start_persistent_area(
     ctx: &ReducerContext,
     caster: Identity,
     state: &CombatActorSnapshot,
-    target: &CombatActorSnapshot,
+    target: Option<&CombatActorSnapshot>,
+    point: Vec3,
     kind: &SpellId,
     action_instance_id: &str,
     ability_id: &str,
@@ -7386,14 +7469,10 @@ fn start_persistent_area(
         state.pos_y + state.hit_height * 0.5,
         state.pos_z,
     );
-    let point = Vec3::new(
-        target.pos_x,
-        target.pos_y + target.hit_height * 0.5,
-        target.pos_z,
-    );
     let direction = normalize_vec3(point.x - origin.x, point.y - origin.y, point.z - origin.z)
         .map(|(x, y, z)| Vec3::new(x, y, z))
         .unwrap_or_else(|| default_forward_direction(state));
+    let target_id = target.map_or(Identity::ZERO, |target| target.player_id);
 
     for event_type in [EVENT_RELEASE, EVENT_IMPACT] {
         emit_spell_combat_event(
@@ -7404,7 +7483,7 @@ fn start_persistent_area(
                 kind,
                 event_type,
                 caster,
-                hit: target.player_id,
+                hit: target_id,
                 origin,
                 direction,
                 speed: 0.0,
@@ -7422,7 +7501,10 @@ fn start_persistent_area(
     let row = ActivePersistentArea {
         key: key.clone(),
         caster,
-        target: target.player_id,
+        target: target_id,
+        area_x: point.x,
+        area_y: point.y,
+        area_z: point.z,
         spell_instance_id: action_instance_id.to_string(),
         kind: kind.as_str().to_string(),
         ability_id: ability_id.to_string(),
@@ -7457,19 +7539,25 @@ pub(crate) fn tick_persistent_areas(ctx: &ReducerContext, now: Timestamp) {
             ctx.db.active_persistent_area().key().delete(active.key);
             continue;
         };
-        let Some(anchor_index) = actor_indices.get(&active.target).copied() else {
-            ctx.db.active_persistent_area().key().delete(active.key);
-            continue;
-        };
         let caster = &actors[caster_index];
-        let anchor = &actors[anchor_index];
-        if !caster.alive
-            || !anchor.alive
-            || !players_share_world_context(ctx, active.caster, active.target)
-        {
+        if !caster.alive {
             ctx.db.active_persistent_area().key().delete(active.key);
             continue;
         }
+        let (area_x, area_y, area_z) = if active.target == Identity::ZERO {
+            (active.area_x, active.area_y, active.area_z)
+        } else {
+            let Some(anchor_index) = actor_indices.get(&active.target).copied() else {
+                ctx.db.active_persistent_area().key().delete(active.key);
+                continue;
+            };
+            let anchor = &actors[anchor_index];
+            if !anchor.alive || !players_share_world_context(ctx, active.caster, active.target) {
+                ctx.db.active_persistent_area().key().delete(active.key);
+                continue;
+            }
+            (anchor.pos_x, anchor.pos_y, anchor.pos_z)
+        };
         if now < active.next_pulse_at {
             continue;
         }
@@ -7491,12 +7579,7 @@ pub(crate) fn tick_persistent_areas(ctx: &ReducerContext, now: Timestamp) {
             continue;
         };
 
-        snapshots.query_disc_indices(
-            anchor.pos_x,
-            anchor.pos_z,
-            definition.radius,
-            &mut candidate_indices,
-        );
+        snapshots.query_disc_indices(area_x, area_z, definition.radius, &mut candidate_indices);
         let mut effects = Vec::new();
         for candidate in candidate_indices
             .iter()
@@ -7510,13 +7593,7 @@ pub(crate) fn tick_persistent_areas(ctx: &ReducerContext, now: Timestamp) {
                     candidate.player_id,
                     persistent_area.effect_target_audience,
                 )
-                || !aoe_hits_player(
-                    anchor.pos_x,
-                    anchor.pos_y,
-                    anchor.pos_z,
-                    definition.radius,
-                    candidate,
-                )
+                || !aoe_hits_player(area_x, area_y, area_z, definition.radius, candidate)
             {
                 continue;
             }
@@ -7533,13 +7610,8 @@ pub(crate) fn tick_persistent_areas(ctx: &ReducerContext, now: Timestamp) {
                     direct_action_key: String::new(),
                 });
             }
-            let direction = area_contact_direction(
-                anchor.pos_x,
-                anchor.pos_z,
-                caster.pos_x,
-                caster.pos_z,
-                candidate,
-            );
+            let direction =
+                area_contact_direction(area_x, area_z, caster.pos_x, caster.pos_z, candidate);
             push_impact_effect_packets(
                 &mut effects,
                 persistent_area.impact_effects.as_slice(),
@@ -8761,9 +8833,21 @@ fn cast_remove_status(
             target,
             kind: status.kind,
             stack_group: status.stack_group.clone().unwrap_or_default(),
+            remove_stacks: remove_status.stacks_per_status,
         })
         .collect();
     effects.extend(filtered_remove_status_effects(ctx, target, remove_status));
+    if let Some(heal_amount) =
+        max_health_fraction_amount(ctx, caster, remove_status.heal_caster_max_health_fraction)
+    {
+        effects.push(EffectPacket::Heal {
+            amount: heal_amount,
+            source: caster,
+            target: caster,
+            spell_id: spell_id.clone(),
+            target_audience: TargetAudience::SelfOnly,
+        });
+    }
     queue_effects(ctx, effects);
     Ok(true)
 }
@@ -8863,6 +8947,7 @@ fn cast_consume_status(
                 target,
                 kind,
                 stack_group: effect.stack_group,
+                remove_stacks: 0,
             })
         })
         .collect();
@@ -9000,6 +9085,7 @@ fn filtered_remove_status_effects(
                 target,
                 kind,
                 stack_group: effect.stack_group,
+                remove_stacks: remove_status.stacks_per_status,
             })
         })
         .take(remove_status_max_count(remove_status.max_count))
@@ -9039,6 +9125,33 @@ fn remove_status_max_count(max_count: u32) -> usize {
     } else {
         max_count as usize
     }
+}
+
+fn max_health_fraction_amount(ctx: &ReducerContext, actor: Identity, fraction: f32) -> Option<i32> {
+    if !fraction.is_finite() || fraction <= 0.0 {
+        return None;
+    }
+    let max_hp = ctx
+        .db
+        .player_state()
+        .player_id()
+        .find(actor)
+        .map(|state| state.max_hp)
+        .or_else(|| {
+            ctx.db
+                .npc_state()
+                .identity()
+                .find(actor)
+                .map(|state| state.max_hp)
+        })?;
+    if max_hp <= 0 {
+        return None;
+    }
+    Some(
+        ((max_hp as f32) * fraction)
+            .round()
+            .clamp(1.0, i32::MAX as f32) as i32,
+    )
 }
 
 fn consumed_status_stacks(stacks: impl IntoIterator<Item = u32>) -> u32 {

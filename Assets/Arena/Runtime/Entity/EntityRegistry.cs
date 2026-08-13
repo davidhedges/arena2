@@ -1769,7 +1769,7 @@ namespace Arena.Entity
             if (row.Terminal || row.EventType != CombatEventTypes.Contact)
                 return false;
 
-            return TryGetSpellDamage(row.ActionKind, out int damage) && damage > 0;
+            return row.Damage > 0;
         }
 
         private void QueueHitReaction(Identity target, float dirX, float dirZ)
@@ -1806,18 +1806,6 @@ namespace Arena.Entity
             if (TryGetSpellDefinition(spellActionId, out SpellDefinition definition))
             {
                 castTimeMs = definition.CastTimeMs;
-                return true;
-            }
-
-            return false;
-        }
-
-        private static bool TryGetSpellDamage(string spellActionId, out int damage)
-        {
-            damage = 0;
-            if (TryGetSpellDefinition(spellActionId, out SpellDefinition definition))
-            {
-                damage = definition.Damage;
                 return true;
             }
 

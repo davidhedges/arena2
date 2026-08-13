@@ -1535,6 +1535,33 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void EntityRegistry_ProjectileContactHitReaction_UsesResolvedEventDamage()
+        {
+            Type entityRegistryType = RequireRuntimeType("Arena.Entity.EntityRegistry");
+            Type projectileEventType = RequireRuntimeType("SpacetimeDB.Types.ProjectilePresentationEvent");
+            object row = Activator.CreateInstance(projectileEventType)!;
+            SetField(row, "SourceKind", "SPELL");
+            SetField(row, "EventType", "CONTACT");
+            SetField(row, "Terminal", false);
+            SetField(row, "Damage", 5);
+
+            MethodInfo predicate = RequireMethod(
+                entityRegistryType,
+                "ShouldTriggerProjectileContactHitReaction",
+                projectileEventType);
+
+            Assert.That(predicate.Invoke(null, new[] { row }), Is.True,
+                "Percentage-health projectile contacts must react when their resolved event damage is positive.");
+
+            SetField(row, "Damage", 0);
+            Assert.That(predicate.Invoke(null, new[] { row }), Is.False);
+
+            SetField(row, "Damage", 5);
+            SetField(row, "Terminal", true);
+            Assert.That(predicate.Invoke(null, new[] { row }), Is.False);
+        }
+
+        [Test]
         public void CombatVFXAnchorResolver_UsesAuthoredFallbackPositionsWhenEntityMissing()
         {
             object identity = CreateIdentity(1);

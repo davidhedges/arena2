@@ -1239,7 +1239,7 @@ namespace Arena.Presentation
 
             if (string.Equals(WireIdentifier.Normalize(spellDef.Behavior), SpellBehaviorProjectile, StringComparison.Ordinal))
             {
-                if (!TryResolvePredictedProjectileVectors(caster, spellDef, targetId, out origin, out direction, out point))
+                if (!TryResolvePredictedProjectileVectors(caster, spellId, spellDef, targetId, out origin, out direction, out point))
                 {
                     fact = default;
                     return false;
@@ -1422,6 +1422,7 @@ namespace Arena.Presentation
 
         private static bool TryResolvePredictedProjectileVectors(
             PlayerEntity caster,
+            string spellId,
             SpellDefinition spellDef,
             string targetId,
             out Vector3 origin,
@@ -1430,6 +1431,18 @@ namespace Arena.Presentation
         {
             Vector3 casterPosition = ResolveLocalCasterPosition(caster);
             Vector3 basePosition = casterPosition + Vector3.up * spellDef.SpawnHeight;
+            if (SpellDefinitionContracts.UsesSelfTargeting(spellDef)
+                && string.Equals(
+                    ResolvePredictedProjectileMotionKind(spellId),
+                    ProjectileMotionBoomerangCaster,
+                    StringComparison.Ordinal))
+            {
+                direction = ResolveLocalCasterForward(caster);
+                origin = basePosition + direction * spellDef.SpawnForward;
+                point = origin;
+                return true;
+            }
+
             ICombatTargetEntity? target = TargetSelector.Instance?.SelectedTarget;
             if (target == null
                 || (!string.IsNullOrWhiteSpace(targetId)
@@ -1458,6 +1471,8 @@ namespace Arena.Presentation
         {
             string normalized = WireIdentifier.Normalize(spellId);
             return normalized.IndexOf("BOOMERANG", StringComparison.Ordinal) >= 0
+                || string.Equals(normalized, "VAMPIRIC_ORB", StringComparison.Ordinal)
+                || string.Equals(normalized, "GRIM_WHEEL", StringComparison.Ordinal)
                 ? ProjectileMotionBoomerangCaster
                 : string.Empty;
         }

@@ -70,7 +70,8 @@ namespace Arena.Presentation
                     ResolveSpeed(context),
                     context.MaxDistance,
                     template.Scale,
-                    template.Prefab);
+                    template.Prefab,
+                    followAuthoritativeProjectileMotion: template.FollowAuthoritativeProjectileMotion);
         }
 
         public void Impact(CombatVFXTemplateContext context)

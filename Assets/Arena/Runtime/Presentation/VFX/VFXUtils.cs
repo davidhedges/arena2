@@ -36,6 +36,23 @@ namespace Arena.Presentation.VFX
             }
         }
 
+        public static void ApplyAuthoritativeProjectileParticleMotion(GameObject instance)
+        {
+            ParticleSystem[] particleSystems = instance.GetComponentsInChildren<ParticleSystem>(true);
+            for (int index = 0; index < particleSystems.Length; index++)
+            {
+                ParticleSystem particleSystem = particleSystems[index];
+                var main = particleSystem.main;
+                main.simulationSpace = ParticleSystemSimulationSpace.Local;
+
+                // Translation and rotation are separate Particle System modules. Removing the
+                // prefab-authored velocity leaves rotation-over-lifetime intact while the
+                // authoritative projectile root supplies all world-space travel.
+                var velocity = particleSystem.velocityOverLifetime;
+                velocity.enabled = false;
+            }
+        }
+
         /// <summary>
         /// Procedural radial gradient glow texture matching TS createGlowTexture().
         /// </summary>

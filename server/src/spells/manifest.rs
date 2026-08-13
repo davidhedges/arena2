@@ -336,6 +336,8 @@ pub(crate) struct ProjectileSecondaryTunables {
     /// Linear damage falloff over the projectile's authoritative lifetime. A value of 1 preserves
     /// full damage; lower values reduce damage toward this multiplier at lifetime end.
     pub damage_multiplier_at_lifetime_end: f32,
+    /// Optional target-max-health damage used instead of the authored flat damage.
+    pub damage_target_max_health_fraction: f32,
     pub impact_effects: Vec<ImpactEffect>,
     // When true, the projectile ignores world geometry for collision (skips terrain fizzle) and tracks
     // the terrain surface height as it travels. For ground-skimming visuals like Ground Slash that need
@@ -414,11 +416,20 @@ pub(crate) struct OrbitCasterProjectileTunables {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct BoomerangCasterProjectileTunables {
     pub outbound_distance: f32,
+    /// Time spent stationary at maximum range before beginning the return leg.
+    pub apex_hold_seconds: f32,
     pub return_speed: f32,
     pub lifetime_seconds: f32,
     pub hit_radius: f32,
     pub hit_cooldown_seconds: f32,
     pub max_hits_per_target: u32,
+    /// Optional moving rectangular contact volume, aligned perpendicular to travel.
+    /// Zero values preserve the legacy swept-radius contact behavior.
+    pub hitbox_length: f32,
+    pub hitbox_width: f32,
+    /// When enabled, confirmed HP damage is accumulated and restored when the projectile
+    /// completes its return to the caster.
+    pub heal_caster_on_return: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -559,6 +570,10 @@ pub(crate) struct RemoveStatusSecondaryTunables {
     pub max_count: u32,
     pub polarity: Option<StatusPolarity>,
     pub dispel_types: Vec<StatusDispelType>,
+    /// Zero removes the selected status row; positive values remove only that many stacks.
+    pub stacks_per_status: u32,
+    /// Optional self-heal based on the caster's maximum health.
+    pub heal_caster_max_health_fraction: f32,
 }
 
 #[derive(Clone, Debug, PartialEq)]

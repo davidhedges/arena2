@@ -13,6 +13,7 @@ namespace Arena.Tests.Editor
         private const string TravelControllerPath = "Assets/Arena/Runtime/Presentation/CombatTravelVisualController.cs";
         private const string LifecycleRegistryPath = "Assets/Arena/Runtime/Presentation/CombatVFXLifecycleRegistry.cs";
         private const string VfxRegistryPath = "Assets/Arena/Runtime/Presentation/VFX/CombatVFXRegistry.cs";
+        private const string VfxUtilsPath = "Assets/Arena/Runtime/Presentation/VFX/VFXUtils.cs";
 
         [Test]
         public void ProjectileVfxPool_ReusesProjectileBodiesUnderHiddenRoot()
@@ -53,6 +54,21 @@ namespace Arena.Tests.Editor
             Assert.That(source, Does.Contain("ApplyLifetimeScale();"));
             Assert.That(source, Does.Contain("_traveled / _maxDistance"));
             Assert.That(source, Does.Contain("Mathf.Lerp(1f, _scaleMultiplierAtLifetimeEnd, progress)"));
+        }
+
+        [Test]
+        public void AuthoritativeProjectileParticleMotion_RemovesTranslationButPreservesRotation()
+        {
+            string registry = File.ReadAllText(VfxRegistryPath);
+            string utilities = File.ReadAllText(VfxUtilsPath);
+            string pool = File.ReadAllText(PoolPath);
+
+            Assert.That(registry, Does.Contain("followAuthoritativeProjectileMotion"));
+            Assert.That(registry, Does.Contain("FollowAuthoritativeProjectileMotion"));
+            Assert.That(utilities, Does.Contain("main.simulationSpace = ParticleSystemSimulationSpace.Local"));
+            Assert.That(utilities, Does.Contain("velocity.enabled = false"));
+            Assert.That(utilities, Does.Not.Contain("rotationOverLifetime.enabled = false"));
+            Assert.That(pool, Does.Contain("ApplyAuthoritativeProjectileParticleMotion(body)"));
         }
 
         [Test]

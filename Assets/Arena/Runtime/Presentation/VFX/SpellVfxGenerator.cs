@@ -34,6 +34,7 @@ namespace Arena.Presentation
         Aura = 7,
         Emanation = 8,
         TargetField = 9,
+        GroundField = 10,
     }
 
     /// <summary>
@@ -90,7 +91,7 @@ namespace Arena.Presentation
         /// <see cref="CastGlow"/>, this surrounds the character and may be authored more than once.
         /// </summary>
         CharacterFx = 10,
-        /// <summary>Persistent field attached to a caster or hostile target.</summary>
+        /// <summary>Persistent field attached to a caster/target or planted at a world point.</summary>
         PersistentField = 11,
         /// <summary>Duration-bound visual attached to an animated socket on the confirmed target.</summary>
         TargetAttachment = 12,
@@ -338,6 +339,7 @@ namespace Arena.Presentation
 
         private const string TargetingSelf = "SELF";
         private const string TargetingTarget = "TARGET";
+        private const string TargetingPoint = "POINT";
 
         /// <summary>
         /// Returns <c>null</c> for kinds we do not generate VFX for (anything unknown). Every known
@@ -374,7 +376,9 @@ namespace Arena.Presentation
                 case DeliveryImmolation:
                     return SpellVfxArchetype.Emanation;
                 case DeliveryPersistentArea:
-                    return SpellVfxArchetype.TargetField;
+                    return facts.Targeting == TargetingPoint
+                        ? SpellVfxArchetype.GroundField
+                        : SpellVfxArchetype.TargetField;
                 default:
                     return null;
             }
@@ -437,6 +441,7 @@ namespace Arena.Presentation
                         SpellVfxSlot.MaxStackCharacterFx,
                     };
                 case SpellVfxArchetype.TargetField:
+                case SpellVfxArchetype.GroundField:
                     return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.PersistentField };
                 default:
                     return System.Array.Empty<SpellVfxSlot>();
@@ -632,6 +637,17 @@ namespace Arena.Presentation
                         projectileSequenceIndex: null);
 
                 case SpellVfxSlot.PersistentField:
+                    if (archetype == SpellVfxArchetype.GroundField)
+                    {
+                        return new CueWiring(
+                            trigger: TriggerSpellImpact,
+                            anchor: CueAnchor.ImpactPoint,
+                            attachMode: AttachSpawnWorld,
+                            vfxRole: RoleAttached,
+                            lifecycle: LifecycleDuration,
+                            duration: CueDurationPolicy.PalettePositive,
+                            projectileSequenceIndex: null);
+                    }
                     if (archetype == SpellVfxArchetype.TargetField)
                     {
                         return new CueWiring(

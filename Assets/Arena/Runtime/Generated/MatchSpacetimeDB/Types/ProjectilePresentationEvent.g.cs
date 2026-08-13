@@ -100,6 +100,8 @@ namespace Arena.MatchDb
         public uint SequenceIndex;
         [DataMember(Name = "sequence_count")]
         public uint SequenceCount;
+        [DataMember(Name = "damage")]
+        public int Damage;
         [DataMember(Name = "terminal")]
         public bool Terminal;
         [DataMember(Name = "created_at")]
@@ -153,6 +155,7 @@ namespace Arena.MatchDb
             float CurveProgress,
             uint SequenceIndex,
             uint SequenceCount,
+            int Damage,
             bool Terminal,
             SpacetimeDB.Timestamp CreatedAt,
             long CreatedAtMicros,
@@ -202,6 +205,7 @@ namespace Arena.MatchDb
             this.CurveProgress = CurveProgress;
             this.SequenceIndex = SequenceIndex;
             this.SequenceCount = SequenceCount;
+            this.Damage = Damage;
             this.Terminal = Terminal;
             this.CreatedAt = CreatedAt;
             this.CreatedAtMicros = CreatedAtMicros;

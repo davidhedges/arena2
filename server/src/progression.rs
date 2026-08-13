@@ -1227,6 +1227,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::DirectDamageAmp,
         StatusEffectKind::DamageTakenReduction,
         StatusEffectKind::HealingTakenReduction,
+        StatusEffectKind::DamageDealtReduction,
         StatusEffectKind::ManaRegen,
         StatusEffectKind::StaminaRegen,
         StatusEffectKind::MagicResistance,
@@ -2193,7 +2194,8 @@ pub(crate) fn migrate_generic_spell_action_bar_assignments(ctx: &ReducerContext)
         ("WARRIOR_LIGHTNING", "SPELL_LIGHTNING"),
         ("WARRIOR_ERUPTION", "SPELL_ERUPTION"),
         ("WARRIOR_ICE_SPIKES", "SPELL_ICE_SPIKES"),
-        ("WARRIOR_BOOMERANG_ORB", "SPELL_BOOMERANG_ORB"),
+        ("WARRIOR_BOOMERANG_ORB", "SPELL_VAMPIRIC_ORB"),
+        ("SPELL_BOOMERANG_ORB", "SPELL_VAMPIRIC_ORB"),
         ("WARRIOR_WITHERING_ORB", "SPELL_WITHERING_ORB"),
         ("WARRIOR_INSTANT_BEAM", "SPELL_INSTANT_BEAM"),
         ("WARRIOR_ELECTROCUTE", "SPELL_ELECTROCUTE"),
@@ -8587,7 +8589,7 @@ mod tests {
             Some("VFX_GROUND_SLASH_PROJECTILE_01")
         );
         assert_eq!(
-            projectile_body_vfx_id_for_spell("SPELL_BOOMERANG_ORB", "BOOMERANG_ORB", 0).as_deref(),
+            projectile_body_vfx_id_for_spell("SPELL_VAMPIRIC_ORB", "VAMPIRIC_ORB", 0).as_deref(),
             Some("VFX_BOOMERANG_ORB_PROJECTILE_01")
         );
         assert_eq!(
@@ -12534,7 +12536,8 @@ mod tests {
             ("SPELL_FROZEN_SPLINTERS", "FROZEN_SPLINTERS", "COLD"),
             ("SPELL_BLIZZARD", "BLIZZARD", "COLD"),
             ("SPELL_MAGIC_MISSILE", "MAGIC_MISSILE", "ARCANE"),
-            ("SPELL_BOOMERANG_ORB", "BOOMERANG_ORB", "SHADOW"),
+            ("SPELL_VAMPIRIC_ORB", "VAMPIRIC_ORB", "SHADOW"),
+            ("SPELL_GRIM_WHEEL", "GRIM_WHEEL", "PHYSICAL"),
             ("SPELL_LIGHTNING", "LIGHTNING", "LIGHTNING"),
             ("SPELL_METEOR", "METEOR", "FIRE"),
             ("SPELL_NEGATE", "NEGATE", "ARCANE"),
@@ -12620,9 +12623,12 @@ mod tests {
             (
                 "BLIGHT",
                 &[
-                    "SPELL_BOOMERANG_ORB",
+                    "SPELL_VAMPIRIC_ORB",
                     "SPELL_WITHERING_ORB",
                     "SPELL_NECROTIC_AURA",
+                    "SPELL_DEFILED_GROUND",
+                    "SPELL_REAP",
+                    "SPELL_GRIM_WHEEL",
                 ][..],
             ),
             (

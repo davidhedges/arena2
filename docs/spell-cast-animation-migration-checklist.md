@@ -63,7 +63,7 @@ one-line composer revert — ask.
 
 Projectiles / AoE (want a real cast gesture):
 - [x] `FIREBALL` — Staff, 2H
-- [ ] `BOOMERANG_ORB` — Staff, 2H
+- [ ] `VAMPIRIC_ORB` — Staff, 2H
 - [ ] `WITHERING_ORB` — Staff, 2H
 - [ ] `ORBITING_BLADES` — Staff, 2H
 - [ ] `LIGHTNING` — Staff, 2H

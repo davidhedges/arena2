@@ -22,6 +22,8 @@ namespace Arena.MatchDb
         public string StatusKind;
         [DataMember(Name = "stack_group")]
         public string StackGroup;
+        [DataMember(Name = "remove_stacks")]
+        public uint RemoveStacks;
         [DataMember(Name = "queued_at")]
         public SpacetimeDB.Timestamp QueuedAt;
         [DataMember(Name = "queued_at_micros")]
@@ -34,6 +36,7 @@ namespace Arena.MatchDb
             SpacetimeDB.Identity Target,
             string StatusKind,
             string StackGroup,
+            uint RemoveStacks,
             SpacetimeDB.Timestamp QueuedAt,
             long QueuedAtMicros,
             ulong QueuedOrder
@@ -43,6 +46,7 @@ namespace Arena.MatchDb
             this.Target = Target;
             this.StatusKind = StatusKind;
             this.StackGroup = StackGroup;
+            this.RemoveStacks = RemoveStacks;
             this.QueuedAt = QueuedAt;
             this.QueuedAtMicros = QueuedAtMicros;
             this.QueuedOrder = QueuedOrder;

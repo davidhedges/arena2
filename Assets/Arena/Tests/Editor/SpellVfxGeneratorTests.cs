@@ -229,6 +229,7 @@ namespace Arena.Tests.Editor
             Assert.That(DeriveArchetype(Facts("EMANATION", "SELF")), Is.EqualTo("Emanation")); // NECROTIC_AURA
             Assert.That(DeriveArchetype(Facts("IMMOLATION", "SELF")), Is.EqualTo("Emanation"));
             Assert.That(DeriveArchetype(Facts("PERSISTENT_AREA", "TARGET")), Is.EqualTo("TargetField")); // BLADE_BARRIER
+            Assert.That(DeriveArchetype(Facts("PERSISTENT_AREA", "POINT")), Is.EqualTo("GroundField")); // DEFILED_GROUND
         }
 
         [Test]
@@ -449,6 +450,21 @@ namespace Arena.Tests.Editor
             Assert.That(WireStr(w, "Trigger"), Is.EqualTo("SPELL_IMPACT"));
             Assert.That(WireStr(w, "Anchor"), Is.EqualTo("Target"));
             Assert.That(WireStr(w, "AttachMode"), Is.EqualTo("FOLLOW_ANCHOR"));
+            Assert.That(WireStr(w, "VfxRole"), Is.EqualTo("ATTACHED"));
+            Assert.That(WireStr(w, "Lifecycle"), Is.EqualTo("DURATION"));
+            Assert.That(WireStr(w, "Duration"), Is.EqualTo("PalettePositive"));
+        }
+
+        [Test]
+        public void GroundFieldDefaults_ToAPersistentWorldPointField()
+        {
+            Assert.That(RequestedSlotNames("GroundField"),
+                Is.EqualTo(new[] { "CastGlow", "CharacterFx", "PersistentField" }));
+
+            object w = Wire("GroundField", "PersistentField", "Instant", false, false);
+            Assert.That(WireStr(w, "Trigger"), Is.EqualTo("SPELL_IMPACT"));
+            Assert.That(WireStr(w, "Anchor"), Is.EqualTo("ImpactPoint"));
+            Assert.That(WireStr(w, "AttachMode"), Is.EqualTo("SPAWN_WORLD"));
             Assert.That(WireStr(w, "VfxRole"), Is.EqualTo("ATTACHED"));
             Assert.That(WireStr(w, "Lifecycle"), Is.EqualTo("DURATION"));
             Assert.That(WireStr(w, "Duration"), Is.EqualTo("PalettePositive"));

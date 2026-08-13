@@ -43,7 +43,8 @@ namespace Arena.Presentation.VFX
             GameObject prefab,
             CombatVFXRegistry.Template? trailTemplate = null,
             float scaleMultiplierAtLifetimeEnd = 1f,
-            bool authoritativeLifetime = false)
+            bool authoritativeLifetime = false,
+            bool followAuthoritativeProjectileMotion = false)
         {
             _group = new GameObject($"VFX_Projectile_{ShortId(instanceId)}");
             _projectileBody = Object.Instantiate(prefab, _group.transform, false);
@@ -52,6 +53,8 @@ namespace Arena.Presentation.VFX
             _projectileBody.transform.localRotation = Quaternion.identity;
             _projectileBody.transform.localScale = Vector3.one;
             VFXUtils.ApplyPrefabPresentationScale(_projectileBody, ResolveVisualScale(visualScale));
+            if (followAuthoritativeProjectileMotion)
+                VFXUtils.ApplyAuthoritativeProjectileParticleMotion(_projectileBody);
             _initialBodyScale = _projectileBody.transform.localScale;
             _scaleMultiplierAtLifetimeEnd = ResolveEndScaleMultiplier(scaleMultiplierAtLifetimeEnd);
             if (trailTemplate != null)
@@ -62,6 +65,8 @@ namespace Arena.Presentation.VFX
                 trail.transform.localRotation = Quaternion.identity;
                 trail.transform.localScale = Vector3.one;
                 VFXUtils.ApplyPrefabPresentationScale(trail, ResolveVisualScale(trailTemplate.Scale));
+                if (trailTemplate.FollowAuthoritativeProjectileMotion)
+                    VFXUtils.ApplyAuthoritativeProjectileParticleMotion(trail);
             }
             _hasVisualEffect = _group.GetComponentInChildren<VisualEffect>(true) != null;
             Initialize(instanceId, position, direction, speed, maxDistance, authoritativeLifetime);

@@ -32,7 +32,7 @@
         {"kind": "ABILITY", "id": "SPELL_METEOR"},
         {"kind": "ABILITY", "id": "SPELL_LIGHTNING"},
         {"kind": "ABILITY", "id": "SPELL_ERUPTION"},
-        {"kind": "ABILITY", "id": "SPELL_BOOMERANG_ORB"},
+        {"kind": "ABILITY", "id": "SPELL_VAMPIRIC_ORB"},
         {"kind": "ABILITY", "id": "SPELL_WITHERING_ORB"},
         {"kind": "ABILITY", "id": "WARRIOR_MOMENTUM"},
         {"kind": "ABILITY", "id": "WARRIOR_FORTIFY"},

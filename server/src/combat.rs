@@ -108,6 +108,8 @@ use crate::combat::player_event as _;
 #[allow(unused_imports)]
 use crate::combat::potential_state as _;
 #[allow(unused_imports)]
+use crate::combat::projectile_return_heal_runtime as _;
+#[allow(unused_imports)]
 use crate::combat::status_effect as _;
 #[allow(unused_imports)]
 use crate::defense::defense_state as _;
@@ -213,6 +215,7 @@ const MAX_MOVE_SPEED_MULTIPLIER: f32 = 3.0;
 const MIN_ATTACK_SPEED_MULTIPLIER: f32 = 0.05;
 const MAX_DAMAGE_TAKEN_REDUCTION: f32 = 1.0;
 const MAX_HEALING_TAKEN_REDUCTION: f32 = 1.0;
+const MAX_DAMAGE_DEALT_REDUCTION: f32 = 1.0;
 const PENDING_EFFECT_SEQUENCE_KEY: u8 = 0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -537,6 +540,9 @@ pub struct ProjectilePresentationEvent {
     pub curve_progress: f32,
     pub sequence_index: u32,
     pub sequence_count: u32,
+    /// Resolved pre-mitigation damage associated with this presentation event.
+    /// Non-damaging lifecycle events carry zero.
+    pub damage: i32,
     pub terminal: bool,
     pub created_at: Timestamp,
     // Keep a micros mirror because SpacetimeDB pruning needs a btree-indexed scalar;
@@ -748,6 +754,74 @@ pub struct ActiveCombatProjectileTargetState {
     pub hit_count: u32,
     pub next_allowed_at: Timestamp,
     pub is_overlapping: bool,
+}
+
+/// Tracks confirmed HP damage for boomerang projectiles that heal only after completing
+/// their return. Keeping this separate from collision state lets the normal queued-damage
+/// pass remain the sole authority for the amount actually dealt.
+#[table(accessor = projectile_return_heal_runtime)]
+pub struct ProjectileReturnHealRuntime {
+    #[primary_key]
+    pub projectile_instance_id: String,
+    #[index(btree)]
+    pub caster: Identity,
+    pub accumulated_damage: i32,
+    pub returned_to_caster: bool,
+}
+
+pub(crate) fn register_projectile_return_heal(
+    ctx: &ReducerContext,
+    projectile_instance_id: &str,
+    caster: Identity,
+) {
+    ctx.db
+        .projectile_return_heal_runtime()
+        .insert(ProjectileReturnHealRuntime {
+            projectile_instance_id: projectile_instance_id.to_string(),
+            caster,
+            accumulated_damage: 0,
+            returned_to_caster: false,
+        });
+}
+
+pub(crate) fn mark_projectile_returned_for_heal(
+    ctx: &ReducerContext,
+    projectile_instance_id: &str,
+) -> bool {
+    let Some(mut runtime) = ctx
+        .db
+        .projectile_return_heal_runtime()
+        .projectile_instance_id()
+        .find(projectile_instance_id.to_string())
+    else {
+        return false;
+    };
+    runtime.returned_to_caster = true;
+    let caster = runtime.caster;
+    ctx.db
+        .projectile_return_heal_runtime()
+        .projectile_instance_id()
+        .update(runtime);
+
+    // Ensures the post-projectile effect pass runs even when the return frame had no enemy contact.
+    queue_effects(
+        ctx,
+        vec![EffectPacket::Heal {
+            amount: 0,
+            source: caster,
+            target: caster,
+            spell_id: projectile_instance_id.to_string(),
+            target_audience: TargetAudience::SelfOnly,
+        }],
+    );
+    true
+}
+
+pub(crate) fn clear_projectile_return_heal(ctx: &ReducerContext, projectile_instance_id: &str) {
+    ctx.db
+        .projectile_return_heal_runtime()
+        .projectile_instance_id()
+        .delete(projectile_instance_id.to_string());
 }
 
 pub(crate) fn sync_combat_projectile_definitions(ctx: &ReducerContext) {
@@ -2634,6 +2708,8 @@ pub struct PendingRemoveStatus {
     pub target: Identity,
     pub status_kind: String,
     pub stack_group: String,
+    /// Zero removes the whole selected status; positive values remove only that many stacks.
+    pub remove_stacks: u32,
     pub queued_at: Timestamp,
     #[index(btree)]
     pub queued_at_micros: i64,
@@ -2702,6 +2778,7 @@ pub enum StatusEffectKind {
     DirectDamageAmp,
     DamageTakenReduction,
     HealingTakenReduction,
+    DamageDealtReduction,
     ManaRegen,
     StaminaRegen,
     MagicResistance,
@@ -2746,6 +2823,7 @@ impl StatusEffectKind {
             Self::DirectDamageAmp => "DIRECT_DAMAGE_AMP",
             Self::DamageTakenReduction => "DAMAGE_TAKEN_REDUCTION",
             Self::HealingTakenReduction => "HEALING_TAKEN_REDUCTION",
+            Self::DamageDealtReduction => "DAMAGE_DEALT_REDUCTION",
             Self::ManaRegen => "MANA_REGEN",
             Self::StaminaRegen => "STAMINA_REGEN",
             Self::MagicResistance => "MAGIC_RESISTANCE",
@@ -2790,6 +2868,7 @@ impl StatusEffectKind {
             "DIRECT_DAMAGE_AMP" => Some(Self::DirectDamageAmp),
             "DAMAGE_TAKEN_REDUCTION" => Some(Self::DamageTakenReduction),
             "HEALING_TAKEN_REDUCTION" => Some(Self::HealingTakenReduction),
+            "DAMAGE_DEALT_REDUCTION" => Some(Self::DamageDealtReduction),
             "MANA_REGEN" => Some(Self::ManaRegen),
             "STAMINA_REGEN" => Some(Self::StaminaRegen),
             "MAGIC_RESISTANCE" => Some(Self::MagicResistance),
@@ -2853,6 +2932,9 @@ pub enum StatusPayload {
         modifier_scalar: f32,
     },
     HealingTakenReduction {
+        modifier_scalar: f32,
+    },
+    DamageDealtReduction {
         modifier_scalar: f32,
     },
     ManaRegen {
@@ -2994,6 +3076,9 @@ impl AuthoredStatusPayload {
             StatusEffectKind::HealingTakenReduction => StatusPayload::HealingTakenReduction {
                 modifier_scalar: self.modifier_scalar,
             },
+            StatusEffectKind::DamageDealtReduction => StatusPayload::DamageDealtReduction {
+                modifier_scalar: self.modifier_scalar,
+            },
             StatusEffectKind::ManaRegen => StatusPayload::ManaRegen {
                 modifier_scalar: self.modifier_scalar,
             },
@@ -3089,6 +3174,7 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::DirectDamageAmp
             | StatusEffectKind::DamageTakenReduction
             | StatusEffectKind::HealingTakenReduction
+            | StatusEffectKind::DamageDealtReduction
             | StatusEffectKind::ManaRegen
             | StatusEffectKind::StaminaRegen
             | StatusEffectKind::MagicResistance
@@ -3231,6 +3317,7 @@ impl StatusPayload {
             Self::DirectDamageAmp { .. } => StatusEffectKind::DirectDamageAmp,
             Self::DamageTakenReduction { .. } => StatusEffectKind::DamageTakenReduction,
             Self::HealingTakenReduction { .. } => StatusEffectKind::HealingTakenReduction,
+            Self::DamageDealtReduction { .. } => StatusEffectKind::DamageDealtReduction,
             Self::ManaRegen { .. } => StatusEffectKind::ManaRegen,
             Self::StaminaRegen { .. } => StatusEffectKind::StaminaRegen,
             Self::MagicResistance { .. } => StatusEffectKind::MagicResistance,
@@ -3362,6 +3449,15 @@ impl StatusPayload {
                 absorb_amount: 0,
                 absorb_cap: 0,
             },
+            Self::DamageDealtReduction { modifier_scalar } => StatusEffectColumns {
+                slow_pct: 0.0,
+                tick_amount: 0,
+                tick_interval_ms: 0,
+                damage_type: DamageType::Physical,
+                modifier_scalar: modifier_scalar.clamp(0.0, MAX_DAMAGE_DEALT_REDUCTION),
+                absorb_amount: 0,
+                absorb_cap: 0,
+            },
             Self::MagicResistance { modifier_scalar } => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: 0,
@@ -3456,6 +3552,11 @@ impl StatusPayload {
                 modifier_scalar: columns
                     .modifier_scalar
                     .clamp(0.0, MAX_HEALING_TAKEN_REDUCTION),
+            },
+            StatusEffectKind::DamageDealtReduction => Self::DamageDealtReduction {
+                modifier_scalar: columns
+                    .modifier_scalar
+                    .clamp(0.0, MAX_DAMAGE_DEALT_REDUCTION),
             },
             StatusEffectKind::ManaRegen => Self::ManaRegen {
                 modifier_scalar: columns.modifier_scalar.max(0.0),
@@ -3554,6 +3655,11 @@ impl StatusPayload {
                 !modifier_scalar.is_finite()
                     || modifier_scalar <= 0.0
                     || modifier_scalar > MAX_HEALING_TAKEN_REDUCTION
+            }
+            Self::DamageDealtReduction { modifier_scalar } => {
+                !modifier_scalar.is_finite()
+                    || modifier_scalar <= 0.0
+                    || modifier_scalar > MAX_DAMAGE_DEALT_REDUCTION
             }
             Self::MagicResistance { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0 || modifier_scalar > 1.0
@@ -3662,6 +3768,17 @@ impl StatusPayload {
                 }
                 Ok(())
             }
+            Self::DamageDealtReduction { modifier_scalar } => {
+                if !modifier_scalar.is_finite()
+                    || modifier_scalar <= 0.0
+                    || modifier_scalar > MAX_DAMAGE_DEALT_REDUCTION
+                {
+                    return Err(format!(
+                        "{subject} {path}.modifier_scalar must be > 0 and <= 1"
+                    ));
+                }
+                Ok(())
+            }
             Self::MagicResistance { modifier_scalar } => {
                 if !modifier_scalar.is_finite() || modifier_scalar <= 0.0 || modifier_scalar > 1.0 {
                     return Err(format!(
@@ -3756,6 +3873,12 @@ impl StatusPayload {
                     > existing
                         .modifier_scalar
                         .clamp(0.0, MAX_HEALING_TAKEN_REDUCTION)
+            }
+            Self::DamageDealtReduction { modifier_scalar } => {
+                modifier_scalar
+                    > existing
+                        .modifier_scalar
+                        .clamp(0.0, MAX_DAMAGE_DEALT_REDUCTION)
             }
             Self::MagicResistance { modifier_scalar } => {
                 modifier_scalar > existing.modifier_scalar.clamp(0.0, 1.0)
@@ -4137,6 +4260,7 @@ pub enum EffectPacket {
         target: Identity,
         kind: StatusEffectKind,
         stack_group: String,
+        remove_stacks: u32,
     },
 }
 
@@ -4305,6 +4429,7 @@ fn queue_effect_at(ctx: &ReducerContext, effect: EffectPacket, queued_at: Timest
             target,
             kind,
             stack_group,
+            remove_stacks,
         } => {
             ctx.db
                 .pending_remove_status()
@@ -4313,6 +4438,7 @@ fn queue_effect_at(ctx: &ReducerContext, effect: EffectPacket, queued_at: Timest
                     kind,
                     queued_order,
                     stack_group,
+                    remove_stacks,
                     queued_at,
                     queued_at_micros,
                 ));
@@ -4425,6 +4551,7 @@ fn new_pending_remove_status(
     kind: StatusEffectKind,
     queued_order: u64,
     stack_group: String,
+    remove_stacks: u32,
     queued_at: Timestamp,
     queued_at_micros: i64,
 ) -> PendingRemoveStatus {
@@ -4433,6 +4560,7 @@ fn new_pending_remove_status(
         target,
         status_kind: kind.as_str().to_string(),
         stack_group,
+        remove_stacks,
         queued_at,
         queued_at_micros,
         queued_order,
@@ -4534,6 +4662,7 @@ impl DuePendingEffect {
                     row.target,
                     row.status_kind.as_str(),
                     row.stack_group.as_str(),
+                    row.remove_stacks,
                 );
                 status_cache.invalidate();
             }
@@ -4617,6 +4746,56 @@ pub fn resolve_pending_effects(ctx: &ReducerContext, now: Timestamp) {
     for effect in pending {
         effect.apply(ctx, now, &mut status_cache);
         effect.delete(ctx);
+    }
+    queue_completed_projectile_return_heals(ctx);
+}
+
+fn record_projectile_return_heal_damage(ctx: &ReducerContext, hit: &PendingHit, hp_damage: i32) {
+    if hp_damage <= 0
+        || hit.damage_source_kind != DAMAGE_SOURCE_KIND_PROJECTILE
+        || hit.direct_action_key.trim().is_empty()
+    {
+        return;
+    }
+    let Some(mut runtime) = ctx
+        .db
+        .projectile_return_heal_runtime()
+        .projectile_instance_id()
+        .find(hit.direct_action_key.clone())
+    else {
+        return;
+    };
+    if runtime.caster != hit.source {
+        return;
+    }
+    runtime.accumulated_damage = runtime.accumulated_damage.saturating_add(hp_damage);
+    ctx.db
+        .projectile_return_heal_runtime()
+        .projectile_instance_id()
+        .update(runtime);
+}
+
+fn queue_completed_projectile_return_heals(ctx: &ReducerContext) {
+    let completed: Vec<_> = ctx
+        .db
+        .projectile_return_heal_runtime()
+        .iter()
+        .filter(|runtime| runtime.returned_to_caster)
+        .collect();
+    for runtime in completed {
+        if runtime.accumulated_damage > 0 {
+            queue_effects(
+                ctx,
+                vec![EffectPacket::Heal {
+                    amount: runtime.accumulated_damage,
+                    source: runtime.caster,
+                    target: runtime.caster,
+                    spell_id: runtime.projectile_instance_id.clone(),
+                    target_audience: TargetAudience::SelfOnly,
+                }],
+            );
+        }
+        clear_projectile_return_heal(ctx, runtime.projectile_instance_id.as_str());
     }
 }
 
@@ -4768,11 +4947,12 @@ fn apply_pending_remove_status_fields(
     target: Identity,
     status_kind: &str,
     stack_group: &str,
+    remove_stacks: u32,
 ) {
     let Some(kind) = StatusEffectKind::from_wire(status_kind) else {
         return;
     };
-    remove_status_by_ability(ctx, target, kind, stack_group, now);
+    remove_status_by_ability(ctx, target, kind, stack_group, remove_stacks, now);
 }
 
 fn apply_damage(
@@ -4884,6 +5064,7 @@ fn apply_damage_to_player_state(
         record_match_kill(ctx, source, instance_id);
         conclude_match_if_needed(ctx, instance_id);
     }
+    record_projectile_return_heal_damage(ctx, hit, hp_damage);
     grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
     apply_equipment_melee_steal(ctx, hit, hp_damage);
     queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
@@ -5198,6 +5379,7 @@ fn apply_damage_to_npc_state(
     if target_survived {
         arm_rime_after_frost_spell_hit(ctx, hit, ctx.timestamp);
     }
+    record_projectile_return_heal_damage(ctx, hit, hp_damage);
     grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
     apply_equipment_melee_steal(ctx, hit, hp_damage);
     queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
@@ -7085,9 +7267,10 @@ fn remove_status_by_ability(
     target: Identity,
     kind: StatusEffectKind,
     stack_group: &str,
+    remove_stacks: u32,
     now: Timestamp,
 ) {
-    let remove_ids: Vec<u64> = ctx
+    let mut matches: Vec<StatusEffect> = ctx
         .db
         .status_effect()
         .target()
@@ -7097,12 +7280,25 @@ fn remove_status_by_ability(
                 && (stack_group.is_empty() || effect.stack_group == stack_group)
                 && !status_removal_is_blocked_by_rime(ctx, effect, now)
         })
-        .map(|effect| effect.status_id)
         .collect();
+    matches.sort_by_key(|effect| effect.status_id);
 
-    for status_id in remove_ids {
-        ctx.db.status_effect().status_id().delete(status_id);
+    for mut effect in matches {
+        if let Some(remaining_stacks) = status_stacks_after_removal(effect.stacks, remove_stacks) {
+            effect.stacks = remaining_stacks;
+            ctx.db.status_effect().status_id().update(effect);
+        } else {
+            ctx.db.status_effect().status_id().delete(effect.status_id);
+        }
+        if remove_stacks > 0 {
+            break;
+        }
     }
+}
+
+fn status_stacks_after_removal(current_stacks: u32, remove_stacks: u32) -> Option<u32> {
+    (remove_stacks > 0 && current_stacks > remove_stacks)
+        .then_some(current_stacks.saturating_sub(remove_stacks))
 }
 
 pub(crate) fn remove_active_status_group(
@@ -7770,6 +7966,16 @@ impl StatusRuntimeView {
                                 .clamp(0.0, MAX_HEALING_TAKEN_REDUCTION),
                         );
                     }
+                    StatusEffectKind::DamageDealtReduction => {
+                        let entry = modifiers
+                            .damage_dealt_reduction_by_target
+                            .entry(*target)
+                            .or_insert(0.0);
+                        *entry = (*entry).max(
+                            (effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32)
+                                .clamp(0.0, MAX_DAMAGE_DEALT_REDUCTION),
+                        );
+                    }
                     StatusEffectKind::AttackSpeed => {
                         let entry = modifiers
                             .attack_speed_multiplier_by_target
@@ -7870,6 +8076,7 @@ pub struct TemporaryCombatModifiers {
     damage_taken_reduction_by_target: HashMap<Identity, f32>,
     damage_taken_amp_by_target_and_source: HashMap<(Identity, Identity), f32>,
     healing_taken_reduction_by_target: HashMap<Identity, f32>,
+    damage_dealt_reduction_by_target: HashMap<Identity, f32>,
     mana_regen_by_target: HashMap<Identity, f32>,
     stamina_regen_by_target: HashMap<Identity, f32>,
     magic_resistance_by_target: HashMap<Identity, f32>,
@@ -7910,7 +8117,13 @@ impl TemporaryCombatModifiers {
         } else {
             0.0
         };
-        1.0 + base_amp + direct_amp
+        let reduction = self
+            .damage_dealt_reduction_by_target
+            .get(identity)
+            .copied()
+            .unwrap_or(0.0)
+            .clamp(0.0, MAX_DAMAGE_DEALT_REDUCTION);
+        (1.0 + base_amp + direct_amp) * (1.0 - reduction)
     }
 
     pub fn damage_taken_multiplier_for(&self, identity: &Identity) -> f32 {
@@ -8157,12 +8370,12 @@ mod tests {
         resolve_temporary_hitpoint_absorb, resolved_shove_tunables,
         spell_critical_can_charge_capacitor, spell_critical_can_trigger_chain_reaction,
         stacked_slow_pct, stagger_shove_tunables, status_has_dispel_type,
-        status_matches_removal_filter_values, AuthoredStatusPayload, DamageDelivery, DamageType,
-        EffectPacket, MovementModifiers, PendingHit, StackPolicy, StatusDispelType, StatusEffect,
-        StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
-        TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS,
-        DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PROJECTILE, DAMAGE_SOURCE_KIND_SPELL,
-        PLAYER_EVENT_RETENTION,
+        status_matches_removal_filter_values, status_stacks_after_removal, AuthoredStatusPayload,
+        DamageDelivery, DamageType, EffectPacket, MovementModifiers, PendingHit, StackPolicy,
+        StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
+        StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
+        COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PROJECTILE,
+        DAMAGE_SOURCE_KIND_SPELL, PLAYER_EVENT_RETENTION,
     };
     use crate::movement::FIXED_TICK_MILLIS;
     use crate::relations::TargetAudience;
@@ -8186,6 +8399,13 @@ mod tests {
         assert_eq!(immolation_damage_for_stacks(100, 0.01, 10), 10);
         assert_eq!(immolation_damage_for_stacks(125, 0.01, 10), 13);
         assert_eq!(immolation_damage_for_stacks(0, 0.01, 10), 0);
+    }
+
+    #[test]
+    fn stack_limited_status_removal_decrements_only_the_selected_status() {
+        assert_eq!(status_stacks_after_removal(3, 1), Some(2));
+        assert_eq!(status_stacks_after_removal(1, 1), None);
+        assert_eq!(status_stacks_after_removal(3, 0), None);
     }
 
     #[test]
@@ -9033,6 +9253,24 @@ mod tests {
     }
 
     #[test]
+    fn damage_dealt_reduction_lowers_direct_and_periodic_damage() {
+        let identity = test_identity();
+        let mut modifiers = TemporaryCombatModifiers::default();
+        modifiers
+            .damage_dealt_reduction_by_target
+            .insert(identity, 0.10);
+
+        assert!(
+            (modifiers.damage_multiplier_for(&identity, DamageDelivery::Direct) - 0.90).abs()
+                < 0.0001
+        );
+        assert!(
+            (modifiers.damage_multiplier_for(&identity, DamageDelivery::Periodic) - 0.90).abs()
+                < 0.0001
+        );
+    }
+
+    #[test]
     fn shroud_breaks_on_positive_direct_damage_but_not_dot_ticks() {
         assert!(damage_breaks_shroud(DamageDelivery::Direct, 1));
         assert!(!damage_breaks_shroud(DamageDelivery::Direct, 0));
@@ -9311,6 +9549,15 @@ mod tests {
                 StatusEffectKind::HealingTakenReduction,
                 StatusPayload::HealingTakenReduction {
                     modifier_scalar: 0.35,
+                },
+            ),
+            (
+                StatusPayload::DamageDealtReduction {
+                    modifier_scalar: 0.10,
+                },
+                StatusEffectKind::DamageDealtReduction,
+                StatusPayload::DamageDealtReduction {
+                    modifier_scalar: 0.10,
                 },
             ),
             (

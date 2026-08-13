@@ -109,7 +109,7 @@ Derived from `delivery.kind` + `targeting` + a few delivery sub-fields (`motion`
 
 | VFX archetype | Derivation | Slot set (trigger/anchor/role/lifecycle) | Examples |
 |---|---|---|---|
-| **`PROJECTILE`** | `delivery.kind==PROJECTILE`, or `CHANNEL` w/ `delivery.projectile` | optional `muzzle` + `projectile_body` + optional `projectile_trail` + `impact` | FIREBALL, ICICLE, BOOMERANG_ORB, MAGIC_MISSILE, BLESSED_SHIELD, GROUND_SLASH |
+| **`PROJECTILE`** | `delivery.kind==PROJECTILE`, or `CHANNEL` w/ `delivery.projectile` | optional `muzzle` + `projectile_body` + optional `projectile_trail` + `impact` | FIREBALL, ICICLE, VAMPIRIC_ORB, MAGIC_MISSILE, BLESSED_SHIELD, GROUND_SLASH |
 | **`SKY_DROP`** | `delivery.kind==AREA && sky_origin` | `travel_body` (SPELL_RELEASE / ORIGIN / TRAVEL_BODY / UNTIL_TERMINAL_EVENT, `duration_ms=0`) + `impact` | METEOR |
 | **`GROUND_AOE`** | `delivery.kind==AREA && targeting∈{POINT,TARGET}` | `impact` at IMPACT_POINT/AREA_ORIGIN (ONE_SHOT / DURATION\|PARTICLE_SYSTEM) | LIGHTNING, ERUPTION, FROST_NEEDLE, NEGATE |
 | **`SELF_NOVA`** | `delivery.kind==AREA && targeting==SELF` | `burst` at CASTER (ONE_SHOT / PARTICLE_SYSTEM) | FROST_NOVA, ICE_SPIKES, SHOCKWAVE, INTIMIDATE |

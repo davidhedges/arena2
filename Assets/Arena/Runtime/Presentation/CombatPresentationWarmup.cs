@@ -329,6 +329,8 @@ namespace Arena.Presentation
                     instance.transform.SetLocalPositionAndRotation(Vector3.zero, template.LocalRotation);
                     instance.transform.localScale = Vector3.one;
                     VFXUtils.ApplyPrefabPresentationScale(instance, template.Scale);
+                    if (template.FollowAuthoritativeProjectileMotion)
+                        VFXUtils.ApplyAuthoritativeProjectileParticleMotion(instance);
                     SetLayerRecursively(instance, WarmupRenderLayer);
 
                     foreach (AudioSource source in instance.GetComponentsInChildren<AudioSource>(true))

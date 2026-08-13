@@ -4728,6 +4728,7 @@ fn resolve_pending_projectile_release(
             curve_progress: 0.0,
             sequence_index: 0,
             sequence_count: 1,
+            damage: 0,
             terminal: false,
             created_at: now,
             created_at_micros: timestamp_to_micros(now),
@@ -4885,6 +4886,7 @@ fn emit_projectile_release_fizzle(
             curve_progress: 0.0,
             sequence_index: 0,
             sequence_count: 1,
+            damage: 0,
             terminal: true,
             created_at: now,
             created_at_micros: timestamp_to_micros(now),
@@ -5794,6 +5796,7 @@ fn push_melee_remove_status_effects(
             target,
             kind,
             stack_group: effect.stack_group,
+            remove_stacks: 0,
         });
     }
 }

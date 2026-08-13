@@ -92,8 +92,8 @@ use crate::resources::{
     sync_primary_resource_for_player_with, tick_primary_resource_for_player, ResourceSpecInputs,
 };
 use crate::spells::{
-    has_due_pending_area_impacts, resolve_pending_area_impacts, resolve_pending_casts,
-    resolve_special_movement_y, sync_spell_definitions, tick_active_casts,
+    has_due_pending_area_impacts, migrate_renamed_spell_storage, resolve_pending_area_impacts,
+    resolve_pending_casts, resolve_special_movement_y, sync_spell_definitions, tick_active_casts,
     tick_bespoke_spells_with_snapshots, tick_persistent_areas,
 };
 use crate::survival::tick_survival;
@@ -748,6 +748,13 @@ fn bootstrap_server_state(ctx: &ReducerContext) {
     sync_item_definitions(ctx);
     sync_combat_projectile_definitions(ctx);
     sync_spell_definitions(ctx);
+    let migrated_spell_storage_rows = migrate_renamed_spell_storage(ctx);
+    if migrated_spell_storage_rows > 0 {
+        log::warn!(
+            "[INIT] Migrated {} renamed learned/spellbook spell row(s)",
+            migrated_spell_storage_rows
+        );
+    }
     sync_melee_definitions(ctx);
     sync_all_player_resources(ctx, ctx.timestamp);
     sync_all_fixed_action_charge_states(ctx, ctx.timestamp);

@@ -51,7 +51,7 @@ materializes slots that resolve. The **one** required slot is `projectile_body` 
 | `SPELL_MAGIC_MISSILE` | Impact | **✅ re-added (`4e4bec90`):** ARCANE impact `VFX_ARCANE_HIT_01` now fires **per missile** thanks to the per-projectile hit-cue fix (`e6a1c785`) — projectile spells dispatch SPELL_IMPACT from the per-missile presentation terminal, not the identity-less combat_event path. |
 | `SPELL_FROZEN_SPLINTERS` | CastGlow | **✅ writable (`6cd6bbcd`):** body sig + per-spell impact DURATION 700 (COLD generic is 1000/ICICLE); COLD inserts a channel cast-glow (UNTIL_CAST_END). |
 | `SPELL_INSTANT_BEAM` | CastGlow | **✅ writable (`6cd6bbcd`):** beam sig (DURATION 500); ARCANE inserts a charging cast-glow. |
-| `SPELL_BOOMERANG_ORB` | — | **✅ writable (`6cd6bbcd`):** body+hit signatures; no SHADOW cast-glow prefab → pure slot-stamp (no new effect, no republish). |
+| `SPELL_VAMPIRIC_ORB` | — | **✅ writable (`6cd6bbcd`):** body+hit signatures; no SHADOW cast-glow prefab → pure slot-stamp (no new effect, no republish). |
 | `SPELL_WITHERING_ORB` | — | **✅ writable (`6cd6bbcd`):** as BOOMERANG — slot-stamp only. |
 | `PALADIN_BLESSED_SHIELD` | Impact | **✅ writable (2026-07-08, commit `6ca4f329`):** HOLY palette (`impact=VFX_HOLY_HIT_01`) + body signature encoded; LEFT-hand matches the generator default → body matches, impact inserts via the relaxed gate. cast_glow deferred (no holy hand-glow prefab). Needs `VFX_HOLY_HIT_01` registered → the Orb08 holy hit + republish. |
 | `PALADIN_BLADE_BARRIER` | PersistentField | **✅ replaced (2026-07-20):** `PERSISTENT_AREA` derives the `TargetField` archetype. Its `persistent_field` fires on `SPELL_IMPACT`, follows `TARGET`, and uses `VFX_BLADE_BARRIER_AREA_01` for 7500 ms. The old orbiting projectile body and cast-hand exception are removed. |
@@ -60,7 +60,7 @@ These are the concrete justification for the **writer insertion path**: the 1:1 
 row that has no authored counterpart. **HOLY school encoded (commit `6ca4f329`):** generic `impact` +
 BLESSED_SHIELD body signature and Blade Barrier's target-field signature; `cast_glow` omitted until a holy hand-glow prefab exists (so
 these "add Impact" now, not CastGlow). The remaining CastGlow-adders (METEOR/FROZEN_SPLINTERS/INSTANT_BEAM/
-BOOMERANG_ORB/WITHERING_ORB) need their school's `cast_glow` (FIRE/COLD have one; SHADOW does not yet).
+VAMPIRIC_ORB/WITHERING_ORB) need their school's `cast_glow` (FIRE/COLD have one; SHADOW does not yet).
 
 ## Catalog-only slot — inference/archetype nuance (6)
 

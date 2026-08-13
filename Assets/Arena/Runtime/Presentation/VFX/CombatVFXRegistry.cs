@@ -26,6 +26,8 @@ namespace Arena.Presentation.VFX
             public Vector3 localEulerAngles = Vector3.zero;
             [Tooltip("Projectile-body scale multiplier at the end of its travel lifetime. Zero or one preserves the authored scale.")]
             [Range(0f, 1f)] public float scaleMultiplierAtLifetimeEnd = 1f;
+            [Tooltip("For projectile-body prefabs with baked travel, disable particle translation and make emitted particles follow the authoritative projectile root. Particle rotation is preserved.")]
+            public bool followAuthoritativeProjectileMotion;
         }
 
         public sealed class Template
@@ -36,7 +38,8 @@ namespace Arena.Presentation.VFX
                 float scale,
                 float scaleMultiplierAtLifetimeEnd = 1f,
                 Vector3 localPositionOffset = default,
-                Vector3 localEulerAngles = default)
+                Vector3 localEulerAngles = default,
+                bool followAuthoritativeProjectileMotion = false)
             {
                 VfxId = vfxId;
                 Prefab = prefab;
@@ -46,6 +49,7 @@ namespace Arena.Presentation.VFX
                     : 1f;
                 LocalPositionOffset = localPositionOffset;
                 LocalRotation = Quaternion.Euler(localEulerAngles);
+                FollowAuthoritativeProjectileMotion = followAuthoritativeProjectileMotion;
             }
 
             public string VfxId { get; }
@@ -54,6 +58,7 @@ namespace Arena.Presentation.VFX
             public float ScaleMultiplierAtLifetimeEnd { get; }
             public Vector3 LocalPositionOffset { get; }
             public Quaternion LocalRotation { get; }
+            public bool FollowAuthoritativeProjectileMotion { get; }
         }
 
         private static CombatVFXRegistry? _sharedRegistry;
@@ -155,7 +160,8 @@ namespace Arena.Presentation.VFX
                         entry.scale,
                         entry.scaleMultiplierAtLifetimeEnd,
                         entry.localPositionOffset,
-                        entry.localEulerAngles);
+                        entry.localEulerAngles,
+                        entry.followAuthoritativeProjectileMotion);
                 }
             }
         }

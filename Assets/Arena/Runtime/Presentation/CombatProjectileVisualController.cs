@@ -196,7 +196,8 @@ namespace Arena.Presentation
                         template.Prefab,
                         trailTemplate,
                         template.ScaleMultiplierAtLifetimeEnd,
-                        authoritativeLifetime: true);
+                        authoritativeLifetime: true,
+                        followAuthoritativeProjectileMotion: template.FollowAuthoritativeProjectileMotion);
             });
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (_activeProjectiles.ContainsKey(projectileKey))

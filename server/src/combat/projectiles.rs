@@ -11,7 +11,8 @@ use crate::combat::scene_query::{
     terrain_surface_y_for_caster, SceneHitKind,
 };
 use crate::combat::{
-    hostile_targeted_ability_misses, queue_effects, timestamp_to_micros, ActiveCombatProjectile,
+    clear_projectile_return_heal, hostile_targeted_ability_misses,
+    mark_projectile_returned_for_heal, queue_effects, timestamp_to_micros, ActiveCombatProjectile,
     ActiveCombatProjectileTargetState, CombatEvent, CombatProjectileTickMetrics, DamageDelivery,
     EffectPacket, ProjectilePresentationEvent, StatusPolarity, COMBAT_EVENT_BLOCK,
     COMBAT_EVENT_CONTACT, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_MISS,
@@ -27,6 +28,11 @@ use crate::spells::{
     spell_definition_by_str, ImpactEffect, SpellBehavior, SpellId, SpellRuntimeDefinition,
 };
 use crate::world_collision::WorldRaycastStats;
+
+#[allow(unused_imports)]
+use crate::npcs::npc_state as _;
+#[allow(unused_imports)]
+use crate::player_state::player_state as _;
 
 #[allow(unused_imports)]
 use crate::combat::active_combat_projectile as _;
@@ -311,7 +317,9 @@ fn tick_projectile_instance(
                 return;
             }
             let impact_damage = spell_definition
-                .map(|definition| projectile_damage_at_current_lifetime(&projectile, definition))
+                .map(|definition| {
+                    projectile_damage_for_target(ctx, &projectile, definition, target)
+                })
                 .unwrap_or(projectile.damage);
             emit_projectile_event(
                 ctx,
@@ -777,7 +785,8 @@ fn resolve_orbit_projectile_contacts(
         }
 
         metrics.contacts_resolved = metrics.contacts_resolved.saturating_add(1);
-        let impact_damage = projectile_damage_at_current_lifetime(projectile, definition);
+        let impact_damage =
+            projectile_damage_for_target(ctx, projectile, definition, target.player_id);
         if consume_on_contact {
             emit_projectile_event(
                 ctx,
@@ -874,6 +883,12 @@ fn tick_boomerang_projectile_instance(
         finish_projectile_without_event(ctx, &projectile);
         return;
     };
+    let boomerang = definition
+        .secondary
+        .projectile
+        .as_ref()
+        .and_then(|tunables| tunables.motion.boomerang())
+        .expect("validated boomerang projectile must expose motion tunables");
 
     if projectile.age >= projectile.lifetime {
         emit_projectile_event(
@@ -895,7 +910,10 @@ fn tick_boomerang_projectile_instance(
     let tick_dt = (projectile.lifetime - projectile.age).max(0.0).min(dt);
     let mut remaining_dt = tick_dt;
     if !projectile.boomerang_returning {
-        let outbound_speed = projectile.speed.max(0.0);
+        // The row speed is set to zero during the apex hold so clients also keep the
+        // authoritative visual still between updates. Gameplay outbound speed remains
+        // catalog-owned and does not depend on that presentation state.
+        let outbound_speed = definition.speed.max(0.0);
         if outbound_speed <= 0.0 {
             fizzle_projectile_and_finish(ctx, now, &projectile, metrics);
             return;
@@ -923,13 +941,40 @@ fn tick_boomerang_projectile_instance(
 
         remaining_dt -= outbound_dt;
         if projectile.traveled >= projectile.boomerang_outbound_distance - 0.001 {
-            projectile.boomerang_returning = true;
+            projectile.speed = 0.0;
+            if resolve_boomerang_enemy_contacts_on_segment(
+                ctx,
+                now,
+                &projectile,
+                definition,
+                actor_snapshots,
+                players,
+                candidate_indices,
+                projectile.pos_x,
+                projectile.pos_y,
+                projectile.pos_z,
+                0.0,
+                metrics,
+            ) {
+                return;
+            }
+
+            if boomerang_apex_hold_finished(
+                projectile.age,
+                projectile.boomerang_outbound_distance,
+                outbound_speed,
+                boomerang.apex_hold_seconds,
+            ) {
+                projectile.boomerang_returning = true;
+                projectile.speed = projectile.boomerang_return_speed;
+            }
             remaining_dt = 0.0;
         }
     }
 
     if projectile.boomerang_returning && remaining_dt > 0.0 {
         if !update_boomerang_return_direction(&mut projectile, &caster) {
+            mark_projectile_returned_for_heal(ctx, projectile.projectile_instance_id.as_str());
             emit_projectile_event(
                 ctx,
                 &projectile,
@@ -942,7 +987,7 @@ fn tick_boomerang_projectile_instance(
                 now,
                 metrics,
             );
-            finish_projectile_without_event(ctx, &projectile);
+            finish_returned_boomerang_without_event(ctx, &projectile);
             return;
         }
 
@@ -993,6 +1038,16 @@ fn tick_boomerang_projectile_instance(
         metrics,
     );
     update_projectile_row(ctx, projectile, metrics);
+}
+
+fn boomerang_apex_hold_finished(
+    age_seconds: f32,
+    outbound_distance: f32,
+    outbound_speed: f32,
+    apex_hold_seconds: f32,
+) -> bool {
+    let outbound_seconds = outbound_distance.max(0.0) / outbound_speed.max(f32::EPSILON);
+    age_seconds >= outbound_seconds + apex_hold_seconds.max(0.0)
 }
 
 fn update_boomerang_return_direction(
@@ -1104,6 +1159,7 @@ fn advance_boomerang_segment(
         projectile.pos_y = hit_y;
         projectile.pos_z = hit_z;
         projectile.traveled += t;
+        mark_projectile_returned_for_heal(ctx, projectile.projectile_instance_id.as_str());
         emit_projectile_event(
             ctx,
             projectile,
@@ -1116,7 +1172,7 @@ fn advance_boomerang_segment(
             now,
             metrics,
         );
-        finish_projectile_without_event(ctx, projectile);
+        finish_returned_boomerang_without_event(ctx, projectile);
         return true;
     }
 
@@ -1163,14 +1219,23 @@ fn resolve_boomerang_enemy_contacts_on_segment(
     max_distance: f32,
     metrics: &mut ProjectileTickMetricsFrame,
 ) -> bool {
+    let boomerang = definition
+        .secondary
+        .projectile
+        .as_ref()
+        .and_then(|tunables| tunables.motion.boomerang())
+        .expect("validated boomerang projectile must expose motion tunables");
     let end_x = start_x + projectile.dir_x * max_distance;
     let end_z = start_z + projectile.dir_z * max_distance;
+    let broadphase_padding = projectile
+        .radius
+        .max((boomerang.hitbox_length * 0.5).max(0.0));
     actor_snapshots.query_segment_indices(
         start_x,
         start_z,
         end_x,
         end_z,
-        projectile.radius,
+        broadphase_padding,
         candidate_indices,
     );
 
@@ -1189,17 +1254,33 @@ fn resolve_boomerang_enemy_contacts_on_segment(
         if !can_harm(ctx, projectile.caster, target.player_id) {
             continue;
         }
-        if let Some(t) = raycast_capsule_with_padding(
-            start_x,
-            start_y,
-            start_z,
-            projectile.dir_x,
-            projectile.dir_y,
-            projectile.dir_z,
-            max_distance,
-            target,
-            projectile.radius,
-        ) {
+        let contact_t = if boomerang.hitbox_length > 0.0 && boomerang.hitbox_width > 0.0 {
+            swept_perpendicular_box_contact_t(
+                start_x,
+                start_y,
+                start_z,
+                projectile.dir_x,
+                projectile.dir_y,
+                projectile.dir_z,
+                max_distance,
+                boomerang.hitbox_length,
+                boomerang.hitbox_width,
+                target,
+            )
+        } else {
+            raycast_capsule_with_padding(
+                start_x,
+                start_y,
+                start_z,
+                projectile.dir_x,
+                projectile.dir_y,
+                projectile.dir_z,
+                max_distance,
+                target,
+                projectile.radius,
+            )
+        };
+        if let Some(t) = contact_t {
             contacts.push((t, *target));
         }
     }
@@ -1276,7 +1357,8 @@ fn resolve_boomerang_enemy_contacts_on_segment(
         }
 
         metrics.contacts_resolved = metrics.contacts_resolved.saturating_add(1);
-        let impact_damage = projectile_damage_at_current_lifetime(projectile, definition);
+        let impact_damage =
+            projectile_damage_for_target(ctx, projectile, definition, target.player_id);
         emit_projectile_event_with_metadata(
             ctx,
             projectile,
@@ -1301,6 +1383,52 @@ fn resolve_boomerang_enemy_contacts_on_segment(
         upsert_projectile_target_state(ctx, state);
     }
     false
+}
+
+#[allow(clippy::too_many_arguments)]
+fn swept_perpendicular_box_contact_t(
+    start_x: f32,
+    start_y: f32,
+    start_z: f32,
+    dir_x: f32,
+    dir_y: f32,
+    dir_z: f32,
+    travel_distance: f32,
+    hitbox_length: f32,
+    hitbox_width: f32,
+    target: &CombatActorSnapshot,
+) -> Option<f32> {
+    if travel_distance < 0.0 || hitbox_length <= 0.0 || hitbox_width <= 0.0 {
+        return None;
+    }
+    let horizontal_len = (dir_x * dir_x + dir_z * dir_z).sqrt();
+    if horizontal_len <= 0.0001 {
+        return None;
+    }
+    let forward_x = dir_x / horizontal_len;
+    let forward_z = dir_z / horizontal_len;
+    let right_x = forward_z;
+    let right_z = -forward_x;
+    let rel_x = target.pos_x - start_x;
+    let rel_z = target.pos_z - start_z;
+    let forward = rel_x * forward_x + rel_z * forward_z;
+    let lateral = rel_x * right_x + rel_z * right_z;
+    let target_radius = target.hit_radius.max(0.0);
+    let half_width = hitbox_width * 0.5 + target_radius;
+    let half_length = hitbox_length * 0.5 + target_radius;
+    if forward < -half_width
+        || forward > travel_distance + half_width
+        || lateral.abs() > half_length
+    {
+        return None;
+    }
+
+    let contact_t = forward.clamp(0.0, travel_distance);
+    let projectile_y = start_y + dir_y * contact_t;
+    let vertical_padding = half_width.max(target_radius);
+    let min_y = target.pos_y - vertical_padding;
+    let max_y = target.pos_y + target.hit_height.max(0.0) + vertical_padding;
+    (projectile_y >= min_y && projectile_y <= max_y).then_some(contact_t)
 }
 
 fn projectile_target_state_key(projectile_instance_id: &str, target: Identity) -> String {
@@ -1697,7 +1825,7 @@ fn queue_spell_projectile_hit_effects(
     definition: &SpellRuntimeDefinition,
     target: &CombatActorSnapshot,
 ) {
-    let impact_damage = projectile_damage_at_current_lifetime(projectile, definition);
+    let impact_damage = projectile_damage_for_target(ctx, projectile, definition, target.player_id);
     let mut effects = vec![EffectPacket::Damage {
         amount: impact_damage,
         damage_type: crate::combat::DamageType::from_wire(projectile.damage_type.as_str()),
@@ -1769,6 +1897,44 @@ fn projectile_damage_at_current_lifetime(
     };
     let multiplier = 1.0 + (end_multiplier - 1.0) * lifetime_progress;
     ((projectile.damage as f32) * multiplier).round().max(1.0) as i32
+}
+
+fn projectile_damage_for_target(
+    ctx: &ReducerContext,
+    projectile: &ActiveCombatProjectile,
+    definition: &SpellRuntimeDefinition,
+    target: Identity,
+) -> i32 {
+    let max_health_fraction = definition
+        .secondary
+        .projectile
+        .as_ref()
+        .or(definition.secondary.channel_projectile.as_ref())
+        .map(|tunables| tunables.damage_target_max_health_fraction)
+        .unwrap_or(0.0);
+    if max_health_fraction <= 0.0 {
+        return projectile_damage_at_current_lifetime(projectile, definition);
+    }
+    let max_hp = ctx
+        .db
+        .player_state()
+        .player_id()
+        .find(target)
+        .map(|state| state.max_hp)
+        .or_else(|| {
+            ctx.db
+                .npc_state()
+                .identity()
+                .find(target)
+                .map(|state| state.max_hp)
+        })
+        .unwrap_or(0);
+    if max_hp <= 0 {
+        return 0;
+    }
+    ((max_hp as f32) * max_health_fraction)
+        .round()
+        .clamp(1.0, i32::MAX as f32) as i32
 }
 
 fn queue_weapon_projectile_hit_effects(
@@ -1947,6 +2113,7 @@ fn emit_projectile_event_with_metadata(
             curve_progress: projectile_curve_progress(projectile),
             sequence_index: projectile.projectile_sequence_index,
             sequence_count: 1,
+            damage,
             terminal,
             created_at: now,
             created_at_micros: timestamp_to_micros(now),
@@ -2095,6 +2262,18 @@ fn fizzle_projectile_and_finish(
 }
 
 fn finish_projectile_without_event(ctx: &ReducerContext, projectile: &ActiveCombatProjectile) {
+    clear_projectile_return_heal(ctx, projectile.projectile_instance_id.as_str());
+    finish_projectile_rows(ctx, projectile);
+}
+
+fn finish_returned_boomerang_without_event(
+    ctx: &ReducerContext,
+    projectile: &ActiveCombatProjectile,
+) {
+    finish_projectile_rows(ctx, projectile);
+}
+
+fn finish_projectile_rows(ctx: &ReducerContext, projectile: &ActiveCombatProjectile) {
     ctx.db
         .active_combat_projectile_target_state()
         .projectile_instance_id()
@@ -2803,5 +2982,45 @@ mod tests {
             return_key,
             projectile_target_state_key(projectile_instance_id, target)
         );
+    }
+
+    #[test]
+    fn boomerang_apex_hold_starts_after_outbound_travel_time() {
+        assert!(!boomerang_apex_hold_finished(1.16, 8.0, 14.0, 0.6));
+        assert!(boomerang_apex_hold_finished(1.18, 8.0, 14.0, 0.6));
+        assert!(boomerang_apex_hold_finished(8.0 / 14.0, 8.0, 14.0, 0.0));
+    }
+
+    #[test]
+    fn grim_wheel_contact_uses_a_long_box_perpendicular_to_travel() {
+        let mut target = test_snapshot(test_identity(2));
+        target.pos_y = 0.0;
+        target.pos_z = 0.5;
+        target.pos_x = 2.3;
+
+        assert!(swept_perpendicular_box_contact_t(
+            0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 3.8, 0.9, &target,
+        )
+        .is_some());
+
+        target.pos_x = 2.5;
+        assert!(swept_perpendicular_box_contact_t(
+            0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 3.8, 0.9, &target,
+        )
+        .is_none());
+
+        target.pos_x = 0.0;
+        target.pos_z = 2.0;
+        assert!(swept_perpendicular_box_contact_t(
+            0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 3.8, 0.9, &target,
+        )
+        .is_none());
+
+        target.pos_x = 1.5;
+        target.pos_z = 0.0;
+        assert!(swept_perpendicular_box_contact_t(
+            0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 3.8, 0.9, &target,
+        )
+        .is_some());
     }
 }
