@@ -13,7 +13,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CATALOG_JSON = REPO_ROOT / "Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json"
 UNITY_ASSET = REPO_ROOT / "Assets/Arena/Resources/CharacterAppearance/EquipmentAppearanceCatalog.asset"
 GENERATED_ENTRY_PREFIX = "  - itemDefId: NH_"
-GENERATED_MARKER = "  # BEGIN GENERATED WEAPON APPEARANCES\n"
+LEGACY_GENERATED_MARKER = "  # BEGIN GENERATED WEAPON APPEARANCES\n"
+GENERATED_ENTRY_SENTINEL = (
+    "  - itemDefId: TRAINING_DAGGER_PAIR\n"
+    "    colorId: DEFAULT\n"
+)
 QUIVER_PATH = REPO_ROOT / "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"
 
 
@@ -91,13 +95,18 @@ def generated_yaml() -> str:
 
 def expected_asset() -> str:
     existing = UNITY_ASSET.read_text(encoding="utf-8")
-    generated_index = existing.find(GENERATED_MARKER)
+    generated_index = existing.find(LEGACY_GENERATED_MARKER)
+    if generated_index < 0:
+        generated_index = existing.find(GENERATED_ENTRY_SENTINEL)
     if generated_index < 0:
         generated_index = existing.find(GENERATED_ENTRY_PREFIX)
     prefix = existing[:generated_index] if generated_index >= 0 else existing
     if not prefix.endswith("\n"):
         prefix += "\n"
-    return prefix + GENERATED_MARKER + generated_yaml()
+    # Unity's NativeFormatImporter does not reliably accept a comment between
+    # serialized list elements. Keep the generated boundary implicit and use
+    # the first fully-authored entry above as the regeneration sentinel.
+    return prefix + generated_yaml()
 
 
 def main() -> None:
