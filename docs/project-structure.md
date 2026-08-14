@@ -215,14 +215,19 @@ validated as the same cluster.
 ## Development Build Cleanup
 
 Repeated native server tests can accumulate large hard-linked Cargo debug and
-incremental artifacts under `server/target/debug`. Periodically inspect the
-physical disk usage and clean those generated artifacts with:
+incremental artifacts under the `server/target`, `hub-server/target`, and
+`match-server/target` trees. Periodically inspect the physical disk usage and
+clean those generated artifacts with:
 
 ```bash
 ops/cleanup-server-build-artifacts.sh --dry-run
 ops/cleanup-server-build-artifacts.sh
 ```
 
-The cleanup preserves release artifacts, including
-`server/target/wasm32-unknown-unknown/release/arena.wasm`. It is separate from
-`ops/cleanup-local-spacetimedb-data.sh`, which deletes local database/cache data.
+The cleanup preserves every module's release artifacts, including the gameplay,
+Hub, and optimized disposable-match WASM files consumed by local publishing.
+It is separate from `ops/cleanup-local-spacetimedb-data.sh`, which deletes all
+local SpacetimeDB databases/caches plus the now-invalid match-provisioner ledger
+and managed runtime files. Preview that destructive cleanup with
+`ops/cleanup-local-spacetimedb-data.sh --dry-run`; after it runs, use
+`ops/setup-local-multiplayer.sh` to publish a fresh local environment.
