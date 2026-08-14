@@ -28,6 +28,8 @@ namespace Arena.Presentation.VFX
             [Range(0f, 1f)] public float scaleMultiplierAtLifetimeEnd = 1f;
             [Tooltip("For projectile-body prefabs with baked travel, disable particle translation and make emitted particles follow the authoritative projectile root. Particle rotation is preserved.")]
             public bool followAuthoritativeProjectileMotion;
+            [Tooltip("Keep the projectile VFX root fixed at its spawn position because travel is already baked into the prefab. Gameplay motion remains authoritative and unaffected.")]
+            public bool lockProjectileRootToSpawn;
         }
 
         public sealed class Template
@@ -39,7 +41,8 @@ namespace Arena.Presentation.VFX
                 float scaleMultiplierAtLifetimeEnd = 1f,
                 Vector3 localPositionOffset = default,
                 Vector3 localEulerAngles = default,
-                bool followAuthoritativeProjectileMotion = false)
+                bool followAuthoritativeProjectileMotion = false,
+                bool lockProjectileRootToSpawn = false)
             {
                 VfxId = vfxId;
                 Prefab = prefab;
@@ -50,6 +53,7 @@ namespace Arena.Presentation.VFX
                 LocalPositionOffset = localPositionOffset;
                 LocalRotation = Quaternion.Euler(localEulerAngles);
                 FollowAuthoritativeProjectileMotion = followAuthoritativeProjectileMotion;
+                LockProjectileRootToSpawn = lockProjectileRootToSpawn;
             }
 
             public string VfxId { get; }
@@ -59,6 +63,7 @@ namespace Arena.Presentation.VFX
             public Vector3 LocalPositionOffset { get; }
             public Quaternion LocalRotation { get; }
             public bool FollowAuthoritativeProjectileMotion { get; }
+            public bool LockProjectileRootToSpawn { get; }
         }
 
         private static CombatVFXRegistry? _sharedRegistry;
@@ -161,7 +166,8 @@ namespace Arena.Presentation.VFX
                         entry.scaleMultiplierAtLifetimeEnd,
                         entry.localPositionOffset,
                         entry.localEulerAngles,
-                        entry.followAuthoritativeProjectileMotion);
+                        entry.followAuthoritativeProjectileMotion,
+                        entry.lockProjectileRootToSpawn);
                 }
             }
         }

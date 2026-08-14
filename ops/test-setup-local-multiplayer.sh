@@ -58,6 +58,7 @@ launchctl() {
 }
 
 MATCH_WASM_PATH="/tmp/Arena Match/arena_match.opt.wasm"
+MATCH_PROVENANCE_PATH="/tmp/Arena Match/arena_match.opt.wasm.inputs.json"
 PROVISIONER_STATE_DB="/tmp/Arena State/state.sqlite3"
 PROVISIONER_LOG_PATH="/tmp/Arena Logs/provisioner.log"
 ARENA_PROVISIONER_MANAGEMENT_URL="http://127.0.0.1:3100"
@@ -75,6 +76,8 @@ assert_contains_line "$PROVISIONER_LOG_PATH" "$captured" \
     "launchd startup should preserve the configured log path"
 assert_contains_line "ARENA_PROVISIONER_MATCH_WASM=$MATCH_WASM_PATH" "$captured" \
     "launchd startup should preserve the configured match artifact"
+assert_contains_line "ARENA_PROVISIONER_MATCH_MANIFEST=$MATCH_PROVENANCE_PATH" "$captured" \
+    "launchd startup should preserve the artifact provenance manifest"
 assert_contains_line "ARENA_PROVISIONER_STATE_DB=$PROVISIONER_STATE_DB" "$captured" \
     "launchd startup should preserve the configured ledger"
 assert_contains_line "ARENA_PROVISIONER_HUB_DATABASE=$ARENA_PROVISIONER_HUB_DATABASE" "$captured" \

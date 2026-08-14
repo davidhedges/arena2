@@ -51,6 +51,8 @@ mod catalog;
 mod cooldowns;
 mod events;
 mod manifest;
+mod necro_prison;
+mod sanctuary;
 mod simulation;
 
 use manifest::spell_definitions;
@@ -80,9 +82,18 @@ pub(crate) use cooldowns::{
 };
 pub(crate) use events::Vec3 as SpellVec3;
 pub(crate) use manifest::{
-    ImmolationSecondaryTunables, ImpactEffect, SpellBehavior,
-    SpellDefinition as SpellRuntimeDefinition, SpellId, SpellTargeting,
-    WorldObstacleSecondaryTunables,
+    ImmolationSecondaryTunables, ImpactEffect, NecroPrisonSecondaryTunables,
+    SanctuarySecondaryTunables, SpellBehavior, SpellDefinition as SpellRuntimeDefinition, SpellId,
+    SpellTargeting, WorldObstacleSecondaryTunables,
+};
+pub(crate) use necro_prison::{
+    clear_necro_prisons_for_owner, expire_necro_prisons, resolve_hostile_necro_prison_movement,
+    spawn_necro_prison,
+};
+pub(crate) use sanctuary::{
+    area_overlaps_hostile_sanctuary, clear_sanctuary_zones_for_owner, expire_sanctuary_zones,
+    first_hostile_sanctuary_projectile_hit, resolve_hostile_sanctuary_movement,
+    spawn_sanctuary_zone,
 };
 #[allow(unused_imports)]
 pub(crate) use simulation::{tick_bespoke_spells, tick_bespoke_spells_with_snapshots};
@@ -426,6 +437,8 @@ pub struct SpellDefinition {
     pub has_status_stack_group: bool,
     pub block_behavior: String,
     pub primary_resource_cost: f32,
+    #[default(0i32)]
+    pub self_health_cost: i32,
     pub generates_primary_resource_on_cast: bool,
 }
 
@@ -808,6 +821,7 @@ pub(crate) fn sync_spell_definitions(ctx: &ReducerContext) {
             has_status_stack_group: definition.status_stack_group.is_some(),
             block_behavior: definition.block_behavior.as_str().to_string(),
             primary_resource_cost: definition.primary_resource_cost.max(0.0),
+            self_health_cost: definition.self_health_cost.max(0),
             generates_primary_resource_on_cast: definition.generates_primary_resource_on_cast,
         };
 

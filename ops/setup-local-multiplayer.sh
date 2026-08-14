@@ -9,6 +9,7 @@ RUNTIME_DIR="${ARENA_LOCAL_MULTIPLAYER_RUNTIME_DIR:-$ROOT_DIR/Library/ArenaLocal
 PROVISIONER_PID_PATH="$RUNTIME_DIR/provisioner.pid"
 PROVISIONER_LOG_PATH="$RUNTIME_DIR/provisioner.log"
 MATCH_WASM_PATH="${ARENA_PROVISIONER_MATCH_WASM:-$ROOT_DIR/match-server/target/wasm32-unknown-unknown/release/arena_match.opt.wasm}"
+MATCH_PROVENANCE_PATH="${ARENA_PROVISIONER_MATCH_MANIFEST:-$MATCH_WASM_PATH.inputs.json}"
 PROVISIONER_STATE_DB="${ARENA_PROVISIONER_STATE_DB:-$ROOT_DIR/Library/ArenaMatchProvisioner/state.sqlite3}"
 PROVISIONER_LOCK_PATH="${PROVISIONER_STATE_DB%.*}.lock"
 ROOT_DIR_CHECKSUM="$(printf '%s' "$ROOT_DIR" | cksum)"
@@ -156,6 +157,7 @@ start_launchd_provisioner() {
     environment_args=(
         "PATH=${PATH:-/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
         "ARENA_PROVISIONER_MATCH_WASM=$MATCH_WASM_PATH"
+        "ARENA_PROVISIONER_MATCH_MANIFEST=$MATCH_PROVENANCE_PATH"
         "ARENA_PROVISIONER_STATE_DB=$PROVISIONER_STATE_DB"
     )
     if [ -n "${ARENA_PROVISIONER_MANAGEMENT_URL:-}" ]; then
@@ -249,10 +251,13 @@ show_status() {
         ready=1
     fi
 
-    if [ -f "$MATCH_WASM_PATH" ]; then
+    local provenance_output
+    if provenance_output="$(python3 "$ROOT_DIR/match_provisioner/artifact_provenance.py" verify \
+        --wasm "$MATCH_WASM_PATH" \
+        --manifest "$MATCH_PROVENANCE_PATH" 2>&1)"; then
         echo "Match artifact: ready ($MATCH_WASM_PATH)"
     else
-        echo "Match artifact: missing ($MATCH_WASM_PATH)"
+        echo "Match artifact: stale or missing ($provenance_output)"
         ready=1
     fi
 

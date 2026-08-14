@@ -30,6 +30,8 @@ import urllib.parse
 import urllib.request
 import uuid
 
+from .artifact_provenance import ArtifactProvenanceError, verify_artifact_manifest
+
 
 DATABASE_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -103,6 +105,7 @@ class Config:
     hub_database: str
     database_prefix: str
     wasm_path: Path
+    artifact_manifest_path: Path
     state_path: Path
     max_concurrent_matches: int
     lease_seconds: int
@@ -130,6 +133,12 @@ class Config:
             raise ProvisionerError(
                 f"prebuilt match WASM does not exist: {wasm_path}; build it before provisioning"
             )
+        artifact_manifest_path = Path(
+            os.environ.get(
+                "ARENA_PROVISIONER_MATCH_MANIFEST",
+                f"{wasm_path}.inputs.json",
+            )
+        ).resolve()
         state_path = Path(
             os.environ.get(
                 "ARENA_PROVISIONER_STATE_DB",
@@ -166,6 +175,7 @@ class Config:
                 os.environ.get("ARENA_PROVISIONER_DATABASE_PREFIX", "arena-match"),
             ),
             wasm_path=wasm_path,
+            artifact_manifest_path=artifact_manifest_path,
             state_path=state_path,
             max_concurrent_matches=_env_int(
                 "ARENA_PROVISIONER_MAX_CONCURRENT_MATCHES", 4, 1, 128
@@ -657,7 +667,18 @@ class Provisioner:
         )
         self.wasm = config.wasm_path.read_bytes()
         self.wasm_sha256 = hashlib.sha256(self.wasm).hexdigest()
+        self._ensure_artifact_fresh()
         self.match_build_id = config.match_build_id or f"sha256-{self.wasm_sha256[:20]}"
+
+    def _ensure_artifact_fresh(self) -> None:
+        try:
+            verify_artifact_manifest(
+                self.config.wasm_path,
+                self.config.artifact_manifest_path,
+                expected_wasm_sha256=self.wasm_sha256,
+            )
+        except ArtifactProvenanceError as error:
+            raise ProvisionerError(str(error)) from error
 
     def run_once(self) -> dict[str, int]:
         now = int(self.clock())
@@ -782,6 +803,10 @@ class Provisioner:
         service_identity: str,
         now: int,
     ) -> None:
+        # Check immediately before creating ledger state or claiming a Hub
+        # ticket. A source edit made after this worker started can therefore
+        # never cause a new match to publish the cached, obsolete module.
+        self._ensure_artifact_fresh()
         startup_started = time.perf_counter()
         ticket_created_micros = timestamp_microseconds(ticket["created_at"])
         timings_ms: dict[str, float] = {}
@@ -1051,6 +1076,10 @@ class Provisioner:
             timings_ms["database_lookup"] = self._elapsed_ms(lookup_started)
         published = False
         if info is None:
+            # Recheck after the Hub claim and immediately before publishing.
+            # This closes the window where an edit could stale the artifact
+            # while a ticket was moving from PENDING to PROVISIONING.
+            self._ensure_artifact_fresh()
             publish_started = time.perf_counter()
             try:
                 success = self.api.publish(allocation.database_name, self.wasm)

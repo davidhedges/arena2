@@ -1,8 +1,11 @@
 #nullable enable
 
 using System;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEngine;
 
 namespace Arena.Tests.Editor
 {
@@ -13,18 +16,118 @@ namespace Arena.Tests.Editor
         [Test]
         public void AdoptedPredictedBoomerangDoesNotHardSnapOnAuthoritativeUpdate()
         {
-            Assert.That(ShouldSnapAuthoritativeVisualUpdate("BOOMERANG_CASTER", adoptedPredictedProjectile: true), Is.False);
-            Assert.That(ShouldSnapAuthoritativeVisualUpdate("BOOMERANG_CASTER", adoptedPredictedProjectile: false), Is.True);
+            Assert.That(ShouldSnapAuthoritativeVisualUpdate("BOOMERANG_CASTER", adoptedPredictedProjectile: true, movesRootWithProjectile: true), Is.False);
+            Assert.That(ShouldSnapAuthoritativeVisualUpdate("BOOMERANG_CASTER", adoptedPredictedProjectile: false, movesRootWithProjectile: true), Is.True);
+            Assert.That(ShouldSnapAuthoritativeVisualUpdate("TRAVELING_AREA", adoptedPredictedProjectile: true, movesRootWithProjectile: true), Is.False);
+            Assert.That(ShouldSnapAuthoritativeVisualUpdate("TRAVELING_AREA", adoptedPredictedProjectile: false, movesRootWithProjectile: true), Is.True);
         }
 
         [Test]
         public void NonAuthoritativeMotionDoesNotHardSnap()
         {
-            Assert.That(ShouldSnapAuthoritativeVisualUpdate("LINEAR", adoptedPredictedProjectile: false), Is.False);
-            Assert.That(ShouldSnapAuthoritativeVisualUpdate(string.Empty, adoptedPredictedProjectile: false), Is.False);
+            Assert.That(ShouldSnapAuthoritativeVisualUpdate("LINEAR", adoptedPredictedProjectile: false, movesRootWithProjectile: true), Is.False);
+            Assert.That(ShouldSnapAuthoritativeVisualUpdate(string.Empty, adoptedPredictedProjectile: false, movesRootWithProjectile: true), Is.False);
         }
 
-        private static bool ShouldSnapAuthoritativeVisualUpdate(string motionKind, bool adoptedPredictedProjectile)
+        [Test]
+        public void GravewakeKeepsItsBakedVisualAtTheSpawnPosition()
+        {
+            UnityEngine.Object? registryAsset = AssetDatabase.LoadMainAssetAtPath(
+                "Assets/Arena/Resources/CombatVFX/CombatVFXRegistry.asset");
+            Assert.That(registryAsset, Is.Not.Null);
+            var registry = new SerializedObject(registryAsset!);
+            SerializedProperty entries = registry.FindProperty("entries");
+            bool found = false;
+            bool lockProjectileRootToSpawn = false;
+            bool followAuthoritativeProjectileMotion = false;
+            for (int index = 0; index < entries.arraySize; index++)
+            {
+                SerializedProperty entry = entries.GetArrayElementAtIndex(index);
+                if (!string.Equals(
+                        entry.FindPropertyRelative("vfxId").stringValue,
+                        "VFX_GRAVEWAKE_BONE_WAVE_01",
+                        StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                found = true;
+                lockProjectileRootToSpawn = entry
+                    .FindPropertyRelative("lockProjectileRootToSpawn")
+                    .boolValue;
+                followAuthoritativeProjectileMotion = entry
+                    .FindPropertyRelative("followAuthoritativeProjectileMotion")
+                    .boolValue;
+                break;
+            }
+
+            Assert.That(found, Is.True);
+            Assert.That(lockProjectileRootToSpawn, Is.True);
+            Assert.That(followAuthoritativeProjectileMotion, Is.False);
+            Assert.That(ShouldSnapAuthoritativeVisualUpdate(
+                "TRAVELING_AREA",
+                adoptedPredictedProjectile: false,
+                movesRootWithProjectile: !lockProjectileRootToSpawn), Is.False);
+        }
+
+        [Test]
+        public void LockedProjectileRootIgnoresSimulationAndAuthoritativePositionUpdates()
+        {
+            var prefab = new GameObject("StationaryProjectileTestPrefab");
+            Type vfxType = RuntimeAssembly.GetType("Arena.Presentation.VFX.WeaponProjectileVFX")
+                ?? throw new InvalidOperationException("WeaponProjectileVFX not found in Assembly-CSharp.");
+            ConstructorInfo constructor = vfxType
+                .GetConstructors(BindingFlags.Instance | BindingFlags.Public)
+                .Single(candidate => candidate.GetParameters().Length == 12);
+            object vfx = constructor.Invoke(new object?[]
+            {
+                "stationary-test",
+                new Vector3(1f, 2f, 3f),
+                Vector3.forward,
+                10f,
+                12f,
+                1f,
+                prefab,
+                null,
+                1f,
+                true,
+                false,
+                false,
+            });
+
+            try
+            {
+                FieldInfo groupField = vfxType.GetField(
+                        "_group",
+                        BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?? throw new InvalidOperationException("WeaponProjectileVFX._group not found.");
+                var group = (GameObject)groupField.GetValue(vfx)!;
+                Vector3 spawnPosition = group.transform.position;
+
+                MethodInfo tick = vfxType.GetMethod("Tick", new[] { typeof(float) })
+                    ?? throw new InvalidOperationException("WeaponProjectileVFX.Tick not found.");
+                MethodInfo update = vfxType.GetMethod(
+                        "OnUpdate",
+                        new[] { typeof(Vector3), typeof(Vector3), typeof(float), typeof(bool) })
+                    ?? throw new InvalidOperationException("WeaponProjectileVFX.OnUpdate not found.");
+                tick.Invoke(vfx, new object[] { 0.5f });
+                update.Invoke(
+                    vfx,
+                    new object[] { new Vector3(9f, 2f, 9f), Vector3.right, 10f, true });
+
+                Assert.That(group.transform.position, Is.EqualTo(spawnPosition));
+            }
+            finally
+            {
+                ((IDisposable)vfx).Dispose();
+                UnityEngine.Object.DestroyImmediate(prefab);
+            }
+        }
+
+        private static bool ShouldSnapAuthoritativeVisualUpdate(
+            string motionKind,
+            bool adoptedPredictedProjectile,
+            bool movesRootWithProjectile)
         {
             Type controller = RuntimeAssembly.GetType("Arena.Presentation.CombatProjectileVisualController")
                 ?? throw new InvalidOperationException("CombatProjectileVisualController not found in Assembly-CSharp.");
@@ -32,7 +135,9 @@ namespace Arena.Tests.Editor
                     "ShouldSnapAuthoritativeVisualUpdate",
                     BindingFlags.Static | BindingFlags.NonPublic)
                 ?? throw new InvalidOperationException("ShouldSnapAuthoritativeVisualUpdate not found.");
-            return (bool)method.Invoke(null, new object[] { motionKind, adoptedPredictedProjectile })!;
+            return (bool)method.Invoke(
+                null,
+                new object[] { motionKind, adoptedPredictedProjectile, movesRootWithProjectile })!;
         }
     }
 }

@@ -29,6 +29,7 @@ namespace Arena.Presentation.VFX
         private bool _active = true;
         private bool _disposed;
         private bool _hasVisualEffect;
+        private bool _moveRootWithProjectile = true;
         private bool _visualSweepExtended;
         private float _visualSweepElapsed;
         private ProjectileVfxPool.Rental? _rental;
@@ -44,7 +45,8 @@ namespace Arena.Presentation.VFX
             CombatVFXRegistry.Template? trailTemplate = null,
             float scaleMultiplierAtLifetimeEnd = 1f,
             bool authoritativeLifetime = false,
-            bool followAuthoritativeProjectileMotion = false)
+            bool followAuthoritativeProjectileMotion = false,
+            bool moveRootWithProjectile = true)
         {
             _group = new GameObject($"VFX_Projectile_{ShortId(instanceId)}");
             _projectileBody = Object.Instantiate(prefab, _group.transform, false);
@@ -69,7 +71,14 @@ namespace Arena.Presentation.VFX
                     VFXUtils.ApplyAuthoritativeProjectileParticleMotion(trail);
             }
             _hasVisualEffect = _group.GetComponentInChildren<VisualEffect>(true) != null;
-            Initialize(instanceId, position, direction, speed, maxDistance, authoritativeLifetime);
+            Initialize(
+                instanceId,
+                position,
+                direction,
+                speed,
+                maxDistance,
+                authoritativeLifetime,
+                moveRootWithProjectile);
         }
 
         internal WeaponProjectileVFX(
@@ -80,7 +89,8 @@ namespace Arena.Presentation.VFX
             float maxDistance,
             ProjectileVfxPool.Rental rental,
             float scaleMultiplierAtLifetimeEnd = 1f,
-            bool authoritativeLifetime = false)
+            bool authoritativeLifetime = false,
+            bool moveRootWithProjectile = true)
         {
             _rental = rental;
             _group = rental.Root;
@@ -89,7 +99,14 @@ namespace Arena.Presentation.VFX
             _scaleMultiplierAtLifetimeEnd = ResolveEndScaleMultiplier(scaleMultiplierAtLifetimeEnd);
             // Pool bypass already excludes VisualEffect prefabs, so the rental path never carries one.
             _hasVisualEffect = false;
-            Initialize(instanceId, position, direction, speed, maxDistance, authoritativeLifetime);
+            Initialize(
+                instanceId,
+                position,
+                direction,
+                speed,
+                maxDistance,
+                authoritativeLifetime,
+                moveRootWithProjectile);
         }
 
         private void Initialize(
@@ -98,7 +115,8 @@ namespace Arena.Presentation.VFX
             Vector3 direction,
             float speed,
             float maxDistance,
-            bool authoritativeLifetime)
+            bool authoritativeLifetime,
+            bool moveRootWithProjectile)
         {
             _group.name = $"VFX_Projectile_{ShortId(instanceId)}";
             _group.transform.SetParent(null, true);
@@ -111,6 +129,7 @@ namespace Arena.Presentation.VFX
             _authoritativePosition = _group.transform.position;
             _traveled = 0f;
             _authoritativeLifetime = authoritativeLifetime;
+            _moveRootWithProjectile = moveRootWithProjectile;
             _active = true;
             _disposed = false;
             _visualSweepExtended = false;
@@ -129,7 +148,8 @@ namespace Arena.Presentation.VFX
                 float step = _speed * dt;
                 _traveled += step;
                 ApplyLifetimeScale();
-                _group.transform.position += _direction * step;
+                if (_moveRootWithProjectile)
+                    _group.transform.position += _direction * step;
 
                 if (_visualSweepExtended)
                 {
@@ -139,8 +159,11 @@ namespace Arena.Presentation.VFX
                 }
                 else
                 {
-                    _authoritativePosition += _direction * step;
-                    ReconcilePosition(dt);
+                    if (_moveRootWithProjectile)
+                    {
+                        _authoritativePosition += _direction * step;
+                        ReconcilePosition(dt);
+                    }
                     if (!_authoritativeLifetime && _traveled >= _maxDistance)
                         EndAt(_group.transform.position);
                 }
@@ -177,7 +200,7 @@ namespace Arena.Presentation.VFX
             bool snapToAuthoritative)
         {
             OnUpdate(position, direction, speed);
-            if (!_active || !snapToAuthoritative)
+            if (!_active || !snapToAuthoritative || !_moveRootWithProjectile)
                 return;
 
             _group.transform.position = _authoritativePosition;
@@ -191,11 +214,13 @@ namespace Arena.Presentation.VFX
             bool snapToAuthoritative)
         {
             OnUpdate(position, direction, speed, traveled);
-            if (!_active || !snapToAuthoritative)
+            if (!_active || !snapToAuthoritative || !_moveRootWithProjectile)
                 return;
 
             _group.transform.position = _authoritativePosition;
         }
+
+        internal bool MovesRootWithProjectile => _moveRootWithProjectile;
 
         public void OnImpact(Vector3 point)
         {

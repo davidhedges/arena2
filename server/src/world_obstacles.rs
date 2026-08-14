@@ -211,6 +211,12 @@ pub(crate) fn resolve_active_world_obstacle_movement(
         out_x = start_x + (out_x - start_x) * safe_t;
         out_z = start_z + (out_z - start_z) * safe_t;
     }
+    let (out_x, out_z) = crate::spells::resolve_hostile_sanctuary_movement(
+        ctx, actor, start_x, start_z, out_x, out_z, radius,
+    );
+    let (out_x, out_z) = crate::spells::resolve_hostile_necro_prison_movement(
+        ctx, actor, start_x, start_z, out_x, out_z, radius,
+    );
     crate::world_interactions::resolve_closed_door_movement(
         ctx, actor, start_x, start_z, out_x, out_z, radius, foot_y, height,
     )

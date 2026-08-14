@@ -51,11 +51,23 @@ namespace Arena.Input
                 outX = Mathf.Lerp(startX, outX, safeFraction);
                 outZ = Mathf.Lerp(startZ, outZ, safeFraction);
             }
-            return WorldDoorCollisionRuntime.ResolveHorizontalCollision(
+            Vector2 sanctuaryResolved = ActiveSanctuaryZoneRuntime.ResolveHorizontalCollision(
                 startX,
                 startZ,
                 outX,
                 outZ,
+                playerRadius);
+            Vector2 necroPrisonResolved = ActiveNecroPrisonRuntime.ResolveHorizontalCollision(
+                startX,
+                startZ,
+                sanctuaryResolved.x,
+                sanctuaryResolved.y,
+                playerRadius);
+            return WorldDoorCollisionRuntime.ResolveHorizontalCollision(
+                startX,
+                startZ,
+                necroPrisonResolved.x,
+                necroPrisonResolved.y,
                 playerRadius,
                 playerHeight,
                 footY);

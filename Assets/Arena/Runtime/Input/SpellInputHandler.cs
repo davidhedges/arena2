@@ -44,6 +44,7 @@ namespace Arena.Input
         private const long PendingInstantSpellPredictionTtlMs = 5000L;
         private const long PendingLocalSpellEventHoldMs = 250L;
         private const string RecallSpellId = "RECALL";
+        private const float NecroPrisonIndicatorYawOffset = Mathf.PI;
 
         // --- Aim mode state ---
         private string? _activeAimSpell;
@@ -51,6 +52,7 @@ namespace Arena.Input
         private float _originalYaw;
         private float _currentYaw;
         private bool _yawLocked;
+        private bool _activeAimUsesTriangle;
         private readonly Dictionary<string, PendingPredictedInstantSpellVisual> _pendingInstantSpellByToken = new();
         private readonly Dictionary<string, AcceptedPredictedInstantSpell> _acceptedInstantSpellByActionInstance = new();
         private readonly List<PendingAuthoritativeInstantSpellReplay> _pendingAuthoritativeInstantSpellReplays = new();
@@ -174,10 +176,15 @@ namespace Arena.Input
         // Aim mode — interactive point targeting
         // ---------------------------------------------------------------
 
-        private void StartAimMode(string spellId, string targetingSpellId, float aimRadius)
+        private void StartAimMode(
+            string spellId,
+            string targetingSpellId,
+            float aimRadius,
+            bool usesTriangle)
         {
             _activeAimSpell = spellId;
             _activeAimTargetingSpell = targetingSpellId;
+            _activeAimUsesTriangle = usesTriangle;
 
             // Unlock cursor for free aiming
             Cursor.lockState = CursorLockMode.None;
@@ -193,7 +200,10 @@ namespace Arena.Input
 
             // Show aim indicator
             var aim = AimIndicator.Instance;
-            aim?.ShowCircle(aimRadius, AimCircleColor);
+            if (_activeAimUsesTriangle)
+                aim?.ShowTriangle(aimRadius, ResolveTriangleIndicatorYaw(_currentYaw), AimCircleColor);
+            else
+                aim?.ShowCircle(aimRadius, AimCircleColor);
         }
 
         private void UpdateAimMode(
@@ -212,7 +222,15 @@ namespace Arena.Input
             {
                 bool hasAimPoint = aim.RefreshFromCursor(input.MousePosition);
                 bool inRange = hasAimPoint && IsAimPointWithinMaxDistance(spellDef, aim.AimPoint);
-                aim.ShowCircle(aimRadius, inRange ? AimCircleColor : AimCircleOutOfRangeColor);
+                bool overlapsSanctuary = hasAimPoint
+                    && ActiveSanctuaryZoneRuntime.OverlapsHostile(aim.AimPoint, aimRadius);
+                Color aimColor = inRange && !overlapsSanctuary
+                    ? AimCircleColor
+                    : AimCircleOutOfRangeColor;
+                if (_activeAimUsesTriangle)
+                    aim.ShowTriangle(aimRadius, ResolveTriangleIndicatorYaw(_currentYaw), aimColor);
+                else
+                    aim.ShowCircle(aimRadius, aimColor);
             }
 
             // Escape → cancel aim
@@ -254,6 +272,9 @@ namespace Arena.Input
                 return;
             }
         }
+
+        private static float ResolveTriangleIndicatorYaw(float facingYaw)
+            => facingYaw + NecroPrisonIndicatorYawOffset;
 
         private void ConfirmAim(SpacetimeDB.Types.DbConnection conn, AimIndicator? aim)
         {
@@ -320,6 +341,13 @@ namespace Arena.Input
                 ActionBarTrace.Trace($"spell dispatch rejected: aim point out of range for {spellId}");
                 return;
             }
+            if (TryGetAimRadius(targetingDef, out float aimRadius)
+                && ActiveSanctuaryZoneRuntime.OverlapsHostile(aimPoint, aimRadius))
+            {
+                ActionBarTrace.Trace(
+                    $"spell dispatch rejected: area overlaps a hostile Sanctuary for {spellId}");
+                return;
+            }
 
             PlayerEntity? localPlayer = EntityRegistry.Instance?.LocalPlayerEntity;
             if (localPlayer == null || !HasResourceForSpell(conn, localPlayer, spellId, spellDef))
@@ -355,6 +383,7 @@ namespace Arena.Input
         {
             _activeAimSpell = null;
             _activeAimTargetingSpell = null;
+            _activeAimUsesTriangle = false;
             _yawLocked = false;
         }
 
@@ -362,6 +391,7 @@ namespace Arena.Input
         {
             _activeAimSpell = null;
             _activeAimTargetingSpell = null;
+            _activeAimUsesTriangle = false;
             _yawLocked = false;
 
             transform.rotation = Quaternion.Euler(0f, _originalYaw * Mathf.Rad2Deg, 0f);
@@ -507,7 +537,11 @@ namespace Arena.Input
                 }
                 // Enter interactive aim mode instead of instant cast
                 ActionBarTrace.Trace($"spell dispatch entered aim mode for {spellId}");
-                StartAimMode(spellId, targetingDef.Kind, aimRadius);
+                StartAimMode(
+                    spellId,
+                    targetingDef.Kind,
+                    aimRadius,
+                    WireIdentifier.Normalize(targetingDef.Behavior) == "NECRO_PRISON");
                 return true;
             }
 
@@ -633,6 +667,18 @@ namespace Arena.Input
         {
             if (IsActiveRadialToggleOff(conn, entity.Identity, spellId, spellDef))
                 return true;
+
+            int healthCost = spellDef == null ? 0 : Mathf.Max(0, spellDef.SelfHealthCost);
+            if (healthCost > 0 && entity.Hp <= healthCost)
+            {
+                ActionBarTrace.Trace(
+                    $"spell rejected: {spellId} requires more than {healthCost} health ({entity.Hp} available)");
+                LocalCombatState.NotifyLocalAdvisoryDenial(
+                    spellId,
+                    spellId,
+                    SpacetimeDB.Types.ActionRejectReason.InsufficientResource);
+                return false;
+            }
 
             float cost = SpellStartResourceCost(spellDef);
             if (cost <= 0.001f)

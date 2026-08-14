@@ -10110,6 +10110,184 @@ mod tests {
     }
 
     #[test]
+    fn graveburst_stays_in_blight_and_authors_delayed_area_impact_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_GRAVEBURST")
+            .expect("expected Graveburst ability");
+        assert_eq!(ability.discipline_id, "BLIGHT");
+        assert_eq!(
+            normalize_identifier(ability.action_id.as_str()),
+            "GRAVEBURST"
+        );
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "POINT"
+        );
+
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                    && normalize_identifier(cue.owner_id.as_str()) == "SPELL_GRAVEBURST"
+                    && normalize_identifier(cue.trigger.as_str()) == "AREA_IMPACT"
+            })
+            .expect("Graveburst should author a delayed area-impact VFX cue");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "AREA_ORIGIN");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_GRAVEBURST_AREA_01"
+        );
+        assert_eq!(
+            normalize_identifier(cue.attach_mode.as_str()),
+            "SPAWN_WORLD"
+        );
+        assert_eq!(
+            normalize_identifier(cue.lifecycle.as_str()),
+            "PARTICLE_SYSTEM"
+        );
+        assert_eq!(cue.duration_ms, 0);
+    }
+
+    #[test]
+    fn gravewake_stays_in_blight_and_authors_moving_bone_wave_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_GRAVEWAKE")
+            .expect("expected Gravewake ability");
+        assert_eq!(ability.discipline_id, "BLIGHT");
+        assert_eq!(
+            normalize_identifier(ability.action_id.as_str()),
+            "GRAVEWAKE"
+        );
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "SELF"
+        );
+        assert_eq!(ability.gameplay.requires_target, Some(false));
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .expect("Gravewake should author projectile delivery");
+        assert_eq!(
+            delivery
+                .get("motion")
+                .and_then(|motion| motion.get("kind"))
+                .and_then(|kind| kind.as_str()),
+            Some("TRAVELING_AREA")
+        );
+        assert_eq!(
+            delivery
+                .get("terrain_conforming")
+                .and_then(|value| value.as_bool()),
+            Some(true)
+        );
+
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_GRAVEWAKE"
+                    && normalize_identifier(cue.vfx_role.as_str()) == "PROJECTILE_BODY"
+            })
+            .expect("Gravewake should author a projectile-body VFX cue");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "CASTER");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_GRAVEWAKE_BONE_WAVE_01"
+        );
+        assert_eq!(
+            normalize_identifier(cue.lifecycle.as_str()),
+            "UNTIL_TERMINAL_EVENT"
+        );
+    }
+
+    #[test]
+    fn necro_prison_stays_in_blight_and_authors_movement_only_zone_contract() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_NECRO_PRISON")
+            .expect("expected Necro Prison ability");
+        assert_eq!(ability.discipline_id, "BLIGHT");
+        assert_eq!(
+            normalize_identifier(ability.action_id.as_str()),
+            "NECRO_PRISON"
+        );
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "POINT"
+        );
+        assert_eq!(ability.gameplay.requires_target_los, Some(false));
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .expect("Necro Prison should author a delivery contract");
+        assert_eq!(
+            delivery.get("kind").and_then(|value| value.as_str()),
+            Some("NECRO_PRISON")
+        );
+        assert_eq!(
+            delivery.get("radius").and_then(|value| value.as_f64()),
+            Some(4.0)
+        );
+        assert!(delivery.get("block_behavior").is_none());
+        assert!(catalog
+            .combat_vfx_cues
+            .iter()
+            .all(|cue| { normalize_identifier(cue.owner_id.as_str()) != "SPELL_NECRO_PRISON" }));
+    }
+
+    #[test]
+    fn blood_offering_stays_in_blight_and_authors_health_for_mana_contract() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_BLOOD_OFFERING")
+            .expect("expected Blood Offering ability");
+        assert_eq!(ability.discipline_id, "BLIGHT");
+        assert_eq!(
+            normalize_identifier(ability.action_id.as_str()),
+            "BLOOD_OFFERING"
+        );
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "SELF"
+        );
+        assert_eq!(ability.gameplay.cast_time_ms, Some(0));
+        assert_eq!(ability.gameplay.primary_resource_gain_on_cast, 50.0);
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .expect("Blood Offering should author a delivery contract");
+        assert_eq!(
+            delivery.get("kind").and_then(|value| value.as_str()),
+            Some("SELF_RESOURCE")
+        );
+        assert_eq!(
+            delivery.get("health_cost").and_then(|value| value.as_i64()),
+            Some(20)
+        );
+        assert_eq!(
+            delivery
+                .get("resource_gain_kind")
+                .and_then(|value| value.as_str()),
+            Some("MANA")
+        );
+    }
+
+    #[test]
     fn meteor_vfx_uses_cast_glow_travel_body_and_impact_prefab() {
         let catalog = progression_catalog();
         let meteor_cues: Vec<_> = catalog
@@ -12538,6 +12716,7 @@ mod tests {
             ("SPELL_MAGIC_MISSILE", "MAGIC_MISSILE", "ARCANE"),
             ("SPELL_VAMPIRIC_ORB", "VAMPIRIC_ORB", "SHADOW"),
             ("SPELL_GRIM_WHEEL", "GRIM_WHEEL", "PHYSICAL"),
+            ("SPELL_GRAVEWAKE", "GRAVEWAKE", "PHYSICAL"),
             ("SPELL_LIGHTNING", "LIGHTNING", "LIGHTNING"),
             ("SPELL_METEOR", "METEOR", "FIRE"),
             ("SPELL_NEGATE", "NEGATE", "ARCANE"),
@@ -12629,6 +12808,10 @@ mod tests {
                     "SPELL_DEFILED_GROUND",
                     "SPELL_REAP",
                     "SPELL_GRIM_WHEEL",
+                    "SPELL_GRAVEBURST",
+                    "SPELL_GRAVEWAKE",
+                    "SPELL_NECRO_PRISON",
+                    "SPELL_BLOOD_OFFERING",
                 ][..],
             ),
             (

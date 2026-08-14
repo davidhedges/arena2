@@ -35,7 +35,9 @@ namespace Arena.MatchDb
             AddTable(ActiveCast = new(conn));
             AddTable(ActiveCombatDiscipline = new(conn));
             AddTable(ActiveCombatMode = new(conn));
+            AddTable(ActiveNecroPrison = new(conn));
             AddTable(ActiveRadialEffect = new(conn));
+            AddTable(ActiveSanctuaryZone = new(conn));
             AddTable(ActiveWorldObstacle = new(conn));
             AddTable(ArenaInstance = new(conn));
             AddTable(ArenaMatch = new(conn));
@@ -606,7 +608,9 @@ namespace Arena.MatchDb
             new QueryBuilder().From.ActiveCast().ToSql(),
             new QueryBuilder().From.ActiveCombatDiscipline().ToSql(),
             new QueryBuilder().From.ActiveCombatMode().ToSql(),
+            new QueryBuilder().From.ActiveNecroPrison().ToSql(),
             new QueryBuilder().From.ActiveRadialEffect().ToSql(),
+            new QueryBuilder().From.ActiveSanctuaryZone().ToSql(),
             new QueryBuilder().From.ActiveWorldObstacle().ToSql(),
             new QueryBuilder().From.ArenaInstance().ToSql(),
             new QueryBuilder().From.ArenaMatch().ToSql(),
@@ -687,7 +691,9 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Table<ActiveCast, ActiveCastCols, ActiveCastIxCols> ActiveCast() => new("active_cast", new ActiveCastCols("active_cast"), new ActiveCastIxCols("active_cast"));
         public global::SpacetimeDB.Table<ActiveCombatDiscipline, ActiveCombatDisciplineCols, ActiveCombatDisciplineIxCols> ActiveCombatDiscipline() => new("active_combat_discipline", new ActiveCombatDisciplineCols("active_combat_discipline"), new ActiveCombatDisciplineIxCols("active_combat_discipline"));
         public global::SpacetimeDB.Table<ActiveCombatMode, ActiveCombatModeCols, ActiveCombatModeIxCols> ActiveCombatMode() => new("active_combat_mode", new ActiveCombatModeCols("active_combat_mode"), new ActiveCombatModeIxCols("active_combat_mode"));
+        public global::SpacetimeDB.Table<ActiveNecroPrison, ActiveNecroPrisonCols, ActiveNecroPrisonIxCols> ActiveNecroPrison() => new("active_necro_prison", new ActiveNecroPrisonCols("active_necro_prison"), new ActiveNecroPrisonIxCols("active_necro_prison"));
         public global::SpacetimeDB.Table<ActiveRadialEffect, ActiveRadialEffectCols, ActiveRadialEffectIxCols> ActiveRadialEffect() => new("active_radial_effect", new ActiveRadialEffectCols("active_radial_effect"), new ActiveRadialEffectIxCols("active_radial_effect"));
+        public global::SpacetimeDB.Table<ActiveSanctuaryZone, ActiveSanctuaryZoneCols, ActiveSanctuaryZoneIxCols> ActiveSanctuaryZone() => new("active_sanctuary_zone", new ActiveSanctuaryZoneCols("active_sanctuary_zone"), new ActiveSanctuaryZoneIxCols("active_sanctuary_zone"));
         public global::SpacetimeDB.Table<ActiveWorldObstacle, ActiveWorldObstacleCols, ActiveWorldObstacleIxCols> ActiveWorldObstacle() => new("active_world_obstacle", new ActiveWorldObstacleCols("active_world_obstacle"), new ActiveWorldObstacleIxCols("active_world_obstacle"));
         public global::SpacetimeDB.Table<ArenaInstance, ArenaInstanceCols, ArenaInstanceIxCols> ArenaInstance() => new("arena_instance", new ArenaInstanceCols("arena_instance"), new ArenaInstanceIxCols("arena_instance"));
         public global::SpacetimeDB.Table<ArenaMatch, ArenaMatchCols, ArenaMatchIxCols> ArenaMatch() => new("arena_match", new ArenaMatchCols("arena_match"), new ArenaMatchIxCols("arena_match"));

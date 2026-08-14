@@ -18,11 +18,13 @@ use super::manifest::{
     ChannelAreaSecondaryTunables, ChannelSecondaryTunables, ConsumeStatusSecondaryTunables,
     CurvedTargetProjectileTunables, DirectTargetSecondaryTunables, EmanationSecondaryTunables,
     ImmolationSecondaryTunables, ImpactEffect, InstantBeamChargeScaling,
-    InstantBeamSecondaryTunables, MeteorSkyOrigin, OrbitCasterProjectileTunables,
-    PersistentAreaSecondaryTunables, ProjectileMotionTunables, ProjectileSecondaryTunables,
-    RecallSecondaryTunables, RemoveStatusDefinition, RemoveStatusSecondaryTunables, SpellBehavior,
-    SpellCastMobility, SpellDefinition, SpellId, SpellParryBehavior, SpellSecondaryTunables,
-    SpellTargeting, StagedStatusApplicationTunables, WorldObstacleSecondaryTunables, SPELL_METEOR,
+    InstantBeamSecondaryTunables, MeteorSkyOrigin, NecroPrisonSecondaryTunables,
+    OrbitCasterProjectileTunables, PersistentAreaSecondaryTunables, ProjectileMotionTunables,
+    ProjectileSecondaryTunables, RecallSecondaryTunables, RemoveStatusDefinition,
+    RemoveStatusSecondaryTunables, SanctuarySecondaryTunables, SpellBehavior, SpellCastMobility,
+    SpellDefinition, SpellId, SpellParryBehavior, SpellSecondaryTunables, SpellTargeting,
+    StagedStatusApplicationTunables, TravelingAreaProjectileTunables,
+    WorldObstacleSecondaryTunables, SPELL_METEOR,
 };
 
 const PROGRESSION_CATALOG_JSON: &str = include_str!("../progression_catalog.shared.json");
@@ -260,6 +262,19 @@ enum SpellCatalogDelivery {
         damage_amp_per_stack: f32,
         status_stack_group: String,
     },
+    Sanctuary {
+        max_distance: f32,
+        radius: f32,
+        duration_ms: u64,
+        visual_resource_path: String,
+    },
+    NecroPrison {
+        max_distance: f32,
+        radius: f32,
+        duration_ms: u64,
+        visual_resource_path: String,
+        dissipate_visual_resource_path: String,
+    },
     WorldObstacle {
         forward_distance: f32,
         duration_ms: u64,
@@ -273,7 +288,12 @@ enum SpellCatalogDelivery {
     Transpose {
         max_distance: f32,
     },
-    SelfResource {},
+    SelfResource {
+        #[serde(default)]
+        health_cost: i32,
+        #[serde(default = "default_self_resource_gain_kind")]
+        resource_gain_kind: String,
+    },
     Recall {
         replay_cooldown_ms: u64,
     },
@@ -328,6 +348,10 @@ struct ProjectileTuningRow {
 
 fn default_projectile_end_damage_multiplier() -> f32 {
     1.0
+}
+
+fn default_self_resource_gain_kind() -> String {
+    "STAMINA".to_string()
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -385,6 +409,11 @@ enum ProjectileMotionRow {
         hitbox_width: f32,
         #[serde(default)]
         heal_caster_on_return: bool,
+    },
+    TravelingArea {
+        hitbox_length: f32,
+        hitbox_width: f32,
+        max_hits_per_target: u32,
     },
 }
 
@@ -446,6 +475,15 @@ impl<'de> Deserialize<'de> for ProjectileMotionRow {
                     hitbox_length: row.hitbox_length,
                     hitbox_width: row.hitbox_width,
                     heal_caster_on_return: row.heal_caster_on_return,
+                })
+            }
+            "TRAVELING_AREA" => {
+                let row: TravelingAreaProjectileMotionRow =
+                    serde_json::from_value(value).map_err(de::Error::custom)?;
+                Ok(Self::TravelingArea {
+                    hitbox_length: row.hitbox_length,
+                    hitbox_width: row.hitbox_width,
+                    max_hits_per_target: row.max_hits_per_target,
                 })
             }
             _ => Err(de::Error::custom(format!(
@@ -516,6 +554,16 @@ struct BoomerangCasterProjectileMotionRow {
     heal_caster_on_return: bool,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TravelingAreaProjectileMotionRow {
+    #[serde(rename = "kind")]
+    _kind: String,
+    hitbox_length: f32,
+    hitbox_width: f32,
+    max_hits_per_target: u32,
+}
+
 impl Default for ProjectileMotionRow {
     fn default() -> Self {
         Self::Linear {}
@@ -555,6 +603,17 @@ enum ImpactEffectRow {
     InterruptCast,
     Knockback {
         distance_meters: f32,
+    },
+    Hot {
+        duration_ms: u64,
+        tick_interval_ms: u64,
+        tick_heal: i32,
+        #[serde(default)]
+        status_stack_group: Option<String>,
+        #[serde(default = "default_one_stack")]
+        max_stacks: u32,
+        #[serde(default = "default_refresh_stack_policy")]
+        stack_policy: StackPolicy,
     },
     Burn {
         duration_ms: u64,
@@ -1029,6 +1088,8 @@ impl SpellCatalogRow {
             block_behavior: BlockBehavior::Blockable,
             primary_resource_cost: self.resource_cost,
             primary_resource_gain_on_cast: self.primary_resource_gain_on_cast,
+            self_health_cost: 0,
+            self_resource_gain_kind: default_self_resource_gain_kind(),
             generates_primary_resource_on_cast: self.primary_resource_gain_on_cast > 0.0,
             arms_auto_attack_on_cast: self.arms_auto_attack_on_cast,
             apply_status: None,
@@ -1095,6 +1156,12 @@ impl SpellCatalogRow {
                         definition.max_distance = boomerang.outbound_distance;
                         definition.duration = boomerang.lifetime_seconds;
                         definition.radius = boomerang.hit_radius;
+                    }
+                    ProjectileMotionTunables::TravelingArea(_) => {
+                        definition.speed = projectile.speed;
+                        definition.max_distance = max_distance;
+                        definition.duration = max_distance / projectile.speed.max(f32::EPSILON);
+                        definition.radius = projectile.radius;
                     }
                 }
                 definition.secondary.projectile = Some(ProjectileSecondaryTunables {
@@ -1394,6 +1461,44 @@ impl SpellCatalogRow {
                     status_stack_group,
                 });
             }
+            SpellCatalogDelivery::Sanctuary {
+                max_distance,
+                radius,
+                duration_ms,
+                visual_resource_path,
+            } => {
+                definition.behavior = SpellBehavior::Sanctuary;
+                definition.max_distance = max_distance;
+                definition.duration = Duration::from_millis(duration_ms).as_secs_f32();
+                definition.radius = radius;
+                definition.damage = 0;
+                definition.damage_type = DamageType::Holy;
+                definition.block_behavior = BlockBehavior::Unblockable;
+                definition.secondary.sanctuary = Some(SanctuarySecondaryTunables {
+                    duration: Duration::from_millis(duration_ms),
+                    visual_resource_path,
+                });
+            }
+            SpellCatalogDelivery::NecroPrison {
+                max_distance,
+                radius,
+                duration_ms,
+                visual_resource_path,
+                dissipate_visual_resource_path,
+            } => {
+                definition.behavior = SpellBehavior::NecroPrison;
+                definition.max_distance = max_distance;
+                definition.duration = Duration::from_millis(duration_ms).as_secs_f32();
+                definition.radius = radius;
+                definition.damage = 0;
+                definition.damage_type = DamageType::Physical;
+                definition.block_behavior = BlockBehavior::Unblockable;
+                definition.secondary.necro_prison = Some(NecroPrisonSecondaryTunables {
+                    duration: Duration::from_millis(duration_ms),
+                    visual_resource_path,
+                    dissipate_visual_resource_path,
+                });
+            }
             SpellCatalogDelivery::WorldObstacle {
                 forward_distance,
                 duration_ms,
@@ -1426,9 +1531,14 @@ impl SpellCatalogRow {
                     visual_resource_path,
                 });
             }
-            SpellCatalogDelivery::SelfResource {} => {
+            SpellCatalogDelivery::SelfResource {
+                health_cost,
+                resource_gain_kind,
+            } => {
                 definition.behavior = SpellBehavior::SelfResource;
                 definition.block_behavior = BlockBehavior::Unblockable;
+                definition.self_health_cost = health_cost;
+                definition.self_resource_gain_kind = resource_gain_kind;
             }
             SpellCatalogDelivery::Recall { replay_cooldown_ms } => {
                 definition.behavior = SpellBehavior::Recall;
@@ -1563,6 +1673,24 @@ fn status_application_from_impact_effect_row(row: ImpactEffectRow) -> StatusAppl
         ImpactEffectRow::Knockback { .. } => {
             unreachable!("knockback is converted before status application mapping")
         }
+        ImpactEffectRow::Hot {
+            duration_ms,
+            tick_interval_ms,
+            tick_heal,
+            status_stack_group,
+            max_stacks,
+            stack_policy,
+        } => StatusApplication::new(
+            StatusPayload::Hot {
+                tick_heal,
+                tick_interval: Duration::from_millis(tick_interval_ms),
+            },
+            Duration::from_millis(duration_ms),
+            status_stack_group,
+            StatusStackGroupDefault::ActionSuffix("HOT"),
+            max_stacks,
+            stack_policy,
+        ),
         ImpactEffectRow::Burn {
             duration_ms,
             tick_interval_ms,
@@ -1913,6 +2041,15 @@ impl From<ProjectileMotionRow> for ProjectileMotionTunables {
                 hitbox_width,
                 heal_caster_on_return,
             }),
+            ProjectileMotionRow::TravelingArea {
+                hitbox_length,
+                hitbox_width,
+                max_hits_per_target,
+            } => Self::TravelingArea(TravelingAreaProjectileTunables {
+                hitbox_length,
+                hitbox_width,
+                max_hits_per_target,
+            }),
         }
     }
 }
@@ -1950,6 +2087,12 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
         "primary_resource_gain_on_cast",
         def.primary_resource_gain_on_cast,
     )?;
+    if def.self_health_cost < 0 {
+        return Err(format!(
+            "{} delivery.health_cost must be non-negative",
+            def.kind.as_str()
+        ));
+    }
     ensure_finite_non_negative(def.kind.as_str(), "speed", def.speed)?;
     ensure_finite_non_negative(def.kind.as_str(), "max_distance", def.max_distance)?;
     ensure_finite_non_negative(def.kind.as_str(), "spawn_forward", def.spawn_forward)?;
@@ -2005,6 +2148,13 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
             if def.primary_resource_gain_on_cast <= 0.0 {
                 return Err(format!(
                     "{} SELF_RESOURCE must define a positive primary_resource_gain_on_cast",
+                    def.kind.as_str()
+                ));
+            }
+            let resource_gain_kind = def.self_resource_gain_kind.trim().to_ascii_uppercase();
+            if !matches!(resource_gain_kind.as_str(), "MANA" | "STAMINA") {
+                return Err(format!(
+                    "{} SELF_RESOURCE delivery.resource_gain_kind must be MANA or STAMINA",
                     def.kind.as_str()
                 ));
             }
@@ -2138,6 +2288,19 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
         return Err(format!(
             "{} must not define persistent-area secondary data",
             def.kind.as_str()
+        ));
+    }
+    if def.behavior != SpellBehavior::Sanctuary && def.secondary.sanctuary.is_some() {
+        return Err(format!(
+            "{} must not define sanctuary secondary data",
+            def.kind.as_str()
+        ));
+    }
+    if def.behavior != SpellBehavior::NecroPrison && def.secondary.necro_prison.is_some() {
+        return Err(format!(
+            "{} defines necro-prison secondary data for {:?} behavior",
+            def.kind.as_str(),
+            def.behavior
         ));
     }
     if def.behavior != SpellBehavior::WorldObstacle && def.secondary.world_obstacle.is_some() {
@@ -2758,6 +2921,96 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 ));
             }
         }
+        SpellBehavior::Sanctuary => {
+            let Some(sanctuary) = def.secondary.sanctuary.as_ref() else {
+                return Err(format!(
+                    "{} SANCTUARY must define secondary sanctuary data",
+                    def.kind.as_str()
+                ));
+            };
+            if def.targeting != SpellTargeting::Point || def.requires_target {
+                return Err(format!(
+                    "{} SANCTUARY must use POINT targeting without a target requirement",
+                    def.kind.as_str()
+                ));
+            }
+            let aim_radius = def.aim_radius.expect(
+                "validated POINT targeting must define aim_radius before SANCTUARY validation",
+            );
+            if (aim_radius - def.radius).abs() > 0.001 {
+                return Err(format!(
+                    "{} SANCTUARY aim_radius must match delivery.radius",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
+            ensure_positive_f32(def.kind.as_str(), "delivery.radius", def.radius)?;
+            ensure_positive_duration(
+                def.kind.as_str(),
+                "delivery.duration_ms",
+                sanctuary.duration,
+            )?;
+            if sanctuary.visual_resource_path.trim().is_empty() {
+                return Err(format!(
+                    "{} SANCTUARY visual_resource_path must not be empty",
+                    def.kind.as_str()
+                ));
+            }
+            let expected = SpellSecondaryTunables {
+                sanctuary: Some(sanctuary.clone()),
+                ..SpellSecondaryTunables::default()
+            };
+            if def.secondary != expected {
+                return Err(format!(
+                    "{} SANCTUARY must only define sanctuary secondary spell tunables",
+                    def.kind.as_str()
+                ));
+            }
+        }
+        SpellBehavior::NecroPrison => {
+            let Some(prison) = def.secondary.necro_prison.as_ref() else {
+                return Err(format!(
+                    "{} NECRO_PRISON must define secondary prison data",
+                    def.kind.as_str()
+                ));
+            };
+            if def.targeting != SpellTargeting::Point || def.requires_target {
+                return Err(format!(
+                    "{} NECRO_PRISON must use POINT targeting without a target requirement",
+                    def.kind.as_str()
+                ));
+            }
+            let aim_radius = def.aim_radius.expect(
+                "validated POINT targeting must define aim_radius before NECRO_PRISON validation",
+            );
+            if (aim_radius - def.radius).abs() > 0.001 {
+                return Err(format!(
+                    "{} NECRO_PRISON aim_radius must match delivery.radius",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
+            ensure_positive_f32(def.kind.as_str(), "delivery.radius", def.radius)?;
+            ensure_positive_duration(def.kind.as_str(), "delivery.duration_ms", prison.duration)?;
+            if prison.visual_resource_path.trim().is_empty()
+                || prison.dissipate_visual_resource_path.trim().is_empty()
+            {
+                return Err(format!(
+                    "{} NECRO_PRISON visual resource paths must not be empty",
+                    def.kind.as_str()
+                ));
+            }
+            let expected = SpellSecondaryTunables {
+                necro_prison: Some(prison.clone()),
+                ..SpellSecondaryTunables::default()
+            };
+            if def.secondary != expected {
+                return Err(format!(
+                    "{} NECRO_PRISON must only define necro-prison secondary spell tunables",
+                    def.kind.as_str()
+                ));
+            }
+        }
         SpellBehavior::Channel => {
             ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
             ensure_positive_f32(
@@ -3223,6 +3476,44 @@ fn validate_projectile_motion(
                 ));
             }
         }
+        ProjectileMotionTunables::TravelingArea(area) => {
+            if def.targeting != SpellTargeting::Self_ || def.requires_target {
+                return Err(format!(
+                    "{} TRAVELING_AREA projectile motion must use untargeted SELF targeting",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_positive_f32(def.kind.as_str(), "delivery.speed", def.speed)?;
+            ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
+            ensure_positive_f32(def.kind.as_str(), "delivery.radius", def.radius)?;
+            ensure_positive_f32(
+                def.kind.as_str(),
+                "delivery.motion.hitbox_length",
+                area.hitbox_length,
+            )?;
+            ensure_positive_f32(
+                def.kind.as_str(),
+                "delivery.motion.hitbox_width",
+                area.hitbox_width,
+            )?;
+            if area.max_hits_per_target == 0 {
+                return Err(format!(
+                    "{} delivery.motion.max_hits_per_target must be positive",
+                    def.kind.as_str()
+                ));
+            }
+            if !def
+                .secondary
+                .projectile
+                .as_ref()
+                .is_some_and(|projectile| projectile.terrain_conforming)
+            {
+                return Err(format!(
+                    "{} TRAVELING_AREA projectile motion must enable terrain_conforming",
+                    def.kind.as_str()
+                ));
+            }
+        }
     }
 
     Ok(())
@@ -3527,10 +3818,19 @@ mod tests {
                 "DEFILED_GROUND",
                 "REAP",
                 "GRIM_WHEEL",
+                "GRAVEBURST",
+                "GRAVEWAKE",
+                "NECRO_PRISON",
+                "BLOOD_OFFERING",
                 "GUST_OF_WIND",
                 "BUFFET",
                 "CAUTERIZE",
                 "CELESTIAL_MANTLE",
+                "SANCTUARY",
+                "BENEDICTION",
+                "DIVINE_MEND",
+                "FLASH_OF_GRACE",
+                "AURA_OF_RENEWAL",
                 "FLASHFIRE",
                 "IMMOLATION",
                 "COMBUSTION",
@@ -3598,6 +3898,90 @@ mod tests {
                 "FAB_DRAGON_BREATH",
             ]
         );
+    }
+
+    #[test]
+    fn sanctuary_catalog_matches_divinity_zone_contract() {
+        let sanctuary = spell_definition_by_str("SANCTUARY").expect("SANCTUARY should exist");
+        assert_eq!(sanctuary.behavior, SpellBehavior::Sanctuary);
+        assert_eq!(sanctuary.targeting, SpellTargeting::Point);
+        assert_eq!(sanctuary.target_audience, TargetAudience::PartyOrSelf);
+        assert!(!sanctuary.requires_target);
+        assert!(!sanctuary.requires_target_los);
+        assert!((sanctuary.max_distance - 18.0).abs() < 0.0001);
+        assert!((sanctuary.radius - 4.0).abs() < 0.0001);
+        assert_eq!(sanctuary.aim_radius, Some(4.0));
+        assert_eq!(sanctuary.primary_resource_cost, 20.0);
+        let zone = sanctuary
+            .secondary
+            .sanctuary
+            .as_ref()
+            .expect("Sanctuary should define replicated zone data");
+        assert_eq!(zone.duration, Duration::from_secs(8));
+        assert_eq!(
+            zone.visual_resource_path,
+            "CombatVFX/playground/4) AoE Spear_sword Thingy 1"
+        );
+    }
+
+    #[test]
+    fn divinity_heal_tiers_and_renewal_aura_match_authored_contract() {
+        for (spell_id, cast_ms, mana_cost, heal_amount) in [
+            ("BENEDICTION", 2_500, 15.0, 60),
+            ("DIVINE_MEND", 1_500, 20.0, 40),
+            ("FLASH_OF_GRACE", 500, 25.0, 25),
+        ] {
+            let definition = spell_definition_by_str(spell_id)
+                .unwrap_or_else(|| panic!("{spell_id} should exist"));
+            assert_eq!(definition.behavior, SpellBehavior::DirectTarget);
+            assert_eq!(definition.targeting, SpellTargeting::Target);
+            assert_eq!(definition.target_audience, TargetAudience::Assistable);
+            assert!(definition.requires_target);
+            assert!(definition.requires_target_los);
+            assert_eq!(definition.cast_time, Duration::from_millis(cast_ms));
+            assert_eq!(
+                definition.cast_mobility,
+                SpellCastMobility::GroundedStationary
+            );
+            assert!((definition.primary_resource_cost - mana_cost).abs() < 0.0001);
+            assert!((definition.max_distance - 18.0).abs() < 0.0001);
+            let direct = definition
+                .secondary
+                .direct_target
+                .as_ref()
+                .expect("authored heal should use generic direct-target delivery");
+            assert_eq!(direct.heal_amount, heal_amount);
+            assert_eq!(definition.damage, 0);
+        }
+
+        let renewal =
+            spell_definition_by_str("AURA_OF_RENEWAL").expect("AURA_OF_RENEWAL should exist");
+        assert_eq!(renewal.behavior, SpellBehavior::Aura);
+        assert_eq!(renewal.targeting, SpellTargeting::Self_);
+        assert_eq!(renewal.target_audience, TargetAudience::PartyOrSelf);
+        let aura = renewal
+            .secondary
+            .aura
+            .as_ref()
+            .expect("Aura of Renewal should define aura tunables");
+        assert!((aura.radius - 20.0).abs() < 0.0001);
+        assert_eq!(aura.tick_interval, Duration::from_secs(2));
+        assert_eq!(aura.effects.len(), 2);
+        assert!(aura.effects.iter().any(|effect| matches!(
+            effect,
+            ImpactEffect::Status(status)
+                if status.payload() == StatusPayload::Hot {
+                    tick_heal: 1,
+                    tick_interval: Duration::from_secs(2),
+                }
+        )));
+        assert!(aura.effects.iter().any(|effect| matches!(
+            effect,
+            ImpactEffect::Status(status)
+                if status.payload() == StatusPayload::ManaRegen {
+                    modifier_scalar: 0.5,
+                }
+        )));
     }
 
     #[test]
@@ -3734,6 +4118,171 @@ mod tests {
     }
 
     #[test]
+    fn graveburst_authors_delayed_hostile_area_damage_slow_and_bleed() {
+        let definition = spell_definition_by_str("GRAVEBURST").expect("GRAVEBURST should exist");
+        assert_eq!(definition.behavior, SpellBehavior::Area);
+        assert_eq!(definition.targeting, SpellTargeting::Point);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(!definition.requires_target);
+        assert!(!definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cast_mobility, SpellCastMobility::Mobile);
+        assert_eq!(definition.cooldown, Duration::from_secs(2));
+        assert_eq!(definition.aim_radius, Some(3.5));
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.radius, 3.5);
+        assert_eq!(definition.damage, 30);
+        assert_eq!(definition.damage_type, DamageType::Physical);
+        assert_eq!(definition.primary_resource_cost, 20.0);
+
+        let area = definition
+            .secondary
+            .area
+            .as_ref()
+            .expect("Graveburst must define generic area tunables");
+        assert_eq!(area.impact_delay_ms, 500);
+        assert_eq!(area.impact_effects.len(), 2);
+
+        let slow = area.impact_effects[0]
+            .as_status()
+            .expect("Graveburst should apply a slow");
+        assert_eq!(slow.payload(), StatusPayload::Slow { slow_pct: 0.25 });
+        assert_eq!(slow.duration(), Duration::from_secs(3));
+        assert_eq!(slow.explicit_stack_group(), Some("GRAVEBURST_SLOW"));
+        assert_eq!(slow.max_stacks(), 1);
+        assert_eq!(slow.stack_policy(), StackPolicy::Refresh);
+
+        let bleed = area.impact_effects[1]
+            .as_status()
+            .expect("Graveburst should apply a bleed DOT");
+        assert_eq!(
+            bleed.payload(),
+            StatusPayload::Dot {
+                tick_damage: 3,
+                damage_type: DamageType::Physical,
+                tick_interval: Duration::from_secs(1),
+            }
+        );
+        assert_eq!(bleed.duration(), Duration::from_secs(6));
+        assert_eq!(bleed.explicit_stack_group(), Some("GRAVEBURST_BLEED"));
+        assert_eq!(bleed.dispel_types(), &[StatusDispelType::Bleed]);
+    }
+
+    #[test]
+    fn gravewake_authors_one_way_moving_column_damage_slow_and_bleed() {
+        let definition = spell_definition_by_str("GRAVEWAKE").expect("GRAVEWAKE should exist");
+        assert_eq!(definition.behavior, SpellBehavior::Projectile);
+        assert_eq!(definition.targeting, SpellTargeting::Self_);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(!definition.requires_target);
+        assert!(!definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cast_mobility, SpellCastMobility::Mobile);
+        assert_eq!(definition.cooldown, Duration::from_secs(2));
+        assert_eq!(definition.speed, 10.0);
+        assert_eq!(definition.max_distance, 12.0);
+        assert_eq!(definition.duration, 1.2);
+        assert_eq!(definition.damage, 24);
+        assert_eq!(definition.damage_type, DamageType::Physical);
+        assert_eq!(definition.primary_resource_cost, 20.0);
+
+        let projectile = definition
+            .secondary
+            .projectile
+            .as_ref()
+            .expect("Gravewake must define projectile tunables");
+        assert!(projectile.terrain_conforming);
+        assert_eq!(projectile.motion.kind(), "TRAVELING_AREA");
+        let area = projectile
+            .motion
+            .traveling_area()
+            .expect("Gravewake must define traveling-area tunables");
+        assert_eq!(area.hitbox_length, 4.5);
+        assert_eq!(area.hitbox_width, 1.5);
+        assert_eq!(area.max_hits_per_target, 1);
+        assert_eq!(projectile.impact_effects.len(), 2);
+
+        let slow = projectile.impact_effects[0]
+            .as_status()
+            .expect("Gravewake should apply a slow");
+        assert_eq!(slow.payload(), StatusPayload::Slow { slow_pct: 0.25 });
+        assert_eq!(slow.duration(), Duration::from_secs(3));
+        assert_eq!(slow.explicit_stack_group(), Some("GRAVEWAKE_SLOW"));
+        assert_eq!(slow.max_stacks(), 1);
+        assert_eq!(slow.stack_policy(), StackPolicy::Refresh);
+
+        let bleed = projectile.impact_effects[1]
+            .as_status()
+            .expect("Gravewake should apply a bleed DOT");
+        assert_eq!(
+            bleed.payload(),
+            StatusPayload::Dot {
+                tick_damage: 3,
+                damage_type: DamageType::Physical,
+                tick_interval: Duration::from_secs(1),
+            }
+        );
+        assert_eq!(bleed.duration(), Duration::from_secs(6));
+        assert_eq!(bleed.explicit_stack_group(), Some("GRAVEWAKE_BLEED"));
+        assert_eq!(bleed.dispel_types(), &[StatusDispelType::Bleed]);
+    }
+
+    #[test]
+    fn gravewake_traveling_area_rejects_targeted_casting() {
+        let mut definition = spell_definition_by_str("GRAVEWAKE")
+            .expect("GRAVEWAKE should exist")
+            .clone();
+        definition.targeting = SpellTargeting::Target;
+        definition.requires_target = true;
+        let projectile = definition
+            .secondary
+            .projectile
+            .clone()
+            .expect("Gravewake must define projectile tunables");
+
+        assert!(validate_projectile_motion(&definition, &projectile)
+            .expect_err("targeted traveling areas must be rejected")
+            .contains("must use untargeted SELF targeting"));
+    }
+
+    #[test]
+    fn necro_prison_authors_casted_hostile_triangular_movement_zone() {
+        let definition =
+            spell_definition_by_str("NECRO_PRISON").expect("NECRO_PRISON should exist");
+        assert_eq!(definition.behavior, SpellBehavior::NecroPrison);
+        assert_eq!(definition.targeting, SpellTargeting::Point);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(!definition.requires_target);
+        assert!(!definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::from_millis(1500));
+        assert_eq!(
+            definition.cast_mobility,
+            SpellCastMobility::GroundedStationary
+        );
+        assert_eq!(definition.cooldown, Duration::from_secs(30));
+        assert_eq!(definition.aim_radius, Some(4.0));
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.radius, 4.0);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.primary_resource_cost, 20.0);
+
+        let prison = definition
+            .secondary
+            .necro_prison
+            .as_ref()
+            .expect("Necro Prison must define replicated prison tunables");
+        assert_eq!(prison.duration, Duration::from_secs(8));
+        assert_eq!(
+            prison.visual_resource_path,
+            "CombatVFX/playground/ARPG Realistic Bonemist 1/NecroPrison"
+        );
+        assert_eq!(
+            prison.dissipate_visual_resource_path,
+            "CombatVFX/playground/ARPG Realistic Bonemist 1/NecroPrison_Off"
+        );
+    }
+
+    #[test]
     fn stonespire_authors_temporary_physical_world_obstacle() {
         let definition = spell_definition_by_str("STONESPIRE").expect("STONESPIRE should exist");
         assert_eq!(definition.behavior, SpellBehavior::WorldObstacle);
@@ -3817,6 +4366,9 @@ mod tests {
             "FLAMING_ORB",
             "REAP",
             "GRIM_WHEEL",
+            "GRAVEBURST",
+            "GRAVEWAKE",
+            "NECRO_PRISON",
             "GUST_OF_WIND",
             "BUFFET",
             "CELESTIAL_MANTLE",

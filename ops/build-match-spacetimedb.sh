@@ -5,11 +5,17 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MATCH_MODULE_PATH="${MATCH_MODULE_PATH:-$ROOT_DIR/match-server}"
 MATCH_RAW_WASM_PATH="${MATCH_RAW_WASM_PATH:-$MATCH_MODULE_PATH/target/wasm32-unknown-unknown/release/arena_match.wasm}"
 MATCH_WASM_PATH="${MATCH_WASM_PATH:-$MATCH_MODULE_PATH/target/wasm32-unknown-unknown/release/arena_match.opt.wasm}"
+MATCH_DEPFILE_PATH="${MATCH_DEPFILE_PATH:-$MATCH_MODULE_PATH/target/wasm32-unknown-unknown/release/arena_match.d}"
+MATCH_PROVENANCE_PATH="${MATCH_PROVENANCE_PATH:-$MATCH_WASM_PATH.inputs.json}"
 MATCH_GENERATED_OUT="${MATCH_GENERATED_OUT:-$ROOT_DIR/Assets/Arena/Runtime/Generated/MatchSpacetimeDB}"
 MATCH_GENERATE_BINDINGS="${MATCH_GENERATE_BINDINGS:-1}"
 
 if ! command -v spacetime >/dev/null 2>&1; then
     echo "spacetime CLI is required." >&2
+    exit 2
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "python3 is required." >&2
     exit 2
 fi
 
@@ -59,6 +65,13 @@ echo "Applying the canonical size-oriented Binaryen pass..."
     -o "$MATCH_WASM_PATH"
 
 "$ROOT_DIR/ops/check-match-wasm-size.sh" "$MATCH_WASM_PATH"
+
+echo "Recording the source inputs for the cached match artifact..."
+python3 "$ROOT_DIR/match_provisioner/artifact_provenance.py" write \
+    --workspace-root "$ROOT_DIR" \
+    --depfile "$MATCH_DEPFILE_PATH" \
+    --wasm "$MATCH_WASM_PATH" \
+    --manifest "$MATCH_PROVENANCE_PATH"
 
 if [ "$MATCH_GENERATE_BINDINGS" = "1" ]; then
     echo "Generating PvP match Unity bindings in namespace Arena.MatchDb..."

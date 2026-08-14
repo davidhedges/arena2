@@ -186,6 +186,8 @@ pub(crate) fn clear_transient_actor_state(ctx: &ReducerContext, identity: Identi
     clear_movement_action_for_owner(ctx, identity);
     clear_pending_player_commands(ctx, identity);
     clear_world_obstacles_for_owner(ctx, identity);
+    crate::spells::clear_sanctuary_zones_for_owner(ctx, identity);
+    crate::spells::clear_necro_prisons_for_owner(ctx, identity);
     crate::world_interactions::cancel_active_world_interaction_for_actor(ctx, identity);
 
     ctx.db.pending_cast_request().caster().delete(identity);
@@ -335,7 +337,7 @@ mod tests {
     /// Per-identity transient tables (or the helpers that own their deletion)
     /// that the unified teardown must cover. Add every new transient table's
     /// accessor here AND to `clear_transient_actor_state`.
-    const TRANSIENT_TEARDOWN_MARKERS: [&str; 25] = [
+    const TRANSIENT_TEARDOWN_MARKERS: [&str; 27] = [
         "clear_player_combat_state",
         "clear_active_cast",
         "clear_recall_slot",
@@ -345,6 +347,8 @@ mod tests {
         "clear_movement_action_for_owner",
         "clear_pending_player_commands",
         "clear_world_obstacles_for_owner",
+        "clear_sanctuary_zones_for_owner",
+        "clear_necro_prisons_for_owner",
         "cancel_active_world_interaction_for_actor",
         "pending_cast_request()",
         "pending_cast_cancel()",

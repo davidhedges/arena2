@@ -72,6 +72,8 @@ namespace Arena.MatchDb
         public string BlockBehavior;
         [DataMember(Name = "primary_resource_cost")]
         public float PrimaryResourceCost;
+        [DataMember(Name = "self_health_cost")]
+        public int SelfHealthCost;
         [DataMember(Name = "generates_primary_resource_on_cast")]
         public bool GeneratesPrimaryResourceOnCast;
 
@@ -105,6 +107,7 @@ namespace Arena.MatchDb
             bool HasStatusStackGroup,
             string BlockBehavior,
             float PrimaryResourceCost,
+            int SelfHealthCost,
             bool GeneratesPrimaryResourceOnCast
         )
         {
@@ -137,6 +140,7 @@ namespace Arena.MatchDb
             this.HasStatusStackGroup = HasStatusStackGroup;
             this.BlockBehavior = BlockBehavior;
             this.PrimaryResourceCost = PrimaryResourceCost;
+            this.SelfHealthCost = SelfHealthCost;
             this.GeneratesPrimaryResourceOnCast = GeneratesPrimaryResourceOnCast;
         }
 

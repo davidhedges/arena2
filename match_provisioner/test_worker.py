@@ -12,6 +12,7 @@ import time
 import unittest
 from typing import Any
 
+from match_provisioner.artifact_provenance import write_artifact_manifest
 from match_provisioner.worker import (
     Allocation,
     AllocationStore,
@@ -52,6 +53,7 @@ class FakeApi:
         self.delete_count = 0
         self.fail_publish_after_create = False
         self.fail_bootstrap = False
+        self.after_claim = None
         self.delete_failures = 0
         self.close_ticket_failures = 0
 
@@ -145,6 +147,8 @@ class FakeApi:
                 ticket["status"] = "CLAIMED"
                 ticket["lease_owner"] = {"some": str(arguments[1])}
                 ticket["lease_until"] = {"some": arguments[2]}
+                if self.after_claim is not None:
+                    self.after_claim()
                 return
             if reducer == "service_mark_provisioning":
                 if ticket is None:
@@ -265,6 +269,16 @@ class ProvisionerTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.wasm_path = self.root / "arena.wasm"
         self.wasm_path.write_bytes(b"fake immutable wasm")
+        self.source_path = self.root / "server/src/spells/catalog.rs"
+        self.source_path.parent.mkdir(parents=True)
+        self.source_path.write_text("pub const SPELL: &str = \"CURRENT\";\n", encoding="utf-8")
+        self.manifest_path = Path(f"{self.wasm_path}.inputs.json")
+        write_artifact_manifest(
+            self.root,
+            self.wasm_path,
+            self.manifest_path,
+            [self.source_path.relative_to(self.root)],
+        )
         self.now = 1_000
         self.api = FakeApi()
         self.config = Config(
@@ -274,6 +288,7 @@ class ProvisionerTests(unittest.TestCase):
             hub_database="arena-hub-local",
             database_prefix="arena-match-test",
             wasm_path=self.wasm_path,
+            artifact_manifest_path=self.manifest_path,
             state_path=self.root / "state.sqlite3",
             max_concurrent_matches=4,
             lease_seconds=90,
@@ -405,6 +420,42 @@ class ProvisionerTests(unittest.TestCase):
         )
         self.assertEqual(bootstrap_args[14], "")
         self.assertEqual(bootstrap_args[15], "")
+
+    def test_stale_sources_are_rejected_before_a_ticket_is_claimed(self) -> None:
+        provisioner = self.provisioner()
+        self.source_path.write_text(
+            "pub const SPELL: &str = \"CHANGED\";\n",
+            encoding="utf-8",
+        )
+        self.api.add_ticket("ticket-one", PLAYER_ONE)
+
+        self.run_quietly(provisioner)
+
+        self.assertEqual(self.api.tickets["ticket-one"]["status"], "PENDING")
+        self.assertIsNone(self.store.get("ticket-one"))
+        self.assertEqual(self.api.publish_count, 0)
+
+    def test_stale_sources_are_rejected_when_the_worker_starts(self) -> None:
+        self.source_path.write_text(
+            "pub const SPELL: &str = \"CHANGED\";\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ProvisionerError, "cached match WASM is stale"):
+            self.provisioner()
+
+    def test_sources_changed_during_claim_are_rejected_before_publish(self) -> None:
+        provisioner = self.provisioner()
+        self.api.after_claim = lambda: self.source_path.write_text(
+            "pub const SPELL: &str = \"CHANGED DURING CLAIM\";\n",
+            encoding="utf-8",
+        )
+        self.api.add_ticket("ticket-one", PLAYER_ONE)
+
+        self.run_quietly(provisioner)
+
+        self.assertEqual(self.api.publish_count, 0)
+        self.assertEqual(self.api.tickets["ticket-one"]["status"], "FAILED")
 
     def test_success_emits_stage_level_startup_timing(self) -> None:
         self.api.add_ticket("ticket-one", PLAYER_ONE)
@@ -577,6 +628,12 @@ class ProvisionerTests(unittest.TestCase):
         self.assertEqual(self.api.tickets["ticket-one"]["status"], "READY")
 
         self.wasm_path.write_bytes(b"replacement immutable wasm")
+        write_artifact_manifest(
+            self.root,
+            self.wasm_path,
+            self.manifest_path,
+            [self.source_path.relative_to(self.root)],
+        )
         self.run_quietly()
 
         self.assertEqual(self.store.get("ticket-one").state, "ORPHANED")

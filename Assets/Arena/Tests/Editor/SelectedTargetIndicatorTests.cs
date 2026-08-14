@@ -75,5 +75,21 @@ namespace Arena.Tests.Editor
             Assert.That(targetSelectorSource, Does.Contain("if (!aimActive && input.LeftMousePressed)"));
             Assert.That(targetSelectorSource, Does.Contain("if (!aimActive && !input.CursorLocked)"));
         }
+
+        [Test]
+        public void NecroPrisonAimIndicator_PresentsFlatEdgeTowardCaster()
+        {
+            string source = File.ReadAllText(SpellInputHandlerPath);
+
+            Assert.That(
+                source,
+                Does.Contain("private const float NecroPrisonIndicatorYawOffset = Mathf.PI;"));
+            Assert.That(
+                source,
+                Does.Contain("ShowTriangle(aimRadius, ResolveTriangleIndicatorYaw(_currentYaw),"));
+            Assert.That(
+                source,
+                Does.Contain("=> facingYaw + NecroPrisonIndicatorYawOffset;"));
+        }
     }
 }

@@ -69,6 +69,7 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Col<SpellDefinition, bool> HasStatusStackGroup { get; }
         public global::SpacetimeDB.Col<SpellDefinition, string> BlockBehavior { get; }
         public global::SpacetimeDB.Col<SpellDefinition, float> PrimaryResourceCost { get; }
+        public global::SpacetimeDB.Col<SpellDefinition, int> SelfHealthCost { get; }
         public global::SpacetimeDB.Col<SpellDefinition, bool> GeneratesPrimaryResourceOnCast { get; }
 
         public SpellDefinitionCols(string tableName)
@@ -102,6 +103,7 @@ namespace Arena.MatchDb
             HasStatusStackGroup = new global::SpacetimeDB.Col<SpellDefinition, bool>(tableName, "has_status_stack_group");
             BlockBehavior = new global::SpacetimeDB.Col<SpellDefinition, string>(tableName, "block_behavior");
             PrimaryResourceCost = new global::SpacetimeDB.Col<SpellDefinition, float>(tableName, "primary_resource_cost");
+            SelfHealthCost = new global::SpacetimeDB.Col<SpellDefinition, int>(tableName, "self_health_cost");
             GeneratesPrimaryResourceOnCast = new global::SpacetimeDB.Col<SpellDefinition, bool>(tableName, "generates_primary_resource_on_cast");
         }
     }

@@ -2233,6 +2233,197 @@
       }
     },
     {
+      "ability_id": "SPELL_GRAVEBURST",
+      "actor_scope": "PLAYER",
+      "discipline_id": "BLIGHT",
+      "combat_profile_id": "",
+      "action_id": "GRAVEBURST",
+      "display_name": "Graveburst",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1017,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 2000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "POINT",
+        "target_audience": "HOSTILE",
+        "requires_target": false,
+        "requires_target_los": false,
+        "aim_radius": 3.5,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "max_distance": 18,
+          "damage": 30,
+          "damage_type": "PHYSICAL",
+          "impact_delay_ms": 500,
+          "radius": 3.5,
+          "block_behavior": "BLOCKABLE",
+          "impact_effects": [
+            {
+              "kind": "SLOW",
+              "duration_ms": 3000,
+              "slow_pct": 0.25,
+              "status_stack_group": "GRAVEBURST_SLOW",
+              "max_stacks": 1,
+              "stack_policy": "REFRESH"
+            },
+            {
+              "kind": "BURN",
+              "duration_ms": 6000,
+              "tick_interval_ms": 1000,
+              "tick_damage": 3,
+              "status_stack_group": "GRAVEBURST_BLEED",
+              "dispel_types": [
+                "BLEED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_GRAVEWAKE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "BLIGHT",
+      "combat_profile_id": "",
+      "action_id": "GRAVEWAKE",
+      "display_name": "Gravewake",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1018,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 2000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "HOSTILE",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "PROJECTILE",
+          "speed": 10,
+          "max_distance": 12,
+          "damage": 24,
+          "damage_type": "PHYSICAL",
+          "spawn_forward": 1,
+          "spawn_height": 0.15,
+          "turn_rate": 0,
+          "update_interval_seconds": 0.05,
+          "radius": 0.2,
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "UNPARRYABLE",
+          "homing_window_seconds": 0,
+          "terrain_conforming": true,
+          "motion": {
+            "kind": "TRAVELING_AREA",
+            "hitbox_length": 4.5,
+            "hitbox_width": 1.5,
+            "max_hits_per_target": 1
+          },
+          "impact_effects": [
+            {
+              "kind": "SLOW",
+              "duration_ms": 3000,
+              "slow_pct": 0.25,
+              "status_stack_group": "GRAVEWAKE_SLOW",
+              "max_stacks": 1,
+              "stack_policy": "REFRESH"
+            },
+            {
+              "kind": "BURN",
+              "duration_ms": 6000,
+              "tick_interval_ms": 1000,
+              "tick_damage": 3,
+              "status_stack_group": "GRAVEWAKE_BLEED",
+              "dispel_types": [
+                "BLEED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_NECRO_PRISON",
+      "actor_scope": "PLAYER",
+      "discipline_id": "BLIGHT",
+      "combat_profile_id": "",
+      "action_id": "NECRO_PRISON",
+      "display_name": "Necro Prison",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1019,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 1500,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "POINT",
+        "target_audience": "HOSTILE",
+        "requires_target": false,
+        "requires_target_los": false,
+        "aim_radius": 4,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "NECRO_PRISON",
+          "max_distance": 18,
+          "radius": 4,
+          "duration_ms": 8000,
+          "visual_resource_path": "CombatVFX/playground/ARPG Realistic Bonemist 1/NecroPrison",
+          "dissipate_visual_resource_path": "CombatVFX/playground/ARPG Realistic Bonemist 1/NecroPrison_Off"
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_BLOOD_OFFERING",
+      "actor_scope": "PLAYER",
+      "discipline_id": "BLIGHT",
+      "combat_profile_id": "",
+      "action_id": "BLOOD_OFFERING",
+      "display_name": "Blood Offering",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1020,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "primary_resource_gain_on_cast": 50,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "SELF_RESOURCE",
+          "health_cost": 20,
+          "resource_gain_kind": "MANA"
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_GUST_OF_WIND",
       "actor_scope": "PLAYER",
       "discipline_id": "PRIMAL",
@@ -2385,6 +2576,190 @@
             "max_stacks": 1,
             "stack_policy": "REFRESH"
           }
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_SANCTUARY",
+      "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
+      "combat_profile_id": "",
+      "action_id": "SANCTUARY",
+      "display_name": "Sanctuary",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1033,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "POINT",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": false,
+        "requires_target_los": false,
+        "aim_radius": 4,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "SANCTUARY",
+          "max_distance": 18,
+          "radius": 4,
+          "duration_ms": 8000,
+          "visual_resource_path": "CombatVFX/playground/4) AoE Spear_sword Thingy 1"
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_BENEDICTION",
+      "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
+      "combat_profile_id": "",
+      "action_id": "BENEDICTION",
+      "display_name": "Benediction",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1034,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 0,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 2500,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "target_audience": "ASSISTABLE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 15,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "DIRECT_TARGET",
+          "max_distance": 18,
+          "damage": 0,
+          "heal": 60,
+          "damage_type": "HOLY",
+          "block_behavior": "UNBLOCKABLE",
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_DIVINE_MEND",
+      "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
+      "combat_profile_id": "",
+      "action_id": "DIVINE_MEND",
+      "display_name": "Divine Mend",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1035,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 0,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 1500,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "target_audience": "ASSISTABLE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "DIRECT_TARGET",
+          "max_distance": 18,
+          "damage": 0,
+          "heal": 40,
+          "damage_type": "HOLY",
+          "block_behavior": "UNBLOCKABLE",
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_FLASH_OF_GRACE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
+      "combat_profile_id": "",
+      "action_id": "FLASH_OF_GRACE",
+      "display_name": "Flash of Grace",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1036,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 0,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 500,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "target_audience": "ASSISTABLE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 25,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "DIRECT_TARGET",
+          "max_distance": 18,
+          "damage": 0,
+          "heal": 25,
+          "damage_type": "HOLY",
+          "block_behavior": "UNBLOCKABLE",
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_AURA_OF_RENEWAL",
+      "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
+      "combat_profile_id": "",
+      "action_id": "AURA_OF_RENEWAL",
+      "display_name": "Aura of Renewal",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1037,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AURA",
+          "radius": 20,
+          "tick_interval_ms": 2000,
+          "effects": [
+            {
+              "kind": "HOT",
+              "duration_ms": 3000,
+              "tick_interval_ms": 2000,
+              "tick_heal": 1,
+              "status_stack_group": "AURA_OF_RENEWAL_HEALTH_REGEN"
+            },
+            {
+              "kind": "MANA_REGEN",
+              "duration_ms": 3000,
+              "modifier_scalar": 0.5,
+              "status_stack_group": "AURA_OF_RENEWAL_MANA_REGEN"
+            }
+          ]
         }
       }
     },
@@ -7278,6 +7653,34 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_GRAVEBURST",
+      "display_name": "Graveburst",
+      "description": "Erupts bone spikes at the targeted area after 0.5 seconds, dealing 30 physical damage, slowing enemies by 25% for 3 seconds, and bleeding them for 3 physical damage each second for 6 seconds.",
+      "sort_order": 91
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_GRAVEWAKE",
+      "display_name": "Gravewake",
+      "description": "Sends a 4.5-meter-wide wave of bones 12 meters forward, dealing 24 physical damage, slowing enemies by 25% for 3 seconds, and bleeding them for 3 physical damage each second for 6 seconds.",
+      "sort_order": 92
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_NECRO_PRISON",
+      "display_name": "Necro Prison",
+      "description": "Conjures a triangular bone prison for 8 seconds. Hostile enemies caught inside cannot cross its walls, but the prison does not block line of sight or projectiles.",
+      "sort_order": 93
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_BLOOD_OFFERING",
+      "display_name": "Blood Offering",
+      "description": "Sacrifices 20 health to restore 50 mana. Cannot be cast when the sacrifice would be lethal.",
+      "sort_order": 94
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_MOMENTUM",
       "display_name": "Momentum",
       "description": "Grants brief immunity to movement slows.",
@@ -7443,6 +7846,41 @@
       "display_name": "Celestial Mantle",
       "description": "Wraps an ally in celestial wings, granting immunity to slows, roots, and knockbacks for 5 seconds.",
       "sort_order": 97
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_SANCTUARY",
+      "display_name": "Sanctuary",
+      "description": "Creates a holy refuge for 8 seconds. Enemies cannot enter, hostile projectiles are intercepted, and hostile area spells cannot overlap it.",
+      "sort_order": 251
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_BENEDICTION",
+      "display_name": "Benediction",
+      "description": "A deliberate 2.5-second prayer that restores 60 health to an assistable target for 15 mana.",
+      "sort_order": 252
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_DIVINE_MEND",
+      "display_name": "Divine Mend",
+      "description": "A balanced 1.5-second heal that restores 40 health to an assistable target for 20 mana.",
+      "sort_order": 253
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_FLASH_OF_GRACE",
+      "display_name": "Flash of Grace",
+      "description": "A swift 0.5-second heal that restores 25 health to an assistable target for 25 mana.",
+      "sort_order": 254
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_AURA_OF_RENEWAL",
+      "display_name": "Aura of Renewal",
+      "description": "Projects a 20-meter aura that restores 1 health every 2 seconds and grants 0.5 additional mana regeneration per second to the caster and nearby party members.",
+      "sort_order": 255
     },
     {
       "presentation_kind": "ABILITY",
@@ -9549,6 +9987,33 @@
       "projectile_sequence_index": 0,
       "duration_ms": 0,
       "sort_order": 329
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_GRAVEBURST",
+      "slot": "impact",
+      "trigger": "AREA_IMPACT",
+      "anchor": "AREA_ORIGIN",
+      "vfx_id": "VFX_GRAVEBURST_AREA_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 330
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_GRAVEWAKE",
+      "slot": "projectile_body",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_GRAVEWAKE_BONE_WAVE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 331
     },
     {
       "owner_kind": "ABILITY",

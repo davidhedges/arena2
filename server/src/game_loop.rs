@@ -1238,6 +1238,8 @@ fn run_post_tick_maintenance_phase(ctx: &ReducerContext, now: Timestamp) {
     prune_due_npc_corpse_despawns(ctx, now);
     expire_lingering_shades(ctx, now);
     expire_world_obstacles(ctx, now);
+    crate::spells::expire_sanctuary_zones(ctx, now);
+    crate::spells::expire_necro_prisons(ctx, now);
     expire_world_traps(ctx, now);
     if should_prune_events(now) {
         prune_combat_events(ctx, now);

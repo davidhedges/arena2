@@ -60,6 +60,7 @@ namespace Arena.Presentation
         private const string SpellBehaviorProjectile = "PROJECTILE";
         private const string SpellBehaviorArea = "AREA";
         private const string ProjectileMotionBoomerangCaster = "BOOMERANG_CASTER";
+        private const string ProjectileMotionTravelingArea = "TRAVELING_AREA";
         private const long PredictedSpellVfxTtlMs = 5000L;
         private const float DefaultPlayerChestHeight = 1.15f;
         private const float PlayerChestHeightFraction = 0.68f;
@@ -1431,11 +1432,16 @@ namespace Arena.Presentation
         {
             Vector3 casterPosition = ResolveLocalCasterPosition(caster);
             Vector3 basePosition = casterPosition + Vector3.up * spellDef.SpawnHeight;
+            string motionKind = ResolvePredictedProjectileMotionKind(spellId);
             if (SpellDefinitionContracts.UsesSelfTargeting(spellDef)
-                && string.Equals(
-                    ResolvePredictedProjectileMotionKind(spellId),
-                    ProjectileMotionBoomerangCaster,
-                    StringComparison.Ordinal))
+                && (string.Equals(
+                        motionKind,
+                        ProjectileMotionBoomerangCaster,
+                        StringComparison.Ordinal)
+                    || string.Equals(
+                        motionKind,
+                        ProjectileMotionTravelingArea,
+                        StringComparison.Ordinal)))
             {
                 direction = ResolveLocalCasterForward(caster);
                 origin = basePosition + direction * spellDef.SpawnForward;
@@ -1470,6 +1476,9 @@ namespace Arena.Presentation
         private static string ResolvePredictedProjectileMotionKind(string spellId)
         {
             string normalized = WireIdentifier.Normalize(spellId);
+            if (string.Equals(normalized, "GRAVEWAKE", StringComparison.Ordinal))
+                return ProjectileMotionTravelingArea;
+
             return normalized.IndexOf("BOOMERANG", StringComparison.Ordinal) >= 0
                 || string.Equals(normalized, "VAMPIRIC_ORB", StringComparison.Ordinal)
                 || string.Equals(normalized, "GRIM_WHEEL", StringComparison.Ordinal)

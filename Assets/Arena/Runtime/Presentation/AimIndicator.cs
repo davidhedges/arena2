@@ -21,6 +21,10 @@ namespace Arena.Presentation
         private Color _color = new(1f, 0.02f, 0.015f, 0.72f);
         private Color _lastColor = new(float.NaN, float.NaN, float.NaN, float.NaN);
         private float _radius = 1f;
+        private float _yaw;
+        private float _lastYaw = float.NaN;
+        private bool _triangle;
+        private bool _lastTriangle;
         private Vector3 _lastCenter = new(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
         private float _lastRadius = -1f;
         private bool _hasAimPoint;
@@ -69,6 +73,17 @@ namespace Arena.Presentation
         /// <summary>Show a circle indicator with the given radius.</summary>
         public void ShowCircle(float radius, Color color)
         {
+            ShowShape(radius, 0f, triangle: false, color);
+        }
+
+        /// <summary>Show an equilateral triangle using a circumradius and world yaw.</summary>
+        public void ShowTriangle(float radius, float yaw, Color color)
+        {
+            ShowShape(radius, yaw, triangle: true, color);
+        }
+
+        private void ShowShape(float radius, float yaw, bool triangle, Color color)
+        {
             if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
             {
                 Hide();
@@ -79,6 +94,8 @@ namespace Arena.Presentation
                 _circle = CreateCircle();
 
             _radius = Mathf.Max(0.01f, radius);
+            _yaw = yaw;
+            _triangle = triangle;
             _color = color;
 
             if (!_hasAimPoint)
@@ -90,6 +107,8 @@ namespace Arena.Presentation
             _circle.SetActive(true);
             RefreshCircleMesh(forceRebuild:
                 Mathf.Abs(_lastRadius - _radius) > 0.0001f ||
+                Mathf.Abs(Mathf.DeltaAngle(_lastYaw * Mathf.Rad2Deg, _yaw * Mathf.Rad2Deg)) > 0.01f ||
+                _lastTriangle != _triangle ||
                 !ApproximatelySameColor(_lastColor, _color));
         }
 
@@ -100,6 +119,8 @@ namespace Arena.Presentation
             _hasAimPoint = false;
             _lastCenter = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
             _lastRadius = -1f;
+            _lastYaw = float.NaN;
+            _lastTriangle = false;
             _lastColor = new Color(float.NaN, float.NaN, float.NaN, float.NaN);
         }
 
@@ -265,9 +286,11 @@ namespace Arena.Presentation
 
             _lastCenter = center;
             _lastRadius = _radius;
+            _lastYaw = _yaw;
+            _lastTriangle = _triangle;
             _lastColor = _color;
             _circle.transform.position = center;
-            _circle.transform.rotation = Quaternion.identity;
+            _circle.transform.rotation = Quaternion.Euler(0f, _yaw * Mathf.Rad2Deg, 0f);
             _circle.transform.localScale = Vector3.one;
             RebuildCircleMesh(_circleMesh, center, _radius, _color);
         }
@@ -301,6 +324,8 @@ namespace Arena.Presentation
                 center,
                 innerFadeRadius,
                 radius,
+                _triangle,
+                _yaw,
                 environment);
 
             for (int ring = 0; ring <= RadialBandCount; ring++)
@@ -315,13 +340,18 @@ namespace Arena.Presentation
 
                 for (int segment = 0; segment <= SegmentCount; segment++)
                 {
-                    float radians = (segment / (float)SegmentCount) * Mathf.PI * 2f;
                     int vertexIndex = ring * verticesPerRing + segment;
                     float localY = Mathf.Lerp(
                         _surfaceHeights[lowerSampleRing * verticesPerRing + segment],
                         _surfaceHeights[upperSampleRing * verticesPerRing + segment],
                         sampleBlend);
-                    WriteCircleVertex(_vertices, vertexIndex, radians, ringRadius, localY);
+                    WriteIndicatorVertex(
+                        _vertices,
+                        vertexIndex,
+                        segment,
+                        ringRadius,
+                        _triangle,
+                        localY);
                     _colors[vertexIndex] = new Color(color.r, color.g, color.b, color.a * radialAlpha);
                 }
             }
@@ -356,11 +386,11 @@ namespace Arena.Presentation
                 float normalizedRadius = Mathf.Lerp(InnerFadeRadiusFraction, 1f, radialT);
                 for (int segment = 0; segment <= SegmentCount; segment++)
                 {
-                    float radians = (segment / (float)SegmentCount) * Mathf.PI * 2f;
                     int vertexIndex = ring * verticesPerRing + segment;
+                    Vector2 boundary = IndicatorBoundaryPoint(segment, 1f, _triangle);
                     _uvs[vertexIndex] = new Vector2(
-                        0.5f + Mathf.Cos(radians) * normalizedRadius * 0.5f,
-                        0.5f + Mathf.Sin(radians) * normalizedRadius * 0.5f);
+                        0.5f + boundary.x * normalizedRadius * 0.5f,
+                        0.5f + boundary.y * normalizedRadius * 0.5f);
                 }
             }
 
@@ -372,6 +402,8 @@ namespace Arena.Presentation
             Vector3 center,
             float innerRadius,
             float outerRadius,
+            bool triangle,
+            float yaw,
             IMovementEnvironment? environment)
         {
             int verticesPerRing = SegmentCount + 1;
@@ -382,9 +414,11 @@ namespace Arena.Presentation
                 int ringStart = sampleRing * verticesPerRing;
                 for (int segment = 0; segment < SegmentCount; segment++)
                 {
-                    float radians = (segment / (float)SegmentCount) * Mathf.PI * 2f;
-                    float worldX = center.x + Mathf.Cos(radians) * ringRadius;
-                    float worldZ = center.z + Mathf.Sin(radians) * ringRadius;
+                    Vector2 local = IndicatorBoundaryPoint(segment, ringRadius, triangle);
+                    float sin = Mathf.Sin(yaw);
+                    float cos = Mathf.Cos(yaw);
+                    float worldX = center.x + local.x * cos + local.y * sin;
+                    float worldZ = center.z - local.x * sin + local.y * cos;
                     float surfaceY = environment != null
                         ? SampleSurfaceY(new Vector3(worldX, center.y, worldZ), environment)
                         : center.y;
@@ -407,16 +441,40 @@ namespace Arena.Presentation
             return Mathf.Clamp01(fill + edge);
         }
 
-        private static void WriteCircleVertex(
+        private static void WriteIndicatorVertex(
             Vector3[] vertices,
             int index,
-            float radians,
+            int segment,
             float ringRadius,
+            bool triangle,
             float localY)
         {
-            float localX = Mathf.Cos(radians) * ringRadius;
-            float localZ = Mathf.Sin(radians) * ringRadius;
-            vertices[index] = new Vector3(localX, localY, localZ);
+            Vector2 boundary = IndicatorBoundaryPoint(segment, ringRadius, triangle);
+            vertices[index] = new Vector3(boundary.x, localY, boundary.y);
+        }
+
+        private static Vector2 IndicatorBoundaryPoint(int segment, float radius, bool triangle)
+        {
+            if (!triangle)
+            {
+                float radians = (segment / (float)SegmentCount) * Mathf.PI * 2f;
+                return new Vector2(Mathf.Cos(radians) * radius, Mathf.Sin(radians) * radius);
+            }
+
+            Vector2 rear = new(0f, -radius);
+            Vector2 frontRight = new(radius * 0.8660254f, radius * 0.5f);
+            Vector2 frontLeft = new(-radius * 0.8660254f, radius * 0.5f);
+            if (segment >= SegmentCount)
+                return rear;
+            float perimeter = segment / (float)SegmentCount * 3f;
+            int edge = Mathf.FloorToInt(perimeter);
+            float edgeT = perimeter - edge;
+            return edge switch
+            {
+                0 => Vector2.Lerp(rear, frontRight, edgeT),
+                1 => Vector2.Lerp(frontRight, frontLeft, edgeT),
+                _ => Vector2.Lerp(frontLeft, rear, edgeT),
+            };
         }
 
         private static void WriteCircleTriangles(int[] triangles)

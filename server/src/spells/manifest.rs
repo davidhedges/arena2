@@ -148,6 +148,8 @@ pub(crate) enum SpellBehavior {
     Aura,
     Emanation,
     Immolation,
+    Sanctuary,
+    NecroPrison,
     SelfResource,
     SelfTeleport,
     Transpose,
@@ -170,6 +172,8 @@ impl SpellBehavior {
             Self::Aura => "AURA",
             Self::Emanation => "EMANATION",
             Self::Immolation => "IMMOLATION",
+            Self::Sanctuary => "SANCTUARY",
+            Self::NecroPrison => "NECRO_PRISON",
             Self::SelfResource => "SELF_RESOURCE",
             Self::SelfTeleport => "SELF_TELEPORT",
             Self::Transpose => "TRANSPOSE",
@@ -299,6 +303,8 @@ pub(crate) struct SpellSecondaryTunables {
     pub aura: Option<AuraSecondaryTunables>,
     pub emanation: Option<EmanationSecondaryTunables>,
     pub immolation: Option<ImmolationSecondaryTunables>,
+    pub sanctuary: Option<SanctuarySecondaryTunables>,
+    pub necro_prison: Option<NecroPrisonSecondaryTunables>,
     pub world_obstacle: Option<WorldObstacleSecondaryTunables>,
     pub recall: Option<RecallSecondaryTunables>,
 }
@@ -351,6 +357,7 @@ pub(crate) enum ProjectileMotionTunables {
     CurvedTarget(CurvedTargetProjectileTunables),
     OrbitCaster(OrbitCasterProjectileTunables),
     BoomerangCaster(BoomerangCasterProjectileTunables),
+    TravelingArea(TravelingAreaProjectileTunables),
 }
 
 impl ProjectileMotionTunables {
@@ -360,19 +367,23 @@ impl ProjectileMotionTunables {
             Self::CurvedTarget(_) => "CURVED_TARGET",
             Self::OrbitCaster(_) => "ORBIT_CASTER",
             Self::BoomerangCaster(_) => "BOOMERANG_CASTER",
+            Self::TravelingArea(_) => "TRAVELING_AREA",
         }
     }
 
     pub(crate) fn curved_target(&self) -> Option<&CurvedTargetProjectileTunables> {
         match self {
             Self::CurvedTarget(curve) => Some(curve),
-            Self::Linear | Self::OrbitCaster(_) | Self::BoomerangCaster(_) => None,
+            Self::Linear
+            | Self::OrbitCaster(_)
+            | Self::BoomerangCaster(_)
+            | Self::TravelingArea(_) => None,
         }
     }
 
     pub(crate) fn orbit(&self) -> Option<&OrbitCasterProjectileTunables> {
         match self {
-            Self::Linear | Self::CurvedTarget(_) => None,
+            Self::Linear | Self::CurvedTarget(_) | Self::TravelingArea(_) => None,
             Self::OrbitCaster(orbit) => Some(orbit),
             Self::BoomerangCaster(_) => None,
         }
@@ -381,7 +392,20 @@ impl ProjectileMotionTunables {
     pub(crate) fn boomerang(&self) -> Option<&BoomerangCasterProjectileTunables> {
         match self {
             Self::BoomerangCaster(boomerang) => Some(boomerang),
-            Self::Linear | Self::CurvedTarget(_) | Self::OrbitCaster(_) => None,
+            Self::Linear
+            | Self::CurvedTarget(_)
+            | Self::OrbitCaster(_)
+            | Self::TravelingArea(_) => None,
+        }
+    }
+
+    pub(crate) fn traveling_area(&self) -> Option<&TravelingAreaProjectileTunables> {
+        match self {
+            Self::TravelingArea(area) => Some(area),
+            Self::Linear
+            | Self::CurvedTarget(_)
+            | Self::OrbitCaster(_)
+            | Self::BoomerangCaster(_) => None,
         }
     }
 }
@@ -430,6 +454,16 @@ pub(crate) struct BoomerangCasterProjectileTunables {
     /// When enabled, confirmed HP damage is accumulated and restored when the projectile
     /// completes its return to the caster.
     pub heal_caster_on_return: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct TravelingAreaProjectileTunables {
+    /// Width across the wave, perpendicular to its direction of travel.
+    pub hitbox_length: f32,
+    /// Depth of the moving contact volume along its direction of travel.
+    pub hitbox_width: f32,
+    /// Contact count is tracked per target for the lifetime of the wave.
+    pub max_hits_per_target: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -617,6 +651,19 @@ pub(crate) struct ImmolationSecondaryTunables {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SanctuarySecondaryTunables {
+    pub duration: Duration,
+    pub visual_resource_path: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct NecroPrisonSecondaryTunables {
+    pub duration: Duration,
+    pub visual_resource_path: String,
+    pub dissipate_visual_resource_path: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct WorldObstacleSecondaryTunables {
     pub forward_distance: f32,
     pub duration: Duration,
@@ -661,6 +708,8 @@ pub(crate) struct SpellDefinition {
     pub block_behavior: BlockBehavior,
     pub primary_resource_cost: f32,
     pub primary_resource_gain_on_cast: f32,
+    pub self_health_cost: i32,
+    pub self_resource_gain_kind: String,
     pub generates_primary_resource_on_cast: bool,
     pub arms_auto_attack_on_cast: bool,
     pub apply_status: Option<ApplyStatusDefinition>,
@@ -1191,7 +1240,25 @@ mod tests {
         assert_eq!(definition.apply_status, None);
         assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
         assert!((definition.primary_resource_gain_on_cast - 50.0).abs() < 0.0001);
+        assert_eq!(definition.self_health_cost, 0);
+        assert_eq!(definition.self_resource_gain_kind, "STAMINA");
         assert!(definition.generates_primary_resource_on_cast);
+    }
+
+    #[test]
+    fn blood_offering_catalog_trades_nonlethal_health_for_mana() {
+        let definition = definition("BLOOD_OFFERING");
+
+        assert_eq!(definition.cooldown, Duration::from_secs(12));
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.behavior, SpellBehavior::SelfResource);
+        assert_eq!(definition.targeting, SpellTargeting::Self_);
+        assert_eq!(definition.target_audience, TargetAudience::SelfOnly);
+        assert!(!definition.requires_target);
+        assert!(!definition.requires_target_los);
+        assert_eq!(definition.self_health_cost, 20);
+        assert_eq!(definition.self_resource_gain_kind, "MANA");
+        assert!((definition.primary_resource_gain_on_cast - 50.0).abs() < 0.0001);
     }
 
     #[test]

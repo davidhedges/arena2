@@ -8,7 +8,7 @@ use crate::combat::actor_snapshot::{CombatActorSnapshot, CombatActorSnapshotSet}
 use crate::combat::scene_query::{
     first_hit_on_segment_candidates_with_world_stats, first_player_hit_on_segment_candidates,
     first_world_hit_on_segment_with_stats, raycast_capsule_with_padding,
-    terrain_surface_y_for_caster, SceneHitKind,
+    terrain_surface_y_for_caster, SceneHit, SceneHitKind,
 };
 use crate::combat::{
     clear_projectile_return_heal, hostile_targeted_ability_misses,
@@ -22,10 +22,11 @@ use crate::combat::{
 use crate::defense::{
     resolve_defensible_combat_hit, CombatHitDeliveryKind, DefenseResolution, DefensibleCombatHit,
 };
-use crate::relations::can_harm;
+use crate::relations::{can_harm, target_audience_allows};
 use crate::resources::grant_primary_resource_for_melee_hit;
 use crate::spells::{
-    spell_definition_by_str, ImpactEffect, SpellBehavior, SpellId, SpellRuntimeDefinition,
+    first_hostile_sanctuary_projectile_hit, spell_definition_by_str, ImpactEffect, SpellBehavior,
+    SpellId, SpellRuntimeDefinition,
 };
 use crate::world_collision::WorldRaycastStats;
 
@@ -166,6 +167,7 @@ pub(crate) fn tick_combat_projectiles_with_snapshots(
 const PROJECTILE_MOTION_ORBIT_CASTER: &str = "ORBIT_CASTER";
 const PROJECTILE_MOTION_BOOMERANG_CASTER: &str = "BOOMERANG_CASTER";
 const PROJECTILE_MOTION_CURVED_TARGET: &str = "CURVED_TARGET";
+const PROJECTILE_MOTION_TRAVELING_AREA: &str = "TRAVELING_AREA";
 const PROJECTILE_CONTACT_METADATA_KIND: &str = "PROJECTILE_CONTACT";
 const PROJECTILE_CONTACT_TERMINAL_KEY: &str = "TERMINAL";
 const PROJECTILE_CONTACT_NON_TERMINAL_VALUE: &str = "FALSE";
@@ -226,6 +228,20 @@ fn tick_projectile_instance(
     }
     if projectile.motion_kind == PROJECTILE_MOTION_BOOMERANG_CASTER {
         tick_boomerang_projectile_instance(
+            ctx,
+            now,
+            dt,
+            projectile,
+            spell_definition,
+            actor_snapshots,
+            players,
+            candidate_indices,
+            metrics,
+        );
+        return;
+    }
+    if projectile.motion_kind == PROJECTILE_MOTION_TRAVELING_AREA {
+        tick_traveling_area_projectile_instance(
             ctx,
             now,
             dt,
@@ -490,7 +506,46 @@ fn tick_orbit_projectile_instance(
         return;
     }
 
+    let start_x = projectile.pos_x;
+    let start_y = projectile.pos_y;
+    let start_z = projectile.pos_z;
     update_orbit_projectile_position(&mut projectile, &caster);
+    if let Some(hit) = first_hostile_sanctuary_projectile_hit(
+        ctx,
+        projectile.caster,
+        start_x,
+        start_y,
+        start_z,
+        projectile.pos_x,
+        projectile.pos_y,
+        projectile.pos_z,
+        projectile.radius,
+    ) {
+        projectile.pos_x = hit.x;
+        projectile.pos_y = hit.y;
+        projectile.pos_z = hit.z;
+        emit_projectile_event(
+            ctx,
+            &projectile,
+            COMBAT_EVENT_IMPACT,
+            None,
+            hit.x,
+            hit.y,
+            hit.z,
+            0,
+            now,
+            metrics,
+        );
+        finish_projectile_without_event(ctx, &projectile);
+        if orbit_tunables.max_active_projectiles.is_some() {
+            orbit_groups_to_rephase.insert((
+                projectile.caster,
+                projectile.action_kind.clone(),
+                projectile.ability_id.clone(),
+            ));
+        }
+        return;
+    }
     if resolve_orbit_projectile_contacts(
         ctx,
         now,
@@ -1040,6 +1095,316 @@ fn tick_boomerang_projectile_instance(
     update_projectile_row(ctx, projectile, metrics);
 }
 
+fn tick_traveling_area_projectile_instance(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    dt: f32,
+    mut projectile: ActiveCombatProjectile,
+    spell_definition: Option<&SpellRuntimeDefinition>,
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
+    candidate_indices: &mut Vec<usize>,
+    metrics: &mut ProjectileTickMetricsFrame,
+) {
+    let Some(definition) = spell_definition else {
+        fizzle_projectile_and_finish(ctx, now, &projectile, metrics);
+        return;
+    };
+    let Some(area) = definition
+        .secondary
+        .projectile
+        .as_ref()
+        .and_then(|projectile| projectile.motion.traveling_area())
+    else {
+        fizzle_projectile_and_finish(ctx, now, &projectile, metrics);
+        return;
+    };
+
+    let step = traveling_area_step_distance(
+        definition.speed,
+        dt,
+        projectile.traveled,
+        definition.max_distance,
+    );
+    if step > 0.0
+        && advance_traveling_area_segment(
+            ctx,
+            now,
+            &mut projectile,
+            definition,
+            area.hitbox_length,
+            area.hitbox_width,
+            area.max_hits_per_target,
+            actor_snapshots,
+            players,
+            candidate_indices,
+            step,
+            metrics,
+        )
+    {
+        return;
+    }
+
+    if projectile.traveled >= definition.max_distance - 0.001
+        || projectile.age >= projectile.lifetime
+    {
+        emit_projectile_event(
+            ctx,
+            &projectile,
+            COMBAT_EVENT_FIZZLE,
+            None,
+            projectile.pos_x,
+            projectile.pos_y,
+            projectile.pos_z,
+            0,
+            now,
+            metrics,
+        );
+        finish_projectile_without_event(ctx, &projectile);
+        return;
+    }
+
+    maybe_emit_projectile_update(
+        ctx,
+        &mut projectile,
+        definition.update_interval,
+        now,
+        dt,
+        metrics,
+    );
+    update_projectile_row(ctx, projectile, metrics);
+}
+
+fn traveling_area_step_distance(speed: f32, dt: f32, traveled: f32, max_distance: f32) -> f32 {
+    let remaining_distance = (max_distance - traveled).max(0.0);
+    (speed.max(0.0) * dt.max(0.0)).min(remaining_distance)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn advance_traveling_area_segment(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    projectile: &mut ActiveCombatProjectile,
+    definition: &SpellRuntimeDefinition,
+    hitbox_length: f32,
+    hitbox_width: f32,
+    max_hits_per_target: u32,
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
+    candidate_indices: &mut Vec<usize>,
+    distance: f32,
+    metrics: &mut ProjectileTickMetricsFrame,
+) -> bool {
+    if distance <= 0.0 {
+        return false;
+    }
+
+    let start_x = projectile.pos_x;
+    let start_y = projectile.pos_y;
+    let start_z = projectile.pos_z;
+    let end_x = start_x + projectile.dir_x * distance;
+    let end_z = start_z + projectile.dir_z * distance;
+    let spawn_height = projectile_spell_spawn_height(Some(definition));
+    let end_y =
+        terrain_surface_y_for_caster(ctx, projectile.caster, end_x, end_z, start_y - spawn_height)
+            + spawn_height;
+    let slope_y = (end_y - start_y) / distance.max(f32::EPSILON);
+
+    let sanctuary_hit = first_hostile_sanctuary_projectile_hit(
+        ctx,
+        projectile.caster,
+        start_x,
+        start_y,
+        start_z,
+        end_x,
+        end_y,
+        end_z,
+        projectile.radius,
+    );
+    let segment_distance = sanctuary_hit
+        .map(|hit| hit.t)
+        .unwrap_or(distance)
+        .min(distance);
+
+    resolve_traveling_area_enemy_contacts_on_segment(
+        ctx,
+        now,
+        projectile,
+        definition,
+        hitbox_length,
+        hitbox_width,
+        max_hits_per_target,
+        actor_snapshots,
+        players,
+        candidate_indices,
+        start_x,
+        start_y,
+        start_z,
+        slope_y,
+        segment_distance,
+        metrics,
+    );
+
+    projectile.pos_x = start_x + projectile.dir_x * segment_distance;
+    projectile.pos_y = start_y + slope_y * segment_distance;
+    projectile.pos_z = start_z + projectile.dir_z * segment_distance;
+    projectile.traveled += segment_distance;
+
+    if let Some(hit) = sanctuary_hit {
+        emit_projectile_event(
+            ctx,
+            projectile,
+            COMBAT_EVENT_IMPACT,
+            None,
+            hit.x,
+            hit.y,
+            hit.z,
+            0,
+            now,
+            metrics,
+        );
+        finish_projectile_without_event(ctx, projectile);
+        return true;
+    }
+
+    false
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_traveling_area_enemy_contacts_on_segment(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    projectile: &ActiveCombatProjectile,
+    definition: &SpellRuntimeDefinition,
+    hitbox_length: f32,
+    hitbox_width: f32,
+    max_hits_per_target: u32,
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
+    candidate_indices: &mut Vec<usize>,
+    start_x: f32,
+    start_y: f32,
+    start_z: f32,
+    slope_y: f32,
+    max_distance: f32,
+    metrics: &mut ProjectileTickMetricsFrame,
+) {
+    let end_x = start_x + projectile.dir_x * max_distance;
+    let end_z = start_z + projectile.dir_z * max_distance;
+    actor_snapshots.query_segment_indices(
+        start_x,
+        start_z,
+        end_x,
+        end_z,
+        (hitbox_length * 0.5).max(projectile.radius),
+        candidate_indices,
+    );
+
+    let mut contacts = Vec::new();
+    for target in candidate_indices
+        .iter()
+        .filter_map(|index| players.get(*index))
+    {
+        metrics.collision_candidate_scans = metrics.collision_candidate_scans.saturating_add(1);
+        if target.player_id == projectile.caster || !target.alive {
+            continue;
+        }
+        if !players_share_world_context(ctx, projectile.caster, target.player_id)
+            || !can_harm(ctx, projectile.caster, target.player_id)
+            || !target_audience_allows(
+                ctx,
+                projectile.caster,
+                target.player_id,
+                definition.target_audience,
+            )
+        {
+            continue;
+        }
+        if let Some(contact_t) = swept_perpendicular_box_contact_t(
+            start_x,
+            start_y,
+            start_z,
+            projectile.dir_x,
+            slope_y,
+            projectile.dir_z,
+            max_distance,
+            hitbox_length,
+            hitbox_width,
+            target,
+        ) {
+            contacts.push((contact_t, *target));
+        }
+    }
+    contacts.sort_by(|(a, _), (b, _)| a.total_cmp(b));
+
+    for (contact_t, target) in contacts {
+        let key = projectile_target_state_key(
+            projectile.projectile_instance_id.as_str(),
+            target.player_id,
+        );
+        let mut state = ctx
+            .db
+            .active_combat_projectile_target_state()
+            .key()
+            .find(key.clone())
+            .unwrap_or(ActiveCombatProjectileTargetState {
+                key,
+                projectile_instance_id: projectile.projectile_instance_id.clone(),
+                target: target.player_id,
+                hit_count: 0,
+                next_allowed_at: Timestamp::UNIX_EPOCH,
+                is_overlapping: false,
+            });
+        if state.hit_count >= max_hits_per_target {
+            continue;
+        }
+
+        let hit_x = start_x + projectile.dir_x * contact_t;
+        let hit_y = start_y + slope_y * contact_t;
+        let hit_z = start_z + projectile.dir_z * contact_t;
+        if resolve_projectile_defense_with_metadata(
+            ctx,
+            projectile,
+            &target,
+            hit_x,
+            hit_y,
+            hit_z,
+            now,
+            PROJECTILE_CONTACT_METADATA_KIND,
+            PROJECTILE_CONTACT_TERMINAL_KEY,
+            PROJECTILE_CONTACT_NON_TERMINAL_VALUE,
+            metrics,
+        ) {
+            metrics.contacts_resolved = metrics.contacts_resolved.saturating_add(1);
+        } else {
+            metrics.contacts_resolved = metrics.contacts_resolved.saturating_add(1);
+            let damage =
+                projectile_damage_for_target(ctx, projectile, definition, target.player_id);
+            emit_projectile_event_with_metadata(
+                ctx,
+                projectile,
+                COMBAT_EVENT_CONTACT,
+                Some(target.player_id),
+                hit_x,
+                hit_y,
+                hit_z,
+                damage,
+                now,
+                PROJECTILE_CONTACT_METADATA_KIND,
+                PROJECTILE_CONTACT_TERMINAL_KEY,
+                PROJECTILE_CONTACT_NON_TERMINAL_VALUE,
+                metrics,
+            );
+            queue_spell_projectile_hit_effects(ctx, projectile, definition, &target);
+        }
+
+        state.hit_count = state.hit_count.saturating_add(1);
+        state.next_allowed_at = now;
+        state.is_overlapping = true;
+        upsert_projectile_target_state(ctx, state);
+    }
+}
+
 fn boomerang_apex_hold_finished(
     age_seconds: f32,
     outbound_distance: f32,
@@ -1105,6 +1470,29 @@ fn advance_boomerang_segment(
         &mut world_stats,
     );
     record_world_raycast_stats(metrics, world_stats);
+    let sanctuary_hit = first_hostile_sanctuary_projectile_hit(
+        ctx,
+        projectile.caster,
+        start_x,
+        start_y,
+        start_z,
+        end_x,
+        end_y,
+        end_z,
+        projectile.radius,
+    )
+    .map(|hit| SceneHit {
+        kind: SceneHitKind::World,
+        t: hit.t,
+        x: hit.x,
+        y: hit.y,
+        z: hit.z,
+    });
+    let world_hit = match (world_hit, sanctuary_hit) {
+        (Some(world), Some(sanctuary)) if sanctuary.t < world.t => Some(sanctuary),
+        (Some(world), _) => Some(world),
+        (None, sanctuary) => sanctuary,
+    };
     let segment_distance = world_hit.map(|hit| hit.t).unwrap_or(distance).min(distance);
     let segment_end_x = start_x + projectile.dir_x * segment_distance;
     let segment_end_y = start_y + projectile.dir_y * segment_distance;
@@ -1651,6 +2039,29 @@ fn advance_projectile_segment_with_collision(
         );
         record_world_raycast_stats(metrics, world_stats);
         hit
+    };
+    let sanctuary_hit = first_hostile_sanctuary_projectile_hit(
+        ctx,
+        projectile.caster,
+        start_x,
+        start_y,
+        start_z,
+        end_x,
+        end_y,
+        end_z,
+        projectile.radius,
+    )
+    .map(|hit| SceneHit {
+        kind: SceneHitKind::World,
+        t: hit.t,
+        x: hit.x,
+        y: hit.y,
+        z: hit.z,
+    });
+    let hit = match (hit, sanctuary_hit) {
+        (Some(scene), Some(sanctuary)) if sanctuary.t < scene.t => Some(sanctuary),
+        (Some(scene), _) => Some(scene),
+        (None, sanctuary) => sanctuary,
     };
 
     if let Some(hit) = hit {
@@ -2953,12 +3364,16 @@ mod tests {
             .expect("GROUND_SLASH should be present in the runtime spell catalog");
         let fireball = spell_definition_by_str("FIREBALL")
             .expect("FIREBALL should be present in the runtime spell catalog");
+        let gravewake = spell_definition_by_str("GRAVEWAKE")
+            .expect("GRAVEWAKE should be present in the runtime spell catalog");
 
         let ground_slash_uses_terrain =
             projectile_uses_terrain_conforming_collision(Some(ground_slash));
         let fireball_uses_terrain = projectile_uses_terrain_conforming_collision(Some(fireball));
+        let gravewake_uses_terrain = projectile_uses_terrain_conforming_collision(Some(gravewake));
 
         assert!(ground_slash_uses_terrain);
+        assert!(gravewake_uses_terrain);
         assert!(!fireball_uses_terrain);
         assert!(!projectile_uses_terrain_conforming_collision(None));
     }
@@ -3022,5 +3437,33 @@ mod tests {
             0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 3.8, 0.9, &target,
         )
         .is_some());
+    }
+
+    #[test]
+    fn gravewake_contact_volume_moves_forward_and_clamps_at_authored_range() {
+        let mut target = test_snapshot(test_identity(2));
+        target.pos_y = 0.0;
+        target.pos_x = 2.74;
+        target.pos_z = 0.5;
+        assert!(swept_perpendicular_box_contact_t(
+            0.0, 0.15, 0.0, 0.0, 0.0, 1.0, 1.0, 4.5, 1.5, &target,
+        )
+        .is_some());
+
+        target.pos_x = 2.76;
+        assert!(swept_perpendicular_box_contact_t(
+            0.0, 0.15, 0.0, 0.0, 0.0, 1.0, 1.0, 4.5, 1.5, &target,
+        )
+        .is_none());
+
+        target.pos_x = 0.0;
+        target.pos_z = -1.26;
+        assert!(swept_perpendicular_box_contact_t(
+            0.0, 0.15, 0.0, 0.0, 0.0, 1.0, 1.0, 4.5, 1.5, &target,
+        )
+        .is_none());
+
+        assert!((traveling_area_step_distance(10.0, 0.05, 11.8, 12.0) - 0.2).abs() < 0.0001);
+        assert_eq!(traveling_area_step_distance(10.0, 0.05, 12.0, 12.0), 0.0);
     }
 }

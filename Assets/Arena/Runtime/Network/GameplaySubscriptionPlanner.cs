@@ -276,6 +276,8 @@ namespace Arena.Network
                 BuildScopedActiveWorldInteractionQuery(new QueryBuilder(), scope),
                 BuildScopedActiveRadialEffectQuery(new QueryBuilder(), scope),
                 BuildScopedActiveWorldObstacleQuery(new QueryBuilder(), scope),
+                BuildScopedActiveSanctuaryZoneQuery(new QueryBuilder(), scope),
+                BuildScopedActiveNecroPrisonQuery(new QueryBuilder(), scope),
                 BuildScopedWorldDoorStateQuery(new QueryBuilder(), scope),
                 BuildScopedWorldTrapStateQuery(new QueryBuilder(), scope),
                 BuildScopedMovementActionStateQuery(new QueryBuilder(), scope),
@@ -790,6 +792,52 @@ namespace Arena.Network
                     .ToSql(),
                 _ => throw new InvalidOperationException(
                     "Scoped world-door-state query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedActiveSanctuaryZoneQuery(
+            QueryBuilder qb,
+            NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .ActiveSanctuaryZone()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .ActiveSanctuaryZone()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .ToSql(),
+                _ => throw new InvalidOperationException(
+                    "Scoped active-sanctuary-zone query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedActiveNecroPrisonQuery(
+            QueryBuilder qb,
+            NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .ActiveNecroPrison()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .ActiveNecroPrison()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .ToSql(),
+                _ => throw new InvalidOperationException(
+                    "Scoped active-necro-prison query requested for GameplayScope.None"),
             };
         }
 

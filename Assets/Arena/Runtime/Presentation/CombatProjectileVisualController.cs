@@ -15,6 +15,7 @@ namespace Arena.Presentation
         private const string ProjectileMotionOrbitCaster = "ORBIT_CASTER";
         private const string ProjectileMotionBoomerangCaster = "BOOMERANG_CASTER";
         private const string ProjectileMotionCurvedTarget = "CURVED_TARGET";
+        private const string ProjectileMotionTravelingArea = "TRAVELING_AREA";
         private const float OrbitRetargetSeconds = 0.2f;
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -185,7 +186,8 @@ namespace Arena.Presentation
                         row.MaxDistance,
                         rental,
                         template.ScaleMultiplierAtLifetimeEnd,
-                        authoritativeLifetime: true)
+                        authoritativeLifetime: true,
+                        moveRootWithProjectile: !template.LockProjectileRootToSpawn)
                     : new WeaponProjectileVFX(
                         projectileKey,
                         ApplyLaunchOffset(projectileKey, ResolvePresentationPosition(row)),
@@ -197,7 +199,8 @@ namespace Arena.Presentation
                         trailTemplate,
                         template.ScaleMultiplierAtLifetimeEnd,
                         authoritativeLifetime: true,
-                        followAuthoritativeProjectileMotion: template.FollowAuthoritativeProjectileMotion);
+                        followAuthoritativeProjectileMotion: template.FollowAuthoritativeProjectileMotion,
+                        moveRootWithProjectile: !template.LockProjectileRootToSpawn);
             });
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (_activeProjectiles.ContainsKey(projectileKey))
@@ -317,7 +320,8 @@ namespace Arena.Presentation
                 if (vfx is WeaponProjectileVFX weaponProjectile
                     && ShouldSnapAuthoritativeVisualUpdate(
                         row.MotionKind,
-                        _adoptedPredictedProjectiles.Contains(projectileKey)))
+                        _adoptedPredictedProjectiles.Contains(projectileKey),
+                        weaponProjectile.MovesRootWithProjectile))
                 {
                     weaponProjectile.OnUpdate(position, direction, PresentationSpeed(row), snapToAuthoritative: true);
                 }
@@ -450,9 +454,14 @@ namespace Arena.Presentation
                 StringComparison.Ordinal);
         }
 
-        internal static bool ShouldSnapAuthoritativeVisualUpdate(string motionKind, bool adoptedPredictedProjectile)
+        internal static bool ShouldSnapAuthoritativeVisualUpdate(
+            string motionKind,
+            bool adoptedPredictedProjectile,
+            bool movesRootWithProjectile)
         {
-            return !adoptedPredictedProjectile && UsesAuthoritativeVisualPosition(motionKind);
+            return movesRootWithProjectile
+                && !adoptedPredictedProjectile
+                && UsesAuthoritativeVisualPosition(motionKind);
         }
 
         private static bool UsesAuthoritativeVisualPosition(string motionKind)
@@ -460,7 +469,8 @@ namespace Arena.Presentation
             string motion = WireIdentifier.Normalize(motionKind);
             return string.Equals(motion, ProjectileMotionOrbitCaster, StringComparison.Ordinal)
                 || string.Equals(motion, ProjectileMotionBoomerangCaster, StringComparison.Ordinal)
-                || string.Equals(motion, ProjectileMotionCurvedTarget, StringComparison.Ordinal);
+                || string.Equals(motion, ProjectileMotionCurvedTarget, StringComparison.Ordinal)
+                || string.Equals(motion, ProjectileMotionTravelingArea, StringComparison.Ordinal);
         }
 
         private static float PresentationSpeed(ProjectilePresentationEvent row)

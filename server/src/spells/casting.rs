@@ -68,9 +68,11 @@ use crate::progression::{
 };
 use crate::relations::{can_harm, target_audience_allows, TargetAudience};
 use crate::resources::{
-    can_pay_action_resource_cost, grant_primary_resource_amount, pay_action_resource_cost,
+    can_pay_action_resource_cost, grant_primary_resource_amount_for_kind, pay_action_resource_cost,
     resolve_ability_action_resource_cost_amount, ResolvedActionResourceCost,
 };
+#[cfg(feature = "spellcasting_terminal_harness")]
+use crate::resources::{clear_player_resources, player_resource as _, sync_resources_for_player};
 use crate::world_collision::{
     resolve_world_horizontal_collision_y_with_layout_for_scene,
     surface_height_for_world_at_y_with_layout_for_scene,
@@ -168,6 +170,18 @@ fn recall_slot_has_stored_spell(slot: &RecallSlot) -> bool {
     !slot.stored_spell_id.trim().is_empty()
 }
 
+fn recall_replay_defaults_to_self(
+    targeting: super::manifest::SpellTargeting,
+    requires_target: bool,
+    target_audience: TargetAudience,
+    requested_target_is_allowed: bool,
+) -> bool {
+    targeting == super::manifest::SpellTargeting::Target
+        && requires_target
+        && target_audience.allows(crate::relations::CombatRelation::Self_)
+        && !requested_target_is_allowed
+}
+
 fn resolved_initial_primary_resource_cost_for_action(
     ctx: &ReducerContext,
     caster: Identity,
@@ -230,6 +244,29 @@ fn channel_tick_resource_cost_amount(definition: &SpellDefinition) -> f32 {
         return 0.0;
     }
     definition.primary_resource_cost * definition.update_interval.max(0.0)
+}
+
+fn can_pay_nonlethal_health_cost(current_hp: i32, health_cost: i32) -> bool {
+    health_cost <= 0 || current_hp > health_cost
+}
+
+fn can_pay_self_health_cost(
+    ctx: &ReducerContext,
+    caster: Identity,
+    definition: &SpellDefinition,
+) -> bool {
+    if definition.self_health_cost <= 0 {
+        return true;
+    }
+    ctx.db
+        .player_state()
+        .player_id()
+        .find(caster)
+        .is_some_and(|state| {
+            state.alive
+                && !state.eliminated
+                && can_pay_nonlethal_health_cost(state.hp, definition.self_health_cost)
+        })
 }
 
 #[cfg(test)]
@@ -962,6 +999,19 @@ fn execute_cast_intent(
         );
         return Ok(());
     }
+    if !can_pay_self_health_cost(ctx, caster_state.player_id, definition) {
+        record_spell_prediction_result(
+            ctx,
+            caster,
+            "",
+            predicted_cast_id.as_str(),
+            client_action_seq,
+            SPELL_PREDICTION_RESULT_REJECTED,
+            ActionRejectReason::InsufficientResource,
+            now,
+        );
+        return Ok(());
+    }
 
     if definition.behavior == SpellBehavior::Channel {
         let reject_reason = process_spell_cast(
@@ -1293,19 +1343,30 @@ fn commit_primary_resource_for_spell(
     spell_kind: &SpellId,
     now: Timestamp,
 ) -> bool {
+    let definition = super::catalog::spell_definition(spell_kind)
+        .expect("validated spell id must resolve to a definition");
     let Some(cost) = resolved_initial_primary_resource_cost_for_action(ctx, caster, spell_kind)
     else {
         return false;
     };
+    if !can_pay_self_health_cost(ctx, caster, definition) {
+        return false;
+    }
     if !pay_action_resource_cost(ctx, caster, &cost, now) {
         return false;
     }
-    grant_primary_resource_amount(
+    if definition.self_health_cost > 0 {
+        let Some(mut state) = ctx.db.player_state().player_id().find(caster) else {
+            return false;
+        };
+        state.hp -= definition.self_health_cost;
+        ctx.db.player_state().player_id().update(state);
+    }
+    grant_primary_resource_amount_for_kind(
         ctx,
         caster,
-        super::catalog::spell_definition(spell_kind)
-            .expect("validated spell id must resolve to a definition")
-            .primary_resource_gain_on_cast,
+        definition.self_resource_gain_kind.as_str(),
+        definition.primary_resource_gain_on_cast,
         now,
     );
     true
@@ -2422,13 +2483,44 @@ fn cast_recall(
     if !recall_capture_is_eligible(stored_definition) {
         return Ok(Some(ActionRejectReason::InvalidInput));
     }
-    if gouge_blocks_targeted_spell(ctx, caster, stored_definition, target_id, ctx.timestamp) {
+    let requested_target_is_allowed =
+        resolve_target(ctx, caster, target_id).is_some_and(|target| {
+            target_audience_allows(
+                ctx,
+                caster,
+                target.player_id,
+                stored_definition.target_audience,
+            )
+        });
+    let replay_target_id = if recall_replay_defaults_to_self(
+        stored_definition.targeting,
+        stored_definition.requires_target,
+        stored_definition.target_audience,
+        requested_target_is_allowed,
+    ) {
+        caster.to_hex().to_string()
+    } else {
+        target_id.to_string()
+    };
+    if gouge_blocks_targeted_spell(
+        ctx,
+        caster,
+        stored_definition,
+        replay_target_id.as_str(),
+        ctx.timestamp,
+    ) {
         return Ok(Some(ActionRejectReason::Disabled));
     }
 
     let stored_ability_id = ability_id_for_spell(ctx, caster, &stored_kind);
     if mode == CastExecutionMode::Execute {
-        mark_harmful_targeted_spell_start(ctx, caster, &stored_kind, target_id, ctx.timestamp);
+        mark_harmful_targeted_spell_start(
+            ctx,
+            caster,
+            &stored_kind,
+            replay_target_id.as_str(),
+            ctx.timestamp,
+        );
         clear_interruptible_defense_for_owner(ctx, caster);
     }
     let reject_reason = process_spell_cast(
@@ -2436,7 +2528,7 @@ fn cast_recall(
         state,
         caster,
         &stored_kind,
-        target_id,
+        replay_target_id.as_str(),
         aim_x,
         aim_y,
         aim_z,
@@ -2459,7 +2551,13 @@ fn cast_recall(
         );
         crate::progression::break_shroud_on_attack(ctx, caster, ctx.timestamp);
     }
-    try_arm_auto_attack_for_spell_start(ctx, caster, &stored_kind, target_id, ctx.timestamp);
+    try_arm_auto_attack_for_spell_start(
+        ctx,
+        caster,
+        &stored_kind,
+        replay_target_id.as_str(),
+        ctx.timestamp,
+    );
     clear_recall_slot(ctx, caster);
     let replay_cooldown = super::catalog::spell_definition(recall_kind)
         .and_then(|definition| definition.secondary.recall)
@@ -2493,6 +2591,26 @@ fn process_spell_cast(
     let definition = super::catalog::spell_definition(spell_kind)
         .expect("validated spell id must resolve to a definition");
 
+    let radial_area_radius = match definition.behavior {
+        SpellBehavior::Aura => definition.secondary.aura.as_ref().map(|aura| aura.radius),
+        SpellBehavior::Emanation => definition
+            .secondary
+            .emanation
+            .as_ref()
+            .map(|emanation| emanation.radius),
+        _ => None,
+    };
+    let deactivates_current_emanation = definition.behavior == SpellBehavior::Emanation
+        && active_emanation_for_owner(ctx, caster)
+            .is_some_and(|active| active.spell_id == spell_kind.as_str());
+    if !deactivates_current_emanation
+        && radial_area_radius.is_some_and(|radius| {
+            super::area_overlaps_hostile_sanctuary(ctx, caster, state.pos_x, state.pos_z, radius)
+        })
+    {
+        return Ok(Some(ActionRejectReason::InvalidTarget));
+    }
+
     if definition.behavior == SpellBehavior::Recall {
         return cast_recall(
             ctx,
@@ -2518,6 +2636,8 @@ fn process_spell_cast(
             | SpellBehavior::Aura
             | SpellBehavior::Emanation
             | SpellBehavior::Immolation
+            | SpellBehavior::Sanctuary
+            | SpellBehavior::NecroPrison
             | SpellBehavior::SelfResource
             | SpellBehavior::SelfTeleport
             | SpellBehavior::Transpose
@@ -2612,6 +2732,40 @@ fn process_spell_cast(
                 SpellBehavior::Immolation => {
                     cast_immolation(ctx, caster, spell_kind, ability_id);
                 }
+                SpellBehavior::Sanctuary => {
+                    return Ok(reject_unless(
+                        cast_sanctuary(
+                            ctx,
+                            caster,
+                            state,
+                            spell_kind,
+                            aim_x,
+                            aim_y,
+                            aim_z,
+                            mode,
+                            action_instance_id,
+                            ability_id,
+                        )?,
+                        ActionRejectReason::InvalidTarget,
+                    ));
+                }
+                SpellBehavior::NecroPrison => {
+                    return Ok(reject_unless(
+                        cast_necro_prison(
+                            ctx,
+                            caster,
+                            state,
+                            spell_kind,
+                            aim_x,
+                            aim_y,
+                            aim_z,
+                            mode,
+                            action_instance_id,
+                            ability_id,
+                        )?,
+                        ActionRejectReason::InvalidTarget,
+                    ));
+                }
                 SpellBehavior::SelfResource => {
                     cast_self_resource(
                         ctx,
@@ -2701,6 +2855,22 @@ fn process_spell_cast(
         if definition.behavior == SpellBehavior::Immolation {
             return Ok(None);
         }
+        if definition.behavior == SpellBehavior::Sanctuary {
+            return Ok(reject_unless(
+                cast_sanctuary(
+                    ctx, caster, state, spell_kind, aim_x, aim_y, aim_z, mode, "", "",
+                )?,
+                ActionRejectReason::InvalidTarget,
+            ));
+        }
+        if definition.behavior == SpellBehavior::NecroPrison {
+            return Ok(reject_unless(
+                cast_necro_prison(
+                    ctx, caster, state, spell_kind, aim_x, aim_y, aim_z, mode, "", "",
+                )?,
+                ActionRejectReason::InvalidTarget,
+            ));
+        }
         if definition.behavior == SpellBehavior::Transpose {
             return Ok(reject_unless(
                 cast_transpose(ctx, caster, state, spell_kind, target_id, mode, "", "")?,
@@ -2741,12 +2911,14 @@ fn process_spell_cast(
             return Ok(None);
         }
 
-        if projectile_motion(definition) == Some("BOOMERANG_CASTER")
-            && definition.targeting == super::manifest::SpellTargeting::Self_
+        if matches!(
+            projectile_motion(definition),
+            Some("BOOMERANG_CASTER" | "TRAVELING_AREA")
+        ) && definition.targeting == super::manifest::SpellTargeting::Self_
             && !definition.requires_target
         {
             if mode == CastExecutionMode::Execute {
-                spawn_untargeted_boomerang_projectile(
+                spawn_untargeted_forward_projectile(
                     ctx,
                     caster,
                     state,
@@ -2868,14 +3040,37 @@ fn process_spell_cast(
         if spell_kind.as_str() == CAPACITOR_ACTION_ID && !super::is_capacitor_charged(ctx, caster) {
             return Ok(Some(ActionRejectReason::NoCharges));
         }
-        if definition.targeting == super::manifest::SpellTargeting::Target {
+        let area_center = if definition.targeting == super::manifest::SpellTargeting::Target {
             if let Err(reason) =
                 validate_targeted_area_cast(ctx, caster, state, definition, target_id)
             {
                 return Ok(Some(reason));
             }
+            resolve_targeted_area_frame(ctx, caster, state, definition, target_id)
+                .map(|(center, _, _)| center)
+                .map_err(|reason| format!("validated area frame unexpectedly failed: {reason:?}"))?
         } else if resolve_generic_area_center(definition, state, aim_x, aim_y, aim_z).is_none() {
             return Ok(Some(ActionRejectReason::InvalidInput));
+        } else {
+            resolve_generic_area_center_for_cast(
+                ctx, caster, definition, state, aim_x, aim_y, aim_z,
+            )
+            .expect("validated generic area center must resolve")
+        };
+        let area_radius = definition
+            .secondary
+            .area
+            .as_ref()
+            .map(|area| area.shape.query_radius())
+            .unwrap_or(definition.radius);
+        if super::area_overlaps_hostile_sanctuary(
+            ctx,
+            caster,
+            area_center.x,
+            area_center.z,
+            area_radius,
+        ) {
+            return Ok(Some(ActionRejectReason::InvalidTarget));
         }
         if mode == CastExecutionMode::Execute {
             let capacitor_charge_count = if spell_kind.as_str() == CAPACITOR_ACTION_ID {
@@ -2911,6 +3106,20 @@ fn process_spell_cast(
 
     match BespokeRuntimeSpell::from_spell_id(spell_kind) {
         Some(BespokeRuntimeSpell::Meteor) => {
+            let Some(center) = resolve_generic_area_center_for_cast(
+                ctx, caster, definition, state, aim_x, aim_y, aim_z,
+            ) else {
+                return Ok(Some(ActionRejectReason::InvalidInput));
+            };
+            if super::area_overlaps_hostile_sanctuary(
+                ctx,
+                caster,
+                center.x,
+                center.z,
+                definition.radius,
+            ) {
+                return Ok(Some(ActionRejectReason::InvalidTarget));
+            }
             if mode == CastExecutionMode::Execute {
                 spawn_meteor(
                     ctx,
@@ -3676,7 +3885,7 @@ fn spawn_tracking_projectile(
     )
 }
 
-fn spawn_untargeted_boomerang_projectile(
+fn spawn_untargeted_forward_projectile(
     ctx: &ReducerContext,
     caster: Identity,
     state: &CombatActorSnapshot,
@@ -3685,19 +3894,29 @@ fn spawn_untargeted_boomerang_projectile(
     ability_id: &str,
 ) -> Result<(), String> {
     let definition = super::catalog::spell_definition(kind)
-        .expect("validated untargeted boomerang spell must resolve to a definition");
-    let outbound_distance = definition
+        .expect("validated untargeted forward projectile must resolve to a definition");
+    let travel_distance = definition
         .secondary
         .projectile
         .as_ref()
-        .and_then(|projectile| projectile.motion.boomerang())
-        .expect("validated untargeted boomerang spell must define motion tunables")
-        .outbound_distance;
+        .and_then(|projectile| {
+            projectile
+                .motion
+                .boomerang()
+                .map(|motion| motion.outbound_distance)
+                .or_else(|| {
+                    projectile
+                        .motion
+                        .traveling_area()
+                        .map(|_| definition.max_distance)
+                })
+        })
+        .expect("validated untargeted forward projectile must define supported motion tunables");
     let launch_target = CombatActorSnapshot {
         player_id: Identity::ZERO,
-        pos_x: state.pos_x + state.facing_yaw.sin() * outbound_distance,
+        pos_x: state.pos_x + state.facing_yaw.sin() * travel_distance,
         pos_y: state.pos_y,
-        pos_z: state.pos_z + state.facing_yaw.cos() * outbound_distance,
+        pos_z: state.pos_z + state.facing_yaw.cos() * travel_distance,
         ..*state
     };
     spawn_tracking_projectile(
@@ -4749,6 +4968,61 @@ pub fn run_spellcasting_terminal_harness(ctx: &ReducerContext) -> Result<(), Str
     upsert_harness_player(ctx, caster, 0.0, 0.0, 0.0, false, now);
     upsert_harness_player(ctx, target, 0.0, -5.0, 0.0, true, now);
 
+    let mut caster_health = ctx
+        .db
+        .player_state()
+        .player_id()
+        .find(caster)
+        .ok_or_else(|| "Blood Offering harness caster state missing".to_string())?;
+    caster_health.hp = 100;
+    ctx.db.player_state().player_id().update(caster_health);
+    sync_resources_for_player(ctx, caster, now);
+    let mut mana = ctx
+        .db
+        .player_resource()
+        .owner()
+        .filter(caster)
+        .find(|resource| resource.kind == "MANA")
+        .ok_or_else(|| "Blood Offering harness mana row missing".to_string())?;
+    mana.current = 10.0;
+    ctx.db.player_resource().key().update(mana);
+    let blood_offering = SpellId::new("BLOOD_OFFERING").map_err(|err| err.to_string())?;
+    if !commit_primary_resource_for_spell(ctx, caster, &blood_offering, now) {
+        return Err("Blood Offering harness commit was rejected at 100 health".to_string());
+    }
+    let state = ctx
+        .db
+        .player_state()
+        .player_id()
+        .find(caster)
+        .ok_or_else(|| "Blood Offering harness caster state missing after commit".to_string())?;
+    if state.hp != 80 {
+        return Err(format!(
+            "Blood Offering harness expected 80 health after commit, got {}",
+            state.hp
+        ));
+    }
+    let mana = ctx
+        .db
+        .player_resource()
+        .owner()
+        .filter(caster)
+        .find(|resource| resource.kind == "MANA")
+        .ok_or_else(|| "Blood Offering harness mana row missing after commit".to_string())?;
+    if (mana.current - 60.0).abs() > 0.0001 {
+        return Err(format!(
+            "Blood Offering harness expected 60 mana after commit, got {}",
+            mana.current
+        ));
+    }
+
+    let mut state = state;
+    state.hp = 20;
+    ctx.db.player_state().player_id().update(state);
+    if commit_primary_resource_for_spell(ctx, caster, &blood_offering, now) {
+        return Err("Blood Offering harness allowed a lethal health payment".to_string());
+    }
+
     let suffix = timestamp_to_micros(now);
 
     let live_facing_cast_id = format!("{SPELLCASTING_TERMINAL_HARNESS_PREFIX}live-facing-{suffix}");
@@ -4850,6 +5124,8 @@ fn upsert_harness_player(
         yaw,
         grounded: true,
         last_processed_tick: 0,
+        last_tick_consumed_command: true,
+        buffered_command_count: 0,
         updated_at: now,
     };
     if ctx.db.player_physics().identity().find(identity).is_some() {
@@ -4874,6 +5150,10 @@ fn upsert_harness_player_intent(
     jump: bool,
     now: Timestamp,
 ) {
+    if let Some(mut state) = ctx.db.player_state().player_id().find(identity) {
+        state.last_voluntary_move_input_tick = 1;
+        ctx.db.player_state().player_id().update(state);
+    }
     let intent = PlayerIntent {
         identity,
         forward,
@@ -5059,6 +5339,7 @@ fn cleanup_spellcasting_terminal_harness(ctx: &ReducerContext, caster: Identity,
         ctx.db.combat_event().event_id().delete(event_id);
     }
     for identity in [caster, target] {
+        clear_player_resources(ctx, identity);
         ctx.db.player_intent().identity().delete(identity);
         ctx.db.player_physics().identity().delete(identity);
         ctx.db.player_state().player_id().delete(identity);
@@ -5270,10 +5551,22 @@ fn validate_channel_cast(
     aim_z: f32,
     definition: &SpellDefinition,
 ) -> Option<ActionRejectReason> {
-    if definition.secondary.channel_area.is_some() {
-        return resolve_generic_area_center(definition, state, aim_x, aim_y, aim_z)
-            .is_none()
-            .then_some(ActionRejectReason::InvalidInput);
+    if let Some(channel_area) = definition.secondary.channel_area.as_ref() {
+        let Some(center) = resolve_generic_area_center_for_cast(
+            ctx, caster, definition, state, aim_x, aim_y, aim_z,
+        ) else {
+            return Some(ActionRejectReason::InvalidInput);
+        };
+        if super::area_overlaps_hostile_sanctuary(
+            ctx,
+            caster,
+            center.x,
+            center.z,
+            channel_area_shape_for(definition, channel_area).query_radius(),
+        ) {
+            return Some(ActionRejectReason::InvalidTarget);
+        }
+        return None;
     }
 
     validate_targeted_channel_cast(ctx, state, caster, spell_kind, target_id, definition)
@@ -7384,6 +7677,162 @@ fn spawn_negate(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
+fn cast_sanctuary(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &CombatActorSnapshot,
+    kind: &SpellId,
+    aim_x: f32,
+    aim_y: f32,
+    aim_z: f32,
+    mode: CastExecutionMode,
+    action_instance_id: &str,
+    ability_id: &str,
+) -> Result<bool, String> {
+    let definition = super::catalog::spell_definition(kind)
+        .expect("validated SANCTUARY spell must resolve to a definition");
+    let Some(mut point) =
+        resolve_generic_area_center_for_cast(ctx, caster, definition, state, aim_x, aim_y, aim_z)
+    else {
+        return Ok(false);
+    };
+    point.y = terrain_surface_y_for_caster(ctx, caster, point.x, point.z, state.pos_y);
+    if super::area_overlaps_hostile_sanctuary(ctx, caster, point.x, point.z, definition.radius) {
+        return Ok(false);
+    }
+    if mode != CastExecutionMode::Execute {
+        return Ok(true);
+    }
+
+    let sanctuary = definition
+        .secondary
+        .sanctuary
+        .as_ref()
+        .expect("validated SANCTUARY spell must define sanctuary tunables");
+    super::spawn_sanctuary_zone(
+        ctx,
+        caster,
+        kind.as_str(),
+        ability_id,
+        point.x,
+        point.y,
+        point.z,
+        definition.radius,
+        sanctuary,
+        ctx.timestamp,
+    )?;
+
+    let origin = Vec3::new(
+        state.pos_x,
+        state.pos_y + state.hit_height * 0.5,
+        state.pos_z,
+    );
+    let direction = normalize_vec3(point.x - origin.x, point.y - origin.y, point.z - origin.z)
+        .map(|(x, y, z)| Vec3::new(x, y, z))
+        .unwrap_or_else(|| default_forward_direction(state));
+    for event_type in [EVENT_RELEASE, EVENT_IMPACT] {
+        emit_spell_combat_event(
+            ctx,
+            SpellCombatEventPayload {
+                action_instance_id,
+                ability_id,
+                kind,
+                event_type,
+                caster,
+                hit: Identity::ZERO,
+                origin,
+                direction,
+                speed: 0.0,
+                max_distance: definition.max_distance,
+                scalar: SpellCombatEventScalar::None,
+                sequence_index: 0,
+                sequence_count: 1,
+                point,
+                now: ctx.timestamp,
+            },
+        );
+    }
+    Ok(true)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn cast_necro_prison(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &CombatActorSnapshot,
+    kind: &SpellId,
+    aim_x: f32,
+    aim_y: f32,
+    aim_z: f32,
+    mode: CastExecutionMode,
+    action_instance_id: &str,
+    ability_id: &str,
+) -> Result<bool, String> {
+    let definition = super::catalog::spell_definition(kind)
+        .expect("validated NECRO_PRISON spell must resolve to a definition");
+    let Some(mut point) =
+        resolve_generic_area_center_for_cast(ctx, caster, definition, state, aim_x, aim_y, aim_z)
+    else {
+        return Ok(false);
+    };
+    point.y = terrain_surface_y_for_caster(ctx, caster, point.x, point.z, state.pos_y);
+    if mode != CastExecutionMode::Execute {
+        return Ok(true);
+    }
+
+    let prison = definition
+        .secondary
+        .necro_prison
+        .as_ref()
+        .expect("validated NECRO_PRISON spell must define prison tunables");
+    super::spawn_necro_prison(
+        ctx,
+        caster,
+        kind.as_str(),
+        ability_id,
+        point.x,
+        point.y,
+        point.z,
+        state.facing_yaw,
+        definition.radius,
+        prison,
+        ctx.timestamp,
+    )?;
+
+    let origin = Vec3::new(
+        state.pos_x,
+        state.pos_y + state.hit_height * 0.5,
+        state.pos_z,
+    );
+    let direction = normalize_vec3(point.x - origin.x, point.y - origin.y, point.z - origin.z)
+        .map(|(x, y, z)| Vec3::new(x, y, z))
+        .unwrap_or_else(|| default_forward_direction(state));
+    for event_type in [EVENT_RELEASE, EVENT_IMPACT] {
+        emit_spell_combat_event(
+            ctx,
+            SpellCombatEventPayload {
+                action_instance_id,
+                ability_id,
+                kind,
+                event_type,
+                caster,
+                hit: Identity::ZERO,
+                origin,
+                direction,
+                speed: 0.0,
+                max_distance: definition.max_distance,
+                scalar: SpellCombatEventScalar::None,
+                sequence_index: 0,
+                sequence_count: 1,
+                point,
+                now: ctx.timestamp,
+            },
+        );
+    }
+    Ok(true)
+}
+
 fn cast_persistent_area(
     ctx: &ReducerContext,
     caster: Identity,
@@ -7435,6 +7884,10 @@ fn cast_persistent_area(
         }
         _ => return Ok(false),
     };
+
+    if super::area_overlaps_hostile_sanctuary(ctx, caster, point.x, point.z, definition.radius) {
+        return Ok(false);
+    }
 
     if mode == CastExecutionMode::Execute {
         start_persistent_area(
@@ -9505,14 +9958,15 @@ mod tests {
     use super::{
         active_cast_cancel_receive_window_allows, active_cast_interrupt_terminal_policy,
         approach_line_contact_point_xz, area_contact_direction, area_shape_for,
-        capacitor_discharge_damage, channel_area_shape_for, consume_status_heal_amount_from_stacks,
-        contact_distance_from_radii, curved_target_control_point,
-        defiance_damage_taken_reduction_for_health, fixed_y_terrain_blocks_special_movement,
-        has_arrived_at_contact_distance, has_movement_intent, has_voluntary_movement_after_cast,
-        horizontal_movement_duration_ms, is_generic_area_spell, is_target_within_facing_arc,
+        can_pay_nonlethal_health_cost, capacitor_discharge_damage, channel_area_shape_for,
+        consume_status_heal_amount_from_stacks, contact_distance_from_radii,
+        curved_target_control_point, defiance_damage_taken_reduction_for_health,
+        fixed_y_terrain_blocks_special_movement, has_arrived_at_contact_distance,
+        has_movement_intent, has_voluntary_movement_after_cast, horizontal_movement_duration_ms,
+        is_generic_area_spell, is_target_within_facing_arc,
         normal_cast_time_spell_refunds_gcd_on_self_cancel, orbit_cast_fits_capacity,
         projectile_release_uses_live_facing, quickening_applies_to_cast_time,
-        recall_capture_is_eligible, recall_slot_has_stored_spell,
+        recall_capture_is_eligible, recall_replay_defaults_to_self, recall_slot_has_stored_spell,
         remaining_dot_damage_from_schedule, resolve_generic_area_center,
         resolve_special_movement_y, spell_primary_resource_cost_for_action,
         targeted_ability_is_blocked, valid_cast_action_token,
@@ -9523,6 +9977,7 @@ mod tests {
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y, TARGET_FACING_ARC_RADIANS,
     };
     use crate::combat::scene_query::is_direction_within_facing_arc;
+    use crate::relations::TargetAudience;
     use crate::spells::manifest::SpellTargeting;
     use crate::spells::{ActiveCast, RecallSlot};
     use core::time::Duration;
@@ -9561,6 +10016,14 @@ mod tests {
         assert_eq!(capacitor_discharge_damage(40, 3), 120);
         assert_eq!(capacitor_discharge_damage(40, 5), 200);
         assert_eq!(capacitor_discharge_damage(40, 99), 200);
+    }
+
+    #[test]
+    fn self_health_cost_is_nonlethal() {
+        assert!(can_pay_nonlethal_health_cost(21, 20));
+        assert!(!can_pay_nonlethal_health_cost(20, 20));
+        assert!(!can_pay_nonlethal_health_cost(1, 20));
+        assert!(can_pay_nonlethal_health_cost(1, 0));
     }
 
     fn spell_id(id: &str) -> SpellId {
@@ -10333,6 +10796,38 @@ mod tests {
         assert!(!recall_slot_has_stored_spell(&slot));
         slot.stored_spell_id = "ICICLE".to_string();
         assert!(recall_slot_has_stored_spell(&slot));
+    }
+
+    #[test]
+    fn recall_friendly_target_replay_defaults_an_invalid_selection_to_self() {
+        assert!(recall_replay_defaults_to_self(
+            SpellTargeting::Target,
+            true,
+            TargetAudience::Assistable,
+            false,
+        ));
+        assert!(recall_replay_defaults_to_self(
+            SpellTargeting::Target,
+            true,
+            TargetAudience::PartyOrSelf,
+            false,
+        ));
+    }
+
+    #[test]
+    fn recall_replay_preserves_valid_or_hostile_required_targets() {
+        assert!(!recall_replay_defaults_to_self(
+            SpellTargeting::Target,
+            true,
+            TargetAudience::Assistable,
+            true,
+        ));
+        assert!(!recall_replay_defaults_to_self(
+            SpellTargeting::Target,
+            true,
+            TargetAudience::Hostile,
+            false,
+        ));
     }
 
     #[test]
