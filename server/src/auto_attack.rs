@@ -18,8 +18,8 @@ use crate::melee::{
     auto_attack_sequence_len_for_profile, auto_attack_sequence_step_for_profile,
     get_melee_definition_for_authored, melee_range_bonus, perform_intrinsic_auto_attack_for,
     perform_intrinsic_auto_attack_replacement_for,
-    perform_intrinsic_auto_attack_sequence_strike_for, scaled_auto_attack_cadence_ms,
-    MeleeAttackDispatch,
+    perform_intrinsic_auto_attack_sequence_strike_for, perform_intrinsic_flurry_auto_attack_for,
+    scaled_auto_attack_cadence_ms, MeleeAttackDispatch,
 };
 use crate::movement_actions::MovementActionKind;
 use crate::player::DEFAULT_COMBAT_PROFILE;
@@ -29,6 +29,10 @@ use crate::progression::{
     AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
 };
 use crate::relations::{can_harm, combat_relation};
+
+const FLURRY_REFERENCE_CADENCE_MS: u64 = 3_500;
+const FLURRY_MAX_PROC_CHANCE: f32 = 0.95;
+const FLURRY_MAX_CHAIN_ATTACKS: usize = 32;
 
 #[allow(unused_imports)]
 use crate::auto_attack::auto_attack_state as _;
@@ -770,6 +774,18 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
                     row.strike_id
                 );
                 schedule_auto_attack_from_swing_start(ctx, row.owner, row.target, now);
+                trigger_flurry_proc_chain(
+                    ctx,
+                    &row,
+                    &authored_strike_id,
+                    gameplay.cooldown_ms,
+                    target_id.as_str(),
+                    caster_phys.pos_x,
+                    caster_phys.pos_y,
+                    caster_phys.pos_z,
+                    caster_phys.yaw,
+                    now,
+                );
                 if starts_authored_sequence {
                     if let Err(error) = schedule_auto_attack_sequence_step(ctx, row.owner, 1, now) {
                         log::info!(
@@ -805,6 +821,129 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
             }
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn trigger_flurry_proc_chain(
+    ctx: &ReducerContext,
+    row: &AutoAttackState,
+    authored_strike_id: &AuthoredActionId,
+    base_cooldown_ms: u64,
+    target_id: &str,
+    cast_pos_x: f32,
+    cast_pos_y: f32,
+    cast_pos_z: f32,
+    cast_yaw: f32,
+    now: Timestamp,
+) {
+    let temporary = temporary_combat_modifiers(ctx, now);
+    let base_chance = temporary.flurry_base_chance_for(&row.owner);
+    if base_chance <= 0.0 {
+        return;
+    }
+
+    let effective_cadence_ms = scaled_auto_attack_cadence_ms(
+        base_cooldown_ms.max(1),
+        temporary.attack_speed_multiplier_for(&row.owner),
+    );
+    let proc_chance = flurry_proc_chance(base_chance, effective_cadence_ms);
+    if proc_chance <= 0.0 {
+        return;
+    }
+
+    for proc_index in 0..FLURRY_MAX_CHAIN_ATTACKS {
+        let roll = stable_flurry_roll(row.owner, row.target, now, proc_index as u32);
+        if !flurry_roll_succeeds(proc_chance, roll) {
+            return;
+        }
+
+        match perform_intrinsic_flurry_auto_attack_for(
+            ctx,
+            row.owner,
+            authored_strike_id,
+            target_id,
+            cast_pos_x,
+            cast_pos_y,
+            cast_pos_z,
+            cast_yaw,
+        ) {
+            Ok(MeleeAttackDispatch::Started) => {
+                log::info!(
+                    "[FLURRY] owner={} target={} proc_index={} chance={:.4} roll={:.4} result=started",
+                    short_identity(row.owner),
+                    short_identity(row.target),
+                    proc_index + 1,
+                    proc_chance,
+                    roll
+                );
+            }
+            Ok(MeleeAttackDispatch::Queued | MeleeAttackDispatch::Rejected(_)) => {
+                log::info!(
+                    "[FLURRY] owner={} target={} proc_index={} result=deferred",
+                    short_identity(row.owner),
+                    short_identity(row.target),
+                    proc_index + 1
+                );
+                return;
+            }
+            Err(error) => {
+                log::info!(
+                    "[FLURRY] owner={} target={} proc_index={} result=error error={}",
+                    short_identity(row.owner),
+                    short_identity(row.target),
+                    proc_index + 1,
+                    error
+                );
+                return;
+            }
+        }
+    }
+
+    log::warn!(
+        "[FLURRY] owner={} target={} stopped_at_safety_cap={}",
+        short_identity(row.owner),
+        short_identity(row.target),
+        FLURRY_MAX_CHAIN_ATTACKS
+    );
+}
+
+fn flurry_proc_chance(base_chance: f32, effective_cadence_ms: u64) -> f32 {
+    if !base_chance.is_finite() || base_chance <= 0.0 {
+        return 0.0;
+    }
+
+    (base_chance * effective_cadence_ms.max(1) as f32 / FLURRY_REFERENCE_CADENCE_MS as f32)
+        .clamp(0.0, FLURRY_MAX_PROC_CHANCE)
+}
+
+fn flurry_roll_succeeds(proc_chance: f32, roll: f32) -> bool {
+    proc_chance.is_finite()
+        && roll.is_finite()
+        && roll.clamp(0.0, 1.0) < proc_chance.clamp(0.0, FLURRY_MAX_PROC_CHANCE)
+}
+
+fn stable_flurry_roll(
+    owner: Identity,
+    target: Identity,
+    trigger_at: Timestamp,
+    proc_index: u32,
+) -> f32 {
+    let mut hash = 0xcbf29ce484222325_u64;
+    hash = flurry_hash_update(hash, b"FLURRY_PROC");
+    hash = flurry_hash_update(hash, &owner.to_byte_array());
+    hash = flurry_hash_update(hash, &target.to_byte_array());
+    hash = flurry_hash_update(hash, &trigger_at.to_micros_since_unix_epoch().to_le_bytes());
+    hash = flurry_hash_update(hash, &proc_index.to_le_bytes());
+    let bucket = (hash & 0x00ff_ffff) as f32;
+    bucket / 0x0100_0000_u32 as f32
+}
+
+fn flurry_hash_update(mut hash: u64, bytes: &[u8]) -> u64 {
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
 }
 
 fn schedule_auto_attack_sequence_step(
@@ -1257,8 +1396,9 @@ fn existing_auto_attack_matches_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        existing_auto_attack_matches_request, preserved_cadence_readiness,
-        should_reset_cadence_for_voluntary_move, AutoAttackState, ResolvedAutoAttackRuntime,
+        existing_auto_attack_matches_request, flurry_proc_chance, flurry_roll_succeeds,
+        preserved_cadence_readiness, should_reset_cadence_for_voluntary_move, AutoAttackState,
+        ResolvedAutoAttackRuntime,
     };
     use crate::progression::{
         AUTO_ATTACK_MOVEMENT_ALLOW_MOVING, AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
@@ -1294,6 +1434,34 @@ mod tests {
 
         assert_eq!(next, started + Duration::from_millis(600));
         assert!(due);
+    }
+
+    #[test]
+    fn flurry_is_fifteen_percent_for_unbuffed_two_handed_sword_cadence() {
+        assert!((flurry_proc_chance(0.15, 3_500) - 0.15).abs() < 0.0001);
+    }
+
+    #[test]
+    fn flurry_flat_proc_chance_decreases_for_faster_weapon_cadence() {
+        let greatsword = flurry_proc_chance(0.15, 3_500);
+        let daggers = flurry_proc_chance(0.15, 2_000);
+        let hasted_greatsword = flurry_proc_chance(0.15, 1_750);
+
+        assert!(daggers < greatsword);
+        assert!(hasted_greatsword < greatsword);
+        assert!((hasted_greatsword - 0.075).abs() < 0.0001);
+    }
+
+    #[test]
+    fn successful_flurry_attacks_can_roll_again_until_the_first_failure() {
+        let chance = 0.15;
+        let rolls = [0.02, 0.14, 0.30];
+        let proc_count = rolls
+            .into_iter()
+            .take_while(|roll| flurry_roll_succeeds(chance, *roll))
+            .count();
+
+        assert_eq!(proc_count, 2);
     }
 
     #[test]

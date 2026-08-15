@@ -6071,6 +6071,7 @@ fn apply_area_channel_tick(
                 delivery: DamageDelivery::Periodic,
                 source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
                 direct_action_key: String::new(),
+                is_area: true,
             });
         }
         if definition.damage_type == DamageType::Cold {
@@ -6195,7 +6196,14 @@ fn apply_generic_channel_damage(
         },
     );
 
-    if hostile_targeted_ability_misses(ctx, active_cast.caster, target.player_id, now) {
+    if hostile_targeted_ability_misses(
+        ctx,
+        active_cast.caster,
+        target.player_id,
+        active_cast.cast_id.as_str(),
+        false,
+        now,
+    ) {
         emit_targeted_spell_miss(
             ctx,
             active_cast.cast_id.as_str(),
@@ -6248,6 +6256,7 @@ fn apply_generic_channel_damage(
             delivery: DamageDelivery::Direct,
             source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
             direct_action_key: active_cast.cast_id.clone(),
+            is_area: false,
         }],
     );
     true
@@ -6677,7 +6686,14 @@ fn queue_electrocute_damage(ctx: &ReducerContext, active_cast: &ActiveCast, targ
             )
         }
     };
-    if hostile_targeted_ability_misses(ctx, active_cast.caster, target_id, ctx.timestamp) {
+    if hostile_targeted_ability_misses(
+        ctx,
+        active_cast.caster,
+        target_id,
+        runtime.spell_instance_id.as_str(),
+        false,
+        ctx.timestamp,
+    ) {
         emit_targeted_spell_miss(
             ctx,
             runtime.spell_instance_id.as_str(),
@@ -6733,6 +6749,7 @@ fn queue_electrocute_damage(ctx: &ReducerContext, active_cast: &ActiveCast, targ
             delivery: DamageDelivery::Direct,
             source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
             direct_action_key: runtime.spell_instance_id,
+            is_area: false,
         }],
     );
 }
@@ -6970,7 +6987,14 @@ fn spawn_instant_beam(
                         continue;
                     };
                     if target_id == target.player_id
-                        && hostile_targeted_ability_misses(ctx, caster, target_id, now)
+                        && hostile_targeted_ability_misses(
+                            ctx,
+                            caster,
+                            target_id,
+                            sequence_effect_id.as_str(),
+                            false,
+                            now,
+                        )
                     {
                         emit_targeted_spell_miss(
                             ctx,
@@ -7044,6 +7068,7 @@ fn spawn_instant_beam(
                             delivery: DamageDelivery::Direct,
                             source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
                             direct_action_key: sequence_effect_id,
+                            is_area: false,
                         }],
                     );
                 }
@@ -7497,6 +7522,7 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
             } else {
                 impact.spell_id.to_string()
             },
+            is_area: true,
         });
         let contact_direction = area_contact_direction(
             impact.area_center.x,
@@ -8147,6 +8173,7 @@ pub(crate) fn tick_persistent_areas(ctx: &ReducerContext, now: Timestamp) {
                     delivery: DamageDelivery::Periodic,
                     source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
                     direct_action_key: String::new(),
+                    is_area: true,
                 });
             }
             let direction =
@@ -8316,7 +8343,16 @@ fn apply_direct_target_spell(
         hostile_target,
     );
     let target_damage = if is_heal { 0 } else { definition.damage };
-    if !is_heal && hostile_targeted_ability_misses(ctx, caster, target.player_id, now) {
+    if !is_heal
+        && hostile_targeted_ability_misses(
+            ctx,
+            caster,
+            target.player_id,
+            spell_id.as_str(),
+            false,
+            now,
+        )
+    {
         emit_targeted_spell_miss(
             ctx,
             spell_id.as_str(),
@@ -8431,6 +8467,7 @@ fn apply_direct_target_spell(
             delivery: DamageDelivery::Direct,
             source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
             direct_action_key: spell_id.clone(),
+            is_area: false,
         });
     } else {
         emit_spell_combat_event(
@@ -8478,6 +8515,7 @@ fn apply_direct_target_spell(
             delivery: DamageDelivery::Direct,
             source_kind: DAMAGE_SOURCE_KIND_SELF_INFLICTED.to_string(),
             direct_action_key: spell_id,
+            is_area: false,
         });
     }
 
@@ -8797,7 +8835,14 @@ fn apply_status_to_target(
         .clone();
     let parry_behavior = apply_status_tunables.parry_behavior;
     if definition.requires_target
-        && hostile_targeted_ability_misses(ctx, caster, target.player_id, now)
+        && hostile_targeted_ability_misses(
+            ctx,
+            caster,
+            target.player_id,
+            spell_id.as_str(),
+            false,
+            now,
+        )
     {
         emit_targeted_spell_miss(
             ctx,
@@ -9567,6 +9612,7 @@ fn cast_consume_status(
             delivery: DamageDelivery::Direct,
             source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
             direct_action_key: spell_id,
+            is_area: false,
         });
     } else {
         effects.push(EffectPacket::Heal {
@@ -9929,7 +9975,14 @@ fn resolve_movement_delivery_hit(
         (forward.x, forward.z)
     };
 
-    if hostile_targeted_ability_misses(ctx, caster, target.player_id, now) {
+    if hostile_targeted_ability_misses(
+        ctx,
+        caster,
+        target.player_id,
+        action_instance_id,
+        false,
+        now,
+    ) {
         emit_direct_spell_terminal_event(
             ctx,
             action_instance_id,
@@ -10039,6 +10092,7 @@ fn resolve_movement_delivery_hit(
         delivery: DamageDelivery::Direct,
         source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
         direct_action_key: action_instance_id.to_string(),
+        is_area: false,
     }];
     let impact_effects = movement_impact_effects(&movement);
     push_impact_effect_packets(

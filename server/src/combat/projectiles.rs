@@ -2227,7 +2227,14 @@ fn projectile_targeted_hit_misses(
     now: Timestamp,
 ) -> bool {
     projectile.intended_target == target
-        && hostile_targeted_ability_misses(ctx, projectile.caster, target, now)
+        && hostile_targeted_ability_misses(
+            ctx,
+            projectile.caster,
+            target,
+            projectile.projectile_instance_id.as_str(),
+            false,
+            now,
+        )
 }
 
 fn queue_spell_projectile_hit_effects(
@@ -2246,6 +2253,7 @@ fn queue_spell_projectile_hit_effects(
         delivery: DamageDelivery::Direct,
         source_kind: DAMAGE_SOURCE_KIND_PROJECTILE.to_string(),
         direct_action_key: projectile.projectile_instance_id.clone(),
+        is_area: false,
     }];
     if let Some(projectile_tunables) = definition.secondary.projectile.as_ref() {
         let (dir_x, dir_z) = projectile_knockback_direction(projectile, target);
@@ -2366,6 +2374,7 @@ fn queue_weapon_projectile_hit_effects(
                 delivery: DamageDelivery::Direct,
                 source_kind: DAMAGE_SOURCE_KIND_PROJECTILE.to_string(),
                 direct_action_key: projectile.projectile_instance_id.clone(),
+                is_area: false,
             }],
         );
     }

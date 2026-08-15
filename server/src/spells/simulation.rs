@@ -394,6 +394,7 @@ fn tick_meteor_spell(
                     delivery: DamageDelivery::Direct,
                     direct_action_key: spell.spell_id.clone(),
                     source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
+                    is_area: true,
                 });
                 if let Some(area) = definition.secondary.area.as_ref() {
                     let (dir_x, dir_z) = radial_knockback_direction(

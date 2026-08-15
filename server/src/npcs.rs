@@ -1472,6 +1472,41 @@ pub(crate) fn tick_npc_combat(
             clear_npc_combat_runtime(ctx, npc.identity);
             continue;
         };
+        if movement_modifiers.is_confused(&npc.identity) {
+            clear_npc_combat_runtime(ctx, npc.identity);
+            if !movement_modifiers.blocks_movement(&npc.identity) {
+                if let Some(directive) = crate::confusion::confusion_wander_directive(
+                    ctx,
+                    npc.identity,
+                    physics.pos_x,
+                    physics.pos_z,
+                    now,
+                ) {
+                    let dx = directive.target_x - physics.pos_x;
+                    let dz = directive.target_z - physics.pos_z;
+                    let distance = (dx * dx + dz * dz).sqrt();
+                    if !directive.standing && distance > NPC_CHASE_STOP_EPSILON {
+                        let move_speed_multiplier =
+                            movement_modifiers.move_speed_multiplier(&npc.identity, 0);
+                        let travel =
+                            (template.move_speed * move_speed_multiplier * FIXED_TICK_SECONDS)
+                                .min(distance);
+                        move_npc_along(
+                            ctx,
+                            now,
+                            &npc,
+                            &physics,
+                            &template,
+                            dx / distance,
+                            dz / distance,
+                            travel,
+                            directive.yaw,
+                        );
+                    }
+                }
+            }
+            continue;
+        }
         match crate::survival::update_survival_npc_perception(
             ctx,
             npc.identity,
@@ -3471,6 +3506,7 @@ fn resolve_npc_swing_target(
 
 pub(crate) fn despawn_npc_identity(ctx: &ReducerContext, identity: Identity) {
     crate::survival::clear_survival_perception_pause(ctx, identity);
+    crate::confusion::clear_confusion_wander(ctx, identity);
     clear_npc_forced_movement(ctx, identity);
     clear_npc_combat_runtime(ctx, identity);
     clear_actor_cooldowns(ctx, identity);

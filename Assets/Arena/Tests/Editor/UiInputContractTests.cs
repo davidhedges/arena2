@@ -48,6 +48,7 @@ namespace Arena.Tests.Editor
         private const string NovaCastPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Arcane Explosion.prefab.meta";
         private const string NovaHitPrefabMetaPath = "Assets/ThirdParty/AssetStore/VFX/Piloto Studio/Super Realistic FX Bundle/ARPG Realistic Essentials Fire/Prefabs/Melee/Green_Fire/Hit_Nova_Light_green.prefab.meta";
         private const string BuffetHitPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Hits/Air/1) Wind Blast 1.prefab.meta";
+        private const string PrimalFourElementsForwardPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Realistic Druid 1/ARPG_Druid_Four_Elements_Forward.prefab.meta";
         private const string VerdantSpiritsPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Realistic Druid 1/ARPG_Druid_Nature_Spirits.prefab.meta";
         private const string VerdantSpiritsVfxPath = "Assets/Arena/Runtime/Presentation/VFX/VerdantSpiritsVFX.cs";
         private const string LingeringShadeReturnPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Realistic Ink Spells 1/shadow_in.prefab.meta";
@@ -259,6 +260,19 @@ namespace Arena.Tests.Editor
             string registry = File.ReadAllText(CombatVfxRegistryPath);
             Assert.That(registry, Does.Contain("vfxId: VFX_BUFFET_IMPACT_01"));
             Assert.That(registry, Does.Contain($"guid: {hitPrefabGuid}"));
+        }
+
+        [Test]
+        public void PrimalBlastVfx_UsesRequestedFourElementsForwardPrefab()
+        {
+            string prefabGuid = File.ReadLines(PrimalFourElementsForwardPrefabMetaPath)
+                .First(line => line.StartsWith("guid: ", StringComparison.Ordinal))
+                .Substring("guid: ".Length)
+                .Trim();
+
+            string registry = File.ReadAllText(CombatVfxRegistryPath);
+            Assert.That(registry, Does.Contain("vfxId: VFX_PRIMAL_FOUR_ELEMENTS_FORWARD_01"));
+            Assert.That(registry, Does.Contain($"guid: {prefabGuid}"));
         }
 
         [Test]
@@ -611,7 +625,9 @@ namespace Arena.Tests.Editor
             Assert.That(panel, Does.Contain("\"CharacterActionBarRoot\""));
             Assert.That(panel, Does.Contain("\"AvailableActions\""));
             Assert.That(panel, Does.Contain("conn.Db.AbilityCatalog.Iter()"));
-            Assert.That(panel, Does.Contain("HasAbilityTag(ability, ActionBarActionTag)"));
+            Assert.That(
+                panel,
+                Does.Contain("AbilityTagCodec.HasTag(ability.AbilityTags, ActionBarActionTag)"));
             Assert.That(panel, Does.Contain("ActionTooltipResolver.ResolveForAbility"));
             Assert.That(panel, Does.Contain("SpellsFilterKey"));
             Assert.That(panel, Does.Contain("AbilityIsKnownIfSpell"));

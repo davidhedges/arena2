@@ -172,6 +172,8 @@ const QUICKENING_SPELL_ID: &str = "RUIN_QUICKENING";
 const HOLY_SHIELD_SPELL_ID: &str = "HOLY_SHIELD";
 const HOLY_SHIELD_ABILITY_ID: &str = "SPELL_HOLY_SHIELD";
 const HOLY_SHIELD_STATUS_GROUP: &str = "HOLY_SHIELD";
+const MIRROR_IMAGE_STATUS_GROUP: &str = "MIRROR_IMAGE";
+const MIRROR_IMAGE_INTERCEPT_CHANCE_PER_IMAGE: f32 = 0.25;
 const RECKONING_SPELL_ID: &str = "RECKONING";
 const RECKONING_ABILITY_ID: &str = "SPELL_RECKONING";
 const RIME_STATUS_GROUP: &str = "RIME";
@@ -221,6 +223,7 @@ pub(crate) const COMBAT_SEQUENCE_NONE: &str = "";
 pub(crate) const COMBAT_SEQUENCE_BEAM: &str = "BEAM";
 pub(crate) const COMBAT_METADATA_NONE: &str = "";
 pub(crate) const COMBAT_METADATA_CONSUMED_MELEE_MODIFIER: &str = "CONSUMED_MELEE_MODIFIER";
+pub(crate) const COMBAT_METADATA_FLURRY_PROC: &str = "FLURRY_PROC";
 const MIN_SLOW_PCT: f32 = f32::EPSILON;
 const MAX_MOVE_SPEED_MULTIPLIER: f32 = 3.0;
 const MIN_ATTACK_SPEED_MULTIPLIER: f32 = 0.05;
@@ -1884,6 +1887,7 @@ pub fn tick_emanations(ctx: &ReducerContext, now: Timestamp) {
                     delivery: DamageDelivery::Periodic,
                     source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
                     direct_action_key: String::new(),
+                    is_area: true,
                 });
             }
             for impact_effect in &emanation.impact_effects {
@@ -1974,6 +1978,7 @@ pub fn tick_immolations(ctx: &ReducerContext, now: Timestamp) {
                     delivery: DamageDelivery::Periodic,
                     source_kind: DAMAGE_SOURCE_KIND_IMMOLATION.to_string(),
                     direct_action_key: String::new(),
+                    is_area: false,
                 }],
             );
         }
@@ -2577,6 +2582,7 @@ pub struct PendingHit {
     pub damage_delivery: String,
     pub damage_source_kind: String,
     pub direct_action_key: String,
+    pub is_area: bool,
     pub queued_at: Timestamp,
     #[index(btree)]
     pub queued_at_micros: i64,
@@ -2791,6 +2797,7 @@ pub enum StatusEffectKind {
     Freeze,
     Intimidated,
     Fear,
+    Confusion,
     // Status CC only.
     Stagger,
     Knockdown,
@@ -2821,7 +2828,9 @@ pub enum StatusEffectKind {
     Berserking,
     BattleTrance,
     TargetedAbilityAvoidance,
+    MirrorImage,
     Gigantism,
+    Flurry,
     FindWeakness,
     BladeTwisting,
     Disarm,
@@ -2843,6 +2852,7 @@ impl StatusEffectKind {
             Self::Freeze => "FREEZE",
             Self::Intimidated => "INTIMIDATED",
             Self::Fear => "FEAR",
+            Self::Confusion => "CONFUSION",
             Self::Stagger => "STAGGER",
             Self::Knockdown => "KNOCKDOWN",
             Self::Slow => "SLOW",
@@ -2872,7 +2882,9 @@ impl StatusEffectKind {
             Self::Berserking => "BERSERKING",
             Self::BattleTrance => "BATTLE_TRANCE",
             Self::TargetedAbilityAvoidance => "TARGETED_ABILITY_AVOIDANCE",
+            Self::MirrorImage => "MIRROR_IMAGE",
             Self::Gigantism => "GIGANTISM",
+            Self::Flurry => "FLURRY",
             Self::FindWeakness => "FIND_WEAKNESS",
             Self::BladeTwisting => "BLADE_TWISTING",
             Self::Disarm => "DISARM",
@@ -2894,6 +2906,7 @@ impl StatusEffectKind {
             "FREEZE" => Some(Self::Freeze),
             "INTIMIDATED" => Some(Self::Intimidated),
             "FEAR" => Some(Self::Fear),
+            "CONFUSION" => Some(Self::Confusion),
             "STAGGER" => Some(Self::Stagger),
             "KNOCKDOWN" => Some(Self::Knockdown),
             "SLOW" => Some(Self::Slow),
@@ -2923,7 +2936,9 @@ impl StatusEffectKind {
             "BERSERKING" => Some(Self::Berserking),
             "BATTLE_TRANCE" => Some(Self::BattleTrance),
             "TARGETED_ABILITY_AVOIDANCE" => Some(Self::TargetedAbilityAvoidance),
+            "MIRROR_IMAGE" => Some(Self::MirrorImage),
             "GIGANTISM" => Some(Self::Gigantism),
+            "FLURRY" => Some(Self::Flurry),
             "FIND_WEAKNESS" => Some(Self::FindWeakness),
             "BLADE_TWISTING" => Some(Self::BladeTwisting),
             "DISARM" => Some(Self::Disarm),
@@ -2947,6 +2962,7 @@ pub enum StatusPayload {
     Freeze,
     Intimidated,
     Fear,
+    Confusion,
     Stagger,
     Knockdown,
     Slow {
@@ -3016,7 +3032,11 @@ pub enum StatusPayload {
     Berserking,
     BattleTrance,
     TargetedAbilityAvoidance,
+    MirrorImage,
     Gigantism {
+        modifier_scalar: f32,
+    },
+    Flurry {
         modifier_scalar: f32,
     },
     FindWeakness,
@@ -3099,6 +3119,7 @@ impl AuthoredStatusPayload {
             StatusEffectKind::Freeze => StatusPayload::Freeze,
             StatusEffectKind::Intimidated => StatusPayload::Intimidated,
             StatusEffectKind::Fear => StatusPayload::Fear,
+            StatusEffectKind::Confusion => StatusPayload::Confusion,
             StatusEffectKind::Stagger => StatusPayload::Stagger,
             StatusEffectKind::Knockdown => StatusPayload::Knockdown,
             StatusEffectKind::Slow => StatusPayload::Slow {
@@ -3168,7 +3189,11 @@ impl AuthoredStatusPayload {
             StatusEffectKind::Berserking => StatusPayload::Berserking,
             StatusEffectKind::BattleTrance => StatusPayload::BattleTrance,
             StatusEffectKind::TargetedAbilityAvoidance => StatusPayload::TargetedAbilityAvoidance,
+            StatusEffectKind::MirrorImage => StatusPayload::MirrorImage,
             StatusEffectKind::Gigantism => StatusPayload::Gigantism {
+                modifier_scalar: self.modifier_scalar,
+            },
+            StatusEffectKind::Flurry => StatusPayload::Flurry {
                 modifier_scalar: self.modifier_scalar,
             },
             StatusEffectKind::FindWeakness => StatusPayload::FindWeakness,
@@ -3259,6 +3284,20 @@ impl AuthoredStatusPayload {
                     ));
                 }
             }
+            StatusEffectKind::Flurry => {
+                if !self.modifier_scalar.is_finite()
+                    || self.modifier_scalar <= 0.0
+                    || self.modifier_scalar > 1.0
+                {
+                    return Err(format!(
+                        "{subject} {path}.modifier_scalar must be > 0 and <= 1"
+                    ));
+                }
+                if !slow_is_default || !dot_is_default || self.tick_heal != 0 || !absorb_is_default
+                {
+                    return Err(format!("{subject} {path} has fields irrelevant to FLURRY"));
+                }
+            }
             StatusEffectKind::Thorns => {
                 if self.tick_damage <= 0 {
                     return Err(format!("{subject} {path}.tick_damage must be positive"));
@@ -3291,6 +3330,7 @@ impl AuthoredStatusPayload {
             StatusEffectKind::VengeanceAura
             | StatusEffectKind::Berserking
             | StatusEffectKind::TargetedAbilityAvoidance
+            | StatusEffectKind::MirrorImage
             | StatusEffectKind::FindWeakness
             | StatusEffectKind::BladeTwisting
             | StatusEffectKind::Disarm
@@ -3374,6 +3414,7 @@ impl StatusPayload {
             Self::Freeze => StatusEffectKind::Freeze,
             Self::Intimidated => StatusEffectKind::Intimidated,
             Self::Fear => StatusEffectKind::Fear,
+            Self::Confusion => StatusEffectKind::Confusion,
             Self::Stagger => StatusEffectKind::Stagger,
             Self::Knockdown => StatusEffectKind::Knockdown,
             Self::Slow { .. } => StatusEffectKind::Slow,
@@ -3403,7 +3444,9 @@ impl StatusPayload {
             Self::Berserking => StatusEffectKind::Berserking,
             Self::BattleTrance => StatusEffectKind::BattleTrance,
             Self::TargetedAbilityAvoidance => StatusEffectKind::TargetedAbilityAvoidance,
+            Self::MirrorImage => StatusEffectKind::MirrorImage,
             Self::Gigantism { .. } => StatusEffectKind::Gigantism,
+            Self::Flurry { .. } => StatusEffectKind::Flurry,
             Self::FindWeakness => StatusEffectKind::FindWeakness,
             Self::BladeTwisting => StatusEffectKind::BladeTwisting,
             Self::Disarm => StatusEffectKind::Disarm,
@@ -3425,6 +3468,7 @@ impl StatusPayload {
             | Self::Freeze
             | Self::Intimidated
             | Self::Fear
+            | Self::Confusion
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
@@ -3436,6 +3480,7 @@ impl StatusPayload {
             | Self::Berserking
             | Self::BattleTrance
             | Self::TargetedAbilityAvoidance
+            | Self::MirrorImage
             | Self::FindWeakness
             | Self::BladeTwisting
             | Self::Disarm
@@ -3510,6 +3555,15 @@ impl StatusPayload {
                 tick_interval_ms: 0,
                 damage_type: DamageType::Physical,
                 modifier_scalar: modifier_scalar.max(0.0),
+                absorb_amount: 0,
+                absorb_cap: 0,
+            },
+            Self::Flurry { modifier_scalar } => StatusEffectColumns {
+                slow_pct: 0.0,
+                tick_amount: 0,
+                tick_interval_ms: 0,
+                damage_type: DamageType::Physical,
+                modifier_scalar: modifier_scalar.clamp(0.0, 1.0),
                 absorb_amount: 0,
                 absorb_cap: 0,
             },
@@ -3599,6 +3653,7 @@ impl StatusPayload {
             StatusEffectKind::Freeze => Self::Freeze,
             StatusEffectKind::Intimidated => Self::Intimidated,
             StatusEffectKind::Fear => Self::Fear,
+            StatusEffectKind::Confusion => Self::Confusion,
             StatusEffectKind::Stagger => Self::Stagger,
             StatusEffectKind::Knockdown => Self::Knockdown,
             StatusEffectKind::Slow => Self::Slow {
@@ -3674,8 +3729,12 @@ impl StatusPayload {
             StatusEffectKind::Berserking => Self::Berserking,
             StatusEffectKind::BattleTrance => Self::BattleTrance,
             StatusEffectKind::TargetedAbilityAvoidance => Self::TargetedAbilityAvoidance,
+            StatusEffectKind::MirrorImage => Self::MirrorImage,
             StatusEffectKind::Gigantism => Self::Gigantism {
                 modifier_scalar: columns.modifier_scalar.max(0.0),
+            },
+            StatusEffectKind::Flurry => Self::Flurry {
+                modifier_scalar: columns.modifier_scalar.clamp(0.0, 1.0),
             },
             StatusEffectKind::FindWeakness => Self::FindWeakness,
             StatusEffectKind::BladeTwisting => Self::BladeTwisting,
@@ -3700,6 +3759,7 @@ impl StatusPayload {
             | Self::Freeze
             | Self::Intimidated
             | Self::Fear
+            | Self::Confusion
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
@@ -3711,6 +3771,7 @@ impl StatusPayload {
             | Self::Berserking
             | Self::BattleTrance
             | Self::TargetedAbilityAvoidance
+            | Self::MirrorImage
             | Self::FindWeakness
             | Self::BladeTwisting
             | Self::Disarm
@@ -3743,6 +3804,9 @@ impl StatusPayload {
             | Self::DamageRedirect { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0
+            }
+            Self::Flurry { modifier_scalar } => {
+                !modifier_scalar.is_finite() || modifier_scalar <= 0.0 || modifier_scalar > 1.0
             }
             Self::DamageTakenReduction { modifier_scalar } => {
                 !modifier_scalar.is_finite()
@@ -3783,6 +3847,7 @@ impl StatusPayload {
             | Self::Freeze
             | Self::Intimidated
             | Self::Fear
+            | Self::Confusion
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
@@ -3794,6 +3859,7 @@ impl StatusPayload {
             | Self::Berserking
             | Self::BattleTrance
             | Self::TargetedAbilityAvoidance
+            | Self::MirrorImage
             | Self::FindWeakness
             | Self::BladeTwisting
             | Self::Disarm
@@ -3849,6 +3915,14 @@ impl StatusPayload {
             | Self::CastSpeed { modifier_scalar } => {
                 if !modifier_scalar.is_finite() || modifier_scalar <= 0.0 {
                     return Err(format!("{subject} {path}.modifier_scalar must be positive"));
+                }
+                Ok(())
+            }
+            Self::Flurry { modifier_scalar } => {
+                if !modifier_scalar.is_finite() || modifier_scalar <= 0.0 || modifier_scalar > 1.0 {
+                    return Err(format!(
+                        "{subject} {path}.modifier_scalar must be > 0 and <= 1"
+                    ));
                 }
                 Ok(())
             }
@@ -3935,6 +4009,7 @@ impl StatusPayload {
             | Self::Freeze
             | Self::Intimidated
             | Self::Fear
+            | Self::Confusion
             | Self::Stagger
             | Self::Knockdown
             | Self::MoveSlowImmunity
@@ -3946,6 +4021,7 @@ impl StatusPayload {
             | Self::Berserking
             | Self::BattleTrance
             | Self::TargetedAbilityAvoidance
+            | Self::MirrorImage
             | Self::FindWeakness
             | Self::BladeTwisting
             | Self::Disarm
@@ -3965,6 +4041,7 @@ impl StatusPayload {
             Self::DamageAmp { modifier_scalar }
             | Self::DirectDamageAmp { modifier_scalar }
             | Self::Gigantism { modifier_scalar }
+            | Self::Flurry { modifier_scalar }
             | Self::ManaRegen { modifier_scalar }
             | Self::StaminaRegen { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
@@ -4045,6 +4122,7 @@ pub(crate) enum StatusDispelType {
     Curse,
     Bleed,
     Enrage,
+    Mental,
 }
 
 impl StatusDispelType {
@@ -4057,6 +4135,7 @@ impl StatusDispelType {
             Self::Curse => "CURSE",
             Self::Bleed => "BLEED",
             Self::Enrage => "ENRAGE",
+            Self::Mental => "MENTAL",
         }
     }
 
@@ -4069,6 +4148,7 @@ impl StatusDispelType {
             "CURSE" => Some(Self::Curse),
             "BLEED" => Some(Self::Bleed),
             "ENRAGE" => Some(Self::Enrage),
+            "MENTAL" => Some(Self::Mental),
             _ => None,
         }
     }
@@ -4332,6 +4412,7 @@ pub enum EffectPacket {
         delivery: DamageDelivery,
         source_kind: String,
         direct_action_key: String,
+        is_area: bool,
     },
     Heal {
         amount: i32,
@@ -4378,6 +4459,12 @@ pub enum EffectPacket {
         kind: StatusEffectKind,
         stack_group: String,
         remove_stacks: u32,
+    },
+    RemoveStatusByFilter {
+        target: Identity,
+        polarity: Option<StatusPolarity>,
+        dispel_types: Vec<StatusDispelType>,
+        max_count: u32,
     },
 }
 
@@ -4441,6 +4528,7 @@ fn queue_effect_at(ctx: &ReducerContext, effect: EffectPacket, queued_at: Timest
             delivery,
             source_kind,
             direct_action_key,
+            is_area,
         } => {
             ctx.db.pending_hit().insert(new_pending_hit(
                 queued_at,
@@ -4456,6 +4544,7 @@ fn queue_effect_at(ctx: &ReducerContext, effect: EffectPacket, queued_at: Timest
                 delivery,
                 source_kind,
                 direct_action_key,
+                is_area,
             ));
         }
         EffectPacket::Heal {
@@ -4479,6 +4568,7 @@ fn queue_effect_at(ctx: &ReducerContext, effect: EffectPacket, queued_at: Timest
                 DamageDelivery::Direct,
                 String::new(),
                 String::new(),
+                false,
             ));
         }
         EffectPacket::ApplyStatus {
@@ -4581,6 +4671,45 @@ fn queue_effect_at(ctx: &ReducerContext, effect: EffectPacket, queued_at: Timest
                     queued_at_micros,
                 ));
         }
+        EffectPacket::RemoveStatusByFilter {
+            target,
+            polarity,
+            dispel_types,
+            max_count,
+        } => {
+            let mut matches: Vec<_> = ctx
+                .db
+                .status_effect()
+                .target()
+                .filter(target)
+                .filter(|effect| {
+                    status_matches_removal_filter(ctx, effect, polarity, dispel_types.as_slice())
+                })
+                .collect();
+            matches.sort_by_key(|effect| effect.status_id);
+
+            for (index, effect) in matches.into_iter().take(max_count as usize).enumerate() {
+                let Some(kind) = StatusEffectKind::from_wire(effect.effect_kind.as_str()) else {
+                    continue;
+                };
+                let removal_order = if index == 0 {
+                    queued_order
+                } else {
+                    next_pending_effect_order(ctx)
+                };
+                ctx.db
+                    .pending_remove_status()
+                    .insert(new_pending_remove_status(
+                        target,
+                        kind,
+                        removal_order,
+                        effect.stack_group,
+                        0,
+                        queued_at,
+                        queued_at_micros,
+                    ));
+            }
+        }
     };
 }
 
@@ -4621,6 +4750,7 @@ fn new_pending_hit(
     damage_delivery: DamageDelivery,
     damage_source_kind: String,
     direct_action_key: String,
+    is_area: bool,
 ) -> PendingHit {
     PendingHit {
         hit_id: 0,
@@ -4634,6 +4764,7 @@ fn new_pending_hit(
         damage_delivery: damage_delivery.as_str().to_string(),
         damage_source_kind,
         direct_action_key,
+        is_area,
         queued_at,
         queued_at_micros,
         queued_order,
@@ -5001,6 +5132,7 @@ fn apply_interrupt_cast(
                 delivery: DamageDelivery::Direct,
                 source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
                 direct_action_key: spell_id.to_string(),
+                is_area: false,
             },
             now,
         );
@@ -5132,6 +5264,10 @@ fn apply_damage(
         return false;
     }
 
+    if damaging_area_consumes_mirror_images(hit.is_area, hit.amount) {
+        consume_all_mirror_images(ctx, target, ctx.timestamp);
+    }
+
     // Death handling clears status rows, so retain the Fulmination owner before
     // mutating the target. The owner defines which nearby actors are enemies.
     let fulmination_source = active_fulmination_source(ctx, hit, ctx.timestamp);
@@ -5194,6 +5330,7 @@ fn redirect_burden_damage(ctx: &ReducerContext, hit: &PendingHit, amount: i32) -
             delivery: DamageDelivery::Direct,
             source_kind: DAMAGE_SOURCE_KIND_BURDEN_REDIRECT.to_string(),
             direct_action_key: String::new(),
+            is_area: false,
         }],
     );
     remaining
@@ -5282,6 +5419,7 @@ fn apply_damage_to_player_state(
     let hp_damage =
         absorb_damage_with_temporary_hitpoints(ctx, target, after_mana_shield, ctx.timestamp);
     resolved.final_amount = hp_damage;
+    break_confusion_on_damage(ctx, target, resolved_amount);
     state.hp -= hp_damage;
     record_reckoning_damage_taken(ctx, target, hp_damage, ctx.timestamp);
     grant_primary_resource_for_damage_taken(ctx, target, hp_damage, ctx.timestamp);
@@ -5624,6 +5762,7 @@ fn apply_damage_to_npc_state(
     let hp_damage =
         absorb_damage_with_temporary_hitpoints(ctx, target, resolved_amount, ctx.timestamp);
     resolved.final_amount = hp_damage;
+    break_confusion_on_damage(ctx, target, resolved_amount);
     state.hp -= hp_damage;
     record_reckoning_damage_taken(ctx, target, hp_damage, ctx.timestamp);
     crate::npcs::record_npc_damage_threat(ctx, target, source, hp_damage);
@@ -6148,6 +6287,7 @@ fn queue_fulmination_arc_if_applicable(
             delivery: DamageDelivery::Direct,
             source_kind: DAMAGE_SOURCE_KIND_FULMINATION_ARC.to_string(),
             direct_action_key: String::new(),
+            is_area: false,
         }],
     );
 }
@@ -6698,6 +6838,7 @@ fn queue_thorns_damage_if_applicable(
             delivery: DamageDelivery::Periodic,
             source_kind: DAMAGE_SOURCE_KIND_PERIODIC.to_string(),
             direct_action_key: String::new(),
+            is_area: false,
         }],
     );
 }
@@ -6825,6 +6966,9 @@ enum HolyShieldEndReason {
 
 fn finish_expired_status_effect(ctx: &ReducerContext, effect: &StatusEffect, now: Timestamp) {
     emit_holy_shield_end_event(ctx, effect, false, now);
+    if effect.effect_kind == StatusEffectKind::Confusion.as_str() {
+        crate::confusion::clear_confusion_wander(ctx, effect.target);
+    }
     if effect.effect_kind != StatusEffectKind::Reckoning.as_str()
         || effect.stack_group != RECKONING_SPELL_ID
         || effect.tick_amount <= 0
@@ -6849,6 +6993,7 @@ fn finish_expired_status_effect(ctx: &ReducerContext, effect: &StatusEffect, now
             delivery: DamageDelivery::Direct,
             source_kind: DAMAGE_SOURCE_KIND_RECKONING.to_string(),
             direct_action_key: effect.spell_id.clone(),
+            is_area: false,
         }],
     );
 }
@@ -7403,7 +7548,7 @@ fn apply_status_internal(
                     now,
                     expires_at,
                     max_stacks.max(1),
-                    Some(1),
+                    Some(initial_status_stacks(kind, max_stacks)),
                     encode_status_dispel_types(&dispel_types),
                 );
                 ctx.db.status_effect().status_id().update(existing);
@@ -7497,9 +7642,43 @@ fn apply_status_side_effects(
     if is_hard_crowd_control_kind(kind) {
         crate::npcs::interrupt_npc_actions_for_crowd_control(ctx, target, now);
     }
+    if kind == StatusEffectKind::Confusion {
+        interrupt_player_actions_for_stagger(ctx, target);
+        sync_confusion_wander_runtime(ctx, target, now);
+    }
     if kind == StatusEffectKind::Stagger {
         apply_stagger_status_side_effects(ctx, now, source, target);
     }
+}
+
+fn sync_confusion_wander_runtime(ctx: &ReducerContext, target: Identity, now: Timestamp) {
+    let status_id = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::Confusion.as_str() && now < effect.expires_at
+        })
+        .max_by_key(|effect| effect.status_id)
+        .map(|effect| effect.status_id);
+
+    let Some(status_id) = status_id else {
+        crate::confusion::clear_confusion_wander(ctx, target);
+        return;
+    };
+    let Some(snapshot) = actor_snapshot::actor_snapshot_for(ctx, target) else {
+        crate::confusion::clear_confusion_wander(ctx, target);
+        return;
+    };
+    crate::confusion::begin_confusion_wander(
+        ctx,
+        target,
+        status_id,
+        snapshot.pos_x,
+        snapshot.pos_z,
+        now,
+    );
 }
 
 fn status_application_is_blocked_by_immunity(kind: StatusEffectKind, stun_immune: bool) -> bool {
@@ -7519,6 +7698,35 @@ fn remove_all_statuses_of_kind(ctx: &ReducerContext, target: Identity, kind: Sta
     for status_id in status_ids {
         ctx.db.status_effect().status_id().delete(status_id);
     }
+    if kind == StatusEffectKind::Confusion {
+        crate::confusion::clear_confusion_wander(ctx, target);
+    }
+}
+
+fn break_confusion_on_damage(ctx: &ReducerContext, target: Identity, damage_amount: i32) -> bool {
+    if !damage_breaks_confusion(damage_amount) {
+        return false;
+    }
+    let status_ids: Vec<u64> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| effect.effect_kind == StatusEffectKind::Confusion.as_str())
+        .map(|effect| effect.status_id)
+        .collect();
+    if status_ids.is_empty() {
+        return false;
+    }
+    for status_id in status_ids {
+        ctx.db.status_effect().status_id().delete(status_id);
+    }
+    crate::confusion::clear_confusion_wander(ctx, target);
+    true
+}
+
+fn damage_breaks_confusion(damage_amount: i32) -> bool {
+    damage_amount > 0
 }
 
 fn target_is_alive_for_status(ctx: &ReducerContext, target: Identity) -> bool {
@@ -7961,6 +8169,9 @@ fn remove_status_group(
     for status_id in remove_ids {
         ctx.db.status_effect().status_id().delete(status_id);
     }
+    if kind == StatusEffectKind::Confusion {
+        sync_confusion_wander_runtime(ctx, target, ctx.timestamp);
+    }
 }
 
 fn remove_status_by_ability(
@@ -7994,6 +8205,9 @@ fn remove_status_by_ability(
         if remove_stacks > 0 {
             break;
         }
+    }
+    if kind == StatusEffectKind::Confusion {
+        sync_confusion_wander_runtime(ctx, target, now);
     }
 }
 
@@ -8307,24 +8521,23 @@ pub fn emit_player_spawned(
 }
 
 pub fn clear_statuses_for_identity(ctx: &ReducerContext, identity: Identity) {
-    let mut remove_ids: HashSet<u64> = ctx
-        .db
-        .status_effect()
-        .target()
-        .filter(identity)
-        .map(|effect| effect.status_id)
-        .collect();
-    for status_id in ctx
-        .db
-        .status_effect()
-        .source()
-        .filter(identity)
-        .map(|effect| effect.status_id)
-    {
-        remove_ids.insert(status_id);
+    let targeted_effects: Vec<StatusEffect> =
+        ctx.db.status_effect().target().filter(identity).collect();
+    let sourced_effects: Vec<StatusEffect> =
+        ctx.db.status_effect().source().filter(identity).collect();
+    let mut remove_ids: HashSet<u64> = HashSet::new();
+    let mut confusion_targets: HashSet<Identity> = HashSet::new();
+    for effect in targeted_effects.iter().chain(sourced_effects.iter()) {
+        remove_ids.insert(effect.status_id);
+        if effect.effect_kind == StatusEffectKind::Confusion.as_str() {
+            confusion_targets.insert(effect.target);
+        }
     }
     for status_id in remove_ids {
         ctx.db.status_effect().status_id().delete(status_id);
+    }
+    for target in confusion_targets {
+        sync_confusion_wander_runtime(ctx, target, ctx.timestamp);
     }
     clear_combat_stacking_passive_runtime_for_identity(ctx, identity);
     clear_blight_empowered_action_runtime(ctx, identity);
@@ -8332,6 +8545,7 @@ pub fn clear_statuses_for_identity(ctx: &ReducerContext, identity: Identity) {
 
 fn clear_statuses_for_target(ctx: &ReducerContext, identity: Identity) {
     ctx.db.status_effect().target().delete(identity);
+    crate::confusion::clear_confusion_wander(ctx, identity);
 }
 
 pub fn clear_statuses_for_dead_players(ctx: &ReducerContext) {
@@ -8345,6 +8559,7 @@ pub fn clear_statuses_for_dead_players(ctx: &ReducerContext) {
 
     for identity in dead_players {
         ctx.db.status_effect().target().delete(identity);
+        crate::confusion::clear_confusion_wander(ctx, identity);
         clear_active_radial_effects_for_owner(ctx, identity);
         clear_combat_engagement_for_identity(ctx, identity);
         clear_combat_stacking_passive_runtime_for_identity(ctx, identity);
@@ -8441,6 +8656,7 @@ fn expire_statuses_for_target(ctx: &ReducerContext, target: Identity, now: Times
 pub struct MovementModifiers {
     rooted: HashSet<Identity>,
     disabled: HashSet<Identity>,
+    confused: HashSet<Identity>,
     slow_pct_by_target: HashMap<Identity, f32>,
     move_speed_bonus_by_target: HashMap<Identity, f32>,
     move_slow_immune: HashSet<Identity>,
@@ -8451,6 +8667,7 @@ impl Default for MovementModifiers {
         Self {
             rooted: HashSet::new(),
             disabled: HashSet::new(),
+            confused: HashSet::new(),
             slow_pct_by_target: HashMap::new(),
             move_speed_bonus_by_target: HashMap::new(),
             move_slow_immune: HashSet::new(),
@@ -8464,11 +8681,15 @@ impl MovementModifiers {
     }
 
     pub fn is_disabled(&self, identity: &Identity) -> bool {
-        self.disabled.contains(identity)
+        self.disabled.contains(identity) || self.confused.contains(identity)
+    }
+
+    pub fn is_confused(&self, identity: &Identity) -> bool {
+        self.confused.contains(identity)
     }
 
     pub fn blocks_movement(&self, identity: &Identity) -> bool {
-        self.is_rooted(identity) || self.is_disabled(identity)
+        self.is_rooted(identity) || self.disabled.contains(identity)
     }
 
     pub fn move_speed_multiplier(&self, identity: &Identity, _input_tick: u32) -> f32 {
@@ -8630,6 +8851,9 @@ impl StatusRuntimeView {
                         *entry = (*entry)
                             .max(effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32);
                     }
+                    StatusEffectKind::Confusion => {
+                        modifiers.confused.insert(*target);
+                    }
                     kind if is_hard_crowd_control_kind(kind)
                         && !(kind == StatusEffectKind::Stun && stun_immune) =>
                     {
@@ -8680,6 +8904,13 @@ impl StatusRuntimeView {
                             .entry(*target)
                             .or_insert(0.0);
                         *entry = (*entry).max(effect.modifier_scalar.max(0.0));
+                    }
+                    StatusEffectKind::Flurry => {
+                        let entry = modifiers
+                            .flurry_base_chance_by_target
+                            .entry(*target)
+                            .or_insert(0.0);
+                        *entry = (*entry).max(effect.modifier_scalar.clamp(0.0, 1.0));
                     }
                     StatusEffectKind::DamageTakenReduction => {
                         let entry = modifiers
@@ -8777,6 +9008,7 @@ impl StatusRuntimeView {
                     | StatusEffectKind::Freeze
                     | StatusEffectKind::Intimidated
                     | StatusEffectKind::Fear
+                    | StatusEffectKind::Confusion
                     | StatusEffectKind::Stagger
                     | StatusEffectKind::Knockdown
                     | StatusEffectKind::Slow
@@ -8789,6 +9021,7 @@ impl StatusRuntimeView {
                     | StatusEffectKind::Silence
                     | StatusEffectKind::BattleTrance
                     | StatusEffectKind::TargetedAbilityAvoidance
+                    | StatusEffectKind::MirrorImage
                     | StatusEffectKind::FindWeakness
                     | StatusEffectKind::BladeTwisting
                     | StatusEffectKind::Disarm
@@ -8816,6 +9049,7 @@ pub struct TemporaryCombatModifiers {
     damage_amp_by_target: HashMap<Identity, f32>,
     direct_damage_amp_by_target: HashMap<Identity, f32>,
     physical_damage_amp_by_target: HashMap<Identity, f32>,
+    flurry_base_chance_by_target: HashMap<Identity, f32>,
     damage_taken_reduction_by_target: HashMap<Identity, f32>,
     damage_taken_amp_by_target_and_source: HashMap<(Identity, Identity), f32>,
     healing_taken_reduction_by_target: HashMap<Identity, f32>,
@@ -8846,6 +9080,14 @@ impl TemporaryCombatModifiers {
 
     pub fn is_disabled(&self, identity: &Identity) -> bool {
         self.disabled.contains(identity)
+    }
+
+    pub fn flurry_base_chance_for(&self, identity: &Identity) -> f32 {
+        self.flurry_base_chance_by_target
+            .get(identity)
+            .copied()
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0)
     }
 
     pub fn damage_multiplier_for(
@@ -9057,6 +9299,7 @@ pub fn process_periodic_status_ticks(ctx: &ReducerContext, now: Timestamp) -> us
                             delivery: DamageDelivery::Periodic,
                             source_kind: DAMAGE_SOURCE_KIND_PERIODIC.to_string(),
                             direct_action_key: String::new(),
+                            is_area: false,
                         });
                     }
                 }
@@ -9141,14 +9384,16 @@ mod tests {
         apply_status_update, attack_speed_scalar_to_multiplier, attacker_is_behind_target,
         battle_trance_hp_after_damage, behind_target_damage_multiplier,
         blight_empowered_hit_is_eligible, bloodlust_passive_spec, burden_damage_split,
-        damage_breaks_shroud, damage_comes_from_casted_ability,
-        damage_source_grants_outgoing_rewards, deterministic_fulmination_candidate_index,
-        disabled_target_damage_multiplier, due_interval_count, event_prune_cutoff_micros,
-        fire_spell_hit_can_trigger_wildfire, fracture_melee_damage_multiplier,
-        frost_spell_hit_can_apply_rime, fulmination_arc_damage,
+        damage_breaks_confusion, damage_breaks_shroud, damage_comes_from_casted_ability,
+        damage_source_grants_outgoing_rewards, damaging_area_consumes_mirror_images,
+        deterministic_fulmination_candidate_index, disabled_target_damage_multiplier,
+        due_interval_count, event_prune_cutoff_micros, fire_spell_hit_can_trigger_wildfire,
+        fracture_melee_damage_multiplier, frost_spell_hit_can_apply_rime, fulmination_arc_damage,
         fulmination_uses_any_target_audience, furnace_mana_restore_amount, holy_shield_end_reason,
-        immolation_damage_for_stacks, immolation_remaining_tick_count, knockback_stagger_duration,
-        melee_attack_can_trigger_fracture, melee_attack_can_trigger_fulmination, new_status_effect,
+        immolation_damage_for_stacks, immolation_remaining_tick_count, initial_status_stacks,
+        knockback_stagger_duration, melee_attack_can_trigger_fracture,
+        melee_attack_can_trigger_fulmination, mirror_image_intercept_chance,
+        mirror_image_stacks_after_intercept, mirror_images_intercept, new_status_effect,
         opportunist_passive_is_active_for_profile, point_within_radius,
         potential_stacks_after_spell_strike, quickening_cast_speed_multiplier,
         resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
@@ -9230,6 +9475,41 @@ mod tests {
         assert_eq!(status_stacks_after_removal(3, 1), Some(2));
         assert_eq!(status_stacks_after_removal(1, 1), None);
         assert_eq!(status_stacks_after_removal(3, 0), None);
+    }
+
+    #[test]
+    fn mirror_image_starts_with_three_authored_charges() {
+        assert_eq!(initial_status_stacks(StatusEffectKind::MirrorImage, 3), 3);
+        assert_eq!(
+            initial_status_stacks(StatusEffectKind::TargetedAbilityAvoidance, 3),
+            1
+        );
+    }
+
+    #[test]
+    fn mirror_image_interception_rolls_each_remaining_image_independently() {
+        assert_eq!(mirror_image_intercept_chance(0), 0.0);
+        assert!((mirror_image_intercept_chance(1) - 0.25).abs() < 0.0001);
+        assert!((mirror_image_intercept_chance(2) - 0.4375).abs() < 0.0001);
+        assert!((mirror_image_intercept_chance(3) - 0.578125).abs() < 0.0001);
+        assert!(mirror_images_intercept(3, 0.578124));
+        assert!(!mirror_images_intercept(3, 0.578125));
+        assert!(!mirror_images_intercept(0, 0.0));
+    }
+
+    #[test]
+    fn mirror_image_interception_consumes_exactly_one_charge() {
+        assert_eq!(mirror_image_stacks_after_intercept(3), Some(2));
+        assert_eq!(mirror_image_stacks_after_intercept(2), Some(1));
+        assert_eq!(mirror_image_stacks_after_intercept(1), None);
+        assert_eq!(mirror_image_stacks_after_intercept(0), None);
+    }
+
+    #[test]
+    fn only_positive_area_damage_consumes_every_mirror_image() {
+        assert!(damaging_area_consumes_mirror_images(true, 1));
+        assert!(!damaging_area_consumes_mirror_images(true, 0));
+        assert!(!damaging_area_consumes_mirror_images(false, 100));
     }
 
     #[test]
@@ -9483,6 +9763,7 @@ mod tests {
                 damage_delivery: delivery.as_str().to_string(),
                 damage_source_kind: source_kind.to_string(),
                 direct_action_key: direct_action_key.to_string(),
+                is_area: false,
                 queued_at: Timestamp::UNIX_EPOCH,
                 queued_at_micros: 0,
                 queued_order: 0,
@@ -9526,6 +9807,7 @@ mod tests {
             damage_delivery: delivery.as_str().to_string(),
             damage_source_kind: source_kind.to_string(),
             direct_action_key: "spell-instance:wildfire-test".to_string(),
+            is_area: false,
             queued_at: Timestamp::UNIX_EPOCH,
             queued_at_micros: 0,
             queued_order: 0,
@@ -9588,6 +9870,7 @@ mod tests {
             damage_delivery: DamageDelivery::Direct.as_str().to_string(),
             damage_source_kind: source_kind.to_string(),
             direct_action_key: direct_action_key.to_string(),
+            is_area: false,
             queued_at: Timestamp::UNIX_EPOCH,
             queued_at_micros: 0,
             queued_order: 0,
@@ -9627,6 +9910,7 @@ mod tests {
             damage_delivery: DamageDelivery::Direct.as_str().to_string(),
             damage_source_kind: source_kind.to_string(),
             direct_action_key: direct_action_key.to_string(),
+            is_area: false,
             queued_at: Timestamp::UNIX_EPOCH,
             queued_at_micros: 0,
             queued_order: 0,
@@ -9705,6 +9989,7 @@ mod tests {
             damage_delivery: delivery.as_str().to_string(),
             damage_source_kind: source_kind.to_string(),
             direct_action_key: direct_action_key.to_string(),
+            is_area: false,
             queued_at: Timestamp::UNIX_EPOCH,
             queued_at_micros: 0,
             queued_order: 0,
@@ -9762,6 +10047,7 @@ mod tests {
             damage_delivery: delivery.as_str().to_string(),
             damage_source_kind: source_kind.to_string(),
             direct_action_key: "fracture-test:hit:0".to_string(),
+            is_area: false,
             queued_at: Timestamp::UNIX_EPOCH,
             queued_at_micros: 0,
             queued_order: 0,
@@ -9831,6 +10117,7 @@ mod tests {
                 damage_delivery: delivery.as_str().to_string(),
                 damage_source_kind: source_kind.to_string(),
                 direct_action_key: "fulmination-test:hit:0".to_string(),
+                is_area: false,
                 queued_at: Timestamp::UNIX_EPOCH,
                 queued_at_micros: 42,
                 queued_order: 7,
@@ -9941,6 +10228,7 @@ mod tests {
                 damage_delivery: delivery.as_str().to_string(),
                 damage_source_kind: source_kind.to_string(),
                 direct_action_key: "blight-cast:p0".to_string(),
+                is_area: false,
                 queued_at: Timestamp::UNIX_EPOCH,
                 queued_at_micros: 0,
                 queued_order: 0,
@@ -10308,6 +10596,29 @@ mod tests {
     }
 
     #[test]
+    fn flurry_status_exposes_authored_base_proc_chance() {
+        let identity = test_identity();
+        let other = test_identity_number(2);
+        let now = Timestamp::UNIX_EPOCH + Duration::from_secs(10);
+        let view = status_runtime_view(
+            vec![test_status_effect(
+                identity,
+                StatusPayload::Flurry {
+                    modifier_scalar: 0.15,
+                },
+                now,
+                now + Duration::from_secs(20),
+            )],
+            &[identity, other],
+            now,
+        );
+        let modifiers = view.temporary_combat_modifiers();
+
+        assert!((modifiers.flurry_base_chance_for(&identity) - 0.15).abs() < 0.0001);
+        assert_eq!(modifiers.flurry_base_chance_for(&other), 0.0);
+    }
+
+    #[test]
     fn damage_dealt_reduction_lowers_direct_and_periodic_damage() {
         let identity = test_identity();
         let mut modifiers = TemporaryCombatModifiers::default();
@@ -10451,6 +10762,26 @@ mod tests {
     }
 
     #[test]
+    fn confusion_disables_actions_without_stopping_autonomous_movement() {
+        let identity = test_identity();
+        let mut modifiers = MovementModifiers::default();
+        modifiers.confused.insert(identity);
+
+        assert!(modifiers.is_disabled(&identity));
+        assert!(modifiers.is_confused(&identity));
+        assert!(!modifiers.blocks_movement(&identity));
+        assert_eq!(modifiers.move_speed_multiplier(&identity, 10), 1.0);
+    }
+
+    #[test]
+    fn any_positive_resolved_damage_breaks_confusion_even_before_absorption() {
+        assert!(!damage_breaks_confusion(0));
+        assert!(!damage_breaks_confusion(-1));
+        assert!(damage_breaks_confusion(1));
+        assert!(damage_breaks_confusion(250));
+    }
+
+    #[test]
     fn zero_stagger_shove_tunables_disable_shove_only() {
         assert_eq!(stagger_shove_tunables(0.0, 100.0), None);
         assert_eq!(stagger_shove_tunables(0.45, 0.0), None);
@@ -10516,6 +10847,11 @@ mod tests {
                 StatusPayload::Fear,
                 StatusEffectKind::Fear,
                 StatusPayload::Fear,
+            ),
+            (
+                StatusPayload::Confusion,
+                StatusEffectKind::Confusion,
+                StatusPayload::Confusion,
             ),
             (
                 StatusPayload::Stagger,
@@ -10610,6 +10946,15 @@ mod tests {
                 StatusEffectKind::Gigantism,
                 StatusPayload::Gigantism {
                     modifier_scalar: 0.20,
+                },
+            ),
+            (
+                StatusPayload::Flurry {
+                    modifier_scalar: 0.15,
+                },
+                StatusEffectKind::Flurry,
+                StatusPayload::Flurry {
+                    modifier_scalar: 0.15,
                 },
             ),
             (
@@ -11203,6 +11548,7 @@ mod tests {
             StatusEffectKind::Freeze,
             StatusEffectKind::Intimidated,
             StatusEffectKind::Fear,
+            StatusEffectKind::Confusion,
             StatusEffectKind::Stagger,
             StatusEffectKind::Knockdown,
         ];
@@ -11216,6 +11562,7 @@ mod tests {
                 StatusEffectKind::Freeze => StatusPayload::Freeze,
                 StatusEffectKind::Intimidated => StatusPayload::Intimidated,
                 StatusEffectKind::Fear => StatusPayload::Fear,
+                StatusEffectKind::Confusion => StatusPayload::Confusion,
                 StatusEffectKind::Stagger => StatusPayload::Stagger,
                 StatusEffectKind::Knockdown => StatusPayload::Knockdown,
                 _ => unreachable!("controls only contains hard crowd-control kinds"),
@@ -11508,13 +11855,106 @@ pub(crate) fn hostile_targeted_ability_misses(
     ctx: &ReducerContext,
     source: Identity,
     target: Identity,
+    attack_key: &str,
+    is_damaging_area: bool,
     now: Timestamp,
 ) -> bool {
-    source != Identity::ZERO
-        && target != Identity::ZERO
-        && source != target
-        && can_harm(ctx, source, target)
-        && has_active_status(ctx, target, StatusEffectKind::TargetedAbilityAvoidance, now)
+    if source == Identity::ZERO
+        || target == Identity::ZERO
+        || source == target
+        || !can_harm(ctx, source, target)
+    {
+        return false;
+    }
+    if has_active_status(ctx, target, StatusEffectKind::TargetedAbilityAvoidance, now) {
+        return true;
+    }
+
+    if is_damaging_area {
+        return false;
+    }
+
+    let Some(mut mirror_images) = active_mirror_image_status(ctx, target, now) else {
+        return false;
+    };
+    let roll = stable_mirror_image_roll(source, target, attack_key, now, mirror_images.status_id);
+    if !mirror_images_intercept(mirror_images.stacks, roll) {
+        return false;
+    }
+
+    match mirror_image_stacks_after_intercept(mirror_images.stacks) {
+        Some(remaining_stacks) => {
+            mirror_images.stacks = remaining_stacks;
+            ctx.db.status_effect().status_id().update(mirror_images);
+        }
+        None => {
+            ctx.db
+                .status_effect()
+                .status_id()
+                .delete(mirror_images.status_id);
+        }
+    }
+    true
+}
+
+fn active_mirror_image_status(
+    ctx: &ReducerContext,
+    target: Identity,
+    now: Timestamp,
+) -> Option<StatusEffect> {
+    ctx.db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::MirrorImage.as_str()
+                && effect.stack_group == MIRROR_IMAGE_STATUS_GROUP
+                && effect.stacks > 0
+                && now < effect.expires_at
+        })
+        .max_by_key(|effect| effect.status_id)
+}
+
+fn consume_all_mirror_images(ctx: &ReducerContext, target: Identity, now: Timestamp) -> bool {
+    let Some(effect) = active_mirror_image_status(ctx, target, now) else {
+        return false;
+    };
+    ctx.db.status_effect().status_id().delete(effect.status_id);
+    true
+}
+
+fn mirror_image_intercept_chance(stacks: u32) -> f32 {
+    1.0 - (1.0 - MIRROR_IMAGE_INTERCEPT_CHANCE_PER_IMAGE).powi(stacks.min(i32::MAX as u32) as i32)
+}
+
+fn mirror_images_intercept(stacks: u32, roll: f32) -> bool {
+    stacks > 0 && roll.is_finite() && roll.clamp(0.0, 1.0) < mirror_image_intercept_chance(stacks)
+}
+
+fn mirror_image_stacks_after_intercept(stacks: u32) -> Option<u32> {
+    (stacks > 1).then(|| stacks - 1)
+}
+
+fn damaging_area_consumes_mirror_images(is_area: bool, amount: i32) -> bool {
+    is_area && amount > 0
+}
+
+fn stable_mirror_image_roll(
+    source: Identity,
+    target: Identity,
+    attack_key: &str,
+    now: Timestamp,
+    status_id: u64,
+) -> f32 {
+    let mut hash = 0xcbf29ce484222325_u64;
+    hash = fnv1a_update(hash, b"MIRROR_IMAGE_INTERCEPT");
+    hash = fnv1a_update(hash, &source.to_byte_array());
+    hash = fnv1a_update(hash, &target.to_byte_array());
+    hash = fnv1a_update(hash, attack_key.as_bytes());
+    hash = fnv1a_update(hash, &timestamp_to_micros(now).to_le_bytes());
+    hash = fnv1a_update(hash, &status_id.to_le_bytes());
+    let bucket = (hash & 0x00ff_ffff) as f32;
+    bucket / 0x0100_0000_u32 as f32
 }
 
 pub(crate) fn has_active_status_group(
@@ -11538,6 +11978,7 @@ pub fn is_hard_crowd_control_kind(kind: StatusEffectKind) -> bool {
             | StatusEffectKind::Freeze
             | StatusEffectKind::Intimidated
             | StatusEffectKind::Fear
+            | StatusEffectKind::Confusion
             | StatusEffectKind::Stagger
             | StatusEffectKind::Knockdown
     )
@@ -11575,7 +12016,7 @@ fn new_status_effect(
         effect_kind: kind.as_str().to_string(),
         polarity: polarity.as_str().to_string(),
         stack_group: stack_group.to_string(),
-        stacks: 1,
+        stacks: initial_status_stacks(kind, max_stacks),
         max_stacks,
         stack_policy: stack_policy.as_str().to_string(),
         applied_at: now,
@@ -11596,6 +12037,14 @@ fn new_status_effect(
     set_status_expires_at(&mut effect, expires_at);
     set_status_next_tick(&mut effect, next_tick_at);
     effect
+}
+
+fn initial_status_stacks(kind: StatusEffectKind, max_stacks: u32) -> u32 {
+    if kind == StatusEffectKind::MirrorImage {
+        max_stacks.max(1)
+    } else {
+        1
+    }
 }
 
 fn set_status_expires_at(effect: &mut StatusEffect, expires_at: Timestamp) {

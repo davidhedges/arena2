@@ -317,8 +317,8 @@ namespace Arena.UI
                 .ThenBy(row => row.Id, StringComparer.Ordinal)
                 .ToList();
             List<HubAbilitySnapshot> abilityRows = hub.Abilities
-                .Where(row => HasAbilityTag(row.Tags, "ACTION_BAR_ACTION")
-                    || HasAbilityTag(row.Tags, "PASSIVE"))
+                .Where(row => AbilityTagCodec.HasTag(row.Tags, "ACTION_BAR_ACTION")
+                    || AbilityTagCodec.HasTag(row.Tags, "PASSIVE"))
                 .OrderBy(row => row.SortOrder)
                 .ThenBy(row => row.Id, StringComparer.Ordinal)
                 .ToList();
@@ -365,7 +365,7 @@ namespace Arena.UI
                         Resource = WireIdentifier.Normalize(abilityRow.Resource),
                         Cost = abilityRow.Cost,
                         SortOrder = abilityRow.SortOrder,
-                        IsPassive = HasAbilityTag(abilityRow.Tags, "PASSIVE"),
+                        IsPassive = AbilityTagCodec.HasTag(abilityRow.Tags, "PASSIVE"),
                         Description = string.IsNullOrWhiteSpace(abilityRow.Description)
                             ? "Select this ability for your saved discipline loadout."
                             : abilityRow.Description.Trim(),
@@ -1223,14 +1223,5 @@ namespace Arena.UI
                     : part.ToUpperInvariant()));
         }
 
-        private static bool HasAbilityTag(string? encodedTags, string tag)
-        {
-            return (encodedTags ?? string.Empty)
-                .Split('|', StringSplitOptions.RemoveEmptyEntries)
-                .Any(value => string.Equals(
-                    WireIdentifier.Normalize(value),
-                    WireIdentifier.Normalize(tag),
-                    StringComparison.Ordinal));
-        }
     }
 }

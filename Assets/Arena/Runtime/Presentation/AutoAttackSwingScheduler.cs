@@ -492,6 +492,7 @@ namespace Arena.Presentation
                     case "FREEZE":
                     case "INTIMIDATED":
                     case "FEAR":
+                    case "CONFUSION":
                     case "STAGGER":
                     case "KNOCKDOWN":
                         return true;

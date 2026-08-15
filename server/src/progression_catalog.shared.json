@@ -424,8 +424,7 @@
       "resource_kind": "STAMINA",
       "resource_cost": 20,
       "ability_tags": [
-        "ACTION_BAR_ACTION",
-        "CORE_ABILITY"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 10,
       "gameplay": {
@@ -676,8 +675,7 @@
       "resource_kind": "STAMINA",
       "resource_cost": 40,
       "ability_tags": [
-        "ACTION_BAR_ACTION",
-        "CORE_ABILITY"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 50,
       "gameplay": {
@@ -2512,6 +2510,49 @@
       }
     },
     {
+      "ability_id": "SPELL_FLURRY",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "FLURRY",
+      "display_name": "Flurry",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1014,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 20000,
+          "max_distance": 18,
+          "damage_type": "AIR",
+          "status_stack_group": "FLURRY",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "FLURRY",
+            "modifier_scalar": 0.15,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_GUST_OF_WIND",
       "actor_scope": "PLAYER",
       "discipline_id": "PRIMAL",
@@ -2522,7 +2563,7 @@
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
-      "sort_order": 1014,
+      "sort_order": 1015,
       "gameplay": {
         "kind": "SPELL",
         "cooldown_ms": 1200,
@@ -2565,7 +2606,7 @@
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
-      "sort_order": 1015,
+      "sort_order": 1016,
       "gameplay": {
         "kind": "SPELL",
         "cooldown_ms": 12000,
@@ -2587,6 +2628,171 @@
           "impact_effects": [
             {
               "kind": "INTERRUPT_CAST"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_EARTH_BLAST",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "EARTH_BLAST",
+      "display_name": "Earth Blast",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1017,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "DIRECT_TARGET",
+          "max_distance": 8,
+          "damage": 30,
+          "damage_type": "PHYSICAL",
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "impact_effects": [
+            {
+              "kind": "STUN",
+              "duration_ms": 1000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_TIDAL_BLAST",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "TIDAL_BLAST",
+      "display_name": "Tidal Blast",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1018,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "DIRECT_TARGET",
+          "max_distance": 8,
+          "damage": 30,
+          "damage_type": "PHYSICAL",
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "impact_effects": [
+            {
+              "kind": "REMOVE_STATUS",
+              "polarity": "BUFF",
+              "max_count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_LAVA_BLAST",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "LAVA_BLAST",
+      "display_name": "Lava Blast",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1019,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "DIRECT_TARGET",
+          "max_distance": 8,
+          "damage": 30,
+          "damage_type": "FIRE",
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "impact_effects": [
+            {
+              "kind": "BURN",
+              "duration_ms": 10000,
+              "tick_interval_ms": 1000,
+              "tick_damage": 3,
+              "damage_type": "FIRE",
+              "status_stack_group": "LAVA_BLAST_BURN"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_WIND_BLAST",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "WIND_BLAST",
+      "display_name": "Wind Blast",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1020,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "DIRECT_TARGET",
+          "max_distance": 8,
+          "damage": 30,
+          "damage_type": "PHYSICAL",
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "impact_effects": [
+            {
+              "kind": "KNOCKBACK",
+              "distance_meters": 4
             }
           ]
         }
@@ -3988,6 +4194,49 @@
       }
     },
     {
+      "ability_id": "SPELL_MIRROR_IMAGE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
+      "combat_profile_id": "",
+      "action_id": "MIRROR_IMAGE",
+      "display_name": "Mirror Image",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1029,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 20000,
+          "max_distance": 18,
+          "damage_type": "ARCANE",
+          "status_stack_group": "MIRROR_IMAGE",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "MIRROR_IMAGE",
+            "modifier_scalar": 0,
+            "max_stacks": 3,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_STONESPIRE",
       "actor_scope": "PLAYER",
       "discipline_id": "PRIMAL",
@@ -4191,8 +4440,7 @@
       "display_name": "Battle Cry",
       "resource_kind": "MANA",
       "ability_tags": [
-        "ACTION_BAR_ACTION",
-        "CORE_ABILITY"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 82,
       "gameplay": {
@@ -4282,8 +4530,7 @@
       "display_name": "Enrage",
       "resource_kind": "MANA",
       "ability_tags": [
-        "ACTION_BAR_ACTION",
-        "CORE_ABILITY"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 90,
       "gameplay": {
@@ -4527,8 +4774,7 @@
       "display_name": "Charge",
       "resource_kind": "STAMINA",
       "ability_tags": [
-        "ACTION_BAR_ACTION",
-        "CORE_ABILITY"
+        "ACTION_BAR_ACTION"
       ],
       "effects": [
         {
@@ -5720,8 +5966,7 @@
       "resource_kind": "STAMINA",
       "resource_cost": 20,
       "ability_tags": [
-        "ACTION_BAR_ACTION",
-        "CORE_ABILITY"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 10,
       "gameplay": {
@@ -6571,6 +6816,50 @@
       }
     },
     {
+      "ability_id": "DAGGER_TEMPLE_STRIKE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "TEMPLE_STRIKE",
+      "display_name": "Temple Strike",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 67,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 5000,
+          "max_distance": 2.5,
+          "damage_type": "PHYSICAL",
+          "status_stack_group": "CONFUSION",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "CONFUSION",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MENTAL"
+            ]
+          }
+        }
+      }
+    },
+    {
       "ability_id": "SUBTLETY_TACTICAL_ADVANTAGE",
       "actor_scope": "PLAYER",
       "discipline_id": "SUBTLETY",
@@ -6581,7 +6870,7 @@
       "ability_tags": [
         "PASSIVE"
       ],
-      "sort_order": 67,
+      "sort_order": 68,
       "gameplay": {
         "kind": "PASSIVE",
         "behind_target_damage_bonus": 0.15
@@ -6598,7 +6887,7 @@
       "ability_tags": [
         "PASSIVE"
       ],
-      "sort_order": 68,
+      "sort_order": 69,
       "gameplay": {
         "kind": "PASSIVE",
         "dodge_recharge_time_reduction": 0.2
@@ -6615,7 +6904,7 @@
       "ability_tags": [
         "PASSIVE"
       ],
-      "sort_order": 69,
+      "sort_order": 70,
       "gameplay": {
         "kind": "PASSIVE",
         "movement_return": {
@@ -6633,8 +6922,7 @@
       "resource_kind": "STAMINA",
       "resource_cost": 12,
       "ability_tags": [
-        "ACTION_BAR_ACTION",
-        "CORE_ABILITY"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 10,
       "gameplay": {
@@ -8304,6 +8592,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_FLURRY",
+      "display_name": "Flurry",
+      "description": "Surrounds a party member or yourself with quickening winds for 20 seconds. Auto attacks gain a weapon-speed-scaled chance to trigger additional ghostly attacks, and each Flurry attack can trigger another.",
+      "sort_order": 93
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_GUST_OF_WIND",
       "display_name": "Gust of Wind",
       "description": "Blasts enemies in a frontal cone, knocking them backward without dealing damage.",
@@ -8315,6 +8610,34 @@
       "display_name": "Buffet",
       "description": "Strikes the target with a burst of air, interrupting its current cast.",
       "sort_order": 93
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_EARTH_BLAST",
+      "display_name": "Earth Blast",
+      "description": "Blasts a nearby enemy with primal earth, dealing physical damage and stunning it for 1 second.",
+      "sort_order": 94
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_TIDAL_BLAST",
+      "display_name": "Tidal Blast",
+      "description": "Blasts a nearby enemy with a crushing tide, dealing physical damage and purging one buff.",
+      "sort_order": 95
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_LAVA_BLAST",
+      "display_name": "Lava Blast",
+      "description": "Blasts a nearby enemy with lava, dealing fire damage and burning it for additional damage over time.",
+      "sort_order": 96
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_WIND_BLAST",
+      "display_name": "Wind Blast",
+      "description": "Blasts a nearby enemy with compressed wind, dealing physical damage and knocking it backward.",
+      "sort_order": 97
     },
     {
       "presentation_kind": "ABILITY",
@@ -8511,6 +8834,20 @@
       "display_name": "Transpose",
       "description": "Instantly swaps positions with the target and cancels any movement the target has in progress.",
       "sort_order": 106
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_MIRROR_IMAGE",
+      "display_name": "Mirror Image",
+      "description": "Surrounds a friendly target with three mirror images for 20 seconds. Each image independently has a 25% chance to intercept a single-target melee or spell attack and is destroyed when it does. Damaging area attacks destroy all images and still hit the target.",
+      "sort_order": 107
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "MIRROR_IMAGE",
+      "display_name": "Mirror Image",
+      "description": "Each remaining image independently has a 25% chance to intercept a single-target attack. Damaging area attacks destroy all images without preventing damage.",
+      "sort_order": 108
     },
     {
       "presentation_kind": "ABILITY",
@@ -9076,7 +9413,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "SUBTLETY_OPPORTUNIST",
       "display_name": "Opportunist",
-      "description": "Deal 15% increased damage to enemies disabled by stun, freeze, fear, intimidation, stagger, or knockdown.",
+      "description": "Deal 15% increased damage to enemies disabled by stun, freeze, fear, intimidation, confusion, stagger, or knockdown.",
       "sort_order": 241
     },
     {
@@ -9116,24 +9453,31 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_TEMPLE_STRIKE",
+      "display_name": "Temple Strike",
+      "description": "Confuse a hostile target for 5 seconds, taking away their control and making them wander unpredictably in a small area. Any damage ends Confusion.",
+      "sort_order": 247
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "SUBTLETY_TACTICAL_ADVANTAGE",
       "display_name": "Tactical Advantage",
       "description": "Passive: deal 15% increased damage while behind the target.",
-      "sort_order": 247
+      "sort_order": 248
     },
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "SUBTLETY_FLEET_FOOTED",
       "display_name": "Fleet Footed",
       "description": "Passive: reduce Dodge recharge time by 20%.",
-      "sort_order": 248
+      "sort_order": 249
     },
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "SUBTLETY_LINGERING_SHADE",
       "display_name": "Lingering Shade",
       "description": "Passive: using Dodge, a gap closer, or a teleport leaves a shade at your starting location for 3 seconds. Recast that ability at no cost to return. Only one shade can exist at a time.",
-      "sort_order": 249
+      "sort_order": 250
     },
     {
       "presentation_kind": "ABILITY",
@@ -9214,6 +9558,13 @@
     },
     {
       "presentation_kind": "STATUS",
+      "presentation_id": "FLURRY",
+      "display_name": "Flurry",
+      "description": "Auto attacks can trigger additional ghostly attacks. The flat chance is 15% at a 3.5-second weapon cadence and decreases for faster attacks; Flurry attacks can trigger again.",
+      "sort_order": 10020
+    },
+    {
+      "presentation_kind": "STATUS",
       "presentation_id": "BATTLE_CRY",
       "display_name": "Battle Cry",
       "description": "Damage dealt increased by 10%.",
@@ -9228,6 +9579,13 @@
     },
     {
       "presentation_kind": "STATUS",
+      "presentation_id": "CONFUSION",
+      "display_name": "Confused",
+      "description": "Unable to act or control movement; wanders unpredictably nearby. Any damage ends this mental effect.",
+      "sort_order": 10031
+    },
+    {
+      "presentation_kind": "STATUS",
       "presentation_id": "WITHERING_ORB_SLOW",
       "display_name": "Slowed",
       "description": "Movement speed is reduced. Additional stacks increase the slow.",
@@ -9239,6 +9597,13 @@
       "display_name": "Burning",
       "description": "Takes fire damage over time.",
       "sort_order": 10045
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "LAVA_BLAST_BURN",
+      "display_name": "Burning",
+      "description": "Takes fire damage over time from Lava Blast.",
+      "sort_order": 10058
     },
     {
       "presentation_kind": "STATUS",
@@ -10656,6 +11021,32 @@
     },
     {
       "owner_kind": "ABILITY",
+      "owner_id": "SPELL_MIRROR_IMAGE",
+      "slot": "target_attachment",
+      "trigger": "STATUS_ACTIVE",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_MIRROR_IMAGE_ACTIVE_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_STATUS_END",
+      "duration_ms": 0,
+      "sort_order": 207
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "DAGGER_TEMPLE_STRIKE",
+      "slot": "target_attachment",
+      "trigger": "STATUS_ACTIVE",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_CONFUSION_ACTIVE_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_STATUS_END",
+      "duration_ms": 0,
+      "sort_order": 208
+    },
+    {
+      "owner_kind": "ABILITY",
       "owner_id": "PALADIN_WARDING_AURA",
       "trigger": "SPELL_RELEASE",
       "anchor": "CASTER",
@@ -10771,6 +11162,58 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 203
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_EARTH_BLAST",
+      "slot": "blast",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_PRIMAL_FOUR_ELEMENTS_FORWARD_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 332
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_TIDAL_BLAST",
+      "slot": "blast",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_PRIMAL_FOUR_ELEMENTS_FORWARD_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 333
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_LAVA_BLAST",
+      "slot": "blast",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_PRIMAL_FOUR_ELEMENTS_FORWARD_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 334
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_WIND_BLAST",
+      "slot": "blast",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_PRIMAL_FOUR_ELEMENTS_FORWARD_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 335
     },
     {
       "owner_kind": "ABILITY",

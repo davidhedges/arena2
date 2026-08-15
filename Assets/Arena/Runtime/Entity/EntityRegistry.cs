@@ -1678,6 +1678,21 @@ namespace Arena.Entity
                 return;
             }
 
+            if (string.Equals(
+                    row.MetadataKind,
+                    CombatEventMetadataKinds.FlurryProc,
+                    System.StringComparison.Ordinal))
+            {
+                if (TryGetLivePlayer(row.Caster, out var flurryCaster))
+                {
+                    flurryCaster.PlayAutoAttackGhost(
+                        row.ActionKind,
+                        row.CreatedAt.MicrosecondsSinceUnixEpoch / 1000L,
+                        new Vector3(row.PointX, row.PointY, row.PointZ));
+                }
+                return;
+            }
+
             if (_hasLocalIdentity && row.Caster == _localIdentity)
             {
                 ActionBarTrace.Trace(

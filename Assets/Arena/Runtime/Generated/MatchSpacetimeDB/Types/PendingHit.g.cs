@@ -36,6 +36,8 @@ namespace Arena.MatchDb
         public string DamageSourceKind;
         [DataMember(Name = "direct_action_key")]
         public string DirectActionKey;
+        [DataMember(Name = "is_area")]
+        public bool IsArea;
         [DataMember(Name = "queued_at")]
         public SpacetimeDB.Timestamp QueuedAt;
         [DataMember(Name = "queued_at_micros")]
@@ -55,6 +57,7 @@ namespace Arena.MatchDb
             string DamageDelivery,
             string DamageSourceKind,
             string DirectActionKey,
+            bool IsArea,
             SpacetimeDB.Timestamp QueuedAt,
             long QueuedAtMicros,
             ulong QueuedOrder
@@ -71,6 +74,7 @@ namespace Arena.MatchDb
             this.DamageDelivery = DamageDelivery;
             this.DamageSourceKind = DamageSourceKind;
             this.DirectActionKey = DirectActionKey;
+            this.IsArea = IsArea;
             this.QueuedAt = QueuedAt;
             this.QueuedAtMicros = QueuedAtMicros;
             this.QueuedOrder = QueuedOrder;

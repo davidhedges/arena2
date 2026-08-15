@@ -12,6 +12,8 @@ namespace Arena.Presentation
         private const string VfxNegate = "VFX_NEGATE_01";
         private const string VfxInstantBeam = "VFX_INSTANT_BEAM_01";
         private const string VfxElectrocuteBeam = "VFX_ELECTROCUTE_BEAM_01";
+        private const string VfxMirrorImageActive = "VFX_MIRROR_IMAGE_ACTIVE_01";
+        private const string VfxConfusionActive = "VFX_CONFUSION_ACTIVE_01";
         private const string VfxVerdantSpiritsActive = "VFX_VERDANT_SPIRITS_ACTIVE_01";
 
         private static readonly string[] ScriptedTemplateIds =
@@ -19,6 +21,8 @@ namespace Arena.Presentation
             VfxNegate,
             VfxInstantBeam,
             VfxElectrocuteBeam,
+            VfxMirrorImageActive,
+            VfxConfusionActive,
             VfxVerdantSpiritsActive,
         };
 
@@ -64,6 +68,8 @@ namespace Arena.Presentation
                 VfxNegate => new NegateVFX(context),
                 VfxInstantBeam => new BeamVFX(context, false, new Color(1f, 1f, 0.2f)),
                 VfxElectrocuteBeam => new BeamVFX(context, true, new Color(0.9f, 0.95f, 0.2f)),
+                VfxMirrorImageActive => new MirrorImageVFX(context),
+                VfxConfusionActive => new ConfusionVFX(context),
                 VfxVerdantSpiritsActive => new VerdantSpiritsVFX(context),
                 _ => null,
             };

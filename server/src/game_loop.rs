@@ -1889,7 +1889,7 @@ fn try_tick_special_movement_player(
     ctx: &ReducerContext,
     identity: Identity,
     now: Timestamp,
-    movement_blocked: bool,
+    movement_input_blocked: bool,
     move_speed_multiplier: f32,
     physics: &mut PlayerPhysics,
     state: &mut crate::player_state::PlayerState,
@@ -1942,7 +1942,7 @@ fn try_tick_special_movement_player(
 
     let state_changed = sync_player_movement_context(
         state,
-        movement_blocked,
+        movement_input_blocked,
         move_speed_multiplier,
         next_input_tick,
     );
@@ -2014,6 +2014,8 @@ fn tick_player(
 
     let next_input_tick = physics.last_processed_tick.saturating_add(1);
     let movement_blocked = movement_modifiers.blocks_movement(&identity);
+    let confused = movement_modifiers.is_confused(&identity);
+    let movement_input_blocked = movement_blocked || confused;
     let mut move_speed_multiplier =
         movement_modifiers.move_speed_multiplier(&identity, next_input_tick);
 
@@ -2073,7 +2075,7 @@ fn tick_player(
         ctx,
         identity,
         now,
-        movement_blocked,
+        movement_input_blocked,
         move_speed_multiplier,
         &mut physics,
         &mut state,
@@ -2115,6 +2117,35 @@ fn tick_player(
         step_intent.input_tick = next_input_tick;
         step_intent.updated_at = now;
     }
+    let retained_step_intent = PlayerIntent {
+        identity,
+        forward: step_intent.forward,
+        strafe: step_intent.strafe,
+        yaw: step_intent.yaw,
+        jump: false,
+        input_tick: step_intent.input_tick,
+        updated_at: step_intent.updated_at,
+    };
+
+    let confusion_directive = if confused && !movement_blocked {
+        crate::confusion::confusion_wander_directive(
+            ctx,
+            identity,
+            physics.pos_x,
+            physics.pos_z,
+            now,
+        )
+    } else {
+        None
+    };
+    if let Some(directive) = confusion_directive {
+        step_intent.forward = if directive.standing { 0.0 } else { 1.0 };
+        step_intent.strafe = 0.0;
+        if !directive.standing {
+            step_intent.yaw = directive.yaw;
+        }
+        step_intent.jump = false;
+    }
 
     // S5: publish this tick's consume truth beside the ack so the client's
     // lead control loop sees starvation/surplus instead of guessing.
@@ -2126,6 +2157,8 @@ fn tick_player(
     move_speed_multiplier *= equipment.move_speed_multiplier();
 
     let grounded_before_step = physics.grounded;
+    let step_start_x = physics.pos_x;
+    let step_start_z = physics.pos_z;
     simulate_non_dummy_player_kinematics(
         ctx,
         identity,
@@ -2141,8 +2174,19 @@ fn tick_player(
         state.hit_radius,
         state.hit_height,
     );
+    if let Some(directive) = confusion_directive {
+        let (resolved_x, resolved_z) = crate::confusion::clamp_completed_wander_step(
+            step_start_x,
+            step_start_z,
+            physics.pos_x,
+            physics.pos_z,
+            directive,
+        );
+        physics.pos_x = resolved_x;
+        physics.pos_z = resolved_z;
+    }
     physics.last_processed_tick = next_input_tick;
-    if apply_player_intent_fallback_if_changed(&mut intent, &step_intent) {
+    if apply_player_intent_fallback_if_changed(&mut intent, &retained_step_intent) {
         record_table_write(TableWriteKind::PlayerIntent);
         ctx.db.player_intent().identity().update(intent);
     }
@@ -2153,14 +2197,14 @@ fn tick_player(
     tick_primary_resource_for_player(ctx, identity, now, dt, &resource_inputs);
     let voluntary_epoch_changed = sync_player_voluntary_move_epoch(
         &mut state,
-        movement_blocked,
+        movement_input_blocked,
         &step_intent,
         grounded_before_step,
         applied_command_input_tick,
     );
     let state_changed = sync_player_movement_context(
         &mut state,
-        movement_blocked,
+        movement_input_blocked,
         move_speed_multiplier,
         next_input_tick,
     ) || voluntary_epoch_changed;

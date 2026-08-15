@@ -410,6 +410,7 @@ fn push_on_hit_effects(
                 delivery: DamageDelivery::Direct,
                 source_kind: DAMAGE_SOURCE_KIND_TRAP.to_string(),
                 direct_action_key: String::new(),
+                is_area: false,
             }),
             EFFECT_KIND_DOT => effects.push(EffectPacket::ApplyStatus {
                 source: Identity::ZERO,

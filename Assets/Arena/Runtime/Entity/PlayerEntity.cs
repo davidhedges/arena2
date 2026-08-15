@@ -308,6 +308,7 @@ namespace Arena.Entity
             { "FREEZE",     new Color(0.35f, 0.85f, 1.0f) },
             { "INTIMIDATED", new Color(0.75f, 0.35f, 1.0f) },
             { "FEAR",        new Color(0.75f, 0.35f, 1.0f) },
+            { "CONFUSION",   new Color(0.9f, 0.35f, 1.0f) },
             { "KNOCKDOWN",  new Color(0.95f, 0.55f, 0.2f) },
             { "burn",       new Color(1.0f, 0.4f, 0.1f) },
             { "DOT",        new Color(1.0f, 0.4f, 0.1f) },
@@ -318,7 +319,9 @@ namespace Arena.Entity
             { "SILENCE", new Color(0.65f, 0.35f, 1.0f) },
             { "DAMAGE_TAKEN_REDUCTION", new Color(1.0f, 0.72f, 0.18f) },
             { "TARGETED_ABILITY_AVOIDANCE", new Color(0.65f, 0.95f, 1.0f) },
+            { "MIRROR_IMAGE", new Color(0.55f, 0.45f, 1.0f) },
             { "GIGANTISM", new Color(0.45f, 0.9f, 0.55f) },
+            { "FLURRY", new Color(0.5f, 0.9f, 1.0f) },
             { "RECKONING", new Color(1.0f, 0.72f, 0.18f) },
             { "DAMAGE_REDIRECT", new Color(1.0f, 0.86f, 0.45f) },
         };
@@ -402,6 +405,8 @@ namespace Arena.Entity
         }
 
         public void RequestCombatAnimation(in CombatAnimationRequest request) => _animator?.RequestCombatAnimation(request);
+        public void PlayAutoAttackGhost(string actionId, long startedAtMs, Vector3 facingTargetPoint)
+            => _animator?.PlayAutoAttackGhost(actionId, startedAtMs, facingTargetPoint);
         public void BeginWorldInteractionAnimation(ActiveWorldInteraction row)
             => _animator?.BeginWorldInteractionAnimation(row);
         public void EndWorldInteractionAnimation(string actionInstanceId, bool completed)

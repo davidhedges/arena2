@@ -472,9 +472,19 @@ pub(crate) struct TravelingAreaProjectileTunables {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum ImpactEffect {
     Status(StatusApplication),
-    Knockback { distance_meters: f32 },
+    Knockback {
+        distance_meters: f32,
+    },
+    RemoveStatus {
+        polarity: Option<StatusPolarity>,
+        dispel_types: Vec<StatusDispelType>,
+        max_count: u32,
+    },
     InterruptCast,
-    InterruptCastWithDamage { damage: i32, damage_type: String },
+    InterruptCastWithDamage {
+        damage: i32,
+        damage_type: String,
+    },
 }
 
 impl PartialEq<StatusApplication> for ImpactEffect {
@@ -487,9 +497,10 @@ impl ImpactEffect {
     pub(crate) fn as_status(&self) -> Option<&StatusApplication> {
         match self {
             Self::Status(status) => Some(status),
-            Self::Knockback { .. } | Self::InterruptCast | Self::InterruptCastWithDamage { .. } => {
-                None
-            }
+            Self::Knockback { .. }
+            | Self::RemoveStatus { .. }
+            | Self::InterruptCast
+            | Self::InterruptCastWithDamage { .. } => None,
         }
     }
 
@@ -553,6 +564,16 @@ impl ImpactEffect {
                 dir_x,
                 dir_z,
                 distance_meters: *distance_meters,
+            },
+            Self::RemoveStatus {
+                polarity,
+                dispel_types,
+                max_count,
+            } => EffectPacket::RemoveStatusByFilter {
+                target,
+                polarity: *polarity,
+                dispel_types: dispel_types.clone(),
+                max_count: *max_count,
             },
             Self::InterruptCast => EffectPacket::InterruptCast {
                 source,
@@ -745,8 +766,11 @@ mod tests {
     use std::collections::HashSet;
     use std::time::Duration;
 
+    use spacetimedb::Identity;
+
     use crate::combat::{
-        DamageType, StackPolicy, StatusDispelType, StatusEffectKind, StatusPayload, StatusPolarity,
+        DamageType, EffectPacket, StackPolicy, StatusDispelType, StatusEffectKind, StatusPayload,
+        StatusPolarity,
     };
     use crate::relations::TargetAudience;
 
@@ -900,7 +924,12 @@ mod tests {
             "FROZEN_GRASP",
             "GUST_OF_WIND",
             "BUFFET",
+            "EARTH_BLAST",
+            "TIDAL_BLAST",
+            "LAVA_BLAST",
+            "WIND_BLAST",
             "GIGANTISM",
+            "FLURRY",
             "VERDANT_SPIRITS",
             "REBUKE",
             "FROST_NEEDLE",
@@ -942,6 +971,10 @@ mod tests {
             "FROZEN_SPLINTERS",
             "MAGIC_MISSILE",
             "GLACIAL_SPIKE",
+            "EARTH_BLAST",
+            "TIDAL_BLAST",
+            "LAVA_BLAST",
+            "WIND_BLAST",
         ] {
             assert!(definition(id).arms_auto_attack_on_cast);
         }
@@ -958,6 +991,7 @@ mod tests {
             "GUST_OF_WIND",
             "BUFFET",
             "GIGANTISM",
+            "FLURRY",
             "VERDANT_SPIRITS",
             "REBUKE",
             "FROST_NEEDLE",
@@ -1286,6 +1320,72 @@ mod tests {
         assert_eq!(status.stack_policy, StackPolicy::Refresh);
         assert!((definition.primary_resource_gain_on_cast - 0.0).abs() < 0.0001);
         assert!(!definition.generates_primary_resource_on_cast);
+    }
+
+    #[test]
+    fn mirror_image_catalog_matches_targeted_three_charge_buff() {
+        let definition = definition("MIRROR_IMAGE");
+
+        assert_eq!(definition.kind.as_str(), "MIRROR_IMAGE");
+        assert_eq!(definition.cooldown, Duration::from_secs(30));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.duration, 20.0);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert_eq!(
+            definition.status_stack_group.as_deref(),
+            Some("MIRROR_IMAGE")
+        );
+        assert_eq!(
+            definition.apply_status_polarity,
+            Some(crate::combat::StatusPolarity::Buff)
+        );
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Mirror Image should define an apply-status payload");
+        assert_eq!(status.kind, StatusEffectKind::MirrorImage);
+        assert_eq!(status.max_stacks, 3);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert_eq!(status.dispel_types, vec![StatusDispelType::Magic]);
+    }
+
+    #[test]
+    fn temple_strike_catalog_matches_five_second_mental_confusion_contract() {
+        let definition = definition("TEMPLE_STRIKE");
+
+        assert_eq!(definition.cooldown, Duration::from_secs(12));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cast_mobility, SpellCastMobility::Mobile);
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.max_distance, 2.5);
+        assert_eq!(definition.duration, 5.0);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert!(!definition.arms_auto_attack_on_cast);
+        assert_eq!(definition.status_stack_group.as_deref(), Some("CONFUSION"));
+        assert_eq!(
+            definition.apply_status_polarity,
+            Some(StatusPolarity::Debuff)
+        );
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Temple Strike should define Confusion");
+        assert_eq!(status.payload(), StatusPayload::Confusion);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert_eq!(status.dispel_types, vec![StatusDispelType::Mental]);
     }
 
     #[test]
@@ -1724,6 +1824,82 @@ mod tests {
     }
 
     #[test]
+    fn primal_blast_catalog_matches_short_range_instant_contracts() {
+        for (spell_id, damage_type) in [
+            ("EARTH_BLAST", DamageType::Physical),
+            ("TIDAL_BLAST", DamageType::Physical),
+            ("LAVA_BLAST", DamageType::Fire),
+            ("WIND_BLAST", DamageType::Physical),
+        ] {
+            let definition = definition(spell_id);
+            assert_eq!(definition.cooldown, Duration::from_millis(1_200));
+            assert!(definition.uses_global_cooldown);
+            assert_eq!(definition.cast_time, Duration::ZERO);
+            assert_eq!(definition.cast_mobility, SpellCastMobility::Mobile);
+            assert_eq!(definition.behavior, SpellBehavior::DirectTarget);
+            assert_eq!(definition.targeting, SpellTargeting::Target);
+            assert_eq!(definition.target_audience, TargetAudience::Hostile);
+            assert!(definition.requires_target);
+            assert!(definition.requires_target_los);
+            assert_eq!(definition.damage, 30);
+            assert_eq!(definition.damage_type, damage_type);
+            assert_eq!(definition.max_distance, 8.0);
+            assert_eq!(definition.primary_resource_cost, 0.0);
+            assert!(definition.arms_auto_attack_on_cast);
+            let direct_target = definition
+                .secondary
+                .direct_target
+                .as_ref()
+                .expect("Primal blasts should define direct-target secondary data");
+            assert_eq!(direct_target.parry_behavior, SpellParryBehavior::Parryable);
+            assert_eq!(direct_target.impact_effects.len(), 1);
+        }
+
+        let tidal = definition("TIDAL_BLAST");
+        assert_eq!(
+            tidal
+                .secondary
+                .direct_target
+                .as_ref()
+                .unwrap()
+                .impact_effects,
+            vec![ImpactEffect::RemoveStatus {
+                polarity: Some(StatusPolarity::Buff),
+                dispel_types: Vec::new(),
+                max_count: 1,
+            }]
+        );
+        let tidal_effect = &tidal
+            .secondary
+            .direct_target
+            .as_ref()
+            .unwrap()
+            .impact_effects[0];
+        match tidal_effect.to_effect_packet(
+            Identity::ZERO,
+            Identity::ZERO,
+            "tidal-instance",
+            StatusPolarity::Debuff,
+            "tidal-action",
+            0.0,
+            1.0,
+        ) {
+            EffectPacket::RemoveStatusByFilter {
+                target,
+                polarity,
+                dispel_types,
+                max_count,
+            } => {
+                assert_eq!(target, Identity::ZERO);
+                assert_eq!(polarity, Some(StatusPolarity::Buff));
+                assert!(dispel_types.is_empty());
+                assert_eq!(max_count, 1);
+            }
+            _ => panic!("Tidal Blast should queue one filtered buff removal"),
+        }
+    }
+
+    #[test]
     fn gigantism_catalog_matches_targeted_primal_buff_contract() {
         let definition = definition("GIGANTISM");
 
@@ -1751,6 +1927,41 @@ mod tests {
             status.payload(),
             StatusPayload::Gigantism {
                 modifier_scalar: 0.20,
+            }
+        );
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert_eq!(status.dispel_types, vec![StatusDispelType::Magic]);
+    }
+
+    #[test]
+    fn flurry_catalog_matches_targeted_primal_buff_contract() {
+        let definition = definition("FLURRY");
+
+        assert_eq!(definition.kind.as_str(), "FLURRY");
+        assert_eq!(definition.cooldown, Duration::from_secs(30));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cast_mobility, SpellCastMobility::Mobile);
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.duration, 20.0);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert!(!definition.arms_auto_attack_on_cast);
+        assert_eq!(definition.status_stack_group.as_deref(), Some("FLURRY"));
+        assert_eq!(definition.apply_status_polarity, Some(StatusPolarity::Buff));
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Flurry should define an apply-status payload");
+        assert_eq!(
+            status.payload(),
+            StatusPayload::Flurry {
+                modifier_scalar: 0.15,
             }
         );
         assert_eq!(status.max_stacks, 1);

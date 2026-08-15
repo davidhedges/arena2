@@ -168,6 +168,40 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void CombatVfxRegistryGrouping_DerivesDisciplinesFromCatalogCueOwners()
+        {
+            Type dataType = AppDomain.CurrentDomain.Load("Assembly-CSharp-Editor")
+                .GetType("Arena.Editor.SpellPresentationEditorData", throwOnError: true)!;
+            MethodInfo load = dataType.GetMethod(
+                "LoadCombatVfxDisciplineUsage",
+                BindingFlags.Public | BindingFlags.Static)!;
+            object?[] args = { null, null };
+            var usageByVfxId = (IDictionary)load.Invoke(null, args)!;
+
+            Assert.That(args[1], Is.EqualTo(string.Empty));
+            Assert.That(DisciplineIds("VFX_DARK_BURST_01_ARENA2"), Is.EqualTo(new[] { "WAR" }));
+            Assert.That(DisciplineIds("VFX_PRIMAL_FOUR_ELEMENTS_FORWARD_01"), Is.EqualTo(new[] { "PRIMAL" }));
+            Assert.That(DisciplineIds("VFX_ARCANE_CAST_HAND_01"), Is.EqualTo(new[] { "RUIN", "ARCANA" }));
+            Assert.That(DisciplineIds("ARROW_STANDARD"), Is.Empty);
+            Assert.That(usageByVfxId.Contains("VFX_DARK_BURST_01_ARENA"), Is.False);
+
+            List<string> DisciplineIds(string vfxId)
+            {
+                object usage = usageByVfxId[vfxId]!;
+                var disciplines = (IEnumerable)usage.GetType().GetProperty("Disciplines")!.GetValue(usage)!;
+                var ids = new List<string>();
+                foreach (object discipline in disciplines)
+                {
+                    ids.Add((string)discipline.GetType()
+                        .GetProperty("DisciplineId")!
+                        .GetValue(discipline)!);
+                }
+
+                return ids;
+            }
+        }
+
+        [Test]
         public void SpellVfxOverrides_AreAssetAuthoredUniqueAndOutsideSource()
         {
             string[] guids = AssetDatabase.FindAssets("t:SpellVfxOverrideCatalog");

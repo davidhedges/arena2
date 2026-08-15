@@ -503,6 +503,7 @@ namespace Arena.Input
                     case "FREEZE":
                     case "INTIMIDATED":
                     case "FEAR":
+                    case "CONFUSION":
                     case "STAGGER":
                     case "KNOCKDOWN":
                         return true;

@@ -180,6 +180,7 @@ pub(crate) fn clear_transient_actor_state(ctx: &ReducerContext, identity: Identi
     crate::spells::clear_capacitor_charge(ctx, identity);
     crate::combat::clear_potential_state_for_owner(ctx, identity);
     clear_lingering_shade_for_owner(ctx, identity);
+    crate::confusion::clear_confusion_wander(ctx, identity);
     // Ordinary cast cleanup preserves externally imposed movement. Actor
     // teardown never does: reconnect/despawn cannot retain any live track.
     ctx.db.special_movement_runtime().owner().delete(identity);
@@ -337,13 +338,14 @@ mod tests {
     /// Per-identity transient tables (or the helpers that own their deletion)
     /// that the unified teardown must cover. Add every new transient table's
     /// accessor here AND to `clear_transient_actor_state`.
-    const TRANSIENT_TEARDOWN_MARKERS: [&str; 27] = [
+    const TRANSIENT_TEARDOWN_MARKERS: [&str; 28] = [
         "clear_player_combat_state",
         "clear_active_cast",
         "clear_recall_slot",
         "clear_capacitor_charge",
         "clear_potential_state_for_owner",
         "clear_lingering_shade_for_owner",
+        "clear_confusion_wander",
         "clear_movement_action_for_owner",
         "clear_pending_player_commands",
         "clear_world_obstacles_for_owner",

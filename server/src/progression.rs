@@ -691,6 +691,7 @@ fn authored_status_stack_group_default(kind: &str) -> StatusStackGroupDefault {
         "STUN" => StatusStackGroupDefault::ActionSuffix("STUN"),
         "FREEZE" => StatusStackGroupDefault::ActionSuffix("FREEZE"),
         "INTIMIDATED" => StatusStackGroupDefault::ActionSuffix("INTIMIDATED"),
+        "CONFUSION" => StatusStackGroupDefault::ActionSuffix("CONFUSION"),
         "KNOCKDOWN" => StatusStackGroupDefault::ActionSuffix("KNOCKDOWN"),
         "SLOW" => StatusStackGroupDefault::ActionSuffix("SLOW"),
         "MOVE_SPEED" => StatusStackGroupDefault::ActionSuffix("MOVE_SPEED"),
@@ -1189,28 +1190,6 @@ fn validate_progression_catalog_authoring_contract(catalog: &ProgressionCatalogF
             cue.vfx_id
         );
     }
-
-    let default_ability_assignments: HashSet<String> = catalog
-        .combat_profile_action_bar_defaults
-        .iter()
-        .filter_map(|assignment| {
-            let action_ref = action_ref_for_action_bar_default(assignment);
-            action_ref.is_ability().then_some(action_ref.id)
-        })
-        .collect();
-    for ability in &catalog.abilities {
-        let ability_id = normalize_identifier(ability.ability_id.as_str());
-        let is_core = ability
-            .ability_tags
-            .iter()
-            .any(|tag| normalize_identifier(tag.as_str()) == "CORE_ABILITY");
-        let is_spell = ability_gameplay_kind(ability) == "SPELL";
-        assert!(
-            !is_core || is_spell || default_ability_assignments.contains(ability_id.as_str()),
-            "core non-spell ability '{}' must have a action-bar default",
-            ability.ability_id
-        );
-    }
 }
 
 fn authored_status_presentation_ids(catalog: &ProgressionCatalogFile) -> HashSet<String> {
@@ -1254,6 +1233,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::Freeze,
         StatusEffectKind::Intimidated,
         StatusEffectKind::Fear,
+        StatusEffectKind::Confusion,
         StatusEffectKind::Stagger,
         StatusEffectKind::Knockdown,
         StatusEffectKind::Slow,
@@ -1282,6 +1262,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::Berserking,
         StatusEffectKind::BattleTrance,
         StatusEffectKind::TargetedAbilityAvoidance,
+        StatusEffectKind::MirrorImage,
         StatusEffectKind::Fulmination,
         StatusEffectKind::Quickening,
         StatusEffectKind::Rime,
@@ -7283,12 +7264,12 @@ mod tests {
         assert!(ability_tags_allow_discipline_selection("ACTION_BAR_ACTION"));
         assert!(ability_tags_allow_discipline_selection("PASSIVE"));
         assert!(ability_tags_allow_discipline_selection(
-            "CORE_ABILITY, PASSIVE"
+            "ACTION_BAR_ACTION,PASSIVE"
         ));
-        let encoded = encode_tags(&["CORE_ABILITY".to_string(), "ACTION_BAR_ACTION".to_string()]);
-        assert_eq!(encoded, "ACTION_BAR_ACTION,CORE_ABILITY");
+        let encoded = encode_tags(&["PASSIVE".to_string(), "ACTION_BAR_ACTION".to_string()]);
+        assert_eq!(encoded, "ACTION_BAR_ACTION,PASSIVE");
         assert!(ability_tags_allow_discipline_selection(encoded.as_str()));
-        assert!(!ability_tags_allow_discipline_selection("CORE_ABILITY"));
+        assert!(!ability_tags_allow_discipline_selection("INTERNAL_ONLY"));
     }
 
     #[test]
@@ -7554,7 +7535,6 @@ mod tests {
         authored_action_id: String,
         action_bar_default_slots: Vec<String>,
         has_action_bar_action_tag: bool,
-        has_core_ability_tag: bool,
         has_ability_presentation: bool,
         melee_matches_authored_strike: bool,
         melee_matches_runtime_slot: bool,
@@ -7576,7 +7556,6 @@ mod tests {
         AutoAttackReplacementResolves,
         AutoAttackReplacementStrikeMatchesAuthoredStrike,
         CombatProfileActionBarDefaultResolves,
-        CoreAbilityHasActionBarDefault,
         PlayerFacingActionHasPresentation,
         PresentationTargetResolves,
         SpellPresentationNotAuthored,
@@ -7602,7 +7581,6 @@ mod tests {
                 Self::CombatProfileActionBarDefaultResolves => {
                     "combat-profile-action-bar-default-resolves"
                 }
-                Self::CoreAbilityHasActionBarDefault => "core-ability-has-action-bar-default",
                 Self::PlayerFacingActionHasPresentation => "player-facing-action-has-presentation",
                 Self::PresentationTargetResolves => "presentation-target-resolves",
                 Self::SpellPresentationNotAuthored => "spell-presentation-not-authored",
@@ -7649,10 +7627,6 @@ mod tests {
                     .ability_tags
                     .iter()
                     .any(|tag| normalize_identifier(tag.as_str()) == "ACTION_BAR_ACTION");
-                let has_core_ability_tag = ability
-                    .ability_tags
-                    .iter()
-                    .any(|tag| normalize_identifier(tag.as_str()) == "CORE_ABILITY");
                 let category = match ability_gameplay_kind(ability).as_str() {
                     "MELEE" => ResolvedAuthoringCategory::Melee,
                     "SPELL" => ResolvedAuthoringCategory::Spell,
@@ -7744,7 +7718,6 @@ mod tests {
                     authored_action_id,
                     action_bar_default_slots,
                     has_action_bar_action_tag,
-                    has_core_ability_tag,
                     has_ability_presentation,
                     melee_matches_authored_strike,
                     melee_matches_runtime_slot,
@@ -7901,18 +7874,6 @@ mod tests {
 
             let is_player_facing =
                 !action.action_bar_default_slots.is_empty() || action.has_action_bar_action_tag;
-            if action.has_core_ability_tag
-                && !matches!(action.category, ResolvedAuthoringCategory::Spell)
-                && action.action_bar_default_slots.is_empty()
-            {
-                errors.push(CombatAuthoringError::new(
-                    CombatAuthoringRule::CoreAbilityHasActionBarDefault,
-                    format!(
-                        "core non-spell ability '{}' must have an action-bar default",
-                        action.ability_id
-                    ),
-                ));
-            }
             if is_player_facing && !action.has_ability_presentation {
                 errors.push(CombatAuthoringError::new(
                     CombatAuthoringRule::PlayerFacingActionHasPresentation,
@@ -13353,6 +13314,107 @@ mod tests {
     }
 
     #[test]
+    fn primal_blast_family_authors_short_range_riders_and_shared_forward_vfx() {
+        let catalog = progression_catalog();
+        let expected = [
+            ("SPELL_EARTH_BLAST", "EARTH_BLAST", "PHYSICAL", "STUN"),
+            (
+                "SPELL_TIDAL_BLAST",
+                "TIDAL_BLAST",
+                "PHYSICAL",
+                "REMOVE_STATUS",
+            ),
+            ("SPELL_LAVA_BLAST", "LAVA_BLAST", "FIRE", "BURN"),
+            ("SPELL_WIND_BLAST", "WIND_BLAST", "PHYSICAL", "KNOCKBACK"),
+        ];
+
+        for (ability_id, action_id, damage_type, rider_kind) in expected {
+            let ability = catalog
+                .abilities
+                .iter()
+                .find(|ability| normalize_identifier(ability.ability_id.as_str()) == ability_id)
+                .unwrap_or_else(|| panic!("expected Primal blast ability {ability_id}"));
+            assert_eq!(normalize_identifier(ability.action_id.as_str()), action_id);
+            assert_eq!(
+                normalize_identifier(ability.gameplay.kind.as_str()),
+                "SPELL"
+            );
+            assert_eq!(ability.gameplay.cooldown_ms, Some(1_200));
+            assert_eq!(ability.gameplay.cast_time_ms, Some(0));
+            assert_eq!(
+                normalize_identifier(ability.gameplay.cast_mobility.as_str()),
+                "MOBILE"
+            );
+            assert_eq!(
+                normalize_identifier(ability.gameplay.targeting.as_str()),
+                "TARGET"
+            );
+            assert_eq!(ability.gameplay.requires_target, Some(true));
+            assert_eq!(ability.gameplay.requires_target_los, Some(true));
+
+            let delivery = ability
+                .gameplay
+                .delivery
+                .as_ref()
+                .expect("Primal blasts should author spell delivery");
+            assert_eq!(
+                delivery.get("kind").and_then(|value| value.as_str()),
+                Some("DIRECT_TARGET")
+            );
+            assert_eq!(
+                delivery
+                    .get("max_distance")
+                    .and_then(|value| value.as_f64()),
+                Some(8.0)
+            );
+            assert_eq!(
+                delivery.get("damage").and_then(|value| value.as_i64()),
+                Some(30)
+            );
+            assert_eq!(
+                delivery.get("damage_type").and_then(|value| value.as_str()),
+                Some(damage_type)
+            );
+            let effects = delivery
+                .get("impact_effects")
+                .and_then(|value| value.as_array())
+                .expect("Primal blasts should author one impact rider");
+            assert_eq!(effects.len(), 1);
+            assert_eq!(
+                effects[0].get("kind").and_then(|value| value.as_str()),
+                Some(rider_kind)
+            );
+
+            let cue = catalog
+                .combat_vfx_cues
+                .iter()
+                .find(|cue| {
+                    normalize_identifier(cue.owner_id.as_str()) == ability_id
+                        && normalize_identifier(cue.trigger.as_str()) == "SPELL_RELEASE"
+                })
+                .unwrap_or_else(|| panic!("{ability_id} should author a release VFX cue"));
+            assert_eq!(
+                normalize_identifier(cue.vfx_id.as_str()),
+                "VFX_PRIMAL_FOUR_ELEMENTS_FORWARD_01"
+            );
+            assert_eq!(normalize_identifier(cue.anchor.as_str()), "CASTER");
+            assert_eq!(
+                normalize_identifier(cue.attach_mode.as_str()),
+                "WORLD_ALIGNED_TO_FACING"
+            );
+        }
+
+        let tidal = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_TIDAL_BLAST")
+            .expect("Tidal Blast ability");
+        let tidal_effect = &tidal.gameplay.delivery.as_ref().unwrap()["impact_effects"][0];
+        assert_eq!(tidal_effect["polarity"].as_str(), Some("BUFF"));
+        assert_eq!(tidal_effect["max_count"].as_u64(), Some(1));
+    }
+
+    #[test]
     fn generic_spell_abilities_are_profile_neutral_and_author_damage_types() {
         let expected = [
             ("SPELL_FIREBALL", "FIREBALL", "FIRE"),
@@ -13380,8 +13442,13 @@ mod tests {
             ("SPELL_INSTANT_BEAM", "INSTANT_BEAM", "ARCANE"),
             ("SPELL_ORBITING_BLADES", "ORBITING_BLADES", "LIGHTNING"),
             ("SPELL_GIGANTISM", "GIGANTISM", "PHYSICAL"),
+            ("SPELL_FLURRY", "FLURRY", "AIR"),
             ("SPELL_GUST_OF_WIND", "GUST_OF_WIND", "AIR"),
             ("SPELL_BUFFET", "BUFFET", "AIR"),
+            ("SPELL_EARTH_BLAST", "EARTH_BLAST", "PHYSICAL"),
+            ("SPELL_TIDAL_BLAST", "TIDAL_BLAST", "PHYSICAL"),
+            ("SPELL_LAVA_BLAST", "LAVA_BLAST", "FIRE"),
+            ("SPELL_WIND_BLAST", "WIND_BLAST", "PHYSICAL"),
             ("SPELL_VERDANT_SPIRITS", "VERDANT_SPIRITS", "AIR"),
             ("SPELL_CELESTIAL_MANTLE", "CELESTIAL_MANTLE", "HOLY"),
             ("SPELL_HOLY_SHIELD", "HOLY_SHIELD", "HOLY"),
@@ -13482,8 +13549,13 @@ mod tests {
                 "PRIMAL",
                 &[
                     "SPELL_GIGANTISM",
+                    "SPELL_FLURRY",
                     "SPELL_GUST_OF_WIND",
                     "SPELL_BUFFET",
+                    "SPELL_EARTH_BLAST",
+                    "SPELL_TIDAL_BLAST",
+                    "SPELL_LAVA_BLAST",
+                    "SPELL_WIND_BLAST",
                     "SPELL_STONESPIRE",
                 ][..],
             ),
@@ -14124,6 +14196,7 @@ mod tests {
             ("DAGGER_BLADE_TWISTING", "BLADE_TWISTING", 86_400_000_u64),
             ("DAGGER_DISARM", "DISARM", 4_000_u64),
             ("DAGGER_GOUGE", "GOUGE", 4_000_u64),
+            ("DAGGER_TEMPLE_STRIKE", "CONFUSION", 5_000_u64),
         ];
         for (ability_id, status_kind, duration_ms) in expected {
             let ability = progression_catalog()
@@ -14162,7 +14235,13 @@ mod tests {
         let animation_ids = parse_spell_ids_from_animation_set_asset(
             animation_set_asset_for_combat_profile(COMBAT_PROFILE_DAGGERS),
         );
-        for spell_id in ["FIND_WEAKNESS", "BLADE_TWISTING", "DISARM", "GOUGE"] {
+        for spell_id in [
+            "FIND_WEAKNESS",
+            "BLADE_TWISTING",
+            "DISARM",
+            "GOUGE",
+            "TEMPLE_STRIKE",
+        ] {
             assert!(
                 animation_ids.contains(spell_id),
                 "Dagger animation set must map {spell_id}"

@@ -700,6 +700,20 @@ namespace Arena.Presentation
                 $"tracked={DescribeTrackedMeleePresentation()} layer={DescribeMeleeLayer()}");
         }
 
+        public void PlayAutoAttackGhost(string actionId, long startedAtMs, Vector3 facingTargetPoint)
+        {
+            if (string.IsNullOrWhiteSpace(actionId))
+                return;
+
+            var request = CombatAnimationRequest.Authoritative(
+                actionId,
+                CombatAnimationCategory.AutoAttack,
+                startedAtMs,
+                CombatEventSources.AutoAttack,
+                facingTargetPoint);
+            CaptureSuppressedAutoAttackGhost(request);
+        }
+
         public void BeginWorldInteractionAnimation(ActiveWorldInteraction row)
         {
             if (_isDead

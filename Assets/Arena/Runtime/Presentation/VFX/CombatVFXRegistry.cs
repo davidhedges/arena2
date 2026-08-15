@@ -177,6 +177,31 @@ namespace Arena.Presentation.VFX
             _templatesById = null;
         }
 
+        public bool SortEntriesAlphabetically()
+        {
+            var originalOrder = new Entry[entries.Count];
+            entries.CopyTo(originalOrder);
+            entries.Sort(CompareEntriesByVfxId);
+
+            for (int index = 0; index < entries.Count; index++)
+            {
+                if (!ReferenceEquals(entries[index], originalOrder[index]))
+                {
+                    InvalidateIndex();
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static int CompareEntriesByVfxId(Entry? left, Entry? right)
+        {
+            string leftId = WireIdentifier.Normalize(left?.vfxId ?? string.Empty);
+            string rightId = WireIdentifier.Normalize(right?.vfxId ?? string.Empty);
+            return string.CompareOrdinal(leftId, rightId);
+        }
+
         private void OnEnable()
         {
             InvalidateIndex();
@@ -192,6 +217,7 @@ namespace Arena.Presentation.VFX
             if (EditorApplication.isPlayingOrWillChangePlaymode)
                 return;
 #endif
+            SortEntriesAlphabetically();
             var errors = new List<string>();
             CollectAuthoringErrors(errors);
             foreach (string error in errors)

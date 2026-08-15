@@ -2,6 +2,7 @@
 
 using System;
 using System.IO;
+using System.Reflection;
 using NUnit.Framework;
 
 namespace Arena.Tests.Editor
@@ -11,6 +12,28 @@ namespace Arena.Tests.Editor
         private static readonly Type Rules = AppDomain.CurrentDomain
             .Load("Assembly-CSharp")
             .GetType("Arena.UI.DisciplineLoadoutRules", throwOnError: true)!;
+        private static readonly Type AbilityTags = AppDomain.CurrentDomain
+            .Load("Assembly-CSharp")
+            .GetType("Arena.Combat.AbilityTagCodec", throwOnError: true)!;
+
+        [TestCase("ACTION_BAR_ACTION", "ACTION_BAR_ACTION", true)]
+        [TestCase("PASSIVE,ACTION_BAR_ACTION", "ACTION_BAR_ACTION", true)]
+        [TestCase("PASSIVE, ACTION_BAR_ACTION", "ACTION_BAR_ACTION", true)]
+        [TestCase("PASSIVE", "ACTION_BAR_ACTION", false)]
+        [TestCase("PASSIVE|ACTION_BAR_ACTION", "ACTION_BAR_ACTION", false)]
+        public void AbilityTags_UseCanonicalCommaDelimitedEncoding(
+            string encodedTags,
+            string expectedTag,
+            bool expected)
+        {
+            MethodInfo method = AbilityTags.GetMethod(
+                "HasTag",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            Assert.That(method, Is.Not.Null);
+            Assert.That(
+                (bool)method.Invoke(null, new object?[] { encodedTags, expectedTag })!,
+                Is.EqualTo(expected));
+        }
 
         [TestCase(0, false)]
         [TestCase(1, true)]

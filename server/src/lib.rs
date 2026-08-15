@@ -22,6 +22,7 @@ mod arena_maps;
 mod auto_attack;
 mod bot_matches;
 mod combat;
+mod confusion;
 mod contract_version;
 mod defense;
 mod derived_stats;

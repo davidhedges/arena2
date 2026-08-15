@@ -616,6 +616,13 @@ enum ImpactEffectRow {
     Knockback {
         distance_meters: f32,
     },
+    RemoveStatus {
+        #[serde(default)]
+        polarity: Option<StatusPolarity>,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
+        max_count: u32,
+    },
     Hot {
         duration_ms: u64,
         tick_interval_ms: u64,
@@ -631,6 +638,8 @@ enum ImpactEffectRow {
         duration_ms: u64,
         tick_interval_ms: u64,
         tick_damage: i32,
+        #[serde(default)]
+        damage_type: String,
         #[serde(default)]
         status_stack_group: Option<String>,
         #[serde(default)]
@@ -1687,6 +1696,15 @@ impl From<ImpactEffectRow> for ImpactEffect {
                 damage_type,
             },
             ImpactEffectRow::Knockback { distance_meters } => Self::Knockback { distance_meters },
+            ImpactEffectRow::RemoveStatus {
+                polarity,
+                dispel_types,
+                max_count,
+            } => Self::RemoveStatus {
+                polarity,
+                dispel_types,
+                max_count,
+            },
             status_row => Self::Status(status_application_from_impact_effect_row(status_row)),
         }
     }
@@ -1704,6 +1722,9 @@ fn status_application_from_impact_effect_row(row: ImpactEffectRow) -> StatusAppl
         }
         ImpactEffectRow::Knockback { .. } => {
             unreachable!("knockback is converted before status application mapping")
+        }
+        ImpactEffectRow::RemoveStatus { .. } => {
+            unreachable!("remove status is converted before status application mapping")
         }
         ImpactEffectRow::Hot {
             duration_ms,
@@ -1727,17 +1748,21 @@ fn status_application_from_impact_effect_row(row: ImpactEffectRow) -> StatusAppl
             duration_ms,
             tick_interval_ms,
             tick_damage,
+            damage_type,
             status_stack_group,
             dispel_types,
         } => StatusApplication::new(
-            AuthoredStatusPayload::new(
-                StatusEffectKind::Dot,
-                0.0,
-                tick_damage,
-                0,
-                tick_interval_ms,
-                0.0,
-            )
+            AuthoredStatusPayload {
+                damage_type: DamageType::from_wire(damage_type.as_str()),
+                ..AuthoredStatusPayload::new(
+                    StatusEffectKind::Dot,
+                    0.0,
+                    tick_damage,
+                    0,
+                    tick_interval_ms,
+                    0.0,
+                )
+            }
             .payload(),
             Duration::from_millis(duration_ms),
             status_stack_group,
@@ -2300,6 +2325,31 @@ fn validate_impact_effect(def: &SpellDefinition, effect: &ImpactEffect) -> Resul
             if !distance_meters.is_finite() || *distance_meters <= 0.0 {
                 return Err(format!(
                     "{} delivery.impact_effects[].distance_meters must be positive",
+                    def.kind.as_str()
+                ));
+            }
+            return Ok(());
+        }
+        ImpactEffect::RemoveStatus {
+            polarity,
+            dispel_types,
+            max_count,
+        } => {
+            if def.behavior != SpellBehavior::DirectTarget {
+                return Err(format!(
+                    "{} REMOVE_STATUS impact effects require DIRECT_TARGET delivery",
+                    def.kind.as_str()
+                ));
+            }
+            if polarity.is_none() && dispel_types.is_empty() {
+                return Err(format!(
+                    "{} REMOVE_STATUS impact effect must define polarity or dispel_types",
+                    def.kind.as_str()
+                ));
+            }
+            if *max_count == 0 {
+                return Err(format!(
+                    "{} REMOVE_STATUS impact effect max_count must be positive",
                     def.kind.as_str()
                 ));
             }
@@ -3789,7 +3839,9 @@ fn validate_apply_status_kind_for_self(
         | StatusEffectKind::Berserking
         | StatusEffectKind::BattleTrance
         | StatusEffectKind::TargetedAbilityAvoidance
+        | StatusEffectKind::MirrorImage
         | StatusEffectKind::Gigantism
+        | StatusEffectKind::Flurry
         | StatusEffectKind::BladeTwisting
         | StatusEffectKind::SoulStolen
         | StatusEffectKind::BlightEmpowered
@@ -3811,6 +3863,7 @@ fn validate_apply_status_kind_for_target(
         | StatusEffectKind::Stun
         | StatusEffectKind::Freeze
         | StatusEffectKind::Intimidated
+        | StatusEffectKind::Confusion
         | StatusEffectKind::Stagger
         | StatusEffectKind::Knockdown
         | StatusEffectKind::Slow
@@ -3933,8 +3986,13 @@ mod tests {
                 "NECRO_PRISON",
                 "BLOOD_OFFERING",
                 "GIGANTISM",
+                "FLURRY",
                 "GUST_OF_WIND",
                 "BUFFET",
+                "EARTH_BLAST",
+                "TIDAL_BLAST",
+                "LAVA_BLAST",
+                "WIND_BLAST",
                 "VERDANT_SPIRITS",
                 "CAUTERIZE",
                 "CELESTIAL_MANTLE",
@@ -3965,6 +4023,7 @@ mod tests {
                 "SHIMMER",
                 "RECALL",
                 "TRANSPOSE",
+                "MIRROR_IMAGE",
                 "STONESPIRE",
                 "MOMENTUM",
                 "FORTIFY",
@@ -3997,6 +4056,7 @@ mod tests {
                 "BLADE_TWISTING",
                 "DISARM",
                 "GOUGE",
+                "TEMPLE_STRIKE",
                 "IMP_FIRE_BOLT",
                 "DEEP_SEA_LIZARD_TIDAL_BOLT",
                 "SKELETON_REAPER_SOUL_BOLT",
@@ -4491,8 +4551,13 @@ mod tests {
             "GRAVEWAKE",
             "NECRO_PRISON",
             "GIGANTISM",
+            "FLURRY",
             "GUST_OF_WIND",
             "BUFFET",
+            "EARTH_BLAST",
+            "TIDAL_BLAST",
+            "LAVA_BLAST",
+            "WIND_BLAST",
             "VERDANT_SPIRITS",
             "CELESTIAL_MANTLE",
             "FLASHFIRE",
@@ -4655,6 +4720,100 @@ mod tests {
         assert_eq!(
             direct_target.impact_effects,
             vec![ImpactEffect::InterruptCast]
+        );
+    }
+
+    #[test]
+    fn primal_blast_family_authors_short_range_direct_damage_and_elemental_riders() {
+        for (spell_id, damage_type) in [
+            ("EARTH_BLAST", DamageType::Physical),
+            ("TIDAL_BLAST", DamageType::Physical),
+            ("LAVA_BLAST", DamageType::Fire),
+            ("WIND_BLAST", DamageType::Physical),
+        ] {
+            let definition = spell_definition_by_str(spell_id)
+                .unwrap_or_else(|| panic!("{spell_id} should derive from the shared catalog"));
+            assert_eq!(definition.behavior, SpellBehavior::DirectTarget);
+            assert_eq!(definition.targeting, SpellTargeting::Target);
+            assert_eq!(definition.target_audience, TargetAudience::Hostile);
+            assert!(definition.requires_target);
+            assert!(definition.requires_target_los);
+            assert_eq!(definition.cast_time, Duration::ZERO);
+            assert_eq!(definition.cast_mobility, SpellCastMobility::Mobile);
+            assert_eq!(definition.cooldown, Duration::from_millis(1_200));
+            assert!(definition.uses_global_cooldown);
+            assert_eq!(definition.damage, 30);
+            assert_eq!(definition.damage_type, damage_type);
+            assert_eq!(definition.max_distance, 8.0);
+            assert_eq!(definition.primary_resource_cost, 0.0);
+            assert!(definition.arms_auto_attack_on_cast);
+            let direct_target = definition
+                .secondary
+                .direct_target
+                .as_ref()
+                .expect("Primal blasts should use direct-target delivery");
+            assert_eq!(direct_target.parry_behavior, SpellParryBehavior::Parryable);
+            assert_eq!(direct_target.impact_effects.len(), 1);
+        }
+
+        let earth = spell_definition_by_str("EARTH_BLAST").expect("Earth Blast definition");
+        let earth_status = earth
+            .secondary
+            .direct_target
+            .as_ref()
+            .unwrap()
+            .impact_effects[0]
+            .as_status()
+            .expect("Earth Blast should apply stun");
+        assert_eq!(earth_status.payload(), StatusPayload::Stun);
+        assert_eq!(earth_status.duration(), Duration::from_secs(1));
+
+        let tidal = spell_definition_by_str("TIDAL_BLAST").expect("Tidal Blast definition");
+        assert_eq!(
+            tidal
+                .secondary
+                .direct_target
+                .as_ref()
+                .unwrap()
+                .impact_effects,
+            vec![ImpactEffect::RemoveStatus {
+                polarity: Some(StatusPolarity::Buff),
+                dispel_types: Vec::new(),
+                max_count: 1,
+            }]
+        );
+
+        let lava = spell_definition_by_str("LAVA_BLAST").expect("Lava Blast definition");
+        let lava_status = lava
+            .secondary
+            .direct_target
+            .as_ref()
+            .unwrap()
+            .impact_effects[0]
+            .as_status()
+            .expect("Lava Blast should apply burning");
+        assert_eq!(lava_status.payload().kind(), StatusEffectKind::Dot);
+        assert_eq!(lava_status.duration(), Duration::from_secs(10));
+        assert_eq!(lava_status.explicit_stack_group(), Some("LAVA_BLAST_BURN"));
+        assert_eq!(
+            lava_status.payload(),
+            StatusPayload::Dot {
+                tick_damage: 3,
+                damage_type: DamageType::Fire,
+                tick_interval: Duration::from_secs(1),
+            }
+        );
+
+        let wind = spell_definition_by_str("WIND_BLAST").expect("Wind Blast definition");
+        assert_eq!(
+            wind.secondary
+                .direct_target
+                .as_ref()
+                .unwrap()
+                .impact_effects,
+            vec![ImpactEffect::Knockback {
+                distance_meters: 4.0,
+            }]
         );
     }
 

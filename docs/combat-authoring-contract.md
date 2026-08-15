@@ -27,11 +27,11 @@ Owns player-facing combat data:
 - fixed-action bindings
 - loadout slots
 
-`ability_tags` controls loadout eligibility and starter semantics. `LOADOUT_ACTION`
-means the ability can be assigned to normal action-bar slots. `CORE_ABILITY`
-means the ability is class-defining and should appear on newly seeded loadouts.
-Generic fixed actions such as `DODGE` and `PARRY` are input actions, not core
-abilities or default action-bar assignments.
+`ability_tags` controls loadout eligibility. `ACTION_BAR_ACTION` means the ability
+can be assigned to normal action-bar slots, while `PASSIVE` exposes a selectable
+passive. Starter assignments are authored independently in
+`combat_profile_action_bar_defaults`. Generic fixed actions such as `DODGE` and
+`PARRY` are input actions rather than default ability assignments.
 
 It does not own melee clip timing, melee phased clips, VFX implementation, or server code for new behavior kinds.
 
@@ -239,7 +239,6 @@ The current combat authoring validator is the `combat_authoring_graph_validates_
 - `auto-attack-replacement-strike-matches-authored-strike`: an auto-attack replacement row references a strike id that does not exist in the class combat profile. Use an authored strike id from the combat animation set, not runtime slot plumbing.
 - `default-loadout-assignment-resolves`: a default loadout assignment references an unknown class, unknown slot, unknown ability, wrong-class ability, slot-incompatible ability, duplicate class/slot pair, or unsupported fixed action. Fix the assignment's slot and ActionRef target.
 - `fixed-action-binding-resolves`: a fixed action binding references an unknown class, unknown ability, wrong-class ability, unsupported fixed action, duplicate class/action pair, or ability whose `fixed_action_id` does not match the binding. Fix the `fixed_action_bindings[]` row or bound ability row.
-- `core-ability-has-default-assignment`: an ability tagged `CORE_ABILITY` has no default loadout assignment. Add a default `ABILITY` assignment for the same class, or remove the core tag.
 - `player-facing-action-has-presentation`: a player-facing ability has no `ABILITY` presentation row, or a default fixed action has no `FIXED` presentation row. Add the row in `action_presentations[]`.
 - `presentation-target-resolves`: an action presentation references an unknown ability, spell, fixed action, or unsupported presentation kind. Fix the `action_presentations[]` row.
 - `spell-presentation-not-authored`: a `SPELL` presentation was authored directly. Remove it and author the corresponding `ABILITY` presentation instead; the server derives the public `SPELL:*` presentation row.

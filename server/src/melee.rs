@@ -44,7 +44,7 @@ use crate::combat::{
     StatusDispelType, StatusEffectKind, StatusPayload, StatusPolarity, COMBAT_EVENT_AREA_IMPACT,
     COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT,
     COMBAT_EVENT_MISS, COMBAT_EVENT_PARRY, COMBAT_EVENT_RELEASE,
-    COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_NONE,
+    COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_FLURRY_PROC, COMBAT_METADATA_NONE,
     COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
     DAMAGE_SOURCE_KIND_MELEE,
 };
@@ -311,6 +311,7 @@ impl MeleeEventSource {
 struct MeleeExecutionPolicy {
     authorization: MeleeAuthorization,
     event_source: MeleeEventSource,
+    presentation_metadata_kind: &'static str,
     schedules_auto_attack_on_started_swing: bool,
     uses_shared_cooldowns: bool,
     grants_primary_resource_on_hit: bool,
@@ -320,6 +321,7 @@ impl MeleeExecutionPolicy {
     const PLAYER_INPUT: Self = Self {
         authorization: MeleeAuthorization::ActionBar,
         event_source: MeleeEventSource::PlayerInput,
+        presentation_metadata_kind: COMBAT_METADATA_NONE,
         schedules_auto_attack_on_started_swing: true,
         uses_shared_cooldowns: true,
         grants_primary_resource_on_hit: false,
@@ -328,6 +330,7 @@ impl MeleeExecutionPolicy {
     const QUEUED_FOLLOWUP: Self = Self {
         authorization: MeleeAuthorization::ActionBar,
         event_source: MeleeEventSource::QueuedFollowup,
+        presentation_metadata_kind: COMBAT_METADATA_NONE,
         schedules_auto_attack_on_started_swing: true,
         uses_shared_cooldowns: true,
         grants_primary_resource_on_hit: false,
@@ -336,6 +339,7 @@ impl MeleeExecutionPolicy {
     const PRACTICE: Self = Self {
         authorization: MeleeAuthorization::ActionBar,
         event_source: MeleeEventSource::Practice,
+        presentation_metadata_kind: COMBAT_METADATA_NONE,
         schedules_auto_attack_on_started_swing: false,
         uses_shared_cooldowns: true,
         grants_primary_resource_on_hit: false,
@@ -344,6 +348,16 @@ impl MeleeExecutionPolicy {
     const INTRINSIC_AUTO_ATTACK: Self = Self {
         authorization: MeleeAuthorization::IntrinsicAutoAttack,
         event_source: MeleeEventSource::AutoAttack,
+        presentation_metadata_kind: COMBAT_METADATA_NONE,
+        schedules_auto_attack_on_started_swing: false,
+        uses_shared_cooldowns: false,
+        grants_primary_resource_on_hit: true,
+    };
+
+    const INTRINSIC_FLURRY_AUTO_ATTACK: Self = Self {
+        authorization: MeleeAuthorization::IntrinsicAutoAttack,
+        event_source: MeleeEventSource::AutoAttack,
+        presentation_metadata_kind: COMBAT_METADATA_FLURRY_PROC,
         schedules_auto_attack_on_started_swing: false,
         uses_shared_cooldowns: false,
         grants_primary_resource_on_hit: true,
@@ -352,6 +366,7 @@ impl MeleeExecutionPolicy {
     const INTRINSIC_AUTO_ATTACK_REPLACEMENT: Self = Self {
         authorization: MeleeAuthorization::IntrinsicAutoAttack,
         event_source: MeleeEventSource::AutoAttack,
+        presentation_metadata_kind: COMBAT_METADATA_NONE,
         schedules_auto_attack_on_started_swing: false,
         uses_shared_cooldowns: true,
         grants_primary_resource_on_hit: false,
@@ -2994,6 +3009,53 @@ pub(crate) fn perform_intrinsic_auto_attack_for(
     cast_pos_z: f32,
     cast_yaw: f32,
 ) -> Result<MeleeAttackDispatch, String> {
+    perform_intrinsic_auto_attack_with_policy(
+        ctx,
+        caster,
+        strike_id,
+        target_id,
+        cast_pos_x,
+        cast_pos_y,
+        cast_pos_z,
+        cast_yaw,
+        MeleeExecutionPolicy::INTRINSIC_AUTO_ATTACK,
+    )
+}
+
+pub(crate) fn perform_intrinsic_flurry_auto_attack_for(
+    ctx: &ReducerContext,
+    caster: Identity,
+    strike_id: &AuthoredActionId,
+    target_id: &str,
+    cast_pos_x: f32,
+    cast_pos_y: f32,
+    cast_pos_z: f32,
+    cast_yaw: f32,
+) -> Result<MeleeAttackDispatch, String> {
+    perform_intrinsic_auto_attack_with_policy(
+        ctx,
+        caster,
+        strike_id,
+        target_id,
+        cast_pos_x,
+        cast_pos_y,
+        cast_pos_z,
+        cast_yaw,
+        MeleeExecutionPolicy::INTRINSIC_FLURRY_AUTO_ATTACK,
+    )
+}
+
+fn perform_intrinsic_auto_attack_with_policy(
+    ctx: &ReducerContext,
+    caster: Identity,
+    strike_id: &AuthoredActionId,
+    target_id: &str,
+    cast_pos_x: f32,
+    cast_pos_y: f32,
+    cast_pos_z: f32,
+    cast_yaw: f32,
+    policy: MeleeExecutionPolicy,
+) -> Result<MeleeAttackDispatch, String> {
     let (combat_profile, resolved) =
         resolve_melee_authored_action_for_caster(ctx, caster, strike_id)?;
     let mode_id = resolved_auto_attack_mode_for_owner(ctx, caster, combat_profile.as_str());
@@ -3030,7 +3092,7 @@ pub(crate) fn perform_intrinsic_auto_attack_for(
         cast_pos_z,
         cast_yaw,
         false,
-        MeleeExecutionPolicy::INTRINSIC_AUTO_ATTACK,
+        policy,
         None,
         Some(gameplay),
         None,
@@ -3534,6 +3596,20 @@ fn perform_melee_attack_for_internal(
     let melee_modifiers = resolve_melee_attack_modifiers(ctx, caster, now);
     let (consumed_modifier_status_kind, consumed_modifier_stack_group) =
         consumed_melee_modifier_event_fields(&melee_modifiers);
+    let (cast_metadata_kind, cast_metadata_key, cast_metadata_value) =
+        if !policy.presentation_metadata_kind.is_empty() {
+            (policy.presentation_metadata_kind, "", "")
+        } else if !consumed_modifier_status_kind.is_empty()
+            && !consumed_modifier_stack_group.is_empty()
+        {
+            (
+                COMBAT_METADATA_CONSUMED_MELEE_MODIFIER,
+                consumed_modifier_status_kind,
+                consumed_modifier_stack_group,
+            )
+        } else {
+            (COMBAT_METADATA_NONE, "", "")
+        };
     let gap_close = melee_gap_close_for_ability(ctx, gameplay.ability_id.as_deref());
     let effective_range = melee_modifiers.effective_range(gameplay.range, gap_close.is_none());
     let mut resolved_effective_range = effective_range;
@@ -4094,16 +4170,9 @@ fn perform_melee_attack_for_internal(
         created_at: now,
         created_at_micros: timestamp_to_micros(now),
         damage: 0,
-        metadata_kind: if consumed_modifier_status_kind.is_empty()
-            || consumed_modifier_stack_group.is_empty()
-        {
-            COMBAT_METADATA_NONE
-        } else {
-            COMBAT_METADATA_CONSUMED_MELEE_MODIFIER
-        }
-        .to_string(),
-        metadata_key: consumed_modifier_status_kind.to_string(),
-        metadata_value: consumed_modifier_stack_group.to_string(),
+        metadata_kind: cast_metadata_kind.to_string(),
+        metadata_key: cast_metadata_key.to_string(),
+        metadata_value: cast_metadata_value.to_string(),
     });
 
     for (hit_index, impact_delay_ms) in impact_delays_ms.iter().copied().enumerate() {
@@ -5208,7 +5277,14 @@ fn resolve_pending_melee_target_impact(
     }
 
     if row.targeting_kind.trim().eq_ignore_ascii_case("TARGET")
-        && hostile_targeted_ability_misses(ctx, row.source, row.target, now)
+        && hostile_targeted_ability_misses(
+            ctx,
+            row.source,
+            row.target,
+            row.spell_id.as_str(),
+            row.impact_area_radius > 0.0 && row.impact_area_damage > 0,
+            now,
+        )
     {
         mark_harmful_combat_action(ctx, row.source, row.target, now, row.kind.as_str());
         log::info!(
@@ -5381,6 +5457,7 @@ fn resolve_pending_melee_target_impact(
         } else {
             row.direct_action_key.clone()
         },
+        is_area: row.impact_area_radius > 0.0 && row.impact_area_damage > 0,
     }];
     let flaming_weapon = ruin_flaming_weapon_on_hit_for_owner(ctx, row.source);
     push_flaming_weapon_effects(&mut effects, row, row.target, flaming_weapon.as_ref());
@@ -5558,6 +5635,7 @@ fn push_melee_impact_area_effects(
                 row.hit_index,
                 short_identity(player.player_id)
             ),
+            is_area: true,
         });
         if player.player_id != row.target {
             push_flaming_weapon_effects(effects, row, player.player_id, flaming_weapon);
@@ -5590,6 +5668,7 @@ fn push_flaming_weapon_effects(
         delivery: DamageDelivery::Direct,
         source_kind: DAMAGE_SOURCE_KIND_MELEE.to_string(),
         direct_action_key: format!("{effect_key}:fire"),
+        is_area: false,
     });
     effects.push(EffectPacket::ApplyStatus {
         source: row.source,
@@ -7447,12 +7526,27 @@ mod tests {
     fn auto_attack_resource_gain_is_explicit_execution_policy() {
         assert!(super::MeleeExecutionPolicy::INTRINSIC_AUTO_ATTACK.grants_primary_resource_on_hit);
         assert!(
+            super::MeleeExecutionPolicy::INTRINSIC_FLURRY_AUTO_ATTACK
+                .grants_primary_resource_on_hit
+        );
+        assert!(
             !super::MeleeExecutionPolicy::INTRINSIC_AUTO_ATTACK_REPLACEMENT
                 .grants_primary_resource_on_hit
         );
         assert!(!super::MeleeExecutionPolicy::PLAYER_INPUT.grants_primary_resource_on_hit);
         assert!(!super::MeleeExecutionPolicy::QUEUED_FOLLOWUP.grants_primary_resource_on_hit);
         assert!(!super::MeleeExecutionPolicy::PRACTICE.grants_primary_resource_on_hit);
+    }
+
+    #[test]
+    fn flurry_auto_attacks_publish_ghost_presentation_metadata() {
+        assert_eq!(
+            super::MeleeExecutionPolicy::INTRINSIC_FLURRY_AUTO_ATTACK.presentation_metadata_kind,
+            "FLURRY_PROC"
+        );
+        assert!(super::MeleeExecutionPolicy::INTRINSIC_AUTO_ATTACK
+            .presentation_metadata_kind
+            .is_empty());
     }
 
     #[test]

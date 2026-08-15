@@ -2343,9 +2343,9 @@ mod tests {
         assert!(ability_tags_allow_discipline_selection("ACTION_BAR_ACTION"));
         assert!(ability_tags_allow_discipline_selection("PASSIVE"));
         assert!(ability_tags_allow_discipline_selection(
-            "CORE_ABILITY, PASSIVE"
+            "ACTION_BAR_ACTION,PASSIVE"
         ));
-        assert!(!ability_tags_allow_discipline_selection("CORE_ABILITY"));
+        assert!(!ability_tags_allow_discipline_selection("INTERNAL_ONLY"));
     }
 
     #[test]

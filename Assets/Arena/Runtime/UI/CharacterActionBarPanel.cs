@@ -722,7 +722,7 @@ namespace Arena.UI
             AbilityCatalog ability,
             string normalizedProfile)
         {
-            if (!HasAbilityTag(ability, ActionBarActionTag))
+            if (!AbilityTagCodec.HasTag(ability.AbilityTags, ActionBarActionTag))
                 return false;
 
             string abilityProfile = CombatProfileResolver.ResolveForAbility(conn, ability);
@@ -743,7 +743,7 @@ namespace Arena.UI
             if (AbilityIsUsableForPanel(conn, owner, ability, normalizedProfile))
                 return string.Empty;
 
-            if (!HasAbilityTag(ability, ActionBarActionTag))
+            if (!AbilityTagCodec.HasTag(ability.AbilityTags, ActionBarActionTag))
                 return "Not assignable";
 
             string abilityProfile = CombatProfileResolver.ResolveForAbility(conn, ability);
@@ -1089,7 +1089,7 @@ namespace Arena.UI
             bool hasSpells = conn.Db.AbilityCatalog.Iter().Any(ability =>
                 string.IsNullOrWhiteSpace(CombatProfileResolver.ResolveForAbility(conn, ability))
                 && IsSpellAbility(ability)
-                && HasAbilityTag(ability, ActionBarActionTag));
+                && AbilityTagCodec.HasTag(ability.AbilityTags, ActionBarActionTag));
             if (hasSpells)
                 options.Add(new WeaponFilterOption(SpellsFilterKey, "Spells", SpellsCategorySortOrder));
 
@@ -1224,14 +1224,6 @@ namespace Arena.UI
                     .Select(part => part.Length == 1
                         ? part
                         : string.Concat(part[..1], part[1..].ToLowerInvariant())));
-        }
-
-        private static bool HasAbilityTag(AbilityCatalog ability, string tag)
-        {
-            string normalizedTag = WireIdentifier.Normalize(tag);
-            return ability.AbilityTags
-                .Split('|')
-                .Any(value => string.Equals(WireIdentifier.Normalize(value), normalizedTag, StringComparison.Ordinal));
         }
 
         private static void TintIcon(GameObject cell, Color color)

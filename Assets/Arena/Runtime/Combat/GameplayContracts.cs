@@ -81,6 +81,7 @@ namespace Arena.Combat
     {
         public const string None = "";
         public const string ConsumedMeleeModifier = "CONSUMED_MELEE_MODIFIER";
+        public const string FlurryProc = "FLURRY_PROC";
     }
 
     public static class CombatModeIds
