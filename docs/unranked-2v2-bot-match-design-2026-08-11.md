@@ -151,7 +151,7 @@ Use four deterministic slots in the current central flat area:
 | 1 | 1 (enemy bot) | `(5, 2)` | toward -X |
 
 All desired points pass through the existing authoritative spawn/collision
-resolver. Bots use normal player hit dimensions and `DEFAULT_MAX_HP`, zero
+resolver. Bots use normal player hit dimensions and 1,000 HP, zero
 velocity, no commands, and `is_dummy = true`. They receive ordinary replicated
 player presentation and can be damaged, healed, killed, and included in match
 statistics. They never move, attack, cast, or respawn.

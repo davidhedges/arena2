@@ -17,7 +17,6 @@ use crate::arena::{
 };
 use crate::combat::{
     new_dummy_player_state, snapshot_match_hp_remaining, DEFAULT_HIT_HEIGHT, DEFAULT_HIT_RADIUS,
-    DEFAULT_MAX_HP,
 };
 use crate::match_contract::MatchReservation;
 use crate::world_collision::resolve_world_spawn_position_with_layout;
@@ -42,6 +41,7 @@ const MATCH_FORMAT_2V2: &str = "2V2";
 const RULESET_TEAM_ELIMINATION: &str = "TEAM_ELIMINATION";
 const TEAM_SIZE_2V2: u8 = 2;
 const MATCH_PLAYER_COUNT: u32 = 4;
+const BOT_MAX_HP: i32 = 1_000;
 
 const TEAM_ZERO: u8 = 0;
 const TEAM_ONE: u8 = 1;
@@ -328,13 +328,7 @@ fn spawn_bot(ctx: &ReducerContext, arena: &ArenaInstance, slot: BotSlot) -> Resu
             vel_z: 0.0,
             grounded: true,
             last_processed_tick: 0,
-            state: new_dummy_player_state(
-                identity,
-                ctx.timestamp,
-                DEFAULT_MAX_HP,
-                DEFAULT_HIT_RADIUS,
-                DEFAULT_HIT_HEIGHT,
-            ),
+            state: new_bot_player_state(identity, ctx.timestamp),
             world: Some(ActorWorldAssignment::Instance(arena.id)),
         },
     )?;
@@ -346,6 +340,19 @@ fn spawn_bot(ctx: &ReducerContext, arena: &ArenaInstance, slot: BotSlot) -> Resu
         is_bot: true,
     });
     Ok(())
+}
+
+fn new_bot_player_state(
+    identity: Identity,
+    now: spacetimedb::Timestamp,
+) -> crate::player_state::PlayerState {
+    new_dummy_player_state(
+        identity,
+        now,
+        BOT_MAX_HP,
+        DEFAULT_HIT_RADIUS,
+        DEFAULT_HIT_HEIGHT,
+    )
 }
 
 fn validate_fixed_roster_slots() -> Result<(), String> {
@@ -594,5 +601,15 @@ mod tests {
     #[test]
     fn fixed_roster_fills_each_team_slot_once() {
         assert_eq!(validate_fixed_roster_slots(), Ok(()));
+    }
+
+    #[test]
+    fn match_bots_spawn_at_full_1000_hp() {
+        let identity = bot_identity(42, TEAM_ONE, 0).unwrap();
+        let state = new_bot_player_state(identity, spacetimedb::Timestamp::UNIX_EPOCH);
+
+        assert!(state.is_dummy);
+        assert_eq!(state.hp, 1_000);
+        assert_eq!(state.max_hp, 1_000);
     }
 }
