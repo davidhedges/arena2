@@ -34,8 +34,10 @@ import websocket
 
 
 PROTOCOL = "v1.json.spacetimedb"
+DatabaseRow = list[Any] | dict[str, Any]
 HUB_QUERIES = [
     'SELECT * FROM "my_hub_player"',
+    'SELECT * FROM "my_hub_loadout"',
     'SELECT * FROM "my_match_status"',
 ]
 PVP_STATIC_TABLES = [
@@ -91,22 +93,34 @@ def normalize_identity(value: Any) -> str:
 
 def option_value(value: Any) -> Any:
     # SpacetimeDB's JSON protocol represents Rust Option<T> as the tagged
-    # algebraic value [0, value] for Some and [1] for None.
+    # algebraic value [0, value] for Some and either [1] or [1, {}] for None.
     if isinstance(value, list) and value:
-        if value[0] == 0 and len(value) == 2:
+        if value[0] == 0 and len(value) >= 2:
             return value[1]
-        if value[0] == 1 and len(value) == 1:
+        if value[0] == 1:
             return None
     return value
 
 
-def positional_row(value: Any) -> list[Any] | None:
+def decoded_row(value: Any) -> DatabaseRow | None:
     if isinstance(value, str):
         try:
             value = json.loads(value)
         except json.JSONDecodeError:
             return None
-    return value if isinstance(value, list) else None
+    return value if isinstance(value, (list, dict)) else None
+
+
+def row_value(row: DatabaseRow, index: int, field: str) -> Any:
+    if isinstance(row, dict):
+        if field not in row:
+            raise RuntimeError(f"database row is missing expected field {field!r}")
+        return row[field]
+    if index >= len(row):
+        raise RuntimeError(
+            f"database row has no positional field {index} for expected field {field!r}"
+        )
+    return row[index]
 
 
 def database_update(frame: dict[str, Any]) -> dict[str, Any] | None:
@@ -120,8 +134,8 @@ def database_update(frame: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def inserted_rows(update: dict[str, Any] | None, table_name: str) -> list[list[Any]]:
-    rows: list[list[Any]] = []
+def inserted_rows(update: dict[str, Any] | None, table_name: str) -> list[DatabaseRow]:
+    rows: list[DatabaseRow] = []
     if not isinstance(update, dict):
         return rows
     for table in update.get("tables", []):
@@ -129,23 +143,112 @@ def inserted_rows(update: dict[str, Any] | None, table_name: str) -> list[list[A
             continue
         for table_update in table.get("updates", []):
             for insert in table_update.get("inserts", []):
-                row = positional_row(insert)
+                row = decoded_row(insert)
                 if row is not None:
                     rows.append(row)
     return rows
 
 
-def parse_match_status(row: list[Any]) -> dict[str, str]:
+def parse_match_status(row: DatabaseRow) -> dict[str, str]:
     if len(row) < 14:
         raise RuntimeError(f"unexpected my_match_status row length: {len(row)}")
     return {
-        "ticket_id": str(row[0]),
-        "status": str(row[3]),
-        "match_id": str(option_value(row[8]) or ""),
-        "server_uri": str(option_value(row[9]) or ""),
-        "database_identity": normalize_identity(row[10]),
-        "match_build_id": str(option_value(row[11]) or ""),
-        "map_id": str(option_value(row[12]) or ""),
+        "ticket_id": str(row_value(row, 0, "ticket_id")),
+        "status": str(row_value(row, 3, "status")),
+        "match_id": str(option_value(row_value(row, 8, "match_id")) or ""),
+        "server_uri": str(option_value(row_value(row, 9, "server_uri")) or ""),
+        "database_identity": normalize_identity(
+            row_value(row, 10, "database_identity")
+        ),
+        "match_build_id": str(
+            option_value(row_value(row, 11, "match_build_id")) or ""
+        ),
+        "map_id": str(option_value(row_value(row, 12, "map_id")) or ""),
+    }
+
+
+def parse_hub_loadout(row: DatabaseRow) -> dict[str, Any]:
+    if len(row) < 12:
+        raise RuntimeError(f"unexpected my_hub_loadout row length: {len(row)}")
+    selected_value = row_value(row, 4, "selected_ability_ids")
+    selected_ability_ids = selected_value if isinstance(selected_value, list) else []
+    return {
+        "owner": normalize_identity(row_value(row, 0, "owner")),
+        "primary_discipline_id": str(row_value(row, 1, "primary_discipline_id")),
+        "secondary_discipline_id_1": str(
+            row_value(row, 2, "secondary_discipline_id_1")
+        ),
+        "secondary_discipline_id_2": str(
+            row_value(row, 3, "secondary_discipline_id_2")
+        ),
+        "selected_ability_ids": [str(value) for value in selected_ability_ids],
+        "armor_set_id": str(row_value(row, 5, "armor_set_id")),
+        "main_hand_item_def_id": str(row_value(row, 6, "main_hand_item_def_id")),
+        "off_hand_item_def_id": str(row_value(row, 7, "off_hand_item_def_id")),
+        "main_hand_color_id": str(row_value(row, 8, "main_hand_color_id")),
+        "off_hand_color_id": str(row_value(row, 9, "off_hand_color_id")),
+        "revision": int(row_value(row, 10, "revision")),
+    }
+
+
+def require_single_inserted_row(
+    update: dict[str, Any] | None,
+    table_name: str,
+) -> DatabaseRow:
+    rows = inserted_rows(update, table_name)
+    if len(rows) != 1:
+        raise RuntimeError(
+            f"initial subscription expected one {table_name} row, received {len(rows)}"
+        )
+    return rows[0]
+
+
+def parse_applied_match_loadout(
+    rows_by_table: dict[str, list[DatabaseRow]],
+) -> dict[str, Any] | None:
+    singular_tables = (
+        "character_discipline_loadout",
+        "active_armor_set",
+        "player_equipment_presentation",
+    )
+    if any(len(rows_by_table.get(table_name, [])) != 1 for table_name in singular_tables):
+        return None
+    selected_abilities = rows_by_table.get("character_discipline_ability_selection", [])
+    if not selected_abilities:
+        return None
+
+    discipline = rows_by_table["character_discipline_loadout"][0]
+    armor = rows_by_table["active_armor_set"][0]
+    equipment = rows_by_table["player_equipment_presentation"][0]
+    return {
+        "discipline_owner": normalize_identity(row_value(discipline, 0, "owner")),
+        "primary_discipline_id": str(
+            row_value(discipline, 1, "primary_discipline_id")
+        ),
+        "secondary_discipline_id_1": str(
+            row_value(discipline, 2, "secondary_discipline_id_1")
+        ),
+        "secondary_discipline_id_2": str(
+            row_value(discipline, 3, "secondary_discipline_id_2")
+        ),
+        "armor_owner": normalize_identity(row_value(armor, 0, "owner")),
+        "armor_set_id": str(row_value(armor, 1, "armor_set_id")),
+        "equipment_owner": normalize_identity(row_value(equipment, 0, "owner")),
+        "main_hand_item_def_id": str(
+            option_value(row_value(equipment, 8, "main_hand_item_def_id")) or ""
+        ),
+        "off_hand_item_def_id": str(
+            option_value(row_value(equipment, 9, "off_hand_item_def_id")) or ""
+        ),
+        "main_hand_color_id": str(row_value(equipment, 12, "main_hand_color_id")),
+        "off_hand_color_id": str(row_value(equipment, 13, "off_hand_color_id")),
+        "selected_ability_owners": {
+            normalize_identity(row_value(row, 1, "owner")) for row in selected_abilities
+        },
+        "selected_ability_ids": {
+            str(row_value(row, 3, "ability_id")) for row in selected_abilities
+        },
+        "selected_ability_count": len(selected_abilities),
     }
 
 
@@ -242,6 +345,7 @@ class Connection:
             header=headers,
         )
         self.ws.settimeout(timeout_seconds)
+        self.timeout_seconds = timeout_seconds
         self.request_id = 0
         first = self.receive()
         issued = first.get("IdentityToken")
@@ -297,11 +401,32 @@ class Connection:
         )
         return self.request_id
 
-    def wait_for(self, predicate: Callable[[dict[str, Any]], Any]) -> Any:
-        while True:
-            result = predicate(self.receive())
-            if result is not None:
-                return result
+    def wait_for(
+        self,
+        predicate: Callable[[dict[str, Any]], Any],
+        timeout_seconds: float | None = None,
+    ) -> Any:
+        timeout_seconds = timeout_seconds or self.timeout_seconds
+        deadline = time.monotonic() + timeout_seconds
+        try:
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(
+                        f"websocket condition was not met within {timeout_seconds}s"
+                    )
+                self.ws.settimeout(min(self.timeout_seconds, remaining))
+                try:
+                    frame = self.receive()
+                except websocket.WebSocketTimeoutException as error:
+                    raise TimeoutError(
+                        f"websocket condition was not met within {timeout_seconds}s"
+                    ) from error
+                result = predicate(frame)
+                if result is not None:
+                    return result
+        finally:
+            self.ws.settimeout(self.timeout_seconds)
 
     def wait_for_initial_subscription(self, request_id: int) -> dict[str, Any]:
         def select(frame: dict[str, Any]) -> dict[str, Any] | None:
@@ -323,7 +448,28 @@ class Benchmark:
         self.timeout_seconds = timeout_seconds
         self.hub = Connection(server_uri, hub_database, timeout_seconds)
         subscription = self.hub.subscribe(HUB_QUERIES)
-        self.hub.wait_for_initial_subscription(subscription)
+        initial = self.hub.wait_for_initial_subscription(subscription)
+        self.hub_loadout = parse_hub_loadout(
+            require_single_inserted_row(initial.get("database_update"), "my_hub_loadout")
+        )
+        if self.hub_loadout["owner"] != self.hub.identity:
+            raise RuntimeError("Hub loadout owner does not match the authenticated identity")
+        missing = [
+            field
+            for field in (
+                "primary_discipline_id",
+                "armor_set_id",
+                "main_hand_item_def_id",
+                "main_hand_color_id",
+            )
+            if not self.hub_loadout[field]
+        ]
+        if missing:
+            raise RuntimeError("Hub loadout is incomplete: " + ", ".join(missing))
+        if len(self.hub_loadout["selected_ability_ids"]) < 8:
+            raise RuntimeError("Hub loadout has fewer than eight selected abilities")
+        if self.hub_loadout["revision"] < 1:
+            raise RuntimeError("Hub loadout revision was not initialized")
 
     def wait_for_hub_status(self, expected: str) -> dict[str, str]:
         def select(frame: dict[str, Any]) -> dict[str, str] | None:
@@ -382,12 +528,110 @@ class Benchmark:
                     "initial PvP subscription omitted required tables: " + ", ".join(sorted(missing))
                 )
 
+            expected_abilities = set(self.hub_loadout["selected_ability_ids"])
+            tracked_tables = (
+                "character_discipline_loadout",
+                "character_discipline_ability_selection",
+                "active_armor_set",
+                "player_equipment_presentation",
+            )
+            observed = {
+                table_name: inserted_rows(update, table_name)
+                for table_name in tracked_tables
+            }
+            last_candidate: dict[str, Any] | None = None
+
+            def select_applied_loadout(frame: dict[str, Any]) -> dict[str, Any] | None:
+                nonlocal last_candidate
+                frame_update = database_update(frame)
+                for table_name in tracked_tables:
+                    rows = inserted_rows(frame_update, table_name)
+                    if rows:
+                        observed[table_name] = rows
+                candidate = parse_applied_match_loadout(observed)
+                if candidate is None:
+                    return None
+                last_candidate = candidate
+                expected_fields = (
+                    "primary_discipline_id",
+                    "secondary_discipline_id_1",
+                    "secondary_discipline_id_2",
+                    "armor_set_id",
+                    "main_hand_item_def_id",
+                    "off_hand_item_def_id",
+                    "main_hand_color_id",
+                    "off_hand_color_id",
+                )
+                if any(
+                    candidate[field] != self.hub_loadout[field]
+                    for field in expected_fields
+                ):
+                    return None
+                if candidate["selected_ability_owners"] != {self.hub.identity}:
+                    return None
+                if candidate["selected_ability_ids"] != expected_abilities:
+                    return None
+                if candidate["selected_ability_count"] != len(expected_abilities):
+                    return None
+                return candidate
+
+            applied = select_applied_loadout({})
+            if applied is None:
+                try:
+                    applied = match.wait_for(select_applied_loadout)
+                except TimeoutError as error:
+                    counts = {
+                        table_name: len(rows)
+                        for table_name, rows in observed.items()
+                    }
+                    raise RuntimeError(
+                        "timed out waiting for the exact Hub loadout in the match; "
+                        f"initial tables={sorted(tables)}; observed rows={counts}; "
+                        f"observed loadout={last_candidate}"
+                    ) from error
+            initial_at = time.perf_counter()
+            if any(
+                applied[field] != self.hub.identity
+                for field in ("discipline_owner", "armor_owner", "equipment_owner")
+            ):
+                raise RuntimeError("match loadout rows do not belong to the authenticated identity")
+            for field in (
+                "primary_discipline_id",
+                "secondary_discipline_id_1",
+                "secondary_discipline_id_2",
+                "armor_set_id",
+                "main_hand_item_def_id",
+                "off_hand_item_def_id",
+                "main_hand_color_id",
+                "off_hand_color_id",
+            ):
+                if applied[field] != self.hub_loadout[field]:
+                    raise RuntimeError(
+                        f"match {field} {applied[field]!r} does not match Hub "
+                        f"value {self.hub_loadout[field]!r}"
+                    )
+            if applied["selected_ability_owners"] != {self.hub.identity}:
+                raise RuntimeError("match ability selections belong to a different identity")
+            if (
+                applied["selected_ability_ids"] != expected_abilities
+                or applied["selected_ability_count"] != len(expected_abilities)
+            ):
+                raise RuntimeError(
+                    "match selected abilities do not match the Hub loadout: "
+                    f"missing={sorted(expected_abilities - applied['selected_ability_ids'])} "
+                    f"extra={sorted(applied['selected_ability_ids'] - expected_abilities)}"
+                )
+
             result = {
                 "sample": ordinal,
                 "ticket": hashlib.sha256(assignment["ticket_id"].encode()).hexdigest()[:12],
                 "match": assignment["match_id"],
                 "match_build_id": assignment["match_build_id"],
                 "map_id": assignment["map_id"],
+                "hub_loadout_revision": self.hub_loadout["revision"],
+                "primary_discipline_id": self.hub_loadout["primary_discipline_id"],
+                "armor_set_id": self.hub_loadout["armor_set_id"],
+                "main_hand_item_def_id": self.hub_loadout["main_hand_item_def_id"],
                 "request_to_ready_ms": round((ready_at - request_started) * 1000.0, 3),
                 "ready_to_match_transport_ms": round((transport_at - ready_at) * 1000.0, 3),
                 "match_transport_to_initial_state_ms": round((initial_at - transport_at) * 1000.0, 3),
