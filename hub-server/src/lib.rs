@@ -41,6 +41,12 @@ const DISCIPLINE_SUBTLETY: &str = "SUBTLETY";
 const DISCIPLINE_WAR: &str = "WAR";
 const DISCIPLINE_ZEAL: &str = "ZEAL";
 const DISCIPLINE_PRECISION: &str = "PRECISION";
+const DISCIPLINE_RUIN: &str = "RUIN";
+
+const DEFAULT_HUB_PRIMARY_DISCIPLINE: &str = DISCIPLINE_WAR;
+const DEFAULT_HUB_SECONDARY_DISCIPLINE_1: &str = DISCIPLINE_SUBTLETY;
+const DEFAULT_HUB_SECONDARY_DISCIPLINE_2: &str = DISCIPLINE_RUIN;
+const DEFAULT_HUB_ARMOR_SET: &str = "PEASANT";
 
 const EQUIP_SLOT_MAIN_HAND: &str = "MAIN_HAND";
 const EQUIP_SLOT_OFF_HAND: &str = "OFF_HAND";
@@ -442,6 +448,7 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     // Reconcile display-only authored data after data-preserving publishes,
     // whose existing databases do not rerun init.
     ensure_hub_loadout_catalogs(ctx)?;
+    ensure_default_hub_player_loadout(ctx, ctx.sender())?;
     Ok(())
 }
 
@@ -602,6 +609,8 @@ pub fn request_unranked_2v2_bot_match(
     let client_request_id = validate_identifier("client request id", client_request_id, 8, 64)?;
     let player_identity = ctx.sender();
     ensure_hub_player(ctx, player_identity);
+    ensure_hub_loadout_catalogs(ctx)?;
+    ensure_default_hub_player_loadout(ctx, player_identity)?;
 
     if let Some(existing) = ctx
         .db
@@ -1843,6 +1852,116 @@ fn ensure_hub_player(ctx: &ReducerContext, identity: Identity) {
     });
 }
 
+fn ensure_default_hub_player_loadout(
+    ctx: &ReducerContext,
+    identity: Identity,
+) -> Result<(), String> {
+    if ctx.db.hub_player_loadout().owner().find(identity).is_some() {
+        return Ok(());
+    }
+
+    let selected_ability_ids = default_hub_selected_ability_ids()?;
+    let (primary, secondary_1, secondary_2, selected_ability_ids) =
+        validate_hub_discipline_loadout(
+            ctx,
+            DEFAULT_HUB_PRIMARY_DISCIPLINE.to_string(),
+            DEFAULT_HUB_SECONDARY_DISCIPLINE_1.to_string(),
+            DEFAULT_HUB_SECONDARY_DISCIPLINE_2.to_string(),
+            selected_ability_ids,
+        )?;
+    if ctx
+        .db
+        .hub_armor_set_definition()
+        .armor_set_id()
+        .find(DEFAULT_HUB_ARMOR_SET.to_string())
+        .is_none()
+    {
+        return Err(format!(
+            "default Hub armor set '{DEFAULT_HUB_ARMOR_SET}' is not authored"
+        ));
+    }
+
+    let (main_hand, main_color, off_hand, off_hand_color) =
+        default_weapon_loadout(primary.as_str());
+    let (main_hand, main_color, off_hand, off_hand_color) = validate_hub_weapon_loadout(
+        primary.as_str(),
+        main_hand.as_str(),
+        main_color.as_str(),
+        off_hand.as_str(),
+        off_hand_color.as_str(),
+    )?;
+    ctx.db.hub_player_loadout().insert(HubPlayerLoadout {
+        owner: identity,
+        primary_discipline_id: primary,
+        secondary_discipline_id_1: secondary_1,
+        secondary_discipline_id_2: secondary_2,
+        selected_ability_ids,
+        armor_set_id: DEFAULT_HUB_ARMOR_SET.to_string(),
+        main_hand_item_def_id: Some(main_hand),
+        off_hand_item_def_id: Some(off_hand),
+        main_hand_color_id: Some(main_color),
+        off_hand_color_id: Some(off_hand_color),
+        revision: next_loadout_revision(None),
+        updated_at: ctx.timestamp,
+    });
+    Ok(())
+}
+
+fn default_hub_selected_ability_ids() -> Result<Vec<String>, String> {
+    let authored: HubProgressionCatalogFile = serde_json::from_str(PROGRESSION_CATALOG_JSON)
+        .map_err(|error| format!("Hub progression catalog is invalid: {error}"))?;
+    let mut abilities = authored.abilities;
+    abilities.sort_by_key(|ability| {
+        (
+            ability.sort_order,
+            normalize_authored_id(ability.ability_id.as_str()),
+        )
+    });
+
+    let requirements = [
+        (
+            DEFAULT_HUB_PRIMARY_DISCIPLINE,
+            PRIMARY_DISCIPLINE_ABILITY_MINIMUM,
+        ),
+        (
+            DEFAULT_HUB_SECONDARY_DISCIPLINE_1,
+            SECONDARY_DISCIPLINE_ABILITY_MINIMUM,
+        ),
+        (
+            DEFAULT_HUB_SECONDARY_DISCIPLINE_2,
+            SECONDARY_DISCIPLINE_ABILITY_MINIMUM,
+        ),
+    ];
+    let mut selected = Vec::new();
+    for (discipline_id, minimum) in requirements {
+        let available: Vec<String> = abilities
+            .iter()
+            .filter(|ability| {
+                normalize_authored_id(ability.actor_scope.as_str()) == "PLAYER"
+                    && normalize_authored_id(ability.discipline_id.as_str()) == discipline_id
+                    && authored_ability_has_tag(ability, "ACTION_BAR_ACTION")
+                    && !authored_ability_has_tag(ability, "PASSIVE")
+            })
+            .map(|ability| normalize_authored_id(ability.ability_id.as_str()))
+            .collect();
+        if available.len() < minimum {
+            return Err(format!(
+                "default Hub discipline '{discipline_id}' requires {minimum} active abilities but only {} are authored",
+                available.len()
+            ));
+        }
+        selected.extend(available.into_iter().take(minimum));
+    }
+    Ok(selected)
+}
+
+fn authored_ability_has_tag(ability: &HubAbilityAuthoring, expected_tag: &str) -> bool {
+    ability
+        .ability_tags
+        .iter()
+        .any(|tag| normalize_authored_id(tag.as_str()) == expected_tag)
+}
+
 fn bump_provisioner_wakeup(ctx: &ReducerContext) {
     let table = ctx.db.provisioner_wakeup_state();
     if let Some(mut state) = table.singleton_id().find(PROVISIONER_WAKEUP_ID) {
@@ -2087,6 +2206,37 @@ mod tests {
         assert_eq!(next_loadout_revision(None), 1);
         assert_eq!(next_loadout_revision(Some(1)), 2);
         assert_eq!(next_loadout_revision(Some(u64::MAX)), u64::MAX);
+    }
+
+    #[test]
+    fn default_hub_loadout_matches_the_existing_ui_starter_selection() {
+        assert_eq!(
+            default_hub_selected_ability_ids().expect("canonical Hub starter abilities"),
+            [
+                "WARRIOR_GROUND_TO_AIR_PLACEHOLDER",
+                "WARRIOR_HEW",
+                "WARRIOR_MAIM",
+                "WARRIOR_CRUSHING_BLOW",
+                "WARRIOR_CATACLYSM",
+                "WARRIOR_BUZZSAW",
+                "WARRIOR_WHIRLWIND",
+                "WARRIOR_SUNDER",
+                "DAGGER_QUICK_CUT",
+                "SPELL_FIREBALL",
+            ]
+        );
+        assert!(HUB_ARMOR_SET_SPECS
+            .iter()
+            .any(|spec| spec.armor_set_id == DEFAULT_HUB_ARMOR_SET));
+        assert_eq!(
+            default_weapon_loadout(DEFAULT_HUB_PRIMARY_DISCIPLINE),
+            (
+                "TRAINING_TWO_HAND_SWORD".to_string(),
+                "DEFAULT".to_string(),
+                String::new(),
+                String::new(),
+            )
+        );
     }
 
     #[test]
