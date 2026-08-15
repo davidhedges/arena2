@@ -20,6 +20,7 @@ namespace Arena.Presentation
         private const string LifecycleUntilTerminalEvent = "UNTIL_TERMINAL_EVENT";
         private const string LifecycleUntilCastEnd = "UNTIL_CAST_END";
         private const string LifecycleUntilRadialEffectEnd = "UNTIL_RADIAL_EFFECT_END";
+        private const string LifecycleUntilStatusEnd = "UNTIL_STATUS_END";
         private const string AnchorTargetBack = "TARGET_BACK";
         private const float GroundYOffset = 0.03f;
 
@@ -213,6 +214,22 @@ namespace Arena.Presentation
             DestroyAllMatchingPrefabs(LifecycleUntilRadialEffectEnd);
         }
 
+        // Ends persistent status cues when the authoritative StatusEffect row is deleted.
+        public void DestroyForStatusEnd(string statusEffectKey)
+        {
+            if (string.IsNullOrWhiteSpace(statusEffectKey))
+                return;
+
+            DestroyMatchingScripted(statusEffectKey, LifecycleUntilStatusEnd);
+            DestroyMatchingPrefabs(statusEffectKey, LifecycleUntilStatusEnd);
+        }
+
+        public void DestroyAllStatusEffects()
+        {
+            DestroyAllMatchingScripted(LifecycleUntilStatusEnd);
+            DestroyAllMatchingPrefabs(LifecycleUntilStatusEnd);
+        }
+
         public void Dispose()
         {
             foreach (var entry in _scripted.Values)
@@ -375,7 +392,8 @@ namespace Arena.Presentation
             }
 
             if (string.Equals(lifecycle, LifecycleUntilCastEnd, System.StringComparison.Ordinal)
-                || string.Equals(lifecycle, LifecycleUntilRadialEffectEnd, System.StringComparison.Ordinal))
+                || string.Equals(lifecycle, LifecycleUntilRadialEffectEnd, System.StringComparison.Ordinal)
+                || string.Equals(lifecycle, LifecycleUntilStatusEnd, System.StringComparison.Ordinal))
             {
                 // Loop and hold until the owning authoritative state row is deleted.
                 ConfigureReleaseBoundParticleSystems(instance);

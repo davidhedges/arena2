@@ -1513,6 +1513,51 @@
       }
     },
     {
+      "ability_id": "SPELL_SOULSTEALER",
+      "actor_scope": "PLAYER",
+      "discipline_id": "BLIGHT",
+      "combat_profile_id": "",
+      "action_id": "SOULSTEALER",
+      "display_name": "Soulstealer",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1008,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 2000,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "soulstealer_empowered_damage_bonus": 0.5,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 604800000,
+          "apply_to_caster": true,
+          "max_distance": 30,
+          "damage_type": "NECROTIC",
+          "status_stack_group": "SOUL_STOLEN",
+          "polarity": "BUFF",
+          "block_behavior": "UNBLOCKABLE",
+          "parry_behavior": "UNPARRYABLE",
+          "status": {
+            "kind": "SOUL_STOLEN",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": []
+          }
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_INSTANT_BEAM",
       "actor_scope": "PLAYER",
       "discipline_id": "ARCANA",
@@ -2764,6 +2809,302 @@
       }
     },
     {
+      "ability_id": "SPELL_HOLY_SHIELD",
+      "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
+      "combat_profile_id": "",
+      "action_id": "HOLY_SHIELD",
+      "display_name": "Holy Shield",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1038,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 20000,
+          "max_distance": 18,
+          "damage_type": "HOLY",
+          "status_stack_group": "HOLY_SHIELD",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "TEMPORARY_HITPOINTS",
+            "modifier_scalar": 0,
+            "absorb_amount": 100,
+            "absorb_cap": 100,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_REBUKE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
+      "combat_profile_id": "",
+      "action_id": "REBUKE",
+      "display_name": "Rebuke",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1039,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": false,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "DIRECT_TARGET",
+          "max_distance": 18,
+          "damage": 0,
+          "damage_type": "HOLY",
+          "block_behavior": "UNBLOCKABLE",
+          "parry_behavior": "UNPARRYABLE",
+          "impact_effects": [
+            {
+              "kind": "INTERRUPT_CAST_WITH_DAMAGE",
+              "damage": 30,
+              "damage_type": "HOLY"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_SMITE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
+      "combat_profile_id": "",
+      "action_id": "SMITE",
+      "display_name": "Smite",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1040,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "DIRECT_TARGET",
+          "max_distance": 30,
+          "damage": 30,
+          "damage_type": "HOLY",
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_PENANCE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
+      "combat_profile_id": "",
+      "action_id": "PENANCE",
+      "display_name": "Penance",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1041,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 1500,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "target_audience": "ANY",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "DIRECT_TARGET",
+          "max_distance": 18,
+          "damage": 40,
+          "heal": 40,
+          "self_damage": 20,
+          "relation_aware": true,
+          "damage_type": "HOLY",
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_RECKONING",
+      "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
+      "combat_profile_id": "",
+      "action_id": "RECKONING",
+      "display_name": "Reckoning",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1042,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 5000,
+          "max_distance": 18,
+          "damage_type": "HOLY",
+          "status_stack_group": "RECKONING",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "RECKONING",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_MARTYR",
+      "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
+      "combat_profile_id": "",
+      "action_id": "MARTYR",
+      "display_name": "Martyr",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1043,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "ASSISTABLE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "REMOVE_STATUS",
+          "max_distance": 18,
+          "max_count": 0,
+          "polarity": "DEBUFF",
+          "transfer_to_caster": true
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_BURDEN",
+      "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
+      "combat_profile_id": "",
+      "action_id": "BURDEN",
+      "display_name": "Burden",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1044,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 10000,
+          "max_distance": 18,
+          "damage_type": "HOLY",
+          "status_stack_group": "BURDEN",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "DAMAGE_REDIRECT",
+            "modifier_scalar": 0.25,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "DIVINITY_FAITH",
+      "actor_scope": "PLAYER",
+      "discipline_id": "DIVINITY",
+      "combat_profile_id": "",
+      "action_id": "FAITH",
+      "display_name": "Faith",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1045,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "mana_regen_bonus": 2
+      }
+    },
+    {
       "ability_id": "SPELL_FLASHFIRE",
       "actor_scope": "PLAYER",
       "discipline_id": "RUIN",
@@ -2989,6 +3330,34 @@
       }
     },
     {
+      "ability_id": "RUIN_WILDFIRE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "WILDFIRE",
+      "display_name": "Wildfire",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1029,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "fire_spell_ignite": {
+          "radius_meters": 5,
+          "burn_duration_ms": 5000,
+          "burn_tick_interval_ms": 1000,
+          "burn_tick_damage": 1,
+          "burn_max_stacks": 5,
+          "burn_status_stack_group": "WILDFIRE_BURN",
+          "burn_dispel_types": [
+            "MAGIC"
+          ]
+        }
+      }
+    },
+    {
       "ability_id": "RUIN_POTENTIAL",
       "actor_scope": "PLAYER",
       "discipline_id": "RUIN",
@@ -3193,6 +3562,50 @@
           "polarity": "DEBUFF",
           "status": {
             "kind": "FULMINATION",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_GLACIAL_ADVANCE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "RUIN",
+      "combat_profile_id": "",
+      "action_id": "GLACIAL_ADVANCE",
+      "display_name": "Glacial Advance",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1033,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 10000,
+          "max_distance": 18,
+          "damage_type": "COLD",
+          "status_stack_group": "GLACIAL_ADVANCE",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "STUN_IMMUNITY",
             "modifier_scalar": 0,
             "max_stacks": 1,
             "stack_policy": "REFRESH",
@@ -7625,6 +8038,27 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_SOULSTEALER",
+      "display_name": "Soulstealer",
+      "description": "Steals a hostile target's soul after a 2-second cast. While carrying the soul, press this ability again to arm Empower for your next damaging Blight spell.",
+      "sort_order": 87
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "SOUL_STOLEN",
+      "display_name": "Soul Stolen",
+      "description": "A stolen soul is ready. Press Soulstealer again to Empower your next damaging Blight spell.",
+      "sort_order": 87
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "BLIGHT_EMPOWERED",
+      "display_name": "Blight Empowered",
+      "description": "Your next damaging Blight spell deals 50% more damage.",
+      "sort_order": 88
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_NECROTIC_AURA",
       "display_name": "Necrotic Aura",
       "description": "Maintains a necrotic field that damages nearby enemies each second.",
@@ -7884,6 +8318,83 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_HOLY_SHIELD",
+      "display_name": "Holy Shield",
+      "description": "Surrounds a friendly target with a holy barrier that absorbs up to 100 damage for 20 seconds.",
+      "sort_order": 256
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "HOLY_SHIELD",
+      "display_name": "Holy Shield",
+      "description": "A holy barrier absorbs incoming damage.",
+      "sort_order": 257
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_REBUKE",
+      "display_name": "Rebuke",
+      "description": "Interrupts the target's current spell from range. A successful interrupt deals 30 holy damage.",
+      "sort_order": 258
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_SMITE",
+      "display_name": "Smite",
+      "description": "Instantly smites a hostile target for 30 holy damage.",
+      "sort_order": 259
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_PENANCE",
+      "display_name": "Penance",
+      "description": "After a 1.5-second cast, deals 40 holy damage to a hostile target or heals a non-hostile target for 40 health. A successful landing also deals 20 damage to the caster.",
+      "sort_order": 260
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_RECKONING",
+      "display_name": "Reckoning",
+      "description": "Marks an enemy for 5 seconds. When the mark expires, it deals holy damage equal to 100% of the confirmed health damage you took during that window.",
+      "sort_order": 261
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "RECKONING",
+      "display_name": "Reckoning",
+      "description": "When this mark expires, its caster retaliates with the health damage they took during the window.",
+      "sort_order": 262
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_MARTYR",
+      "display_name": "Martyr",
+      "description": "Transfers every active debuff from an assistable target onto the caster, preserving each debuff's remaining duration and stacks.",
+      "sort_order": 263
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_BURDEN",
+      "display_name": "Burden",
+      "description": "For 10 seconds, the caster takes 25% of the target's incoming damage while the target takes the remaining 75%.",
+      "sort_order": 264
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "BURDEN",
+      "display_name": "Burden",
+      "description": "The caster bears 25% of this target's incoming damage.",
+      "sort_order": 265
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DIVINITY_FAITH",
+      "display_name": "Faith",
+      "description": "Passive: increases mana regeneration by 2 mana per second.",
+      "sort_order": 266
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_FLASHFIRE",
       "display_name": "Flashfire",
       "description": "Instantly scorches the target for 30 fire damage.",
@@ -8003,6 +8514,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "RUIN_WILDFIRE",
+      "display_name": "Wildfire",
+      "description": "Passive: when your direct fire spells deal damage, enemies within 5 meters of the target ignite for 5 seconds. Burning deals 1 fire damage per stack each second, stacking up to 5 times.",
+      "sort_order": 115
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "RUIN_FRACTURE",
       "display_name": "Fracture",
       "description": "Passive: the first melee attack against a target frozen by your spells deals 50% increased damage and removes Freeze.",
@@ -8035,6 +8553,13 @@
       "display_name": "Fulmination",
       "description": "Afflicts the target for 8 seconds. Direct melee hits arc their confirmed damage as lightning to one random enemy within 10 meters.",
       "sort_order": 118
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_GLACIAL_ADVANCE",
+      "display_name": "Glacial Advance",
+      "description": "Encases a party member or yourself in advancing frost, removing stuns and granting immunity to stuns for 10 seconds.",
+      "sort_order": 119
     },
     {
       "presentation_kind": "ABILITY",
@@ -8626,6 +9151,13 @@
     },
     {
       "presentation_kind": "STATUS",
+      "presentation_id": "GLACIAL_ADVANCE",
+      "display_name": "Glacial Advance",
+      "description": "Immune to stuns.",
+      "sort_order": 10018
+    },
+    {
+      "presentation_kind": "STATUS",
       "presentation_id": "GIANT_SWING",
       "display_name": "Giant Swing",
       "description": "The next melee attack reaches farther and staggers enemies hit.",
@@ -8665,6 +9197,13 @@
       "display_name": "Burning",
       "description": "Takes stacking fire damage over time.",
       "sort_order": 10056
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "WILDFIRE_BURN",
+      "display_name": "Wildfire",
+      "description": "Burns for stacking fire damage over time after a nearby fire spell lands.",
+      "sort_order": 10057
     },
     {
       "presentation_kind": "STATUS",
@@ -9487,6 +10026,19 @@
     },
     {
       "owner_kind": "ABILITY",
+      "owner_id": "SPELL_SOULSTEALER",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_SOULSTEALER_TARGET_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 187
+    },
+    {
+      "owner_kind": "ABILITY",
       "owner_id": "SPELL_INSTANT_BEAM",
       "slot": "cast_glow",
       "trigger": "SPELL_CAST",
@@ -9733,6 +10285,32 @@
     },
     {
       "owner_kind": "ABILITY",
+      "owner_id": "SPELL_GLACIAL_ADVANCE",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_GLACIAL_SPIKE_TARGET_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 208
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "RUIN_WILDFIRE",
+      "slot": "ignite",
+      "trigger": "AREA_IMPACT",
+      "anchor": "AREA_ORIGIN",
+      "vfx_id": "VFX_FIRE_AREA_BURST_01_ARENA",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 209
+    },
+    {
+      "owner_kind": "ABILITY",
       "owner_id": "SPELL_FULMINATION",
       "slot": "impact",
       "trigger": "SPELL_IMPACT",
@@ -9805,6 +10383,110 @@
       "lifecycle": "DURATION",
       "duration_ms": 5000,
       "sort_order": 197
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_HOLY_SHIELD",
+      "slot": "target_attachment",
+      "trigger": "STATUS_ACTIVE",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_HOLY_SHIELD_ACTIVE_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_STATUS_END",
+      "duration_ms": 0,
+      "sort_order": 211
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_HOLY_SHIELD",
+      "slot": "status_end",
+      "trigger": "STATUS_END",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_HOLY_SHIELD_END_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 212
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_REBUKE",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_HOLY_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1000,
+      "sort_order": 213
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_SMITE",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_HOLY_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1000,
+      "sort_order": 214
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_PENANCE",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ABSOLUTION_HOLY_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1000,
+      "sort_order": 215
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_RECKONING",
+      "slot": "status_end",
+      "trigger": "STATUS_END",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_HOLY_HIT_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1000,
+      "sort_order": 216
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_MARTYR",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_CLEANSE_HOLY_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 1000,
+      "sort_order": 217
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_BURDEN",
+      "slot": "target_attachment",
+      "trigger": "STATUS_ACTIVE",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_PROTECTION_SHIELD_BUFF_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_STATUS_END",
+      "duration_ms": 0,
+      "sort_order": 218
     },
     {
       "owner_kind": "ABILITY",

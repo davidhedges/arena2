@@ -293,6 +293,8 @@ namespace Arena.Presentation
         public const string TriggerAreaImpact = "AREA_IMPACT";
         public const string TriggerEmanationActive = "EMANATION_ACTIVE";
         public const string TriggerEmanationMaxStacks = "EMANATION_MAX_STACKS";
+        public const string TriggerStatusActive = "STATUS_ACTIVE";
+        public const string TriggerStatusEnd = "STATUS_END";
 
         public const string AttachSpawnWorld = "SPAWN_WORLD";
         public const string AttachFollowAnchor = "FOLLOW_ANCHOR";
@@ -311,6 +313,7 @@ namespace Arena.Presentation
         public const string LifecycleUntilTerminalEvent = "UNTIL_TERMINAL_EVENT";
         public const string LifecycleUntilCastEnd = "UNTIL_CAST_END";
         public const string LifecycleUntilRadialEffectEnd = "UNTIL_RADIAL_EFFECT_END";
+        public const string LifecycleUntilStatusEnd = "UNTIL_STATUS_END";
 
         public const string AnchorLeftHand = "LEFT_HAND";
         public const string AnchorRightHand = "RIGHT_HAND";

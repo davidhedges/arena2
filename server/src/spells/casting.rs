@@ -38,14 +38,14 @@ use crate::combat::{
     consume_active_immolation_damage, consume_quickening_for_cast, has_active_disabling_status,
     has_active_status, hostile_targeted_ability_misses, mark_harmful_combat_action,
     queue_delayed_status_effect, queue_effects, quickening_cast_speed_multiplier_for_owner,
-    register_projectile_return_heal, rephase_accumulated_orbit_projectiles,
-    rime_effect_packet_for_frost_spell, set_active_aura, status_matches_removal_filter,
-    status_removal_is_blocked_by_rime, temporary_combat_modifiers, timestamp_to_micros,
-    toggle_active_emanation, toggle_active_immolation, ActiveCombatProjectile, CombatEvent,
-    DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StatusApplication,
-    StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity, StatusStackGroupDefault,
-    COMBAT_EVENT_MISS, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
-    DAMAGE_SOURCE_KIND_SPELL,
+    register_projectile_return_heal, remove_active_status_group,
+    rephase_accumulated_orbit_projectiles, rime_effect_packet_for_frost_spell, set_active_aura,
+    status_matches_removal_filter, status_removal_is_blocked_by_rime, temporary_combat_modifiers,
+    timestamp_to_micros, toggle_active_emanation, toggle_active_immolation, ActiveCombatProjectile,
+    CombatEvent, DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent,
+    StackPolicy, StatusApplication, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
+    StatusStackGroupDefault, COMBAT_EVENT_MISS, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
+    COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SELF_INFLICTED, DAMAGE_SOURCE_KIND_SPELL,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -155,6 +155,58 @@ const SPECIAL_MOVEMENT_AIR_PATH_GROUND_CLEARANCE: f32 = 0.10;
 const PROJECTILE_SEQUENCE_INDEX_V1: u32 = 0;
 const RECALL_ACTION_ID: &str = "RECALL";
 const CAPACITOR_ACTION_ID: &str = "CAPACITOR";
+const SOULSTEALER_ACTION_ID: &str = "SOULSTEALER";
+const SOUL_STOLEN_STACK_GROUP: &str = "SOUL_STOLEN";
+const BLIGHT_EMPOWERED_STACK_GROUP: &str = "BLIGHT_EMPOWERED";
+const SOUL_STATE_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 7);
+
+fn try_activate_soulstealer_empower(
+    ctx: &ReducerContext,
+    caster: Identity,
+    spell_kind: &SpellId,
+    predicted_cast_id: &str,
+    client_action_seq: u64,
+) -> bool {
+    if spell_kind.as_str() != SOULSTEALER_ACTION_ID
+        || !has_active_status(ctx, caster, StatusEffectKind::SoulStolen, ctx.timestamp)
+    {
+        return false;
+    }
+
+    remove_active_status_group(
+        ctx,
+        caster,
+        StatusEffectKind::SoulStolen,
+        SOUL_STOLEN_STACK_GROUP,
+    );
+    queue_effects(
+        ctx,
+        vec![EffectPacket::ApplyStatus {
+            source: caster,
+            target: caster,
+            spell_id: format!("empower:{}", predicted_cast_id),
+            payload: StatusPayload::BlightEmpowered,
+            polarity: StatusPolarity::Buff,
+            target_audience: TargetAudience::SelfOnly,
+            duration: SOUL_STATE_DURATION,
+            stack_group: BLIGHT_EMPOWERED_STACK_GROUP.to_string(),
+            max_stacks: 1,
+            stack_policy: StackPolicy::Refresh,
+            dispel_types: Vec::new(),
+        }],
+    );
+    record_spell_prediction_result(
+        ctx,
+        caster,
+        predicted_cast_id,
+        predicted_cast_id,
+        client_action_seq,
+        SPELL_PREDICTION_RESULT_ACCEPTED,
+        ActionRejectReason::None,
+        ctx.timestamp,
+    );
+    true
+}
 
 fn is_recall_spell(spell_kind: &SpellId) -> bool {
     spell_kind.as_str() == RECALL_ACTION_ID
@@ -330,6 +382,22 @@ fn push_impact_effect_packets(
             dir_z,
         ));
     }
+}
+
+fn successful_interrupt_damage(
+    impact_effects: &[ImpactEffect],
+    target_has_active_cast: bool,
+) -> i32 {
+    if !target_has_active_cast {
+        return 0;
+    }
+
+    impact_effects.iter().fold(0, |total, effect| match effect {
+        ImpactEffect::InterruptCastWithDamage { damage, .. } => {
+            total.saturating_add((*damage).max(0))
+        }
+        _ => total,
+    })
 }
 
 fn movement_impact_effects(movement: &MovementDeliveryRuntime) -> Vec<ImpactEffect> {
@@ -582,6 +650,15 @@ pub(crate) fn queue_pending_cast_request(
             ActionRejectReason::Busy,
             ctx.timestamp,
         );
+        return Ok(());
+    }
+    if try_activate_soulstealer_empower(
+        ctx,
+        caster,
+        spell_kind,
+        predicted_cast_id.as_str(),
+        client_action_seq,
+    ) {
         return Ok(());
     }
     if definition.uses_global_cooldown && is_on_global_cooldown(ctx, caster, ctx.timestamp) {
@@ -939,6 +1016,15 @@ fn execute_cast_intent(
             ActionRejectReason::Busy,
             now,
         );
+        return Ok(());
+    }
+    if try_activate_soulstealer_empower(
+        ctx,
+        caster,
+        spell_kind,
+        predicted_cast_id.as_str(),
+        client_action_seq,
+    ) {
         return Ok(());
     }
     if uses_global_cooldown && is_on_global_cooldown(ctx, caster_state.player_id, now) {
@@ -8198,7 +8284,13 @@ fn apply_direct_target_spell(
         },
     );
 
-    let is_heal = direct_target.heal_amount > 0;
+    let hostile_target = can_harm(ctx, caster, target.player_id);
+    let is_heal = direct_target_is_heal(
+        direct_target.heal_amount,
+        direct_target.relation_aware,
+        hostile_target,
+    );
+    let target_damage = if is_heal { 0 } else { definition.damage };
     if !is_heal && hostile_targeted_ability_misses(ctx, caster, target.player_id, now) {
         emit_targeted_spell_miss(
             ctx,
@@ -8236,7 +8328,7 @@ fn apply_direct_target_spell(
             point.x,
             point.y,
             point.z,
-            definition.damage,
+            target_damage,
             direct_target.parry_behavior.as_str(),
             definition.block_behavior.as_str(),
             now,
@@ -8245,6 +8337,15 @@ fn apply_direct_target_spell(
         return Ok(());
     }
 
+    let interrupt_damage = successful_interrupt_damage(
+        direct_target.impact_effects.as_slice(),
+        ctx.db
+            .active_cast()
+            .caster()
+            .find(target.player_id)
+            .is_some(),
+    );
+    let event_damage = target_damage.saturating_add(interrupt_damage);
     let mut effects = Vec::new();
     if is_heal {
         emit_spell_combat_event(
@@ -8274,7 +8375,7 @@ fn apply_direct_target_spell(
             spell_id: spell_id.clone(),
             target_audience: definition.target_audience,
         });
-    } else if definition.damage > 0 {
+    } else if event_damage > 0 {
         emit_spell_combat_event_with_damage(
             ctx,
             SpellCombatEventPayload {
@@ -8294,10 +8395,10 @@ fn apply_direct_target_spell(
                 point,
                 now,
             },
-            definition.damage,
+            event_damage,
         );
         effects.push(EffectPacket::Damage {
-            amount: definition.damage,
+            amount: target_damage,
             damage_type: definition.damage_type,
             source: caster,
             target: target.player_id,
@@ -8337,16 +8438,33 @@ fn apply_direct_target_spell(
         target.player_id,
         spell_id.as_str(),
         definition.kind.as_str(),
-        definition.damage > 0,
+        event_damage > 0,
         knockback_dir_x,
         knockback_dir_z,
     );
+
+    if direct_target.self_damage_amount > 0 {
+        effects.push(EffectPacket::Damage {
+            amount: direct_target.self_damage_amount,
+            damage_type: definition.damage_type,
+            source: caster,
+            target: caster,
+            spell_id: spell_id.clone(),
+            delivery: DamageDelivery::Direct,
+            source_kind: DAMAGE_SOURCE_KIND_SELF_INFLICTED.to_string(),
+            direct_action_key: spell_id,
+        });
+    }
 
     if !effects.is_empty() {
         queue_effects(ctx, effects);
     }
 
     Ok(())
+}
+
+fn direct_target_is_heal(heal_amount: i32, relation_aware: bool, hostile_target: bool) -> bool {
+    heal_amount > 0 && (!relation_aware || !hostile_target)
 }
 
 fn cast_apply_status(
@@ -8734,12 +8852,17 @@ fn apply_status_to_target(
             effects.push(rime);
         }
     }
+    let (application_target, application_audience) = if apply_status_tunables.apply_to_caster {
+        (caster, TargetAudience::SelfOnly)
+    } else {
+        (target.player_id, definition.target_audience)
+    };
     effects.push(application.to_effect_packet_for_audience(
         caster,
-        target.player_id,
+        application_target,
         spell_id.as_str(),
         polarity,
-        definition.target_audience,
+        application_audience,
         definition.kind.as_str(),
     ));
     queue_effects(ctx, effects);
@@ -9279,6 +9402,11 @@ fn cast_remove_status(
         now,
     );
 
+    if remove_status.transfer_to_caster {
+        transfer_debuffs_to_caster(ctx, caster, target, remove_status.max_count, now);
+        return Ok(true);
+    }
+
     let mut effects: Vec<EffectPacket> = remove_status
         .statuses
         .iter()
@@ -9543,6 +9671,54 @@ fn filtered_remove_status_effects(
         })
         .take(remove_status_max_count(remove_status.max_count))
         .collect()
+}
+
+fn transfer_debuffs_to_caster(
+    ctx: &ReducerContext,
+    caster: Identity,
+    target: Identity,
+    max_count: u32,
+    now: Timestamp,
+) -> usize {
+    if caster == target {
+        return 0;
+    }
+    let mut matches: Vec<StatusEffect> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| {
+            status_is_transferable_debuff_values(
+                effect.polarity.as_str(),
+                effect.expires_at,
+                now,
+                crate::combat::status_is_projected_by_active_radial_effect(ctx, effect),
+            )
+        })
+        .collect();
+    matches.sort_by_key(|effect| effect.status_id);
+    let matches: Vec<_> = matches
+        .into_iter()
+        .take(remove_status_max_count(max_count))
+        .collect();
+    let transferred = matches.len();
+    for mut effect in matches {
+        effect.target = caster;
+        ctx.db.status_effect().status_id().update(effect);
+    }
+    transferred
+}
+
+fn status_is_transferable_debuff_values(
+    polarity: &str,
+    expires_at: Timestamp,
+    now: Timestamp,
+    projected_by_active_radial_effect: bool,
+) -> bool {
+    polarity == StatusPolarity::Debuff.as_str()
+        && now < expires_at
+        && !projected_by_active_radial_effect
 }
 
 fn matched_consume_status_effects(
@@ -9961,19 +10137,20 @@ mod tests {
         can_pay_nonlethal_health_cost, capacitor_discharge_damage, channel_area_shape_for,
         consume_status_heal_amount_from_stacks, contact_distance_from_radii,
         curved_target_control_point, defiance_damage_taken_reduction_for_health,
-        fixed_y_terrain_blocks_special_movement, has_arrived_at_contact_distance,
-        has_movement_intent, has_voluntary_movement_after_cast, horizontal_movement_duration_ms,
-        is_generic_area_spell, is_target_within_facing_arc,
+        direct_target_is_heal, fixed_y_terrain_blocks_special_movement,
+        has_arrived_at_contact_distance, has_movement_intent, has_voluntary_movement_after_cast,
+        horizontal_movement_duration_ms, is_generic_area_spell, is_target_within_facing_arc,
         normal_cast_time_spell_refunds_gcd_on_self_cancel, orbit_cast_fits_capacity,
         projectile_release_uses_live_facing, quickening_applies_to_cast_time,
         recall_capture_is_eligible, recall_replay_defaults_to_self, recall_slot_has_stored_spell,
         remaining_dot_damage_from_schedule, resolve_generic_area_center,
         resolve_special_movement_y, spell_primary_resource_cost_for_action,
+        status_is_transferable_debuff_values, successful_interrupt_damage,
         targeted_ability_is_blocked, valid_cast_action_token,
         violates_active_cast_lifetime_mobility_requirement_for_tick,
         violates_cast_mobility_requirement, ActiveCastTerminalOutcome, CastExecutionMode,
-        CombatActorSnapshot, CombatAreaShape, CurvedTargetProjectileTunables, SpellBehavior,
-        SpellId, Vec3, FACING_DOT_EPSILON, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+        CombatActorSnapshot, CombatAreaShape, CurvedTargetProjectileTunables, ImpactEffect,
+        SpellBehavior, SpellId, Vec3, FACING_DOT_EPSILON, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y, TARGET_FACING_ARC_RADIANS,
     };
     use crate::combat::scene_query::is_direction_within_facing_arc;
@@ -9982,6 +10159,32 @@ mod tests {
     use crate::spells::{ActiveCast, RecallSlot};
     use core::time::Duration;
     use spacetimedb::{Identity, Timestamp};
+
+    #[test]
+    fn relation_aware_direct_target_heals_only_non_hostile_targets() {
+        assert!(!direct_target_is_heal(40, true, true));
+        assert!(direct_target_is_heal(40, true, false));
+        assert!(direct_target_is_heal(40, false, true));
+        assert!(!direct_target_is_heal(0, true, false));
+    }
+
+    #[test]
+    fn martyr_transfers_only_live_independent_debuff_rows() {
+        let now = Timestamp::from_micros_since_unix_epoch(1_000_000);
+        let later = Timestamp::from_micros_since_unix_epoch(2_000_000);
+        assert!(status_is_transferable_debuff_values(
+            "DEBUFF", later, now, false
+        ));
+        assert!(!status_is_transferable_debuff_values(
+            "BUFF", later, now, false
+        ));
+        assert!(!status_is_transferable_debuff_values(
+            "DEBUFF", now, now, false
+        ));
+        assert!(!status_is_transferable_debuff_values(
+            "DEBUFF", later, now, true
+        ));
+    }
 
     fn test_intent(forward: f32, strafe: f32, jump: bool) -> PlayerIntent {
         PlayerIntent {
@@ -10458,6 +10661,21 @@ mod tests {
         assert_eq!(
             active_cast_interrupt_terminal_policy(&unknown),
             ActiveCastTerminalOutcome::SilentClear
+        );
+    }
+
+    #[test]
+    fn interrupt_damage_requires_a_cast_to_interrupt() {
+        let effects = vec![ImpactEffect::InterruptCastWithDamage {
+            damage: 30,
+            damage_type: "HOLY".to_string(),
+        }];
+
+        assert_eq!(successful_interrupt_damage(effects.as_slice(), false), 0);
+        assert_eq!(successful_interrupt_damage(effects.as_slice(), true), 30);
+        assert_eq!(
+            successful_interrupt_damage(&[ImpactEffect::InterruptCast], true),
+            0
         );
     }
 

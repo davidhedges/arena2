@@ -111,6 +111,8 @@ const SUBTLETY_OPPORTUNIST_ABILITY_ID: &str = "SUBTLETY_OPPORTUNIST";
 const SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID: &str = "SUBTLETY_SURPRISE_ATTACKS";
 const SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID: &str = "SUBTLETY_TACTICAL_ADVANTAGE";
 const RUIN_FLAMING_WEAPON_ABILITY_ID: &str = "RUIN_FLAMING_WEAPON";
+const RUIN_WILDFIRE_ABILITY_ID: &str = "RUIN_WILDFIRE";
+const SOULSTEALER_ABILITY_ID: &str = "SPELL_SOULSTEALER";
 const RUIN_FURNACE_ABILITY_ID: &str = "RUIN_FURNACE";
 const RUIN_ACCELERATION_ABILITY_ID: &str = "RUIN_ACCELERATION";
 const RUIN_QUICKENING_ABILITY_ID: &str = "RUIN_QUICKENING";
@@ -118,6 +120,7 @@ const RUIN_CHAIN_REACTION_ABILITY_ID: &str = "RUIN_CHAIN_REACTION";
 const RUIN_RIME_ABILITY_ID: &str = "RUIN_RIME";
 const RUIN_FRACTURE_ABILITY_ID: &str = "RUIN_FRACTURE";
 const RUIN_POTENTIAL_ABILITY_ID: &str = "RUIN_POTENTIAL";
+const DIVINITY_FAITH_ABILITY_ID: &str = "DIVINITY_FAITH";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct AllocatedStatTotals {
@@ -284,6 +287,10 @@ struct AbilityGameplayDefinition {
     #[serde(default)]
     melee_fire_on_hit: Option<MeleeFireOnHitDefinition>,
     #[serde(default)]
+    fire_spell_ignite: Option<FireSpellIgniteDefinition>,
+    #[serde(default)]
+    soulstealer_empowered_damage_bonus: f32,
+    #[serde(default)]
     fire_damage_taken_mana_restore_ratio: f32,
     #[serde(default)]
     critical_strike_cooldown_reduction_ms: u64,
@@ -299,6 +306,8 @@ struct AbilityGameplayDefinition {
     frozen_melee_first_hit_damage_bonus: f32,
     #[serde(default)]
     noncritical_lightning_spell_crit_chance_bonus: f32,
+    #[serde(default)]
+    mana_regen_bonus: f32,
     uses_global_cooldown: Option<bool>,
     #[serde(default)]
     global_cooldown_ms: Option<u64>,
@@ -351,6 +360,18 @@ struct MovementReturnDefinition {
 #[serde(deny_unknown_fields)]
 struct MeleeFireOnHitDefinition {
     bonus_damage: i32,
+    burn_duration_ms: u64,
+    burn_tick_interval_ms: u64,
+    burn_tick_damage: i32,
+    burn_max_stacks: u32,
+    burn_status_stack_group: String,
+    burn_dispel_types: Vec<StatusDispelType>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FireSpellIgniteDefinition {
+    radius_meters: f32,
     burn_duration_ms: u64,
     burn_tick_interval_ms: u64,
     burn_tick_damage: i32,
@@ -677,6 +698,7 @@ fn authored_status_stack_group_default(kind: &str) -> StatusStackGroupDefault {
         "MOVEMENT_IMPAIRING_IMMUNITY" => {
             StatusStackGroupDefault::ActionSuffix("MOVEMENT_IMPAIRING_IMMUNITY")
         }
+        "STUN_IMMUNITY" => StatusStackGroupDefault::ActionSuffix("STUN_IMMUNITY"),
         "SILENCE" => StatusStackGroupDefault::ActionSuffix("SILENCE"),
         "DAMAGE_AMP" => StatusStackGroupDefault::ActionSuffix("DAMAGE_AMP"),
         "DIRECT_DAMAGE_AMP" => StatusStackGroupDefault::ActionSuffix("DIRECT_DAMAGE_AMP"),
@@ -769,6 +791,17 @@ pub(crate) struct MeleeChannelRuntime {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MeleeFireOnHitRuntime {
     pub bonus_damage: i32,
+    pub burn_duration: Duration,
+    pub burn_tick_interval: Duration,
+    pub burn_tick_damage: i32,
+    pub burn_max_stacks: u32,
+    pub burn_status_stack_group: String,
+    pub burn_dispel_types: Vec<StatusDispelType>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct FireSpellIgniteRuntime {
+    pub radius_meters: f32,
     pub burn_duration: Duration,
     pub burn_tick_interval: Duration,
     pub burn_tick_damage: i32,
@@ -1204,6 +1237,12 @@ fn authored_status_presentation_ids(catalog: &ProgressionCatalogFile) -> HashSet
                 &mut ids,
             );
         }
+        if let Some(fire_spell_ignite) = ability.gameplay.fire_spell_ignite.as_ref() {
+            collect_optional_status_stack_group(
+                Some(fire_spell_ignite.burn_status_stack_group.as_str()),
+                &mut ids,
+            );
+        }
     }
     ids
 }
@@ -1222,6 +1261,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::Hot,
         StatusEffectKind::MoveSlowImmunity,
         StatusEffectKind::MovementImpairingImmunity,
+        StatusEffectKind::StunImmunity,
         StatusEffectKind::Silence,
         StatusEffectKind::DamageAmp,
         StatusEffectKind::DirectDamageAmp,
@@ -1245,6 +1285,10 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::Fulmination,
         StatusEffectKind::Quickening,
         StatusEffectKind::Rime,
+        StatusEffectKind::SoulStolen,
+        StatusEffectKind::BlightEmpowered,
+        StatusEffectKind::Reckoning,
+        StatusEffectKind::DamageRedirect,
     ]
     .into_iter()
     .map(|kind| kind.as_str().to_string())
@@ -5475,6 +5519,7 @@ fn validate_ability_catalog() {
         let movement_return = ability.gameplay.movement_return.as_ref();
         let stealth_attack_stun_ms = ability.gameplay.stealth_attack_stun_ms;
         let melee_fire_on_hit = ability.gameplay.melee_fire_on_hit.as_ref();
+        let fire_spell_ignite = ability.gameplay.fire_spell_ignite.as_ref();
         let fire_damage_taken_mana_restore_ratio =
             ability.gameplay.fire_damage_taken_mana_restore_ratio;
         let critical_strike_cooldown_reduction_ms =
@@ -5491,11 +5536,34 @@ fn validate_ability_catalog() {
         let noncritical_lightning_spell_crit_chance_bonus = ability
             .gameplay
             .noncritical_lightning_spell_crit_chance_bonus;
+        let mana_regen_bonus = ability.gameplay.mana_regen_bonus;
         assert!(
             disabled_target_damage_bonus.is_finite()
                 && (0.0..=1.0).contains(&disabled_target_damage_bonus),
             "ability '{ability_id}' must author disabled_target_damage_bonus between 0 and 1"
         );
+        assert!(
+            mana_regen_bonus.is_finite() && mana_regen_bonus >= 0.0,
+            "ability '{ability_id}' must author a finite non-negative mana_regen_bonus"
+        );
+        if mana_regen_bonus > 0.0 {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author mana_regen_bonus for PASSIVE gameplay"
+            );
+        }
+        if ability_id == DIVINITY_FAITH_ABILITY_ID {
+            assert_eq!(
+                discipline_id, DISCIPLINE_DIVINITY,
+                "Faith must remain Divinity"
+            );
+            assert_eq!(ability_kind, "PASSIVE", "Faith must remain passive");
+            assert!(ability
+                .ability_tags
+                .iter()
+                .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+            assert!((mana_regen_bonus - 2.0).abs() < 0.0001);
+        }
         if disabled_target_damage_bonus > 0.0 {
             assert_eq!(
                 ability_kind, "PASSIVE",
@@ -5601,6 +5669,62 @@ fn validate_ability_catalog() {
             );
             assert_eq!(
                 melee_fire_on_hit.burn_dispel_types,
+                vec![StatusDispelType::Magic]
+            );
+        }
+        if let Some(fire_spell_ignite) = fire_spell_ignite {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author fire_spell_ignite for PASSIVE gameplay"
+            );
+            assert!(
+                fire_spell_ignite.radius_meters.is_finite()
+                    && (0.1..=50.0).contains(&fire_spell_ignite.radius_meters),
+                "ability '{ability_id}' must author fire_spell_ignite.radius_meters between 0.1 and 50"
+            );
+            assert!(
+                (1..=60_000).contains(&fire_spell_ignite.burn_duration_ms),
+                "ability '{ability_id}' must author fire_spell_ignite.burn_duration_ms between 1 and 60000"
+            );
+            assert!(
+                (1..=fire_spell_ignite.burn_duration_ms)
+                    .contains(&fire_spell_ignite.burn_tick_interval_ms),
+                "ability '{ability_id}' must author a positive Wildfire burn interval no longer than its duration"
+            );
+            assert!(
+                fire_spell_ignite.burn_tick_damage > 0,
+                "ability '{ability_id}' must author positive fire_spell_ignite.burn_tick_damage"
+            );
+            assert!(
+                (1..=100).contains(&fire_spell_ignite.burn_max_stacks),
+                "ability '{ability_id}' must author fire_spell_ignite.burn_max_stacks between 1 and 100"
+            );
+            assert!(
+                !normalize_identifier(fire_spell_ignite.burn_status_stack_group.as_str())
+                    .is_empty(),
+                "ability '{ability_id}' must author fire_spell_ignite.burn_status_stack_group"
+            );
+        }
+        if ability_id == RUIN_WILDFIRE_ABILITY_ID {
+            let fire_spell_ignite =
+                fire_spell_ignite.expect("Wildfire must author fire_spell_ignite tuning");
+            assert_eq!(discipline_id, DISCIPLINE_RUIN, "Wildfire must remain Ruin");
+            assert_eq!(ability_kind, "PASSIVE", "Wildfire must remain passive");
+            assert!(ability
+                .ability_tags
+                .iter()
+                .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+            assert!((fire_spell_ignite.radius_meters - 5.0).abs() < 0.0001);
+            assert_eq!(fire_spell_ignite.burn_duration_ms, 5_000);
+            assert_eq!(fire_spell_ignite.burn_tick_interval_ms, 1_000);
+            assert_eq!(fire_spell_ignite.burn_tick_damage, 1);
+            assert_eq!(fire_spell_ignite.burn_max_stacks, 5);
+            assert_eq!(
+                normalize_identifier(fire_spell_ignite.burn_status_stack_group.as_str()),
+                "WILDFIRE_BURN"
+            );
+            assert_eq!(
+                fire_spell_ignite.burn_dispel_types,
                 vec![StatusDispelType::Magic]
             );
         }
@@ -6380,6 +6504,7 @@ fn validate_spell_gameplay(ability_id: &str, gameplay: &AbilityGameplayDefinitio
         "spell ability '{ability_id}' must define gameplay.delivery"
     );
     validate_spell_delivery_damage_type(ability_id, gameplay);
+    validate_interrupt_damage_impact_effects(ability_id, gameplay);
     assert!(
         gameplay.minimum_range.is_none(),
         "spell ability '{ability_id}' must not define gameplay.minimum_range"
@@ -6388,6 +6513,65 @@ fn validate_spell_gameplay(ability_id: &str, gameplay: &AbilityGameplayDefinitio
         gameplay.target_health_damage_scaling.is_none(),
         "spell ability '{ability_id}' must not define gameplay.target_health_damage_scaling"
     );
+    assert!(
+        gameplay.soulstealer_empowered_damage_bonus.is_finite()
+            && (0.0..=1.0).contains(&gameplay.soulstealer_empowered_damage_bonus),
+        "spell ability '{ability_id}' must author soulstealer_empowered_damage_bonus between 0 and 1"
+    );
+    if ability_id == SOULSTEALER_ABILITY_ID {
+        assert!(
+            (gameplay.soulstealer_empowered_damage_bonus - 0.5).abs() < 0.0001,
+            "Soulstealer must author a provisional 50% empowered damage bonus"
+        );
+    } else {
+        assert_eq!(
+            gameplay.soulstealer_empowered_damage_bonus, 0.0,
+            "only Soulstealer may author soulstealer_empowered_damage_bonus"
+        );
+    }
+}
+
+fn validate_interrupt_damage_impact_effects(
+    ability_id: &str,
+    gameplay: &AbilityGameplayDefinition,
+) {
+    let Some(impact_effects) = gameplay
+        .delivery
+        .as_ref()
+        .and_then(|delivery| delivery.get("impact_effects"))
+        .and_then(|value| value.as_array())
+    else {
+        return;
+    };
+
+    for effect in impact_effects {
+        let kind = effect
+            .get("kind")
+            .and_then(|value| value.as_str())
+            .map(normalize_identifier)
+            .unwrap_or_default();
+        if kind != "INTERRUPT_CAST_WITH_DAMAGE" {
+            continue;
+        }
+
+        let damage = effect
+            .get("damage")
+            .and_then(|value| value.as_i64())
+            .unwrap_or(0);
+        assert!(
+            damage > 0 && damage <= i32::MAX as i64,
+            "spell ability '{ability_id}' INTERRUPT_CAST_WITH_DAMAGE damage must be a positive i32"
+        );
+        let damage_type = effect
+            .get("damage_type")
+            .and_then(|value| value.as_str())
+            .map(normalize_identifier)
+            .unwrap_or_default();
+        assert!(
+            is_known_damage_type(damage_type.as_str()),
+            "spell ability '{ability_id}' INTERRUPT_CAST_WITH_DAMAGE has unsupported damage_type '{damage_type}'"
+        );
+    }
 }
 
 fn validate_spell_delivery_damage_type(ability_id: &str, gameplay: &AbilityGameplayDefinition) {
@@ -6815,6 +6999,34 @@ pub(crate) fn ruin_flaming_weapon_on_hit_for_owner(
         })
 }
 
+pub(crate) fn ruin_wildfire_ignite_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<FireSpellIgniteRuntime> {
+    if !character_has_selected_discipline(ctx, owner, DISCIPLINE_RUIN) {
+        return None;
+    }
+
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == RUIN_WILDFIRE_ABILITY_ID
+        })
+        .and_then(|ability| ability.gameplay.fire_spell_ignite.as_ref())
+        .map(|definition| FireSpellIgniteRuntime {
+            radius_meters: definition.radius_meters,
+            burn_duration: Duration::from_millis(definition.burn_duration_ms),
+            burn_tick_interval: Duration::from_millis(definition.burn_tick_interval_ms),
+            burn_tick_damage: definition.burn_tick_damage,
+            burn_max_stacks: definition.burn_max_stacks,
+            burn_status_stack_group: normalize_identifier(
+                definition.burn_status_stack_group.as_str(),
+            ),
+            burn_dispel_types: definition.burn_dispel_types.clone(),
+        })
+}
+
 pub(crate) fn ruin_fracture_melee_damage_bonus() -> f32 {
     progression_catalog()
         .abilities
@@ -6849,6 +7061,26 @@ pub(crate) fn ruin_furnace_mana_restore_ratio_for_owner(
         .filter(|ratio| ratio.is_finite())
         .unwrap_or(0.0)
         .clamp(0.0, 1.0)
+}
+
+pub(crate) fn divinity_faith_mana_regen_bonus_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> f32 {
+    if !character_has_selected_discipline(ctx, owner, DISCIPLINE_DIVINITY) {
+        return 0.0;
+    }
+
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == DIVINITY_FAITH_ABILITY_ID
+        })
+        .map(|ability| ability.gameplay.mana_regen_bonus)
+        .filter(|bonus| bonus.is_finite())
+        .unwrap_or(0.0)
+        .max(0.0)
 }
 
 pub(crate) fn ruin_acceleration_cooldown_reduction_for_owner(
@@ -6957,6 +7189,26 @@ pub(crate) fn spell_ability_id_for_action_id(action_id: &str) -> Option<String> 
         .map(|ability| normalize_identifier(ability.ability_id.as_str()))
 }
 
+pub(crate) fn ability_belongs_to_discipline(ability_id: &str, discipline_id: &str) -> bool {
+    let ability_id = normalize_identifier(ability_id);
+    let discipline_id = normalize_identifier(discipline_id);
+    progression_catalog().abilities.iter().any(|ability| {
+        normalize_identifier(ability.ability_id.as_str()) == ability_id
+            && normalize_identifier(ability.discipline_id.as_str()) == discipline_id
+    })
+}
+
+pub(crate) fn soulstealer_empowered_damage_bonus() -> f32 {
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| normalize_identifier(ability.ability_id.as_str()) == SOULSTEALER_ABILITY_ID)
+        .map(|ability| ability.gameplay.soulstealer_empowered_damage_bonus)
+        .filter(|bonus| bonus.is_finite())
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0)
+}
+
 fn canonical_action_bar_slot_id(value: &str) -> String {
     match normalize_identifier(value).as_str() {
         "BOTTOM_01" => "SLOT_0_0".to_string(),
@@ -6976,7 +7228,7 @@ fn encode_tags(tags: &[String]) -> String {
     let mut normalized: Vec<_> = tags.iter().map(|tag| normalize_identifier(tag)).collect();
     normalized.sort();
     normalized.dedup();
-    normalized.join("|")
+    normalized.join(",")
 }
 
 #[cfg(test)]
@@ -7003,7 +7255,7 @@ mod tests {
         action_ref_for_action_bar_default, authored_status_presentation_ids,
         canonical_action_bar_slot_id, character_action_bar_assignment_is_generic_fixed_action,
         character_discipline_loadout_contains, combat_rule_value, combat_vfx_cue_key,
-        derived_spell_action_presentation_rows, melee_channel_for_ability_id,
+        derived_spell_action_presentation_rows, encode_tags, melee_channel_for_ability_id,
         melee_impact_effects_for_ability_id, normalize_identifier,
         normalize_optional_target_audience, primary_resource_gain_on_action_accept,
         progression_catalog, projectile_body_vfx_id_for_spell,
@@ -7017,7 +7269,7 @@ mod tests {
         AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE, COMBAT_MODE_FULL_DRAW, COMBAT_MODE_READY,
         COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED, COMBAT_PROFILE_ARCHER_BOW,
         COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_SWORD_AND_SHIELD, COMBAT_PROFILE_TWO_HANDED_SWORD,
-        DAGGER_SHROUD_ABILITY_ID, DISCIPLINE_RUIN, GLOBAL_ACTION_BAR_PROFILE,
+        DAGGER_SHROUD_ABILITY_ID, DISCIPLINE_DIVINITY, DISCIPLINE_RUIN, GLOBAL_ACTION_BAR_PROFILE,
         RESOURCE_KIND_STAMINA, SUBTLETY_FLEET_FOOTED_ABILITY_ID,
         SUBTLETY_LINGERING_SHADE_ABILITY_ID, SUBTLETY_OPPORTUNIST_ABILITY_ID,
         SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID, SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID,
@@ -7033,6 +7285,9 @@ mod tests {
         assert!(ability_tags_allow_discipline_selection(
             "CORE_ABILITY, PASSIVE"
         ));
+        let encoded = encode_tags(&["CORE_ABILITY".to_string(), "ACTION_BAR_ACTION".to_string()]);
+        assert_eq!(encoded, "ACTION_BAR_ACTION,CORE_ABILITY");
+        assert!(ability_tags_allow_discipline_selection(encoded.as_str()));
         assert!(!ability_tags_allow_discipline_selection("CORE_ABILITY"));
     }
 
@@ -8077,6 +8332,8 @@ mod tests {
             "SPELL_BLOCK",
             "SPELL_PARRY",
             "SPELL_FIZZLE",
+            "STATUS_ACTIVE",
+            "STATUS_END",
             "EMANATION_ACTIVE",
             "EMANATION_MAX_STACKS",
             "SPECIAL_MOVEMENT_START",
@@ -8125,6 +8382,8 @@ mod tests {
             "UNTIL_CAST_END",
             // State-backed caster field; ends when its ActiveRadialEffect row is deleted.
             "UNTIL_RADIAL_EFFECT_END",
+            // State-backed target attachment; ends when its StatusEffect row is deleted.
+            "UNTIL_STATUS_END",
         ];
         for cue in &catalog.combat_vfx_cues {
             let owner_kind = normalize_identifier(cue.owner_kind.as_str());
@@ -9227,6 +9486,311 @@ mod tests {
     }
 
     #[test]
+    fn glacial_advance_authors_ruin_stun_immunity_and_frost_impact() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_GLACIAL_ADVANCE")
+            .expect("Glacial Advance ability should be authored");
+        assert_eq!(ability.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(ability.action_id, "GLACIAL_ADVANCE");
+        assert_eq!(ability_delivery_kind(ability), "APPLY_STATUS");
+        assert_eq!(ability.gameplay.cast_time_ms, Some(0));
+        assert_eq!(ability.gameplay.cooldown_ms, Some(30_000));
+        assert_eq!(ability.gameplay.resource_cost, Some(20.0));
+        assert_eq!(
+            normalize_optional_target_audience(ability.gameplay.target_audience.as_str()),
+            "PARTY_OR_SELF"
+        );
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .expect("Glacial Advance should define delivery data");
+        assert_eq!(
+            delivery
+                .get("duration_ms")
+                .and_then(serde_json::Value::as_u64),
+            Some(10_000)
+        );
+        assert_eq!(
+            delivery
+                .get("max_distance")
+                .and_then(serde_json::Value::as_f64),
+            Some(18.0)
+        );
+        assert_eq!(
+            delivery
+                .get("damage_type")
+                .and_then(serde_json::Value::as_str),
+            Some("COLD")
+        );
+        assert_eq!(
+            delivery
+                .get("status")
+                .and_then(serde_json::Value::as_object)
+                .and_then(|status| status.get("kind"))
+                .and_then(serde_json::Value::as_str),
+            Some("STUN_IMMUNITY")
+        );
+
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_GLACIAL_ADVANCE"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_IMPACT"
+            })
+            .expect("Glacial Advance frost impact VFX cue should be authored");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "IMPACT_POINT");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_GLACIAL_SPIKE_TARGET_01"
+        );
+        assert_eq!(
+            normalize_identifier(cue.lifecycle.as_str()),
+            "PARTICLE_SYSTEM"
+        );
+        assert_eq!(cue.duration_ms, 0);
+    }
+
+    #[test]
+    fn holy_shield_authors_divinity_absorb_and_natural_end_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_HOLY_SHIELD")
+            .expect("Holy Shield ability should be authored");
+        assert_eq!(ability.discipline_id, DISCIPLINE_DIVINITY);
+        assert_eq!(ability.action_id, "HOLY_SHIELD");
+        assert_eq!(ability_delivery_kind(ability), "APPLY_STATUS");
+        assert_eq!(ability.gameplay.cast_time_ms, Some(0));
+        assert_eq!(ability.gameplay.cooldown_ms, Some(30_000));
+        assert_eq!(ability.gameplay.resource_cost, Some(0.0));
+        assert_eq!(
+            normalize_optional_target_audience(ability.gameplay.target_audience.as_str()),
+            "PARTY_OR_SELF"
+        );
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .expect("Holy Shield should define delivery data");
+        assert_eq!(
+            delivery
+                .get("duration_ms")
+                .and_then(serde_json::Value::as_u64),
+            Some(20_000)
+        );
+        assert_eq!(
+            delivery
+                .get("max_distance")
+                .and_then(serde_json::Value::as_f64),
+            Some(18.0)
+        );
+        let status = delivery
+            .get("status")
+            .and_then(serde_json::Value::as_object)
+            .expect("Holy Shield should author temporary hitpoints");
+        assert_eq!(
+            status.get("kind").and_then(serde_json::Value::as_str),
+            Some("TEMPORARY_HITPOINTS")
+        );
+        assert_eq!(
+            status
+                .get("absorb_amount")
+                .and_then(serde_json::Value::as_i64),
+            Some(100)
+        );
+        assert_eq!(
+            status.get("absorb_cap").and_then(serde_json::Value::as_i64),
+            Some(100)
+        );
+
+        let active_cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_HOLY_SHIELD"
+                    && normalize_identifier(cue.trigger.as_str()) == "STATUS_ACTIVE"
+            })
+            .expect("Holy Shield active target VFX cue should be authored");
+        assert_eq!(normalize_identifier(active_cue.anchor.as_str()), "TARGET");
+        assert_eq!(
+            normalize_identifier(active_cue.attach_mode.as_str()),
+            "FOLLOW_ANCHOR"
+        );
+        assert_eq!(
+            normalize_identifier(active_cue.vfx_id.as_str()),
+            "VFX_HOLY_SHIELD_ACTIVE_01"
+        );
+        assert_eq!(
+            normalize_identifier(active_cue.lifecycle.as_str()),
+            "UNTIL_STATUS_END"
+        );
+
+        let end_cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_HOLY_SHIELD"
+                    && normalize_identifier(cue.trigger.as_str()) == "STATUS_END"
+            })
+            .expect("Holy Shield natural-end VFX cue should be authored");
+        assert_eq!(normalize_identifier(end_cue.anchor.as_str()), "TARGET");
+        assert_eq!(
+            normalize_identifier(end_cue.vfx_id.as_str()),
+            "VFX_HOLY_SHIELD_END_01"
+        );
+        assert_eq!(
+            normalize_identifier(end_cue.lifecycle.as_str()),
+            "PARTICLE_SYSTEM"
+        );
+        assert_eq!(end_cue.duration_ms, 0);
+    }
+
+    #[test]
+    fn rebuke_authors_divinity_interrupt_conditional_holy_damage_and_impact_vfx() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_REBUKE")
+            .expect("Rebuke ability should be authored");
+        assert_eq!(ability.discipline_id, DISCIPLINE_DIVINITY);
+        assert_eq!(ability.action_id, "REBUKE");
+        assert_eq!(ability_delivery_kind(ability), "DIRECT_TARGET");
+        assert_eq!(ability.gameplay.cast_time_ms, Some(0));
+        assert_eq!(ability.gameplay.cooldown_ms, Some(12_000));
+        assert_eq!(ability.gameplay.uses_global_cooldown, Some(false));
+        assert_eq!(
+            normalize_identifier(ability.gameplay.targeting.as_str()),
+            "TARGET"
+        );
+        assert_eq!(
+            normalize_optional_target_audience(ability.gameplay.target_audience.as_str()),
+            "HOSTILE"
+        );
+        assert_eq!(ability.gameplay.requires_target, Some(true));
+        assert_eq!(ability.gameplay.requires_target_los, Some(true));
+        assert_eq!(ability.gameplay.resource_cost, Some(0.0));
+
+        let delivery = ability
+            .gameplay
+            .delivery
+            .as_ref()
+            .expect("Rebuke delivery should be authored");
+        assert_eq!(
+            delivery
+                .get("max_distance")
+                .and_then(serde_json::Value::as_f64),
+            Some(18.0)
+        );
+        assert_eq!(
+            delivery.get("damage").and_then(serde_json::Value::as_i64),
+            Some(0)
+        );
+        assert_eq!(
+            delivery
+                .get("damage_type")
+                .and_then(serde_json::Value::as_str),
+            Some("HOLY")
+        );
+        let effects = delivery
+            .get("impact_effects")
+            .and_then(serde_json::Value::as_array)
+            .expect("Rebuke impact effect should be authored");
+        assert_eq!(effects.len(), 1);
+        assert_eq!(
+            effects[0].get("kind").and_then(serde_json::Value::as_str),
+            Some("INTERRUPT_CAST_WITH_DAMAGE")
+        );
+        assert_eq!(
+            effects[0].get("damage").and_then(serde_json::Value::as_i64),
+            Some(30)
+        );
+        assert_eq!(
+            effects[0]
+                .get("damage_type")
+                .and_then(serde_json::Value::as_str),
+            Some("HOLY")
+        );
+
+        let cues: Vec<_> = catalog
+            .combat_vfx_cues
+            .iter()
+            .filter(|cue| normalize_identifier(cue.owner_id.as_str()) == "SPELL_REBUKE")
+            .collect();
+        assert_eq!(cues.len(), 1);
+        let cue = cues[0];
+        assert_eq!(normalize_identifier(cue.trigger.as_str()), "SPELL_IMPACT");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "IMPACT_POINT");
+        assert_eq!(normalize_identifier(cue.vfx_id.as_str()), "VFX_HOLY_HIT_01");
+    }
+
+    #[test]
+    fn new_divinity_spell_family_and_faith_passive_are_fully_presented() {
+        let catalog = progression_catalog();
+        let expected = [
+            ("SPELL_SMITE", "SMITE", "SPELL"),
+            ("SPELL_PENANCE", "PENANCE", "SPELL"),
+            ("SPELL_RECKONING", "RECKONING", "SPELL"),
+            ("SPELL_MARTYR", "MARTYR", "SPELL"),
+            ("SPELL_BURDEN", "BURDEN", "SPELL"),
+            ("DIVINITY_FAITH", "FAITH", "PASSIVE"),
+        ];
+        for (ability_id, action_id, gameplay_kind) in expected {
+            let ability = catalog
+                .abilities
+                .iter()
+                .find(|ability| ability.ability_id == ability_id)
+                .unwrap_or_else(|| panic!("missing {ability_id}"));
+            assert_eq!(ability.discipline_id, DISCIPLINE_DIVINITY);
+            assert_eq!(ability.action_id, action_id);
+            assert_eq!(ability_gameplay_kind(ability), gameplay_kind);
+            assert!(catalog.action_presentations.iter().any(|presentation| {
+                normalize_identifier(presentation.presentation_id.as_str()) == ability_id
+            }));
+        }
+
+        let faith = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DIVINITY_FAITH")
+            .expect("Faith ability");
+        assert!((faith.gameplay.mana_regen_bonus - 2.0).abs() < 0.0001);
+        assert!(faith
+            .ability_tags
+            .iter()
+            .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+
+        let expected_cues = [
+            ("SPELL_SMITE", "SPELL_IMPACT", "VFX_HOLY_HIT_01"),
+            ("SPELL_PENANCE", "SPELL_IMPACT", "VFX_ABSOLUTION_HOLY_01"),
+            ("SPELL_RECKONING", "STATUS_END", "VFX_HOLY_HIT_01"),
+            ("SPELL_MARTYR", "SPELL_IMPACT", "VFX_CLEANSE_HOLY_01"),
+            (
+                "SPELL_BURDEN",
+                "STATUS_ACTIVE",
+                "VFX_PROTECTION_SHIELD_BUFF_01",
+            ),
+        ];
+        for (owner, trigger, vfx_id) in expected_cues {
+            assert!(catalog.combat_vfx_cues.iter().any(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == owner
+                    && normalize_identifier(cue.trigger.as_str()) == trigger
+                    && normalize_identifier(cue.vfx_id.as_str()) == vfx_id
+            }));
+        }
+    }
+
+    #[test]
     fn ruin_flaming_weapon_authors_melee_fire_and_stacking_burning_passive() {
         let catalog = progression_catalog();
         let ability = catalog
@@ -9276,6 +9840,90 @@ mod tests {
             .combat_profile_action_bar_defaults
             .iter()
             .any(|assignment| assignment.ability_id == "RUIN_FLAMING_WEAPON"));
+    }
+
+    #[test]
+    fn soulstealer_authors_blight_empowerment_and_target_impact_presentation() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_SOULSTEALER")
+            .expect("Soulstealer ability should be authored");
+        assert_eq!(ability.discipline_id, "BLIGHT");
+        assert_eq!(ability.action_id, "SOULSTEALER");
+        assert_eq!(ability_gameplay_kind(ability), "SPELL");
+        assert_eq!(ability.gameplay.cast_time_ms, Some(2_000));
+        assert!((ability.gameplay.soulstealer_empowered_damage_bonus - 0.5).abs() < 0.0001);
+
+        assert!(authored_status_presentation_ids(catalog).contains("SOUL_STOLEN"));
+        assert!(authored_status_presentation_ids(catalog).contains("BLIGHT_EMPOWERED"));
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_SOULSTEALER"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_IMPACT"
+            })
+            .expect("Soulstealer target impact VFX cue should be authored");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "TARGET");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_SOULSTEALER_TARGET_01"
+        );
+        assert_eq!(
+            normalize_identifier(cue.lifecycle.as_str()),
+            "PARTICLE_SYSTEM"
+        );
+    }
+
+    #[test]
+    fn ruin_wildfire_authors_nearby_fire_spell_ignite_passive() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "RUIN_WILDFIRE")
+            .expect("Wildfire ability should be authored");
+        assert_eq!(ability.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(ability.action_id, "WILDFIRE");
+        assert_eq!(ability_gameplay_kind(ability), "PASSIVE");
+        assert!(ability
+            .ability_tags
+            .iter()
+            .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+
+        let tuning = ability
+            .gameplay
+            .fire_spell_ignite
+            .as_ref()
+            .expect("Wildfire should define fire-spell ignite tuning");
+        assert!((tuning.radius_meters - 5.0).abs() < 0.0001);
+        assert_eq!(tuning.burn_duration_ms, 5_000);
+        assert_eq!(tuning.burn_tick_interval_ms, 1_000);
+        assert_eq!(tuning.burn_tick_damage, 1);
+        assert_eq!(tuning.burn_max_stacks, 5);
+        assert_eq!(tuning.burn_status_stack_group, "WILDFIRE_BURN");
+        assert_eq!(tuning.burn_dispel_types, vec![StatusDispelType::Magic]);
+
+        assert!(authored_status_presentation_ids(catalog).contains("WILDFIRE_BURN"));
+        assert!(!catalog
+            .combat_profile_action_bar_defaults
+            .iter()
+            .any(|assignment| assignment.ability_id == "RUIN_WILDFIRE"));
+        let cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "RUIN_WILDFIRE"
+                    && normalize_identifier(cue.trigger.as_str()) == "AREA_IMPACT"
+            })
+            .expect("Wildfire should author an ignite VFX cue");
+        assert_eq!(
+            normalize_identifier(cue.vfx_id.as_str()),
+            "VFX_FIRE_AREA_BURST_01_ARENA"
+        );
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "AREA_ORIGIN");
     }
 
     #[test]
@@ -12734,6 +13382,9 @@ mod tests {
             ("SPELL_GUST_OF_WIND", "GUST_OF_WIND", "AIR"),
             ("SPELL_BUFFET", "BUFFET", "AIR"),
             ("SPELL_CELESTIAL_MANTLE", "CELESTIAL_MANTLE", "HOLY"),
+            ("SPELL_HOLY_SHIELD", "HOLY_SHIELD", "HOLY"),
+            ("SPELL_REBUKE", "REBUKE", "HOLY"),
+            ("SPELL_GLACIAL_ADVANCE", "GLACIAL_ADVANCE", "COLD"),
             ("SPELL_FLASHFIRE", "FLASHFIRE", "FIRE"),
             ("SPELL_COLLAPSE", "COLLAPSE", "ARCANE"),
             ("SPELL_SILENCE", "SILENCE", "ARCANE"),
@@ -12821,6 +13472,8 @@ mod tests {
                     "SPELL_PROTECTION",
                     "SPELL_BLINDING_LIGHT",
                     "SPELL_CELESTIAL_MANTLE",
+                    "SPELL_HOLY_SHIELD",
+                    "SPELL_REBUKE",
                 ][..],
             ),
             (
@@ -12848,6 +13501,7 @@ mod tests {
                     "SPELL_FROZEN_GRASP",
                     "SPELL_CAUTERIZE",
                     "SPELL_FLASHFIRE",
+                    "SPELL_GLACIAL_ADVANCE",
                 ][..],
             ),
         ];

@@ -5,6 +5,7 @@ using Arena.Simulation;
 using Arena.Presentation;
 using Arena.Presentation.Appearance;
 using Arena.Presentation.Targeting;
+using Arena.Presentation.VFX;
 using Arena.Input;
 using Arena.Combat;
 using SpacetimeDB;
@@ -62,6 +63,7 @@ namespace Arena.Entity
 
         private readonly Dictionary<string, int> _effectCounts = new();
         private readonly Transform? _presentationRoot;
+        private GameObject? _soulstealerCasterVfx;
         private Renderer[]? _renderers;
         private Color _baseColor;
         private bool _isHighlighted;
@@ -197,6 +199,7 @@ namespace Arena.Entity
             _effectCounts[effectKind] = (_effectCounts.TryGetValue(effectKind, out var n) ? n : 0) + 1;
             RefreshWeaponStatusVisibility();
             RefreshEffectTint();
+            RefreshSoulstealerCasterVfx();
         }
 
         public void RemoveStatusEffect(string effectKind)
@@ -207,6 +210,51 @@ namespace Arena.Entity
                 _effectCounts.Remove(effectKind);
             RefreshWeaponStatusVisibility();
             RefreshEffectTint();
+            RefreshSoulstealerCasterVfx();
+        }
+
+        private void RefreshSoulstealerCasterVfx()
+        {
+            bool hasStolenSoul = false;
+            foreach (var effect in _effectCounts)
+            {
+                if (effect.Value > 0
+                    && string.Equals(effect.Key, "SOUL_STOLEN", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    hasStolenSoul = true;
+                    break;
+                }
+            }
+
+            if (!hasStolenSoul)
+            {
+                if (_soulstealerCasterVfx != null)
+                    Object.Destroy(_soulstealerCasterVfx);
+                _soulstealerCasterVfx = null;
+                return;
+            }
+            if (_soulstealerCasterVfx != null || IsDestroyed)
+                return;
+
+            CombatVFXRegistry.Template? template =
+                CombatVFXTemplateRegistry.ResolveTemplate("VFX_SOULSTEALER_CASTER_01");
+            if (template?.Prefab == null)
+                return;
+
+            Transform parent = _presentationRoot ?? GameObject.transform;
+            _soulstealerCasterVfx = Object.Instantiate(template.Prefab, parent, false);
+            _soulstealerCasterVfx.name = "Soulstealer_StolenSoulVFX";
+            _soulstealerCasterVfx.transform.SetLocalPositionAndRotation(
+                template.LocalPositionOffset,
+                template.LocalRotation);
+            VFXUtils.ApplyPrefabPresentationScale(_soulstealerCasterVfx, template.Scale);
+            foreach (ParticleSystem particles in
+                     _soulstealerCasterVfx.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                ParticleSystem.MainModule main = particles.main;
+                main.loop = true;
+                particles.Play(true);
+            }
         }
 
         private void RefreshWeaponStatusVisibility()
@@ -242,9 +290,12 @@ namespace Arena.Entity
             { "shock",      new Color(0.9f, 1.0f, 0.3f) },
             { "MOVE_SLOW_IMMUNITY", new Color(1.0f, 0.8f, 0.25f) },
             { "MOVEMENT_IMPAIRING_IMMUNITY", new Color(1.0f, 0.88f, 0.45f) },
+            { "STUN_IMMUNITY", new Color(0.45f, 0.88f, 1.0f) },
             { "SILENCE", new Color(0.65f, 0.35f, 1.0f) },
             { "DAMAGE_TAKEN_REDUCTION", new Color(1.0f, 0.72f, 0.18f) },
             { "TARGETED_ABILITY_AVOIDANCE", new Color(0.65f, 0.95f, 1.0f) },
+            { "RECKONING", new Color(1.0f, 0.72f, 0.18f) },
+            { "DAMAGE_REDIRECT", new Color(1.0f, 0.86f, 0.45f) },
         };
 
         private void RefreshEffectTint()

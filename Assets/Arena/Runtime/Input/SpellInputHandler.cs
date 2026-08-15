@@ -498,6 +498,20 @@ namespace Arena.Input
                 ActionBarTrace.Trace($"spell dispatch rejected: no local player for {spellId}");
                 return false;
             }
+            if (SoulstealerPresentation.IsSoulstealerAbility(spellId, spellId)
+                && SoulstealerPresentation.HasStolenSoul(conn, localPlayer.Identity))
+            {
+                if (!CanAttemptCast(usesGlobalCooldown: false))
+                {
+                    ActionBarTrace.Trace("Empower dispatch rejected by local active-action gate");
+                    return false;
+                }
+
+                CastActionToken empowerToken = LocalCombatState.Instance.CreateCastActionToken(spellId);
+                ActionBarTrace.Trace("sending explicit Empower press through the Soulstealer keybind");
+                SendCastRequest(conn, spellId, string.Empty, 0f, 0f, 0f, empowerToken);
+                return true;
+            }
             // TS: canAttemptCast() — client-side gates for snappy rejection.
             if (!CanAttemptCast(
                 usesGlobalCooldown,

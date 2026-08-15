@@ -25,6 +25,11 @@ namespace Arena.Combat
                 return ResolveForFixedAction(conn, action.ActionId);
             if (action.IsCombatDisciplineSwitch)
                 return ResolveForCombatDisciplineSwitch(conn, action);
+            if (SoulstealerPresentation.IsSoulstealerAction(action)
+                && SoulstealerPresentation.HasStolenSoul(conn, owner))
+            {
+                return SoulstealerPresentation.EmpowerTooltip();
+            }
             if (CapacitorPresentation.IsCapacitorAction(action)
                 && CapacitorPresentation.IsCharged(conn, owner))
             {

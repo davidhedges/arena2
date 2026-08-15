@@ -29,6 +29,8 @@ namespace Arena.Presentation
         private const string TriggerSpellBlock = "SPELL_BLOCK";
         private const string TriggerSpellParry = "SPELL_PARRY";
         private const string TriggerSpellFizzle = "SPELL_FIZZLE";
+        private const string TriggerStatusActive = "STATUS_ACTIVE";
+        private const string TriggerStatusEnd = "STATUS_END";
         private const string TriggerEmanationActive = "EMANATION_ACTIVE";
         private const string TriggerEmanationMaxStacks = "EMANATION_MAX_STACKS";
         private const string TriggerSpecialMovementStart = "SPECIAL_MOVEMENT_START";
@@ -77,6 +79,7 @@ namespace Arena.Presentation
         private readonly Dictionary<string, string> _spellVfxTokenByActionInstance = new(StringComparer.Ordinal);
         private readonly Dictionary<string, bool> _projectileDeliveredSpellImpactByActionKind = new(StringComparer.Ordinal);
         private readonly Dictionary<string, ActiveRadialEffectVfxState> _activeRadialEffectVfxByKey = new(StringComparer.Ordinal);
+        private readonly Dictionary<ulong, ActiveStatusEffectVfxState> _activeStatusEffectVfxById = new();
 
         private readonly struct ActiveRadialEffectVfxState : IEquatable<ActiveRadialEffectVfxState>
         {
@@ -92,6 +95,25 @@ namespace Arena.Presentation
             public bool Equals(ActiveRadialEffectVfxState other)
                 => string.Equals(Trigger, other.Trigger, StringComparison.Ordinal)
                     && string.Equals(AbilityId, other.AbilityId, StringComparison.Ordinal);
+        }
+
+        private readonly struct ActiveStatusEffectVfxState : IEquatable<ActiveStatusEffectVfxState>
+        {
+            public ActiveStatusEffectVfxState(string spellId, string abilityId, Identity target)
+            {
+                SpellId = spellId;
+                AbilityId = abilityId;
+                Target = target;
+            }
+
+            public string SpellId { get; }
+            public string AbilityId { get; }
+            public Identity Target { get; }
+
+            public bool Equals(ActiveStatusEffectVfxState other)
+                => string.Equals(SpellId, other.SpellId, StringComparison.Ordinal)
+                    && string.Equals(AbilityId, other.AbilityId, StringComparison.Ordinal)
+                    && Target.Equals(other.Target);
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -213,7 +235,10 @@ namespace Arena.Presentation
             if (_subscribedConnection != null && !ReferenceEquals(_subscribedConnection, conn))
                 UnsubscribeFromConnection();
             if (_subscribedConnection != null)
+            {
+                RefreshActiveStatusEffectVfx();
                 return;
+            }
             if (conn == null)
                 return;
 
@@ -240,6 +265,8 @@ namespace Arena.Presentation
 
             foreach (ActiveRadialEffect row in conn.Db.ActiveRadialEffect.Iter())
                 SpawnActiveRadialEffectVfx(row);
+            foreach (StatusEffect row in conn.Db.StatusEffect.Iter())
+                SpawnStatusEffectVfx(row);
         }
 
         // Channel/cast end: tear down any UNTIL_CAST_END cues bound to this cast. The cue's
@@ -338,12 +365,14 @@ namespace Arena.Presentation
         private void OnStatusEffectInsertForVfx(EventContext ctx, StatusEffect row)
         {
             _ = ctx;
+            SpawnStatusEffectVfx(row);
             RefreshActiveRadialEffectVfxForStatus(row);
         }
 
         private void OnStatusEffectUpdateForVfx(EventContext ctx, StatusEffect oldRow, StatusEffect newRow)
         {
             _ = ctx;
+            SpawnStatusEffectVfx(newRow);
             RefreshActiveRadialEffectVfxForStatus(oldRow);
             if (!oldRow.Target.Equals(newRow.Target)
                 || !string.Equals(oldRow.SpellId, newRow.SpellId, StringComparison.Ordinal))
@@ -355,8 +384,85 @@ namespace Arena.Presentation
         private void OnStatusEffectDeleteForVfx(EventContext ctx, StatusEffect row)
         {
             _ = ctx;
+            string statusEffectKey = StatusEffectVfxKey(row.StatusId);
+            _lifecycle?.DestroyForStatusEnd(statusEffectKey);
+            _activeStatusEffectVfxById.Remove(row.StatusId);
             RefreshActiveRadialEffectVfxForStatus(row);
         }
+
+        private void RefreshActiveStatusEffectVfx()
+        {
+            var conn = _subscribedConnection ?? NetworkManager.Instance?.Conn;
+            if (conn == null)
+                return;
+
+            foreach (StatusEffect row in conn.Db.StatusEffect.Iter())
+            {
+                if (!_activeStatusEffectVfxById.ContainsKey(row.StatusId))
+                    SpawnStatusEffectVfx(row);
+            }
+        }
+
+        private void SpawnStatusEffectVfx(StatusEffect row)
+        {
+            var conn = _subscribedConnection ?? NetworkManager.Instance?.Conn;
+            if (conn == null || EntityRegistry.Instance == null)
+                return;
+
+            string spellId = WireIdentifier.Normalize(row.SpellId);
+            if (string.IsNullOrWhiteSpace(spellId))
+                return;
+
+            string abilityId = ResolveAbilityIdForSpell(conn, spellId);
+            if (string.IsNullOrWhiteSpace(abilityId))
+            {
+                string authoredStatusOwner = WireIdentifier.Normalize(row.StackGroup);
+                int sourceSuffix = authoredStatusOwner.IndexOf(':');
+                if (sourceSuffix > 0)
+                    authoredStatusOwner = authoredStatusOwner.Substring(0, sourceSuffix);
+                abilityId = ResolveAbilityIdForSpell(conn, authoredStatusOwner);
+            }
+            var desiredState = new ActiveStatusEffectVfxState(spellId, abilityId, row.Target);
+            string statusEffectKey = StatusEffectVfxKey(row.StatusId);
+            if (_activeStatusEffectVfxById.TryGetValue(row.StatusId, out ActiveStatusEffectVfxState currentState))
+            {
+                if (currentState.Equals(desiredState))
+                    return;
+
+                _lifecycle?.DestroyForStatusEnd(statusEffectKey);
+                _activeStatusEffectVfxById.Remove(row.StatusId);
+            }
+
+            if (!EntityRegistry.Instance.TryGetCombatTarget(row.Target, out ICombatTargetEntity target))
+                return;
+
+            Transform root = target.GetPresentationRoot();
+            var fact = new CombatVfxFact(
+                TriggerStatusActive,
+                spellId,
+                abilityId,
+                string.Empty,
+                -1,
+                row.Source,
+                row.Target,
+                statusEffectKey,
+                spellId,
+                root.position,
+                root.forward,
+                root.position,
+                0f,
+                0f,
+                CombatEventScalarKinds.None,
+                0f,
+                0,
+                1,
+                isSpell: true);
+            if (DispatchFact(fact))
+                _activeStatusEffectVfxById[row.StatusId] = desiredState;
+        }
+
+        private static string StatusEffectVfxKey(ulong statusId)
+            => $"status-effect:{statusId}";
 
         private void RefreshActiveRadialEffectVfxForStatus(StatusEffect status)
         {
@@ -447,7 +553,12 @@ namespace Arena.Presentation
                 return current.AbilityId;
             }
 
-            string spellId = WireIdentifier.Normalize(row.SpellId);
+            return ResolveAbilityIdForSpell(conn, row.SpellId);
+        }
+
+        private static string ResolveAbilityIdForSpell(DbConnection conn, string spellId)
+        {
+            spellId = WireIdentifier.Normalize(spellId);
             string resolved = string.Empty;
             uint resolvedSortOrder = uint.MaxValue;
             foreach (AbilityCatalog ability in conn.Db.AbilityCatalog.Iter())
@@ -1545,6 +1656,7 @@ namespace Arena.Presentation
                     CombatEventTypes.Parry => TriggerSpellParry,
                     CombatEventTypes.Miss => TriggerSpellFizzle,
                     CombatEventTypes.Fizzle => TriggerSpellFizzle,
+                    CombatEventTypes.StatusEnd => TriggerStatusEnd,
                     _ => string.Empty,
                 };
             }
@@ -1688,6 +1800,8 @@ namespace Arena.Presentation
             _projectileDeliveredSpellImpactByActionKind.Clear();
             _lifecycle?.DestroyAllRadialEffects();
             _activeRadialEffectVfxByKey.Clear();
+            _lifecycle?.DestroyAllStatusEffects();
+            _activeStatusEffectVfxById.Clear();
         }
 
         private readonly struct CombatVfxFact

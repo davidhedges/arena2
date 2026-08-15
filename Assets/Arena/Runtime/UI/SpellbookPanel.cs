@@ -335,7 +335,11 @@ namespace Arena.UI
 
         private static string BuildSignature(string title, IReadOnlyList<ItemSpell> spells, DbConnection conn)
         {
-            List<string> parts = new() { title };
+            List<string> parts = new()
+            {
+                title,
+                $"soul_stolen:{SoulstealerPresentation.HasStolenSoul(conn, conn.Identity)}"
+            };
             foreach (ItemSpell spell in spells)
             {
                 string spellId = WireIdentifier.Normalize(spell.SpellId);

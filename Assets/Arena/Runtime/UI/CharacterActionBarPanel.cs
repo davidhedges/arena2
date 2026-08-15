@@ -805,6 +805,7 @@ namespace Arena.UI
             sb.Append("weapon_filter:").Append(weaponFilterKey).Append('|');
             sb.Append("spell_slots:").Append(assignedSpellSlots).Append('/').Append(spellSlotCapacity).Append('|');
             sb.Append("capacitor_charges:").Append(CapacitorPresentation.ChargeCount(conn, owner)).Append('|');
+            sb.Append("soul_stolen:").Append(SoulstealerPresentation.HasStolenSoul(conn, owner)).Append('|');
             sb.Append("discipline_abilities:");
             foreach (CharacterDisciplineAbilitySelection selection in
                      conn.Db.CharacterDisciplineAbilitySelection.Owner.Filter(owner)

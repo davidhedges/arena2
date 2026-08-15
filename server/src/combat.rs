@@ -24,13 +24,15 @@ use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WOR
 use crate::player_state::PlayerState;
 use crate::practice::resolve_respawn_pose;
 use crate::progression::{
-    character_has_selected_discipline, combat_rule_value, derived_combat_profile_id_for_owner,
-    ruin_acceleration_cooldown_reduction_for_owner, ruin_chain_reaction_spell_for_owner,
-    ruin_fracture_melee_damage_bonus, ruin_furnace_mana_restore_ratio_for_owner,
-    ruin_potential_crit_chance_per_stack_for_owner, ruin_quickening_for_owner,
-    ruin_rime_protects_debuffs_for_owner, subtlety_behind_target_damage_bonus,
-    subtlety_disabled_target_damage_bonus, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD,
-    DISCIPLINE_RUIN, DISCIPLINE_SUBTLETY,
+    ability_belongs_to_discipline, character_has_selected_discipline, combat_rule_value,
+    derived_combat_profile_id_for_owner, ruin_acceleration_cooldown_reduction_for_owner,
+    ruin_chain_reaction_spell_for_owner, ruin_fracture_melee_damage_bonus,
+    ruin_furnace_mana_restore_ratio_for_owner, ruin_potential_crit_chance_per_stack_for_owner,
+    ruin_quickening_for_owner, ruin_rime_protects_debuffs_for_owner,
+    ruin_wildfire_ignite_for_owner, soulstealer_empowered_damage_bonus,
+    subtlety_behind_target_damage_bonus, subtlety_disabled_target_damage_bonus,
+    COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD, DISCIPLINE_BLIGHT, DISCIPLINE_RUIN,
+    DISCIPLINE_SUBTLETY,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
@@ -160,10 +162,18 @@ pub(crate) const DAMAGE_SOURCE_KIND_SPELL: &str = "SPELL";
 pub(crate) const DAMAGE_SOURCE_KIND_PROJECTILE: &str = "PROJECTILE";
 pub(crate) const DAMAGE_SOURCE_KIND_PERIODIC: &str = "PERIODIC";
 pub(crate) const DAMAGE_SOURCE_KIND_TRAP: &str = "TRAP";
+pub(crate) const DAMAGE_SOURCE_KIND_SELF_INFLICTED: &str = "SELF_INFLICTED";
+const DAMAGE_SOURCE_KIND_BURDEN_REDIRECT: &str = "BURDEN_REDIRECT";
+const DAMAGE_SOURCE_KIND_RECKONING: &str = "RECKONING";
 const DAMAGE_SOURCE_KIND_FULMINATION_ARC: &str = "FULMINATION_ARC";
 const CHAIN_REACTION_ACTION_PREFIX: &str = "chain_reaction:";
 const QUICKENING_STATUS_GROUP: &str = "QUICKENING";
 const QUICKENING_SPELL_ID: &str = "RUIN_QUICKENING";
+const HOLY_SHIELD_SPELL_ID: &str = "HOLY_SHIELD";
+const HOLY_SHIELD_ABILITY_ID: &str = "SPELL_HOLY_SHIELD";
+const HOLY_SHIELD_STATUS_GROUP: &str = "HOLY_SHIELD";
+const RECKONING_SPELL_ID: &str = "RECKONING";
+const RECKONING_ABILITY_ID: &str = "SPELL_RECKONING";
 const RIME_STATUS_GROUP: &str = "RIME";
 const RIME_SPELL_ID: &str = "RUIN_RIME";
 const FULMINATION_SPELL_ID: &str = "FULMINATION";
@@ -202,6 +212,7 @@ pub(crate) const COMBAT_EVENT_FIZZLE: &str = "COMBAT_FIZZLE";
 pub(crate) const COMBAT_EVENT_MISS: &str = "COMBAT_MISS";
 pub(crate) const COMBAT_EVENT_BLOCK: &str = "COMBAT_BLOCK";
 pub(crate) const COMBAT_EVENT_PARRY: &str = "COMBAT_PARRY";
+pub(crate) const COMBAT_EVENT_STATUS_END: &str = "COMBAT_STATUS_END";
 pub(crate) const COMBAT_SCALAR_NONE: &str = "";
 pub(crate) const COMBAT_SCALAR_TRAVEL_DURATION_SECONDS: &str = "TRAVEL_DURATION_SECONDS";
 pub(crate) const COMBAT_SCALAR_BEAM_CHARGE_PCT: &str = "BEAM_CHARGE_PCT";
@@ -310,6 +321,7 @@ pub fn clear_player_combat_state(ctx: &ReducerContext, identity: Identity) {
     clear_combat_engagement_for_identity(ctx, identity);
     clear_combat_stacking_passive_runtime_for_identity(ctx, identity);
     clear_potential_state_for_owner(ctx, identity);
+    clear_blight_empowered_action_runtime(ctx, identity);
 }
 
 pub fn new_player_state(player_id: Identity, now: Timestamp) -> PlayerState {
@@ -579,6 +591,14 @@ pub struct CombatStackingPassiveRuntime {
     pub next_stack_at: Timestamp,
     pub last_direct_damage_at: Timestamp,
     pub last_consumed_action_key: String,
+}
+
+#[table(accessor = blight_empowered_action_runtime)]
+#[derive(Clone)]
+pub struct BlightEmpoweredActionRuntime {
+    #[primary_key]
+    pub owner: Identity,
+    pub action_instance_id: String,
 }
 
 #[table(accessor = potential_state)]
@@ -2456,6 +2476,13 @@ fn clear_combat_stacking_passive_runtime_for_identity(ctx: &ReducerContext, owne
     }
 }
 
+fn clear_blight_empowered_action_runtime(ctx: &ReducerContext, owner: Identity) {
+    ctx.db
+        .blight_empowered_action_runtime()
+        .owner()
+        .delete(owner);
+}
+
 fn upsert_combat_stacking_passive_runtime(
     ctx: &ReducerContext,
     runtime: CombatStackingPassiveRuntime,
@@ -2773,6 +2800,7 @@ pub enum StatusEffectKind {
     Hot,
     MoveSlowImmunity,
     MovementImpairingImmunity,
+    StunImmunity,
     Silence,
     DamageAmp,
     DirectDamageAmp,
@@ -2800,6 +2828,10 @@ pub enum StatusEffectKind {
     Fulmination,
     Quickening,
     Rime,
+    SoulStolen,
+    BlightEmpowered,
+    Reckoning,
+    DamageRedirect,
 }
 
 impl StatusEffectKind {
@@ -2818,6 +2850,7 @@ impl StatusEffectKind {
             Self::Hot => "HOT",
             Self::MoveSlowImmunity => "MOVE_SLOW_IMMUNITY",
             Self::MovementImpairingImmunity => "MOVEMENT_IMPAIRING_IMMUNITY",
+            Self::StunImmunity => "STUN_IMMUNITY",
             Self::Silence => "SILENCE",
             Self::DamageAmp => "DAMAGE_AMP",
             Self::DirectDamageAmp => "DIRECT_DAMAGE_AMP",
@@ -2845,6 +2878,10 @@ impl StatusEffectKind {
             Self::Fulmination => "FULMINATION",
             Self::Quickening => "QUICKENING",
             Self::Rime => "RIME",
+            Self::SoulStolen => "SOUL_STOLEN",
+            Self::BlightEmpowered => "BLIGHT_EMPOWERED",
+            Self::Reckoning => "RECKONING",
+            Self::DamageRedirect => "DAMAGE_REDIRECT",
         }
     }
 
@@ -2863,6 +2900,7 @@ impl StatusEffectKind {
             "HOT" => Some(Self::Hot),
             "MOVE_SLOW_IMMUNITY" => Some(Self::MoveSlowImmunity),
             "MOVEMENT_IMPAIRING_IMMUNITY" => Some(Self::MovementImpairingImmunity),
+            "STUN_IMMUNITY" => Some(Self::StunImmunity),
             "SILENCE" => Some(Self::Silence),
             "DAMAGE_AMP" => Some(Self::DamageAmp),
             "DIRECT_DAMAGE_AMP" => Some(Self::DirectDamageAmp),
@@ -2890,6 +2928,10 @@ impl StatusEffectKind {
             "FULMINATION" => Some(Self::Fulmination),
             "QUICKENING" => Some(Self::Quickening),
             "RIME" => Some(Self::Rime),
+            "SOUL_STOLEN" => Some(Self::SoulStolen),
+            "BLIGHT_EMPOWERED" => Some(Self::BlightEmpowered),
+            "RECKONING" => Some(Self::Reckoning),
+            "DAMAGE_REDIRECT" => Some(Self::DamageRedirect),
             _ => None,
         }
     }
@@ -2921,6 +2963,7 @@ pub enum StatusPayload {
     },
     MoveSlowImmunity,
     MovementImpairingImmunity,
+    StunImmunity,
     Silence,
     DamageAmp {
         modifier_scalar: f32,
@@ -2977,6 +3020,12 @@ pub enum StatusPayload {
     Fulmination,
     Quickening,
     Rime,
+    SoulStolen,
+    BlightEmpowered,
+    Reckoning,
+    DamageRedirect {
+        modifier_scalar: f32,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -3063,6 +3112,7 @@ impl AuthoredStatusPayload {
             },
             StatusEffectKind::MoveSlowImmunity => StatusPayload::MoveSlowImmunity,
             StatusEffectKind::MovementImpairingImmunity => StatusPayload::MovementImpairingImmunity,
+            StatusEffectKind::StunImmunity => StatusPayload::StunImmunity,
             StatusEffectKind::Silence => StatusPayload::Silence,
             StatusEffectKind::DamageAmp => StatusPayload::DamageAmp {
                 modifier_scalar: self.modifier_scalar,
@@ -3119,6 +3169,12 @@ impl AuthoredStatusPayload {
             StatusEffectKind::Fulmination => StatusPayload::Fulmination,
             StatusEffectKind::Quickening => StatusPayload::Quickening,
             StatusEffectKind::Rime => StatusPayload::Rime,
+            StatusEffectKind::SoulStolen => StatusPayload::SoulStolen,
+            StatusEffectKind::BlightEmpowered => StatusPayload::BlightEmpowered,
+            StatusEffectKind::Reckoning => StatusPayload::Reckoning,
+            StatusEffectKind::DamageRedirect => StatusPayload::DamageRedirect {
+                modifier_scalar: self.modifier_scalar,
+            },
         }
     }
 
@@ -3180,6 +3236,7 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::MagicResistance
             | StatusEffectKind::KnockbackResistance
             | StatusEffectKind::DamageTakenFromSourceAmp
+            | StatusEffectKind::DamageRedirect
             | StatusEffectKind::CastSpeed => {
                 if !self.modifier_scalar.is_finite() || self.modifier_scalar <= 0.0 {
                     return Err(format!("{subject} {path}.modifier_scalar must be positive"));
@@ -3230,7 +3287,10 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::Gouge
             | StatusEffectKind::Fulmination
             | StatusEffectKind::Quickening
-            | StatusEffectKind::Rime => {
+            | StatusEffectKind::Rime
+            | StatusEffectKind::SoulStolen
+            | StatusEffectKind::BlightEmpowered
+            | StatusEffectKind::Reckoning => {
                 if !slow_is_default
                     || !dot_is_default
                     || !hot_is_default
@@ -3312,6 +3372,7 @@ impl StatusPayload {
             Self::Hot { .. } => StatusEffectKind::Hot,
             Self::MoveSlowImmunity => StatusEffectKind::MoveSlowImmunity,
             Self::MovementImpairingImmunity => StatusEffectKind::MovementImpairingImmunity,
+            Self::StunImmunity => StatusEffectKind::StunImmunity,
             Self::Silence => StatusEffectKind::Silence,
             Self::DamageAmp { .. } => StatusEffectKind::DamageAmp,
             Self::DirectDamageAmp { .. } => StatusEffectKind::DirectDamageAmp,
@@ -3339,6 +3400,10 @@ impl StatusPayload {
             Self::Fulmination => StatusEffectKind::Fulmination,
             Self::Quickening => StatusEffectKind::Quickening,
             Self::Rime => StatusEffectKind::Rime,
+            Self::SoulStolen => StatusEffectKind::SoulStolen,
+            Self::BlightEmpowered => StatusEffectKind::BlightEmpowered,
+            Self::Reckoning => StatusEffectKind::Reckoning,
+            Self::DamageRedirect { .. } => StatusEffectKind::DamageRedirect,
         }
     }
 
@@ -3353,6 +3418,7 @@ impl StatusPayload {
             | Self::Knockdown
             | Self::MoveSlowImmunity
             | Self::MovementImpairingImmunity
+            | Self::StunImmunity
             | Self::Silence
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
@@ -3365,7 +3431,10 @@ impl StatusPayload {
             | Self::Gouge
             | Self::Fulmination
             | Self::Quickening
-            | Self::Rime => StatusEffectColumns {
+            | Self::Rime
+            | Self::SoulStolen
+            | Self::BlightEmpowered
+            | Self::Reckoning => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
@@ -3422,6 +3491,7 @@ impl StatusPayload {
             | Self::ManaRegen { modifier_scalar }
             | Self::StaminaRegen { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
+            | Self::DamageRedirect { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: 0,
@@ -3536,6 +3606,7 @@ impl StatusPayload {
             },
             StatusEffectKind::MoveSlowImmunity => Self::MoveSlowImmunity,
             StatusEffectKind::MovementImpairingImmunity => Self::MovementImpairingImmunity,
+            StatusEffectKind::StunImmunity => Self::StunImmunity,
             StatusEffectKind::Silence => Self::Silence,
             StatusEffectKind::DamageAmp => Self::DamageAmp {
                 modifier_scalar: columns.modifier_scalar.max(0.0),
@@ -3598,6 +3669,12 @@ impl StatusPayload {
             StatusEffectKind::Fulmination => Self::Fulmination,
             StatusEffectKind::Quickening => Self::Quickening,
             StatusEffectKind::Rime => Self::Rime,
+            StatusEffectKind::SoulStolen => Self::SoulStolen,
+            StatusEffectKind::BlightEmpowered => Self::BlightEmpowered,
+            StatusEffectKind::Reckoning => Self::Reckoning,
+            StatusEffectKind::DamageRedirect => Self::DamageRedirect {
+                modifier_scalar: columns.modifier_scalar.max(0.0),
+            },
         }
     }
 
@@ -3612,6 +3689,7 @@ impl StatusPayload {
             | Self::Knockdown
             | Self::MoveSlowImmunity
             | Self::MovementImpairingImmunity
+            | Self::StunImmunity
             | Self::Silence
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
@@ -3624,7 +3702,10 @@ impl StatusPayload {
             | Self::Gouge
             | Self::Fulmination
             | Self::Quickening
-            | Self::Rime => false,
+            | Self::Rime
+            | Self::SoulStolen
+            | Self::BlightEmpowered
+            | Self::Reckoning => false,
             Self::Slow { slow_pct } => !(MIN_SLOW_PCT..=0.95).contains(&slow_pct),
             Self::MoveSpeed { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0
@@ -3643,6 +3724,7 @@ impl StatusPayload {
             | Self::ManaRegen { modifier_scalar }
             | Self::StaminaRegen { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
+            | Self::DamageRedirect { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0
             }
@@ -3689,6 +3771,7 @@ impl StatusPayload {
             | Self::Knockdown
             | Self::MoveSlowImmunity
             | Self::MovementImpairingImmunity
+            | Self::StunImmunity
             | Self::Silence
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
@@ -3701,7 +3784,10 @@ impl StatusPayload {
             | Self::Gouge
             | Self::Fulmination
             | Self::Quickening
-            | Self::Rime => Ok(()),
+            | Self::Rime
+            | Self::SoulStolen
+            | Self::BlightEmpowered
+            | Self::Reckoning => Ok(()),
             Self::Slow { slow_pct } => {
                 if !(MIN_SLOW_PCT..=0.95).contains(&slow_pct) {
                     return Err(format!("{subject} {path}.slow_pct must be > 0 and <= 0.95"));
@@ -3742,6 +3828,7 @@ impl StatusPayload {
             | Self::ManaRegen { modifier_scalar }
             | Self::StaminaRegen { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
+            | Self::DamageRedirect { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 if !modifier_scalar.is_finite() || modifier_scalar <= 0.0 {
                     return Err(format!("{subject} {path}.modifier_scalar must be positive"));
@@ -3835,6 +3922,7 @@ impl StatusPayload {
             | Self::Knockdown
             | Self::MoveSlowImmunity
             | Self::MovementImpairingImmunity
+            | Self::StunImmunity
             | Self::Silence
             | Self::VengeanceAura
             | Self::MeleeAttackModifier
@@ -3847,7 +3935,10 @@ impl StatusPayload {
             | Self::Gouge
             | Self::Fulmination
             | Self::Quickening
-            | Self::Rime => true,
+            | Self::Rime
+            | Self::SoulStolen
+            | Self::BlightEmpowered
+            | Self::Reckoning => true,
             Self::Slow { slow_pct } => slow_pct > existing.slow_pct,
             Self::MoveSpeed { modifier_scalar } => {
                 modifier_scalar > existing.modifier_scalar.max(0.0)
@@ -3859,6 +3950,7 @@ impl StatusPayload {
             | Self::ManaRegen { modifier_scalar }
             | Self::StaminaRegen { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
+            | Self::DamageRedirect { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 modifier_scalar > existing.modifier_scalar.max(0.0)
             }
@@ -4256,6 +4348,13 @@ pub enum EffectPacket {
         target: Identity,
         spell_id: String,
     },
+    InterruptCastWithDamage {
+        source: Identity,
+        target: Identity,
+        spell_id: String,
+        damage: i32,
+        damage_type: DamageType,
+    },
     RemoveStatus {
         target: Identity,
         kind: StatusEffectKind,
@@ -4283,14 +4382,33 @@ pub(crate) fn queue_delayed_status_effect(
 }
 
 fn queue_effect_at(ctx: &ReducerContext, effect: EffectPacket, queued_at: Timestamp) {
-    if let EffectPacket::InterruptCast {
-        source,
-        target,
-        spell_id,
-    } = &effect
-    {
-        apply_interrupt_cast(ctx, queued_at, *source, *target, spell_id.as_str());
-        return;
+    match &effect {
+        EffectPacket::InterruptCast {
+            source,
+            target,
+            spell_id,
+        } => {
+            apply_interrupt_cast(ctx, queued_at, *source, *target, spell_id.as_str(), None);
+            return;
+        }
+        EffectPacket::InterruptCastWithDamage {
+            source,
+            target,
+            spell_id,
+            damage,
+            damage_type,
+        } => {
+            apply_interrupt_cast(
+                ctx,
+                queued_at,
+                *source,
+                *target,
+                spell_id.as_str(),
+                Some((*damage, *damage_type)),
+            );
+            return;
+        }
+        _ => {}
     }
 
     let (queued_at, queued_at_micros) = with_micros(queued_at);
@@ -4424,7 +4542,9 @@ fn queue_effect_at(ctx: &ReducerContext, effect: EffectPacket, queued_at: Timest
                 queued_order,
             });
         }
-        EffectPacket::InterruptCast { .. } => unreachable!("interrupts resolve immediately"),
+        EffectPacket::InterruptCast { .. } | EffectPacket::InterruptCastWithDamage { .. } => {
+            unreachable!("interrupts resolve immediately")
+        }
         EffectPacket::RemoveStatus {
             target,
             kind,
@@ -4836,6 +4956,7 @@ fn apply_interrupt_cast(
     source: Identity,
     target: Identity,
     spell_id: &str,
+    success_damage: Option<(i32, DamageType)>,
 ) {
     if source == Identity::ZERO
         || target == Identity::ZERO
@@ -4850,6 +4971,22 @@ fn apply_interrupt_cast(
 
     mark_harmful_combat_action(ctx, source, target, now, spell_id);
     fizzle_active_cast_for_interrupt(ctx, target, now);
+    if let Some((amount, damage_type)) = success_damage.filter(|(amount, _)| *amount > 0) {
+        queue_effect_at(
+            ctx,
+            EffectPacket::Damage {
+                amount,
+                damage_type,
+                source,
+                target,
+                spell_id: spell_id.to_string(),
+                delivery: DamageDelivery::Direct,
+                source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
+                direct_action_key: spell_id.to_string(),
+            },
+            now,
+        );
+    }
 }
 
 fn apply_pending_knockback(ctx: &ReducerContext, now: Timestamp, row: &PendingKnockback) {
@@ -4962,10 +5099,18 @@ fn apply_damage(
 ) -> bool {
     let source = hit.source;
     let target = hit.target;
+    let is_self_inflicted = hit.damage_source_kind == DAMAGE_SOURCE_KIND_SELF_INFLICTED
+        && source != Identity::ZERO
+        && source == target;
+    let is_burden_redirect = hit.damage_source_kind == DAMAGE_SOURCE_KIND_BURDEN_REDIRECT;
     if source != Identity::ZERO && !players_share_world_context(ctx, source, target) {
         return false;
     }
-    if source != Identity::ZERO && !can_harm(ctx, source, target) {
+    if source != Identity::ZERO
+        && !is_self_inflicted
+        && !is_burden_redirect
+        && !can_harm(ctx, source, target)
+    {
         return false;
     }
 
@@ -4990,6 +5135,104 @@ fn apply_damage(
     apply_damage_to_npc_state(ctx, hit, temporary_modifiers, npc_state, fulmination_source)
 }
 
+fn redirect_burden_damage(ctx: &ReducerContext, hit: &PendingHit, amount: i32) -> i32 {
+    let amount = amount.max(0);
+    if amount == 0 || hit.damage_source_kind == DAMAGE_SOURCE_KIND_BURDEN_REDIRECT {
+        return amount;
+    }
+
+    let Some(burden) = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(hit.target)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::DamageRedirect.as_str()
+                && effect.polarity == StatusPolarity::Buff.as_str()
+                && ctx.timestamp < effect.expires_at
+                && effect.source != Identity::ZERO
+                && effect.source != hit.target
+                && target_is_alive_for_status(ctx, effect.source)
+                && players_share_world_context(ctx, hit.target, effect.source)
+        })
+        .max_by_key(|effect| effect.status_id)
+    else {
+        return amount;
+    };
+
+    let (remaining, redirected) = burden_damage_split(amount, burden.modifier_scalar);
+    if redirected == 0 {
+        return amount;
+    }
+
+    queue_effects(
+        ctx,
+        vec![EffectPacket::Damage {
+            amount: redirected,
+            damage_type: DamageType::from_wire(hit.damage_type.as_str()),
+            source: hit.source,
+            target: burden.source,
+            spell_id: burden.spell_id,
+            delivery: DamageDelivery::Direct,
+            source_kind: DAMAGE_SOURCE_KIND_BURDEN_REDIRECT.to_string(),
+            direct_action_key: String::new(),
+        }],
+    );
+    remaining
+}
+
+fn damage_grants_outgoing_rewards(ctx: &ReducerContext, hit: &PendingHit) -> bool {
+    let source_is_hostile = hit.source == Identity::ZERO || can_harm(ctx, hit.source, hit.target);
+    damage_source_grants_outgoing_rewards(hit.damage_source_kind.as_str(), source_is_hostile)
+}
+
+fn damage_source_grants_outgoing_rewards(source_kind: &str, source_is_hostile: bool) -> bool {
+    source_kind != DAMAGE_SOURCE_KIND_SELF_INFLICTED
+        && (source_kind != DAMAGE_SOURCE_KIND_BURDEN_REDIRECT || source_is_hostile)
+}
+
+fn burden_damage_split(amount: i32, ratio: f32) -> (i32, i32) {
+    let amount = amount.max(0);
+    let ratio = if ratio.is_finite() {
+        ratio.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let redirected = ((amount as f32) * ratio).round() as i32;
+    let redirected = redirected.clamp(0, amount);
+    (amount - redirected, redirected)
+}
+
+fn accumulated_reckoning_damage(current: i32, confirmed_hp_damage: i32) -> i32 {
+    current.max(0).saturating_add(confirmed_hp_damage.max(0))
+}
+
+fn record_reckoning_damage_taken(
+    ctx: &ReducerContext,
+    caster: Identity,
+    confirmed_hp_damage: i32,
+    now: Timestamp,
+) {
+    if confirmed_hp_damage <= 0 {
+        return;
+    }
+    let active: Vec<StatusEffect> = ctx
+        .db
+        .status_effect()
+        .source()
+        .filter(caster)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::Reckoning.as_str()
+                && effect.polarity == StatusPolarity::Debuff.as_str()
+                && now < effect.expires_at
+        })
+        .collect();
+    for mut effect in active {
+        effect.tick_amount = accumulated_reckoning_damage(effect.tick_amount, confirmed_hp_damage);
+        ctx.db.status_effect().status_id().update(effect);
+    }
+}
+
 fn apply_damage_to_player_state(
     ctx: &ReducerContext,
     hit: &PendingHit,
@@ -5004,13 +5247,14 @@ fn apply_damage_to_player_state(
     }
 
     let mut resolved = resolve_damage_amount(ctx, hit, temporary_modifiers);
-    let resolved_amount = resolved.final_amount;
+    let resolved_amount = redirect_burden_damage(ctx, hit, resolved.final_amount);
     let damage_delivery = DamageDelivery::from_wire(hit.damage_delivery.as_str());
     let is_direct_damage = damage_delivery == DamageDelivery::Direct;
+    let grants_outgoing_rewards = damage_grants_outgoing_rewards(ctx, hit);
     if damage_breaks_shroud(damage_delivery, resolved_amount) {
         crate::progression::break_shroud_on_direct_damage(ctx, target, ctx.timestamp);
     }
-    if hit.amount > 0 {
+    if hit.amount > 0 && grants_outgoing_rewards {
         mark_harmful_combat_action(ctx, source, target, ctx.timestamp, COMBAT_REASON_DAMAGE);
     }
     let mut defeated_instance_id = None;
@@ -5021,6 +5265,7 @@ fn apply_damage_to_player_state(
         absorb_damage_with_temporary_hitpoints(ctx, target, after_mana_shield, ctx.timestamp);
     resolved.final_amount = hp_damage;
     state.hp -= hp_damage;
+    record_reckoning_damage_taken(ctx, target, hp_damage, ctx.timestamp);
     grant_primary_resource_for_damage_taken(ctx, target, hp_damage, ctx.timestamp);
     let furnace_mana = furnace_mana_restore_amount(
         hp_damage,
@@ -5061,17 +5306,22 @@ fn apply_damage_to_player_state(
         crate::survival::end_survival_run_for_player_death(ctx, target);
     }
     if let Some(instance_id) = defeated_instance_id {
-        record_match_kill(ctx, source, instance_id);
+        if grants_outgoing_rewards {
+            record_match_kill(ctx, source, instance_id);
+        }
         conclude_match_if_needed(ctx, instance_id);
     }
-    record_projectile_return_heal_damage(ctx, hit, hp_damage);
-    grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
-    apply_equipment_melee_steal(ctx, hit, hp_damage);
-    queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
-    queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
-    queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
-    queue_fulmination_arc_if_applicable(ctx, hit, hp_damage, fulmination_source);
-    if hp_damage > 0 && is_direct_damage {
+    if grants_outgoing_rewards {
+        record_projectile_return_heal_damage(ctx, hit, hp_damage);
+        grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
+        apply_equipment_melee_steal(ctx, hit, hp_damage);
+        queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
+        queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
+        queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
+        queue_fulmination_arc_if_applicable(ctx, hit, hp_damage, fulmination_source);
+        queue_wildfire_ignites_if_applicable(ctx, hit, hp_damage);
+    }
+    if grants_outgoing_rewards && hp_damage > 0 && is_direct_damage {
         let action_key = if hit.direct_action_key.trim().is_empty() {
             hit.spell_id.as_str()
         } else {
@@ -5079,7 +5329,9 @@ fn apply_damage_to_player_state(
         };
         record_successful_direct_damage(ctx, source, action_key, ctx.timestamp);
     }
-    record_match_damage_done(ctx, source, hp_damage.max(0));
+    if grants_outgoing_rewards {
+        record_match_damage_done(ctx, source, hp_damage.max(0));
+    }
     emit_combat_effect_event(ctx, hit, EFFECT_TYPE_DAMAGE, resolved);
     defeated_instance_id.is_some()
 }
@@ -5345,8 +5597,9 @@ fn apply_damage_to_npc_state(
     }
 
     let mut resolved = resolve_damage_amount(ctx, hit, temporary_modifiers);
-    let resolved_amount = resolved.final_amount;
-    if hit.amount > 0 {
+    let resolved_amount = redirect_burden_damage(ctx, hit, resolved.final_amount);
+    let grants_outgoing_rewards = damage_grants_outgoing_rewards(ctx, hit);
+    if hit.amount > 0 && grants_outgoing_rewards {
         mark_harmful_combat_action(ctx, source, target, ctx.timestamp, COMBAT_REASON_DAMAGE);
     }
 
@@ -5354,6 +5607,7 @@ fn apply_damage_to_npc_state(
         absorb_damage_with_temporary_hitpoints(ctx, target, resolved_amount, ctx.timestamp);
     resolved.final_amount = hp_damage;
     state.hp -= hp_damage;
+    record_reckoning_damage_taken(ctx, target, hp_damage, ctx.timestamp);
     crate::npcs::record_npc_damage_threat(ctx, target, source, hp_damage);
     let defeated = state.hp <= 0;
     let survival_defeated =
@@ -5379,14 +5633,18 @@ fn apply_damage_to_npc_state(
     if target_survived {
         arm_rime_after_frost_spell_hit(ctx, hit, ctx.timestamp);
     }
-    record_projectile_return_heal_damage(ctx, hit, hp_damage);
-    grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
-    apply_equipment_melee_steal(ctx, hit, hp_damage);
-    queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
-    queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
-    queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
-    queue_fulmination_arc_if_applicable(ctx, hit, hp_damage, fulmination_source);
-    if hp_damage > 0
+    if grants_outgoing_rewards {
+        record_projectile_return_heal_damage(ctx, hit, hp_damage);
+        grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
+        apply_equipment_melee_steal(ctx, hit, hp_damage);
+        queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
+        queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
+        queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
+        queue_fulmination_arc_if_applicable(ctx, hit, hp_damage, fulmination_source);
+        queue_wildfire_ignites_if_applicable(ctx, hit, hp_damage);
+    }
+    if grants_outgoing_rewards
+        && hp_damage > 0
         && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
     {
         let action_key = if hit.direct_action_key.trim().is_empty() {
@@ -5396,7 +5654,9 @@ fn apply_damage_to_npc_state(
         };
         record_successful_direct_damage(ctx, source, action_key, ctx.timestamp);
     }
-    record_match_damage_done(ctx, source, hp_damage.max(0));
+    if grants_outgoing_rewards {
+        record_match_damage_done(ctx, source, hp_damage.max(0));
+    }
     emit_combat_effect_event(ctx, hit, EFFECT_TYPE_DAMAGE, resolved);
     defeated
 }
@@ -5435,6 +5695,26 @@ fn resolve_damage_amount(
     temporary_modifiers: &TemporaryCombatModifiers,
 ) -> ResolvedEffectAmount {
     let delivery = DamageDelivery::from_wire(hit.damage_delivery.as_str());
+    if matches!(
+        hit.damage_source_kind.as_str(),
+        DAMAGE_SOURCE_KIND_SELF_INFLICTED
+            | DAMAGE_SOURCE_KIND_BURDEN_REDIRECT
+            | DAMAGE_SOURCE_KIND_RECKONING
+    ) {
+        // These amounts are already final authored/copied damage. Do not let
+        // source power, target resistance, critical strikes, or passive
+        // multipliers transform them a second time; shields still resolve in
+        // the normal application path after this function returns.
+        return resolve_effect_amount(
+            ctx,
+            hit,
+            1.0,
+            0.0,
+            Some(0.0),
+            None,
+            combat_rule_value(RULE_CRIT_DAMAGE_MULTIPLIER),
+        );
+    }
     if hit.damage_source_kind.as_str() == DAMAGE_SOURCE_KIND_FULMINATION_ARC {
         // The proc amount is already derived from confirmed melee HP damage.
         // Apply only the secondary target's mitigation/vulnerability and do
@@ -5498,6 +5778,7 @@ fn resolve_damage_amount(
             * temporary_modifiers.damage_taken_multiplier_from_source_for(&hit.target, &hit.source)
             * opportunist_passive_damage_multiplier(ctx, hit, temporary_modifiers)
             * tactical_advantage_passive_damage_multiplier(ctx, hit)
+            * blight_empowered_damage_multiplier(ctx, hit)
             * fracture_melee_damage_multiplier(
                 !fracture_freezes.is_empty(),
                 ruin_fracture_melee_damage_bonus(),
@@ -5545,6 +5826,95 @@ fn resolve_damage_amount(
     update_potential_after_spell_strike(ctx, hit, resolved.was_critical);
     trigger_critical_strike_passives(ctx, hit, resolved.was_critical);
     resolved
+}
+
+const BLIGHT_EMPOWERED_STACK_GROUP: &str = "BLIGHT_EMPOWERED";
+
+fn blight_empowered_damage_multiplier(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
+    if !blight_empowered_hit_is_eligible(hit) {
+        return 1.0;
+    }
+
+    let action_key = if hit.direct_action_key.trim().is_empty() {
+        hit.spell_id.trim()
+    } else {
+        hit.direct_action_key.trim()
+    };
+    if action_key.is_empty() {
+        return 1.0;
+    }
+
+    if ctx
+        .db
+        .blight_empowered_action_runtime()
+        .owner()
+        .find(hit.source)
+        .is_some_and(|runtime| {
+            action_key_matches_instance(action_key, runtime.action_instance_id.as_str())
+        })
+    {
+        return 1.0 + soulstealer_empowered_damage_bonus();
+    }
+
+    if !has_active_status(
+        ctx,
+        hit.source,
+        StatusEffectKind::BlightEmpowered,
+        ctx.timestamp,
+    ) {
+        return 1.0;
+    }
+
+    let Some(event) = ctx
+        .db
+        .combat_event()
+        .caster()
+        .filter(hit.source)
+        .filter(|event| action_key_matches_instance(action_key, event.action_instance_id.as_str()))
+        .max_by_key(|event| event.event_id)
+    else {
+        return 1.0;
+    };
+    if !ability_belongs_to_discipline(event.ability_id.as_str(), DISCIPLINE_BLIGHT) {
+        return 1.0;
+    }
+
+    remove_active_status_group(
+        ctx,
+        hit.source,
+        StatusEffectKind::BlightEmpowered,
+        BLIGHT_EMPOWERED_STACK_GROUP,
+    );
+    let runtime = BlightEmpoweredActionRuntime {
+        owner: hit.source,
+        action_instance_id: event.action_instance_id,
+    };
+    if ctx
+        .db
+        .blight_empowered_action_runtime()
+        .owner()
+        .find(hit.source)
+        .is_some()
+    {
+        ctx.db
+            .blight_empowered_action_runtime()
+            .owner()
+            .update(runtime);
+    } else {
+        ctx.db.blight_empowered_action_runtime().insert(runtime);
+    }
+
+    1.0 + soulstealer_empowered_damage_bonus()
+}
+
+fn blight_empowered_hit_is_eligible(hit: &PendingHit) -> bool {
+    hit.source != Identity::ZERO
+        && hit.amount > 0
+        && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
+        && matches!(
+            hit.damage_source_kind.as_str(),
+            DAMAGE_SOURCE_KIND_SPELL | DAMAGE_SOURCE_KIND_PROJECTILE
+        )
 }
 
 fn trigger_critical_strike_passives(ctx: &ReducerContext, hit: &PendingHit, was_critical: bool) {
@@ -5759,6 +6129,143 @@ fn queue_fulmination_arc_if_applicable(
             direct_action_key: String::new(),
         }],
     );
+}
+
+const WILDFIRE_ACTION_ID: &str = "WILDFIRE";
+const WILDFIRE_ABILITY_ID: &str = "RUIN_WILDFIRE";
+
+fn queue_wildfire_ignites_if_applicable(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    confirmed_hp_damage: i32,
+) {
+    if !fire_spell_hit_can_trigger_wildfire(hit, confirmed_hp_damage) {
+        return;
+    }
+    let Some(tuning) = ruin_wildfire_ignite_for_owner(ctx, hit.source) else {
+        return;
+    };
+    let radius = tuning.radius_meters;
+    if !radius.is_finite() || radius <= 0.0 {
+        return;
+    }
+
+    let snapshots = actor_snapshot::CombatActorSnapshotSet::collect(ctx);
+    let actors = snapshots.as_slice();
+    let Some(primary_index) = snapshots.index_by_id().get(&hit.target).copied() else {
+        return;
+    };
+    let primary = actors[primary_index];
+    let primary_point = actor_center(&primary);
+    let mut candidate_indices = Vec::new();
+    snapshots.query_disc_indices(primary.pos_x, primary.pos_z, radius, &mut candidate_indices);
+    let mut candidates: Vec<actor_snapshot::CombatActorSnapshot> = candidate_indices
+        .into_iter()
+        .filter_map(|index| actors.get(index).copied())
+        .filter(|candidate| {
+            candidate.alive
+                && candidate.player_id != hit.source
+                && candidate.player_id != hit.target
+                && players_share_world_context(ctx, hit.source, candidate.player_id)
+                && can_harm(ctx, hit.source, candidate.player_id)
+                && point_within_radius(primary_point, actor_center(candidate), radius)
+        })
+        .collect();
+    candidates.sort_by_key(|candidate| candidate.player_id.to_byte_array());
+
+    let effects: Vec<_> = candidates
+        .iter()
+        .map(|candidate| {
+            let candidate_point = actor_center(candidate);
+            emit_wildfire_ignite_event(
+                ctx,
+                hit,
+                candidate.player_id,
+                primary_point,
+                candidate_point,
+                radius,
+            );
+            EffectPacket::ApplyStatus {
+                source: hit.source,
+                target: candidate.player_id,
+                spell_id: format!("wildfire:{}:{}", hit.spell_id, candidate.player_id.to_hex()),
+                payload: StatusPayload::Dot {
+                    tick_damage: tuning.burn_tick_damage,
+                    damage_type: DamageType::Fire,
+                    tick_interval: tuning.burn_tick_interval,
+                },
+                polarity: StatusPolarity::Debuff,
+                target_audience: TargetAudience::Hostile,
+                duration: tuning.burn_duration,
+                stack_group: format!("{}:{}", tuning.burn_status_stack_group, hit.source.to_hex()),
+                max_stacks: tuning.burn_max_stacks,
+                stack_policy: StackPolicy::AddStackRefresh,
+                dispel_types: tuning.burn_dispel_types.clone(),
+            }
+        })
+        .collect();
+    if !effects.is_empty() {
+        queue_effects(ctx, effects);
+    }
+}
+
+fn fire_spell_hit_can_trigger_wildfire(hit: &PendingHit, confirmed_hp_damage: i32) -> bool {
+    confirmed_hp_damage > 0
+        && DamageType::from_wire(hit.damage_type.as_str()) == DamageType::Fire
+        && damage_comes_from_casted_ability(hit)
+        && matches!(
+            hit.damage_source_kind.as_str(),
+            DAMAGE_SOURCE_KIND_SPELL | DAMAGE_SOURCE_KIND_PROJECTILE
+        )
+}
+
+fn emit_wildfire_ignite_event(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    ignite_target: Identity,
+    origin: (f32, f32, f32),
+    point: (f32, f32, f32),
+    radius: f32,
+) {
+    let direction = normalized_direction(origin, point);
+    ctx.db.combat_event().insert(CombatEvent {
+        event_id: 0,
+        action_instance_id: format!(
+            "wildfire:{}:{}:{}",
+            hit.queued_at_micros,
+            hit.queued_order,
+            ignite_target.to_hex()
+        ),
+        action_kind: WILDFIRE_ACTION_ID.to_string(),
+        ability_id: WILDFIRE_ABILITY_ID.to_string(),
+        hit_index: -1,
+        event_type: COMBAT_EVENT_AREA_IMPACT.to_string(),
+        source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
+        caster: hit.source,
+        hit: ignite_target,
+        origin_x: origin.0,
+        origin_y: origin.1,
+        origin_z: origin.2,
+        dir_x: direction.0,
+        dir_y: direction.1,
+        dir_z: direction.2,
+        speed: 0.0,
+        max_distance: radius,
+        scalar_kind: COMBAT_SCALAR_NONE.to_string(),
+        scalar_value: 0.0,
+        sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
+        sequence_index: 0,
+        sequence_count: 1,
+        point_x: point.0,
+        point_y: point.1,
+        point_z: point.2,
+        created_at: ctx.timestamp,
+        created_at_micros: timestamp_to_micros(ctx.timestamp),
+        damage: 0,
+        metadata_kind: COMBAT_METADATA_NONE.to_string(),
+        metadata_key: String::new(),
+        metadata_value: String::new(),
+    });
 }
 
 fn actor_center(actor: &actor_snapshot::CombatActorSnapshot) -> (f32, f32, f32) {
@@ -6289,6 +6796,148 @@ struct TemporaryHitpointAbsorbResult {
     delete_ids: Vec<u64>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HolyShieldEndReason {
+    Expired,
+    Depleted,
+}
+
+fn finish_expired_status_effect(ctx: &ReducerContext, effect: &StatusEffect, now: Timestamp) {
+    emit_holy_shield_end_event(ctx, effect, false, now);
+    if effect.effect_kind != StatusEffectKind::Reckoning.as_str()
+        || effect.stack_group != RECKONING_SPELL_ID
+        || effect.tick_amount <= 0
+        || effect.source == Identity::ZERO
+        || effect.source == effect.target
+        || !target_is_alive_for_status(ctx, effect.target)
+        || !players_share_world_context(ctx, effect.source, effect.target)
+        || !can_harm(ctx, effect.source, effect.target)
+    {
+        return;
+    }
+
+    emit_reckoning_end_event(ctx, effect, now);
+    queue_effects(
+        ctx,
+        vec![EffectPacket::Damage {
+            amount: effect.tick_amount,
+            damage_type: DamageType::Holy,
+            source: effect.source,
+            target: effect.target,
+            spell_id: effect.spell_id.clone(),
+            delivery: DamageDelivery::Direct,
+            source_kind: DAMAGE_SOURCE_KIND_RECKONING.to_string(),
+            direct_action_key: effect.spell_id.clone(),
+        }],
+    );
+}
+
+fn emit_reckoning_end_event(ctx: &ReducerContext, effect: &StatusEffect, now: Timestamp) {
+    ctx.db.combat_event().insert(CombatEvent {
+        event_id: 0,
+        action_instance_id: format!("reckoning-status-end:{}", effect.status_id),
+        action_kind: RECKONING_SPELL_ID.to_string(),
+        ability_id: RECKONING_ABILITY_ID.to_string(),
+        hit_index: -1,
+        event_type: COMBAT_EVENT_STATUS_END.to_string(),
+        source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
+        caster: effect.source,
+        hit: effect.target,
+        origin_x: 0.0,
+        origin_y: 0.0,
+        origin_z: 0.0,
+        dir_x: 0.0,
+        dir_y: 0.0,
+        dir_z: 0.0,
+        speed: 0.0,
+        max_distance: 0.0,
+        scalar_kind: COMBAT_SCALAR_NONE.to_string(),
+        scalar_value: 0.0,
+        sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
+        sequence_index: 0,
+        sequence_count: 1,
+        point_x: 0.0,
+        point_y: 0.0,
+        point_z: 0.0,
+        created_at: now,
+        created_at_micros: timestamp_to_micros(now),
+        damage: effect.tick_amount,
+        metadata_kind: "STATUS_END".to_string(),
+        metadata_key: "REASON".to_string(),
+        metadata_value: "EXPIRED".to_string(),
+    });
+}
+
+impl HolyShieldEndReason {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Expired => "EXPIRED",
+            Self::Depleted => "DEPLETED",
+        }
+    }
+}
+
+fn holy_shield_end_reason(
+    effect: &StatusEffect,
+    now: Timestamp,
+    depleted: bool,
+) -> Option<HolyShieldEndReason> {
+    if effect.effect_kind != StatusEffectKind::TemporaryHitpoints.as_str()
+        || effect.stack_group != HOLY_SHIELD_STATUS_GROUP
+        || effect.spell_id != HOLY_SHIELD_SPELL_ID
+    {
+        return None;
+    }
+    if depleted {
+        return Some(HolyShieldEndReason::Depleted);
+    }
+    (now >= effect.expires_at).then_some(HolyShieldEndReason::Expired)
+}
+
+fn emit_holy_shield_end_event(
+    ctx: &ReducerContext,
+    effect: &StatusEffect,
+    depleted: bool,
+    now: Timestamp,
+) {
+    let Some(reason) = holy_shield_end_reason(effect, now, depleted) else {
+        return;
+    };
+    ctx.db.combat_event().insert(CombatEvent {
+        event_id: 0,
+        action_instance_id: format!("holy-shield-status-end:{}", effect.status_id),
+        action_kind: HOLY_SHIELD_SPELL_ID.to_string(),
+        ability_id: HOLY_SHIELD_ABILITY_ID.to_string(),
+        hit_index: -1,
+        event_type: COMBAT_EVENT_STATUS_END.to_string(),
+        source_kind: DAMAGE_SOURCE_KIND_SPELL.to_string(),
+        caster: effect.source,
+        hit: effect.target,
+        origin_x: 0.0,
+        origin_y: 0.0,
+        origin_z: 0.0,
+        dir_x: 0.0,
+        dir_y: 0.0,
+        dir_z: 0.0,
+        speed: 0.0,
+        max_distance: 0.0,
+        scalar_kind: COMBAT_SCALAR_NONE.to_string(),
+        scalar_value: 0.0,
+        sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
+        sequence_index: 0,
+        sequence_count: 1,
+        point_x: 0.0,
+        point_y: 0.0,
+        point_z: 0.0,
+        created_at: now,
+        created_at_micros: timestamp_to_micros(now),
+        damage: 0,
+        metadata_kind: "STATUS_END".to_string(),
+        metadata_key: "REASON".to_string(),
+        metadata_value: reason.as_str().to_string(),
+    });
+}
+
 fn absorb_damage_with_temporary_hitpoints(
     ctx: &ReducerContext,
     target: Identity,
@@ -6313,6 +6962,9 @@ fn absorb_damage_with_temporary_hitpoints(
         ctx.db.status_effect().status_id().update(effect);
     }
     for status_id in result.delete_ids {
+        if let Some(effect) = ctx.db.status_effect().status_id().find(status_id) {
+            emit_holy_shield_end_event(ctx, &effect, true, now);
+        }
         ctx.db.status_effect().status_id().delete(status_id);
     }
 
@@ -6673,6 +7325,12 @@ fn apply_status_internal(
     if source != Identity::ZERO && !players_share_world_context(ctx, source, target) {
         return;
     }
+    if status_application_is_blocked_by_immunity(
+        kind,
+        has_active_status(ctx, target, StatusEffectKind::StunImmunity, now),
+    ) {
+        return;
+    }
     let target_audience_allowed = source == Identity::ZERO
         || if fulmination_uses_any_target_audience(kind, target_audience) {
             target_audience_allows(ctx, source, target, target_audience)
@@ -6812,11 +7470,33 @@ fn apply_status_side_effects(
     target: Identity,
     kind: StatusEffectKind,
 ) {
+    if kind == StatusEffectKind::StunImmunity {
+        remove_all_statuses_of_kind(ctx, target, StatusEffectKind::Stun);
+    }
     if is_hard_crowd_control_kind(kind) {
         crate::npcs::interrupt_npc_actions_for_crowd_control(ctx, target, now);
     }
     if kind == StatusEffectKind::Stagger {
         apply_stagger_status_side_effects(ctx, now, source, target);
+    }
+}
+
+fn status_application_is_blocked_by_immunity(kind: StatusEffectKind, stun_immune: bool) -> bool {
+    kind == StatusEffectKind::Stun && stun_immune
+}
+
+fn remove_all_statuses_of_kind(ctx: &ReducerContext, target: Identity, kind: StatusEffectKind) {
+    let status_ids: Vec<u64> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| effect.effect_kind == kind.as_str())
+        .map(|effect| effect.status_id)
+        .collect();
+
+    for status_id in status_ids {
+        ctx.db.status_effect().status_id().delete(status_id);
     }
 }
 
@@ -7344,6 +8024,7 @@ fn handle_death(ctx: &ReducerContext, state: &mut PlayerState) -> Option<u64> {
     crate::spells::clear_capacitor_charge(ctx, state.player_id);
     clear_combat_engagement_for_identity(ctx, state.player_id);
     clear_combat_stacking_passive_runtime_for_identity(ctx, state.player_id);
+    clear_blight_empowered_action_runtime(ctx, state.player_id);
 
     let (event_x, event_y, event_z) = physics_position_or_default(ctx, state.player_id);
 
@@ -7624,6 +8305,7 @@ pub fn clear_statuses_for_identity(ctx: &ReducerContext, identity: Identity) {
         ctx.db.status_effect().status_id().delete(status_id);
     }
     clear_combat_stacking_passive_runtime_for_identity(ctx, identity);
+    clear_blight_empowered_action_runtime(ctx, identity);
 }
 
 fn clear_statuses_for_target(ctx: &ReducerContext, identity: Identity) {
@@ -7644,6 +8326,7 @@ pub fn clear_statuses_for_dead_players(ctx: &ReducerContext) {
         clear_active_radial_effects_for_owner(ctx, identity);
         clear_combat_engagement_for_identity(ctx, identity);
         clear_combat_stacking_passive_runtime_for_identity(ctx, identity);
+        clear_blight_empowered_action_runtime(ctx, identity);
     }
 }
 
@@ -7676,6 +8359,15 @@ pub fn normalize_legacy_hot_status_rows(ctx: &ReducerContext) -> usize {
 pub fn expire_status_effects(ctx: &ReducerContext, now: Timestamp) {
     // Sweep pass: catches any expired rows not touched by per-target application/tick paths.
     let now_micros = timestamp_to_micros(now);
+    let expired_statuses: Vec<StatusEffect> = ctx
+        .db
+        .status_effect()
+        .expires_at_micros()
+        .filter(..=now_micros)
+        .collect();
+    for effect in &expired_statuses {
+        finish_expired_status_effect(ctx, effect, now);
+    }
     ctx.db
         .status_effect()
         .expires_at_micros()
@@ -7711,16 +8403,16 @@ fn prune_orphaned_rime_statuses(ctx: &ReducerContext, now: Timestamp) {
 
 fn expire_statuses_for_target(ctx: &ReducerContext, target: Identity, now: Timestamp) {
     // Pre-application cleanup for target-local status operations.
-    let remove_ids: Vec<u64> = ctx
+    let remove_effects: Vec<StatusEffect> = ctx
         .db
         .status_effect()
         .target()
         .filter(target)
         .filter(|effect| now >= effect.expires_at)
-        .map(|effect| effect.status_id)
         .collect();
-    for status_id in remove_ids {
-        ctx.db.status_effect().status_id().delete(status_id);
+    for effect in remove_effects {
+        finish_expired_status_effect(ctx, &effect, now);
+        ctx.db.status_effect().status_id().delete(effect.status_id);
     }
 }
 
@@ -7878,9 +8570,13 @@ impl StatusRuntimeView {
 
     pub fn has_disabling_status(&self, target: Identity) -> bool {
         self.effects_by_target.get(&target).is_some_and(|effects| {
-            effects
+            let stun_immune = effects
                 .iter()
-                .any(|effect| is_hard_crowd_control_kind(effect.kind))
+                .any(|effect| effect.kind == StatusEffectKind::StunImmunity);
+            effects.iter().any(|effect| {
+                is_hard_crowd_control_kind(effect.kind)
+                    && !(effect.kind == StatusEffectKind::Stun && stun_immune)
+            })
         })
     }
 
@@ -7890,6 +8586,7 @@ impl StatusRuntimeView {
 
         for (target, effects) in self.effects_by_target.iter() {
             let movement_impairing_immune = temporary.has_movement_impairing_immunity(target);
+            let stun_immune = temporary.has_stun_immunity(target);
             if temporary.has_move_slow_immunity(target) || movement_impairing_immune {
                 modifiers.move_slow_immune.insert(*target);
             }
@@ -7911,7 +8608,9 @@ impl StatusRuntimeView {
                         *entry = (*entry)
                             .max(effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32);
                     }
-                    kind if is_hard_crowd_control_kind(kind) => {
+                    kind if is_hard_crowd_control_kind(kind)
+                        && !(kind == StatusEffectKind::Stun && stun_immune) =>
+                    {
                         modifiers.disabled.insert(*target);
                     }
                     _ => {}
@@ -7926,6 +8625,12 @@ impl StatusRuntimeView {
         let mut modifiers = TemporaryCombatModifiers::default();
 
         for (target, effects) in self.effects_by_target.iter() {
+            let stun_immune = effects
+                .iter()
+                .any(|effect| effect.kind == StatusEffectKind::StunImmunity);
+            if stun_immune {
+                modifiers.stun_immune.insert(*target);
+            }
             for effect in effects {
                 match effect.kind {
                     StatusEffectKind::MoveSlowImmunity => {
@@ -7934,6 +8639,7 @@ impl StatusRuntimeView {
                     StatusEffectKind::MovementImpairingImmunity => {
                         modifiers.movement_impairing_immune.insert(*target);
                     }
+                    StatusEffectKind::StunImmunity => {}
                     StatusEffectKind::DamageAmp => {
                         let entry = modifiers.damage_amp_by_target.entry(*target).or_insert(0.0);
                         *entry = (*entry).max(effect.modifier_scalar.max(0.0));
@@ -8032,7 +8738,9 @@ impl StatusRuntimeView {
                     StatusEffectKind::Berserking => {
                         modifiers.berserking.insert(*target);
                     }
-                    kind if is_hard_crowd_control_kind(kind) => {
+                    kind if is_hard_crowd_control_kind(kind)
+                        && !(kind == StatusEffectKind::Stun && stun_immune) =>
+                    {
                         modifiers.disabled.insert(*target);
                     }
                     StatusEffectKind::Root
@@ -8058,7 +8766,11 @@ impl StatusRuntimeView {
                     | StatusEffectKind::Gouge
                     | StatusEffectKind::Fulmination
                     | StatusEffectKind::Quickening
-                    | StatusEffectKind::Rime => {}
+                    | StatusEffectKind::Rime
+                    | StatusEffectKind::SoulStolen
+                    | StatusEffectKind::BlightEmpowered
+                    | StatusEffectKind::Reckoning
+                    | StatusEffectKind::DamageRedirect => {}
                 }
             }
         }
@@ -8071,6 +8783,7 @@ impl StatusRuntimeView {
 pub struct TemporaryCombatModifiers {
     move_slow_immune: HashSet<Identity>,
     movement_impairing_immune: HashSet<Identity>,
+    stun_immune: HashSet<Identity>,
     damage_amp_by_target: HashMap<Identity, f32>,
     direct_damage_amp_by_target: HashMap<Identity, f32>,
     damage_taken_reduction_by_target: HashMap<Identity, f32>,
@@ -8095,6 +8808,10 @@ impl TemporaryCombatModifiers {
 
     pub fn has_movement_impairing_immunity(&self, identity: &Identity) -> bool {
         self.movement_impairing_immune.contains(identity)
+    }
+
+    pub fn has_stun_immunity(&self, identity: &Identity) -> bool {
+        self.stun_immune.contains(identity)
     }
 
     pub fn is_disabled(&self, identity: &Identity) -> bool {
@@ -8354,14 +9071,16 @@ fn attack_speed_scalar_to_multiplier(modifier_scalar: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        action_key_matches_instance, actor_distance_sq, apply_status_update,
-        attack_speed_scalar_to_multiplier, attacker_is_behind_target,
-        battle_trance_hp_after_damage, behind_target_damage_multiplier, bloodlust_passive_spec,
+        accumulated_reckoning_damage, action_key_matches_instance, actor_distance_sq,
+        apply_status_update, attack_speed_scalar_to_multiplier, attacker_is_behind_target,
+        battle_trance_hp_after_damage, behind_target_damage_multiplier,
+        blight_empowered_hit_is_eligible, bloodlust_passive_spec, burden_damage_split,
         damage_breaks_shroud, damage_comes_from_casted_ability,
-        deterministic_fulmination_candidate_index, disabled_target_damage_multiplier,
-        due_interval_count, event_prune_cutoff_micros, fracture_melee_damage_multiplier,
+        damage_source_grants_outgoing_rewards, deterministic_fulmination_candidate_index,
+        disabled_target_damage_multiplier, due_interval_count, event_prune_cutoff_micros,
+        fire_spell_hit_can_trigger_wildfire, fracture_melee_damage_multiplier,
         frost_spell_hit_can_apply_rime, fulmination_arc_damage,
-        fulmination_uses_any_target_audience, furnace_mana_restore_amount,
+        fulmination_uses_any_target_audience, furnace_mana_restore_amount, holy_shield_end_reason,
         immolation_damage_for_stacks, immolation_remaining_tick_count, knockback_stagger_duration,
         melee_attack_can_trigger_fracture, melee_attack_can_trigger_fulmination, new_status_effect,
         opportunist_passive_is_active_for_profile, point_within_radius,
@@ -8369,13 +9088,15 @@ mod tests {
         resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
         resolve_temporary_hitpoint_absorb, resolved_shove_tunables,
         spell_critical_can_charge_capacitor, spell_critical_can_trigger_chain_reaction,
-        stacked_slow_pct, stagger_shove_tunables, status_has_dispel_type,
-        status_matches_removal_filter_values, status_stacks_after_removal, AuthoredStatusPayload,
-        DamageDelivery, DamageType, EffectPacket, MovementModifiers, PendingHit, StackPolicy,
-        StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
-        StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
-        COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PROJECTILE,
-        DAMAGE_SOURCE_KIND_SPELL, PLAYER_EVENT_RETENTION,
+        stacked_slow_pct, stagger_shove_tunables, status_application_is_blocked_by_immunity,
+        status_has_dispel_type, status_matches_removal_filter_values, status_stacks_after_removal,
+        AuthoredStatusPayload, DamageDelivery, DamageType, EffectPacket, HolyShieldEndReason,
+        MovementModifiers, PendingHit, StackPolicy, StatusDispelType, StatusEffect,
+        StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
+        TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS,
+        DAMAGE_SOURCE_KIND_BURDEN_REDIRECT, DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PERIODIC,
+        DAMAGE_SOURCE_KIND_PROJECTILE, DAMAGE_SOURCE_KIND_SELF_INFLICTED, DAMAGE_SOURCE_KIND_SPELL,
+        HOLY_SHIELD_SPELL_ID, HOLY_SHIELD_STATUS_GROUP, PLAYER_EVENT_RETENTION,
     };
     use crate::movement::FIXED_TICK_MILLIS;
     use crate::relations::TargetAudience;
@@ -8384,6 +9105,43 @@ mod tests {
 
     const TEST_IDENTITY_HEX: &str =
         "00000000000000000000000000000000000000000000000000000000000000b1";
+
+    #[test]
+    fn burden_redirects_one_quarter_without_changing_total_damage() {
+        assert_eq!(burden_damage_split(100, 0.25), (75, 25));
+        assert_eq!(burden_damage_split(30, 0.25), (22, 8));
+        assert_eq!(burden_damage_split(1, 0.25), (1, 0));
+        assert_eq!(burden_damage_split(100, f32::NAN), (100, 0));
+    }
+
+    #[test]
+    fn burden_redirect_only_grants_attacker_rewards_for_hostile_sources() {
+        assert!(damage_source_grants_outgoing_rewards(
+            DAMAGE_SOURCE_KIND_BURDEN_REDIRECT,
+            true
+        ));
+        assert!(!damage_source_grants_outgoing_rewards(
+            DAMAGE_SOURCE_KIND_BURDEN_REDIRECT,
+            false
+        ));
+        assert!(!damage_source_grants_outgoing_rewards(
+            DAMAGE_SOURCE_KIND_SELF_INFLICTED,
+            true
+        ));
+        assert!(damage_source_grants_outgoing_rewards(
+            DAMAGE_SOURCE_KIND_SPELL,
+            true
+        ));
+    }
+
+    #[test]
+    fn reckoning_accumulates_only_confirmed_positive_hp_damage() {
+        assert_eq!(accumulated_reckoning_damage(0, 35), 35);
+        assert_eq!(accumulated_reckoning_damage(35, 65), 100);
+        assert_eq!(accumulated_reckoning_damage(35, 0), 35);
+        assert_eq!(accumulated_reckoning_damage(35, -10), 35);
+        assert_eq!(accumulated_reckoning_damage(i32::MAX - 2, 10), i32::MAX);
+    }
 
     fn test_identity() -> Identity {
         Identity::from_hex(TEST_IDENTITY_HEX).expect("test identity hex should be valid")
@@ -8684,6 +9442,61 @@ mod tests {
             DamageDelivery::Periodic,
             "PERIODIC",
         )));
+    }
+
+    #[test]
+    fn wildfire_only_accepts_confirmed_direct_fire_spell_hits() {
+        let source = test_identity_number(1);
+        let target = test_identity_number(2);
+        let hit = |damage_type: &str, delivery: DamageDelivery, source_kind: &str| PendingHit {
+            hit_id: 0,
+            source,
+            target,
+            spell_id: "wildfire-test".to_string(),
+            amount: 10,
+            is_heal: false,
+            damage_type: damage_type.to_string(),
+            target_audience: "HOSTILE".to_string(),
+            damage_delivery: delivery.as_str().to_string(),
+            damage_source_kind: source_kind.to_string(),
+            direct_action_key: "spell-instance:wildfire-test".to_string(),
+            queued_at: Timestamp::UNIX_EPOCH,
+            queued_at_micros: 0,
+            queued_order: 0,
+        };
+
+        assert!(fire_spell_hit_can_trigger_wildfire(
+            &hit("FIRE", DamageDelivery::Direct, DAMAGE_SOURCE_KIND_SPELL),
+            10,
+        ));
+        assert!(fire_spell_hit_can_trigger_wildfire(
+            &hit(
+                "FIRE",
+                DamageDelivery::Direct,
+                DAMAGE_SOURCE_KIND_PROJECTILE,
+            ),
+            10,
+        ));
+        assert!(!fire_spell_hit_can_trigger_wildfire(
+            &hit("COLD", DamageDelivery::Direct, DAMAGE_SOURCE_KIND_SPELL),
+            10,
+        ));
+        assert!(!fire_spell_hit_can_trigger_wildfire(
+            &hit(
+                "FIRE",
+                DamageDelivery::Periodic,
+                DAMAGE_SOURCE_KIND_PERIODIC,
+            ),
+            10,
+        ));
+        assert!(!fire_spell_hit_can_trigger_wildfire(
+            &hit("FIRE", DamageDelivery::Direct, DAMAGE_SOURCE_KIND_MELEE),
+            10,
+        ));
+        assert!(!fire_spell_hit_can_trigger_wildfire(
+            &hit("FIRE", DamageDelivery::Direct, DAMAGE_SOURCE_KIND_SPELL),
+            0,
+        ));
     }
 
     #[test]
@@ -9046,6 +9859,67 @@ mod tests {
     }
 
     #[test]
+    fn soulstealer_empower_only_accepts_direct_damaging_spell_actions() {
+        let source = test_identity_number(1);
+        let target = test_identity_number(2);
+        let hit = |delivery: DamageDelivery, source_kind: &str, amount: i32, source: Identity| {
+            PendingHit {
+                hit_id: 0,
+                source,
+                target,
+                spell_id: "blight-cast".to_string(),
+                amount,
+                is_heal: false,
+                damage_type: "NECROTIC".to_string(),
+                target_audience: "HOSTILE".to_string(),
+                damage_delivery: delivery.as_str().to_string(),
+                damage_source_kind: source_kind.to_string(),
+                direct_action_key: "blight-cast:p0".to_string(),
+                queued_at: Timestamp::UNIX_EPOCH,
+                queued_at_micros: 0,
+                queued_order: 0,
+            }
+        };
+
+        assert!(blight_empowered_hit_is_eligible(&hit(
+            DamageDelivery::Direct,
+            DAMAGE_SOURCE_KIND_SPELL,
+            20,
+            source,
+        )));
+        assert!(blight_empowered_hit_is_eligible(&hit(
+            DamageDelivery::Direct,
+            DAMAGE_SOURCE_KIND_PROJECTILE,
+            20,
+            source,
+        )));
+        assert!(!blight_empowered_hit_is_eligible(&hit(
+            DamageDelivery::Periodic,
+            DAMAGE_SOURCE_KIND_SPELL,
+            20,
+            source,
+        )));
+        assert!(!blight_empowered_hit_is_eligible(&hit(
+            DamageDelivery::Direct,
+            DAMAGE_SOURCE_KIND_MELEE,
+            20,
+            source,
+        )));
+        assert!(!blight_empowered_hit_is_eligible(&hit(
+            DamageDelivery::Direct,
+            DAMAGE_SOURCE_KIND_SPELL,
+            0,
+            source,
+        )));
+        assert!(!blight_empowered_hit_is_eligible(&hit(
+            DamageDelivery::Direct,
+            DAMAGE_SOURCE_KIND_SPELL,
+            20,
+            Identity::ZERO,
+        )));
+    }
+
+    #[test]
     fn battle_trance_prevents_lethal_player_damage_at_one_hp() {
         assert_eq!(battle_trance_hp_after_damage(-40, true), (1, true));
         assert_eq!(battle_trance_hp_after_damage(0, true), (1, true));
@@ -9096,6 +9970,67 @@ mod tests {
         assert_eq!(result.hp_damage, 15);
         assert!(result.updates.is_empty());
         assert_eq!(result.delete_ids, vec![9]);
+    }
+
+    #[test]
+    fn holy_shield_absorbs_damage_until_its_authored_capacity_is_depleted() {
+        let target = test_identity();
+        let now = Timestamp::UNIX_EPOCH;
+        let mut effect = test_status_effect(
+            target,
+            StatusPayload::TemporaryHitpoints {
+                absorb_amount: 100,
+                absorb_cap: 100,
+            },
+            now,
+            now + Duration::from_secs(20),
+        );
+        effect.status_id = 10;
+        effect.stack_group = HOLY_SHIELD_STATUS_GROUP.to_string();
+        effect.spell_id = HOLY_SHIELD_SPELL_ID.to_string();
+
+        let partial = resolve_temporary_hitpoint_absorb(vec![effect], 35);
+        assert_eq!(partial.hp_damage, 0);
+        assert_eq!(partial.updates.len(), 1);
+        assert_eq!(partial.updates[0].absorb_amount, 65);
+        assert!(partial.delete_ids.is_empty());
+
+        let depleted = resolve_temporary_hitpoint_absorb(partial.updates, 80);
+        assert_eq!(depleted.hp_damage, 15);
+        assert!(depleted.updates.is_empty());
+        assert_eq!(depleted.delete_ids, vec![10]);
+    }
+
+    #[test]
+    fn holy_shield_end_reason_only_accepts_expiry_or_depletion() {
+        let target = test_identity();
+        let now = Timestamp::UNIX_EPOCH;
+        let expires_at = now + Duration::from_secs(20);
+        let mut effect = test_status_effect(
+            target,
+            StatusPayload::TemporaryHitpoints {
+                absorb_amount: 100,
+                absorb_cap: 100,
+            },
+            now,
+            expires_at,
+        );
+        effect.stack_group = HOLY_SHIELD_STATUS_GROUP.to_string();
+        effect.spell_id = HOLY_SHIELD_SPELL_ID.to_string();
+
+        assert_eq!(holy_shield_end_reason(&effect, now, false), None);
+        assert_eq!(
+            holy_shield_end_reason(&effect, now, true),
+            Some(HolyShieldEndReason::Depleted)
+        );
+        assert_eq!(
+            holy_shield_end_reason(&effect, expires_at, false),
+            Some(HolyShieldEndReason::Expired)
+        );
+
+        effect.spell_id = "FORTIFY".to_string();
+        assert_eq!(holy_shield_end_reason(&effect, expires_at, false), None);
+        assert_eq!(holy_shield_end_reason(&effect, now, true), None);
     }
 
     #[test]
@@ -9509,6 +10444,11 @@ mod tests {
                 StatusPayload::MovementImpairingImmunity,
                 StatusEffectKind::MovementImpairingImmunity,
                 StatusPayload::MovementImpairingImmunity,
+            ),
+            (
+                StatusPayload::StunImmunity,
+                StatusEffectKind::StunImmunity,
+                StatusPayload::StunImmunity,
             ),
             (
                 StatusPayload::Silence,
@@ -10065,6 +11005,55 @@ mod tests {
                 .knockback_resistance_for(&protected),
             1.0
         );
+    }
+
+    #[test]
+    fn stun_immunity_suppresses_only_stun_until_its_expiry_boundary() {
+        let now = Timestamp::UNIX_EPOCH + Duration::from_secs(10);
+        let protected = test_identity_number(1);
+        let immunity_expires_at = now + Duration::from_secs(10);
+        let stun_expires_at = now + Duration::from_secs(15);
+        let effects = || {
+            vec![
+                test_status_effect(protected, StatusPayload::Stun, now, stun_expires_at),
+                test_status_effect(
+                    protected,
+                    StatusPayload::StunImmunity,
+                    now,
+                    immunity_expires_at,
+                ),
+            ]
+        };
+
+        let protected_view = status_runtime_view(effects(), &[protected], now);
+        assert!(!protected_view.has_disabling_status(protected));
+        assert!(!protected_view.movement_modifiers().is_disabled(&protected));
+        assert!(protected_view
+            .temporary_combat_modifiers()
+            .has_stun_immunity(&protected));
+
+        let expired_view = status_runtime_view(effects(), &[protected], immunity_expires_at);
+        assert!(expired_view.has_disabling_status(protected));
+        assert!(expired_view.movement_modifiers().is_disabled(&protected));
+        assert!(!expired_view
+            .temporary_combat_modifiers()
+            .has_stun_immunity(&protected));
+    }
+
+    #[test]
+    fn stun_immunity_rejects_stun_without_blocking_other_control() {
+        assert!(status_application_is_blocked_by_immunity(
+            StatusEffectKind::Stun,
+            true
+        ));
+        assert!(!status_application_is_blocked_by_immunity(
+            StatusEffectKind::Stun,
+            false
+        ));
+        assert!(!status_application_is_blocked_by_immunity(
+            StatusEffectKind::Freeze,
+            true
+        ));
     }
 
     #[test]

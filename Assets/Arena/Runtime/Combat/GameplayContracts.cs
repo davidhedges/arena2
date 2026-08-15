@@ -51,6 +51,7 @@ namespace Arena.Combat
         public const string Miss = "COMBAT_MISS";
         public const string Block = "COMBAT_BLOCK";
         public const string Parry = "COMBAT_PARRY";
+        public const string StatusEnd = "COMBAT_STATUS_END";
     }
 
     public static class CombatEventSources
@@ -1730,6 +1731,12 @@ namespace Arena.Combat
             string fallback = string.IsNullOrWhiteSpace(fallbackDisplayName)
                 ? normalizedActionId
                 : fallbackDisplayName.Trim();
+
+            if (SoulstealerPresentation.IsSoulstealerAbility(normalizedActionId, normalizedActionId)
+                && SoulstealerPresentation.HasStolenSoul(conn, owner))
+            {
+                return "Empower";
+            }
 
             ActionPresentationCatalog? fixedPresentation =
                 FindPresentation(conn, ActionTooltipResolver.PresentationKindFixed, normalizedActionId);

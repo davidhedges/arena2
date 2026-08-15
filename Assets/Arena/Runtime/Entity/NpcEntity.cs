@@ -332,8 +332,11 @@ namespace Arena.Entity
             { "STAGGER", new Color(0.95f, 0.55f, 0.2f) },
             { "KNOCKDOWN", new Color(0.95f, 0.55f, 0.2f) },
             { "DOT", new Color(1.0f, 0.4f, 0.1f) },
+            { "STUN_IMMUNITY", new Color(0.45f, 0.88f, 1.0f) },
             { "DAMAGE_TAKEN_REDUCTION", new Color(1.0f, 0.72f, 0.18f) },
             { "TARGETED_ABILITY_AVOIDANCE", new Color(0.65f, 0.95f, 1.0f) },
+            { "RECKONING", new Color(1.0f, 0.72f, 0.18f) },
+            { "DAMAGE_REDIRECT", new Color(1.0f, 0.86f, 0.45f) },
         };
 
         private void CaptureBaseMaterialColors()

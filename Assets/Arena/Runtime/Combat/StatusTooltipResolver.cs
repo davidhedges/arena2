@@ -35,6 +35,17 @@ namespace Arena.Combat
             string description = !string.IsNullOrWhiteSpace(presentation?.Description)
                 ? presentation.Description
                 : ResolveFallbackDescription(status);
+            if (string.Equals(
+                    WireIdentifier.Normalize(status.EffectKind),
+                    "TEMPORARY_HITPOINTS",
+                    StringComparison.Ordinal)
+                && status.AbsorbCap > 0)
+            {
+                string remaining = $"{Math.Max(status.AbsorbAmount, 0)} of {status.AbsorbCap} absorb remaining.";
+                description = string.IsNullOrWhiteSpace(description)
+                    ? remaining
+                    : $"{description} {remaining}";
+            }
             if (isRimed)
             {
                 const string protection = "Rimed: cannot be removed by abilities; expires naturally.";
@@ -117,17 +128,21 @@ namespace Arena.Combat
                 "HOT" => FormatPeriodicDescription("Restores", status.TickAmount, stacks, status.TickIntervalMs),
                 "MOVE_SLOW_IMMUNITY" => "Prevents movement slows from reducing speed.",
                 "MOVEMENT_IMPAIRING_IMMUNITY" => "Prevents slows, roots, and knockbacks.",
+                "STUN_IMMUNITY" => "Prevents stuns.",
                 "SILENCE" => "Prevents spell casting.",
                 "KNOCKBACK_RESISTANCE" => $"Reduces knockback distance by {FormatPercent(status.ModifierScalar * stacks)}.",
                 "DAMAGE_AMP" => $"Increases damage dealt by {FormatPercent(status.ModifierScalar)}.",
                 "DIRECT_DAMAGE_AMP" => $"Increases direct damage dealt by {FormatPercent(status.ModifierScalar * stacks)}.",
                 "DAMAGE_TAKEN_REDUCTION" => $"Reduces incoming damage by {FormatPercent(status.ModifierScalar * stacks)}.",
+                "TEMPORARY_HITPOINTS" => $"Absorbs up to {Math.Max(status.AbsorbCap, 0)} incoming damage.",
                 "HEALING_TAKEN_REDUCTION" => $"Reduces healing received by {FormatPercent(status.ModifierScalar * stacks)}.",
                 "DAMAGE_DEALT_REDUCTION" => $"Reduces damage dealt by {FormatPercent(status.ModifierScalar * stacks)}.",
                 "MELEE_ATTACK_MODIFIER" => "Modifies the next melee attack.",
                 "TARGETED_ABILITY_AVOIDANCE" => "Causes hostile targeted abilities to miss.",
                 "ATTACK_SPEED" => $"Modifies attack speed by {FormatSignedPercent(status.ModifierScalar)}.",
                 "CAST_SPEED" => $"Increases cast speed by {FormatPercent(status.ModifierScalar)}.",
+                "RECKONING" => "Retaliates when the mark expires based on damage its caster takes.",
+                "DAMAGE_REDIRECT" => $"Redirects {FormatPercent(status.ModifierScalar)} of incoming damage to the caster.",
                 _ => string.Empty,
             };
         }

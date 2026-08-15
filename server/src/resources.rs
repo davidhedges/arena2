@@ -648,6 +648,7 @@ fn resolve_resource_spec_with(
     };
     let status_regen = if primary_kind.eq_ignore_ascii_case(RESOURCE_KIND_MANA) {
         status_modifiers.mana_regen_bonus_for(&owner)
+            + crate::progression::divinity_faith_mana_regen_bonus_for_owner(ctx, owner)
     } else if primary_kind.eq_ignore_ascii_case(RESOURCE_KIND_STAMINA) {
         status_modifiers.stamina_regen_bonus_for(&owner)
     } else {

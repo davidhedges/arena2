@@ -99,6 +99,10 @@ enum SpellCatalogDelivery {
         #[serde(default)]
         heal: i32,
         #[serde(default)]
+        self_damage: i32,
+        #[serde(default)]
+        relation_aware: bool,
+        #[serde(default)]
         damage_type: String,
         block_behavior: BlockBehavior,
         #[serde(default)]
@@ -189,6 +193,8 @@ enum SpellCatalogDelivery {
     ApplyStatus {
         duration_ms: u64,
         #[serde(default)]
+        apply_to_caster: bool,
+        #[serde(default)]
         max_distance: f32,
         #[serde(default)]
         radius: f32,
@@ -220,6 +226,8 @@ enum SpellCatalogDelivery {
         stacks_per_status: u32,
         #[serde(default)]
         heal_caster_max_health_fraction: f32,
+        #[serde(default)]
+        transfer_to_caster: bool,
     },
     ConsumeStatus {
         max_distance: f32,
@@ -601,6 +609,10 @@ struct InstantBeamChargeScalingRow {
 #[serde(tag = "kind", rename_all = "SCREAMING_SNAKE_CASE", deny_unknown_fields)]
 enum ImpactEffectRow {
     InterruptCast,
+    InterruptCastWithDamage {
+        damage: i32,
+        damage_type: String,
+    },
     Knockback {
         distance_meters: f32,
     },
@@ -1102,6 +1114,8 @@ impl SpellCatalogRow {
                 max_distance,
                 damage,
                 heal,
+                self_damage,
+                relation_aware,
                 damage_type,
                 block_behavior,
                 parry_behavior,
@@ -1114,6 +1128,8 @@ impl SpellCatalogRow {
                 definition.block_behavior = block_behavior;
                 definition.secondary.direct_target = Some(DirectTargetSecondaryTunables {
                     heal_amount: heal,
+                    self_damage_amount: self_damage,
+                    relation_aware,
                     parry_behavior: parry_behavior.unwrap_or(SpellParryBehavior::Unparryable),
                     impact_effects: impact_effects.into_iter().map(Into::into).collect(),
                 });
@@ -1322,6 +1338,7 @@ impl SpellCatalogRow {
             }
             SpellCatalogDelivery::ApplyStatus {
                 duration_ms,
+                apply_to_caster,
                 max_distance,
                 radius,
                 damage_type,
@@ -1342,6 +1359,7 @@ impl SpellCatalogRow {
                 definition.apply_status = Some(status);
                 definition.apply_status_polarity = Some(polarity);
                 definition.secondary.apply_status = Some(ApplyStatusSecondaryTunables {
+                    apply_to_caster,
                     parry_behavior: parry_behavior.unwrap_or(SpellParryBehavior::Unparryable),
                     staged_applications: staged_applications
                         .into_iter()
@@ -1362,6 +1380,7 @@ impl SpellCatalogRow {
                 dispel_types,
                 stacks_per_status,
                 heal_caster_max_health_fraction,
+                transfer_to_caster,
             } => {
                 definition.behavior = SpellBehavior::RemoveStatus;
                 definition.max_distance = max_distance;
@@ -1379,6 +1398,7 @@ impl SpellCatalogRow {
                     dispel_types,
                     stacks_per_status,
                     heal_caster_max_health_fraction,
+                    transfer_to_caster,
                 });
             }
             SpellCatalogDelivery::ConsumeStatus {
@@ -1659,6 +1679,13 @@ impl From<ImpactEffectRow> for ImpactEffect {
     fn from(row: ImpactEffectRow) -> Self {
         match row {
             ImpactEffectRow::InterruptCast => Self::InterruptCast,
+            ImpactEffectRow::InterruptCastWithDamage {
+                damage,
+                damage_type,
+            } => Self::InterruptCastWithDamage {
+                damage,
+                damage_type,
+            },
             ImpactEffectRow::Knockback { distance_meters } => Self::Knockback { distance_meters },
             status_row => Self::Status(status_application_from_impact_effect_row(status_row)),
         }
@@ -1669,6 +1696,11 @@ fn status_application_from_impact_effect_row(row: ImpactEffectRow) -> StatusAppl
     match row {
         ImpactEffectRow::InterruptCast => {
             unreachable!("interrupt cast is converted before status application mapping")
+        }
+        ImpactEffectRow::InterruptCastWithDamage { .. } => {
+            unreachable!(
+                "interrupt cast with damage is converted before status application mapping"
+            )
         }
         ImpactEffectRow::Knockback { .. } => {
             unreachable!("knockback is converted before status application mapping")
@@ -2212,6 +2244,11 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
     if def.damage > 0
         && def.behavior != SpellBehavior::PersistentArea
         && def.target_audience != TargetAudience::Hostile
+        && !def
+            .secondary
+            .direct_target
+            .as_ref()
+            .is_some_and(|direct| direct.relation_aware)
     {
         return Err(format!(
             "{} damaging spells must use HOSTILE target_audience",
@@ -2228,6 +2265,37 @@ fn validate_impact_effect(def: &SpellDefinition, effect: &ImpactEffect) -> Resul
     let effect = match effect {
         ImpactEffect::Status(status) => status,
         ImpactEffect::InterruptCast => return Ok(()),
+        ImpactEffect::InterruptCastWithDamage {
+            damage,
+            damage_type,
+        } => {
+            if *damage <= 0 {
+                return Err(format!(
+                    "{} INTERRUPT_CAST_WITH_DAMAGE damage must be positive",
+                    def.kind.as_str()
+                ));
+            }
+            if !matches!(
+                damage_type.trim().to_ascii_uppercase().as_str(),
+                "PHYSICAL"
+                    | "FIRE"
+                    | "COLD"
+                    | "AIR"
+                    | "LIGHTNING"
+                    | "POISON"
+                    | "HOLY"
+                    | "SHADOW"
+                    | "NECROTIC"
+                    | "ARCANE"
+            ) {
+                return Err(format!(
+                    "{} INTERRUPT_CAST_WITH_DAMAGE damage_type '{}' is unsupported",
+                    def.kind.as_str(),
+                    damage_type
+                ));
+            }
+            return Ok(());
+        }
         ImpactEffect::Knockback { distance_meters } => {
             if !distance_meters.is_finite() || *distance_meters <= 0.0 {
                 return Err(format!(
@@ -2331,15 +2399,28 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     def.kind.as_str()
                 ));
             };
-            if def.damage < 0 || direct_target.heal_amount < 0 {
+            if def.damage < 0
+                || direct_target.heal_amount < 0
+                || direct_target.self_damage_amount < 0
+            {
                 return Err(format!(
-                    "{} DIRECT_TARGET damage/heal must be non-negative",
+                    "{} DIRECT_TARGET damage/heal/self_damage must be non-negative",
                     def.kind.as_str()
                 ));
             }
-            if def.damage > 0 && direct_target.heal_amount > 0 {
+            if def.damage > 0 && direct_target.heal_amount > 0 && !direct_target.relation_aware {
                 return Err(format!(
-                    "{} DIRECT_TARGET cannot both damage and heal",
+                    "{} DIRECT_TARGET cannot both damage and heal unless relation_aware is enabled",
+                    def.kind.as_str()
+                ));
+            }
+            if direct_target.relation_aware
+                && (def.target_audience != TargetAudience::Any
+                    || def.damage <= 0
+                    || direct_target.heal_amount <= 0)
+            {
+                return Err(format!(
+                    "{} relation-aware DIRECT_TARGET must use ANY audience and define positive damage and heal",
                     def.kind.as_str()
                 ));
             }
@@ -2727,6 +2808,19 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
             if remove_status.heal_caster_max_health_fraction > 1.0 {
                 return Err(format!(
                     "{} delivery.heal_caster_max_health_fraction must be <= 1",
+                    def.kind.as_str()
+                ));
+            }
+            if remove_status.transfer_to_caster
+                && (def.targeting != SpellTargeting::Target
+                    || !def.requires_target
+                    || remove_status.polarity != Some(StatusPolarity::Debuff)
+                    || !remove_status.statuses.is_empty()
+                    || remove_status.stacks_per_status != 0
+                    || remove_status.heal_caster_max_health_fraction > 0.0)
+            {
+                return Err(format!(
+                    "{} debuff transfer must use required TARGET targeting, a DEBUFF filter, and no remove/heal overrides",
                     def.kind.as_str()
                 ));
             }
@@ -3578,6 +3672,11 @@ fn validate_apply_status(
     status: ApplyStatusDefinition,
     polarity: StatusPolarity,
 ) -> Result<(), String> {
+    let apply_to_caster = def
+        .secondary
+        .apply_status
+        .as_ref()
+        .is_some_and(|tunables| tunables.apply_to_caster);
     match def.targeting {
         SpellTargeting::Self_ => {
             if def.requires_target {
@@ -3634,10 +3733,12 @@ fn validate_apply_status(
                     validate_apply_status_kind_for_target(def.kind.as_str(), status.kind)?;
                 }
                 StatusPolarity::Buff => {
-                    if !matches!(
-                        def.target_audience,
-                        TargetAudience::PartyOrSelf | TargetAudience::Assistable
-                    ) {
+                    if !apply_to_caster
+                        && !matches!(
+                            def.target_audience,
+                            TargetAudience::PartyOrSelf | TargetAudience::Assistable
+                        )
+                    {
                         return Err(format!(
                             "{} TARGET BUFF must use PARTY_OR_SELF or ASSISTABLE target_audience",
                             def.kind.as_str()
@@ -3672,6 +3773,7 @@ fn validate_apply_status_kind_for_self(
     match kind {
         StatusEffectKind::MoveSlowImmunity
         | StatusEffectKind::MovementImpairingImmunity
+        | StatusEffectKind::StunImmunity
         | StatusEffectKind::DamageAmp
         | StatusEffectKind::DirectDamageAmp
         | StatusEffectKind::DamageTakenReduction
@@ -3687,7 +3789,11 @@ fn validate_apply_status_kind_for_self(
         | StatusEffectKind::Berserking
         | StatusEffectKind::BattleTrance
         | StatusEffectKind::TargetedAbilityAvoidance
-        | StatusEffectKind::BladeTwisting => Ok(()),
+        | StatusEffectKind::BladeTwisting
+        | StatusEffectKind::SoulStolen
+        | StatusEffectKind::BlightEmpowered
+        | StatusEffectKind::Reckoning
+        | StatusEffectKind::DamageRedirect => Ok(()),
         other => Err(format!(
             "{spell_id} SELF APPLY_STATUS status '{}' is not supported",
             other.as_str()
@@ -3712,7 +3818,9 @@ fn validate_apply_status_kind_for_target(
         | StatusEffectKind::FindWeakness
         | StatusEffectKind::Disarm
         | StatusEffectKind::Gouge
-        | StatusEffectKind::Fulmination => Ok(()),
+        | StatusEffectKind::Fulmination
+        | StatusEffectKind::Reckoning
+        | StatusEffectKind::DamageRedirect => Ok(()),
         other => Err(format!(
             "{spell_id} TARGET APPLY_STATUS status '{}' is not supported",
             other.as_str()
@@ -3800,6 +3908,7 @@ mod tests {
                 "ICE_SPIKES",
                 "VAMPIRIC_ORB",
                 "WITHERING_ORB",
+                "SOULSTEALER",
                 "INSTANT_BEAM",
                 "ELECTROCUTE",
                 "FLAMETHROWER",
@@ -3831,12 +3940,20 @@ mod tests {
                 "DIVINE_MEND",
                 "FLASH_OF_GRACE",
                 "AURA_OF_RENEWAL",
+                "HOLY_SHIELD",
+                "REBUKE",
+                "SMITE",
+                "PENANCE",
+                "RECKONING",
+                "MARTYR",
+                "BURDEN",
                 "FLASHFIRE",
                 "IMMOLATION",
                 "COMBUSTION",
                 "FLASH_FREEZE",
                 "DEEPENING_COLD",
                 "FULMINATION",
+                "GLACIAL_ADVANCE",
                 "COLLAPSE",
                 "DISPEL_MAGIC",
                 "TELEPORT",
@@ -4357,6 +4474,8 @@ mod tests {
             "BLIZZARD",
             "MAGIC_MISSILE",
             "PROTECTION",
+            "HOLY_SHIELD",
+            "REBUKE",
             "FROST_NOVA",
             "NOVA",
             "NEGATE",
@@ -4556,6 +4675,184 @@ mod tests {
         assert_eq!(status.kind, StatusEffectKind::MovementImpairingImmunity);
         assert_eq!(status.max_stacks, 1);
         assert_eq!(status.stack_policy, StackPolicy::Refresh);
+    }
+
+    #[test]
+    fn glacial_advance_authors_targeted_cold_stun_immunity() {
+        let definition = spell_definition_by_str("GLACIAL_ADVANCE")
+            .expect("GLACIAL_ADVANCE should derive from the shared catalog");
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("GLACIAL_ADVANCE should apply a status");
+
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cooldown, Duration::from_secs(30));
+        assert_eq!(definition.duration, 10.0);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.damage_type, DamageType::Cold);
+        assert_eq!(definition.primary_resource_cost, 20.0);
+        assert_eq!(status.kind, StatusEffectKind::StunImmunity);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+    }
+
+    #[test]
+    fn holy_shield_authors_targeted_holy_absorb_for_twenty_seconds() {
+        let definition = spell_definition_by_str("HOLY_SHIELD")
+            .expect("HOLY_SHIELD should derive from the shared catalog");
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("HOLY_SHIELD should apply a status");
+
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cooldown, Duration::from_secs(30));
+        assert_eq!(definition.duration, 20.0);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.damage_type, DamageType::Holy);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert_eq!(
+            definition.status_stack_group.as_deref(),
+            Some("HOLY_SHIELD")
+        );
+        assert_eq!(status.kind, StatusEffectKind::TemporaryHitpoints);
+        assert_eq!(status.absorb_amount, 100);
+        assert_eq!(status.absorb_cap, 100);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert_eq!(status.dispel_types, vec![StatusDispelType::Magic]);
+    }
+
+    #[test]
+    fn rebuke_authors_ranged_interrupt_with_conditional_holy_damage() {
+        let definition = spell_definition_by_str("REBUKE")
+            .expect("REBUKE should derive from the shared catalog");
+        let direct_target = definition
+            .secondary
+            .direct_target
+            .as_ref()
+            .expect("REBUKE should use direct-target delivery");
+
+        assert_eq!(definition.behavior, SpellBehavior::DirectTarget);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cooldown, Duration::from_secs(12));
+        assert!(!definition.uses_global_cooldown);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage_type, DamageType::Holy);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert_eq!(definition.block_behavior, BlockBehavior::Unblockable);
+        assert_eq!(
+            direct_target.parry_behavior,
+            SpellParryBehavior::Unparryable
+        );
+        assert_eq!(
+            direct_target.impact_effects,
+            vec![ImpactEffect::InterruptCastWithDamage {
+                damage: 30,
+                damage_type: "HOLY".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn new_divinity_spells_author_requested_targeting_and_effect_contracts() {
+        let smite = spell_definition_by_str("SMITE").expect("SMITE definition");
+        assert_eq!(smite.behavior, SpellBehavior::DirectTarget);
+        assert_eq!(smite.target_audience, TargetAudience::Hostile);
+        assert_eq!(smite.damage, 30);
+        assert_eq!(smite.damage_type, DamageType::Holy);
+        assert_eq!(smite.max_distance, 30.0);
+
+        let penance = spell_definition_by_str("PENANCE").expect("PENANCE definition");
+        let penance_target = penance
+            .secondary
+            .direct_target
+            .as_ref()
+            .expect("PENANCE direct-target tunables");
+        assert_eq!(penance.target_audience, TargetAudience::Any);
+        assert_eq!(penance.cast_time, Duration::from_millis(1_500));
+        assert_eq!(penance.damage, 40);
+        assert_eq!(penance_target.heal_amount, 40);
+        assert_eq!(penance_target.self_damage_amount, 20);
+        assert!(penance_target.relation_aware);
+
+        let reckoning = spell_definition_by_str("RECKONING").expect("RECKONING definition");
+        assert_eq!(reckoning.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(reckoning.target_audience, TargetAudience::Hostile);
+        assert_eq!(reckoning.duration, 5.0);
+        assert_eq!(
+            reckoning
+                .apply_status
+                .as_ref()
+                .expect("RECKONING status")
+                .kind,
+            StatusEffectKind::Reckoning
+        );
+
+        let martyr = spell_definition_by_str("MARTYR").expect("MARTYR definition");
+        let transfer = martyr
+            .secondary
+            .remove_status
+            .as_ref()
+            .expect("MARTYR transfer tunables");
+        assert_eq!(martyr.target_audience, TargetAudience::Assistable);
+        assert_eq!(transfer.polarity, Some(StatusPolarity::Debuff));
+        assert_eq!(transfer.max_count, 0);
+        assert!(transfer.transfer_to_caster);
+
+        let burden = spell_definition_by_str("BURDEN").expect("BURDEN definition");
+        let burden_status = burden.apply_status.as_ref().expect("BURDEN status");
+        assert_eq!(burden.target_audience, TargetAudience::PartyOrSelf);
+        assert_eq!(burden.duration, 10.0);
+        assert_eq!(burden_status.kind, StatusEffectKind::DamageRedirect);
+        assert!((burden_status.modifier_scalar - 0.25).abs() < 0.0001);
+    }
+
+    #[test]
+    fn soulstealer_authors_targeted_cast_that_stores_the_soul_on_the_caster() {
+        let definition = spell_definition_by_str("SOULSTEALER")
+            .expect("SOULSTEALER should derive from the shared catalog");
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("SOULSTEALER should apply a status");
+        let secondary = definition
+            .secondary
+            .apply_status
+            .as_ref()
+            .expect("SOULSTEALER should define apply-status tunables");
+
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::from_secs(2));
+        assert_eq!(definition.cooldown, Duration::from_secs(12));
+        assert_eq!(definition.max_distance, 30.0);
+        assert_eq!(definition.damage_type, DamageType::Necrotic);
+        assert_eq!(status.kind, StatusEffectKind::SoulStolen);
+        assert_eq!(
+            definition.status_stack_group.as_deref(),
+            Some("SOUL_STOLEN")
+        );
+        assert!(secondary.apply_to_caster);
     }
 
     #[test]

@@ -312,6 +312,9 @@ pub(crate) struct SpellSecondaryTunables {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct DirectTargetSecondaryTunables {
     pub heal_amount: i32,
+    pub self_damage_amount: i32,
+    /// Chooses damage for hostile targets and healing for non-hostile targets.
+    pub relation_aware: bool,
     pub parry_behavior: SpellParryBehavior,
     pub impact_effects: Vec<ImpactEffect>,
 }
@@ -471,6 +474,7 @@ pub(crate) enum ImpactEffect {
     Status(StatusApplication),
     Knockback { distance_meters: f32 },
     InterruptCast,
+    InterruptCastWithDamage { damage: i32, damage_type: String },
 }
 
 impl PartialEq<StatusApplication> for ImpactEffect {
@@ -483,7 +487,9 @@ impl ImpactEffect {
     pub(crate) fn as_status(&self) -> Option<&StatusApplication> {
         match self {
             Self::Status(status) => Some(status),
-            Self::Knockback { .. } | Self::InterruptCast => None,
+            Self::Knockback { .. } | Self::InterruptCast | Self::InterruptCastWithDamage { .. } => {
+                None
+            }
         }
     }
 
@@ -553,6 +559,16 @@ impl ImpactEffect {
                 target,
                 spell_id: spell_id.to_string(),
             },
+            Self::InterruptCastWithDamage {
+                damage,
+                damage_type,
+            } => EffectPacket::InterruptCastWithDamage {
+                source,
+                target,
+                spell_id: spell_id.to_string(),
+                damage: *damage,
+                damage_type: DamageType::from_wire(damage_type.as_str()),
+            },
         }
     }
 }
@@ -586,6 +602,7 @@ pub(crate) struct InstantBeamChargeScaling {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ApplyStatusSecondaryTunables {
+    pub apply_to_caster: bool,
     pub parry_behavior: SpellParryBehavior,
     pub staged_applications: Vec<StagedStatusApplicationTunables>,
 }
@@ -608,6 +625,8 @@ pub(crate) struct RemoveStatusSecondaryTunables {
     pub stacks_per_status: u32,
     /// Optional self-heal based on the caster's maximum health.
     pub heal_caster_max_health_fraction: f32,
+    /// Moves matching status rows to the caster instead of removing them.
+    pub transfer_to_caster: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -734,7 +753,8 @@ mod tests {
     use crate::spells::spell_definition_by_str;
 
     use super::{
-        spell_definitions, ImpactEffect, SpellBehavior, SpellCastMobility, SpellId, SpellTargeting,
+        spell_definitions, BlockBehavior, ImpactEffect, SpellBehavior, SpellCastMobility, SpellId,
+        SpellParryBehavior, SpellTargeting,
     };
 
     fn definition(id: &str) -> &'static super::SpellDefinition {
@@ -880,6 +900,7 @@ mod tests {
             "FROZEN_GRASP",
             "GUST_OF_WIND",
             "BUFFET",
+            "REBUKE",
             "FROST_NEEDLE",
             "MOMENTUM",
             "INTIMIDATE",
@@ -934,6 +955,7 @@ mod tests {
             "FROZEN_GRASP",
             "GUST_OF_WIND",
             "BUFFET",
+            "REBUKE",
             "FROST_NEEDLE",
             "MOMENTUM",
             "BATTLE_CRY",
@@ -1357,6 +1379,39 @@ mod tests {
     }
 
     #[test]
+    fn glacial_advance_catalog_matches_targeted_stun_immunity() {
+        let definition = definition("GLACIAL_ADVANCE");
+
+        assert_eq!(definition.kind.as_str(), "GLACIAL_ADVANCE");
+        assert_eq!(definition.cooldown, Duration::from_secs(30));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.duration, 10.0);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.damage_type, DamageType::Cold);
+        assert_eq!(
+            definition.status_stack_group.as_deref(),
+            Some("GLACIAL_ADVANCE")
+        );
+        assert_eq!(definition.apply_status_polarity, Some(StatusPolarity::Buff));
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Glacial Advance should apply a status");
+        assert_eq!(status.payload(), StatusPayload::StunImmunity);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert_eq!(status.dispel_types, vec![StatusDispelType::Magic]);
+        assert_eq!(definition.primary_resource_cost, 20.0);
+        assert!(!definition.arms_auto_attack_on_cast);
+    }
+
+    #[test]
     fn frozen_splinters_catalog_matches_channel_projectile_defaults() {
         let definition = definition("FROZEN_SPLINTERS");
 
@@ -1559,6 +1614,45 @@ mod tests {
     }
 
     #[test]
+    fn holy_shield_catalog_matches_targeted_temporary_hitpoints_defaults() {
+        let definition = definition("HOLY_SHIELD");
+
+        assert_eq!(definition.kind.as_str(), "HOLY_SHIELD");
+        assert_eq!(definition.cooldown, Duration::from_secs(30));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.duration, 20.0);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.damage_type, DamageType::Holy);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert_eq!(
+            definition.status_stack_group.as_deref(),
+            Some("HOLY_SHIELD")
+        );
+        assert_eq!(definition.apply_status_polarity, Some(StatusPolarity::Buff));
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Holy Shield should apply a status");
+        assert_eq!(
+            status.payload(),
+            StatusPayload::TemporaryHitpoints {
+                absorb_amount: 100,
+                absorb_cap: 100,
+            }
+        );
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert_eq!(status.dispel_types, vec![StatusDispelType::Magic]);
+        assert!(!definition.arms_auto_attack_on_cast);
+    }
+
+    #[test]
     fn frozen_grasp_catalog_matches_self_area_root_defaults() {
         let definition = definition("FROZEN_GRASP");
 
@@ -1652,6 +1746,43 @@ mod tests {
         assert_eq!(
             direct_target.impact_effects,
             vec![ImpactEffect::InterruptCast]
+        );
+        assert!(!definition.generates_primary_resource_on_cast);
+    }
+
+    #[test]
+    fn rebuke_catalog_matches_conditional_holy_interrupt_defaults() {
+        let definition = definition("REBUKE");
+
+        assert_eq!(definition.kind.as_str(), "REBUKE");
+        assert_eq!(definition.cooldown, Duration::from_secs(12));
+        assert!(!definition.uses_global_cooldown);
+        assert_eq!(definition.behavior, SpellBehavior::DirectTarget);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage_type, DamageType::Holy);
+        assert!((definition.max_distance - 18.0).abs() < 0.0001);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert_eq!(definition.block_behavior, BlockBehavior::Unblockable);
+        let direct_target = definition
+            .secondary
+            .direct_target
+            .as_ref()
+            .expect("Rebuke should define direct-target secondary data");
+        assert_eq!(
+            direct_target.parry_behavior,
+            SpellParryBehavior::Unparryable
+        );
+        assert_eq!(
+            direct_target.impact_effects,
+            vec![ImpactEffect::InterruptCastWithDamage {
+                damage: 30,
+                damage_type: "HOLY".to_string(),
+            }]
         );
         assert!(!definition.generates_primary_resource_on_cast);
     }
