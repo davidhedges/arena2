@@ -140,6 +140,7 @@ namespace Arena.Combat
                 "MELEE_ATTACK_MODIFIER" => "Modifies the next melee attack.",
                 "TARGETED_ABILITY_AVOIDANCE" => "Causes hostile targeted abilities to miss.",
                 "GIGANTISM" => "Increases size to 150%, physical damage by 20%, and non-gap-closer melee attack range by 1.5 meters.",
+                "VERDANT_SPIRITS" => "Holds one or two nature spirits bestowed by their living origin. Restores 1 health per spirit each second.",
                 "ATTACK_SPEED" => $"Modifies attack speed by {FormatSignedPercent(status.ModifierScalar)}.",
                 "CAST_SPEED" => $"Increases cast speed by {FormatPercent(status.ModifierScalar)}.",
                 "RECKONING" => "Retaliates when the mark expires based on damage its caster takes.",

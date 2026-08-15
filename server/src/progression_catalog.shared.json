@@ -2593,6 +2593,41 @@
       }
     },
     {
+      "ability_id": "SPELL_VERDANT_SPIRITS",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "VERDANT_SPIRITS",
+      "display_name": "Verdant Spirits",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1021,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 100,
+        "uses_global_cooldown": false,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "ASSISTABLE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "DIRECT_TARGET",
+          "max_distance": 18,
+          "damage": 0,
+          "damage_type": "AIR",
+          "block_behavior": "UNBLOCKABLE",
+          "parry_behavior": "UNPARRYABLE",
+          "impact_effects": []
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_CAUTERIZE",
       "actor_scope": "PLAYER",
       "discipline_id": "RUIN",
@@ -8283,6 +8318,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_VERDANT_SPIRITS",
+      "display_name": "Verdant Spirits",
+      "description": "Two nature spirits orbit you while you live. Bestow one instantly on another assistable player; each bestowed spirit restores 1 health per second to its holder, and both can stack on one host.",
+      "sort_order": 98
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_CAUTERIZE",
       "display_name": "Cauterize",
       "description": "Seals a friendly target's wounds with fire, removing all bleed effects.",
@@ -10729,6 +10771,19 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 203
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_VERDANT_SPIRITS",
+      "slot": "target_attachment",
+      "trigger": "STATUS_ACTIVE",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_VERDANT_SPIRITS_ACTIVE_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_STATUS_END",
+      "duration_ms": 0,
+      "sort_order": 336
     },
     {
       "owner_kind": "ABILITY", "owner_id": "NPC_DEMON_SUMMONER_SHADOW_BOLT", "slot": "cast_glow", "trigger": "SPELL_CAST", "anchor": "LEFT_HAND",

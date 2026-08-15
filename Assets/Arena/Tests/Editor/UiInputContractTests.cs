@@ -48,6 +48,8 @@ namespace Arena.Tests.Editor
         private const string NovaCastPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Arcane Explosion.prefab.meta";
         private const string NovaHitPrefabMetaPath = "Assets/ThirdParty/AssetStore/VFX/Piloto Studio/Super Realistic FX Bundle/ARPG Realistic Essentials Fire/Prefabs/Melee/Green_Fire/Hit_Nova_Light_green.prefab.meta";
         private const string BuffetHitPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Hits/Air/1) Wind Blast 1.prefab.meta";
+        private const string VerdantSpiritsPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Realistic Druid 1/ARPG_Druid_Nature_Spirits.prefab.meta";
+        private const string VerdantSpiritsVfxPath = "Assets/Arena/Runtime/Presentation/VFX/VerdantSpiritsVFX.cs";
         private const string LingeringShadeReturnPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/Realistic Ink Spells 1/shadow_in.prefab.meta";
         private const string LightningPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/Area/Electric/8) Vertical Lightning blue 1.prefab.meta";
         private const string NegateArcaneShockPrefabMetaPath = "Assets/Arena/Resources/CombatVFX/playground/ARPG Realistic Arcane 1/Simple/ARPG_Arcane_Shock_Calling.prefab.meta";
@@ -257,6 +259,31 @@ namespace Arena.Tests.Editor
             string registry = File.ReadAllText(CombatVfxRegistryPath);
             Assert.That(registry, Does.Contain("vfxId: VFX_BUFFET_IMPACT_01"));
             Assert.That(registry, Does.Contain($"guid: {hitPrefabGuid}"));
+        }
+
+        [Test]
+        public void VerdantSpiritsVfx_UsesRequestedNatureSpiritsPrefabAndStackDrivenBursts()
+        {
+            string prefabGuid = File.ReadLines(VerdantSpiritsPrefabMetaPath)
+                .First(line => line.StartsWith("guid: ", StringComparison.Ordinal))
+                .Substring("guid: ".Length)
+                .Trim();
+
+            string registry = File.ReadAllText(CombatVfxRegistryPath);
+            Assert.That(registry, Does.Contain("vfxId: VFX_VERDANT_SPIRITS_ACTIVE_01"));
+            Assert.That(registry, Does.Contain($"guid: {prefabGuid}"));
+
+            string templates = File.ReadAllText(CombatVfxTemplateRegistryPath);
+            Assert.That(templates, Does.Contain("VfxVerdantSpiritsActive"));
+            Assert.That(templates, Does.Contain("new VerdantSpiritsVFX(context)"));
+
+            string visual = File.ReadAllText(VerdantSpiritsVfxPath);
+            Assert.That(visual, Does.Contain("context.SequenceCount"));
+            Assert.That(visual, Does.Contain("main.loop = true"));
+            Assert.That(visual, Does.Contain("main.startLifetime.constantMax"));
+            Assert.That(visual, Does.Contain("Mathf.Approximately(count.constant, MaxSpirits)"));
+            Assert.That(visual, Does.Contain("emission.SetBursts(bursts)"));
+            Assert.That(visual, Does.Contain("ParticleSystemStopBehavior.StopEmittingAndClear"));
         }
 
         [Test]

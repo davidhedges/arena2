@@ -83,6 +83,8 @@ mod spells;
 mod survival;
 #[path = "../../server/src/tick_metrics.rs"]
 mod tick_metrics;
+#[path = "../../server/src/verdant_spirits.rs"]
+mod verdant_spirits;
 #[cfg(test)]
 #[path = "../../server/src/vfx_generation.rs"]
 mod vfx_generation;

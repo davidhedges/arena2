@@ -13382,6 +13382,7 @@ mod tests {
             ("SPELL_GIGANTISM", "GIGANTISM", "PHYSICAL"),
             ("SPELL_GUST_OF_WIND", "GUST_OF_WIND", "AIR"),
             ("SPELL_BUFFET", "BUFFET", "AIR"),
+            ("SPELL_VERDANT_SPIRITS", "VERDANT_SPIRITS", "AIR"),
             ("SPELL_CELESTIAL_MANTLE", "CELESTIAL_MANTLE", "HOLY"),
             ("SPELL_HOLY_SHIELD", "HOLY_SHIELD", "HOLY"),
             ("SPELL_REBUKE", "REBUKE", "HOLY"),

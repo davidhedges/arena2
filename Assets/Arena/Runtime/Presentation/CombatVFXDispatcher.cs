@@ -99,21 +99,28 @@ namespace Arena.Presentation
 
         private readonly struct ActiveStatusEffectVfxState : IEquatable<ActiveStatusEffectVfxState>
         {
-            public ActiveStatusEffectVfxState(string spellId, string abilityId, Identity target)
+            public ActiveStatusEffectVfxState(
+                string spellId,
+                string abilityId,
+                Identity target,
+                uint stacks)
             {
                 SpellId = spellId;
                 AbilityId = abilityId;
                 Target = target;
+                Stacks = stacks;
             }
 
             public string SpellId { get; }
             public string AbilityId { get; }
             public Identity Target { get; }
+            public uint Stacks { get; }
 
             public bool Equals(ActiveStatusEffectVfxState other)
                 => string.Equals(SpellId, other.SpellId, StringComparison.Ordinal)
                     && string.Equals(AbilityId, other.AbilityId, StringComparison.Ordinal)
-                    && Target.Equals(other.Target);
+                    && Target.Equals(other.Target)
+                    && Stacks == other.Stacks;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -422,7 +429,11 @@ namespace Arena.Presentation
                     authoredStatusOwner = authoredStatusOwner.Substring(0, sourceSuffix);
                 abilityId = ResolveAbilityIdForSpell(conn, authoredStatusOwner);
             }
-            var desiredState = new ActiveStatusEffectVfxState(spellId, abilityId, row.Target);
+            var desiredState = new ActiveStatusEffectVfxState(
+                spellId,
+                abilityId,
+                row.Target,
+                row.Stacks);
             string statusEffectKey = StatusEffectVfxKey(row.StatusId);
             if (_activeStatusEffectVfxById.TryGetValue(row.StatusId, out ActiveStatusEffectVfxState currentState))
             {
@@ -455,7 +466,7 @@ namespace Arena.Presentation
                 CombatEventScalarKinds.None,
                 0f,
                 0,
-                1,
+                row.Stacks > 0 ? row.Stacks : 1u,
                 isSpell: true);
             if (DispatchFact(fact))
                 _activeStatusEffectVfxById[row.StatusId] = desiredState;

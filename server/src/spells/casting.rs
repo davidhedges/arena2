@@ -8284,6 +8284,31 @@ fn apply_direct_target_spell(
         },
     );
 
+    if kind.as_str() == crate::verdant_spirits::ACTION_ID {
+        crate::verdant_spirits::bestow(ctx, caster, target.player_id, now)?;
+        emit_spell_combat_event(
+            ctx,
+            SpellCombatEventPayload {
+                action_instance_id: spell_id.as_str(),
+                ability_id,
+                kind,
+                event_type: EVENT_IMPACT,
+                caster,
+                hit: target.player_id,
+                origin,
+                direction,
+                speed: 0.0,
+                max_distance: definition.max_distance,
+                scalar: SpellCombatEventScalar::None,
+                sequence_index: 0,
+                sequence_count: 1,
+                point,
+                now,
+            },
+        );
+        return Ok(());
+    }
+
     let hostile_target = can_harm(ctx, caster, target.player_id);
     let is_heal = direct_target_is_heal(
         direct_target.heal_amount,

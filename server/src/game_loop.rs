@@ -1155,6 +1155,7 @@ fn run_pre_tick_housekeeping_phase(
             tick_emanations(ctx, now);
             tick_immolations(ctx, now);
             tick_persistent_areas(ctx, now);
+            crate::verdant_spirits::reconcile_all(ctx, now);
         },
     );
     timed_subphase(

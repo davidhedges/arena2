@@ -901,6 +901,7 @@ mod tests {
             "GUST_OF_WIND",
             "BUFFET",
             "GIGANTISM",
+            "VERDANT_SPIRITS",
             "REBUKE",
             "FROST_NEEDLE",
             "MOMENTUM",
@@ -957,6 +958,7 @@ mod tests {
             "GUST_OF_WIND",
             "BUFFET",
             "GIGANTISM",
+            "VERDANT_SPIRITS",
             "REBUKE",
             "FROST_NEEDLE",
             "MOMENTUM",
@@ -1754,6 +1756,25 @@ mod tests {
         assert_eq!(status.max_stacks, 1);
         assert_eq!(status.stack_policy, StackPolicy::Refresh);
         assert_eq!(status.dispel_types, vec![StatusDispelType::Magic]);
+    }
+
+    #[test]
+    fn verdant_spirits_catalog_matches_passive_bestow_contract() {
+        let definition = definition("VERDANT_SPIRITS");
+
+        assert_eq!(definition.cooldown, Duration::from_millis(100));
+        assert!(!definition.uses_global_cooldown);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cast_mobility, SpellCastMobility::Mobile);
+        assert_eq!(definition.behavior, SpellBehavior::DirectTarget);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::Assistable);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage_type, DamageType::Air);
+        assert!(!definition.arms_auto_attack_on_cast);
     }
 
     #[test]

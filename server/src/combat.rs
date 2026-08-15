@@ -8040,6 +8040,7 @@ fn handle_death(ctx: &ReducerContext, state: &mut PlayerState) -> Option<u64> {
         mark_respawn_pending(state, ctx.timestamp);
     }
     clear_statuses_for_target(ctx, state.player_id);
+    crate::verdant_spirits::clear_for_origin(ctx, state.player_id);
     crate::lingering_shade::clear_lingering_shade_for_owner(ctx, state.player_id);
     crate::spells::clear_recall_slot(ctx, state.player_id);
     crate::spells::clear_capacitor_charge(ctx, state.player_id);
@@ -9011,10 +9012,11 @@ pub fn process_periodic_status_ticks(ctx: &ReducerContext, now: Timestamp) -> us
         if effect.tick_interval_ms == 0 || now >= effect.expires_at {
             continue;
         }
-        let Some(kind) = StatusEffectKind::from_wire(effect.effect_kind.as_str()) else {
-            continue;
-        };
-        if !matches!(kind, StatusEffectKind::Dot | StatusEffectKind::Hot) {
+        let kind = StatusEffectKind::from_wire(effect.effect_kind.as_str());
+        let is_verdant_spirits = effect.effect_kind == crate::verdant_spirits::STATUS_KIND;
+        if !is_verdant_spirits
+            && !matches!(kind, Some(StatusEffectKind::Dot | StatusEffectKind::Hot))
+        {
             continue;
         }
         if !alive_targets.contains(&effect.target) {
@@ -9022,35 +9024,56 @@ pub fn process_periodic_status_ticks(ctx: &ReducerContext, now: Timestamp) -> us
         }
 
         let stacks = effect.stacks.max(1) as i32;
-        match kind {
-            StatusEffectKind::Dot => {
-                let base = effect.tick_amount.max(0);
-                if base > 0 {
-                    queued.push(EffectPacket::Damage {
-                        amount: base.saturating_mul(stacks),
-                        damage_type: DamageType::from_wire(effect.damage_type.as_str()),
-                        source: effect.source,
-                        target: effect.target,
-                        spell_id: effect.spell_id.clone(),
-                        delivery: DamageDelivery::Periodic,
-                        source_kind: DAMAGE_SOURCE_KIND_PERIODIC.to_string(),
-                        direct_action_key: String::new(),
-                    });
-                }
+        if is_verdant_spirits {
+            if !crate::verdant_spirits::origin_is_active(ctx, effect.source) {
+                continue;
             }
-            StatusEffectKind::Hot => {
-                let base = effect.tick_amount.max(0);
-                if base > 0 {
-                    queued.push(EffectPacket::Heal {
-                        amount: base.saturating_mul(stacks),
-                        source: effect.source,
-                        target: effect.target,
-                        spell_id: effect.spell_id.clone(),
-                        target_audience: TargetAudience::Assistable,
-                    });
-                }
+            let amount = crate::verdant_spirits::periodic_heal_amount(
+                effect.source,
+                effect.target,
+                effect.tick_amount,
+                effect.stacks,
+            );
+            if amount > 0 {
+                queued.push(EffectPacket::Heal {
+                    amount,
+                    source: effect.source,
+                    target: effect.target,
+                    spell_id: effect.spell_id.clone(),
+                    target_audience: TargetAudience::Assistable,
+                });
             }
-            _ => {}
+        } else {
+            match kind.expect("validated periodic status kind") {
+                StatusEffectKind::Dot => {
+                    let base = effect.tick_amount.max(0);
+                    if base > 0 {
+                        queued.push(EffectPacket::Damage {
+                            amount: base.saturating_mul(stacks),
+                            damage_type: DamageType::from_wire(effect.damage_type.as_str()),
+                            source: effect.source,
+                            target: effect.target,
+                            spell_id: effect.spell_id.clone(),
+                            delivery: DamageDelivery::Periodic,
+                            source_kind: DAMAGE_SOURCE_KIND_PERIODIC.to_string(),
+                            direct_action_key: String::new(),
+                        });
+                    }
+                }
+                StatusEffectKind::Hot => {
+                    let base = effect.tick_amount.max(0);
+                    if base > 0 {
+                        queued.push(EffectPacket::Heal {
+                            amount: base.saturating_mul(stacks),
+                            source: effect.source,
+                            target: effect.target,
+                            spell_id: effect.spell_id.clone(),
+                            target_audience: TargetAudience::Assistable,
+                        });
+                    }
+                }
+                _ => {}
+            }
         }
 
         let interval = Duration::from_millis(effect.tick_interval_ms.max(1));

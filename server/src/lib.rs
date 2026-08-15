@@ -51,6 +51,7 @@ mod resources;
 mod spells;
 mod survival;
 mod tick_metrics;
+mod verdant_spirits;
 #[cfg(test)]
 mod vfx_generation;
 mod world_collision;
