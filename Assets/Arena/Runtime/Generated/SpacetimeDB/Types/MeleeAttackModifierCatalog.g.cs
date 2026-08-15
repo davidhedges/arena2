@@ -21,6 +21,8 @@ namespace SpacetimeDB.Types
         public string StackGroup;
         [DataMember(Name = "min_range")]
         public float MinRange;
+        [DataMember(Name = "range_bonus")]
+        public float RangeBonus;
         [DataMember(Name = "force_stagger")]
         public bool ForceStagger;
         [DataMember(Name = "sort_order")]
@@ -31,6 +33,7 @@ namespace SpacetimeDB.Types
             string StatusKind,
             string StackGroup,
             float MinRange,
+            float RangeBonus,
             bool ForceStagger,
             uint SortOrder
         )
@@ -39,6 +42,7 @@ namespace SpacetimeDB.Types
             this.StatusKind = StatusKind;
             this.StackGroup = StackGroup;
             this.MinRange = MinRange;
+            this.RangeBonus = RangeBonus;
             this.ForceStagger = ForceStagger;
             this.SortOrder = SortOrder;
         }

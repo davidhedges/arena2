@@ -3789,6 +3789,7 @@ fn validate_apply_status_kind_for_self(
         | StatusEffectKind::Berserking
         | StatusEffectKind::BattleTrance
         | StatusEffectKind::TargetedAbilityAvoidance
+        | StatusEffectKind::Gigantism
         | StatusEffectKind::BladeTwisting
         | StatusEffectKind::SoulStolen
         | StatusEffectKind::BlightEmpowered
@@ -3931,6 +3932,7 @@ mod tests {
                 "GRAVEWAKE",
                 "NECRO_PRISON",
                 "BLOOD_OFFERING",
+                "GIGANTISM",
                 "GUST_OF_WIND",
                 "BUFFET",
                 "CAUTERIZE",
@@ -3968,7 +3970,6 @@ mod tests {
                 "IRON_WILL",
                 "DEFIANCE",
                 "BATTLE_CRY",
-                "GIANT_SWING",
                 "FRENZY",
                 "ENRAGE",
                 "SECOND_WIND",
@@ -4488,6 +4489,7 @@ mod tests {
             "GRAVEBURST",
             "GRAVEWAKE",
             "NECRO_PRISON",
+            "GIGANTISM",
             "GUST_OF_WIND",
             "BUFFET",
             "CELESTIAL_MANTLE",
@@ -4503,7 +4505,6 @@ mod tests {
             "IRON_WILL",
             "DEFIANCE",
             "BATTLE_CRY",
-            "GIANT_SWING",
             "ENRAGE",
             "SECOND_WIND",
             "SHOCKWAVE",

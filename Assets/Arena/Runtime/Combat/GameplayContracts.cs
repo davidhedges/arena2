@@ -27,7 +27,6 @@ namespace Arena.Combat
         public const string GustOfWind = "GUST_OF_WIND";
         public const string Buffet = "BUFFET";
         public const string Momentum = "MOMENTUM";
-        public const string GiantSwing = "GIANT_SWING";
         public const string Intimidate = "INTIMIDATE";
         public const string Enrage = "ENRAGE";
         public const string Shockwave = "SHOCKWAVE";
@@ -1543,10 +1542,49 @@ namespace Arena.Combat
             DbConnection? conn,
             SpacetimeDB.Identity? owner,
             float baseRange,
-            long nowMs)
+            long nowMs,
+            bool includeRangeBonus = true)
         {
             float modifierRange = ResolveActiveModifierGuideRange(conn, owner, nowMs);
-            return modifierRange > 0f ? Mathf.Max(baseRange, modifierRange) : baseRange;
+            float range = modifierRange > 0f ? Mathf.Max(baseRange, modifierRange) : baseRange;
+            return includeRangeBonus
+                ? range + ResolveActiveModifierRangeBonus(conn, owner, nowMs)
+                : range;
+        }
+
+        public static float ResolveActiveModifierRangeBonus(
+            DbConnection? conn,
+            SpacetimeDB.Identity? owner,
+            long nowMs)
+        {
+            if (conn == null || !owner.HasValue)
+                return 0f;
+
+            float bonus = 0f;
+            long nowMicros = nowMs * 1000L;
+            foreach (StatusEffect effect in conn.Db.StatusEffect.Target.Filter(owner.Value))
+            {
+                if (!IsActive(effect, nowMicros))
+                    continue;
+
+                string effectKind = WireIdentifier.Normalize(effect.EffectKind);
+                string stackGroup = WireIdentifier.Normalize(effect.StackGroup);
+                if (string.IsNullOrWhiteSpace(effectKind) || string.IsNullOrWhiteSpace(stackGroup))
+                    continue;
+
+                foreach (MeleeAttackModifierCatalog modifier in conn.Db.MeleeAttackModifierCatalog.Iter())
+                {
+                    if (!string.Equals(WireIdentifier.Normalize(modifier.StatusKind), effectKind, StringComparison.Ordinal))
+                        continue;
+                    if (!string.Equals(WireIdentifier.Normalize(modifier.StackGroup), stackGroup, StringComparison.Ordinal))
+                        continue;
+
+                    bonus += Mathf.Max(0f, modifier.RangeBonus);
+                    break;
+                }
+            }
+
+            return bonus;
         }
 
         public static float ResolveActiveModifierGuideRange(

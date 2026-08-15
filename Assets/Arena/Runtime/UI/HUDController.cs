@@ -2125,7 +2125,8 @@ namespace Arena.UI
                 conn,
                 owner,
                 melee.Range,
-                nowMs);
+                nowMs,
+                includeRangeBonus: false);
             return maximum > 0f
                 && !MeleeStrikeGeometry.PassesRangeGate(
                     targetHorizontalDistance,

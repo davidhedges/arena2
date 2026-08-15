@@ -13379,6 +13379,7 @@ mod tests {
             ("SPELL_FROST_NEEDLE", "FROST_NEEDLE", "COLD"),
             ("SPELL_INSTANT_BEAM", "INSTANT_BEAM", "ARCANE"),
             ("SPELL_ORBITING_BLADES", "ORBITING_BLADES", "LIGHTNING"),
+            ("SPELL_GIGANTISM", "GIGANTISM", "PHYSICAL"),
             ("SPELL_GUST_OF_WIND", "GUST_OF_WIND", "AIR"),
             ("SPELL_BUFFET", "BUFFET", "AIR"),
             ("SPELL_CELESTIAL_MANTLE", "CELESTIAL_MANTLE", "HOLY"),
@@ -13478,7 +13479,12 @@ mod tests {
             ),
             (
                 "PRIMAL",
-                &["SPELL_GUST_OF_WIND", "SPELL_BUFFET", "SPELL_STONESPIRE"][..],
+                &[
+                    "SPELL_GIGANTISM",
+                    "SPELL_GUST_OF_WIND",
+                    "SPELL_BUFFET",
+                    "SPELL_STONESPIRE",
+                ][..],
             ),
             (
                 "RUIN",

@@ -22,6 +22,8 @@ namespace Arena.MatchDb
         public string StackGroup;
         [DataMember(Name = "min_range")]
         public float MinRange;
+        [DataMember(Name = "range_bonus")]
+        public float RangeBonus;
         [DataMember(Name = "force_stagger")]
         public bool ForceStagger;
         [DataMember(Name = "sort_order")]
@@ -32,6 +34,7 @@ namespace Arena.MatchDb
             string StatusKind,
             string StackGroup,
             float MinRange,
+            float RangeBonus,
             bool ForceStagger,
             uint SortOrder
         )
@@ -40,6 +43,7 @@ namespace Arena.MatchDb
             this.StatusKind = StatusKind;
             this.StackGroup = StackGroup;
             this.MinRange = MinRange;
+            this.RangeBonus = RangeBonus;
             this.ForceStagger = ForceStagger;
             this.SortOrder = SortOrder;
         }

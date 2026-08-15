@@ -2821,6 +2821,7 @@ pub enum StatusEffectKind {
     Berserking,
     BattleTrance,
     TargetedAbilityAvoidance,
+    Gigantism,
     FindWeakness,
     BladeTwisting,
     Disarm,
@@ -2871,6 +2872,7 @@ impl StatusEffectKind {
             Self::Berserking => "BERSERKING",
             Self::BattleTrance => "BATTLE_TRANCE",
             Self::TargetedAbilityAvoidance => "TARGETED_ABILITY_AVOIDANCE",
+            Self::Gigantism => "GIGANTISM",
             Self::FindWeakness => "FIND_WEAKNESS",
             Self::BladeTwisting => "BLADE_TWISTING",
             Self::Disarm => "DISARM",
@@ -2921,6 +2923,7 @@ impl StatusEffectKind {
             "BERSERKING" => Some(Self::Berserking),
             "BATTLE_TRANCE" => Some(Self::BattleTrance),
             "TARGETED_ABILITY_AVOIDANCE" => Some(Self::TargetedAbilityAvoidance),
+            "GIGANTISM" => Some(Self::Gigantism),
             "FIND_WEAKNESS" => Some(Self::FindWeakness),
             "BLADE_TWISTING" => Some(Self::BladeTwisting),
             "DISARM" => Some(Self::Disarm),
@@ -3013,6 +3016,9 @@ pub enum StatusPayload {
     Berserking,
     BattleTrance,
     TargetedAbilityAvoidance,
+    Gigantism {
+        modifier_scalar: f32,
+    },
     FindWeakness,
     BladeTwisting,
     Disarm,
@@ -3162,6 +3168,9 @@ impl AuthoredStatusPayload {
             StatusEffectKind::Berserking => StatusPayload::Berserking,
             StatusEffectKind::BattleTrance => StatusPayload::BattleTrance,
             StatusEffectKind::TargetedAbilityAvoidance => StatusPayload::TargetedAbilityAvoidance,
+            StatusEffectKind::Gigantism => StatusPayload::Gigantism {
+                modifier_scalar: self.modifier_scalar,
+            },
             StatusEffectKind::FindWeakness => StatusPayload::FindWeakness,
             StatusEffectKind::BladeTwisting => StatusPayload::BladeTwisting,
             StatusEffectKind::Disarm => StatusPayload::Disarm,
@@ -3237,6 +3246,7 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::KnockbackResistance
             | StatusEffectKind::DamageTakenFromSourceAmp
             | StatusEffectKind::DamageRedirect
+            | StatusEffectKind::Gigantism
             | StatusEffectKind::CastSpeed => {
                 if !self.modifier_scalar.is_finite() || self.modifier_scalar <= 0.0 {
                     return Err(format!("{subject} {path}.modifier_scalar must be positive"));
@@ -3393,6 +3403,7 @@ impl StatusPayload {
             Self::Berserking => StatusEffectKind::Berserking,
             Self::BattleTrance => StatusEffectKind::BattleTrance,
             Self::TargetedAbilityAvoidance => StatusEffectKind::TargetedAbilityAvoidance,
+            Self::Gigantism { .. } => StatusEffectKind::Gigantism,
             Self::FindWeakness => StatusEffectKind::FindWeakness,
             Self::BladeTwisting => StatusEffectKind::BladeTwisting,
             Self::Disarm => StatusEffectKind::Disarm,
@@ -3488,6 +3499,7 @@ impl StatusPayload {
             },
             Self::DamageAmp { modifier_scalar }
             | Self::DirectDamageAmp { modifier_scalar }
+            | Self::Gigantism { modifier_scalar }
             | Self::ManaRegen { modifier_scalar }
             | Self::StaminaRegen { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
@@ -3662,6 +3674,9 @@ impl StatusPayload {
             StatusEffectKind::Berserking => Self::Berserking,
             StatusEffectKind::BattleTrance => Self::BattleTrance,
             StatusEffectKind::TargetedAbilityAvoidance => Self::TargetedAbilityAvoidance,
+            StatusEffectKind::Gigantism => Self::Gigantism {
+                modifier_scalar: columns.modifier_scalar.max(0.0),
+            },
             StatusEffectKind::FindWeakness => Self::FindWeakness,
             StatusEffectKind::BladeTwisting => Self::BladeTwisting,
             StatusEffectKind::Disarm => Self::Disarm,
@@ -3721,6 +3736,7 @@ impl StatusPayload {
             } => tick_heal <= 0 || tick_interval.is_zero(),
             Self::DamageAmp { modifier_scalar }
             | Self::DirectDamageAmp { modifier_scalar }
+            | Self::Gigantism { modifier_scalar }
             | Self::ManaRegen { modifier_scalar }
             | Self::StaminaRegen { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
@@ -3825,6 +3841,7 @@ impl StatusPayload {
             }
             Self::DamageAmp { modifier_scalar }
             | Self::DirectDamageAmp { modifier_scalar }
+            | Self::Gigantism { modifier_scalar }
             | Self::ManaRegen { modifier_scalar }
             | Self::StaminaRegen { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
@@ -3947,6 +3964,7 @@ impl StatusPayload {
             Self::Hot { tick_heal, .. } => tick_heal > existing.tick_amount.max(0),
             Self::DamageAmp { modifier_scalar }
             | Self::DirectDamageAmp { modifier_scalar }
+            | Self::Gigantism { modifier_scalar }
             | Self::ManaRegen { modifier_scalar }
             | Self::StaminaRegen { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
@@ -5771,8 +5789,11 @@ fn resolve_damage_amount(
     } else {
         let (source_equipment, source_stats) =
             source_equipment_and_stats.expect("non-system hit must have source stats");
-        temporary_modifiers.damage_multiplier_for(&hit.source, delivery)
-            * source_stats.damage_multiplier
+        temporary_modifiers.damage_multiplier_for(
+            &hit.source,
+            delivery,
+            DamageType::from_wire(hit.damage_type.as_str()),
+        ) * source_stats.damage_multiplier
             * equipment_damage_multiplier_for_hit(hit, source_equipment)
             * resistance_multiplier
             * temporary_modifiers.damage_taken_multiplier_from_source_for(&hit.target, &hit.source)
@@ -8652,6 +8673,13 @@ impl StatusRuntimeView {
                         *entry = (*entry)
                             .max(effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32);
                     }
+                    StatusEffectKind::Gigantism => {
+                        let entry = modifiers
+                            .physical_damage_amp_by_target
+                            .entry(*target)
+                            .or_insert(0.0);
+                        *entry = (*entry).max(effect.modifier_scalar.max(0.0));
+                    }
                     StatusEffectKind::DamageTakenReduction => {
                         let entry = modifiers
                             .damage_taken_reduction_by_target
@@ -8786,6 +8814,7 @@ pub struct TemporaryCombatModifiers {
     stun_immune: HashSet<Identity>,
     damage_amp_by_target: HashMap<Identity, f32>,
     direct_damage_amp_by_target: HashMap<Identity, f32>,
+    physical_damage_amp_by_target: HashMap<Identity, f32>,
     damage_taken_reduction_by_target: HashMap<Identity, f32>,
     damage_taken_amp_by_target_and_source: HashMap<(Identity, Identity), f32>,
     healing_taken_reduction_by_target: HashMap<Identity, f32>,
@@ -8818,7 +8847,12 @@ impl TemporaryCombatModifiers {
         self.disabled.contains(identity)
     }
 
-    pub fn damage_multiplier_for(&self, identity: &Identity, delivery: DamageDelivery) -> f32 {
+    pub fn damage_multiplier_for(
+        &self,
+        identity: &Identity,
+        delivery: DamageDelivery,
+        damage_type: DamageType,
+    ) -> f32 {
         let base_amp = self
             .damage_amp_by_target
             .get(identity)
@@ -8834,13 +8868,22 @@ impl TemporaryCombatModifiers {
         } else {
             0.0
         };
+        let physical_amp = if damage_type == DamageType::Physical {
+            self.physical_damage_amp_by_target
+                .get(identity)
+                .copied()
+                .unwrap_or(0.0)
+                .max(0.0)
+        } else {
+            0.0
+        };
         let reduction = self
             .damage_dealt_reduction_by_target
             .get(identity)
             .copied()
             .unwrap_or(0.0)
             .clamp(0.0, MAX_DAMAGE_DEALT_REDUCTION);
-        (1.0 + base_amp + direct_amp) * (1.0 - reduction)
+        (1.0 + base_amp + direct_amp + physical_amp) * (1.0 - reduction)
     }
 
     pub fn damage_taken_multiplier_for(&self, identity: &Identity) -> f32 {
@@ -10178,11 +10221,65 @@ mod tests {
         modifiers.direct_damage_amp_by_target.insert(identity, 0.30);
 
         assert!(
-            (modifiers.damage_multiplier_for(&identity, DamageDelivery::Direct) - 1.50).abs()
+            (modifiers.damage_multiplier_for(
+                &identity,
+                DamageDelivery::Direct,
+                DamageType::Physical,
+            ) - 1.50)
+                .abs()
                 < 0.0001
         );
         assert!(
-            (modifiers.damage_multiplier_for(&identity, DamageDelivery::Periodic) - 1.20).abs()
+            (modifiers.damage_multiplier_for(
+                &identity,
+                DamageDelivery::Periodic,
+                DamageType::Physical,
+            ) - 1.20)
+                .abs()
+                < 0.0001
+        );
+    }
+
+    #[test]
+    fn gigantism_amp_applies_only_to_physical_damage() {
+        let identity = test_identity();
+        let now = Timestamp::UNIX_EPOCH + Duration::from_secs(10);
+        let view = status_runtime_view(
+            vec![test_status_effect(
+                identity,
+                StatusPayload::Gigantism {
+                    modifier_scalar: 0.20,
+                },
+                now,
+                now + Duration::from_secs(20),
+            )],
+            &[identity],
+            now,
+        );
+        let modifiers = view.temporary_combat_modifiers();
+
+        assert!(
+            (modifiers.damage_multiplier_for(
+                &identity,
+                DamageDelivery::Direct,
+                DamageType::Physical,
+            ) - 1.20)
+                .abs()
+                < 0.0001
+        );
+        assert!(
+            (modifiers.damage_multiplier_for(
+                &identity,
+                DamageDelivery::Periodic,
+                DamageType::Physical,
+            ) - 1.20)
+                .abs()
+                < 0.0001
+        );
+        assert!(
+            (modifiers.damage_multiplier_for(&identity, DamageDelivery::Direct, DamageType::Air,)
+                - 1.0)
+                .abs()
                 < 0.0001
         );
     }
@@ -10196,11 +10293,21 @@ mod tests {
             .insert(identity, 0.10);
 
         assert!(
-            (modifiers.damage_multiplier_for(&identity, DamageDelivery::Direct) - 0.90).abs()
+            (modifiers.damage_multiplier_for(
+                &identity,
+                DamageDelivery::Direct,
+                DamageType::Physical,
+            ) - 0.90)
+                .abs()
                 < 0.0001
         );
         assert!(
-            (modifiers.damage_multiplier_for(&identity, DamageDelivery::Periodic) - 0.90).abs()
+            (modifiers.damage_multiplier_for(
+                &identity,
+                DamageDelivery::Periodic,
+                DamageType::Physical,
+            ) - 0.90)
+                .abs()
                 < 0.0001
         );
     }
@@ -10471,6 +10578,15 @@ mod tests {
                 StatusEffectKind::DirectDamageAmp,
                 StatusPayload::DirectDamageAmp {
                     modifier_scalar: 0.30,
+                },
+            ),
+            (
+                StatusPayload::Gigantism {
+                    modifier_scalar: 0.20,
+                },
+                StatusEffectKind::Gigantism,
+                StatusPayload::Gigantism {
+                    modifier_scalar: 0.20,
                 },
             ),
             (
@@ -11313,11 +11429,21 @@ mod tests {
         let modifiers = view.temporary_combat_modifiers();
 
         assert!(
-            (modifiers.damage_multiplier_for(&target, DamageDelivery::Direct) - 1.70).abs()
+            (modifiers.damage_multiplier_for(
+                &target,
+                DamageDelivery::Direct,
+                DamageType::Physical,
+            ) - 1.70)
+                .abs()
                 < 0.0001
         );
         assert!(
-            (modifiers.damage_multiplier_for(&target, DamageDelivery::Periodic) - 1.40).abs()
+            (modifiers.damage_multiplier_for(
+                &target,
+                DamageDelivery::Periodic,
+                DamageType::Physical,
+            ) - 1.40)
+                .abs()
                 < 0.0001
         );
         assert_eq!(modifiers.damage_taken_multiplier_for(&target), 0.0);

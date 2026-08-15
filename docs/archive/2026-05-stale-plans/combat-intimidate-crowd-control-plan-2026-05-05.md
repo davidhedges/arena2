@@ -144,7 +144,7 @@ Add a new behavior `APPLY_STATUS` to:
 First-pass scope:
 
 - Support `SELF` and `TARGET` application modes.
-- Migrate existing `SELF_BUFF` rows (`MOMENTUM`, `GIANT_SWING`) to `APPLY_STATUS` with `targeting: "SELF"` and `polarity: "BUFF"`.
+- Migrate the existing `MOMENTUM` `SELF_BUFF` row to `APPLY_STATUS` with `targeting: "SELF"` and `polarity: "BUFF"`.
 - Add `INTIMIDATE` as `APPLY_STATUS` with `targeting: "TARGET"` and `polarity: "DEBUFF"`.
 - Keep `SELF_RESOURCE` for `ENRAGE`; resource generation is not a status application.
 - Do not collapse `FROST_NOVA` into `APPLY_STATUS` in this pass. Later, move Frost Nova root into generic `AREA` impact effects instead of broadening `APPLY_STATUS` into a damage/AoE/event behavior.
@@ -413,7 +413,7 @@ Work:
 - Emit existing combat events; do not add a parallel event table.
 - Do not create `ActiveSpell` rows for `INTIMIDATE`; there is no projectile or travel simulation.
 - Add tests for:
-  - existing `MOMENTUM` and `GIANT_SWING` rows load as `APPLY_STATUS`
+  - the existing `MOMENTUM` row loads as `APPLY_STATUS`
   - unknown status kinds/fields rejected
   - missing/invalid duration rejected at catalog validation
   - `SELF` rows reject target-only range/defense fields
@@ -432,7 +432,7 @@ Files:
 Work:
 
 - Add `INTIMIDATE` spell row.
-- Convert `MOMENTUM` and `GIANT_SWING` from `SELF_BUFF` to `APPLY_STATUS`.
+- Convert `MOMENTUM` from `SELF_BUFF` to `APPLY_STATUS`.
 - Add `WARRIOR_INTIMIDATE` ability row.
 - Add action presentation row.
 - Add default loadout row at `slot_1_7`.

@@ -233,7 +233,8 @@ namespace Arena.Input
                     conn,
                     entity.Identity,
                     gameplay.Range,
-                    nowMs);
+                    nowMs,
+                    includeRangeBonus: configuredGapClose == null);
                 if (configuredGapClose != null && gapClose == null)
                     strikeRange = Mathf.Min(strikeRange, Mathf.Max(0f, configuredGapClose.ImpactRange));
                 var targetPos = target!.GetPresentationRoot().position;

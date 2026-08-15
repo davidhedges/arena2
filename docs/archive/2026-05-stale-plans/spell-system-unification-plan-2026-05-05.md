@@ -226,7 +226,7 @@ Server:
   - Update charge/projectile/area impact resolution to consume the unified `StatusApplication` shape. Look for the call sites that create `EffectPacket::ApplyStatus { payload: StatusPayload::Stagger, ... }` etc. - they all become `StatusApplication.into_payload()`.
 
 - `server/src/progression_catalog.shared.json`
-  - Migrate `MOMENTUM`, `GIANT_SWING` to `APPLY_STATUS` + `targeting_mode: SELF`.
+  - Migrate `MOMENTUM` to `APPLY_STATUS` + `targeting_mode: SELF`.
   - Migrate `FIREBALL`'s `delivery.impact_effects` from `BURN` to a generic `APPLY_STATUS` with `kind: DOT`.
   - Migrate `METEOR`'s impact effects (STUN, STAGGER) similarly.
   - Migrate movement-delivery arrival effects that were bridged into charge impact effects (STUN).
@@ -247,7 +247,7 @@ Tests to add (`server/src/spells/catalog.rs`, `server/src/spells/manifest.rs`, `
 
 ### Risks and rollback
 
-- The largest risk is silently breaking `MOMENTUM`/`GIANT_SWING` for players. Manual playtest after migration to confirm both still apply their buffs and consume rage correctly.
+- The largest risk is silently breaking `MOMENTUM` for players. Manual playtest after migration to confirm it still applies its buff and consumes rage correctly.
 - Burn DoT migration: confirm `FIREBALL`'s burn still ticks for the same total damage. The existing `Burn { duration: 10s, tick_interval: 1s, tick_damage: 3 }` should produce 10 ticks of 3 damage; `APPLY_STATUS` with `kind: DOT, duration_ms: 10000, tick_interval_ms: 1000, tick_damage: 3` should match.
 - Historical fallback, now resolved: if `SpellSecondaryTunables` had more callers than expected, this step could have kept `Projectile/Area/Charge` impact effect types unchanged and only done SelfBuff -> ApplyStatus. The implementation did not take that fallback; movement delivery now authors shared `impact_effects`.
 
@@ -257,7 +257,7 @@ Tests to add (`server/src/spells/catalog.rs`, `server/src/spells/manifest.rs`, `
 cargo test --manifest-path server/Cargo.toml
 ```
 
-Plus manual playtest: cast `MOMENTUM` (slow immunity buff), cast `GIANT_SWING` (melee modifier), cast `FIREBALL` (DoT), confirm same gameplay behavior as before the refactor.
+Plus manual playtest: cast `MOMENTUM` (slow immunity buff), cast `FIREBALL` (DoT), and confirm the same gameplay behavior as before the refactor.
 
 ---
 

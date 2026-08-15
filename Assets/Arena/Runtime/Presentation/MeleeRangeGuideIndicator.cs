@@ -9,7 +9,7 @@ using UnityEngine;
 namespace Arena.Presentation
 {
     /// <summary>
-    /// Local-only ground guide for active melee range modifiers such as Giant Swing.
+    /// Local-only ground guide for active melee range modifiers.
     /// Combat authority remains server-side; this visual reads replicated modifier/status rows.
     /// </summary>
     public sealed class MeleeRangeGuideIndicator : MonoBehaviour

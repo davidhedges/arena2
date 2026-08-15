@@ -900,6 +900,7 @@ mod tests {
             "FROZEN_GRASP",
             "GUST_OF_WIND",
             "BUFFET",
+            "GIGANTISM",
             "REBUKE",
             "FROST_NEEDLE",
             "MOMENTUM",
@@ -955,11 +956,11 @@ mod tests {
             "FROZEN_GRASP",
             "GUST_OF_WIND",
             "BUFFET",
+            "GIGANTISM",
             "REBUKE",
             "FROST_NEEDLE",
             "MOMENTUM",
             "BATTLE_CRY",
-            "GIANT_SWING",
             "INTIMIDATE",
             "IRON_WILL",
             "DEFIANCE",
@@ -1190,36 +1191,6 @@ mod tests {
             .expect("Defiance should define an apply-status payload");
         assert_eq!(status.kind, StatusEffectKind::DamageTakenReduction);
         assert!((status.modifier_scalar - 0.1).abs() < 0.0001);
-        assert_eq!(status.max_stacks, 1);
-        assert_eq!(status.stack_policy, StackPolicy::Refresh);
-    }
-
-    #[test]
-    fn giant_swing_catalog_matches_melee_modifier_buff_defaults() {
-        let definition = definition("GIANT_SWING");
-
-        assert_eq!(definition.kind.as_str(), "GIANT_SWING");
-        assert_eq!(definition.cooldown, Duration::from_millis(12_000));
-        assert!(definition.uses_global_cooldown);
-        assert_eq!(definition.behavior.as_str(), "APPLY_STATUS");
-        assert_eq!(definition.targeting.as_str(), "SELF");
-        assert!(!definition.requires_target);
-        assert!((definition.duration - 12.0).abs() < 0.0001);
-        assert!((definition.primary_resource_cost - 0.0).abs() < 0.0001);
-        assert_eq!(
-            definition.status_stack_group.as_deref(),
-            Some("GIANT_SWING")
-        );
-        assert_eq!(
-            definition.apply_status_polarity,
-            Some(crate::combat::StatusPolarity::Buff)
-        );
-        let status = definition
-            .apply_status
-            .as_ref()
-            .expect("Giant Swing should define an apply-status payload");
-        assert_eq!(status.kind, StatusEffectKind::MeleeAttackModifier);
-        assert_eq!(status.modifier_scalar, 0.0);
         assert_eq!(status.max_stacks, 1);
         assert_eq!(status.stack_policy, StackPolicy::Refresh);
     }
@@ -1748,6 +1719,41 @@ mod tests {
             vec![ImpactEffect::InterruptCast]
         );
         assert!(!definition.generates_primary_resource_on_cast);
+    }
+
+    #[test]
+    fn gigantism_catalog_matches_targeted_primal_buff_contract() {
+        let definition = definition("GIGANTISM");
+
+        assert_eq!(definition.kind.as_str(), "GIGANTISM");
+        assert_eq!(definition.cooldown, Duration::from_secs(30));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cast_mobility, SpellCastMobility::Mobile);
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.duration, 20.0);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert!(!definition.arms_auto_attack_on_cast);
+        assert_eq!(definition.status_stack_group.as_deref(), Some("GIGANTISM"));
+        assert_eq!(definition.apply_status_polarity, Some(StatusPolarity::Buff));
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("Gigantism should define an apply-status payload");
+        assert_eq!(
+            status.payload(),
+            StatusPayload::Gigantism {
+                modifier_scalar: 0.20,
+            }
+        );
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert_eq!(status.dispel_types, vec![StatusDispelType::Magic]);
     }
 
     #[test]

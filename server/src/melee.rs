@@ -131,8 +131,8 @@ const EVENT_BLOCK: &str = COMBAT_EVENT_BLOCK;
 const EVENT_PARRY: &str = COMBAT_EVENT_PARRY;
 const EVENT_MISS: &str = COMBAT_EVENT_MISS;
 const MELEE_MANIFEST_JSON: &str = include_str!("melee_manifest.shared.json");
-const GIANT_SWING_STATUS_GROUP: &str = "GIANT_SWING";
-const GIANT_SWING_MIN_RANGE_METERS: f32 = 5.0;
+const GIGANTISM_STATUS_GROUP: &str = "GIGANTISM";
+const GIGANTISM_MELEE_RANGE_BONUS_METERS: f32 = 1.5;
 const SERRATED_BLADES_STATUS_GROUP: &str = "SERRATED_BLADES";
 const SERRATED_BLADES_BLEED_STATUS_GROUP: &str = "SERRATED_BLADES_BLEED";
 const SERRATED_BLADES_BLEED_DAMAGE_RATIO: f32 = 0.10;
@@ -161,6 +161,7 @@ struct MeleeAttackModifierSpec {
     status_kind: StatusEffectKind,
     status_group: &'static str,
     min_range: Option<f32>,
+    range_bonus: f32,
     force_stagger: bool,
     consume_on_attack: bool,
     bleed_damage_ratio: f32,
@@ -169,19 +170,21 @@ struct MeleeAttackModifierSpec {
 const MELEE_ATTACK_MODIFIER_SPECS: [MeleeAttackModifierSpec; 2] = [
     MeleeAttackModifierSpec {
         status_kind: StatusEffectKind::MeleeAttackModifier,
-        status_group: GIANT_SWING_STATUS_GROUP,
-        min_range: Some(GIANT_SWING_MIN_RANGE_METERS),
-        force_stagger: true,
-        consume_on_attack: true,
-        bleed_damage_ratio: 0.0,
-    },
-    MeleeAttackModifierSpec {
-        status_kind: StatusEffectKind::MeleeAttackModifier,
         status_group: SERRATED_BLADES_STATUS_GROUP,
         min_range: None,
+        range_bonus: 0.0,
         force_stagger: false,
         consume_on_attack: false,
         bleed_damage_ratio: SERRATED_BLADES_BLEED_DAMAGE_RATIO,
+    },
+    MeleeAttackModifierSpec {
+        status_kind: StatusEffectKind::Gigantism,
+        status_group: GIGANTISM_STATUS_GROUP,
+        min_range: None,
+        range_bonus: GIGANTISM_MELEE_RANGE_BONUS_METERS,
+        force_stagger: false,
+        consume_on_attack: false,
+        bleed_damage_ratio: 0.0,
     },
 ];
 
@@ -192,6 +195,7 @@ pub struct MeleeAttackModifierCatalog {
     pub status_kind: String,
     pub stack_group: String,
     pub min_range: f32,
+    pub range_bonus: f32,
     pub force_stagger: bool,
     pub sort_order: u32,
 }
@@ -215,6 +219,7 @@ pub(crate) fn sync_melee_attack_modifier_catalog(ctx: &ReducerContext) {
             status_kind: spec.status_kind.as_str().to_string(),
             stack_group: spec.status_group.to_string(),
             min_range: spec.min_range.unwrap_or(0.0).max(0.0),
+            range_bonus: spec.range_bonus.max(0.0),
             force_stagger: spec.force_stagger,
             sort_order: index as u32,
         };
@@ -250,16 +255,23 @@ fn melee_attack_modifier_catalog_key(spec: &MeleeAttackModifierSpec) -> String {
 #[derive(Clone, Debug, Default, PartialEq)]
 struct ResolvedMeleeAttackModifiers {
     min_range: Option<f32>,
+    range_bonus: f32,
     force_stagger: bool,
     bleed_damage_ratio: f32,
     consumed: Vec<ConsumedMeleeAttackModifier>,
 }
 
 impl ResolvedMeleeAttackModifiers {
-    fn effective_range(&self, base_range: f32) -> f32 {
-        self.min_range
+    fn effective_range(&self, base_range: f32, include_range_bonus: bool) -> f32 {
+        let range = self
+            .min_range
             .map(|min_range| base_range.max(min_range))
-            .unwrap_or(base_range)
+            .unwrap_or(base_range);
+        if include_range_bonus {
+            range + self.range_bonus.max(0.0)
+        } else {
+            range
+        }
     }
 }
 
@@ -3237,6 +3249,7 @@ fn resolve_melee_attack_modifiers(
         if let Some(min_range) = spec.min_range {
             resolved.min_range = Some(resolved.min_range.unwrap_or(0.0).max(min_range));
         }
+        resolved.range_bonus += spec.range_bonus.max(0.0);
         resolved.force_stagger |= spec.force_stagger;
         resolved.bleed_damage_ratio += spec.bleed_damage_ratio.max(0.0);
         if spec.consume_on_attack {
@@ -3521,9 +3534,9 @@ fn perform_melee_attack_for_internal(
     let melee_modifiers = resolve_melee_attack_modifiers(ctx, caster, now);
     let (consumed_modifier_status_kind, consumed_modifier_stack_group) =
         consumed_melee_modifier_event_fields(&melee_modifiers);
-    let effective_range = melee_modifiers.effective_range(gameplay.range);
-    let mut resolved_effective_range = effective_range;
     let gap_close = melee_gap_close_for_ability(ctx, gameplay.ability_id.as_deref());
+    let effective_range = melee_modifiers.effective_range(gameplay.range, gap_close.is_none());
+    let mut resolved_effective_range = effective_range;
     let mut gap_close_active = gap_close.is_some();
     let applies_stagger = gameplay.applies_stagger || melee_modifiers.force_stagger;
 
@@ -6101,11 +6114,10 @@ mod tests {
         resolve_melee_action_reference_in_strikes, resolved_hit_window_damages,
         scaled_auto_attack_cadence_ms, scaled_impact_area_damage, scheduled_melee_impact_at,
         strike_total_duration_ms, timed_melee_movement_destination, yaw_toward_xz,
-        AerialExecutionMode, AirborneTargetingMode, ComboInputDecision,
-        ConsumedMeleeAttackModifier, GapCloseActorSnapshot, GapClosePreCommitDecision,
-        MeleeAuthorization, PendingMeleeImpact, ResolvedMeleeAttackModifiers,
-        ResolvedMeleeGapClose, ResolvedMeleeTargeting, SpellVec3, StaggerDirection, StrikeData,
-        StrikeHitWindowData, GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH,
+        AerialExecutionMode, AirborneTargetingMode, ComboInputDecision, GapCloseActorSnapshot,
+        GapClosePreCommitDecision, MeleeAuthorization, PendingMeleeImpact,
+        ResolvedMeleeAttackModifiers, ResolvedMeleeGapClose, ResolvedMeleeTargeting, SpellVec3,
+        StaggerDirection, StrikeData, StrikeHitWindowData, GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH,
         GAP_CLOSE_DESTINATION_BEHIND_TARGET, GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT,
         GAP_CLOSE_KIND_LINEAR, GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED, MELEE_MANIFEST_JSON,
         MELEE_TARGET_FACING_ARC_RADIANS,
@@ -6115,8 +6127,7 @@ mod tests {
     use crate::combat::actor_snapshot::CombatActorSnapshot;
     use crate::combat::scene_query::{is_direction_within_facing_arc, target_within_area_range_xz};
     use crate::combat::{
-        DamageType, EffectPacket, StackPolicy, StatusDispelType, StatusEffectKind, StatusPayload,
-        StatusPolarity,
+        DamageType, EffectPacket, StackPolicy, StatusDispelType, StatusPayload, StatusPolarity,
     };
     use crate::player::{DEFAULT_COMBAT_PROFILE, TWO_HANDED_SWORD_COMBAT_PROFILE};
     use crate::player_state::PlayerState;
@@ -7254,27 +7265,17 @@ mod tests {
         let mut modifiers = ResolvedMeleeAttackModifiers::default();
         modifiers.min_range = Some(5.0);
 
-        assert!((modifiers.effective_range(2.5) - 5.0).abs() < 0.0001);
-        assert!((modifiers.effective_range(5.5) - 5.5).abs() < 0.0001);
+        assert!((modifiers.effective_range(2.5, true) - 5.0).abs() < 0.0001);
+        assert!((modifiers.effective_range(5.5, true) - 5.5).abs() < 0.0001);
     }
 
     #[test]
-    fn consumed_melee_modifier_event_fields_publish_giant_swing_identity() {
+    fn gigantism_adds_flat_reach_only_to_non_gap_close_melee() {
         let mut modifiers = ResolvedMeleeAttackModifiers::default();
-        assert_eq!(
-            super::consumed_melee_modifier_event_fields(&modifiers),
-            ("", "")
-        );
+        modifiers.range_bonus = super::GIGANTISM_MELEE_RANGE_BONUS_METERS;
 
-        modifiers.consumed.push(ConsumedMeleeAttackModifier {
-            status_kind: StatusEffectKind::MeleeAttackModifier,
-            status_group: "GIANT_SWING",
-        });
-
-        assert_eq!(
-            super::consumed_melee_modifier_event_fields(&modifiers),
-            ("MELEE_ATTACK_MODIFIER", "GIANT_SWING")
-        );
+        assert!((modifiers.effective_range(2.5, true) - 4.0).abs() < 0.0001);
+        assert!((modifiers.effective_range(2.5, false) - 2.5).abs() < 0.0001);
     }
 
     fn collision_test_strikes() -> &'static [StrikeData] {

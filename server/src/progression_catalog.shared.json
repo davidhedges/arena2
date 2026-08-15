@@ -2469,6 +2469,49 @@
       }
     },
     {
+      "ability_id": "SPELL_GIGANTISM",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "GIGANTISM",
+      "display_name": "Gigantism",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1013,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 20000,
+          "max_distance": 18,
+          "damage_type": "PHYSICAL",
+          "status_stack_group": "GIGANTISM",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "GIGANTISM",
+            "modifier_scalar": 0.2,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_GUST_OF_WIND",
       "actor_scope": "PLAYER",
       "discipline_id": "PRIMAL",
@@ -4137,42 +4180,6 @@
           "status": {
             "kind": "DAMAGE_AMP",
             "modifier_scalar": 0.1,
-            "max_stacks": 1,
-            "stack_policy": "REFRESH"
-          }
-        }
-      }
-    },
-    {
-      "ability_id": "WARRIOR_GIANT_SWING",
-      "actor_scope": "PLAYER",
-      "discipline_id": "WAR",
-      "combat_profile_id": "TWO_HANDED_SWORD",
-      "action_id": "GIANT_SWING",
-      "display_name": "Giant Swing",
-      "resource_kind": "MANA",
-      "ability_tags": [
-        "ACTION_BAR_ACTION"
-      ],
-      "sort_order": 85,
-      "gameplay": {
-        "kind": "SPELL",
-        "cooldown_ms": 12000,
-        "uses_global_cooldown": true,
-        "cast_time_ms": 0,
-        "cast_mobility": "MOBILE",
-        "targeting": "SELF",
-        "requires_target": false,
-        "resource_cost": 0,
-        "arms_auto_attack_on_cast": false,
-        "delivery": {
-          "kind": "APPLY_STATUS",
-          "duration_ms": 12000,
-          "status_stack_group": "GIANT_SWING",
-          "polarity": "BUFF",
-          "status": {
-            "kind": "MELEE_ATTACK_MODIFIER",
-            "modifier_scalar": 0,
             "max_stacks": 1,
             "stack_policy": "REFRESH"
           }
@@ -8255,6 +8262,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_GIGANTISM",
+      "display_name": "Gigantism",
+      "description": "Enlarges a party member or yourself to 150% size for 20 seconds, increasing physical damage by 20% and adding 1.5 meters to non-gap-closer melee attack range.",
+      "sort_order": 92
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_GUST_OF_WIND",
       "display_name": "Gust of Wind",
       "description": "Blasts enemies in a frontal cone, knocking them backward without dealing damage.",
@@ -8560,13 +8574,6 @@
       "display_name": "Glacial Advance",
       "description": "Encases a party member or yourself in advancing frost, removing stuns and granting immunity to stuns for 10 seconds.",
       "sort_order": 119
-    },
-    {
-      "presentation_kind": "ABILITY",
-      "presentation_id": "WARRIOR_GIANT_SWING",
-      "display_name": "Giant Swing",
-      "description": "Empowers the next attack to reach farther and stagger enemies hit.",
-      "sort_order": 87
     },
     {
       "presentation_kind": "ABILITY",
@@ -9158,10 +9165,10 @@
     },
     {
       "presentation_kind": "STATUS",
-      "presentation_id": "GIANT_SWING",
-      "display_name": "Giant Swing",
-      "description": "The next melee attack reaches farther and staggers enemies hit.",
-      "sort_order": 10020
+      "presentation_id": "GIGANTISM",
+      "display_name": "Gigantism",
+      "description": "Size increased to 150%. Physical damage increased by 20%, and non-gap-closer melee attack range increased by 1.5 meters.",
+      "sort_order": 10019
     },
     {
       "presentation_kind": "STATUS",

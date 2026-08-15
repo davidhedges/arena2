@@ -90,6 +90,7 @@ namespace Arena.Entity
         private static readonly Color TargetIndicatorHostile = new(1f, 0.02f, 0.015f, 1f);
         private static readonly Color TargetIndicatorNeutral = new(1f, 0.82f, 0.18f, 1f);
         private static readonly Color TargetIndicatorParty = new(0.2f, 0.75f, 0.3f, 1f);
+        private const float GigantismPresentationScale = 1.5f;
 
         public PlayerEntity(Identity identity, bool isLocalPlayer, GameObject? prefab)
         {
@@ -197,6 +198,7 @@ namespace Arena.Entity
         public void ApplyStatusEffect(string effectKind)
         {
             _effectCounts[effectKind] = (_effectCounts.TryGetValue(effectKind, out var n) ? n : 0) + 1;
+            RefreshGigantismScale();
             RefreshWeaponStatusVisibility();
             RefreshEffectTint();
             RefreshSoulstealerCasterVfx();
@@ -208,9 +210,31 @@ namespace Arena.Entity
                 _effectCounts[effectKind] = n - 1;
             else
                 _effectCounts.Remove(effectKind);
+            RefreshGigantismScale();
             RefreshWeaponStatusVisibility();
             RefreshEffectTint();
             RefreshSoulstealerCasterVfx();
+        }
+
+        private void RefreshGigantismScale()
+        {
+            Transform? visualRoot = _avatarController?.VisualRoot;
+            if (visualRoot == null)
+                return;
+
+            bool active = false;
+            foreach (var effect in _effectCounts)
+            {
+                if (effect.Value > 0
+                    && string.Equals(effect.Key, "GIGANTISM", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    active = true;
+                    break;
+                }
+            }
+
+            float scale = active ? GigantismPresentationScale : 1f;
+            visualRoot.localScale = Vector3.one * scale;
         }
 
         private void RefreshSoulstealerCasterVfx()
@@ -294,6 +318,7 @@ namespace Arena.Entity
             { "SILENCE", new Color(0.65f, 0.35f, 1.0f) },
             { "DAMAGE_TAKEN_REDUCTION", new Color(1.0f, 0.72f, 0.18f) },
             { "TARGETED_ABILITY_AVOIDANCE", new Color(0.65f, 0.95f, 1.0f) },
+            { "GIGANTISM", new Color(0.45f, 0.9f, 0.55f) },
             { "RECKONING", new Color(1.0f, 0.72f, 0.18f) },
             { "DAMAGE_REDIRECT", new Color(1.0f, 0.86f, 0.45f) },
         };
@@ -639,6 +664,7 @@ namespace Arena.Entity
                 SetCombatAnimationSet(_combatAnimationSet);
             if (_sharedActionProfile != null)
                 SetSharedActionProfile(_sharedActionProfile);
+            RefreshGigantismScale();
             RefreshEffectTint();
             RefreshStealthVisualTargets();
         }

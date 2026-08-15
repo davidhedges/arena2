@@ -826,7 +826,7 @@ namespace Arena.Presentation
         public WeaponPresentationEffectSourceKind sourceKind;
         [Tooltip("Status kind required for ConsumedMeleeModifier triggers, e.g. MELEE_ATTACK_MODIFIER.")]
         public string statusKind;
-        [Tooltip("Status stack group required for ConsumedMeleeModifier triggers, e.g. GIANT_SWING.")]
+        [Tooltip("Status stack group required for ConsumedMeleeModifier triggers.")]
         public string stackGroup;
         [Tooltip("Which spawned weapon visual receives this presentation effect.")]
         public WeaponPresentationEffectTarget target;

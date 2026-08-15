@@ -40,7 +40,6 @@
         {"kind": "ABILITY", "id": "WARRIOR_DEFIANCE"},
         {"kind": "ABILITY", "id": "WARRIOR_BATTLE_CRY"},
         {"kind": "ABILITY", "id": "SPELL_FROST_NOVA"},
-        {"kind": "ABILITY", "id": "WARRIOR_GIANT_SWING"},
         {"kind": "ABILITY", "id": "WARRIOR_ENRAGE"},
         {"kind": "ABILITY", "id": "WARRIOR_SHOCKWAVE"},
         {"kind": "ABILITY", "id": "WARRIOR_INTIMIDATE"},

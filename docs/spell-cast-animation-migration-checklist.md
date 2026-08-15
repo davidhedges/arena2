@@ -84,7 +84,7 @@ Projectiles / AoE (want a real cast gesture):
 
 Self-buffs / shouts / auras (may keep bespoke baked clips — e.g. warrior shouts):
 - [ ] `INTIMIDATE`, `SHOCKWAVE`, `BATTLE_CRY`, `ENRAGE`, `DEFIANCE`, `FORTIFY`, `MOMENTUM`,
-  `GIANT_SWING`, `IRON_WILL` — Staff, 2H
+  `IRON_WILL` — Staff, 2H
 - [ ] `BATTLE_TRANCE`, `BERSERKING`, `FEAST`, `FRENZY`, `SECOND_WIND` — 2H
 - [ ] `FERVOR` — S&S, Dag
 - [ ] `AURA_OF_VENGEANCE`, `MANA_FONT`, `STAMINA_FONT`, `THORNS_AURA`, `WARDING_AURA`,

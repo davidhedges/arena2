@@ -44,6 +44,7 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Col<MeleeAttackModifierCatalog, string> StatusKind { get; }
         public global::SpacetimeDB.Col<MeleeAttackModifierCatalog, string> StackGroup { get; }
         public global::SpacetimeDB.Col<MeleeAttackModifierCatalog, float> MinRange { get; }
+        public global::SpacetimeDB.Col<MeleeAttackModifierCatalog, float> RangeBonus { get; }
         public global::SpacetimeDB.Col<MeleeAttackModifierCatalog, bool> ForceStagger { get; }
         public global::SpacetimeDB.Col<MeleeAttackModifierCatalog, uint> SortOrder { get; }
 
@@ -53,6 +54,7 @@ namespace Arena.MatchDb
             StatusKind = new global::SpacetimeDB.Col<MeleeAttackModifierCatalog, string>(tableName, "status_kind");
             StackGroup = new global::SpacetimeDB.Col<MeleeAttackModifierCatalog, string>(tableName, "stack_group");
             MinRange = new global::SpacetimeDB.Col<MeleeAttackModifierCatalog, float>(tableName, "min_range");
+            RangeBonus = new global::SpacetimeDB.Col<MeleeAttackModifierCatalog, float>(tableName, "range_bonus");
             ForceStagger = new global::SpacetimeDB.Col<MeleeAttackModifierCatalog, bool>(tableName, "force_stagger");
             SortOrder = new global::SpacetimeDB.Col<MeleeAttackModifierCatalog, uint>(tableName, "sort_order");
         }
