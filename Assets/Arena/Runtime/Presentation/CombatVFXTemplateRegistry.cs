@@ -15,6 +15,7 @@ namespace Arena.Presentation
         private const string VfxMirrorImageActive = "VFX_MIRROR_IMAGE_ACTIVE_01";
         private const string VfxConfusionActive = "VFX_CONFUSION_ACTIVE_01";
         private const string VfxVerdantSpiritsActive = "VFX_VERDANT_SPIRITS_ACTIVE_01";
+        private const string VfxPhotosynthesisActive = "VFX_PHOTOSYNTHESIS_ACTIVE_01";
 
         private static readonly string[] ScriptedTemplateIds =
         {
@@ -24,6 +25,7 @@ namespace Arena.Presentation
             VfxMirrorImageActive,
             VfxConfusionActive,
             VfxVerdantSpiritsActive,
+            VfxPhotosynthesisActive,
         };
 
         public static IReadOnlyList<string> KnownScriptedTemplateIds => ScriptedTemplateIds;
@@ -71,6 +73,7 @@ namespace Arena.Presentation
                 VfxMirrorImageActive => new MirrorImageVFX(context),
                 VfxConfusionActive => new ConfusionVFX(context),
                 VfxVerdantSpiritsActive => new VerdantSpiritsVFX(context),
+                VfxPhotosynthesisActive => new PhotosynthesisVFX(context),
                 _ => null,
             };
 

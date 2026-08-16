@@ -140,6 +140,43 @@ pub(crate) fn advance_active_ability_cooldowns(
     }
 }
 
+pub(crate) fn advance_other_movement_ability_cooldowns(
+    ctx: &ReducerContext,
+    caster: Identity,
+    used_action_id: &str,
+    amount: Duration,
+    now: Timestamp,
+) {
+    if amount.is_zero() {
+        return;
+    }
+
+    let cooldowns: Vec<_> = ctx.db.spell_cooldown().caster().filter(caster).collect();
+    for mut cooldown in cooldowns {
+        if cooldown.kind.eq_ignore_ascii_case(used_action_id)
+            || !crate::progression::action_id_is_movement_ability(cooldown.kind.as_str())
+        {
+            continue;
+        }
+        let ends_at = cooldown.last_cast_at + Duration::from_millis(cooldown.duration_ms.max(1));
+        if now >= ends_at {
+            continue;
+        }
+        if cooldown_ready_after_advance(ends_at, now, amount) {
+            ctx.db.spell_cooldown().key().delete(cooldown.key);
+            continue;
+        }
+
+        cooldown.last_cast_at = Timestamp::from_micros_since_unix_epoch(
+            cooldown
+                .last_cast_at
+                .to_micros_since_unix_epoch()
+                .saturating_sub(amount.as_micros().min(i64::MAX as u128) as i64),
+        );
+        ctx.db.spell_cooldown().key().update(cooldown);
+    }
+}
+
 fn cooldown_ready_after_advance(ends_at: Timestamp, now: Timestamp, amount: Duration) -> bool {
     now + amount >= ends_at
 }

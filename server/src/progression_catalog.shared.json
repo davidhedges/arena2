@@ -2834,6 +2834,460 @@
       }
     },
     {
+      "ability_id": "PRIMAL_ADAPTATION",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "ADAPTATION",
+      "display_name": "Adaptation",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1022,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "adaptation_resistance_per_stack": 0.02,
+        "adaptation_duration_ms": 10000,
+        "adaptation_max_stacks": 10
+      }
+    },
+    {
+      "ability_id": "SPELL_OVERGROWTH",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "OVERGROWTH",
+      "display_name": "Overgrowth",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1023,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 31536000000,
+          "max_distance": 18,
+          "damage_type": "AIR",
+          "status_stack_group": "OVERGROWTH",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "MAX_HEALTH",
+            "modifier_scalar": 0.1,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "PRIMAL_PHOTOSYNTHESIS",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "PHOTOSYNTHESIS",
+      "display_name": "Photosynthesis",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1024,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "stationary_mana_regen_per_stack": 1,
+        "stationary_first_stack_delay_ms": 2000,
+        "stationary_stack_interval_ms": 2000,
+        "stationary_max_stacks": 5
+      }
+    },
+    {
+      "ability_id": "SPELL_TAILWIND",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "TAILWIND",
+      "display_name": "Tailwind",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1025,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 15000,
+          "max_distance": 18,
+          "damage_type": "AIR",
+          "status_stack_group": "TAILWIND",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "MOVE_SPEED",
+            "modifier_scalar": 0.1,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "PRIMAL_SLIPSTREAM",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "SLIPSTREAM",
+      "display_name": "Slipstream",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1026,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "other_movement_cooldown_reduction_ms": 2000
+      }
+    },
+    {
+      "ability_id": "SPELL_WELLSPRING",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "WELLSPRING",
+      "display_name": "Wellspring",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1027,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "POINT",
+        "target_audience": "PARTY_OR_SELF",
+        "requires_target": false,
+        "requires_target_los": false,
+        "aim_radius": 4,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "PERSISTENT_AREA",
+          "max_distance": 18,
+          "radius": 4,
+          "pulse_interval_ms": 1000,
+          "duration_ms": 5000,
+          "damage": 0,
+          "heal": 5,
+          "mana_restore": 5,
+          "damage_type": "AIR",
+          "effect_target_audience": "PARTY_OR_SELF",
+          "block_behavior": "UNBLOCKABLE",
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_STONE_CARAPACE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "STONE_CARAPACE",
+      "display_name": "Stone Carapace",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1028,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 8000,
+          "damage_type": "PHYSICAL",
+          "status_stack_group": "STONESKIN",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "PHYSICAL_DAMAGE_REDUCTION",
+            "modifier_scalar": 0.5,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_MOULT",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "MOULT",
+      "display_name": "Moult",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1029,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "REMOVE_STATUS",
+          "statuses": [
+            {
+              "kind": "SLOW"
+            },
+            {
+              "kind": "ROOT"
+            },
+            {
+              "kind": "PHYSICAL_DAMAGE_REDUCTION",
+              "stack_group": "STONESKIN"
+            },
+            {
+              "kind": "ADAPTATION"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_CLOUDBURST",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "CLOUDBURST",
+      "display_name": "Cloudburst",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1030,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "POINT",
+        "target_audience": "ANY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "aim_radius": 4,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "PERSISTENT_AREA",
+          "max_distance": 18,
+          "radius": 4,
+          "pulse_interval_ms": 1000,
+          "duration_ms": 3000,
+          "damage": 0,
+          "heal": 0,
+          "mana_restore": 0,
+          "damage_type": "AIR",
+          "effect_target_audience": "ANY",
+          "block_behavior": "UNBLOCKABLE",
+          "impact_effects": [
+            {
+              "kind": "REMOVE_STATUS_BY_DAMAGE_TYPE",
+              "polarity": "DEBUFF",
+              "damage_type": "FIRE",
+              "max_count": 64
+            },
+            {
+              "kind": "DOUSED",
+              "duration_ms": 4000,
+              "modifier_scalar": 0.2,
+              "polarity": "BUFF",
+              "target_audience": "ANY",
+              "status_stack_group": "DOUSED:RESISTANCE",
+              "dispel_types": [
+                "MAGIC"
+              ]
+            },
+            {
+              "kind": "DOUSED",
+              "duration_ms": 4000,
+              "modifier_scalar": 0.2,
+              "polarity": "DEBUFF",
+              "target_audience": "ANY",
+              "status_stack_group": "DOUSED:VULNERABILITY",
+              "dispel_types": [
+                "MAGIC"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_FISSURE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "FISSURE",
+      "display_name": "Fissure",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1031,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 8000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "HOSTILE",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "PROJECTILE",
+          "speed": 10,
+          "max_distance": 12,
+          "damage": 18,
+          "damage_type": "PHYSICAL",
+          "spawn_forward": 1,
+          "spawn_height": 0.15,
+          "turn_rate": 0,
+          "update_interval_seconds": 0.05,
+          "radius": 0.2,
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "UNPARRYABLE",
+          "homing_window_seconds": 0,
+          "terrain_conforming": true,
+          "motion": {
+            "kind": "TRAVELING_AREA",
+            "hitbox_length": 4.5,
+            "hitbox_width": 1.5,
+            "max_hits_per_target": 1,
+            "terminal_radius": 3,
+            "terminal_damage": 30
+          },
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_EARTHQUAKE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRIMAL",
+      "combat_profile_id": "",
+      "action_id": "EARTHQUAKE",
+      "display_name": "Earthquake",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1032,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "POINT",
+        "target_audience": "HOSTILE",
+        "requires_target": false,
+        "requires_target_los": false,
+        "aim_radius": 4,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "PERSISTENT_AREA",
+          "max_distance": 18,
+          "radius": 4,
+          "pulse_interval_ms": 1000,
+          "duration_ms": 5000,
+          "damage": 0,
+          "heal": 0,
+          "mana_restore": 0,
+          "damage_type": "PHYSICAL",
+          "effect_target_audience": "HOSTILE",
+          "block_behavior": "UNBLOCKABLE",
+          "impact_effects": [
+            {
+              "kind": "SLOW",
+              "duration_ms": 1100,
+              "slow_pct": 0.5,
+              "status_stack_group": "EARTHQUAKE_SLOW",
+              "dispel_types": [
+                "MAGIC"
+              ],
+              "max_stacks": 1,
+              "stack_policy": "REFRESH"
+            },
+            {
+              "kind": "STUN",
+              "duration_ms": 500,
+              "chance": 0.25,
+              "dispel_types": [
+                "MAGIC"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
       "ability_id": "SPELL_CAUTERIZE",
       "actor_scope": "PLAYER",
       "discipline_id": "RUIN",
@@ -4237,12 +4691,12 @@
       }
     },
     {
-      "ability_id": "SPELL_STONESPIRE",
+      "ability_id": "SPELL_UPHEAVAL",
       "actor_scope": "PLAYER",
       "discipline_id": "PRIMAL",
       "combat_profile_id": "",
-      "action_id": "STONESPIRE",
-      "display_name": "Stonespire",
+      "action_id": "UPHEAVAL",
+      "display_name": "Upheaval",
       "resource_kind": "MANA",
       "ability_tags": [
         "ACTION_BAR_ACTION"
@@ -4282,7 +4736,7 @@
               "z": 2.5
             }
           },
-          "visual_resource_path": "CombatVFX/playground/5) Rune AoE aftershock stuff 1"
+          "visual_resource_path": "CombatVFX/playground/primal/Magic Floating Rock 1"
         }
       }
     },
@@ -8578,9 +9032,9 @@
     },
     {
       "presentation_kind": "ABILITY",
-      "presentation_id": "SPELL_STONESPIRE",
-      "display_name": "Stonespire",
-      "description": "Raises a short-lived stone spire that blocks movement and line of sight.",
+      "presentation_id": "SPELL_UPHEAVAL",
+      "display_name": "Upheaval",
+      "description": "Tears a mass of stone from the earth for 4 seconds, blocking movement and line of sight.",
       "sort_order": 91
     },
     {
@@ -8645,6 +9099,83 @@
       "display_name": "Verdant Spirits",
       "description": "Two nature spirits orbit you while you live. Bestow one instantly on another assistable player; each bestowed spirit restores 1 health per second to its holder, and both can stack on one host.",
       "sort_order": 98
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PRIMAL_ADAPTATION",
+      "display_name": "Adaptation",
+      "description": "Taking magical damage grants 2% resistance to that exact damage type for 10 seconds, stacking up to 10 times independently per type. Adaptation cannot be dispelled.",
+      "sort_order": 99
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_OVERGROWTH",
+      "display_name": "Overgrowth",
+      "description": "Permanently increases a party member's or your maximum health by 10%. This magical buff can be dispelled.",
+      "sort_order": 100
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PRIMAL_PHOTOSYNTHESIS",
+      "display_name": "Photosynthesis",
+      "description": "After standing still for 1 second, gain 1 additional mana per second. Gain another stack each stationary second, up to 5; moving clears all stacks.",
+      "sort_order": 101
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_TAILWIND",
+      "display_name": "Tailwind",
+      "description": "Increases a party member's or your movement speed by 10% for 15 seconds.",
+      "sort_order": 102
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "PRIMAL_SLIPSTREAM",
+      "display_name": "Slipstream",
+      "description": "Using a movement ability advances the cooldowns of your other movement abilities by 2 seconds.",
+      "sort_order": 103
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_WELLSPRING",
+      "display_name": "Wellspring",
+      "description": "Creates a primal spring for 5 seconds. You and party members standing within it restore 5 health and 5 mana each second.",
+      "sort_order": 104
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_STONE_CARAPACE",
+      "display_name": "Stone Carapace",
+      "description": "Hardens your body for 8 seconds, reducing physical damage taken by 50%.",
+      "sort_order": 105
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_MOULT",
+      "display_name": "Moult",
+      "description": "Sheds all slows and snares, along with Stoneskin and Adaptation armor effects.",
+      "sort_order": 106
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_CLOUDBURST",
+      "display_name": "Cloudburst",
+      "description": "Drenches an area for 3 seconds, cleansing fire effects and Dousing everyone within. Doused targets resist 20% fire damage but take 20% more cold and lightning damage.",
+      "sort_order": 107
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_FISSURE",
+      "display_name": "Fissure",
+      "description": "Sends a damaging 4.5-meter-wide crack 12 meters forward before it erupts for 30 physical damage in a 3-meter radius.",
+      "sort_order": 108
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_EARTHQUAKE",
+      "display_name": "Earthquake",
+      "description": "Shakes a targeted area for 5 seconds. Enemies within are slowed by 50%, and each has an independent 25% chance each second to be stunned for 0.5 seconds.",
+      "sort_order": 109
     },
     {
       "presentation_kind": "ABILITY",
@@ -9562,6 +10093,55 @@
       "display_name": "Flurry",
       "description": "Auto attacks can trigger additional ghostly attacks. The flat chance is 15% at a 3.5-second weapon cadence and decreases for faster attacks; Flurry attacks can trigger again.",
       "sort_order": 10020
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "ADAPTATION",
+      "display_name": "Adaptation",
+      "description": "Resistance to this magical damage type is increased by 2% per stack. Cannot be dispelled.",
+      "sort_order": 10021
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "OVERGROWTH",
+      "display_name": "Overgrowth",
+      "description": "Maximum health increased by 10%.",
+      "sort_order": 10022
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "PHOTOSYNTHESIS",
+      "display_name": "Photosynthesis",
+      "description": "Mana regeneration increased by 1 per second per stack. Moving clears all stacks.",
+      "sort_order": 10023
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "TAILWIND",
+      "display_name": "Tailwind",
+      "description": "Movement speed increased by 10%.",
+      "sort_order": 10024
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "STONESKIN",
+      "display_name": "Stone Carapace",
+      "description": "Physical damage taken is reduced by 50%.",
+      "sort_order": 10030
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "DOUSED",
+      "display_name": "Doused",
+      "description": "Fire damage resistance is increased by 20%, but cold and lightning damage taken is increased by 20%.",
+      "sort_order": 10031
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "EARTHQUAKE_SLOW",
+      "display_name": "Earthquake",
+      "description": "Movement speed is reduced by 50% while caught in the quake.",
+      "sort_order": 10032
     },
     {
       "presentation_kind": "STATUS",
@@ -11227,6 +11807,84 @@
       "lifecycle": "UNTIL_STATUS_END",
       "duration_ms": 0,
       "sort_order": 336
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "PRIMAL_PHOTOSYNTHESIS",
+      "slot": "stationary_aura",
+      "trigger": "STATUS_ACTIVE",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_PHOTOSYNTHESIS_ACTIVE_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_STATUS_END",
+      "duration_ms": 0,
+      "sort_order": 337
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_TAILWIND",
+      "slot": "target_burst",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_BUFFET_IMPACT_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 338
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_WELLSPRING",
+      "slot": "persistent_field",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_WELLSPRING_AREA_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_RADIAL_EFFECT_END",
+      "duration_ms": 0,
+      "sort_order": 339
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_CLOUDBURST",
+      "slot": "release_rain",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_CLOUDBURST_RAIN_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 340
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_FISSURE",
+      "slot": "release_burst",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "ORIGIN",
+      "vfx_id": "VFX_FISSURE_GROUND_CRACK_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 341
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_EARTHQUAKE",
+      "slot": "persistent_field",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_EARTHQUAKE_GROUND_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_RADIAL_EFFECT_END",
+      "duration_ms": 0,
+      "sort_order": 342
     },
     {
       "owner_kind": "ABILITY", "owner_id": "NPC_DEMON_SUMMONER_SHADOW_BOLT", "slot": "cast_glow", "trigger": "SPELL_CAST", "anchor": "LEFT_HAND",

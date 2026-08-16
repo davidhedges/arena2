@@ -79,6 +79,7 @@ namespace Arena.Presentation
         private readonly Dictionary<string, string> _spellVfxTokenByActionInstance = new(StringComparer.Ordinal);
         private readonly Dictionary<string, bool> _projectileDeliveredSpellImpactByActionKind = new(StringComparer.Ordinal);
         private readonly Dictionary<string, ActiveRadialEffectVfxState> _activeRadialEffectVfxByKey = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, ActivePersistentAreaVfxState> _activePersistentAreaVfxByKey = new(StringComparer.Ordinal);
         private readonly Dictionary<ulong, ActiveStatusEffectVfxState> _activeStatusEffectVfxById = new();
 
         private readonly struct ActiveRadialEffectVfxState : IEquatable<ActiveRadialEffectVfxState>
@@ -117,10 +118,29 @@ namespace Arena.Presentation
             public uint Stacks { get; }
 
             public bool Equals(ActiveStatusEffectVfxState other)
+                => MatchesExceptStacks(other) && Stacks == other.Stacks;
+
+            /// <summary>True when a stack tick is the only thing that moved.</summary>
+            public bool MatchesExceptStacks(ActiveStatusEffectVfxState other)
                 => string.Equals(SpellId, other.SpellId, StringComparison.Ordinal)
                     && string.Equals(AbilityId, other.AbilityId, StringComparison.Ordinal)
-                    && Target.Equals(other.Target)
-                    && Stacks == other.Stacks;
+                    && Target.Equals(other.Target);
+        }
+
+        private readonly struct ActivePersistentAreaVfxState : IEquatable<ActivePersistentAreaVfxState>
+        {
+            public ActivePersistentAreaVfxState(string spellInstanceId, string abilityId)
+            {
+                SpellInstanceId = spellInstanceId;
+                AbilityId = abilityId;
+            }
+
+            public string SpellInstanceId { get; }
+            public string AbilityId { get; }
+
+            public bool Equals(ActivePersistentAreaVfxState other)
+                => string.Equals(SpellInstanceId, other.SpellInstanceId, StringComparison.Ordinal)
+                    && string.Equals(AbilityId, other.AbilityId, StringComparison.Ordinal);
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -244,6 +264,7 @@ namespace Arena.Presentation
             if (_subscribedConnection != null)
             {
                 RefreshActiveStatusEffectVfx();
+                RefreshActivePersistentAreaVfx();
                 return;
             }
             if (conn == null)
@@ -260,6 +281,9 @@ namespace Arena.Presentation
             conn.Db.ActiveRadialEffect.OnInsert += OnActiveRadialEffectInsertForVfx;
             conn.Db.ActiveRadialEffect.OnUpdate += OnActiveRadialEffectUpdateForVfx;
             conn.Db.ActiveRadialEffect.OnDelete += OnActiveRadialEffectDeleteForVfx;
+            conn.Db.ActivePersistentArea.OnInsert += OnActivePersistentAreaInsertForVfx;
+            conn.Db.ActivePersistentArea.OnUpdate += OnActivePersistentAreaUpdateForVfx;
+            conn.Db.ActivePersistentArea.OnDelete += OnActivePersistentAreaDeleteForVfx;
             conn.Db.StatusEffect.OnInsert += OnStatusEffectInsertForVfx;
             conn.Db.StatusEffect.OnUpdate += OnStatusEffectUpdateForVfx;
             conn.Db.StatusEffect.OnDelete += OnStatusEffectDeleteForVfx;
@@ -272,8 +296,89 @@ namespace Arena.Presentation
 
             foreach (ActiveRadialEffect row in conn.Db.ActiveRadialEffect.Iter())
                 SpawnActiveRadialEffectVfx(row);
+            foreach (ActivePersistentArea row in conn.Db.ActivePersistentArea.Iter())
+                SpawnActivePersistentAreaVfx(row);
             foreach (StatusEffect row in conn.Db.StatusEffect.Iter())
                 SpawnStatusEffectVfx(row);
+        }
+
+        private void OnActivePersistentAreaInsertForVfx(EventContext ctx, ActivePersistentArea row)
+        {
+            _ = ctx;
+            SpawnActivePersistentAreaVfx(row);
+        }
+
+        private void OnActivePersistentAreaUpdateForVfx(
+            EventContext ctx,
+            ActivePersistentArea oldRow,
+            ActivePersistentArea newRow)
+        {
+            _ = ctx;
+            if (!string.Equals(oldRow.Key, newRow.Key, StringComparison.Ordinal)
+                || !string.Equals(oldRow.SpellInstanceId, newRow.SpellInstanceId, StringComparison.Ordinal))
+            {
+                _lifecycle?.DestroyForRadialEffectEnd(oldRow.SpellInstanceId);
+                _activePersistentAreaVfxByKey.Remove(oldRow.Key);
+            }
+            SpawnActivePersistentAreaVfx(newRow);
+        }
+
+        private void OnActivePersistentAreaDeleteForVfx(EventContext ctx, ActivePersistentArea row)
+        {
+            _ = ctx;
+            _lifecycle?.DestroyForRadialEffectEnd(row.SpellInstanceId);
+            _activePersistentAreaVfxByKey.Remove(row.Key);
+        }
+
+        private void RefreshActivePersistentAreaVfx()
+        {
+            var conn = _subscribedConnection ?? NetworkManager.Instance?.Conn;
+            if (conn == null)
+                return;
+
+            foreach (ActivePersistentArea row in conn.Db.ActivePersistentArea.Iter())
+            {
+                if (!_activePersistentAreaVfxByKey.ContainsKey(row.Key))
+                    SpawnActivePersistentAreaVfx(row);
+            }
+        }
+
+        private void SpawnActivePersistentAreaVfx(ActivePersistentArea row)
+        {
+            string abilityId = WireIdentifier.Normalize(row.AbilityId);
+            var desiredState = new ActivePersistentAreaVfxState(row.SpellInstanceId, abilityId);
+            if (_activePersistentAreaVfxByKey.TryGetValue(row.Key, out ActivePersistentAreaVfxState currentState))
+            {
+                if (currentState.Equals(desiredState))
+                    return;
+
+                _lifecycle?.DestroyForRadialEffectEnd(currentState.SpellInstanceId);
+                _activePersistentAreaVfxByKey.Remove(row.Key);
+            }
+
+            Vector3 point = new(row.AreaX, row.AreaY, row.AreaZ);
+            var fact = new CombatVfxFact(
+                TriggerSpellImpact,
+                WireIdentifier.Normalize(row.Kind),
+                abilityId,
+                string.Empty,
+                -1,
+                row.Caster,
+                row.Target,
+                row.SpellInstanceId,
+                row.Kind,
+                point,
+                Vector3.forward,
+                point,
+                0f,
+                0f,
+                CombatEventScalarKinds.None,
+                0f,
+                0,
+                1,
+                isSpell: true);
+            if (DispatchFact(fact))
+                _activePersistentAreaVfxByKey[row.Key] = desiredState;
         }
 
         // Channel/cast end: tear down any UNTIL_CAST_END cues bound to this cast. The cue's
@@ -434,11 +539,24 @@ namespace Arena.Presentation
                 abilityId,
                 row.Target,
                 row.Stacks);
+            uint stackCount = row.Stacks > 0 ? row.Stacks : 1u;
             string statusEffectKey = StatusEffectVfxKey(row.StatusId);
             if (_activeStatusEffectVfxById.TryGetValue(row.StatusId, out ActiveStatusEffectVfxState currentState))
             {
                 if (currentState.Equals(desiredState))
                     return;
+
+                // A stack tick on an otherwise unchanged status retunes the live visual so a
+                // ramping buff grows instead of restarting once per stack. Visuals whose stack
+                // change is a discrete event (Mirror Image losing a charge) do not offer that
+                // route and fall through to the rebuild below.
+                if (currentState.MatchesExceptStacks(desiredState)
+                    && _lifecycle != null
+                    && _lifecycle.TryRouteStackCount(statusEffectKey, stackCount))
+                {
+                    _activeStatusEffectVfxById[row.StatusId] = desiredState;
+                    return;
+                }
 
                 _lifecycle?.DestroyForStatusEnd(statusEffectKey);
                 _activeStatusEffectVfxById.Remove(row.StatusId);
@@ -466,7 +584,7 @@ namespace Arena.Presentation
                 CombatEventScalarKinds.None,
                 0f,
                 0,
-                row.Stacks > 0 ? row.Stacks : 1u,
+                stackCount,
                 isSpell: true);
             if (DispatchFact(fact))
                 _activeStatusEffectVfxById[row.StatusId] = desiredState;
@@ -581,6 +699,26 @@ namespace Arena.Presentation
                 }
 
                 string candidate = WireIdentifier.Normalize(ability.AbilityId);
+                if (ability.SortOrder < resolvedSortOrder
+                    || (ability.SortOrder == resolvedSortOrder
+                        && string.CompareOrdinal(candidate, resolved) < 0))
+                {
+                    resolved = candidate;
+                    resolvedSortOrder = ability.SortOrder;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(resolved))
+                return resolved;
+
+            // Passive-owned statuses use their stable ability ID as spell_id because they have
+            // no SpellDefinition/action row. Resolve that direct ID so STATUS_ACTIVE cues can
+            // reconstruct after subscription and update when the replicated stack count changes.
+            foreach (AbilityCatalog ability in conn.Db.AbilityCatalog.Iter())
+            {
+                string candidate = WireIdentifier.Normalize(ability.AbilityId);
+                if (!string.Equals(candidate, spellId, StringComparison.Ordinal))
+                    continue;
                 if (ability.SortOrder < resolvedSortOrder
                     || (ability.SortOrder == resolvedSortOrder
                         && string.CompareOrdinal(candidate, resolved) < 0))
@@ -1598,7 +1736,8 @@ namespace Arena.Presentation
         private static string ResolvePredictedProjectileMotionKind(string spellId)
         {
             string normalized = WireIdentifier.Normalize(spellId);
-            if (string.Equals(normalized, "GRAVEWAKE", StringComparison.Ordinal))
+            if (string.Equals(normalized, "GRAVEWAKE", StringComparison.Ordinal)
+                || string.Equals(normalized, "FISSURE", StringComparison.Ordinal))
                 return ProjectileMotionTravelingArea;
 
             return normalized.IndexOf("BOOMERANG", StringComparison.Ordinal) >= 0
@@ -1797,6 +1936,9 @@ namespace Arena.Presentation
             conn.Db.ActiveRadialEffect.OnInsert -= OnActiveRadialEffectInsertForVfx;
             conn.Db.ActiveRadialEffect.OnUpdate -= OnActiveRadialEffectUpdateForVfx;
             conn.Db.ActiveRadialEffect.OnDelete -= OnActiveRadialEffectDeleteForVfx;
+            conn.Db.ActivePersistentArea.OnInsert -= OnActivePersistentAreaInsertForVfx;
+            conn.Db.ActivePersistentArea.OnUpdate -= OnActivePersistentAreaUpdateForVfx;
+            conn.Db.ActivePersistentArea.OnDelete -= OnActivePersistentAreaDeleteForVfx;
             conn.Db.StatusEffect.OnInsert -= OnStatusEffectInsertForVfx;
             conn.Db.StatusEffect.OnUpdate -= OnStatusEffectUpdateForVfx;
             conn.Db.StatusEffect.OnDelete -= OnStatusEffectDeleteForVfx;
@@ -1811,6 +1953,7 @@ namespace Arena.Presentation
             _projectileDeliveredSpellImpactByActionKind.Clear();
             _lifecycle?.DestroyAllRadialEffects();
             _activeRadialEffectVfxByKey.Clear();
+            _activePersistentAreaVfxByKey.Clear();
             _lifecycle?.DestroyAllStatusEffects();
             _activeStatusEffectVfxById.Clear();
         }

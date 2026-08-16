@@ -55,7 +55,7 @@ Profile-neutral spells use one of the consolidated spell-school disciplines:
 - `RUIN`: Fire, Cold, and Lightning spell themes
 - `DIVINITY`: Holy spell themes
 - `ARCANA`: Arcane spell themes
-- `PRIMAL`: Air/Wind spell themes, plus non-damaging natural-world spells such as `STONESPIRE`
+- `PRIMAL`: Air/Wind spell themes, plus non-damaging natural-world spells such as `UPHEAVAL`
 
 Keep granular authored `damage_type` and presentation `vfx_school` values intact.
 For example, a `RUIN` spell may still deal `FIRE`, `COLD`, or `LIGHTNING` damage.

@@ -465,8 +465,8 @@ mod tests {
         ActiveWorldObstacle {
             obstacle_id: 1,
             owner: Identity::ZERO,
-            spell_id: "STONESPIRE".to_string(),
-            ability_id: "SPELL_STONESPIRE".to_string(),
+            spell_id: "UPHEAVAL".to_string(),
+            ability_id: "SPELL_UPHEAVAL".to_string(),
             visual_resource_path: "CombatVFX/playground/test".to_string(),
             world_kind: "OPEN".to_string(),
             instance_id: None,

@@ -71,6 +71,26 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void AdditionalPrimalVfxRegistryReferencesTheFullAuthoredPrefabs()
+        {
+            GameObject? cloudburst = AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Arena/Resources/CombatVFX/playground/primal/Water_Healing_Rain 1.prefab");
+            GameObject? fissure = AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Arena/Resources/CombatVFX/playground/primal/ARPG_GroundSlams_ForwardPunch 1.prefab");
+            Assert.That(cloudburst, Is.Not.Null);
+            Assert.That(fissure, Is.Not.Null);
+
+            UnityEngine.Object? registryAsset = AssetDatabase.LoadMainAssetAtPath(
+                "Assets/Arena/Resources/CombatVFX/CombatVFXRegistry.asset");
+            Assert.That(registryAsset, Is.Not.Null);
+            var registry = new SerializedObject(registryAsset!);
+            SerializedProperty entries = registry.FindProperty("entries");
+
+            Assert.That(ResolvePrefab(entries, "VFX_CLOUDBURST_RAIN_01"), Is.SameAs(cloudburst));
+            Assert.That(ResolvePrefab(entries, "VFX_FISSURE_GROUND_CRACK_01"), Is.SameAs(fissure));
+        }
+
+        [Test]
         public void LockedProjectileRootIgnoresSimulationAndAuthoritativePositionUpdates()
         {
             var prefab = new GameObject("StationaryProjectileTestPrefab");
@@ -138,6 +158,24 @@ namespace Arena.Tests.Editor
             return (bool)method.Invoke(
                 null,
                 new object[] { motionKind, adoptedPredictedProjectile, movesRootWithProjectile })!;
+        }
+
+        private static UnityEngine.Object? ResolvePrefab(SerializedProperty entries, string vfxId)
+        {
+            for (int index = 0; index < entries.arraySize; index++)
+            {
+                SerializedProperty entry = entries.GetArrayElementAtIndex(index);
+                if (string.Equals(
+                        entry.FindPropertyRelative("vfxId").stringValue,
+                        vfxId,
+                        StringComparison.Ordinal))
+                {
+                    return entry.FindPropertyRelative("prefab").objectReferenceValue;
+                }
+            }
+
+            Assert.Fail($"Missing VFX registry entry {vfxId}.");
+            return null;
         }
     }
 }

@@ -413,12 +413,16 @@ fn push_impact_effect_packets(
     target: Identity,
     spell_id: &str,
     action_key: &str,
+    roll_key: &str,
     positive_damage: bool,
     dir_x: f32,
     dir_z: f32,
 ) {
-    for effect in impact_effects {
+    for (effect_index, effect) in impact_effects.iter().enumerate() {
         if effect.requires_positive_damage() && !positive_damage {
+            continue;
+        }
+        if !effect.chance_roll_succeeds(roll_key, target, effect_index) {
             continue;
         }
         effects.push(effect.to_effect_packet(
@@ -1148,15 +1152,31 @@ fn tick_traveling_area_projectile_instance(
     if projectile.traveled >= definition.max_distance - 0.001
         || projectile.age >= projectile.lifetime
     {
+        if area.terminal_radius > 0.0 && area.terminal_damage > 0 {
+            resolve_traveling_area_terminal_eruption(
+                ctx,
+                &projectile,
+                definition,
+                area.terminal_radius,
+                area.terminal_damage,
+                actor_snapshots,
+                players,
+                candidate_indices,
+            );
+        }
         emit_projectile_event(
             ctx,
             &projectile,
-            COMBAT_EVENT_FIZZLE,
+            if area.terminal_damage > 0 {
+                COMBAT_EVENT_IMPACT
+            } else {
+                COMBAT_EVENT_FIZZLE
+            },
             None,
             projectile.pos_x,
             projectile.pos_y,
             projectile.pos_z,
-            0,
+            area.terminal_damage.max(0),
             now,
             metrics,
         );
@@ -1173,6 +1193,60 @@ fn tick_traveling_area_projectile_instance(
         metrics,
     );
     update_projectile_row(ctx, projectile, metrics);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_traveling_area_terminal_eruption(
+    ctx: &ReducerContext,
+    projectile: &ActiveCombatProjectile,
+    definition: &SpellRuntimeDefinition,
+    radius: f32,
+    damage: i32,
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
+    candidate_indices: &mut Vec<usize>,
+) {
+    actor_snapshots.query_disc_indices(
+        projectile.pos_x,
+        projectile.pos_z,
+        radius,
+        candidate_indices,
+    );
+    let mut effects = Vec::new();
+    for target in candidate_indices
+        .iter()
+        .filter_map(|index| players.get(*index))
+    {
+        let vertical_tolerance = radius + target.hit_height.max(0.0);
+        if target.player_id == projectile.caster
+            || !target.alive
+            || (target.pos_y - projectile.pos_y).abs() > vertical_tolerance
+            || !players_share_world_context(ctx, projectile.caster, target.player_id)
+            || !can_harm(ctx, projectile.caster, target.player_id)
+            || !target_audience_allows(
+                ctx,
+                projectile.caster,
+                target.player_id,
+                definition.target_audience,
+            )
+        {
+            continue;
+        }
+        effects.push(EffectPacket::Damage {
+            amount: damage,
+            damage_type: definition.damage_type,
+            source: projectile.caster,
+            target: target.player_id,
+            spell_id: projectile.projectile_instance_id.clone(),
+            delivery: DamageDelivery::Direct,
+            source_kind: DAMAGE_SOURCE_KIND_PROJECTILE.to_string(),
+            direct_action_key: projectile.projectile_instance_id.clone(),
+            is_area: true,
+        });
+    }
+    if !effects.is_empty() {
+        queue_effects(ctx, effects);
+    }
 }
 
 fn traveling_area_step_distance(speed: f32, dt: f32, traveled: f32, max_distance: f32) -> f32 {
@@ -2264,6 +2338,7 @@ fn queue_spell_projectile_hit_effects(
             target.player_id,
             projectile.projectile_instance_id.as_str(),
             definition.kind.as_str(),
+            projectile.projectile_instance_id.as_str(),
             impact_damage > 0,
             dir_x,
             dir_z,

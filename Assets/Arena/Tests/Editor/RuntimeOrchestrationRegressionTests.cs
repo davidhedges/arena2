@@ -926,6 +926,24 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void GameplaySubscriptionPlanner_ScopesPersistentAreasToVisibleCasters()
+        {
+            Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");
+            Type gameplayScopeType = RequireRuntimeType("Arena.Network.NetworkManager+GameplayScope");
+            Type playerWorldType = RequireRuntimeType("SpacetimeDB.Types.PlayerWorld");
+            object row = Activator.CreateInstance(playerWorldType, CreateIdentity(1), "OPEN", null, 0UL, "Oasis_Day")!;
+            object scope = RequireMethod(gameplayScopeType, "FromPlayerWorld", playerWorldType, typeof(string))
+                .Invoke(null, new[] { row, null })!;
+
+            string[] scopedSql = (string[])RequireMethod(plannerType, "BuildScopedQuerySqls", gameplayScopeType)
+                .Invoke(null, new[] { scope })!;
+            string scopedSqlText = string.Join("\n", scopedSql);
+
+            Assert.That(scopedSqlText, Does.Contain("\"active_persistent_area\""));
+            Assert.That(scopedSqlText, Does.Contain("\"player_world\".\"identity\" = \"active_persistent_area\".\"caster\""));
+        }
+
+        [Test]
         public void GameplaySubscriptionPlanner_ScopesActiveWorldObstaclesToTheVisibleWorld()
         {
             Type plannerType = RequireRuntimeType("Arena.Network.GameplaySubscriptionPlanner");

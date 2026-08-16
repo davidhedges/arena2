@@ -230,6 +230,32 @@ namespace Arena.Presentation
             DestroyAllMatchingPrefabs(LifecycleUntilStatusEnd);
         }
 
+        // Retunes live status visuals when only the replicated stack count moved. Returns
+        // false when nothing live can absorb the change, which leaves the caller on the
+        // rebuild path it would have taken anyway.
+        public bool TryRouteStackCount(string statusEffectKey, uint stacks)
+        {
+            if (string.IsNullOrWhiteSpace(statusEffectKey))
+                return false;
+
+            bool routed = false;
+            foreach (var entry in _scripted.Values)
+            {
+                if (!string.Equals(entry.ActionInstanceId, statusEffectKey, System.StringComparison.Ordinal))
+                    continue;
+                if (!string.Equals(entry.Lifecycle, LifecycleUntilStatusEnd, System.StringComparison.Ordinal))
+                    continue;
+                if (entry.Visual is not IStackScaledVFX scaled)
+                    continue;
+
+                bool accepted = false;
+                RouteToVfx(entry.Visual, () => accepted = scaled.TrySetStackCount(stacks));
+                routed |= accepted;
+            }
+
+            return routed;
+        }
+
         public void Dispose()
         {
             foreach (var entry in _scripted.Values)

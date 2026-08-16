@@ -76,9 +76,9 @@ pub(crate) use casting::{
 };
 pub(crate) use catalog::spell_definition_by_str;
 pub(crate) use cooldowns::{
-    advance_active_ability_cooldowns, clear_actor_cooldowns,
-    is_on_cooldown as is_on_spell_cooldown, is_on_global_cooldown, is_on_named_cooldown,
-    stamp_global_cooldown_for_duration, stamp_named_cooldown_for_duration,
+    advance_active_ability_cooldowns, advance_other_movement_ability_cooldowns,
+    clear_actor_cooldowns, is_on_cooldown as is_on_spell_cooldown, is_on_global_cooldown,
+    is_on_named_cooldown, stamp_global_cooldown_for_duration, stamp_named_cooldown_for_duration,
 };
 pub(crate) use events::Vec3 as SpellVec3;
 pub(crate) use manifest::{
@@ -169,7 +169,7 @@ pub struct PendingAreaImpact {
     pub resolve_at_micros: i64,
 }
 
-#[table(accessor = active_persistent_area)]
+#[table(accessor = active_persistent_area, public)]
 #[derive(Clone)]
 pub struct ActivePersistentArea {
     #[primary_key]

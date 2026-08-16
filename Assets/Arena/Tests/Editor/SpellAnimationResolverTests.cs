@@ -148,7 +148,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void Stonespire_ComposedDefaultUsesLeftCallCastClip()
+        public void Upheaval_ComposedDefaultUsesLeftCallCastClip()
         {
             Type resolverType = RuntimeAssembly.GetType(
                 "Arena.Presentation.SpellCastAnimationResolver", throwOnError: true)!;
@@ -165,7 +165,7 @@ namespace Arena.Tests.Editor
 
             invalidate.Invoke(null, null);
             object instant = Enum.Parse(archetypeType, "Instant");
-            object?[] args = { null, "STONESPIRE", instant, Activator.CreateInstance(entryType) };
+            object?[] args = { null, "UPHEAVAL", instant, Activator.CreateInstance(entryType) };
 
             Assert.That(resolve.Invoke(null, args), Is.True);
             object entry = args[3]!;

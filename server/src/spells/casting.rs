@@ -34,16 +34,17 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect;
 use crate::combat::{
-    active_emanation_for_owner, arm_quickening_after_movement_ability,
-    consume_active_immolation_damage, consume_quickening_for_cast, has_active_disabling_status,
-    has_active_status, hostile_targeted_ability_misses, mark_harmful_combat_action,
-    queue_delayed_status_effect, queue_effects, quickening_cast_speed_multiplier_for_owner,
-    register_projectile_return_heal, remove_active_status_group,
-    rephase_accumulated_orbit_projectiles, rime_effect_packet_for_frost_spell, set_active_aura,
-    status_matches_removal_filter, status_removal_is_blocked_by_rime, temporary_combat_modifiers,
-    timestamp_to_micros, toggle_active_emanation, toggle_active_immolation, ActiveCombatProjectile,
-    CombatEvent, DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent,
-    StackPolicy, StatusApplication, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
+    active_emanation_for_owner, advance_slipstream_after_movement_ability,
+    arm_quickening_after_movement_ability, consume_active_immolation_damage,
+    consume_quickening_for_cast, has_active_disabling_status, has_active_status,
+    hostile_targeted_ability_misses, mark_harmful_combat_action, queue_delayed_status_effect,
+    queue_effects, quickening_cast_speed_multiplier_for_owner, register_projectile_return_heal,
+    remove_active_status_group, rephase_accumulated_orbit_projectiles,
+    rime_effect_packet_for_frost_spell, set_active_aura, status_matches_removal_filter,
+    status_removal_is_blocked_by_rime, temporary_combat_modifiers, timestamp_to_micros,
+    toggle_active_emanation, toggle_active_immolation, ActiveCombatProjectile, CombatEvent,
+    DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StackPolicy,
+    StatusApplication, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
     StatusStackGroupDefault, COMBAT_EVENT_MISS, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
     COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SELF_INFLICTED, DAMAGE_SOURCE_KIND_SPELL,
 };
@@ -364,12 +365,16 @@ fn push_impact_effect_packets(
     target: Identity,
     spell_id: &str,
     action_key: &str,
+    roll_key: &str,
     positive_damage: bool,
     dir_x: f32,
     dir_z: f32,
 ) {
-    for effect in impact_effects {
+    for (effect_index, effect) in impact_effects.iter().enumerate() {
         if effect.requires_positive_damage() && !positive_damage {
+            continue;
+        }
+        if !effect.chance_roll_succeeds(roll_key, target, effect_index) {
             continue;
         }
         effects.push(effect.to_effect_packet(
@@ -6091,6 +6096,7 @@ fn apply_area_channel_tick(
             target.player_id,
             active_cast.cast_id.as_str(),
             definition.kind.as_str(),
+            active_cast.cast_id.as_str(),
             definition.damage > 0,
             direction.x,
             direction.z,
@@ -7539,6 +7545,7 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
                 player.player_id,
                 impact.spell_id,
                 impact.definition.kind.as_str(),
+                impact.spell_id,
                 impact.damage > 0,
                 contact_direction.x,
                 contact_direction.z,
@@ -8146,6 +8153,11 @@ pub(crate) fn tick_persistent_areas(ctx: &ReducerContext, now: Timestamp) {
 
         snapshots.query_disc_indices(area_x, area_z, definition.radius, &mut candidate_indices);
         let mut effects = Vec::new();
+        let pulse_roll_key = format!(
+            "{}:{}",
+            active.spell_instance_id,
+            timestamp_to_micros(active.next_pulse_at)
+        );
         for candidate in candidate_indices
             .iter()
             .filter_map(|index| actors.get(*index))
@@ -8176,6 +8188,24 @@ pub(crate) fn tick_persistent_areas(ctx: &ReducerContext, now: Timestamp) {
                     is_area: true,
                 });
             }
+            if persistent_area.heal_amount > 0 {
+                effects.push(EffectPacket::Heal {
+                    amount: persistent_area.heal_amount,
+                    source: active.caster,
+                    target: candidate.player_id,
+                    spell_id: active.spell_instance_id.clone(),
+                    target_audience: persistent_area.effect_target_audience,
+                });
+            }
+            if persistent_area.mana_restore_amount > 0.0 {
+                grant_primary_resource_amount_for_kind(
+                    ctx,
+                    candidate.player_id,
+                    "MANA",
+                    persistent_area.mana_restore_amount,
+                    now,
+                );
+            }
             let direction =
                 area_contact_direction(area_x, area_z, caster.pos_x, caster.pos_z, candidate);
             push_impact_effect_packets(
@@ -8185,6 +8215,7 @@ pub(crate) fn tick_persistent_areas(ctx: &ReducerContext, now: Timestamp) {
                 candidate.player_id,
                 active.spell_instance_id.as_str(),
                 definition.kind.as_str(),
+                pulse_roll_key.as_str(),
                 definition.damage > 0,
                 direction.x,
                 direction.z,
@@ -8500,6 +8531,7 @@ fn apply_direct_target_spell(
         target.player_id,
         spell_id.as_str(),
         definition.kind.as_str(),
+        spell_id.as_str(),
         event_damage > 0,
         knockback_dir_x,
         knockback_dir_z,
@@ -9054,6 +9086,7 @@ fn cast_self_teleport(
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
     );
     arm_quickening_after_movement_ability(ctx, caster, ctx.timestamp);
+    advance_slipstream_after_movement_ability(ctx, caster, kind.as_str(), ctx.timestamp);
     arm_lingering_shade_for_voluntary_movement(
         ctx,
         caster,
@@ -10102,6 +10135,7 @@ fn resolve_movement_delivery_hit(
         target.player_id,
         action_instance_id,
         kind.as_str(),
+        action_instance_id,
         movement.damage > 0,
         dir_x,
         dir_z,

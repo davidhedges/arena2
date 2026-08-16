@@ -121,6 +121,9 @@ const RUIN_RIME_ABILITY_ID: &str = "RUIN_RIME";
 const RUIN_FRACTURE_ABILITY_ID: &str = "RUIN_FRACTURE";
 const RUIN_POTENTIAL_ABILITY_ID: &str = "RUIN_POTENTIAL";
 const DIVINITY_FAITH_ABILITY_ID: &str = "DIVINITY_FAITH";
+const PRIMAL_ADAPTATION_ABILITY_ID: &str = "PRIMAL_ADAPTATION";
+const PRIMAL_PHOTOSYNTHESIS_ABILITY_ID: &str = "PRIMAL_PHOTOSYNTHESIS";
+const PRIMAL_SLIPSTREAM_ABILITY_ID: &str = "PRIMAL_SLIPSTREAM";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct AllocatedStatTotals {
@@ -308,6 +311,22 @@ struct AbilityGameplayDefinition {
     noncritical_lightning_spell_crit_chance_bonus: f32,
     #[serde(default)]
     mana_regen_bonus: f32,
+    #[serde(default)]
+    adaptation_resistance_per_stack: f32,
+    #[serde(default)]
+    adaptation_duration_ms: u64,
+    #[serde(default)]
+    adaptation_max_stacks: u32,
+    #[serde(default)]
+    stationary_mana_regen_per_stack: f32,
+    #[serde(default)]
+    stationary_first_stack_delay_ms: u64,
+    #[serde(default)]
+    stationary_stack_interval_ms: u64,
+    #[serde(default)]
+    stationary_max_stacks: u32,
+    #[serde(default)]
+    other_movement_cooldown_reduction_ms: u64,
     uses_global_cooldown: Option<bool>,
     #[serde(default)]
     global_cooldown_ms: Option<u64>,
@@ -708,6 +727,7 @@ fn authored_status_stack_group_default(kind: &str) -> StatusStackGroupDefault {
         }
         "MANA_REGEN" => StatusStackGroupDefault::ActionSuffix("MANA_REGEN"),
         "STAMINA_REGEN" => StatusStackGroupDefault::ActionSuffix("STAMINA_REGEN"),
+        "MAX_HEALTH" => StatusStackGroupDefault::ActionSuffix("MAX_HEALTH"),
         "MAGIC_RESISTANCE" => StatusStackGroupDefault::ActionSuffix("MAGIC_RESISTANCE"),
         "THORNS" => StatusStackGroupDefault::ActionSuffix("THORNS"),
         "VENGEANCE_AURA" => StatusStackGroupDefault::ActionSuffix("VENGEANCE_AURA"),
@@ -1194,6 +1214,7 @@ fn validate_progression_catalog_authoring_contract(catalog: &ProgressionCatalogF
 
 fn authored_status_presentation_ids(catalog: &ProgressionCatalogFile) -> HashSet<String> {
     let mut ids = known_status_kind_ids();
+    ids.insert("PHOTOSYNTHESIS".to_string());
     for ability in &catalog.abilities {
         if let Some(delivery) = ability.gameplay.delivery.as_ref() {
             collect_status_stack_groups(delivery, &mut ids);
@@ -1237,6 +1258,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::Stagger,
         StatusEffectKind::Knockdown,
         StatusEffectKind::Slow,
+        StatusEffectKind::MoveSpeed,
         StatusEffectKind::Dot,
         StatusEffectKind::Hot,
         StatusEffectKind::MoveSlowImmunity,
@@ -1246,11 +1268,15 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::DamageAmp,
         StatusEffectKind::DirectDamageAmp,
         StatusEffectKind::DamageTakenReduction,
+        StatusEffectKind::PhysicalDamageReduction,
         StatusEffectKind::HealingTakenReduction,
         StatusEffectKind::DamageDealtReduction,
         StatusEffectKind::ManaRegen,
         StatusEffectKind::StaminaRegen,
+        StatusEffectKind::MaxHealth,
         StatusEffectKind::MagicResistance,
+        StatusEffectKind::Adaptation,
+        StatusEffectKind::Doused,
         StatusEffectKind::KnockbackResistance,
         StatusEffectKind::Thorns,
         StatusEffectKind::VengeanceAura,
@@ -3562,6 +3588,32 @@ pub(crate) fn movement_delivery_for_action_id(action_id: &str) -> Option<Movemen
         })
 }
 
+pub(crate) fn action_id_is_movement_ability(action_id: &str) -> bool {
+    let normalized_action_id = AuthoredActionId::new(action_id).into_string();
+    progression_catalog().abilities.iter().any(|definition| {
+        if AuthoredActionId::new(definition.action_id.as_str()).as_str() != normalized_action_id {
+            return false;
+        }
+
+        let gameplay_kind = ability_gameplay_kind(definition);
+        match gameplay_kind.as_str() {
+            "MOVEMENT" => true,
+            "MELEE" => {
+                definition.gameplay.gap_close.is_some()
+                    || definition.gameplay.melee_timed_movement.is_some()
+            }
+            "SPELL" => definition
+                .gameplay
+                .delivery
+                .as_ref()
+                .and_then(|delivery| delivery.get("kind"))
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|kind| normalize_identifier(kind) == "SELF_TELEPORT"),
+            _ => false,
+        }
+    })
+}
+
 pub(crate) fn projectile_body_vfx_id_for_spell(
     ability_id: &str,
     spell_kind: &str,
@@ -5518,6 +5570,15 @@ fn validate_ability_catalog() {
             .gameplay
             .noncritical_lightning_spell_crit_chance_bonus;
         let mana_regen_bonus = ability.gameplay.mana_regen_bonus;
+        let adaptation_resistance_per_stack = ability.gameplay.adaptation_resistance_per_stack;
+        let adaptation_duration_ms = ability.gameplay.adaptation_duration_ms;
+        let adaptation_max_stacks = ability.gameplay.adaptation_max_stacks;
+        let stationary_mana_regen_per_stack = ability.gameplay.stationary_mana_regen_per_stack;
+        let stationary_first_stack_delay_ms = ability.gameplay.stationary_first_stack_delay_ms;
+        let stationary_stack_interval_ms = ability.gameplay.stationary_stack_interval_ms;
+        let stationary_max_stacks = ability.gameplay.stationary_max_stacks;
+        let other_movement_cooldown_reduction_ms =
+            ability.gameplay.other_movement_cooldown_reduction_ms;
         assert!(
             disabled_target_damage_bonus.is_finite()
                 && (0.0..=1.0).contains(&disabled_target_damage_bonus),
@@ -5544,6 +5605,78 @@ fn validate_ability_catalog() {
                 .iter()
                 .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
             assert!((mana_regen_bonus - 2.0).abs() < 0.0001);
+        }
+        assert!(
+            adaptation_resistance_per_stack.is_finite()
+                && (0.0..=1.0).contains(&adaptation_resistance_per_stack),
+            "ability '{ability_id}' must author adaptation_resistance_per_stack between 0 and 1"
+        );
+        if adaptation_resistance_per_stack > 0.0
+            || adaptation_duration_ms > 0
+            || adaptation_max_stacks > 0
+        {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author Adaptation tuning for PASSIVE gameplay"
+            );
+            assert!(
+                adaptation_resistance_per_stack > 0.0
+                    && adaptation_duration_ms > 0
+                    && adaptation_max_stacks > 0,
+                "ability '{ability_id}' must author complete Adaptation tuning"
+            );
+        }
+        if ability_id == PRIMAL_ADAPTATION_ABILITY_ID {
+            assert_eq!(discipline_id, DISCIPLINE_PRIMAL);
+            assert_eq!(ability_kind, "PASSIVE");
+            assert!((adaptation_resistance_per_stack - 0.02).abs() < 0.0001);
+            assert_eq!(adaptation_duration_ms, 10_000);
+            assert_eq!(adaptation_max_stacks, 10);
+        }
+        assert!(
+            stationary_mana_regen_per_stack.is_finite()
+                && stationary_mana_regen_per_stack >= 0.0,
+            "ability '{ability_id}' must author a finite non-negative stationary_mana_regen_per_stack"
+        );
+        if stationary_mana_regen_per_stack > 0.0
+            || stationary_first_stack_delay_ms > 0
+            || stationary_stack_interval_ms > 0
+            || stationary_max_stacks > 0
+        {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author Photosynthesis tuning for PASSIVE gameplay"
+            );
+            assert!(
+                stationary_mana_regen_per_stack > 0.0
+                    && stationary_first_stack_delay_ms > 0
+                    && stationary_stack_interval_ms > 0
+                    && stationary_max_stacks > 0,
+                "ability '{ability_id}' must author complete Photosynthesis tuning"
+            );
+        }
+        if ability_id == PRIMAL_PHOTOSYNTHESIS_ABILITY_ID {
+            assert_eq!(discipline_id, DISCIPLINE_PRIMAL);
+            assert_eq!(ability_kind, "PASSIVE");
+            assert!((stationary_mana_regen_per_stack - 1.0).abs() < 0.0001);
+            assert_eq!(stationary_first_stack_delay_ms, 2_000);
+            assert_eq!(stationary_stack_interval_ms, 2_000);
+            assert_eq!(stationary_max_stacks, 5);
+        }
+        if other_movement_cooldown_reduction_ms > 0 {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author movement cooldown reduction for PASSIVE gameplay"
+            );
+            assert!(
+                other_movement_cooldown_reduction_ms <= 60_000,
+                "ability '{ability_id}' movement cooldown reduction must not exceed 60000"
+            );
+        }
+        if ability_id == PRIMAL_SLIPSTREAM_ABILITY_ID {
+            assert_eq!(discipline_id, DISCIPLINE_PRIMAL);
+            assert_eq!(ability_kind, "PASSIVE");
+            assert_eq!(other_movement_cooldown_reduction_ms, 2_000);
         }
         if disabled_target_damage_bonus > 0.0 {
             assert_eq!(
@@ -7064,6 +7197,80 @@ pub(crate) fn divinity_faith_mana_regen_bonus_for_owner(
         .max(0.0)
 }
 
+pub(crate) fn primal_adaptation_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<(f32, Duration, u32)> {
+    if !character_has_selected_discipline(ctx, owner, DISCIPLINE_PRIMAL) {
+        return None;
+    }
+
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == PRIMAL_ADAPTATION_ABILITY_ID
+        })
+        .and_then(|ability| {
+            let resistance = ability.gameplay.adaptation_resistance_per_stack;
+            let duration_ms = ability.gameplay.adaptation_duration_ms;
+            let max_stacks = ability.gameplay.adaptation_max_stacks;
+            (resistance.is_finite() && resistance > 0.0 && duration_ms > 0 && max_stacks > 0)
+                .then_some((resistance, Duration::from_millis(duration_ms), max_stacks))
+        })
+}
+
+pub(crate) fn primal_photosynthesis_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<(f32, Duration, Duration, u32)> {
+    if !character_has_selected_discipline(ctx, owner, DISCIPLINE_PRIMAL) {
+        return None;
+    }
+
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == PRIMAL_PHOTOSYNTHESIS_ABILITY_ID
+        })
+        .and_then(|ability| {
+            let mana_regen = ability.gameplay.stationary_mana_regen_per_stack;
+            let first_delay_ms = ability.gameplay.stationary_first_stack_delay_ms;
+            let interval_ms = ability.gameplay.stationary_stack_interval_ms;
+            let max_stacks = ability.gameplay.stationary_max_stacks;
+            (mana_regen.is_finite()
+                && mana_regen > 0.0
+                && first_delay_ms > 0
+                && interval_ms > 0
+                && max_stacks > 0)
+                .then_some((
+                    mana_regen,
+                    Duration::from_millis(first_delay_ms),
+                    Duration::from_millis(interval_ms),
+                    max_stacks,
+                ))
+        })
+}
+
+pub(crate) fn primal_slipstream_cooldown_reduction_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Duration {
+    if !character_has_selected_discipline(ctx, owner, DISCIPLINE_PRIMAL) {
+        return Duration::ZERO;
+    }
+
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == PRIMAL_SLIPSTREAM_ABILITY_ID
+        })
+        .map(|ability| Duration::from_millis(ability.gameplay.other_movement_cooldown_reduction_ms))
+        .unwrap_or(Duration::ZERO)
+}
+
 pub(crate) fn ruin_acceleration_cooldown_reduction_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
@@ -7227,14 +7434,16 @@ mod tests {
     };
     use crate::melee::{auto_attack_reference_for_profile, profile_supports_action_reference};
     use crate::progression::melee_timed_movement_for_ability_id;
+    use crate::relations::TargetAudience;
     use crate::resources::RESOURCE_KIND_MANA;
     use crate::spells::{spell_definition_by_str, SpellTargeting};
 
     use super::{
         ability_gameplay_kind, ability_is_compatible_with_slot,
-        ability_tags_allow_discipline_selection, action_presentation_key,
-        action_ref_for_action_bar_default, authored_status_presentation_ids,
-        canonical_action_bar_slot_id, character_action_bar_assignment_is_generic_fixed_action,
+        ability_tags_allow_discipline_selection, action_id_is_movement_ability,
+        action_presentation_key, action_ref_for_action_bar_default,
+        authored_status_presentation_ids, canonical_action_bar_slot_id,
+        character_action_bar_assignment_is_generic_fixed_action,
         character_discipline_loadout_contains, combat_rule_value, combat_vfx_cue_key,
         derived_spell_action_presentation_rows, encode_tags, melee_channel_for_ability_id,
         melee_impact_effects_for_ability_id, normalize_identifier,
@@ -7250,8 +7459,9 @@ mod tests {
         AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE, COMBAT_MODE_FULL_DRAW, COMBAT_MODE_READY,
         COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED, COMBAT_PROFILE_ARCHER_BOW,
         COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_SWORD_AND_SHIELD, COMBAT_PROFILE_TWO_HANDED_SWORD,
-        DAGGER_SHROUD_ABILITY_ID, DISCIPLINE_DIVINITY, DISCIPLINE_RUIN, GLOBAL_ACTION_BAR_PROFILE,
-        RESOURCE_KIND_STAMINA, SUBTLETY_FLEET_FOOTED_ABILITY_ID,
+        DAGGER_SHROUD_ABILITY_ID, DISCIPLINE_DIVINITY, DISCIPLINE_PRIMAL, DISCIPLINE_RUIN,
+        GLOBAL_ACTION_BAR_PROFILE, PRIMAL_ADAPTATION_ABILITY_ID, PRIMAL_PHOTOSYNTHESIS_ABILITY_ID,
+        PRIMAL_SLIPSTREAM_ABILITY_ID, RESOURCE_KIND_STAMINA, SUBTLETY_FLEET_FOOTED_ABILITY_ID,
         SUBTLETY_LINGERING_SHADE_ABILITY_ID, SUBTLETY_OPPORTUNIST_ABILITY_ID,
         SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID, SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID,
     };
@@ -7352,6 +7562,20 @@ mod tests {
 
     fn ability_uses_projectile_body(ability: &AbilityDefinition) -> bool {
         projectile_delivery_projectile_count(ability) > 0
+    }
+
+    fn ability_uses_traveling_area_motion(ability: &AbilityDefinition) -> bool {
+        ability_delivery_kind(ability) == "PROJECTILE"
+            && ability
+                .gameplay
+                .delivery
+                .as_ref()
+                .and_then(serde_json::Value::as_object)
+                .and_then(|delivery| delivery.get("motion"))
+                .and_then(serde_json::Value::as_object)
+                .and_then(|motion| motion.get("kind"))
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|kind| normalize_identifier(kind) == "TRAVELING_AREA")
     }
 
     fn animation_set_asset_for_combat_profile(combat_profile_id: &str) -> &'static str {
@@ -8142,6 +8366,13 @@ mod tests {
             .collect();
         let projectile_spell_kinds: HashSet<_> =
             projectile_spell_abilities.values().cloned().collect();
+        let traveling_area_spell_abilities: HashSet<_> = catalog
+            .abilities
+            .iter()
+            .filter(|ability| ability_gameplay_kind(ability) == "SPELL")
+            .filter(|ability| ability_uses_traveling_area_motion(ability))
+            .map(|ability| normalize_identifier(ability.ability_id.as_str()))
+            .collect();
         let projectile_sequence_count_by_ability: HashMap<_, _> = catalog
             .abilities
             .iter()
@@ -8679,14 +8910,37 @@ mod tests {
                 spell_kind.as_str(),
                 0,
             );
-            if selected_count != 1 {
+            let prefab_owned_release_count =
+                if traveling_area_spell_abilities.contains(ability_id.as_str()) {
+                    catalog
+                        .combat_vfx_cues
+                        .iter()
+                        .filter(|cue| {
+                            normalize_identifier(cue.owner_kind.as_str()) == "ABILITY"
+                                && normalize_identifier(cue.owner_id.as_str()) == *ability_id
+                                && normalize_identifier(cue.trigger.as_str()) == "SPELL_RELEASE"
+                                && normalize_identifier(cue.anchor.as_str()) == "ORIGIN"
+                                && normalize_identifier(cue.attach_mode.as_str())
+                                    == "WORLD_ALIGNED_TO_FACING"
+                                && normalize_identifier(cue.vfx_role.as_str()) == "ONE_SHOT"
+                                && normalize_identifier(cue.lifecycle.as_str()) == "PARTICLE_SYSTEM"
+                        })
+                        .count()
+                } else {
+                    0
+                };
+            let has_selected_projectile_body = selected_count == 1;
+            let has_prefab_owned_traveling_area_release =
+                selected_count == 0 && prefab_owned_release_count == 1;
+            if !has_selected_projectile_body && !has_prefab_owned_traveling_area_release {
                 errors.push(CombatAuthoringError::new(
                     CombatAuthoringRule::CombatVfxCueResolves,
                     format!(
-                        "spell projectile ability '{}' kind '{}' must resolve exactly one selected PROJECTILE_BODY cue for projectile_sequence_index 0; found {}",
+                        "spell projectile ability '{}' kind '{}' must resolve exactly one selected PROJECTILE_BODY cue for projectile_sequence_index 0, or a traveling-area ability must author exactly one prefab-owned ORIGIN/WORLD_ALIGNED_TO_FACING ONE_SHOT release cue; found {} body cue(s) and {} prefab-owned release cue(s)",
                         ability_id,
                         spell_kind,
-                        selected_count
+                        selected_count,
+                        prefab_owned_release_count
                     ),
                 ));
             }
@@ -8933,6 +9187,15 @@ mod tests {
                 .contains("unknown field `movement_delivery`"),
             "unexpected parse error: {err}"
         );
+    }
+
+    #[test]
+    fn movement_ability_classification_covers_current_delivery_domains() {
+        assert!(action_id_is_movement_ability("TELEPORT"));
+        assert!(action_id_is_movement_ability("WARRIOR_CHARGE"));
+        assert!(action_id_is_movement_ability("DAGGER_COMBO_ATTACK_01_04"));
+        assert!(!action_id_is_movement_ability("FIREBALL"));
+        assert!(!action_id_is_movement_ability("TAILWIND"));
     }
 
     #[test]
@@ -13415,6 +13678,140 @@ mod tests {
     }
 
     #[test]
+    fn primal_adaptation_overgrowth_photosynthesis_tailwind_slipstream_and_wellspring_are_authored()
+    {
+        let catalog = progression_catalog();
+        let ids = [
+            "PRIMAL_ADAPTATION",
+            "SPELL_OVERGROWTH",
+            "PRIMAL_PHOTOSYNTHESIS",
+            "SPELL_TAILWIND",
+            "PRIMAL_SLIPSTREAM",
+            "SPELL_WELLSPRING",
+        ];
+        for id in ids {
+            let ability = catalog
+                .abilities
+                .iter()
+                .find(|ability| normalize_identifier(ability.ability_id.as_str()) == id)
+                .unwrap_or_else(|| panic!("expected Primal ability {id}"));
+            assert_eq!(
+                normalize_identifier(ability.discipline_id.as_str()),
+                DISCIPLINE_PRIMAL
+            );
+        }
+
+        let adaptation = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == PRIMAL_ADAPTATION_ABILITY_ID)
+            .expect("Adaptation ability");
+        assert_eq!(ability_gameplay_kind(adaptation), "PASSIVE");
+        assert!((adaptation.gameplay.adaptation_resistance_per_stack - 0.02).abs() < 0.0001);
+        assert_eq!(adaptation.gameplay.adaptation_duration_ms, 10_000);
+        assert_eq!(adaptation.gameplay.adaptation_max_stacks, 10);
+
+        let photosynthesis = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == PRIMAL_PHOTOSYNTHESIS_ABILITY_ID)
+            .expect("Photosynthesis ability");
+        // Stack cadence is authored tuning, not a code contract - validate_ability_catalog is
+        // the gate that keeps it in sync with the catalog.
+        assert!(photosynthesis.gameplay.stationary_first_stack_delay_ms > 0);
+        assert!(photosynthesis.gameplay.stationary_stack_interval_ms > 0);
+        assert_eq!(photosynthesis.gameplay.stationary_max_stacks, 5);
+        assert!((photosynthesis.gameplay.stationary_mana_regen_per_stack - 1.0).abs() < 0.0001);
+        let photosynthesis_cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == PRIMAL_PHOTOSYNTHESIS_ABILITY_ID
+                    && normalize_identifier(cue.trigger.as_str()) == "STATUS_ACTIVE"
+            })
+            .expect("Photosynthesis should author a reconstructable status VFX cue");
+        assert_eq!(
+            normalize_identifier(photosynthesis_cue.anchor.as_str()),
+            "TARGET"
+        );
+        assert_eq!(
+            normalize_identifier(photosynthesis_cue.lifecycle.as_str()),
+            "UNTIL_STATUS_END"
+        );
+
+        let slipstream = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == PRIMAL_SLIPSTREAM_ABILITY_ID)
+            .expect("Slipstream ability");
+        assert_eq!(
+            slipstream.gameplay.other_movement_cooldown_reduction_ms,
+            2_000
+        );
+
+        let wellspring = spell_definition_by_str("WELLSPRING").expect("Wellspring definition");
+        assert_eq!(
+            wellspring.behavior,
+            crate::spells::SpellBehavior::PersistentArea
+        );
+        assert_eq!(wellspring.duration, 5.0);
+        assert_eq!(wellspring.radius, 4.0);
+        let area = wellspring
+            .secondary
+            .persistent_area
+            .as_ref()
+            .expect("Wellspring persistent-area tuning");
+        assert_eq!(area.pulse_interval, Duration::from_secs(1));
+        assert_eq!(area.heal_amount, 5);
+        assert_eq!(area.mana_restore_amount, 5.0);
+        assert_eq!(area.effect_target_audience, TargetAudience::PartyOrSelf);
+
+        let fissure_cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_FISSURE"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_RELEASE"
+            })
+            .expect("Fissure should author a release VFX cue");
+        assert_eq!(normalize_identifier(fissure_cue.anchor.as_str()), "ORIGIN");
+        assert_eq!(
+            normalize_identifier(fissure_cue.attach_mode.as_str()),
+            "WORLD_ALIGNED_TO_FACING"
+        );
+        assert_eq!(
+            normalize_identifier(fissure_cue.vfx_role.as_str()),
+            "ONE_SHOT"
+        );
+        assert_eq!(
+            normalize_identifier(fissure_cue.lifecycle.as_str()),
+            "PARTICLE_SYSTEM"
+        );
+    }
+
+    #[test]
+    fn cloudburst_vfx_plays_once_at_the_aimed_point_until_its_particles_finish() {
+        let cue = progression_catalog()
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| normalize_identifier(cue.owner_id.as_str()) == "SPELL_CLOUDBURST")
+            .expect("Cloudburst should author its rain VFX cue");
+
+        assert_eq!(normalize_identifier(cue.trigger.as_str()), "SPELL_RELEASE");
+        assert_eq!(normalize_identifier(cue.anchor.as_str()), "IMPACT_POINT");
+        assert_eq!(
+            normalize_identifier(cue.attach_mode.as_str()),
+            "SPAWN_WORLD"
+        );
+        assert_eq!(normalize_identifier(cue.vfx_role.as_str()), "ONE_SHOT");
+        assert_eq!(
+            normalize_identifier(cue.lifecycle.as_str()),
+            "PARTICLE_SYSTEM"
+        );
+        assert_eq!(cue.duration_ms, 0);
+    }
+
+    #[test]
     fn generic_spell_abilities_are_profile_neutral_and_author_damage_types() {
         let expected = [
             ("SPELL_FIREBALL", "FIREBALL", "FIRE"),
@@ -13449,6 +13846,9 @@ mod tests {
             ("SPELL_TIDAL_BLAST", "TIDAL_BLAST", "PHYSICAL"),
             ("SPELL_LAVA_BLAST", "LAVA_BLAST", "FIRE"),
             ("SPELL_WIND_BLAST", "WIND_BLAST", "PHYSICAL"),
+            ("SPELL_STONE_CARAPACE", "STONE_CARAPACE", "PHYSICAL"),
+            ("SPELL_FISSURE", "FISSURE", "PHYSICAL"),
+            ("SPELL_EARTHQUAKE", "EARTHQUAKE", "PHYSICAL"),
             ("SPELL_VERDANT_SPIRITS", "VERDANT_SPIRITS", "AIR"),
             ("SPELL_CELESTIAL_MANTLE", "CELESTIAL_MANTLE", "HOLY"),
             ("SPELL_HOLY_SHIELD", "HOLY_SHIELD", "HOLY"),
@@ -13556,7 +13956,12 @@ mod tests {
                     "SPELL_TIDAL_BLAST",
                     "SPELL_LAVA_BLAST",
                     "SPELL_WIND_BLAST",
-                    "SPELL_STONESPIRE",
+                    "SPELL_STONE_CARAPACE",
+                    "SPELL_MOULT",
+                    "SPELL_CLOUDBURST",
+                    "SPELL_FISSURE",
+                    "SPELL_EARTHQUAKE",
+                    "SPELL_UPHEAVAL",
                 ][..],
             ),
             (
@@ -13599,14 +14004,14 @@ mod tests {
             }
         }
 
-        let stonespire = catalog
+        let upheaval = catalog
             .abilities
             .iter()
-            .find(|ability| ability.ability_id == "SPELL_STONESPIRE")
-            .expect("Stonespire should remain authored");
-        assert_eq!(stonespire.discipline_id, "PRIMAL");
-        assert_eq!(ability_delivery_kind(stonespire), "WORLD_OBSTACLE");
-        assert!(stonespire
+            .find(|ability| ability.ability_id == "SPELL_UPHEAVAL")
+            .expect("Upheaval should remain authored");
+        assert_eq!(upheaval.discipline_id, "PRIMAL");
+        assert_eq!(ability_delivery_kind(upheaval), "WORLD_OBSTACLE");
+        assert!(upheaval
             .gameplay
             .delivery
             .as_ref()

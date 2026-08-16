@@ -12,7 +12,8 @@ use crate::action_snapshot::{
 };
 use crate::auto_attack::arm_auto_attack_if_unarmed_with_cadence;
 use crate::combat::{
-    arm_quickening_after_movement_ability, has_active_disabling_status, mark_harmful_combat_action,
+    advance_slipstream_after_movement_ability, arm_quickening_after_movement_ability,
+    has_active_disabling_status, mark_harmful_combat_action,
 };
 use crate::defense::clear_interruptible_defense_for_owner;
 use crate::lingering_shade::arm_lingering_shade_for_voluntary_movement;
@@ -618,6 +619,7 @@ pub(crate) fn launch_movement_delivery(
         collision_policy,
     );
     arm_quickening_after_movement_ability(ctx, owner, now);
+    advance_slipstream_after_movement_ability(ctx, owner, action_id.as_str(), now);
     crate::spells::begin_active_cast(
         ctx,
         owner,

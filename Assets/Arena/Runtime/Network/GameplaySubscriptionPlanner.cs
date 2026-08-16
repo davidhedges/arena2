@@ -275,6 +275,7 @@ namespace Arena.Network
                 BuildScopedActiveCastQuery(new QueryBuilder(), scope),
                 BuildScopedActiveWorldInteractionQuery(new QueryBuilder(), scope),
                 BuildScopedActiveRadialEffectQuery(new QueryBuilder(), scope),
+                BuildScopedActivePersistentAreaQuery(new QueryBuilder(), scope),
                 BuildScopedActiveWorldObstacleQuery(new QueryBuilder(), scope),
                 BuildScopedActiveSanctuaryZoneQuery(new QueryBuilder(), scope),
                 BuildScopedActiveNecroPrisonQuery(new QueryBuilder(), scope),
@@ -726,6 +727,28 @@ namespace Arena.Network
                     .RightSemijoin(qb.From.ActiveRadialEffect(), (world, effect) => world.Identity.Eq(effect.Owner))
                     .ToSql(),
                 _ => throw new InvalidOperationException("Scoped active-radial-effect query requested for GameplayScope.None"),
+            };
+        }
+
+        private static string BuildScopedActivePersistentAreaQuery(QueryBuilder qb, NetworkManager.GameplayScope scope)
+        {
+            return scope.Kind switch
+            {
+                NetworkManager.GameplayScopeKind.OpenWorld => qb
+                    .From
+                    .PlayerWorld()
+                    .Where(c => c.WorldKind.Eq("OPEN"))
+                    .Where(c => c.OpenWorldSceneName.Eq(OpenWorldSceneName(scope)))
+                    .RightSemijoin(qb.From.ActivePersistentArea(), (world, area) => world.Identity.Eq(area.Caster))
+                    .ToSql(),
+                NetworkManager.GameplayScopeKind.Instance => qb
+                    .From
+                    .PlayerWorld()
+                    .Where(c => c.WorldKind.Eq("INSTANCE"))
+                    .Where(c => c.InstanceScopeId.Eq(scope.InstanceId.GetValueOrDefault()))
+                    .RightSemijoin(qb.From.ActivePersistentArea(), (world, area) => world.Identity.Eq(area.Caster))
+                    .ToSql(),
+                _ => throw new InvalidOperationException("Scoped active-persistent-area query requested for GameplayScope.None"),
             };
         }
 

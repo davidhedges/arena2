@@ -63,6 +63,38 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void CombatVfxDispatcher_ReconstructsAndCleansUpPersistentAreaVisuals()
+        {
+            string source = File.ReadAllText(DispatcherPath);
+
+            Assert.That(source, Does.Contain("ActivePersistentArea.OnInsert += OnActivePersistentAreaInsertForVfx"));
+            Assert.That(source, Does.Contain("foreach (ActivePersistentArea row in conn.Db.ActivePersistentArea.Iter())"));
+            Assert.That(source, Does.Contain("SpawnActivePersistentAreaVfx(row)"));
+            Assert.That(source, Does.Contain("DestroyForRadialEffectEnd(row.SpellInstanceId)"));
+        }
+
+        [Test]
+        public void PhotosynthesisVfx_ScalesOnlyTheAuthoredLeafFlecksWithStacks()
+        {
+            const string path = "Assets/Arena/Runtime/Presentation/VFX/PhotosynthesisVFX.cs";
+            string source = File.ReadAllText(path);
+
+            Assert.That(source, Does.Contain("Flecks_Shiny_Additive"));
+            Assert.That(source, Does.Contain("Mathf.Clamp((int)context.SequenceCount, 1, MaxStacks)"));
+            Assert.That(source, Does.Contain("main.maxParticles = LeavesPerStack * stacks"));
+        }
+
+        [Test]
+        public void CombatVfxDispatcher_ResolvesPassiveOwnedStatusCuesByAbilityId()
+        {
+            string source = File.ReadAllText(DispatcherPath);
+
+            Assert.That(source, Does.Contain("Passive-owned statuses use their stable ability ID as spell_id"));
+            Assert.That(source, Does.Contain("string candidate = WireIdentifier.Normalize(ability.AbilityId);"));
+            Assert.That(source, Does.Contain("string.Equals(candidate, spellId, StringComparison.Ordinal)"));
+        }
+
+        [Test]
         public void CombatVfxDispatcher_RoutesSpecialMovementThroughNormalCuePipeline()
         {
             string source = File.ReadAllText(DispatcherPath);

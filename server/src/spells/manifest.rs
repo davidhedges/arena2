@@ -334,6 +334,8 @@ pub(crate) struct ChannelAreaSecondaryTunables {
 pub(crate) struct PersistentAreaSecondaryTunables {
     pub pulse_interval: Duration,
     pub effect_target_audience: TargetAudience,
+    pub heal_amount: i32,
+    pub mana_restore_amount: f32,
     pub impact_effects: Vec<ImpactEffect>,
 }
 
@@ -467,17 +469,36 @@ pub(crate) struct TravelingAreaProjectileTunables {
     pub hitbox_width: f32,
     /// Contact count is tracked per target for the lifetime of the wave.
     pub max_hits_per_target: u32,
+    /// Optional terminal eruption when the traveling area reaches its end.
+    pub terminal_radius: f32,
+    pub terminal_damage: i32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum ImpactEffect {
     Status(StatusApplication),
+    StatusWithPolarity {
+        status: StatusApplication,
+        polarity: StatusPolarity,
+        target_audience: TargetAudience,
+    },
+    ChanceStatus {
+        status: StatusApplication,
+        chance: f32,
+        polarity: StatusPolarity,
+        target_audience: TargetAudience,
+    },
     Knockback {
         distance_meters: f32,
     },
     RemoveStatus {
         polarity: Option<StatusPolarity>,
         dispel_types: Vec<StatusDispelType>,
+        max_count: u32,
+    },
+    RemoveStatusByDamageType {
+        polarity: Option<StatusPolarity>,
+        damage_type: DamageType,
         max_count: u32,
     },
     InterruptCast,
@@ -497,11 +518,46 @@ impl ImpactEffect {
     pub(crate) fn as_status(&self) -> Option<&StatusApplication> {
         match self {
             Self::Status(status) => Some(status),
+            Self::StatusWithPolarity { status, .. } | Self::ChanceStatus { status, .. } => {
+                Some(status)
+            }
             Self::Knockback { .. }
             | Self::RemoveStatus { .. }
+            | Self::RemoveStatusByDamageType { .. }
             | Self::InterruptCast
             | Self::InterruptCastWithDamage { .. } => None,
         }
+    }
+
+    pub(crate) fn chance_roll_succeeds(
+        &self,
+        roll_key: &str,
+        target: Identity,
+        effect_index: usize,
+    ) -> bool {
+        let Self::ChanceStatus { chance, .. } = self else {
+            return true;
+        };
+        if !chance.is_finite() || *chance <= 0.0 {
+            return false;
+        }
+        if *chance >= 1.0 {
+            return true;
+        }
+
+        let mut hash = 0xcbf29ce484222325u64 ^ effect_index as u64;
+        let target_hex = target.to_hex();
+        for byte in roll_key.bytes().chain(target_hex.bytes()) {
+            hash ^= byte as u64;
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        hash ^= hash >> 33;
+        hash = hash.wrapping_mul(0xff51afd7ed558ccd);
+        hash ^= hash >> 33;
+        hash = hash.wrapping_mul(0xc4ceb9fe1a85ec53);
+        hash ^= hash >> 33;
+        let roll = ((hash >> 40) as f32) / ((1u64 << 24) as f32);
+        roll < chance.clamp(0.0, 1.0)
     }
 
     pub(crate) fn requires_positive_damage(&self) -> bool {
@@ -557,6 +613,24 @@ impl ImpactEffect {
                 target_audience,
                 action_key,
             ),
+            Self::StatusWithPolarity {
+                status,
+                polarity,
+                target_audience,
+            }
+            | Self::ChanceStatus {
+                status,
+                polarity,
+                target_audience,
+                ..
+            } => status.to_effect_packet_for_audience(
+                source,
+                target,
+                spell_id,
+                *polarity,
+                *target_audience,
+                action_key,
+            ),
             Self::Knockback { distance_meters } => EffectPacket::Knockback {
                 source,
                 target,
@@ -573,6 +647,16 @@ impl ImpactEffect {
                 target,
                 polarity: *polarity,
                 dispel_types: dispel_types.clone(),
+                max_count: *max_count,
+            },
+            Self::RemoveStatusByDamageType {
+                polarity,
+                damage_type,
+                max_count,
+            } => EffectPacket::RemoveStatusByDamageType {
+                target,
+                polarity: *polarity,
+                damage_type: *damage_type,
                 max_count: *max_count,
             },
             Self::InterruptCast => EffectPacket::InterruptCast {
@@ -769,8 +853,8 @@ mod tests {
     use spacetimedb::Identity;
 
     use crate::combat::{
-        DamageType, EffectPacket, StackPolicy, StatusDispelType, StatusEffectKind, StatusPayload,
-        StatusPolarity,
+        DamageType, EffectPacket, StackPolicy, StatusApplication, StatusDispelType,
+        StatusEffectKind, StatusPayload, StatusPolarity, StatusStackGroupDefault,
     };
     use crate::relations::TargetAudience;
 
@@ -808,6 +892,43 @@ mod tests {
                 "valid spell id '{valid}' should be accepted"
             );
         }
+    }
+
+    #[test]
+    fn chance_status_rolls_are_stable_per_target_and_independent_per_pulse() {
+        let effect = ImpactEffect::ChanceStatus {
+            status: StatusApplication::new(
+                StatusPayload::Stun,
+                Duration::from_millis(500),
+                Some("EARTHQUAKE_STUN".to_string()),
+                StatusStackGroupDefault::Global("EARTHQUAKE_STUN"),
+                1,
+                StackPolicy::Refresh,
+            ),
+            chance: 0.25,
+            polarity: StatusPolarity::Debuff,
+            target_audience: TargetAudience::Hostile,
+        };
+        let targets: Vec<_> = (1..=64)
+            .map(|value| Identity::from_hex(format!("{value:064x}").as_str()).unwrap())
+            .collect();
+        let first: Vec<_> = targets
+            .iter()
+            .map(|target| effect.chance_roll_succeeds("quake:1000000", *target, 1))
+            .collect();
+        let repeated: Vec<_> = targets
+            .iter()
+            .map(|target| effect.chance_roll_succeeds("quake:1000000", *target, 1))
+            .collect();
+        let second: Vec<_> = targets
+            .iter()
+            .map(|target| effect.chance_roll_succeeds("quake:2000000", *target, 1))
+            .collect();
+
+        assert_eq!(first, repeated);
+        assert!(first.iter().any(|success| *success));
+        assert!(first.iter().any(|success| !*success));
+        assert!(first.iter().zip(second).any(|(left, right)| *left != right));
     }
 
     #[test]

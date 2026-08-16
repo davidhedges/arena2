@@ -931,6 +931,17 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void PrimalStatusTooltips_ExposeAdaptationTypeAndPermanentOvergrowth()
+        {
+            string tooltip = File.ReadAllText(StatusTooltipResolverPath);
+
+            Assert.That(tooltip, Does.Contain("stackGroup, \"ADAPTATION\""));
+            Assert.That(tooltip, Does.Contain("TitleCaseStatusKind(status.DamageType)"));
+            Assert.That(tooltip, Does.Contain("stackGroup, \"OVERGROWTH\""));
+            Assert.That(tooltip, Does.Contain("parts.Add(\"Permanent\")"));
+        }
+
+        [Test]
         public void Blizzard_UsesTheAuthoredIcicleRainAreaPrefab()
         {
             Assert.That(File.Exists(BlizzardVfxPrefabPath), Is.True);

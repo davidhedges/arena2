@@ -158,6 +158,10 @@ enum SpellCatalogDelivery {
         duration_ms: u64,
         damage: i32,
         #[serde(default)]
+        heal: i32,
+        #[serde(default)]
+        mana_restore: f32,
+        #[serde(default)]
         damage_type: String,
         effect_target_audience: TargetAudience,
         block_behavior: BlockBehavior,
@@ -422,6 +426,8 @@ enum ProjectileMotionRow {
         hitbox_length: f32,
         hitbox_width: f32,
         max_hits_per_target: u32,
+        terminal_radius: f32,
+        terminal_damage: i32,
     },
 }
 
@@ -492,6 +498,8 @@ impl<'de> Deserialize<'de> for ProjectileMotionRow {
                     hitbox_length: row.hitbox_length,
                     hitbox_width: row.hitbox_width,
                     max_hits_per_target: row.max_hits_per_target,
+                    terminal_radius: row.terminal_radius,
+                    terminal_damage: row.terminal_damage,
                 })
             }
             _ => Err(de::Error::custom(format!(
@@ -570,6 +578,10 @@ struct TravelingAreaProjectileMotionRow {
     hitbox_length: f32,
     hitbox_width: f32,
     max_hits_per_target: u32,
+    #[serde(default)]
+    terminal_radius: f32,
+    #[serde(default)]
+    terminal_damage: i32,
 }
 
 impl Default for ProjectileMotionRow {
@@ -588,6 +600,10 @@ fn default_one_stack() -> u32 {
 
 fn default_refresh_stack_policy() -> StackPolicy {
     StackPolicy::Refresh
+}
+
+fn default_full_chance() -> f32 {
+    1.0
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -623,6 +639,12 @@ enum ImpactEffectRow {
         dispel_types: Vec<StatusDispelType>,
         max_count: u32,
     },
+    RemoveStatusByDamageType {
+        #[serde(default)]
+        polarity: Option<StatusPolarity>,
+        damage_type: String,
+        max_count: u32,
+    },
     Hot {
         duration_ms: u64,
         tick_interval_ms: u64,
@@ -647,6 +669,17 @@ enum ImpactEffectRow {
     },
     Stun {
         duration_ms: u64,
+        #[serde(default = "default_full_chance")]
+        chance: f32,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
+    },
+    Doused {
+        duration_ms: u64,
+        modifier_scalar: f32,
+        polarity: StatusPolarity,
+        target_audience: TargetAudience,
+        status_stack_group: String,
         #[serde(default)]
         dispel_types: Vec<StatusDispelType>,
     },
@@ -1255,6 +1288,8 @@ impl SpellCatalogRow {
                 pulse_interval_ms,
                 duration_ms,
                 damage,
+                heal,
+                mana_restore,
                 damage_type,
                 effect_target_audience,
                 block_behavior,
@@ -1271,6 +1306,8 @@ impl SpellCatalogRow {
                 definition.secondary.persistent_area = Some(PersistentAreaSecondaryTunables {
                     pulse_interval: Duration::from_millis(pulse_interval_ms),
                     effect_target_audience,
+                    heal_amount: heal,
+                    mana_restore_amount: mana_restore,
                     impact_effects: impact_effects.into_iter().map(Into::into).collect(),
                 });
             }
@@ -1705,6 +1742,32 @@ impl From<ImpactEffectRow> for ImpactEffect {
                 dispel_types,
                 max_count,
             },
+            ImpactEffectRow::RemoveStatusByDamageType {
+                polarity,
+                damage_type,
+                max_count,
+            } => Self::RemoveStatusByDamageType {
+                polarity,
+                damage_type: DamageType::from_wire(damage_type.as_str()),
+                max_count,
+            },
+            status_row @ ImpactEffectRow::Doused {
+                polarity,
+                target_audience,
+                ..
+            } => Self::StatusWithPolarity {
+                status: status_application_from_impact_effect_row(status_row),
+                polarity,
+                target_audience,
+            },
+            status_row @ ImpactEffectRow::Stun { chance, .. } if chance < 1.0 => {
+                Self::ChanceStatus {
+                    status: status_application_from_impact_effect_row(status_row),
+                    chance,
+                    polarity: StatusPolarity::Debuff,
+                    target_audience: TargetAudience::Hostile,
+                }
+            }
             status_row => Self::Status(status_application_from_impact_effect_row(status_row)),
         }
     }
@@ -1725,6 +1788,9 @@ fn status_application_from_impact_effect_row(row: ImpactEffectRow) -> StatusAppl
         }
         ImpactEffectRow::RemoveStatus { .. } => {
             unreachable!("remove status is converted before status application mapping")
+        }
+        ImpactEffectRow::RemoveStatusByDamageType { .. } => {
+            unreachable!("damage-type removal is converted before status application mapping")
         }
         ImpactEffectRow::Hot {
             duration_ms,
@@ -1773,12 +1839,29 @@ fn status_application_from_impact_effect_row(row: ImpactEffectRow) -> StatusAppl
         .with_dispel_types(dispel_types),
         ImpactEffectRow::Stun {
             duration_ms,
+            chance: _,
             dispel_types,
         } => StatusApplication::new(
             StatusPayload::Stun,
             Duration::from_millis(duration_ms),
             None,
             StatusStackGroupDefault::ActionSuffix("STUN"),
+            1,
+            StackPolicy::Refresh,
+        )
+        .with_dispel_types(dispel_types),
+        ImpactEffectRow::Doused {
+            duration_ms,
+            modifier_scalar,
+            polarity: _,
+            target_audience: _,
+            status_stack_group,
+            dispel_types,
+        } => StatusApplication::new(
+            StatusPayload::Doused { modifier_scalar },
+            Duration::from_millis(duration_ms),
+            Some(status_stack_group),
+            StatusStackGroupDefault::Global("DOUSED"),
             1,
             StackPolicy::Refresh,
         )
@@ -2102,10 +2185,14 @@ impl From<ProjectileMotionRow> for ProjectileMotionTunables {
                 hitbox_length,
                 hitbox_width,
                 max_hits_per_target,
+                terminal_radius,
+                terminal_damage,
             } => Self::TravelingArea(TravelingAreaProjectileTunables {
                 hitbox_length,
                 hitbox_width,
                 max_hits_per_target,
+                terminal_radius,
+                terminal_damage,
             }),
         }
     }
@@ -2289,6 +2376,16 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
 fn validate_impact_effect(def: &SpellDefinition, effect: &ImpactEffect) -> Result<(), String> {
     let effect = match effect {
         ImpactEffect::Status(status) => status,
+        ImpactEffect::StatusWithPolarity { status, .. } => status,
+        ImpactEffect::ChanceStatus { status, chance, .. } => {
+            if !chance.is_finite() || *chance <= 0.0 || *chance > 1.0 {
+                return Err(format!(
+                    "{} delivery.impact_effects[].chance must be > 0 and <= 1",
+                    def.kind.as_str()
+                ));
+            }
+            status
+        }
         ImpactEffect::InterruptCast => return Ok(()),
         ImpactEffect::InterruptCastWithDamage {
             damage,
@@ -2350,6 +2447,25 @@ fn validate_impact_effect(def: &SpellDefinition, effect: &ImpactEffect) -> Resul
             if *max_count == 0 {
                 return Err(format!(
                     "{} REMOVE_STATUS impact effect max_count must be positive",
+                    def.kind.as_str()
+                ));
+            }
+            return Ok(());
+        }
+        ImpactEffect::RemoveStatusByDamageType {
+            damage_type,
+            max_count,
+            ..
+        } => {
+            if *damage_type == DamageType::Physical {
+                return Err(format!(
+                    "{} damage-type removal must specify a magical damage type",
+                    def.kind.as_str()
+                ));
+            }
+            if *max_count == 0 {
+                return Err(format!(
+                    "{} damage-type removal max_count must be positive",
                     def.kind.as_str()
                 ));
             }
@@ -2667,15 +2783,41 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 "delivery.pulse_interval_ms",
                 persistent_area.pulse_interval,
             )?;
-            if def.damage <= 0 && persistent_area.impact_effects.is_empty() {
+            if persistent_area.heal_amount < 0 {
                 return Err(format!(
-                    "{} PERSISTENT_AREA must define positive damage or at least one impact effect",
+                    "{} PERSISTENT_AREA heal must be non-negative",
+                    def.kind.as_str()
+                ));
+            }
+            if !persistent_area.mana_restore_amount.is_finite()
+                || persistent_area.mana_restore_amount < 0.0
+            {
+                return Err(format!(
+                    "{} PERSISTENT_AREA mana_restore must be finite and non-negative",
+                    def.kind.as_str()
+                ));
+            }
+            if def.damage <= 0
+                && persistent_area.heal_amount <= 0
+                && persistent_area.mana_restore_amount <= 0.0
+                && persistent_area.impact_effects.is_empty()
+            {
+                return Err(format!(
+                    "{} PERSISTENT_AREA must define damage, healing, mana restoration, or at least one impact effect",
                     def.kind.as_str()
                 ));
             }
             if def.damage > 0 && persistent_area.effect_target_audience != TargetAudience::Hostile {
                 return Err(format!(
                     "{} damaging PERSISTENT_AREA must use HOSTILE effect_target_audience",
+                    def.kind.as_str()
+                ));
+            }
+            if (persistent_area.heal_amount > 0 || persistent_area.mana_restore_amount > 0.0)
+                && persistent_area.effect_target_audience == TargetAudience::Hostile
+            {
+                return Err(format!(
+                    "{} restorative PERSISTENT_AREA must not use HOSTILE effect_target_audience",
                     def.kind.as_str()
                 ));
             }
@@ -3646,6 +3788,23 @@ fn validate_projectile_motion(
                     def.kind.as_str()
                 ));
             }
+            ensure_finite_non_negative(
+                def.kind.as_str(),
+                "delivery.motion.terminal_radius",
+                area.terminal_radius,
+            )?;
+            if area.terminal_damage < 0 {
+                return Err(format!(
+                    "{} delivery.motion.terminal_damage must be non-negative",
+                    def.kind.as_str()
+                ));
+            }
+            if (area.terminal_radius > 0.0) != (area.terminal_damage > 0) {
+                return Err(format!(
+                    "{} TRAVELING_AREA terminal eruption requires both terminal_radius and terminal_damage",
+                    def.kind.as_str()
+                ));
+            }
             if !def
                 .secondary
                 .projectile
@@ -3821,14 +3980,17 @@ fn validate_apply_status_kind_for_self(
     kind: StatusEffectKind,
 ) -> Result<(), String> {
     match kind {
-        StatusEffectKind::MoveSlowImmunity
+        StatusEffectKind::MoveSpeed
+        | StatusEffectKind::MoveSlowImmunity
         | StatusEffectKind::MovementImpairingImmunity
         | StatusEffectKind::StunImmunity
         | StatusEffectKind::DamageAmp
         | StatusEffectKind::DirectDamageAmp
         | StatusEffectKind::DamageTakenReduction
+        | StatusEffectKind::PhysicalDamageReduction
         | StatusEffectKind::ManaRegen
         | StatusEffectKind::StaminaRegen
+        | StatusEffectKind::MaxHealth
         | StatusEffectKind::MagicResistance
         | StatusEffectKind::Thorns
         | StatusEffectKind::VengeanceAura
@@ -3994,6 +4156,14 @@ mod tests {
                 "LAVA_BLAST",
                 "WIND_BLAST",
                 "VERDANT_SPIRITS",
+                "OVERGROWTH",
+                "TAILWIND",
+                "WELLSPRING",
+                "STONE_CARAPACE",
+                "MOULT",
+                "CLOUDBURST",
+                "FISSURE",
+                "EARTHQUAKE",
                 "CAUTERIZE",
                 "CELESTIAL_MANTLE",
                 "SANCTUARY",
@@ -4024,7 +4194,7 @@ mod tests {
                 "RECALL",
                 "TRANSPOSE",
                 "MIRROR_IMAGE",
-                "STONESPIRE",
+                "UPHEAVAL",
                 "MOMENTUM",
                 "FORTIFY",
                 "IRON_WILL",
@@ -4462,8 +4632,8 @@ mod tests {
     }
 
     #[test]
-    fn stonespire_authors_temporary_physical_world_obstacle() {
-        let definition = spell_definition_by_str("STONESPIRE").expect("STONESPIRE should exist");
+    fn upheaval_authors_temporary_physical_world_obstacle() {
+        let definition = spell_definition_by_str("UPHEAVAL").expect("UPHEAVAL should exist");
         assert_eq!(definition.behavior, SpellBehavior::WorldObstacle);
         assert_eq!(definition.targeting, SpellTargeting::Self_);
         assert!(!definition.requires_target);
@@ -4475,7 +4645,7 @@ mod tests {
             .secondary
             .world_obstacle
             .as_ref()
-            .expect("Stonespire must define obstacle tunables");
+            .expect("Upheaval must define obstacle tunables");
         assert_eq!(obstacle.forward_distance, 3.0);
         assert_eq!(obstacle.duration, Duration::from_millis(4000));
         assert_eq!(obstacle.visual_yaw_offset_degrees, 70.0);
@@ -4487,8 +4657,82 @@ mod tests {
         assert_eq!(obstacle.collider_size, [2.0, 7.0, 2.5]);
         assert_eq!(
             obstacle.visual_resource_path,
-            "CombatVFX/playground/5) Rune AoE aftershock stuff 1"
+            "CombatVFX/playground/primal/Magic Floating Rock 1"
         );
+    }
+
+    #[test]
+    fn additional_primal_abilities_author_requested_status_area_and_fissure_contracts() {
+        let carapace =
+            spell_definition_by_str("STONE_CARAPACE").expect("STONE_CARAPACE should exist");
+        assert_eq!(carapace.targeting, SpellTargeting::Self_);
+        assert_eq!(carapace.duration, 8.0);
+        assert_eq!(carapace.status_stack_group.as_deref(), Some("STONESKIN"));
+        assert_eq!(
+            carapace.apply_status.as_ref().unwrap().payload(),
+            StatusPayload::PhysicalDamageReduction {
+                modifier_scalar: 0.5
+            }
+        );
+
+        let moult = spell_definition_by_str("MOULT").expect("MOULT should exist");
+        let removals = &moult.secondary.remove_status.as_ref().unwrap().statuses;
+        assert!(removals
+            .iter()
+            .any(|status| status.kind == StatusEffectKind::Slow));
+        assert!(removals
+            .iter()
+            .any(|status| status.kind == StatusEffectKind::Root));
+        assert!(removals.iter().any(|status| {
+            status.kind == StatusEffectKind::PhysicalDamageReduction
+                && status.stack_group.as_deref() == Some("STONESKIN")
+        }));
+        assert!(removals
+            .iter()
+            .any(|status| status.kind == StatusEffectKind::Adaptation));
+
+        let cloudburst = spell_definition_by_str("CLOUDBURST").expect("CLOUDBURST should exist");
+        let cloudburst_area = cloudburst.secondary.persistent_area.as_ref().unwrap();
+        assert_eq!(cloudburst.duration, 3.0);
+        assert_eq!(cloudburst_area.pulse_interval, Duration::from_secs(1));
+        assert_eq!(cloudburst_area.effect_target_audience, TargetAudience::Any);
+        assert!(matches!(
+            cloudburst_area.impact_effects[0],
+            ImpactEffect::RemoveStatusByDamageType {
+                damage_type: DamageType::Fire,
+                ..
+            }
+        ));
+        assert_eq!(
+            cloudburst_area
+                .impact_effects
+                .iter()
+                .filter(|effect| matches!(effect, ImpactEffect::StatusWithPolarity { .. }))
+                .count(),
+            2
+        );
+
+        let fissure = spell_definition_by_str("FISSURE").expect("FISSURE should exist");
+        let traveling = fissure
+            .secondary
+            .projectile
+            .as_ref()
+            .and_then(|projectile| projectile.motion.traveling_area())
+            .unwrap();
+        assert_eq!(fissure.damage, 18);
+        assert_eq!(traveling.terminal_radius, 3.0);
+        assert_eq!(traveling.terminal_damage, 30);
+
+        let earthquake = spell_definition_by_str("EARTHQUAKE").expect("EARTHQUAKE should exist");
+        let quake_area = earthquake.secondary.persistent_area.as_ref().unwrap();
+        assert_eq!(earthquake.duration, 5.0);
+        assert!(quake_area.impact_effects.iter().any(|effect| matches!(
+            effect,
+            ImpactEffect::ChanceStatus { chance, status, .. }
+                if (*chance - 0.25).abs() < 0.0001
+                    && status.payload() == StatusPayload::Stun
+                    && status.duration() == Duration::from_millis(500)
+        )));
     }
 
     #[test]

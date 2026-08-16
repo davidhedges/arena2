@@ -1203,7 +1203,12 @@ fn sync_progression_runtime_rows(
         .map(|row| row.player_id)
         .collect();
     for owner in owners {
-        sync_player_state_derived_stats(ctx, owner, contexts.derived(ctx, owner));
+        let mut derived = contexts.derived(ctx, owner);
+        derived.max_hp = ((derived.max_hp.max(1) as f32)
+            * status_modifiers.max_health_multiplier_for(&owner))
+        .round()
+        .max(1.0) as i32;
+        sync_player_state_derived_stats(ctx, owner, derived);
         let equipment = contexts.equipment(ctx, owner);
         let inputs = ResourceSpecInputs {
             status_modifiers,

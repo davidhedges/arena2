@@ -25,14 +25,15 @@ use crate::player_state::PlayerState;
 use crate::practice::resolve_respawn_pose;
 use crate::progression::{
     ability_belongs_to_discipline, character_has_selected_discipline, combat_rule_value,
-    derived_combat_profile_id_for_owner, ruin_acceleration_cooldown_reduction_for_owner,
-    ruin_chain_reaction_spell_for_owner, ruin_fracture_melee_damage_bonus,
-    ruin_furnace_mana_restore_ratio_for_owner, ruin_potential_crit_chance_per_stack_for_owner,
-    ruin_quickening_for_owner, ruin_rime_protects_debuffs_for_owner,
-    ruin_wildfire_ignite_for_owner, soulstealer_empowered_damage_bonus,
-    subtlety_behind_target_damage_bonus, subtlety_disabled_target_damage_bonus,
-    COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD, DISCIPLINE_BLIGHT, DISCIPLINE_RUIN,
-    DISCIPLINE_SUBTLETY,
+    derived_combat_profile_id_for_owner, primal_adaptation_for_owner,
+    primal_photosynthesis_for_owner, primal_slipstream_cooldown_reduction_for_owner,
+    ruin_acceleration_cooldown_reduction_for_owner, ruin_chain_reaction_spell_for_owner,
+    ruin_fracture_melee_damage_bonus, ruin_furnace_mana_restore_ratio_for_owner,
+    ruin_potential_crit_chance_per_stack_for_owner, ruin_quickening_for_owner,
+    ruin_rime_protects_debuffs_for_owner, ruin_wildfire_ignite_for_owner,
+    soulstealer_empowered_damage_bonus, subtlety_behind_target_damage_bonus,
+    subtlety_disabled_target_damage_bonus, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD,
+    DISCIPLINE_BLIGHT, DISCIPLINE_RUIN, DISCIPLINE_SUBTLETY,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
@@ -44,13 +45,13 @@ use crate::resources::{
     spend_primary_resource_amount_for_kind, RESOURCE_KIND_MANA,
 };
 use crate::spells::{
-    advance_active_ability_cooldowns, bake_linear_special_movement,
-    begin_special_movement_with_facing_policy, fizzle_active_cast_for_interrupt,
-    horizontal_movement_duration_ms, is_externally_imposed_movement_kind,
-    resolved_primary_resource_cost_for_amount, spell_definition_by_str,
-    ImmolationSecondaryTunables, SpellBehavior, SpellVec3, KNOCKBACK_MOVEMENT_KIND,
-    SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_FACING_FACE_START,
-    STAGGER_SHOVE_MOVEMENT_KIND,
+    advance_active_ability_cooldowns, advance_other_movement_ability_cooldowns,
+    bake_linear_special_movement, begin_special_movement_with_facing_policy,
+    fizzle_active_cast_for_interrupt, horizontal_movement_duration_ms,
+    is_externally_imposed_movement_kind, resolved_primary_resource_cost_for_amount,
+    spell_definition_by_str, ImmolationSecondaryTunables, SpellBehavior, SpellVec3,
+    KNOCKBACK_MOVEMENT_KIND, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+    SPECIAL_MOVEMENT_FACING_FACE_START, STAGGER_SHOVE_MOVEMENT_KIND,
 };
 use crate::world_collision::{
     resolve_world_spawn_position, resolve_world_spawn_position_with_layout_for_scene,
@@ -178,6 +179,10 @@ const RECKONING_SPELL_ID: &str = "RECKONING";
 const RECKONING_ABILITY_ID: &str = "SPELL_RECKONING";
 const RIME_STATUS_GROUP: &str = "RIME";
 const RIME_SPELL_ID: &str = "RUIN_RIME";
+const ADAPTATION_SPELL_ID: &str = "PRIMAL_ADAPTATION";
+const ADAPTATION_STATUS_GROUP: &str = "ADAPTATION";
+const PHOTOSYNTHESIS_PASSIVE_ID: &str = "PRIMAL_PHOTOSYNTHESIS";
+const PHOTOSYNTHESIS_STATUS_GROUP: &str = "PHOTOSYNTHESIS";
 const FULMINATION_SPELL_ID: &str = "FULMINATION";
 const FULMINATION_ABILITY_ID: &str = "SPELL_FULMINATION";
 const DAMAGE_SOURCE_KIND_IMMOLATION: &str = "IMMOLATION";
@@ -232,7 +237,7 @@ const MAX_HEALING_TAKEN_REDUCTION: f32 = 1.0;
 const MAX_DAMAGE_DEALT_REDUCTION: f32 = 1.0;
 const PENDING_EFFECT_SEQUENCE_KEY: u8 = 0;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum DamageType {
     Physical,
     Fire,
@@ -1104,6 +1109,153 @@ pub fn tick_combat_stacking_passives(ctx: &ReducerContext, now: Timestamp) {
     }
 
     tick_bloodlust_passives(ctx, now);
+    tick_photosynthesis_passives(ctx, now);
+}
+
+fn tick_photosynthesis_passives(ctx: &ReducerContext, now: Timestamp) {
+    let mut owners: HashSet<Identity> = ctx
+        .db
+        .player_state()
+        .iter()
+        .filter(|state| state.alive && !state.is_dummy)
+        .map(|state| state.player_id)
+        .collect();
+    owners.extend(
+        ctx.db
+            .combat_stacking_passive_runtime()
+            .iter()
+            .filter(|row| row.passive_id == PHOTOSYNTHESIS_PASSIVE_ID)
+            .map(|row| row.owner),
+    );
+    owners.extend(
+        ctx.db
+            .status_effect()
+            .effect_kind()
+            .filter(StatusEffectKind::ManaRegen.as_str())
+            .filter(|effect| effect.stack_group == PHOTOSYNTHESIS_STATUS_GROUP)
+            .map(|effect| effect.target),
+    );
+
+    for owner in owners {
+        tick_photosynthesis_for_owner(ctx, owner, now);
+    }
+}
+
+fn tick_photosynthesis_for_owner(ctx: &ReducerContext, owner: Identity, now: Timestamp) {
+    let alive = ctx
+        .db
+        .player_state()
+        .player_id()
+        .find(owner)
+        .is_some_and(|state| state.alive && !state.is_dummy);
+    let Some((mana_regen_per_stack, first_delay, interval, max_stacks)) = alive
+        .then(|| primal_photosynthesis_for_owner(ctx, owner))
+        .flatten()
+    else {
+        clear_photosynthesis(ctx, owner);
+        return;
+    };
+
+    let moving = ctx
+        .db
+        .player_physics()
+        .identity()
+        .find(owner)
+        .is_some_and(|physics| {
+            physics.vel_x.abs() > 0.001
+                || physics.vel_y.abs() > 0.001
+                || physics.vel_z.abs() > 0.001
+        })
+        || ctx
+            .db
+            .special_movement_runtime()
+            .owner()
+            .find(owner)
+            .is_some();
+    if moving {
+        clear_photosynthesis(ctx, owner);
+        return;
+    }
+
+    let key = combat_stacking_passive_runtime_key(owner, PHOTOSYNTHESIS_PASSIVE_ID);
+    let mut runtime = if let Some(existing) = ctx
+        .db
+        .combat_stacking_passive_runtime()
+        .key()
+        .find(key.clone())
+    {
+        existing
+    } else {
+        upsert_combat_stacking_passive_runtime(
+            ctx,
+            CombatStackingPassiveRuntime {
+                key,
+                owner,
+                passive_id: PHOTOSYNTHESIS_PASSIVE_ID.to_string(),
+                next_stack_at: now + first_delay,
+                last_direct_damage_at: Timestamp::UNIX_EPOCH,
+                last_consumed_action_key: String::new(),
+            },
+        );
+        return;
+    };
+
+    let due = due_interval_count(now, runtime.next_stack_at, interval);
+    if due == 0 {
+        return;
+    }
+    let current_stacks = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(owner)
+        .find(|effect| {
+            effect.effect_kind == StatusEffectKind::ManaRegen.as_str()
+                && effect.stack_group == PHOTOSYNTHESIS_STATUS_GROUP
+                && now < effect.expires_at
+        })
+        .map(|effect| effect.stacks)
+        .unwrap_or(0);
+    for _ in 0..due.min(max_stacks.saturating_sub(current_stacks)) {
+        apply_status_internal(
+            ctx,
+            now,
+            owner,
+            owner,
+            PHOTOSYNTHESIS_PASSIVE_ID,
+            StatusPayload::ManaRegen {
+                modifier_scalar: mana_regen_per_stack,
+            },
+            StatusPolarity::Buff,
+            Duration::from_secs(365 * 24 * 60 * 60),
+            PHOTOSYNTHESIS_STATUS_GROUP,
+            max_stacks,
+            StackPolicy::AddStackRefresh,
+            TargetAudience::SelfOnly,
+            Vec::new(),
+            false,
+        );
+    }
+    runtime.next_stack_at = advance_timestamp_by_intervals(runtime.next_stack_at, interval, due);
+    upsert_combat_stacking_passive_runtime(ctx, runtime);
+}
+
+fn clear_photosynthesis(ctx: &ReducerContext, owner: Identity) {
+    clear_combat_stacking_passive_runtime(ctx, owner, PHOTOSYNTHESIS_PASSIVE_ID);
+    let status_ids: Vec<_> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(owner)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::ManaRegen.as_str()
+                && effect.stack_group == PHOTOSYNTHESIS_STATUS_GROUP
+        })
+        .map(|effect| effect.status_id)
+        .collect();
+    for status_id in status_ids {
+        ctx.db.status_effect().status_id().delete(status_id);
+    }
 }
 
 fn tick_bloodlust_passives(ctx: &ReducerContext, now: Timestamp) {
@@ -2812,11 +2964,15 @@ pub enum StatusEffectKind {
     DamageAmp,
     DirectDamageAmp,
     DamageTakenReduction,
+    PhysicalDamageReduction,
     HealingTakenReduction,
     DamageDealtReduction,
     ManaRegen,
     StaminaRegen,
+    MaxHealth,
     MagicResistance,
+    Adaptation,
+    Doused,
     KnockbackResistance,
     Thorns,
     VengeanceAura,
@@ -2866,11 +3022,15 @@ impl StatusEffectKind {
             Self::DamageAmp => "DAMAGE_AMP",
             Self::DirectDamageAmp => "DIRECT_DAMAGE_AMP",
             Self::DamageTakenReduction => "DAMAGE_TAKEN_REDUCTION",
+            Self::PhysicalDamageReduction => "PHYSICAL_DAMAGE_REDUCTION",
             Self::HealingTakenReduction => "HEALING_TAKEN_REDUCTION",
             Self::DamageDealtReduction => "DAMAGE_DEALT_REDUCTION",
             Self::ManaRegen => "MANA_REGEN",
             Self::StaminaRegen => "STAMINA_REGEN",
+            Self::MaxHealth => "MAX_HEALTH",
             Self::MagicResistance => "MAGIC_RESISTANCE",
+            Self::Adaptation => "ADAPTATION",
+            Self::Doused => "DOUSED",
             Self::KnockbackResistance => "KNOCKBACK_RESISTANCE",
             Self::Thorns => "THORNS",
             Self::VengeanceAura => "VENGEANCE_AURA",
@@ -2920,11 +3080,15 @@ impl StatusEffectKind {
             "DAMAGE_AMP" => Some(Self::DamageAmp),
             "DIRECT_DAMAGE_AMP" => Some(Self::DirectDamageAmp),
             "DAMAGE_TAKEN_REDUCTION" => Some(Self::DamageTakenReduction),
+            "PHYSICAL_DAMAGE_REDUCTION" => Some(Self::PhysicalDamageReduction),
             "HEALING_TAKEN_REDUCTION" => Some(Self::HealingTakenReduction),
             "DAMAGE_DEALT_REDUCTION" => Some(Self::DamageDealtReduction),
             "MANA_REGEN" => Some(Self::ManaRegen),
             "STAMINA_REGEN" => Some(Self::StaminaRegen),
+            "MAX_HEALTH" => Some(Self::MaxHealth),
             "MAGIC_RESISTANCE" => Some(Self::MagicResistance),
+            "ADAPTATION" => Some(Self::Adaptation),
+            "DOUSED" => Some(Self::Doused),
             "KNOCKBACK_RESISTANCE" => Some(Self::KnockbackResistance),
             "THORNS" => Some(Self::Thorns),
             "VENGEANCE_AURA" => Some(Self::VengeanceAura),
@@ -2993,6 +3157,9 @@ pub enum StatusPayload {
     DamageTakenReduction {
         modifier_scalar: f32,
     },
+    PhysicalDamageReduction {
+        modifier_scalar: f32,
+    },
     HealingTakenReduction {
         modifier_scalar: f32,
     },
@@ -3005,7 +3172,17 @@ pub enum StatusPayload {
     StaminaRegen {
         modifier_scalar: f32,
     },
+    MaxHealth {
+        modifier_scalar: f32,
+    },
     MagicResistance {
+        modifier_scalar: f32,
+    },
+    Adaptation {
+        modifier_scalar: f32,
+        damage_type: DamageType,
+    },
+    Doused {
         modifier_scalar: f32,
     },
     KnockbackResistance {
@@ -3150,6 +3327,9 @@ impl AuthoredStatusPayload {
             StatusEffectKind::DamageTakenReduction => StatusPayload::DamageTakenReduction {
                 modifier_scalar: self.modifier_scalar,
             },
+            StatusEffectKind::PhysicalDamageReduction => StatusPayload::PhysicalDamageReduction {
+                modifier_scalar: self.modifier_scalar,
+            },
             StatusEffectKind::HealingTakenReduction => StatusPayload::HealingTakenReduction {
                 modifier_scalar: self.modifier_scalar,
             },
@@ -3162,7 +3342,17 @@ impl AuthoredStatusPayload {
             StatusEffectKind::StaminaRegen => StatusPayload::StaminaRegen {
                 modifier_scalar: self.modifier_scalar,
             },
+            StatusEffectKind::MaxHealth => StatusPayload::MaxHealth {
+                modifier_scalar: self.modifier_scalar,
+            },
             StatusEffectKind::MagicResistance => StatusPayload::MagicResistance {
+                modifier_scalar: self.modifier_scalar,
+            },
+            StatusEffectKind::Adaptation => StatusPayload::Adaptation {
+                modifier_scalar: self.modifier_scalar,
+                damage_type: self.damage_type,
+            },
+            StatusEffectKind::Doused => StatusPayload::Doused {
                 modifier_scalar: self.modifier_scalar,
             },
             StatusEffectKind::KnockbackResistance => StatusPayload::KnockbackResistance {
@@ -3263,11 +3453,15 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::DamageAmp
             | StatusEffectKind::DirectDamageAmp
             | StatusEffectKind::DamageTakenReduction
+            | StatusEffectKind::PhysicalDamageReduction
             | StatusEffectKind::HealingTakenReduction
             | StatusEffectKind::DamageDealtReduction
             | StatusEffectKind::ManaRegen
             | StatusEffectKind::StaminaRegen
+            | StatusEffectKind::MaxHealth
             | StatusEffectKind::MagicResistance
+            | StatusEffectKind::Adaptation
+            | StatusEffectKind::Doused
             | StatusEffectKind::KnockbackResistance
             | StatusEffectKind::DamageTakenFromSourceAmp
             | StatusEffectKind::DamageRedirect
@@ -3428,11 +3622,15 @@ impl StatusPayload {
             Self::DamageAmp { .. } => StatusEffectKind::DamageAmp,
             Self::DirectDamageAmp { .. } => StatusEffectKind::DirectDamageAmp,
             Self::DamageTakenReduction { .. } => StatusEffectKind::DamageTakenReduction,
+            Self::PhysicalDamageReduction { .. } => StatusEffectKind::PhysicalDamageReduction,
             Self::HealingTakenReduction { .. } => StatusEffectKind::HealingTakenReduction,
             Self::DamageDealtReduction { .. } => StatusEffectKind::DamageDealtReduction,
             Self::ManaRegen { .. } => StatusEffectKind::ManaRegen,
             Self::StaminaRegen { .. } => StatusEffectKind::StaminaRegen,
+            Self::MaxHealth { .. } => StatusEffectKind::MaxHealth,
             Self::MagicResistance { .. } => StatusEffectKind::MagicResistance,
+            Self::Adaptation { .. } => StatusEffectKind::Adaptation,
+            Self::Doused { .. } => StatusEffectKind::Doused,
             Self::KnockbackResistance { .. } => StatusEffectKind::KnockbackResistance,
             Self::Thorns { .. } => StatusEffectKind::Thorns,
             Self::VengeanceAura => StatusEffectKind::VengeanceAura,
@@ -3547,14 +3745,29 @@ impl StatusPayload {
             | Self::Gigantism { modifier_scalar }
             | Self::ManaRegen { modifier_scalar }
             | Self::StaminaRegen { modifier_scalar }
+            | Self::MaxHealth { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
             | Self::DamageRedirect { modifier_scalar }
+            | Self::PhysicalDamageReduction { modifier_scalar }
+            | Self::Doused { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: 0,
                 tick_interval_ms: 0,
                 damage_type: DamageType::Physical,
                 modifier_scalar: modifier_scalar.max(0.0),
+                absorb_amount: 0,
+                absorb_cap: 0,
+            },
+            Self::Adaptation {
+                modifier_scalar,
+                damage_type,
+            } => StatusEffectColumns {
+                slow_pct: 0.0,
+                tick_amount: 0,
+                tick_interval_ms: 0,
+                damage_type,
+                modifier_scalar: modifier_scalar.clamp(0.0, 1.0),
                 absorb_amount: 0,
                 absorb_cap: 0,
             },
@@ -3686,6 +3899,11 @@ impl StatusPayload {
                     .modifier_scalar
                     .clamp(0.0, MAX_DAMAGE_TAKEN_REDUCTION),
             },
+            StatusEffectKind::PhysicalDamageReduction => Self::PhysicalDamageReduction {
+                modifier_scalar: columns
+                    .modifier_scalar
+                    .clamp(0.0, MAX_DAMAGE_TAKEN_REDUCTION),
+            },
             StatusEffectKind::HealingTakenReduction => Self::HealingTakenReduction {
                 modifier_scalar: columns
                     .modifier_scalar
@@ -3702,7 +3920,17 @@ impl StatusPayload {
             StatusEffectKind::StaminaRegen => Self::StaminaRegen {
                 modifier_scalar: columns.modifier_scalar.max(0.0),
             },
+            StatusEffectKind::MaxHealth => Self::MaxHealth {
+                modifier_scalar: columns.modifier_scalar.max(0.0),
+            },
             StatusEffectKind::MagicResistance => Self::MagicResistance {
+                modifier_scalar: columns.modifier_scalar.clamp(0.0, 1.0),
+            },
+            StatusEffectKind::Adaptation => Self::Adaptation {
+                modifier_scalar: columns.modifier_scalar.clamp(0.0, 1.0),
+                damage_type: columns.damage_type,
+            },
+            StatusEffectKind::Doused => Self::Doused {
                 modifier_scalar: columns.modifier_scalar.clamp(0.0, 1.0),
             },
             StatusEffectKind::KnockbackResistance => Self::KnockbackResistance {
@@ -3800,10 +4028,20 @@ impl StatusPayload {
             | Self::Gigantism { modifier_scalar }
             | Self::ManaRegen { modifier_scalar }
             | Self::StaminaRegen { modifier_scalar }
+            | Self::MaxHealth { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
             | Self::DamageRedirect { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0
+            }
+            Self::Adaptation {
+                modifier_scalar,
+                damage_type,
+            } => {
+                damage_type == DamageType::Physical
+                    || !modifier_scalar.is_finite()
+                    || modifier_scalar <= 0.0
+                    || modifier_scalar > 1.0
             }
             Self::Flurry { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0 || modifier_scalar > 1.0
@@ -3812,6 +4050,14 @@ impl StatusPayload {
                 !modifier_scalar.is_finite()
                     || modifier_scalar <= 0.0
                     || modifier_scalar > MAX_DAMAGE_TAKEN_REDUCTION
+            }
+            Self::PhysicalDamageReduction { modifier_scalar } => {
+                !modifier_scalar.is_finite()
+                    || modifier_scalar <= 0.0
+                    || modifier_scalar > MAX_DAMAGE_TAKEN_REDUCTION
+            }
+            Self::Doused { modifier_scalar } => {
+                !modifier_scalar.is_finite() || modifier_scalar <= 0.0 || modifier_scalar > 1.0
             }
             Self::HealingTakenReduction { modifier_scalar } => {
                 !modifier_scalar.is_finite()
@@ -3910,11 +4156,27 @@ impl StatusPayload {
             | Self::Gigantism { modifier_scalar }
             | Self::ManaRegen { modifier_scalar }
             | Self::StaminaRegen { modifier_scalar }
+            | Self::MaxHealth { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
             | Self::DamageRedirect { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 if !modifier_scalar.is_finite() || modifier_scalar <= 0.0 {
                     return Err(format!("{subject} {path}.modifier_scalar must be positive"));
+                }
+                Ok(())
+            }
+            Self::Adaptation {
+                modifier_scalar,
+                damage_type,
+            } => {
+                if damage_type == DamageType::Physical
+                    || !modifier_scalar.is_finite()
+                    || modifier_scalar <= 0.0
+                    || modifier_scalar > 1.0
+                {
+                    return Err(format!(
+                        "{subject} {path} ADAPTATION requires a magical damage type and modifier_scalar > 0 and <= 1"
+                    ));
                 }
                 Ok(())
             }
@@ -3931,6 +4193,25 @@ impl StatusPayload {
                     || modifier_scalar <= 0.0
                     || modifier_scalar > MAX_DAMAGE_TAKEN_REDUCTION
                 {
+                    return Err(format!(
+                        "{subject} {path}.modifier_scalar must be > 0 and <= 1"
+                    ));
+                }
+                Ok(())
+            }
+            Self::PhysicalDamageReduction { modifier_scalar } => {
+                if !modifier_scalar.is_finite()
+                    || modifier_scalar <= 0.0
+                    || modifier_scalar > MAX_DAMAGE_TAKEN_REDUCTION
+                {
+                    return Err(format!(
+                        "{subject} {path}.modifier_scalar must be > 0 and <= 1"
+                    ));
+                }
+                Ok(())
+            }
+            Self::Doused { modifier_scalar } => {
+                if !modifier_scalar.is_finite() || modifier_scalar <= 0.0 || modifier_scalar > 1.0 {
                     return Err(format!(
                         "{subject} {path}.modifier_scalar must be > 0 and <= 1"
                     ));
@@ -4044,11 +4325,17 @@ impl StatusPayload {
             | Self::Flurry { modifier_scalar }
             | Self::ManaRegen { modifier_scalar }
             | Self::StaminaRegen { modifier_scalar }
+            | Self::MaxHealth { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
             | Self::DamageRedirect { modifier_scalar }
+            | Self::PhysicalDamageReduction { modifier_scalar }
+            | Self::Doused { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 modifier_scalar > existing.modifier_scalar.max(0.0)
             }
+            Self::Adaptation {
+                modifier_scalar, ..
+            } => modifier_scalar > existing.modifier_scalar.clamp(0.0, 1.0),
             Self::DamageTakenReduction { modifier_scalar } => {
                 modifier_scalar
                     > existing
@@ -4184,8 +4471,13 @@ pub(crate) fn status_matches_removal_filter(
         polarity,
         dispel_types,
         status_is_projected_by_active_radial_effect(ctx, effect),
-        status_removal_is_blocked_by_rime(ctx, effect, ctx.timestamp),
+        status_removal_is_blocked_by_rime(ctx, effect, ctx.timestamp)
+            || status_kind_is_intrinsically_undispellable(effect.effect_kind.as_str()),
     )
+}
+
+fn status_kind_is_intrinsically_undispellable(effect_kind: &str) -> bool {
+    StatusEffectKind::from_wire(effect_kind) == Some(StatusEffectKind::Adaptation)
 }
 
 fn status_matches_removal_filter_values(
@@ -4466,6 +4758,12 @@ pub enum EffectPacket {
         dispel_types: Vec<StatusDispelType>,
         max_count: u32,
     },
+    RemoveStatusByDamageType {
+        target: Identity,
+        polarity: Option<StatusPolarity>,
+        damage_type: DamageType,
+        max_count: u32,
+    },
 }
 
 pub fn queue_effects(ctx: &ReducerContext, effects: Vec<EffectPacket>) {
@@ -4684,6 +4982,48 @@ fn queue_effect_at(ctx: &ReducerContext, effect: EffectPacket, queued_at: Timest
                 .filter(target)
                 .filter(|effect| {
                     status_matches_removal_filter(ctx, effect, polarity, dispel_types.as_slice())
+                })
+                .collect();
+            matches.sort_by_key(|effect| effect.status_id);
+
+            for (index, effect) in matches.into_iter().take(max_count as usize).enumerate() {
+                let Some(kind) = StatusEffectKind::from_wire(effect.effect_kind.as_str()) else {
+                    continue;
+                };
+                let removal_order = if index == 0 {
+                    queued_order
+                } else {
+                    next_pending_effect_order(ctx)
+                };
+                ctx.db
+                    .pending_remove_status()
+                    .insert(new_pending_remove_status(
+                        target,
+                        kind,
+                        removal_order,
+                        effect.stack_group,
+                        0,
+                        queued_at,
+                        queued_at_micros,
+                    ));
+            }
+        }
+        EffectPacket::RemoveStatusByDamageType {
+            target,
+            polarity,
+            damage_type,
+            max_count,
+        } => {
+            let mut matches: Vec<_> = ctx
+                .db
+                .status_effect()
+                .target()
+                .filter(target)
+                .filter(|effect| {
+                    polarity.is_none_or(|expected| effect.polarity == expected.as_str())
+                        && effect.damage_type == damage_type.as_str()
+                        && !status_removal_is_blocked_by_rime(ctx, effect, ctx.timestamp)
+                        && !status_kind_is_intrinsically_undispellable(effect.effect_kind.as_str())
                 })
                 .collect();
             matches.sort_by_key(|effect| effect.status_id);
@@ -5457,6 +5797,7 @@ fn apply_damage_to_player_state(
     ctx.db.player_state().player_id().update(state);
     if target_survived {
         arm_rime_after_frost_spell_hit(ctx, hit, ctx.timestamp);
+        arm_adaptation_after_magical_damage(ctx, hit, hp_damage, ctx.timestamp);
     }
     if player_was_defeated {
         crate::survival::end_survival_run_for_player_death(ctx, target);
@@ -5514,6 +5855,43 @@ fn furnace_mana_restore_amount(
     }
 
     confirmed_hp_damage as f32 * restore_ratio
+}
+
+fn arm_adaptation_after_magical_damage(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    confirmed_hp_damage: i32,
+    now: Timestamp,
+) {
+    let damage_type = DamageType::from_wire(hit.damage_type.as_str());
+    if confirmed_hp_damage <= 0 || damage_type == DamageType::Physical {
+        return;
+    }
+    let Some((resistance_per_stack, duration, max_stacks)) =
+        primal_adaptation_for_owner(ctx, hit.target)
+    else {
+        return;
+    };
+
+    apply_status_internal(
+        ctx,
+        now,
+        hit.target,
+        hit.target,
+        ADAPTATION_SPELL_ID,
+        StatusPayload::Adaptation {
+            modifier_scalar: resistance_per_stack,
+            damage_type,
+        },
+        StatusPolarity::Buff,
+        duration,
+        format!("{ADAPTATION_STATUS_GROUP}:{}", damage_type.as_str()).as_str(),
+        max_stacks,
+        StackPolicy::AddStackRefresh,
+        TargetAudience::SelfOnly,
+        Vec::new(),
+        false,
+    );
 }
 
 pub(crate) fn rime_effect_packet_for_frost_spell(
@@ -5687,6 +6065,16 @@ pub(crate) fn arm_quickening_after_movement_ability(
         Vec::new(),
         false,
     );
+}
+
+pub(crate) fn advance_slipstream_after_movement_ability(
+    ctx: &ReducerContext,
+    owner: Identity,
+    used_action_id: &str,
+    now: Timestamp,
+) {
+    let amount = primal_slipstream_cooldown_reduction_for_owner(ctx, owner);
+    advance_other_movement_ability_cooldowns(ctx, owner, used_action_id, amount, now);
 }
 
 pub(crate) fn quickening_cast_speed_multiplier_for_owner(
@@ -6744,13 +7132,16 @@ fn resistance_multiplier_for_damage_type(
     }
     let resistance = equipment_modifier_totals_for_owner(ctx, hit.target)
         .resistance_for_damage_type(&hit.damage_type);
-    let status_resistance =
-        if DamageType::from_wire(hit.damage_type.as_str()) == DamageType::Physical {
-            0.0
-        } else {
-            temporary_modifiers.magic_resistance_for(&hit.target)
-        };
-    (1.0 - (resistance + status_resistance).clamp(0.0, 1.0)).max(0.0)
+    let damage_type = DamageType::from_wire(hit.damage_type.as_str());
+    let status_resistance = if damage_type == DamageType::Physical {
+        temporary_modifiers.physical_damage_reduction_for(&hit.target)
+    } else {
+        temporary_modifiers.magic_resistance_for(&hit.target)
+            + temporary_modifiers.adaptation_resistance_for(&hit.target, damage_type)
+            + temporary_modifiers.doused_resistance_for(&hit.target, damage_type)
+    };
+    let vulnerability = temporary_modifiers.doused_vulnerability_for(&hit.target, damage_type);
+    (1.0 - (resistance + status_resistance).clamp(0.0, 1.0)).max(0.0) * (1.0 + vulnerability)
 }
 
 fn queue_surprise_attack_stun_if_applicable(
@@ -8726,6 +9117,8 @@ struct StatusRuntimeEffect {
     stacks: u32,
     slow_pct: f32,
     tick_amount: i32,
+    damage_type: DamageType,
+    polarity: StatusPolarity,
     modifier_scalar: f32,
 }
 
@@ -8739,6 +9132,8 @@ impl StatusRuntimeEffect {
             stacks: effect.stacks,
             slow_pct: effect.slow_pct,
             tick_amount: effect.tick_amount,
+            damage_type: DamageType::from_wire(effect.damage_type.as_str()),
+            polarity: StatusPolarity::from_wire(effect.polarity.as_str())?,
             modifier_scalar: effect.modifier_scalar,
         })
     }
@@ -8922,6 +9317,16 @@ impl StatusRuntimeView {
                                 .clamp(0.0, MAX_DAMAGE_TAKEN_REDUCTION),
                         );
                     }
+                    StatusEffectKind::PhysicalDamageReduction => {
+                        let entry = modifiers
+                            .physical_damage_reduction_by_target
+                            .entry(*target)
+                            .or_insert(0.0);
+                        *entry = (*entry).max(
+                            (effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32)
+                                .clamp(0.0, MAX_DAMAGE_TAKEN_REDUCTION),
+                        );
+                    }
                     StatusEffectKind::HealingTakenReduction => {
                         let entry = modifiers
                             .healing_taken_reduction_by_target
@@ -8964,12 +9369,46 @@ impl StatusRuntimeView {
                             .or_insert(0.0);
                         *entry += effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32;
                     }
+                    StatusEffectKind::MaxHealth => {
+                        let entry = modifiers
+                            .max_health_bonus_by_target
+                            .entry(*target)
+                            .or_insert(0.0);
+                        *entry = (*entry).max(effect.modifier_scalar.max(0.0));
+                    }
                     StatusEffectKind::MagicResistance => {
                         let entry = modifiers
                             .magic_resistance_by_target
                             .entry(*target)
                             .or_insert(0.0);
                         *entry = (*entry).max(effect.modifier_scalar.max(0.0));
+                    }
+                    StatusEffectKind::Adaptation => {
+                        if effect.damage_type != DamageType::Physical {
+                            let entry = modifiers
+                                .adaptation_resistance_by_target_and_type
+                                .entry((*target, effect.damage_type))
+                                .or_insert(0.0);
+                            *entry = (*entry)
+                                .max(effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32);
+                        }
+                    }
+                    StatusEffectKind::Doused => {
+                        let entry = if effect.polarity == StatusPolarity::Buff {
+                            modifiers
+                                .doused_resistance_by_target
+                                .entry(*target)
+                                .or_insert(0.0)
+                        } else {
+                            modifiers
+                                .doused_vulnerability_by_target
+                                .entry(*target)
+                                .or_insert(0.0)
+                        };
+                        *entry = (*entry).max(
+                            (effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32)
+                                .clamp(0.0, 1.0),
+                        );
                     }
                     StatusEffectKind::KnockbackResistance => {
                         let entry = modifiers
@@ -9051,12 +9490,17 @@ pub struct TemporaryCombatModifiers {
     physical_damage_amp_by_target: HashMap<Identity, f32>,
     flurry_base_chance_by_target: HashMap<Identity, f32>,
     damage_taken_reduction_by_target: HashMap<Identity, f32>,
+    physical_damage_reduction_by_target: HashMap<Identity, f32>,
     damage_taken_amp_by_target_and_source: HashMap<(Identity, Identity), f32>,
     healing_taken_reduction_by_target: HashMap<Identity, f32>,
     damage_dealt_reduction_by_target: HashMap<Identity, f32>,
     mana_regen_by_target: HashMap<Identity, f32>,
     stamina_regen_by_target: HashMap<Identity, f32>,
+    max_health_bonus_by_target: HashMap<Identity, f32>,
     magic_resistance_by_target: HashMap<Identity, f32>,
+    adaptation_resistance_by_target_and_type: HashMap<(Identity, DamageType), f32>,
+    doused_resistance_by_target: HashMap<Identity, f32>,
+    doused_vulnerability_by_target: HashMap<Identity, f32>,
     knockback_resistance_by_target: HashMap<Identity, f32>,
     thorns_damage_by_target: HashMap<Identity, i32>,
     attack_speed_multiplier_by_target: HashMap<Identity, f32>,
@@ -9179,8 +9623,70 @@ impl TemporaryCombatModifiers {
             .max(0.0)
     }
 
+    pub(crate) fn max_health_multiplier_for(&self, identity: &Identity) -> f32 {
+        1.0 + self
+            .max_health_bonus_by_target
+            .get(identity)
+            .copied()
+            .unwrap_or(0.0)
+            .max(0.0)
+    }
+
     pub(crate) fn magic_resistance_for(&self, identity: &Identity) -> f32 {
         self.magic_resistance_by_target
+            .get(identity)
+            .copied()
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0)
+    }
+
+    pub(crate) fn adaptation_resistance_for(
+        &self,
+        identity: &Identity,
+        damage_type: DamageType,
+    ) -> f32 {
+        if damage_type == DamageType::Physical {
+            return 0.0;
+        }
+        self.adaptation_resistance_by_target_and_type
+            .get(&(*identity, damage_type))
+            .copied()
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0)
+    }
+
+    pub(crate) fn physical_damage_reduction_for(&self, identity: &Identity) -> f32 {
+        self.physical_damage_reduction_by_target
+            .get(identity)
+            .copied()
+            .unwrap_or(0.0)
+            .clamp(0.0, MAX_DAMAGE_TAKEN_REDUCTION)
+    }
+
+    pub(crate) fn doused_resistance_for(
+        &self,
+        identity: &Identity,
+        damage_type: DamageType,
+    ) -> f32 {
+        if damage_type != DamageType::Fire {
+            return 0.0;
+        }
+        self.doused_resistance_by_target
+            .get(identity)
+            .copied()
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0)
+    }
+
+    pub(crate) fn doused_vulnerability_for(
+        &self,
+        identity: &Identity,
+        damage_type: DamageType,
+    ) -> f32 {
+        if !matches!(damage_type, DamageType::Cold | DamageType::Lightning) {
+            return 0.0;
+        }
+        self.doused_vulnerability_by_target
             .get(identity)
             .copied()
             .unwrap_or(0.0)
@@ -9400,14 +9906,15 @@ mod tests {
         resolve_temporary_hitpoint_absorb, resolved_shove_tunables,
         spell_critical_can_charge_capacitor, spell_critical_can_trigger_chain_reaction,
         stacked_slow_pct, stagger_shove_tunables, status_application_is_blocked_by_immunity,
-        status_has_dispel_type, status_matches_removal_filter_values, status_stacks_after_removal,
-        AuthoredStatusPayload, DamageDelivery, DamageType, EffectPacket, HolyShieldEndReason,
-        MovementModifiers, PendingHit, StackPolicy, StatusDispelType, StatusEffect,
-        StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
-        TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS,
-        DAMAGE_SOURCE_KIND_BURDEN_REDIRECT, DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PERIODIC,
-        DAMAGE_SOURCE_KIND_PROJECTILE, DAMAGE_SOURCE_KIND_SELF_INFLICTED, DAMAGE_SOURCE_KIND_SPELL,
-        HOLY_SHIELD_SPELL_ID, HOLY_SHIELD_STATUS_GROUP, PLAYER_EVENT_RETENTION,
+        status_has_dispel_type, status_kind_is_intrinsically_undispellable,
+        status_matches_removal_filter_values, status_stacks_after_removal, AuthoredStatusPayload,
+        DamageDelivery, DamageType, EffectPacket, HolyShieldEndReason, MovementModifiers,
+        PendingHit, StackPolicy, StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload,
+        StatusPolarity, StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
+        COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_BURDEN_REDIRECT,
+        DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PERIODIC, DAMAGE_SOURCE_KIND_PROJECTILE,
+        DAMAGE_SOURCE_KIND_SELF_INFLICTED, DAMAGE_SOURCE_KIND_SPELL, HOLY_SHIELD_SPELL_ID,
+        HOLY_SHIELD_STATUS_GROUP, PLAYER_EVENT_RETENTION,
     };
     use crate::movement::FIXED_TICK_MILLIS;
     use crate::relations::TargetAudience;
@@ -10619,6 +11126,68 @@ mod tests {
     }
 
     #[test]
+    fn stone_carapace_and_doused_apply_only_to_their_authored_damage_types() {
+        let identity = test_identity();
+        let now = Timestamp::UNIX_EPOCH + Duration::from_secs(10);
+        let carapace = test_status_effect(
+            identity,
+            StatusPayload::PhysicalDamageReduction {
+                modifier_scalar: 0.5,
+            },
+            now,
+            now + Duration::from_secs(8),
+        );
+        let mut doused_resistance = test_status_effect(
+            identity,
+            StatusPayload::Doused {
+                modifier_scalar: 0.2,
+            },
+            now,
+            now + Duration::from_secs(4),
+        );
+        doused_resistance.polarity = StatusPolarity::Buff.as_str().to_string();
+        doused_resistance.stack_group = "DOUSED:RESISTANCE".to_string();
+        let mut doused_vulnerability = test_status_effect(
+            identity,
+            StatusPayload::Doused {
+                modifier_scalar: 0.2,
+            },
+            now,
+            now + Duration::from_secs(4),
+        );
+        doused_vulnerability.status_id = 2;
+        doused_vulnerability.stack_group = "DOUSED:VULNERABILITY".to_string();
+        doused_vulnerability.polarity = StatusPolarity::Debuff.as_str().to_string();
+
+        let view = status_runtime_view(
+            vec![carapace, doused_resistance, doused_vulnerability],
+            &[identity],
+            now,
+        );
+        let modifiers = view.temporary_combat_modifiers();
+
+        assert!((modifiers.physical_damage_reduction_for(&identity) - 0.5).abs() < 0.0001);
+        assert!(
+            (modifiers.doused_resistance_for(&identity, DamageType::Fire) - 0.2).abs() < 0.0001
+        );
+        assert_eq!(
+            modifiers.doused_resistance_for(&identity, DamageType::Cold),
+            0.0
+        );
+        assert!(
+            (modifiers.doused_vulnerability_for(&identity, DamageType::Cold) - 0.2).abs() < 0.0001
+        );
+        assert!(
+            (modifiers.doused_vulnerability_for(&identity, DamageType::Lightning) - 0.2).abs()
+                < 0.0001
+        );
+        assert_eq!(
+            modifiers.doused_vulnerability_for(&identity, DamageType::Fire),
+            0.0
+        );
+    }
+
+    #[test]
     fn damage_dealt_reduction_lowers_direct_and_periodic_damage() {
         let identity = test_identity();
         let mut modifiers = TemporaryCombatModifiers::default();
@@ -10681,6 +11250,74 @@ mod tests {
             ),
             3
         );
+    }
+
+    #[test]
+    fn adaptation_is_intrinsically_undispellable() {
+        assert!(status_kind_is_intrinsically_undispellable("ADAPTATION"));
+        assert!(!status_kind_is_intrinsically_undispellable(
+            "MAGIC_RESISTANCE"
+        ));
+    }
+
+    #[test]
+    fn primal_status_modifiers_keep_adaptation_types_independent() {
+        let now = Timestamp::UNIX_EPOCH + Duration::from_secs(10);
+        let target = test_identity();
+        let expires_at = now + Duration::from_secs(10);
+        let mut fire = test_status_effect(
+            target,
+            StatusPayload::Adaptation {
+                modifier_scalar: 0.02,
+                damage_type: DamageType::Fire,
+            },
+            now,
+            expires_at,
+        );
+        fire.stacks = 4;
+        let mut cold = test_status_effect(
+            target,
+            StatusPayload::Adaptation {
+                modifier_scalar: 0.02,
+                damage_type: DamageType::Cold,
+            },
+            now,
+            expires_at,
+        );
+        cold.stacks = 2;
+        let overgrowth = test_status_effect(
+            target,
+            StatusPayload::MaxHealth {
+                modifier_scalar: 0.10,
+            },
+            now,
+            expires_at,
+        );
+        let mut photosynthesis = test_status_effect(
+            target,
+            StatusPayload::ManaRegen {
+                modifier_scalar: 1.0,
+            },
+            now,
+            expires_at,
+        );
+        photosynthesis.stacks = 5;
+
+        let modifiers =
+            status_runtime_view(vec![fire, cold, overgrowth, photosynthesis], &[target], now)
+                .temporary_combat_modifiers();
+        assert!(
+            (modifiers.adaptation_resistance_for(&target, DamageType::Fire) - 0.08).abs() < 0.0001
+        );
+        assert!(
+            (modifiers.adaptation_resistance_for(&target, DamageType::Cold) - 0.04).abs() < 0.0001
+        );
+        assert_eq!(
+            modifiers.adaptation_resistance_for(&target, DamageType::Physical),
+            0.0
+        );
+        assert!((modifiers.max_health_multiplier_for(&target) - 1.10).abs() < 0.0001);
+        assert!((modifiers.mana_regen_bonus_for(&target) - 5.0).abs() < 0.0001);
     }
 
     #[test]
@@ -11003,12 +11640,32 @@ mod tests {
                 },
             ),
             (
+                StatusPayload::MaxHealth {
+                    modifier_scalar: 0.10,
+                },
+                StatusEffectKind::MaxHealth,
+                StatusPayload::MaxHealth {
+                    modifier_scalar: 0.10,
+                },
+            ),
+            (
                 StatusPayload::MagicResistance {
                     modifier_scalar: 0.15,
                 },
                 StatusEffectKind::MagicResistance,
                 StatusPayload::MagicResistance {
                     modifier_scalar: 0.15,
+                },
+            ),
+            (
+                StatusPayload::Adaptation {
+                    modifier_scalar: 0.02,
+                    damage_type: DamageType::Fire,
+                },
+                StatusEffectKind::Adaptation,
+                StatusPayload::Adaptation {
+                    modifier_scalar: 0.02,
+                    damage_type: DamageType::Fire,
                 },
             ),
             (

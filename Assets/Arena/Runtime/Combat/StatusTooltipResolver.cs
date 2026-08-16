@@ -65,15 +65,29 @@ namespace Arena.Combat
             List<string> parts = new();
             parts.Add(FormatPolarity(status.Polarity));
 
+            string stackGroup = WireIdentifier.Normalize(status.StackGroup);
+            int stackVariantIndex = stackGroup.IndexOf(':');
+            if (stackVariantIndex > 0)
+                stackGroup = stackGroup.Substring(0, stackVariantIndex);
+            if (string.Equals(stackGroup, "ADAPTATION", StringComparison.Ordinal))
+                parts.Add(TitleCaseStatusKind(status.DamageType));
+
             if (isRimed)
                 parts.Add("Rimed");
 
             if (status.Stacks > 1)
                 parts.Add($"{status.Stacks} stacks");
 
-            string remaining = FormatRemainingDuration(status.ExpiresAtMicros);
-            if (!string.IsNullOrWhiteSpace(remaining))
-                parts.Add(remaining);
+            if (string.Equals(stackGroup, "OVERGROWTH", StringComparison.Ordinal))
+            {
+                parts.Add("Permanent");
+            }
+            else
+            {
+                string remaining = FormatRemainingDuration(status.ExpiresAtMicros);
+                if (!string.IsNullOrWhiteSpace(remaining))
+                    parts.Add(remaining);
+            }
 
             return string.Join(" \u00b7 ", parts);
         }
@@ -135,6 +149,7 @@ namespace Arena.Combat
                 "DAMAGE_AMP" => $"Increases damage dealt by {FormatPercent(status.ModifierScalar)}.",
                 "DIRECT_DAMAGE_AMP" => $"Increases direct damage dealt by {FormatPercent(status.ModifierScalar * stacks)}.",
                 "DAMAGE_TAKEN_REDUCTION" => $"Reduces incoming damage by {FormatPercent(status.ModifierScalar * stacks)}.",
+                "PHYSICAL_DAMAGE_REDUCTION" => $"Reduces incoming physical damage by {FormatPercent(status.ModifierScalar * stacks)}.",
                 "TEMPORARY_HITPOINTS" => $"Absorbs up to {Math.Max(status.AbsorbCap, 0)} incoming damage.",
                 "HEALING_TAKEN_REDUCTION" => $"Reduces healing received by {FormatPercent(status.ModifierScalar * stacks)}.",
                 "DAMAGE_DEALT_REDUCTION" => $"Reduces damage dealt by {FormatPercent(status.ModifierScalar * stacks)}.",
@@ -146,6 +161,15 @@ namespace Arena.Combat
                 "VERDANT_SPIRITS" => "Holds one or two nature spirits bestowed by their living origin. Restores 1 health per spirit each second.",
                 "ATTACK_SPEED" => $"Modifies attack speed by {FormatSignedPercent(status.ModifierScalar)}.",
                 "CAST_SPEED" => $"Increases cast speed by {FormatPercent(status.ModifierScalar)}.",
+                "MAX_HEALTH" => $"Increases maximum health by {FormatPercent(status.ModifierScalar)}.",
+                "MOVE_SPEED" => $"Increases movement speed by {FormatPercent(status.ModifierScalar)}.",
+                "ADAPTATION" => $"Reduces incoming {TitleCaseStatusKind(status.DamageType).ToLowerInvariant()} damage by {FormatPercent(status.ModifierScalar * stacks)}.",
+                "DOUSED" => string.Equals(
+                        WireIdentifier.Normalize(status.Polarity),
+                        "BUFF",
+                        StringComparison.Ordinal)
+                    ? $"Reduces incoming fire damage by {FormatPercent(status.ModifierScalar * stacks)}."
+                    : $"Increases incoming cold and lightning damage by {FormatPercent(status.ModifierScalar * stacks)}.",
                 "RECKONING" => "Retaliates when the mark expires based on damage its caster takes.",
                 "DAMAGE_REDIRECT" => $"Redirects {FormatPercent(status.ModifierScalar)} of incoming damage to the caster.",
                 _ => string.Empty,

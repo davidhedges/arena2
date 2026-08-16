@@ -114,12 +114,16 @@ fn push_impact_effect_packets(
     target: Identity,
     spell_id: &str,
     action_key: &str,
+    roll_key: &str,
     positive_damage: bool,
     dir_x: f32,
     dir_z: f32,
 ) {
-    for effect in impact_effects {
+    for (effect_index, effect) in impact_effects.iter().enumerate() {
         if effect.requires_positive_damage() && !positive_damage {
+            continue;
+        }
+        if !effect.chance_roll_succeeds(roll_key, target, effect_index) {
             continue;
         }
         effects.push(effect.to_effect_packet(
@@ -411,6 +415,7 @@ fn tick_meteor_spell(
                         player.player_id,
                         spell_id.as_str(),
                         definition.kind.as_str(),
+                        spell_id.as_str(),
                         definition.damage > 0,
                         dir_x,
                         dir_z,
