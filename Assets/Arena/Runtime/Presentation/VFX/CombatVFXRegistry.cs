@@ -30,6 +30,8 @@ namespace Arena.Presentation.VFX
             public bool followAuthoritativeProjectileMotion;
             [Tooltip("Keep the projectile VFX root fixed at its spawn position because travel is already baked into the prefab. Gameplay motion remains authoritative and unaffected.")]
             public bool lockProjectileRootToSpawn;
+            [Tooltip("Simulate emitted projectile particles in world space and let them finish their authored lifetimes in place after the projectile ends.")]
+            public bool lingerEmittedParticles;
         }
 
         public sealed class Template
@@ -42,7 +44,8 @@ namespace Arena.Presentation.VFX
                 Vector3 localPositionOffset = default,
                 Vector3 localEulerAngles = default,
                 bool followAuthoritativeProjectileMotion = false,
-                bool lockProjectileRootToSpawn = false)
+                bool lockProjectileRootToSpawn = false,
+                bool lingerEmittedParticles = false)
             {
                 VfxId = vfxId;
                 Prefab = prefab;
@@ -54,6 +57,7 @@ namespace Arena.Presentation.VFX
                 LocalRotation = Quaternion.Euler(localEulerAngles);
                 FollowAuthoritativeProjectileMotion = followAuthoritativeProjectileMotion;
                 LockProjectileRootToSpawn = lockProjectileRootToSpawn;
+                LingerEmittedParticles = lingerEmittedParticles;
             }
 
             public string VfxId { get; }
@@ -64,6 +68,7 @@ namespace Arena.Presentation.VFX
             public Quaternion LocalRotation { get; }
             public bool FollowAuthoritativeProjectileMotion { get; }
             public bool LockProjectileRootToSpawn { get; }
+            public bool LingerEmittedParticles { get; }
         }
 
         private static CombatVFXRegistry? _sharedRegistry;
@@ -167,7 +172,8 @@ namespace Arena.Presentation.VFX
                         entry.localPositionOffset,
                         entry.localEulerAngles,
                         entry.followAuthoritativeProjectileMotion,
-                        entry.lockProjectileRootToSpawn);
+                        entry.lockProjectileRootToSpawn,
+                        entry.lingerEmittedParticles);
                 }
             }
         }

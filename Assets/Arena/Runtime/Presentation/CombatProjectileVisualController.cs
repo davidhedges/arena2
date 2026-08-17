@@ -200,7 +200,8 @@ namespace Arena.Presentation
                         template.ScaleMultiplierAtLifetimeEnd,
                         authoritativeLifetime: true,
                         followAuthoritativeProjectileMotion: template.FollowAuthoritativeProjectileMotion,
-                        moveRootWithProjectile: !template.LockProjectileRootToSpawn);
+                        moveRootWithProjectile: !template.LockProjectileRootToSpawn,
+                        lingerEmittedParticles: template.LingerEmittedParticles);
             });
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (_activeProjectiles.ContainsKey(projectileKey))

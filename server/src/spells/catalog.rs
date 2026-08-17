@@ -4739,6 +4739,13 @@ mod tests {
         assert!(fissure.requires_target);
         assert_eq!(fissure.turn_rate, 3.0);
         assert_eq!(fissure_projectile.homing_window_seconds, 1.2);
+        let fissure_stun = fissure_projectile
+            .impact_effects
+            .iter()
+            .find_map(|effect| effect.as_status())
+            .expect("FISSURE should stun every projectile contact");
+        assert_eq!(fissure_stun.payload(), StatusPayload::Stun);
+        assert_eq!(fissure_stun.duration(), Duration::from_secs(1));
         assert_eq!(traveling.terminal_radius, 1.0);
         assert_eq!(traveling.terminal_damage, 30);
 

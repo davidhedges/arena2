@@ -114,6 +114,9 @@ namespace Arena.Tests.Editor
                 travelEntry.FindPropertyRelative("lockProjectileRootToSpawn").boolValue,
                 Is.False);
             Assert.That(
+                travelEntry.FindPropertyRelative("lingerEmittedParticles").boolValue,
+                Is.True);
+            Assert.That(
                 impactEntry.FindPropertyRelative("prefab").objectReferenceValue,
                 Is.SameAs(impact));
         }

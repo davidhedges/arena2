@@ -3222,7 +3222,12 @@
             "terminal_radius": 1,
             "terminal_damage": 30
           },
-          "impact_effects": []
+          "impact_effects": [
+            {
+              "kind": "STUN",
+              "duration_ms": 1000
+            }
+          ]
         }
       }
     },
@@ -9167,7 +9172,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_FISSURE",
       "display_name": "Fissure",
-      "description": "Sends a damaging 4.5-meter-wide crack homing toward your target for up to 18 meters before it erupts for 30 physical damage in a 1-meter radius.",
+      "description": "Sends a damaging 4.5-meter-wide crack homing toward your target for up to 18 meters before it erupts for 30 physical damage in a 1-meter radius. Enemies hit by either the crack or eruption are stunned for 1 second.",
       "sort_order": 108
     },
     {

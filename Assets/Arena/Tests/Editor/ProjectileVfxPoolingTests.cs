@@ -72,6 +72,24 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void LingeringProjectileParticles_PreserveAuthoredSimulationSpacesAndBypassPooling()
+        {
+            string registry = File.ReadAllText(VfxRegistryPath);
+            string utilities = File.ReadAllText(VfxUtilsPath);
+            string pool = File.ReadAllText(PoolPath);
+            string projectile = File.ReadAllText(WeaponProjectilePath);
+
+            Assert.That(registry, Does.Contain("lingerEmittedParticles"));
+            Assert.That(registry, Does.Contain("LingerEmittedParticles"));
+            Assert.That(utilities, Does.Not.Contain("ApplyWorldSpaceParticleLinger"));
+            Assert.That(pool, Does.Contain("template.LingerEmittedParticles"));
+            Assert.That(projectile, Does.Contain("Preserve the prefab's authored mix of simulation spaces"));
+            Assert.That(projectile, Does.Contain("_particleLingerBodies.Add(body)"));
+            Assert.That(projectile, Does.Contain("DetachAndLingerParticleSystemBodies();"));
+            Assert.That(projectile, Does.Contain("ParticleSystemStopBehavior.StopEmitting"));
+        }
+
+        [Test]
         public void FollowAnchorVfx_AppliesRegistryLocalTransform()
         {
             string registry = File.ReadAllText(VfxRegistryPath);

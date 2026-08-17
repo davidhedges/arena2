@@ -71,7 +71,8 @@ namespace Arena.Presentation
                     context.MaxDistance,
                     template.Scale,
                     template.Prefab,
-                    followAuthoritativeProjectileMotion: template.FollowAuthoritativeProjectileMotion);
+                    followAuthoritativeProjectileMotion: template.FollowAuthoritativeProjectileMotion,
+                    lingerEmittedParticles: template.LingerEmittedParticles);
         }
 
         public void Impact(CombatVFXTemplateContext context)

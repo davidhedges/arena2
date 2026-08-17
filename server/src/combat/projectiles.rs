@@ -1283,20 +1283,51 @@ fn resolve_traveling_area_terminal_eruption(
         {
             continue;
         }
-        effects.push(EffectPacket::Damage {
-            amount: damage,
-            damage_type: definition.damage_type,
-            source: projectile.caster,
-            target: target.player_id,
-            spell_id: projectile.projectile_instance_id.clone(),
-            delivery: DamageDelivery::Direct,
-            source_kind: DAMAGE_SOURCE_KIND_PROJECTILE.to_string(),
-            direct_action_key: projectile.projectile_instance_id.clone(),
-            is_area: true,
-        });
+        push_traveling_area_terminal_effect_packets(
+            &mut effects,
+            projectile,
+            definition,
+            target,
+            damage,
+        );
     }
     if !effects.is_empty() {
         queue_effects(ctx, effects);
+    }
+}
+
+fn push_traveling_area_terminal_effect_packets(
+    effects: &mut Vec<EffectPacket>,
+    projectile: &ActiveCombatProjectile,
+    definition: &SpellRuntimeDefinition,
+    target: &CombatActorSnapshot,
+    damage: i32,
+) {
+    effects.push(EffectPacket::Damage {
+        amount: damage,
+        damage_type: definition.damage_type,
+        source: projectile.caster,
+        target: target.player_id,
+        spell_id: projectile.projectile_instance_id.clone(),
+        delivery: DamageDelivery::Direct,
+        source_kind: DAMAGE_SOURCE_KIND_PROJECTILE.to_string(),
+        direct_action_key: projectile.projectile_instance_id.clone(),
+        is_area: true,
+    });
+    if let Some(projectile_tunables) = definition.secondary.projectile.as_ref() {
+        let (dir_x, dir_z) = projectile_knockback_direction(projectile, target);
+        push_impact_effect_packets(
+            effects,
+            projectile_tunables.impact_effects.as_slice(),
+            projectile.caster,
+            target.player_id,
+            projectile.projectile_instance_id.as_str(),
+            definition.kind.as_str(),
+            projectile.projectile_instance_id.as_str(),
+            damage > 0,
+            dir_x,
+            dir_z,
+        );
     }
 }
 
@@ -3675,5 +3706,45 @@ mod tests {
         target.pos_z = 1.2;
 
         assert!(traveling_area_target_arrival_distance(&projectile, &target, 2.0).is_none());
+    }
+
+    #[test]
+    fn traveling_area_terminal_eruption_applies_authored_impact_effects() {
+        let caster_id = test_identity(1);
+        let target_id = test_identity(2);
+        let mut projectile = test_projectile(caster_id);
+        projectile.projectile_instance_id = "FISSURE:test".to_string();
+        projectile.action_kind = "FISSURE".to_string();
+        let target = test_snapshot(target_id);
+        let definition = spell_definition_by_str("FISSURE").expect("FISSURE should exist");
+        let mut effects = Vec::new();
+
+        push_traveling_area_terminal_effect_packets(
+            &mut effects,
+            &projectile,
+            definition,
+            &target,
+            30,
+        );
+
+        assert!(matches!(
+            effects.first(),
+            Some(EffectPacket::Damage {
+                amount: 30,
+                target,
+                is_area: true,
+                ..
+            }) if *target == target_id
+        ));
+        assert!(matches!(
+            effects.get(1),
+            Some(EffectPacket::ApplyStatus {
+                target,
+                payload: crate::combat::StatusPayload::Stun,
+                duration,
+                ..
+            }) if *target == target_id && *duration == Duration::from_secs(1)
+        ));
+        assert_eq!(effects.len(), 2);
     }
 }

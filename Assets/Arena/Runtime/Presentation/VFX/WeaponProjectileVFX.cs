@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.VFX;
 
@@ -33,6 +34,7 @@ namespace Arena.Presentation.VFX
         private bool _visualSweepExtended;
         private float _visualSweepElapsed;
         private ProjectileVfxPool.Rental? _rental;
+        private readonly List<GameObject> _particleLingerBodies = new();
 
         public WeaponProjectileVFX(
             string instanceId,
@@ -46,7 +48,8 @@ namespace Arena.Presentation.VFX
             float scaleMultiplierAtLifetimeEnd = 1f,
             bool authoritativeLifetime = false,
             bool followAuthoritativeProjectileMotion = false,
-            bool moveRootWithProjectile = true)
+            bool moveRootWithProjectile = true,
+            bool lingerEmittedParticles = false)
         {
             _group = new GameObject($"VFX_Projectile_{ShortId(instanceId)}");
             _projectileBody = Object.Instantiate(prefab, _group.transform, false);
@@ -57,6 +60,7 @@ namespace Arena.Presentation.VFX
             VFXUtils.ApplyPrefabPresentationScale(_projectileBody, ResolveVisualScale(visualScale));
             if (followAuthoritativeProjectileMotion)
                 VFXUtils.ApplyAuthoritativeProjectileParticleMotion(_projectileBody);
+            ConfigureParticleLinger(_projectileBody, lingerEmittedParticles);
             _initialBodyScale = _projectileBody.transform.localScale;
             _scaleMultiplierAtLifetimeEnd = ResolveEndScaleMultiplier(scaleMultiplierAtLifetimeEnd);
             if (trailTemplate != null)
@@ -69,6 +73,7 @@ namespace Arena.Presentation.VFX
                 VFXUtils.ApplyPrefabPresentationScale(trail, ResolveVisualScale(trailTemplate.Scale));
                 if (trailTemplate.FollowAuthoritativeProjectileMotion)
                     VFXUtils.ApplyAuthoritativeProjectileParticleMotion(trail);
+                ConfigureParticleLinger(trail, trailTemplate.LingerEmittedParticles);
             }
             _hasVisualEffect = _group.GetComponentInChildren<VisualEffect>(true) != null;
             Initialize(
@@ -274,6 +279,7 @@ namespace Arena.Presentation.VFX
             }
 
             DetachAndLingerVisualEffectBody();
+            DetachAndLingerParticleSystemBodies();
 
             if (_group != null)
                 Object.Destroy(_group);
@@ -297,6 +303,42 @@ namespace Arena.Presentation.VFX
 
             Object.Destroy(_projectileBody, VisualEffectLingerSeconds);
             _projectileBody = null!;
+        }
+
+        private void ConfigureParticleLinger(GameObject body, bool enabled)
+        {
+            if (!enabled)
+                return;
+
+            // Preserve the prefab's authored mix of simulation spaces: local systems form the moving
+            // travel head, while world-space systems deposit particles behind it for the ground trail.
+            _particleLingerBodies.Add(body);
+        }
+
+        private void DetachAndLingerParticleSystemBodies()
+        {
+            for (int bodyIndex = 0; bodyIndex < _particleLingerBodies.Count; bodyIndex++)
+            {
+                GameObject body = _particleLingerBodies[bodyIndex];
+                if (body == null)
+                    continue;
+
+                ParticleSystem[] particleSystems = body.GetComponentsInChildren<ParticleSystem>(true);
+                if (particleSystems.Length == 0)
+                    continue;
+
+                body.transform.SetParent(null, worldPositionStays: true);
+                for (int particleIndex = 0; particleIndex < particleSystems.Length; particleIndex++)
+                {
+                    particleSystems[particleIndex].Stop(
+                        withChildren: false,
+                        ParticleSystemStopBehavior.StopEmitting);
+                }
+                Object.Destroy(body, VisualEffectLingerSeconds);
+                if (ReferenceEquals(body, _projectileBody))
+                    _projectileBody = null!;
+            }
+            _particleLingerBodies.Clear();
         }
 
         private void EndAt(Vector3 point)

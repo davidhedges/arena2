@@ -30,7 +30,9 @@ namespace Arena.Presentation.VFX
         {
             if (_disposed || template.Prefab == null)
                 return null;
-            if (HasUnsafePoolingComponents(template.Prefab)
+            if (template.LingerEmittedParticles
+                || (trailTemplate?.LingerEmittedParticles ?? false)
+                || HasUnsafePoolingComponents(template.Prefab)
                 || (trailTemplate != null && HasUnsafePoolingComponents(trailTemplate.Prefab)))
                 return null;
 
