@@ -15,13 +15,14 @@ use crate::combat::{
     mark_projectile_returned_for_heal, queue_effects, timestamp_to_micros, ActiveCombatProjectile,
     ActiveCombatProjectileTargetState, CombatEvent, CombatProjectileTickMetrics, DamageDelivery,
     EffectPacket, ProjectilePresentationEvent, StatusPolarity, COMBAT_EVENT_BLOCK,
-    COMBAT_EVENT_CONTACT, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_MISS,
-    COMBAT_EVENT_PARRY, COMBAT_EVENT_UPDATE, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
-    COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_PROJECTILE,
+    COMBAT_EVENT_CONTACT, COMBAT_EVENT_EVADE, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT,
+    COMBAT_EVENT_MISS, COMBAT_EVENT_PARRY, COMBAT_EVENT_UPDATE, COMBAT_METADATA_NONE,
+    COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_PROJECTILE,
 };
 use crate::defense::{
     resolve_defensible_combat_hit, CombatHitDeliveryKind, DefenseResolution, DefensibleCombatHit,
 };
+use crate::progression::precision_perforation_for_owner;
 use crate::relations::{can_harm, target_audience_allows};
 use crate::resources::grant_primary_resource_for_melee_hit;
 use crate::spells::{
@@ -272,7 +273,18 @@ fn tick_projectile_instance(
         }
     }
 
-    let advance = if uses_curved_target {
+    let advance = if projectile_uses_perforation(ctx, &projectile) {
+        advance_perforating_weapon_projectile(
+            ctx,
+            now,
+            &mut projectile,
+            actor_snapshots,
+            players,
+            candidate_indices,
+            dt,
+            metrics,
+        )
+    } else if uses_curved_target {
         advance_curved_target_projectile_with_collision(
             ctx,
             &mut projectile,
@@ -2128,6 +2140,279 @@ fn advance_projectile_with_collision(
     )
 }
 
+fn projectile_uses_perforation(ctx: &ReducerContext, projectile: &ActiveCombatProjectile) -> bool {
+    projectile.source_kind != "SPELL"
+        && projectile.intended_target != Identity::ZERO
+        && precision_perforation_for_owner(ctx, projectile.caster)
+}
+
+/// Advances a targeted bow projectile through every hostile capsule in travel order. Player
+/// defenses still resolve their normal damage outcome, but only authoritative world geometry can
+/// terminate the projectile. Existing projectile-target state guarantees one contact per target.
+#[allow(clippy::too_many_arguments)]
+fn advance_perforating_weapon_projectile(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    projectile: &mut ActiveCombatProjectile,
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
+    candidate_indices: &mut Vec<usize>,
+    dt: f32,
+    metrics: &mut ProjectileTickMetricsFrame,
+) -> ProjectileAdvance {
+    let step = projectile.speed * dt;
+    projectile.traveled += step;
+
+    let start_x = projectile.pos_x;
+    let start_y = projectile.pos_y;
+    let start_z = projectile.pos_z;
+    let end_x = start_x + projectile.dir_x * step;
+    let end_y = start_y + projectile.dir_y * step;
+    let end_z = start_z + projectile.dir_z * step;
+    let segment_distance =
+        ((end_x - start_x).powi(2) + (end_y - start_y).powi(2) + (end_z - start_z).powi(2))
+            .sqrt()
+            .max(0.0001);
+
+    actor_snapshots.query_segment_indices(
+        start_x,
+        start_z,
+        end_x,
+        end_z,
+        projectile.radius,
+        candidate_indices,
+    );
+    metrics.collision_candidate_scans = metrics
+        .collision_candidate_scans
+        .saturating_add(candidate_indices.len().min(u32::MAX as usize) as u32);
+
+    let mut world_stats = WorldRaycastStats::default();
+    let world_hit = first_world_hit_on_segment_with_stats(
+        ctx,
+        projectile.caster,
+        start_x,
+        start_y,
+        start_z,
+        end_x,
+        end_y,
+        end_z,
+        projectile.radius,
+        &mut world_stats,
+    );
+    record_world_raycast_stats(metrics, world_stats);
+    let sanctuary_hit = first_hostile_sanctuary_projectile_hit(
+        ctx,
+        projectile.caster,
+        start_x,
+        start_y,
+        start_z,
+        end_x,
+        end_y,
+        end_z,
+        projectile.radius,
+    )
+    .map(|hit| SceneHit {
+        kind: SceneHitKind::World,
+        t: hit.t,
+        x: hit.x,
+        y: hit.y,
+        z: hit.z,
+    });
+    let terminal_hit = match (world_hit, sanctuary_hit) {
+        (Some(world), Some(sanctuary)) if sanctuary.t < world.t => Some(sanctuary),
+        (Some(world), _) => Some(world),
+        (None, sanctuary) => sanctuary,
+    };
+
+    let eligible_targets: Vec<CombatActorSnapshot> = candidate_indices
+        .iter()
+        .filter_map(|index| players.get(*index))
+        .filter(|target| {
+            target.alive
+                && target.player_id != projectile.caster
+                && players_share_world_context(ctx, projectile.caster, target.player_id)
+                && can_harm(ctx, projectile.caster, target.player_id)
+                && ctx
+                    .db
+                    .active_combat_projectile_target_state()
+                    .key()
+                    .find(projectile_target_state_key(
+                        projectile.projectile_instance_id.as_str(),
+                        target.player_id,
+                    ))
+                    .is_none()
+        })
+        .copied()
+        .collect();
+    let contacts = piercing_contacts_on_segment(
+        projectile.caster,
+        start_x,
+        start_y,
+        start_z,
+        end_x,
+        end_y,
+        end_z,
+        projectile.radius,
+        eligible_targets.as_slice(),
+        terminal_hit.map(|hit| hit.t),
+    );
+
+    for (contact_distance, target) in contacts {
+        let contact_fraction = (contact_distance / segment_distance).clamp(0.0, 1.0);
+        let point_x = start_x + (end_x - start_x) * contact_fraction;
+        let point_y = start_y + (end_y - start_y) * contact_fraction;
+        let point_z = start_z + (end_z - start_z) * contact_fraction;
+        let key = projectile_target_state_key(
+            projectile.projectile_instance_id.as_str(),
+            target.player_id,
+        );
+        upsert_projectile_target_state(
+            ctx,
+            ActiveCombatProjectileTargetState {
+                key,
+                projectile_instance_id: projectile.projectile_instance_id.clone(),
+                target: target.player_id,
+                hit_count: 1,
+                next_allowed_at: Timestamp::UNIX_EPOCH,
+                is_overlapping: false,
+            },
+        );
+
+        metrics.contacts_resolved = metrics.contacts_resolved.saturating_add(1);
+        if projectile_targeted_hit_misses(ctx, projectile, target.player_id, now) {
+            emit_projectile_event_with_metadata(
+                ctx,
+                projectile,
+                COMBAT_EVENT_MISS,
+                Some(target.player_id),
+                point_x,
+                point_y,
+                point_z,
+                0,
+                now,
+                PROJECTILE_CONTACT_METADATA_KIND,
+                PROJECTILE_CONTACT_TERMINAL_KEY,
+                PROJECTILE_CONTACT_NON_TERMINAL_VALUE,
+                metrics,
+            );
+            continue;
+        }
+        if resolve_projectile_defense_with_metadata(
+            ctx,
+            projectile,
+            &target,
+            point_x,
+            point_y,
+            point_z,
+            now,
+            PROJECTILE_CONTACT_METADATA_KIND,
+            PROJECTILE_CONTACT_TERMINAL_KEY,
+            PROJECTILE_CONTACT_NON_TERMINAL_VALUE,
+            metrics,
+        ) {
+            continue;
+        }
+
+        emit_projectile_event_with_metadata(
+            ctx,
+            projectile,
+            COMBAT_EVENT_CONTACT,
+            Some(target.player_id),
+            point_x,
+            point_y,
+            point_z,
+            projectile.damage,
+            now,
+            PROJECTILE_CONTACT_METADATA_KIND,
+            PROJECTILE_CONTACT_TERMINAL_KEY,
+            PROJECTILE_CONTACT_NON_TERMINAL_VALUE,
+            metrics,
+        );
+        queue_weapon_projectile_hit_effects(ctx, projectile, target.player_id, now);
+    }
+
+    if let Some(hit) = terminal_hit {
+        projectile.pos_x = hit.x;
+        projectile.pos_y = hit.y;
+        projectile.pos_z = hit.z;
+        ProjectileAdvance {
+            impacted: true,
+            end_x: hit.x,
+            end_y: hit.y,
+            end_z: hit.z,
+            impact_target: None,
+        }
+    } else {
+        projectile.pos_x = end_x;
+        projectile.pos_y = end_y;
+        projectile.pos_z = end_z;
+        ProjectileAdvance {
+            impacted: false,
+            end_x,
+            end_y,
+            end_z,
+            impact_target: None,
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn piercing_contacts_on_segment(
+    caster: Identity,
+    start_x: f32,
+    start_y: f32,
+    start_z: f32,
+    end_x: f32,
+    end_y: f32,
+    end_z: f32,
+    projectile_radius: f32,
+    targets: &[CombatActorSnapshot],
+    terminal_world_distance: Option<f32>,
+) -> Vec<(f32, CombatActorSnapshot)> {
+    let dx = end_x - start_x;
+    let dy = end_y - start_y;
+    let dz = end_z - start_z;
+    let distance_sq = dx * dx + dy * dy + dz * dz;
+    if distance_sq <= 0.000001 {
+        return Vec::new();
+    }
+    let distance = distance_sq.sqrt();
+    let inv_distance = 1.0 / distance;
+    let dir_x = dx * inv_distance;
+    let dir_y = dy * inv_distance;
+    let dir_z = dz * inv_distance;
+    let mut contacts = Vec::new();
+    for target in targets {
+        if !target.alive || target.player_id == caster {
+            continue;
+        }
+        let Some(contact_distance) = raycast_capsule_with_padding(
+            start_x,
+            start_y,
+            start_z,
+            dir_x,
+            dir_y,
+            dir_z,
+            distance,
+            target,
+            projectile_radius,
+        ) else {
+            continue;
+        };
+        if terminal_world_distance.is_some_and(|world_distance| contact_distance >= world_distance)
+        {
+            continue;
+        }
+        contacts.push((contact_distance, *target));
+    }
+    contacts.sort_by(|(left_distance, left), (right_distance, right)| {
+        left_distance
+            .total_cmp(right_distance)
+            .then_with(|| left.player_id.to_hex().cmp(&right.player_id.to_hex()))
+    });
+    contacts
+}
+
 fn advance_curved_target_projectile_with_collision(
     ctx: &ReducerContext,
     projectile: &mut ActiveCombatProjectile,
@@ -2375,6 +2660,24 @@ fn resolve_projectile_defense_with_metadata(
             speed: projectile.speed,
         },
     ) {
+        DefenseResolution::Evaded => {
+            emit_projectile_event_with_metadata(
+                ctx,
+                projectile,
+                COMBAT_EVENT_EVADE,
+                Some(target.player_id),
+                point_x,
+                point_y,
+                point_z,
+                0,
+                now,
+                metadata_kind,
+                metadata_key,
+                metadata_value,
+                metrics,
+            );
+            true
+        }
         DefenseResolution::Blocked => {
             emit_projectile_event_with_metadata(
                 ctx,
@@ -2789,7 +3092,11 @@ fn is_projectile_presentation_terminal(
 
     matches!(
         event_type,
-        COMBAT_EVENT_IMPACT | COMBAT_EVENT_BLOCK | COMBAT_EVENT_PARRY | COMBAT_EVENT_FIZZLE
+        COMBAT_EVENT_IMPACT
+            | COMBAT_EVENT_BLOCK
+            | COMBAT_EVENT_PARRY
+            | COMBAT_EVENT_EVADE
+            | COMBAT_EVENT_FIZZLE
     )
 }
 
@@ -2980,7 +3287,7 @@ fn record_emitted_event(event_type: &str, metrics: &mut ProjectileTickMetricsFra
         COMBAT_EVENT_CONTACT => {
             metrics.contact_events_emitted = metrics.contact_events_emitted.saturating_add(1);
         }
-        COMBAT_EVENT_BLOCK | COMBAT_EVENT_PARRY => {
+        COMBAT_EVENT_BLOCK | COMBAT_EVENT_PARRY | COMBAT_EVENT_EVADE => {
             metrics.block_parry_events_emitted =
                 metrics.block_parry_events_emitted.saturating_add(1);
             metrics.terminal_events_emitted = metrics.terminal_events_emitted.saturating_add(1);
@@ -3468,6 +3775,52 @@ mod tests {
             COMBAT_EVENT_CONTACT,
             terminal
         ));
+    }
+
+    #[test]
+    fn perforating_contacts_are_ordered_once_and_clipped_by_world_geometry() {
+        let caster = test_identity(1);
+        let mut near = test_snapshot(test_identity(2));
+        near.pos_y = 0.0;
+        near.pos_z = 2.0;
+        let mut far = test_snapshot(test_identity(3));
+        far.pos_y = 0.0;
+        far.pos_z = 4.0;
+
+        let contacts = piercing_contacts_on_segment(
+            caster,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            6.0,
+            0.1,
+            &[far, near],
+            None,
+        );
+        assert_eq!(
+            contacts
+                .iter()
+                .map(|(_, target)| target.player_id)
+                .collect::<Vec<_>>(),
+            vec![near.player_id, far.player_id]
+        );
+
+        let clipped = piercing_contacts_on_segment(
+            caster,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            6.0,
+            0.1,
+            &[far, near],
+            Some(3.0),
+        );
+        assert_eq!(clipped.len(), 1);
+        assert_eq!(clipped[0].1.player_id, near.player_id);
     }
 
     #[test]

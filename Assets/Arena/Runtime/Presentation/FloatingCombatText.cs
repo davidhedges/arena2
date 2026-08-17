@@ -62,6 +62,7 @@ namespace Arena.Presentation
             {
                 _subscribedConnection.Db.PlayerEvent.OnInsert -= OnPlayerEvent;
                 _subscribedConnection.Db.CombatEffectEvent.OnInsert -= OnCombatEffectEvent;
+                _subscribedConnection.Db.CombatEvent.OnInsert -= OnCombatEvent;
             }
 
             _subscribedConnection = conn;
@@ -70,12 +71,28 @@ namespace Arena.Presentation
 
             conn.Db.PlayerEvent.OnInsert += OnPlayerEvent;
             conn.Db.CombatEffectEvent.OnInsert += OnCombatEffectEvent;
+            conn.Db.CombatEvent.OnInsert += OnCombatEvent;
+        }
+
+        private void OnCombatEvent(EventContext ctx, CombatEvent row)
+        {
+            if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene()
+                || !string.Equals(row.EventType, CombatEventTypes.Evade, System.StringComparison.Ordinal))
+                return;
+
+            SpawnEvadeText(row.Caster, row.Hit);
         }
 
         private void OnCombatEffectEvent(EventContext ctx, CombatEffectEvent row)
         {
             if (!ArenaRuntimeSceneGate.ShouldRunArenaRuntimeInActiveScene())
                 return;
+
+            if (string.Equals(row.EffectType, "EVADE", System.StringComparison.OrdinalIgnoreCase))
+            {
+                SpawnEvadeText(row.Source, row.Target);
+                return;
+            }
 
             if (row.FinalAmount <= 0) return;
 
@@ -95,6 +112,18 @@ namespace Arena.Presentation
 
             var pos = targetEntity.GetPresentationRoot().position + Vector3.up * targetEntity.HitHeight;
             SpawnFloatingText(pos, $"{prefix}{row.FinalAmount}{suffix}", color, row.WasCritical ? 34 : 28);
+        }
+
+        private void SpawnEvadeText(Identity source, Identity target)
+        {
+            var registry = EntityRegistry.Instance;
+            if (registry == null
+                || (!registry.IsIdentityVisible(source) && !registry.IsIdentityVisible(target))
+                || !registry.TryGetCombatTarget(target, out ICombatTargetEntity targetEntity))
+                return;
+
+            var pos = targetEntity.GetPresentationRoot().position + Vector3.up * targetEntity.HitHeight;
+            SpawnFloatingText(pos, "Evade", new Color(0.55f, 0.9f, 1f), 28);
         }
 
         private void OnPlayerEvent(EventContext ctx, PlayerEvent row)

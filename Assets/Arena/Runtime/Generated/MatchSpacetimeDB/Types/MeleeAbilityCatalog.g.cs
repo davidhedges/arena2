@@ -76,6 +76,8 @@ namespace Arena.MatchDb
         public ulong ChannelTickIntervalMs;
         [DataMember(Name = "channel_cancel_on_movement")]
         public bool ChannelCancelOnMovement;
+        [DataMember(Name = "channel_use_authored_hit_windows")]
+        public bool ChannelUseAuthoredHitWindows;
 
         public MeleeAbilityCatalog(
             string AbilityId,
@@ -108,7 +110,8 @@ namespace Arena.MatchDb
             ulong ChannelDurationMs,
             ulong ChannelFirstTickDelayMs,
             ulong ChannelTickIntervalMs,
-            bool ChannelCancelOnMovement
+            bool ChannelCancelOnMovement,
+            bool ChannelUseAuthoredHitWindows
         )
         {
             this.AbilityId = AbilityId;
@@ -142,6 +145,7 @@ namespace Arena.MatchDb
             this.ChannelFirstTickDelayMs = ChannelFirstTickDelayMs;
             this.ChannelTickIntervalMs = ChannelTickIntervalMs;
             this.ChannelCancelOnMovement = ChannelCancelOnMovement;
+            this.ChannelUseAuthoredHitWindows = ChannelUseAuthoredHitWindows;
         }
 
         public MeleeAbilityCatalog()

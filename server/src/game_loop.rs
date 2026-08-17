@@ -153,6 +153,7 @@ const EVENT_PRUNE_INTERVAL: Duration = Duration::from_millis(500);
 const TICK_PROFILE_WINDOW_MICROS: i64 = 5_000_000;
 const TICK_BUDGET_MICROS: u32 = FIXED_TICK_MILLIS as u32 * 1_000;
 const SPECIAL_MOVEMENT_PATH_INSTANT: &str = "INSTANT";
+const SPECIAL_MOVEMENT_PATH_PARABOLIC_ARC: &str = "PARABOLIC_ARC";
 const SPECIAL_MOVEMENT_FACING_FACE_PATH: &str = "FACE_PATH";
 const SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y: &str = "STOP_AT_BLOCK_FIXED_Y";
 const SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY: &str =
@@ -1708,12 +1709,16 @@ fn tick_special_movement_runtimes(ctx: &ReducerContext, now: Timestamp) {
             resolved_z,
             desired_y,
         );
-        let resolved_y = resolve_special_movement_y(
-            &runtime.collision_policy,
-            runtime.start_y,
-            desired_y,
-            ground_y,
-        );
+        let resolved_y = if runtime.path_mode == SPECIAL_MOVEMENT_PATH_PARABOLIC_ARC {
+            desired_y
+        } else {
+            resolve_special_movement_y(
+                &runtime.collision_policy,
+                runtime.start_y,
+                desired_y,
+                ground_y,
+            )
+        };
 
         let prev_x = physics.pos_x;
         let prev_y = physics.pos_y;
@@ -1735,8 +1740,11 @@ fn tick_special_movement_runtimes(ctx: &ReducerContext, now: Timestamp) {
             physics.vel_y = (resolved_y - prev_y) / FIXED_TICK_SECONDS;
             physics.vel_z = (resolved_z - prev_z) / FIXED_TICK_SECONDS;
         }
-        physics.grounded =
-            special_movement_grounded_state(&runtime.collision_policy, physics.grounded);
+        physics.grounded = special_movement_grounded_state(
+            &runtime.path_mode,
+            &runtime.collision_policy,
+            physics.grounded,
+        );
         physics.updated_at = now;
         let handoff_input_tick = physics.last_processed_tick;
         let handoff_yaw = physics.yaw;
@@ -1804,8 +1812,14 @@ fn apply_special_movement_handoff_intent(
     intent.updated_at = now;
 }
 
-fn special_movement_grounded_state(collision_policy: &str, current_grounded: bool) -> bool {
-    if uses_fixed_y_collision_policy(collision_policy) {
+fn special_movement_grounded_state(
+    path_mode: &str,
+    collision_policy: &str,
+    current_grounded: bool,
+) -> bool {
+    if path_mode == SPECIAL_MOVEMENT_PATH_PARABOLIC_ARC
+        || uses_fixed_y_collision_policy(collision_policy)
+    {
         false
     } else {
         current_grounded
@@ -1838,7 +1852,10 @@ fn sample_special_movement_pose(
         ((now_micros - start) as f64 / duration_micros as f64).clamp(0.0, 1.0) as f32
     };
     let pos_x = runtime.start_x + (runtime.end_x - runtime.start_x) * progress;
-    let pos_y = if uses_fixed_y_collision_policy(&runtime.collision_policy) {
+    let pos_y = if runtime.path_mode == SPECIAL_MOVEMENT_PATH_PARABOLIC_ARC {
+        let base_y = runtime.start_y + (runtime.end_y - runtime.start_y) * progress;
+        base_y + 4.0 * runtime.arc_height.max(0.0) * progress * (1.0 - progress)
+    } else if uses_fixed_y_collision_policy(&runtime.collision_policy) {
         runtime.start_y
     } else {
         runtime.start_y + (runtime.end_y - runtime.start_y) * progress
@@ -2364,11 +2381,12 @@ mod tests {
     use super::{
         apply_player_intent_fallback_if_changed, apply_special_movement_handoff_intent,
         fresh_game_tick_schedule, game_loop_timer_is_overdue, next_game_tick_schedule,
-        percentile_sorted, settle_stationary_dummy, settle_stationary_playground_target,
-        special_movement_grounded_state, sync_player_voluntary_move_epoch, PlayerIntent,
-        PlayerPhysics, TickProfileSample, TickProfileWindowState,
-        SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
+        percentile_sorted, sample_special_movement_pose, settle_stationary_dummy,
+        settle_stationary_playground_target, special_movement_grounded_state,
+        sync_player_voluntary_move_epoch, PlayerIntent, PlayerPhysics, TickProfileSample,
+        TickProfileWindowState, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
         SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY,
+        SPECIAL_MOVEMENT_PATH_PARABOLIC_ARC,
     };
     use crate::combat::new_player_state;
     use spacetimedb::{Identity, ScheduleAt, Timestamp};
@@ -2680,10 +2698,12 @@ mod tests {
     #[test]
     fn special_movement_handoff_preserves_airborne_state_for_fixed_y_runtime() {
         assert!(!special_movement_grounded_state(
+            "LINEAR",
             SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
             true
         ));
         assert!(!special_movement_grounded_state(
+            "LINEAR",
             SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_KEEP_HEIGHT_LEGACY,
             true
         ));
@@ -2691,8 +2711,59 @@ mod tests {
 
     #[test]
     fn special_movement_handoff_preserves_grounded_state_for_ground_following_runtime() {
-        assert!(special_movement_grounded_state("STOP_AT_BLOCK", true));
-        assert!(!special_movement_grounded_state("STOP_AT_BLOCK", false));
+        assert!(special_movement_grounded_state(
+            "LINEAR",
+            "STOP_AT_BLOCK",
+            true
+        ));
+        assert!(!special_movement_grounded_state(
+            "LINEAR",
+            "STOP_AT_BLOCK",
+            false
+        ));
+    }
+
+    #[test]
+    fn parabolic_special_movement_reaches_authored_apex_and_returns_to_ground() {
+        let started_at = Timestamp::from_micros_since_unix_epoch(1_000_000);
+        let runtime = crate::spells::SpecialMovementRuntime {
+            owner: Identity::ZERO,
+            runtime_id: "evasive-shot".to_string(),
+            kind: "ARCHER_EVASIVE_SHOT".to_string(),
+            path_mode: SPECIAL_MOVEMENT_PATH_PARABOLIC_ARC.to_string(),
+            started_at,
+            duration_ms: 2_000,
+            start_x: 1.0,
+            start_y: 3.0,
+            start_z: 2.0,
+            end_x: 1.0,
+            end_y: 3.0,
+            end_z: 2.0,
+            arc_height: 2.25,
+            facing_yaw_start: 0.5,
+            facing_policy: "FACE_START".to_string(),
+            collision_policy: SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y.to_string(),
+            resolve_policy: "RESOLVE_AT_END".to_string(),
+        };
+
+        let apex = sample_special_movement_pose(
+            &runtime,
+            Timestamp::from_micros_since_unix_epoch(2_000_000),
+        );
+        assert!((apex.1 - 5.25).abs() < 0.0001);
+        assert!(!apex.4);
+
+        let landed = sample_special_movement_pose(
+            &runtime,
+            Timestamp::from_micros_since_unix_epoch(3_000_000),
+        );
+        assert!((landed.1 - 3.0).abs() < 0.0001);
+        assert!(landed.4);
+        assert!(!special_movement_grounded_state(
+            SPECIAL_MOVEMENT_PATH_PARABOLIC_ARC,
+            "STOP_AT_BLOCK",
+            true
+        ));
     }
 
     #[test]

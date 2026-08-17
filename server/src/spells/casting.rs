@@ -417,6 +417,7 @@ const SPECIAL_MOVEMENT_BLOCK_EPSILON: f32 = 0.001;
 const SPECIAL_MOVEMENT_FIXED_Y_TERRAIN_EPSILON: f32 = 0.001;
 const SPECIAL_MOVEMENT_PATH_LINEAR: &str = "LINEAR";
 const SPECIAL_MOVEMENT_PATH_INSTANT: &str = "INSTANT";
+pub(crate) const SPECIAL_MOVEMENT_PATH_PARABOLIC_ARC: &str = "PARABOLIC_ARC";
 pub(crate) const SPECIAL_MOVEMENT_FACING_FACE_PATH: &str = "FACE_PATH";
 pub(crate) const SPECIAL_MOVEMENT_FACING_FACE_START: &str = "FACE_START";
 pub(crate) const SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK: &str = "STOP_AT_BLOCK";
@@ -1646,6 +1647,30 @@ pub(super) fn resolve_spell_combat_hit_defense(
             speed,
         },
     ) {
+        DefenseResolution::Evaded => {
+            mark_harmful_combat_action(ctx, caster, target.player_id, now, kind.as_str());
+            emit_spell_combat_event(
+                ctx,
+                SpellCombatEventPayload {
+                    action_instance_id: spell_id,
+                    ability_id,
+                    kind,
+                    event_type: crate::combat::COMBAT_EVENT_EVADE,
+                    caster,
+                    hit: target.player_id,
+                    origin: Vec3::new(source_x, source_y, source_z),
+                    direction: Vec3::new(dir_x, dir_y, dir_z),
+                    speed,
+                    max_distance,
+                    scalar: SpellCombatEventScalar::None,
+                    sequence_index: 0,
+                    sequence_count: 1,
+                    point: Vec3::new(point_x, point_y, point_z),
+                    now,
+                },
+            );
+            true
+        }
         DefenseResolution::Blocked => {
             mark_harmful_combat_action(ctx, caster, target.player_id, now, kind.as_str());
             let (block_point_x, block_point_y, block_point_z) = resolve_spell_block_impact_point(
@@ -5506,6 +5531,7 @@ pub(crate) fn begin_special_movement_with_facing_policy(
         duration_ms,
         start,
         end,
+        0.0,
         facing_yaw_start,
         facing_policy,
         collision_policy,
@@ -5533,6 +5559,37 @@ pub(crate) fn begin_instant_special_movement(
         0,
         start,
         end,
+        0.0,
+        facing_yaw_start,
+        facing_policy,
+        collision_policy,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn begin_parabolic_arc_special_movement(
+    ctx: &ReducerContext,
+    owner: Identity,
+    kind: &str,
+    started_at: Timestamp,
+    duration_ms: u64,
+    start: Vec3,
+    end: Vec3,
+    arc_height: f32,
+    facing_yaw_start: f32,
+    facing_policy: &str,
+    collision_policy: &str,
+) -> SpecialMovementRuntime {
+    begin_special_movement_runtime(
+        ctx,
+        owner,
+        kind,
+        SPECIAL_MOVEMENT_PATH_PARABOLIC_ARC,
+        started_at,
+        duration_ms,
+        start,
+        end,
+        arc_height.max(0.0),
         facing_yaw_start,
         facing_policy,
         collision_policy,
@@ -5549,6 +5606,7 @@ fn begin_special_movement_runtime(
     duration_ms: u64,
     start: Vec3,
     end: Vec3,
+    arc_height: f32,
     facing_yaw_start: f32,
     facing_policy: &str,
     collision_policy: &str,
@@ -5571,6 +5629,7 @@ fn begin_special_movement_runtime(
         end_x: end.x,
         end_y: end.y,
         end_z: end.z,
+        arc_height,
         facing_yaw_start,
         facing_policy: facing_policy.to_string(),
         collision_policy: collision_policy.to_string(),
@@ -10076,6 +10135,26 @@ fn resolve_movement_delivery_hit(
             speed: movement.speed,
         },
     ) {
+        DefenseResolution::Evaded => {
+            mark_harmful_combat_action(ctx, caster, target.player_id, now, kind.as_str());
+            emit_direct_spell_terminal_event(
+                ctx,
+                action_instance_id,
+                ability_id,
+                kind,
+                crate::combat::COMBAT_EVENT_EVADE,
+                caster,
+                target.player_id,
+                Vec3::new(caster_state.pos_x, caster_state.pos_y, caster_state.pos_z),
+                Vec3::new(dir_x, 0.0, dir_z),
+                movement.speed,
+                movement.max_distance,
+                Vec3::new(target.pos_x, target.pos_y, target.pos_z),
+                0,
+                now,
+            );
+            return Ok(());
+        }
         DefenseResolution::Blocked => {
             mark_harmful_combat_action(ctx, caster, target.player_id, now, kind.as_str());
             emit_direct_spell_terminal_event(

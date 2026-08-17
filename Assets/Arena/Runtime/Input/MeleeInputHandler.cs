@@ -122,18 +122,29 @@ namespace Arena.Input
 
         private bool TryTriggerAction(DbConnection conn, PlayerEntity entity, string slotId, long nowMs)
         {
+            string pressedActionId = slotId;
             if (entity.IsDestroyed || !entity.IsAlive)
             {
-                ActionBarTrace.Trace($"melee rejected: {slotId} has no live local entity");
-                return false;
+                return RejectLocalMeleeAction(
+                    slotId,
+                    pressedActionId,
+                    ActionRejectReason.Dead,
+                    $"melee rejected: {slotId} has no live local entity");
             }
 
             string combatProfile = CombatProfileResolver.ResolveForEntity(conn, entity);
+            MeleeDefinition? pressedDefinition = GetStrikeDefinition(conn, combatProfile, slotId);
+            ActionBarTrace.Diagnostic(
+                $"melee evaluate pressed={slotId} profile={combatProfile} " +
+                $"definition={(pressedDefinition == null ? "<missing>" : $"{pressedDefinition.Key}|comboFrom={pressedDefinition.ComboFrom}")}");
 
             if (!IsDirectlyBindableMeleeStrike(conn, combatProfile, slotId))
             {
-                ActionBarTrace.Trace($"melee rejected: {slotId} is not a bindable opener for {combatProfile}");
-                return false;
+                return RejectLocalMeleeAction(
+                    slotId,
+                    pressedActionId,
+                    ActionRejectReason.InvalidInput,
+                    $"melee rejected: {slotId} is not a bindable opener for {combatProfile}");
             }
 
             var combat = LocalCombatState.Instance;
@@ -146,22 +157,28 @@ namespace Arena.Input
             var strikeChoice = ResolveStrikeChoice(
                 conn, combatProfile, slotId,
                 effectiveLastStrikeState.lastStrikeId, effectiveLastStrikeState.lastStrikeAtMs, nowMs);
+            ActionBarTrace.Diagnostic(
+                $"melee choice pressed={pressedActionId} resolved={strikeChoice.strikeId} " +
+                $"queue={strikeChoice.shouldQueue} authoritativeLast={authorityState.lastStrikeId} " +
+                $"effectiveLast={effectiveLastStrikeState.lastStrikeId}");
             // The bar slot keeps showing the pressed opener even when the
             // strike choice resolves a combo follow-up; the denial flash
             // (netcode design review S2) must target the pressed id.
-            string pressedActionId = slotId;
             slotId = strikeChoice.strikeId;
             MeleeAbilityCatalog? gameplay =
                 MeleeGameplayResolver.ResolveForAction(conn, entity.Identity, combatProfile, slotId);
             if (gameplay == null)
             {
-                ActionBarTrace.Trace($"melee rejected: {slotId} has no melee gameplay row");
-                return false;
+                return RejectLocalMeleeAction(
+                    slotId,
+                    pressedActionId,
+                    ActionRejectReason.InvalidInput,
+                    $"melee rejected: {slotId} has no melee gameplay row");
             }
             MeleeGapCloseCatalog? configuredGapClose =
                 ResolveGapCloseForAction(conn, entity.Identity, combatProfile, slotId);
             MeleeGapCloseCatalog? gapClose = configuredGapClose;
-            if (!HasResourceForMeleeAction(conn, entity, slotId))
+            if (!HasResourceForMeleeAction(conn, entity, slotId, pressedActionId))
                 return false;
 
             bool requiresTarget = RequiresTarget(gameplay);
@@ -172,20 +189,28 @@ namespace Arena.Input
                 target = TargetSelector.Instance?.SelectedTarget;
                 if (target == null || target.IsDestroyed || !target.IsAlive)
                 {
-                    ActionBarTrace.Trace($"melee rejected: {slotId} requires a live target");
-                    return false;
+                    return RejectLocalMeleeAction(
+                        slotId,
+                        pressedActionId,
+                        ActionRejectReason.InvalidTarget,
+                        $"melee rejected: {slotId} requires a live target");
                 }
                 if (!IsTargetWithinFacingArc(entity, target))
                 {
-                    ActionBarTrace.Trace($"melee rejected: {slotId} requires target facing");
-                    return false;
+                    return RejectLocalMeleeAction(
+                        slotId,
+                        pressedActionId,
+                        ActionRejectReason.NotFacingTarget,
+                        $"melee rejected: {slotId} requires target facing");
                 }
                 if (!PartyRelationship.TargetAudienceAllowsLocal(target, gameplay.TargetAudience))
                 {
                     var relation = PartyRelationship.RelationToLocal(target);
-                    ActionBarTrace.Trace(
+                    return RejectLocalMeleeAction(
+                        slotId,
+                        pressedActionId,
+                        ActionRejectReason.InvalidTarget,
                         $"melee rejected: {slotId} target audience {TraceAudience(gameplay.TargetAudience)} rejects relation={relation} target={target.DisplayName}");
-                    return false;
                 }
                 if (configuredGapClose != null
                     && !GapCloseActivationSatisfied(conn, configuredGapClose, target.TargetIdentity, nowMs))
@@ -205,8 +230,11 @@ namespace Arena.Input
             {
                 if (usesGlobalCooldown && !isComboFollowup && combat.IsGlobalCooldownActive(nowMs))
                 {
-                    ActionBarTrace.Trace($"melee rejected: {slotId} blocked by GCD");
-                    return false;
+                    return RejectLocalMeleeAction(
+                        slotId,
+                        pressedActionId,
+                        ActionRejectReason.OnGlobalCooldown,
+                        $"melee rejected: {slotId} blocked by GCD");
                 }
             }
 
@@ -216,8 +244,11 @@ namespace Arena.Input
             {
                 if (nowMs < cd.lastCastMs + cd.durationMs)
                 {
-                    ActionBarTrace.Trace($"melee rejected: {slotId} blocked by cooldown");
-                    return false;
+                    return RejectLocalMeleeAction(
+                        slotId,
+                        pressedActionId,
+                        ActionRejectReason.OnCooldown,
+                        $"melee rejected: {slotId} blocked by cooldown");
                 }
             }
 
@@ -243,12 +274,15 @@ namespace Arena.Input
                 float strictAllowedDistance = MeleeStrikeGeometry.MaximumContactDistance(strikeRange, targetRadius);
                 if (horizDist > strictAllowedDistance)
                 {
-                    ActionBarTrace.Trace(
-                        gapClose != null
-                            ? $"melee rejected: {slotId} gap close acquisition out of range dist={horizDist:F2} allowed={strictAllowedDistance:F2} range={strikeRange:F2} target_radius={targetRadius:F2}"
-                            : $"melee rejected: {slotId} out of range dist={horizDist:F2} allowed={strictAllowedDistance:F2} range={strikeRange:F2} target_radius={targetRadius:F2}");
-                    NotifyGapCloseMaximumRangeDenial(gapClose, slotId, pressedActionId);
-                    return false;
+                    string trace = gapClose != null
+                        ? $"melee rejected: {slotId} gap close acquisition out of range dist={horizDist:F2} allowed={strictAllowedDistance:F2} range={strikeRange:F2} target_radius={targetRadius:F2}"
+                        : $"melee rejected: {slotId} out of range dist={horizDist:F2} allowed={strictAllowedDistance:F2} range={strikeRange:F2} target_radius={targetRadius:F2}";
+                    return RejectLocalMeleeAction(
+                        slotId,
+                        pressedActionId,
+                        ActionRejectReason.OutOfRange,
+                        trace,
+                        notifyUser: gapClose != null);
                 }
                 minimumRange = Mathf.Max(0f, gameplay.MinimumRange);
                 if (minimumRange > 0f)
@@ -256,9 +290,11 @@ namespace Arena.Input
                     float strictMinimumDistance = MeleeStrikeGeometry.MinimumContactDistance(minimumRange, targetRadius);
                     if (horizDist < strictMinimumDistance)
                     {
-                        ActionBarTrace.Trace(
+                        return RejectLocalMeleeAction(
+                            slotId,
+                            pressedActionId,
+                            ActionRejectReason.OutOfRange,
                             $"melee rejected: {slotId} inside minimum range dist={horizDist:F2} min={strictMinimumDistance:F2} minimum_range={minimumRange:F2} target_radius={targetRadius:F2}");
-                        return false;
                     }
                 }
 
@@ -269,12 +305,12 @@ namespace Arena.Input
                 if (gameplay.RequiresTargetLos
                     && AdvisoryTargetLineOfSight.IsPressBlocked(entity, target!))
                 {
-                    ActionBarTrace.Trace($"melee denied locally: {slotId} advisory line of sight blocked");
-                    LocalCombatState.NotifyLocalAdvisoryDenial(
+                    return RejectLocalMeleeAction(
                         slotId,
                         pressedActionId,
-                        ActionRejectReason.LineOfSightBlocked);
-                    return false;
+                        ActionRejectReason.LineOfSightBlocked,
+                        $"melee denied locally: {slotId} advisory line of sight blocked",
+                        notifyUser: true);
                 }
             }
 
@@ -282,14 +318,15 @@ namespace Arena.Input
                 AlignCoupDeGraceFacing(entity, target!, gameplay.AbilityId);
 
             // Send to server for authoritative validation, damage, and remote sync.
-            ActionBarTrace.Trace(
-                strikeChoice.shouldQueue
-                    ? $"sending MeleeAttack queue request for {slotId} execute_at={strikeChoice.executeNotBeforeMs}"
-                    : $"sending MeleeAttack for {slotId}");
             bool predictsLocalVisual = !strikeChoice.shouldQueue;
             ActionPredictionToken token = predictsLocalVisual
                 ? LocalCombatState.Instance.CreateActionPredictionToken(slotId)
                 : ActionPredictionToken.None(slotId);
+            ActionBarTrace.Diagnostic(
+                $"sending MeleeAttack action={slotId} profile={combatProfile} " +
+                $"target={(requiresTarget ? target!.TargetIdentity.ToString() : "<none>")} " +
+                $"queue={strikeChoice.shouldQueue} executeAt={strikeChoice.executeNotBeforeMs} " +
+                $"prediction={token.PredictedActionId}:{token.ClientActionSeq}");
             conn.Reducers.MeleeAttack(
                 slotId,
                 requiresTarget ? target!.TargetIdentity.ToString() : string.Empty,
@@ -368,18 +405,23 @@ namespace Arena.Input
             return true;
         }
 
-        private static void NotifyGapCloseMaximumRangeDenial(
-            MeleeGapCloseCatalog? gapClose,
+        private static bool RejectLocalMeleeAction(
             string actionId,
-            string pressedActionId)
+            string pressedActionId,
+            ActionRejectReason reason,
+            string trace,
+            bool notifyUser = false)
         {
-            if (gapClose == null)
-                return;
-
-            LocalCombatState.NotifyLocalAdvisoryDenial(
-                actionId,
-                pressedActionId,
-                ActionRejectReason.OutOfRange);
+            ActionBarTrace.Diagnostic(
+                $"local melee rejection reason={reason} action={actionId} pressed={pressedActionId}: {trace}");
+            if (notifyUser)
+            {
+                LocalCombatState.NotifyLocalAdvisoryDenial(
+                    actionId,
+                    pressedActionId,
+                    reason);
+            }
+            return false;
         }
 
         private static void AlignCoupDeGraceFacing(
@@ -521,7 +563,11 @@ namespace Arena.Input
                 target.GetPresentationRoot().position);
         }
 
-        private bool HasResourceForMeleeAction(DbConnection conn, PlayerEntity entity, string actionId)
+        private bool HasResourceForMeleeAction(
+            DbConnection conn,
+            PlayerEntity entity,
+            string actionId,
+            string pressedActionId)
         {
             ActiveActionBarAction action = ActiveActionBarResolver.ResolveActiveSelectableActionForAction(
                 conn,
@@ -537,13 +583,12 @@ namespace Arena.Input
             float available = LocalCombatState.Instance.EffectiveCurrentResource(entity, requiredKind);
             if (available + 0.001f < action.ResourceCost)
             {
-                ActionBarTrace.Trace(
-                    $"melee rejected: {actionId} requires {action.ResourceCost:F0} {requiredKind} ({available:F0} available)");
-                LocalCombatState.NotifyLocalAdvisoryDenial(
+                return RejectLocalMeleeAction(
                     actionId,
-                    actionId,
-                    ActionRejectReason.InsufficientResource);
-                return false;
+                    pressedActionId,
+                    ActionRejectReason.InsufficientResource,
+                    $"melee rejected: {actionId} requires {action.ResourceCost:F0} {requiredKind} ({available:F0} available)",
+                    notifyUser: true);
             }
 
             return true;
@@ -695,6 +740,11 @@ namespace Arena.Input
         {
             if (row.Family != PredictedActionFamily.Melee)
                 return;
+
+            ActionBarTrace.Diagnostic(
+                $"MeleeAttack result={row.Result} reason={row.RejectReason} " +
+                $"prediction={row.PredictedActionId}:{row.ClientActionSeq} " +
+                $"actionInstance={row.ActionInstanceId}");
 
             // Predicted contact cue correlation shares this subscription
             // (feel audit F5 slice 2).

@@ -938,6 +938,25 @@ namespace Arena.Presentation
                 : CombatAnimationEvents.PhasedMeleeStartToLoopSafetyNormalizedTime;
             return startLengthSeconds * Mathf.Min(normalizedTime, safetyNormalizedTime);
         }
+
+        public float ResolveLoopTimelineLengthSeconds()
+        {
+            if (ReleaseAfterStart)
+                return 0f;
+
+            float loopLengthSeconds = Mathf.Max(0f, Loop.length);
+            if (!CombatAnimationEvents.TryGetEventNormalizedTime(
+                    Loop,
+                    CombatAnimationEvents.OnPhaseLoopReady,
+                    out float normalizedTime))
+            {
+                return loopLengthSeconds;
+            }
+
+            return loopLengthSeconds * Mathf.Min(
+                normalizedTime,
+                CombatAnimationEvents.PhasedMeleeStartToLoopSafetyNormalizedTime);
+        }
     }
 
     [Serializable]
@@ -1166,7 +1185,7 @@ namespace Arena.Presentation
                     found = true;
                 }
 
-                offset += Mathf.Max(0f, resolved.Loop.length);
+                offset += resolved.ResolveLoopTimelineLengthSeconds();
             }
 
             if (CombatAnimationEvents.TryGetEventTime(resolved.End, eventName, out float endTime)
@@ -1288,7 +1307,7 @@ namespace Arena.Presentation
 
             float endPhaseOffsetSeconds = loopPhaseOffsetSeconds;
             if (!resolved.ReleaseAfterStart)
-                endPhaseOffsetSeconds += Mathf.Max(0f, resolved.Loop.length);
+                endPhaseOffsetSeconds += resolved.ResolveLoopTimelineLengthSeconds();
 
             CombatAnimationEvents.AppendEventTimes(
                 resolved.End,
@@ -1306,7 +1325,7 @@ namespace Arena.Presentation
 
             float total = resolved.ResolveStartTimelineLengthSeconds();
             if (!resolved.ReleaseAfterStart)
-                total += Mathf.Max(0f, resolved.Loop.length);
+                total += resolved.ResolveLoopTimelineLengthSeconds();
             total += Mathf.Max(0f, resolved.End.length);
             return total;
         }

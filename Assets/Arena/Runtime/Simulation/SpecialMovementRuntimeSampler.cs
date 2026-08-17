@@ -14,6 +14,7 @@ namespace Arena.Simulation
             long durationMs,
             Vector3 start,
             Vector3 end,
+            float arcHeight,
             float facingYawStart,
             string facingPolicy,
             string collisionPolicy,
@@ -25,6 +26,7 @@ namespace Arena.Simulation
             DurationMs = durationMs;
             Start = start;
             End = end;
+            ArcHeight = Mathf.Max(0.0f, arcHeight);
             FacingYawStart = facingYawStart;
             FacingPolicy = facingPolicy;
             CollisionPolicy = collisionPolicy;
@@ -37,6 +39,7 @@ namespace Arena.Simulation
         public long DurationMs { get; }
         public Vector3 Start { get; }
         public Vector3 End { get; }
+        public float ArcHeight { get; }
         public float FacingYawStart { get; }
         public string FacingPolicy { get; }
         public string CollisionPolicy { get; }
@@ -52,6 +55,7 @@ namespace Arena.Simulation
                 (long)row.DurationMs,
                 new Vector3(row.StartX, row.StartY, row.StartZ),
                 new Vector3(row.EndX, row.EndY, row.EndZ),
+                row.ArcHeight,
                 row.FacingYawStart,
                 row.FacingPolicy,
                 row.CollisionPolicy,
@@ -77,6 +81,7 @@ namespace Arena.Simulation
     {
         public const string PathModeLinear = "LINEAR";
         public const string PathModeInstant = "INSTANT";
+        public const string PathModeParabolicArc = "PARABOLIC_ARC";
         public const string FacingPolicyFacePath = "FACE_PATH";
         public const string CollisionPolicyFixedY = "STOP_AT_BLOCK_FIXED_Y";
         public const string CollisionPolicyKeepHeightLegacy = "STOP_AT_BLOCK_KEEP_HEIGHT";
@@ -98,7 +103,10 @@ namespace Arena.Simulation
                 ? 1.0f
                 : Mathf.Clamp01((float)elapsedMs / track.DurationMs);
             Vector3 position = Vector3.Lerp(track.Start, track.End, progress);
-            position = ResolveSpecialMovementY(track, position, sampleGroundHeight);
+            if (string.Equals(track.PathMode, PathModeParabolicArc, System.StringComparison.OrdinalIgnoreCase))
+                position.y += 4.0f * track.ArcHeight * progress * (1.0f - progress);
+            else
+                position = ResolveSpecialMovementY(track, position, sampleGroundHeight);
             float yaw = track.FacingYawStart;
             if (string.Equals(track.FacingPolicy, FacingPolicyFacePath, System.StringComparison.OrdinalIgnoreCase))
             {

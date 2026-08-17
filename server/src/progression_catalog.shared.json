@@ -6324,28 +6324,105 @@
       }
     },
     {
-      "ability_id": "ARCHER_RAIN_SHOT",
+      "ability_id": "ARCHER_TRIPLE_SHOT",
       "actor_scope": "PLAYER",
       "discipline_id": "PRECISION",
       "combat_profile_id": "ARCHER_BOW",
-      "action_id": "ARCHER_RAIN_SHOT",
-      "display_name": "Rain Shot",
+      "action_id": "ARCHER_TRIPLE_SHOT",
+      "display_name": "Triple Shot",
       "resource_kind": "STAMINA",
-      "resource_cost": 35,
+      "resource_cost": 30,
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
       "sort_order": 20,
       "gameplay": {
         "kind": "MELEE",
-        "base_damage": 42,
+        "base_damage": 48,
         "applies_stagger": false,
-        "range": 24,
-        "cooldown_ms": 1600,
+        "range": 18,
+        "cooldown_ms": 3000,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
         "block_behavior": "BLOCKABLE",
-        "airborne_targeting_mode": "ANY_TARGET"
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_channel": {
+          "duration_ms": 2743,
+          "first_tick_delay_ms": 0,
+          "tick_interval_ms": 0,
+          "cancel_on_movement": true,
+          "use_authored_hit_windows": true
+        }
+      }
+    },
+    {
+      "ability_id": "ARCHER_BACKSTEP",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
+      "combat_profile_id": "ARCHER_BOW",
+      "action_id": "ARCHER_BACKSTEP",
+      "display_name": "Backstep",
+      "resource_kind": "STAMINA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 30,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 28,
+        "applies_stagger": false,
+        "range": 18,
+        "cooldown_ms": 1600,
+        "uses_global_cooldown": true,
+        "global_cooldown_ms": 650,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_timed_movement": {
+          "kind": "BACKSTEP",
+          "start_delay_ms": 220,
+          "direction": "BACKWARD",
+          "distance": 7,
+          "speed": 18,
+          "collision_policy": "STOP_AT_BLOCK",
+          "facing_policy": "FACE_START"
+        }
+      }
+    },
+    {
+      "ability_id": "ARCHER_DISENGAGE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
+      "combat_profile_id": "ARCHER_BOW",
+      "action_id": "ARCHER_DISENGAGE",
+      "display_name": "Disengage",
+      "resource_kind": "STAMINA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 40,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 28,
+        "applies_stagger": false,
+        "range": 18,
+        "cooldown_ms": 1600,
+        "uses_global_cooldown": true,
+        "global_cooldown_ms": 650,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_timed_movement": {
+          "kind": "BACKSTEP",
+          "start_delay_ms": 220,
+          "direction": "BACKWARD",
+          "distance": 7,
+          "speed": 18,
+          "collision_policy": "STOP_AT_BLOCK",
+          "facing_policy": "FACE_START"
+        }
       }
     },
     {
@@ -6356,46 +6433,168 @@
       "action_id": "ARCHER_EVASIVE_SHOT",
       "display_name": "Evasive Shot",
       "resource_kind": "STAMINA",
-      "resource_cost": 25,
+      "resource_cost": 20,
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
-      "sort_order": 30,
-      "gameplay": {
-        "kind": "MELEE",
-        "base_damage": 30,
-        "applies_stagger": false,
-        "range": 16,
-        "cooldown_ms": 1200,
-        "uses_global_cooldown": true,
-        "parry_behavior": "PARRYABLE",
-        "block_behavior": "BLOCKABLE",
-        "airborne_targeting_mode": "ANY_TARGET"
-      }
-    },
-    {
-      "ability_id": "ARCHER_AIR_SHOT",
-      "actor_scope": "PLAYER",
-      "discipline_id": "PRECISION",
-      "combat_profile_id": "ARCHER_BOW",
-      "action_id": "ARCHER_AIR_SHOT",
-      "display_name": "Air Shot",
-      "resource_kind": "STAMINA",
-      "resource_cost": 18,
-      "ability_tags": [
-        "ACTION_BAR_ACTION"
-      ],
-      "sort_order": 40,
+      "sort_order": 50,
       "gameplay": {
         "kind": "MELEE",
         "base_damage": 28,
         "applies_stagger": false,
         "range": 18,
-        "cooldown_ms": 900,
+        "cooldown_ms": 8000,
+        "uses_global_cooldown": true,
+        "global_cooldown_ms": 650,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_evasive_leap": {
+          "duration_ms": 2000,
+          "arc_height": 2.25
+        }
+      }
+    },
+    {
+      "ability_id": "ARCHER_MAVERICK",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
+      "combat_profile_id": "ARCHER_BOW",
+      "action_id": "MAVERICK",
+      "display_name": "Maverick",
+      "resource_kind": "STAMINA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 60,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "isolated_damage_bonus": 0.15,
+        "isolated_ally_radius_meters": 10
+      }
+    },
+    {
+      "ability_id": "ARCHER_POINT_BLANK",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
+      "combat_profile_id": "ARCHER_BOW",
+      "action_id": "POINT_BLANK",
+      "display_name": "Point Blank",
+      "resource_kind": "STAMINA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 70,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "point_blank_damage_bonus": 0.3,
+        "point_blank_full_bonus_range_meters": 2.5,
+        "point_blank_zero_bonus_range_meters": 18
+      }
+    },
+    {
+      "ability_id": "ARCHER_CAREFUL_AIM",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
+      "combat_profile_id": "ARCHER_BOW",
+      "action_id": "CAREFUL_AIM",
+      "display_name": "Careful Aim",
+      "resource_kind": "STAMINA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 80,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "stationary_target_damage_bonus": 0.15,
+        "stationary_target_window_ms": 250,
+        "stationary_target_max_displacement_meters": 0.05
+      }
+    },
+    {
+      "ability_id": "ARCHER_HEARTSEEKER",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
+      "combat_profile_id": "ARCHER_BOW",
+      "action_id": "ARCHER_HEARTSEEKER",
+      "display_name": "Heartseeker",
+      "resource_kind": "STAMINA",
+      "resource_cost": 25,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 90,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 42,
+        "applies_stagger": false,
+        "range": 18,
+        "cooldown_ms": 5000,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
         "block_behavior": "BLOCKABLE",
-        "airborne_targeting_mode": "ANY_TARGET"
+        "airborne_targeting_mode": "ANY_TARGET",
+        "stationary_target_window_ms": 250,
+        "stationary_target_max_displacement_meters": 0.05,
+        "stationary_target_auto_crit": true
+      }
+    },
+    {
+      "ability_id": "ARCHER_RAIN_OF_ARROWS",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
+      "combat_profile_id": "ARCHER_BOW",
+      "action_id": "RAIN_OF_ARROWS",
+      "display_name": "Rain of Arrows",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 100,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 6000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "POINT",
+        "requires_target": false,
+        "requires_target_los": true,
+        "aim_radius": 4,
+        "resource_cost": 30,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "max_distance": 18,
+          "damage": 38,
+          "damage_type": "PHYSICAL",
+          "impact_delay_ms": 850,
+          "radius": 4,
+          "block_behavior": "BLOCKABLE",
+          "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "ARCHER_PERFORATION",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
+      "combat_profile_id": "ARCHER_BOW",
+      "action_id": "PERFORATION",
+      "display_name": "Perforation",
+      "resource_kind": "STAMINA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 110,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "projectile_piercing": true
       }
     },
     {
@@ -6410,7 +6609,7 @@
       "ability_tags": [
         "ACTION_BAR_ACTION"
       ],
-      "sort_order": 45,
+      "sort_order": 120,
       "gameplay": {
         "kind": "COMBAT_MODE_TOGGLE"
       }
@@ -9758,31 +9957,80 @@
     },
     {
       "presentation_kind": "ABILITY",
-      "presentation_id": "ARCHER_RAIN_SHOT",
-      "display_name": "Rain Shot",
-      "description": "Fires a committed shot for long-range pressure.",
+      "presentation_id": "ARCHER_TRIPLE_SHOT",
+      "display_name": "Triple Shot",
+      "description": "Fires three arrows in sequence; moving cancels every shot that has not yet released.",
       "sort_order": 170
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_BACKSTEP",
+      "display_name": "Backstep",
+      "description": "Fires a shot and moves backward to reset spacing.",
+      "sort_order": 180
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_DISENGAGE",
+      "display_name": "Disengage",
+      "description": "Fires a shot and moves backward to disengage.",
+      "sort_order": 190
     },
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "ARCHER_EVASIVE_SHOT",
       "display_name": "Evasive Shot",
-      "description": "Uses a mobile bow attack to keep distance.",
-      "sort_order": 180
+      "description": "Leaps into the air and evades incoming damage while firing a shot.",
+      "sort_order": 200
     },
     {
       "presentation_kind": "ABILITY",
-      "presentation_id": "ARCHER_AIR_SHOT",
-      "display_name": "Air Shot",
-      "description": "Releases a bow shot while airborne.",
-      "sort_order": 190
+      "presentation_id": "ARCHER_MAVERICK",
+      "display_name": "Maverick",
+      "description": "Passive: deal 15% increased damage while no allied player is within 10 meters.",
+      "sort_order": 210
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_POINT_BLANK",
+      "display_name": "Point Blank",
+      "description": "Passive: damage increases as the target gets closer, reaching 30% increased damage within melee range.",
+      "sort_order": 220
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_CAREFUL_AIM",
+      "display_name": "Careful Aim",
+      "description": "Passive: deal 15% increased damage to stationary targets.",
+      "sort_order": 230
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_HEARTSEEKER",
+      "display_name": "Heartseeker",
+      "description": "Fires a high-damage precision shot that automatically critically strikes stationary targets.",
+      "sort_order": 240
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_RAIN_OF_ARROWS",
+      "display_name": "Rain of Arrows",
+      "description": "Targets a circular area and sends a rain of arrows down on enemies within it.",
+      "sort_order": 250
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_PERFORATION",
+      "display_name": "Perforation",
+      "description": "Passive: targeted bow projectiles pierce every enemy in their path and stop only on terrain or environmental obstacles.",
+      "sort_order": 260
     },
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "ARCHER_DRAW_MODE_TOGGLE",
       "display_name": "Draw Mode",
       "description": "Toggles between short draw and full draw auto attack modes.",
-      "sort_order": 195
+      "sort_order": 270
     },
     {
       "presentation_kind": "ABILITY",
@@ -12519,26 +12767,14 @@
     {
       "slot_id": "slot_0_1",
       "combat_profile_id": "ARCHER_BOW",
-      "ability_id": "ARCHER_RAIN_SHOT",
+      "ability_id": "ARCHER_TRIPLE_SHOT",
       "sort_order": 190
-    },
-    {
-      "slot_id": "slot_0_2",
-      "combat_profile_id": "ARCHER_BOW",
-      "ability_id": "ARCHER_EVASIVE_SHOT",
-      "sort_order": 200
-    },
-    {
-      "slot_id": "slot_0_3",
-      "combat_profile_id": "ARCHER_BOW",
-      "ability_id": "ARCHER_AIR_SHOT",
-      "sort_order": 210
     },
     {
       "slot_id": "slot_1_1",
       "combat_profile_id": "ARCHER_BOW",
       "ability_id": "ARCHER_DRAW_MODE_TOGGLE",
-      "sort_order": 215
+      "sort_order": 200
     },
     {
       "slot_id": "slot_0_0",

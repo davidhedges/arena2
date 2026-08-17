@@ -25,18 +25,21 @@ use crate::player_state::PlayerState;
 use crate::practice::resolve_respawn_pose;
 use crate::progression::{
     ability_belongs_to_discipline, character_has_selected_discipline, combat_rule_value,
-    derived_combat_profile_id_for_owner, primal_adaptation_for_owner,
-    primal_photosynthesis_for_owner, primal_slipstream_cooldown_reduction_for_owner,
-    ruin_acceleration_cooldown_reduction_for_owner, ruin_chain_reaction_spell_for_owner,
-    ruin_fracture_melee_damage_bonus, ruin_furnace_mana_restore_ratio_for_owner,
-    ruin_potential_crit_chance_per_stack_for_owner, ruin_quickening_for_owner,
-    ruin_rime_protects_debuffs_for_owner, ruin_wildfire_ignite_for_owner,
-    soulstealer_empowered_damage_bonus, subtlety_behind_target_damage_bonus,
-    subtlety_disabled_target_damage_bonus, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD,
+    derived_combat_profile_id_for_owner, precision_careful_aim_for_owner,
+    precision_heartseeker_stationary_rule, precision_maverick_for_owner,
+    precision_point_blank_for_owner, primal_adaptation_for_owner, primal_photosynthesis_for_owner,
+    primal_slipstream_cooldown_reduction_for_owner, ruin_acceleration_cooldown_reduction_for_owner,
+    ruin_chain_reaction_spell_for_owner, ruin_fracture_melee_damage_bonus,
+    ruin_furnace_mana_restore_ratio_for_owner, ruin_potential_crit_chance_per_stack_for_owner,
+    ruin_quickening_for_owner, ruin_rime_protects_debuffs_for_owner,
+    ruin_wildfire_ignite_for_owner, soulstealer_empowered_damage_bonus,
+    subtlety_behind_target_damage_bonus, subtlety_disabled_target_damage_bonus,
+    ARCHER_HEARTSEEKER_ABILITY_ID, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD,
     DISCIPLINE_BLIGHT, DISCIPLINE_RUIN, DISCIPLINE_SUBTLETY,
 };
 use crate::relations::{
-    can_apply_status_polarity, can_harm, target_audience_allows, TargetAudience,
+    can_apply_status_polarity, can_harm, combat_relation, target_audience_allows, CombatRelation,
+    TargetAudience,
 };
 use crate::resources::{
     current_primary_resource_amount_for_kind, grant_primary_resource_amount,
@@ -158,6 +161,7 @@ const RULE_FULMINATION_ARC_RADIUS_METERS: &str = "FULMINATION_ARC_RADIUS_METERS"
 const RULE_FULMINATION_ARC_DAMAGE_MULTIPLIER: &str = "FULMINATION_ARC_DAMAGE_MULTIPLIER";
 const EFFECT_TYPE_DAMAGE: &str = "DAMAGE";
 const EFFECT_TYPE_HEAL: &str = "HEAL";
+const EFFECT_TYPE_EVADE: &str = "EVADE";
 pub(crate) const DAMAGE_SOURCE_KIND_MELEE: &str = "MELEE";
 pub(crate) const DAMAGE_SOURCE_KIND_SPELL: &str = "SPELL";
 pub(crate) const DAMAGE_SOURCE_KIND_PROJECTILE: &str = "PROJECTILE";
@@ -219,6 +223,7 @@ pub(crate) const COMBAT_EVENT_FIZZLE: &str = "COMBAT_FIZZLE";
 pub(crate) const COMBAT_EVENT_MISS: &str = "COMBAT_MISS";
 pub(crate) const COMBAT_EVENT_BLOCK: &str = "COMBAT_BLOCK";
 pub(crate) const COMBAT_EVENT_PARRY: &str = "COMBAT_PARRY";
+pub(crate) const COMBAT_EVENT_EVADE: &str = "COMBAT_EVADE";
 pub(crate) const COMBAT_EVENT_STATUS_END: &str = "COMBAT_STATUS_END";
 pub(crate) const COMBAT_SCALAR_NONE: &str = "";
 pub(crate) const COMBAT_SCALAR_TRAVEL_DURATION_SECONDS: &str = "TRAVEL_DURATION_SECONDS";
@@ -5740,6 +5745,20 @@ fn apply_damage_to_player_state(
     if !state.alive || crate::survival::survival_player_is_invulnerable(ctx, target) {
         return false;
     }
+    if hit.amount > 0 && crate::defense::is_evasion_active(ctx, target, ctx.timestamp) {
+        emit_combat_effect_event(
+            ctx,
+            hit,
+            EFFECT_TYPE_EVADE,
+            ResolvedEffectAmount {
+                base_amount: hit.amount.max(0),
+                final_amount: 0,
+                was_critical: false,
+                crit_chance: 0.0,
+            },
+        );
+        return false;
+    }
 
     let mut resolved = resolve_damage_amount(ctx, hit, temporary_modifiers);
     let resolved_amount = redirect_burden_damage(ctx, hit, resolved.final_amount);
@@ -6326,6 +6345,7 @@ fn resolve_damage_amount(
             * temporary_modifiers.damage_taken_multiplier_from_source_for(&hit.target, &hit.source)
             * opportunist_passive_damage_multiplier(ctx, hit, temporary_modifiers)
             * tactical_advantage_passive_damage_multiplier(ctx, hit)
+            * precision_passive_damage_multiplier(ctx, hit)
             * blight_empowered_damage_multiplier(ctx, hit)
             * fracture_melee_damage_multiplier(
                 !fracture_freezes.is_empty(),
@@ -6345,6 +6365,7 @@ fn resolve_damage_amount(
         find_weakness
             .as_ref()
             .map(|_| 1.0)
+            .or_else(|| heartseeker_stationary_crit_override(ctx, hit))
             .or_else(|| temporary_modifiers.crit_chance_override_for(&hit.source)),
         source_crit_chance,
         if blade_twisting.is_some() {
@@ -7120,6 +7141,201 @@ fn behind_target_damage_multiplier(
     } else {
         1.0
     }
+}
+
+fn precision_passive_damage_multiplier(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
+    if hit.source == Identity::ZERO || !can_harm(ctx, hit.source, hit.target) {
+        return 1.0;
+    }
+    let Some((source, target)) = actor_snapshot::actor_snapshot_for(ctx, hit.source)
+        .zip(actor_snapshot::actor_snapshot_for(ctx, hit.target))
+    else {
+        return 1.0;
+    };
+
+    let maverick = precision_maverick_for_owner(ctx, hit.source)
+        .map(|(bonus, radius)| {
+            isolated_damage_multiplier(
+                !nearby_allied_player_exists(ctx, hit.source, source.pos_x, source.pos_z, radius),
+                bonus,
+            )
+        })
+        .unwrap_or(1.0);
+
+    let distance =
+        ((target.pos_x - source.pos_x).powi(2) + (target.pos_z - source.pos_z).powi(2)).sqrt();
+    let point_blank = precision_point_blank_for_owner(ctx, hit.source)
+        .map(|(bonus, full_range, zero_range)| {
+            point_blank_damage_multiplier(distance, full_range, zero_range, bonus)
+        })
+        .unwrap_or(1.0);
+
+    let careful_aim = precision_careful_aim_for_owner(ctx, hit.source)
+        .map(|(bonus, window_ms, max_displacement)| {
+            stationary_target_damage_multiplier(
+                target_is_stationary(ctx, hit.target, window_ms, max_displacement),
+                bonus,
+            )
+        })
+        .unwrap_or(1.0);
+
+    maverick * point_blank * careful_aim
+}
+
+fn nearby_allied_player_exists(
+    ctx: &ReducerContext,
+    source: Identity,
+    source_x: f32,
+    source_z: f32,
+    radius: f32,
+) -> bool {
+    if !source_x.is_finite() || !source_z.is_finite() || !radius.is_finite() || radius <= 0.0 {
+        return false;
+    }
+    let radius_sq = radius * radius;
+    ctx.db
+        .player_state()
+        .alive()
+        .filter(true)
+        .filter(|candidate| candidate.player_id != source)
+        .any(|candidate| {
+            players_share_world_context(ctx, source, candidate.player_id)
+                && combat_relation(ctx, source, candidate.player_id) == CombatRelation::PartyAlly
+                && actor_snapshot::actor_snapshot_for(ctx, candidate.player_id).is_some_and(
+                    |snapshot| {
+                        let dx = snapshot.pos_x - source_x;
+                        let dz = snapshot.pos_z - source_z;
+                        dx.is_finite() && dz.is_finite() && dx * dx + dz * dz <= radius_sq
+                    },
+                )
+        })
+}
+
+fn isolated_damage_multiplier(is_isolated: bool, bonus: f32) -> f32 {
+    if is_isolated && bonus.is_finite() {
+        1.0 + bonus.max(0.0)
+    } else {
+        1.0
+    }
+}
+
+fn point_blank_damage_multiplier(
+    distance: f32,
+    full_bonus_range: f32,
+    zero_bonus_range: f32,
+    max_bonus: f32,
+) -> f32 {
+    if !distance.is_finite()
+        || !full_bonus_range.is_finite()
+        || !zero_bonus_range.is_finite()
+        || !max_bonus.is_finite()
+        || full_bonus_range < 0.0
+        || zero_bonus_range <= full_bonus_range
+        || max_bonus <= 0.0
+    {
+        return 1.0;
+    }
+    let ramp = ((zero_bonus_range - distance.max(0.0)) / (zero_bonus_range - full_bonus_range))
+        .clamp(0.0, 1.0);
+    1.0 + max_bonus * ramp
+}
+
+fn target_is_stationary(
+    ctx: &ReducerContext,
+    target: Identity,
+    window_ms: u64,
+    max_displacement: f32,
+) -> bool {
+    if window_ms == 0 || !max_displacement.is_finite() || max_displacement <= 0.0 {
+        return false;
+    }
+    if ctx
+        .db
+        .special_movement_runtime()
+        .owner()
+        .find(target)
+        .is_some()
+        || crate::npcs::has_npc_forced_movement(ctx, target)
+    {
+        return false;
+    }
+    let Some(present) = actor_snapshot::actor_snapshot_for(ctx, target) else {
+        return false;
+    };
+    let rewind_micros = window_ms.saturating_mul(1_000).min(i64::MAX as u64) as i64;
+    let past =
+        position_history::rewound_pose_for(ctx, target, rewind_micros, ctx.timestamp, &present);
+    stationary_target_from_poses(
+        present.pos_x,
+        present.pos_z,
+        past.pos_x,
+        past.pos_z,
+        max_displacement,
+    )
+}
+
+fn stationary_target_from_poses(
+    present_x: f32,
+    present_z: f32,
+    past_x: f32,
+    past_z: f32,
+    max_displacement: f32,
+) -> bool {
+    if !present_x.is_finite()
+        || !present_z.is_finite()
+        || !past_x.is_finite()
+        || !past_z.is_finite()
+        || !max_displacement.is_finite()
+        || max_displacement <= 0.0
+    {
+        return false;
+    }
+    let dx = present_x - past_x;
+    let dz = present_z - past_z;
+    dx * dx + dz * dz <= max_displacement * max_displacement
+}
+
+fn stationary_target_damage_multiplier(is_stationary: bool, bonus: f32) -> f32 {
+    if is_stationary && bonus.is_finite() {
+        1.0 + bonus.max(0.0)
+    } else {
+        1.0
+    }
+}
+
+fn heartseeker_stationary_crit_override(ctx: &ReducerContext, hit: &PendingHit) -> Option<f32> {
+    if !damage_comes_from_casted_ability(hit) {
+        return None;
+    }
+    let ability_id = ability_id_for_pending_hit(ctx, hit)?;
+    let (window_ms, max_displacement) = precision_heartseeker_stationary_rule()?;
+    heartseeker_should_auto_crit(
+        ability_id.as_str(),
+        target_is_stationary(ctx, hit.target, window_ms, max_displacement),
+    )
+    .then_some(1.0)
+}
+
+fn ability_id_for_pending_hit(ctx: &ReducerContext, hit: &PendingHit) -> Option<String> {
+    let action_key = if hit.direct_action_key.trim().is_empty() {
+        hit.spell_id.trim()
+    } else {
+        hit.direct_action_key.trim()
+    };
+    if action_key.is_empty() {
+        return None;
+    }
+    ctx.db
+        .combat_event()
+        .caster()
+        .filter(hit.source)
+        .filter(|event| action_key_matches_instance(action_key, event.action_instance_id.as_str()))
+        .max_by_key(|event| event.event_id)
+        .map(|event| event.ability_id)
+}
+
+fn heartseeker_should_auto_crit(ability_id: &str, target_is_stationary: bool) -> bool {
+    target_is_stationary && ability_id.eq_ignore_ascii_case(ARCHER_HEARTSEEKER_ABILITY_ID)
 }
 
 fn resistance_multiplier_for_damage_type(
@@ -9895,17 +10111,19 @@ mod tests {
         deterministic_fulmination_candidate_index, disabled_target_damage_multiplier,
         due_interval_count, event_prune_cutoff_micros, fire_spell_hit_can_trigger_wildfire,
         fracture_melee_damage_multiplier, frost_spell_hit_can_apply_rime, fulmination_arc_damage,
-        fulmination_uses_any_target_audience, furnace_mana_restore_amount, holy_shield_end_reason,
-        immolation_damage_for_stacks, immolation_remaining_tick_count, initial_status_stacks,
+        fulmination_uses_any_target_audience, furnace_mana_restore_amount,
+        heartseeker_should_auto_crit, holy_shield_end_reason, immolation_damage_for_stacks,
+        immolation_remaining_tick_count, initial_status_stacks, isolated_damage_multiplier,
         knockback_stagger_duration, melee_attack_can_trigger_fracture,
         melee_attack_can_trigger_fulmination, mirror_image_intercept_chance,
         mirror_image_stacks_after_intercept, mirror_images_intercept, new_status_effect,
-        opportunist_passive_is_active_for_profile, point_within_radius,
-        potential_stacks_after_spell_strike, quickening_cast_speed_multiplier,
+        opportunist_passive_is_active_for_profile, point_blank_damage_multiplier,
+        point_within_radius, potential_stacks_after_spell_strike, quickening_cast_speed_multiplier,
         resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
         resolve_temporary_hitpoint_absorb, resolved_shove_tunables,
         spell_critical_can_charge_capacitor, spell_critical_can_trigger_chain_reaction,
-        stacked_slow_pct, stagger_shove_tunables, status_application_is_blocked_by_immunity,
+        stacked_slow_pct, stagger_shove_tunables, stationary_target_damage_multiplier,
+        stationary_target_from_poses, status_application_is_blocked_by_immunity,
         status_has_dispel_type, status_kind_is_intrinsically_undispellable,
         status_matches_removal_filter_values, status_stacks_after_removal, AuthoredStatusPayload,
         DamageDelivery, DamageType, EffectPacket, HolyShieldEndReason, MovementModifiers,
@@ -10123,6 +10341,37 @@ mod tests {
         assert!((behind_target_damage_multiplier(true, true, 0.15) - 1.15).abs() < 0.0001);
         assert_eq!(behind_target_damage_multiplier(false, true, 0.15), 1.0);
         assert_eq!(behind_target_damage_multiplier(true, false, 0.15), 1.0);
+    }
+
+    #[test]
+    fn maverick_bonuses_only_isolated_archer_damage() {
+        assert!((isolated_damage_multiplier(true, 0.15) - 1.15).abs() < 0.0001);
+        assert_eq!(isolated_damage_multiplier(false, 0.15), 1.0);
+        assert_eq!(isolated_damage_multiplier(true, f32::NAN), 1.0);
+    }
+
+    #[test]
+    fn point_blank_scales_linearly_between_melee_and_max_bow_range() {
+        assert!((point_blank_damage_multiplier(2.5, 2.5, 18.0, 0.30) - 1.30).abs() < 0.0001);
+        assert!((point_blank_damage_multiplier(10.25, 2.5, 18.0, 0.30) - 1.15).abs() < 0.0001);
+        assert_eq!(point_blank_damage_multiplier(18.0, 2.5, 18.0, 0.30), 1.0);
+        assert_eq!(point_blank_damage_multiplier(30.0, 2.5, 18.0, 0.30), 1.0);
+    }
+
+    #[test]
+    fn careful_aim_uses_horizontal_displacement_and_inclusive_threshold() {
+        assert!(stationary_target_from_poses(0.05, 0.0, 0.0, 0.0, 0.05));
+        assert!(!stationary_target_from_poses(0.051, 0.0, 0.0, 0.0, 0.05));
+        assert!((stationary_target_damage_multiplier(true, 0.15) - 1.15).abs() < 0.0001);
+        assert_eq!(stationary_target_damage_multiplier(false, 0.15), 1.0);
+    }
+
+    #[test]
+    fn heartseeker_forces_critical_only_for_stationary_targets() {
+        assert!(heartseeker_should_auto_crit("ARCHER_HEARTSEEKER", true));
+        assert!(heartseeker_should_auto_crit("archer_heartseeker", true));
+        assert!(!heartseeker_should_auto_crit("ARCHER_HEARTSEEKER", false));
+        assert!(!heartseeker_should_auto_crit("ARCHER_POWER_SHOT", true));
     }
 
     #[test]

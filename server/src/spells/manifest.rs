@@ -2242,4 +2242,37 @@ mod tests {
         assert_eq!(status.max_stacks(), 1);
         assert_eq!(status.stack_policy(), StackPolicy::Refresh);
     }
+
+    #[test]
+    fn rain_of_arrows_catalog_uses_the_standard_point_area_contract() {
+        let definition = definition("RAIN_OF_ARROWS");
+
+        assert_eq!(definition.cooldown, Duration::from_millis(6_000));
+        assert!(definition.uses_global_cooldown);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(
+            definition.cast_mobility,
+            SpellCastMobility::GroundedStationary
+        );
+        assert_eq!(definition.behavior, SpellBehavior::Area);
+        assert_eq!(definition.targeting, SpellTargeting::Point);
+        assert!(!definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.damage, 38);
+        assert_eq!(definition.damage_type, DamageType::Physical);
+        assert!((definition.max_distance - 18.0).abs() < 0.0001);
+        assert!((definition.radius - 4.0).abs() < 0.0001);
+        assert_eq!(definition.aim_radius, Some(4.0));
+        assert!((definition.primary_resource_cost - 30.0).abs() < 0.0001);
+        assert_eq!(definition.block_behavior, BlockBehavior::Blockable);
+        assert_eq!(
+            definition
+                .secondary
+                .area
+                .as_ref()
+                .expect("Rain of Arrows should define area secondary data")
+                .impact_delay_ms,
+            850
+        );
+    }
 }

@@ -38,6 +38,8 @@ namespace Arena.MatchDb
         public float EndY;
         [DataMember(Name = "end_z")]
         public float EndZ;
+        [DataMember(Name = "arc_height")]
+        public float ArcHeight;
         [DataMember(Name = "facing_yaw_start")]
         public float FacingYawStart;
         [DataMember(Name = "facing_policy")]
@@ -60,6 +62,7 @@ namespace Arena.MatchDb
             float EndX,
             float EndY,
             float EndZ,
+            float ArcHeight,
             float FacingYawStart,
             string FacingPolicy,
             string CollisionPolicy,
@@ -78,6 +81,7 @@ namespace Arena.MatchDb
             this.EndX = EndX;
             this.EndY = EndY;
             this.EndZ = EndZ;
+            this.ArcHeight = ArcHeight;
             this.FacingYawStart = FacingYawStart;
             this.FacingPolicy = FacingPolicy;
             this.CollisionPolicy = CollisionPolicy;

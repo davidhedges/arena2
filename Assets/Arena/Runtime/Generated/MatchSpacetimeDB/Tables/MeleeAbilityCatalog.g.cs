@@ -71,6 +71,7 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong> ChannelFirstTickDelayMs { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong> ChannelTickIntervalMs { get; }
         public global::SpacetimeDB.Col<MeleeAbilityCatalog, bool> ChannelCancelOnMovement { get; }
+        public global::SpacetimeDB.Col<MeleeAbilityCatalog, bool> ChannelUseAuthoredHitWindows { get; }
 
         public MeleeAbilityCatalogCols(string tableName)
         {
@@ -105,6 +106,7 @@ namespace Arena.MatchDb
             ChannelFirstTickDelayMs = new global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong>(tableName, "channel_first_tick_delay_ms");
             ChannelTickIntervalMs = new global::SpacetimeDB.Col<MeleeAbilityCatalog, ulong>(tableName, "channel_tick_interval_ms");
             ChannelCancelOnMovement = new global::SpacetimeDB.Col<MeleeAbilityCatalog, bool>(tableName, "channel_cancel_on_movement");
+            ChannelUseAuthoredHitWindows = new global::SpacetimeDB.Col<MeleeAbilityCatalog, bool>(tableName, "channel_use_authored_hit_windows");
         }
     }
 

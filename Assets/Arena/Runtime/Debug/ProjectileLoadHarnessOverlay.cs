@@ -474,6 +474,7 @@ namespace Arena.Debugging
                     break;
                 case CombatEventTypes.Block:
                 case CombatEventTypes.Parry:
+                case CombatEventTypes.Evade:
                     _blockParryTotal++;
                     _terminalTotal++;
                     _observedActiveProjectiles.Remove(projectileKey);

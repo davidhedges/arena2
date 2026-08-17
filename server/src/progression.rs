@@ -103,6 +103,11 @@ pub(crate) const AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE: &str =
 const ABILITY_KIND_COMBAT_MODE_TOGGLE: &str = "COMBAT_MODE_TOGGLE";
 #[cfg(test)]
 const ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID: &str = "ARCHER_DRAW_MODE_TOGGLE";
+const ARCHER_MAVERICK_ABILITY_ID: &str = "ARCHER_MAVERICK";
+const ARCHER_POINT_BLANK_ABILITY_ID: &str = "ARCHER_POINT_BLANK";
+const ARCHER_CAREFUL_AIM_ABILITY_ID: &str = "ARCHER_CAREFUL_AIM";
+pub(crate) const ARCHER_HEARTSEEKER_ABILITY_ID: &str = "ARCHER_HEARTSEEKER";
+const ARCHER_PERFORATION_ABILITY_ID: &str = "ARCHER_PERFORATION";
 // Keep the original wire ID stable so existing action-bar assignments survive the rename.
 const DAGGER_SHROUD_ABILITY_ID: &str = "DAGGER_STEALTH";
 const SUBTLETY_FLEET_FOOTED_ABILITY_ID: &str = "SUBTLETY_FLEET_FOOTED";
@@ -282,6 +287,26 @@ struct AbilityGameplayDefinition {
     #[serde(default)]
     behind_target_damage_bonus: f32,
     #[serde(default)]
+    isolated_damage_bonus: f32,
+    #[serde(default)]
+    isolated_ally_radius_meters: f32,
+    #[serde(default)]
+    point_blank_damage_bonus: f32,
+    #[serde(default)]
+    point_blank_full_bonus_range_meters: f32,
+    #[serde(default)]
+    point_blank_zero_bonus_range_meters: f32,
+    #[serde(default)]
+    stationary_target_damage_bonus: f32,
+    #[serde(default)]
+    stationary_target_window_ms: u64,
+    #[serde(default)]
+    stationary_target_max_displacement_meters: f32,
+    #[serde(default)]
+    stationary_target_auto_crit: bool,
+    #[serde(default)]
+    projectile_piercing: bool,
+    #[serde(default)]
     dodge_recharge_time_reduction: f32,
     #[serde(default)]
     movement_return: Option<MovementReturnDefinition>,
@@ -341,6 +366,8 @@ struct AbilityGameplayDefinition {
     gap_close: Option<GapCloseDefinition>,
     #[serde(default)]
     melee_timed_movement: Option<MeleeTimedMovementDefinition>,
+    #[serde(default)]
+    melee_evasive_leap: Option<MeleeEvasiveLeapDefinition>,
     #[serde(default)]
     melee_channel: Option<MeleeChannelDefinition>,
     #[serde(default)]
@@ -801,12 +828,19 @@ pub(crate) struct MeleeTimedMovementRuntime {
     pub facing_policy: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct MeleeEvasiveLeapRuntime {
+    pub duration_ms: u64,
+    pub arc_height: f32,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MeleeChannelRuntime {
     pub duration_ms: u64,
     pub first_tick_delay_ms: u64,
     pub tick_interval_ms: u64,
     pub cancel_on_movement: bool,
+    pub use_authored_hit_windows: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -860,11 +894,20 @@ struct MeleeTimedMovementDefinition {
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct MeleeEvasiveLeapDefinition {
+    duration_ms: u64,
+    arc_height: f32,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct MeleeChannelDefinition {
     duration_ms: u64,
     first_tick_delay_ms: u64,
     tick_interval_ms: u64,
     cancel_on_movement: bool,
+    #[serde(default)]
+    use_authored_hit_windows: bool,
 }
 
 #[derive(Clone, Deserialize)]
@@ -1522,6 +1565,8 @@ pub struct MeleeAbilityCatalog {
     pub channel_tick_interval_ms: u64,
     #[default(false)]
     pub channel_cancel_on_movement: bool,
+    #[default(false)]
+    pub channel_use_authored_hit_windows: bool,
 }
 
 #[table(accessor = melee_gap_close_catalog, public)]
@@ -3481,6 +3526,20 @@ pub(crate) fn melee_timed_movement_for_ability_id(
     })
 }
 
+pub(crate) fn melee_evasive_leap_for_ability_id(
+    ability_id: &str,
+) -> Option<MeleeEvasiveLeapRuntime> {
+    let definition = ability_definition(ability_id)?;
+    if ability_gameplay_kind(definition) != "MELEE" {
+        return None;
+    }
+    let leap = definition.gameplay.melee_evasive_leap.as_ref()?;
+    Some(MeleeEvasiveLeapRuntime {
+        duration_ms: leap.duration_ms,
+        arc_height: leap.arc_height.max(0.0),
+    })
+}
+
 pub(crate) fn melee_channel_for_ability_id(ability_id: &str) -> Option<MeleeChannelRuntime> {
     let definition = ability_definition(ability_id)?;
     if ability_gameplay_kind(definition) != "MELEE" {
@@ -3492,6 +3551,7 @@ pub(crate) fn melee_channel_for_ability_id(ability_id: &str) -> Option<MeleeChan
         first_tick_delay_ms: channel.first_tick_delay_ms,
         tick_interval_ms: channel.tick_interval_ms,
         cancel_on_movement: channel.cancel_on_movement,
+        use_authored_hit_windows: channel.use_authored_hit_windows,
     })
 }
 
@@ -3601,6 +3661,7 @@ pub(crate) fn action_id_is_movement_ability(action_id: &str) -> bool {
             "MELEE" => {
                 definition.gameplay.gap_close.is_some()
                     || definition.gameplay.melee_timed_movement.is_some()
+                    || definition.gameplay.melee_evasive_leap.is_some()
             }
             "SPELL" => definition
                 .gameplay
@@ -4140,6 +4201,11 @@ fn sync_melee_ability_catalog(ctx: &ReducerContext) {
                 .melee_channel
                 .as_ref()
                 .is_some_and(|channel| channel.cancel_on_movement),
+            channel_use_authored_hit_windows: definition
+                .gameplay
+                .melee_channel
+                .as_ref()
+                .is_some_and(|channel| channel.use_authored_hit_windows),
         };
         if ctx
             .db
@@ -5548,6 +5614,19 @@ fn validate_ability_catalog() {
         let ability_kind = ability_gameplay_kind(ability);
         let disabled_target_damage_bonus = ability.gameplay.disabled_target_damage_bonus;
         let behind_target_damage_bonus = ability.gameplay.behind_target_damage_bonus;
+        let isolated_damage_bonus = ability.gameplay.isolated_damage_bonus;
+        let isolated_ally_radius_meters = ability.gameplay.isolated_ally_radius_meters;
+        let point_blank_damage_bonus = ability.gameplay.point_blank_damage_bonus;
+        let point_blank_full_bonus_range_meters =
+            ability.gameplay.point_blank_full_bonus_range_meters;
+        let point_blank_zero_bonus_range_meters =
+            ability.gameplay.point_blank_zero_bonus_range_meters;
+        let stationary_target_damage_bonus = ability.gameplay.stationary_target_damage_bonus;
+        let stationary_target_window_ms = ability.gameplay.stationary_target_window_ms;
+        let stationary_target_max_displacement_meters =
+            ability.gameplay.stationary_target_max_displacement_meters;
+        let stationary_target_auto_crit = ability.gameplay.stationary_target_auto_crit;
+        let projectile_piercing = ability.gameplay.projectile_piercing;
         let dodge_recharge_time_reduction = ability.gameplay.dodge_recharge_time_reduction;
         let movement_return = ability.gameplay.movement_return.as_ref();
         let stealth_attack_stun_ms = ability.gameplay.stealth_attack_stun_ms;
@@ -5584,6 +5663,84 @@ fn validate_ability_catalog() {
                 && (0.0..=1.0).contains(&disabled_target_damage_bonus),
             "ability '{ability_id}' must author disabled_target_damage_bonus between 0 and 1"
         );
+        assert!(
+            isolated_damage_bonus.is_finite() && (0.0..=1.0).contains(&isolated_damage_bonus),
+            "ability '{ability_id}' must author isolated_damage_bonus between 0 and 1"
+        );
+        assert!(
+            isolated_ally_radius_meters.is_finite() && isolated_ally_radius_meters >= 0.0,
+            "ability '{ability_id}' must author a finite non-negative isolated_ally_radius_meters"
+        );
+        if isolated_damage_bonus > 0.0 || isolated_ally_radius_meters > 0.0 {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author isolated damage tuning for PASSIVE gameplay"
+            );
+            assert!(
+                isolated_damage_bonus > 0.0 && isolated_ally_radius_meters > 0.0,
+                "ability '{ability_id}' must author complete isolated damage tuning"
+            );
+        }
+        assert!(
+            point_blank_damage_bonus.is_finite() && (0.0..=1.0).contains(&point_blank_damage_bonus),
+            "ability '{ability_id}' must author point_blank_damage_bonus between 0 and 1"
+        );
+        assert!(
+            point_blank_full_bonus_range_meters.is_finite()
+                && point_blank_full_bonus_range_meters >= 0.0
+                && point_blank_zero_bonus_range_meters.is_finite()
+                && point_blank_zero_bonus_range_meters >= 0.0,
+            "ability '{ability_id}' must author finite non-negative Point Blank ranges"
+        );
+        if point_blank_damage_bonus > 0.0
+            || point_blank_full_bonus_range_meters > 0.0
+            || point_blank_zero_bonus_range_meters > 0.0
+        {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author Point Blank tuning for PASSIVE gameplay"
+            );
+            assert!(
+                point_blank_damage_bonus > 0.0
+                    && point_blank_full_bonus_range_meters > 0.0
+                    && point_blank_zero_bonus_range_meters > point_blank_full_bonus_range_meters,
+                "ability '{ability_id}' must author complete ordered Point Blank tuning"
+            );
+        }
+        assert!(
+            stationary_target_damage_bonus.is_finite()
+                && (0.0..=1.0).contains(&stationary_target_damage_bonus),
+            "ability '{ability_id}' must author stationary_target_damage_bonus between 0 and 1"
+        );
+        assert!(
+            stationary_target_max_displacement_meters.is_finite()
+                && stationary_target_max_displacement_meters >= 0.0,
+            "ability '{ability_id}' must author a finite non-negative stationary displacement threshold"
+        );
+        if stationary_target_damage_bonus > 0.0 {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author stationary target damage tuning for PASSIVE gameplay"
+            );
+        }
+        if stationary_target_damage_bonus > 0.0
+            || stationary_target_window_ms > 0
+            || stationary_target_max_displacement_meters > 0.0
+            || stationary_target_auto_crit
+        {
+            assert!(
+                (stationary_target_damage_bonus > 0.0 || stationary_target_auto_crit)
+                    && stationary_target_window_ms > 0
+                    && stationary_target_max_displacement_meters > 0.0,
+                "ability '{ability_id}' must author complete stationary target tuning"
+            );
+        }
+        if projectile_piercing {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author projectile_piercing for PASSIVE gameplay"
+            );
+        }
         assert!(
             mana_regen_bonus.is_finite() && mana_regen_bonus >= 0.0,
             "ability '{ability_id}' must author a finite non-negative mana_regen_bonus"
@@ -6077,6 +6234,39 @@ fn validate_ability_catalog() {
                 "Opportunist must carry the PASSIVE ability tag"
             );
         }
+        if ability_id == ARCHER_MAVERICK_ABILITY_ID {
+            assert_eq!(discipline_id, DISCIPLINE_PRECISION);
+            assert_eq!(ability_kind, "PASSIVE");
+            assert!((isolated_damage_bonus - 0.15).abs() < 0.0001);
+            assert!((isolated_ally_radius_meters - 10.0).abs() < 0.0001);
+        }
+        if ability_id == ARCHER_POINT_BLANK_ABILITY_ID {
+            assert_eq!(discipline_id, DISCIPLINE_PRECISION);
+            assert_eq!(ability_kind, "PASSIVE");
+            assert!((point_blank_damage_bonus - 0.30).abs() < 0.0001);
+            assert!((point_blank_full_bonus_range_meters - 2.5).abs() < 0.0001);
+            assert!((point_blank_zero_bonus_range_meters - 18.0).abs() < 0.0001);
+        }
+        if ability_id == ARCHER_CAREFUL_AIM_ABILITY_ID {
+            assert_eq!(discipline_id, DISCIPLINE_PRECISION);
+            assert_eq!(ability_kind, "PASSIVE");
+            assert!((stationary_target_damage_bonus - 0.15).abs() < 0.0001);
+            assert_eq!(stationary_target_window_ms, 250);
+            assert!((stationary_target_max_displacement_meters - 0.05).abs() < 0.0001);
+        }
+        if ability_id == ARCHER_HEARTSEEKER_ABILITY_ID {
+            assert_eq!(discipline_id, DISCIPLINE_PRECISION);
+            assert_eq!(ability_kind, "MELEE");
+            assert_eq!(ability.gameplay.base_damage, Some(42));
+            assert!(stationary_target_auto_crit);
+            assert_eq!(stationary_target_window_ms, 250);
+            assert!((stationary_target_max_displacement_meters - 0.05).abs() < 0.0001);
+        }
+        if ability_id == ARCHER_PERFORATION_ABILITY_ID {
+            assert_eq!(discipline_id, DISCIPLINE_PRECISION);
+            assert_eq!(ability_kind, "PASSIVE");
+            assert!(projectile_piercing);
+        }
         if ability_id == SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID {
             assert_eq!(
                 discipline_id, DISCIPLINE_SUBTLETY,
@@ -6277,6 +6467,10 @@ fn validate_ability_catalog() {
                 "non-melee ability '{ability_id}' must not define melee_timed_movement"
             );
             assert!(
+                ability.gameplay.melee_evasive_leap.is_none(),
+                "non-melee ability '{ability_id}' must not define melee_evasive_leap"
+            );
+            assert!(
                 ability.gameplay.melee_channel.is_none(),
                 "non-melee ability '{ability_id}' must not define melee_channel"
             );
@@ -6302,18 +6496,22 @@ fn validated_ability_actor_scope(ability_id: &str, actor_scope: &str) -> String 
 }
 
 fn validate_melee_gameplay_fields(ability_id: &str, gameplay: &AbilityGameplayDefinition) {
-    if gameplay.gap_close.is_some() && gameplay.melee_timed_movement.is_some() {
-        panic!("melee ability '{ability_id}' must not combine gap_close and melee_timed_movement");
+    let authored_movement_count = usize::from(gameplay.gap_close.is_some())
+        + usize::from(gameplay.melee_timed_movement.is_some())
+        + usize::from(gameplay.melee_evasive_leap.is_some());
+    if authored_movement_count > 1 {
+        panic!("melee ability '{ability_id}' must define at most one authored movement");
     }
-    if gameplay.melee_channel.is_some()
-        && (gameplay.gap_close.is_some() || gameplay.melee_timed_movement.is_some())
-    {
+    if gameplay.melee_channel.is_some() && authored_movement_count > 0 {
         panic!(
             "melee ability '{ability_id}' must not combine melee_channel with authored movement"
         );
     }
     if let Some(movement) = gameplay.melee_timed_movement.as_ref() {
         validate_melee_timed_movement(ability_id, movement);
+    }
+    if let Some(leap) = gameplay.melee_evasive_leap.as_ref() {
+        validate_melee_evasive_leap(ability_id, leap);
     }
     if let Some(channel) = gameplay.melee_channel.as_ref() {
         validate_melee_channel(ability_id, channel);
@@ -6398,20 +6596,42 @@ fn validate_melee_gameplay_fields(ability_id: &str, gameplay: &AbilityGameplayDe
     }
 }
 
+fn validate_melee_evasive_leap(ability_id: &str, leap: &MeleeEvasiveLeapDefinition) {
+    assert!(
+        leap.duration_ms > 0,
+        "melee ability '{ability_id}' melee_evasive_leap.duration_ms must be positive"
+    );
+    assert!(
+        leap.arc_height.is_finite() && leap.arc_height > 0.0,
+        "melee ability '{ability_id}' melee_evasive_leap.arc_height must be positive"
+    );
+}
+
 fn validate_melee_channel(ability_id: &str, channel: &MeleeChannelDefinition) {
     assert!(
         channel.duration_ms > 0,
         "melee ability '{ability_id}' melee_channel.duration_ms must be positive"
     );
-    assert!(
-        channel.first_tick_delay_ms > 0
-            && channel.first_tick_delay_ms <= channel.duration_ms,
-        "melee ability '{ability_id}' melee_channel.first_tick_delay_ms must be in (0, duration_ms]"
-    );
-    assert!(
-        channel.tick_interval_ms > 0 && channel.tick_interval_ms <= channel.duration_ms,
-        "melee ability '{ability_id}' melee_channel.tick_interval_ms must be in (0, duration_ms]"
-    );
+    if channel.use_authored_hit_windows {
+        assert_eq!(
+            channel.first_tick_delay_ms, 0,
+            "melee ability '{ability_id}' authored-hit-window melee_channel.first_tick_delay_ms must be zero"
+        );
+        assert_eq!(
+            channel.tick_interval_ms, 0,
+            "melee ability '{ability_id}' authored-hit-window melee_channel.tick_interval_ms must be zero"
+        );
+    } else {
+        assert!(
+            channel.first_tick_delay_ms > 0
+                && channel.first_tick_delay_ms <= channel.duration_ms,
+            "melee ability '{ability_id}' melee_channel.first_tick_delay_ms must be in (0, duration_ms]"
+        );
+        assert!(
+            channel.tick_interval_ms > 0 && channel.tick_interval_ms <= channel.duration_ms,
+            "melee ability '{ability_id}' melee_channel.tick_interval_ms must be in (0, duration_ms]"
+        );
+    }
     assert!(
         channel.cancel_on_movement,
         "melee ability '{ability_id}' melee_channel.cancel_on_movement must be true"
@@ -7045,6 +7265,111 @@ pub(crate) fn subtlety_behind_target_damage_bonus() -> f32 {
         .unwrap_or(0.0)
 }
 
+fn precision_profile_is_active_for_owner(ctx: &ReducerContext, owner: Identity) -> bool {
+    derived_combat_profile_id_for_owner(ctx, owner)
+        .is_some_and(|profile_id| profile_id.eq_ignore_ascii_case(COMBAT_PROFILE_ARCHER_BOW))
+}
+
+pub(crate) fn precision_maverick_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<(f32, f32)> {
+    if !precision_profile_is_active_for_owner(ctx, owner) {
+        return None;
+    }
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == ARCHER_MAVERICK_ABILITY_ID
+        })
+        .and_then(|ability| {
+            let bonus = ability.gameplay.isolated_damage_bonus;
+            let radius = ability.gameplay.isolated_ally_radius_meters;
+            (bonus.is_finite() && bonus > 0.0 && radius.is_finite() && radius > 0.0)
+                .then_some((bonus, radius))
+        })
+}
+
+pub(crate) fn precision_point_blank_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<(f32, f32, f32)> {
+    if !precision_profile_is_active_for_owner(ctx, owner) {
+        return None;
+    }
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == ARCHER_POINT_BLANK_ABILITY_ID
+        })
+        .and_then(|ability| {
+            let bonus = ability.gameplay.point_blank_damage_bonus;
+            let full_range = ability.gameplay.point_blank_full_bonus_range_meters;
+            let zero_range = ability.gameplay.point_blank_zero_bonus_range_meters;
+            (bonus.is_finite()
+                && bonus > 0.0
+                && full_range.is_finite()
+                && full_range > 0.0
+                && zero_range.is_finite()
+                && zero_range > full_range)
+                .then_some((bonus, full_range, zero_range))
+        })
+}
+
+pub(crate) fn precision_careful_aim_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<(f32, u64, f32)> {
+    if !precision_profile_is_active_for_owner(ctx, owner) {
+        return None;
+    }
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == ARCHER_CAREFUL_AIM_ABILITY_ID
+        })
+        .and_then(|ability| {
+            let bonus = ability.gameplay.stationary_target_damage_bonus;
+            let window_ms = ability.gameplay.stationary_target_window_ms;
+            let max_displacement = ability.gameplay.stationary_target_max_displacement_meters;
+            (bonus.is_finite()
+                && bonus > 0.0
+                && window_ms > 0
+                && max_displacement.is_finite()
+                && max_displacement > 0.0)
+                .then_some((bonus, window_ms, max_displacement))
+        })
+}
+
+pub(crate) fn precision_heartseeker_stationary_rule() -> Option<(u64, f32)> {
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == ARCHER_HEARTSEEKER_ABILITY_ID
+        })
+        .and_then(|ability| {
+            let window_ms = ability.gameplay.stationary_target_window_ms;
+            let max_displacement = ability.gameplay.stationary_target_max_displacement_meters;
+            (ability.gameplay.stationary_target_auto_crit
+                && window_ms > 0
+                && max_displacement.is_finite()
+                && max_displacement > 0.0)
+                .then_some((window_ms, max_displacement))
+        })
+}
+
+pub(crate) fn precision_perforation_for_owner(ctx: &ReducerContext, owner: Identity) -> bool {
+    precision_profile_is_active_for_owner(ctx, owner)
+        && progression_catalog().abilities.iter().any(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == ARCHER_PERFORATION_ABILITY_ID
+                && ability.gameplay.projectile_piercing
+        })
+}
+
 pub(crate) fn subtlety_dodge_recharge_time_reduction() -> f32 {
     progression_catalog()
         .abilities
@@ -7446,21 +7771,22 @@ mod tests {
         character_action_bar_assignment_is_generic_fixed_action,
         character_discipline_loadout_contains, combat_rule_value, combat_vfx_cue_key,
         derived_spell_action_presentation_rows, encode_tags, melee_channel_for_ability_id,
-        melee_impact_effects_for_ability_id, normalize_identifier,
-        normalize_optional_target_audience, primary_resource_gain_on_action_accept,
-        progression_catalog, projectile_body_vfx_id_for_spell,
-        resolved_combat_profile_id_for_ability_definition, resolved_melee_targeting_for_catalog,
-        selectable_slot_ids, shroud_has_expired, validate_auto_attack_catalog,
-        validate_combat_mode_catalog, validate_progression_catalog_authoring_contract,
-        AbilityDefinition, ActionKind, CharacterActionBarAssignment, CharacterDisciplineLoadout,
-        CombatVfxPresentationManifest, FixedActionId, MeleeChannelRuntime,
-        MeleeImpactEffectRuntime, ABILITY_KIND_COMBAT_MODE_TOGGLE, ACTION_KIND_FIXED,
-        ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID, AUTO_ATTACK_MOVEMENT_ALLOW_MOVING,
-        AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE, COMBAT_MODE_FULL_DRAW, COMBAT_MODE_READY,
-        COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED, COMBAT_PROFILE_ARCHER_BOW,
-        COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_SWORD_AND_SHIELD, COMBAT_PROFILE_TWO_HANDED_SWORD,
-        DAGGER_SHROUD_ABILITY_ID, DISCIPLINE_DIVINITY, DISCIPLINE_PRIMAL, DISCIPLINE_RUIN,
-        GLOBAL_ACTION_BAR_PROFILE, PRIMAL_ADAPTATION_ABILITY_ID, PRIMAL_PHOTOSYNTHESIS_ABILITY_ID,
+        melee_evasive_leap_for_ability_id, melee_impact_effects_for_ability_id,
+        normalize_identifier, normalize_optional_target_audience,
+        primary_resource_gain_on_action_accept, progression_catalog,
+        projectile_body_vfx_id_for_spell, resolved_combat_profile_id_for_ability_definition,
+        resolved_melee_targeting_for_catalog, selectable_slot_ids, shroud_has_expired,
+        validate_auto_attack_catalog, validate_combat_mode_catalog,
+        validate_progression_catalog_authoring_contract, AbilityDefinition, ActionKind,
+        CharacterActionBarAssignment, CharacterDisciplineLoadout, CombatVfxPresentationManifest,
+        FixedActionId, MeleeChannelRuntime, MeleeImpactEffectRuntime,
+        ABILITY_KIND_COMBAT_MODE_TOGGLE, ACTION_KIND_FIXED, ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID,
+        AUTO_ATTACK_MOVEMENT_ALLOW_MOVING, AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
+        COMBAT_MODE_FULL_DRAW, COMBAT_MODE_READY, COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED,
+        COMBAT_PROFILE_ARCHER_BOW, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_SWORD_AND_SHIELD,
+        COMBAT_PROFILE_TWO_HANDED_SWORD, DAGGER_SHROUD_ABILITY_ID, DISCIPLINE_DIVINITY,
+        DISCIPLINE_PRECISION, DISCIPLINE_PRIMAL, DISCIPLINE_RUIN, GLOBAL_ACTION_BAR_PROFILE,
+        PRIMAL_ADAPTATION_ABILITY_ID, PRIMAL_PHOTOSYNTHESIS_ABILITY_ID,
         PRIMAL_SLIPSTREAM_ABILITY_ID, RESOURCE_KIND_STAMINA, SUBTLETY_FLEET_FOOTED_ABILITY_ID,
         SUBTLETY_LINGERING_SHADE_ABILITY_ID, SUBTLETY_OPPORTUNIST_ABILITY_ID,
         SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID, SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID,
@@ -11840,6 +12166,7 @@ mod tests {
                 first_tick_delay_ms: 44,
                 tick_interval_ms: 333,
                 cancel_on_movement: true,
+                use_authored_hit_windows: false,
             })
         );
         assert_eq!(
@@ -11849,8 +12176,185 @@ mod tests {
                 first_tick_delay_ms: 107,
                 tick_interval_ms: 667,
                 cancel_on_movement: true,
+                use_authored_hit_windows: false,
             })
         );
+    }
+
+    #[test]
+    fn archer_triple_shot_authors_a_three_window_movement_cancelable_sequence() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "ARCHER_TRIPLE_SHOT")
+            .expect("ARCHER_TRIPLE_SHOT must exist");
+
+        assert_eq!(ability.discipline_id, DISCIPLINE_PRECISION);
+        assert_eq!(ability.combat_profile_id, COMBAT_PROFILE_ARCHER_BOW);
+        assert_eq!(ability.action_id, "ARCHER_TRIPLE_SHOT");
+        assert_eq!(ability.gameplay.base_damage, Some(48));
+        assert_eq!(
+            melee_channel_for_ability_id("ARCHER_TRIPLE_SHOT"),
+            Some(MeleeChannelRuntime {
+                duration_ms: 2743,
+                first_tick_delay_ms: 0,
+                tick_interval_ms: 0,
+                cancel_on_movement: true,
+                use_authored_hit_windows: true,
+            })
+        );
+    }
+
+    #[test]
+    fn archer_backstep_attacks_reuse_the_authored_timed_movement_path() {
+        for ability_id in ["ARCHER_BACKSTEP", "ARCHER_DISENGAGE"] {
+            let movement = melee_timed_movement_for_ability_id(ability_id)
+                .unwrap_or_else(|| panic!("{ability_id} should author timed movement"));
+
+            assert_eq!(movement.ability_id, ability_id);
+            assert_eq!(movement.kind, "BACKSTEP");
+            assert_eq!(movement.start_delay_ms, 220);
+            assert_eq!(movement.direction, "BACKWARD");
+            assert_eq!(movement.distance, 7.0);
+            assert_eq!(movement.speed, 18.0);
+            assert_eq!(movement.collision_policy, "STOP_AT_BLOCK");
+            assert_eq!(movement.facing_policy, "FACE_START");
+
+            let ability = progression_catalog()
+                .abilities
+                .iter()
+                .find(|ability| ability.ability_id == ability_id)
+                .unwrap_or_else(|| panic!("{ability_id} ability should exist"));
+            assert_eq!(ability.discipline_id, DISCIPLINE_PRECISION);
+            assert_eq!(ability.combat_profile_id, COMBAT_PROFILE_ARCHER_BOW);
+            assert_eq!(ability.action_id, ability_id);
+            assert_eq!(ability.gameplay.cooldown_ms, Some(1600));
+            assert_eq!(ability.gameplay.uses_global_cooldown, Some(true));
+            assert_eq!(ability.gameplay.global_cooldown_ms, Some(650));
+        }
+    }
+
+    #[test]
+    fn archer_evasive_shot_authors_tunable_leap_and_immunity_window() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "ARCHER_EVASIVE_SHOT")
+            .expect("ARCHER_EVASIVE_SHOT ability should exist");
+        let leap = melee_evasive_leap_for_ability_id("ARCHER_EVASIVE_SHOT")
+            .expect("ARCHER_EVASIVE_SHOT should author an evasive leap");
+
+        assert_eq!(ability.discipline_id, DISCIPLINE_PRECISION);
+        assert_eq!(ability.combat_profile_id, COMBAT_PROFILE_ARCHER_BOW);
+        assert_eq!(ability.action_id, "ARCHER_EVASIVE_SHOT");
+        assert_eq!(ability.gameplay.base_damage, Some(28));
+        assert_eq!(ability.gameplay.cooldown_ms, Some(8000));
+        assert_eq!(ability.gameplay.uses_global_cooldown, Some(true));
+        assert_eq!(ability.gameplay.global_cooldown_ms, Some(650));
+        assert_eq!(leap.duration_ms, 2000);
+        assert_eq!(leap.arc_height, 2.25);
+    }
+
+    #[test]
+    fn precision_passives_author_complete_damage_tuning_without_action_bar_defaults() {
+        let catalog = progression_catalog();
+        for ability_id in [
+            "ARCHER_MAVERICK",
+            "ARCHER_POINT_BLANK",
+            "ARCHER_CAREFUL_AIM",
+            "ARCHER_PERFORATION",
+        ] {
+            let ability = catalog
+                .abilities
+                .iter()
+                .find(|ability| ability.ability_id == ability_id)
+                .unwrap_or_else(|| panic!("{ability_id} ability should exist"));
+            assert_eq!(ability.discipline_id, DISCIPLINE_PRECISION);
+            assert_eq!(ability.combat_profile_id, COMBAT_PROFILE_ARCHER_BOW);
+            assert_eq!(ability_gameplay_kind(ability), "PASSIVE");
+            assert!(ability
+                .ability_tags
+                .iter()
+                .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+            assert!(catalog.action_presentations.iter().any(|presentation| {
+                action_presentation_key(presentation) == format!("ABILITY:{ability_id}")
+            }));
+            assert!(!catalog
+                .combat_profile_action_bar_defaults
+                .iter()
+                .any(|assignment| {
+                    action_ref_for_action_bar_default(assignment).id == ability_id
+                }));
+        }
+
+        let maverick = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "ARCHER_MAVERICK")
+            .unwrap();
+        assert!((maverick.gameplay.isolated_damage_bonus - 0.15).abs() < 0.0001);
+        assert!((maverick.gameplay.isolated_ally_radius_meters - 10.0).abs() < 0.0001);
+
+        let point_blank = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "ARCHER_POINT_BLANK")
+            .unwrap();
+        assert!((point_blank.gameplay.point_blank_damage_bonus - 0.30).abs() < 0.0001);
+        assert!((point_blank.gameplay.point_blank_full_bonus_range_meters - 2.5).abs() < 0.0001);
+        assert!((point_blank.gameplay.point_blank_zero_bonus_range_meters - 18.0).abs() < 0.0001);
+
+        let careful_aim = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "ARCHER_CAREFUL_AIM")
+            .unwrap();
+        assert!((careful_aim.gameplay.stationary_target_damage_bonus - 0.15).abs() < 0.0001);
+        assert_eq!(careful_aim.gameplay.stationary_target_window_ms, 250);
+        assert!(
+            (careful_aim
+                .gameplay
+                .stationary_target_max_displacement_meters
+                - 0.05)
+                .abs()
+                < 0.0001
+        );
+
+        let perforation = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "ARCHER_PERFORATION")
+            .unwrap();
+        assert!(perforation.gameplay.projectile_piercing);
+    }
+
+    #[test]
+    fn archer_heartseeker_authors_high_damage_stationary_auto_crit_shot() {
+        let catalog = progression_catalog();
+        let ability = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "ARCHER_HEARTSEEKER")
+            .expect("ARCHER_HEARTSEEKER ability should exist");
+
+        assert_eq!(ability.discipline_id, DISCIPLINE_PRECISION);
+        assert_eq!(ability.combat_profile_id, COMBAT_PROFILE_ARCHER_BOW);
+        assert_eq!(ability.action_id, "ARCHER_HEARTSEEKER");
+        assert_eq!(ability_gameplay_kind(ability), "MELEE");
+        assert_eq!(ability.resource_cost, 25.0);
+        assert_eq!(ability.gameplay.base_damage, Some(42));
+        assert_eq!(ability.gameplay.range, Some(18.0));
+        assert_eq!(ability.gameplay.cooldown_ms, Some(5_000));
+        assert!(ability.gameplay.stationary_target_auto_crit);
+        assert_eq!(ability.gameplay.stationary_target_window_ms, 250);
+        assert!((ability.gameplay.stationary_target_max_displacement_meters - 0.05).abs() < 0.0001);
+        assert!(profile_supports_action_reference(
+            COMBAT_PROFILE_ARCHER_BOW,
+            &AuthoredActionId::new("ARCHER_HEARTSEEKER")
+        ));
+        assert!(catalog.action_presentations.iter().any(|presentation| {
+            action_presentation_key(presentation) == "ABILITY:ARCHER_HEARTSEEKER"
+        }));
     }
 
     #[test]

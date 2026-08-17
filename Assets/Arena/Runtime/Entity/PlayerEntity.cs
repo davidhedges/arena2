@@ -484,6 +484,11 @@ namespace Arena.Entity
             return _animator?.RequestCombatLifecycleDrivenPhasedMeleeEnd(actionId) == true;
         }
 
+        public bool CancelPhasedMeleeAction(string actionId)
+        {
+            return _animator?.CancelPhasedMeleeAction(actionId) == true;
+        }
+
         /// <summary>
         /// Cuts the predicted presentation of a server-rejected action
         /// (netcode design review S2) via the shared preemption primitives —

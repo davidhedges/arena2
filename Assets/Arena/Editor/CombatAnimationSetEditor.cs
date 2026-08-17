@@ -1022,6 +1022,7 @@ namespace Arena.Editor
                         {
                             Undo.RecordObject(set, "Remove Melee Attack");
                             set.meleeAttacks.RemoveAt(attackIndex);
+                            PruneDanglingMeleeReferences(set);
                             OnDirectMeleeAttackListMutation(set, "remove-melee-attack");
                             GUIUtility.ExitGUI();
                         }
@@ -3134,6 +3135,55 @@ namespace Arena.Editor
             EditorUtility.SetDirty(set);
             ScheduleAnimationSetPersist(set, reason);
             InvalidateAvatarValidationCache(set);
+        }
+
+        internal static int PruneDanglingMeleeReferences(CombatAnimationSet set)
+        {
+            if (set == null)
+                return 0;
+
+            set.EnsureMeleeAttackListInitialized();
+            var strikeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int strikeIndex = 1; strikeIndex <= set.MeleeAttackCount; strikeIndex++)
+            {
+                string strikeId = set.GetStrikeCombat(strikeIndex).AuthoredStrikeIdOrDefault;
+                if (!string.IsNullOrWhiteSpace(strikeId))
+                    strikeIds.Add(strikeId);
+            }
+
+            int prunedReferenceCount = 0;
+            for (int strikeIndex = 1; strikeIndex <= set.MeleeAttackCount; strikeIndex++)
+            {
+                WeaponStrikeCombatAuthoring combat = set.GetStrikeCombat(strikeIndex);
+                string comboFrom = combat.ComboFromOrEmpty;
+                if (string.IsNullOrEmpty(comboFrom) || strikeIds.Contains(comboFrom))
+                    continue;
+
+                combat.comboFrom = string.Empty;
+                combat.comboOpenMs = 0f;
+                combat.comboGraceMs = 0f;
+                set.SetStrikeCombat(strikeIndex, combat);
+                prunedReferenceCount += 1;
+            }
+
+            List<string> autoAttackSequence = set.autoAttackVisualSequenceActionIds;
+            if (autoAttackSequence != null)
+            {
+                for (int index = autoAttackSequence.Count - 1; index >= 0; index--)
+                {
+                    string actionId = autoAttackSequence[index]?.Trim() ?? string.Empty;
+                    if (!string.IsNullOrEmpty(actionId) && strikeIds.Contains(actionId))
+                        continue;
+
+                    autoAttackSequence.RemoveAt(index);
+                    prunedReferenceCount += 1;
+                }
+
+                if (autoAttackSequence.Count == 0 && set.MeleeAttackCount > 0)
+                    autoAttackSequence.Add(set.GetStrikeCombat(1).AuthoredStrikeIdOrDefault);
+            }
+
+            return prunedReferenceCount;
         }
 
         private static MeleeManifestStrike[] GetImportedAuthoredMeleeStrikes(

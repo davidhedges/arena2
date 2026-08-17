@@ -51,6 +51,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<SpecialMovementRuntime, float> EndX { get; }
         public global::SpacetimeDB.Col<SpecialMovementRuntime, float> EndY { get; }
         public global::SpacetimeDB.Col<SpecialMovementRuntime, float> EndZ { get; }
+        public global::SpacetimeDB.Col<SpecialMovementRuntime, float> ArcHeight { get; }
         public global::SpacetimeDB.Col<SpecialMovementRuntime, float> FacingYawStart { get; }
         public global::SpacetimeDB.Col<SpecialMovementRuntime, string> FacingPolicy { get; }
         public global::SpacetimeDB.Col<SpecialMovementRuntime, string> CollisionPolicy { get; }
@@ -70,6 +71,7 @@ namespace SpacetimeDB.Types
             EndX = new global::SpacetimeDB.Col<SpecialMovementRuntime, float>(tableName, "end_x");
             EndY = new global::SpacetimeDB.Col<SpecialMovementRuntime, float>(tableName, "end_y");
             EndZ = new global::SpacetimeDB.Col<SpecialMovementRuntime, float>(tableName, "end_z");
+            ArcHeight = new global::SpacetimeDB.Col<SpecialMovementRuntime, float>(tableName, "arc_height");
             FacingYawStart = new global::SpacetimeDB.Col<SpecialMovementRuntime, float>(tableName, "facing_yaw_start");
             FacingPolicy = new global::SpacetimeDB.Col<SpecialMovementRuntime, string>(tableName, "facing_policy");
             CollisionPolicy = new global::SpacetimeDB.Col<SpecialMovementRuntime, string>(tableName, "collision_policy");

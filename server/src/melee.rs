@@ -42,26 +42,27 @@ use crate::combat::{
     status_matches_removal_filter, ActiveCombatProjectile, CombatEvent, CombatProjectileDefinition,
     DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StackPolicy,
     StatusDispelType, StatusEffectKind, StatusPayload, StatusPolarity, COMBAT_EVENT_AREA_IMPACT,
-    COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT,
-    COMBAT_EVENT_MISS, COMBAT_EVENT_PARRY, COMBAT_EVENT_RELEASE,
+    COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_EVADE, COMBAT_EVENT_FIZZLE,
+    COMBAT_EVENT_IMPACT, COMBAT_EVENT_MISS, COMBAT_EVENT_PARRY, COMBAT_EVENT_RELEASE,
     COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_FLURRY_PROC, COMBAT_METADATA_NONE,
     COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
     DAMAGE_SOURCE_KIND_MELEE,
 };
 use crate::defense::{
-    clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
-    DefenseResolution, DefensibleCombatHit,
+    begin_evasion_window, clear_interruptible_defense_for_owner, resolve_defensible_combat_hit,
+    CombatHitDeliveryKind, DefenseResolution, DefensibleCombatHit,
 };
 use crate::lingering_shade::arm_lingering_shade_for_voluntary_movement;
 use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::progression::{
     active_action_bar_assignment_debug_summary, active_selectable_ability_for_authored_action,
     derived_combat_profile_id_for_owner, melee_channel_for_ability_id,
-    melee_impact_effects_for_ability_id, melee_timed_movement_for_ability_id,
-    primary_resource_gain_on_action_accept, resolved_auto_attack_mode_for_owner,
-    ruin_flaming_weapon_on_hit_for_owner, AbilityCatalog, AutoAttackCatalog,
-    AutoAttackReplacementCatalog, MeleeAbilityCatalog, MeleeChannelRuntime, MeleeFireOnHitRuntime,
-    MeleeGapCloseCatalog, MeleeTimedMovementRuntime,
+    melee_evasive_leap_for_ability_id, melee_impact_effects_for_ability_id,
+    melee_timed_movement_for_ability_id, primary_resource_gain_on_action_accept,
+    resolved_auto_attack_mode_for_owner, ruin_flaming_weapon_on_hit_for_owner, AbilityCatalog,
+    AutoAttackCatalog, AutoAttackReplacementCatalog, MeleeAbilityCatalog, MeleeChannelRuntime,
+    MeleeEvasiveLeapRuntime, MeleeFireOnHitRuntime, MeleeGapCloseCatalog,
+    MeleeTimedMovementRuntime,
 };
 use crate::relations::{can_harm, combat_relation, target_audience_allows, TargetAudience};
 use crate::resources::{
@@ -72,10 +73,12 @@ use crate::resources::{
 };
 use crate::spells::{
     aoe_hits_player, approach_line_contact_point_xz, bake_linear_special_movement,
-    begin_special_movement, begin_special_movement_with_facing_policy, contact_distance_from_radii,
+    begin_parabolic_arc_special_movement, begin_special_movement,
+    begin_special_movement_with_facing_policy, contact_distance_from_radii,
     horizontal_movement_duration_ms, is_on_global_cooldown, is_on_named_cooldown,
     stamp_global_cooldown_for_duration, stamp_named_cooldown_for_duration, SpellVec3,
-    SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_FACING_FACE_START,
+    SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
+    SPECIAL_MOVEMENT_FACING_FACE_START,
 };
 use crate::world_collision::{
     resolve_world_horizontal_collision_y_with_layout_for_scene,
@@ -129,6 +132,7 @@ const EVENT_AREA_IMPACT: &str = COMBAT_EVENT_AREA_IMPACT;
 const EVENT_FIZZLE: &str = COMBAT_EVENT_FIZZLE;
 const EVENT_BLOCK: &str = COMBAT_EVENT_BLOCK;
 const EVENT_PARRY: &str = COMBAT_EVENT_PARRY;
+const EVENT_EVADE: &str = COMBAT_EVENT_EVADE;
 const EVENT_MISS: &str = COMBAT_EVENT_MISS;
 const MELEE_MANIFEST_JSON: &str = include_str!("melee_manifest.shared.json");
 const GIGANTISM_STATUS_GROUP: &str = "GIGANTISM";
@@ -1085,6 +1089,15 @@ fn melee_channel_movement_canceled(
     cancel_on_movement && current_voluntary_move_epoch != started_voluntary_move_epoch
 }
 
+fn pending_commitment_belongs_to_channel(
+    channel_owner: Identity,
+    channel_action_instance_id: &str,
+    pending_owner: Identity,
+    pending_action_instance_id: &str,
+) -> bool {
+    channel_owner == pending_owner && channel_action_instance_id == pending_action_instance_id
+}
+
 fn finish_active_melee_channel(
     ctx: &ReducerContext,
     row: ActiveMeleeChannel,
@@ -1097,11 +1110,39 @@ fn finish_active_melee_channel(
             .pending_melee_impact()
             .source()
             .filter(row.owner)
-            .filter(|impact| impact.spell_id == row.action_instance_id)
+            .filter(|impact| {
+                pending_commitment_belongs_to_channel(
+                    row.owner,
+                    row.action_instance_id.as_str(),
+                    impact.source,
+                    impact.spell_id.as_str(),
+                )
+            })
             .map(|impact| impact.impact_id)
             .collect();
         for impact_id in pending_impact_ids {
             ctx.db.pending_melee_impact().impact_id().delete(impact_id);
+        }
+
+        let pending_release_ids: Vec<u64> = ctx
+            .db
+            .pending_projectile_release()
+            .iter()
+            .filter(|release| {
+                pending_commitment_belongs_to_channel(
+                    row.owner,
+                    row.action_instance_id.as_str(),
+                    release.source,
+                    release.action_instance_id.as_str(),
+                )
+            })
+            .map(|release| release.release_id)
+            .collect();
+        for release_id in pending_release_ids {
+            ctx.db
+                .pending_projectile_release()
+                .release_id()
+                .delete(release_id);
         }
     }
 
@@ -1386,6 +1427,7 @@ struct ResolvedMeleeGameplay {
     applies_stagger: bool,
     impact_area: Option<ResolvedMeleeImpactArea>,
     timed_movement: Option<MeleeTimedMovementRuntime>,
+    evasive_leap: Option<MeleeEvasiveLeapRuntime>,
     channel: Option<MeleeChannelRuntime>,
 }
 
@@ -1854,6 +1896,7 @@ fn melee_gameplay_from_catalog_rows(
         applies_stagger: melee.applies_stagger,
         impact_area: resolved_melee_impact_area_from_catalog(&melee),
         timed_movement: melee_timed_movement_for_ability_id(ability.ability_id.as_str()),
+        evasive_leap: melee_evasive_leap_for_ability_id(ability.ability_id.as_str()),
         channel: melee_channel_for_ability_id(ability.ability_id.as_str()),
     })
 }
@@ -2042,6 +2085,7 @@ fn auto_attack_melee_gameplay_from_catalog(
         applies_stagger: row.applies_stagger,
         impact_area: None,
         timed_movement: None,
+        evasive_leap: None,
         channel: None,
     })
 }
@@ -2069,6 +2113,7 @@ fn auto_attack_replacement_melee_gameplay_from_catalog(
         applies_stagger: row.applies_stagger,
         impact_area: None,
         timed_movement: None,
+        evasive_leap: None,
         channel: None,
     })
 }
@@ -2117,6 +2162,10 @@ fn evenly_split_damage(total_damage: i32, count: usize) -> Vec<i32> {
 }
 
 fn melee_channel_tick_delays(channel: MeleeChannelRuntime) -> Vec<u64> {
+    if channel.tick_interval_ms == 0 {
+        return Vec::new();
+    }
+
     let mut delays = Vec::new();
     let mut delay_ms = channel.first_tick_delay_ms;
     while delay_ms <= channel.duration_ms {
@@ -2127,6 +2176,17 @@ fn melee_channel_tick_delays(channel: MeleeChannelRuntime) -> Vec<u64> {
         delay_ms = next_delay_ms;
     }
     delays
+}
+
+fn melee_impact_delays(strike: &StrikeData, channel: Option<MeleeChannelRuntime>) -> Vec<u64> {
+    match channel {
+        Some(channel) if !channel.use_authored_hit_windows => melee_channel_tick_delays(channel),
+        _ => strike
+            .hit_windows
+            .iter()
+            .map(|hit_window| hit_window.impact_delay_ms)
+            .collect(),
+    }
 }
 
 fn yaw_direction(yaw: f32) -> (f32, f32) {
@@ -3575,19 +3635,21 @@ fn perform_melee_attack_for_internal(
         }
     }
 
-    let impact_delays_ms = gameplay.channel.map_or_else(
-        || {
-            strike
-                .hit_windows
-                .iter()
-                .map(|hit_window| hit_window.impact_delay_ms)
-                .collect()
-        },
-        melee_channel_tick_delays,
-    );
+    let impact_delays_ms = melee_impact_delays(&strike, gameplay.channel);
     if impact_delays_ms.is_empty() {
         return Err(format!(
             "Melee strike has no resolved impact schedule: {}:{}",
+            combat_profile,
+            authored_action_id.as_str()
+        ));
+    }
+    if gameplay.channel.is_some_and(|channel| {
+        impact_delays_ms
+            .last()
+            .is_some_and(|last_delay_ms| *last_delay_ms > channel.duration_ms)
+    }) {
+        return Err(format!(
+            "Melee strike impact schedule exceeds channel duration: {}:{}",
             combat_profile,
             authored_action_id.as_str()
         ));
@@ -4014,6 +4076,7 @@ fn perform_melee_attack_for_internal(
         now
     );
     let timed_movement = gameplay.timed_movement.clone();
+    let evasive_leap = gameplay.evasive_leap;
     let (target, target_point_x, target_point_y, target_point_z, dx, dz, horiz_dist) =
         if let Some((target, target_snapshot, dx, dz, horiz_dist)) = target_context.as_ref() {
             mark_harmful_combat_action(ctx, caster, *target, now, strike.id.as_str());
@@ -4045,9 +4108,34 @@ fn perform_melee_attack_for_internal(
 
     crate::progression::arm_surprise_attacks_from_shroud(ctx, caster, spell_id.as_str(), now);
     crate::progression::break_shroud_on_attack(ctx, caster, now);
-    if resolved_gap_close.is_some() || timed_movement.is_some() {
+    if resolved_gap_close.is_some() || timed_movement.is_some() || evasive_leap.is_some() {
         arm_quickening_after_movement_ability(ctx, caster, now);
         advance_slipstream_after_movement_ability(ctx, caster, runtime_action_id.as_str(), now);
+    }
+
+    if let Some(leap) = evasive_leap {
+        let position = SpellVec3::new(caster_phys.pos_x, caster_phys.pos_y, caster_phys.pos_z);
+        begin_parabolic_arc_special_movement(
+            ctx,
+            caster,
+            &format!("MELEE_EVASIVE_LEAP:{}", runtime_action_id.as_str()),
+            now,
+            leap.duration_ms,
+            position,
+            position,
+            leap.arc_height,
+            caster_phys.yaw,
+            SPECIAL_MOVEMENT_FACING_FACE_START,
+            SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
+        );
+        begin_evasion_window(
+            ctx,
+            caster,
+            spell_id.as_str(),
+            Duration::from_millis(leap.duration_ms),
+            caster_phys.yaw,
+            now,
+        );
     }
 
     if let Some(gap_close) = resolved_gap_close {
@@ -5334,6 +5422,31 @@ fn resolve_pending_melee_target_impact(
             speed: 0.0,
         },
     ) {
+        DefenseResolution::Evaded => {
+            mark_harmful_combat_action(ctx, row.source, row.target, now, row.kind.as_str());
+            log::info!(
+                "[MELEE_IMPACT] owner={} source={} strike={} target={} result=evaded damage={} spell_id={}",
+                short_identity(row.source),
+                row.event_source,
+                row.kind,
+                short_identity(row.target),
+                row.damage,
+                row.spell_id
+            );
+            emit_evade_event(
+                ctx,
+                row,
+                now,
+                &caster_pose,
+                target_snapshot.pos_x,
+                target_impact_y,
+                target_snapshot.pos_z,
+                dx,
+                dz,
+                horiz_dist,
+            );
+            return;
+        }
         DefenseResolution::Parried => {
             mark_harmful_combat_action(ctx, row.source, row.target, now, row.kind.as_str());
             log::info!(
@@ -6028,6 +6141,58 @@ fn emit_parry_event(
     });
 }
 
+fn emit_evade_event(
+    ctx: &ReducerContext,
+    row: &PendingMeleeImpact,
+    now: Timestamp,
+    caster_phys: &CombatActorSnapshot,
+    target_x: f32,
+    target_y: f32,
+    target_z: f32,
+    dx: f32,
+    dz: f32,
+    horiz_dist: f32,
+) {
+    let (dir_x, dir_z) = if horiz_dist > 0.001 {
+        (dx / horiz_dist, dz / horiz_dist)
+    } else {
+        (0.0, 0.0)
+    };
+    ctx.db.combat_event().insert(CombatEvent {
+        event_id: 0,
+        action_instance_id: row.spell_id.clone(),
+        action_kind: row.kind.clone(),
+        ability_id: row.ability_id.clone(),
+        hit_index: row.hit_index as i32,
+        event_type: EVENT_EVADE.to_string(),
+        source_kind: row.event_source.clone(),
+        caster: row.source,
+        hit: row.target,
+        origin_x: caster_phys.pos_x,
+        origin_y: caster_phys.pos_y,
+        origin_z: caster_phys.pos_z,
+        dir_x,
+        dir_y: 0.0,
+        dir_z,
+        speed: 0.0,
+        max_distance: 0.0,
+        scalar_kind: COMBAT_SCALAR_NONE.to_string(),
+        scalar_value: 0.0,
+        sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
+        sequence_index: 0,
+        sequence_count: 0,
+        point_x: target_x,
+        point_y: target_y,
+        point_z: target_z,
+        created_at: now,
+        created_at_micros: timestamp_to_micros(now),
+        damage: 0,
+        metadata_kind: COMBAT_METADATA_NONE.to_string(),
+        metadata_key: String::new(),
+        metadata_value: String::new(),
+    });
+}
+
 fn emit_block_event(
     ctx: &ReducerContext,
     row: &PendingMeleeImpact,
@@ -6186,7 +6351,8 @@ mod tests {
         gap_close_has_horizontal_travel, gap_close_pre_commit_decision,
         gap_close_target_facing_satisfied, inactive_conditional_gap_close_range,
         melee_channel_movement_canceled, melee_channel_tick_delays,
-        melee_hit_volume_contains_player, melee_manifest, melee_target_impact_point_y,
+        melee_hit_volume_contains_player, melee_impact_delays, melee_manifest,
+        melee_target_impact_point_y, pending_commitment_belongs_to_channel,
         pending_melee_impact_range, positive_projectile_override,
         projectile_max_distance_for_policy, push_flaming_weapon_effects,
         push_melee_impact_status_effects, push_stagger_effect_with_duration_if_applicable,
@@ -7291,6 +7457,7 @@ mod tests {
                 first_tick_delay_ms: 44,
                 tick_interval_ms: 333,
                 cancel_on_movement: true,
+                use_authored_hit_windows: false,
             }),
             vec![44, 377, 710, 1043, 1376, 1709, 2042, 2375]
         );
@@ -7300,8 +7467,49 @@ mod tests {
                 first_tick_delay_ms: 107,
                 tick_interval_ms: 667,
                 cancel_on_movement: true,
+                use_authored_hit_windows: false,
             }),
             vec![107, 774, 1441, 2108, 2775]
+        );
+    }
+
+    #[test]
+    fn movement_cancelable_sequence_can_use_authored_hit_windows() {
+        let strike = StrikeData {
+            id: "TEST_AUTHORED_SEQUENCE".to_string(),
+            slot_id: "utility_1".to_string(),
+            hit_windows: vec![
+                StrikeHitWindowData {
+                    impact_delay_ms: 320,
+                },
+                StrikeHitWindowData {
+                    impact_delay_ms: 1503,
+                },
+                StrikeHitWindowData {
+                    impact_delay_ms: 2743,
+                },
+            ],
+            recovery_ms: 250,
+            is_gap_closer: false,
+            combo_from: None,
+            combo_open_ms: 0,
+            combo_grace_ms: 0,
+            aerial_execution_mode: default_aerial_execution_mode(),
+            projectile: None,
+        };
+
+        assert_eq!(
+            melee_impact_delays(
+                &strike,
+                Some(MeleeChannelRuntime {
+                    duration_ms: 2743,
+                    first_tick_delay_ms: 0,
+                    tick_interval_ms: 0,
+                    cancel_on_movement: true,
+                    use_authored_hit_windows: true,
+                })
+            ),
+            vec![320, 1503, 2743]
         );
     }
 
@@ -7310,6 +7518,31 @@ mod tests {
         assert!(!melee_channel_movement_canceled(true, 7, 7));
         assert!(melee_channel_movement_canceled(true, 7, 8));
         assert!(!melee_channel_movement_canceled(false, 7, 8));
+    }
+
+    #[test]
+    fn channel_cancellation_matches_only_the_same_owner_and_action_instance() {
+        let owner = test_identity_with_byte(0x11);
+        let other_owner = test_identity_with_byte(0x22);
+
+        assert!(pending_commitment_belongs_to_channel(
+            owner,
+            "triple-shot:7",
+            owner,
+            "triple-shot:7"
+        ));
+        assert!(!pending_commitment_belongs_to_channel(
+            owner,
+            "triple-shot:7",
+            other_owner,
+            "triple-shot:7"
+        ));
+        assert!(!pending_commitment_belongs_to_channel(
+            owner,
+            "triple-shot:7",
+            owner,
+            "triple-shot:8"
+        ));
     }
 
     #[test]
@@ -7596,12 +7829,17 @@ mod tests {
     }
 
     #[test]
-    fn archer_bow_marks_most_attacks_as_projectile_delivery() {
+    fn archer_bow_exports_only_the_eight_authored_attacks_plus_auto_attack() {
         let profile = melee_manifest()
             .profiles
             .iter()
             .find(|profile| profile.combat_profile == "ARCHER_BOW")
             .expect("ARCHER_BOW profile should exist");
+        let strike_ids: HashSet<_> = profile
+            .strikes
+            .iter()
+            .map(|strike| strike.id.as_str())
+            .collect();
         let projectile_strikes: HashSet<_> = profile
             .strikes
             .iter()
@@ -7609,26 +7847,20 @@ mod tests {
             .map(|strike| strike.id.as_str())
             .collect();
 
-        for expected in [
+        let expected = HashSet::from([
             "ARCHER_QUICK_SHOT",
-            "ARCHER_FOLLOW_THROUGH",
-            "ARCHER_LOW_DRAW",
             "ARCHER_FINISHING_SHOT",
             "ARCHER_POWER_SHOT",
+            "ARCHER_TRIPLE_SHOT",
+            "ARCHER_BACKSTEP",
+            "ARCHER_DISENGAGE",
             "ARCHER_EVASIVE_SHOT",
-            "ARCHER_AIR_SHOT",
+            "ARCHER_HEARTSEEKER",
             "AUTO_ATTACK_1",
-        ] {
-            assert!(
-                projectile_strikes.contains(expected),
-                "expected {expected} to release ARROW_STANDARD"
-            );
-        }
+        ]);
 
-        assert!(
-            !projectile_strikes.contains("ARCHER_RAIN_SHOT"),
-            "Rain Shot should stay out of single-arrow V1 delivery"
-        );
+        assert_eq!(strike_ids, expected);
+        assert_eq!(projectile_strikes, expected);
     }
 
     #[test]

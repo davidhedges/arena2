@@ -294,14 +294,24 @@ def validate_manifest(manifest: dict[str, Any]) -> None:
     authored: set[tuple[str, str]] = set()
     for sheet in manifest["sheets"]:
         capacity = int(sheet["columns"]) * int(sheet["rows"])
-        if len(sheet["cells"]) > capacity:
-            raise ValueError(f"{sheet['source']} has more cells than grid capacity")
-        for cell in sheet["cells"]:
+        occupied_indices: set[int] = set()
+        for ordinal, cell in enumerate(sheet["cells"]):
+            index = int(cell.get("index", ordinal))
+            if index < 0 or index >= capacity:
+                raise ValueError(f"{sheet['source']} cell index {index} exceeds grid capacity")
+            if index in occupied_indices:
+                raise ValueError(f"{sheet['source']} maps more than one icon to cell {index}")
+            occupied_indices.add(index)
             key = (cell["kind"], cell["id"])
             if key in authored:
                 raise ValueError(f"Duplicate icon mapping for {key[0]}:{key[1]}")
             authored.add(key)
-    missing = sorted(expected - authored)
+    output_root = ROOT / manifest["output_root"]
+    missing = sorted(
+        key
+        for key in expected - authored
+        if not (output_root / key[0] / f"{key[1]}.png").is_file()
+    )
     if missing:
         raise ValueError("Missing icon mappings: " + ", ".join(f"{kind}:{id_}" for kind, id_ in missing))
 
@@ -326,7 +336,8 @@ def main() -> None:
         src_width, src_height, src = read_png(source)
         columns = int(sheet["columns"])
         rows = int(sheet["rows"])
-        for index, cell in enumerate(sheet["cells"]):
+        for ordinal, cell in enumerate(sheet["cells"]):
+            index = int(cell.get("index", ordinal))
             col = index % columns
             row = index // columns
             x0 = round(col * src_width / columns)

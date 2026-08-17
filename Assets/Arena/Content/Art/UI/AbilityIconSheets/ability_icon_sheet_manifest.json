@@ -81,10 +81,7 @@
         {"kind": "ABILITY", "id": "PALADIN_FERVOR"},
         {"kind": "ABILITY", "id": "PALADIN_SACRED_FLAME"},
         {"kind": "ABILITY", "id": "ARCHER_POWER_SHOT"},
-        {"kind": "ABILITY", "id": "ARCHER_RAIN_SHOT"},
-        {"kind": "ABILITY", "id": "ARCHER_EVASIVE_SHOT"},
-        {"kind": "ABILITY", "id": "ARCHER_AIR_SHOT"},
-        {"kind": "ABILITY", "id": "ARCHER_DRAW_MODE_TOGGLE"}
+        {"kind": "ABILITY", "id": "ARCHER_DRAW_MODE_TOGGLE", "index": 15}
       ]
     }
   ]

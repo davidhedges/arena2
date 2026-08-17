@@ -20,6 +20,37 @@ namespace Arena.Tests.Editor
         private static readonly Assembly RuntimeAssembly = AppDomain.CurrentDomain.Load("Assembly-CSharp");
 
         [Test]
+        public void ParabolicSpecialMovementSampler_ReachesAuthoredApexAndReturnsToGround()
+        {
+            Type trackType = RequireType("Arena.Simulation.SpecialMovementTrack");
+            Type samplerType = RequireType("Arena.Simulation.SpecialMovementRuntimeSampler");
+            object track = Activator.CreateInstance(
+                trackType,
+                "ARCHER_EVASIVE_SHOT",
+                "PARABOLIC_ARC",
+                1_000L,
+                2_000L,
+                new Vector3(1.0f, 3.0f, 2.0f),
+                new Vector3(1.0f, 3.0f, 2.0f),
+                2.25f,
+                0.5f,
+                "FACE_START",
+                "STOP_AT_BLOCK_FIXED_Y",
+                "RESOLVE_AT_END")!;
+            MethodInfo sample = samplerType.GetMethod("Sample", BindingFlags.Public | BindingFlags.Static)!;
+
+            object apex = sample.Invoke(null, new object?[] { track, 2_000L, null })!;
+            Vector3 apexPosition = (Vector3)apex.GetType().GetProperty("Position")!.GetValue(apex)!;
+            Assert.That(apexPosition.y, Is.EqualTo(5.25f).Within(PositionTolerance));
+            Assert.That((bool)apex.GetType().GetProperty("Finished")!.GetValue(apex)!, Is.False);
+
+            object landed = sample.Invoke(null, new object?[] { track, 3_000L, null })!;
+            Vector3 landedPosition = (Vector3)landed.GetType().GetProperty("Position")!.GetValue(landed)!;
+            Assert.That(landedPosition.y, Is.EqualTo(3.0f).Within(PositionTolerance));
+            Assert.That((bool)landed.GetType().GetProperty("Finished")!.GetValue(landed)!, Is.True);
+        }
+
+        [Test]
         public void BundledSharedMovementAssets_ArePresent()
         {
             TextAsset arenaLayout = Resources.Load<TextAsset>("SharedData/Maps/arena_map_01.layout.shared");
@@ -614,6 +645,67 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void CombatAnimationSet_PhasedMeleeExportHonorsLoopPhaseReadyMarker()
+        {
+            Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
+            Type attackType = RequireType("Arena.Presentation.WeaponMeleeAttackAuthoring");
+            Type phaseSetType = RequireType("Arena.Presentation.WeaponPhasedActionClipSet");
+            Type presentationModeType = RequireType("Arena.Presentation.WeaponMeleePresentationMode");
+            ScriptableObject set = CreateMinimalExportableCombatAnimationSet(combatAnimationSetType);
+            AnimationClip start = CreateClipWithLength(1f);
+            AnimationClip loop = CreateClipWithLength(2f);
+            AnimationClip end = CreateClipWithLength(1f);
+            try
+            {
+                AnimationUtility.SetAnimationEvents(
+                    start,
+                    new[]
+                    {
+                        new AnimationEvent { functionName = "OnStrikeHit", time = 0.2f },
+                        new AnimationEvent { functionName = "OnPhaseLoopReady", time = 0.5f },
+                    });
+                AnimationUtility.SetAnimationEvents(
+                    loop,
+                    new[]
+                    {
+                        new AnimationEvent { functionName = "OnStrikeHit", time = 0.3f },
+                        new AnimationEvent { functionName = "OnPhaseLoopReady", time = 1f },
+                    });
+                AnimationUtility.SetAnimationEvents(
+                    end,
+                    new[]
+                    {
+                        new AnimationEvent { functionName = "OnStrikeHit", time = 0.4f },
+                    });
+
+                object phaseSet = Activator.CreateInstance(phaseSetType)!;
+                phaseSetType.GetField("start")!.SetValue(phaseSet, start);
+                phaseSetType.GetField("loop")!.SetValue(phaseSet, loop);
+                phaseSetType.GetField("end")!.SetValue(phaseSet, end);
+
+                SetFirstMeleeAttackField(
+                    combatAnimationSetType,
+                    attackType,
+                    set,
+                    "presentationMode",
+                    Enum.Parse(presentationModeType, "Phased"));
+                SetFirstMeleeAttackField(combatAnimationSetType, attackType, set, "phasedGround", phaseSet);
+
+                object export = InvokeInstanceMethod(set, "BuildMeleeExport");
+                object strike = FindExportedStrike(GetExportedStrikes(export), "MELEE_ATTACK_1");
+
+                Assert.That(GetImpactDelayMs(strike), Is.EqualTo(new[] { 200, 800, 1900 }));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(end);
+                UnityEngine.Object.DestroyImmediate(loop);
+                UnityEngine.Object.DestroyImmediate(start);
+                UnityEngine.Object.DestroyImmediate(set);
+            }
+        }
+
+        [Test]
         public void CombatAnimationSet_StartEndPhasedMeleeExportSkipsMissingLoop()
         {
             Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
@@ -764,6 +856,59 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void ArcherTripleShot_UsesThreePhasesAndThreeAuthoredProjectileWindows()
+        {
+            Type setType = RequireType("Arena.Presentation.CombatAnimationSet");
+            Type phasedEntryType = RequireType("Arena.Presentation.WeaponPhasedActionEntry");
+            Type resolvedPhaseSetType = RequireType("Arena.Presentation.ResolvedWeaponPhasedActionClipSet");
+            UnityEngine.Object instance = Resources.Load("CombatAnimationSets/ArcherBow", setType);
+            Assert.That(instance, Is.Not.Null);
+
+            object?[] phasedArgs = { "ARCHER_TRIPLE_SHOT", null };
+            bool hasPhasedEntry = (bool)RequireMethod(
+                    setType,
+                    "TryGetPhasedMeleeEntry",
+                    typeof(string),
+                    phasedEntryType.MakeByRefType())
+                .Invoke(instance, phasedArgs)!;
+            Assert.That(hasPhasedEntry, Is.True);
+
+            object phasedEntry = phasedArgs[1]!;
+            Assert.That(
+                (bool)phasedEntryType.GetField("drivePhasesFromSpecialMovement")!.GetValue(phasedEntry)!,
+                Is.False);
+            Assert.That(
+                (bool)phasedEntryType.GetField("drivePhasesFromCombatLifecycle")!.GetValue(phasedEntry)!,
+                Is.False);
+
+            object?[] clipSetArgs = { true, null };
+            bool resolved = (bool)RequireMethod(
+                    phasedEntryType,
+                    "TryResolveClipSet",
+                    typeof(bool),
+                    resolvedPhaseSetType.MakeByRefType())
+                .Invoke(phasedEntry, clipSetArgs)!;
+            Assert.That(resolved, Is.True);
+
+            object clipSet = clipSetArgs[1]!;
+            AnimationClip start = (AnimationClip)resolvedPhaseSetType.GetProperty("Start")!.GetValue(clipSet)!;
+            AnimationClip loop = (AnimationClip)resolvedPhaseSetType.GetProperty("Loop")!.GetValue(clipSet)!;
+            AnimationClip end = (AnimationClip)resolvedPhaseSetType.GetProperty("End")!.GetValue(clipSet)!;
+            Assert.That(start.name, Is.EqualTo("Combo_Attack_01_01"));
+            Assert.That(loop.name, Is.EqualTo("Combo_Attack_01_02"));
+            Assert.That(end.name, Is.EqualTo("Combo_Attack_01_03"));
+            Assert.That(
+                new[] { start, loop, end }
+                    .Sum(clip => AnimationUtility.GetAnimationEvents(clip)
+                        .Count(animationEvent => animationEvent.functionName == "OnStrikeHit")),
+                Is.EqualTo(3));
+
+            object export = InvokeInstanceMethod(instance, "BuildMeleeExport");
+            object strike = FindExportedStrike(GetExportedStrikes(export), "ARCHER_TRIPLE_SHOT");
+            Assert.That(GetImpactDelayMs(strike), Is.EqualTo(new[] { 320, 1503, 2743 }));
+        }
+
+        [Test]
         public void DaggerSessionAttacks_ResolveAuthoredClipsAndLifecycleDrivers()
         {
             Type setType = RequireType("Arena.Presentation.CombatAnimationSet");
@@ -862,7 +1007,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void ArcherAnimationSet_ExportsStandardArrowProjectilesExceptRainShot()
+        public void ArcherAnimationSet_ExportsOnlyEightAuthoredAttacksWithStandardArrowProjectiles()
         {
             Type combatAnimationSetType = RequireType("Arena.Presentation.CombatAnimationSet");
             UnityEngine.Object instance = Resources.Load("CombatAnimationSets/ArcherBow", combatAnimationSetType);
@@ -871,21 +1016,66 @@ namespace Arena.Tests.Editor
             object export = InvokeInstanceMethod(instance, "BuildMeleeExport");
             object profile = ((Array)export.GetType().GetField("profiles")!.GetValue(export)!).GetValue(0)!;
             Array strikes = (Array)profile.GetType().GetField("strikes")!.GetValue(profile)!;
-            string[] projectileStrikeIds =
+            string[] expectedStrikeIds =
             {
                 "ARCHER_QUICK_SHOT",
-                "ARCHER_FOLLOW_THROUGH",
-                "ARCHER_LOW_DRAW",
                 "ARCHER_FINISHING_SHOT",
                 "ARCHER_POWER_SHOT",
+                "ARCHER_TRIPLE_SHOT",
+                "ARCHER_BACKSTEP",
+                "ARCHER_DISENGAGE",
                 "ARCHER_EVASIVE_SHOT",
-                "ARCHER_AIR_SHOT",
+                "ARCHER_HEARTSEEKER",
                 "AUTO_ATTACK_1",
             };
 
-            foreach (string strikeId in projectileStrikeIds)
+            Assert.That(
+                strikes.Cast<object>()
+                    .Select(strike => (string)strike.GetType().GetField("id")!.GetValue(strike)!),
+                Is.EquivalentTo(expectedStrikeIds));
+
+            foreach ((string strikeId, string expectedClipName, int expectedImpactDelayMs) in new[]
+            {
+                ("ARCHER_FINISHING_SHOT", "Combo_Attack_01_04", 538),
+                ("ARCHER_POWER_SHOT", "Skill_03", 850),
+                ("ARCHER_BACKSTEP", "Combo_Attack_01_04", 538),
+                ("ARCHER_DISENGAGE", "Combo_Attack_04_04", 737),
+                ("ARCHER_EVASIVE_SHOT", "Skill_03", 850),
+                ("ARCHER_HEARTSEEKER", "Skill_01", 850),
+            })
+            {
+                int strikeIndex = (int)InvokeInstanceMethod(
+                    instance,
+                    "GetStrikeIndexForActionId",
+                    strikeId);
+                AnimationClip clip = (AnimationClip)InvokeInstanceMethod(
+                    instance,
+                    "GetStrikeClip",
+                    strikeIndex);
+                Assert.That(clip.name, Is.EqualTo(expectedClipName), strikeId);
+                AnimationEvent[] hitEvents = AnimationUtility.GetAnimationEvents(clip)
+                    .Where(animationEvent => animationEvent.functionName == "OnStrikeHit")
+                    .ToArray();
+                Assert.That(hitEvents, Has.Length.EqualTo(1), strikeId);
+                Assert.That(
+                    Mathf.RoundToInt(hitEvents[0].time * 1000f),
+                    Is.EqualTo(expectedImpactDelayMs),
+                    strikeId);
+
+                object exportedStrike = FindExportedStrike(strikes, strikeId);
+                Assert.That(
+                    GetImpactDelayMs(exportedStrike),
+                    Is.EqualTo(new[] { expectedImpactDelayMs }),
+                    strikeId);
+            }
+
+            foreach (string strikeId in expectedStrikeIds)
             {
                 object strike = FindExportedStrike(strikes, strikeId);
+                Assert.That(
+                    (string)strike.GetType().GetField("combo_from")!.GetValue(strike)!,
+                    Is.Empty,
+                    $"{strikeId} should not reference a removed combo predecessor");
                 object? projectile = strike.GetType().GetField("projectile")!.GetValue(strike);
                 Assert.That(projectile, Is.Not.Null, strikeId);
                 Assert.That(
@@ -916,11 +1106,99 @@ namespace Arena.Tests.Editor
                 }
             }
 
+        }
+
+        [Test]
+        public void CombatAnimationSetEditor_PrunesReferencesToRemovedMeleeAttacks()
+        {
+            Type setType = RequireType("Arena.Presentation.CombatAnimationSet");
+            Type combatType = RequireType("Arena.Presentation.WeaponStrikeCombatAuthoring");
+            Type editorType = RequireType("Arena.Editor.CombatAnimationSetEditor");
+            ScriptableObject set = CreateMinimalExportableCombatAnimationSet(setType);
+            try
+            {
+                RequireMethod(setType, "EnsureMeleeAttackListSize", typeof(int))
+                    .Invoke(set, new object[] { 3 });
+
+                SetCombat(1, "KEEP", string.Empty, 0f, 0f);
+                SetCombat(2, "REMOVED", string.Empty, 0f, 0f);
+                SetCombat(3, "FINISH", "REMOVED", 450f, 200f);
+
+                System.Collections.IList attacks =
+                    (System.Collections.IList)setType.GetField("meleeAttacks")!.GetValue(set)!;
+                attacks.RemoveAt(1);
+                setType.GetField("autoAttackVisualSequenceActionIds")!.SetValue(
+                    set,
+                    new System.Collections.Generic.List<string> { "REMOVED" });
+
+                int prunedReferenceCount = (int)RequireMethod(
+                        editorType,
+                        "PruneDanglingMeleeReferences",
+                        setType)
+                    .Invoke(null, new object[] { set })!;
+
+                Assert.That(prunedReferenceCount, Is.EqualTo(2));
+                object finishCombat = RequireMethod(setType, "GetStrikeCombat", typeof(int))
+                    .Invoke(set, new object[] { 2 })!;
+                Assert.That((string)combatType.GetField("comboFrom")!.GetValue(finishCombat)!, Is.Empty);
+                Assert.That((float)combatType.GetField("comboOpenMs")!.GetValue(finishCombat)!, Is.Zero);
+                Assert.That((float)combatType.GetField("comboGraceMs")!.GetValue(finishCombat)!, Is.Zero);
+                Assert.That(
+                    (System.Collections.Generic.List<string>)setType
+                        .GetField("autoAttackVisualSequenceActionIds")!
+                        .GetValue(set)!,
+                    Is.EqualTo(new[] { "KEEP" }));
+
+                void SetCombat(
+                    int strikeIndex,
+                    string strikeId,
+                    string comboFrom,
+                    float comboOpenMs,
+                    float comboGraceMs)
+                {
+                    object combat = RequireMethod(setType, "GetStrikeCombat", typeof(int))
+                        .Invoke(set, new object[] { strikeIndex })!;
+                    combatType.GetField("id")!.SetValue(combat, strikeId);
+                    combatType.GetField("slotId")!.SetValue(combat, strikeId.ToLowerInvariant());
+                    combatType.GetField("comboFrom")!.SetValue(combat, comboFrom);
+                    combatType.GetField("comboOpenMs")!.SetValue(combat, comboOpenMs);
+                    combatType.GetField("comboGraceMs")!.SetValue(combat, comboGraceMs);
+                    RequireMethod(setType, "SetStrikeCombat", typeof(int), combatType)
+                        .Invoke(set, new[] { (object)strikeIndex, combat });
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(set);
+            }
+        }
+
+        [Test]
+        public void ArcherRainOfArrows_UsesSkill01AsAFullBodySpellRelease()
+        {
+            Type setType = RequireType("Arena.Presentation.CombatAnimationSet");
+            Type entryType = RequireType("Arena.Presentation.WeaponSpellAnimationEntry");
+            UnityEngine.Object instance = Resources.Load("CombatAnimationSets/ArcherBow", setType);
+            Assert.That(instance, Is.Not.Null);
+
+            object?[] args = { "RAIN_OF_ARROWS", null };
+            bool found = (bool)RequireMethod(
+                    setType,
+                    "TryGetSpellAnimation",
+                    typeof(string),
+                    entryType.MakeByRefType())
+                .Invoke(instance, args)!;
+            Assert.That(found, Is.True);
+
+            object entry = args[1]!;
+            AnimationClip ground = (AnimationClip)entryType.GetField("ground")!.GetValue(entry)!;
+            AnimationClip air = (AnimationClip)entryType.GetField("air")!.GetValue(entry)!;
+            Assert.That(ground.name, Is.EqualTo("Skill_01"));
+            Assert.That(air, Is.SameAs(ground));
+            Assert.That(Convert.ToInt32(entryType.GetField("playbackLayer")!.GetValue(entry)!), Is.EqualTo(1));
             Assert.That(
-                FindExportedStrike(strikes, "ARCHER_RAIN_SHOT").GetType().GetField("projectile")!.GetValue(
-                    FindExportedStrike(strikes, "ARCHER_RAIN_SHOT")),
-                Is.Null,
-                "Rain Shot should remain a non-single-arrow action until volley behavior exists.");
+                (float)entryType.GetMethod("ResolveReleaseOffsetSeconds")!.Invoke(entry, new object[] { true })!,
+                Is.EqualTo(0.85f).Within(PositionTolerance));
         }
 
         [Test]

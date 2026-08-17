@@ -230,7 +230,8 @@ namespace Arena.Presentation
             if (!isImpact
                 && !string.Equals(row.EventType, CombatEventTypes.Contact, StringComparison.Ordinal)
                 && !string.Equals(row.EventType, CombatEventTypes.Block, StringComparison.Ordinal)
-                && !string.Equals(row.EventType, CombatEventTypes.Parry, StringComparison.Ordinal))
+                && !string.Equals(row.EventType, CombatEventTypes.Parry, StringComparison.Ordinal)
+                && !string.Equals(row.EventType, CombatEventTypes.Evade, StringComparison.Ordinal))
             {
                 return false;
             }

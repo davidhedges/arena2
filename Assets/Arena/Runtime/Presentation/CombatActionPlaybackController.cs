@@ -176,6 +176,7 @@ namespace Arena.Presentation
         private AnimationClip? _phasedMeleeEndClip;
         private PhasedMeleePlaybackPhase _phasedMeleePhase = PhasedMeleePlaybackPhase.None;
         private float _phasedMeleeAuthoredStartExitNormalizedTime = -1f;
+        private float _phasedMeleeAuthoredLoopExitNormalizedTime = -1f;
         private float _phasedMeleeElapsedBeforePhase;
         private float _phasedMeleeCurrentPhaseLengthSeconds;
         private float _phasedMeleeTotalLengthSeconds;
@@ -512,10 +513,31 @@ namespace Arena.Presentation
             float startTimelineLengthSeconds = hasAuthoredStartExit
                 ? Mathf.Max(0f, startClip.length) * _phasedMeleeAuthoredStartExitNormalizedTime
                 : Mathf.Max(0f, startClip.length);
+            bool hasAuthoredLoopExit = !releaseAfterStart
+                && CombatAnimationEvents.TryGetEventNormalizedTime(
+                    loopClip,
+                    CombatAnimationEvents.OnPhaseLoopReady,
+                    out _phasedMeleeAuthoredLoopExitNormalizedTime);
+            if (!hasAuthoredLoopExit)
+            {
+                _phasedMeleeAuthoredLoopExitNormalizedTime = -1f;
+            }
+            else
+            {
+                _phasedMeleeAuthoredLoopExitNormalizedTime = Mathf.Min(
+                    _phasedMeleeAuthoredLoopExitNormalizedTime,
+                    CombatAnimationEvents.PhasedMeleeStartToLoopSafetyNormalizedTime);
+            }
+
+            float loopTimelineLengthSeconds = releaseAfterStart
+                ? 0f
+                : hasAuthoredLoopExit
+                    ? Mathf.Max(0f, loopClip.length) * _phasedMeleeAuthoredLoopExitNormalizedTime
+                    : Mathf.Max(0f, loopClip.length);
             _phasedMeleeElapsedBeforePhase = 0f;
             _phasedMeleeCurrentPhaseLengthSeconds = 0f;
             _phasedMeleeTotalLengthSeconds = startTimelineLengthSeconds
-                + (releaseAfterStart ? 0f : Mathf.Max(0f, loopClip.length))
+                + loopTimelineLengthSeconds
                 + Mathf.Max(0f, endClip.length);
             _phasedMeleeSpecialMovementDriven = specialMovementDriven;
             _phasedMeleeSpecialMovementArrivalDriven =
@@ -550,6 +572,7 @@ namespace Arena.Presentation
             _phasedMeleeEndClip = null;
             _phasedMeleePhase = PhasedMeleePlaybackPhase.None;
             _phasedMeleeAuthoredStartExitNormalizedTime = -1f;
+            _phasedMeleeAuthoredLoopExitNormalizedTime = -1f;
             _phasedMeleeElapsedBeforePhase = 0f;
             _phasedMeleeCurrentPhaseLengthSeconds = 0f;
             _phasedMeleeTotalLengthSeconds = 0f;
@@ -642,6 +665,18 @@ namespace Arena.Presentation
                 _phasedMeleeReleaseAfterStart
                     ? startOnlyEndTriggerNormalizedTime
                     : segmentTransitionNormalizedTime);
+        }
+
+        public float ResolvePhasedMeleeLoopExitNormalizedTime(float fallbackNormalizedTime)
+        {
+            if (_phasedMeleeAuthoredLoopExitNormalizedTime >= 0f)
+            {
+                return Mathf.Min(
+                    Mathf.Clamp01(_phasedMeleeAuthoredLoopExitNormalizedTime),
+                    Mathf.Clamp01(fallbackNormalizedTime));
+            }
+
+            return Mathf.Clamp01(fallbackNormalizedTime);
         }
 
         public bool TryGetPhasedMeleePresentationTiming(
@@ -776,7 +811,7 @@ namespace Arena.Presentation
 
             if (_phasedMeleePhase == PhasedMeleePlaybackPhase.Loop)
             {
-                if (normalizedTime < segmentTransitionNormalizedTime)
+                if (normalizedTime < ResolvePhasedMeleeLoopExitNormalizedTime(segmentTransitionNormalizedTime))
                     return false;
 
                 nextPhase = PhasedMeleePlaybackPhase.End;

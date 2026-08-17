@@ -15,6 +15,7 @@ namespace Arena.Tests.Editor
         private const string RuntimeUiEventSystemPath = "Assets/Arena/Runtime/UI/RuntimeUiEventSystem.cs";
         private const string RuntimeUiEscapeRouterPath = "Assets/Arena/Runtime/UI/RuntimeUiEscapeRouter.cs";
         private const string ActionBarInputDispatcherPath = "Assets/Arena/Runtime/Input/ActionBarInputDispatcher.cs";
+        private const string ActionBarTracePath = "Assets/Arena/Runtime/Debug/ActionBarTrace.cs";
         private const string SpellInputHandlerPath = "Assets/Arena/Runtime/Input/SpellInputHandler.cs";
         private const string MeleeInputHandlerPath = "Assets/Arena/Runtime/Input/MeleeInputHandler.cs";
         private const string GameplayContractsPath = "Assets/Arena/Runtime/Combat/GameplayContracts.cs";
@@ -447,6 +448,42 @@ namespace Arena.Tests.Editor
 
             string contracts = File.ReadAllText(GameplayContractsPath);
             Assert.That(contracts, Does.Contain("!string.Equals(actionKind, ActionKinds.Ability"));
+        }
+
+        [Test]
+        public void SelectableMeleeActivation_EmitsPressRejectionAndReducerResultDiagnostics()
+        {
+            string meleeInput = File.ReadAllText(MeleeInputHandlerPath);
+            Assert.That(meleeInput, Does.Contain("RejectLocalMeleeAction("));
+            foreach (string reason in new[]
+                     {
+                         "Dead",
+                         "InvalidInput",
+                         "InvalidTarget",
+                         "NotFacingTarget",
+                         "OnGlobalCooldown",
+                         "OnCooldown",
+                         "InsufficientResource",
+                         "OutOfRange",
+                         "LineOfSightBlocked",
+                     })
+            {
+                Assert.That(
+                    meleeInput,
+                    Does.Contain($"ActionRejectReason.{reason}"),
+                    $"local melee rejection '{reason}' must be identifiable in diagnostics");
+            }
+            Assert.That(meleeInput, Does.Contain("sending MeleeAttack action="));
+            Assert.That(meleeInput, Does.Contain("MeleeAttack result="));
+
+            string actionBarDispatcher = File.ReadAllText(ActionBarInputDispatcherPath);
+            Assert.That(actionBarDispatcher, Does.Contain("LogDispatchSnapshot(action, conn, keyLabel, slotId)"));
+            Assert.That(actionBarDispatcher, Does.Contain("press input="));
+            Assert.That(actionBarDispatcher, Does.Contain("reason=missing_melee_definition"));
+
+            string trace = File.ReadAllText(ActionBarTracePath);
+            Assert.That(trace, Does.Contain("[ArenaActionDiagnostic]"));
+            Assert.That(trace, Does.Contain("Debug.LogWarning"));
         }
 
         [Test]

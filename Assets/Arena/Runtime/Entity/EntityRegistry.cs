@@ -1610,6 +1610,9 @@ namespace Arena.Entity
                 return;
             }
 
+            if (row.EventType == CombatEventTypes.Evade)
+                return;
+
             // Hit reactions: directional flinch on the player who was struck.
             if (ShouldTriggerHitReaction(row))
             {
@@ -1625,14 +1628,21 @@ namespace Arena.Entity
                 return;
             }
 
-            bool meleeLifecycleEnd = row.EventType == CombatEventTypes.Release
-                || row.EventType == CombatEventTypes.Fizzle;
+            bool meleeLifecycleEnd = row.HitIndex < 0
+                && (row.EventType == CombatEventTypes.Release
+                    || row.EventType == CombatEventTypes.Fizzle);
             if (meleeLifecycleEnd
                 && !string.Equals(row.SourceKind, CombatEventSources.Spell, System.StringComparison.Ordinal)
-                && TryGetLivePlayer(row.Caster, out var meleeLifecycleCaster)
-                && meleeLifecycleCaster.RequestCombatLifecycleDrivenPhasedMeleeEnd(row.ActionKind))
+                && TryGetLivePlayer(row.Caster, out var meleeLifecycleCaster))
             {
-                return;
+                if (meleeLifecycleCaster.RequestCombatLifecycleDrivenPhasedMeleeEnd(row.ActionKind))
+                    return;
+
+                if (row.EventType == CombatEventTypes.Fizzle
+                    && meleeLifecycleCaster.CancelPhasedMeleeAction(row.ActionKind))
+                {
+                    return;
+                }
             }
 
             if (TryGetLiveNpc(row.Caster, out var npcCaster))

@@ -3191,6 +3191,28 @@ namespace Arena.Presentation
             return true;
         }
 
+        public bool CancelPhasedMeleeAction(string actionId)
+        {
+            if (!_actionPlayback.IsPhasedMeleeActive
+                || !_actionPlayback.ActiveMeleePresentation.HasValue)
+            {
+                return false;
+            }
+
+            ActiveMeleePresentation active = _actionPlayback.ActiveMeleePresentation.GetValueOrDefault();
+            if (!active.IsPhased
+                || !string.Equals(
+                    WireIdentifier.Normalize(active.ActionId),
+                    WireIdentifier.Normalize(actionId),
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            CancelPhasedMeleePlayback();
+            return true;
+        }
+
         private void UpdateSpecialMovementDrivenPhasedMeleePlayback(float normalizedTime)
         {
             if (_actionPlayback.IsPhasedMeleeSpecialMovementArrivalDriven

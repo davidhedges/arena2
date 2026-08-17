@@ -62,7 +62,7 @@ pub(crate) use crate::combat::scene_query::aoe_hits_player;
 pub(crate) use casting::special_movement_uses_air_path_with_ground;
 pub(crate) use casting::{
     approach_line_contact_point_xz, bake_linear_special_movement, begin_active_cast,
-    begin_instant_special_movement, begin_special_movement,
+    begin_instant_special_movement, begin_parabolic_arc_special_movement, begin_special_movement,
     begin_special_movement_with_facing_policy, cast_spell_for_server_actor, clear_active_cast,
     clear_recall_slot, contact_distance_from_radii, fire_chain_reaction_spell,
     fizzle_active_cast_for_interrupt, has_due_pending_area_impacts,
@@ -279,6 +279,7 @@ pub struct SpecialMovementRuntime {
     pub end_x: f32,
     pub end_y: f32,
     pub end_z: f32,
+    pub arc_height: f32,
     pub facing_yaw_start: f32,
     pub facing_policy: String,
     pub collision_policy: String,

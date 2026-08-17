@@ -4234,6 +4234,7 @@ mod tests {
                 "BLADE_BARRIER",
                 "RADIANT_BURST",
                 "SACRED_FLAME",
+                "RAIN_OF_ARROWS",
                 "FIND_WEAKNESS",
                 "BLADE_TWISTING",
                 "DISARM",

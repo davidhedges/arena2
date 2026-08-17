@@ -50,6 +50,7 @@ namespace Arena.Combat
         public const string Miss = "COMBAT_MISS";
         public const string Block = "COMBAT_BLOCK";
         public const string Parry = "COMBAT_PARRY";
+        public const string Evade = "COMBAT_EVADE";
         public const string StatusEnd = "COMBAT_STATUS_END";
     }
 

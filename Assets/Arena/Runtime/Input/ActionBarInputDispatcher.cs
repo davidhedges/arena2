@@ -5,6 +5,7 @@ using Arena.Combat;
 using Arena.Debugging;
 using Arena.Entity;
 using Arena.Network;
+using Arena.Presentation;
 using Arena.Simulation;
 using SpacetimeDB.Types;
 
@@ -32,7 +33,7 @@ namespace Arena.Input
                     binding.SlotId);
                 if (!resolved.HasAssignedAction)
                 {
-                    ActionBarTrace.Trace(
+                    ActionBarTrace.Diagnostic(
                         $"{binding.KeyLabel} -> {binding.SlotId} unresolved (assigned={resolved.HasAssignedAction})");
                     continue;
                 }
@@ -54,7 +55,7 @@ namespace Arena.Input
                     binding.SlotIndex);
                 if (!resolved.HasAssignedAction)
                 {
-                    ActionBarTrace.Trace(
+                    ActionBarTrace.Diagnostic(
                         $"{binding.KeyLabel} -> {slotId} unresolved (assigned={resolved.HasAssignedAction})");
                     continue;
                 }
@@ -75,7 +76,7 @@ namespace Arena.Input
                     binding.SlotId);
                 if (!resolved.HasAssignedAction)
                 {
-                    ActionBarTrace.Trace(
+                    ActionBarTrace.Diagnostic(
                         $"{binding.KeyLabel} -> {binding.SlotId} unresolved (assigned={resolved.HasAssignedAction})");
                     continue;
                 }
@@ -163,11 +164,21 @@ namespace Arena.Input
             if (conn == null)
                 return false;
 
+            LogDispatchSnapshot(action, conn, keyLabel, slotId);
+
             if (LingeringShadeInput.TryConsumeRecast(conn, action))
                 return true;
 
             if (!action.CanTrigger)
+            {
+                string rejectedActionId = string.IsNullOrWhiteSpace(action.ActionId)
+                    ? action.AuthoredActionId
+                    : action.ActionId;
+                ActionBarTrace.Diagnostic(
+                    $"dispatch stopped before handler slot={slotId} action={rejectedActionId} " +
+                    $"hasAssigned={action.HasAssignedAction} isAvailable={action.IsAvailable}");
                 return false;
+            }
 
             if (action.IsCombatDisciplineSwitch)
             {
@@ -243,21 +254,96 @@ namespace Arena.Input
             PlayerEntity? entity = EntityRegistry.Instance?.LocalPlayerEntity;
             if (entity == null || entity.IsDestroyed || !entity.IsAlive)
             {
-                ActionBarTrace.Trace($"melee dispatch unavailable for {source}:{actionId} (no live local entity)");
+                ActionBarTrace.Diagnostic(
+                    $"melee dispatch stopped source={source} action={actionId} reason=no_live_local_entity");
                 return false;
             }
 
             string combatProfile = CombatProfileResolver.ResolveForEntity(conn, entity);
             if (CombatActionIds.FindMeleeDefinition(conn, combatProfile, actionId) == null)
             {
-                ActionBarTrace.Trace($"melee dispatch unavailable for {source}:{actionId} profile={combatProfile} (missing definition)");
+                ActionBarTrace.Diagnostic(
+                    $"melee dispatch stopped source={source} action={actionId} " +
+                    $"profile={combatProfile} reason=missing_melee_definition");
                 return false;
             }
 
-            bool accepted = MeleeInputHandler.Instance?.TryTriggerAction(conn, entity, actionId) == true;
-            if (!accepted)
-                ActionBarTrace.Trace($"melee dispatch declined locally for {source}:{actionId}");
+            MeleeInputHandler? handler = MeleeInputHandler.Instance;
+            if (handler == null)
+            {
+                ActionBarTrace.Diagnostic(
+                    $"melee dispatch stopped source={source} action={actionId} reason=missing_input_handler");
+                return false;
+            }
+
+            bool accepted = handler.TryTriggerAction(conn, entity, actionId);
+            ActionBarTrace.Diagnostic(
+                $"melee handler returned source={source} action={actionId} accepted={accepted}");
             return accepted;
+        }
+
+        private static void LogDispatchSnapshot(
+            ActiveActionBarAction action,
+            DbConnection conn,
+            string keyLabel,
+            string slotId)
+        {
+            SpacetimeDB.Identity? owner = conn.Identity;
+            string ownerProfile = CombatProfileResolver.ResolveForOwner(conn, owner);
+            ActiveCombatDiscipline? discipline = owner.HasValue
+                ? conn.Db.ActiveCombatDiscipline.Owner.Find(owner.Value)
+                : null;
+            EquipmentLoadout? equipment = owner.HasValue
+                ? conn.Db.EquipmentLoadout.Owner.Find(owner.Value)
+                : null;
+            AbilityCatalog? ability = string.IsNullOrWhiteSpace(action.AbilityId)
+                ? null
+                : conn.Db.AbilityCatalog.AbilityId.Find(action.AbilityId);
+            string abilityProfile = CombatProfileResolver.ResolveForAbility(conn, ability);
+            bool abilitySelected = owner.HasValue
+                && DisciplineAbilitySelectionResolver.IsSelected(conn, owner, action.AbilityId);
+            MeleeDefinition? definition = action.IsMeleeAbility
+                ? CombatActionIds.FindMeleeDefinition(conn, ownerProfile, action.ActionId)
+                : null;
+            CombatAnimationSet? animationSet = action.IsMeleeAbility
+                ? CombatAnimationSetCatalog.Resolve(ownerProfile)
+                : null;
+            string directAnimationMapping = animationSet == null
+                ? "<missing-set>"
+                : animationSet.ResolveRuntimeSlotIdForStrikeReference(action.AuthoredActionId);
+            PlayerEntity? entity = EntityRegistry.Instance?.LocalPlayerEntity;
+            ICombatTargetEntity? target = TargetSelector.Instance?.SelectedTarget;
+
+            ActionBarTrace.Diagnostic(
+                $"press input={(string.IsNullOrWhiteSpace(keyLabel) ? "pointer" : keyLabel)} slot={slotId} " +
+                $"kind={action.ActionKind}/{action.AbilityKind} ability={action.AbilityId} " +
+                $"authored={action.AuthoredActionId} runtime={action.ActionId} " +
+                $"assigned={action.HasAssignedAction} available={action.IsAvailable} canTrigger={action.CanTrigger} " +
+                $"selected={abilitySelected} ownerProfile={ownerProfile} " +
+                $"activeDiscipline={discipline?.DisciplineId ?? "<missing>"} " +
+                $"activeProfile={discipline?.CombatProfileId ?? "<missing>"} " +
+                $"abilityProfile={(string.IsNullOrWhiteSpace(abilityProfile) ? "<missing>" : abilityProfile)} " +
+                $"catalogAction={ability?.ActionId ?? "<missing>"} " +
+                $"mainHand={equipment?.MainHandItemId ?? "<missing>"} offHand={equipment?.OffHandItemId ?? "<missing>"} " +
+                $"definition={(definition == null ? "<missing>" : $"{definition.Key}|comboFrom={definition.ComboFrom}")} " +
+                $"animationSet={DescribeAnimationSet(animationSet)} directAnimationMapping={directAnimationMapping} " +
+                $"entity={(entity == null ? "<missing>" : $"alive={entity.IsAlive},destroyed={entity.IsDestroyed}")} " +
+                $"target={(target == null ? "<none>" : $"{target.DisplayName},alive={target.IsAlive},destroyed={target.IsDestroyed}")}");
+        }
+
+        private static string DescribeAnimationSet(CombatAnimationSet? set)
+        {
+            if (set == null)
+                return "<missing>";
+
+            var strikes = new List<string>(set.MeleeAttackCount);
+            for (int strikeIndex = 1; strikeIndex <= set.MeleeAttackCount; strikeIndex++)
+            {
+                WeaponStrikeCombatAuthoring strike = set.GetStrikeCombat(strikeIndex);
+                strikes.Add($"{strike.AuthoredStrikeIdOrDefault}>{strike.RuntimeSlotIdOrDefault}");
+            }
+
+            return $"{set.name}[{string.Join(",", strikes)}]";
         }
     }
 }

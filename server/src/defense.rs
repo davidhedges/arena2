@@ -67,6 +67,7 @@ pub enum DefenseResolution {
     None,
     Parried,
     Blocked,
+    Evaded,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -513,6 +514,44 @@ pub(crate) fn clear_interruptible_defense_for_owner(ctx: &ReducerContext, owner:
     }
 }
 
+pub(crate) fn begin_evasion_window(
+    ctx: &ReducerContext,
+    owner: Identity,
+    action_id: &str,
+    duration: Duration,
+    facing_yaw: f32,
+    now: Timestamp,
+) {
+    let active_until = now + duration;
+    upsert_defense_state(
+        ctx,
+        DefenseState {
+            owner,
+            action_id: action_id.to_string(),
+            kind: DefenseKind::Dodge.as_str().to_string(),
+            started_at: now,
+            active_from: now,
+            active_until,
+            recovery_until: active_until,
+            movement_restrict_from_input_tick: 0,
+            movement_restrict_until_input_tick: 0,
+            facing_yaw,
+        },
+    );
+}
+
+pub(crate) fn is_evasion_active(ctx: &ReducerContext, owner: Identity, now: Timestamp) -> bool {
+    ctx.db
+        .defense_state()
+        .owner()
+        .find(owner)
+        .is_some_and(|state| {
+            DefenseKind::from_wire(state.kind.as_str()) == Some(DefenseKind::Dodge)
+                && now >= state.active_from
+                && now < state.active_until
+        })
+}
+
 pub(crate) fn resolve_defensible_combat_hit(
     ctx: &ReducerContext,
     hit: DefensibleCombatHit<'_>,
@@ -544,6 +583,16 @@ fn resolve_valid_defensible_combat_hit(
         return DefenseResolution::None;
     };
 
+    if defense_window_evades_hit(
+        kind,
+        state.active_from,
+        state.active_until,
+        hit.active_from,
+        hit.active_until,
+    ) {
+        return DefenseResolution::Evaded;
+    }
+
     if !intervals_overlap(
         state.active_from,
         state.active_until,
@@ -574,6 +623,16 @@ fn resolve_valid_defensible_combat_hit(
         }
         _ => DefenseResolution::None,
     }
+}
+
+fn defense_window_evades_hit(
+    kind: DefenseKind,
+    active_from: Timestamp,
+    active_until: Timestamp,
+    hit_from: Timestamp,
+    hit_until: Timestamp,
+) -> bool {
+    kind == DefenseKind::Dodge && active_from < hit_until && hit_from < active_until
 }
 
 fn record_undefended_hit(ctx: &ReducerContext, hit: &DefensibleCombatHit<'_>) {
@@ -788,9 +847,10 @@ fn is_attack_within_defense_arc(facing_yaw: f32, to_attacker_x: f32, to_attacker
 #[cfg(test)]
 mod tests {
     use super::{
-        defense_arc_vector, defensible_hit_payload_is_valid, is_attack_within_defense_arc,
-        is_successful_block_cooldown_state, is_successful_parry_cooldown_state,
-        CombatHitDeliveryKind, DefenseKind, DefenseState, DefensibleCombatHit,
+        defense_arc_vector, defense_window_evades_hit, defensible_hit_payload_is_valid,
+        is_attack_within_defense_arc, is_successful_block_cooldown_state,
+        is_successful_parry_cooldown_state, CombatHitDeliveryKind, DefenseKind, DefenseState,
+        DefensibleCombatHit,
     };
     use spacetimedb::{Identity, Timestamp};
     use std::time::Duration;
@@ -801,6 +861,34 @@ mod tests {
         assert!(is_attack_within_defense_arc(0.0, 0.5, 0.866));
         assert!(!is_attack_within_defense_arc(0.0, 0.0, -1.0));
         assert!(!is_attack_within_defense_arc(0.0, 1.0, 0.0));
+    }
+
+    #[test]
+    fn dodge_window_evades_only_overlapping_hits() {
+        let start = Timestamp::UNIX_EPOCH + Duration::from_millis(1000);
+        let end = start + Duration::from_millis(2000);
+
+        assert!(defense_window_evades_hit(
+            DefenseKind::Dodge,
+            start,
+            end,
+            start + Duration::from_millis(850),
+            start + Duration::from_millis(851),
+        ));
+        assert!(!defense_window_evades_hit(
+            DefenseKind::Parry,
+            start,
+            end,
+            start + Duration::from_millis(850),
+            start + Duration::from_millis(851),
+        ));
+        assert!(!defense_window_evades_hit(
+            DefenseKind::Dodge,
+            start,
+            end,
+            end,
+            end + Duration::from_millis(1),
+        ));
     }
 
     #[test]

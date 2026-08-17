@@ -83,6 +83,8 @@ namespace Arena.Editor
                 if (set == null)
                     continue;
 
+                PruneAndPersistDanglingMeleeReferences(set, assetPath);
+
                 var current = ComputeSummary(set);
                 CombatAnimationSetSummary? trusted = LoadTrustedSummary(assetPath);
 
@@ -106,6 +108,8 @@ namespace Arena.Editor
                 if (set == null)
                     continue;
 
+                PruneAndPersistDanglingMeleeReferences(set, assetPath);
+
                 var current = ComputeSummary(set);
                 CombatAnimationSetSummary? trusted = LoadTrustedSummary(assetPath);
                 if (trusted.HasValue && IsSuspiciousLoss(trusted.Value, current))
@@ -116,6 +120,23 @@ namespace Arena.Editor
 
                 RecordTrustedState(set, trusted.HasValue ? "seed-refresh" : "seed");
             }
+        }
+
+        private static void PruneAndPersistDanglingMeleeReferences(
+            CombatAnimationSet set,
+            string assetPath)
+        {
+            int prunedReferenceCount = CombatAnimationSetEditor.PruneDanglingMeleeReferences(set);
+            if (prunedReferenceCount <= 0)
+                return;
+
+            MarkTrustedMutation(set, "prune-dangling-melee-references");
+            CombatAnimationSetEditor.PersistAnimationSetEdit(
+                set,
+                "prune-dangling-melee-references");
+            Debug.Log(
+                $"[{nameof(CombatAnimationSetProtection)}] Pruned {prunedReferenceCount} dangling melee reference(s) from '{assetPath}'.",
+                set);
         }
 
         private static CombatAnimationSetSummary ComputeSummary(CombatAnimationSet set)
