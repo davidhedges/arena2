@@ -1,0 +1,13 @@
+fileFormatVersion: 2
+guid: 28ac1d0cf36c43048b52f65ebc7a210f
+ShaderImporter:
+  defaultTextures: []
+  userData: 
+  assetBundleName: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295189
+  packageName: Toon Deserted Temples
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Shared/Shaders/CustomWaterUnlit.shader
+  uploadId: 970994

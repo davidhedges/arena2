@@ -5,3 +5,10 @@ PrefabImporter:
   userData: 
   assetBundleName: 
   assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295189
+  packageName: Toon Deserted Temples
+  packageVersion: 1.0.3
+  assetPath: Assets/ThirdParty/AssetStore/Environments/ToonDesertedTemples/Prefabs/Buildings/Runes/TFD_Wall_Writing_Tablet_03A.prefab
+  uploadId: 970994

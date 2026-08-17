@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 12a7ae8e8303c94468ee1a978708effe
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295189
+  packageName: Toon Deserted Temples
+  packageVersion: 1.0.3
+  assetPath: Assets/Toon Series/Shared/Shaders/CustomToonEnhanced.shader
+  uploadId: 970994

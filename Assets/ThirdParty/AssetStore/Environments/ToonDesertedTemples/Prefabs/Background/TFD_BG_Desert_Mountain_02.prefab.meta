@@ -5,3 +5,10 @@ PrefabImporter:
   userData: 
   assetBundleName: 
   assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295189
+  packageName: Toon Deserted Temples
+  packageVersion: 1.0.3
+  assetPath: Assets/ThirdParty/AssetStore/Environments/ToonDesertedTemples/Prefabs/Background/TFD_BG_Desert_Mountain_02.prefab
+  uploadId: 970994

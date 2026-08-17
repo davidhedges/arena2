@@ -7,3 +7,10 @@ ShaderImporter:
   userData: 
   assetBundleName: 
   assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295189
+  packageName: Toon Deserted Temples
+  packageVersion: 1.0.3
+  assetPath: Assets/ThirdParty/AssetStore/Environments/ToonDesertedTemples/Shaders/TFD_CustomTerrainFirstPass.shader
+  uploadId: 970994

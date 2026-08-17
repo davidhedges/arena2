@@ -232,3 +232,10 @@ TextureImporter:
   userData: 
   assetBundleName: 
   assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 295189
+  packageName: Toon Deserted Temples
+  packageVersion: 1.0.3
+  assetPath: Assets/ThirdParty/AssetStore/Environments/ToonDesertedTemples/Particles/Textures/TFD_Foam_Particle_01A.psd
+  uploadId: 970994
