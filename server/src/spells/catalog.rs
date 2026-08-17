@@ -3763,15 +3763,27 @@ fn validate_projectile_motion(
             }
         }
         ProjectileMotionTunables::TravelingArea(area) => {
-            if def.targeting != SpellTargeting::Self_ || def.requires_target {
+            let valid_targeting = matches!(
+                (def.targeting, def.requires_target),
+                (SpellTargeting::Target, true) | (SpellTargeting::Self_, false)
+            );
+            if !valid_targeting {
                 return Err(format!(
-                    "{} TRAVELING_AREA projectile motion must use untargeted SELF targeting",
+                    "{} TRAVELING_AREA projectile motion must use required TARGET or untargeted SELF targeting",
                     def.kind.as_str()
                 ));
             }
             ensure_positive_f32(def.kind.as_str(), "delivery.speed", def.speed)?;
             ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
             ensure_positive_f32(def.kind.as_str(), "delivery.radius", def.radius)?;
+            if def.targeting == SpellTargeting::Target {
+                ensure_positive_f32(def.kind.as_str(), "delivery.turn_rate", def.turn_rate)?;
+                ensure_positive_f32(
+                    def.kind.as_str(),
+                    "delivery.homing_window_seconds",
+                    projectile.homing_window_seconds,
+                )?;
+            }
             ensure_positive_f32(
                 def.kind.as_str(),
                 "delivery.motion.hitbox_length",
@@ -4577,7 +4589,7 @@ mod tests {
     }
 
     #[test]
-    fn gravewake_traveling_area_rejects_targeted_casting() {
+    fn targeted_traveling_area_requires_homing_tuning() {
         let mut definition = spell_definition_by_str("GRAVEWAKE")
             .expect("GRAVEWAKE should exist")
             .clone();
@@ -4590,8 +4602,8 @@ mod tests {
             .expect("Gravewake must define projectile tunables");
 
         assert!(validate_projectile_motion(&definition, &projectile)
-            .expect_err("targeted traveling areas must be rejected")
-            .contains("must use untargeted SELF targeting"));
+            .expect_err("targeted traveling areas without homing tuning must be rejected")
+            .contains("delivery.turn_rate"));
     }
 
     #[test]
@@ -4719,8 +4731,15 @@ mod tests {
             .as_ref()
             .and_then(|projectile| projectile.motion.traveling_area())
             .unwrap();
+        let fissure_projectile = fissure.secondary.projectile.as_ref().unwrap();
         assert_eq!(fissure.damage, 18);
-        assert_eq!(traveling.terminal_radius, 3.0);
+        assert_eq!(fissure.speed, 30.0);
+        assert_eq!(fissure.max_distance, 18.0);
+        assert_eq!(fissure.targeting, SpellTargeting::Target);
+        assert!(fissure.requires_target);
+        assert_eq!(fissure.turn_rate, 3.0);
+        assert_eq!(fissure_projectile.homing_window_seconds, 1.2);
+        assert_eq!(traveling.terminal_radius, 1.0);
         assert_eq!(traveling.terminal_damage, 30);
 
         let earthquake = spell_definition_by_str("EARTHQUAKE").expect("EARTHQUAKE should exist");

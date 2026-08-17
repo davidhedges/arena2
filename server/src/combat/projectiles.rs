@@ -249,6 +249,7 @@ fn tick_projectile_instance(
             spell_definition,
             actor_snapshots,
             players,
+            player_index_by_id,
             candidate_indices,
             metrics,
         );
@@ -266,6 +267,7 @@ fn tick_projectile_instance(
                 definition.spawn_height,
                 definition.turn_rate,
                 dt,
+                false,
             );
         }
     }
@@ -1107,6 +1109,7 @@ fn tick_traveling_area_projectile_instance(
     spell_definition: Option<&SpellRuntimeDefinition>,
     actor_snapshots: &CombatActorSnapshotSet,
     players: &[CombatActorSnapshot],
+    player_index_by_id: &HashMap<Identity, usize>,
     candidate_indices: &mut Vec<usize>,
     metrics: &mut ProjectileTickMetricsFrame,
 ) {
@@ -1124,12 +1127,32 @@ fn tick_traveling_area_projectile_instance(
         return;
     };
 
-    let step = traveling_area_step_distance(
+    let live_target = if projectile.age <= projectile_homing_window_seconds(definition) {
+        retarget_projectile_towards_live_target(
+            ctx,
+            &mut projectile,
+            players,
+            player_index_by_id,
+            definition.spawn_height,
+            definition.turn_rate,
+            dt,
+            true,
+        )
+    } else {
+        None
+    };
+
+    let mut step = traveling_area_step_distance(
         definition.speed,
         dt,
         projectile.traveled,
         definition.max_distance,
     );
+    let target_arrival_distance = live_target
+        .and_then(|target| traveling_area_target_arrival_distance(&projectile, &target, step));
+    if let Some(arrival_distance) = target_arrival_distance {
+        step = arrival_distance;
+    }
     if step > 0.0
         && advance_traveling_area_segment(
             ctx,
@@ -1149,38 +1172,22 @@ fn tick_traveling_area_projectile_instance(
         return;
     }
 
-    if projectile.traveled >= definition.max_distance - 0.001
+    if target_arrival_distance.is_some()
+        || projectile.traveled >= definition.max_distance - 0.001
         || projectile.age >= projectile.lifetime
     {
-        if area.terminal_radius > 0.0 && area.terminal_damage > 0 {
-            resolve_traveling_area_terminal_eruption(
-                ctx,
-                &projectile,
-                definition,
-                area.terminal_radius,
-                area.terminal_damage,
-                actor_snapshots,
-                players,
-                candidate_indices,
-            );
-        }
-        emit_projectile_event(
+        finish_traveling_area_projectile(
             ctx,
-            &projectile,
-            if area.terminal_damage > 0 {
-                COMBAT_EVENT_IMPACT
-            } else {
-                COMBAT_EVENT_FIZZLE
-            },
-            None,
-            projectile.pos_x,
-            projectile.pos_y,
-            projectile.pos_z,
-            area.terminal_damage.max(0),
             now,
+            &projectile,
+            definition,
+            area.terminal_radius,
+            area.terminal_damage,
+            actor_snapshots,
+            players,
+            candidate_indices,
             metrics,
         );
-        finish_projectile_without_event(ctx, &projectile);
         return;
     }
 
@@ -1193,6 +1200,50 @@ fn tick_traveling_area_projectile_instance(
         metrics,
     );
     update_projectile_row(ctx, projectile, metrics);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn finish_traveling_area_projectile(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    projectile: &ActiveCombatProjectile,
+    definition: &SpellRuntimeDefinition,
+    terminal_radius: f32,
+    terminal_damage: i32,
+    actor_snapshots: &CombatActorSnapshotSet,
+    players: &[CombatActorSnapshot],
+    candidate_indices: &mut Vec<usize>,
+    metrics: &mut ProjectileTickMetricsFrame,
+) {
+    if terminal_radius > 0.0 && terminal_damage > 0 {
+        resolve_traveling_area_terminal_eruption(
+            ctx,
+            projectile,
+            definition,
+            terminal_radius,
+            terminal_damage,
+            actor_snapshots,
+            players,
+            candidate_indices,
+        );
+    }
+    emit_projectile_event(
+        ctx,
+        projectile,
+        if terminal_damage > 0 {
+            COMBAT_EVENT_IMPACT
+        } else {
+            COMBAT_EVENT_FIZZLE
+        },
+        None,
+        projectile.pos_x,
+        projectile.pos_y,
+        projectile.pos_z,
+        terminal_damage.max(0),
+        now,
+        metrics,
+    );
+    finish_projectile_without_event(ctx, projectile);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1252,6 +1303,35 @@ fn resolve_traveling_area_terminal_eruption(
 fn traveling_area_step_distance(speed: f32, dt: f32, traveled: f32, max_distance: f32) -> f32 {
     let remaining_distance = (max_distance - traveled).max(0.0);
     (speed.max(0.0) * dt.max(0.0)).min(remaining_distance)
+}
+
+fn traveling_area_target_arrival_distance(
+    projectile: &ActiveCombatProjectile,
+    target: &CombatActorSnapshot,
+    max_distance: f32,
+) -> Option<f32> {
+    raycast_capsule_with_padding(
+        projectile.pos_x,
+        projectile.pos_y,
+        projectile.pos_z,
+        projectile.dir_x,
+        0.0,
+        projectile.dir_z,
+        max_distance,
+        target,
+        0.0,
+    )?;
+
+    let horizontal_len =
+        (projectile.dir_x * projectile.dir_x + projectile.dir_z * projectile.dir_z).sqrt();
+    if horizontal_len <= 0.0001 {
+        return Some(0.0);
+    }
+    let forward_x = projectile.dir_x / horizontal_len;
+    let forward_z = projectile.dir_z / horizontal_len;
+    let target_forward = (target.pos_x - projectile.pos_x) * forward_x
+        + (target.pos_z - projectile.pos_z) * forward_z;
+    Some(target_forward.clamp(0.0, max_distance))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1931,9 +2011,10 @@ fn retarget_projectile_towards_live_target(
     spawn_height: f32,
     turn_rate: f32,
     dt: f32,
-) {
+    horizontal_only: bool,
+) -> Option<CombatActorSnapshot> {
     if projectile.intended_target == Identity::ZERO {
-        return;
+        return None;
     }
 
     if let Some(target) = player_index_by_id
@@ -1945,23 +2026,32 @@ fn retarget_projectile_towards_live_target(
             && can_harm(ctx, projectile.caster, target.player_id)
         {
             let desired_x = target.pos_x - projectile.pos_x;
-            let desired_y = target.pos_y + spawn_height - projectile.pos_y;
+            let desired_y = if horizontal_only {
+                0.0
+            } else {
+                target.pos_y + spawn_height - projectile.pos_y
+            };
             let desired_z = target.pos_z - projectile.pos_z;
             if let Some(desired_dir) = normalize_vec3(desired_x, desired_y, desired_z) {
-                let current_dir =
-                    normalize_vec3(projectile.dir_x, projectile.dir_y, projectile.dir_z)
-                        .unwrap_or(desired_dir);
+                let current_y = if horizontal_only {
+                    0.0
+                } else {
+                    projectile.dir_y
+                };
+                let current_dir = normalize_vec3(projectile.dir_x, current_y, projectile.dir_z)
+                    .unwrap_or(desired_dir);
                 let (dir_x, dir_y, dir_z) =
                     rotate_towards(current_dir, desired_dir, turn_rate * dt);
                 projectile.dir_x = dir_x;
-                projectile.dir_y = dir_y;
+                projectile.dir_y = if horizontal_only { 0.0 } else { dir_y };
                 projectile.dir_z = dir_z;
             }
-            return;
+            return Some(*target);
         }
     }
 
     projectile.intended_target = Identity::ZERO;
+    None
 }
 
 fn advance_projectile_with_collision(
@@ -3549,5 +3639,41 @@ mod tests {
 
         assert!((traveling_area_step_distance(10.0, 0.05, 11.8, 12.0) - 0.2).abs() < 0.0001);
         assert_eq!(traveling_area_step_distance(10.0, 0.05, 12.0, 12.0), 0.0);
+    }
+
+    #[test]
+    fn traveling_area_target_arrival_clamps_to_the_target_centerline() {
+        let caster_id = test_identity(1);
+        let mut projectile = test_projectile(caster_id);
+        projectile.motion_kind = PROJECTILE_MOTION_TRAVELING_AREA.to_string();
+        projectile.pos_y = 0.15;
+        projectile.dir_x = 0.0;
+        projectile.dir_y = 0.0;
+        projectile.dir_z = 1.0;
+
+        let mut target = test_snapshot(test_identity(2));
+        target.pos_x = 0.49;
+        target.pos_z = 1.2;
+
+        let arrival = traveling_area_target_arrival_distance(&projectile, &target, 2.0)
+            .expect("the ground projectile should reach the target capsule");
+        assert!((arrival - 1.2).abs() < 0.0001);
+    }
+
+    #[test]
+    fn traveling_area_target_arrival_does_not_use_the_broad_damage_wave() {
+        let caster_id = test_identity(1);
+        let mut projectile = test_projectile(caster_id);
+        projectile.motion_kind = PROJECTILE_MOTION_TRAVELING_AREA.to_string();
+        projectile.pos_y = 0.15;
+        projectile.dir_x = 0.0;
+        projectile.dir_y = 0.0;
+        projectile.dir_z = 1.0;
+
+        let mut target = test_snapshot(test_identity(2));
+        target.pos_x = 0.51;
+        target.pos_z = 1.2;
+
+        assert!(traveling_area_target_arrival_distance(&projectile, &target, 2.0).is_none());
     }
 }

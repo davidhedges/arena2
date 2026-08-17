@@ -13766,26 +13766,64 @@ mod tests {
         assert_eq!(area.mana_restore_amount, 5.0);
         assert_eq!(area.effect_target_audience, TargetAudience::PartyOrSelf);
 
-        let fissure_cue = catalog
+        let fissure_travel_cue = catalog
             .combat_vfx_cues
             .iter()
             .find(|cue| {
                 normalize_identifier(cue.owner_id.as_str()) == "SPELL_FISSURE"
                     && normalize_identifier(cue.trigger.as_str()) == "SPELL_RELEASE"
             })
-            .expect("Fissure should author a release VFX cue");
-        assert_eq!(normalize_identifier(fissure_cue.anchor.as_str()), "ORIGIN");
+            .expect("Fissure should author a projectile travel VFX cue");
         assert_eq!(
-            normalize_identifier(fissure_cue.attach_mode.as_str()),
-            "WORLD_ALIGNED_TO_FACING"
+            normalize_identifier(fissure_travel_cue.anchor.as_str()),
+            "ORIGIN"
         );
         assert_eq!(
-            normalize_identifier(fissure_cue.vfx_role.as_str()),
+            normalize_identifier(fissure_travel_cue.attach_mode.as_str()),
+            "SPAWN_WORLD"
+        );
+        assert_eq!(
+            normalize_identifier(fissure_travel_cue.vfx_role.as_str()),
+            "PROJECTILE_BODY"
+        );
+        assert_eq!(
+            normalize_identifier(fissure_travel_cue.lifecycle.as_str()),
+            "UNTIL_TERMINAL_EVENT"
+        );
+        assert_eq!(
+            normalize_identifier(fissure_travel_cue.vfx_id.as_str()),
+            "VFX_FISSURE_TRAVEL_01"
+        );
+        assert_eq!(fissure_travel_cue.projectile_sequence_index, Some(0));
+
+        let fissure_impact_cue = catalog
+            .combat_vfx_cues
+            .iter()
+            .find(|cue| {
+                normalize_identifier(cue.owner_id.as_str()) == "SPELL_FISSURE"
+                    && normalize_identifier(cue.trigger.as_str()) == "SPELL_IMPACT"
+            })
+            .expect("Fissure should author a terminal eruption VFX cue");
+        assert_eq!(
+            normalize_identifier(fissure_impact_cue.anchor.as_str()),
+            "IMPACT_POINT"
+        );
+        assert_eq!(
+            normalize_identifier(fissure_impact_cue.attach_mode.as_str()),
+            "SPAWN_WORLD"
+        );
+        assert_eq!(
+            normalize_identifier(fissure_impact_cue.vfx_role.as_str()),
             "ONE_SHOT"
         );
         assert_eq!(
-            normalize_identifier(fissure_cue.lifecycle.as_str()),
-            "PARTICLE_SYSTEM"
+            normalize_identifier(fissure_impact_cue.lifecycle.as_str()),
+            "DURATION"
+        );
+        assert_eq!(fissure_impact_cue.duration_ms, 5000);
+        assert_eq!(
+            normalize_identifier(fissure_impact_cue.vfx_id.as_str()),
+            "VFX_FISSURE_ERUPTION_01"
         );
     }
 

@@ -4224,6 +4224,7 @@ fn spawn_tracking_projectile_instance(
     let mut dir_x = target.pos_x - base_x;
     let mut dir_y = target_y - base_y;
     let mut dir_z = target.pos_z - base_z;
+    let horizontal_target_distance = (dir_x * dir_x + dir_z * dir_z).sqrt();
 
     let distance_sq = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
     if distance_sq > 0.0001 {
@@ -4250,9 +4251,15 @@ fn spawn_tracking_projectile_instance(
         dir_z = state.facing_yaw.cos();
     }
 
-    let origin_x = base_x + dir_x * definition.spawn_forward;
-    let origin_y = base_y + dir_y * definition.spawn_forward;
-    let origin_z = base_z + dir_z * definition.spawn_forward;
+    let spawn_forward = targeted_traveling_area_spawn_forward(
+        definition.spawn_forward,
+        horizontal_target_distance,
+        projectile_tunables.motion.traveling_area().is_some(),
+        target.player_id != Identity::ZERO,
+    );
+    let origin_x = base_x + dir_x * spawn_forward;
+    let origin_y = base_y + dir_y * spawn_forward;
+    let origin_z = base_z + dir_z * spawn_forward;
     let curve_end = Vec3::new(target.pos_x, target_y, target.pos_z);
     let curve_control = curve
         .map(|curve| {
@@ -4415,6 +4422,19 @@ fn spawn_tracking_projectile_instance(
     }
 
     Ok(())
+}
+
+fn targeted_traveling_area_spawn_forward(
+    authored_spawn_forward: f32,
+    horizontal_target_distance: f32,
+    is_traveling_area: bool,
+    has_live_target: bool,
+) -> f32 {
+    if is_traveling_area && has_live_target {
+        authored_spawn_forward.min(horizontal_target_distance.max(0.0))
+    } else {
+        authored_spawn_forward
+    }
 }
 
 fn orbit_cast_fits_capacity(active_count: u32, spawn_count: u32, maximum: u32) -> bool {
@@ -10259,8 +10279,8 @@ mod tests {
         remaining_dot_damage_from_schedule, resolve_generic_area_center,
         resolve_special_movement_y, spell_primary_resource_cost_for_action,
         status_is_transferable_debuff_values, successful_interrupt_damage,
-        targeted_ability_is_blocked, valid_cast_action_token,
-        violates_active_cast_lifetime_mobility_requirement_for_tick,
+        targeted_ability_is_blocked, targeted_traveling_area_spawn_forward,
+        valid_cast_action_token, violates_active_cast_lifetime_mobility_requirement_for_tick,
         violates_cast_mobility_requirement, ActiveCastTerminalOutcome, CastExecutionMode,
         CombatActorSnapshot, CombatAreaShape, CurvedTargetProjectileTunables, ImpactEffect,
         SpellBehavior, SpellId, Vec3, FACING_DOT_EPSILON, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
@@ -10383,6 +10403,26 @@ mod tests {
         assert!(
             height_buckets.len() > 8,
             "expected authored amplitude and arc direction to vary control height"
+        );
+    }
+
+    #[test]
+    fn targeted_traveling_area_spawn_does_not_overshoot_a_nearby_target() {
+        assert_eq!(
+            targeted_traveling_area_spawn_forward(1.0, 0.4, true, true),
+            0.4
+        );
+        assert_eq!(
+            targeted_traveling_area_spawn_forward(1.0, 4.0, true, true),
+            1.0
+        );
+        assert_eq!(
+            targeted_traveling_area_spawn_forward(1.0, 0.4, true, false),
+            1.0
+        );
+        assert_eq!(
+            targeted_traveling_area_spawn_forward(1.0, 0.4, false, true),
+            1.0
         );
     }
 
