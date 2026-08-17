@@ -25,6 +25,29 @@ const QUEUE_UNRANKED: &str = "UNRANKED";
 const FORMAT_2V2: &str = "2V2";
 const ARENA_MAP_01_ID: &str = "ARENA_MAP_01";
 
+/// Open-world sessions ride the same ticket/assignment pipeline as PvP so they
+/// inherit its disposal behavior; the destination scene travels in the ticket's
+/// `format` column rather than a new column, keeping `MatchTicket` unchanged.
+const QUEUE_OPEN_WORLD: &str = "OPEN_WORLD";
+
+/// The control plane refuses to provision a destination it does not recognize,
+/// so a typo cannot leave an orphaned database behind. Authoritative scene
+/// behavior still lives in the gameplay module's `is_known_open_world_scene`;
+/// this list mirrors it and `OpenWorldTravelCatalog.Destinations` on the client.
+const OPEN_WORLD_DESTINATIONS: &[&str] = &[
+    "Adventure_Island",
+    "Desert_Day",
+    "Docks_Day",
+    "Giant_Skeleton",
+    "Golden_Valley_Overcast",
+    "Golden_Valley_Sunny",
+    "Great_Hall_Day",
+    "Idol_Day",
+    "Oasis_Day",
+    "RandomDungeon",
+    "Temple_Gardens",
+];
+
 const STATUS_PENDING: &str = "PENDING";
 const STATUS_CLAIMED: &str = "CLAIMED";
 const STATUS_PROVISIONING: &str = "PROVISIONING";
@@ -642,6 +665,71 @@ pub fn request_unranked_2v2_bot_match(
         client_request_id,
         queue_kind: QUEUE_UNRANKED.to_string(),
         format: FORMAT_2V2.to_string(),
+        status: STATUS_PENDING.to_string(),
+        created_at: ctx.timestamp,
+        updated_at: ctx.timestamp,
+        expires_at: ctx.timestamp + PENDING_TICKET_TTL,
+        lease_owner: None,
+        lease_until: None,
+        failure_code: None,
+    });
+    freeze_player_loadout_for_ticket(ctx, ticket_id, player_identity);
+    bump_provisioner_wakeup(ctx);
+    Ok(())
+}
+
+/// Requests a disposable open-world instance for the caller.
+///
+/// Open worlds are ephemeral: the player enters with their Hub loadout and
+/// nothing is written back when the instance is torn down. Reusing the match
+/// ticket pipeline is deliberate — it is what makes the instance disposable.
+#[reducer]
+pub fn request_open_world_instance(
+    ctx: &ReducerContext,
+    client_request_id: String,
+    destination: String,
+) -> Result<(), String> {
+    let client_request_id = validate_identifier("client request id", client_request_id, 8, 64)?;
+    let destination = validate_identifier("open-world destination", destination, 1, 64)?;
+    if !OPEN_WORLD_DESTINATIONS.contains(&destination.as_str()) {
+        return Err(format!("Unknown open-world destination '{destination}'"));
+    }
+
+    let player_identity = ctx.sender();
+    ensure_hub_player(ctx, player_identity);
+    ensure_hub_loadout_catalogs(ctx)?;
+    ensure_default_hub_player_loadout(ctx, player_identity)?;
+
+    if let Some(existing) = ctx
+        .db
+        .match_ticket()
+        .player_identity()
+        .find(player_identity)
+    {
+        match request_decision(
+            existing.status.as_str(),
+            existing.client_request_id.as_str(),
+            client_request_id.as_str(),
+        ) {
+            RequestDecision::Idempotent => return Ok(()),
+            RequestDecision::RejectActive => {
+                return Err("A match request is already active for this player".to_string())
+            }
+            RequestDecision::ReplaceTerminal => {
+                delete_assignment_for_player(ctx, player_identity);
+                delete_loadout_snapshot_for_ticket(ctx, existing.ticket_id.as_str());
+                ctx.db.match_ticket().ticket_id().delete(existing.ticket_id);
+            }
+        }
+    }
+
+    let ticket_id = ticket_id_for(player_identity, client_request_id.as_str());
+    ctx.db.match_ticket().insert(MatchTicket {
+        ticket_id: ticket_id.clone(),
+        player_identity,
+        client_request_id,
+        queue_kind: QUEUE_OPEN_WORLD.to_string(),
+        format: destination,
         status: STATUS_PENDING.to_string(),
         created_at: ctx.timestamp,
         updated_at: ctx.timestamp,
