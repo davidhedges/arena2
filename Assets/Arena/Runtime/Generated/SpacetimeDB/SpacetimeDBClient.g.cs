@@ -892,6 +892,7 @@ namespace SpacetimeDB.Types
                 Reducer.AssignCombatDisciplineWeaponLoadout args => Reducers.InvokeAssignCombatDisciplineWeaponLoadout(eventContext, args),
                 Reducer.AssignEquippedSpellbookSpell args => Reducers.InvokeAssignEquippedSpellbookSpell(eventContext, args),
                 Reducer.BeginWorldDoorAction args => Reducers.InvokeBeginWorldDoorAction(eventContext, args),
+                Reducer.BootstrapOpenWorldInstance args => Reducers.InvokeBootstrapOpenWorldInstance(eventContext, args),
                 Reducer.BootstrapUnranked2V2BotMatch args => Reducers.InvokeBootstrapUnranked2V2BotMatch(eventContext, args),
                 Reducer.CancelActiveCastRequest args => Reducers.InvokeCancelActiveCastRequest(eventContext, args),
                 Reducer.CancelWorldInteraction args => Reducers.InvokeCancelWorldInteraction(eventContext, args),

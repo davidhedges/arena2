@@ -138,8 +138,14 @@ namespace Arena.Network
 
         private static IEnumerable<(string serverKey, TextAsset? asset)> ClientSharedFiles()
         {
-            // TextAsset names have the ".json" extension stripped; server
-            // keys are src-relative paths ("world_data/x.shared.json").
+            // TextAsset names have the ".json" extension stripped; server keys
+            // are src-relative paths ("world_data/x.shared.json"). Every
+            // client folder whose server copy lives in a subdirectory must be
+            // enumerated with that prefix BEFORE the unprefixed root sweep, or
+            // the guard asks for a key the module never stamps. A long-lived
+            // database hides that: contract_version rows from an older layout
+            // are never deleted, so only a freshly published module — every
+            // disposable instance — reports it.
             var seen = new HashSet<TextAsset>();
             foreach (TextAsset asset in Resources.LoadAll<TextAsset>("SharedData/Worlds"))
             {
@@ -152,6 +158,12 @@ namespace Arena.Network
             {
                 seen.Add(asset);
                 yield return ($"world_data/{asset.name}.json", asset);
+            }
+
+            foreach (TextAsset asset in Resources.LoadAll<TextAsset>("SharedData/Maps"))
+            {
+                seen.Add(asset);
+                yield return ($"map_data/{asset.name}.json", asset);
             }
 
             foreach (TextAsset asset in Resources.LoadAll<TextAsset>("SharedData"))

@@ -300,28 +300,29 @@ namespace Arena.UI
                 return;
 
             if (_travelConnection != null)
-            {
-                _travelConnection.Reducers.OnSetOpenWorldScene -= OnSetOpenWorldScene;
                 _travelConnection.Reducers.OnStartSurvivalRun -= OnStartSurvivalRun;
-            }
 
             _travelConnection = conn;
-            if (_pendingTravelScene != null || _pendingSurvivalStart)
+            if (_pendingSurvivalStart)
             {
-                _pendingTravelScene = null;
                 _pendingSurvivalStart = false;
                 SetTravelButtonsInteractable(true);
             }
 
             if (conn != null)
-            {
-                conn.Reducers.OnSetOpenWorldScene += OnSetOpenWorldScene;
                 conn.Reducers.OnStartSurvivalRun += OnStartSurvivalRun;
-            }
         }
 
+        /// <summary>
+        /// Travel provisions a disposable open-world instance through the Hub
+        /// control plane. The gameplay connection does not exist yet in the
+        /// Hub, so the old SetOpenWorldScene call could never reach a server
+        /// (docs/open-world-disposable-instances-2026-08-18.md).
+        /// </summary>
         private void RequestTravel(string sceneName)
         {
+            if (!Application.isPlaying)
+                return;
             if (_pendingTravelScene != null || _pendingSurvivalStart)
                 return;
             if (!OpenWorldTravelCatalog.IsRegisteredOpenWorldScene(sceneName))
@@ -330,16 +331,16 @@ namespace Arena.UI
                 return;
             }
 
-            EnsureTravelConnection();
-            if (_travelConnection == null)
-            {
-                Debug.LogWarning($"[{nameof(HubController)}] Cannot travel while disconnected.");
-                return;
-            }
-
+            MatchHandoffCoordinator handoff = MatchHandoffCoordinator.EnsureInstance();
             _pendingTravelScene = sceneName;
             SetTravelButtonsInteractable(false);
-            _travelConnection.Reducers.SetOpenWorldScene(sceneName);
+            if (handoff.RequestOpenWorldInstance(sceneName))
+                return;
+
+            Debug.LogWarning(
+                $"[{nameof(HubController)}] Travel to '{sceneName}' was not accepted: {handoff.LastError}");
+            _pendingTravelScene = null;
+            SetTravelButtonsInteractable(true);
         }
 
         private void RequestSurvival()
@@ -357,35 +358,6 @@ namespace Arena.UI
             _pendingSurvivalStart = true;
             SetTravelButtonsInteractable(false);
             _travelConnection.Reducers.StartSurvivalRun();
-        }
-
-        private void OnSetOpenWorldScene(ReducerEventContext ctx, string sceneName)
-        {
-            if (_travelConnection == null
-                || !_travelConnection.Identity.HasValue
-                || ctx.Event.CallerIdentity != _travelConnection.Identity.Value
-                || !string.Equals(_pendingTravelScene, sceneName, System.StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            if (ctx.Event.Status is Status.Committed)
-            {
-                _pendingTravelScene = null;
-                OpenWorldTravelCatalog.SetCurrentScene(sceneName);
-                SceneManager.LoadScene(sceneName);
-                return;
-            }
-
-            string reason = ctx.Event.Status switch
-            {
-                Status.Failed(var failure) => failure,
-                Status.OutOfEnergy(var _) => "server was out of reducer energy",
-                _ => "server did not commit the travel request",
-            };
-            Debug.LogError($"[{nameof(HubController)}] Travel to '{sceneName}' failed: {reason}");
-            _pendingTravelScene = null;
-            SetTravelButtonsInteractable(true);
         }
 
         private void OnStartSurvivalRun(ReducerEventContext ctx)
@@ -415,6 +387,30 @@ namespace Arena.UI
             SetTravelButtonsInteractable(true);
         }
 
+        /// <summary>
+        /// The travel ticket is owned by the handoff coordinator, which either
+        /// loads the destination scene or rolls back to the Hub with a reason.
+        /// This releases the menu once it has stopped waiting on either.
+        /// </summary>
+        private void ReconcileTravelRequest()
+        {
+            if (!Application.isPlaying || _pendingTravelScene == null)
+                return;
+
+            MatchHandoffCoordinator? handoff = MatchHandoffCoordinator.Instance;
+            if (handoff == null || handoff.IsMatchRequestPending)
+                return;
+
+            if (!string.IsNullOrWhiteSpace(handoff.LastError))
+            {
+                Debug.LogWarning(
+                    $"[{nameof(HubController)}] Travel to '{_pendingTravelScene}' failed: {handoff.LastError}");
+            }
+
+            _pendingTravelScene = null;
+            SetTravelButtonsInteractable(true);
+        }
+
         private void SetTravelButtonsInteractable(bool interactable)
         {
             Transform? destinations = _root?.Find("HubCanvas/HomeRoot/TravelMenu/DestinationButtons");
@@ -431,6 +427,7 @@ namespace Arena.UI
 
         private void ApplyState()
         {
+            ReconcileTravelRequest();
             bool activeHub = string.Equals(SceneManager.GetActiveScene().name, HubSceneName, System.StringComparison.Ordinal);
             bool showHome = activeHub && HubViewState.Current == HubViewScreen.Play;
             bool showStage = activeHub && HubViewState.Current == HubViewScreen.Play;

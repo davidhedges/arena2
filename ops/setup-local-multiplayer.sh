@@ -10,6 +10,8 @@ PROVISIONER_PID_PATH="$RUNTIME_DIR/provisioner.pid"
 PROVISIONER_LOG_PATH="$RUNTIME_DIR/provisioner.log"
 MATCH_WASM_PATH="${ARENA_PROVISIONER_MATCH_WASM:-$ROOT_DIR/match-server/target/wasm32-unknown-unknown/release/arena_match.opt.wasm}"
 MATCH_PROVENANCE_PATH="${ARENA_PROVISIONER_MATCH_MANIFEST:-$MATCH_WASM_PATH.inputs.json}"
+OPENWORLD_WASM_PATH="${ARENA_PROVISIONER_OPENWORLD_WASM:-$ROOT_DIR/server/target/wasm32-unknown-unknown/release/arena.opt.wasm}"
+OPENWORLD_PROVENANCE_PATH="${ARENA_PROVISIONER_OPENWORLD_MANIFEST:-$OPENWORLD_WASM_PATH.inputs.json}"
 PROVISIONER_STATE_DB="${ARENA_PROVISIONER_STATE_DB:-$ROOT_DIR/Library/ArenaMatchProvisioner/state.sqlite3}"
 PROVISIONER_LOCK_PATH="${PROVISIONER_STATE_DB%.*}.lock"
 ROOT_DIR_CHECKSUM="$(printf '%s' "$ROOT_DIR" | cksum)"
@@ -158,6 +160,8 @@ start_launchd_provisioner() {
         "PATH=${PATH:-/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
         "ARENA_PROVISIONER_MATCH_WASM=$MATCH_WASM_PATH"
         "ARENA_PROVISIONER_MATCH_MANIFEST=$MATCH_PROVENANCE_PATH"
+        "ARENA_PROVISIONER_OPENWORLD_WASM=$OPENWORLD_WASM_PATH"
+        "ARENA_PROVISIONER_OPENWORLD_MANIFEST=$OPENWORLD_PROVENANCE_PATH"
         "ARENA_PROVISIONER_STATE_DB=$PROVISIONER_STATE_DB"
     )
     if [ -n "${ARENA_PROVISIONER_MANAGEMENT_URL:-}" ]; then
@@ -261,6 +265,15 @@ show_status() {
         ready=1
     fi
 
+    if provenance_output="$(python3 "$ROOT_DIR/match_provisioner/artifact_provenance.py" verify \
+        --wasm "$OPENWORLD_WASM_PATH" \
+        --manifest "$OPENWORLD_PROVENANCE_PATH" 2>&1)"; then
+        echo "Open-world artifact: ready ($OPENWORLD_WASM_PATH)"
+    else
+        echo "Open-world artifact: stale or missing ($provenance_output)"
+        ready=1
+    fi
+
     if managed_provisioner_is_running; then
         echo "Provisioner: running (pid $(managed_provisioner_pid))"
         echo "Provisioner log: $PROVISIONER_LOG_PATH"
@@ -292,10 +305,14 @@ setup_environment() {
     MATCH_GENERATE_BINDINGS="${MATCH_GENERATE_BINDINGS:-1}" \
         "$ROOT_DIR/ops/build-match-spacetimedb.sh"
 
+    echo "Building the cached disposable-open-world module..."
+    "$ROOT_DIR/ops/build-openworld-spacetimedb.sh"
+
     start_managed_provisioner
 
     echo
-    echo "Local multiplayer is ready. Open Unity and request an Unranked 2v2 Bot Match."
+    echo "Local multiplayer is ready. Open Unity and request an Unranked 2v2 Bot Match,"
+    echo "or travel to an open-world destination from Play > Practice."
     echo "Status: ops/setup-local-multiplayer.sh status"
     echo "Stop:   ops/setup-local-multiplayer.sh stop"
 }

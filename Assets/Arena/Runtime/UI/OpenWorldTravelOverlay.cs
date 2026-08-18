@@ -1,5 +1,6 @@
 #nullable enable
 
+using Arena.Network;
 using Arena.World;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -103,6 +104,13 @@ namespace Arena.UI
 
         private static void ReturnToHub()
         {
+            // An open world is now a provisioned, disposable database. Leaving
+            // it has to disconnect through the handoff coordinator, which is
+            // what marks the instance ended so the provisioner deletes it;
+            // loading the Hub scene alone would strand it until its TTL.
+            if (MatchHandoffCoordinator.Instance?.ReturnToHub() == true)
+                return;
+
             SceneManager.LoadScene(HubSceneName);
         }
 

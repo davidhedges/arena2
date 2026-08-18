@@ -34,7 +34,10 @@ The worker is intentionally local-only:
   never written to SQLite or logs;
 - client assignments contain only the public `ws://`/`wss://` endpoint and
   database identity;
-- the WASM is read once at process start and is never compiled per match;
+- both WASM artifacts are read once at process start and are never compiled
+  per session: the small PvP module for match tickets, and the main server
+  module for open-world tickets, whose destination scene comes from the ticket
+  rather than from `ARENA_PROVISIONER_MAP_ID`;
 - wakeup updates are coalesced, so a burst of requests causes one authoritative
   Hub snapshot instead of one query set per notification;
 - a 30-second reconciliation sweep recovers subscription interruptions,
@@ -57,7 +60,14 @@ ops/build-match-spacetimedb.sh
 
 That command also applies the canonical Binaryen size pass, enforces the PvP
 artifact ceiling, and regenerates the separate `Arena.MatchDb` schema bindings.
-Start the provisioner after the cached optimized artifact exists:
+
+Build the disposable open-world module the same way:
+
+```bash
+ops/build-openworld-spacetimedb.sh
+```
+
+Start the provisioner after the cached optimized artifacts exist:
 
 ```bash
 ops/run-local-match-provisioner.sh run

@@ -276,7 +276,11 @@ pub fn start_match(ctx: &ReducerContext, arena_id: u64) -> Result<(), String> {
 
 #[reducer]
 pub fn leave_instance(ctx: &ReducerContext) -> Result<(), String> {
-    if crate::match_contract::is_provisioned(ctx) {
+    // A disposable open world is exempt: leaving a private instance there
+    // returns the player to that world, not out of the database.
+    if crate::match_contract::is_provisioned(ctx)
+        && !crate::match_contract::is_provisioned_open_world(ctx)
+    {
         return Err(
             "A reserved player cannot leave a provisioned match database; disconnect instead"
                 .to_string(),

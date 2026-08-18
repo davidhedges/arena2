@@ -19,33 +19,7 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 2
 fi
 
-find_wasm_opt() {
-    if [ -n "${WASM_OPT:-}" ]; then
-        if command -v "$WASM_OPT" >/dev/null 2>&1; then
-            command -v "$WASM_OPT"
-            return
-        fi
-        echo "WASM_OPT does not identify an executable: $WASM_OPT" >&2
-        return 1
-    fi
-
-    if command -v wasm-opt >/dev/null 2>&1; then
-        command -v wasm-opt
-        return
-    fi
-
-    unity_version="$(awk '/^m_EditorVersion:/ { print $2; exit }' "$ROOT_DIR/ProjectSettings/ProjectVersion.txt" 2>/dev/null || true)"
-    unity_wasm_opt="/Applications/Unity/Hub/Editor/$unity_version/PlaybackEngines/WebGLSupport/BuildTools/Emscripten/binaryen/bin/wasm-opt"
-    if [ -n "$unity_version" ] && [ -x "$unity_wasm_opt" ]; then
-        printf '%s\n' "$unity_wasm_opt"
-        return
-    fi
-
-    echo "wasm-opt is required. Install Binaryen or set WASM_OPT to its executable path." >&2
-    return 1
-}
-
-WASM_OPT_BIN="$(find_wasm_opt)"
+WASM_OPT_BIN="$("$ROOT_DIR/ops/find-wasm-opt.sh")"
 export PATH="$(dirname "$WASM_OPT_BIN"):$PATH"
 
 echo "Building disposable PvP match module..."

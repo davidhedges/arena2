@@ -30,7 +30,8 @@ namespace Arena.Network
             string databaseIdentity,
             string matchBuildId,
             string mapId,
-            string sceneName)
+            string sceneName,
+            bool isOpenWorld)
         {
             TicketId = ticketId;
             MatchId = matchId;
@@ -39,6 +40,7 @@ namespace Arena.Network
             MatchBuildId = matchBuildId;
             MapId = mapId;
             SceneName = sceneName;
+            IsOpenWorld = isOpenWorld;
         }
 
         internal string TicketId { get; }
@@ -48,6 +50,10 @@ namespace Arena.Network
         internal string MatchBuildId { get; }
         internal string MapId { get; }
         internal string SceneName { get; }
+
+        /// A disposable open world runs the full server module, so it uses the
+        /// ordinary gameplay subscription plan rather than the trimmed PvP one.
+        internal bool IsOpenWorld { get; }
     }
 
     internal static class MatchAssignmentValidator
@@ -77,8 +83,21 @@ namespace Arena.Network
                 return false;
             }
 
+            // A match is assigned an authored arena map; an open world is
+            // assigned an authored scene. Both arrive in the same column, so
+            // the ticket's queue kind chooses the catalog that must accept it.
             string mapId = status.MapId.Trim();
-            if (!ArenaMapCatalog.TryResolveSceneName(mapId, out string sceneName))
+            string sceneName;
+            if (status.IsOpenWorld)
+            {
+                if (!OpenWorldTravelCatalog.IsRegisteredOpenWorldScene(mapId))
+                {
+                    error = $"The Hub assigned an unknown open-world destination ({mapId}).";
+                    return false;
+                }
+                sceneName = mapId;
+            }
+            else if (!ArenaMapCatalog.TryResolveSceneName(mapId, out sceneName))
             {
                 error = $"The Hub assigned an unsupported arena map ({mapId}).";
                 return false;
@@ -123,8 +142,9 @@ namespace Arena.Network
                 status.ServerUri.Trim(),
                 databaseIdentity.ToLowerInvariant(),
                 status.MatchBuildId.Trim(),
-                mapId.ToUpperInvariant(),
-                sceneName);
+                status.IsOpenWorld ? mapId : mapId.ToUpperInvariant(),
+                sceneName,
+                status.IsOpenWorld);
             error = string.Empty;
             return true;
         }
@@ -367,6 +387,34 @@ namespace Arena.Network
         }
 
         internal bool RequestUnranked2V2BotMatch()
+            => RequestTicket(
+                () => _hub.RequestUnranked2V2BotMatch(),
+                ArenaMapCatalog.DefaultSceneName,
+                "The Hub did not accept the match request.");
+
+        /// Travels to a disposable open world. The Hub is the only connection
+        /// open while the Hub scene is active, so travel must be requested
+        /// here rather than on the gameplay connection
+        /// (docs/open-world-disposable-instances-2026-08-18.md section 1).
+        internal bool RequestOpenWorldInstance(string destination)
+        {
+            if (!OpenWorldTravelCatalog.IsRegisteredOpenWorldScene(destination))
+            {
+                LastError = $"Unknown open-world destination '{destination}'.";
+                NotifyChanged();
+                return false;
+            }
+
+            return RequestTicket(
+                () => _hub.RequestOpenWorldInstance(destination),
+                destination,
+                "The Hub did not accept the travel request.");
+        }
+
+        private bool RequestTicket(
+            Func<bool> submit,
+            string expectedSceneName,
+            string rejectionMessage)
         {
             if (!CanRequestMatch)
             {
@@ -380,16 +428,16 @@ namespace Arena.Network
             LastError = string.Empty;
             _activeTicketId = null;
             _ignoredTicketId = null;
-            _activeMatchSceneName = ArenaMapCatalog.DefaultSceneName;
+            _activeMatchSceneName = expectedSceneName;
             _deadlineRealtime = Time.unscaledTime + AssignmentWaitTimeoutSeconds;
             State = MatchHandoffState.WaitingForAssignment;
             MatchStartupTiming.BeginRequest();
-            bool submitted = _hub.RequestUnranked2V2BotMatch();
+            bool submitted = submit();
             if (!submitted)
             {
                 State = MatchHandoffState.HubReady;
                 LastError = string.IsNullOrWhiteSpace(_hub.LastError)
-                    ? "The Hub did not accept the match request."
+                    ? rejectionMessage
                     : _hub.LastError;
                 MatchStartupTiming.Fail("request_rejected");
             }
@@ -553,7 +601,8 @@ namespace Arena.Network
                 assignment.DatabaseIdentity,
                 hubIdentity.Value,
                 assignment.MatchId,
-                assignment.MatchBuildId);
+                assignment.MatchBuildId,
+                assignment.IsOpenWorld);
         }
 
         private void OnMatchReady(Identity identity)
@@ -669,7 +718,19 @@ namespace Arena.Network
 
         private string ResolveQueueStatus()
         {
-            string? status = _hub.MatchStatus?.Status;
+            HubMatchStatusSnapshot? snapshot = _hub.MatchStatus;
+            string? status = snapshot?.Status;
+            if (snapshot?.IsOpenWorld == true)
+            {
+                return status switch
+                {
+                    "CLAIMED" => "CLAIMING WORLD…",
+                    "PROVISIONING" => "BUILDING WORLD…",
+                    "READY" => "WORLD READY…",
+                    _ => "REQUESTING WORLD…",
+                };
+            }
+
             return status switch
             {
                 "CLAIMED" => "MATCH CLAIMED…",

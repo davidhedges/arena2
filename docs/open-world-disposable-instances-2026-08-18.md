@@ -30,7 +30,8 @@ Introduced by `06d7a1a8` ("feat: add disposable PvP match provisioning",
 2026-08-12), which replaced the old unconditional `ConnectToResolvedEndpoint()`
 in `Start()` with the Hub early-return. PvP gained a provisioning flow to
 replace it; open-world travel did not. `RequestSurvival` has the same defect —
-`StartSurvivalRun` is sent on the same null connection.
+`StartSurvivalRun` is sent on the same null connection — but survival mode is
+deprecated (owner, 2026-08-18), so that path is being retired, not repaired.
 
 The scene itself is fine: `Giant_Skeleton.unity` is in Build Settings enabled,
 and the destination buttons are wired correctly by name (`Travel_<SceneName>`).
@@ -95,7 +96,7 @@ pub fn request_open_world_instance(
 - Reuse `request_decision`, `freeze_player_loadout_for_ticket`, and
   `bump_provisioner_wakeup` unchanged.
 
-### 4.1b server (Rust) — open-world bootstrap reducer  **[open design point]**
+### 4.1b server (Rust) — open-world bootstrap reducer  **[SETTLED — option 1]**
 
 The provisioner does not merely publish a database; it calls a bootstrap
 reducer on the fresh instance —
@@ -121,6 +122,31 @@ those things. Pick one before writing 4.1b:
 Recommendation: (1) for the first cut, because teardown, allocation expiry, and
 `_validate_existing_bootstrap` already key off that singleton and would
 otherwise need parallel implementations. Revisit if the phase machine fights it.
+
+**Decision (built 2026-08-18): option 1.** The phase machine did not fight it.
+`bootstrap_open_world_instance` (`server/src/match_contract.rs`, `#[cfg(not(feature
+= "pvp_match"))]` for the same reason `set_open_world_scene` is) shares one
+`claim_provisioned_database` helper with the 2v2 bootstrap, so both queue kinds
+provably get the same owner check, one-shot latch, gameplay-row refusal,
+loadout validation, and allocation bound. Only three things differ:
+
+- **destination vocabulary** — `require_arena_map_id` for a match, the authored
+  scene list for a world. The destination occupies `map_id` (so the provisioner
+  and Hub assignment carry it unchanged) *and* `format` (mirroring the ticket).
+- **what bootstrap builds** — nothing. A match builds its arena instance and
+  roster up front; an authored world has none, so the reducer only records the
+  config and reservation.
+- **phase** — both bootstrap to `WAITING`. On the reserved player's connect a
+  match goes to `COUNTDOWN` and joins the roster, while a world goes straight to
+  `IN_PROGRESS` (it is live on arrival) and enters the ordinary open-world
+  lifecycle via `set_player_open_world`. On disconnect a match reports
+  `ABORTED/PLAYER_DISCONNECTED`; leaving a world *is* its ending, so it reports
+  `ENDED/PLAYER_LEFT`. Both are terminal, which is all the provisioner reads.
+
+One further rule had to bend: `leave_instance` refuses to run in a provisioned
+database (a reserved PvP player must not leave the match). A disposable world is
+exempt, because leaving a private instance there returns you to that world, not
+out of the database.
 
 ### 4.2 match_provisioner/worker.py
 
@@ -152,13 +178,38 @@ Disposal needs no change.
 
 ### 4.4 Verification
 
-- Provisioner leg: request a ticket, assert a fresh database appears, assert it
-  is deleted on exit.
-- Client leg: Hub -> Practice -> Giant Skeleton actually loads the scene.
-- Confirm no `arena-local`-style persistent open-world database is left behind,
-  which is the entire point of the change.
+Both legs are automated; neither needs a human at the keyboard.
 
-## 5. Known follow-ups, deliberately out of scope
+- **Provisioner leg** — `ops/open-world-travel-probe.py`. Opens an anonymous Hub
+  websocket (a fresh non-owner identity, the same shape a real client has),
+  calls `request_open_world_instance`, waits for READY, reconnects to the
+  assigned database with the *same* identity token, and asserts the player was
+  seated in the requested scene; then disconnects and asserts the database is
+  deleted.
+- **Client leg** — `ops/open-world-travel-client-leg.sh`, a batchmode editor run
+  that presses the Hub's real `Travel_<Scene>` button and exits nonzero unless
+  the destination scene becomes active.
+
+## 6. Measured cost of running the main module per instance
+
+The main server module is **~424 MB** of wasm against the PvP module's 3.5 MB,
+because `server/src/world_data` embeds ~150 MB of heightfield/collision JSON and
+`const X: &str = include_str!(..)` is *inlined at every use site* — each payload
+lands in the binary 3–5 times. Measured consequences, local loopback:
+
+- publishing one instance takes **~15 s**, which is the dominant term in travel
+  latency (ticket to READY measured at 14.5 s);
+- each live instance database carries that module on disk;
+- the provisioner's management-call timeout had to grow a publish-specific
+  budget, because 30 s was uncomfortably close to the upload time.
+
+The fix is not to trim content: it is to stop the duplication. Flipping the
+payload chain in `open_world_scene.rs` from `const` to `static` (payload, then
+profile, then the profile table) should remove 2–4 copies and take the artifact
+to roughly its ~190 MB floor. That refactor touches the LOS/collision data path,
+so it was deliberately left out of this change.
+
+## 7. Known follow-ups, deliberately out of scope
 
 - **Nothing persists out of an open world.** `hub-server` stores identity,
   display name, and loadout *choices* only — its own comment
@@ -166,8 +217,9 @@ Disposal needs no change.
   deliberately stay out of the Hub. XP, inventory, currency, and loot earned in
   an instance are destroyed with it. Accepted for now; revisit if open world
   becomes progression-bearing.
-- **Survival mode has the identical defect** (`RequestSurvival` ->
-  `StartSurvivalRun` on the null gameplay connection) and should ride the same
-  ticket path.
+- **Survival mode is deprecated and going away** (owner, 2026-08-18). It has
+  the identical defect (`RequestSurvival` -> `StartSurvivalRun` on the null
+  gameplay connection), and it is deliberately NOT being put on this ticket
+  path. Do not spend work on it.
 - `ARENA_PROVISIONER_MAP_ID` remains the PvP default; only the open-world kind
   reads its destination from the ticket.

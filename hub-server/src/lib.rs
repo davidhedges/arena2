@@ -883,9 +883,6 @@ pub fn service_mark_ready(
     let database_identity = validate_identifier("database identity", database_identity, 8, 128)?;
     let match_build_id = validate_identifier("match build id", match_build_id, 1, 96)?;
     let map_id = validate_identifier("map id", map_id, 1, 64)?;
-    if map_id != ARENA_MAP_01_ID {
-        return Err(format!("Unsupported authored arena map {map_id}"));
-    }
     let server_uri = validate_server_uri(server_uri)?;
     validate_future_deadline(
         "assignment deadline",
@@ -900,6 +897,23 @@ pub fn service_mark_ready(
         .ticket_id()
         .find(ticket_id.clone())
         .ok_or_else(|| "Match ticket not found".to_string())?;
+
+    // The destination vocabulary is per queue kind: a match is assigned an
+    // authored arena map, an open world an authored scene. Both travel in the
+    // assignment's `map_id`, so the ticket decides which list to check.
+    if ticket.queue_kind == QUEUE_OPEN_WORLD {
+        if !OPEN_WORLD_DESTINATIONS.contains(&map_id.as_str()) {
+            return Err(format!("Unsupported open-world destination {map_id}"));
+        }
+        if map_id != ticket.format {
+            return Err(
+                "Open-world assignment does not target the destination the ticket requested"
+                    .to_string(),
+            );
+        }
+    } else if map_id != ARENA_MAP_01_ID {
+        return Err(format!("Unsupported authored arena map {map_id}"));
+    }
 
     if ticket.status == STATUS_READY {
         let same_assignment = ctx

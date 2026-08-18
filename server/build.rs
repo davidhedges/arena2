@@ -5,6 +5,18 @@ use std::path::{Path, PathBuf};
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 
+/// Shared JSON the module compiles in from OUTSIDE `src/`, as
+/// `(contract key, path relative to the crate manifest)`. The `src` walk
+/// cannot see these, but the client bundles and verifies them, so an unstamped
+/// one is reported by `ContractVersionGuard` as a missing server stamp.
+const EXTERNAL_SHARED_INPUTS: &[(&str, &str)] = &[
+    // inventory.rs includes the Unity Resources copy directly.
+    (
+        "weapon_appearance_catalog.shared.json",
+        "../Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json",
+    ),
+];
+
 fn main() {
     let manifest_dir =
         PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set"));
@@ -19,6 +31,17 @@ fn main() {
     println!("cargo:rerun-if-changed={}", src_root.display());
     let mut files = Vec::new();
     collect_shared_json(&src_root, &src_root, &mut files);
+    for (key, relative_path) in EXTERNAL_SHARED_INPUTS {
+        let path = manifest_dir.join(relative_path);
+        println!("cargo:rerun-if-changed={}", path.display());
+        let bytes = fs::read(&path).unwrap_or_else(|error| {
+            panic!(
+                "external shared json {} must be readable: {error}",
+                path.display()
+            )
+        });
+        files.push(((*key).to_string(), shared_content_hash(&bytes)));
+    }
     files.sort_by(|a, b| a.0.cmp(&b.0));
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR must be set"));

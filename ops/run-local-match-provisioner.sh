@@ -9,6 +9,10 @@ export ARENA_PROVISIONER_HUB_DATABASE="${ARENA_PROVISIONER_HUB_DATABASE:-arena-h
 export ARENA_PROVISIONER_MAP_ID="${ARENA_PROVISIONER_MAP_ID:-ARENA_MAP_01}"
 export ARENA_PROVISIONER_MATCH_WASM="${ARENA_PROVISIONER_MATCH_WASM:-$ROOT_DIR/match-server/target/wasm32-unknown-unknown/release/arena_match.opt.wasm}"
 export ARENA_PROVISIONER_MATCH_MANIFEST="${ARENA_PROVISIONER_MATCH_MANIFEST:-$ARENA_PROVISIONER_MATCH_WASM.inputs.json}"
+# Disposable open worlds publish the main server module, which is the flavor
+# that still contains the open-world reducers.
+export ARENA_PROVISIONER_OPENWORLD_WASM="${ARENA_PROVISIONER_OPENWORLD_WASM:-$ROOT_DIR/server/target/wasm32-unknown-unknown/release/arena.opt.wasm}"
+export ARENA_PROVISIONER_OPENWORLD_MANIFEST="${ARENA_PROVISIONER_OPENWORLD_MANIFEST:-$ARENA_PROVISIONER_OPENWORLD_WASM.inputs.json}"
 export ARENA_PROVISIONER_STATE_DB="${ARENA_PROVISIONER_STATE_DB:-$ROOT_DIR/Library/ArenaMatchProvisioner/state.sqlite3}"
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -27,6 +31,10 @@ if [ ! -f "$ARENA_PROVISIONER_MATCH_WASM" ]; then
     echo "Prebuilt match WASM not found at $ARENA_PROVISIONER_MATCH_WASM" >&2
     echo "Build it once before starting the provisioner; the provisioner never compiles per match." >&2
     exit 2
+fi
+if [ ! -f "$ARENA_PROVISIONER_OPENWORLD_WASM" ]; then
+    echo "Prebuilt open-world WASM not found at $ARENA_PROVISIONER_OPENWORLD_WASM" >&2
+    echo "PvP still works; open-world travel will fail until ops/build-openworld-spacetimedb.sh runs." >&2
 fi
 
 if [ -z "${ARENA_PROVISIONER_TOKEN:-}" ]; then

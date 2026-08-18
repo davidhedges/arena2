@@ -37,6 +37,11 @@ DATABASE_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 IDENTITY_RE = re.compile(r"^[0-9a-f]{64}$")
 ACTIVE_TICKET_STATUSES = {"PENDING", "CLAIMED", "PROVISIONING", "READY"}
+# Open worlds are provisioned and disposed exactly like matches; only their
+# destination and their module artifact differ
+# (docs/open-world-disposable-instances-2026-08-18.md).
+QUEUE_KIND_OPEN_WORLD = "OPEN_WORLD"
+DEFAULT_QUEUE_KIND = "UNRANKED"
 LIVE_MATCH_PHASES = {"WAITING", "COUNTDOWN", "IN_PROGRESS"}
 TERMINAL_MATCH_PHASES = {"ENDED", "ABORTED"}
 ACTIVE_LEDGER_STATES = {
@@ -116,6 +121,12 @@ class Config:
     cleaned_retention_seconds: int
     map_id: str = "ARENA_MAP_01"
     match_build_id: str | None = None
+    # The disposable open world runs the main server module, which is the one
+    # that still compiles the open-world reducers. Optional so a PvP-only
+    # environment keeps starting; open-world tickets then fail loudly.
+    openworld_wasm_path: Path | None = None
+    openworld_artifact_manifest_path: Path | None = None
+    openworld_build_id: str | None = None
 
     @classmethod
     def from_environment(cls) -> "Config":
@@ -156,6 +167,38 @@ class Config:
         if not map_id or len(map_id) > 64 or not IDENTIFIER_RE.fullmatch(map_id):
             raise ProvisionerError(
                 "ARENA_PROVISIONER_MAP_ID must be a 1-64 character safe identifier"
+            )
+        # An explicitly configured open-world artifact must exist; a missing
+        # DEFAULT one only disables open-world tickets, so a PvP-only
+        # environment still starts.
+        configured_openworld = os.environ.get("ARENA_PROVISIONER_OPENWORLD_WASM", "").strip()
+        openworld_wasm_path: Path | None = Path(
+            configured_openworld
+            or root / "server/target/wasm32-unknown-unknown/release/arena.opt.wasm"
+        ).resolve()
+        if not openworld_wasm_path.is_file():
+            if configured_openworld:
+                raise ProvisionerError(
+                    f"prebuilt open-world WASM does not exist: {openworld_wasm_path}; "
+                    "build it with ops/build-openworld-spacetimedb.sh"
+                )
+            openworld_wasm_path = None
+        openworld_manifest_path: Path | None = None
+        if openworld_wasm_path is not None:
+            openworld_manifest_path = Path(
+                os.environ.get(
+                    "ARENA_PROVISIONER_OPENWORLD_MANIFEST",
+                    f"{openworld_wasm_path}.inputs.json",
+                )
+            ).resolve()
+        openworld_build_id = (
+            os.environ.get("ARENA_PROVISIONER_OPENWORLD_BUILD_ID", "").strip() or None
+        )
+        if openworld_build_id is not None and (
+            len(openworld_build_id) > 96 or not IDENTIFIER_RE.fullmatch(openworld_build_id)
+        ):
+            raise ProvisionerError(
+                "ARENA_PROVISIONER_OPENWORLD_BUILD_ID must be a 1-96 character safe identifier"
             )
 
         config = cls(
@@ -198,6 +241,9 @@ class Config:
             ),
             map_id=map_id,
             match_build_id=build_id,
+            openworld_wasm_path=openworld_wasm_path,
+            openworld_artifact_manifest_path=openworld_manifest_path,
+            openworld_build_id=openworld_build_id,
         )
         if config.hard_ttl_seconds < config.allocation_seconds:
             raise ProvisionerError(
@@ -299,6 +345,11 @@ class Api(Protocol):
 
 
 class HttpApi:
+    # The open-world module is two orders of magnitude larger than the match
+    # module, so uploading it needs its own budget; every other management call
+    # is small and should still fail fast.
+    PUBLISH_TIMEOUT_SECONDS = 180
+
     def __init__(self, management_url: str, token: str, timeout_seconds: int = 30):
         self.management_url = management_url.rstrip("/")
         self.token = token
@@ -311,6 +362,7 @@ class HttpApi:
         body: bytes | None = None,
         content_type: str | None = None,
         not_found_is_none: bool = False,
+        timeout_seconds: int | None = None,
     ) -> bytes | None:
         headers = {"Authorization": f"Bearer {self.token}"}
         if content_type:
@@ -322,7 +374,9 @@ class HttpApi:
             method=method,
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+            with urllib.request.urlopen(
+                request, timeout=timeout_seconds or self.timeout_seconds
+            ) as response:
                 return response.read()
         except urllib.error.HTTPError as error:
             response_body = error.read().decode("utf-8", errors="replace").strip()
@@ -361,6 +415,7 @@ class HttpApi:
             f"/v1/database/{self._database_path(database_name)}?clear=false",
             wasm,
             "application/wasm",
+            timeout_seconds=self.PUBLISH_TIMEOUT_SECONDS,
         )
         payload = json.loads((body or b"{}").decode("utf-8"))
         success = payload.get("Success") if isinstance(payload, dict) else None
@@ -407,6 +462,11 @@ class Allocation:
     cleanup_attempts: int
     next_retry_at: int
     last_error: str | None
+    # Frozen from the Hub ticket at claim time. Cleanup and reconciliation run
+    # long after a ticket disappears, so the ledger — not the Hub — decides
+    # which module artifact and which destination this database belongs to.
+    queue_kind: str = DEFAULT_QUEUE_KIND
+    map_id: str = ""
 
 
 class AllocationStore:
@@ -447,10 +507,26 @@ class AllocationStore:
                 failure_code TEXT,
                 cleanup_attempts INTEGER NOT NULL DEFAULT 0,
                 next_retry_at INTEGER NOT NULL DEFAULT 0,
-                last_error TEXT
+                last_error TEXT,
+                queue_kind TEXT NOT NULL DEFAULT 'UNRANKED',
+                map_id TEXT NOT NULL DEFAULT ''
             )
             """
         )
+        existing_columns = {
+            str(row["name"])
+            for row in self.connection.execute("PRAGMA table_info(allocations)").fetchall()
+        }
+        # Ledgers written before open-world provisioning predate these columns.
+        # Their rows are PvP by construction, which is exactly the default.
+        if "queue_kind" not in existing_columns:
+            self.connection.execute(
+                "ALTER TABLE allocations ADD COLUMN queue_kind TEXT NOT NULL DEFAULT 'UNRANKED'"
+            )
+        if "map_id" not in existing_columns:
+            self.connection.execute(
+                "ALTER TABLE allocations ADD COLUMN map_id TEXT NOT NULL DEFAULT ''"
+            )
         self.connection.commit()
 
     @staticmethod
@@ -470,8 +546,8 @@ class AllocationStore:
                 ticket_id, player_identity, lease_id, match_id, database_name,
                 database_identity, state, wasm_sha256, created_at, updated_at,
                 hard_expires_at, ready_at, terminal_phase, failure_code,
-                cleanup_attempts, next_retry_at, last_error
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                cleanup_attempts, next_retry_at, last_error, queue_kind, map_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             dataclasses.astuple(allocation),
         )
@@ -649,6 +725,37 @@ class HubWakeupSubscriber:
             self._stop.wait(self.RESTART_SECONDS)
 
 
+@dataclasses.dataclass(frozen=True)
+class Artifact:
+    """One prebuilt module the worker may publish, plus its provenance."""
+
+    label: str
+    wasm_path: Path
+    manifest_path: Path
+    wasm: bytes
+    sha256: str
+    build_id: str
+
+    @classmethod
+    def load(
+        cls,
+        label: str,
+        wasm_path: Path,
+        manifest_path: Path,
+        build_id: str | None,
+    ) -> "Artifact":
+        wasm = wasm_path.read_bytes()
+        sha256 = hashlib.sha256(wasm).hexdigest()
+        return cls(
+            label=label,
+            wasm_path=wasm_path,
+            manifest_path=manifest_path,
+            wasm=wasm,
+            sha256=sha256,
+            build_id=build_id or f"sha256-{sha256[:20]}",
+        )
+
+
 class Provisioner:
     def __init__(
         self,
@@ -665,20 +772,50 @@ class Provisioner:
         self.lease_factory = lease_factory or (
             lambda: f"lease-{uuid.uuid4().hex[:24]}"
         )
-        self.wasm = config.wasm_path.read_bytes()
-        self.wasm_sha256 = hashlib.sha256(self.wasm).hexdigest()
-        self._ensure_artifact_fresh()
-        self.match_build_id = config.match_build_id or f"sha256-{self.wasm_sha256[:20]}"
+        self.match_artifact = Artifact.load(
+            "match",
+            config.wasm_path,
+            config.artifact_manifest_path,
+            config.match_build_id,
+        )
+        self.openworld_artifact: Artifact | None = None
+        if config.openworld_wasm_path is not None:
+            if config.openworld_artifact_manifest_path is None:
+                raise ProvisionerError("open-world artifact has no provenance manifest")
+            self.openworld_artifact = Artifact.load(
+                "open-world",
+                config.openworld_wasm_path,
+                config.openworld_artifact_manifest_path,
+                config.openworld_build_id,
+            )
+        for artifact in self._configured_artifacts():
+            self._ensure_artifact_fresh(artifact)
 
-    def _ensure_artifact_fresh(self) -> None:
+    def _configured_artifacts(self) -> list[Artifact]:
+        artifacts = [self.match_artifact]
+        if self.openworld_artifact is not None:
+            artifacts.append(self.openworld_artifact)
+        return artifacts
+
+    def _artifact_for(self, queue_kind: str) -> Artifact:
+        if queue_kind != QUEUE_KIND_OPEN_WORLD:
+            return self.match_artifact
+        if self.openworld_artifact is None:
+            raise ProvisionerError(
+                "open-world provisioning requires ARENA_PROVISIONER_OPENWORLD_WASM; "
+                "build the main server module before requesting a destination"
+            )
+        return self.openworld_artifact
+
+    def _ensure_artifact_fresh(self, artifact: Artifact) -> None:
         try:
             verify_artifact_manifest(
-                self.config.wasm_path,
-                self.config.artifact_manifest_path,
-                expected_wasm_sha256=self.wasm_sha256,
+                artifact.wasm_path,
+                artifact.manifest_path,
+                expected_wasm_sha256=artifact.sha256,
             )
         except ArtifactProvenanceError as error:
-            raise ProvisionerError(str(error)) from error
+            raise ProvisionerError(f"{artifact.label} artifact: {error}") from error
 
     def run_once(self) -> dict[str, int]:
         now = int(self.clock())
@@ -769,12 +906,27 @@ class Provisioner:
             "loadouts": loadouts,
         }
 
+    def _ticket_destination(self, ticket: dict[str, Any], queue_kind: str) -> str:
+        """The map or scene this ticket asks for.
+
+        A match is always the process-wide authored arena map. An open world
+        instead carries its destination per ticket, in the ticket column the
+        Hub already had, so the pipeline needed no schema change.
+        """
+        if queue_kind != QUEUE_KIND_OPEN_WORLD:
+            return self.config.map_id
+        destination = str(ticket.get("format", "")).strip()
+        if not destination or len(destination) > 64 or not IDENTIFIER_RE.fullmatch(destination):
+            raise ProvisionerError("open-world ticket has no usable destination")
+        return destination
+
     def _new_allocation(self, ticket: dict[str, Any], now: int) -> Allocation:
         ticket_id = str(ticket["ticket_id"])
         player_identity = normalize_identity(ticket["player_identity"])
         database_name, match_id, _ = allocation_keys(
             ticket_id, self.config.database_prefix
         )
+        queue_kind = str(ticket.get("queue_kind", DEFAULT_QUEUE_KIND)).strip() or DEFAULT_QUEUE_KIND
         return Allocation(
             ticket_id=ticket_id,
             player_identity=player_identity,
@@ -783,7 +935,7 @@ class Provisioner:
             database_name=database_name,
             database_identity=None,
             state="CLAIMED",
-            wasm_sha256=self.wasm_sha256,
+            wasm_sha256=self._artifact_for(queue_kind).sha256,
             created_at=now,
             updated_at=now,
             hard_expires_at=now + self.config.hard_ttl_seconds,
@@ -793,6 +945,8 @@ class Provisioner:
             cleanup_attempts=0,
             next_retry_at=0,
             last_error=None,
+            queue_kind=queue_kind,
+            map_id=self._ticket_destination(ticket, queue_kind),
         )
 
     def _claim_and_provision(
@@ -806,7 +960,8 @@ class Provisioner:
         # Check immediately before creating ledger state or claiming a Hub
         # ticket. A source edit made after this worker started can therefore
         # never cause a new match to publish the cached, obsolete module.
-        self._ensure_artifact_fresh()
+        queue_kind = str(ticket.get("queue_kind", DEFAULT_QUEUE_KIND)).strip() or DEFAULT_QUEUE_KIND
+        self._ensure_artifact_fresh(self._artifact_for(queue_kind))
         startup_started = time.perf_counter()
         ticket_created_micros = timestamp_microseconds(ticket["created_at"])
         timings_ms: dict[str, float] = {}
@@ -882,16 +1037,21 @@ class Provisioner:
             0.0,
             round((self.clock() * 1_000_000 - ticket_created_micros) / 1_000.0, 3),
         )
+        try:
+            artifact = self._artifact_for(allocation.queue_kind)
+        except ProvisionerError:
+            artifact = self.match_artifact
         log_event(
             "match_startup_timing",
             ticket=ticket_log_id(allocation.ticket_id),
             match=allocation.match_id,
             outcome=outcome,
             final_stage=final_stage,
-            match_build_id=self.match_build_id,
+            queue_kind=allocation.queue_kind,
+            match_build_id=artifact.build_id,
             ticket_elapsed_ms=ticket_elapsed_ms,
             provisioner_elapsed_ms=self._elapsed_ms(startup_started),
-            wasm_bytes=len(self.wasm),
+            wasm_bytes=len(artifact.wasm),
             database_published=database_published,
             bootstrap_called=bootstrap_called,
             timings_ms={key: round(value, 3) for key, value in timings_ms.items()},
@@ -984,8 +1144,8 @@ class Provisioner:
                     allocation.match_id,
                     self.config.client_uri,
                     allocation.database_identity,
-                    self.match_build_id,
-                    self.config.map_id,
+                    self._artifact_for(allocation.queue_kind).build_id,
+                    allocation.map_id or self.config.map_id,
                     timestamp_arg(allocation.hard_expires_at),
                 ],
             )
@@ -1079,10 +1239,11 @@ class Provisioner:
             # Recheck after the Hub claim and immediately before publishing.
             # This closes the window where an edit could stale the artifact
             # while a ticket was moving from PENDING to PROVISIONING.
-            self._ensure_artifact_fresh()
+            artifact = self._artifact_for(allocation.queue_kind)
+            self._ensure_artifact_fresh(artifact)
             publish_started = time.perf_counter()
             try:
-                success = self.api.publish(allocation.database_name, self.wasm)
+                success = self.api.publish(allocation.database_name, artifact.wasm)
                 published = True
             finally:
                 timings_ms["database_publish"] = self._elapsed_ms(publish_started)
@@ -1154,31 +1315,35 @@ class Provisioner:
         if not display_name:
             raise ProvisionerError("Hub player display name is empty")
         _, _, seed = allocation_keys(allocation.ticket_id, self.config.database_prefix)
+        # Both bootstraps take the same frozen Hub build in the same order;
+        # only the destination argument's vocabulary differs.
+        # SpacetimeDB exposes the Rust `2v2` token as `2_v_2` on the wire.
+        reducer = (
+            "bootstrap_open_world_instance"
+            if allocation.queue_kind == QUEUE_KIND_OPEN_WORLD
+            else "bootstrap_unranked_2_v_2_bot_match"
+        )
+        arguments = [
+            allocation.match_id,
+            self._artifact_for(allocation.queue_kind).build_id,
+            allocation.map_id or self.config.map_id,
+            seed,
+            timestamp_arg(now + self.config.allocation_seconds),
+            identity_arg(allocation.player_identity),
+            display_name,
+            str(loadout.get("primary_discipline_id", "")),
+            str(loadout.get("secondary_discipline_id_1", "")),
+            str(loadout.get("secondary_discipline_id_2", "")),
+            [str(value) for value in loadout.get("selected_ability_ids", [])],
+            str(loadout.get("armor_set_id", "")),
+            str(unwrap_option(loadout.get("main_hand_item_def_id")) or ""),
+            str(unwrap_option(loadout.get("main_hand_color_id")) or ""),
+            str(unwrap_option(loadout.get("off_hand_item_def_id")) or ""),
+            str(unwrap_option(loadout.get("off_hand_color_id")) or ""),
+        ]
         bootstrap_started = time.perf_counter()
         try:
-            self.api.call(
-                allocation.database_identity,
-                # SpacetimeDB exposes the Rust `2v2` token as `2_v_2` on the wire.
-                "bootstrap_unranked_2_v_2_bot_match",
-                [
-                    allocation.match_id,
-                    self.match_build_id,
-                    self.config.map_id,
-                    seed,
-                    timestamp_arg(now + self.config.allocation_seconds),
-                    identity_arg(allocation.player_identity),
-                    display_name,
-                    str(loadout.get("primary_discipline_id", "")),
-                    str(loadout.get("secondary_discipline_id_1", "")),
-                    str(loadout.get("secondary_discipline_id_2", "")),
-                    [str(value) for value in loadout.get("selected_ability_ids", [])],
-                    str(loadout.get("armor_set_id", "")),
-                    str(unwrap_option(loadout.get("main_hand_item_def_id")) or ""),
-                    str(unwrap_option(loadout.get("main_hand_color_id")) or ""),
-                    str(unwrap_option(loadout.get("off_hand_item_def_id")) or ""),
-                    str(unwrap_option(loadout.get("off_hand_color_id")) or ""),
-                ],
-            )
+            self.api.call(allocation.database_identity, reducer, arguments)
         finally:
             timings_ms["bootstrap_call"] = self._elapsed_ms(bootstrap_started)
         return True
@@ -1188,8 +1353,9 @@ class Provisioner:
     ) -> None:
         if (
             str(match_config.get("match_id")) != allocation.match_id
-            or str(match_config.get("match_build_id")) != self.match_build_id
-            or str(match_config.get("map_id")) != self.config.map_id
+            or str(match_config.get("match_build_id"))
+            != self._artifact_for(allocation.queue_kind).build_id
+            or str(match_config.get("map_id")) != (allocation.map_id or self.config.map_id)
         ):
             raise SafetyError("existing database bootstrap belongs to different match work")
         if allocation.database_identity is None:
@@ -1212,7 +1378,7 @@ class Provisioner:
         service_identity: str,
         now: int,
     ) -> None:
-        if allocation.wasm_sha256 != self.wasm_sha256:
+        if allocation.wasm_sha256 != self._artifact_for(allocation.queue_kind).sha256:
             self._mark_orphaned(
                 allocation,
                 ticket,
@@ -1403,8 +1569,8 @@ class Provisioner:
                 allocation.match_id,
                 self.config.client_uri,
                 allocation.database_identity,
-                self.match_build_id,
-                self.config.map_id,
+                self._artifact_for(allocation.queue_kind).build_id,
+                allocation.map_id or self.config.map_id,
                 timestamp_arg(allocation.hard_expires_at),
             ],
         )

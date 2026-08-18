@@ -116,6 +116,10 @@ namespace Arena.Network
         private Identity _localIdentity;
         private bool _hasLocalIdentity;
         private bool _isProvisionedMatchConnection;
+        // A disposable open world is provisioned exactly like a match but runs
+        // the full server module, so it keeps the ordinary subscription plan
+        // instead of the trimmed PvP one.
+        private bool _provisionedConnectionHasFullSchema;
         private Identity _expectedProvisionedIdentity;
         private bool _hasExpectedProvisionedIdentity;
         private string _provisionedMatchId = string.Empty;
@@ -224,18 +228,20 @@ namespace Arena.Network
             string databaseIdentity,
             Identity expectedIdentity,
             string matchId,
-            string matchBuildId)
+            string matchBuildId,
+            bool hasFullSchema = false)
         {
             Connect(
                 new NetworkEnvironmentEndpoint(
                     NetworkEnvironmentKind.Custom,
-                    "Provisioned Match",
+                    hasFullSchema ? "Provisioned World" : "Provisioned Match",
                     serverUri,
                     databaseIdentity),
                 isProvisionedMatch: true,
                 expectedIdentity,
                 matchId,
-                matchBuildId);
+                matchBuildId,
+                hasFullSchema);
         }
 
         internal void DisconnectProvisionedMatch()
@@ -249,13 +255,15 @@ namespace Arena.Network
             bool isProvisionedMatch,
             Identity? expectedIdentity,
             string matchId,
-            string matchBuildId)
+            string matchBuildId,
+            bool provisionedHasFullSchema = false)
         {
             DisconnectCurrentConnection();
             ContractCompatibilityError = null;
 
             _activeEndpoint = endpoint;
             _isProvisionedMatchConnection = isProvisionedMatch;
+            _provisionedConnectionHasFullSchema = isProvisionedMatch && provisionedHasFullSchema;
             _hasExpectedProvisionedIdentity = expectedIdentity.HasValue;
             _expectedProvisionedIdentity = expectedIdentity.GetValueOrDefault();
             _provisionedMatchId = matchId;
@@ -327,7 +335,7 @@ namespace Arena.Network
             conn.Reducers.OnPingClock += HandlePingClockResult;
             _nextClockPingRealtime = 0f;
 
-            if (_isProvisionedMatchConnection)
+            if (_isProvisionedMatchConnection && !_provisionedConnectionHasFullSchema)
                 SubscribePvpMatchInitialTables(conn, identity);
             else
                 SubscribeStaticTables(conn);
@@ -483,7 +491,7 @@ namespace Arena.Network
             GameplayScope scope,
             int generation)
         {
-            string[] queries = _isProvisionedMatchConnection
+            string[] queries = _isProvisionedMatchConnection && !_provisionedConnectionHasFullSchema
                 ? GameplaySubscriptionPlanner.BuildPvpMatchScopedQuerySqls(scope)
                 : GameplaySubscriptionPlanner.BuildScopedQuerySqls(scope);
             return conn
@@ -555,6 +563,14 @@ namespace Arena.Network
 
             IsConnected = true;
             Debug.Log("[NetworkManager] Local-player subscription applied.");
+            if (!_isProvisionedMatchConnection)
+                return;
+
+            // A provisioned open world reaches readiness through the ordinary
+            // static/local plan, so this is where its handoff completes.
+            TryAdvanceGameplayScopeTransition();
+            MatchStartupTiming.Record("initial_state_accepted");
+            ProvisionedMatchReady?.Invoke(_localIdentity);
         }
 
         private void OnScopedSubscriptionApplied(GameplayScope scope, int generation)
@@ -753,6 +769,7 @@ namespace Arena.Network
             _scopeTransitionInFlight = false;
             _scopeTransitionGeneration = 0;
             _isProvisionedMatchConnection = false;
+            _provisionedConnectionHasFullSchema = false;
             _hasExpectedProvisionedIdentity = false;
             _provisionedMatchId = string.Empty;
             _provisionedMatchBuildId = string.Empty;

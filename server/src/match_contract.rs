@@ -1,7 +1,8 @@
-//! One-database-per-match bootstrap and admission contract.
+//! One-database-per-session bootstrap and admission contract.
 //!
-//! A fresh database is inert until exactly one of two paths wins:
-//! - the module owner bootstraps a provisioned 2v2 bot match; or
+//! A fresh database is inert until exactly one of three paths wins:
+//! - the module owner bootstraps a provisioned 2v2 bot match;
+//! - the module owner bootstraps a provisioned open-world instance; or
 //! - the module owner explicitly enables the temporary local-direct
 //!   compatibility mode used by the current Hub button.
 //!
@@ -44,6 +45,13 @@ pub(crate) const PHASE_ABORTED: &str = "ABORTED";
 const QUEUE_UNRANKED: &str = "UNRANKED";
 const FORMAT_2V2: &str = "2V2";
 const RULESET_TEAM_ELIMINATION: &str = "TEAM_ELIMINATION";
+
+/// A disposable open world rides the same bootstrap singleton as a match so it
+/// inherits allocation expiry, phase-driven teardown, and database disposal
+/// unchanged. The destination scene occupies `map_id` (which the provisioner
+/// already carries end to end) and `format` (which mirrors the Hub ticket).
+pub(crate) const QUEUE_OPEN_WORLD: &str = "OPEN_WORLD";
+const RULESET_OPEN_WORLD: &str = "OPEN_WORLD_SANDBOX";
 
 /// Private authority and deployment-mode latch for this physical database.
 #[table(accessor = match_module_owner)]
@@ -188,6 +196,19 @@ pub(crate) fn is_provisioned(ctx: &ReducerContext) -> bool {
         .is_some_and(|owner| owner.deployment_mode == MODE_PROVISIONED)
 }
 
+/// True only for a disposable open world. Rules written for the elimination
+/// match ("a reserved player may not leave") do not apply to a sandbox whose
+/// whole point is wandering in and out of private instances.
+pub(crate) fn is_provisioned_open_world(ctx: &ReducerContext) -> bool {
+    is_provisioned(ctx)
+        && ctx
+            .db
+            .match_bootstrap_config()
+            .singleton_id()
+            .find(SINGLETON_ID)
+            .is_some_and(|config| config.queue_kind == QUEUE_OPEN_WORLD)
+}
+
 pub(crate) fn start_reserved_player_match(
     ctx: &ReducerContext,
     identity: Identity,
@@ -198,10 +219,36 @@ pub(crate) fn start_reserved_player_match(
         .player_identity()
         .find(identity)
         .ok_or_else(|| "Match reservation disappeared during admission".to_string())?;
+    let config = require_bootstrap_config(ctx)?;
+    if config.queue_kind == QUEUE_OPEN_WORLD {
+        return start_reserved_open_world_session(ctx, identity, config.format.as_str());
+    }
     crate::bot_matches::join_provisioned_human(ctx, &reservation)?;
     set_provisioned_phase(ctx, PHASE_COUNTDOWN, None)?;
     crate::game_loop::ensure_game_loop_schedule(ctx);
     crate::game_loop::ensure_game_loop_watchdog_schedule(ctx);
+    Ok(())
+}
+
+/// A disposable open world has no match runtime to join. The reserved player
+/// enters the ordinary open world at the frozen destination, so spawn, scene,
+/// and subscription scope stay owned by the normal open-world lifecycle.
+/// There is no countdown to wait through: the world is live on arrival.
+fn start_reserved_open_world_session(
+    ctx: &ReducerContext,
+    identity: Identity,
+    destination: &str,
+) -> Result<(), String> {
+    crate::arena::upsert_player_open_world_scene(ctx, identity, destination);
+    crate::arena::set_player_open_world(ctx, identity)?;
+    set_provisioned_phase(ctx, PHASE_IN_PROGRESS, None)?;
+    crate::game_loop::ensure_game_loop_schedule(ctx);
+    crate::game_loop::ensure_game_loop_watchdog_schedule(ctx);
+    log::info!(
+        "[MATCH_CONTRACT] Seated reserved player {} in disposable open world {}",
+        &identity.to_hex()[..8],
+        destination
+    );
     Ok(())
 }
 
@@ -243,9 +290,16 @@ pub(crate) fn handle_provisioned_disconnect(
 
     let config = require_bootstrap_config(ctx)?;
     if !is_terminal_phase(config.phase.as_str()) {
-        set_provisioned_phase(ctx, PHASE_ABORTED, Some(ctx.timestamp))?;
+        // Leaving a disposable open world *is* its ending; only an elimination
+        // match can be cut short, so only that one reports an abort.
+        let (phase, reason) = if config.queue_kind == QUEUE_OPEN_WORLD {
+            (PHASE_ENDED, "PLAYER_LEFT")
+        } else {
+            (PHASE_ABORTED, "PLAYER_DISCONNECTED")
+        };
+        set_provisioned_phase(ctx, phase, Some(ctx.timestamp))?;
         let mut config = require_bootstrap_config(ctx)?;
-        config.terminal_reason = Some("PLAYER_DISCONNECTED".to_string());
+        config.terminal_reason = Some(reason.to_string());
         ctx.db
             .match_bootstrap_config()
             .singleton_id()
@@ -307,6 +361,126 @@ pub fn enable_local_direct_mode(ctx: &ReducerContext) -> Result<(), String> {
     Ok(())
 }
 
+/// Everything a provisioned bootstrap records, whatever the queue kind. The
+/// caller validates `map_id` against its own vocabulary — authored arena maps
+/// for a match, authored open-world scenes for a disposable world — because
+/// that is the only field whose meaning differs between them.
+struct ProvisionedBootstrap {
+    match_id: String,
+    match_build_id: String,
+    map_id: String,
+    queue_kind: &'static str,
+    format: String,
+    ruleset: &'static str,
+    seed: u64,
+    allocation_expires_at: Timestamp,
+    reserved_player_identity: Identity,
+    reserved_display_name: String,
+    primary_discipline_id: String,
+    secondary_discipline_id_1: String,
+    secondary_discipline_id_2: String,
+    selected_ability_ids: Vec<String>,
+    armor_set_id: String,
+    main_hand_item_def_id: String,
+    main_hand_color_id: String,
+    off_hand_item_def_id: String,
+    off_hand_color_id: String,
+}
+
+/// Latches this database into PROVISIONED mode and freezes the caller's Hub
+/// build. Every queue kind shares it so a second kind cannot quietly acquire a
+/// weaker admission, expiry, or one-shot guarantee than the first.
+fn claim_provisioned_database(
+    ctx: &ReducerContext,
+    request: ProvisionedBootstrap,
+) -> Result<(), String> {
+    let mut owner = require_module_owner(ctx)?;
+    require_identity(
+        ctx.sender(),
+        owner.identity,
+        "Only the match database owner may bootstrap it",
+    )?;
+    let has_bootstrap_config = ctx
+        .db
+        .match_bootstrap_config()
+        .singleton_id()
+        .find(SINGLETON_ID)
+        .is_some();
+    if !bootstrap_mode_is_available(owner.deployment_mode.as_str(), has_bootstrap_config) {
+        return Err("This match database has already selected a runtime mode".to_string());
+    }
+    if request.reserved_player_identity == Identity::ZERO
+        || request.reserved_player_identity == owner.identity
+    {
+        return Err(
+            "Reserved gameplay identity must be nonzero and distinct from the module owner"
+                .to_string(),
+        );
+    }
+    if ctx.db.player().iter().next().is_some()
+        || ctx.db.arena_instance().iter().next().is_some()
+        || ctx.db.arena_match().iter().next().is_some()
+    {
+        return Err(
+            "Cannot bootstrap a database that already has gameplay runtime rows".to_string(),
+        );
+    }
+
+    let match_id = validate_identifier("match id", request.match_id, 8, 96)?;
+    let match_build_id = validate_identifier("match build id", request.match_build_id, 1, 96)?;
+    let reserved_display_name = validate_display_name(request.reserved_display_name)?;
+    let primary_discipline_id = validate_optional_loadout_id(request.primary_discipline_id)?;
+    let secondary_discipline_id_1 =
+        validate_optional_loadout_id(request.secondary_discipline_id_1)?;
+    let secondary_discipline_id_2 =
+        validate_optional_loadout_id(request.secondary_discipline_id_2)?;
+    let selected_ability_ids = validate_loadout_ability_ids(request.selected_ability_ids)?;
+    let armor_set_id = validate_optional_loadout_id(request.armor_set_id)?;
+    let main_hand_item_def_id = validate_optional_loadout_id(request.main_hand_item_def_id)?;
+    let main_hand_color_id = validate_optional_loadout_id(request.main_hand_color_id)?;
+    let off_hand_item_def_id = validate_optional_loadout_id(request.off_hand_item_def_id)?;
+    let off_hand_color_id = validate_optional_loadout_id(request.off_hand_color_id)?;
+    validate_future_deadline(ctx.timestamp, request.allocation_expires_at)?;
+
+    owner.deployment_mode = MODE_PROVISIONED.to_string();
+    owner.updated_at = ctx.timestamp;
+    ctx.db.match_module_owner().singleton_id().update(owner);
+    ctx.db
+        .match_bootstrap_config()
+        .insert(MatchBootstrapConfig {
+            singleton_id: SINGLETON_ID,
+            match_id,
+            match_build_id,
+            map_id: request.map_id,
+            queue_kind: request.queue_kind.to_string(),
+            format: request.format,
+            ruleset: request.ruleset.to_string(),
+            seed: request.seed,
+            phase: PHASE_BOOTSTRAPPING.to_string(),
+            allocation_expires_at: request.allocation_expires_at,
+            bootstrapped_at: ctx.timestamp,
+            ended_at: None,
+            terminal_reason: None,
+        });
+    ctx.db.match_reservation().insert(MatchReservation {
+        player_identity: request.reserved_player_identity,
+        team_id: 0,
+        team_slot: 0,
+        display_name: reserved_display_name,
+        primary_discipline_id,
+        secondary_discipline_id_1,
+        secondary_discipline_id_2,
+        selected_ability_ids,
+        armor_set_id,
+        main_hand_item_def_id,
+        main_hand_color_id,
+        off_hand_item_def_id,
+        off_hand_color_id,
+        reserved_at: ctx.timestamp,
+    });
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 #[reducer]
 pub fn bootstrap_unranked_2v2_bot_match(
@@ -328,87 +502,31 @@ pub fn bootstrap_unranked_2v2_bot_match(
     off_hand_item_def_id: String,
     off_hand_color_id: String,
 ) -> Result<(), String> {
-    let mut owner = require_module_owner(ctx)?;
-    require_identity(
-        ctx.sender(),
-        owner.identity,
-        "Only the match database owner may bootstrap it",
-    )?;
-    let has_bootstrap_config = ctx
-        .db
-        .match_bootstrap_config()
-        .singleton_id()
-        .find(SINGLETON_ID)
-        .is_some();
-    if !bootstrap_mode_is_available(owner.deployment_mode.as_str(), has_bootstrap_config) {
-        return Err("This match database has already selected a runtime mode".to_string());
-    }
-    if reserved_player_identity == Identity::ZERO || reserved_player_identity == owner.identity {
-        return Err(
-            "Reserved gameplay identity must be nonzero and distinct from the module owner"
-                .to_string(),
-        );
-    }
-    if ctx.db.player().iter().next().is_some()
-        || ctx.db.arena_instance().iter().next().is_some()
-        || ctx.db.arena_match().iter().next().is_some()
-    {
-        return Err(
-            "Cannot bootstrap a database that already has gameplay runtime rows".to_string(),
-        );
-    }
-
-    let match_id = validate_identifier("match id", match_id, 8, 96)?;
-    let match_build_id = validate_identifier("match build id", match_build_id, 1, 96)?;
     let map_id = require_arena_map_id(map_id.trim())?.as_str().to_string();
-    let reserved_display_name = validate_display_name(reserved_display_name)?;
-    let primary_discipline_id = validate_optional_loadout_id(primary_discipline_id)?;
-    let secondary_discipline_id_1 = validate_optional_loadout_id(secondary_discipline_id_1)?;
-    let secondary_discipline_id_2 = validate_optional_loadout_id(secondary_discipline_id_2)?;
-    let selected_ability_ids = validate_loadout_ability_ids(selected_ability_ids)?;
-    let armor_set_id = validate_optional_loadout_id(armor_set_id)?;
-    let main_hand_item_def_id = validate_optional_loadout_id(main_hand_item_def_id)?;
-    let main_hand_color_id = validate_optional_loadout_id(main_hand_color_id)?;
-    let off_hand_item_def_id = validate_optional_loadout_id(off_hand_item_def_id)?;
-    let off_hand_color_id = validate_optional_loadout_id(off_hand_color_id)?;
-    validate_future_deadline(ctx.timestamp, allocation_expires_at)?;
-
-    owner.deployment_mode = MODE_PROVISIONED.to_string();
-    owner.updated_at = ctx.timestamp;
-    ctx.db.match_module_owner().singleton_id().update(owner);
-    ctx.db
-        .match_bootstrap_config()
-        .insert(MatchBootstrapConfig {
-            singleton_id: SINGLETON_ID,
+    claim_provisioned_database(
+        ctx,
+        ProvisionedBootstrap {
             match_id,
             match_build_id,
             map_id: map_id.clone(),
-            queue_kind: QUEUE_UNRANKED.to_string(),
+            queue_kind: QUEUE_UNRANKED,
             format: FORMAT_2V2.to_string(),
-            ruleset: RULESET_TEAM_ELIMINATION.to_string(),
+            ruleset: RULESET_TEAM_ELIMINATION,
             seed,
-            phase: PHASE_BOOTSTRAPPING.to_string(),
             allocation_expires_at,
-            bootstrapped_at: ctx.timestamp,
-            ended_at: None,
-            terminal_reason: None,
-        });
-    ctx.db.match_reservation().insert(MatchReservation {
-        player_identity: reserved_player_identity,
-        team_id: 0,
-        team_slot: 0,
-        display_name: reserved_display_name,
-        primary_discipline_id,
-        secondary_discipline_id_1,
-        secondary_discipline_id_2,
-        selected_ability_ids,
-        armor_set_id,
-        main_hand_item_def_id,
-        main_hand_color_id,
-        off_hand_item_def_id,
-        off_hand_color_id,
-        reserved_at: ctx.timestamp,
-    });
+            reserved_player_identity,
+            reserved_display_name,
+            primary_discipline_id,
+            secondary_discipline_id_1,
+            secondary_discipline_id_2,
+            selected_ability_ids,
+            armor_set_id,
+            main_hand_item_def_id,
+            main_hand_color_id,
+            off_hand_item_def_id,
+            off_hand_color_id,
+        },
+    )?;
 
     crate::bot_matches::bootstrap_provisioned_2v2(
         ctx,
@@ -419,6 +537,75 @@ pub fn bootstrap_unranked_2v2_bot_match(
     set_provisioned_phase(ctx, PHASE_WAITING, None)?;
     log::info!(
         "[MATCH_CONTRACT] Bootstrapped match for reserved player {}; waiting without a game tick",
+        &reserved_player_identity.to_hex()[..8]
+    );
+    Ok(())
+}
+
+/// Bootstraps a disposable open-world instance.
+///
+/// Unlike a match, nothing is built here: an authored open-world scene has no
+/// arena instance, no roster, and no countdown. The database only records the
+/// destination and the caller's frozen Hub build, then waits for that one
+/// reserved identity to connect. Progress made inside is destroyed with the
+/// database (docs/open-world-disposable-instances-2026-08-18.md).
+///
+/// Absent from `match-server` for the same reason `set_open_world_scene` is:
+/// the PvP flavor compiles out every open-world path.
+#[cfg(not(feature = "pvp_match"))]
+#[allow(clippy::too_many_arguments)]
+#[reducer]
+pub fn bootstrap_open_world_instance(
+    ctx: &ReducerContext,
+    match_id: String,
+    match_build_id: String,
+    destination: String,
+    seed: u64,
+    allocation_expires_at: Timestamp,
+    reserved_player_identity: Identity,
+    reserved_display_name: String,
+    primary_discipline_id: String,
+    secondary_discipline_id_1: String,
+    secondary_discipline_id_2: String,
+    selected_ability_ids: Vec<String>,
+    armor_set_id: String,
+    main_hand_item_def_id: String,
+    main_hand_color_id: String,
+    off_hand_item_def_id: String,
+    off_hand_color_id: String,
+) -> Result<(), String> {
+    let destination = destination.trim().to_string();
+    if !crate::open_world_scene::is_known_open_world_scene(destination.as_str()) {
+        return Err(format!("Unknown open-world destination '{destination}'"));
+    }
+    claim_provisioned_database(
+        ctx,
+        ProvisionedBootstrap {
+            match_id,
+            match_build_id,
+            map_id: destination.clone(),
+            queue_kind: QUEUE_OPEN_WORLD,
+            format: destination.clone(),
+            ruleset: RULESET_OPEN_WORLD,
+            seed,
+            allocation_expires_at,
+            reserved_player_identity,
+            reserved_display_name,
+            primary_discipline_id,
+            secondary_discipline_id_1,
+            secondary_discipline_id_2,
+            selected_ability_ids,
+            armor_set_id,
+            main_hand_item_def_id,
+            main_hand_color_id,
+            off_hand_item_def_id,
+            off_hand_color_id,
+        },
+    )?;
+    set_provisioned_phase(ctx, PHASE_WAITING, None)?;
+    log::info!(
+        "[MATCH_CONTRACT] Bootstrapped disposable open world {} for reserved player {}",
+        destination,
         &reserved_player_identity.to_hex()[..8]
     );
     Ok(())

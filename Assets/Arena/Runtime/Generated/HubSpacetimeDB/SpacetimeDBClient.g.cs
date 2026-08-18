@@ -639,6 +639,7 @@ namespace Arena.HubDb
             return reducer switch
             {
                 Reducer.CancelMatchTicket args => Reducers.InvokeCancelMatchTicket(eventContext, args),
+                Reducer.RequestOpenWorldInstance args => Reducers.InvokeRequestOpenWorldInstance(eventContext, args),
                 Reducer.RequestUnranked2V2BotMatch args => Reducers.InvokeRequestUnranked2V2BotMatch(eventContext, args),
                 Reducer.SaveHubArmorSet args => Reducers.InvokeSaveHubArmorSet(eventContext, args),
                 Reducer.SaveHubDisciplineLoadout args => Reducers.InvokeSaveHubDisciplineLoadout(eventContext, args),

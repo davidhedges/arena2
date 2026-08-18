@@ -52,6 +52,8 @@ namespace Arena.Network
     {
         internal HubMatchStatusSnapshot(
             string ticketId,
+            string queueKind,
+            string format,
             string status,
             string? failureCode,
             string? matchId,
@@ -66,6 +68,8 @@ namespace Arena.Network
             long? assignmentExpiresAtMicros)
         {
             TicketId = ticketId;
+            QueueKind = queueKind;
+            Format = format;
             Status = status;
             FailureCode = failureCode;
             MatchId = matchId;
@@ -81,6 +85,11 @@ namespace Arena.Network
         }
 
         internal string TicketId { get; }
+
+        /// UNRANKED for a PvP match, OPEN_WORLD for a disposable world. The
+        /// ticket's <see cref="Format"/> then names the destination scene.
+        internal string QueueKind { get; }
+        internal string Format { get; }
         internal string Status { get; }
         internal string? FailureCode { get; }
         internal string? MatchId { get; }
@@ -93,6 +102,9 @@ namespace Arena.Network
         internal long TicketExpiresAtMicros { get; }
         internal long? ReadyAtMicros { get; }
         internal long? AssignmentExpiresAtMicros { get; }
+
+        internal bool IsOpenWorld
+            => string.Equals(QueueKind, "OPEN_WORLD", StringComparison.Ordinal);
 
         internal bool IsActive
             => string.Equals(Status, "PENDING", StringComparison.Ordinal)
@@ -316,6 +328,7 @@ namespace Arena.Network
         private float _nextRetryRealtime;
         private int _connectionGeneration;
         private string? _activeClientRequestId;
+        private string? _pendingOpenWorldDestination;
         private bool _requestAwaitingConfirmation;
         private HubPlayerSnapshot? _player;
         private HubMatchStatusSnapshot? _matchStatus;
@@ -395,21 +408,48 @@ namespace Arena.Network
 
         internal bool RequestUnranked2V2BotMatch()
         {
+            if (BeginTicketRequest() is not string clientRequestId)
+                return false;
+
+            _pendingOpenWorldDestination = null;
+            _conn!.Reducers.RequestUnranked2V2BotMatch(clientRequestId);
+            return true;
+        }
+
+        /// Requests a disposable open-world instance. Open worlds ride the same
+        /// ticket pipeline as matches, so everything after this call — lease,
+        /// assignment, handoff, disposal — is the path PvP already uses.
+        internal bool RequestOpenWorldInstance(string destination)
+        {
+            if (string.IsNullOrWhiteSpace(destination))
+                return false;
+            if (BeginTicketRequest() is not string clientRequestId)
+                return false;
+
+            _pendingOpenWorldDestination = destination;
+            _conn!.Reducers.RequestOpenWorldInstance(clientRequestId, destination);
+            return true;
+        }
+
+        /// Returns the stable client request id to send, or null when the Hub
+        /// cannot take a new ticket right now.
+        private string? BeginTicketRequest()
+        {
             if (!IsReady || _conn == null)
             {
                 SetError("The Hub is still connecting. Try again in a moment.", disconnect: false);
-                return false;
+                return null;
             }
 
             if (HasActiveMatchRequest)
-                return false;
+                return null;
 
-            _activeClientRequestId = Guid.NewGuid().ToString("N");
+            string clientRequestId = Guid.NewGuid().ToString("N");
+            _activeClientRequestId = clientRequestId;
             _requestAwaitingConfirmation = true;
             LastError = string.Empty;
             NotifyChanged();
-            _conn.Reducers.RequestUnranked2V2BotMatch(_activeClientRequestId);
-            return true;
+            return clientRequestId;
         }
 
         internal bool SaveDisciplineLoadout(
@@ -514,6 +554,7 @@ namespace Arena.Network
 
             BindRows(conn);
             conn.Reducers.OnRequestUnranked2V2BotMatch += OnRequestMatchResult;
+            conn.Reducers.OnRequestOpenWorldInstance += OnRequestOpenWorldInstanceResult;
             conn.Reducers.OnSaveHubDisciplineLoadout += OnSaveDisciplineLoadoutResult;
             conn.Reducers.OnSaveHubArmorSet += OnSaveArmorSetResult;
             conn.Reducers.OnSaveHubWeaponLoadout += OnSaveWeaponLoadoutResult;
@@ -553,7 +594,16 @@ namespace Arena.Network
                 && !string.IsNullOrWhiteSpace(_activeClientRequestId)
                 && !_matchStatus.HasValue)
             {
-                _conn.Reducers.RequestUnranked2V2BotMatch(_activeClientRequestId);
+                if (_pendingOpenWorldDestination != null)
+                {
+                    _conn.Reducers.RequestOpenWorldInstance(
+                        _activeClientRequestId,
+                        _pendingOpenWorldDestination);
+                }
+                else
+                {
+                    _conn.Reducers.RequestUnranked2V2BotMatch(_activeClientRequestId);
+                }
             }
         }
 
@@ -652,6 +702,7 @@ namespace Arena.Network
             conn.Db.HubWeaponColorDefinition.OnUpdate -= OnWeaponColorUpdate;
             conn.Db.HubWeaponColorDefinition.OnDelete -= OnWeaponColorDelete;
             conn.Reducers.OnRequestUnranked2V2BotMatch -= OnRequestMatchResult;
+            conn.Reducers.OnRequestOpenWorldInstance -= OnRequestOpenWorldInstanceResult;
             conn.Reducers.OnSaveHubDisciplineLoadout -= OnSaveDisciplineLoadoutResult;
             conn.Reducers.OnSaveHubArmorSet -= OnSaveArmorSetResult;
             conn.Reducers.OnSaveHubWeaponLoadout -= OnSaveWeaponLoadoutResult;
@@ -673,6 +724,7 @@ namespace Arena.Network
         {
             _matchStatus = null;
             _activeClientRequestId = null;
+            _pendingOpenWorldDestination = null;
             _requestAwaitingConfirmation = false;
             NotifyChanged();
         }
@@ -723,6 +775,8 @@ namespace Arena.Network
         {
             _matchStatus = new HubMatchStatusSnapshot(
                 row.TicketId,
+                row.QueueKind,
+                row.Format,
                 row.Status,
                 row.FailureCode,
                 row.MatchId,
@@ -841,6 +895,8 @@ namespace Arena.Network
             {
                 _matchStatus = new HubMatchStatusSnapshot(
                     row.TicketId,
+                    row.QueueKind,
+                    row.Format,
                     row.Status,
                     row.FailureCode,
                     row.MatchId,
@@ -875,6 +931,12 @@ namespace Arena.Network
             }
             RefreshCatalogSnapshots();
         }
+
+        private void OnRequestOpenWorldInstanceResult(
+            HubReducerEventContext context,
+            string clientRequestId,
+            string destination)
+            => OnRequestMatchResult(context, clientRequestId);
 
         private void OnRequestMatchResult(HubReducerEventContext context, string clientRequestId)
         {
