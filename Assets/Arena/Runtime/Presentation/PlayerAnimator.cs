@@ -3215,13 +3215,16 @@ namespace Arena.Presentation
 
         private void UpdateSpecialMovementDrivenPhasedMeleePlayback(float normalizedTime)
         {
-            if (_actionPlayback.IsPhasedMeleeSpecialMovementArrivalDriven
-                && _actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.Loop
+            if (_actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.Loop
                 && !_actionPlayback.IsPhasedMeleeSpecialMovementEndRequested
                 && normalizedTime >= PhasedMeleeLoopReplayNormalizedTime)
             {
-                // Banked strike states auto-exit at 0.9. Re-enter the authored Loop
-                // before that controller transition can expose Empty during a long dash.
+                // Banked strike states auto-exit at 0.9 (Arena_Character.controller),
+                // and nothing else re-enters Loop while an external signal is holding
+                // it open. Re-arm the authored Loop before that controller transition
+                // can expose Empty. This applies to every held loop, not just an
+                // arrival-driven dash: a combat-lifecycle channel holds Loop for as
+                // long as the player keeps firing, which is far longer than a dash.
                 AdvancePhasedMeleeSegment(PhasedMeleePlaybackPhase.Loop);
                 return;
             }
