@@ -906,7 +906,7 @@
                     "slot_id": "evasive_shot_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 850
+                            "impact_delay_ms": 790
                         }
                     ],
                     "recovery_ms": 350,
@@ -932,7 +932,7 @@
                     "slot_id": "heartseeker_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 850
+                            "impact_delay_ms": 210
                         }
                     ],
                     "recovery_ms": 350,
