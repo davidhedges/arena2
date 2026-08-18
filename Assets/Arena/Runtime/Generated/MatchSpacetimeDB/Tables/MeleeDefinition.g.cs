@@ -52,6 +52,7 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Col<MeleeDefinition, ulong> ComboOpenMs { get; }
         public global::SpacetimeDB.Col<MeleeDefinition, ulong> ComboGraceMs { get; }
         public global::SpacetimeDB.Col<MeleeDefinition, string> AerialExecutionMode { get; }
+        public global::SpacetimeDB.Col<MeleeDefinition, bool> Holdable { get; }
 
         public MeleeDefinitionCols(string tableName)
         {
@@ -67,6 +68,7 @@ namespace Arena.MatchDb
             ComboOpenMs = new global::SpacetimeDB.Col<MeleeDefinition, ulong>(tableName, "combo_open_ms");
             ComboGraceMs = new global::SpacetimeDB.Col<MeleeDefinition, ulong>(tableName, "combo_grace_ms");
             AerialExecutionMode = new global::SpacetimeDB.Col<MeleeDefinition, string>(tableName, "aerial_execution_mode");
+            Holdable = new global::SpacetimeDB.Col<MeleeDefinition, bool>(tableName, "holdable");
         }
     }
 

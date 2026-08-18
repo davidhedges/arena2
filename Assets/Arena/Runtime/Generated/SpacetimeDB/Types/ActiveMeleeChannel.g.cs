@@ -47,6 +47,8 @@ namespace SpacetimeDB.Types
         public float PointZ;
         [DataMember(Name = "ends_at")]
         public SpacetimeDB.Timestamp EndsAt;
+        [DataMember(Name = "holdable")]
+        public bool Holdable;
         [DataMember(Name = "ends_at_micros")]
         public long EndsAtMicros;
 
@@ -68,6 +70,7 @@ namespace SpacetimeDB.Types
             float PointY,
             float PointZ,
             SpacetimeDB.Timestamp EndsAt,
+            bool Holdable,
             long EndsAtMicros
         )
         {
@@ -88,6 +91,7 @@ namespace SpacetimeDB.Types
             this.PointY = PointY;
             this.PointZ = PointZ;
             this.EndsAt = EndsAt;
+            this.Holdable = Holdable;
             this.EndsAtMicros = EndsAtMicros;
         }
 

@@ -6356,6 +6356,31 @@
       }
     },
     {
+      "ability_id": "ARCHER_DOUBLE_SHOT",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
+      "combat_profile_id": "ARCHER_BOW",
+      "action_id": "ARCHER_DOUBLE_SHOT",
+      "display_name": "Double Shot",
+      "resource_kind": "STAMINA",
+      "resource_cost": 25,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 25,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 44,
+        "applies_stagger": false,
+        "range": 18,
+        "cooldown_ms": 1800,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
       "ability_id": "ARCHER_BACKSTEP",
       "actor_scope": "PLAYER",
       "discipline_id": "PRECISION",
@@ -6576,6 +6601,40 @@
           "radius": 4,
           "block_behavior": "BLOCKABLE",
           "impact_effects": []
+        }
+      }
+    },
+    {
+      "ability_id": "ARCHER_RAPID_FIRE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "PRECISION",
+      "combat_profile_id": "ARCHER_BOW",
+      "action_id": "ARCHER_RAPID_FIRE",
+      "display_name": "Rapid Fire",
+      "resource_kind": "STAMINA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 105,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 228,
+        "applies_stagger": false,
+        "range": 18,
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_channel": {
+          "duration_ms": 5000,
+          "first_tick_delay_ms": 333,
+          "tick_interval_ms": 250,
+          "cancel_on_movement": true,
+          "holdable": true,
+          "resource_cost_per_release": 8,
+          "resource_kind_per_release": "MANA"
         }
       }
     },
@@ -9964,6 +10023,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_DOUBLE_SHOT",
+      "display_name": "Double Shot",
+      "description": "Looses two arrows in a single draw; both land in under half a second.",
+      "sort_order": 175
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "ARCHER_BACKSTEP",
       "display_name": "Backstep",
       "description": "Fires a shot and moves backward to reset spacing.",
@@ -10017,6 +10083,13 @@
       "display_name": "Rain of Arrows",
       "description": "Targets a circular area and sends a rain of arrows down on enemies within it.",
       "sort_order": 250
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "ARCHER_RAPID_FIRE",
+      "display_name": "Rapid Fire",
+      "description": "Hold to pour arrows into the target, four a second. Every arrow loosed burns mana; releasing the key, running dry, or moving ends the volley.",
+      "sort_order": 255
     },
     {
       "presentation_kind": "ABILITY",
@@ -12769,6 +12842,22 @@
       "combat_profile_id": "ARCHER_BOW",
       "ability_id": "ARCHER_TRIPLE_SHOT",
       "sort_order": 190
+    },
+    {
+      "slot_id": "slot_0_2",
+      "combat_profile_id": "ARCHER_BOW",
+      "action_kind": "ABILITY",
+      "action_id": "ARCHER_DOUBLE_SHOT",
+      "ability_id": "ARCHER_DOUBLE_SHOT",
+      "sort_order": 195
+    },
+    {
+      "slot_id": "slot_0_3",
+      "combat_profile_id": "ARCHER_BOW",
+      "action_kind": "ABILITY",
+      "action_id": "ARCHER_RAPID_FIRE",
+      "ability_id": "ARCHER_RAPID_FIRE",
+      "sort_order": 197
     },
     {
       "slot_id": "slot_1_1",

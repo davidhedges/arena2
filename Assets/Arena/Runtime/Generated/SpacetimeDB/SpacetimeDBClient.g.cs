@@ -936,6 +936,7 @@ namespace SpacetimeDB.Types
                 Reducer.QuickLoot args => Reducers.InvokeQuickLoot(eventContext, args),
                 Reducer.ReadyForNextSurvivalRound args => Reducers.InvokeReadyForNextSurvivalRound(eventContext, args),
                 Reducer.ReleaseCastRequest args => Reducers.InvokeReleaseCastRequest(eventContext, args),
+                Reducer.ReleaseMeleeChannel args => Reducers.InvokeReleaseMeleeChannel(eventContext, args),
                 Reducer.RequestDiceRollPreview args => Reducers.InvokeRequestDiceRollPreview(eventContext, args),
                 Reducer.ReturnToLingeringShade args => Reducers.InvokeReturnToLingeringShade(eventContext, args),
                 Reducer.RunKnockbackProbeShove args => Reducers.InvokeRunKnockbackProbeShove(eventContext, args),

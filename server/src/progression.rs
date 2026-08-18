@@ -834,13 +834,23 @@ pub(crate) struct MeleeEvasiveLeapRuntime {
     pub arc_height: f32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct MeleeChannelRuntime {
     pub duration_ms: u64,
     pub first_tick_delay_ms: u64,
     pub tick_interval_ms: u64,
     pub cancel_on_movement: bool,
     pub use_authored_hit_windows: bool,
+    /// Channel ends early when the player releases the action key.
+    pub holdable: bool,
+    /// Resource charged per projectile release, not per impact: you pay when
+    /// the shot leaves, whether or not it connects. 0 = free to sustain.
+    pub resource_cost_per_release: f32,
+    /// Resource the per-release cost draws from. Empty falls back to the
+    /// ability's own kind. A martial ability stays STAMINA-costed while its
+    /// channel drains a different pool, so sustain cost can be priced apart
+    /// from press cost without breaking the martial/stamina invariant.
+    pub resource_kind_per_release: &'static str,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -908,6 +918,12 @@ struct MeleeChannelDefinition {
     cancel_on_movement: bool,
     #[serde(default)]
     use_authored_hit_windows: bool,
+    #[serde(default)]
+    holdable: bool,
+    #[serde(default)]
+    resource_cost_per_release: f32,
+    #[serde(default)]
+    resource_kind_per_release: String,
 }
 
 #[derive(Clone, Deserialize)]
@@ -3546,13 +3562,49 @@ pub(crate) fn melee_channel_for_ability_id(ability_id: &str) -> Option<MeleeChan
         return None;
     }
     let channel = definition.gameplay.melee_channel.as_ref()?;
-    Some(MeleeChannelRuntime {
+    Some(melee_channel_runtime_from_definition(channel))
+}
+
+fn melee_channel_runtime_from_definition(channel: &MeleeChannelDefinition) -> MeleeChannelRuntime {
+    MeleeChannelRuntime {
         duration_ms: channel.duration_ms,
         first_tick_delay_ms: channel.first_tick_delay_ms,
         tick_interval_ms: channel.tick_interval_ms,
         cancel_on_movement: channel.cancel_on_movement,
         use_authored_hit_windows: channel.use_authored_hit_windows,
-    })
+        holdable: channel.holdable,
+        resource_cost_per_release: channel.resource_cost_per_release.max(0.0),
+        resource_kind_per_release: match normalize_identifier(
+            channel.resource_kind_per_release.as_str(),
+        )
+        .as_str()
+        {
+            "MANA" => "MANA",
+            "STAMINA" => "STAMINA",
+            _ => "",
+        },
+    }
+}
+
+/// Melee channel for the ability that exposes `authored_action_id` on
+/// `combat_profile`. `sync_melee_definitions` publishes from the manifest,
+/// which has no ability rows, so the channel has to be found from this side.
+pub(crate) fn melee_channel_for_authored_strike(
+    combat_profile: &str,
+    authored_action_id: &str,
+) -> Option<MeleeChannelRuntime> {
+    let combat_profile = normalize_identifier(combat_profile);
+    let authored_action_id = normalize_identifier(authored_action_id);
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            ability_gameplay_kind(ability) == "MELEE"
+                && normalize_identifier(ability.action_id.as_str()) == authored_action_id
+                && normalize_identifier(ability.combat_profile_id.as_str()) == combat_profile
+        })
+        .and_then(|ability| ability.gameplay.melee_channel.as_ref())
+        .map(melee_channel_runtime_from_definition)
 }
 
 fn movement_delivery_runtime_from_definition(
@@ -6632,6 +6684,23 @@ fn validate_melee_channel(ability_id: &str, channel: &MeleeChannelDefinition) {
             "melee ability '{ability_id}' melee_channel.tick_interval_ms must be in (0, duration_ms]"
         );
     }
+    assert!(
+        channel.resource_cost_per_release.is_finite() && channel.resource_cost_per_release >= 0.0,
+        "melee ability '{ability_id}' melee_channel.resource_cost_per_release must be finite and non-negative"
+    );
+    assert!(
+        channel.resource_cost_per_release == 0.0 || !channel.use_authored_hit_windows,
+        "melee ability '{ability_id}' melee_channel.resource_cost_per_release needs tick-driven releases, not authored hit windows"
+    );
+    let per_release_kind = normalize_identifier(channel.resource_kind_per_release.as_str());
+    assert!(
+        per_release_kind.is_empty() || per_release_kind == "MANA" || per_release_kind == "STAMINA",
+        "melee ability '{ability_id}' melee_channel.resource_kind_per_release must be MANA, STAMINA, or empty"
+    );
+    assert!(
+        per_release_kind.is_empty() || channel.resource_cost_per_release > 0.0,
+        "melee ability '{ability_id}' melee_channel.resource_kind_per_release needs a non-zero resource_cost_per_release"
+    );
     assert!(
         channel.cancel_on_movement,
         "melee ability '{ability_id}' melee_channel.cancel_on_movement must be true"
@@ -12167,6 +12236,9 @@ mod tests {
                 tick_interval_ms: 333,
                 cancel_on_movement: true,
                 use_authored_hit_windows: false,
+                holdable: false,
+                resource_cost_per_release: 0.0,
+                resource_kind_per_release: "",
             })
         );
         assert_eq!(
@@ -12177,6 +12249,9 @@ mod tests {
                 tick_interval_ms: 667,
                 cancel_on_movement: true,
                 use_authored_hit_windows: false,
+                holdable: false,
+                resource_cost_per_release: 0.0,
+                resource_kind_per_release: "",
             })
         );
     }
@@ -12201,6 +12276,9 @@ mod tests {
                 tick_interval_ms: 0,
                 cancel_on_movement: true,
                 use_authored_hit_windows: true,
+                holdable: false,
+                resource_cost_per_release: 0.0,
+                resource_kind_per_release: "",
             })
         );
     }

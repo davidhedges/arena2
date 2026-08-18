@@ -37,6 +37,8 @@ namespace SpacetimeDB.Types
         public ulong ComboGraceMs;
         [DataMember(Name = "aerial_execution_mode")]
         public string AerialExecutionMode;
+        [DataMember(Name = "holdable")]
+        public bool Holdable;
 
         public MeleeDefinition(
             string Key,
@@ -50,7 +52,8 @@ namespace SpacetimeDB.Types
             string ComboFrom,
             ulong ComboOpenMs,
             ulong ComboGraceMs,
-            string AerialExecutionMode
+            string AerialExecutionMode,
+            bool Holdable
         )
         {
             this.Key = Key;
@@ -65,6 +68,7 @@ namespace SpacetimeDB.Types
             this.ComboOpenMs = ComboOpenMs;
             this.ComboGraceMs = ComboGraceMs;
             this.AerialExecutionMode = AerialExecutionMode;
+            this.Holdable = Holdable;
         }
 
         public MeleeDefinition()

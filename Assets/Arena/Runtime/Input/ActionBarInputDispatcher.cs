@@ -99,6 +99,8 @@ namespace Arena.Input
                 string? actionId = resolved.ActionId;
                 if (string.IsNullOrWhiteSpace(actionId)) continue;
                 consumedReleaseKeys.Add(binding.KeyCode);
+                if (TryReleaseHeldMeleeChannel(conn, resolved, binding.KeyLabel))
+                    continue;
                 if (!resolved.IsSpellAbility)
                     continue;
                 if (!SpellDefinitionContracts.CastsOnRelease(GetSpellDefinition(conn, actionId))) continue;
@@ -136,6 +138,11 @@ namespace Arena.Input
                 string? actionId = resolved.ActionId;
                 if (string.IsNullOrWhiteSpace(actionId)) continue;
                 consumedReleaseKeys.Add(binding.KeyCode);
+                if (input.WasKeyReleasedThisFrame(binding.KeyCode)
+                    && TryReleaseHeldMeleeChannel(conn, resolved, binding.KeyLabel))
+                {
+                    continue;
+                }
                 if (!resolved.IsSpellAbility)
                     continue;
                 if (!SpellDefinitionContracts.CastsOnRelease(GetSpellDefinition(conn, actionId))) continue;
@@ -147,6 +154,29 @@ namespace Arena.Input
                     token.PredictedCastId,
                     token.ClientActionSeq);
             }
+        }
+
+        /// Key-up for a holdable melee channel (Rapid Fire and anything else
+        /// authoring `melee_channel.holdable`). The published MeleeDefinition
+        /// carries the flag, so the client only sends the reducer for strikes
+        /// that can actually be cut short.
+        private static bool TryReleaseHeldMeleeChannel(
+            DbConnection conn,
+            ActiveActionBarAction action,
+            string keyLabel)
+        {
+            if (!action.IsMeleeAbility || string.IsNullOrWhiteSpace(action.ActionId))
+                return false;
+
+            string combatProfile = CombatProfileResolver.ResolveForOwner(conn, conn.Identity);
+            MeleeDefinition? definition =
+                CombatActionIds.FindMeleeDefinition(conn, combatProfile, action.ActionId);
+            if (definition == null || !definition.Holdable)
+                return false;
+
+            ActionBarTrace.Trace($"{keyLabel} release -> release melee channel {action.ActionId}");
+            conn.Reducers.ReleaseMeleeChannel(action.AbilityId ?? string.Empty);
+            return true;
         }
 
         public static bool TryTrigger(ActiveActionBarAction action, DbConnection? conn)

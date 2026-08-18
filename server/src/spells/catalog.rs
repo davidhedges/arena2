@@ -4113,153 +4113,31 @@ mod tests {
     #[test]
     fn shared_catalog_preserves_derived_runtime_spell_order() {
         let definitions = load_spell_definitions().expect("spell catalog should load");
-        let kinds: Vec<_> = definitions
+        let derived: Vec<_> = definitions
             .iter()
-            .map(|definition| definition.kind.as_str())
+            .map(|definition| definition.kind.as_str().to_string())
             .collect();
 
-        assert_eq!(
-            kinds,
-            vec![
-                "FIREBALL",
-                "FLAMING_ORB",
-                "BOLT",
-                "GROUND_SLASH",
-                "ICICLE",
-                "ORBITING_BLADES",
-                "FIERY_ORBS",
-                "METEOR",
-                "LIGHTNING",
-                "CAPACITOR",
-                "ERUPTION",
-                "FROST_NEEDLE",
-                "ICE_SPIKES",
-                "VAMPIRIC_ORB",
-                "WITHERING_ORB",
-                "SOULSTEALER",
-                "INSTANT_BEAM",
-                "ELECTROCUTE",
-                "FLAMETHROWER",
-                "FROZEN_SPLINTERS",
-                "BLIZZARD",
-                "MAGIC_MISSILE",
-                "RESTORATION",
-                "PROTECTION",
-                "FROST_NOVA",
-                "NOVA",
-                "NEGATE",
-                "BLINDING_LIGHT",
-                "GLACIAL_SPIKE",
-                "FROZEN_GRASP",
-                "NECROTIC_AURA",
-                "DEFILED_GROUND",
-                "REAP",
-                "GRIM_WHEEL",
-                "GRAVEBURST",
-                "GRAVEWAKE",
-                "NECRO_PRISON",
-                "BLOOD_OFFERING",
-                "GIGANTISM",
-                "FLURRY",
-                "GUST_OF_WIND",
-                "BUFFET",
-                "EARTH_BLAST",
-                "TIDAL_BLAST",
-                "LAVA_BLAST",
-                "WIND_BLAST",
-                "VERDANT_SPIRITS",
-                "OVERGROWTH",
-                "TAILWIND",
-                "WELLSPRING",
-                "STONE_CARAPACE",
-                "MOULT",
-                "CLOUDBURST",
-                "FISSURE",
-                "EARTHQUAKE",
-                "CAUTERIZE",
-                "CELESTIAL_MANTLE",
-                "SANCTUARY",
-                "BENEDICTION",
-                "DIVINE_MEND",
-                "FLASH_OF_GRACE",
-                "AURA_OF_RENEWAL",
-                "HOLY_SHIELD",
-                "REBUKE",
-                "SMITE",
-                "PENANCE",
-                "RECKONING",
-                "MARTYR",
-                "BURDEN",
-                "FLASHFIRE",
-                "IMMOLATION",
-                "COMBUSTION",
-                "FLASH_FREEZE",
-                "DEEPENING_COLD",
-                "FULMINATION",
-                "GLACIAL_ADVANCE",
-                "COLLAPSE",
-                "DISPEL_MAGIC",
-                "TELEPORT",
-                "SILENCE",
-                "MANA_SHIELD",
-                "SHIMMER",
-                "RECALL",
-                "TRANSPOSE",
-                "MIRROR_IMAGE",
-                "UPHEAVAL",
-                "MOMENTUM",
-                "FORTIFY",
-                "IRON_WILL",
-                "DEFIANCE",
-                "BATTLE_CRY",
-                "FRENZY",
-                "ENRAGE",
-                "SECOND_WIND",
-                "BERSERKING",
-                "BATTLE_TRANCE",
-                "FEAST",
-                "SHOCKWAVE",
-                "INTIMIDATE",
-                "SERRATED_BLADES",
-                "CONSECRATE",
-                "CLEANSING_TOUCH",
-                "ABSOLUTION",
-                "FERVOR",
-                "MANA_FONT",
-                "STAMINA_FONT",
-                "THORNS_AURA",
-                "WARDING_AURA",
-                "AURA_OF_VENGEANCE",
-                "BLESSED_SHIELD",
-                "BLADE_BARRIER",
-                "RADIANT_BURST",
-                "SACRED_FLAME",
-                "RAIN_OF_ARROWS",
-                "FIND_WEAKNESS",
-                "BLADE_TWISTING",
-                "DISARM",
-                "GOUGE",
-                "TEMPLE_STRIKE",
-                "IMP_FIRE_BOLT",
-                "DEEP_SEA_LIZARD_TIDAL_BOLT",
-                "SKELETON_REAPER_SOUL_BOLT",
-                "DEMON_SUMMONER_SHADOW_BOLT",
-                "SKELETON_WIZARD_FROST_BOLT",
-                "SKELETON_WIZARD_FROSTBITE",
-                "SKELETON_WIZARD_ICE_LOCK",
-                "LICH_BONE_WARD",
-                "SKELETON_ARCHER_SHOT",
-                "LICH_MEND",
-                "BANSHEE_WAIL",
-                "DARK_RITUALIST_SHADOW_BOLT",
-                "LICH_BOSS_SHADOW_BOLT",
-                "LICH_CASTER_SHADOW_BOLT",
-                "SKELETAL_DRAGON_BONE_BREATH",
-                "SKELETON_CULTIST_SHADOW_BOLT",
-                "FAB_SHADOW_BOLT",
-                "FAB_DRAGON_BREATH",
-            ]
-        );
+        // The runtime spell list is derived from `abilities[]`, so it must stay in
+        // authored order. Pinning the ids themselves would just be a copy of the
+        // catalog; pin the derivation instead.
+        let catalog: serde_json::Value = serde_json::from_str(PROGRESSION_CATALOG_JSON)
+            .expect("shared progression catalog should parse");
+        let authored: Vec<_> = catalog["abilities"]
+            .as_array()
+            .expect("abilities must be an array")
+            .iter()
+            .filter(|ability| ability["gameplay"]["kind"].as_str() == Some("SPELL"))
+            .map(|ability| {
+                ability["action_id"]
+                    .as_str()
+                    .expect("spell ability must author action_id")
+                    .trim()
+                    .to_ascii_uppercase()
+            })
+            .collect();
+
+        assert_eq!(derived, authored);
     }
 
     #[test]

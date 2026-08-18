@@ -881,6 +881,7 @@ namespace Arena.MatchDb
                 Reducer.PublishSpellDefinitions args => Reducers.InvokePublishSpellDefinitions(eventContext, args),
                 Reducer.QuickLoot args => Reducers.InvokeQuickLoot(eventContext, args),
                 Reducer.ReleaseCastRequest args => Reducers.InvokeReleaseCastRequest(eventContext, args),
+                Reducer.ReleaseMeleeChannel args => Reducers.InvokeReleaseMeleeChannel(eventContext, args),
                 Reducer.ReturnToLingeringShade args => Reducers.InvokeReturnToLingeringShade(eventContext, args),
                 Reducer.RunStatusRuntimeHarness args => Reducers.InvokeRunStatusRuntimeHarness(eventContext, args),
                 Reducer.SaveCharacterAppearance args => Reducers.InvokeSaveCharacterAppearance(eventContext, args),

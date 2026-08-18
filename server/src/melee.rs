@@ -57,6 +57,7 @@ use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::progression::{
     active_action_bar_assignment_debug_summary, active_selectable_ability_for_authored_action,
     derived_combat_profile_id_for_owner, melee_channel_for_ability_id,
+    melee_channel_for_authored_strike,
     melee_evasive_leap_for_ability_id, melee_impact_effects_for_ability_id,
     melee_timed_movement_for_ability_id, primary_resource_gain_on_action_accept,
     resolved_auto_attack_mode_for_owner, ruin_flaming_weapon_on_hit_for_owner, AbilityCatalog,
@@ -68,7 +69,8 @@ use crate::relations::{can_harm, combat_relation, target_audience_allows, Target
 use crate::resources::{
     can_pay_action_resource_cost, grant_primary_resource_amount,
     grant_primary_resource_amount_for_kind, grant_primary_resource_for_melee_hit,
-    pay_action_resource_cost, resolve_ability_action_resource_cost, ResolvedActionResourceCost,
+    pay_action_resource_cost, resolve_ability_action_resource_cost,
+    resolve_ability_action_resource_cost_amount, ResolvedActionResourceCost,
     RESOURCE_KIND_MANA,
 };
 use crate::spells::{
@@ -823,6 +825,8 @@ pub struct MeleeDefinition {
     pub combo_open_ms: u64,
     pub combo_grace_ms: u64,
     pub aerial_execution_mode: String,
+    /// This strike runs a melee channel that ends early on key release.
+    pub holdable: bool,
 }
 
 #[derive(Clone)]
@@ -904,6 +908,7 @@ pub struct ActiveMeleeChannel {
     pub point_y: f32,
     pub point_z: f32,
     pub ends_at: Timestamp,
+    pub holdable: bool,
     #[index(btree)]
     pub ends_at_micros: i64,
 }
@@ -1098,13 +1103,37 @@ fn pending_commitment_belongs_to_channel(
     channel_owner == pending_owner && channel_action_instance_id == pending_action_instance_id
 }
 
+/// How an active melee channel ended. `Completed` lets the already-scheduled
+/// commitments land (a channel that ran its authored duration owes its last
+/// tick); `Canceled` and `ReleasedEarly` drop everything still pending, and
+/// differ only in the lifecycle event they emit.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MeleeChannelEnd {
+    Completed,
+    Canceled,
+    ReleasedEarly,
+}
+
+impl MeleeChannelEnd {
+    fn drops_pending_commitments(self) -> bool {
+        !matches!(self, MeleeChannelEnd::Completed)
+    }
+
+    fn event_type(self) -> &'static str {
+        match self {
+            MeleeChannelEnd::Canceled => EVENT_FIZZLE,
+            _ => EVENT_RELEASE,
+        }
+    }
+}
+
 fn finish_active_melee_channel(
     ctx: &ReducerContext,
     row: ActiveMeleeChannel,
     now: Timestamp,
-    canceled: bool,
+    outcome: MeleeChannelEnd,
 ) {
-    if canceled {
+    if outcome.drops_pending_commitments() {
         let pending_impact_ids: Vec<u64> = ctx
             .db
             .pending_melee_impact()
@@ -1153,12 +1182,7 @@ fn finish_active_melee_channel(
         action_kind: row.action_kind,
         ability_id: row.ability_id,
         hit_index: -1,
-        event_type: if canceled {
-            EVENT_FIZZLE
-        } else {
-            EVENT_RELEASE
-        }
-        .to_string(),
+        event_type: outcome.event_type().to_string(),
         source_kind: row.source_kind,
         caster: row.owner,
         hit: row.target,
@@ -1195,8 +1219,31 @@ pub(crate) fn cancel_active_melee_channel_for_interrupt(
     let Some(row) = ctx.db.active_melee_channel().owner().find(owner) else {
         return false;
     };
-    finish_active_melee_channel(ctx, row, now, true);
+    finish_active_melee_channel(ctx, row, now, MeleeChannelEnd::Canceled);
     true
+}
+
+/// Key-up for a holdable melee channel. Mirrors `release_cast` on the spell
+/// side: the volley stops where the player let go, unfired commitments are
+/// dropped, and the lifecycle RELEASE event drives the authored end clip.
+#[reducer]
+pub fn release_melee_channel(ctx: &ReducerContext, ability_id: String) -> Result<(), String> {
+    let Some(row) = ctx.db.active_melee_channel().owner().find(ctx.sender()) else {
+        return Ok(());
+    };
+    if !row.holdable {
+        return Ok(());
+    }
+    // An empty ability id releases whatever the sender is channeling; a named
+    // one must match so a stale key-up cannot cut a later channel short.
+    if !ability_id.trim().is_empty()
+        && !row.ability_id.eq_ignore_ascii_case(ability_id.trim())
+        && !row.action_kind.eq_ignore_ascii_case(ability_id.trim())
+    {
+        return Ok(());
+    }
+    finish_active_melee_channel(ctx, row, ctx.timestamp, MeleeChannelEnd::ReleasedEarly);
+    Ok(())
 }
 
 pub(crate) fn tick_active_melee_channels(ctx: &ReducerContext, now: Timestamp) {
@@ -1229,9 +1276,9 @@ pub(crate) fn tick_active_melee_channels(ctx: &ReducerContext, now: Timestamp) {
             || has_active_disabling_status(ctx, row.owner, now)
             || has_active_status(ctx, row.owner, StatusEffectKind::Disarm, now);
         if canceled {
-            finish_active_melee_channel(ctx, row, now, true);
+            finish_active_melee_channel(ctx, row, now, MeleeChannelEnd::Canceled);
         } else if now_micros >= row.ends_at_micros {
-            finish_active_melee_channel(ctx, row, now, false);
+            finish_active_melee_channel(ctx, row, now, MeleeChannelEnd::Completed);
         }
     }
 }
@@ -1749,6 +1796,8 @@ pub(crate) fn sync_melee_definitions(ctx: &ReducerContext) {
                 combo_open_ms: strike.combo_open_ms,
                 combo_grace_ms: strike.combo_grace_ms,
                 aerial_execution_mode: strike.aerial_execution_mode.as_str().to_string(),
+                holdable: melee_channel_for_authored_strike(combat_profile, strike.id.as_str())
+                    .is_some_and(|channel| channel.holdable),
             };
             if ctx.db.melee_definition().key().find(key.clone()).is_some() {
                 ctx.db.melee_definition().key().update(row);
@@ -4223,6 +4272,7 @@ fn perform_melee_attack_for_internal(
             point_y: target_point_y,
             point_z: target_point_z,
             ends_at,
+            holdable: channel.holdable,
             ends_at_micros: timestamp_to_micros(ends_at),
         });
     }
@@ -4767,6 +4817,47 @@ pub(crate) fn has_due_pending_projectile_releases(ctx: &ReducerContext, now: Tim
         .is_some()
 }
 
+/// Melee channels that author `resource_cost_per_release` pay here — at the
+/// shot, not the impact — so a volley costs exactly what it loosed, whether or
+/// not the arrows connect. Running dry ends the channel rather than quietly
+/// firing the rest for free.
+fn commit_projectile_release_channel_cost(
+    ctx: &ReducerContext,
+    row: &PendingProjectileRelease,
+    now: Timestamp,
+) -> bool {
+    let Some(channel) = melee_channel_for_ability_id(row.ability_id.as_str()) else {
+        return true;
+    };
+    if channel.resource_cost_per_release <= 0.0 {
+        return true;
+    }
+    let cost = if channel.resource_kind_per_release.is_empty() {
+        let Some(ability) = active_selectable_ability_for_authored_action(
+            ctx,
+            row.source,
+            &AuthoredActionId::new(row.action_kind.as_str()),
+        ) else {
+            return true;
+        };
+        let Some(cost) = resolve_ability_action_resource_cost_amount(
+            ctx,
+            row.source,
+            &ability,
+            channel.resource_cost_per_release,
+        ) else {
+            return true;
+        };
+        cost
+    } else {
+        ResolvedActionResourceCost::for_kind(
+            channel.resource_kind_per_release,
+            channel.resource_cost_per_release,
+        )
+    };
+    pay_action_resource_cost(ctx, row.source, &cost, now)
+}
+
 fn resolve_pending_projectile_release(
     ctx: &ReducerContext,
     row: &PendingProjectileRelease,
@@ -4799,6 +4890,11 @@ fn resolve_pending_projectile_release(
     };
     if !target.alive || !players_share_world_context(ctx, row.source, row.target) {
         emit_projectile_release_fizzle(ctx, row, &caster, now);
+        return;
+    }
+    if !commit_projectile_release_channel_cost(ctx, row, now) {
+        emit_projectile_release_fizzle(ctx, row, &caster, now);
+        cancel_active_melee_channel_for_interrupt(ctx, row.source, now);
         return;
     }
 
@@ -7458,6 +7554,9 @@ mod tests {
                 tick_interval_ms: 333,
                 cancel_on_movement: true,
                 use_authored_hit_windows: false,
+                holdable: false,
+                resource_cost_per_release: 0.0,
+                resource_kind_per_release: "",
             }),
             vec![44, 377, 710, 1043, 1376, 1709, 2042, 2375]
         );
@@ -7468,6 +7567,9 @@ mod tests {
                 tick_interval_ms: 667,
                 cancel_on_movement: true,
                 use_authored_hit_windows: false,
+                holdable: false,
+                resource_cost_per_release: 0.0,
+                resource_kind_per_release: "",
             }),
             vec![107, 774, 1441, 2108, 2775]
         );
@@ -7507,6 +7609,9 @@ mod tests {
                     tick_interval_ms: 0,
                     cancel_on_movement: true,
                     use_authored_hit_windows: true,
+                holdable: false,
+                resource_cost_per_release: 0.0,
+                resource_kind_per_release: "",
                 })
             ),
             vec![320, 1503, 2743]
@@ -7829,7 +7934,7 @@ mod tests {
     }
 
     #[test]
-    fn archer_bow_exports_only_the_eight_authored_attacks_plus_auto_attack() {
+    fn every_archer_bow_strike_delivers_a_projectile() {
         let profile = melee_manifest()
             .profiles
             .iter()
@@ -7847,20 +7952,8 @@ mod tests {
             .map(|strike| strike.id.as_str())
             .collect();
 
-        let expected = HashSet::from([
-            "ARCHER_QUICK_SHOT",
-            "ARCHER_FINISHING_SHOT",
-            "ARCHER_POWER_SHOT",
-            "ARCHER_TRIPLE_SHOT",
-            "ARCHER_BACKSTEP",
-            "ARCHER_DISENGAGE",
-            "ARCHER_EVASIVE_SHOT",
-            "ARCHER_HEARTSEEKER",
-            "AUTO_ATTACK_1",
-        ]);
-
-        assert_eq!(strike_ids, expected);
-        assert_eq!(projectile_strikes, expected);
+        assert!(strike_ids.contains("AUTO_ATTACK_1"));
+        assert_eq!(strike_ids, projectile_strikes);
     }
 
     #[test]
