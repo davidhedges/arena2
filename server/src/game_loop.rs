@@ -43,6 +43,7 @@ use crate::combat::actor_snapshot::CombatActorSnapshotSet;
 use crate::combat::{
     clear_statuses_for_dead_players, expire_combat_engagements, expire_status_effects,
     has_due_pending_effects, normalize_legacy_hot_status_rows, process_periodic_status_ticks,
+    tick_hemorrhage,
     prune_combat_events, prune_surprise_attack_runtimes, resolve_pending_effects, respawn_player,
     sync_combat_projectile_definitions, sync_player_state_derived_stats, tick_auras,
     tick_combat_projectiles_with_snapshots, tick_combat_stacking_passives, tick_emanations,
@@ -1124,7 +1125,7 @@ fn run_pre_tick_housekeeping_phase(
         &mut subphase_micros[PRE_SUB_PERIODIC_EFFECTS],
         || {
             (
-                process_periodic_status_ticks(ctx, now),
+                process_periodic_status_ticks(ctx, now) + tick_hemorrhage(ctx, now, dt),
                 tick_equipment_periodic_effects(ctx, now, dt, contexts),
             )
         },

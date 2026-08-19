@@ -2982,6 +2982,8 @@ pub enum StatusEffectKind {
     Thorns,
     VengeanceAura,
     DamageTakenFromSourceAmp,
+    DamageTakenAmp,
+    Hemorrhaging,
     MeleeAttackModifier,
     AttackSpeed,
     CastSpeed,
@@ -3040,6 +3042,8 @@ impl StatusEffectKind {
             Self::Thorns => "THORNS",
             Self::VengeanceAura => "VENGEANCE_AURA",
             Self::DamageTakenFromSourceAmp => "DAMAGE_TAKEN_FROM_SOURCE_AMP",
+            Self::DamageTakenAmp => "DAMAGE_TAKEN_AMP",
+            Self::Hemorrhaging => "HEMORRHAGING",
             Self::MeleeAttackModifier => "MELEE_ATTACK_MODIFIER",
             Self::AttackSpeed => "ATTACK_SPEED",
             Self::CastSpeed => "CAST_SPEED",
@@ -3098,6 +3102,8 @@ impl StatusEffectKind {
             "THORNS" => Some(Self::Thorns),
             "VENGEANCE_AURA" => Some(Self::VengeanceAura),
             "DAMAGE_TAKEN_FROM_SOURCE_AMP" => Some(Self::DamageTakenFromSourceAmp),
+            "DAMAGE_TAKEN_AMP" => Some(Self::DamageTakenAmp),
+            "HEMORRHAGING" => Some(Self::Hemorrhaging),
             "MELEE_ATTACK_MODIFIER" => Some(Self::MeleeAttackModifier),
             "ATTACK_SPEED" => Some(Self::AttackSpeed),
             "CAST_SPEED" => Some(Self::CastSpeed),
@@ -3198,6 +3204,16 @@ pub enum StatusPayload {
     },
     VengeanceAura,
     DamageTakenFromSourceAmp {
+        modifier_scalar: f32,
+    },
+    /// Target takes amplified damage from every source, not only the actor that
+    /// applied it, and the amplification scales with stacks.
+    DamageTakenAmp {
+        modifier_scalar: f32,
+    },
+    /// Movement advances the target's bleed clock. `modifier_scalar` is seconds
+    /// of bleed progress bought per meter travelled.
+    Hemorrhaging {
         modifier_scalar: f32,
     },
     MeleeAttackModifier,
@@ -3370,6 +3386,12 @@ impl AuthoredStatusPayload {
             StatusEffectKind::DamageTakenFromSourceAmp => StatusPayload::DamageTakenFromSourceAmp {
                 modifier_scalar: self.modifier_scalar,
             },
+            StatusEffectKind::DamageTakenAmp => StatusPayload::DamageTakenAmp {
+                modifier_scalar: self.modifier_scalar,
+            },
+            StatusEffectKind::Hemorrhaging => StatusPayload::Hemorrhaging {
+                modifier_scalar: self.modifier_scalar,
+            },
             StatusEffectKind::MeleeAttackModifier => StatusPayload::MeleeAttackModifier,
             StatusEffectKind::AttackSpeed => StatusPayload::AttackSpeed {
                 modifier_scalar: self.modifier_scalar,
@@ -3469,6 +3491,8 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::Doused
             | StatusEffectKind::KnockbackResistance
             | StatusEffectKind::DamageTakenFromSourceAmp
+            | StatusEffectKind::DamageTakenAmp
+            | StatusEffectKind::Hemorrhaging
             | StatusEffectKind::DamageRedirect
             | StatusEffectKind::Gigantism
             | StatusEffectKind::CastSpeed => {
@@ -3640,6 +3664,8 @@ impl StatusPayload {
             Self::Thorns { .. } => StatusEffectKind::Thorns,
             Self::VengeanceAura => StatusEffectKind::VengeanceAura,
             Self::DamageTakenFromSourceAmp { .. } => StatusEffectKind::DamageTakenFromSourceAmp,
+            Self::DamageTakenAmp { .. } => StatusEffectKind::DamageTakenAmp,
+            Self::Hemorrhaging { .. } => StatusEffectKind::Hemorrhaging,
             Self::MeleeAttackModifier => StatusEffectKind::MeleeAttackModifier,
             Self::AttackSpeed { .. } => StatusEffectKind::AttackSpeed,
             Self::CastSpeed { .. } => StatusEffectKind::CastSpeed,
@@ -3752,6 +3778,8 @@ impl StatusPayload {
             | Self::StaminaRegen { modifier_scalar }
             | Self::MaxHealth { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
+            | Self::DamageTakenAmp { modifier_scalar }
+            | Self::Hemorrhaging { modifier_scalar }
             | Self::DamageRedirect { modifier_scalar }
             | Self::PhysicalDamageReduction { modifier_scalar }
             | Self::Doused { modifier_scalar }
@@ -3948,6 +3976,12 @@ impl StatusPayload {
             StatusEffectKind::DamageTakenFromSourceAmp => Self::DamageTakenFromSourceAmp {
                 modifier_scalar: columns.modifier_scalar.max(0.0),
             },
+            StatusEffectKind::DamageTakenAmp => Self::DamageTakenAmp {
+                modifier_scalar: columns.modifier_scalar.max(0.0),
+            },
+            StatusEffectKind::Hemorrhaging => Self::Hemorrhaging {
+                modifier_scalar: columns.modifier_scalar.max(0.0),
+            },
             StatusEffectKind::MeleeAttackModifier => Self::MeleeAttackModifier,
             StatusEffectKind::AttackSpeed => Self::AttackSpeed {
                 modifier_scalar: columns.modifier_scalar,
@@ -4035,6 +4069,8 @@ impl StatusPayload {
             | Self::StaminaRegen { modifier_scalar }
             | Self::MaxHealth { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
+            | Self::DamageTakenAmp { modifier_scalar }
+            | Self::Hemorrhaging { modifier_scalar }
             | Self::DamageRedirect { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 !modifier_scalar.is_finite() || modifier_scalar <= 0.0
@@ -4163,6 +4199,8 @@ impl StatusPayload {
             | Self::StaminaRegen { modifier_scalar }
             | Self::MaxHealth { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
+            | Self::DamageTakenAmp { modifier_scalar }
+            | Self::Hemorrhaging { modifier_scalar }
             | Self::DamageRedirect { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
                 if !modifier_scalar.is_finite() || modifier_scalar <= 0.0 {
@@ -4332,6 +4370,8 @@ impl StatusPayload {
             | Self::StaminaRegen { modifier_scalar }
             | Self::MaxHealth { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
+            | Self::DamageTakenAmp { modifier_scalar }
+            | Self::Hemorrhaging { modifier_scalar }
             | Self::DamageRedirect { modifier_scalar }
             | Self::PhysicalDamageReduction { modifier_scalar }
             | Self::Doused { modifier_scalar }
@@ -9650,6 +9690,17 @@ impl StatusRuntimeView {
                         *entry = (*entry)
                             .max(effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32);
                     }
+                    // Read by tick_hemorrhage against live movement, not folded into
+                    // the per-tick modifier snapshot.
+                    StatusEffectKind::Hemorrhaging => {}
+                    StatusEffectKind::DamageTakenAmp => {
+                        let entry = modifiers
+                            .damage_taken_amp_by_target
+                            .entry(*target)
+                            .or_insert(0.0);
+                        *entry = (*entry)
+                            .max(effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32);
+                    }
                     StatusEffectKind::Berserking => {
                         modifiers.berserking.insert(*target);
                     }
@@ -9708,6 +9759,7 @@ pub struct TemporaryCombatModifiers {
     damage_taken_reduction_by_target: HashMap<Identity, f32>,
     physical_damage_reduction_by_target: HashMap<Identity, f32>,
     damage_taken_amp_by_target_and_source: HashMap<(Identity, Identity), f32>,
+    damage_taken_amp_by_target: HashMap<Identity, f32>,
     healing_taken_reduction_by_target: HashMap<Identity, f32>,
     damage_dealt_reduction_by_target: HashMap<Identity, f32>,
     mana_regen_by_target: HashMap<Identity, f32>,
@@ -9796,7 +9848,15 @@ impl TemporaryCombatModifiers {
             .copied()
             .unwrap_or(0.0)
             .clamp(0.0, MAX_DAMAGE_TAKEN_REDUCTION);
-        1.0 - reduction
+        // Source-agnostic vulnerability (Tenderize): every attacker benefits, unlike
+        // DamageTakenFromSourceAmp which only pays out for the actor that applied it.
+        let amp = self
+            .damage_taken_amp_by_target
+            .get(identity)
+            .copied()
+            .unwrap_or(0.0)
+            .max(0.0);
+        (1.0 - reduction) * (1.0 + amp)
     }
 
     pub fn damage_taken_multiplier_from_source_for(
@@ -9953,6 +10013,204 @@ impl TemporaryCombatModifiers {
     pub fn disables_equipment_defenses_for(&self, identity: &Identity) -> bool {
         self.berserking.contains(identity)
     }
+}
+
+/// Carried fractional bleed advance for a hemorrhaging target. Movement buys
+/// bleed progress in milliseconds; only whole ticks are spent, so the remainder
+/// has to survive between server ticks or slow movement (or a low authored
+/// rate) would round to zero every frame and the mechanic would do nothing.
+#[table(accessor = hemorrhage_advance)]
+#[derive(Clone)]
+pub struct HemorrhageAdvance {
+    #[primary_key]
+    pub target: Identity,
+    pub pending_ms: u64,
+    /// Last observed `voluntary_move_epoch`. Movement only buys bleed progress
+    /// on ticks where this changed, which is how forced displacement is
+    /// excluded: knockback and ability-driven movement never bump the epoch.
+    pub last_voluntary_move_epoch: u64,
+}
+
+fn upsert_hemorrhage_advance(
+    ctx: &ReducerContext,
+    target: Identity,
+    pending_ms: u64,
+    last_voluntary_move_epoch: u64,
+) {
+    if let Some(mut row) = ctx.db.hemorrhage_advance().target().find(target) {
+        row.pending_ms = pending_ms;
+        row.last_voluntary_move_epoch = last_voluntary_move_epoch;
+        ctx.db.hemorrhage_advance().target().update(row);
+    } else {
+        ctx.db.hemorrhage_advance().insert(HemorrhageAdvance {
+            target,
+            pending_ms,
+            last_voluntary_move_epoch,
+        });
+    }
+}
+
+/// Hemorrhaging: moving advances the target's bleeds instead of letting them
+/// run on wall-clock time. The bleed's authored total damage is conserved --
+/// movement front-loads it by consuming remaining duration, it does not add
+/// damage on top. Standing still is the only way to make a bleed take its full
+/// authored time, so the target chooses between bleeding slowly and repositioning.
+pub fn tick_hemorrhage(ctx: &ReducerContext, now: Timestamp, dt: f32) -> usize {
+    if !dt.is_finite() || dt <= 0.0 {
+        return 0;
+    }
+
+    let hemorrhaging: Vec<StatusEffect> = ctx
+        .db
+        .status_effect()
+        .effect_kind()
+        .filter(StatusEffectKind::Hemorrhaging.as_str())
+        .filter(|effect| now < effect.expires_at)
+        .collect();
+
+    // Drop carried progress for anyone who is no longer hemorrhaging so a later
+    // application does not inherit a stale head start.
+    let active_targets: HashSet<Identity> =
+        hemorrhaging.iter().map(|effect| effect.target).collect();
+    let stale: Vec<Identity> = ctx
+        .db
+        .hemorrhage_advance()
+        .iter()
+        .filter(|row| !active_targets.contains(&row.target))
+        .map(|row| row.target)
+        .collect();
+    for target in stale {
+        ctx.db.hemorrhage_advance().target().delete(target);
+    }
+    if hemorrhaging.is_empty() {
+        return 0;
+    }
+
+    // Strongest application wins rather than summing, matching how the other
+    // scalar statuses resolve overlapping sources.
+    let mut rate_by_target: HashMap<Identity, f32> = HashMap::new();
+    for effect in &hemorrhaging {
+        let rate = effect.modifier_scalar.max(0.0);
+        let entry = rate_by_target.entry(effect.target).or_insert(0.0);
+        *entry = entry.max(rate);
+    }
+
+    let mut queued = Vec::new();
+    for (target, rate_seconds_per_meter) in rate_by_target {
+        if rate_seconds_per_meter <= 0.0 {
+            continue;
+        }
+        let Some(physics) = ctx.db.player_physics().identity().find(target) else {
+            continue;
+        };
+        let Some(state) = ctx.db.player_state().player_id().find(target) else {
+            continue;
+        };
+
+        let existing = ctx.db.hemorrhage_advance().target().find(target);
+        let voluntary_move_epoch = state.voluntary_move_epoch;
+        // First tick under hemorrhage seeds the epoch without paying out, so a
+        // target that was already running does not get a free advance.
+        let moved_voluntarily = existing
+            .as_ref()
+            .is_some_and(|row| row.last_voluntary_move_epoch != voluntary_move_epoch);
+        let carried = existing.as_ref().map(|row| row.pending_ms).unwrap_or(0);
+
+        let bought_ms = if moved_voluntarily {
+            // Horizontal travel only: falling is not repositioning.
+            let speed = (physics.vel_x * physics.vel_x + physics.vel_z * physics.vel_z).sqrt();
+            if speed.is_finite() && speed > 0.0 {
+                let bought = (speed * dt * rate_seconds_per_meter * 1000.0).max(0.0);
+                if bought.is_finite() {
+                    bought as u64
+                } else {
+                    0
+                }
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
+        let available_ms = carried.saturating_add(bought_ms);
+        if available_ms == 0 {
+            upsert_hemorrhage_advance(ctx, target, 0, voluntary_move_epoch);
+            continue;
+        }
+
+        let bleeds: Vec<StatusEffect> = ctx
+            .db
+            .status_effect()
+            .target()
+            .filter(target)
+            .filter(|effect| {
+                StatusEffectKind::from_wire(effect.effect_kind.as_str())
+                    == Some(StatusEffectKind::Dot)
+                    && effect.tick_interval_ms > 0
+                    && now < effect.expires_at
+                    && status_has_dispel_type(effect, StatusDispelType::Bleed)
+            })
+            .collect();
+
+        // Every bleed advances by the same movement clock; the carried remainder
+        // is reduced by the most any single bleed actually consumed.
+        let mut consumed_ms = 0u64;
+        for mut bleed in bleeds {
+            let remaining_ms = timestamp_to_micros(bleed.expires_at)
+                .saturating_sub(timestamp_to_micros(now))
+                .max(0) as u64
+                / 1000;
+            let interval_ms = bleed.tick_interval_ms.max(1);
+            let spendable_ms = available_ms.min(remaining_ms);
+            let ticks = spendable_ms / interval_ms;
+            if ticks == 0 {
+                continue;
+            }
+
+            let used_ms = ticks.saturating_mul(interval_ms);
+            consumed_ms = consumed_ms.max(used_ms);
+
+            let per_tick = bleed.tick_amount.max(0) * bleed.stacks.max(1) as i32;
+            let amount = per_tick.saturating_mul(ticks.min(i32::MAX as u64) as i32);
+            if amount > 0 {
+                queued.push(EffectPacket::Damage {
+                    amount,
+                    damage_type: DamageType::from_wire(bleed.damage_type.as_str()),
+                    source: bleed.source,
+                    target: bleed.target,
+                    spell_id: bleed.spell_id.clone(),
+                    delivery: DamageDelivery::Periodic,
+                    source_kind: DAMAGE_SOURCE_KIND_PERIODIC.to_string(),
+                    direct_action_key: String::new(),
+                    is_area: false,
+                });
+            }
+
+            // Burn the duration those ticks represent and re-anchor the normal
+            // tick clock so the shortened bleed keeps ticking on schedule.
+            let expires_at = bleed.expires_at - Duration::from_millis(used_ms);
+            bleed.expires_at = expires_at;
+            bleed.expires_at_micros = timestamp_to_micros(expires_at);
+            if bleed.next_tick_at > expires_at {
+                set_status_next_tick(&mut bleed, expires_at);
+            }
+            ctx.db.status_effect().status_id().update(bleed);
+        }
+
+        upsert_hemorrhage_advance(
+            ctx,
+            target,
+            available_ms.saturating_sub(consumed_ms),
+            voluntary_move_epoch,
+        );
+    }
+
+    let queued_count = queued.len();
+    if queued_count > 0 {
+        queue_effects(ctx, queued);
+    }
+    queued_count
 }
 
 pub fn process_periodic_status_ticks(ctx: &ReducerContext, now: Timestamp) -> usize {

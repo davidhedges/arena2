@@ -12549,9 +12549,10 @@ mod tests {
 
         assert_eq!(ability.action_id, "DAGGER_COMBO_ATTACK_04_01");
         assert_eq!(ability.gameplay.applies_stagger, Some(false));
-        assert_eq!(
-            melee_impact_effects_for_ability_id("DAGGER_GUT_RIPPER"),
-            vec![MeleeImpactEffectRuntime::ApplyStatus {
+        // Containment, not equality: Gut Ripper also carries the hemorrhage
+        // marker, and pinning the whole effect list just re-copies the catalog.
+        assert!(melee_impact_effects_for_ability_id("DAGGER_GUT_RIPPER").contains(
+            &MeleeImpactEffectRuntime::ApplyStatus {
                 status: StatusApplication::new(
                     StatusPayload::Dot {
                         tick_damage: 3,
@@ -12565,8 +12566,8 @@ mod tests {
                     StackPolicy::Refresh,
                 )
                 .with_dispel_types(vec![StatusDispelType::Bleed]),
-            }]
-        );
+            }
+        ));
     }
 
     #[test]

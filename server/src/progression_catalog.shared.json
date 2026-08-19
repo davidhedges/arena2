@@ -775,6 +775,47 @@
       }
     },
     {
+      "ability_id": "WARRIOR_TENDERIZE",
+      "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "action_id": "COMBO_ATTACK_2_2_HIGH_TO_LOW",
+      "display_name": "Tenderize",
+      "resource_kind": "STAMINA",
+      "resource_cost": 25,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 73,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 18,
+        "applies_stagger": false,
+        "range": 2.5,
+        "cooldown_ms": 1000,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS",
+            "status": {
+              "kind": "DAMAGE_TAKEN_AMP",
+              "duration_ms": 12000,
+              "status_stack_group": "WARRIOR_TENDERIZE",
+              "modifier_scalar": 0.05,
+              "max_stacks": 5,
+              "stack_policy": "ADD_STACK_REFRESH",
+              "dispel_types": [
+                "PHYSICAL"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
       "ability_id": "WARRIOR_CARVE",
       "actor_scope": "PLAYER",
       "discipline_id": "WAR",
@@ -6849,6 +6890,20 @@
                 "BLEED"
               ]
             }
+          },
+          {
+            "kind": "APPLY_STATUS",
+            "status": {
+              "kind": "HEMORRHAGING",
+              "duration_ms": 8000,
+              "status_stack_group": "DAGGER_GUT_RIPPER_HEMORRHAGE",
+              "modifier_scalar": 3,
+              "max_stacks": 1,
+              "stack_policy": "REFRESH",
+              "dispel_types": [
+                "BLEED"
+              ]
+            }
           }
         ]
       }
@@ -8966,6 +9021,13 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_TENDERIZE",
+      "display_name": "Tenderize",
+      "description": "A hammering overhead chop that softens the target. Stacks up to 5 times; each stack makes the target take 5% more damage from every attacker.",
+      "sort_order": 73
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_CARVE",
       "display_name": "Carve",
       "description": "A low-to-high greatsword cut that opens a bleeding wound.",
@@ -10144,7 +10206,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_GUT_RIPPER",
       "display_name": "Gut Ripper",
-      "description": "Rips the target with crossed daggers, leaving a bleeding wound.",
+      "description": "Rips the target with crossed daggers, leaving a bleeding wound and hemorrhaging them. A hemorrhaging target advances its bleeds by 3 seconds for every meter it moves, so running spends the wound early instead of waiting it out.",
       "sort_order": 224
     },
     {
