@@ -677,6 +677,10 @@ enum ImpactEffectRow {
         chance: f32,
         #[serde(default)]
         dispel_types: Vec<StatusDispelType>,
+        /// Only stuns targets already carrying this status. Authored by Trip,
+        /// which lands on Off Balance enemies and passes over everyone else.
+        #[serde(default)]
+        requires_target_status: Option<StatusEffectKind>,
     },
     Doused {
         duration_ms: u64,
@@ -1768,6 +1772,17 @@ impl From<ImpactEffectRow> for ImpactEffect {
                 polarity,
                 target_audience,
             },
+            status_row @ ImpactEffectRow::Stun {
+                requires_target_status: Some(requires_target_status),
+                chance,
+                ..
+            } => Self::ConditionalStatus {
+                status: status_application_from_impact_effect_row(status_row),
+                requires_target_status,
+                chance,
+                polarity: StatusPolarity::Debuff,
+                target_audience: TargetAudience::Hostile,
+            },
             status_row @ ImpactEffectRow::Stun { chance, .. } if chance < 1.0 => {
                 Self::ChanceStatus {
                     status: status_application_from_impact_effect_row(status_row),
@@ -1849,6 +1864,7 @@ fn status_application_from_impact_effect_row(row: ImpactEffectRow) -> StatusAppl
             duration_ms,
             chance: _,
             dispel_types,
+            requires_target_status: _,
         } => StatusApplication::new(
             StatusPayload::Stun,
             Duration::from_millis(duration_ms),
@@ -2385,7 +2401,8 @@ fn validate_impact_effect(def: &SpellDefinition, effect: &ImpactEffect) -> Resul
     let effect = match effect {
         ImpactEffect::Status(status) => status,
         ImpactEffect::StatusWithPolarity { status, .. } => status,
-        ImpactEffect::ChanceStatus { status, chance, .. } => {
+        ImpactEffect::ChanceStatus { status, chance, .. }
+        | ImpactEffect::ConditionalStatus { status, chance, .. } => {
             if !chance.is_finite() || *chance <= 0.0 || *chance > 1.0 {
                 return Err(format!(
                     "{} delivery.impact_effects[].chance must be > 0 and <= 1",
@@ -4033,6 +4050,7 @@ fn validate_apply_status_kind_for_self(
         | StatusEffectKind::Berserking
         | StatusEffectKind::BattleTrance
         | StatusEffectKind::TargetedAbilityAvoidance
+        | StatusEffectKind::AllAbilityAvoidance
         | StatusEffectKind::MirrorImage
         | StatusEffectKind::Gigantism
         | StatusEffectKind::Flurry

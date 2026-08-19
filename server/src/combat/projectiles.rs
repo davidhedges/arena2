@@ -11,7 +11,7 @@ use crate::combat::scene_query::{
     terrain_surface_y_for_caster, SceneHit, SceneHitKind,
 };
 use crate::combat::{
-    clear_projectile_return_heal, hostile_targeted_ability_misses,
+    clear_projectile_return_heal, hostile_targeted_ability_misses, AttackAim,
     mark_projectile_returned_for_heal, queue_effects, timestamp_to_micros, ActiveCombatProjectile,
     ActiveCombatProjectileTargetState, CombatEvent, CombatProjectileTickMetrics, DamageDelivery,
     EffectPacket, ProjectilePresentationEvent, StatusPolarity, COMBAT_EVENT_BLOCK,
@@ -2730,7 +2730,7 @@ fn projectile_targeted_hit_misses(
             projectile.caster,
             target,
             projectile.projectile_instance_id.as_str(),
-            false,
+            AttackAim::Targeted,
             now,
         )
 }

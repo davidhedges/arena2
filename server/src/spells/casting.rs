@@ -37,7 +37,7 @@ use crate::combat::{
     active_emanation_for_owner, advance_slipstream_after_movement_ability,
     arm_quickening_after_movement_ability, consume_active_immolation_damage,
     consume_quickening_for_cast, has_active_disabling_status, has_active_status,
-    hostile_targeted_ability_misses, mark_harmful_combat_action, queue_delayed_status_effect,
+    hostile_targeted_ability_misses, AttackAim, mark_harmful_combat_action, queue_delayed_status_effect,
     queue_effects, quickening_cast_speed_multiplier_for_owner, register_projectile_return_heal,
     remove_active_status_group, rephase_accumulated_orbit_projectiles,
     rime_effect_packet_for_frost_spell, set_active_aura, status_matches_removal_filter,
@@ -359,7 +359,9 @@ fn bespoke_spell_definition(
     super::catalog::require_spell_definition_by_str(spell.as_str())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_impact_effect_packets(
+    ctx: &ReducerContext,
     effects: &mut Vec<EffectPacket>,
     impact_effects: &[ImpactEffect],
     source: Identity,
@@ -373,6 +375,12 @@ fn push_impact_effect_packets(
 ) {
     for (effect_index, effect) in impact_effects.iter().enumerate() {
         if effect.requires_positive_damage() && !positive_damage {
+            continue;
+        }
+        if effect
+            .required_target_status()
+            .is_some_and(|kind| !has_active_status(ctx, target, kind, ctx.timestamp))
+        {
             continue;
         }
         if !effect.chance_roll_succeeds(roll_key, target, effect_index) {
@@ -6093,6 +6101,16 @@ fn apply_area_channel_tick(
             continue;
         }
 
+        if hostile_targeted_ability_misses(
+            ctx,
+            active_cast.caster,
+            target.player_id,
+            active_cast.cast_id.as_str(),
+            AttackAim::Volume,
+            now,
+        ) {
+            continue;
+        }
         if resolve_blockable_spell_hit(
             ctx,
             active_cast.cast_id.as_str(),
@@ -6170,6 +6188,7 @@ fn apply_area_channel_tick(
             }
         }
         push_impact_effect_packets(
+            ctx,
             &mut effects,
             channel_area.impact_effects.as_slice(),
             active_cast.caster,
@@ -6287,7 +6306,7 @@ fn apply_generic_channel_damage(
         active_cast.caster,
         target.player_id,
         active_cast.cast_id.as_str(),
-        false,
+        AttackAim::Targeted,
         now,
     ) {
         emit_targeted_spell_miss(
@@ -6777,7 +6796,7 @@ fn queue_electrocute_damage(ctx: &ReducerContext, active_cast: &ActiveCast, targ
         active_cast.caster,
         target_id,
         runtime.spell_instance_id.as_str(),
-        false,
+        AttackAim::Targeted,
         ctx.timestamp,
     ) {
         emit_targeted_spell_miss(
@@ -7078,7 +7097,7 @@ fn spawn_instant_beam(
                             caster,
                             target_id,
                             sequence_effect_id.as_str(),
-                            false,
+                            AttackAim::Targeted,
                             now,
                         )
                     {
@@ -7541,6 +7560,16 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
         ) {
             continue;
         }
+        if hostile_targeted_ability_misses(
+            ctx,
+            impact.caster,
+            player.player_id,
+            impact.spell_id,
+            AttackAim::Volume,
+            impact.now,
+        ) {
+            continue;
+        }
         if resolve_blockable_spell_hit(
             ctx,
             impact.spell_id,
@@ -7619,6 +7648,7 @@ fn resolve_area_impact(ctx: &ReducerContext, impact: AreaImpactResolution<'_>) {
         );
         if let Some(area) = impact.definition.secondary.area.as_ref() {
             push_impact_effect_packets(
+                ctx,
                 &mut effects,
                 area.impact_effects.as_slice(),
                 impact.caster,
@@ -8254,6 +8284,16 @@ pub(crate) fn tick_persistent_areas(ctx: &ReducerContext, now: Timestamp) {
             {
                 continue;
             }
+            if hostile_targeted_ability_misses(
+                ctx,
+                active.caster,
+                candidate.player_id,
+                active.spell_instance_id.as_str(),
+                AttackAim::Volume,
+                now,
+            ) {
+                continue;
+            }
 
             if definition.damage > 0 {
                 effects.push(EffectPacket::Damage {
@@ -8289,6 +8329,7 @@ pub(crate) fn tick_persistent_areas(ctx: &ReducerContext, now: Timestamp) {
             let direction =
                 area_contact_direction(area_x, area_z, caster.pos_x, caster.pos_z, candidate);
             push_impact_effect_packets(
+                ctx,
                 &mut effects,
                 persistent_area.impact_effects.as_slice(),
                 active.caster,
@@ -8460,7 +8501,7 @@ fn apply_direct_target_spell(
             caster,
             target.player_id,
             spell_id.as_str(),
-            false,
+            AttackAim::Targeted,
             now,
         )
     {
@@ -8605,6 +8646,7 @@ fn apply_direct_target_spell(
 
     let (knockback_dir_x, knockback_dir_z) = direct_knockback_direction(state, target);
     push_impact_effect_packets(
+        ctx,
         &mut effects,
         direct_target.impact_effects.as_slice(),
         caster,
@@ -8952,7 +8994,7 @@ fn apply_status_to_target(
             caster,
             target.player_id,
             spell_id.as_str(),
-            false,
+            AttackAim::Targeted,
             now,
         )
     {
@@ -10112,7 +10154,7 @@ fn resolve_movement_delivery_hit(
         caster,
         target.player_id,
         action_instance_id,
-        false,
+        AttackAim::Targeted,
         now,
     ) {
         emit_direct_spell_terminal_event(
@@ -10248,6 +10290,7 @@ fn resolve_movement_delivery_hit(
     }];
     let impact_effects = movement_impact_effects(&movement);
     push_impact_effect_packets(
+        ctx,
         &mut effects,
         impact_effects.as_slice(),
         caster,

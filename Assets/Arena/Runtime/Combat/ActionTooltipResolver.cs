@@ -35,6 +35,11 @@ namespace Arena.Combat
             {
                 return CapacitorPresentation.DischargeTooltip(conn, owner);
             }
+            if (LightningReflexesPresentation.IsLightningReflexesAction(action)
+                && LightningReflexesPresentation.IsArmed(conn, owner))
+            {
+                return LightningReflexesPresentation.TripTooltip();
+            }
 
             ActionPresentationCatalog? presentation =
                 ActionPresentation.FindPresentation(conn, PresentationKindAbility, action.AbilityId)

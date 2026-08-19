@@ -1818,7 +1818,7 @@ namespace Arena.UI
                     ? ActionIconResolver.Resolve(ActionKinds.Ability, spellId)
                     : ActionIconResolver.Resolve(
                         ActionKinds.Ability,
-                        CapacitorPresentation.ResolvePresentationId(conn, owner, ability.AbilityId, spellId));
+                        ActionIconResolver.ResolvePresentationId(conn, owner, ability.AbilityId, spellId));
                 ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveEquippedSpellbookAction(conn, owner.Value, (uint)col);
                 bool canTrigger = resolved.HasAssignedAction;
                 string keyLabel = SpellbookKeymap.KeyLabelForIndex(col);

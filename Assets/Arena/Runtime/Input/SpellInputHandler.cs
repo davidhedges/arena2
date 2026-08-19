@@ -512,6 +512,23 @@ namespace Arena.Input
                 SendCastRequest(conn, spellId, string.Empty, 0f, 0f, 0f, empowerToken);
                 return true;
             }
+            // Lightning Reflexes is on its own long cooldown the instant it is cast, so the
+            // re-press that the server turns into Trip has to skip the local cooldown and
+            // resource gates -- they would be checked against the wrong ability.
+            if (LightningReflexesPresentation.IsLightningReflexesAbility(spellId, spellId)
+                && LightningReflexesPresentation.IsArmed(conn, localPlayer.Identity))
+            {
+                if (!CanAttemptCast(usesGlobalCooldown: false))
+                {
+                    ActionBarTrace.Trace("Trip dispatch rejected by local active-action gate");
+                    return false;
+                }
+
+                CastActionToken tripToken = LocalCombatState.Instance.CreateCastActionToken(spellId);
+                ActionBarTrace.Trace("sending Trip press through the Lightning Reflexes keybind");
+                SendCastRequest(conn, spellId, string.Empty, 0f, 0f, 0f, tripToken);
+                return true;
+            }
             // TS: canAttemptCast() — client-side gates for snappy rejection.
             if (!CanAttemptCast(
                 usesGlobalCooldown,

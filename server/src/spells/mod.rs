@@ -346,6 +346,9 @@ pub struct CapacitorState {
 }
 
 const CAPACITOR_ACTION_ID: &str = "CAPACITOR";
+const LIGHTNING_REFLEXES_ACTION_ID: &str = "LIGHTNING_REFLEXES";
+const LIGHTNING_REFLEXES_STATUS_GROUP: &str = "LIGHTNING_REFLEXES";
+const TRIP_ACTION_ID: &str = "TRIP";
 pub(crate) const CAPACITOR_MAX_CHARGES: u32 = 5;
 
 fn next_capacitor_charge_count(current: u32) -> u32 {
@@ -636,6 +639,11 @@ pub fn cast_request(
             kind.as_str()
         ));
     }
+    // Authorization is checked against the slotted action; the follow-up it opens up
+    // is reached through that same keybind and is never assigned on its own.
+    let definition = redirected_followup_definition(ctx, ctx.sender(), definition);
+    let kind = &definition.kind;
+
     crate::world_interactions::cancel_active_world_interaction_for_actor(ctx, ctx.sender());
     if cast_request_executes_immediately(definition.behavior, definition.cast_time) {
         return casting::cast_spell(
@@ -670,6 +678,41 @@ pub fn cast_request(
         predicted_cast_id,
         client_action_seq,
     )
+}
+
+/// Lightning Reflexes re-armed: pressing the keybind again while the dodge window
+/// is up spends it on Trip. The redirect happens after action-bar authorization
+/// and before every gameplay gate, so Trip resolves against its own cooldown,
+/// cost, targeting and delivery rather than inheriting the buff's. Consuming the
+/// avoidance status is what makes the follow-up available exactly once, and it
+/// ends the dodge early -- spending your reflexes is the price of the trip.
+fn redirected_followup_definition(
+    ctx: &ReducerContext,
+    caster: Identity,
+    definition: &'static SpellRuntimeDefinition,
+) -> &'static SpellRuntimeDefinition {
+    if definition.kind.as_str() != LIGHTNING_REFLEXES_ACTION_ID {
+        return definition;
+    }
+    if !crate::combat::has_active_status_group(
+        ctx,
+        caster,
+        crate::combat::StatusEffectKind::AllAbilityAvoidance,
+        LIGHTNING_REFLEXES_STATUS_GROUP,
+        ctx.timestamp,
+    ) {
+        return definition;
+    }
+    let Some(trip) = catalog::spell_definition_by_str(TRIP_ACTION_ID) else {
+        return definition;
+    };
+    crate::combat::remove_active_status_group(
+        ctx,
+        caster,
+        crate::combat::StatusEffectKind::AllAbilityAvoidance,
+        LIGHTNING_REFLEXES_STATUS_GROUP,
+    );
+    trip
 }
 
 fn cast_request_executes_immediately(behavior: SpellBehavior, cast_time: Duration) -> bool {

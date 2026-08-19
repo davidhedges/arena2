@@ -32,11 +32,7 @@ namespace Arena.UI
 
             return Resolve(
                 ActionKinds.Ability,
-                CapacitorPresentation.ResolvePresentationId(
-                    conn,
-                    owner,
-                    action.AbilityId,
-                    action.ActionId));
+                ResolvePresentationId(conn, owner, action.AbilityId, action.ActionId));
         }
 
         public static Sprite? ResolveForAvailableAction(string actionKind, string actionId, string abilityId)
@@ -51,9 +47,24 @@ namespace Arena.UI
         {
             string normalizedKind = WireIdentifier.Normalize(actionKind);
             string normalizedId = string.Equals(normalizedKind, ActionKinds.Ability, StringComparison.Ordinal)
-                ? CapacitorPresentation.ResolvePresentationId(conn, owner, abilityId, actionId)
+                ? ResolvePresentationId(conn, owner, abilityId, actionId)
                 : WireIdentifier.Normalize(actionId);
             return Resolve(normalizedKind, normalizedId);
+        }
+
+        /// <summary>
+        /// Resolves the presentation id to draw for an ability, honoring abilities that
+        /// swap to a second face while armed (Capacitor's Discharge, Lightning Reflexes'
+        /// Trip). They are mutually exclusive, so the chain is order-independent.
+        /// </summary>
+        public static string ResolvePresentationId(
+            DbConnection? conn,
+            SpacetimeDB.Identity? owner,
+            string abilityId,
+            string actionId = "")
+        {
+            string capacitor = CapacitorPresentation.ResolvePresentationId(conn, owner, abilityId, actionId);
+            return LightningReflexesPresentation.ResolvePresentationId(conn, owner, capacitor, actionId);
         }
 
         public static Sprite? Resolve(string presentationKind, string presentationId)

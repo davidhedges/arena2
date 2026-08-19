@@ -37,7 +37,7 @@ use crate::combat::status_effect as _;
 use crate::combat::{
     advance_slipstream_after_movement_ability, arm_quickening_after_movement_ability,
     combat_projectile_definition_for_id, has_active_disabling_status, has_active_status,
-    has_active_status_group, has_due_pending_effects, hostile_targeted_ability_misses,
+    has_active_status_group, has_due_pending_effects, hostile_targeted_ability_misses, AttackAim,
     mark_harmful_combat_action, queue_effects, remove_active_status_group, resolve_pending_effects,
     status_matches_removal_filter, ActiveCombatProjectile, CombatEvent, CombatProjectileDefinition,
     DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StackPolicy,
@@ -5461,16 +5461,24 @@ fn resolve_pending_melee_target_impact(
         return;
     }
 
-    if row.targeting_kind.trim().eq_ignore_ascii_case("TARGET")
-        && hostile_targeted_ability_misses(
-            ctx,
-            row.source,
-            row.target,
-            row.spell_id.as_str(),
-            row.impact_area_radius > 0.0 && row.impact_area_damage > 0,
-            now,
-        )
+    // Sweeps reach a victim as a volume, a plain strike as a targeted blow, and a
+    // strike carrying splash reaches the splashed as a volume. All three are
+    // avoidable; only the targeted blow leaves its attacker Off Balance.
+    let attack_aim = if !row.targeting_kind.trim().eq_ignore_ascii_case("TARGET")
+        || (row.impact_area_radius > 0.0 && row.impact_area_damage > 0)
     {
+        AttackAim::Volume
+    } else {
+        AttackAim::Targeted
+    };
+    if hostile_targeted_ability_misses(
+        ctx,
+        row.source,
+        row.target,
+        row.spell_id.as_str(),
+        attack_aim,
+        now,
+    ) {
         mark_harmful_combat_action(ctx, row.source, row.target, now, row.kind.as_str());
         log::info!(
             "[MELEE_IMPACT] owner={} source={} strike={} target={} result=miss damage={} spell_id={}",

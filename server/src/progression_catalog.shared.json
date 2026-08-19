@@ -367,6 +367,11 @@
       "combat_rule_id": "FULMINATION_ARC_DAMAGE_MULTIPLIER",
       "scalar_value": 1,
       "sort_order": 110
+    },
+    {
+      "combat_rule_id": "OFF_BALANCE_DURATION_MS",
+      "scalar_value": 6000,
+      "sort_order": 120
     }
   ],
   "stat_scalings": [
@@ -7688,6 +7693,86 @@
       }
     },
     {
+      "ability_id": "DAGGER_LIGHTNING_REFLEXES",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "LIGHTNING_REFLEXES",
+      "display_name": "Lightning Reflexes",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 71,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 24000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 3000,
+          "damage_type": "PHYSICAL",
+          "status_stack_group": "LIGHTNING_REFLEXES",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "ALL_ABILITY_AVOIDANCE",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_TRIP",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "TRIP",
+      "display_name": "Trip",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "COMBO_FOLLOWUP"
+      ],
+      "sort_order": 72,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 24000,
+        "uses_global_cooldown": false,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "damage": 0,
+          "damage_type": "PHYSICAL",
+          "radius": 4,
+          "block_behavior": "UNBLOCKABLE",
+          "impact_effects": [
+            {
+              "kind": "STUN",
+              "duration_ms": 5000,
+              "requires_target_status": "OFF_BALANCE"
+            }
+          ]
+        }
+      }
+    },
+    {
       "ability_id": "STAFF_STRIKE",
       "actor_scope": "PLAYER",
       "discipline_id": "ARCANA",
@@ -10403,6 +10488,20 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_LIGHTNING_REFLEXES",
+      "display_name": "Lightning Reflexes",
+      "description": "Dodge every incoming attack and spell for 3 seconds. Each attacker you dodge is left Off Balance for 6 seconds. Press again during the window to spend your reflexes on Trip.",
+      "sort_order": 251
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_TRIP",
+      "display_name": "Trip",
+      "description": "Sweeps the legs of everyone within 4 meters, stunning Off Balance targets for 5 seconds. Only reachable by re-pressing Lightning Reflexes.",
+      "sort_order": 252
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "STAFF_STRIKE",
       "display_name": "Staff Strike",
       "description": "A controlled staff blow.",
@@ -10722,6 +10821,20 @@
       "display_name": "Knocked Down",
       "description": "Knocked down and unable to act.",
       "sort_order": 10080
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "LIGHTNING_REFLEXES",
+      "display_name": "Lightning Reflexes",
+      "description": "Dodging every incoming attack and spell.",
+      "sort_order": 10090
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "OFF_BALANCE",
+      "display_name": "Off Balance",
+      "description": "Overcommitted on a dodged attack. Vulnerable to Trip.",
+      "sort_order": 10100
     }
   ],
   "combat_vfx_cues": [

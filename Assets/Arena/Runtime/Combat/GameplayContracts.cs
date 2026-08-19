@@ -1777,6 +1777,11 @@ namespace Arena.Combat
             {
                 return "Empower";
             }
+            if (LightningReflexesPresentation.IsLightningReflexesAbility(normalizedActionId, normalizedActionId)
+                && LightningReflexesPresentation.IsArmed(conn, owner))
+            {
+                return LightningReflexesPresentation.ArmedDisplayName;
+            }
 
             ActionPresentationCatalog? fixedPresentation =
                 FindPresentation(conn, ActionTooltipResolver.PresentationKindFixed, normalizedActionId);

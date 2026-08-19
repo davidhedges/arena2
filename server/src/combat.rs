@@ -183,6 +183,10 @@ const HOLY_SHIELD_SPELL_ID: &str = "HOLY_SHIELD";
 const HOLY_SHIELD_ABILITY_ID: &str = "SPELL_HOLY_SHIELD";
 const HOLY_SHIELD_STATUS_GROUP: &str = "HOLY_SHIELD";
 const MIRROR_IMAGE_STATUS_GROUP: &str = "MIRROR_IMAGE";
+const LIGHTNING_REFLEXES_SPELL_ID: &str = "LIGHTNING_REFLEXES";
+const LIGHTNING_REFLEXES_STATUS_GROUP: &str = "LIGHTNING_REFLEXES";
+const OFF_BALANCE_STATUS_GROUP: &str = "OFF_BALANCE";
+const RULE_OFF_BALANCE_DURATION_MS: &str = "OFF_BALANCE_DURATION_MS";
 const MIRROR_IMAGE_INTERCEPT_CHANCE_PER_IMAGE: f32 = 0.25;
 const RECKONING_SPELL_ID: &str = "RECKONING";
 const RECKONING_ABILITY_ID: &str = "SPELL_RECKONING";
@@ -3001,6 +3005,8 @@ pub enum StatusEffectKind {
     Flurry,
     FindWeakness,
     BladeTwisting,
+    OffBalance,
+    AllAbilityAvoidance,
     Disarm,
     Gouge,
     Fulmination,
@@ -3061,6 +3067,8 @@ impl StatusEffectKind {
             Self::Flurry => "FLURRY",
             Self::FindWeakness => "FIND_WEAKNESS",
             Self::BladeTwisting => "BLADE_TWISTING",
+            Self::OffBalance => "OFF_BALANCE",
+            Self::AllAbilityAvoidance => "ALL_ABILITY_AVOIDANCE",
             Self::Disarm => "DISARM",
             Self::Gouge => "GOUGE",
             Self::Fulmination => "FULMINATION",
@@ -3121,6 +3129,8 @@ impl StatusEffectKind {
             "FLURRY" => Some(Self::Flurry),
             "FIND_WEAKNESS" => Some(Self::FindWeakness),
             "BLADE_TWISTING" => Some(Self::BladeTwisting),
+            "OFF_BALANCE" => Some(Self::OffBalance),
+            "ALL_ABILITY_AVOIDANCE" => Some(Self::AllAbilityAvoidance),
             "DISARM" => Some(Self::Disarm),
             "GOUGE" => Some(Self::Gouge),
             "FULMINATION" => Some(Self::Fulmination),
@@ -3244,6 +3254,8 @@ pub enum StatusPayload {
     },
     FindWeakness,
     BladeTwisting,
+    OffBalance,
+    AllAbilityAvoidance,
     Disarm,
     Gouge,
     Fulmination,
@@ -3420,6 +3432,8 @@ impl AuthoredStatusPayload {
             },
             StatusEffectKind::FindWeakness => StatusPayload::FindWeakness,
             StatusEffectKind::BladeTwisting => StatusPayload::BladeTwisting,
+            StatusEffectKind::OffBalance => StatusPayload::OffBalance,
+            StatusEffectKind::AllAbilityAvoidance => StatusPayload::AllAbilityAvoidance,
             StatusEffectKind::Disarm => StatusPayload::Disarm,
             StatusEffectKind::Gouge => StatusPayload::Gouge,
             StatusEffectKind::Fulmination => StatusPayload::Fulmination,
@@ -3561,6 +3575,8 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::MirrorImage
             | StatusEffectKind::FindWeakness
             | StatusEffectKind::BladeTwisting
+            | StatusEffectKind::OffBalance
+            | StatusEffectKind::AllAbilityAvoidance
             | StatusEffectKind::Disarm
             | StatusEffectKind::Gouge
             | StatusEffectKind::Fulmination
@@ -3683,6 +3699,8 @@ impl StatusPayload {
             Self::Flurry { .. } => StatusEffectKind::Flurry,
             Self::FindWeakness => StatusEffectKind::FindWeakness,
             Self::BladeTwisting => StatusEffectKind::BladeTwisting,
+            Self::OffBalance => StatusEffectKind::OffBalance,
+            Self::AllAbilityAvoidance => StatusEffectKind::AllAbilityAvoidance,
             Self::Disarm => StatusEffectKind::Disarm,
             Self::Gouge => StatusEffectKind::Gouge,
             Self::Fulmination => StatusEffectKind::Fulmination,
@@ -3717,6 +3735,8 @@ impl StatusPayload {
             | Self::MirrorImage
             | Self::FindWeakness
             | Self::BladeTwisting
+            | Self::OffBalance
+            | Self::AllAbilityAvoidance
             | Self::Disarm
             | Self::Gouge
             | Self::Fulmination
@@ -4010,6 +4030,8 @@ impl StatusPayload {
             },
             StatusEffectKind::FindWeakness => Self::FindWeakness,
             StatusEffectKind::BladeTwisting => Self::BladeTwisting,
+            StatusEffectKind::OffBalance => Self::OffBalance,
+            StatusEffectKind::AllAbilityAvoidance => Self::AllAbilityAvoidance,
             StatusEffectKind::Disarm => Self::Disarm,
             StatusEffectKind::Gouge => Self::Gouge,
             StatusEffectKind::Fulmination => Self::Fulmination,
@@ -4046,6 +4068,8 @@ impl StatusPayload {
             | Self::MirrorImage
             | Self::FindWeakness
             | Self::BladeTwisting
+            | Self::OffBalance
+            | Self::AllAbilityAvoidance
             | Self::Disarm
             | Self::Gouge
             | Self::Fulmination
@@ -4154,6 +4178,8 @@ impl StatusPayload {
             | Self::MirrorImage
             | Self::FindWeakness
             | Self::BladeTwisting
+            | Self::OffBalance
+            | Self::AllAbilityAvoidance
             | Self::Disarm
             | Self::Gouge
             | Self::Fulmination
@@ -4353,6 +4379,8 @@ impl StatusPayload {
             | Self::MirrorImage
             | Self::FindWeakness
             | Self::BladeTwisting
+            | Self::OffBalance
+            | Self::AllAbilityAvoidance
             | Self::Disarm
             | Self::Gouge
             | Self::Fulmination
@@ -9759,6 +9787,8 @@ impl StatusRuntimeView {
                     | StatusEffectKind::MirrorImage
                     | StatusEffectKind::FindWeakness
                     | StatusEffectKind::BladeTwisting
+                    | StatusEffectKind::OffBalance
+                    | StatusEffectKind::AllAbilityAvoidance
                     | StatusEffectKind::Disarm
                     | StatusEffectKind::Gouge
                     | StatusEffectKind::Fulmination
@@ -13044,12 +13074,24 @@ pub fn has_active_status(
     StatusRuntimeView::collect(ctx, now).has_status(target, kind)
 }
 
+/// How an incoming hit reached its victim. Avoidance turns aside both, but the
+/// two differ in who can body-double for the hit and in what dodging it says
+/// about the attacker.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AttackAim {
+    /// Aimed at this victim specifically.
+    Targeted,
+    /// Aimed at ground the victim happened to be standing on. No authored content
+    /// reaches this through a single-target strike today; sweeps and area spells do.
+    Volume,
+}
+
 pub(crate) fn hostile_targeted_ability_misses(
     ctx: &ReducerContext,
     source: Identity,
     target: Identity,
     attack_key: &str,
-    is_damaging_area: bool,
+    aim: AttackAim,
     now: Timestamp,
 ) -> bool {
     if source == Identity::ZERO
@@ -13059,11 +13101,46 @@ pub(crate) fn hostile_targeted_ability_misses(
     {
         return false;
     }
-    if has_active_status(ctx, target, StatusEffectKind::TargetedAbilityAvoidance, now) {
+    // Two breadths of avoidance, chosen per ability in the catalog rather than in
+    // code: TARGETED_ABILITY_AVOIDANCE turns aside blows aimed at the holder
+    // (Blinding Light), ALL_ABILITY_AVOIDANCE also turns aside volumes they are
+    // merely standing in (Lightning Reflexes). Widening an ability is an authored
+    // one-word change, not a code change.
+    let avoids = match aim {
+        AttackAim::Targeted => {
+            has_active_status(ctx, target, StatusEffectKind::TargetedAbilityAvoidance, now)
+                || has_active_status(ctx, target, StatusEffectKind::AllAbilityAvoidance, now)
+        }
+        AttackAim::Volume => {
+            has_active_status(ctx, target, StatusEffectKind::AllAbilityAvoidance, now)
+        }
+    };
+    if avoids {
+        // Lightning Reflexes is the one avoidance source that answers back: whoever
+        // just got dodged is left Off Balance and open to Trip. Other avoidance
+        // buffs share the choke point but not the counterplay, so the mark keys off
+        // the stack group rather than the status kind.
+        //
+        // Only a targeted attack marks. Slipping an area spell is footwork, not a
+        // counter -- its caster aimed at the floor and never overcommitted, and a
+        // pulsing ground effect would otherwise re-mark them on every tick.
+        if aim == AttackAim::Targeted
+            && has_active_status_group(
+                ctx,
+                target,
+                StatusEffectKind::AllAbilityAvoidance,
+                LIGHTNING_REFLEXES_STATUS_GROUP,
+                now,
+            )
+        {
+            apply_off_balance_mark(ctx, target, source, now);
+        }
         return true;
     }
 
-    if is_damaging_area {
+    // A mirror image can step in front of a blow aimed at its owner; it cannot
+    // soak a volume that covers the ground they are both standing on.
+    if aim == AttackAim::Volume {
         return false;
     }
 
@@ -13088,6 +13165,39 @@ pub(crate) fn hostile_targeted_ability_misses(
         }
     }
     true
+}
+
+/// Marks an attacker whose blow Lightning Reflexes just slipped. The mark is a
+/// pure flag: it changes nothing on its own and exists so Trip can find the
+/// enemies that overcommitted. It outlives the 3s dodge window on purpose --
+/// a dodge landed at the end of the window still has to be answerable.
+fn apply_off_balance_mark(
+    ctx: &ReducerContext,
+    dodger: Identity,
+    attacker: Identity,
+    now: Timestamp,
+) {
+    let duration_ms = combat_rule_value(RULE_OFF_BALANCE_DURATION_MS);
+    if !duration_ms.is_finite() || duration_ms <= 0.0 {
+        return;
+    }
+    queue_effect_at(
+        ctx,
+        EffectPacket::ApplyStatus {
+            source: dodger,
+            target: attacker,
+            spell_id: LIGHTNING_REFLEXES_SPELL_ID.to_string(),
+            payload: StatusPayload::OffBalance,
+            polarity: StatusPolarity::Debuff,
+            target_audience: TargetAudience::Hostile,
+            duration: Duration::from_millis(duration_ms.round() as u64),
+            stack_group: OFF_BALANCE_STATUS_GROUP.to_string(),
+            max_stacks: 1,
+            stack_policy: StackPolicy::Refresh,
+            dispel_types: Vec::new(),
+        },
+        now,
+    );
 }
 
 fn active_mirror_image_status(

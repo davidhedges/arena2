@@ -488,6 +488,16 @@ pub(crate) enum ImpactEffect {
         polarity: StatusPolarity,
         target_audience: TargetAudience,
     },
+    /// A status that only lands on targets already carrying `requires_target_status`.
+    /// The gate is evaluated per target at impact, so one authored effect can pay
+    /// out on some targets in an area and skip the rest.
+    ConditionalStatus {
+        status: StatusApplication,
+        requires_target_status: StatusEffectKind,
+        chance: f32,
+        polarity: StatusPolarity,
+        target_audience: TargetAudience,
+    },
     Knockback {
         distance_meters: f32,
     },
@@ -518,9 +528,9 @@ impl ImpactEffect {
     pub(crate) fn as_status(&self) -> Option<&StatusApplication> {
         match self {
             Self::Status(status) => Some(status),
-            Self::StatusWithPolarity { status, .. } | Self::ChanceStatus { status, .. } => {
-                Some(status)
-            }
+            Self::StatusWithPolarity { status, .. }
+            | Self::ChanceStatus { status, .. }
+            | Self::ConditionalStatus { status, .. } => Some(status),
             Self::Knockback { .. }
             | Self::RemoveStatus { .. }
             | Self::RemoveStatusByDamageType { .. }
@@ -535,7 +545,8 @@ impl ImpactEffect {
         target: Identity,
         effect_index: usize,
     ) -> bool {
-        let Self::ChanceStatus { chance, .. } = self else {
+        let (Self::ChanceStatus { chance, .. } | Self::ConditionalStatus { chance, .. }) = self
+        else {
             return true;
         };
         if !chance.is_finite() || *chance <= 0.0 {
@@ -558,6 +569,17 @@ impl ImpactEffect {
         hash ^= hash >> 33;
         let roll = ((hash >> 40) as f32) / ((1u64 << 24) as f32);
         roll < chance.clamp(0.0, 1.0)
+    }
+
+    /// The status a target must already carry for this effect to land, if any.
+    pub(crate) fn required_target_status(&self) -> Option<StatusEffectKind> {
+        match self {
+            Self::ConditionalStatus {
+                requires_target_status,
+                ..
+            } => Some(*requires_target_status),
+            _ => None,
+        }
     }
 
     pub(crate) fn requires_positive_damage(&self) -> bool {
@@ -619,6 +641,12 @@ impl ImpactEffect {
                 target_audience,
             }
             | Self::ChanceStatus {
+                status,
+                polarity,
+                target_audience,
+                ..
+            }
+            | Self::ConditionalStatus {
                 status,
                 polarity,
                 target_audience,
