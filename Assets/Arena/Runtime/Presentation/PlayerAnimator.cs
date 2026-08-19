@@ -199,6 +199,12 @@ namespace Arena.Presentation
             CombatAnimationEvents.PhasedMeleeStartToLoopSafetyNormalizedTime;
         private const float PhasedMeleeEndCompleteNormalizedTime = 0.88f;
         private const float PhasedMeleeLoopReplayNormalizedTime = 0.8f;
+        /// Safety ceiling on re-arming a held phased loop. The authored end
+        /// signal is what should stop it; this only guarantees a lost or
+        /// mismatched end event cannot strand the animation forever, which is
+        /// what the banked state's own 0.9 exit used to do by accident. Well
+        /// above the longest authored channel (Rapid Fire, 5s).
+        private const float PhasedMeleeHeldLoopMaxSeconds = 15f;
         private const float SpecialMovementArrivalEndCrossFadeDurationSeconds = 0.08f;
         private const float LandingRecoveryMinNormalizedTime = 0.16f;
         private const float WeaponTransitionRecoveryMinNormalizedTime = 0.18f;
@@ -3174,11 +3180,7 @@ namespace Arena.Presentation
                 return false;
             }
 
-            ActiveMeleePresentation active = _actionPlayback.ActiveMeleePresentation.GetValueOrDefault();
-            if (!string.Equals(
-                    WireIdentifier.Normalize(active.ActionId),
-                    WireIdentifier.Normalize(actionId),
-                    StringComparison.Ordinal)
+            if (!ActivePhasedMeleeMatches(actionId)
                 || !_animationSet.TryGetPhasedMeleeEntry(actionId, out WeaponPhasedActionEntry entry)
                 || !entry.drivePhasesFromCombatLifecycle
                 || !_actionPlayback.RequestPhasedMeleeSpecialMovementEnd())
@@ -3191,6 +3193,34 @@ namespace Arena.Presentation
             return true;
         }
 
+        /// The local predicted request stores the runtime slot id
+        /// (MeleeInputHandler dispatches PredictedMeleeSkill(slotId)), while
+        /// authoritative combat events carry the authored strike id. Compare
+        /// them in one id-space or the local player's own channel end never
+        /// matches its own presentation.
+        private bool HasHeldPhasedMeleeLoopOutlivedItsCeiling(float normalizedTime)
+        {
+            return _actionPlayback.TryGetPhasedMeleePresentationTiming(
+                       normalizedTime,
+                       out float elapsedSeconds,
+                       out _)
+                   && elapsedSeconds >= PhasedMeleeHeldLoopMaxSeconds;
+        }
+
+        private bool ActivePhasedMeleeMatches(string actionId)
+        {
+            if (_animationSet == null || !_actionPlayback.ActiveMeleePresentation.HasValue)
+                return false;
+
+            ActiveMeleePresentation active = _actionPlayback.ActiveMeleePresentation.GetValueOrDefault();
+            string activeAuthored = WireIdentifier.Normalize(
+                _animationSet.ResolveAuthoredStrikeIdForRuntimeAction(active.ActionId));
+            string incomingAuthored = WireIdentifier.Normalize(
+                _animationSet.ResolveAuthoredStrikeIdForRuntimeAction(actionId));
+            return !string.IsNullOrEmpty(activeAuthored)
+                && string.Equals(activeAuthored, incomingAuthored, StringComparison.Ordinal);
+        }
+
         public bool CancelPhasedMeleeAction(string actionId)
         {
             if (!_actionPlayback.IsPhasedMeleeActive
@@ -3200,14 +3230,8 @@ namespace Arena.Presentation
             }
 
             ActiveMeleePresentation active = _actionPlayback.ActiveMeleePresentation.GetValueOrDefault();
-            if (!active.IsPhased
-                || !string.Equals(
-                    WireIdentifier.Normalize(active.ActionId),
-                    WireIdentifier.Normalize(actionId),
-                    StringComparison.Ordinal))
-            {
+            if (!active.IsPhased || !ActivePhasedMeleeMatches(actionId))
                 return false;
-            }
 
             CancelPhasedMeleePlayback();
             return true;
@@ -3217,7 +3241,8 @@ namespace Arena.Presentation
         {
             if (_actionPlayback.PhasedMeleePhase == PhasedMeleePlaybackPhase.Loop
                 && !_actionPlayback.IsPhasedMeleeSpecialMovementEndRequested
-                && normalizedTime >= PhasedMeleeLoopReplayNormalizedTime)
+                && normalizedTime >= PhasedMeleeLoopReplayNormalizedTime
+                && !HasHeldPhasedMeleeLoopOutlivedItsCeiling(normalizedTime))
             {
                 // Banked strike states auto-exit at 0.9 (Arena_Character.controller),
                 // and nothing else re-enters Loop while an external signal is holding
