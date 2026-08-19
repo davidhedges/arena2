@@ -2,7 +2,7 @@ use crate::open_world_scene::{
     default_open_world_scene_profile, OpenWorldSceneProfile, ADVENTURE_ISLAND_PROFILE,
     DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE, GIANT_SKELETON_PROFILE, GOLDEN_VALLEY_OVERCAST_PROFILE,
     GOLDEN_VALLEY_SUNNY_PROFILE, GREAT_HALL_DAY_PROFILE, IDOL_DAY_PROFILE, OASIS_DAY_PROFILE,
-    OPEN_WORLD_HEIGHTFIELD_JSON, RANDOM_DUNGEON_PROFILE, TEMPLE_GARDENS_PROFILE,
+    RANDOM_DUNGEON_PROFILE, TEMPLE_GARDENS_PROFILE,
 };
 use serde::Deserialize;
 use std::sync::OnceLock;
@@ -59,9 +59,9 @@ fn open_world_heightfield_for_profile(
     } else if profile.scene_name == TEMPLE_GARDENS_PROFILE.scene_name {
         (&TEMPLE_GARDENS_HEIGHTFIELD, profile.heightfield_json)
     } else if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
-        (&OPEN_WORLD_HEIGHTFIELD, OPEN_WORLD_HEIGHTFIELD_JSON)
+        (&OPEN_WORLD_HEIGHTFIELD, OASIS_DAY_PROFILE.heightfield_json)
     } else {
-        (&OPEN_WORLD_HEIGHTFIELD, OPEN_WORLD_HEIGHTFIELD_JSON)
+        (&OPEN_WORLD_HEIGHTFIELD, OASIS_DAY_PROFILE.heightfield_json)
     };
 
     heightfield.get_or_init(|| {

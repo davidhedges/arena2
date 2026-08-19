@@ -8,8 +8,7 @@ use crate::open_world_scene::{
     default_open_world_scene_profile, open_world_scene_profile_for_scene, OpenWorldSceneProfile,
     ADVENTURE_ISLAND_PROFILE, DESERT_DAY_PROFILE, DOCKS_DAY_PROFILE, GIANT_SKELETON_PROFILE,
     GOLDEN_VALLEY_OVERCAST_PROFILE, GOLDEN_VALLEY_SUNNY_PROFILE, GREAT_HALL_DAY_PROFILE,
-    IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, OPEN_WORLD_GAMEPLAY_COLLISION_JSON,
-    OPEN_WORLD_GAMEPLAY_QUERY_COLLISION_JSON, OPEN_WORLD_SCENE_PROFILES, RANDOM_DUNGEON_PROFILE,
+    IDOL_DAY_PROFILE, OASIS_DAY_PROFILE, OPEN_WORLD_SCENE_PROFILES, RANDOM_DUNGEON_PROFILE,
     TEMPLE_GARDENS_PROFILE,
 };
 use crate::open_world_terrain::{
@@ -861,7 +860,7 @@ pub(crate) fn preload_world_collision_data() -> WorldCollisionPreloadSummary {
     accumulate_broadphase_preload_summary(&mut summary, arena_query_broadphase);
     accumulate_broadphase_preload_summary(&mut summary, arena_query_mesh_broadphase);
 
-    for profile in OPEN_WORLD_SCENE_PROFILES {
+    for &profile in OPEN_WORLD_SCENE_PROFILES {
         let generated_colliders = open_world_colliders(profile).len();
         let gameplay_boxes = open_world_gameplay_collision_boxes(profile).len();
         let gameplay_mesh_hulls = open_world_gameplay_movement_mesh_hulls(profile).len();
@@ -2337,7 +2336,7 @@ fn open_world_gameplay_query_meshes(
     OPEN_WORLD_QUERY_MESHES
         .get_or_init(|| {
             let mut meshes_by_scene = HashMap::new();
-            for profile in OPEN_WORLD_SCENE_PROFILES {
+            for &profile in OPEN_WORLD_SCENE_PROFILES {
                 meshes_by_scene.insert(
                     profile.scene_name,
                     load_open_world_gameplay_query_meshes(profile),
@@ -2360,7 +2359,7 @@ fn open_world_gameplay_query_mesh_broadphase(
     OPEN_WORLD_QUERY_MESH_BROADPHASES
         .get_or_init(|| {
             let mut broadphases_by_scene = HashMap::new();
-            for profile in OPEN_WORLD_SCENE_PROFILES {
+            for &profile in OPEN_WORLD_SCENE_PROFILES {
                 let meshes = open_world_gameplay_query_meshes(profile);
                 broadphases_by_scene.insert(
                     profile.scene_name,
@@ -2391,7 +2390,7 @@ fn open_world_gameplay_movement_mesh_hulls(
     OPEN_WORLD_MOVEMENT_MESH_HULLS
         .get_or_init(|| {
             let mut hulls_by_scene = HashMap::new();
-            for profile in OPEN_WORLD_SCENE_PROFILES {
+            for &profile in OPEN_WORLD_SCENE_PROFILES {
                 hulls_by_scene.insert(
                     profile.scene_name,
                     load_open_world_gameplay_movement_mesh_hulls(profile),
@@ -2415,7 +2414,7 @@ fn open_world_gameplay_movement_mesh_broadphase(
     OPEN_WORLD_MOVEMENT_MESH_BROADPHASES
         .get_or_init(|| {
             let mut broadphases_by_scene = HashMap::new();
-            for profile in OPEN_WORLD_SCENE_PROFILES {
+            for &profile in OPEN_WORLD_SCENE_PROFILES {
                 let hulls = open_world_gameplay_movement_mesh_hulls(profile);
                 broadphases_by_scene.insert(
                     profile.scene_name,
@@ -2473,7 +2472,7 @@ fn load_open_world_gameplay_collision_boxes(
     profile: &OpenWorldSceneProfile,
 ) -> Vec<GameplayCollisionBox> {
     let json = if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
-        OPEN_WORLD_GAMEPLAY_COLLISION_JSON
+        OASIS_DAY_PROFILE.gameplay_collision_json
     } else {
         profile.gameplay_collision_json
     };
@@ -2507,7 +2506,7 @@ fn load_open_world_gameplay_movement_mesh_hulls(
     profile: &OpenWorldSceneProfile,
 ) -> Vec<GameplayMovementMeshHull> {
     let json = if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
-        OPEN_WORLD_GAMEPLAY_COLLISION_JSON
+        OASIS_DAY_PROFILE.gameplay_collision_json
     } else {
         profile.gameplay_collision_json
     };
@@ -2519,7 +2518,7 @@ fn load_open_world_gameplay_movement_mesh_hulls(
 
 fn query_collision_json_for_profile(profile: &OpenWorldSceneProfile) -> &'static str {
     if profile.scene_name == OASIS_DAY_PROFILE.scene_name {
-        OPEN_WORLD_GAMEPLAY_QUERY_COLLISION_JSON
+        OASIS_DAY_PROFILE.gameplay_query_collision_json
     } else {
         profile.gameplay_query_collision_json
     }

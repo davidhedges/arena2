@@ -199,7 +199,9 @@ lands in the binary 3–5 times. Measured consequences, local loopback:
 
 - publishing one instance takes **~15 s**, which is the dominant term in travel
   latency (ticket to READY measured at 14.5 s);
-- each live instance database carries that module on disk;
+- **every** instance database carries that module on disk — and, because
+  `spacetime delete` does not remove `replicas/<id>/`, disposed ones kept
+  carrying it too (see section 6.1);
 - the provisioner's management-call timeout had to grow a publish-specific
   budget, because 30 s was uncomfortably close to the upload time.
 
@@ -208,6 +210,49 @@ payload chain in `open_world_scene.rs` from `const` to `static` (payload, then
 profile, then the profile table) should remove 2–4 copies and take the artifact
 to roughly its ~190 MB floor. That refactor touches the LOS/collision data path,
 so it was deliberately left out of this change.
+
+**Done 2026-08-19, and it beat the estimate: 423.2 MB -> 125.5 MB (-70.3%).**
+A `const` is re-materialized at every use site *together with the data it points
+at*, so the payload landed once per profile, once more in the profile table, once
+per `OPEN_WORLD_*_JSON` alias, and again at each of the ~30
+`XXX_PROFILE.scene_name` comparisons in `world_collision.rs`. The profiles are
+now `static`, so those are pointer loads from one location;
+`OPEN_WORLD_SCENE_PROFILES` holds `&[&OpenWorldSceneProfile]` because a slice of
+values would have to read each static, which const-eval forbids; and the three
+`OPEN_WORLD_*_JSON` aliases are gone, since each was a redundant special case
+resolving to the same payload as the `profile.*` fallback beside it. Verified:
+every one of the 27 embedded payloads is still present, and the artifact now
+sits at its floor of 18 distinct payloads (9 files are byte-identical to another
+and merge) plus 7.3 MB of code. Travel dropped to **ticket-to-READY 6.2 s**,
+`database_publish` 4.3 s.
+
+## 6.1 Disposal is a control-plane fact, not a disk fact
+
+`spacetime delete` unregisters a database and leaves `replicas/<id>/` — its full
+commitlog and snapshot — on disk permanently. Measured 2026-08-19 on
+SpacetimeDB v2.1.0: publish a throwaway database, delete it, and the directory
+is still there at its original size while the identity stops resolving. The
+local data directory had reached **141 replica directories against 2 live
+databases, 11 GB**, and the section above assumed the opposite by saying only
+*live* instances carry the module.
+
+`ops/gc-orphaned-replicas.py` reclaims them. It decides liveness per replica
+against the running server rather than by ownership: it reads the replica id and
+database identity out of the snapshot preamble, asks `/v1/database/<identity>`
+whether that database still resolves, and re-asks after a short pause before
+removing anything, so a database still registering is never mistaken for a dead
+one. Anything it cannot identify is kept. The match provisioner runs it after
+every confirmed disposal (`ARENA_PROVISIONER_REPLICA_GC_DATA_DIR`, set by
+`ops/run-local-match-provisioner.sh` only when the data directory is on this
+machine), `ops/setup-local-multiplayer.sh setup` sweeps at bring-up, and
+`ops/setup-local-multiplayer.sh gc` runs it by hand.
+
+One caveat: the server holds a deleted database's commitlog file open until it
+restarts, so that half of the space returns on restart rather than immediately.
+The GC says so when it applies.
+
+Per-instance cost after both fixes: **247.6 MB, reclaimed automatically on
+disposal** — against 832 MB that was never reclaimed.
 
 ## 7. Known follow-ups, deliberately out of scope
 

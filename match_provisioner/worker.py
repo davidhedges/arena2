@@ -127,6 +127,12 @@ class Config:
     openworld_wasm_path: Path | None = None
     openworld_artifact_manifest_path: Path | None = None
     openworld_build_id: str | None = None
+    # Deleting a database only unregisters it: SpacetimeDB leaves
+    # replicas/<id>/ on disk forever, so a disposable instance is disposable in
+    # the control plane and permanent on disk. Set to a local data directory to
+    # reclaim that space after each disposal. Unset (the default) when the
+    # server's storage is not on this machine.
+    replica_gc_data_dir: Path | None = None
 
     @classmethod
     def from_environment(cls) -> "Config":
@@ -191,6 +197,18 @@ class Config:
                     f"{openworld_wasm_path}.inputs.json",
                 )
             ).resolve()
+        configured_gc_dir = os.environ.get(
+            "ARENA_PROVISIONER_REPLICA_GC_DATA_DIR", ""
+        ).strip()
+        replica_gc_data_dir: Path | None = None
+        if configured_gc_dir:
+            replica_gc_data_dir = Path(configured_gc_dir)
+            if not (replica_gc_data_dir / "replicas").is_dir():
+                raise ProvisionerError(
+                    "ARENA_PROVISIONER_REPLICA_GC_DATA_DIR does not look like a "
+                    f"SpacetimeDB data directory: {replica_gc_data_dir}"
+                )
+
         openworld_build_id = (
             os.environ.get("ARENA_PROVISIONER_OPENWORLD_BUILD_ID", "").strip() or None
         )
@@ -244,6 +262,7 @@ class Config:
             openworld_wasm_path=openworld_wasm_path,
             openworld_artifact_manifest_path=openworld_manifest_path,
             openworld_build_id=openworld_build_id,
+            replica_gc_data_dir=replica_gc_data_dir,
         )
         if config.hard_ttl_seconds < config.allocation_seconds:
             raise ProvisionerError(
@@ -1606,6 +1625,48 @@ class Provisioner:
         self.api.delete(exact_identity)
         if self.api.database_info(exact_identity) is not None:
             raise ProvisionerError("database still resolves after delete")
+        self._reclaim_replica_disk()
+
+    def _reclaim_replica_disk(self) -> None:
+        """Return the deleted instance's bytes to the filesystem.
+
+        Best effort by design: the database is already gone, so a GC that fails
+        must never turn a completed disposal into a retry. It only ever removes
+        replicas whose database the server no longer resolves.
+        """
+        data_dir = self.config.replica_gc_data_dir
+        if data_dir is None:
+            return
+        script = Path(__file__).resolve().parents[1] / "ops" / "gc-orphaned-replicas.py"
+        if not script.is_file():
+            return
+        try:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--data-dir",
+                    str(data_dir),
+                    "--server-url",
+                    self.config.management_url,
+                    "--apply",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            log_event("replica_gc_failed", error=str(error))
+            return
+        if result.returncode != 0:
+            log_event("replica_gc_failed", error=result.stderr.strip()[:400])
+            return
+        summary = next(
+            (line for line in result.stdout.splitlines() if line.startswith("Reclaimed ")),
+            None,
+        )
+        if summary:
+            log_event("replica_gc_reclaimed", detail=summary)
 
     def _cleanup_normal(
         self,

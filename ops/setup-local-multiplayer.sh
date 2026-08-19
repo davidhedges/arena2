@@ -13,13 +13,17 @@ MATCH_PROVENANCE_PATH="${ARENA_PROVISIONER_MATCH_MANIFEST:-$MATCH_WASM_PATH.inpu
 OPENWORLD_WASM_PATH="${ARENA_PROVISIONER_OPENWORLD_WASM:-$ROOT_DIR/server/target/wasm32-unknown-unknown/release/arena.opt.wasm}"
 OPENWORLD_PROVENANCE_PATH="${ARENA_PROVISIONER_OPENWORLD_MANIFEST:-$OPENWORLD_WASM_PATH.inputs.json}"
 PROVISIONER_STATE_DB="${ARENA_PROVISIONER_STATE_DB:-$ROOT_DIR/Library/ArenaMatchProvisioner/state.sqlite3}"
+# SpacetimeDB leaves replicas/<id>/ on disk when a database is deleted, so a
+# disposed instance keeps its whole commitlog and snapshot. The provisioner
+# reclaims that space after each disposal when pointed at the local data dir.
+SPACETIME_DATA="${SPACETIME_DATA:-${XDG_DATA_HOME:-$HOME/.local/share}/spacetime/data}"
 PROVISIONER_LOCK_PATH="${PROVISIONER_STATE_DB%.*}.lock"
 ROOT_DIR_CHECKSUM="$(printf '%s' "$ROOT_DIR" | cksum)"
 PROVISIONER_LAUNCHD_LABEL="com.arena.local-match-provisioner.${ROOT_DIR_CHECKSUM%% *}"
 
 usage() {
     cat <<'EOF'
-Usage: ops/setup-local-multiplayer.sh [setup|status|stop|--help]
+Usage: ops/setup-local-multiplayer.sh [setup|status|stop|gc|--help]
 
   setup   Safely publish the local Hub, rebuild the cached match module, and
           start one background match provisioner. This is the default.
@@ -27,6 +31,9 @@ Usage: ops/setup-local-multiplayer.sh [setup|status|stop|--help]
           provisioner are ready without changing anything.
   stop    Stop only the provisioner started by this script. The shared local
           SpacetimeDB server is intentionally left running.
+  gc      Delete replica directories whose database no longer exists. Deleting
+          a database does not remove its on-disk replica, so disposed matches
+          and open worlds keep their commitlog and snapshot until this runs.
 
 The setup command is local-only and preserves Hub data by default. To
 intentionally reset only the local Hub when a schema migration cannot be
@@ -163,6 +170,7 @@ start_launchd_provisioner() {
         "ARENA_PROVISIONER_OPENWORLD_WASM=$OPENWORLD_WASM_PATH"
         "ARENA_PROVISIONER_OPENWORLD_MANIFEST=$OPENWORLD_PROVENANCE_PATH"
         "ARENA_PROVISIONER_STATE_DB=$PROVISIONER_STATE_DB"
+        "ARENA_PROVISIONER_REPLICA_GC_DATA_DIR=$SPACETIME_DATA"
     )
     if [ -n "${ARENA_PROVISIONER_MANAGEMENT_URL:-}" ]; then
         environment_args+=("ARENA_PROVISIONER_MANAGEMENT_URL=$ARENA_PROVISIONER_MANAGEMENT_URL")
@@ -199,6 +207,7 @@ start_managed_provisioner() {
     if uses_launchd; then
         start_launchd_provisioner
     else
+        ARENA_PROVISIONER_REPLICA_GC_DATA_DIR="$SPACETIME_DATA" \
         nohup "$ROOT_DIR/ops/run-local-match-provisioner.sh" run \
             >> "$PROVISIONER_LOG_PATH" 2>&1 </dev/null &
         pid=$!
@@ -308,6 +317,10 @@ setup_environment() {
     echo "Building the cached disposable-open-world module..."
     "$ROOT_DIR/ops/build-openworld-spacetimedb.sh"
 
+    echo "Reclaiming replica directories left by deleted databases..."
+    python3 "$ROOT_DIR/ops/gc-orphaned-replicas.py" --apply || \
+        echo "Replica GC skipped; run ops/setup-local-multiplayer.sh gc later." >&2
+
     start_managed_provisioner
 
     echo
@@ -340,6 +353,10 @@ case "$command" in
             exit 2
         fi
         stop_managed_provisioner
+        ;;
+    gc)
+        shift
+        python3 "$ROOT_DIR/ops/gc-orphaned-replicas.py" --apply "$@"
         ;;
     -h|--help|help)
         usage

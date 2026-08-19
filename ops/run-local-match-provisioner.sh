@@ -15,6 +15,15 @@ export ARENA_PROVISIONER_OPENWORLD_WASM="${ARENA_PROVISIONER_OPENWORLD_WASM:-$RO
 export ARENA_PROVISIONER_OPENWORLD_MANIFEST="${ARENA_PROVISIONER_OPENWORLD_MANIFEST:-$ARENA_PROVISIONER_OPENWORLD_WASM.inputs.json}"
 export ARENA_PROVISIONER_STATE_DB="${ARENA_PROVISIONER_STATE_DB:-$ROOT_DIR/Library/ArenaMatchProvisioner/state.sqlite3}"
 
+# Deleting a database leaves its replicas/<id>/ directory on disk, so disposed
+# instances keep their commitlog and snapshot until something reclaims them.
+# Only defaulted when the data directory is actually on this machine; worker.py
+# rejects an explicitly configured path that is not a SpacetimeDB data dir.
+LOCAL_SPACETIME_DATA="${XDG_DATA_HOME:-$HOME/.local/share}/spacetime/data"
+if [ -z "${ARENA_PROVISIONER_REPLICA_GC_DATA_DIR:-}" ] && [ -d "$LOCAL_SPACETIME_DATA/replicas" ]; then
+    export ARENA_PROVISIONER_REPLICA_GC_DATA_DIR="$LOCAL_SPACETIME_DATA"
+fi
+
 if ! command -v python3 >/dev/null 2>&1; then
     echo "python3 is required." >&2
     exit 2

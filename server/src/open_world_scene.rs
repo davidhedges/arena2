@@ -147,13 +147,17 @@ pub struct OpenWorldSceneProfile {
     pub use_ground_plane: bool,
 }
 
-pub const OASIS_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
+const OASIS_DAY_SPAWN_X: f32 = 62.22;
+const OASIS_DAY_SPAWN_Z: f32 = 79.47;
+const OASIS_DAY_SPAWN_YAW: f32 = 0.0;
+
+pub static OASIS_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     scene_name: OPEN_WORLD_SCENE_NAME,
     display_name: OPEN_WORLD_DISPLAY_NAME,
-    spawn_x: 62.22,
+    spawn_x: OASIS_DAY_SPAWN_X,
     ground_y: 12.358,
-    spawn_z: 79.47,
-    spawn_yaw: 0.0,
+    spawn_z: OASIS_DAY_SPAWN_Z,
+    spawn_yaw: OASIS_DAY_SPAWN_YAW,
     heightfield_json: OASIS_DAY_HEIGHTFIELD_JSON,
     gameplay_collision_json: OASIS_DAY_GAMEPLAY_COLLISION_JSON,
     gameplay_query_collision_json: OASIS_DAY_GAMEPLAY_QUERY_COLLISION_JSON,
@@ -161,7 +165,7 @@ pub const OASIS_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     use_ground_plane: true,
 };
 
-pub const ADVENTURE_ISLAND_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
+pub static ADVENTURE_ISLAND_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     scene_name: ADVENTURE_ISLAND_SCENE_NAME,
     display_name: ADVENTURE_ISLAND_DISPLAY_NAME,
     spawn_x: -176.3932,
@@ -175,7 +179,7 @@ pub const ADVENTURE_ISLAND_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfil
     use_ground_plane: true,
 };
 
-pub const DESERT_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
+pub static DESERT_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     scene_name: DESERT_DAY_SCENE_NAME,
     display_name: DESERT_DAY_DISPLAY_NAME,
     spawn_x: -35.535,
@@ -189,7 +193,7 @@ pub const DESERT_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     use_ground_plane: true,
 };
 
-pub const DOCKS_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
+pub static DOCKS_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     scene_name: DOCKS_DAY_SCENE_NAME,
     display_name: DOCKS_DAY_DISPLAY_NAME,
     spawn_x: 413.772,
@@ -203,7 +207,7 @@ pub const DOCKS_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     use_ground_plane: true,
 };
 
-pub const GIANT_SKELETON_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
+pub static GIANT_SKELETON_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     scene_name: GIANT_SKELETON_SCENE_NAME,
     display_name: GIANT_SKELETON_DISPLAY_NAME,
     spawn_x: 24.946,
@@ -217,7 +221,7 @@ pub const GIANT_SKELETON_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile 
     use_ground_plane: true,
 };
 
-pub const GOLDEN_VALLEY_OVERCAST_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
+pub static GOLDEN_VALLEY_OVERCAST_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     scene_name: GOLDEN_VALLEY_OVERCAST_SCENE_NAME,
     display_name: GOLDEN_VALLEY_OVERCAST_DISPLAY_NAME,
     spawn_x: 356.842,
@@ -231,7 +235,7 @@ pub const GOLDEN_VALLEY_OVERCAST_PROFILE: OpenWorldSceneProfile = OpenWorldScene
     use_ground_plane: true,
 };
 
-pub const GOLDEN_VALLEY_SUNNY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
+pub static GOLDEN_VALLEY_SUNNY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     scene_name: GOLDEN_VALLEY_SUNNY_SCENE_NAME,
     display_name: GOLDEN_VALLEY_SUNNY_DISPLAY_NAME,
     spawn_x: 356.842,
@@ -245,7 +249,7 @@ pub const GOLDEN_VALLEY_SUNNY_PROFILE: OpenWorldSceneProfile = OpenWorldScenePro
     use_ground_plane: true,
 };
 
-pub const GREAT_HALL_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
+pub static GREAT_HALL_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     scene_name: GREAT_HALL_DAY_SCENE_NAME,
     display_name: GREAT_HALL_DAY_DISPLAY_NAME,
     spawn_x: 27.34,
@@ -259,7 +263,7 @@ pub const GREAT_HALL_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile 
     use_ground_plane: true,
 };
 
-pub const IDOL_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
+pub static IDOL_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     scene_name: IDOL_DAY_SCENE_NAME,
     display_name: IDOL_DAY_DISPLAY_NAME,
     spawn_x: 328.09,
@@ -273,7 +277,7 @@ pub const IDOL_DAY_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     use_ground_plane: true,
 };
 
-pub const RANDOM_DUNGEON_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
+pub static RANDOM_DUNGEON_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     scene_name: RANDOM_DUNGEON_SCENE_NAME,
     display_name: RANDOM_DUNGEON_DISPLAY_NAME,
     spawn_x: 0.0,
@@ -287,7 +291,7 @@ pub const RANDOM_DUNGEON_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile 
     use_ground_plane: false,
 };
 
-pub const TEMPLE_GARDENS_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
+pub static TEMPLE_GARDENS_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile {
     scene_name: TEMPLE_GARDENS_SCENE_NAME,
     display_name: TEMPLE_GARDENS_DISPLAY_NAME,
     spawn_x: -1.06860,
@@ -301,19 +305,16 @@ pub const TEMPLE_GARDENS_PROFILE: OpenWorldSceneProfile = OpenWorldSceneProfile 
     use_ground_plane: true,
 };
 
-pub const OPEN_WORLD_SPAWN_X: f32 = OASIS_DAY_PROFILE.spawn_x;
-pub const OPEN_WORLD_SPAWN_Z: f32 = OASIS_DAY_PROFILE.spawn_z;
-pub const OPEN_WORLD_SPAWN_YAW: f32 = OASIS_DAY_PROFILE.spawn_yaw;
-pub const OPEN_WORLD_HEIGHTFIELD_JSON: &str = OASIS_DAY_PROFILE.heightfield_json;
-pub const OPEN_WORLD_GAMEPLAY_COLLISION_JSON: &str = OASIS_DAY_PROFILE.gameplay_collision_json;
-pub const OPEN_WORLD_GAMEPLAY_QUERY_COLLISION_JSON: &str =
-    OASIS_DAY_PROFILE.gameplay_query_collision_json;
+pub const OPEN_WORLD_SPAWN_X: f32 = OASIS_DAY_SPAWN_X;
+pub const OPEN_WORLD_SPAWN_Z: f32 = OASIS_DAY_SPAWN_Z;
+pub const OPEN_WORLD_SPAWN_YAW: f32 = OASIS_DAY_SPAWN_YAW;
 
 pub fn open_world_scene_profile_for_scene(
     scene_name: &str,
 ) -> Option<&'static OpenWorldSceneProfile> {
     OPEN_WORLD_SCENE_PROFILES
         .iter()
+        .copied()
         .find(|profile| profile.scene_name == scene_name)
 }
 
@@ -327,16 +328,16 @@ pub fn default_open_world_scene_profile() -> &'static OpenWorldSceneProfile {
     &OASIS_DAY_PROFILE
 }
 
-pub const OPEN_WORLD_SCENE_PROFILES: &[OpenWorldSceneProfile] = &[
-    OASIS_DAY_PROFILE,
-    ADVENTURE_ISLAND_PROFILE,
-    DESERT_DAY_PROFILE,
-    DOCKS_DAY_PROFILE,
-    GIANT_SKELETON_PROFILE,
-    GOLDEN_VALLEY_OVERCAST_PROFILE,
-    GOLDEN_VALLEY_SUNNY_PROFILE,
-    GREAT_HALL_DAY_PROFILE,
-    IDOL_DAY_PROFILE,
-    RANDOM_DUNGEON_PROFILE,
-    TEMPLE_GARDENS_PROFILE,
+pub static OPEN_WORLD_SCENE_PROFILES: &[&OpenWorldSceneProfile] = &[
+    &OASIS_DAY_PROFILE,
+    &ADVENTURE_ISLAND_PROFILE,
+    &DESERT_DAY_PROFILE,
+    &DOCKS_DAY_PROFILE,
+    &GIANT_SKELETON_PROFILE,
+    &GOLDEN_VALLEY_OVERCAST_PROFILE,
+    &GOLDEN_VALLEY_SUNNY_PROFILE,
+    &GREAT_HALL_DAY_PROFILE,
+    &IDOL_DAY_PROFILE,
+    &RANDOM_DUNGEON_PROFILE,
+    &TEMPLE_GARDENS_PROFILE,
 ];
