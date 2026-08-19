@@ -231,6 +231,10 @@ enum SpellCatalogDelivery {
         #[serde(default)]
         heal_caster_max_health_fraction: f32,
         #[serde(default)]
+        damage_target_max_health_fraction: f32,
+        #[serde(default)]
+        damage_type: String,
+        #[serde(default)]
         transfer_to_caster: bool,
     },
     ConsumeStatus {
@@ -1426,10 +1430,13 @@ impl SpellCatalogRow {
                 dispel_types,
                 stacks_per_status,
                 heal_caster_max_health_fraction,
+                damage_target_max_health_fraction,
+                damage_type,
                 transfer_to_caster,
             } => {
                 definition.behavior = SpellBehavior::RemoveStatus;
                 definition.max_distance = max_distance;
+                definition.damage_type = DamageType::from_wire(damage_type.as_str());
                 definition.block_behavior = BlockBehavior::Unblockable;
                 definition.secondary.remove_status = Some(RemoveStatusSecondaryTunables {
                     statuses: statuses
@@ -1444,6 +1451,7 @@ impl SpellCatalogRow {
                     dispel_types,
                     stacks_per_status,
                     heal_caster_max_health_fraction,
+                    damage_target_max_health_fraction,
                     transfer_to_caster,
                 });
             }
@@ -3003,13 +3011,25 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                     def.kind.as_str()
                 ));
             }
+            ensure_finite_non_negative(
+                def.kind.as_str(),
+                "delivery.damage_target_max_health_fraction",
+                remove_status.damage_target_max_health_fraction,
+            )?;
+            if remove_status.damage_target_max_health_fraction > 1.0 {
+                return Err(format!(
+                    "{} delivery.damage_target_max_health_fraction must be <= 1",
+                    def.kind.as_str()
+                ));
+            }
             if remove_status.transfer_to_caster
                 && (def.targeting != SpellTargeting::Target
                     || !def.requires_target
                     || remove_status.polarity != Some(StatusPolarity::Debuff)
                     || !remove_status.statuses.is_empty()
                     || remove_status.stacks_per_status != 0
-                    || remove_status.heal_caster_max_health_fraction > 0.0)
+                    || remove_status.heal_caster_max_health_fraction > 0.0
+                    || remove_status.damage_target_max_health_fraction > 0.0)
             {
                 return Err(format!(
                     "{} debuff transfer must use required TARGET targeting, a DEBUFF filter, and no remove/heal overrides",

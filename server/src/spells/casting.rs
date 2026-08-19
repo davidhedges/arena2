@@ -46,7 +46,8 @@ use crate::combat::{
     DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StackPolicy,
     StatusApplication, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
     StatusStackGroupDefault, COMBAT_EVENT_MISS, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
-    COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_SELF_INFLICTED, DAMAGE_SOURCE_KIND_SPELL,
+    COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_ASSIST_COST, DAMAGE_SOURCE_KIND_SELF_INFLICTED,
+    DAMAGE_SOURCE_KIND_SPELL,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -9609,6 +9610,25 @@ fn cast_remove_status(
             target: caster,
             spell_id: spell_id.clone(),
             target_audience: TargetAudience::SelfOnly,
+        });
+    }
+    // The burn is the price of the cleanse, so it lands on every successful cast
+    // whether or not the filter found anything to remove.
+    if let Some(burn_amount) = max_health_fraction_amount(
+        ctx,
+        target,
+        remove_status.damage_target_max_health_fraction,
+    ) {
+        effects.push(EffectPacket::Damage {
+            amount: burn_amount,
+            damage_type: definition.damage_type,
+            source: caster,
+            target,
+            spell_id: spell_id.clone(),
+            delivery: DamageDelivery::Direct,
+            source_kind: DAMAGE_SOURCE_KIND_ASSIST_COST.to_string(),
+            direct_action_key: spell_id.clone(),
+            is_area: false,
         });
     }
     queue_effects(ctx, effects);

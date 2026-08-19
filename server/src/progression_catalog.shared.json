@@ -3363,8 +3363,11 @@
           "max_count": 0,
           "polarity": "DEBUFF",
           "dispel_types": [
-            "BLEED"
-          ]
+            "BLEED",
+            "POISON"
+          ],
+          "damage_target_max_health_fraction": 0.05,
+          "damage_type": "FIRE"
         }
       }
     },
@@ -9506,7 +9509,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_CAUTERIZE",
       "display_name": "Cauterize",
-      "description": "Seals a friendly target's wounds with fire, removing all bleed effects.",
+      "description": "Seals a friendly target's wounds with fire, removing all bleed and poison effects and searing the target for 5% of their maximum health.",
       "sort_order": 96
     },
     {

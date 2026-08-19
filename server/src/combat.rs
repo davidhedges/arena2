@@ -168,6 +168,11 @@ pub(crate) const DAMAGE_SOURCE_KIND_PROJECTILE: &str = "PROJECTILE";
 pub(crate) const DAMAGE_SOURCE_KIND_PERIODIC: &str = "PERIODIC";
 pub(crate) const DAMAGE_SOURCE_KIND_TRAP: &str = "TRAP";
 pub(crate) const DAMAGE_SOURCE_KIND_SELF_INFLICTED: &str = "SELF_INFLICTED";
+/// Damage an assisting ability charges to the actor it helps, such as Cauterize
+/// searing the wound it seals. It is a cost, not an attack: it reaches a target
+/// the caster cannot harm, but never flags combat, breaks stealth, grants credit,
+/// or kills.
+pub(crate) const DAMAGE_SOURCE_KIND_ASSIST_COST: &str = "ASSIST_COST";
 const DAMAGE_SOURCE_KIND_BURDEN_REDIRECT: &str = "BURDEN_REDIRECT";
 const DAMAGE_SOURCE_KIND_RECKONING: &str = "RECKONING";
 const DAMAGE_SOURCE_KIND_FULMINATION_ARC: &str = "FULMINATION_ARC";
@@ -5638,12 +5643,14 @@ fn apply_damage(
         && source != Identity::ZERO
         && source == target;
     let is_burden_redirect = hit.damage_source_kind == DAMAGE_SOURCE_KIND_BURDEN_REDIRECT;
+    let is_assist_cost = damage_is_assist_cost(hit.damage_source_kind.as_str());
     if source != Identity::ZERO && !players_share_world_context(ctx, source, target) {
         return false;
     }
     if source != Identity::ZERO
         && !is_self_inflicted
         && !is_burden_redirect
+        && !is_assist_cost
         && !can_harm(ctx, source, target)
     {
         return false;
@@ -5728,7 +5735,21 @@ fn damage_grants_outgoing_rewards(ctx: &ReducerContext, hit: &PendingHit) -> boo
 
 fn damage_source_grants_outgoing_rewards(source_kind: &str, source_is_hostile: bool) -> bool {
     source_kind != DAMAGE_SOURCE_KIND_SELF_INFLICTED
+        && !damage_is_assist_cost(source_kind)
         && (source_kind != DAMAGE_SOURCE_KIND_BURDEN_REDIRECT || source_is_hostile)
+}
+
+fn damage_is_assist_cost(source_kind: &str) -> bool {
+    source_kind == DAMAGE_SOURCE_KIND_ASSIST_COST
+}
+
+/// Assist-cost damage stops one point short of defeating its target: the spell
+/// helping someone must not be what finishes them.
+fn non_lethal_assist_cost_damage(hp_damage: i32, current_hp: i32, source_kind: &str) -> i32 {
+    if !damage_is_assist_cost(source_kind) {
+        return hp_damage;
+    }
+    hp_damage.min((current_hp - 1).max(0))
 }
 
 fn burden_damage_split(amount: i32, ratio: f32) -> (i32, i32) {
@@ -5805,7 +5826,8 @@ fn apply_damage_to_player_state(
     let damage_delivery = DamageDelivery::from_wire(hit.damage_delivery.as_str());
     let is_direct_damage = damage_delivery == DamageDelivery::Direct;
     let grants_outgoing_rewards = damage_grants_outgoing_rewards(ctx, hit);
-    if damage_breaks_shroud(damage_delivery, resolved_amount) {
+    let is_assist_cost = damage_is_assist_cost(hit.damage_source_kind.as_str());
+    if !is_assist_cost && damage_breaks_shroud(damage_delivery, resolved_amount) {
         crate::progression::break_shroud_on_direct_damage(ctx, target, ctx.timestamp);
     }
     if hit.amount > 0 && grants_outgoing_rewards {
@@ -5817,6 +5839,8 @@ fn apply_damage_to_player_state(
         absorb_damage_with_mana_shield(ctx, target, resolved_amount, ctx.timestamp);
     let hp_damage =
         absorb_damage_with_temporary_hitpoints(ctx, target, after_mana_shield, ctx.timestamp);
+    let hp_damage =
+        non_lethal_assist_cost_damage(hp_damage, state.hp, hit.damage_source_kind.as_str());
     resolved.final_amount = hp_damage;
     break_confusion_on_damage(ctx, target, resolved_amount);
     state.hp -= hp_damage;
@@ -6208,11 +6232,15 @@ fn apply_damage_to_npc_state(
 
     let hp_damage =
         absorb_damage_with_temporary_hitpoints(ctx, target, resolved_amount, ctx.timestamp);
+    let hp_damage =
+        non_lethal_assist_cost_damage(hp_damage, state.hp, hit.damage_source_kind.as_str());
     resolved.final_amount = hp_damage;
     break_confusion_on_damage(ctx, target, resolved_amount);
     state.hp -= hp_damage;
     record_reckoning_damage_taken(ctx, target, hp_damage, ctx.timestamp);
-    crate::npcs::record_npc_damage_threat(ctx, target, source, hp_damage);
+    if !damage_is_assist_cost(hit.damage_source_kind.as_str()) {
+        crate::npcs::record_npc_damage_threat(ctx, target, source, hp_damage);
+    }
     let defeated = state.hp <= 0;
     let survival_defeated =
         defeated && crate::survival::on_survival_npc_defeated(ctx, target, source);
@@ -6304,6 +6332,7 @@ fn resolve_damage_amount(
         DAMAGE_SOURCE_KIND_SELF_INFLICTED
             | DAMAGE_SOURCE_KIND_BURDEN_REDIRECT
             | DAMAGE_SOURCE_KIND_RECKONING
+            | DAMAGE_SOURCE_KIND_ASSIST_COST
     ) {
         // These amounts are already final authored/copied damage. Do not let
         // source power, target resistance, critical strikes, or passive

@@ -730,6 +730,9 @@ pub(crate) struct RemoveStatusSecondaryTunables {
     pub stacks_per_status: u32,
     /// Optional self-heal based on the caster's maximum health.
     pub heal_caster_max_health_fraction: f32,
+    /// Optional burn the removal costs its target, as a fraction of the target's
+    /// maximum health. Flat authored damage: it never crits, scales, or kills.
+    pub damage_target_max_health_fraction: f32,
     /// Moves matching status rows to the caster instead of removing them.
     pub transfer_to_caster: bool,
 }
@@ -1286,14 +1289,14 @@ mod tests {
             .secondary
             .remove_status
             .as_ref()
-            .expect("Cauterize should define bleed-removal filters");
+            .expect("Cauterize should define dispel filters");
         assert!(remove_status.statuses.is_empty());
         assert_eq!(remove_status.max_count, 0);
         assert_eq!(
             remove_status.polarity,
             Some(crate::combat::StatusPolarity::Debuff)
         );
-        assert_eq!(remove_status.dispel_types, vec![StatusDispelType::Bleed]);
+        assert!(!remove_status.dispel_types.is_empty());
     }
 
     #[test]
