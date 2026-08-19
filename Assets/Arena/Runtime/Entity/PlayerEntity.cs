@@ -76,6 +76,8 @@ namespace Arena.Entity
         private RuntimeAvatarBinding? _avatarBinding;
         private WeaponAttachmentController? _weaponAttachments;
         private StealthVisualController? _stealthVisual;
+        private PresentationScaleController? _presentationScale;
+        private readonly int _spawnFrame;
         private LocalPlayerStateProvider? _stateProvider;
         private CombatAnimationSet? _combatAnimationSet;
         private string _combatAnimationModeId = string.Empty;
@@ -95,6 +97,7 @@ namespace Arena.Entity
         public PlayerEntity(Identity identity, bool isLocalPlayer, GameObject? prefab)
         {
             Identity       = identity;
+            _spawnFrame    = Time.frameCount;
             SimState       = new ClientSimulationState();
             SimState.SetIsLocalPlayer(isLocalPlayer);
             IsLocalPlayer = isLocalPlayer;
@@ -150,6 +153,10 @@ namespace Arena.Entity
             if (_stealthVisual == null)
                 _stealthVisual = GameObject.AddComponent<StealthVisualController>();
             _stealthVisual.MaterialsRestored += RefreshEffectTint;
+
+            _presentationScale = GameObject.GetComponent<PresentationScaleController>();
+            if (_presentationScale == null)
+                _presentationScale = GameObject.AddComponent<PresentationScaleController>();
 
             GameObject.name = $"Player_{identity}";
 
@@ -218,9 +225,10 @@ namespace Arena.Entity
 
         private void RefreshGigantismScale()
         {
-            Transform? visualRoot = _avatarController?.VisualRoot;
-            if (visualRoot == null)
+            if (_presentationScale == null)
                 return;
+
+            _presentationScale.SetTarget(_avatarController != null ? _avatarController.VisualRoot : null);
 
             bool active = false;
             foreach (var effect in _effectCounts)
@@ -233,8 +241,10 @@ namespace Arena.Entity
                 }
             }
 
+            // Statuses hydrated on the spawn frame belong to an entity we are seeing for the
+            // first time: it should appear already sized rather than grow in front of us.
             float scale = active ? GigantismPresentationScale : 1f;
-            visualRoot.localScale = Vector3.one * scale;
+            _presentationScale.SetScale(scale, immediate: Time.frameCount <= _spawnFrame);
         }
 
         private void RefreshSoulstealerCasterVfx()
