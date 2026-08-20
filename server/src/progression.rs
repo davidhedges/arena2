@@ -331,8 +331,6 @@ struct AbilityGameplayDefinition {
     #[serde(default)]
     critical_spell_proc_action_id: String,
     #[serde(default)]
-    frost_spell_debuff_protection: bool,
-    #[serde(default)]
     frozen_melee_first_hit_damage_bonus: f32,
     #[serde(default)]
     noncritical_lightning_spell_crit_chance_bonus: f32,
@@ -5698,7 +5696,6 @@ fn validate_ability_catalog() {
             ability.gameplay.movement_spell_cast_time_buff_duration_ms;
         let critical_spell_proc_action_id =
             normalize_identifier(ability.gameplay.critical_spell_proc_action_id.as_str());
-        let frost_spell_debuff_protection = ability.gameplay.frost_spell_debuff_protection;
         let frozen_melee_first_hit_damage_bonus =
             ability.gameplay.frozen_melee_first_hit_damage_bonus;
         let noncritical_lightning_spell_crit_chance_bonus = ability
@@ -6190,28 +6187,18 @@ fn validate_ability_catalog() {
                 "Chain Reaction must proc the authored Bolt spell"
             );
         }
-        if frost_spell_debuff_protection {
-            assert_eq!(
-                ability_kind, "PASSIVE",
-                "ability '{ability_id}' may only author frost_spell_debuff_protection for PASSIVE gameplay"
-            );
-        }
         if ability_id == RUIN_RIME_ABILITY_ID {
             assert_eq!(
                 discipline_id, DISCIPLINE_BLIGHT,
-                "Rime must remain a Blight passive"
+                "Rime must remain a Blight ability"
             );
-            assert_eq!(ability_kind, "PASSIVE", "Rime must remain passive");
+            assert_eq!(ability_kind, "SPELL", "Rime must remain an active spell");
             assert!(
                 ability
                     .ability_tags
                     .iter()
-                    .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
-                "Rime must carry the PASSIVE ability tag"
-            );
-            assert!(
-                frost_spell_debuff_protection,
-                "Rime must protect debuffs after frost-spell impacts"
+                    .any(|tag| normalize_identifier(tag.as_str()) == "ACTION_BAR_ACTION"),
+                "Rime must carry the ACTION_BAR_ACTION ability tag"
             );
         }
         assert!(
@@ -7731,17 +7718,6 @@ pub(crate) fn ruin_chain_reaction_spell_for_owner(
         .filter(|action_id| !action_id.is_empty())
 }
 
-pub(crate) fn blight_rime_protects_debuffs_for_owner(
-    ctx: &ReducerContext,
-    owner: Identity,
-) -> bool {
-    character_has_selected_discipline(ctx, owner, DISCIPLINE_BLIGHT)
-        && progression_catalog().abilities.iter().any(|ability| {
-            normalize_identifier(ability.ability_id.as_str()) == RUIN_RIME_ABILITY_ID
-                && ability.gameplay.frost_spell_debuff_protection
-        })
-}
-
 pub(crate) fn ruin_potential_crit_chance_per_stack_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
@@ -7831,13 +7807,13 @@ mod tests {
     };
     use crate::combat::{
         DamageType, StackPolicy, StatusApplication, StatusDispelType, StatusEffectKind,
-        StatusPayload, StatusStackGroupDefault, DEFAULT_HIT_RADIUS,
+        StatusPayload, StatusPolarity, StatusStackGroupDefault, DEFAULT_HIT_RADIUS,
     };
     use crate::melee::{auto_attack_reference_for_profile, profile_supports_action_reference};
     use crate::progression::melee_timed_movement_for_ability_id;
     use crate::relations::TargetAudience;
     use crate::resources::RESOURCE_KIND_MANA;
-    use crate::spells::{spell_definition_by_str, SpellTargeting};
+    use crate::spells::{spell_definition_by_str, SpellBehavior, SpellTargeting};
 
     use super::{
         ability_gameplay_kind, ability_is_compatible_with_slot,
@@ -10735,7 +10711,7 @@ mod tests {
     }
 
     #[test]
-    fn blight_rime_authors_frost_debuff_protection_meta_status() {
+    fn blight_rime_authors_off_gcd_active_status_empowerment() {
         let catalog = progression_catalog();
         let rime = catalog
             .abilities
@@ -10744,16 +10720,31 @@ mod tests {
             .expect("Rime ability should be authored");
         assert_eq!(rime.discipline_id, DISCIPLINE_BLIGHT);
         assert_eq!(rime.action_id, "RIME");
-        assert_eq!(ability_gameplay_kind(rime), "PASSIVE");
-        assert!(rime.gameplay.frost_spell_debuff_protection);
+        assert_eq!(ability_gameplay_kind(rime), "SPELL");
         assert!(rime
             .ability_tags
             .iter()
-            .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
-        assert!(!catalog
-            .combat_profile_action_bar_defaults
-            .iter()
-            .any(|assignment| assignment.ability_id == "RUIN_RIME"));
+            .any(|tag| normalize_identifier(tag.as_str()) == "ACTION_BAR_ACTION"));
+
+        let definition =
+            spell_definition_by_str("RIME").expect("Rime should derive a runtime spell definition");
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Self_);
+        assert_eq!(definition.target_audience, TargetAudience::SelfOnly);
+        assert!(!definition.requires_target);
+        assert!(!definition.uses_global_cooldown);
+        assert_eq!(definition.cooldown, Duration::from_secs(30));
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.status_stack_group.as_deref(), Some("RIME_ARMED"));
+        assert_eq!(definition.apply_status_polarity, Some(StatusPolarity::Buff));
+        assert_eq!(
+            definition
+                .apply_status
+                .as_ref()
+                .expect("Rime should apply its armed status")
+                .kind,
+            StatusEffectKind::Rime
+        );
 
         let ability_presentation = catalog
             .action_presentations

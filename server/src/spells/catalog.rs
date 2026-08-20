@@ -4087,6 +4087,7 @@ fn validate_apply_status_kind_for_self(
         | StatusEffectKind::Gigantism
         | StatusEffectKind::Flurry
         | StatusEffectKind::BladeTwisting
+        | StatusEffectKind::Rime
         | StatusEffectKind::SoulStolen
         | StatusEffectKind::BlightEmpowered
         | StatusEffectKind::Reckoning

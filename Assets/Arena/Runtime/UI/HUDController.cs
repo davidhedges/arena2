@@ -34,6 +34,8 @@ namespace Arena.UI
         private const string UnitFrameSpritePath = "UI/UnitFrame/UnitFrame";
         private const string TemporaryHitpointsStatusKind = "TEMPORARY_HITPOINTS";
         private const string RimeStatusKind = "RIME";
+        private const string RimeConsumedStatusGroup = "RIME_CONSUMED";
+        private const string RimeProtectedStatusGroupPrefix = "RIME_PROTECTED:";
 
         // --- Colors (WoW-inspired) ---
         private static readonly Color FrameBg       = Hex("#1a1a1a");
@@ -243,6 +245,7 @@ namespace Arena.UI
         // --- Temp lists for status iteration ---
         private readonly List<StatusEffect> _tmpBuff   = new();
         private readonly List<StatusEffect> _tmpDebuff = new();
+        private readonly HashSet<ulong> _tmpRimeProtectedStatusIds = new();
         private readonly List<PartyMember> _tmpPartyMembers = new();
         private readonly List<SpacetimeDB.Identity> _visiblePartyMembers = new();
         private Canvas _canvas = null!;
@@ -1257,11 +1260,18 @@ namespace Arena.UI
 
             _tmpBuff.Clear();
             _tmpDebuff.Clear();
+            _tmpRimeProtectedStatusIds.Clear();
 
             long nowUs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000L;
             foreach (var se in conn.Db.StatusEffect.Target.Filter(id))
             {
                 if (se.ExpiresAtMicros > 0 && se.ExpiresAtMicros < nowUs) continue;
+                if (TryGetRimeProtectedStatusId(se, out ulong protectedStatusId))
+                {
+                    _tmpRimeProtectedStatusIds.Add(protectedStatusId);
+                    continue;
+                }
+                if (IsConsumedRimeMetadata(se)) continue;
 
                 if (IsBuffPolarity(se.Polarity))
                     _tmpBuff.Add(se);
@@ -1269,8 +1279,8 @@ namespace Arena.UI
                     _tmpDebuff.Add(se);
             }
 
-            SyncRow(buffRow, buffIcons, _tmpBuff, true, false);
-            SyncRow(debuffRow, debuffIcons, _tmpDebuff, false, HasActiveRime(_tmpDebuff));
+            SyncRow(buffRow, buffIcons, _tmpBuff, true);
+            SyncRow(debuffRow, debuffIcons, _tmpDebuff, false);
         }
 
         private void RefreshDebuffIcons(SpacetimeDB.Identity id, Transform debuffRow, List<GameObject> debuffIcons)
@@ -1279,20 +1289,27 @@ namespace Arena.UI
             if (conn == null) return;
 
             _tmpDebuff.Clear();
+            _tmpRimeProtectedStatusIds.Clear();
 
             long nowUs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000L;
             foreach (var se in conn.Db.StatusEffect.Target.Filter(id))
             {
                 if (se.ExpiresAtMicros > 0 && se.ExpiresAtMicros < nowUs) continue;
+                if (TryGetRimeProtectedStatusId(se, out ulong protectedStatusId))
+                {
+                    _tmpRimeProtectedStatusIds.Add(protectedStatusId);
+                    continue;
+                }
+                if (IsConsumedRimeMetadata(se)) continue;
                 if (!IsBuffPolarity(se.Polarity))
                     _tmpDebuff.Add(se);
             }
 
-            SyncRow(debuffRow, debuffIcons, _tmpDebuff, false, HasActiveRime(_tmpDebuff));
+            SyncRow(debuffRow, debuffIcons, _tmpDebuff, false);
         }
 
         private void SyncRow(Transform row, List<GameObject> pool,
-            List<StatusEffect> effects, bool isBuff, bool isRimed)
+            List<StatusEffect> effects, bool isBuff)
         {
             while (pool.Count < effects.Count)
                 pool.Add(MakeIcon(row, isBuff));
@@ -1305,6 +1322,7 @@ namespace Arena.UI
 
                 pool[i].SetActive(true);
                 var se = effects[i];
+                bool isRimed = _tmpRimeProtectedStatusIds.Contains(se.StatusId);
                 if (_statusIconViews.TryGetValue(pool[i], out StatusIconView view))
                 {
                     SetActiveIfChanged(view.RimePane, isRimed);
@@ -1329,20 +1347,37 @@ namespace Arena.UI
             string.Equals(WireIdentifier.Normalize(polarity), "BUFF", StringComparison.Ordinal)
             || string.Equals(polarity, "positive", StringComparison.OrdinalIgnoreCase);
 
-        private static bool HasActiveRime(List<StatusEffect> debuffs)
+        private static bool TryGetRimeProtectedStatusId(
+            StatusEffect status,
+            out ulong protectedStatusId)
         {
-            for (int i = 0; i < debuffs.Count; i++)
-            {
-                if (string.Equals(
-                    WireIdentifier.Normalize(debuffs[i].EffectKind),
+            protectedStatusId = 0;
+            if (!string.Equals(
+                    WireIdentifier.Normalize(status.EffectKind),
                     RimeStatusKind,
+                    StringComparison.Ordinal)
+                || string.IsNullOrEmpty(status.StackGroup)
+                || !status.StackGroup.StartsWith(
+                    RimeProtectedStatusGroupPrefix,
                     StringComparison.Ordinal))
-                {
-                    return true;
-                }
+            {
+                return false;
             }
-            return false;
+
+            return ulong.TryParse(
+                status.StackGroup.Substring(RimeProtectedStatusGroupPrefix.Length),
+                out protectedStatusId);
         }
+
+        private static bool IsConsumedRimeMetadata(StatusEffect status) =>
+            string.Equals(
+                WireIdentifier.Normalize(status.EffectKind),
+                RimeStatusKind,
+                StringComparison.Ordinal)
+            && string.Equals(
+                WireIdentifier.Normalize(status.StackGroup),
+                RimeConsumedStatusGroup,
+                StringComparison.Ordinal);
 
         private GameObject MakeIcon(Transform parent, bool isBuff)
         {

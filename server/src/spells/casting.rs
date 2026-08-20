@@ -36,16 +36,15 @@ use crate::combat::status_effect;
 use crate::combat::{
     active_emanation_for_owner, active_stalk_mark_target,
     advance_slipstream_after_movement_ability, arm_quickening_after_movement_ability,
-    clear_stalk_mark, consume_active_immolation_damage,
-    consume_quickening_for_cast, has_active_disabling_status, has_active_status,
-    hostile_targeted_ability_misses, AttackAim, mark_harmful_combat_action, queue_delayed_status_effect,
-    queue_effects, quickening_cast_speed_multiplier_for_owner, register_projectile_return_heal,
-    remove_active_status_group, rephase_accumulated_orbit_projectiles,
-    rime_effect_packet_for_frost_spell, set_active_aura, status_matches_removal_filter,
-    status_removal_is_blocked_by_rime, temporary_combat_modifiers, timestamp_to_micros,
-    toggle_active_emanation, toggle_active_immolation, ActiveCombatProjectile, CombatEvent,
-    DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StackPolicy,
-    StatusApplication, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
+    clear_stalk_mark, consume_active_immolation_damage, consume_quickening_for_cast,
+    has_active_disabling_status, has_active_status, hostile_targeted_ability_misses,
+    mark_harmful_combat_action, queue_delayed_status_effect, queue_effects,
+    quickening_cast_speed_multiplier_for_owner, register_projectile_return_heal,
+    remove_active_status_group, rephase_accumulated_orbit_projectiles, set_active_aura,
+    status_matches_removal_filter, status_removal_is_blocked_by_rime, temporary_combat_modifiers,
+    timestamp_to_micros, toggle_active_emanation, toggle_active_immolation, ActiveCombatProjectile,
+    AttackAim, CombatEvent, DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent,
+    StackPolicy, StatusApplication, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
     StatusStackGroupDefault, COMBAT_EVENT_MISS, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
     COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_ASSIST_COST, DAMAGE_SOURCE_KIND_SELF_INFLICTED,
     DAMAGE_SOURCE_KIND_SPELL,
@@ -6092,12 +6091,6 @@ fn apply_area_channel_tick(
         &mut candidate_indices,
     );
 
-    let rime_duration = channel_area
-        .impact_effects
-        .iter()
-        .filter_map(|effect| effect.as_status().map(|status| status.duration()))
-        .max()
-        .unwrap_or_else(|| seconds_to_duration(definition.update_interval));
     let mut effects = Vec::new();
     for target in candidate_indices
         .iter()
@@ -6198,16 +6191,6 @@ fn apply_area_channel_tick(
                 direct_action_key: String::new(),
                 is_area: true,
             });
-        }
-        if definition.damage_type == DamageType::Cold {
-            if let Some(rime) = rime_effect_packet_for_frost_spell(
-                ctx,
-                active_cast.caster,
-                target.player_id,
-                rime_duration,
-            ) {
-                effects.push(rime);
-            }
         }
         push_impact_effect_packets(
             ctx,
@@ -9088,16 +9071,6 @@ fn apply_status_to_target(
         .apply_status_polarity
         .expect("APPLY_STATUS spells must define polarity");
     let mut effects = Vec::new();
-    if definition.damage_type == DamageType::Cold && polarity == StatusPolarity::Debuff {
-        if let Some(rime) = rime_effect_packet_for_frost_spell(
-            ctx,
-            caster,
-            target.player_id,
-            application.duration(),
-        ) {
-            effects.push(rime);
-        }
-    }
     let (application_target, application_audience) = if apply_status_tunables.apply_to_caster {
         (caster, TargetAudience::SelfOnly)
     } else {
@@ -9124,16 +9097,6 @@ fn apply_status_to_target(
             StatusStackGroupDefault::EffectKind,
         );
         let queued_at = now + staged.delay;
-        if definition.damage_type == DamageType::Cold && polarity == StatusPolarity::Debuff {
-            if let Some(rime) = rime_effect_packet_for_frost_spell(
-                ctx,
-                caster,
-                target.player_id,
-                application.duration(),
-            ) {
-                queue_delayed_status_effect(ctx, rime, queued_at);
-            }
-        }
         queue_delayed_status_effect(
             ctx,
             application.to_effect_packet_for_audience(

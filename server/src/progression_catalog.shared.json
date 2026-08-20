@@ -4128,12 +4128,35 @@
       "resource_kind": "MANA",
       "resource_cost": 0,
       "ability_tags": [
-        "PASSIVE"
+        "ACTION_BAR_ACTION"
       ],
       "sort_order": 1028,
       "gameplay": {
-        "kind": "PASSIVE",
-        "frost_spell_debuff_protection": true
+        "kind": "SPELL",
+        "cooldown_ms": 30000,
+        "uses_global_cooldown": false,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 604800000,
+          "damage_type": "COLD",
+          "status_stack_group": "RIME_ARMED",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "RIME",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": []
+          }
+        }
       }
     },
     {
@@ -9965,7 +9988,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "RUIN_RIME",
       "display_name": "Rime",
-      "description": "Passive: impacts from your frost spells Rime the target's debuffs, preventing abilities from removing them. Rimed debuffs still expire naturally, and only one Rime can affect a target at a time.",
+      "description": "Instant and off the global cooldown. Your next friendly or harmful ability that applies a buff or debuff Rimes those effects, preventing abilities from removing them. Rimed effects still expire naturally.",
       "sort_order": 114
     },
     {
@@ -10930,8 +10953,8 @@
     {
       "presentation_kind": "STATUS",
       "presentation_id": "RIME",
-      "display_name": "Rimed",
-      "description": "Debuffs on this target cannot be removed by abilities and still expire naturally.",
+      "display_name": "Rime",
+      "description": "Your next friendly or harmful ability that applies a buff or debuff makes those effects impossible for abilities to remove.",
       "sort_order": 10065
     },
     {

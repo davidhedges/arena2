@@ -25,14 +25,13 @@ use crate::player_state::PlayerState;
 use crate::practice::resolve_respawn_pose;
 use crate::progression::{
     ability_belongs_to_discipline, blight_fracture_melee_damage_bonus,
-    blight_rime_protects_debuffs_for_owner, character_has_selected_discipline, combat_rule_value,
-    derived_combat_profile_id_for_owner, precision_careful_aim_for_owner,
-    precision_heartseeker_stationary_rule, precision_maverick_for_owner,
-    precision_point_blank_for_owner, primal_adaptation_for_owner, primal_photosynthesis_for_owner,
-    primal_slipstream_cooldown_reduction_for_owner, ruin_acceleration_cooldown_reduction_for_owner,
-    ruin_chain_reaction_spell_for_owner, ruin_furnace_mana_restore_ratio_for_owner,
-    ruin_potential_crit_chance_per_stack_for_owner, ruin_quickening_for_owner,
-    ruin_wildfire_ignite_for_owner, soulstealer_empowered_damage_bonus,
+    character_has_selected_discipline, combat_rule_value, derived_combat_profile_id_for_owner,
+    precision_careful_aim_for_owner, precision_heartseeker_stationary_rule,
+    precision_maverick_for_owner, precision_point_blank_for_owner, primal_adaptation_for_owner,
+    primal_photosynthesis_for_owner, primal_slipstream_cooldown_reduction_for_owner,
+    ruin_acceleration_cooldown_reduction_for_owner, ruin_chain_reaction_spell_for_owner,
+    ruin_furnace_mana_restore_ratio_for_owner, ruin_potential_crit_chance_per_stack_for_owner,
+    ruin_quickening_for_owner, ruin_wildfire_ignite_for_owner, soulstealer_empowered_damage_bonus,
     subtlety_behind_target_damage_bonus, subtlety_disabled_target_damage_bonus,
     ARCHER_HEARTSEEKER_ABILITY_ID, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD,
     DISCIPLINE_BLIGHT, DISCIPLINE_MORTALITY, DISCIPLINE_SUBTLETY,
@@ -193,8 +192,9 @@ pub(crate) const STALK_STATUS_GROUP: &str = "STALKED";
 const MIRROR_IMAGE_INTERCEPT_CHANCE_PER_IMAGE: f32 = 0.25;
 const RECKONING_SPELL_ID: &str = "RECKONING";
 const RECKONING_ABILITY_ID: &str = "SPELL_RECKONING";
-const RIME_STATUS_GROUP: &str = "RIME";
-const RIME_SPELL_ID: &str = "RUIN_RIME";
+const RIME_ARMED_STATUS_GROUP: &str = "RIME_ARMED";
+const RIME_CONSUMED_STATUS_GROUP: &str = "RIME_CONSUMED";
+const RIME_PROTECTED_STATUS_GROUP_PREFIX: &str = "RIME_PROTECTED:";
 const ADAPTATION_SPELL_ID: &str = "PRIMAL_ADAPTATION";
 const ADAPTATION_STATUS_GROUP: &str = "ADAPTATION";
 const PHOTOSYNTHESIS_PASSIVE_ID: &str = "PRIMAL_PHOTOSYNTHESIS";
@@ -4570,7 +4570,10 @@ pub(crate) fn status_matches_removal_filter(
 }
 
 fn status_kind_is_intrinsically_undispellable(effect_kind: &str) -> bool {
-    StatusEffectKind::from_wire(effect_kind) == Some(StatusEffectKind::Adaptation)
+    matches!(
+        StatusEffectKind::from_wire(effect_kind),
+        Some(StatusEffectKind::Adaptation | StatusEffectKind::Rime)
+    )
 }
 
 fn status_matches_removal_filter_values(
@@ -5922,7 +5925,6 @@ fn apply_damage_to_player_state(
     let target_survived = state.alive;
     ctx.db.player_state().player_id().update(state);
     if target_survived {
-        arm_rime_after_frost_spell_hit(ctx, hit, ctx.timestamp);
         arm_adaptation_after_magical_damage(ctx, hit, hp_damage, ctx.timestamp);
     }
     if player_was_defeated {
@@ -6021,85 +6023,55 @@ fn arm_adaptation_after_magical_damage(
     );
 }
 
-pub(crate) fn rime_effect_packet_for_frost_spell(
+fn active_rime_armed_status(
     ctx: &ReducerContext,
     source: Identity,
-    target: Identity,
-    lifetime: Duration,
-) -> Option<EffectPacket> {
-    if lifetime.is_zero()
-        || source == Identity::ZERO
-        || source == target
-        || !blight_rime_protects_debuffs_for_owner(ctx, source)
-    {
-        return None;
-    }
-
-    Some(EffectPacket::ApplyStatus {
-        source,
-        target,
-        spell_id: RIME_SPELL_ID.to_string(),
-        payload: StatusPayload::Rime,
-        polarity: StatusPolarity::Debuff,
-        target_audience: TargetAudience::Hostile,
-        duration: lifetime,
-        stack_group: RIME_STATUS_GROUP.to_string(),
-        max_stacks: 1,
-        stack_policy: StackPolicy::Refresh,
-        dispel_types: Vec::new(),
-    })
-}
-
-fn arm_rime_after_frost_spell_hit(ctx: &ReducerContext, hit: &PendingHit, now: Timestamp) {
-    if !frost_spell_hit_can_apply_rime(hit)
-        || !blight_rime_protects_debuffs_for_owner(ctx, hit.source)
-    {
-        return;
-    }
-
-    apply_status_internal(
-        ctx,
-        now,
-        hit.source,
-        hit.target,
-        RIME_SPELL_ID,
-        StatusPayload::Rime,
-        StatusPolarity::Debuff,
-        Duration::from_millis(FIXED_TICK_MILLIS.max(1)),
-        RIME_STATUS_GROUP,
-        1,
-        StackPolicy::Refresh,
-        TargetAudience::Hostile,
-        Vec::new(),
-        false,
-    );
-    refresh_rime_lifetime_from_active_debuffs(ctx, hit.target, now);
-}
-
-fn frost_spell_hit_can_apply_rime(hit: &PendingHit) -> bool {
-    DamageType::from_wire(hit.damage_type.as_str()) == DamageType::Cold
-        && damage_comes_from_casted_ability(hit)
-        && matches!(
-            hit.damage_source_kind.as_str(),
-            DAMAGE_SOURCE_KIND_SPELL | DAMAGE_SOURCE_KIND_PROJECTILE
-        )
-}
-
-fn active_rime_status(
-    ctx: &ReducerContext,
-    target: Identity,
     now: Timestamp,
 ) -> Option<StatusEffect> {
     ctx.db
         .status_effect()
         .target()
-        .filter(target)
+        .filter(source)
         .filter(|effect| {
             effect.effect_kind == StatusEffectKind::Rime.as_str()
-                && effect.stack_group == RIME_STATUS_GROUP
+                && effect.stack_group == RIME_ARMED_STATUS_GROUP
+                && effect.source == source
                 && now < effect.expires_at
         })
         .max_by_key(|effect| effect.status_id)
+}
+
+fn rime_protection_stack_group(status_id: u64) -> String {
+    format!("{RIME_PROTECTED_STATUS_GROUP_PREFIX}{status_id}")
+}
+
+fn rime_protected_status_id(stack_group: &str) -> Option<u64> {
+    stack_group
+        .strip_prefix(RIME_PROTECTED_STATUS_GROUP_PREFIX)
+        .and_then(|status_id| status_id.parse::<u64>().ok())
+}
+
+fn action_instance_keys_match(left: &str, right: &str) -> bool {
+    action_key_matches_instance(left, right) || action_key_matches_instance(right, left)
+}
+
+fn active_rime_protection_for_status(
+    ctx: &ReducerContext,
+    effect: &StatusEffect,
+    now: Timestamp,
+) -> Option<StatusEffect> {
+    let stack_group = rime_protection_stack_group(effect.status_id);
+    ctx.db
+        .status_effect()
+        .target()
+        .filter(effect.target)
+        .find(|marker| {
+            marker.effect_kind == StatusEffectKind::Rime.as_str()
+                && marker.stack_group == stack_group
+                && marker.source == effect.source
+                && action_instance_keys_match(marker.spell_id.as_str(), effect.spell_id.as_str())
+                && now < marker.expires_at
+        })
 }
 
 pub(crate) fn status_removal_is_blocked_by_rime(
@@ -6107,65 +6079,137 @@ pub(crate) fn status_removal_is_blocked_by_rime(
     effect: &StatusEffect,
     now: Timestamp,
 ) -> bool {
-    effect.polarity == StatusPolarity::Debuff.as_str()
+    effect.effect_kind != StatusEffectKind::Rime.as_str()
         && now < effect.expires_at
-        && active_rime_status(ctx, effect.target, now).is_some()
+        && active_rime_protection_for_status(ctx, effect, now).is_some()
 }
 
-fn extend_active_rime_through(
+fn rime_action_already_has_protection(
     ctx: &ReducerContext,
-    target: Identity,
-    expires_at: Timestamp,
+    source: Identity,
+    spell_id: &str,
     now: Timestamp,
-) {
-    let Some(mut rime) = active_rime_status(ctx, target, now) else {
-        return;
-    };
-    if expires_at <= rime.expires_at {
-        return;
-    }
-    set_status_expires_at(&mut rime, expires_at);
-    ctx.db.status_effect().status_id().update(rime);
+) -> bool {
+    ctx.db
+        .status_effect()
+        .target()
+        .filter(source)
+        .any(|marker| {
+            marker.effect_kind == StatusEffectKind::Rime.as_str()
+                && marker.stack_group == RIME_CONSUMED_STATUS_GROUP
+                && marker.source == source
+                && action_instance_keys_match(marker.spell_id.as_str(), spell_id)
+                && now < marker.expires_at
+        })
 }
 
-fn extend_rime_for_applied_debuff(
+fn action_was_cast_after_rime_was_armed(
     ctx: &ReducerContext,
-    target: Identity,
-    kind: StatusEffectKind,
-    polarity: StatusPolarity,
-    expires_at: Timestamp,
-    now: Timestamp,
-) {
-    if polarity == StatusPolarity::Debuff && kind != StatusEffectKind::Rime {
-        extend_active_rime_through(ctx, target, expires_at, now);
-    }
+    armed: &StatusEffect,
+    spell_id: &str,
+) -> bool {
+    let armed_cast_event_id = ctx
+        .db
+        .combat_event()
+        .caster()
+        .filter(armed.source)
+        .filter(|event| {
+            event.event_type == COMBAT_EVENT_CAST
+                && action_instance_keys_match(
+                    event.action_instance_id.as_str(),
+                    armed.spell_id.as_str(),
+                )
+        })
+        .map(|event| event.event_id)
+        .max();
+
+    ctx.db
+        .combat_event()
+        .caster()
+        .filter(armed.source)
+        .any(|event| {
+            event.event_type == COMBAT_EVENT_CAST
+                && action_instance_keys_match(event.action_instance_id.as_str(), spell_id)
+                && armed_cast_event_id.map_or(event.created_at >= armed.applied_at, |armed_id| {
+                    event.event_id > armed_id
+                })
+        })
 }
 
-fn refresh_rime_lifetime_from_active_debuffs(
-    ctx: &ReducerContext,
-    target: Identity,
-    now: Timestamp,
-) {
-    let Some(mut rime) = active_rime_status(ctx, target, now) else {
-        return;
-    };
-    let grace_expires_at = now + Duration::from_millis(FIXED_TICK_MILLIS.max(1));
-    let expires_at = ctx
+fn clear_rime_protection_for_status(ctx: &ReducerContext, target: Identity, status_id: u64) {
+    let stack_group = rime_protection_stack_group(status_id);
+    let marker_ids: Vec<u64> = ctx
         .db
         .status_effect()
         .target()
         .filter(target)
         .filter(|effect| {
-            effect.status_id != rime.status_id
-                && effect.polarity == StatusPolarity::Debuff.as_str()
-                && now < effect.expires_at
+            effect.effect_kind == StatusEffectKind::Rime.as_str()
+                && effect.stack_group == stack_group
         })
-        .map(|effect| effect.expires_at)
-        .max()
-        .unwrap_or(grace_expires_at)
-        .max(grace_expires_at);
-    set_status_expires_at(&mut rime, expires_at);
-    ctx.db.status_effect().status_id().update(rime);
+        .map(|effect| effect.status_id)
+        .collect();
+    for marker_id in marker_ids {
+        ctx.db.status_effect().status_id().delete(marker_id);
+    }
+}
+
+fn apply_rime_protection_to_status(ctx: &ReducerContext, effect: &StatusEffect, now: Timestamp) {
+    if effect.source == Identity::ZERO
+        || effect.effect_kind == StatusEffectKind::Rime.as_str()
+        || effect.spell_id.trim().is_empty()
+    {
+        return;
+    }
+
+    let armed = active_rime_armed_status(ctx, effect.source, now);
+    let consumes_armed = armed.as_ref().is_some_and(|armed| {
+        action_was_cast_after_rime_was_armed(ctx, armed, effect.spell_id.as_str())
+    });
+    if !consumes_armed
+        && !rime_action_already_has_protection(ctx, effect.source, effect.spell_id.as_str(), now)
+    {
+        return;
+    }
+
+    let marker = new_status_effect(
+        effect.target,
+        effect.source,
+        StatusPolarity::from_wire(effect.polarity.as_str()).unwrap_or(StatusPolarity::Buff),
+        rime_protection_stack_group(effect.status_id).as_str(),
+        1,
+        StackPolicy::Refresh,
+        effect.spell_id.as_str(),
+        StatusPayload::Rime,
+        now,
+        effect.expires_at,
+        String::new(),
+    );
+    ctx.db.status_effect().insert(marker);
+
+    if consumes_armed {
+        let consumed_status_ids: Vec<u64> = ctx
+            .db
+            .status_effect()
+            .target()
+            .filter(effect.source)
+            .filter(|status| {
+                status.effect_kind == StatusEffectKind::Rime.as_str()
+                    && status.stack_group == RIME_CONSUMED_STATUS_GROUP
+                    && status.source == effect.source
+            })
+            .map(|status| status.status_id)
+            .collect();
+        for status_id in consumed_status_ids {
+            ctx.db.status_effect().status_id().delete(status_id);
+        }
+        if let Some(mut armed) = armed {
+            armed.stack_group = RIME_CONSUMED_STATUS_GROUP.to_string();
+            armed.spell_id = effect.spell_id.clone();
+            armed.applied_at = now;
+            ctx.db.status_effect().status_id().update(armed);
+        }
+    }
 }
 
 pub(crate) fn arm_quickening_after_movement_ability(
@@ -6304,11 +6348,7 @@ fn apply_damage_to_npc_state(
         schedule_npc_corpse_despawn(ctx, target, ctx.timestamp);
     }
 
-    let target_survived = state.alive;
     ctx.db.npc_state().identity().update(state);
-    if target_survived {
-        arm_rime_after_frost_spell_hit(ctx, hit, ctx.timestamp);
-    }
     if grants_outgoing_rewards {
         record_projectile_return_heal_damage(ctx, hit, hp_damage);
         grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
@@ -8261,6 +8301,7 @@ fn apply_status_internal(
     match stack_policy {
         StackPolicy::Refresh => {
             if let Some(mut existing) = matches.into_iter().next() {
+                clear_rime_protection_for_status(ctx, target, existing.status_id);
                 apply_status_update(
                     &mut existing,
                     source,
@@ -8274,8 +8315,8 @@ fn apply_status_internal(
                     Some(initial_status_stacks(kind, max_stacks)),
                     encode_status_dispel_types(&dispel_types),
                 );
+                apply_rime_protection_to_status(ctx, &existing, now);
                 ctx.db.status_effect().status_id().update(existing);
-                extend_rime_for_applied_debuff(ctx, target, kind, polarity, expires_at, now);
                 apply_status_side_effects(ctx, now, source, target, kind);
                 return;
             }
@@ -8283,6 +8324,7 @@ fn apply_status_internal(
         StackPolicy::AddStackRefresh => {
             if let Some(mut existing) = matches.into_iter().next() {
                 let next_stacks = existing.stacks.saturating_add(1).min(max_stacks.max(1));
+                clear_rime_protection_for_status(ctx, target, existing.status_id);
                 apply_status_update(
                     &mut existing,
                     source,
@@ -8296,8 +8338,8 @@ fn apply_status_internal(
                     Some(next_stacks),
                     encode_status_dispel_types(&dispel_types),
                 );
+                apply_rime_protection_to_status(ctx, &existing, now);
                 ctx.db.status_effect().status_id().update(existing);
-                extend_rime_for_applied_debuff(ctx, target, kind, polarity, expires_at, now);
                 apply_status_side_effects(ctx, now, source, target, kind);
                 return;
             }
@@ -8307,6 +8349,7 @@ fn apply_status_internal(
                 if !payload.is_stronger_than_status(&existing) {
                     return;
                 }
+                clear_rime_protection_for_status(ctx, target, existing.status_id);
                 apply_status_update(
                     &mut existing,
                     source,
@@ -8320,15 +8363,15 @@ fn apply_status_internal(
                     Some(1),
                     encode_status_dispel_types(&dispel_types),
                 );
+                apply_rime_protection_to_status(ctx, &existing, now);
                 ctx.db.status_effect().status_id().update(existing);
-                extend_rime_for_applied_debuff(ctx, target, kind, polarity, expires_at, now);
                 apply_status_side_effects(ctx, now, source, target, kind);
                 return;
             }
         }
     }
 
-    ctx.db.status_effect().insert(new_status_effect(
+    let applied = ctx.db.status_effect().insert(new_status_effect(
         target,
         source,
         polarity,
@@ -8341,7 +8384,7 @@ fn apply_status_internal(
         expires_at,
         encode_status_dispel_types(&dispel_types),
     ));
-    extend_rime_for_applied_debuff(ctx, target, kind, polarity, expires_at, now);
+    apply_rime_protection_to_status(ctx, &applied, now);
     apply_status_side_effects(ctx, now, source, target, kind);
 }
 
@@ -9348,17 +9391,22 @@ fn prune_orphaned_rime_statuses(ctx: &ReducerContext, now: Timestamp) {
         .collect();
 
     for rime in rime_statuses {
-        let has_protected_debuff =
-            ctx.db
-                .status_effect()
-                .target()
-                .filter(rime.target)
-                .any(|effect| {
-                    effect.status_id != rime.status_id
-                        && effect.polarity == StatusPolarity::Debuff.as_str()
-                        && now < effect.expires_at
-                });
-        if !has_protected_debuff {
+        if matches!(
+            rime.stack_group.as_str(),
+            RIME_ARMED_STATUS_GROUP | RIME_CONSUMED_STATUS_GROUP
+        ) {
+            continue;
+        }
+        let protected_status = rime_protected_status_id(rime.stack_group.as_str())
+            .and_then(|status_id| ctx.db.status_effect().status_id().find(status_id));
+        let marker_is_valid = protected_status.is_some_and(|effect| {
+            effect.target == rime.target
+                && effect.source == rime.source
+                && effect.effect_kind != StatusEffectKind::Rime.as_str()
+                && action_instance_keys_match(effect.spell_id.as_str(), rime.spell_id.as_str())
+                && now < effect.expires_at
+        });
+        if !marker_is_valid {
             ctx.db.status_effect().status_id().delete(rime.status_id);
         }
     }
@@ -10597,25 +10645,25 @@ mod tests {
         damage_source_grants_outgoing_rewards, damaging_area_consumes_mirror_images,
         deterministic_fulmination_candidate_index, disabled_target_damage_multiplier,
         due_interval_count, event_prune_cutoff_micros, fire_spell_hit_can_trigger_wildfire,
-        fracture_melee_damage_multiplier, frost_spell_hit_can_apply_rime, fulmination_arc_damage,
+        fracture_melee_damage_multiplier, fulmination_arc_damage,
         fulmination_uses_any_target_audience, furnace_mana_restore_amount,
-        heartseeker_should_auto_crit, holy_shield_end_reason, immolation_damage_for_stacks,
-        immolation_remaining_tick_count, initial_status_stacks, isolated_damage_multiplier,
-        knockback_stagger_duration, melee_attack_can_trigger_fracture,
-        hit_is_direct_melee_attack, mirror_image_intercept_chance,
-        mirror_image_stacks_after_intercept, mirror_images_intercept, new_status_effect,
-        opportunist_passive_is_active_for_profile, point_blank_damage_multiplier,
-        point_within_radius, potential_stacks_after_spell_strike, quickening_cast_speed_multiplier,
-        resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
-        resolve_temporary_hitpoint_absorb, resolved_shove_tunables,
-        spell_critical_can_charge_capacitor, spell_critical_can_trigger_chain_reaction,
-        stacked_slow_pct, stagger_shove_tunables, stationary_target_damage_multiplier,
-        stationary_target_from_poses, status_application_is_blocked_by_immunity,
-        status_has_dispel_type, status_kind_is_intrinsically_undispellable,
-        status_matches_removal_filter_values, status_stacks_after_removal, AuthoredStatusPayload,
-        DamageDelivery, DamageType, EffectPacket, HolyShieldEndReason, MovementModifiers,
-        PendingHit, StackPolicy, StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload,
-        StatusPolarity, StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
+        heartseeker_should_auto_crit, hit_is_direct_melee_attack, holy_shield_end_reason,
+        immolation_damage_for_stacks, immolation_remaining_tick_count, initial_status_stacks,
+        isolated_damage_multiplier, knockback_stagger_duration, melee_attack_can_trigger_fracture,
+        mirror_image_intercept_chance, mirror_image_stacks_after_intercept,
+        mirror_images_intercept, new_status_effect, opportunist_passive_is_active_for_profile,
+        point_blank_damage_multiplier, point_within_radius, potential_stacks_after_spell_strike,
+        quickening_cast_speed_multiplier, resolve_effect_amount_from_roll,
+        resolve_mana_shield_absorb, resolve_temporary_hitpoint_absorb, resolved_shove_tunables,
+        rime_protected_status_id, rime_protection_stack_group, spell_critical_can_charge_capacitor,
+        spell_critical_can_trigger_chain_reaction, stacked_slow_pct, stagger_shove_tunables,
+        stationary_target_damage_multiplier, stationary_target_from_poses,
+        status_application_is_blocked_by_immunity, status_has_dispel_type,
+        status_kind_is_intrinsically_undispellable, status_matches_removal_filter_values,
+        status_stacks_after_removal, AuthoredStatusPayload, DamageDelivery, DamageType,
+        EffectPacket, HolyShieldEndReason, MovementModifiers, PendingHit, StackPolicy,
+        StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
+        StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
         COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_BURDEN_REDIRECT,
         DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PERIODIC, DAMAGE_SOURCE_KIND_PROJECTILE,
         DAMAGE_SOURCE_KIND_SELF_INFLICTED, DAMAGE_SOURCE_KIND_SPELL, HOLY_SHIELD_SPELL_ID,
@@ -10914,7 +10962,7 @@ mod tests {
     }
 
     #[test]
-    fn rime_protection_excludes_debuffs_from_ability_removal_filters() {
+    fn rime_protection_excludes_buffs_and_debuffs_from_ability_removal_filters() {
         assert!(!status_matches_removal_filter_values(
             "DEBUFF",
             "BLEED",
@@ -10923,13 +10971,13 @@ mod tests {
             false,
             true,
         ));
-        assert!(status_matches_removal_filter_values(
+        assert!(!status_matches_removal_filter_values(
             "BUFF",
             "MAGIC",
             Some(StatusPolarity::Buff),
             &[StatusDispelType::Magic],
             false,
-            false,
+            true,
         ));
     }
 
@@ -11214,60 +11262,11 @@ mod tests {
     }
 
     #[test]
-    fn rime_accepts_direct_frost_spells_but_rejects_other_damage_sources() {
-        let source = test_identity_number(1);
-        let target = test_identity_number(2);
-        let hit = |damage_type: &str,
-                   delivery: DamageDelivery,
-                   source_kind: &str,
-                   direct_action_key: &str| PendingHit {
-            hit_id: 0,
-            source,
-            target,
-            spell_id: "RIME_TRIGGER_TEST".to_string(),
-            amount: 10,
-            is_heal: false,
-            damage_type: damage_type.to_string(),
-            target_audience: "HOSTILE".to_string(),
-            damage_delivery: delivery.as_str().to_string(),
-            damage_source_kind: source_kind.to_string(),
-            direct_action_key: direct_action_key.to_string(),
-            is_area: false,
-            queued_at: Timestamp::UNIX_EPOCH,
-            queued_at_micros: 0,
-            queued_order: 0,
-        };
-
-        assert!(frost_spell_hit_can_apply_rime(&hit(
-            "COLD",
-            DamageDelivery::Direct,
-            DAMAGE_SOURCE_KIND_SPELL,
-            "spell-instance:beam",
-        )));
-        assert!(frost_spell_hit_can_apply_rime(&hit(
-            "COLD",
-            DamageDelivery::Direct,
-            DAMAGE_SOURCE_KIND_PROJECTILE,
-            "spell-instance:p0",
-        )));
-        assert!(!frost_spell_hit_can_apply_rime(&hit(
-            "FIRE",
-            DamageDelivery::Direct,
-            DAMAGE_SOURCE_KIND_SPELL,
-            "spell-instance:beam",
-        )));
-        assert!(!frost_spell_hit_can_apply_rime(&hit(
-            "COLD",
-            DamageDelivery::Periodic,
-            DAMAGE_SOURCE_KIND_SPELL,
-            "spell-instance:dot",
-        )));
-        assert!(!frost_spell_hit_can_apply_rime(&hit(
-            "COLD",
-            DamageDelivery::Direct,
-            DAMAGE_SOURCE_KIND_MELEE,
-            "melee:player_input:abc:hit:0",
-        )));
+    fn rime_protection_group_identifies_exactly_one_status() {
+        assert_eq!(rime_protection_stack_group(42), "RIME_PROTECTED:42");
+        assert_eq!(rime_protected_status_id("RIME_PROTECTED:42"), Some(42));
+        assert_eq!(rime_protected_status_id("RIME_PROTECTED:"), None);
+        assert_eq!(rime_protected_status_id("RIME"), None);
     }
 
     #[test]
@@ -11989,8 +11988,9 @@ mod tests {
     }
 
     #[test]
-    fn adaptation_is_intrinsically_undispellable() {
+    fn adaptation_and_rime_metadata_are_intrinsically_undispellable() {
         assert!(status_kind_is_intrinsically_undispellable("ADAPTATION"));
+        assert!(status_kind_is_intrinsically_undispellable("RIME"));
         assert!(!status_kind_is_intrinsically_undispellable(
             "MAGIC_RESISTANCE"
         ));
