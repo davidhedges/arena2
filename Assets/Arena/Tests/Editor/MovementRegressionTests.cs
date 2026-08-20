@@ -856,6 +856,65 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void DaggerCoupDeGrace_AutomaticallyFacesWithoutPriorFacing()
+        {
+            Type meleeInputHandlerType = RequireType("Arena.Input.MeleeInputHandler");
+            MethodInfo automaticallyFacesTarget = RequireMethod(
+                meleeInputHandlerType,
+                "AutomaticallyFacesTarget",
+                typeof(string));
+
+            Assert.That(
+                (bool)automaticallyFacesTarget.Invoke(null, new object[] { "DAGGER_COUP_DE_GRACE" })!,
+                Is.True);
+            Assert.That(
+                (bool)automaticallyFacesTarget.Invoke(null, new object[] { "dagger_coup_de_grace" })!,
+                Is.True);
+            Assert.That(
+                (bool)automaticallyFacesTarget.Invoke(null, new object[] { "DAGGER_NERVE_STRIKE" })!,
+                Is.False);
+        }
+
+        [Test]
+        public void CameraOrbit_AlignBehindMatchesTheCharacterFacingYaw()
+        {
+            var player = new GameObject("CoupDeGraceCameraTestPlayer");
+            var cameraTarget = new GameObject("CoupDeGraceCameraTestTarget");
+            try
+            {
+                Type inputSourceType = RequireType("Arena.Input.LocalPlayerInputSource");
+                Type stateProviderType = RequireType("Arena.Input.LocalPlayerStateProvider");
+                Type orbitType = RequireType("Arena.Presentation.CameraOrbitController");
+                Component inputSource = player.AddComponent(inputSourceType);
+                Component stateProvider = player.AddComponent(stateProviderType);
+                Component orbit = player.AddComponent(orbitType);
+
+                RequireMethod(
+                        orbitType,
+                        "Initialize",
+                        typeof(Transform),
+                        inputSourceType,
+                        stateProviderType)
+                    .Invoke(orbit, new object[] { cameraTarget.transform, inputSource, stateProvider });
+                RequireMethod(orbitType, "AlignBehind", typeof(float))
+                    .Invoke(orbit, new object[] { Mathf.PI * 0.5f });
+
+                Assert.That(
+                    Mathf.Abs(Mathf.DeltaAngle(cameraTarget.transform.eulerAngles.y, 90f)),
+                    Is.LessThan(0.001f));
+                Assert.That((bool)RequireProperty(stateProviderType, "HasCameraYaw").GetValue(stateProvider)!, Is.True);
+                Assert.That(
+                    (float)RequireProperty(stateProviderType, "CameraYaw").GetValue(stateProvider)!,
+                    Is.EqualTo(Mathf.PI * 0.5f).Within(0.0001f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(cameraTarget);
+                UnityEngine.Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
         public void ArcherTripleShot_UsesThreePhasesAndThreeAuthoredProjectileWindows()
         {
             Type setType = RequireType("Arena.Presentation.CombatAnimationSet");

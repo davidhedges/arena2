@@ -2906,6 +2906,7 @@ struct TargetedPositionalGate<'a> {
     check_z: f32,
     effective_range: f32,
     minimum_range: f32,
+    requires_target_facing: bool,
     requires_target_los: bool,
     log_detail: bool,
 }
@@ -2916,13 +2917,15 @@ fn evaluate_targeted_positional_gate(
 ) -> Option<ActionRejectReason> {
     let dx = gate.check_x - gate.caster_phys.pos_x;
     let dz = gate.check_z - gate.caster_phys.pos_z;
-    if !is_direction_within_facing_arc(
-        gate.caster_phys.yaw,
-        dx,
-        dz,
-        MELEE_TARGET_FACING_ARC_RADIANS,
-        0.0,
-    ) {
+    if gate.requires_target_facing
+        && !is_direction_within_facing_arc(
+            gate.caster_phys.yaw,
+            dx,
+            dz,
+            MELEE_TARGET_FACING_ARC_RADIANS,
+            0.0,
+        )
+    {
         if gate.log_detail {
             log::info!(
                 "[MELEE] owner={} source={} strike={} rejected_target_facing caster=({:.2},{:.2}) target=({:.2},{:.2}) yaw={:.2}",
@@ -3000,6 +3003,11 @@ fn evaluate_targeted_positional_gate(
     }
 
     None
+}
+
+fn targeted_melee_requires_current_facing(ability_id: Option<&str>) -> bool {
+    !ability_id
+        .is_some_and(|ability_id| ability_id.eq_ignore_ascii_case(DAGGER_COUP_DE_GRACE_ABILITY_ID))
 }
 
 fn reject_reason_audit_label(reject: Option<ActionRejectReason>) -> &'static str {
@@ -3723,6 +3731,8 @@ fn perform_melee_attack_for_internal(
             (COMBAT_METADATA_NONE, "", "")
         };
     let gap_close = melee_gap_close_for_ability(ctx, gameplay.ability_id.as_deref());
+    let requires_target_facing =
+        targeted_melee_requires_current_facing(gameplay.ability_id.as_deref());
     let effective_range = melee_modifiers.effective_range(gameplay.range, gap_close.is_none());
     let mut resolved_effective_range = effective_range;
     let mut gap_close_active = gap_close.is_some();
@@ -3919,6 +3929,7 @@ fn perform_melee_attack_for_internal(
                 check_z: target_snapshot.pos_z,
                 effective_range: resolved_effective_range,
                 minimum_range: gameplay.minimum_range,
+                requires_target_facing,
                 requires_target_los: gameplay.requires_target_los,
                 log_detail: !use_rewound,
             },
@@ -3937,6 +3948,7 @@ fn perform_melee_attack_for_internal(
                     check_z: pose.pos_z,
                     effective_range: resolved_effective_range,
                     minimum_range: gameplay.minimum_range,
+                    requires_target_facing,
                     requires_target_los: gameplay.requires_target_los,
                     log_detail: use_rewound,
                 },
@@ -6465,13 +6477,15 @@ mod tests {
         resolve_gap_close_destination, resolve_melee_action_reference,
         resolve_melee_action_reference_in_strikes, resolved_hit_window_damages,
         scaled_auto_attack_cadence_ms, scaled_impact_area_damage, scheduled_melee_impact_at,
-        strike_total_duration_ms, timed_melee_movement_destination, yaw_toward_xz,
-        AerialExecutionMode, AirborneTargetingMode, ComboInputDecision, GapCloseActorSnapshot,
+        strike_total_duration_ms, targeted_melee_requires_current_facing,
+        timed_melee_movement_destination, yaw_toward_xz, AerialExecutionMode,
+        AirborneTargetingMode, ComboInputDecision, GapCloseActorSnapshot,
         GapClosePreCommitDecision, MeleeAuthorization, PendingMeleeImpact,
         ResolvedMeleeAttackModifiers, ResolvedMeleeGapClose, ResolvedMeleeTargeting, SpellVec3,
-        StaggerDirection, StrikeData, StrikeHitWindowData, GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH,
-        GAP_CLOSE_DESTINATION_BEHIND_TARGET, GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT,
-        GAP_CLOSE_KIND_LINEAR, GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED, MELEE_MANIFEST_JSON,
+        StaggerDirection, StrikeData, StrikeHitWindowData, DAGGER_COUP_DE_GRACE_ABILITY_ID,
+        GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH, GAP_CLOSE_DESTINATION_BEHIND_TARGET,
+        GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT, GAP_CLOSE_KIND_LINEAR,
+        GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED, MELEE_MANIFEST_JSON,
         MELEE_TARGET_FACING_ARC_RADIANS,
     };
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
@@ -8158,6 +8172,20 @@ mod tests {
         );
 
         assert!((facing_yaw - target.yaw).abs() < 0.001);
+    }
+
+    #[test]
+    fn coup_de_grace_does_not_require_the_caster_to_face_the_target_before_casting() {
+        assert!(!targeted_melee_requires_current_facing(Some(
+            DAGGER_COUP_DE_GRACE_ABILITY_ID,
+        )));
+        assert!(!targeted_melee_requires_current_facing(Some(
+            "dagger_coup_de_grace",
+        )));
+        assert!(targeted_melee_requires_current_facing(Some(
+            "DAGGER_NERVE_STRIKE",
+        )));
+        assert!(targeted_melee_requires_current_facing(None));
     }
 
     #[test]

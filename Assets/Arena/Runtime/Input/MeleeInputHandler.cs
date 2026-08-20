@@ -182,6 +182,7 @@ namespace Arena.Input
                 return false;
 
             bool requiresTarget = RequiresTarget(gameplay);
+            bool automaticallyFacesTarget = AutomaticallyFacesTarget(gameplay.AbilityId);
 
             ICombatTargetEntity? target = null;
             if (requiresTarget)
@@ -195,7 +196,7 @@ namespace Arena.Input
                         ActionRejectReason.InvalidTarget,
                         $"melee rejected: {slotId} requires a live target");
                 }
-                if (!IsTargetWithinFacingArc(entity, target))
+                if (!automaticallyFacesTarget && !IsTargetWithinFacingArc(entity, target))
                 {
                     return RejectLocalMeleeAction(
                         slotId,
@@ -314,8 +315,8 @@ namespace Arena.Input
                 }
             }
 
-            if (requiresTarget)
-                AlignCoupDeGraceFacing(entity, target!, gameplay.AbilityId);
+            if (requiresTarget && automaticallyFacesTarget)
+                AlignCoupDeGraceFacing(entity, target!);
 
             // Send to server for authoritative validation, damage, and remote sync.
             bool predictsLocalVisual = !strikeChoice.shouldQueue;
@@ -426,17 +427,8 @@ namespace Arena.Input
 
         private static void AlignCoupDeGraceFacing(
             PlayerEntity entity,
-            ICombatTargetEntity target,
-            string abilityId)
+            ICombatTargetEntity target)
         {
-            if (!string.Equals(
-                    WireIdentifier.Normalize(abilityId),
-                    CoupDeGraceAbilityId,
-                    System.StringComparison.Ordinal))
-            {
-                return;
-            }
-
             Vector3 toTarget =
                 target.GetPresentationRoot().position - entity.GameObject.transform.position;
             toTarget.y = 0f;
@@ -458,6 +450,14 @@ namespace Arena.Input
             }
 
             entity.GameObject.GetComponent<CameraOrbitController>()?.AlignBehind(targetYaw);
+        }
+
+        private static bool AutomaticallyFacesTarget(string abilityId)
+        {
+            return string.Equals(
+                WireIdentifier.Normalize(abilityId),
+                CoupDeGraceAbilityId,
+                System.StringComparison.Ordinal);
         }
 
         private static MeleeGapCloseCatalog? ResolveGapCloseForAction(
