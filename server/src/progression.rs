@@ -64,7 +64,8 @@ use crate::progression::resource_catalog as _;
 #[allow(unused_imports)]
 use crate::progression::stat_scaling_catalog as _;
 
-const PROGRESSION_CATALOG_JSON: &str = include_str!("progression_catalog.shared.json");
+const PROGRESSION_CATALOG_JSON: &str =
+    include_str!(concat!(env!("OUT_DIR"), "/progression_catalog.shared.json"));
 const ACTION_KIND_ABILITY: &str = "ABILITY";
 const ACTION_KIND_FIXED: &str = "FIXED";
 const FIXED_ACTION_DODGE: &str = "DODGE";

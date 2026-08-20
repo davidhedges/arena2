@@ -178,8 +178,10 @@ const STARTER_INSIGHT_RING_ITEM_DEF_ID: &str = "BRONZE_RING";
 const STARTER_INSIGHT_RING_AFFIX_ID: &str = "AFFIX_INSIGHT_STARTER";
 pub(crate) const AFFIX_KNOCKBACK_RESISTANCE_MINOR: &str = "AFFIX_KNOCKBACK_RESISTANCE_MINOR";
 const STARTER_INSIGHT_RING_VALUE: f32 = 10.0;
-const WEAPON_APPEARANCE_CATALOG_JSON: &str =
-    include_str!("../../Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json");
+const WEAPON_APPEARANCE_CATALOG_JSON: &str = include_str!(concat!(
+    env!("OUT_DIR"),
+    "/weapon_appearance_catalog.shared.json"
+));
 
 pub(crate) const MODIFIER_PHYSICAL_RESISTANCE: &str = "PHYSICAL_RESISTANCE";
 pub(crate) const MODIFIER_MAGIC_RESISTANCE: &str = "MAGIC_RESISTANCE";

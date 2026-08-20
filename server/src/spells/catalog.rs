@@ -27,7 +27,8 @@ use super::manifest::{
     WorldObstacleSecondaryTunables, SPELL_METEOR,
 };
 
-const PROGRESSION_CATALOG_JSON: &str = include_str!("../progression_catalog.shared.json");
+const PROGRESSION_CATALOG_JSON: &str =
+    include_str!(concat!(env!("OUT_DIR"), "/progression_catalog.shared.json"));
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

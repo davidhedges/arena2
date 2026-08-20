@@ -93,7 +93,7 @@ const NPC_CHASE_STOP_EPSILON: f32 = 0.05;
 const NPC_FACE_EPSILON: f32 = 0.001;
 const NPC_LOOTED_CORPSE_DESPAWN_DELAY: Duration = Duration::from_secs(8);
 const NPC_UNLOOTED_CORPSE_DESPAWN_DELAY: Duration = Duration::from_secs(60);
-const NPC_CATALOG_JSON: &str = include_str!("npc_catalog.shared.json");
+const NPC_CATALOG_JSON: &str = include_str!(concat!(env!("OUT_DIR"), "/npc_catalog.shared.json"));
 
 #[table(accessor = npc_template_catalog, public)]
 pub struct NpcTemplateCatalog {

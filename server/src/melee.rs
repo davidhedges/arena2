@@ -136,7 +136,8 @@ const EVENT_BLOCK: &str = COMBAT_EVENT_BLOCK;
 const EVENT_PARRY: &str = COMBAT_EVENT_PARRY;
 const EVENT_EVADE: &str = COMBAT_EVENT_EVADE;
 const EVENT_MISS: &str = COMBAT_EVENT_MISS;
-const MELEE_MANIFEST_JSON: &str = include_str!("melee_manifest.shared.json");
+const MELEE_MANIFEST_JSON: &str =
+    include_str!(concat!(env!("OUT_DIR"), "/melee_manifest.shared.json"));
 const GIGANTISM_STATUS_GROUP: &str = "GIGANTISM";
 const GIGANTISM_MELEE_RANGE_BONUS_METERS: f32 = 1.5;
 const SERRATED_BLADES_STATUS_GROUP: &str = "SERRATED_BLADES";
@@ -6441,7 +6442,8 @@ mod tests {
     use serde_json::Value;
     use spacetimedb::{Identity, Timestamp};
 
-    const PROGRESSION_CATALOG_JSON: &str = include_str!("progression_catalog.shared.json");
+    const PROGRESSION_CATALOG_JSON: &str =
+        include_str!(concat!(env!("OUT_DIR"), "/progression_catalog.shared.json"));
     fn test_identity_with_byte(byte: u8) -> Identity {
         Identity::from_hex(format!("{byte:064x}").as_str())
             .expect("test identity hex should be valid")
