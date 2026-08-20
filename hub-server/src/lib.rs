@@ -64,6 +64,8 @@ const DISCIPLINE_SUBTLETY: &str = "SUBTLETY";
 const DISCIPLINE_WAR: &str = "WAR";
 const DISCIPLINE_ZEAL: &str = "ZEAL";
 const DISCIPLINE_PRECISION: &str = "PRECISION";
+const DISCIPLINE_BLIGHT: &str = "BLIGHT";
+const DISCIPLINE_MORTALITY: &str = "MORTALITY";
 const DISCIPLINE_RUIN: &str = "RUIN";
 
 const DEFAULT_HUB_PRIMARY_DISCIPLINE: &str = DISCIPLINE_WAR;
@@ -1379,6 +1381,7 @@ fn sync_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
     for id in stale_ability_ids {
         ctx.db.hub_ability_definition().ability_id().delete(id);
     }
+    reconcile_hub_player_loadouts_for_catalog(ctx);
 
     let armor_rows: Vec<HubArmorSetDefinition> = HUB_ARMOR_SET_SPECS
         .iter()
@@ -1870,12 +1873,15 @@ fn validate_hub_discipline_loadout(
 }
 
 fn ability_tags_allow_discipline_selection(ability_tags: &str) -> bool {
-    ability_tags.split(',').any(|tag| {
-        matches!(
-            normalize_authored_id(tag).as_str(),
-            "ACTION_BAR_ACTION" | "PASSIVE"
-        )
-    })
+    ability_tags_contain(ability_tags, "ACTION_BAR_ACTION")
+        || ability_tags_contain(ability_tags, "PASSIVE")
+}
+
+fn ability_tags_contain(ability_tags: &str, expected_tag: &str) -> bool {
+    let expected_tag = normalize_authored_id(expected_tag);
+    ability_tags
+        .split(',')
+        .any(|tag| normalize_authored_id(tag) == expected_tag)
 }
 
 fn next_loadout_revision(current: Option<u64>) -> u64 {
@@ -2062,6 +2068,202 @@ fn authored_ability_has_tag(ability: &HubAbilityAuthoring, expected_tag: &str) -
         .ability_tags
         .iter()
         .any(|tag| normalize_authored_id(tag.as_str()) == expected_tag)
+}
+
+fn reconcile_restructured_spell_school_disciplines(
+    selected_ability_ids: &[String],
+    primary_discipline_id: &str,
+    secondary_discipline_id_1: &str,
+    secondary_discipline_id_2: &str,
+    ability_rows: &[HubAbilityDefinition],
+) -> (String, String, String) {
+    let ability_by_id: HashMap<&str, &HubAbilityDefinition> = ability_rows
+        .iter()
+        .map(|ability| (ability.ability_id.as_str(), ability))
+        .collect();
+    let mut selected_counts: HashMap<String, usize> = HashMap::new();
+    for selected_id in selected_ability_ids {
+        let selected_id = normalize_authored_id(selected_id);
+        let Some(ability) = ability_by_id.get(selected_id.as_str()) else {
+            continue;
+        };
+        if ability_tags_allow_discipline_selection(ability.ability_tags.as_str()) {
+            *selected_counts
+                .entry(ability.discipline_id.clone())
+                .or_default() += 1;
+        }
+    }
+
+    let mut disciplines = [
+        normalize_authored_id(primary_discipline_id),
+        normalize_authored_id(secondary_discipline_id_1),
+        normalize_authored_id(secondary_discipline_id_2),
+    ];
+
+    let mortality_count = selected_counts
+        .get(DISCIPLINE_MORTALITY)
+        .copied()
+        .unwrap_or_default();
+    if mortality_count > 0 && !disciplines.iter().any(|id| id == DISCIPLINE_MORTALITY) {
+        if let Some(index) = disciplines.iter().position(|id| id == DISCIPLINE_BLIGHT) {
+            disciplines[index] = DISCIPLINE_MORTALITY.to_string();
+        }
+    }
+
+    let blight_count = selected_counts
+        .get(DISCIPLINE_BLIGHT)
+        .copied()
+        .unwrap_or_default();
+    let ruin_count = selected_counts
+        .get(DISCIPLINE_RUIN)
+        .copied()
+        .unwrap_or_default();
+    if blight_count > 0
+        && !disciplines.iter().any(|id| id == DISCIPLINE_BLIGHT)
+        && disciplines.iter().any(|id| id == DISCIPLINE_RUIN)
+    {
+        if ruin_count == 0 {
+            if let Some(index) = disciplines.iter().position(|id| id == DISCIPLINE_RUIN) {
+                disciplines[index] = DISCIPLINE_BLIGHT.to_string();
+            }
+        } else if let Some(index) =
+            (1..disciplines.len()).find(|index| disciplines[*index].is_empty())
+        {
+            disciplines[index] = DISCIPLINE_BLIGHT.to_string();
+        } else if blight_count > ruin_count {
+            if let Some(index) = disciplines.iter().position(|id| id == DISCIPLINE_RUIN) {
+                disciplines[index] = DISCIPLINE_BLIGHT.to_string();
+            }
+        }
+    }
+
+    (
+        disciplines[0].clone(),
+        disciplines[1].clone(),
+        disciplines[2].clone(),
+    )
+}
+
+fn reconcile_selected_ability_ids(
+    selected_ability_ids: &[String],
+    primary_discipline_id: &str,
+    secondary_discipline_id_1: &str,
+    secondary_discipline_id_2: &str,
+    ability_rows: &[HubAbilityDefinition],
+) -> Vec<String> {
+    let selected_disciplines: HashSet<String> = [
+        primary_discipline_id,
+        secondary_discipline_id_1,
+        secondary_discipline_id_2,
+    ]
+    .into_iter()
+    .map(normalize_authored_id)
+    .filter(|discipline_id| !discipline_id.is_empty())
+    .collect();
+    let ability_by_id: HashMap<&str, &HubAbilityDefinition> = ability_rows
+        .iter()
+        .map(|ability| (ability.ability_id.as_str(), ability))
+        .collect();
+    let mut reconciled = Vec::new();
+    let mut counts: HashMap<String, usize> = HashMap::new();
+
+    for selected_id in selected_ability_ids {
+        let selected_id = normalize_authored_id(selected_id.as_str());
+        let Some(ability) = ability_by_id.get(selected_id.as_str()).copied() else {
+            continue;
+        };
+        if !selected_disciplines.contains(ability.discipline_id.as_str())
+            || !ability_tags_allow_discipline_selection(ability.ability_tags.as_str())
+            || reconciled.contains(&ability.ability_id)
+        {
+            continue;
+        }
+        *counts.entry(ability.discipline_id.clone()).or_default() += 1;
+        reconciled.push(ability.ability_id.clone());
+    }
+
+    let mut ordered_active_abilities: Vec<&HubAbilityDefinition> = ability_rows
+        .iter()
+        .filter(|ability| ability_tags_contain(ability.ability_tags.as_str(), "ACTION_BAR_ACTION"))
+        .collect();
+    ordered_active_abilities
+        .sort_by_key(|ability| (ability.sort_order, ability.ability_id.as_str()));
+
+    for (discipline_id, minimum) in [
+        (
+            normalize_authored_id(primary_discipline_id),
+            PRIMARY_DISCIPLINE_ABILITY_MINIMUM,
+        ),
+        (
+            normalize_authored_id(secondary_discipline_id_1),
+            SECONDARY_DISCIPLINE_ABILITY_MINIMUM,
+        ),
+        (
+            normalize_authored_id(secondary_discipline_id_2),
+            SECONDARY_DISCIPLINE_ABILITY_MINIMUM,
+        ),
+    ] {
+        if discipline_id.is_empty() {
+            continue;
+        }
+        for ability in ordered_active_abilities
+            .iter()
+            .copied()
+            .filter(|ability| ability.discipline_id == discipline_id)
+        {
+            if counts.get(&discipline_id).copied().unwrap_or_default() >= minimum
+                || reconciled.len() >= MAX_DISCIPLINE_LOADOUT_ABILITIES
+            {
+                break;
+            }
+            if reconciled.contains(&ability.ability_id) {
+                continue;
+            }
+            reconciled.push(ability.ability_id.clone());
+            *counts.entry(discipline_id.clone()).or_default() += 1;
+        }
+    }
+
+    reconciled
+}
+
+fn reconcile_hub_player_loadouts_for_catalog(ctx: &ReducerContext) {
+    let ability_rows: Vec<HubAbilityDefinition> = ctx.db.hub_ability_definition().iter().collect();
+    let loadouts: Vec<HubPlayerLoadout> = ctx.db.hub_player_loadout().iter().collect();
+    for mut loadout in loadouts {
+        let (primary, secondary_1, secondary_2) = reconcile_restructured_spell_school_disciplines(
+            loadout.selected_ability_ids.as_slice(),
+            loadout.primary_discipline_id.as_str(),
+            loadout.secondary_discipline_id_1.as_str(),
+            loadout.secondary_discipline_id_2.as_str(),
+            ability_rows.as_slice(),
+        );
+        let reconciled = reconcile_selected_ability_ids(
+            loadout.selected_ability_ids.as_slice(),
+            primary.as_str(),
+            secondary_1.as_str(),
+            secondary_2.as_str(),
+            ability_rows.as_slice(),
+        );
+        if primary == loadout.primary_discipline_id
+            && secondary_1 == loadout.secondary_discipline_id_1
+            && secondary_2 == loadout.secondary_discipline_id_2
+            && reconciled == loadout.selected_ability_ids
+        {
+            continue;
+        }
+        log::info!(
+            "[HUB_CATALOG] Reconciled saved disciplines and abilities for {} after catalog revision",
+            &loadout.owner.to_hex()[..8]
+        );
+        loadout.primary_discipline_id = primary;
+        loadout.secondary_discipline_id_1 = secondary_1;
+        loadout.secondary_discipline_id_2 = secondary_2;
+        loadout.selected_ability_ids = reconciled;
+        loadout.revision = next_loadout_revision(Some(loadout.revision));
+        loadout.updated_at = ctx.timestamp;
+        ctx.db.hub_player_loadout().owner().update(loadout);
+    }
 }
 
 fn bump_provisioner_wakeup(ctx: &ReducerContext) {
@@ -2431,6 +2633,17 @@ mod tests {
         let authored: HubProgressionCatalogFile =
             serde_json::from_str(PROGRESSION_CATALOG_JSON).expect("canonical progression JSON");
         assert!(!authored.combat_disciplines.is_empty());
+        assert!(authored
+            .combat_disciplines
+            .iter()
+            .any(|discipline| discipline.discipline_id == DISCIPLINE_MORTALITY));
+        assert!(authored.abilities.iter().any(|ability| {
+            ability.ability_id == "SPELL_NECROTIC_AURA"
+                && ability.discipline_id == DISCIPLINE_MORTALITY
+        }));
+        assert!(authored.abilities.iter().any(|ability| {
+            ability.ability_id == "SPELL_ICICLE" && ability.discipline_id == DISCIPLINE_BLIGHT
+        }));
         assert!(authored.abilities.iter().any(|ability| {
             ability.actor_scope == "PLAYER"
                 && ability
@@ -2448,6 +2661,149 @@ mod tests {
             "ACTION_BAR_ACTION,PASSIVE"
         ));
         assert!(!ability_tags_allow_discipline_selection("INTERNAL_ONLY"));
+    }
+
+    #[test]
+    fn catalog_reconciliation_drops_stale_or_misowned_abilities_and_restores_minimums() {
+        let mut abilities: Vec<HubAbilityDefinition> = (1..=8)
+            .map(|index| HubAbilityDefinition {
+                ability_id: format!("SUBTLETY_{index}"),
+                discipline_id: DISCIPLINE_SUBTLETY.to_string(),
+                display_name: format!("Subtlety {index}"),
+                resource_kind: "STAMINA".to_string(),
+                resource_cost: 0.0,
+                ability_tags: "ACTION_BAR_ACTION".to_string(),
+                description: String::new(),
+                sort_order: index,
+            })
+            .collect();
+        abilities.push(HubAbilityDefinition {
+            ability_id: "BLIGHT_ACTION".to_string(),
+            discipline_id: "BLIGHT".to_string(),
+            display_name: "Blight Action".to_string(),
+            resource_kind: "MANA".to_string(),
+            resource_cost: 0.0,
+            ability_tags: "ACTION_BAR_ACTION".to_string(),
+            description: String::new(),
+            sort_order: 1,
+        });
+        let selected = [
+            "SUBTLETY_1",
+            "SUBTLETY_2",
+            "SUBTLETY_3",
+            "SUBTLETY_4",
+            "SUBTLETY_5",
+            "SUBTLETY_6",
+            "SUBTLETY_7",
+            "REMOVED_ACTION",
+            "BLIGHT_ACTION",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+
+        assert_eq!(
+            reconcile_selected_ability_ids(
+                selected.as_slice(),
+                DISCIPLINE_SUBTLETY,
+                "BLIGHT",
+                "",
+                abilities.as_slice(),
+            ),
+            [
+                "SUBTLETY_1",
+                "SUBTLETY_2",
+                "SUBTLETY_3",
+                "SUBTLETY_4",
+                "SUBTLETY_5",
+                "SUBTLETY_6",
+                "SUBTLETY_7",
+                "BLIGHT_ACTION",
+                "SUBTLETY_8",
+            ]
+        );
+        assert_eq!(
+            reconcile_selected_ability_ids(
+                selected.as_slice(),
+                DISCIPLINE_SUBTLETY,
+                "",
+                "",
+                abilities.as_slice(),
+            ),
+            [
+                "SUBTLETY_1",
+                "SUBTLETY_2",
+                "SUBTLETY_3",
+                "SUBTLETY_4",
+                "SUBTLETY_5",
+                "SUBTLETY_6",
+                "SUBTLETY_7",
+                "SUBTLETY_8",
+            ]
+        );
+    }
+
+    #[test]
+    fn catalog_reconciliation_migrates_restructured_spell_school_slots() {
+        let ability = |ability_id: &str, discipline_id: &str| HubAbilityDefinition {
+            ability_id: ability_id.to_string(),
+            discipline_id: discipline_id.to_string(),
+            display_name: ability_id.to_string(),
+            resource_kind: "MANA".to_string(),
+            resource_cost: 0.0,
+            ability_tags: "ACTION_BAR_ACTION".to_string(),
+            description: String::new(),
+            sort_order: 1,
+        };
+        let abilities = [
+            ability("NECROTIC_AURA", DISCIPLINE_MORTALITY),
+            ability("ICICLE", DISCIPLINE_BLIGHT),
+            ability("FIREBALL", DISCIPLINE_RUIN),
+            ability("FROST_NOVA", DISCIPLINE_BLIGHT),
+        ];
+
+        assert_eq!(
+            reconcile_restructured_spell_school_disciplines(
+                &["NECROTIC_AURA".to_string(), "ICICLE".to_string()],
+                DISCIPLINE_BLIGHT,
+                DISCIPLINE_RUIN,
+                "",
+                &abilities,
+            ),
+            (
+                DISCIPLINE_MORTALITY.to_string(),
+                DISCIPLINE_BLIGHT.to_string(),
+                String::new(),
+            )
+        );
+        assert_eq!(
+            reconcile_restructured_spell_school_disciplines(
+                &["ICICLE".to_string()],
+                DISCIPLINE_RUIN,
+                "",
+                "",
+                &abilities,
+            ),
+            (DISCIPLINE_BLIGHT.to_string(), String::new(), String::new(),)
+        );
+        assert_eq!(
+            reconcile_restructured_spell_school_disciplines(
+                &[
+                    "ICICLE".to_string(),
+                    "FROST_NOVA".to_string(),
+                    "FIREBALL".to_string(),
+                ],
+                DISCIPLINE_RUIN,
+                DISCIPLINE_SUBTLETY,
+                DISCIPLINE_WAR,
+                &abilities,
+            ),
+            (
+                DISCIPLINE_BLIGHT.to_string(),
+                DISCIPLINE_SUBTLETY.to_string(),
+                DISCIPLINE_WAR.to_string(),
+            )
+        );
     }
 
     #[test]

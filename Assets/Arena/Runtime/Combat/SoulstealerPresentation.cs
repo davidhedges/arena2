@@ -12,7 +12,8 @@ namespace Arena.Combat
         public const string AbilityId = "SPELL_SOULSTEALER";
         public const string ActionId = "SOULSTEALER";
         public const string SoulStolenStatusId = "SOUL_STOLEN";
-        public const string BlightEmpoweredStatusId = "BLIGHT_EMPOWERED";
+        // Keep the wire id stable for existing status rows and generated bindings.
+        public const string MortalityEmpoweredStatusId = "BLIGHT_EMPOWERED";
         public static readonly Color ReadyColor = new(0.55f, 0.20f, 0.82f, 0.98f);
 
         public static bool IsSoulstealerAction(ActiveActionBarAction action) =>
@@ -26,13 +27,13 @@ namespace Arena.Combat
         public static bool HasStolenSoul(DbConnection? conn, SpacetimeDB.Identity? owner) =>
             HasActiveStatus(conn, owner, SoulStolenStatusId);
 
-        public static bool HasEmpoweredBlight(DbConnection? conn, SpacetimeDB.Identity? owner) =>
-            HasActiveStatus(conn, owner, BlightEmpoweredStatusId);
+        public static bool HasEmpoweredMortality(DbConnection? conn, SpacetimeDB.Identity? owner) =>
+            HasActiveStatus(conn, owner, MortalityEmpoweredStatusId);
 
         public static TooltipData EmpowerTooltip() => new(
             "Empower",
             "Stolen Soul Ready",
-            "Press to consume the stolen soul and empower your next damaging Blight spell by 50%.",
+            "Press to consume the stolen soul and empower your next damaging Mortality spell by 50%.",
             ReadyColor,
             footnote: "Empower is armed only by pressing this Soulstealer keybind again.");
 

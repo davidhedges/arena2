@@ -38,12 +38,17 @@
       icon: iconRoot + "COMBAT_DISCIPLINE_SWITCH/PRECISION.png"
     },
     BLIGHT: {
+      description: "Frost, ice, and the binding force of cold.",
+      color: "#6cabd2",
+      icon: iconRoot + "ABILITY/SPELL_ICICLE.png"
+    },
+    MORTALITY: {
       description: "Necromancy, shadow, and corrosive affliction.",
       color: "#799760",
       icon: iconRoot + "ABILITY/SPELL_NECROTIC_AURA.png"
     },
     RUIN: {
-      description: "Fire, frost, and lightning shaped for destruction.",
+      description: "Fire and lightning shaped for destruction.",
       color: "#bd6a4c",
       icon: iconRoot + "ABILITY/SPELL_FIREBALL.png"
     },
@@ -71,6 +76,7 @@
       { discipline_id: "ZEAL", display_name: "Zeal", discipline_kind: "WEAPON", sort_order: 30 },
       { discipline_id: "PRECISION", display_name: "Precision", discipline_kind: "WEAPON", sort_order: 40 },
       { discipline_id: "BLIGHT", display_name: "Blight", discipline_kind: "SPELL_SCHOOL", sort_order: 100 },
+      { discipline_id: "MORTALITY", display_name: "Mortality", discipline_kind: "SPELL_SCHOOL", sort_order: 105 },
       { discipline_id: "RUIN", display_name: "Ruin", discipline_kind: "SPELL_SCHOOL", sort_order: 110 },
       { discipline_id: "DIVINITY", display_name: "Divinity", discipline_kind: "SPELL_SCHOOL", sort_order: 120 },
       { discipline_id: "ARCANA", display_name: "Arcana", discipline_kind: "SPELL_SCHOOL", sort_order: 130 },
@@ -88,7 +94,8 @@
       ["SUBTLETY", "DAGGER_QUICK_CUT", "Quick Cut"],
       ["ZEAL", "PALADIN_SHIELD_PUMMEL", "Shield Bash"],
       ["PRECISION", "ARCHER_POWER_SHOT", "Power Shot"],
-      ["BLIGHT", "SPELL_NECROTIC_AURA", "Necrotic Aura"],
+      ["BLIGHT", "SPELL_ICICLE", "Icicle"],
+      ["MORTALITY", "SPELL_NECROTIC_AURA", "Necrotic Aura"],
       ["RUIN", "SPELL_FIREBALL", "Fireball"],
       ["DIVINITY", "SPELL_RESTORATION", "Restoration"],
       ["ARCANA", "SPELL_MAGIC_MISSILE", "Magic Missile"],

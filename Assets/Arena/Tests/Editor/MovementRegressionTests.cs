@@ -946,14 +946,6 @@ namespace Arena.Tests.Editor
                 "Skill_04_End",
                 specialMovementDriven: false,
                 combatLifecycleDriven: true);
-            AssertPhasedEntry(
-                "DAGGER_FLURRY",
-                "Speed_Attack_Start",
-                "Speed_Attack_Loop",
-                "Speed_Attack_End",
-                specialMovementDriven: false,
-                combatLifecycleDriven: true);
-
             void AssertPhasedEntry(
                 string actionId,
                 string expectedStart,

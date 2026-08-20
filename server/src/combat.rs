@@ -24,18 +24,18 @@ use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WOR
 use crate::player_state::PlayerState;
 use crate::practice::resolve_respawn_pose;
 use crate::progression::{
-    ability_belongs_to_discipline, character_has_selected_discipline, combat_rule_value,
+    ability_belongs_to_discipline, blight_fracture_melee_damage_bonus,
+    blight_rime_protects_debuffs_for_owner, character_has_selected_discipline, combat_rule_value,
     derived_combat_profile_id_for_owner, precision_careful_aim_for_owner,
     precision_heartseeker_stationary_rule, precision_maverick_for_owner,
     precision_point_blank_for_owner, primal_adaptation_for_owner, primal_photosynthesis_for_owner,
     primal_slipstream_cooldown_reduction_for_owner, ruin_acceleration_cooldown_reduction_for_owner,
-    ruin_chain_reaction_spell_for_owner, ruin_fracture_melee_damage_bonus,
-    ruin_furnace_mana_restore_ratio_for_owner, ruin_potential_crit_chance_per_stack_for_owner,
-    ruin_quickening_for_owner, ruin_rime_protects_debuffs_for_owner,
+    ruin_chain_reaction_spell_for_owner, ruin_furnace_mana_restore_ratio_for_owner,
+    ruin_potential_crit_chance_per_stack_for_owner, ruin_quickening_for_owner,
     ruin_wildfire_ignite_for_owner, soulstealer_empowered_damage_bonus,
     subtlety_behind_target_damage_bonus, subtlety_disabled_target_damage_bonus,
     ARCHER_HEARTSEEKER_ABILITY_ID, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD,
-    DISCIPLINE_BLIGHT, DISCIPLINE_RUIN, DISCIPLINE_SUBTLETY,
+    DISCIPLINE_BLIGHT, DISCIPLINE_MORTALITY, DISCIPLINE_SUBTLETY,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, combat_relation, target_audience_allows, CombatRelation,
@@ -6030,7 +6030,7 @@ pub(crate) fn rime_effect_packet_for_frost_spell(
     if lifetime.is_zero()
         || source == Identity::ZERO
         || source == target
-        || !ruin_rime_protects_debuffs_for_owner(ctx, source)
+        || !blight_rime_protects_debuffs_for_owner(ctx, source)
     {
         return None;
     }
@@ -6052,7 +6052,7 @@ pub(crate) fn rime_effect_packet_for_frost_spell(
 
 fn arm_rime_after_frost_spell_hit(ctx: &ReducerContext, hit: &PendingHit, now: Timestamp) {
     if !frost_spell_hit_can_apply_rime(hit)
-        || !ruin_rime_protects_debuffs_for_owner(ctx, hit.source)
+        || !blight_rime_protects_debuffs_for_owner(ctx, hit.source)
     {
         return;
     }
@@ -6463,7 +6463,7 @@ fn resolve_damage_amount(
             * blight_empowered_damage_multiplier(ctx, hit)
             * fracture_melee_damage_multiplier(
                 !fracture_freezes.is_empty(),
-                ruin_fracture_melee_damage_bonus(),
+                blight_fracture_melee_damage_bonus(),
             )
     };
     let source_crit_chance = source_equipment_and_stats.map(|(_, stats)| stats.crit_chance);
@@ -6558,7 +6558,7 @@ fn blight_empowered_damage_multiplier(ctx: &ReducerContext, hit: &PendingHit) ->
     else {
         return 1.0;
     };
-    if !ability_belongs_to_discipline(event.ability_id.as_str(), DISCIPLINE_BLIGHT) {
+    if !ability_belongs_to_discipline(event.ability_id.as_str(), DISCIPLINE_MORTALITY) {
         return 1.0;
     }
 
@@ -6680,7 +6680,7 @@ fn active_fracture_freezes_for_melee_attack(
                 && effect.polarity == StatusPolarity::Debuff.as_str()
                 && effect.source != Identity::ZERO
                 && ctx.timestamp < effect.expires_at
-                && character_has_selected_discipline(ctx, effect.source, DISCIPLINE_RUIN)
+                && character_has_selected_discipline(ctx, effect.source, DISCIPLINE_BLIGHT)
         })
         .collect()
 }

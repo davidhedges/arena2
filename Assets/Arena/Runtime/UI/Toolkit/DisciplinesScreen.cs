@@ -1175,7 +1175,8 @@ namespace Arena.UI
 
             string representative = disciplineId switch
             {
-                "BLIGHT" => "SPELL_NECROTIC_AURA",
+                "BLIGHT" => "SPELL_ICICLE",
+                "MORTALITY" => "SPELL_NECROTIC_AURA",
                 "RUIN" => "SPELL_FIREBALL",
                 "DIVINITY" => "SPELL_CELESTIAL_MANTLE",
                 "PRIMAL" => "SPELL_GUST_OF_WIND",
@@ -1192,7 +1193,8 @@ namespace Arena.UI
             "WAR" => new Color32(213, 161, 72, 255),
             "ZEAL" => new Color32(216, 179, 90, 255),
             "PRECISION" => new Color32(111, 159, 105, 255),
-            "BLIGHT" => new Color32(121, 151, 96, 255),
+            "BLIGHT" => new Color32(108, 171, 210, 255),
+            "MORTALITY" => new Color32(121, 151, 96, 255),
             "RUIN" => new Color32(189, 106, 76, 255),
             "DIVINITY" => new Color32(216, 199, 138, 255),
             "ARCANA" => new Color32(111, 131, 196, 255),
@@ -1206,8 +1208,9 @@ namespace Arena.UI
             "WAR" => "Relentless pressure with a greatsword.",
             "ZEAL" => "Shielded resolve, sacred force, and protection.",
             "PRECISION" => "Measured bow attacks and evasive control.",
-            "BLIGHT" => "Necromancy, shadow, and corrosive affliction.",
-            "RUIN" => "Fire, frost, and lightning shaped for destruction.",
+            "BLIGHT" => "Frost, ice, and the binding force of cold.",
+            "MORTALITY" => "Necromancy, shadow, and corrosive affliction.",
+            "RUIN" => "Fire and lightning shaped for destruction.",
             "DIVINITY" => "Holy restoration, protection, and radiant judgment.",
             "ARCANA" => "Pure magic, control, and staff technique.",
             "PRIMAL" => "Wind and the unyielding force of the natural world.",

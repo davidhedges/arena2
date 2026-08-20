@@ -87,6 +87,7 @@ pub(crate) const DISCIPLINE_WAR: &str = "WAR";
 pub(crate) const DISCIPLINE_ZEAL: &str = "ZEAL";
 pub(crate) const DISCIPLINE_PRECISION: &str = "PRECISION";
 pub(crate) const DISCIPLINE_BLIGHT: &str = "BLIGHT";
+pub(crate) const DISCIPLINE_MORTALITY: &str = "MORTALITY";
 pub(crate) const DISCIPLINE_RUIN: &str = "RUIN";
 pub(crate) const DISCIPLINE_DIVINITY: &str = "DIVINITY";
 pub(crate) const DISCIPLINE_ARCANA: &str = "ARCANA";
@@ -5394,6 +5395,7 @@ fn validate_combat_discipline_catalog() {
         DISCIPLINE_ZEAL.to_string(),
         DISCIPLINE_PRECISION.to_string(),
         DISCIPLINE_BLIGHT.to_string(),
+        DISCIPLINE_MORTALITY.to_string(),
         DISCIPLINE_RUIN.to_string(),
         DISCIPLINE_DIVINITY.to_string(),
         DISCIPLINE_ARCANA.to_string(),
@@ -5419,9 +5421,8 @@ fn validate_combat_discipline_catalog() {
             DISCIPLINE_ZEAL => (DISCIPLINE_KIND_WEAPON, COMBAT_PROFILE_SWORD_AND_SHIELD),
             DISCIPLINE_PRECISION => (DISCIPLINE_KIND_WEAPON, COMBAT_PROFILE_ARCHER_BOW),
             DISCIPLINE_ARCANA => (DISCIPLINE_KIND_SPELL_SCHOOL, "STAFF"),
-            DISCIPLINE_BLIGHT | DISCIPLINE_RUIN | DISCIPLINE_DIVINITY | DISCIPLINE_PRIMAL => {
-                (DISCIPLINE_KIND_SPELL_SCHOOL, "")
-            }
+            DISCIPLINE_BLIGHT | DISCIPLINE_MORTALITY | DISCIPLINE_RUIN | DISCIPLINE_DIVINITY
+            | DISCIPLINE_PRIMAL => (DISCIPLINE_KIND_SPELL_SCHOOL, ""),
             _ => panic!("unsupported combat discipline '{}'", discipline_id),
         };
         assert_eq!(
@@ -6197,8 +6198,8 @@ fn validate_ability_catalog() {
         }
         if ability_id == RUIN_RIME_ABILITY_ID {
             assert_eq!(
-                discipline_id, DISCIPLINE_RUIN,
-                "Rime must remain a Ruin passive"
+                discipline_id, DISCIPLINE_BLIGHT,
+                "Rime must remain a Blight passive"
             );
             assert_eq!(ability_kind, "PASSIVE", "Rime must remain passive");
             assert!(
@@ -6226,8 +6227,8 @@ fn validate_ability_catalog() {
         }
         if ability_id == RUIN_FRACTURE_ABILITY_ID {
             assert_eq!(
-                discipline_id, DISCIPLINE_RUIN,
-                "Fracture must remain a Ruin passive"
+                discipline_id, DISCIPLINE_BLIGHT,
+                "Fracture must remain a Blight passive"
             );
             assert_eq!(ability_kind, "PASSIVE", "Fracture must remain passive");
             assert!(
@@ -7538,7 +7539,7 @@ pub(crate) fn ruin_wildfire_ignite_for_owner(
         })
 }
 
-pub(crate) fn ruin_fracture_melee_damage_bonus() -> f32 {
+pub(crate) fn blight_fracture_melee_damage_bonus() -> f32 {
     progression_catalog()
         .abilities
         .iter()
@@ -7730,8 +7731,11 @@ pub(crate) fn ruin_chain_reaction_spell_for_owner(
         .filter(|action_id| !action_id.is_empty())
 }
 
-pub(crate) fn ruin_rime_protects_debuffs_for_owner(ctx: &ReducerContext, owner: Identity) -> bool {
-    character_has_selected_discipline(ctx, owner, DISCIPLINE_RUIN)
+pub(crate) fn blight_rime_protects_debuffs_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> bool {
+    character_has_selected_discipline(ctx, owner, DISCIPLINE_BLIGHT)
         && progression_catalog().abilities.iter().any(|ability| {
             normalize_identifier(ability.ability_id.as_str()) == RUIN_RIME_ABILITY_ID
                 && ability.gameplay.frost_spell_debuff_protection
@@ -7856,12 +7860,13 @@ mod tests {
         AUTO_ATTACK_MOVEMENT_ALLOW_MOVING, AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
         COMBAT_MODE_FULL_DRAW, COMBAT_MODE_READY, COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED,
         COMBAT_PROFILE_ARCHER_BOW, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_SWORD_AND_SHIELD,
-        COMBAT_PROFILE_TWO_HANDED_SWORD, DAGGER_SHROUD_ABILITY_ID, DISCIPLINE_DIVINITY,
-        DISCIPLINE_PRECISION, DISCIPLINE_PRIMAL, DISCIPLINE_RUIN, GLOBAL_ACTION_BAR_PROFILE,
-        PRIMAL_ADAPTATION_ABILITY_ID, PRIMAL_PHOTOSYNTHESIS_ABILITY_ID,
-        PRIMAL_SLIPSTREAM_ABILITY_ID, RESOURCE_KIND_STAMINA, SUBTLETY_FLEET_FOOTED_ABILITY_ID,
-        SUBTLETY_LINGERING_SHADE_ABILITY_ID, SUBTLETY_OPPORTUNIST_ABILITY_ID,
-        SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID, SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID,
+        COMBAT_PROFILE_TWO_HANDED_SWORD, DAGGER_SHROUD_ABILITY_ID, DISCIPLINE_BLIGHT,
+        DISCIPLINE_DIVINITY, DISCIPLINE_MORTALITY, DISCIPLINE_PRECISION, DISCIPLINE_PRIMAL,
+        DISCIPLINE_RUIN, DISCIPLINE_WAR, GLOBAL_ACTION_BAR_PROFILE, PRIMAL_ADAPTATION_ABILITY_ID,
+        PRIMAL_PHOTOSYNTHESIS_ABILITY_ID, PRIMAL_SLIPSTREAM_ABILITY_ID, RESOURCE_KIND_STAMINA,
+        SUBTLETY_FLEET_FOOTED_ABILITY_ID, SUBTLETY_LINGERING_SHADE_ABILITY_ID,
+        SUBTLETY_OPPORTUNIST_ABILITY_ID, SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID,
+        SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID,
     };
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
 
@@ -10108,14 +10113,14 @@ mod tests {
     }
 
     #[test]
-    fn glacial_advance_authors_ruin_stun_immunity_and_frost_impact() {
+    fn glacial_advance_authors_blight_stun_immunity_and_frost_impact() {
         let catalog = progression_catalog();
         let ability = catalog
             .abilities
             .iter()
             .find(|ability| ability.ability_id == "SPELL_GLACIAL_ADVANCE")
             .expect("Glacial Advance ability should be authored");
-        assert_eq!(ability.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(ability.discipline_id, DISCIPLINE_BLIGHT);
         assert_eq!(ability.action_id, "GLACIAL_ADVANCE");
         assert_eq!(ability_delivery_kind(ability), "APPLY_STATUS");
         assert_eq!(ability.gameplay.cast_time_ms, Some(0));
@@ -10472,7 +10477,7 @@ mod tests {
             .iter()
             .find(|ability| ability.ability_id == "SPELL_SOULSTEALER")
             .expect("Soulstealer ability should be authored");
-        assert_eq!(ability.discipline_id, "BLIGHT");
+        assert_eq!(ability.discipline_id, DISCIPLINE_MORTALITY);
         assert_eq!(ability.action_id, "SOULSTEALER");
         assert_eq!(ability_gameplay_kind(ability), "SPELL");
         assert_eq!(ability.gameplay.cast_time_ms, Some(2_000));
@@ -10730,14 +10735,14 @@ mod tests {
     }
 
     #[test]
-    fn ruin_rime_authors_frost_debuff_protection_meta_status() {
+    fn blight_rime_authors_frost_debuff_protection_meta_status() {
         let catalog = progression_catalog();
         let rime = catalog
             .abilities
             .iter()
             .find(|ability| ability.ability_id == "RUIN_RIME")
             .expect("Rime ability should be authored");
-        assert_eq!(rime.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(rime.discipline_id, DISCIPLINE_BLIGHT);
         assert_eq!(rime.action_id, "RIME");
         assert_eq!(ability_gameplay_kind(rime), "PASSIVE");
         assert!(rime.gameplay.frost_spell_debuff_protection);
@@ -10763,14 +10768,14 @@ mod tests {
     }
 
     #[test]
-    fn ruin_blizzard_authors_point_area_channel_and_persistent_ice_vfx() {
+    fn blight_blizzard_authors_point_area_channel_and_persistent_ice_vfx() {
         let catalog = progression_catalog();
         let ability = catalog
             .abilities
             .iter()
             .find(|ability| ability.ability_id == "SPELL_BLIZZARD")
             .expect("Blizzard ability should be authored");
-        assert_eq!(ability.discipline_id, DISCIPLINE_RUIN);
+        assert_eq!(ability.discipline_id, DISCIPLINE_BLIGHT);
         assert_eq!(ability.action_id, "BLIZZARD");
         assert_eq!(ability_gameplay_kind(ability), "SPELL");
 
@@ -10940,7 +10945,7 @@ mod tests {
     }
 
     #[test]
-    fn ruin_fracture_flash_freeze_and_deepening_cold_author_shatter_combo() {
+    fn blight_fracture_flash_freeze_and_deepening_cold_author_shatter_combo() {
         let catalog = progression_catalog();
         let fracture = catalog
             .abilities
@@ -10949,7 +10954,7 @@ mod tests {
             .expect("Fracture ability should be authored");
         assert_eq!(
             normalize_identifier(fracture.discipline_id.as_str()),
-            DISCIPLINE_RUIN
+            DISCIPLINE_BLIGHT
         );
         assert!(fracture.combat_profile_id.is_empty());
         assert_eq!(fracture.action_id, "FRACTURE");
@@ -10971,7 +10976,7 @@ mod tests {
             .expect("Flash Freeze ability should be authored");
         assert_eq!(
             normalize_identifier(flash_freeze.discipline_id.as_str()),
-            DISCIPLINE_RUIN
+            DISCIPLINE_BLIGHT
         );
         assert_eq!(flash_freeze.action_id, "FLASH_FREEZE");
         assert_eq!(ability_gameplay_kind(flash_freeze), "SPELL");
@@ -11021,7 +11026,7 @@ mod tests {
             .expect("Deepening Cold ability should be authored");
         assert_eq!(
             normalize_identifier(deepening_cold.discipline_id.as_str()),
-            DISCIPLINE_RUIN
+            DISCIPLINE_BLIGHT
         );
         assert_eq!(deepening_cold.action_id, "DEEPENING_COLD");
         assert_eq!(ability_gameplay_kind(deepening_cold), "SPELL");
@@ -11380,14 +11385,14 @@ mod tests {
     }
 
     #[test]
-    fn graveburst_stays_in_blight_and_authors_delayed_area_impact_vfx() {
+    fn graveburst_stays_in_mortality_and_authors_delayed_area_impact_vfx() {
         let catalog = progression_catalog();
         let ability = catalog
             .abilities
             .iter()
             .find(|ability| ability.ability_id == "SPELL_GRAVEBURST")
             .expect("expected Graveburst ability");
-        assert_eq!(ability.discipline_id, "BLIGHT");
+        assert_eq!(ability.discipline_id, DISCIPLINE_MORTALITY);
         assert_eq!(
             normalize_identifier(ability.action_id.as_str()),
             "GRAVEBURST"
@@ -11423,14 +11428,14 @@ mod tests {
     }
 
     #[test]
-    fn gravewake_stays_in_blight_and_authors_moving_bone_wave_vfx() {
+    fn gravewake_stays_in_mortality_and_authors_moving_bone_wave_vfx() {
         let catalog = progression_catalog();
         let ability = catalog
             .abilities
             .iter()
             .find(|ability| ability.ability_id == "SPELL_GRAVEWAKE")
             .expect("expected Gravewake ability");
-        assert_eq!(ability.discipline_id, "BLIGHT");
+        assert_eq!(ability.discipline_id, DISCIPLINE_MORTALITY);
         assert_eq!(
             normalize_identifier(ability.action_id.as_str()),
             "GRAVEWAKE"
@@ -11480,14 +11485,14 @@ mod tests {
     }
 
     #[test]
-    fn necro_prison_stays_in_blight_and_authors_movement_only_zone_contract() {
+    fn necro_prison_stays_in_mortality_and_authors_movement_only_zone_contract() {
         let catalog = progression_catalog();
         let ability = catalog
             .abilities
             .iter()
             .find(|ability| ability.ability_id == "SPELL_NECRO_PRISON")
             .expect("expected Necro Prison ability");
-        assert_eq!(ability.discipline_id, "BLIGHT");
+        assert_eq!(ability.discipline_id, DISCIPLINE_MORTALITY);
         assert_eq!(
             normalize_identifier(ability.action_id.as_str()),
             "NECRO_PRISON"
@@ -11518,14 +11523,14 @@ mod tests {
     }
 
     #[test]
-    fn blood_offering_stays_in_blight_and_authors_health_for_mana_contract() {
+    fn blood_offering_stays_in_mortality_and_authors_health_for_mana_contract() {
         let catalog = progression_catalog();
         let ability = catalog
             .abilities
             .iter()
             .find(|ability| ability.ability_id == "SPELL_BLOOD_OFFERING")
             .expect("expected Blood Offering ability");
-        assert_eq!(ability.discipline_id, "BLIGHT");
+        assert_eq!(ability.discipline_id, DISCIPLINE_MORTALITY);
         assert_eq!(
             normalize_identifier(ability.action_id.as_str()),
             "BLOOD_OFFERING"
@@ -12189,7 +12194,6 @@ mod tests {
         for (ability_id, action_id) in [
             ("DAGGER_QUICK_CUT", "DAGGER_QUICK_CUT"),
             ("DAGGER_SLICE", "DAGGER_SLICE"),
-            ("DAGGER_RIPOSTE", "DAGGER_RIPOSTE"),
             ("DAGGER_DASHING_CUT", "DAGGER_DASHING_CUT"),
             ("DAGGER_ROUNDHOUSE", "DAGGER_ROUNDHOUSE"),
             ("DAGGER_GUT_RIPPER", "DAGGER_COMBO_ATTACK_04_01"),
@@ -12208,7 +12212,6 @@ mod tests {
             ("DAGGER_DIVING_STRIKE", "DAGGER_DIVING_STRIKE"),
             ("DAGGER_DISEMBOWEL", "DAGGER_DISEMBOWEL"),
             ("DAGGER_FLAY", "DAGGER_FLAY"),
-            ("DAGGER_FLURRY", "DAGGER_FLURRY"),
         ] {
             let ability = catalog
                 .abilities
@@ -12230,26 +12233,13 @@ mod tests {
     }
 
     #[test]
-    fn dagger_channel_attacks_author_movement_canceling_runtime() {
+    fn dagger_channel_attack_authors_movement_canceling_runtime() {
         assert_eq!(
             melee_channel_for_ability_id("DAGGER_FLAY"),
             Some(MeleeChannelRuntime {
                 duration_ms: 2500,
                 first_tick_delay_ms: 44,
                 tick_interval_ms: 333,
-                cancel_on_movement: true,
-                use_authored_hit_windows: false,
-                holdable: false,
-                resource_cost_per_release: 0.0,
-                resource_kind_per_release: "",
-            })
-        );
-        assert_eq!(
-            melee_channel_for_ability_id("DAGGER_FLURRY"),
-            Some(MeleeChannelRuntime {
-                duration_ms: 3000,
-                first_tick_delay_ms: 107,
-                tick_interval_ms: 667,
                 cancel_on_movement: true,
                 use_authored_hit_windows: false,
                 holdable: false,
@@ -14546,8 +14536,25 @@ mod tests {
             (
                 "BLIGHT",
                 &[
+                    "SPELL_ICICLE",
+                    "SPELL_FROST_NEEDLE",
+                    "SPELL_ICE_SPIKES",
+                    "SPELL_FROZEN_SPLINTERS",
+                    "SPELL_BLIZZARD",
+                    "SPELL_FROST_NOVA",
+                    "SPELL_GLACIAL_SPIKE",
+                    "SPELL_FROZEN_GRASP",
+                    "SPELL_FLASH_FREEZE",
+                    "SPELL_DEEPENING_COLD",
+                    "SPELL_GLACIAL_ADVANCE",
+                ][..],
+            ),
+            (
+                "MORTALITY",
+                &[
                     "SPELL_VAMPIRIC_ORB",
                     "SPELL_WITHERING_ORB",
+                    "SPELL_SOULSTEALER",
                     "SPELL_NECROTIC_AURA",
                     "SPELL_DEFILED_GROUND",
                     "SPELL_REAP",
@@ -14594,22 +14601,13 @@ mod tests {
                     "SPELL_FIREBALL",
                     "SPELL_FLAMING_ORB",
                     "SPELL_BOLT",
-                    "SPELL_ICICLE",
                     "SPELL_ORBITING_BLADES",
                     "SPELL_METEOR",
                     "SPELL_LIGHTNING",
                     "SPELL_ERUPTION",
-                    "SPELL_FROST_NEEDLE",
-                    "SPELL_ICE_SPIKES",
                     "SPELL_ELECTROCUTE",
-                    "SPELL_FROZEN_SPLINTERS",
-                    "SPELL_BLIZZARD",
-                    "SPELL_FROST_NOVA",
-                    "SPELL_GLACIAL_SPIKE",
-                    "SPELL_FROZEN_GRASP",
                     "SPELL_CAUTERIZE",
                     "SPELL_FLASHFIRE",
-                    "SPELL_GLACIAL_ADVANCE",
                 ][..],
             ),
         ];
@@ -15223,7 +15221,6 @@ mod tests {
         let expected = [
             ("DAGGER_FIND_WEAKNESS", "FIND_WEAKNESS", 86_400_000_u64),
             ("DAGGER_BLADE_TWISTING", "BLADE_TWISTING", 86_400_000_u64),
-            ("DAGGER_DISARM", "DISARM", 4_000_u64),
             ("DAGGER_GOUGE", "GOUGE", 4_000_u64),
             ("DAGGER_TEMPLE_STRIKE", "CONFUSION", 5_000_u64),
         ];
@@ -15264,18 +15261,103 @@ mod tests {
         let animation_ids = parse_spell_ids_from_animation_set_asset(
             animation_set_asset_for_combat_profile(COMBAT_PROFILE_DAGGERS),
         );
-        for spell_id in [
-            "FIND_WEAKNESS",
-            "BLADE_TWISTING",
-            "DISARM",
-            "GOUGE",
-            "TEMPLE_STRIKE",
-        ] {
+        for spell_id in ["FIND_WEAKNESS", "BLADE_TWISTING", "GOUGE", "TEMPLE_STRIKE"] {
             assert!(
                 animation_ids.contains(spell_id),
                 "Dagger animation set must map {spell_id}"
             );
         }
+    }
+
+    #[test]
+    fn moved_disarm_and_shadow_abilities_author_their_new_disciplines() {
+        let catalog = progression_catalog();
+        let disarm = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_DISARM")
+            .expect("expected Disarm");
+        assert_eq!(normalize_identifier(&disarm.discipline_id), DISCIPLINE_WAR);
+        assert_eq!(
+            normalize_identifier(&disarm.combat_profile_id),
+            COMBAT_PROFILE_TWO_HANDED_SWORD
+        );
+        assert!(spell_ids_for_combat_profile(COMBAT_PROFILE_TWO_HANDED_SWORD).contains("DISARM"));
+        assert!(!spell_ids_for_combat_profile(COMBAT_PROFILE_DAGGERS).contains("DISARM"));
+
+        for ability_id in [
+            "DAGGER_DARKNESS",
+            "DAGGER_STALK",
+            "DAGGER_STALK_SHADOWSTEP",
+            "DAGGER_SHADOWREND",
+        ] {
+            let ability = catalog
+                .abilities
+                .iter()
+                .find(|ability| ability.ability_id == ability_id)
+                .unwrap_or_else(|| panic!("expected {ability_id}"));
+            assert_eq!(
+                normalize_identifier(&ability.discipline_id),
+                DISCIPLINE_MORTALITY
+            );
+            assert!(
+                normalize_identifier(&ability.combat_profile_id).is_empty(),
+                "{ability_id} should be profile-neutral in Mortality"
+            );
+        }
+    }
+
+    #[test]
+    fn mortality_and_blight_own_the_complete_restructured_spell_families() {
+        let catalog = progression_catalog();
+        let expected_mortality = HashSet::from([
+            "SPELL_VAMPIRIC_ORB",
+            "SPELL_WITHERING_ORB",
+            "SPELL_SOULSTEALER",
+            "SPELL_NECROTIC_AURA",
+            "SPELL_DEFILED_GROUND",
+            "SPELL_REAP",
+            "SPELL_GRIM_WHEEL",
+            "SPELL_GRAVEBURST",
+            "SPELL_GRAVEWAKE",
+            "SPELL_NECRO_PRISON",
+            "SPELL_BLOOD_OFFERING",
+            "DAGGER_DARKNESS",
+            "DAGGER_STALK",
+            "DAGGER_STALK_SHADOWSTEP",
+            "DAGGER_SHADOWREND",
+        ]);
+        let expected_blight = HashSet::from([
+            "SPELL_ICICLE",
+            "SPELL_FROST_NEEDLE",
+            "SPELL_ICE_SPIKES",
+            "SPELL_FROZEN_SPLINTERS",
+            "SPELL_BLIZZARD",
+            "SPELL_FROST_NOVA",
+            "SPELL_GLACIAL_SPIKE",
+            "SPELL_FROZEN_GRASP",
+            "RUIN_RIME",
+            "RUIN_FRACTURE",
+            "SPELL_FLASH_FREEZE",
+            "SPELL_DEEPENING_COLD",
+            "SPELL_GLACIAL_ADVANCE",
+        ]);
+
+        let mortality: HashSet<&str> = catalog
+            .abilities
+            .iter()
+            .filter(|ability| normalize_identifier(&ability.discipline_id) == DISCIPLINE_MORTALITY)
+            .map(|ability| ability.ability_id.as_str())
+            .collect();
+        let blight: HashSet<&str> = catalog
+            .abilities
+            .iter()
+            .filter(|ability| normalize_identifier(&ability.discipline_id) == DISCIPLINE_BLIGHT)
+            .map(|ability| ability.ability_id.as_str())
+            .collect();
+
+        assert_eq!(mortality, expected_mortality);
+        assert_eq!(blight, expected_blight);
     }
 
     #[test]

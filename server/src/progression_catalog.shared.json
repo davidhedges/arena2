@@ -78,6 +78,16 @@
       "sort_order": 100
     },
     {
+      "discipline_id": "MORTALITY",
+      "display_name": "Mortality",
+      "discipline_kind": "SPELL_SCHOOL",
+      "combat_profile_id": "",
+      "primary_resource_kind": "",
+      "inactive_resource_tick": false,
+      "inactive_decay_delay_ms": 0,
+      "sort_order": 105
+    },
+    {
       "discipline_id": "RUIN",
       "display_name": "Ruin",
       "discipline_kind": "SPELL_SCHOOL",
@@ -1101,7 +1111,7 @@
     {
       "ability_id": "SPELL_ICICLE",
       "actor_scope": "PLAYER",
-      "discipline_id": "RUIN",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "ICICLE",
       "display_name": "Icicle",
@@ -1387,7 +1397,7 @@
     {
       "ability_id": "SPELL_FROST_NEEDLE",
       "actor_scope": "PLAYER",
-      "discipline_id": "RUIN",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "FROST_NEEDLE",
       "display_name": "Frost Needle",
@@ -1422,7 +1432,7 @@
     {
       "ability_id": "SPELL_ICE_SPIKES",
       "actor_scope": "PLAYER",
-      "discipline_id": "RUIN",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "ICE_SPIKES",
       "display_name": "Ice Spikes",
@@ -1464,7 +1474,7 @@
     {
       "ability_id": "SPELL_VAMPIRIC_ORB",
       "actor_scope": "PLAYER",
-      "discipline_id": "BLIGHT",
+      "discipline_id": "MORTALITY",
       "combat_profile_id": "",
       "action_id": "VAMPIRIC_ORB",
       "display_name": "Vampiric Orb",
@@ -1515,7 +1525,7 @@
     {
       "ability_id": "SPELL_WITHERING_ORB",
       "actor_scope": "PLAYER",
-      "discipline_id": "BLIGHT",
+      "discipline_id": "MORTALITY",
       "combat_profile_id": "",
       "action_id": "WITHERING_ORB",
       "display_name": "Withering Orb",
@@ -1564,7 +1574,7 @@
     {
       "ability_id": "SPELL_SOULSTEALER",
       "actor_scope": "PLAYER",
-      "discipline_id": "BLIGHT",
+      "discipline_id": "MORTALITY",
       "combat_profile_id": "",
       "action_id": "SOULSTEALER",
       "display_name": "Soulstealer",
@@ -1714,7 +1724,7 @@
     {
       "ability_id": "SPELL_FROZEN_SPLINTERS",
       "actor_scope": "PLAYER",
-      "discipline_id": "RUIN",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "FROZEN_SPLINTERS",
       "display_name": "Frozen Splinters",
@@ -1754,7 +1764,7 @@
     {
       "ability_id": "SPELL_BLIZZARD",
       "actor_scope": "PLAYER",
-      "discipline_id": "RUIN",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "BLIZZARD",
       "display_name": "Blizzard",
@@ -1929,7 +1939,7 @@
     {
       "ability_id": "SPELL_FROST_NOVA",
       "actor_scope": "PLAYER",
-      "discipline_id": "RUIN",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "FROST_NOVA",
       "display_name": "Frost Nova",
@@ -2068,7 +2078,7 @@
     {
       "ability_id": "SPELL_GLACIAL_SPIKE",
       "actor_scope": "PLAYER",
-      "discipline_id": "RUIN",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "GLACIAL_SPIKE",
       "display_name": "Glacial Spike",
@@ -2106,7 +2116,7 @@
     {
       "ability_id": "SPELL_FROZEN_GRASP",
       "actor_scope": "PLAYER",
-      "discipline_id": "RUIN",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "FROZEN_GRASP",
       "display_name": "Frozen Grasp",
@@ -2144,7 +2154,7 @@
     {
       "ability_id": "SPELL_NECROTIC_AURA",
       "actor_scope": "PLAYER",
-      "discipline_id": "BLIGHT",
+      "discipline_id": "MORTALITY",
       "combat_profile_id": "",
       "action_id": "NECROTIC_AURA",
       "display_name": "Necrotic Aura",
@@ -2179,7 +2189,7 @@
     {
       "ability_id": "SPELL_DEFILED_GROUND",
       "actor_scope": "PLAYER",
-      "discipline_id": "BLIGHT",
+      "discipline_id": "MORTALITY",
       "combat_profile_id": "",
       "action_id": "DEFILED_GROUND",
       "display_name": "Defiled Ground",
@@ -2242,7 +2252,7 @@
     {
       "ability_id": "SPELL_REAP",
       "actor_scope": "PLAYER",
-      "discipline_id": "BLIGHT",
+      "discipline_id": "MORTALITY",
       "combat_profile_id": "",
       "action_id": "REAP",
       "display_name": "Reap",
@@ -2275,7 +2285,7 @@
     {
       "ability_id": "SPELL_GRIM_WHEEL",
       "actor_scope": "PLAYER",
-      "discipline_id": "BLIGHT",
+      "discipline_id": "MORTALITY",
       "combat_profile_id": "",
       "action_id": "GRIM_WHEEL",
       "display_name": "Grim Wheel",
@@ -2329,7 +2339,7 @@
     {
       "ability_id": "SPELL_GRAVEBURST",
       "actor_scope": "PLAYER",
-      "discipline_id": "BLIGHT",
+      "discipline_id": "MORTALITY",
       "combat_profile_id": "",
       "action_id": "GRAVEBURST",
       "display_name": "Graveburst",
@@ -2385,7 +2395,7 @@
     {
       "ability_id": "SPELL_GRAVEWAKE",
       "actor_scope": "PLAYER",
-      "discipline_id": "BLIGHT",
+      "discipline_id": "MORTALITY",
       "combat_profile_id": "",
       "action_id": "GRAVEWAKE",
       "display_name": "Gravewake",
@@ -2453,7 +2463,7 @@
     {
       "ability_id": "SPELL_NECRO_PRISON",
       "actor_scope": "PLAYER",
-      "discipline_id": "BLIGHT",
+      "discipline_id": "MORTALITY",
       "combat_profile_id": "",
       "action_id": "NECRO_PRISON",
       "display_name": "Necro Prison",
@@ -2488,7 +2498,7 @@
     {
       "ability_id": "SPELL_BLOOD_OFFERING",
       "actor_scope": "PLAYER",
-      "discipline_id": "BLIGHT",
+      "discipline_id": "MORTALITY",
       "combat_profile_id": "",
       "action_id": "BLOOD_OFFERING",
       "display_name": "Blood Offering",
@@ -4111,7 +4121,7 @@
     {
       "ability_id": "RUIN_RIME",
       "actor_scope": "PLAYER",
-      "discipline_id": "RUIN",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "RIME",
       "display_name": "Rime",
@@ -4175,7 +4185,7 @@
     {
       "ability_id": "RUIN_FRACTURE",
       "actor_scope": "PLAYER",
-      "discipline_id": "RUIN",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "FRACTURE",
       "display_name": "Fracture",
@@ -4193,7 +4203,7 @@
     {
       "ability_id": "SPELL_FLASH_FREEZE",
       "actor_scope": "PLAYER",
-      "discipline_id": "RUIN",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "FLASH_FREEZE",
       "display_name": "Flash Freeze",
@@ -4237,7 +4247,7 @@
     {
       "ability_id": "SPELL_DEEPENING_COLD",
       "actor_scope": "PLAYER",
-      "discipline_id": "RUIN",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "DEEPENING_COLD",
       "display_name": "Deepening Cold",
@@ -4372,7 +4382,7 @@
     {
       "ability_id": "SPELL_GLACIAL_ADVANCE",
       "actor_scope": "PLAYER",
-      "discipline_id": "RUIN",
+      "discipline_id": "BLIGHT",
       "combat_profile_id": "",
       "action_id": "GLACIAL_ADVANCE",
       "display_name": "Glacial Advance",
@@ -6778,31 +6788,6 @@
       }
     },
     {
-      "ability_id": "DAGGER_RIPOSTE",
-      "actor_scope": "PLAYER",
-      "discipline_id": "SUBTLETY",
-      "combat_profile_id": "DAGGERS",
-      "action_id": "DAGGER_RIPOSTE",
-      "display_name": "Riposte",
-      "resource_kind": "STAMINA",
-      "resource_cost": 30,
-      "ability_tags": [
-        "ACTION_BAR_ACTION"
-      ],
-      "sort_order": 20,
-      "gameplay": {
-        "kind": "MELEE",
-        "base_damage": 36,
-        "applies_stagger": false,
-        "range": 2.25,
-        "cooldown_ms": 1000,
-        "uses_global_cooldown": true,
-        "parry_behavior": "PARRYABLE",
-        "block_behavior": "BLOCKABLE",
-        "airborne_targeting_mode": "ANY_TARGET"
-      }
-    },
-    {
       "ability_id": "DAGGER_DASHING_CUT",
       "actor_scope": "PLAYER",
       "discipline_id": "SUBTLETY",
@@ -7352,37 +7337,6 @@
       }
     },
     {
-      "ability_id": "DAGGER_FLURRY",
-      "actor_scope": "PLAYER",
-      "discipline_id": "SUBTLETY",
-      "combat_profile_id": "DAGGERS",
-      "action_id": "DAGGER_FLURRY",
-      "display_name": "Flurry",
-      "resource_kind": "STAMINA",
-      "resource_cost": 50,
-      "ability_tags": [
-        "ACTION_BAR_ACTION"
-      ],
-      "sort_order": 51,
-      "gameplay": {
-        "kind": "MELEE",
-        "base_damage": 80,
-        "applies_stagger": false,
-        "range": 2.5,
-        "cooldown_ms": 6000,
-        "uses_global_cooldown": true,
-        "parry_behavior": "PARRYABLE",
-        "block_behavior": "BLOCKABLE",
-        "airborne_targeting_mode": "ANY_TARGET",
-        "melee_channel": {
-          "duration_ms": 3000,
-          "first_tick_delay_ms": 107,
-          "tick_interval_ms": 667,
-          "cancel_on_movement": true
-        }
-      }
-    },
-    {
       "ability_id": "DAGGER_STEALTH",
       "actor_scope": "PLAYER",
       "discipline_id": "SUBTLETY",
@@ -7521,8 +7475,8 @@
     {
       "ability_id": "DAGGER_DISARM",
       "actor_scope": "PLAYER",
-      "discipline_id": "SUBTLETY",
-      "combat_profile_id": "DAGGERS",
+      "discipline_id": "WAR",
+      "combat_profile_id": "TWO_HANDED_SWORD",
       "action_id": "DISARM",
       "display_name": "Disarm",
       "resource_kind": "MANA",
@@ -7780,8 +7734,8 @@
     {
       "ability_id": "DAGGER_DARKNESS",
       "actor_scope": "PLAYER",
-      "discipline_id": "SUBTLETY",
-      "combat_profile_id": "DAGGERS",
+      "discipline_id": "MORTALITY",
+      "combat_profile_id": "",
       "action_id": "DARKNESS",
       "display_name": "Darkness",
       "resource_kind": "MANA",
@@ -7821,8 +7775,8 @@
     {
       "ability_id": "DAGGER_STALK",
       "actor_scope": "PLAYER",
-      "discipline_id": "SUBTLETY",
-      "combat_profile_id": "DAGGERS",
+      "discipline_id": "MORTALITY",
+      "combat_profile_id": "",
       "action_id": "STALK",
       "display_name": "Stalk",
       "resource_kind": "MANA",
@@ -7862,8 +7816,8 @@
     {
       "ability_id": "DAGGER_STALK_SHADOWSTEP",
       "actor_scope": "PLAYER",
-      "discipline_id": "SUBTLETY",
-      "combat_profile_id": "DAGGERS",
+      "discipline_id": "MORTALITY",
+      "combat_profile_id": "",
       "action_id": "STALK_SHADOWSTEP",
       "display_name": "Stalk",
       "resource_kind": "MANA",
@@ -7893,8 +7847,8 @@
     {
       "ability_id": "DAGGER_SHADOWREND",
       "actor_scope": "PLAYER",
-      "discipline_id": "SUBTLETY",
-      "combat_profile_id": "DAGGERS",
+      "discipline_id": "MORTALITY",
+      "combat_profile_id": "",
       "action_id": "SHADOWREND",
       "display_name": "Shadowrend",
       "resource_kind": "MANA",
@@ -9402,21 +9356,21 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_SOULSTEALER",
       "display_name": "Soulstealer",
-      "description": "Steals a hostile target's soul after a 2-second cast. While carrying the soul, press this ability again to arm Empower for your next damaging Blight spell.",
+      "description": "Steals a hostile target's soul after a 2-second cast. While carrying the soul, press this ability again to arm Empower for your next damaging Mortality spell.",
       "sort_order": 87
     },
     {
       "presentation_kind": "STATUS",
       "presentation_id": "SOUL_STOLEN",
       "display_name": "Soul Stolen",
-      "description": "A stolen soul is ready. Press Soulstealer again to Empower your next damaging Blight spell.",
+      "description": "A stolen soul is ready. Press Soulstealer again to Empower your next damaging Mortality spell.",
       "sort_order": 87
     },
     {
       "presentation_kind": "STATUS",
       "presentation_id": "BLIGHT_EMPOWERED",
-      "display_name": "Blight Empowered",
-      "description": "Your next damaging Blight spell deals 50% more damage.",
+      "display_name": "Mortality Empowered",
+      "description": "Your next damaging Mortality spell deals 50% more damage.",
       "sort_order": 88
     },
     {
@@ -10436,13 +10390,6 @@
     },
     {
       "presentation_kind": "ABILITY",
-      "presentation_id": "DAGGER_RIPOSTE",
-      "display_name": "Riposte",
-      "description": "A committed dagger counterattack.",
-      "sort_order": 210
-    },
-    {
-      "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_DASHING_CUT",
       "display_name": "Dashing Cut",
       "description": "Dashes to the target for a quick dagger strike.",
@@ -10566,13 +10513,6 @@
       "display_name": "Flay",
       "description": "Channels a sustained series of close dagger cuts; movement cancels the attack.",
       "sort_order": 238
-    },
-    {
-      "presentation_kind": "ABILITY",
-      "presentation_id": "DAGGER_FLURRY",
-      "display_name": "Flurry",
-      "description": "Channels a blinding storm of dagger strikes; movement cancels the attack.",
-      "sort_order": 239
     },
     {
       "presentation_kind": "ABILITY",
@@ -13262,12 +13202,6 @@
       "combat_profile_id": "DAGGERS",
       "ability_id": "DAGGER_QUICK_CUT",
       "sort_order": 240
-    },
-    {
-      "slot_id": "slot_0_1",
-      "combat_profile_id": "DAGGERS",
-      "ability_id": "DAGGER_RIPOSTE",
-      "sort_order": 250
     },
     {
       "slot_id": "slot_0_2",
