@@ -40,6 +40,11 @@ namespace Arena.Combat
             {
                 return LightningReflexesPresentation.TripTooltip();
             }
+            if (StalkPresentation.IsStalkAction(action)
+                && StalkPresentation.IsShadowAttached(conn, owner))
+            {
+                return StalkPresentation.ShadowstepTooltip(conn);
+            }
 
             ActionPresentationCatalog? presentation =
                 ActionPresentation.FindPresentation(conn, PresentationKindAbility, action.AbilityId)

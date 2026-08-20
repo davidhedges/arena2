@@ -529,6 +529,24 @@ namespace Arena.Input
                 SendCastRequest(conn, spellId, string.Empty, 0f, 0f, 0f, tripToken);
                 return true;
             }
+            // Stalk with a shadow already out: the server turns the press into the
+            // shadow step, which is free and off Stalk's long cooldown, so the local
+            // cooldown and resource gates would be checked against the wrong ability.
+            // The step also needs no target, so it must not go through TryCastTargeted.
+            if (StalkPresentation.IsStalkAbility(spellId, spellId)
+                && StalkPresentation.IsShadowAttached(conn, localPlayer.Identity))
+            {
+                if (!CanAttemptCast(usesGlobalCooldown: true))
+                {
+                    ActionBarTrace.Trace("Shadowstep dispatch rejected by local active-action gate");
+                    return false;
+                }
+
+                CastActionToken stepToken = LocalCombatState.Instance.CreateCastActionToken(spellId);
+                ActionBarTrace.Trace("sending Shadowstep press through the Stalk keybind");
+                SendCastRequest(conn, spellId, string.Empty, 0f, 0f, 0f, stepToken);
+                return true;
+            }
             // TS: canAttemptCast() — client-side gates for snappy rejection.
             if (!CanAttemptCast(
                 usesGlobalCooldown,

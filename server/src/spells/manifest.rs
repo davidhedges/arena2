@@ -153,6 +153,7 @@ pub(crate) enum SpellBehavior {
     SelfResource,
     SelfTeleport,
     Transpose,
+    StalkTeleport,
     WorldObstacle,
     Recall,
 }
@@ -177,6 +178,7 @@ impl SpellBehavior {
             Self::SelfResource => "SELF_RESOURCE",
             Self::SelfTeleport => "SELF_TELEPORT",
             Self::Transpose => "TRANSPOSE",
+            Self::StalkTeleport => "STALK_TELEPORT",
             Self::WorldObstacle => "WORLD_OBSTACLE",
             Self::Recall => "RECALL",
         }

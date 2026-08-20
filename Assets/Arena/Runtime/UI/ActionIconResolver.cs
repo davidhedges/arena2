@@ -55,7 +55,8 @@ namespace Arena.UI
         /// <summary>
         /// Resolves the presentation id to draw for an ability, honoring abilities that
         /// swap to a second face while armed (Capacitor's Discharge, Lightning Reflexes'
-        /// Trip). They are mutually exclusive, so the chain is order-independent.
+        /// Trip, Stalk's shadow step). They are mutually exclusive, so the chain is
+        /// order-independent.
         /// </summary>
         public static string ResolvePresentationId(
             DbConnection? conn,
@@ -64,7 +65,8 @@ namespace Arena.UI
             string actionId = "")
         {
             string capacitor = CapacitorPresentation.ResolvePresentationId(conn, owner, abilityId, actionId);
-            return LightningReflexesPresentation.ResolvePresentationId(conn, owner, capacitor, actionId);
+            string reflexes = LightningReflexesPresentation.ResolvePresentationId(conn, owner, capacitor, actionId);
+            return StalkPresentation.ResolvePresentationId(conn, owner, reflexes, actionId);
         }
 
         public static Sprite? Resolve(string presentationKind, string presentationId)

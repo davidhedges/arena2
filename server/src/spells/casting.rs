@@ -34,8 +34,9 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect;
 use crate::combat::{
-    active_emanation_for_owner, advance_slipstream_after_movement_ability,
-    arm_quickening_after_movement_ability, consume_active_immolation_damage,
+    active_emanation_for_owner, active_stalk_mark_target,
+    advance_slipstream_after_movement_ability, arm_quickening_after_movement_ability,
+    clear_stalk_mark, consume_active_immolation_damage,
     consume_quickening_for_cast, has_active_disabling_status, has_active_status,
     hostile_targeted_ability_misses, AttackAim, mark_harmful_combat_action, queue_delayed_status_effect,
     queue_effects, quickening_cast_speed_multiplier_for_owner, register_projectile_return_heal,
@@ -2766,6 +2767,7 @@ fn process_spell_cast(
             | SpellBehavior::SelfResource
             | SpellBehavior::SelfTeleport
             | SpellBehavior::Transpose
+            | SpellBehavior::StalkTeleport
             | SpellBehavior::WorldObstacle
     ) {
         if mode == CastExecutionMode::Execute {
@@ -2926,6 +2928,20 @@ fn process_spell_cast(
                         ActionRejectReason::InvalidTarget,
                     ));
                 }
+                SpellBehavior::StalkTeleport => {
+                    return Ok(reject_unless(
+                        cast_stalk_teleport(
+                            ctx,
+                            caster,
+                            state,
+                            spell_kind,
+                            mode,
+                            action_instance_id,
+                            ability_id,
+                        )?,
+                        ActionRejectReason::InvalidTarget,
+                    ));
+                }
                 SpellBehavior::WorldObstacle => {
                     cast_world_obstacle(
                         ctx,
@@ -2999,6 +3015,12 @@ fn process_spell_cast(
         if definition.behavior == SpellBehavior::Transpose {
             return Ok(reject_unless(
                 cast_transpose(ctx, caster, state, spell_kind, target_id, mode, "", "")?,
+                ActionRejectReason::InvalidTarget,
+            ));
+        }
+        if definition.behavior == SpellBehavior::StalkTeleport {
+            return Ok(reject_unless(
+                cast_stalk_teleport(ctx, caster, state, spell_kind, mode, "", "")?,
                 ActionRejectReason::InvalidTarget,
             ));
         }
@@ -9242,6 +9264,107 @@ fn cast_self_teleport(
             },
         );
     }
+}
+
+/// Stalk's second press. The shadow is the reach: the caster steps to whoever
+/// is carrying their STALKED mark at any distance, with no target selected and
+/// no line of sight required, and lands behind the victim facing the way the
+/// victim faces. The mark is spent here rather than in the press redirect, so a
+/// step that cannot resolve leaves the shadow attached.
+///
+/// This deliberately does not arm Lingering Shade. Stalk is already a
+/// return-to-a-mark ability on this keybind; a second one layered on top would
+/// make the next press ambiguous.
+fn cast_stalk_teleport(
+    ctx: &ReducerContext,
+    caster: Identity,
+    state: &CombatActorSnapshot,
+    kind: &SpellId,
+    mode: CastExecutionMode,
+    action_instance_id: &str,
+    ability_id: &str,
+) -> Result<bool, String> {
+    let definition = super::catalog::spell_definition(kind)
+        .expect("validated STALK_TELEPORT spell must resolve to a definition");
+    let now = ctx.timestamp;
+    let Some(marked) = active_stalk_mark_target(ctx, caster, now) else {
+        return Ok(false);
+    };
+    // A shadow on someone who is dead, despawned or no longer in this world can
+    // never be stepped to. Drop it here rather than leaving a press that keeps
+    // being redirected into a step that keeps failing.
+    let unreachable = marked == caster
+        || !actor_snapshot_for(ctx, marked).is_some_and(|target| target.alive)
+        || !players_share_world_context(ctx, caster, marked);
+    if unreachable {
+        clear_stalk_mark(ctx, marked);
+        return Ok(false);
+    }
+    let target = actor_snapshot_for(ctx, marked).expect("reachable mark resolves to a snapshot");
+    if mode != CastExecutionMode::Execute {
+        return Ok(true);
+    }
+
+    let origin = Vec3::new(state.pos_x, state.pos_y, state.pos_z);
+    // Behind is measured off the victim's facing, not the approach line: the
+    // point of the ability is that the step lands where they are not looking.
+    let behind_distance = contact_distance_from_radii(
+        state.hit_radius,
+        target.hit_radius,
+        definition.spawn_forward,
+    );
+    let destination = Vec3::new(
+        target.pos_x - target.facing_yaw.sin() * behind_distance,
+        target.pos_y,
+        target.pos_z - target.facing_yaw.cos() * behind_distance,
+    );
+
+    clear_stalk_mark(ctx, marked);
+    begin_instant_special_movement(
+        ctx,
+        caster,
+        kind.as_str(),
+        now,
+        origin,
+        destination,
+        target.facing_yaw,
+        SPECIAL_MOVEMENT_FACING_FACE_START,
+        SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+    );
+    arm_quickening_after_movement_ability(ctx, caster, now);
+    advance_slipstream_after_movement_ability(ctx, caster, kind.as_str(), now);
+
+    let direction = normalize_vec3(
+        destination.x - origin.x,
+        destination.y - origin.y,
+        destination.z - origin.z,
+    )
+    .map(|(x, y, z)| Vec3::new(x, y, z))
+    .unwrap_or_else(|| default_forward_direction(state));
+    for (event_type, point) in [(EVENT_RELEASE, origin), (EVENT_IMPACT, destination)] {
+        emit_spell_combat_event(
+            ctx,
+            SpellCombatEventPayload {
+                action_instance_id,
+                ability_id,
+                kind,
+                event_type,
+                caster,
+                hit: marked,
+                origin,
+                direction,
+                speed: 0.0,
+                max_distance: 0.0,
+                scalar: SpellCombatEventScalar::None,
+                sequence_index: 0,
+                sequence_count: 1,
+                point,
+                now,
+            },
+        );
+    }
+
+    Ok(true)
 }
 
 #[derive(Clone, Copy)]

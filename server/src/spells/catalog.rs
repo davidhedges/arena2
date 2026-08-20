@@ -305,6 +305,9 @@ enum SpellCatalogDelivery {
     Transpose {
         max_distance: f32,
     },
+    StalkTeleport {
+        behind_buffer: f32,
+    },
     SelfResource {
         #[serde(default)]
         health_cost: i32,
@@ -1636,6 +1639,13 @@ impl SpellCatalogRow {
                 definition.max_distance = max_distance;
                 definition.block_behavior = BlockBehavior::Unblockable;
             }
+            SpellCatalogDelivery::StalkTeleport { behind_buffer } => {
+                definition.behavior = SpellBehavior::StalkTeleport;
+                // Reused as the gap the caster leaves between the two capsules on
+                // arrival; the reach is the shadow, not a distance.
+                definition.spawn_forward = behind_buffer;
+                definition.block_behavior = BlockBehavior::Unblockable;
+            }
         }
 
         definition.target_audience = self.target_audience.unwrap_or_else(|| {
@@ -2345,6 +2355,19 @@ fn validate_definition(def: &SpellDefinition) -> Result<(), String> {
                 ));
             }
             ensure_positive_f32(def.kind.as_str(), "delivery.max_distance", def.max_distance)?;
+        }
+        SpellBehavior::StalkTeleport => {
+            if def.targeting != SpellTargeting::Self_ || def.requires_target {
+                return Err(format!(
+                    "{} STALK_TELEPORT must use SELF targeting without a target requirement",
+                    def.kind.as_str()
+                ));
+            }
+            ensure_finite_non_negative(
+                def.kind.as_str(),
+                "delivery.behind_buffer",
+                def.spawn_forward,
+            )?;
         }
         SpellBehavior::Recall => {
             if def.targeting != SpellTargeting::Self_ || def.requires_target {
@@ -3462,6 +3485,14 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 ));
             }
         }
+        SpellBehavior::StalkTeleport => {
+            if def.secondary != SpellSecondaryTunables::default() {
+                return Err(format!(
+                    "{} STALK_TELEPORT must not define secondary spell tunables",
+                    def.kind.as_str()
+                ));
+            }
+        }
         SpellBehavior::WorldObstacle => {
             let Some(obstacle) = def.secondary.world_obstacle.as_ref() else {
                 return Err(format!(
@@ -4085,6 +4116,7 @@ fn validate_apply_status_kind_for_target(
         | StatusEffectKind::FindWeakness
         | StatusEffectKind::Disarm
         | StatusEffectKind::Gouge
+        | StatusEffectKind::Stalked
         | StatusEffectKind::Fulmination
         | StatusEffectKind::Reckoning
         | StatusEffectKind::DamageRedirect => Ok(()),

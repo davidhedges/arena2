@@ -187,6 +187,9 @@ const LIGHTNING_REFLEXES_SPELL_ID: &str = "LIGHTNING_REFLEXES";
 const LIGHTNING_REFLEXES_STATUS_GROUP: &str = "LIGHTNING_REFLEXES";
 const OFF_BALANCE_STATUS_GROUP: &str = "OFF_BALANCE";
 const RULE_OFF_BALANCE_DURATION_MS: &str = "OFF_BALANCE_DURATION_MS";
+const RULE_SHADOWREND_MELEE_ADVANCE_TICKS: &str = "SHADOWREND_MELEE_ADVANCE_TICKS";
+const SHADOWREND_STATUS_GROUP: &str = "SHADOWREND";
+pub(crate) const STALK_STATUS_GROUP: &str = "STALKED";
 const MIRROR_IMAGE_INTERCEPT_CHANCE_PER_IMAGE: f32 = 0.25;
 const RECKONING_SPELL_ID: &str = "RECKONING";
 const RECKONING_ABILITY_ID: &str = "SPELL_RECKONING";
@@ -3009,6 +3012,7 @@ pub enum StatusEffectKind {
     AllAbilityAvoidance,
     Disarm,
     Gouge,
+    Stalked,
     Fulmination,
     Quickening,
     Rime,
@@ -3071,6 +3075,7 @@ impl StatusEffectKind {
             Self::AllAbilityAvoidance => "ALL_ABILITY_AVOIDANCE",
             Self::Disarm => "DISARM",
             Self::Gouge => "GOUGE",
+            Self::Stalked => "STALKED",
             Self::Fulmination => "FULMINATION",
             Self::Quickening => "QUICKENING",
             Self::Rime => "RIME",
@@ -3133,6 +3138,7 @@ impl StatusEffectKind {
             "ALL_ABILITY_AVOIDANCE" => Some(Self::AllAbilityAvoidance),
             "DISARM" => Some(Self::Disarm),
             "GOUGE" => Some(Self::Gouge),
+            "STALKED" => Some(Self::Stalked),
             "FULMINATION" => Some(Self::Fulmination),
             "QUICKENING" => Some(Self::Quickening),
             "RIME" => Some(Self::Rime),
@@ -3258,6 +3264,7 @@ pub enum StatusPayload {
     AllAbilityAvoidance,
     Disarm,
     Gouge,
+    Stalked,
     Fulmination,
     Quickening,
     Rime,
@@ -3436,6 +3443,7 @@ impl AuthoredStatusPayload {
             StatusEffectKind::AllAbilityAvoidance => StatusPayload::AllAbilityAvoidance,
             StatusEffectKind::Disarm => StatusPayload::Disarm,
             StatusEffectKind::Gouge => StatusPayload::Gouge,
+            StatusEffectKind::Stalked => StatusPayload::Stalked,
             StatusEffectKind::Fulmination => StatusPayload::Fulmination,
             StatusEffectKind::Quickening => StatusPayload::Quickening,
             StatusEffectKind::Rime => StatusPayload::Rime,
@@ -3579,6 +3587,7 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::AllAbilityAvoidance
             | StatusEffectKind::Disarm
             | StatusEffectKind::Gouge
+            | StatusEffectKind::Stalked
             | StatusEffectKind::Fulmination
             | StatusEffectKind::Quickening
             | StatusEffectKind::Rime
@@ -3703,6 +3712,7 @@ impl StatusPayload {
             Self::AllAbilityAvoidance => StatusEffectKind::AllAbilityAvoidance,
             Self::Disarm => StatusEffectKind::Disarm,
             Self::Gouge => StatusEffectKind::Gouge,
+            Self::Stalked => StatusEffectKind::Stalked,
             Self::Fulmination => StatusEffectKind::Fulmination,
             Self::Quickening => StatusEffectKind::Quickening,
             Self::Rime => StatusEffectKind::Rime,
@@ -3739,6 +3749,7 @@ impl StatusPayload {
             | Self::AllAbilityAvoidance
             | Self::Disarm
             | Self::Gouge
+            | Self::Stalked
             | Self::Fulmination
             | Self::Quickening
             | Self::Rime
@@ -4034,6 +4045,7 @@ impl StatusPayload {
             StatusEffectKind::AllAbilityAvoidance => Self::AllAbilityAvoidance,
             StatusEffectKind::Disarm => Self::Disarm,
             StatusEffectKind::Gouge => Self::Gouge,
+            StatusEffectKind::Stalked => Self::Stalked,
             StatusEffectKind::Fulmination => Self::Fulmination,
             StatusEffectKind::Quickening => Self::Quickening,
             StatusEffectKind::Rime => Self::Rime,
@@ -4072,6 +4084,7 @@ impl StatusPayload {
             | Self::AllAbilityAvoidance
             | Self::Disarm
             | Self::Gouge
+            | Self::Stalked
             | Self::Fulmination
             | Self::Quickening
             | Self::Rime
@@ -4182,6 +4195,7 @@ impl StatusPayload {
             | Self::AllAbilityAvoidance
             | Self::Disarm
             | Self::Gouge
+            | Self::Stalked
             | Self::Fulmination
             | Self::Quickening
             | Self::Rime
@@ -4383,6 +4397,7 @@ impl StatusPayload {
             | Self::AllAbilityAvoidance
             | Self::Disarm
             | Self::Gouge
+            | Self::Stalked
             | Self::Fulmination
             | Self::Quickening
             | Self::Rime
@@ -5928,6 +5943,7 @@ fn apply_damage_to_player_state(
         queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
         queue_fulmination_arc_if_applicable(ctx, hit, hp_damage, fulmination_source);
         queue_wildfire_ignites_if_applicable(ctx, hit, hp_damage);
+        advance_shadowrend_from_melee(ctx, hit, hp_damage);
     }
     if grants_outgoing_rewards && hp_damage > 0 && is_direct_damage {
         let action_key = if hit.direct_action_key.trim().is_empty() {
@@ -6302,6 +6318,7 @@ fn apply_damage_to_npc_state(
         queue_vengeance_mark_if_applicable(ctx, hit, hp_damage);
         queue_fulmination_arc_if_applicable(ctx, hit, hp_damage, fulmination_source);
         queue_wildfire_ignites_if_applicable(ctx, hit, hp_damage);
+        advance_shadowrend_from_melee(ctx, hit, hp_damage);
     }
     if grants_outgoing_rewards
         && hp_damage > 0
@@ -6688,7 +6705,7 @@ fn active_fulmination_source(
     hit: &PendingHit,
     now: Timestamp,
 ) -> Option<Identity> {
-    if !melee_attack_can_trigger_fulmination(hit) {
+    if !hit_is_direct_melee_attack(hit) {
         return None;
     }
 
@@ -6706,7 +6723,9 @@ fn active_fulmination_source(
         .map(|effect| effect.source)
 }
 
-fn melee_attack_can_trigger_fulmination(hit: &PendingHit) -> bool {
+/// A landed, damaging melee swing from a real actor -- the shared definition
+/// behind Fulmination's arc and Shadowrend's advance.
+fn hit_is_direct_melee_attack(hit: &PendingHit) -> bool {
     hit.source != Identity::ZERO
         && hit.amount > 0
         && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
@@ -8353,6 +8372,9 @@ fn apply_status_side_effects(
     if kind == StatusEffectKind::Stagger {
         apply_stagger_status_side_effects(ctx, now, source, target);
     }
+    if kind == StatusEffectKind::Stalked {
+        clear_other_stalk_marks(ctx, source, target);
+    }
 }
 
 fn sync_confusion_wander_runtime(ctx: &ReducerContext, target: Identity, now: Timestamp) {
@@ -9791,6 +9813,7 @@ impl StatusRuntimeView {
                     | StatusEffectKind::AllAbilityAvoidance
                     | StatusEffectKind::Disarm
                     | StatusEffectKind::Gouge
+                    | StatusEffectKind::Stalked
                     | StatusEffectKind::Fulmination
                     | StatusEffectKind::Quickening
                     | StatusEffectKind::Rime
@@ -10272,6 +10295,153 @@ pub fn tick_hemorrhage(ctx: &ReducerContext, now: Timestamp, dt: f32) -> usize {
     queued_count
 }
 
+/// Shadowrend: the caster's own melee attacks advance the wound they opened.
+/// Like Hemorrhaging this conserves the DOT's authored total damage -- an
+/// advanced tick pays out immediately and the same span is burned off the
+/// remaining duration -- so hitting the target front-loads the wound rather
+/// than adding damage on top of it, and the number of advances a cast can
+/// ever pay for is capped by its own tick count.
+///
+/// The advance is keyed on the DOT's authored stack group *and* its source, so
+/// only the attacker's own Shadowrend moves. Another assassin's wound on the
+/// same target, and every other magic DOT on them, tick on wall-clock time.
+///
+/// The payout is queued as PERIODIC damage, which is not a melee attack, so it
+/// cannot advance the wound again.
+fn advance_shadowrend_from_melee(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    confirmed_hp_damage: i32,
+) {
+    if confirmed_hp_damage <= 0 || !hit_is_direct_melee_attack(hit) {
+        return;
+    }
+    let authored_ticks = combat_rule_value(RULE_SHADOWREND_MELEE_ADVANCE_TICKS);
+    if !authored_ticks.is_finite() || authored_ticks < 1.0 {
+        return;
+    }
+    let advance_ticks = authored_ticks as u64;
+
+    let now = ctx.timestamp;
+    let wounds: Vec<StatusEffect> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(hit.target)
+        .filter(|effect| {
+            effect.source == hit.source
+                && effect.stack_group == SHADOWREND_STATUS_GROUP
+                && StatusEffectKind::from_wire(effect.effect_kind.as_str())
+                    == Some(StatusEffectKind::Dot)
+                && effect.tick_interval_ms > 0
+                && now < effect.expires_at
+        })
+        .collect();
+    if wounds.is_empty() {
+        return;
+    }
+
+    let mut queued = Vec::new();
+    for mut wound in wounds {
+        let remaining_ms = timestamp_to_micros(wound.expires_at)
+            .saturating_sub(timestamp_to_micros(now))
+            .max(0) as u64
+            / 1000;
+        let interval_ms = wound.tick_interval_ms.max(1);
+        // Only whole ticks are spent. A wound with less than one interval left
+        // is already inside its final tick and simply runs out.
+        let spendable_ms = advance_ticks
+            .saturating_mul(interval_ms)
+            .min(remaining_ms);
+        let ticks = spendable_ms / interval_ms;
+        if ticks == 0 {
+            continue;
+        }
+        let used_ms = ticks.saturating_mul(interval_ms);
+
+        let per_tick = wound.tick_amount.max(0) * wound.stacks.max(1) as i32;
+        let amount = per_tick.saturating_mul(ticks.min(i32::MAX as u64) as i32);
+        if amount > 0 {
+            queued.push(EffectPacket::Damage {
+                amount,
+                damage_type: DamageType::from_wire(wound.damage_type.as_str()),
+                source: wound.source,
+                target: wound.target,
+                spell_id: wound.spell_id.clone(),
+                delivery: DamageDelivery::Periodic,
+                source_kind: DAMAGE_SOURCE_KIND_PERIODIC.to_string(),
+                direct_action_key: String::new(),
+                is_area: false,
+            });
+        }
+
+        // Burn the duration those ticks represent and keep the normal tick clock
+        // inside the shortened window.
+        let expires_at = wound.expires_at - Duration::from_millis(used_ms);
+        wound.expires_at = expires_at;
+        wound.expires_at_micros = timestamp_to_micros(expires_at);
+        if wound.next_tick_at > expires_at {
+            set_status_next_tick(&mut wound, expires_at);
+        }
+        ctx.db.status_effect().status_id().update(wound);
+    }
+
+    if !queued.is_empty() {
+        queue_effects(ctx, queued);
+    }
+}
+
+/// The victim currently carrying `caster`'s Stalk shadow, if the mark is live.
+/// The status row is the whole ledger -- there is no second table to keep in
+/// sync, and the mark dies with the debuff, the victim, or the world change
+/// that already clears status rows.
+pub(crate) fn active_stalk_mark_target(
+    ctx: &ReducerContext,
+    caster: Identity,
+    now: Timestamp,
+) -> Option<Identity> {
+    ctx.db
+        .status_effect()
+        .source()
+        .filter(caster)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::Stalked.as_str()
+                && effect.stack_group == STALK_STATUS_GROUP
+                && now < effect.expires_at
+        })
+        .max_by_key(|effect| effect.status_id)
+        .map(|effect| effect.target)
+}
+
+pub(crate) fn clear_stalk_mark(ctx: &ReducerContext, victim: Identity) {
+    remove_active_status_group(
+        ctx,
+        victim,
+        StatusEffectKind::Stalked,
+        STALK_STATUS_GROUP,
+    );
+}
+
+/// One shadow at a time: attaching it to someone new takes it off whoever was
+/// carrying it, so the follow-up press is never ambiguous about where it goes.
+fn clear_other_stalk_marks(ctx: &ReducerContext, caster: Identity, keep: Identity) {
+    let stale: Vec<Identity> = ctx
+        .db
+        .status_effect()
+        .source()
+        .filter(caster)
+        .filter(|effect| {
+            effect.target != keep
+                && effect.effect_kind == StatusEffectKind::Stalked.as_str()
+                && effect.stack_group == STALK_STATUS_GROUP
+        })
+        .map(|effect| effect.target)
+        .collect();
+    for victim in stale {
+        clear_stalk_mark(ctx, victim);
+    }
+}
+
 pub fn process_periodic_status_ticks(ctx: &ReducerContext, now: Timestamp) -> usize {
     let now_micros = timestamp_to_micros(now);
     let mut due_effects: Vec<StatusEffect> = ctx
@@ -10432,7 +10602,7 @@ mod tests {
         heartseeker_should_auto_crit, holy_shield_end_reason, immolation_damage_for_stacks,
         immolation_remaining_tick_count, initial_status_stacks, isolated_damage_multiplier,
         knockback_stagger_duration, melee_attack_can_trigger_fracture,
-        melee_attack_can_trigger_fulmination, mirror_image_intercept_chance,
+        hit_is_direct_melee_attack, mirror_image_intercept_chance,
         mirror_image_stacks_after_intercept, mirror_images_intercept, new_status_effect,
         opportunist_passive_is_active_for_profile, point_blank_damage_multiplier,
         point_within_radius, potential_stacks_after_spell_strike, quickening_cast_speed_multiplier,
@@ -11210,32 +11380,32 @@ mod tests {
             StatusEffectKind::Gouge,
             TargetAudience::Any,
         ));
-        assert!(melee_attack_can_trigger_fulmination(&qualifying));
-        assert!(!melee_attack_can_trigger_fulmination(&hit(
+        assert!(hit_is_direct_melee_attack(&qualifying));
+        assert!(!hit_is_direct_melee_attack(&hit(
             DamageDelivery::Periodic,
             "MELEE",
             20,
             source,
         )));
-        assert!(!melee_attack_can_trigger_fulmination(&hit(
+        assert!(!hit_is_direct_melee_attack(&hit(
             DamageDelivery::Direct,
             "SPELL",
             20,
             source,
         )));
-        assert!(!melee_attack_can_trigger_fulmination(&hit(
+        assert!(!hit_is_direct_melee_attack(&hit(
             DamageDelivery::Direct,
             "FULMINATION_ARC",
             20,
             source,
         )));
-        assert!(!melee_attack_can_trigger_fulmination(&hit(
+        assert!(!hit_is_direct_melee_attack(&hit(
             DamageDelivery::Direct,
             "MELEE",
             0,
             source,
         )));
-        assert!(!melee_attack_can_trigger_fulmination(&hit(
+        assert!(!hit_is_direct_melee_attack(&hit(
             DamageDelivery::Direct,
             "MELEE",
             20,

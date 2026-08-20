@@ -349,6 +349,8 @@ const CAPACITOR_ACTION_ID: &str = "CAPACITOR";
 const LIGHTNING_REFLEXES_ACTION_ID: &str = "LIGHTNING_REFLEXES";
 const LIGHTNING_REFLEXES_STATUS_GROUP: &str = "LIGHTNING_REFLEXES";
 const TRIP_ACTION_ID: &str = "TRIP";
+const STALK_ACTION_ID: &str = "STALK";
+const STALK_SHADOWSTEP_ACTION_ID: &str = "STALK_SHADOWSTEP";
 pub(crate) const CAPACITOR_MAX_CHARGES: u32 = 5;
 
 fn next_capacitor_charge_count(current: u32) -> u32 {
@@ -691,6 +693,9 @@ fn redirected_followup_definition(
     caster: Identity,
     definition: &'static SpellRuntimeDefinition,
 ) -> &'static SpellRuntimeDefinition {
+    if definition.kind.as_str() == STALK_ACTION_ID {
+        return redirected_stalk_definition(ctx, caster, definition);
+    }
     if definition.kind.as_str() != LIGHTNING_REFLEXES_ACTION_ID {
         return definition;
     }
@@ -713,6 +718,27 @@ fn redirected_followup_definition(
         LIGHTNING_REFLEXES_STATUS_GROUP,
     );
     trip
+}
+
+/// Stalk with a shadow already out: the same keybind becomes the step to
+/// whoever is carrying it. The redirect happens after action-bar authorization
+/// and before every gameplay gate, so the step resolves against its own
+/// cooldown, cost and SELF targeting rather than the mark's -- which is what
+/// lets it be pressed with nothing selected and out of range.
+///
+/// Unlike Trip, the mark is *not* consumed here. The step can still fail its
+/// own validation (the victim left the world, or died between press and
+/// resolve), and a shadow burned by a cast that never happened would be a
+/// silent loss of the ability. cast_stalk_teleport spends it on execution.
+fn redirected_stalk_definition(
+    ctx: &ReducerContext,
+    caster: Identity,
+    definition: &'static SpellRuntimeDefinition,
+) -> &'static SpellRuntimeDefinition {
+    if crate::combat::active_stalk_mark_target(ctx, caster, ctx.timestamp).is_none() {
+        return definition;
+    }
+    catalog::spell_definition_by_str(STALK_SHADOWSTEP_ACTION_ID).unwrap_or(definition)
 }
 
 fn cast_request_executes_immediately(behavior: SpellBehavior, cast_time: Duration) -> bool {

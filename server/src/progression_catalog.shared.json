@@ -372,6 +372,11 @@
       "combat_rule_id": "OFF_BALANCE_DURATION_MS",
       "scalar_value": 6000,
       "sort_order": 120
+    },
+    {
+      "combat_rule_id": "SHADOWREND_MELEE_ADVANCE_TICKS",
+      "scalar_value": 1,
+      "sort_order": 130
     }
   ],
   "stat_scalings": [
@@ -7773,6 +7778,166 @@
       }
     },
     {
+      "ability_id": "DAGGER_DARKNESS",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "DARKNESS",
+      "display_name": "Darkness",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 73,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 20000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 5000,
+          "max_distance": 25,
+          "damage_type": "SHADOW",
+          "status_stack_group": "DARKNESS",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "GOUGE",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_STALK",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "STALK",
+      "display_name": "Stalk",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 74,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 24000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 30000,
+          "max_distance": 30,
+          "damage_type": "SHADOW",
+          "status_stack_group": "STALKED",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "STALKED",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_STALK_SHADOWSTEP",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "STALK_SHADOWSTEP",
+      "display_name": "Stalk",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "COMBO_FOLLOWUP"
+      ],
+      "sort_order": 75,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1500,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "STALK_TELEPORT",
+          "behind_buffer": 0.35
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_SHADOWREND",
+      "actor_scope": "PLAYER",
+      "discipline_id": "SUBTLETY",
+      "combat_profile_id": "DAGGERS",
+      "action_id": "SHADOWREND",
+      "display_name": "Shadowrend",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 76,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 18000,
+          "max_distance": 5,
+          "damage_type": "SHADOW",
+          "status_stack_group": "SHADOWREND",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "DOT",
+            "modifier_scalar": 0,
+            "tick_damage": 6,
+            "tick_interval_ms": 3000,
+            "damage_type": "SHADOW",
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
       "ability_id": "STAFF_STRIKE",
       "actor_scope": "PLAYER",
       "discipline_id": "ARCANA",
@@ -10502,6 +10667,34 @@
     },
     {
       "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_DARKNESS",
+      "display_name": "Darkness",
+      "description": "Smothers a hostile target in shadow for 5 seconds, preventing them from using targeted abilities. Area effects and self-casts remain available.",
+      "sort_order": 253
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_STALK",
+      "display_name": "Stalk",
+      "description": "Attaches your shadow to a hostile target for 30 seconds. Press again to spend the shadow and appear directly behind them.",
+      "sort_order": 254
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_STALK_SHADOWSTEP",
+      "display_name": "Stalk",
+      "description": "Spends your attached shadow to appear directly behind whoever is carrying it, at any distance. Only reachable by re-pressing Stalk.",
+      "sort_order": 255
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_SHADOWREND",
+      "display_name": "Shadowrend",
+      "description": "Tears a hostile target's shadow open for 18 seconds, dealing shadow damage every 3 seconds. Each of your melee attacks on them advances the wound by one tick.",
+      "sort_order": 256
+    },
+    {
+      "presentation_kind": "ABILITY",
       "presentation_id": "STAFF_STRIKE",
       "display_name": "Staff Strike",
       "description": "A controlled staff blow.",
@@ -10835,6 +11028,27 @@
       "display_name": "Off Balance",
       "description": "Overcommitted on a dodged attack. Vulnerable to Trip.",
       "sort_order": 10100
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "DARKNESS",
+      "display_name": "Darkness",
+      "description": "Blinded by shadow. Targeted abilities cannot be used.",
+      "sort_order": 10110
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "STALKED",
+      "display_name": "Stalked",
+      "description": "Carrying an assassin's shadow. They can step to you from anywhere.",
+      "sort_order": 10120
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "SHADOWREND",
+      "display_name": "Shadowrend",
+      "description": "A torn shadow bleeding shadow damage. The caster's melee attacks advance it.",
+      "sort_order": 10130
     }
   ],
   "combat_vfx_cues": [

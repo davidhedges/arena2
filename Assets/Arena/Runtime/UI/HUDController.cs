@@ -1698,7 +1698,8 @@ namespace Arena.UI
                     resolved.AbilityId,
                     !resolved.IsCombatModeToggleAbility && UsesGlobalCooldown(resolved.ActionId, string.Empty),
                     ResolveRequiresTargetLos(conn, resolved),
-                    capacitorCharged);
+                    capacitorCharged,
+                    ResolveCooldownActionId(conn, owner, resolved.AbilityId, resolved.ActionId));
                 SetActionBarSlotPresentation(_abilityGridCd[index], _abilityGridIcons[index], _abilityGridStates[index], slotColor, iconSprite);
                 _abilityGridClicks[index].Configure(
                     isVisible ? () => TriggerActionRef(conn, resolved) : null,
@@ -1761,7 +1762,8 @@ namespace Arena.UI
                     resolved.AbilityId,
                     false,
                     ResolveRequiresTargetLos(conn, resolved),
-                    capacitorCharged);
+                    capacitorCharged,
+                    ResolveCooldownActionId(conn, owner, resolved.AbilityId, resolved.ActionId));
                 SetActionBarSlotPresentation(
                     _disciplineBarCd[index],
                     _disciplineBarIcons[index],
@@ -1832,7 +1834,8 @@ namespace Arena.UI
                     resolved.AbilityId,
                     UsesGlobalCooldown(spellId, string.Empty),
                     ResolveSpellRequiresTargetLos(conn, spellId),
-                    capacitorCharged);
+                    capacitorCharged,
+                    ResolveCooldownActionId(conn, owner, resolved.AbilityId, spellId));
                 SetActionBarSlotPresentation(
                     _spellbookGridCd[col],
                     _spellbookGridIcons[col],
@@ -1854,6 +1857,25 @@ namespace Arena.UI
         // authored requires_target_los is set — melee abilities via the melee
         // catalog row, spells via the spell definition. Fixed actions and
         // non-targeted sweeps never dim.
+        /// <summary>
+        /// Stalk is the one slotted action whose press is redirected for long
+        /// enough to matter on the bar: the mark lasts 30 seconds and Stalk's own
+        /// cooldown covers most of it, so the slot would read as unavailable for
+        /// nearly the whole window the shadow step is live. Lightning Reflexes has
+        /// the same seam for 3 seconds and is deliberately left as it is.
+        /// </summary>
+        private static string ResolveCooldownActionId(
+            DbConnection? conn,
+            SpacetimeDB.Identity? owner,
+            string abilityId,
+            string actionId)
+        {
+            return StalkPresentation.IsStalkAbility(abilityId, actionId)
+                    && StalkPresentation.IsShadowAttached(conn, owner)
+                ? StalkPresentation.FollowUpActionId
+                : actionId;
+        }
+
         private static bool ResolveRequiresTargetLos(DbConnection? conn, ActiveActionBarAction resolved)
         {
             if (conn == null || !resolved.HasAssignedAction || resolved.IsFixed)
@@ -2065,7 +2087,7 @@ namespace Arena.UI
                 Color col = frac > 0f ? GcdOverlay : CdOverlay;
                 float remSec = 0f;
 
-                if (combat.SpellCooldowns.TryGetValue(state.ActionId, out var cd) && cd.durationMs > 0)
+                if (combat.SpellCooldowns.TryGetValue(state.CooldownActionId, out var cd) && cd.durationMs > 0)
                 {
                     float rem = Mathf.Max(0f, cd.lastCastMs + cd.durationMs - nowMs);
                     float spellFrac = rem / cd.durationMs;
@@ -2533,6 +2555,12 @@ namespace Arena.UI
             public readonly bool UsesGlobalCooldown;
             public readonly bool RequiresTargetLos;
             public readonly bool IsCapacitorCharged;
+            /// <summary>
+            /// Spell id whose cooldown this slot draws. It is the slotted action
+            /// except while a press is redirected into a follow-up, where drawing
+            /// the parent's cooldown would grey out a button that is pressable.
+            /// </summary>
+            public readonly string CooldownActionId;
 
             public ActionBarSlotState(
                 string keyLabel,
@@ -2543,7 +2571,8 @@ namespace Arena.UI
                 string abilityId,
                 bool usesGlobalCooldown,
                 bool requiresTargetLos,
-                bool isCapacitorCharged)
+                bool isCapacitorCharged,
+                string cooldownActionId = "")
             {
                 KeyLabel = keyLabel;
                 Label = label;
@@ -2554,6 +2583,7 @@ namespace Arena.UI
                 UsesGlobalCooldown = usesGlobalCooldown;
                 RequiresTargetLos = requiresTargetLos;
                 IsCapacitorCharged = isCapacitorCharged;
+                CooldownActionId = string.IsNullOrWhiteSpace(cooldownActionId) ? actionId : cooldownActionId;
             }
 
             public static ActionBarSlotState Empty(string keyLabel) =>
