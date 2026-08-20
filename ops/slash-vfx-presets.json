@@ -1,0 +1,89 @@
+{
+  "_comment": "Per-archetype half of the slash calibration. The per-clip half (which way the swing plane faces) is measured from the animation; these values say how the effect sits relative to that plane. endOffsetSeconds 0 lets the prefab finish naturally; set it to cut long-lived smoke so fast combos do not stack copies. Tune, then re-run ops/slash-vfx-author.py --apply.",
+  "archetypes": {
+    "HORIZONTAL": {
+      "correctionEuler": [
+        322.1966,
+        300.6403,
+        159.709
+      ],
+      "localPosition": [
+        0.0,
+        0.9,
+        0.0
+      ],
+      "localScale": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "anchor": 0,
+      "attachment": 0,
+      "endOffsetSeconds": 0,
+      "startOffsetSeconds": 0.008
+    },
+    "DIAGONAL": {
+      "correctionEuler": [
+        322.1966,
+        300.6403,
+        159.709
+      ],
+      "localPosition": [
+        0.0,
+        0.9,
+        0.0
+      ],
+      "localScale": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "anchor": 0,
+      "attachment": 0,
+      "endOffsetSeconds": 0,
+      "startOffsetSeconds": 0.008
+    },
+    "VERTICAL": {
+      "correctionEuler": [
+        322.1966,
+        300.6403,
+        159.709
+      ],
+      "localPosition": [
+        0.0,
+        0.9,
+        0.0
+      ],
+      "localScale": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "anchor": 0,
+      "attachment": 0,
+      "endOffsetSeconds": 0,
+      "startOffsetSeconds": 0.008
+    },
+    "THRUST": {
+      "correctionEuler": [
+        322.1966,
+        300.6403,
+        159.709
+      ],
+      "localPosition": [
+        0.0,
+        0.9,
+        0.0
+      ],
+      "localScale": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "anchor": 0,
+      "attachment": 0,
+      "endOffsetSeconds": 0,
+      "startOffsetSeconds": 0.008
+    }
+  }
+}

@@ -495,7 +495,52 @@ namespace Arena.UI
             _boundWeaponAttachments = attachments;
             _boundWeaponVisualVersion = attachments.VisualVersion;
             instance.SetActive(true);
+            BindMeshShapesToRenderer(instance, targetRenderer);
             return true;
+        }
+
+        /// <summary>
+        /// Points every mesh-shaped particle system in the effect at the weapon renderer so
+        /// particles spawn across the whole weapon surface. The vendor OverlayFX component only
+        /// rebinds the systems listed in its own serialized array, and every MeshFX_* prefab
+        /// omits at least its root system; an omitted system keeps a mesh shape with a null
+        /// renderer, which Unity treats as zero surface area and collapses to the emitter origin.
+        /// </summary>
+        private static void BindMeshShapesToRenderer(GameObject effectRoot, Renderer targetRenderer)
+        {
+            ParticleSystem[] systems = effectRoot.GetComponentsInChildren<ParticleSystem>(includeInactive: true);
+            for (int i = 0; i < systems.Length; i++)
+            {
+                ParticleSystem system = systems[i];
+                if (system == null)
+                    continue;
+
+                ParticleSystem.ShapeModule shape = system.shape;
+                if (!shape.enabled)
+                    continue;
+
+                // Only retarget systems the pack already authored as mesh emitters; cones,
+                // spheres and edges are deliberate shapes and must keep their authored form.
+                if (shape.shapeType is not (ParticleSystemShapeType.Mesh
+                    or ParticleSystemShapeType.MeshRenderer
+                    or ParticleSystemShapeType.SkinnedMeshRenderer))
+                    continue;
+
+                if (targetRenderer is SkinnedMeshRenderer skinned)
+                {
+                    shape.shapeType = ParticleSystemShapeType.SkinnedMeshRenderer;
+                    shape.skinnedMeshRenderer = skinned;
+                }
+                else if (targetRenderer is MeshRenderer mesh)
+                {
+                    shape.shapeType = ParticleSystemShapeType.MeshRenderer;
+                    shape.meshRenderer = mesh;
+                }
+
+                // Vertex placement clusters particles on a low-poly weapon's corners; triangle
+                // placement spreads them over the surface area instead.
+                shape.meshShapeType = ParticleSystemMeshShapeType.Triangle;
+            }
         }
 
         private static WeaponAttachmentController? ResolveLocalWeaponAttachments()
