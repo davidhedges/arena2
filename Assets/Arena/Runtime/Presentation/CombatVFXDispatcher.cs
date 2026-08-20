@@ -356,7 +356,12 @@ namespace Arena.Presentation
                 _activePersistentAreaVfxByKey.Remove(row.Key);
             }
 
+            Vector3 origin = new(row.OriginX, row.OriginY, row.OriginZ);
+            Vector3 direction = new(row.DirX, row.DirY, row.DirZ);
             Vector3 point = new(row.AreaX, row.AreaY, row.AreaZ);
+            bool hasStoredFacing = direction.sqrMagnitude > 0.0001f;
+            if (!hasStoredFacing)
+                origin = point;
             var fact = new CombatVfxFact(
                 TriggerSpellImpact,
                 WireIdentifier.Normalize(row.Kind),
@@ -367,8 +372,8 @@ namespace Arena.Presentation
                 row.Target,
                 row.SpellInstanceId,
                 row.Kind,
-                point,
-                Vector3.forward,
+                origin,
+                hasStoredFacing ? direction.normalized : Vector3.forward,
                 point,
                 0f,
                 0f,

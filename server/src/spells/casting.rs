@@ -8116,6 +8116,16 @@ fn cast_persistent_area(
             point.y = terrain_surface_y_for_caster(ctx, caster, point.x, point.z, state.pos_y);
             (None, point)
         }
+        super::manifest::SpellTargeting::Self_ if !definition.requires_target => {
+            let forward = default_forward_direction(state);
+            let mut point = Vec3::new(
+                state.pos_x + forward.x * definition.spawn_forward,
+                state.pos_y,
+                state.pos_z + forward.z * definition.spawn_forward,
+            );
+            point.y = terrain_surface_y_for_caster(ctx, caster, point.x, point.z, state.pos_y);
+            (None, point)
+        }
         _ => return Ok(false),
     };
 
@@ -8192,6 +8202,12 @@ fn start_persistent_area(
         area_x: point.x,
         area_y: point.y,
         area_z: point.z,
+        origin_x: origin.x,
+        origin_y: origin.y,
+        origin_z: origin.z,
+        dir_x: direction.x,
+        dir_y: direction.y,
+        dir_z: direction.z,
         spell_instance_id: action_instance_id.to_string(),
         kind: kind.as_str().to_string(),
         ability_id: ability_id.to_string(),

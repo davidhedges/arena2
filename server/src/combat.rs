@@ -158,6 +158,7 @@ const RULE_KNOCKBACK_MIN_EFFECTIVE_DISTANCE_METERS: &str =
 const RULE_MAX_EQUIPMENT_KNOCKBACK_RESISTANCE: &str = "MAX_EQUIPMENT_KNOCKBACK_RESISTANCE";
 const RULE_FULMINATION_ARC_RADIUS_METERS: &str = "FULMINATION_ARC_RADIUS_METERS";
 const RULE_FULMINATION_ARC_DAMAGE_MULTIPLIER: &str = "FULMINATION_ARC_DAMAGE_MULTIPLIER";
+const RULE_CONTAGION_RADIUS_METERS: &str = "CONTAGION_RADIUS_METERS";
 const EFFECT_TYPE_DAMAGE: &str = "DAMAGE";
 const EFFECT_TYPE_HEAL: &str = "HEAL";
 const EFFECT_TYPE_EVADE: &str = "EVADE";
@@ -3018,6 +3019,7 @@ pub enum StatusEffectKind {
     Rime,
     SoulStolen,
     BlightEmpowered,
+    Contagious,
     Reckoning,
     DamageRedirect,
 }
@@ -3081,6 +3083,7 @@ impl StatusEffectKind {
             Self::Rime => "RIME",
             Self::SoulStolen => "SOUL_STOLEN",
             Self::BlightEmpowered => "BLIGHT_EMPOWERED",
+            Self::Contagious => "CONTAGIOUS",
             Self::Reckoning => "RECKONING",
             Self::DamageRedirect => "DAMAGE_REDIRECT",
         }
@@ -3144,6 +3147,7 @@ impl StatusEffectKind {
             "RIME" => Some(Self::Rime),
             "SOUL_STOLEN" => Some(Self::SoulStolen),
             "BLIGHT_EMPOWERED" => Some(Self::BlightEmpowered),
+            "CONTAGIOUS" => Some(Self::Contagious),
             "RECKONING" => Some(Self::Reckoning),
             "DAMAGE_REDIRECT" => Some(Self::DamageRedirect),
             _ => None,
@@ -3270,6 +3274,7 @@ pub enum StatusPayload {
     Rime,
     SoulStolen,
     BlightEmpowered,
+    Contagious,
     Reckoning,
     DamageRedirect {
         modifier_scalar: f32,
@@ -3449,6 +3454,7 @@ impl AuthoredStatusPayload {
             StatusEffectKind::Rime => StatusPayload::Rime,
             StatusEffectKind::SoulStolen => StatusPayload::SoulStolen,
             StatusEffectKind::BlightEmpowered => StatusPayload::BlightEmpowered,
+            StatusEffectKind::Contagious => StatusPayload::Contagious,
             StatusEffectKind::Reckoning => StatusPayload::Reckoning,
             StatusEffectKind::DamageRedirect => StatusPayload::DamageRedirect {
                 modifier_scalar: self.modifier_scalar,
@@ -3718,6 +3724,7 @@ impl StatusPayload {
             Self::Rime => StatusEffectKind::Rime,
             Self::SoulStolen => StatusEffectKind::SoulStolen,
             Self::BlightEmpowered => StatusEffectKind::BlightEmpowered,
+            Self::Contagious => StatusEffectKind::Contagious,
             Self::Reckoning => StatusEffectKind::Reckoning,
             Self::DamageRedirect { .. } => StatusEffectKind::DamageRedirect,
         }
@@ -3755,6 +3762,7 @@ impl StatusPayload {
             | Self::Rime
             | Self::SoulStolen
             | Self::BlightEmpowered
+            | Self::Contagious
             | Self::Reckoning => StatusEffectColumns {
                 slow_pct: 0.0,
                 tick_amount: 0,
@@ -4051,6 +4059,7 @@ impl StatusPayload {
             StatusEffectKind::Rime => Self::Rime,
             StatusEffectKind::SoulStolen => Self::SoulStolen,
             StatusEffectKind::BlightEmpowered => Self::BlightEmpowered,
+            StatusEffectKind::Contagious => Self::Contagious,
             StatusEffectKind::Reckoning => Self::Reckoning,
             StatusEffectKind::DamageRedirect => Self::DamageRedirect {
                 modifier_scalar: columns.modifier_scalar.max(0.0),
@@ -4090,6 +4099,7 @@ impl StatusPayload {
             | Self::Rime
             | Self::SoulStolen
             | Self::BlightEmpowered
+            | Self::Contagious
             | Self::Reckoning => false,
             Self::Slow { slow_pct } => !(MIN_SLOW_PCT..=0.95).contains(&slow_pct),
             Self::MoveSpeed { modifier_scalar } => {
@@ -4201,6 +4211,7 @@ impl StatusPayload {
             | Self::Rime
             | Self::SoulStolen
             | Self::BlightEmpowered
+            | Self::Contagious
             | Self::Reckoning => Ok(()),
             Self::Slow { slow_pct } => {
                 if !(MIN_SLOW_PCT..=0.95).contains(&slow_pct) {
@@ -4403,6 +4414,7 @@ impl StatusPayload {
             | Self::Rime
             | Self::SoulStolen
             | Self::BlightEmpowered
+            | Self::Contagious
             | Self::Reckoning => true,
             Self::Slow { slow_pct } => slow_pct > existing.slow_pct,
             Self::MoveSpeed { modifier_scalar } => {
@@ -8318,6 +8330,20 @@ fn apply_status_internal(
                 apply_rime_protection_to_status(ctx, &existing, now);
                 ctx.db.status_effect().status_id().update(existing);
                 apply_status_side_effects(ctx, now, source, target, kind);
+                queue_contagion_spread_if_applicable(
+                    ctx,
+                    now,
+                    source,
+                    target,
+                    spell_id,
+                    payload,
+                    polarity,
+                    duration,
+                    stack_group,
+                    max_stacks,
+                    stack_policy,
+                    dispel_types.as_slice(),
+                );
                 return;
             }
         }
@@ -8341,6 +8367,20 @@ fn apply_status_internal(
                 apply_rime_protection_to_status(ctx, &existing, now);
                 ctx.db.status_effect().status_id().update(existing);
                 apply_status_side_effects(ctx, now, source, target, kind);
+                queue_contagion_spread_if_applicable(
+                    ctx,
+                    now,
+                    source,
+                    target,
+                    spell_id,
+                    payload,
+                    polarity,
+                    duration,
+                    stack_group,
+                    max_stacks,
+                    stack_policy,
+                    dispel_types.as_slice(),
+                );
                 return;
             }
         }
@@ -8366,6 +8406,20 @@ fn apply_status_internal(
                 apply_rime_protection_to_status(ctx, &existing, now);
                 ctx.db.status_effect().status_id().update(existing);
                 apply_status_side_effects(ctx, now, source, target, kind);
+                queue_contagion_spread_if_applicable(
+                    ctx,
+                    now,
+                    source,
+                    target,
+                    spell_id,
+                    payload,
+                    polarity,
+                    duration,
+                    stack_group,
+                    max_stacks,
+                    stack_policy,
+                    dispel_types.as_slice(),
+                );
                 return;
             }
         }
@@ -8386,6 +8440,105 @@ fn apply_status_internal(
     ));
     apply_rime_protection_to_status(ctx, &applied, now);
     apply_status_side_effects(ctx, now, source, target, kind);
+    queue_contagion_spread_if_applicable(
+        ctx,
+        now,
+        source,
+        target,
+        spell_id,
+        payload,
+        polarity,
+        duration,
+        stack_group,
+        max_stacks,
+        stack_policy,
+        dispel_types.as_slice(),
+    );
+}
+
+const CONTAGION_SPREAD_SPELL_PREFIX: &str = "contagion_spread:";
+
+#[allow(clippy::too_many_arguments)]
+fn queue_contagion_spread_if_applicable(
+    ctx: &ReducerContext,
+    now: Timestamp,
+    source: Identity,
+    target: Identity,
+    spell_id: &str,
+    payload: StatusPayload,
+    polarity: StatusPolarity,
+    duration: Duration,
+    stack_group: &str,
+    max_stacks: u32,
+    stack_policy: StackPolicy,
+    dispel_types: &[StatusDispelType],
+) {
+    if source == Identity::ZERO
+        || !status_can_spread_from_contagious_target(payload, polarity, spell_id)
+        || !has_active_status(ctx, target, StatusEffectKind::Contagious, now)
+    {
+        return;
+    }
+
+    let radius = combat_rule_value(RULE_CONTAGION_RADIUS_METERS);
+    if !radius.is_finite() || radius <= 0.0 {
+        return;
+    }
+    let snapshots = actor_snapshot::CombatActorSnapshotSet::collect(ctx);
+    let actors = snapshots.as_slice();
+    let Some(primary_index) = snapshots.index_by_id().get(&target).copied() else {
+        return;
+    };
+    let primary = actors[primary_index];
+    let primary_point = actor_center(&primary);
+    let mut candidate_indices = Vec::new();
+    snapshots.query_disc_indices(primary.pos_x, primary.pos_z, radius, &mut candidate_indices);
+    let effects: Vec<_> = candidate_indices
+        .into_iter()
+        .filter_map(|index| actors.get(index).copied())
+        .filter(|candidate| {
+            candidate.alive
+                && candidate.player_id != source
+                && candidate.player_id != target
+                && players_share_world_context(ctx, source, candidate.player_id)
+                && can_harm(ctx, source, candidate.player_id)
+                && point_within_radius(primary_point, actor_center(candidate), radius)
+        })
+        .map(|candidate| EffectPacket::ApplyStatus {
+            source,
+            target: candidate.player_id,
+            spell_id: format!(
+                "{CONTAGION_SPREAD_SPELL_PREFIX}{spell_id}:{}",
+                candidate.player_id.to_hex()
+            ),
+            payload,
+            polarity,
+            target_audience: TargetAudience::Hostile,
+            duration,
+            stack_group: stack_group.to_string(),
+            max_stacks,
+            stack_policy,
+            dispel_types: dispel_types.to_vec(),
+        })
+        .collect();
+    if !effects.is_empty() {
+        queue_effects(ctx, effects);
+    }
+}
+
+fn status_can_spread_from_contagious_target(
+    payload: StatusPayload,
+    polarity: StatusPolarity,
+    spell_id: &str,
+) -> bool {
+    matches!(
+        payload,
+        StatusPayload::Dot {
+            damage_type: DamageType::Shadow | DamageType::Poison,
+            ..
+        }
+    ) && polarity == StatusPolarity::Debuff
+        && !spell_id.starts_with(CONTAGION_SPREAD_SPELL_PREFIX)
 }
 
 fn fulmination_uses_any_target_audience(
@@ -9867,6 +10020,7 @@ impl StatusRuntimeView {
                     | StatusEffectKind::Rime
                     | StatusEffectKind::SoulStolen
                     | StatusEffectKind::BlightEmpowered
+                    | StatusEffectKind::Contagious
                     | StatusEffectKind::Reckoning
                     | StatusEffectKind::DamageRedirect => {}
                 }
@@ -10660,7 +10814,8 @@ mod tests {
         stationary_target_damage_multiplier, stationary_target_from_poses,
         status_application_is_blocked_by_immunity, status_has_dispel_type,
         status_kind_is_intrinsically_undispellable, status_matches_removal_filter_values,
-        status_stacks_after_removal, AuthoredStatusPayload, DamageDelivery, DamageType,
+        status_stacks_after_removal, status_can_spread_from_contagious_target,
+        AuthoredStatusPayload, DamageDelivery, DamageType,
         EffectPacket, HolyShieldEndReason, MovementModifiers, PendingHit, StackPolicy,
         StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
         StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
@@ -11135,6 +11290,45 @@ mod tests {
         assert!(!fire_spell_hit_can_trigger_wildfire(
             &hit("FIRE", DamageDelivery::Direct, DAMAGE_SOURCE_KIND_SPELL),
             0,
+        ));
+    }
+
+    #[test]
+    fn contagion_only_spreads_new_shadow_or_poison_dot_debuffs_once() {
+        let dot = |damage_type| StatusPayload::Dot {
+            tick_damage: 2,
+            damage_type,
+            tick_interval: Duration::from_secs(1),
+        };
+        assert!(status_can_spread_from_contagious_target(
+            dot(DamageType::Poison),
+            StatusPolarity::Debuff,
+            "poison:cast"
+        ));
+        assert!(status_can_spread_from_contagious_target(
+            dot(DamageType::Shadow),
+            StatusPolarity::Debuff,
+            "shadow:cast"
+        ));
+        assert!(!status_can_spread_from_contagious_target(
+            dot(DamageType::Fire),
+            StatusPolarity::Debuff,
+            "fire:cast"
+        ));
+        assert!(!status_can_spread_from_contagious_target(
+            dot(DamageType::Poison),
+            StatusPolarity::Buff,
+            "poison:buff"
+        ));
+        assert!(!status_can_spread_from_contagious_target(
+            dot(DamageType::Poison),
+            StatusPolarity::Debuff,
+            "contagion_spread:poison:cast:target"
+        ));
+        assert!(!status_can_spread_from_contagious_target(
+            StatusPayload::Stun,
+            StatusPolarity::Debuff,
+            "stun:cast"
         ));
     }
 

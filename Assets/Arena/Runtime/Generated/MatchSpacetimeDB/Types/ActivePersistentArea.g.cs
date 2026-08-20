@@ -38,6 +38,18 @@ namespace Arena.MatchDb
         public SpacetimeDB.Timestamp ExpiresAt;
         [DataMember(Name = "next_pulse_at")]
         public SpacetimeDB.Timestamp NextPulseAt;
+        [DataMember(Name = "origin_x")]
+        public float OriginX;
+        [DataMember(Name = "origin_y")]
+        public float OriginY;
+        [DataMember(Name = "origin_z")]
+        public float OriginZ;
+        [DataMember(Name = "dir_x")]
+        public float DirX;
+        [DataMember(Name = "dir_y")]
+        public float DirY;
+        [DataMember(Name = "dir_z")]
+        public float DirZ;
 
         public ActivePersistentArea(
             string Key,
@@ -51,7 +63,13 @@ namespace Arena.MatchDb
             string AbilityId,
             SpacetimeDB.Timestamp ActivatedAt,
             SpacetimeDB.Timestamp ExpiresAt,
-            SpacetimeDB.Timestamp NextPulseAt
+            SpacetimeDB.Timestamp NextPulseAt,
+            float OriginX,
+            float OriginY,
+            float OriginZ,
+            float DirX,
+            float DirY,
+            float DirZ
         )
         {
             this.Key = Key;
@@ -66,6 +84,12 @@ namespace Arena.MatchDb
             this.ActivatedAt = ActivatedAt;
             this.ExpiresAt = ExpiresAt;
             this.NextPulseAt = NextPulseAt;
+            this.OriginX = OriginX;
+            this.OriginY = OriginY;
+            this.OriginZ = OriginZ;
+            this.DirX = DirX;
+            this.DirY = DirY;
+            this.DirZ = DirZ;
         }
 
         public ActivePersistentArea()

@@ -189,6 +189,22 @@ pub struct ActivePersistentArea {
     pub activated_at: Timestamp,
     pub expires_at: Timestamp,
     pub next_pulse_at: Timestamp,
+    /// Cast-time source and facing are retained so reconnecting clients can
+    /// reconstruct authored directional field VFX deterministically. Defaults
+    /// keep existing persistent-area rows compatible during data-preserving
+    /// schema upgrades.
+    #[default(0.0f32)]
+    pub origin_x: f32,
+    #[default(0.0f32)]
+    pub origin_y: f32,
+    #[default(0.0f32)]
+    pub origin_z: f32,
+    #[default(0.0f32)]
+    pub dir_x: f32,
+    #[default(0.0f32)]
+    pub dir_y: f32,
+    #[default(0.0f32)]
+    pub dir_z: f32,
 }
 
 #[table(accessor = active_cast, public)]

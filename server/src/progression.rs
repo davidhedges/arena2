@@ -118,6 +118,7 @@ const SUBTLETY_OPPORTUNIST_ABILITY_ID: &str = "SUBTLETY_OPPORTUNIST";
 const SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID: &str = "SUBTLETY_SURPRISE_ATTACKS";
 const SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID: &str = "SUBTLETY_TACTICAL_ADVANTAGE";
 const RUIN_FLAMING_WEAPON_ABILITY_ID: &str = "RUIN_FLAMING_WEAPON";
+const BLIGHT_TOXIC_WEAPON_ABILITY_ID: &str = "BLIGHT_TOXIC_WEAPON";
 const RUIN_WILDFIRE_ABILITY_ID: &str = "RUIN_WILDFIRE";
 const SOULSTEALER_ABILITY_ID: &str = "SPELL_SOULSTEALER";
 const RUIN_FURNACE_ABILITY_ID: &str = "RUIN_FURNACE";
@@ -317,6 +318,8 @@ struct AbilityGameplayDefinition {
     #[serde(default)]
     melee_fire_on_hit: Option<MeleeFireOnHitDefinition>,
     #[serde(default)]
+    melee_poison_on_hit: Option<MeleePoisonOnHitDefinition>,
+    #[serde(default)]
     fire_spell_ignite: Option<FireSpellIgniteDefinition>,
     #[serde(default)]
     soulstealer_empowered_damage_bonus: f32,
@@ -412,6 +415,19 @@ struct MeleeFireOnHitDefinition {
     burn_max_stacks: u32,
     burn_status_stack_group: String,
     burn_dispel_types: Vec<StatusDispelType>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MeleePoisonOnHitDefinition {
+    #[serde(deserialize_with = "deserialize_authored_f32")]
+    proc_chance: f32,
+    poison_duration_ms: u64,
+    poison_tick_interval_ms: u64,
+    poison_tick_damage: i32,
+    poison_max_stacks: u32,
+    poison_status_stack_group: String,
+    poison_dispel_types: Vec<StatusDispelType>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -865,6 +881,17 @@ pub(crate) struct MeleeFireOnHitRuntime {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MeleePoisonOnHitRuntime {
+    pub proc_chance: f32,
+    pub poison_duration: Duration,
+    pub poison_tick_interval: Duration,
+    pub poison_tick_damage: i32,
+    pub poison_max_stacks: u32,
+    pub poison_status_stack_group: String,
+    pub poison_dispel_types: Vec<StatusDispelType>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct FireSpellIgniteRuntime {
     pub radius_meters: f32,
     pub burn_duration: Duration,
@@ -1296,6 +1323,12 @@ fn authored_status_presentation_ids(catalog: &ProgressionCatalogFile) -> HashSet
                 &mut ids,
             );
         }
+        if let Some(melee_poison_on_hit) = ability.gameplay.melee_poison_on_hit.as_ref() {
+            collect_optional_status_stack_group(
+                Some(melee_poison_on_hit.poison_status_stack_group.as_str()),
+                &mut ids,
+            );
+        }
         if let Some(fire_spell_ignite) = ability.gameplay.fire_spell_ignite.as_ref() {
             collect_optional_status_stack_group(
                 Some(fire_spell_ignite.burn_status_stack_group.as_str()),
@@ -1354,6 +1387,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::Rime,
         StatusEffectKind::SoulStolen,
         StatusEffectKind::BlightEmpowered,
+        StatusEffectKind::Contagious,
         StatusEffectKind::OffBalance,
         StatusEffectKind::Reckoning,
         StatusEffectKind::DamageRedirect,
@@ -1370,7 +1404,7 @@ fn collect_status_stack_groups(value: &serde_json::Value, ids: &mut HashSet<Stri
             {
                 let normalized = normalize_identifier(status_stack_group);
                 if !normalized.is_empty() {
-                    ids.insert(normalized);
+                    insert_status_stack_group_presentation_ids(ids, normalized);
                 }
             }
             for nested in map.values() {
@@ -1393,9 +1427,18 @@ fn collect_optional_status_stack_group(
     if let Some(status_stack_group) = status_stack_group {
         let normalized = normalize_identifier(status_stack_group);
         if !normalized.is_empty() {
-            ids.insert(normalized);
+            insert_status_stack_group_presentation_ids(ids, normalized);
         }
     }
+}
+
+fn insert_status_stack_group_presentation_ids(ids: &mut HashSet<String>, normalized: String) {
+    if let Some((base, _)) = normalized.split_once(":{") {
+        if !base.is_empty() {
+            ids.insert(base.to_string());
+        }
+    }
+    ids.insert(normalized);
 }
 
 #[table(accessor = combat_profile_catalog, public)]
@@ -5685,6 +5728,7 @@ fn validate_ability_catalog() {
         let movement_return = ability.gameplay.movement_return.as_ref();
         let stealth_attack_stun_ms = ability.gameplay.stealth_attack_stun_ms;
         let melee_fire_on_hit = ability.gameplay.melee_fire_on_hit.as_ref();
+        let melee_poison_on_hit = ability.gameplay.melee_poison_on_hit.as_ref();
         let fire_spell_ignite = ability.gameplay.fire_spell_ignite.as_ref();
         let fire_damage_taken_mana_restore_ratio =
             ability.gameplay.fire_damage_taken_mana_restore_ratio;
@@ -5994,6 +6038,63 @@ fn validate_ability_catalog() {
             assert_eq!(
                 melee_fire_on_hit.burn_dispel_types,
                 vec![StatusDispelType::Magic]
+            );
+        }
+        if let Some(melee_poison_on_hit) = melee_poison_on_hit {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author melee_poison_on_hit for PASSIVE gameplay"
+            );
+            assert!(
+                melee_poison_on_hit.proc_chance.is_finite()
+                    && melee_poison_on_hit.proc_chance > 0.0
+                    && melee_poison_on_hit.proc_chance <= 1.0,
+                "ability '{ability_id}' must author melee_poison_on_hit.proc_chance > 0 and <= 1"
+            );
+            assert!(
+                (1..=60_000).contains(&melee_poison_on_hit.poison_duration_ms),
+                "ability '{ability_id}' must author melee_poison_on_hit.poison_duration_ms between 1 and 60000"
+            );
+            assert!(
+                (1..=melee_poison_on_hit.poison_duration_ms)
+                    .contains(&melee_poison_on_hit.poison_tick_interval_ms),
+                "ability '{ability_id}' must author a positive poison tick interval no longer than its duration"
+            );
+            assert!(
+                melee_poison_on_hit.poison_tick_damage > 0,
+                "ability '{ability_id}' must author positive melee_poison_on_hit.poison_tick_damage"
+            );
+            assert!(
+                (2..=100).contains(&melee_poison_on_hit.poison_max_stacks),
+                "ability '{ability_id}' must author melee_poison_on_hit.poison_max_stacks between 2 and 100"
+            );
+            assert!(
+                !normalize_identifier(melee_poison_on_hit.poison_status_stack_group.as_str())
+                    .is_empty(),
+                "ability '{ability_id}' must author melee_poison_on_hit.poison_status_stack_group"
+            );
+        }
+        if ability_id == BLIGHT_TOXIC_WEAPON_ABILITY_ID {
+            let tuning = melee_poison_on_hit
+                .expect("Toxic Weapon must author melee_poison_on_hit tuning");
+            assert_eq!(discipline_id, DISCIPLINE_BLIGHT);
+            assert_eq!(ability_kind, "PASSIVE");
+            assert!(ability
+                .ability_tags
+                .iter()
+                .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"));
+            assert!((tuning.proc_chance - 0.25).abs() < 0.0001);
+            assert_eq!(tuning.poison_duration_ms, 6_000);
+            assert_eq!(tuning.poison_tick_interval_ms, 1_000);
+            assert_eq!(tuning.poison_tick_damage, 2);
+            assert_eq!(tuning.poison_max_stacks, 5);
+            assert_eq!(
+                normalize_identifier(tuning.poison_status_stack_group.as_str()),
+                "POISON"
+            );
+            assert_eq!(
+                tuning.poison_dispel_types,
+                vec![StatusDispelType::Poison]
             );
         }
         if let Some(fire_spell_ignite) = fire_spell_ignite {
@@ -7498,6 +7599,36 @@ pub(crate) fn ruin_flaming_weapon_on_hit_for_owner(
         })
 }
 
+pub(crate) fn blight_toxic_weapon_on_hit_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<MeleePoisonOnHitRuntime> {
+    if !character_has_selected_discipline(ctx, owner, DISCIPLINE_BLIGHT) {
+        return None;
+    }
+
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == BLIGHT_TOXIC_WEAPON_ABILITY_ID
+        })
+        .and_then(|ability| ability.gameplay.melee_poison_on_hit.as_ref())
+        .map(|definition| MeleePoisonOnHitRuntime {
+            proc_chance: definition.proc_chance,
+            poison_duration: Duration::from_millis(definition.poison_duration_ms),
+            poison_tick_interval: Duration::from_millis(
+                definition.poison_tick_interval_ms,
+            ),
+            poison_tick_damage: definition.poison_tick_damage,
+            poison_max_stacks: definition.poison_max_stacks,
+            poison_status_stack_group: normalize_identifier(
+                definition.poison_status_stack_group.as_str(),
+            ),
+            poison_dispel_types: definition.poison_dispel_types.clone(),
+        })
+}
+
 pub(crate) fn ruin_wildfire_ignite_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
@@ -7834,6 +7965,7 @@ mod tests {
         FixedActionId, MeleeChannelRuntime, MeleeImpactEffectRuntime,
         ABILITY_KIND_COMBAT_MODE_TOGGLE, ACTION_KIND_FIXED, ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID,
         AUTO_ATTACK_MOVEMENT_ALLOW_MOVING, AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
+        BLIGHT_TOXIC_WEAPON_ABILITY_ID,
         COMBAT_MODE_FULL_DRAW, COMBAT_MODE_READY, COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED,
         COMBAT_PROFILE_ARCHER_BOW, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_SWORD_AND_SHIELD,
         COMBAT_PROFILE_TWO_HANDED_SWORD, DAGGER_SHROUD_ABILITY_ID, DISCIPLINE_BLIGHT,
@@ -10443,6 +10575,67 @@ mod tests {
             .combat_profile_action_bar_defaults
             .iter()
             .any(|assignment| assignment.ability_id == "RUIN_FLAMING_WEAPON"));
+    }
+
+    #[test]
+    fn blight_toxic_weapon_and_contagion_author_poison_contracts() {
+        let catalog = progression_catalog();
+        let toxic = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == BLIGHT_TOXIC_WEAPON_ABILITY_ID)
+            .expect("Toxic Weapon should be authored");
+        assert_eq!(toxic.discipline_id, DISCIPLINE_BLIGHT);
+        assert_eq!(ability_gameplay_kind(toxic), "PASSIVE");
+        let poison = toxic
+            .gameplay
+            .melee_poison_on_hit
+            .as_ref()
+            .expect("Toxic Weapon should define melee poison tuning");
+        assert!((poison.proc_chance - 0.25).abs() < 0.0001);
+        assert_eq!(poison.poison_duration_ms, 6_000);
+        assert_eq!(poison.poison_tick_interval_ms, 1_000);
+        assert_eq!(poison.poison_tick_damage, 2);
+        assert_eq!(poison.poison_max_stacks, 5);
+        assert_eq!(poison.poison_status_stack_group, "POISON");
+        assert_eq!(poison.poison_dispel_types, vec![StatusDispelType::Poison]);
+
+        let contagion = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "SPELL_CONTAGION")
+            .expect("Contagion should be authored");
+        assert_eq!(contagion.discipline_id, DISCIPLINE_BLIGHT);
+        assert_eq!(ability_gameplay_kind(contagion), "SPELL");
+        assert_eq!(ability_delivery_kind(contagion), "APPLY_STATUS");
+        assert_eq!(contagion.gameplay.cooldown_ms, Some(12_000));
+        let delivery = contagion.gameplay.delivery.as_ref().unwrap();
+        assert_eq!(
+            delivery
+                .get("duration_ms")
+                .and_then(serde_json::Value::as_u64),
+            Some(10_000)
+        );
+        assert_eq!(
+            delivery
+                .get("status_stack_group")
+                .and_then(serde_json::Value::as_str),
+            Some("CONTAGIOUS:{SOURCE}")
+        );
+        assert_eq!(
+            delivery
+                .pointer("/status/kind")
+                .and_then(serde_json::Value::as_str),
+            Some("CONTAGIOUS")
+        );
+        assert_eq!(combat_rule_value("CONTAGION_RADIUS_METERS"), 5.0);
+        assert!(authored_status_presentation_ids(catalog).contains("CONTAGIOUS"));
+        assert!(authored_status_presentation_ids(catalog).contains("POISON"));
+        assert!(catalog.combat_vfx_cues.iter().any(|cue| {
+            normalize_identifier(cue.owner_id.as_str()) == "SPELL_CONTAGION"
+                && normalize_identifier(cue.trigger.as_str()) == "STATUS_ACTIVE"
+                && normalize_identifier(cue.vfx_id.as_str()) == "VFX_CONTAGION_ACTIVE_01"
+        }));
     }
 
     #[test]
@@ -15332,6 +15525,10 @@ mod tests {
             "SPELL_FLASH_FREEZE",
             "SPELL_DEEPENING_COLD",
             "SPELL_GLACIAL_ADVANCE",
+            "SPELL_MIASMA",
+            "SPELL_PLAGUEBOLT",
+            "BLIGHT_TOXIC_WEAPON",
+            "SPELL_CONTAGION",
         ]);
 
         let mortality: HashSet<&str> = catalog

@@ -154,6 +154,8 @@ enum SpellCatalogDelivery {
     },
     PersistentArea {
         max_distance: f32,
+        #[serde(default)]
+        spawn_forward: f32,
         radius: f32,
         pulse_interval_ms: u64,
         duration_ms: u64,
@@ -674,6 +676,10 @@ enum ImpactEffectRow {
         status_stack_group: Option<String>,
         #[serde(default)]
         dispel_types: Vec<StatusDispelType>,
+        #[serde(default = "default_one_stack")]
+        max_stacks: u32,
+        #[serde(default = "default_refresh_stack_policy")]
+        stack_policy: StackPolicy,
     },
     Stun {
         duration_ms: u64,
@@ -1296,6 +1302,7 @@ impl SpellCatalogRow {
             }
             SpellCatalogDelivery::PersistentArea {
                 max_distance,
+                spawn_forward,
                 radius,
                 pulse_interval_ms,
                 duration_ms,
@@ -1309,6 +1316,7 @@ impl SpellCatalogRow {
             } => {
                 definition.behavior = SpellBehavior::PersistentArea;
                 definition.max_distance = max_distance;
+                definition.spawn_forward = spawn_forward;
                 definition.damage = damage;
                 definition.damage_type = DamageType::from_wire(damage_type.as_str());
                 definition.update_interval = pulse_interval_ms as f32 / 1000.0;
@@ -1851,6 +1859,8 @@ fn status_application_from_impact_effect_row(row: ImpactEffectRow) -> StatusAppl
             damage_type,
             status_stack_group,
             dispel_types,
+            max_stacks,
+            stack_policy,
         } => StatusApplication::new(
             AuthoredStatusPayload {
                 damage_type: DamageType::from_wire(damage_type.as_str()),
@@ -1866,9 +1876,13 @@ fn status_application_from_impact_effect_row(row: ImpactEffectRow) -> StatusAppl
             .payload(),
             Duration::from_millis(duration_ms),
             status_stack_group,
-            StatusStackGroupDefault::InstanceScopedActionSuffix("BURN"),
-            1,
-            StackPolicy::Refresh,
+            if max_stacks > 1 {
+                StatusStackGroupDefault::EffectKind
+            } else {
+                StatusStackGroupDefault::InstanceScopedActionSuffix("BURN")
+            },
+            max_stacks,
+            stack_policy,
         )
         .with_dispel_types(dispel_types),
         ImpactEffectRow::Stun {
@@ -2806,6 +2820,7 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
             };
             match def.targeting {
                 SpellTargeting::Target if def.requires_target => {}
+                SpellTargeting::Self_ if !def.requires_target && def.spawn_forward > 0.0 => {}
                 SpellTargeting::Point if !def.requires_target => {
                     let aim_radius = def.aim_radius.expect(
                         "validated POINT targeting must define aim_radius before PERSISTENT_AREA validation",
@@ -2819,7 +2834,7 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 }
                 _ => {
                     return Err(format!(
-                        "{} PERSISTENT_AREA must use required TARGET or targetless POINT targeting",
+                        "{} PERSISTENT_AREA must use required TARGET, targetless POINT, or forward-spawned SELF targeting",
                         def.kind.as_str()
                     ));
                 }
@@ -4119,6 +4134,7 @@ fn validate_apply_status_kind_for_target(
         | StatusEffectKind::Gouge
         | StatusEffectKind::Stalked
         | StatusEffectKind::Fulmination
+        | StatusEffectKind::Contagious
         | StatusEffectKind::Reckoning
         | StatusEffectKind::DamageRedirect => Ok(()),
         other => Err(format!(
@@ -4427,6 +4443,59 @@ mod tests {
                 .is_some_and(|status| status.duration() == Duration::from_millis(500)
                     && status.max_stacks() == 1
                     && status.stack_policy() == StackPolicy::Refresh)));
+    }
+
+    #[test]
+    fn blight_poison_spells_author_shared_stacking_dot_contracts() {
+        let miasma = spell_definition_by_str("MIASMA").expect("MIASMA should exist");
+        assert_eq!(miasma.behavior, SpellBehavior::PersistentArea);
+        assert_eq!(miasma.targeting, SpellTargeting::Self_);
+        assert!(!miasma.requires_target);
+        assert_eq!(miasma.spawn_forward, 3.0);
+        assert_eq!(miasma.radius, 3.5);
+        assert_eq!(miasma.duration, 6.0);
+        let miasma_area = miasma
+            .secondary
+            .persistent_area
+            .as_ref()
+            .expect("MIASMA should define persistent-area tunables");
+        assert_eq!(miasma_area.pulse_interval, Duration::from_secs(1));
+        assert_eq!(miasma_area.effect_target_audience, TargetAudience::Hostile);
+
+        let plaguebolt =
+            spell_definition_by_str("PLAGUEBOLT").expect("PLAGUEBOLT should exist");
+        assert_eq!(plaguebolt.behavior, SpellBehavior::Projectile);
+        assert_eq!(plaguebolt.damage_type, DamageType::Poison);
+        assert_eq!(plaguebolt.damage, 10);
+
+        let poison_statuses = [
+            miasma_area
+                .impact_effects
+                .first()
+                .and_then(ImpactEffect::as_status)
+                .expect("MIASMA should apply Poison"),
+            plaguebolt
+                .secondary
+                .projectile
+                .as_ref()
+                .and_then(|projectile| projectile.impact_effects.first())
+                .and_then(ImpactEffect::as_status)
+                .expect("PLAGUEBOLT should apply Poison"),
+        ];
+        for poison in poison_statuses {
+            assert_eq!(
+                poison.payload(),
+                StatusPayload::Dot {
+                    tick_damage: 2,
+                    damage_type: DamageType::Poison,
+                    tick_interval: Duration::from_secs(1),
+                }
+            );
+            assert_eq!(poison.duration(), Duration::from_secs(6));
+            assert_eq!(poison.explicit_stack_group(), Some("POISON:{SOURCE}"));
+            assert_eq!(poison.max_stacks(), 5);
+            assert_eq!(poison.stack_policy(), StackPolicy::AddStackRefresh);
+        }
     }
 
     #[test]

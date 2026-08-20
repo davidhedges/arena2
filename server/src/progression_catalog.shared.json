@@ -387,6 +387,11 @@
       "combat_rule_id": "SHADOWREND_MELEE_ADVANCE_TICKS",
       "scalar_value": 1,
       "sort_order": 130
+    },
+    {
+      "combat_rule_id": "CONTAGION_RADIUS_METERS",
+      "scalar_value": 5,
+      "sort_order": 140
     }
   ],
   "stat_scalings": [
@@ -4441,6 +4446,187 @@
             "stack_policy": "REFRESH",
             "dispel_types": [
               "MAGIC"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_MIASMA",
+      "actor_scope": "PLAYER",
+      "discipline_id": "BLIGHT",
+      "combat_profile_id": "",
+      "action_id": "MIASMA",
+      "display_name": "Miasma",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1034,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "PERSISTENT_AREA",
+          "max_distance": 3,
+          "spawn_forward": 3,
+          "radius": 3.5,
+          "pulse_interval_ms": 1000,
+          "duration_ms": 6000,
+          "damage": 0,
+          "damage_type": "POISON",
+          "effect_target_audience": "HOSTILE",
+          "block_behavior": "UNBLOCKABLE",
+          "impact_effects": [
+            {
+              "kind": "BURN",
+              "duration_ms": 6000,
+              "tick_interval_ms": 1000,
+              "tick_damage": 2,
+              "damage_type": "POISON",
+              "status_stack_group": "POISON:{SOURCE}",
+              "dispel_types": [
+                "POISON"
+              ],
+              "max_stacks": 5,
+              "stack_policy": "ADD_STACK_REFRESH"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_PLAGUEBOLT",
+      "actor_scope": "PLAYER",
+      "discipline_id": "BLIGHT",
+      "combat_profile_id": "",
+      "action_id": "PLAGUEBOLT",
+      "display_name": "Plaguebolt",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1035,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 1200,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 800,
+        "cast_mobility": "GROUNDED_STATIONARY",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 10,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "PROJECTILE",
+          "speed": 22,
+          "max_distance": 24,
+          "damage": 10,
+          "damage_type": "POISON",
+          "spawn_forward": 0,
+          "spawn_height": 1.2,
+          "turn_rate": 3,
+          "update_interval_seconds": 0.05,
+          "radius": 0.45,
+          "block_behavior": "BLOCKABLE",
+          "parry_behavior": "PARRYABLE",
+          "homing_window_seconds": 0.15,
+          "impact_effects": [
+            {
+              "kind": "BURN",
+              "duration_ms": 6000,
+              "tick_interval_ms": 1000,
+              "tick_damage": 2,
+              "damage_type": "POISON",
+              "status_stack_group": "POISON:{SOURCE}",
+              "dispel_types": [
+                "POISON"
+              ],
+              "max_stacks": 5,
+              "stack_policy": "ADD_STACK_REFRESH"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "BLIGHT_TOXIC_WEAPON",
+      "actor_scope": "PLAYER",
+      "discipline_id": "BLIGHT",
+      "combat_profile_id": "",
+      "action_id": "TOXIC_WEAPON",
+      "display_name": "Toxic Weapon",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 1036,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "melee_poison_on_hit": {
+          "proc_chance": 0.25,
+          "poison_duration_ms": 6000,
+          "poison_tick_interval_ms": 1000,
+          "poison_tick_damage": 2,
+          "poison_max_stacks": 5,
+          "poison_status_stack_group": "POISON",
+          "poison_dispel_types": [
+            "POISON"
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "SPELL_CONTAGION",
+      "actor_scope": "PLAYER",
+      "discipline_id": "BLIGHT",
+      "combat_profile_id": "",
+      "action_id": "CONTAGION",
+      "display_name": "Contagion",
+      "resource_kind": "MANA",
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 1037,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 12000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 20,
+        "arms_auto_attack_on_cast": true,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 10000,
+          "max_distance": 18,
+          "damage_type": "POISON",
+          "status_stack_group": "CONTAGIOUS:{SOURCE}",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "CONTAGIOUS",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH",
+            "dispel_types": [
+              "MAGIC",
+              "POISON"
             ]
           }
         }
@@ -11012,6 +11198,48 @@
       "display_name": "Shadowrend",
       "description": "A torn shadow bleeding shadow damage. The caster's melee attacks advance it.",
       "sort_order": 10130
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_MIASMA",
+      "display_name": "Miasma",
+      "description": "Releases a poison cloud ahead of the caster for 6 seconds. Enemies inside gain a Poison stack each second.",
+      "sort_order": 120
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_PLAGUEBOLT",
+      "display_name": "Plaguebolt",
+      "description": "Launches a poison projectile that deals poison damage and applies a Poison stack on impact.",
+      "sort_order": 121
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "BLIGHT_TOXIC_WEAPON",
+      "display_name": "Toxic Weapon",
+      "description": "Passive: melee hits have a 25% chance to apply a Poison stack.",
+      "sort_order": 122
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "SPELL_CONTAGION",
+      "display_name": "Contagion",
+      "description": "Marks an enemy Contagious for 10 seconds. Shadow and Poison damage-over-time effects applied to it are copied to enemies within 5 meters.",
+      "sort_order": 123
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "CONTAGIOUS",
+      "display_name": "Contagious",
+      "description": "New Shadow and Poison damage-over-time effects spread to nearby enemies.",
+      "sort_order": 10141
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "POISON",
+      "display_name": "Poisoned",
+      "description": "Takes 2 poison damage each second per stack. Stacks up to 5 times.",
+      "sort_order": 10140
     }
   ],
   "combat_vfx_cues": [
@@ -12956,6 +13184,85 @@
       "lifecycle": "UNTIL_RADIAL_EFFECT_END",
       "duration_ms": 0,
       "sort_order": 326
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_MIASMA",
+      "slot": "persistent_field",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "ORIGIN",
+      "vfx_id": "VFX_MIASMA_AREA_01",
+      "attach_mode": "WORLD_ALIGNED_TO_FACING",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_RADIAL_EFFECT_END",
+      "duration_ms": 0,
+      "sort_order": 327
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_PLAGUEBOLT",
+      "slot": "cast_glow",
+      "trigger": "SPELL_CAST",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_PLAGUEBOLT_CAST_HAND_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_RELEASE_EVENT",
+      "duration_ms": 0,
+      "sort_order": 328
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_PLAGUEBOLT",
+      "slot": "muzzle",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_PLAGUEBOLT_MUZZLE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 329
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_PLAGUEBOLT",
+      "slot": "projectile_body",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "LEFT_HAND",
+      "vfx_id": "VFX_PLAGUEBOLT_PROJECTILE_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "PROJECTILE_BODY",
+      "lifecycle": "UNTIL_TERMINAL_EVENT",
+      "projectile_sequence_index": 0,
+      "duration_ms": 0,
+      "sort_order": 330
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_PLAGUEBOLT",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_PLAGUEBOLT_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 331
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "SPELL_CONTAGION",
+      "slot": "active_debuff",
+      "trigger": "STATUS_ACTIVE",
+      "anchor": "TARGET",
+      "vfx_id": "VFX_CONTAGION_ACTIVE_01",
+      "attach_mode": "FOLLOW_ANCHOR",
+      "vfx_role": "ATTACHED",
+      "lifecycle": "UNTIL_STATUS_END",
+      "duration_ms": 0,
+      "sort_order": 332
     }
   ],
   "combat_profile_action_bar_defaults": [

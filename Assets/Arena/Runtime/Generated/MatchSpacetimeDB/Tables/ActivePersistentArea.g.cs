@@ -62,6 +62,12 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Col<ActivePersistentArea, SpacetimeDB.Timestamp> ActivatedAt { get; }
         public global::SpacetimeDB.Col<ActivePersistentArea, SpacetimeDB.Timestamp> ExpiresAt { get; }
         public global::SpacetimeDB.Col<ActivePersistentArea, SpacetimeDB.Timestamp> NextPulseAt { get; }
+        public global::SpacetimeDB.Col<ActivePersistentArea, float> OriginX { get; }
+        public global::SpacetimeDB.Col<ActivePersistentArea, float> OriginY { get; }
+        public global::SpacetimeDB.Col<ActivePersistentArea, float> OriginZ { get; }
+        public global::SpacetimeDB.Col<ActivePersistentArea, float> DirX { get; }
+        public global::SpacetimeDB.Col<ActivePersistentArea, float> DirY { get; }
+        public global::SpacetimeDB.Col<ActivePersistentArea, float> DirZ { get; }
 
         public ActivePersistentAreaCols(string tableName)
         {
@@ -77,6 +83,12 @@ namespace Arena.MatchDb
             ActivatedAt = new global::SpacetimeDB.Col<ActivePersistentArea, SpacetimeDB.Timestamp>(tableName, "activated_at");
             ExpiresAt = new global::SpacetimeDB.Col<ActivePersistentArea, SpacetimeDB.Timestamp>(tableName, "expires_at");
             NextPulseAt = new global::SpacetimeDB.Col<ActivePersistentArea, SpacetimeDB.Timestamp>(tableName, "next_pulse_at");
+            OriginX = new global::SpacetimeDB.Col<ActivePersistentArea, float>(tableName, "origin_x");
+            OriginY = new global::SpacetimeDB.Col<ActivePersistentArea, float>(tableName, "origin_y");
+            OriginZ = new global::SpacetimeDB.Col<ActivePersistentArea, float>(tableName, "origin_z");
+            DirX = new global::SpacetimeDB.Col<ActivePersistentArea, float>(tableName, "dir_x");
+            DirY = new global::SpacetimeDB.Col<ActivePersistentArea, float>(tableName, "dir_y");
+            DirZ = new global::SpacetimeDB.Col<ActivePersistentArea, float>(tableName, "dir_z");
         }
     }
 

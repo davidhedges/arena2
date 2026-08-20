@@ -56,14 +56,15 @@ use crate::lingering_shade::arm_lingering_shade_for_voluntary_movement;
 use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::progression::{
     active_action_bar_assignment_debug_summary, active_selectable_ability_for_authored_action,
-    derived_combat_profile_id_for_owner, melee_channel_for_ability_id,
+    blight_toxic_weapon_on_hit_for_owner, derived_combat_profile_id_for_owner,
+    melee_channel_for_ability_id,
     melee_channel_for_authored_strike,
     melee_evasive_leap_for_ability_id, melee_impact_effects_for_ability_id,
     melee_timed_movement_for_ability_id, primary_resource_gain_on_action_accept,
     resolved_auto_attack_mode_for_owner, ruin_flaming_weapon_on_hit_for_owner, AbilityCatalog,
     AutoAttackCatalog, AutoAttackReplacementCatalog, MeleeAbilityCatalog, MeleeChannelRuntime,
     MeleeEvasiveLeapRuntime, MeleeFireOnHitRuntime, MeleeGapCloseCatalog,
-    MeleeTimedMovementRuntime,
+    MeleePoisonOnHitRuntime, MeleeTimedMovementRuntime,
 };
 use crate::relations::{can_harm, combat_relation, target_audience_allows, TargetAudience};
 use crate::resources::{
@@ -5691,7 +5692,9 @@ fn resolve_pending_melee_target_impact(
         is_area: row.impact_area_radius > 0.0 && row.impact_area_damage > 0,
     }];
     let flaming_weapon = ruin_flaming_weapon_on_hit_for_owner(ctx, row.source);
+    let toxic_weapon = blight_toxic_weapon_on_hit_for_owner(ctx, row.source);
     push_flaming_weapon_effects(&mut effects, row, row.target, flaming_weapon.as_ref());
+    push_toxic_weapon_effects(&mut effects, row, row.target, toxic_weapon.as_ref());
     push_stagger_effect_if_applicable(
         ctx,
         &mut effects,
@@ -5722,6 +5725,7 @@ fn resolve_pending_melee_target_impact(
         target_snapshot.pos_y,
         target_snapshot.pos_z,
         flaming_weapon.as_ref(),
+        toxic_weapon.as_ref(),
     );
     queue_effects(ctx, effects);
     grant_primary_resource_for_melee_event_hit(
@@ -5801,6 +5805,7 @@ fn push_melee_impact_area_effects(
     impact_y: f32,
     impact_z: f32,
     flaming_weapon: Option<&MeleeFireOnHitRuntime>,
+    toxic_weapon: Option<&MeleePoisonOnHitRuntime>,
 ) {
     if row.impact_area_radius <= 0.0 || primary_damage <= 0 {
         return;
@@ -5870,6 +5875,7 @@ fn push_melee_impact_area_effects(
         });
         if player.player_id != row.target {
             push_flaming_weapon_effects(effects, row, player.player_id, flaming_weapon);
+            push_toxic_weapon_effects(effects, row, player.player_id, toxic_weapon);
         }
     }
 }
@@ -5918,6 +5924,77 @@ fn push_flaming_weapon_effects(
         stack_policy: StackPolicy::AddStackRefresh,
         dispel_types: tuning.burn_dispel_types.clone(),
     });
+}
+
+fn push_toxic_weapon_effects(
+    effects: &mut Vec<EffectPacket>,
+    row: &PendingMeleeImpact,
+    target: Identity,
+    tuning: Option<&MeleePoisonOnHitRuntime>,
+) {
+    let Some(tuning) = tuning else {
+        return;
+    };
+    if !toxic_weapon_proc_succeeds(row, target, tuning.proc_chance) {
+        return;
+    }
+
+    effects.push(EffectPacket::ApplyStatus {
+        source: row.source,
+        target,
+        spell_id: format!(
+            "{}:toxic_weapon:{}:{}",
+            row.spell_id,
+            row.hit_index,
+            target.to_hex()
+        ),
+        payload: StatusPayload::Dot {
+            tick_damage: tuning.poison_tick_damage,
+            damage_type: DamageType::Poison,
+            tick_interval: tuning.poison_tick_interval,
+        },
+        polarity: StatusPolarity::Debuff,
+        target_audience: TargetAudience::Hostile,
+        duration: tuning.poison_duration,
+        stack_group: format!(
+            "{}:{}",
+            tuning.poison_status_stack_group,
+            row.source.to_hex()
+        ),
+        max_stacks: tuning.poison_max_stacks,
+        stack_policy: StackPolicy::AddStackRefresh,
+        dispel_types: tuning.poison_dispel_types.clone(),
+    });
+}
+
+fn toxic_weapon_proc_succeeds(
+    row: &PendingMeleeImpact,
+    target: Identity,
+    proc_chance: f32,
+) -> bool {
+    if proc_chance >= 1.0 {
+        return true;
+    }
+    if proc_chance <= 0.0 || !proc_chance.is_finite() {
+        return false;
+    }
+
+    fn update_hash(mut hash: u64, bytes: &[u8]) -> u64 {
+        for byte in bytes {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        hash
+    }
+
+    let mut hash = 0xcbf29ce484222325u64;
+    hash = update_hash(hash, b"TOXIC_WEAPON");
+    hash = update_hash(hash, &row.source.to_byte_array());
+    hash = update_hash(hash, &target.to_byte_array());
+    hash = update_hash(hash, row.spell_id.as_bytes());
+    hash = update_hash(hash, &row.hit_index.to_le_bytes());
+    let roll = (hash as f64 / u64::MAX as f64) as f32;
+    roll < proc_chance
 }
 
 fn push_melee_impact_effects(
@@ -6473,6 +6550,7 @@ mod tests {
         melee_target_impact_point_y, pending_commitment_belongs_to_channel,
         pending_melee_impact_range, positive_projectile_override,
         projectile_max_distance_for_policy, push_flaming_weapon_effects,
+        push_toxic_weapon_effects, toxic_weapon_proc_succeeds,
         push_melee_impact_status_effects, push_stagger_effect_with_duration_if_applicable,
         resolve_gap_close_destination, resolve_melee_action_reference,
         resolve_melee_action_reference_in_strikes, resolved_hit_window_damages,
@@ -6497,7 +6575,10 @@ mod tests {
     };
     use crate::player::{DEFAULT_COMBAT_PROFILE, TWO_HANDED_SWORD_COMBAT_PROFILE};
     use crate::player_state::PlayerState;
-    use crate::progression::{MeleeChannelRuntime, MeleeFireOnHitRuntime, MeleeGapCloseCatalog};
+    use crate::progression::{
+        MeleeChannelRuntime, MeleeFireOnHitRuntime, MeleeGapCloseCatalog,
+        MeleePoisonOnHitRuntime,
+    };
 
     const TEST_GAP_CLOSE_DESTINATION_EPSILON_METERS: f32 = 0.10;
 
@@ -7519,6 +7600,102 @@ mod tests {
         assert_eq!(*max_stacks, 5);
         assert_eq!(*stack_policy, StackPolicy::AddStackRefresh);
         assert_eq!(dispel_types, &vec![StatusDispelType::Magic]);
+    }
+
+    #[test]
+    fn toxic_weapon_proc_is_deterministic_and_applies_source_scoped_poison() {
+        let source = test_identity_with_byte(1);
+        let target = test_identity_with_byte(2);
+        let now = Timestamp::UNIX_EPOCH;
+        let row = PendingMeleeImpact {
+            impact_id: 0,
+            source,
+            event_source: "test".to_string(),
+            target,
+            spell_id: "test:toxic_weapon".to_string(),
+            kind: "SWORD_AND_SHIELD_LIGHT_COMBO_1".to_string(),
+            ability_id: "PALADIN_SHIELD_PUMMEL".to_string(),
+            hit_index: 2,
+            damage: 35,
+            damage_type: DamageType::Physical.as_str().to_string(),
+            target_health_damage_scaling_min_multiplier: 1.0,
+            target_health_damage_scaling_max_multiplier: 1.0,
+            range: 2.5,
+            impact_at: now,
+            active_until: now,
+            recovery_until: now,
+            parry_behavior: "PARRYABLE".to_string(),
+            block_behavior: "BLOCKABLE".to_string(),
+            airborne_targeting_mode: "ANY_TARGET".to_string(),
+            targeting_kind: "TARGET".to_string(),
+            targeting_radius: 0.0,
+            targeting_angle_degrees: 0.0,
+            applies_stagger: false,
+            grants_primary_resource_on_hit: false,
+            impact_area_radius: 0.0,
+            impact_area_damage: 0,
+            impact_area_include_primary_target: false,
+            target_audience: String::new(),
+            requires_present_time_facing: false,
+            present_time_facing_arc_radians: 0.0,
+            requires_present_time_los: false,
+            impact_event_max_distance: 0.0,
+            direct_action_key: String::new(),
+            view_delay_micros: 0,
+            resolve_at_micros: 0,
+            targeting_width: 0.0,
+        };
+        assert!(toxic_weapon_proc_succeeds(&row, target, 1.0));
+        assert!(!toxic_weapon_proc_succeeds(&row, target, 0.0));
+        assert_eq!(
+            toxic_weapon_proc_succeeds(&row, target, 0.25),
+            toxic_weapon_proc_succeeds(&row, target, 0.25)
+        );
+
+        let tuning = MeleePoisonOnHitRuntime {
+            proc_chance: 1.0,
+            poison_duration: Duration::from_secs(6),
+            poison_tick_interval: Duration::from_secs(1),
+            poison_tick_damage: 2,
+            poison_max_stacks: 5,
+            poison_status_stack_group: "POISON".to_string(),
+            poison_dispel_types: vec![StatusDispelType::Poison],
+        };
+        let mut effects = Vec::new();
+        push_toxic_weapon_effects(&mut effects, &row, target, Some(&tuning));
+
+        assert_eq!(effects.len(), 1);
+        let EffectPacket::ApplyStatus {
+            source: effect_source,
+            target: effect_target,
+            payload,
+            polarity,
+            duration,
+            stack_group,
+            max_stacks,
+            stack_policy,
+            dispel_types,
+            ..
+        } = &effects[0]
+        else {
+            panic!("expected Toxic Weapon Poison effect");
+        };
+        assert_eq!(*effect_source, source);
+        assert_eq!(*effect_target, target);
+        assert_eq!(
+            *payload,
+            StatusPayload::Dot {
+                tick_damage: 2,
+                damage_type: DamageType::Poison,
+                tick_interval: Duration::from_secs(1),
+            }
+        );
+        assert_eq!(*polarity, StatusPolarity::Debuff);
+        assert_eq!(*duration, Duration::from_secs(6));
+        assert_eq!(stack_group, &format!("POISON:{}", source.to_hex()));
+        assert_eq!(*max_stacks, 5);
+        assert_eq!(*stack_policy, StackPolicy::AddStackRefresh);
+        assert_eq!(dispel_types, &vec![StatusDispelType::Poison]);
     }
 
     #[test]
