@@ -108,6 +108,8 @@ namespace Arena.Editor
             public AnimationClip Clip { get; }
         }
 
+        private const string NoAnimationVfxEffectLabel = "\u2014 no effect \u2014";
+
         private readonly struct CombatVfxPreviewOption
         {
             public CombatVfxPreviewOption(string vfxId, string label)
@@ -1286,11 +1288,17 @@ namespace Arena.Editor
                 EditorGUILayout.HelpBox(
                     "This clip has no animation VFX yet. Choose a registered prefab below, play or scrub to the desired slash frame, then create it in one step.",
                     MessageType.None);
-                if (TryDrawCombatVfxPreviewPicker(
-                        "Effect",
-                        currentVfxId: string.Empty,
-                        out string newVfxId)
-                    && GUILayout.Button("Create Slash Effect At Current Frame"))
+                bool pickedNewEffect = TryDrawCombatVfxPreviewPicker(
+                    "Registered Prefab",
+                    currentVfxId: string.Empty,
+                    out string newVfxId);
+                bool createRequested;
+                using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(newVfxId)))
+                {
+                    createRequested = GUILayout.Button("Create Slash Effect At Current Frame");
+                }
+
+                if (pickedNewEffect && createRequested)
                 {
                     CreateAnimationVfxTrackAndBinding(
                         set,
@@ -1305,15 +1313,26 @@ namespace Arena.Editor
             int selectedTrackIndex = ResolveSelectedAnimationVfxPreviewTrackIndex(
                 previewClip,
                 matchingTracks.Count);
+            WeaponMeleeAttackAuthoring attack = set.meleeAttacks[strikeIndex - 1];
             string[] trackLabels = new string[matchingTracks.Count];
             for (int index = 0; index < matchingTracks.Count; index++)
             {
                 CombatAnimationVfxTrack track = matchingTracks[index];
+                // Which slots this attack actually fills is the first thing you want to
+                // know here, so it belongs in the list rather than one selection away.
+                bool filled = TryResolvePreviewVfxId(
+                        attack,
+                        track.NormalizedSlotId,
+                        out string slotVfxId)
+                    && !string.IsNullOrEmpty(slotVfxId);
                 trackLabels[index] =
-                    $"{track.NormalizedSlotId} ({track.startTimeSeconds:0.000}s)";
+                    $"{(filled ? "\u25cf" : "\u25cb")} {track.NormalizedSlotId} ({track.startTimeSeconds:0.000}s)";
             }
 
-            int nextSelectedTrackIndex = EditorGUILayout.Popup("Track", selectedTrackIndex, trackLabels);
+            int nextSelectedTrackIndex = EditorGUILayout.Popup(
+                "Slot On Clip",
+                selectedTrackIndex,
+                trackLabels);
             if (nextSelectedTrackIndex != selectedTrackIndex)
             {
                 selectedTrackIndex = nextSelectedTrackIndex;
@@ -1327,26 +1346,60 @@ namespace Arena.Editor
             SessionState.SetInt(selectedTrackKey, selectedTrackIndex);
             CombatAnimationVfxTrack selectedTrack = matchingTracks[selectedTrackIndex];
 
-            WeaponMeleeAttackAuthoring attack = set.meleeAttacks[strikeIndex - 1];
             bool hasBinding = TryResolvePreviewVfxId(
                 attack,
                 selectedTrack.NormalizedSlotId,
                 out string vfxId);
-            EditorGUILayout.HelpBox(
-                hasBinding && !string.IsNullOrEmpty(vfxId)
-                    ? $"Attack {strikeIndex} fills {selectedTrack.NormalizedSlotId} with {vfxId}. Scrubbing at or after Start Time previews the registered prefab."
-                    : $"Attack {strikeIndex} does not fill {selectedTrack.NormalizedSlotId}, so this animation plays without that effect.",
-                hasBinding && !string.IsNullOrEmpty(vfxId) ? MessageType.Info : MessageType.Warning);
+            if (hasBinding && !string.IsNullOrEmpty(vfxId))
+            {
+                EditorGUILayout.HelpBox(
+                    $"Attack {strikeIndex} fills {selectedTrack.NormalizedSlotId} with {vfxId}. Scrubbing at or after Start Time previews the registered prefab.",
+                    MessageType.Info);
+            }
+            else
+            {
+                // An empty slot is only a problem when the attack fills nothing at all.
+                // Reporting "does not fill" while another slot carries the effect reads
+                // as a broken setup when the setup is fine.
+                string filledElsewhere = DescribeOtherFilledSlots(
+                    attack,
+                    matchingTracks,
+                    selectedTrack.NormalizedSlotId);
+                EditorGUILayout.HelpBox(
+                    filledElsewhere.Length > 0
+                        ? $"Attack {strikeIndex} does not fill {selectedTrack.NormalizedSlotId}, but it does fill {filledElsewhere}. Select that slot above to preview it."
+                        : $"Attack {strikeIndex} fills no slot on this clip, so this animation plays without any effect.",
+                    filledElsewhere.Length > 0 ? MessageType.Info : MessageType.Warning);
+            }
 
             EditorGUI.BeginChangeCheck();
             bool hasRegistryChoice = TryDrawCombatVfxPreviewPicker(
-                "Effect",
+                "Registered Prefab",
                 vfxId,
                 out string selectedVfxId);
             bool selectedEffectChanged = EditorGUI.EndChangeCheck();
-            if (hasRegistryChoice
-                && ((hasBinding && selectedEffectChanged)
-                    || (!hasBinding && GUILayout.Button("Bind Selected Effect To This Attack"))))
+
+            bool bindRequested = false;
+            if (hasRegistryChoice)
+            {
+                if (hasBinding)
+                {
+                    bindRequested = selectedEffectChanged;
+                }
+                else
+                {
+                    // The picker parks on "no effect" until a real choice is made, so the
+                    // button must stay dead until then: binding the placeholder would author
+                    // an empty binding that CombatVFXAuthoringValidator rejects.
+                    using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(selectedVfxId)))
+                    {
+                        bindRequested = GUILayout.Button(
+                            $"Bind Selected Prefab To {selectedTrack.NormalizedSlotId}");
+                    }
+                }
+            }
+
+            if (bindRequested)
             {
                 Undo.RecordObject(set, "Bind Animation VFX Effect");
                 SetAttackAnimationVfxBinding(
@@ -1356,7 +1409,7 @@ namespace Arena.Editor
                     selectedVfxId);
                 CommitAnimationVfxTrackEdit(set, "animation-vfx-binding");
                 vfxId = selectedVfxId;
-                hasBinding = true;
+                hasBinding = !string.IsNullOrEmpty(vfxId);
             }
 
             EditorGUILayout.LabelField("Live VFX Transform", EditorStyles.boldLabel);
@@ -1505,22 +1558,37 @@ namespace Arena.Editor
                 return false;
             }
 
+            // An unmatched id used to fall through to index 0, so an unbound slot rendered
+            // as though the alphabetically first registry entry were chosen -- and one
+            // click on Bind would author it. "No effect" has to be a real, selectable entry.
             string normalizedCurrentId = WireIdentifier.Normalize(currentVfxId);
+            var menu = new List<CombatVfxPreviewOption>(options.Count + 2)
+            {
+                new CombatVfxPreviewOption(string.Empty, NoAnimationVfxEffectLabel),
+            };
             int selectedIndex = 0;
             for (int index = 0; index < options.Count; index++)
             {
                 if (string.Equals(options[index].VfxId, normalizedCurrentId, StringComparison.Ordinal))
-                {
-                    selectedIndex = index;
-                    break;
-                }
+                    selectedIndex = menu.Count;
+                menu.Add(options[index]);
             }
 
-            string[] labels = new string[options.Count];
-            for (int index = 0; index < options.Count; index++)
-                labels[index] = options[index].Label;
+            if (selectedIndex == 0 && !string.IsNullOrEmpty(normalizedCurrentId))
+            {
+                // A binding that exists but points at nothing is a different problem from
+                // no binding at all, and showing "no effect" for it hides the breakage.
+                selectedIndex = menu.Count;
+                menu.Add(new CombatVfxPreviewOption(
+                    normalizedCurrentId,
+                    $"{normalizedCurrentId} \u2014 MISSING FROM REGISTRY"));
+            }
+
+            string[] labels = new string[menu.Count];
+            for (int index = 0; index < menu.Count; index++)
+                labels[index] = menu[index].Label;
             selectedIndex = EditorGUILayout.Popup(label, selectedIndex, labels);
-            selectedVfxId = options[selectedIndex].VfxId;
+            selectedVfxId = menu[selectedIndex].VfxId;
             return true;
         }
 
@@ -1575,9 +1643,16 @@ namespace Arena.Editor
                 }
             }
 
-            attack.animationVfxBindings.Add(new CombatAnimationVfxBinding(
-                normalizedSlotId,
-                WireIdentifier.Normalize(vfxId)));
+            // An empty id clears the slot. Authoring an empty binding instead is a
+            // validation error, and the picker can now produce one deliberately.
+            string normalizedVfxId = WireIdentifier.Normalize(vfxId);
+            if (!string.IsNullOrEmpty(normalizedVfxId))
+            {
+                attack.animationVfxBindings.Add(new CombatAnimationVfxBinding(
+                    normalizedSlotId,
+                    normalizedVfxId));
+            }
+
             set.meleeAttacks[strikeIndex - 1] = attack;
         }
 
@@ -2010,6 +2085,35 @@ namespace Arena.Editor
             }
 
             _attackPreviewVfxInstances.Clear();
+        }
+
+        /// <summary>
+        /// Slots this attack fills on the previewed clip, other than the one being viewed.
+        /// Empty when the attack fills nothing else the clip can show.
+        /// </summary>
+        private static string DescribeOtherFilledSlots(
+            WeaponMeleeAttackAuthoring attack,
+            List<CombatAnimationVfxTrack> clipTracks,
+            string excludedSlotId)
+        {
+            var described = new List<string>();
+            for (int index = 0; index < clipTracks.Count; index++)
+            {
+                string slotId = clipTracks[index].NormalizedSlotId;
+                if (string.Equals(slotId, excludedSlotId, StringComparison.Ordinal))
+                    continue;
+                if (!TryResolvePreviewVfxId(attack, slotId, out string slotVfxId)
+                    || string.IsNullOrEmpty(slotVfxId))
+                {
+                    continue;
+                }
+
+                string entry = $"{slotId} with {slotVfxId}";
+                if (!described.Contains(entry))
+                    described.Add(entry);
+            }
+
+            return string.Join(", ", described);
         }
 
         private static bool TryResolvePreviewVfxId(
