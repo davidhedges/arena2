@@ -76,11 +76,11 @@ use crate::resources::{
 };
 use crate::spells::{
     aoe_hits_player, approach_line_contact_point_xz, bake_linear_special_movement,
-    begin_parabolic_arc_special_movement, begin_special_movement,
-    begin_special_movement_with_facing_policy, contact_distance_from_radii,
-    horizontal_movement_duration_ms, is_on_global_cooldown, is_on_named_cooldown,
-    stamp_global_cooldown_for_duration, stamp_named_cooldown_for_duration, SpellVec3,
-    SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
+    begin_parabolic_arc_special_movement, begin_special_movement_with_facing_policy,
+    contact_distance_from_radii, horizontal_movement_duration_ms, is_on_global_cooldown,
+    is_on_named_cooldown, stamp_global_cooldown_for_duration,
+    stamp_named_cooldown_for_duration, SpellVec3, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+    SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y, SPECIAL_MOVEMENT_FACING_FACE_PATH,
     SPECIAL_MOVEMENT_FACING_FACE_START,
 };
 use crate::world_collision::{
@@ -2259,6 +2259,31 @@ fn yaw_toward_xz(from_x: f32, from_z: f32, to_x: f32, to_z: f32, fallback_yaw: f
     }
 }
 
+fn gap_close_movement_facing(
+    ability_id: Option<&str>,
+    movement_end: SpellVec3,
+    target_x: f32,
+    target_z: f32,
+    caster_yaw: f32,
+) -> (f32, &'static str) {
+    if ability_id
+        .is_some_and(|ability_id| ability_id.eq_ignore_ascii_case(DAGGER_COUP_DE_GRACE_ABILITY_ID))
+    {
+        (
+            yaw_toward_xz(
+                movement_end.x,
+                movement_end.z,
+                target_x,
+                target_z,
+                caster_yaw,
+            ),
+            SPECIAL_MOVEMENT_FACING_FACE_START,
+        )
+    } else {
+        (caster_yaw, SPECIAL_MOVEMENT_FACING_FACE_PATH)
+    }
+}
+
 fn melee_gap_close_for_ability(
     ctx: &ReducerContext,
     ability_id: Option<&str>,
@@ -4206,19 +4231,14 @@ fn perform_melee_attack_for_internal(
         let movement_start =
             SpellVec3::new(caster_phys.pos_x, caster_phys.pos_y, caster_phys.pos_z);
         if gap_close_has_horizontal_travel(movement_start, gap_close.end) {
-            let movement_facing_yaw =
-                if gameplay.ability_id.as_deref() == Some(DAGGER_COUP_DE_GRACE_ABILITY_ID) {
-                    yaw_toward_xz(
-                        gap_close.end.x,
-                        gap_close.end.z,
-                        target_point_x,
-                        target_point_z,
-                        caster_phys.yaw,
-                    )
-                } else {
-                    caster_phys.yaw
-                };
-            begin_special_movement(
+            let (movement_facing_yaw, movement_facing_policy) = gap_close_movement_facing(
+                gameplay.ability_id.as_deref(),
+                gap_close.end,
+                target_point_x,
+                target_point_z,
+                caster_phys.yaw,
+            );
+            begin_special_movement_with_facing_policy(
                 ctx,
                 caster,
                 &format!(
@@ -4231,6 +4251,7 @@ fn perform_melee_attack_for_internal(
                 movement_start,
                 gap_close.end,
                 movement_facing_yaw,
+                movement_facing_policy,
                 SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
             );
             arm_lingering_shade_for_voluntary_movement(
@@ -6545,7 +6566,7 @@ mod tests {
         auto_attack_sequence_step_for_profile, canonical_slot_id, combo_input_decision,
         default_aerial_execution_mode, find_combo_root_for_authorization,
         gap_close_activation_satisfied, gap_close_destination_within_epsilon,
-        gap_close_has_horizontal_travel, gap_close_pre_commit_decision,
+        gap_close_has_horizontal_travel, gap_close_movement_facing, gap_close_pre_commit_decision,
         gap_close_target_facing_satisfied, inactive_conditional_gap_close_range,
         melee_channel_movement_canceled, melee_channel_tick_delays,
         melee_hit_volume_contains_player, melee_impact_delays, melee_manifest,
@@ -6558,7 +6579,7 @@ mod tests {
         resolve_melee_action_reference_in_strikes, resolved_hit_window_damages,
         scaled_auto_attack_cadence_ms, scaled_impact_area_damage, scheduled_melee_impact_at,
         strike_total_duration_ms, targeted_melee_requires_current_facing,
-        timed_melee_movement_destination, yaw_toward_xz, AerialExecutionMode,
+        timed_melee_movement_destination, AerialExecutionMode,
         AirborneTargetingMode, ComboInputDecision, GapCloseActorSnapshot,
         GapClosePreCommitDecision, MeleeAuthorization, PendingMeleeImpact,
         ResolvedMeleeAttackModifiers, ResolvedMeleeGapClose, ResolvedMeleeTargeting, SpellVec3,
@@ -6566,7 +6587,8 @@ mod tests {
         GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH, GAP_CLOSE_DESTINATION_BEHIND_TARGET,
         GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT, GAP_CLOSE_KIND_LINEAR,
         GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED, MELEE_MANIFEST_JSON,
-        MELEE_TARGET_FACING_ARC_RADIANS,
+        MELEE_TARGET_FACING_ARC_RADIANS, SPECIAL_MOVEMENT_FACING_FACE_PATH,
+        SPECIAL_MOVEMENT_FACING_FACE_START,
     };
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
     use crate::animation_set_test_utils::animation_set_assets_by_combat_profile;
@@ -8342,15 +8364,30 @@ mod tests {
             resolve_gap_close_destination(&gap, gap_actor(0.0, 0.0, 0.0, 0.5), target)
                 .expect("destination should resolve");
 
-        let facing_yaw = yaw_toward_xz(
-            destination.x,
-            destination.z,
+        let (facing_yaw, facing_policy) = gap_close_movement_facing(
+            Some(DAGGER_COUP_DE_GRACE_ABILITY_ID),
+            destination,
             target.pos_x,
             target.pos_z,
             0.0,
         );
 
         assert!((facing_yaw - target.yaw).abs() < 0.001);
+        assert_eq!(facing_policy, SPECIAL_MOVEMENT_FACING_FACE_START);
+    }
+
+    #[test]
+    fn ordinary_gap_closers_keep_path_facing() {
+        let (facing_yaw, facing_policy) = gap_close_movement_facing(
+            Some("DAGGER_DEATH_CROSS"),
+            SpellVec3::new(3.0, 0.0, 4.0),
+            5.0,
+            6.0,
+            0.75,
+        );
+
+        assert!((facing_yaw - 0.75).abs() < 0.001);
+        assert_eq!(facing_policy, SPECIAL_MOVEMENT_FACING_FACE_PATH);
     }
 
     #[test]

@@ -7150,31 +7150,6 @@
       }
     },
     {
-      "ability_id": "DAGGER_CROSSCUT",
-      "actor_scope": "PLAYER",
-      "discipline_id": "SUBTLETY",
-      "combat_profile_id": "DAGGERS",
-      "action_id": "DAGGER_COMBO_ATTACK_02_04",
-      "display_name": "Crosscut",
-      "resource_kind": "STAMINA",
-      "resource_cost": 30,
-      "ability_tags": [
-        "ACTION_BAR_ACTION"
-      ],
-      "sort_order": 38,
-      "gameplay": {
-        "kind": "MELEE",
-        "base_damage": 36,
-        "applies_stagger": false,
-        "range": 2.25,
-        "cooldown_ms": 1000,
-        "uses_global_cooldown": true,
-        "parry_behavior": "PARRYABLE",
-        "block_behavior": "BLOCKABLE",
-        "airborne_targeting_mode": "ANY_TARGET"
-      }
-    },
-    {
       "ability_id": "DAGGER_BLADE_FLURRY",
       "actor_scope": "PLAYER",
       "discipline_id": "SUBTLETY",
@@ -7448,12 +7423,24 @@
         "kind": "MELEE",
         "base_damage": 44,
         "applies_stagger": false,
-        "range": 2.75,
+        "range": 12,
+        "minimum_range": 4,
         "cooldown_ms": 1400,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
         "block_behavior": "BLOCKABLE",
-        "airborne_targeting_mode": "ANY_TARGET"
+        "airborne_targeting_mode": "ANY_TARGET",
+        "gap_close": {
+          "kind": "LINEAR",
+          "destination": "NEAREST_CONTACT_POINT",
+          "speed": 24,
+          "arrival_buffer": 1.44,
+          "arrival_epsilon": 0.05,
+          "impact_range": 2.5,
+          "collision_policy": "STOP_AT_BLOCK",
+          "require_arrival_for_swing": true,
+          "requires_target_facing": false
+        }
       }
     },
     {
@@ -10631,13 +10618,6 @@
     },
     {
       "presentation_kind": "ABILITY",
-      "presentation_id": "DAGGER_CROSSCUT",
-      "display_name": "Crosscut",
-      "description": "Cuts the target with a crossing pair of dagger strikes.",
-      "sort_order": 226
-    },
-    {
-      "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_BLADE_FLURRY",
       "display_name": "Blade Flurry",
       "description": "Unleashes a rapid flurry of alternating dagger strikes.",
@@ -10703,7 +10683,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_DEATH_CROSS",
       "display_name": "Death Cross",
-      "description": "Descends into a decisive crossing dagger strike.",
+      "description": "Rushes to the target and descends into a decisive crossing dagger strike.",
       "sort_order": 235
     },
     {
@@ -13566,14 +13546,6 @@
       "action_id": "DAGGER_SPINNING_SLASH",
       "ability_id": "DAGGER_SPINNING_SLASH",
       "sort_order": 267
-    },
-    {
-      "slot_id": "slot_0_6",
-      "combat_profile_id": "DAGGERS",
-      "action_kind": "ABILITY",
-      "action_id": "DAGGER_CROSSCUT",
-      "ability_id": "DAGGER_CROSSCUT",
-      "sort_order": 268
     },
     {
       "slot_id": "slot_0_7",

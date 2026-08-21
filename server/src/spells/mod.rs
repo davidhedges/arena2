@@ -72,7 +72,8 @@ pub(crate) use casting::{
     special_movement_uses_air_path, tick_active_casts, tick_persistent_areas,
     validate_movement_delivery_target, KNOCKBACK_MOVEMENT_KIND,
     SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
-    SPECIAL_MOVEMENT_FACING_FACE_START, STAGGER_SHOVE_MOVEMENT_KIND,
+    SPECIAL_MOVEMENT_FACING_FACE_PATH, SPECIAL_MOVEMENT_FACING_FACE_START,
+    STAGGER_SHOVE_MOVEMENT_KIND,
 };
 pub(crate) use catalog::spell_definition_by_str;
 pub(crate) use cooldowns::{

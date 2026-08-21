@@ -12382,7 +12382,6 @@ mod tests {
             ("DAGGER_ROUNDHOUSE", "DAGGER_ROUNDHOUSE"),
             ("DAGGER_GUT_RIPPER", "DAGGER_COMBO_ATTACK_04_01"),
             ("DAGGER_SPINNING_SLASH", "DAGGER_COMBO_ATTACK_03_01"),
-            ("DAGGER_CROSSCUT", "DAGGER_COMBO_ATTACK_02_04"),
             ("DAGGER_BLADE_FLURRY", "DAGGER_COMBO_ATTACK_02_02"),
             ("DAGGER_DEADLY_FLOURISH", "DAGGER_DEADLY_FLOURISH"),
             ("DAGGER_PURSUE", "DAGGER_COMBO_ATTACK_01_04"),
@@ -12664,7 +12663,6 @@ mod tests {
             ("DAGGER_ROUNDHOUSE", "SLOT_0_3"),
             ("DAGGER_GUT_RIPPER", "SLOT_0_4"),
             ("DAGGER_SPINNING_SLASH", "SLOT_0_5"),
-            ("DAGGER_CROSSCUT", "SLOT_0_6"),
             ("DAGGER_BLADE_FLURRY", "SLOT_0_7"),
             ("DAGGER_DEADLY_FLOURISH", "SLOT_0_8"),
             ("DAGGER_PURSUE", "SLOT_1_0"),
@@ -12818,6 +12816,36 @@ mod tests {
         assert_eq!(
             normalize_identifier(gap_close.collision_policy.as_str()),
             "REQUIRE_CLEAR_PATH"
+        );
+        assert!(gap_close.require_arrival_for_swing);
+        assert!(!gap_close.requires_target_facing);
+    }
+
+    #[test]
+    fn dagger_death_cross_authors_standard_linear_gap_close() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_DEATH_CROSS")
+            .expect("DAGGER_DEATH_CROSS must exist");
+        let gap_close = ability
+            .gameplay
+            .gap_close
+            .as_ref()
+            .expect("DAGGER_DEATH_CROSS must author gap_close");
+
+        assert_eq!(ability.gameplay.range, Some(12.0));
+        assert_eq!(ability.gameplay.minimum_range, Some(4.0));
+        assert_eq!(normalize_identifier(gap_close.kind.as_str()), "LINEAR");
+        assert_eq!(
+            normalize_identifier(gap_close.destination.as_str()),
+            "NEAREST_CONTACT_POINT"
+        );
+        assert_eq!(gap_close.speed, Some(24.0));
+        assert_eq!(gap_close.impact_range, 2.5);
+        assert_eq!(
+            normalize_identifier(gap_close.collision_policy.as_str()),
+            "STOP_AT_BLOCK"
         );
         assert!(gap_close.require_arrival_for_swing);
         assert!(!gap_close.requires_target_facing);
