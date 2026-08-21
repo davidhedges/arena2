@@ -303,7 +303,7 @@ namespace Arena.Network
     internal sealed class MatchHandoffCoordinator : MonoBehaviour
     {
         private const float MatchConnectTimeoutSeconds = 20f;
-        private const float AssignmentWaitTimeoutSeconds = 150f;
+        private const float AssignmentWaitTimeoutSeconds = 45f;
 
         internal static MatchHandoffCoordinator? Instance { get; private set; }
 
@@ -529,9 +529,14 @@ namespace Arena.Network
 
             if (string.Equals(status.Status, "FAILED", StringComparison.Ordinal))
             {
-                LastError = string.IsNullOrWhiteSpace(status.FailureCode)
-                    ? "Match provisioning failed."
-                    : $"Match provisioning failed ({status.FailureCode}).";
+                LastError = string.Equals(
+                        status.FailureCode,
+                        "ARTIFACT_STALE",
+                        StringComparison.Ordinal)
+                    ? "Local match build is stale. Run ops/setup-local-multiplayer.sh setup."
+                    : string.IsNullOrWhiteSpace(status.FailureCode)
+                        ? "Match provisioning failed."
+                        : $"Match provisioning failed ({status.FailureCode}).";
                 MatchStartupTiming.Fail("hub_provisioning_failed");
                 State = MatchHandoffState.HubReady;
                 NotifyChanged();

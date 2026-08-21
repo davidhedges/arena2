@@ -60,6 +60,10 @@ class ProvisionerError(RuntimeError):
     """Expected operational failure that is safe to log without credentials."""
 
 
+class ArtifactStaleError(ProvisionerError):
+    """The cached server artifact no longer matches its source inputs."""
+
+
 class SafetyError(ProvisionerError):
     """A destructive action failed its exact-target safety checks."""
 
@@ -834,7 +838,7 @@ class Provisioner:
                 expected_wasm_sha256=artifact.sha256,
             )
         except ArtifactProvenanceError as error:
-            raise ProvisionerError(f"{artifact.label} artifact: {error}") from error
+            raise ArtifactStaleError(f"{artifact.label} artifact: {error}") from error
 
     def run_once(self) -> dict[str, int]:
         now = int(self.clock())
@@ -976,11 +980,6 @@ class Provisioner:
         service_identity: str,
         now: int,
     ) -> None:
-        # Check immediately before creating ledger state or claiming a Hub
-        # ticket. A source edit made after this worker started can therefore
-        # never cause a new match to publish the cached, obsolete module.
-        queue_kind = str(ticket.get("queue_kind", DEFAULT_QUEUE_KIND)).strip() or DEFAULT_QUEUE_KIND
-        self._ensure_artifact_fresh(self._artifact_for(queue_kind))
         startup_started = time.perf_counter()
         ticket_created_micros = timestamp_microseconds(ticket["created_at"])
         timings_ms: dict[str, float] = {}
@@ -1222,9 +1221,14 @@ class Provisioner:
                 bootstrap_called=bootstrap_called,
             )
             current = self.store.get(allocation.ticket_id) or allocation
-            failure_code = (
-                "PUBLISH_FAILED" if current.database_identity is None else "BOOTSTRAP_FAILED"
-            )
+            if isinstance(error, ArtifactStaleError):
+                failure_code = "ARTIFACT_STALE"
+            else:
+                failure_code = (
+                    "PUBLISH_FAILED"
+                    if current.database_identity is None
+                    else "BOOTSTRAP_FAILED"
+                )
             self.store.update(
                 allocation.ticket_id,
                 state="FAILURE_CLEANUP",

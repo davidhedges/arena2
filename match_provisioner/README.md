@@ -38,6 +38,10 @@ The worker is intentionally local-only:
   per session: the small PvP module for match tickets, and the main server
   module for open-world tickets, whose destination scene comes from the ticket
   rather than from `ARENA_PROVISIONER_MAP_ID`;
+- if source inputs change after startup, the worker claims and immediately
+  fails the next affected ticket as `ARTIFACT_STALE` without publishing a
+  database, so clients receive an actionable error instead of waiting on a
+  permanently pending request;
 - wakeup updates are coalesced, so a burst of requests causes one authoritative
   Hub snapshot instead of one query set per notification;
 - a 30-second reconciliation sweep recovers subscription interruptions,

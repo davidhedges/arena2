@@ -421,7 +421,7 @@ class ProvisionerTests(unittest.TestCase):
         self.assertEqual(bootstrap_args[14], "")
         self.assertEqual(bootstrap_args[15], "")
 
-    def test_stale_sources_are_rejected_before_a_ticket_is_claimed(self) -> None:
+    def test_stale_sources_fail_the_ticket_without_publishing(self) -> None:
         provisioner = self.provisioner()
         self.source_path.write_text(
             "pub const SPELL: &str = \"CHANGED\";\n",
@@ -431,8 +431,12 @@ class ProvisionerTests(unittest.TestCase):
 
         self.run_quietly(provisioner)
 
-        self.assertEqual(self.api.tickets["ticket-one"]["status"], "PENDING")
-        self.assertIsNone(self.store.get("ticket-one"))
+        self.assertEqual(self.api.tickets["ticket-one"]["status"], "FAILED")
+        self.assertEqual(
+            self.api.tickets["ticket-one"]["failure_code"],
+            {"some": "ARTIFACT_STALE"},
+        )
+        self.assertEqual(self.store.get("ticket-one").state, "CLEANED")
         self.assertEqual(self.api.publish_count, 0)
 
     def test_stale_sources_are_rejected_when_the_worker_starts(self) -> None:
@@ -456,6 +460,10 @@ class ProvisionerTests(unittest.TestCase):
 
         self.assertEqual(self.api.publish_count, 0)
         self.assertEqual(self.api.tickets["ticket-one"]["status"], "FAILED")
+        self.assertEqual(
+            self.api.tickets["ticket-one"]["failure_code"],
+            {"some": "ARTIFACT_STALE"},
+        )
 
     def test_success_emits_stage_level_startup_timing(self) -> None:
         self.api.add_ticket("ticket-one", PLAYER_ONE)
