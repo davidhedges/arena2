@@ -82,6 +82,13 @@ namespace Arena.Editor
                 ObserveSet(set, path, map);
             }
 
+            SpellCastAnimationLibrary? library = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationLibrary>();
+            if (library != null)
+                ObserveSpellLibrary(library, AssetDatabase.GetAssetPath(library), map);
+            SpellCastAnimationMap? spellMap = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
+            if (spellMap != null)
+                ObserveFixedSpellAnimations(spellMap, AssetDatabase.GetAssetPath(spellMap), map);
+
             return map;
         }
 
@@ -102,19 +109,6 @@ namespace Arena.Editor
             // re-introduced, but no observations are recorded for it today.
             Add(map, set.defaultSpellCastHold.enter, CombatClipRole.SpellCastHoldEnter, assetPath, ".defaultSpellCastHold.enter");
             Add(map, set.defaultSpellCastHold.idleLoop, CombatClipRole.SpellCastHoldIdle, assetPath, ".defaultSpellCastHold.idleLoop");
-
-            // Spell release clips
-            for (int i = 0; i < (set.spells?.Length ?? 0); i++)
-            {
-                WeaponSpellAnimationEntry entry = set.spells![i];
-                if (entry.PlaysReleasePresentation)
-                {
-                    Add(map, entry.ground, CombatClipRole.SpellRelease, assetPath, $".spells[{i}].ground ({entry.SpellIdOrEmpty})");
-                    Add(map, entry.air, CombatClipRole.SpellRelease, assetPath, $".spells[{i}].air ({entry.SpellIdOrEmpty})");
-                }
-                Add(map, entry.holdOverride.enter, CombatClipRole.SpellCastHoldEnter, assetPath, $".spells[{i}].holdOverride.enter ({entry.SpellIdOrEmpty})");
-                Add(map, entry.holdOverride.idleLoop, CombatClipRole.SpellCastHoldIdle, assetPath, $".spells[{i}].holdOverride.idleLoop ({entry.SpellIdOrEmpty})");
-            }
 
             // Melee attacks
             if (set.meleeAttacks != null)
@@ -191,6 +185,52 @@ namespace Arena.Editor
             {
                 Add(map, wp.DrawWeapon, CombatClipRole.DrawWeapon, assetPath, ".weaponPresentation.drawWeapon");
                 Add(map, wp.SheathWeapon, CombatClipRole.SheathWeapon, assetPath, ".weaponPresentation.sheathWeapon");
+            }
+        }
+
+        private static void ObserveSpellLibrary(
+            SpellCastAnimationLibrary library,
+            string assetPath,
+            Dictionary<AnimationClip, List<CombatClipRoleObservation>> map)
+        {
+            for (int familyIndex = 0; familyIndex < library.Families.Count; familyIndex++)
+            {
+                SpellCastAnimationFamily family = library.Families[familyIndex];
+                ObserveSpellTriple(family.left, $".families[{familyIndex}].left ({family.BaseNameOrEmpty})");
+                ObserveSpellTriple(family.right, $".families[{familyIndex}].right ({family.BaseNameOrEmpty})");
+                ObserveSpellTriple(family.twoHand, $".families[{familyIndex}].twoHand ({family.BaseNameOrEmpty})");
+            }
+
+            void ObserveSpellTriple(SpellCastClipTriple triple, string referencePath)
+            {
+                Add(map, triple.oneShot, CombatClipRole.SpellCastHoldEnter, assetPath, referencePath + ".oneShot");
+                Add(map, triple.load, CombatClipRole.SpellCastHoldIdle, assetPath, referencePath + ".load");
+                Add(map, triple.cast, CombatClipRole.SpellRelease, assetPath, referencePath + ".cast");
+            }
+        }
+
+        private static void ObserveFixedSpellAnimations(
+            SpellCastAnimationMap spellMap,
+            string assetPath,
+            Dictionary<AnimationClip, List<CombatClipRoleObservation>> map)
+        {
+            for (int entryIndex = 0; entryIndex < spellMap.Entries.Count; entryIndex++)
+            {
+                SpellCastAnimationMap.Entry assignment = spellMap.Entries[entryIndex];
+                if (assignment.assignmentKind != SpellCastAnimationAssignmentKind.Fixed)
+                    continue;
+
+                WeaponSpellAnimationEntry entry = assignment.fixedAnimation;
+                string spellId = string.IsNullOrWhiteSpace(assignment.spellId)
+                    ? "<missing spell id>"
+                    : assignment.spellId.Trim().ToUpperInvariant();
+                if (entry.PlaysReleasePresentation)
+                {
+                    Add(map, entry.ground, CombatClipRole.SpellRelease, assetPath, $".entries[{entryIndex}].fixedAnimation.ground ({spellId})");
+                    Add(map, entry.air, CombatClipRole.SpellRelease, assetPath, $".entries[{entryIndex}].fixedAnimation.air ({spellId})");
+                }
+                Add(map, entry.holdOverride.enter, CombatClipRole.SpellCastHoldEnter, assetPath, $".entries[{entryIndex}].fixedAnimation.holdOverride.enter ({spellId})");
+                Add(map, entry.holdOverride.idleLoop, CombatClipRole.SpellCastHoldIdle, assetPath, $".entries[{entryIndex}].fixedAnimation.holdOverride.idleLoop ({spellId})");
             }
         }
 

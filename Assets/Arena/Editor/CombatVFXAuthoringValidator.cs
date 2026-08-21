@@ -257,7 +257,7 @@ namespace Arena.Editor
                 SpellAnimationArchetype archetype = DeriveSpellAnimationArchetype(ability);
                 if (!SpellCastAnimationResolver.TryResolve(animationSet, actionId, archetype, out WeaponSpellAnimationEntry entry))
                 {
-                    errors.Add($"spell ability '{abilityId}' action '{actionId}' is selectable but CombatAnimationSet '{animationSet.name}' has no explicit or map-composed spell animation entry.");
+                    errors.Add($"spell ability '{abilityId}' action '{actionId}' is selectable but its cast-motion/fixed assignment does not resolve in CombatAnimationSet '{animationSet.name}'.");
                     continue;
                 }
 
@@ -481,7 +481,6 @@ namespace Arena.Editor
                 if (!string.Equals(animationSet.CombatProfileIdOrDefault, "TWO_HANDED_SWORD", StringComparison.Ordinal))
                     continue;
 
-                ValidateGreatswordSpellReleaseEvents(animationSet, errors);
                 ValidateGreatswordMeleeEvents(animationSet, errors);
                 ValidateGreatswordStaggerEvents(animationSet, errors);
             }
@@ -685,60 +684,6 @@ namespace Arena.Editor
                 errors.Add(
                     $"CombatAnimationSet '{animationSet.name}' animation VFX track '{track.NormalizedSlotId}' uses {track.anchor}, but the set has no authored main-hand visual to provide '{markerName}'.");
             }
-        }
-
-        private static void ValidateGreatswordSpellReleaseEvents(
-            CombatAnimationSet animationSet,
-            List<string> errors)
-        {
-            if (animationSet.spells == null)
-                return;
-
-            foreach (WeaponSpellAnimationEntry entry in animationSet.spells)
-            {
-                ValidateSpellHoldEvents(animationSet, errors, entry);
-                if (!entry.PlaysReleasePresentation)
-                    continue;
-
-                var clips = new List<(AnimationClip Clip, string Label)>();
-                AddUniqueClip(clips, entry.ground, "ground");
-                AddUniqueClip(clips, entry.air, "air");
-                if (clips.Count == 0)
-                    continue;
-
-                bool mayPlayFullBody = entry.playbackLayer == SpellPlaybackLayer.FullBody
-                    || entry.playbackLayer == SpellPlaybackLayer.UpperBodyWhileMoving;
-                foreach ((AnimationClip clip, string label) in clips)
-                {
-                    string context = $"CombatAnimationSet '{animationSet.name}' spell '{entry.SpellIdOrEmpty}' {label} release clip";
-                    RequireClipEvent(errors, clip, CombatAnimationEvents.OnReleaseFrame, context);
-                    if (mayPlayFullBody)
-                    {
-                        RequireClipEvent(errors, clip, CombatAnimationEvents.OnLowerBodyUnlock, context);
-                        RequireClipEvent(errors, clip, CombatAnimationEvents.OnVisualInterruptible, context);
-                    }
-
-                    RejectDeprecatedLowerBodyBlendEnd(errors, clip, context);
-                }
-            }
-        }
-
-        private static void ValidateSpellHoldEvents(
-            CombatAnimationSet animationSet,
-            List<string> errors,
-            WeaponSpellAnimationEntry entry)
-        {
-            if (!entry.UsesHoldPresentation || !entry.holdOverride.HasAny)
-                return;
-
-            string context = $"CombatAnimationSet '{animationSet.name}' spell '{entry.SpellIdOrEmpty}' hold override";
-            if (!entry.holdOverride.IsPlayable)
-            {
-                errors.Add($"{context} must author both enter and idleLoop clips, or leave the override empty to use Default Spell Cast Hold.");
-                return;
-            }
-
-            RequireClipEvent(errors, entry.holdOverride.EnterOrIdle!, CombatAnimationEvents.OnEnterComplete, $"{context} enter clip");
         }
 
         private static void ValidateGreatswordMeleeEvents(
@@ -951,19 +896,42 @@ namespace Arena.Editor
 
             CombatAnimationSet[] animationSets = Resources.LoadAll<CombatAnimationSet>("CombatAnimationSets");
 
+            foreach (CombatAnimationSet animationSet in animationSets)
+            {
+                var seenMotions = new HashSet<SpellCastMotion>();
+                foreach (SpellCastMotionBinding binding in animationSet.spellCastMotionBindings ?? Array.Empty<SpellCastMotionBinding>())
+                {
+                    if (binding.motion == SpellCastMotion.None)
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' has a spell cast motion binding with motion None.");
+                        continue;
+                    }
+                    if (!seenMotions.Add(binding.motion))
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' has duplicate bindings for spell cast motion '{binding.motion}'.");
+                    if (binding.FamilyBaseNameOrEmpty.Length == 0)
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' motion '{binding.motion}' has no family base name.");
+                        continue;
+                    }
+                    if (!library.TryGetFamily(binding.FamilyBaseNameOrEmpty, out _))
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' motion '{binding.motion}' references family '{binding.FamilyBaseNameOrEmpty}', but SpellCastAnimationLibrary has no matching family.");
+                    }
+                }
+            }
+
+            var seenSpellIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (SpellCastAnimationMap.Entry entry in map.Entries)
             {
                 string spellId = WireIdentifier.Normalize(entry.spellId);
                 if (string.IsNullOrWhiteSpace(spellId))
-                    continue;
-                if (string.IsNullOrWhiteSpace(entry.baseName))
                 {
-                    errors.Add($"SpellCastAnimationMap entry for spell '{spellId}' has no baseName.");
+                    errors.Add("SpellCastAnimationMap has an entry with no spellId.");
                     continue;
                 }
-                if (!library.TryGetFamily(entry.baseName, out SpellCastAnimationFamily family))
+                if (!seenSpellIds.Add(spellId))
                 {
-                    errors.Add($"SpellCastAnimationMap entry for spell '{spellId}' references baseName '{entry.baseName}', but SpellCastAnimationLibrary has no matching family.");
+                    errors.Add($"SpellCastAnimationMap has duplicate entries for spell '{spellId}'.");
                     continue;
                 }
 
@@ -974,28 +942,43 @@ namespace Arena.Editor
                 }
 
                 SpellAnimationArchetype archetype = DeriveSpellAnimationArchetype(ability);
-                var setsByHand = new Dictionary<SpellCastHand, List<string>>();
-                foreach (CombatAnimationSet animationSet in animationSets)
+                if (entry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
                 {
-                    if (animationSet.TryGetSpellAnimation(spellId, out _))
+                    if (entry.motion != SpellCastMotion.None)
+                        errors.Add($"SpellCastAnimationMap fixed entry for spell '{spellId}' must leave motion as None.");
+                    if (!entry.fixedAnimation.HasAnyPresentation)
+                    {
+                        errors.Add($"SpellCastAnimationMap fixed entry for spell '{spellId}' has no playable presentation.");
                         continue;
-
-                    SpellCastHand hand = animationSet.OneHandedCastHand;
-                    if (!setsByHand.TryGetValue(hand, out List<string> setNames))
-                        setsByHand[hand] = setNames = new List<string>();
-                    setNames.Add(animationSet.name);
+                    }
+                    if (!SpellCastAnimationResolver.TryResolve(null, spellId, archetype, out _))
+                        errors.Add($"SpellCastAnimationMap fixed entry for spell '{spellId}' did not resolve independently of a CombatAnimationSet.");
+                    continue;
                 }
 
-                if (setsByHand.Count == 0)
-                    setsByHand[SpellCastHand.Left] = new List<string> { "default composed path" };
-
-                foreach ((SpellCastHand hand, List<string> setNames) in setsByHand)
+                if (entry.motion == SpellCastMotion.None)
                 {
+                    errors.Add($"SpellCastAnimationMap motion entry for spell '{spellId}' has motion None.");
+                    continue;
+                }
+                if (entry.fixedAnimation.HasAnyPresentation)
+                    errors.Add($"SpellCastAnimationMap motion entry for spell '{spellId}' also contains a fixed presentation; clear the unused fixed data.");
+
+                foreach (CombatAnimationSet animationSet in animationSets)
+                {
+                    if (!animationSet.TryGetSpellCastFamily(entry.motion, out string familyBaseName))
+                    {
+                        errors.Add($"SpellCastAnimationMap spell '{spellId}' uses motion '{entry.motion}', but CombatAnimationSet '{animationSet.name}' has no binding for it.");
+                        continue;
+                    }
+                    if (!library.TryGetFamily(familyBaseName, out SpellCastAnimationFamily family))
+                        continue;
+                    SpellCastHand hand = animationSet.OneHandedCastHand;
                     if (SpellCastAnimationComposer.TryCompose(spellId, family, hand, archetype, out _))
                         continue;
 
                     errors.Add(
-                        $"SpellCastAnimationMap entry for spell '{spellId}' resolves authored gameplay as {archetype}, but family '{entry.baseName}' has no playable clips for hand '{hand}' used by: {string.Join(", ", setNames)}.");
+                        $"SpellCastAnimationMap spell '{spellId}' uses motion '{entry.motion}' and resolves authored gameplay as {archetype}, but CombatAnimationSet '{animationSet.name}' family '{familyBaseName}' has no playable clips for hand '{hand}'.");
                 }
             }
         }

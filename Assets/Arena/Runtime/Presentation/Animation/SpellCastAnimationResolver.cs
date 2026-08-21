@@ -10,12 +10,10 @@ using UnityEngine;
 namespace Arena.Presentation
 {
     /// <summary>
-    /// The single runtime entry point for a spell's cast animation: an authored explicit
-    /// <see cref="WeaponSpellAnimationEntry"/> wins (byte-identical to legacy behavior); otherwise the
-    /// spell is composed from its flavor family (design doc §5). Until a <see cref="SpellCastAnimationMap"/>
-    /// exists in Resources, composition is a no-op and this is exactly
-    /// <see cref="CombatAnimationSet.TryGetSpellAnimation"/> — so wiring the runtime through it changes
-    /// nothing until spells are mapped.
+    /// The single runtime entry point for spell cast animation. A fixed assignment resolves exactly
+    /// as authored and ignores the active combat set. An ordinary assignment resolves its semantic
+    /// motion through the active set's family binding, then composes that family for the set's cast
+    /// hand and the spell's authoritative Instant/Charged/Channel archetype.
     /// </summary>
     public static class SpellCastAnimationResolver
     {
@@ -24,13 +22,13 @@ namespace Arena.Presentation
 
         private static SpellCastAnimationLibrary? _library;
         private static SpellCastAnimationMap? _map;
-        private static readonly Dictionary<ComposedCacheKey, WeaponSpellAnimationEntry> ComposedEntries = new();
+        private static readonly Dictionary<ResolvedCacheKey, WeaponSpellAnimationEntry> ResolvedEntries = new();
 
-        private readonly struct ComposedCacheKey : IEquatable<ComposedCacheKey>
+        private readonly struct ResolvedCacheKey : IEquatable<ResolvedCacheKey>
         {
-            public ComposedCacheKey(
+            public ResolvedCacheKey(
                 string spellId,
-                CombatAnimationSet? animationSet,
+                CombatAnimationSet animationSet,
                 SpellCastHand hand,
                 SpellAnimationArchetype archetype)
             {
@@ -41,43 +39,50 @@ namespace Arena.Presentation
             }
 
             private string SpellId { get; }
-            private CombatAnimationSet? AnimationSet { get; }
+            private CombatAnimationSet AnimationSet { get; }
             private SpellCastHand Hand { get; }
             private SpellAnimationArchetype Archetype { get; }
 
-            public bool Equals(ComposedCacheKey other) =>
+            public bool Equals(ResolvedCacheKey other) =>
                 ReferenceEquals(AnimationSet, other.AnimationSet)
                 && Hand == other.Hand
                 && Archetype == other.Archetype
                 && string.Equals(SpellId, other.SpellId, StringComparison.Ordinal);
 
-            public override bool Equals(object? obj) => obj is ComposedCacheKey other && Equals(other);
+            public override bool Equals(object? obj) => obj is ResolvedCacheKey other && Equals(other);
 
             public override int GetHashCode()
             {
                 unchecked
                 {
                     int hash = StringComparer.Ordinal.GetHashCode(SpellId);
-                    hash = (hash * 397) ^ (AnimationSet != null ? RuntimeHelpers.GetHashCode(AnimationSet) : 0);
+                    hash = (hash * 397) ^ RuntimeHelpers.GetHashCode(AnimationSet);
                     hash = (hash * 397) ^ (int)Hand;
                     return (hash * 397) ^ (int)Archetype;
                 }
             }
         }
 
-        /// <summary>Explicit authored entry wins; else the family-composed entry; else not found.</summary>
         public static bool TryResolve(CombatAnimationSet? set, string spellId, out WeaponSpellAnimationEntry entry)
         {
-            if (set != null && set.TryGetSpellAnimation(spellId, out entry))
-                return true;
+            entry = default;
+            string normalizedSpellId = WireIdentifier.Normalize(spellId);
+            if (!TryGetMapEntry(normalizedSpellId, out SpellCastAnimationMap.Entry mapEntry))
+                return false;
 
-            return TryResolveComposed(set, spellId, out entry);
+            if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
+                return TryResolveFixed(normalizedSpellId, mapEntry, out entry);
+
+            if (!TryDeriveArchetype(normalizedSpellId, out SpellAnimationArchetype archetype, out _))
+                return false;
+
+            return TryResolveMotion(set, normalizedSpellId, mapEntry, archetype, out entry);
         }
 
         /// <summary>
         /// Runtime playback overload that also reports whether authoritative synced gameplay confirms
-        /// the resolved spell is Instant. Animation resolution retains its existing fallback behavior;
-        /// the confirmation fails closed so missing gameplay data can only disable startup trim.
+        /// the resolved spell is Instant. Missing gameplay data fails closed and only disables startup
+        /// trim; it does not invalidate a fixed presentation.
         /// </summary>
         public static bool TryResolve(
             CombatAnimationSet? set,
@@ -95,6 +100,7 @@ namespace Arena.Presentation
         /// <summary>
         /// Authoring/offline overload. The caller supplies the archetype derived from the authored
         /// catalog so validation never guesses Instant merely because no runtime connection exists.
+        /// Fixed presentations intentionally ignore the supplied archetype.
         /// </summary>
         public static bool TryResolve(
             CombatAnimationSet? set,
@@ -102,52 +108,15 @@ namespace Arena.Presentation
             SpellAnimationArchetype archetype,
             out WeaponSpellAnimationEntry entry)
         {
-            if (set != null && set.TryGetSpellAnimation(spellId, out entry))
-                return true;
-
-            return TryResolveComposed(set, spellId, archetype, out entry);
-        }
-
-        /// <summary>
-        /// The composed (family-derived) entry only — skips the explicit layer. Returns false when no
-        /// map/library is present, the spell is unmapped, its family is missing, or the family lacks
-        /// the clips the archetype needs.
-        /// </summary>
-        public static bool TryResolveComposed(CombatAnimationSet? set, string spellId, out WeaponSpellAnimationEntry entry)
-        {
-            entry = default;
-            if (!TryDeriveArchetype(spellId, out SpellAnimationArchetype archetype, out _))
-                return false;
-            return TryResolveComposed(set, spellId, archetype, out entry);
-        }
-
-        /// <summary>Composed-only authoring/offline overload with an explicit catalog archetype.</summary>
-        public static bool TryResolveComposed(
-            CombatAnimationSet? set,
-            string spellId,
-            SpellAnimationArchetype archetype,
-            out WeaponSpellAnimationEntry entry)
-        {
             entry = default;
             string normalizedSpellId = WireIdentifier.Normalize(spellId);
-            SpellCastHand hand = set != null ? set.OneHandedCastHand : SpellCastHand.Left;
-            var cacheKey = new ComposedCacheKey(
-                normalizedSpellId,
-                set,
-                hand,
-                archetype);
-            if (normalizedSpellId.Length != 0 && ComposedEntries.TryGetValue(cacheKey, out entry))
-                return true;
-
-            if (!TryResolveComposedAssets(normalizedSpellId, out SpellCastAnimationMap.Entry mapEntry, out SpellCastAnimationFamily family, out _))
+            if (!TryGetMapEntry(normalizedSpellId, out SpellCastAnimationMap.Entry mapEntry))
                 return false;
 
-            if (!SpellCastAnimationComposer.TryCompose(normalizedSpellId, family, hand, archetype, out entry))
-                return false;
+            if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
+                return TryResolveFixed(normalizedSpellId, mapEntry, out entry);
 
-            ApplyOverrides(mapEntry, ref entry);
-            ComposedEntries[cacheKey] = entry;
-            return true;
+            return TryResolveMotion(set, normalizedSpellId, mapEntry, archetype, out entry);
         }
 
         public static bool TryDescribeMappedResolutionFailure(
@@ -155,68 +124,126 @@ namespace Arena.Presentation
             string spellId,
             out string reason)
         {
-            if (!TryResolveComposedInput(set, spellId, out SpellCastAnimationMap.Entry mapEntry, out SpellCastAnimationFamily family, out SpellAnimationArchetype archetype, out reason))
-                return !string.IsNullOrWhiteSpace(reason);
+            reason = string.Empty;
+            string normalizedSpellId = WireIdentifier.Normalize(spellId);
+            if (!TryGetMapEntry(normalizedSpellId, out SpellCastAnimationMap.Entry mapEntry))
+                return false;
 
-            SpellCastHand hand = set != null ? set.OneHandedCastHand : SpellCastHand.Left;
-            if (!SpellCastAnimationComposer.TryCompose(spellId, family, hand, archetype, out _))
+            if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
             {
-                reason = $"map entry baseName '{mapEntry.baseName}' has no playable {archetype} clips for hand '{hand}'";
+                if (mapEntry.fixedAnimation.HasAnyPresentation)
+                    return false;
+
+                reason = "fixed assignment has no playable presentation";
                 return true;
             }
 
-            reason = string.Empty;
+            if (mapEntry.motion == SpellCastMotion.None)
+            {
+                reason = "motion assignment is None";
+                return true;
+            }
+
+            if (set == null)
+            {
+                reason = $"motion '{mapEntry.motion}' requires an active CombatAnimationSet";
+                return true;
+            }
+
+            if (!TryResolveMotionAssets(
+                    set,
+                    mapEntry,
+                    out SpellCastAnimationFamily family,
+                    out string familyBaseName,
+                    out reason))
+            {
+                return true;
+            }
+
+            if (!TryDeriveArchetype(normalizedSpellId, out SpellAnimationArchetype archetype, out reason))
+                return true;
+
+            SpellCastHand hand = set.OneHandedCastHand;
+            if (!SpellCastAnimationComposer.TryCompose(normalizedSpellId, family, hand, archetype, out _))
+            {
+                reason = $"motion '{mapEntry.motion}' family '{familyBaseName}' has no playable {archetype} clips for hand '{hand}'";
+                return true;
+            }
+
             return false;
         }
 
-        private static bool TryResolveComposedInput(
+        private static bool TryResolveMotion(
             CombatAnimationSet? set,
             string spellId,
-            out SpellCastAnimationMap.Entry mapEntry,
-            out SpellCastAnimationFamily family,
-            out SpellAnimationArchetype archetype,
-            out string failureReason)
+            in SpellCastAnimationMap.Entry mapEntry,
+            SpellAnimationArchetype archetype,
+            out WeaponSpellAnimationEntry entry)
         {
-            archetype = default;
-            if (!TryResolveComposedAssets(spellId, out mapEntry, out family, out failureReason))
+            entry = default;
+            if (set == null || mapEntry.motion == SpellCastMotion.None)
                 return false;
 
-            if (!TryDeriveArchetype(spellId, out archetype, out failureReason))
+            SpellCastHand hand = set.OneHandedCastHand;
+            var cacheKey = new ResolvedCacheKey(spellId, set, hand, archetype);
+            if (spellId.Length != 0 && ResolvedEntries.TryGetValue(cacheKey, out entry))
+                return true;
+
+            if (!TryResolveMotionAssets(set, mapEntry, out SpellCastAnimationFamily family, out _, out _))
                 return false;
 
+            if (!SpellCastAnimationComposer.TryCompose(spellId, family, hand, archetype, out entry))
+                return false;
+
+            ApplyOverrides(mapEntry, ref entry);
+            ResolvedEntries[cacheKey] = entry;
             return true;
         }
 
-        private static bool TryResolveComposedAssets(
-            string spellId,
-            out SpellCastAnimationMap.Entry mapEntry,
+        private static bool TryResolveMotionAssets(
+            CombatAnimationSet set,
+            in SpellCastAnimationMap.Entry mapEntry,
             out SpellCastAnimationFamily family,
+            out string familyBaseName,
             out string failureReason)
         {
-            mapEntry = default;
             family = default;
+            familyBaseName = string.Empty;
             failureReason = string.Empty;
 
+            if (!set.TryGetSpellCastFamily(mapEntry.motion, out familyBaseName))
+            {
+                failureReason = $"motion '{mapEntry.motion}' has no family binding on CombatAnimationSet '{set.name}'";
+                return false;
+            }
+
             EnsureLoaded();
-            if (_map == null)
-                return false;
-            if (!_map.TryGetEntry(spellId, out mapEntry))
-                return false;
             if (_library == null)
             {
                 failureReason = "SpellCastAnimationLibrary resource is missing";
                 return false;
             }
-            if (!_library.TryGetFamily(mapEntry.baseName, out family))
+
+            if (!_library.TryGetFamily(familyBaseName, out family))
             {
-                failureReason = $"map entry baseName '{mapEntry.baseName}' does not resolve in SpellCastAnimationLibrary";
+                failureReason = $"motion '{mapEntry.motion}' on CombatAnimationSet '{set.name}' references family '{familyBaseName}', but SpellCastAnimationLibrary has no matching family";
                 return false;
             }
 
             return true;
         }
 
-        /// <summary>Applies the map entry's optional per-spell overrides onto the composed entry.</summary>
+        private static bool TryResolveFixed(
+            string spellId,
+            in SpellCastAnimationMap.Entry mapEntry,
+            out WeaponSpellAnimationEntry entry)
+        {
+            entry = mapEntry.fixedAnimation;
+            entry.spellId = spellId;
+            return spellId.Length != 0 && entry.HasAnyPresentation;
+        }
+
+        /// <summary>Applies optional per-spell overrides onto a motion-composed entry.</summary>
         private static void ApplyOverrides(in SpellCastAnimationMap.Entry mapEntry, ref WeaponSpellAnimationEntry entry)
         {
             switch (mapEntry.playbackLayer)
@@ -238,17 +265,24 @@ namespace Arena.Presentation
                 default: break;
             }
 
-            // A prop the composer never sets — the one field an explicit entry carried that a
-            // family can't (the temporary shield/weapon visual). Only overrides when enabled.
             if (mapEntry.animatedProp.enabled)
                 entry.animatedProp = mapEntry.animatedProp;
         }
 
-        /// <summary>True when a family mapping exists for the spell (used to gate the composed path).</summary>
         public static bool HasMapping(string spellId)
         {
             EnsureLoaded();
             return _map != null && _map.TryGetEntry(spellId, out _);
+        }
+
+        private static bool TryGetMapEntry(string spellId, out SpellCastAnimationMap.Entry mapEntry)
+        {
+            EnsureLoaded();
+            if (_map != null && _map.TryGetEntry(spellId, out mapEntry))
+                return true;
+
+            mapEntry = default;
+            return false;
         }
 
         private static bool TryDeriveArchetype(
@@ -262,8 +296,6 @@ namespace Arena.Presentation
             NetworkManager? network = NetworkManager.Instance;
             if (network == null)
             {
-                // Editor/offline tools do not have a NetworkManager. Keep their preview path usable;
-                // runtime resolution with a NetworkManager present must wait for authoritative rows.
                 archetype = SpellAnimationArchetypes.Derive((SpellDefinition?)null);
                 return true;
             }
@@ -310,10 +342,6 @@ namespace Arena.Presentation
             if (_library != null && _map != null)
                 return;
 
-            // Resources.Load can invoke ScriptableObject validation callbacks in the editor.
-            // Those callbacks deliberately invalidate this cache, so hold both results locally
-            // and publish the pair only after both loads finish. This prevents a map validation
-            // from clearing the library halfway through initialization.
             SpellCastAnimationLibrary? library = _library;
             SpellCastAnimationMap? map = _map;
             library ??= Resources.Load<SpellCastAnimationLibrary>(LibraryResource);
@@ -330,15 +358,14 @@ namespace Arena.Presentation
                 _library = library;
             if (map != null)
                 _map = map;
-            ComposedEntries.Clear();
+            ResolvedEntries.Clear();
         }
 
-        /// <summary>Editor/test hook: drop cached Resources so a rescan or new map is picked up.</summary>
         public static void InvalidateCache()
         {
             _library = null;
             _map = null;
-            ComposedEntries.Clear();
+            ResolvedEntries.Clear();
         }
     }
 }

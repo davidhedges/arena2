@@ -148,15 +148,22 @@ namespace Arena.Editor
 
             if (string.IsNullOrWhiteSpace(combatProfileId))
             {
-                // Profile-less shared SPELL_* abilities (combat_profile_id: "") are expected, not an error:
-                // they have no per-weapon CombatAnimationSet and resolve via the weapon-agnostic archetype
-                // template; their VFX cues resolve by ability id (design doc §6.10). No animation-set lookup
-                // to do, so fall through to the cue audit / generator preview below.
-                EditorGUILayout.HelpBox(
-                    $"Ability '{abilityId}' is a profile-less shared spell (no combat_profile_id). It has no "
-                    + "per-weapon animation set — animation resolves via the weapon-agnostic archetype template, "
-                    + "and cues resolve by ability id. Expected for shared SPELL_* elementals (design doc §6.10).",
-                    MessageType.Info);
+                SpellCastAnimationMap? map = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
+                if (map != null && map.TryGetEntry(spellId, out SpellCastAnimationMap.Entry mapEntry))
+                {
+                    string assignment = mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed
+                        ? "Fixed (independent of combat set)"
+                        : mapEntry.motion.ToString();
+                    EditorGUILayout.HelpBox(
+                        $"Profile-less shared spell '{abilityId}' is classified as {assignment}. At runtime its motion resolves through the player's active CombatAnimationSet.",
+                        MessageType.Info);
+                }
+                else
+                {
+                    EditorGUILayout.HelpBox(
+                        $"Profile-less shared spell '{abilityId}' has no SpellCastAnimationMap classification.",
+                        MessageType.Warning);
+                }
             }
             else if (!_animationSetByProfile.TryGetValue(combatProfileId, out CombatAnimationSet animationSet))
             {
@@ -186,9 +193,9 @@ namespace Arena.Editor
                 }
                 else
                 {
-                    EditorGUILayout.HelpBox($"No explicit or map-composed spell animation resolves for '{spellId}'. Add it under Spell Actions > Spells or SpellCastAnimationMap.", MessageType.Warning);
-                    if (GUILayout.Button("Add Missing Animation Entry", GUILayout.Width(210f)))
-                        AddMissingSpellAnimationEntry(animationSet, spellId);
+                    EditorGUILayout.HelpBox($"The cast-motion/fixed assignment for '{spellId}' does not resolve in '{animationSet.name}'. Check SpellCastAnimationMap and the set's Spell Cast Motion bindings.", MessageType.Warning);
+                    if (GUILayout.Button("Select Spell Cast Map", GUILayout.Width(180f)))
+                        Selection.activeObject = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
                 }
             }
 
@@ -482,39 +489,6 @@ namespace Arena.Editor
             out WeaponSpellAnimationEntry entry)
         {
             return SpellCastAnimationResolver.TryResolve(animationSet, spellId, out entry);
-        }
-
-        private void AddMissingSpellAnimationEntry(CombatAnimationSet animationSet, string spellId)
-        {
-            string normalizedSpellId = Normalize(spellId);
-            if (string.IsNullOrWhiteSpace(normalizedSpellId))
-                return;
-
-            List<WeaponSpellAnimationEntry> spells = animationSet.spells?.ToList() ?? new List<WeaponSpellAnimationEntry>();
-            if (spells.Any(entry => string.Equals(entry.SpellIdOrEmpty, normalizedSpellId, StringComparison.Ordinal)))
-                return;
-
-            Undo.RecordObject(animationSet, "Add Spell Animation Entry");
-            spells.Add(new WeaponSpellAnimationEntry
-            {
-                spellId = normalizedSpellId,
-                requiresCombatStance = true,
-                combatEntryMode = CombatEntryMode.AnimatedAfterCast,
-                playbackLayer = SpellPlaybackLayer.UpperBody,
-                groundEffectTime = 0f,
-                airEffectTime = 0f,
-                lowerBodyUnlockAtSeconds = 0f,
-                lowerBodyBlendOutSeconds = 0f,
-                visualInterruptibleAtSeconds = 0f,
-            });
-            animationSet.spells = spells
-                .OrderBy(entry => entry.SpellIdOrEmpty, StringComparer.Ordinal)
-                .ToArray();
-            EditorUtility.SetDirty(animationSet);
-            AssetDatabase.SaveAssetIfDirty(animationSet);
-            SpellCastAnimationResolver.InvalidateCache();
-            InvalidateGeneratedCueCache();
-            Selection.activeObject = animationSet;
         }
 
         private void CopySelectedAbilityToDraft()

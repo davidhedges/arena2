@@ -1224,19 +1224,24 @@ namespace Arena.Tests.Editor
         {
             Type setType = RequireType("Arena.Presentation.CombatAnimationSet");
             Type entryType = RequireType("Arena.Presentation.WeaponSpellAnimationEntry");
+            Type resolverType = RequireType("Arena.Presentation.SpellCastAnimationResolver");
+            Type archetypeType = RequireType("Arena.Presentation.SpellAnimationArchetype");
             UnityEngine.Object instance = Resources.Load("CombatAnimationSets/ArcherBow", setType);
             Assert.That(instance, Is.Not.Null);
 
-            object?[] args = { "RAIN_OF_ARROWS", null };
+            object instant = Enum.Parse(archetypeType, "Instant");
+            object?[] args = { instance, "RAIN_OF_ARROWS", instant, null };
             bool found = (bool)RequireMethod(
+                    resolverType,
+                    "TryResolve",
                     setType,
-                    "TryGetSpellAnimation",
                     typeof(string),
+                    archetypeType,
                     entryType.MakeByRefType())
-                .Invoke(instance, args)!;
+                .Invoke(null, args)!;
             Assert.That(found, Is.True);
 
-            object entry = args[1]!;
+            object entry = args[3]!;
             AnimationClip ground = (AnimationClip)entryType.GetField("ground")!.GetValue(entry)!;
             AnimationClip air = (AnimationClip)entryType.GetField("air")!.GetValue(entry)!;
             Assert.That(ground.name, Is.EqualTo("Skill_01"));

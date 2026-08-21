@@ -1,91 +1,67 @@
-# Spell Cast-Animation Migration — living checklist
+# Spell Cast-Animation Migration
 
-Companion to `docs/spell-cast-animation-stitching-2026-07-09.md`. Tracks moving each spell off its
-hand-authored per-weapon `WeaponSpellAnimationEntry` onto a weapon-agnostic flavor family.
-**Generated 2026-07-09** from the live `CombatAnimationSet` assets. Regenerate the "delete from"
-column whenever a set changes (it reflects current explicit-entry membership).
+**Status:** Complete 2026-08-22.
 
-## Per-spell workflow (order matters)
+The legacy spell-level family and CombatAnimationSet per-spell override paths have been removed.
+This file is now the cutover record and the checklist for future spell additions.
 
-For each spell you want on the family system:
-1. **Map** it: add `spellId → baseName` to `Assets/Arena/Resources/SpellCastAnimationMap.asset`
-   (pick the flavor family that fits the spell's feel).
-2. **Set the hand** (once per weapon set, not per spell): `oneHandedCastHand` (Left/Right) on each
-   `CombatAnimationSet`. 2H flavors (Omni/Special/Direct2H) ignore this; 1H flavors use it.
-3. **Delete** the spell's explicit entry from the sets listed below — *after* mapping, so it never
-   goes silent (delete before map = no animation until mapped).
-4. **Test** in Play Mode (re-enter play to reload the asset; no publish/resync — client-side only).
+## Completed cutover
 
-Leave a spell's explicit entry in place to **opt it out** or to give one weapon/class a bespoke look
-(explicit always wins over the family). This is the escape hatch for the four-set spells below.
+- [x] Added semantic SpellCastMotion values: Direct, Raise, Call, Omni, Special.
+- [x] Changed SpellCastAnimationMap to spell -> motion or spell -> fixed presentation.
+- [x] Added spellCastMotionBindings to every runtime CombatAnimationSet.
+- [x] Set Greatsword Raise -> MagicAttackCall1H01.
+- [x] Set Greatsword Call -> MagicAttackCall1H02.
+- [x] Classified UPHEAVAL as Raise.
+- [x] Migrated all 93 previously mapped or explicitly-authored spell ids into the global map.
+- [x] Moved BATTLE_CRY to a fixed GreatSword Buff/Buff_Air presentation that ignores combat set.
+- [x] Preserved bespoke fixed animations for GROUND_SLASH, RAIN_OF_ARROWS, BLESSED_SHIELD, and
+  RADIANT_BURST.
+- [x] Preserved the Blessed Shield animated-prop handoff in its fixed assignment.
+- [x] Removed all 101 legacy per-set spell rows from the five CombatAnimationSet assets.
+- [x] Removed CombatAnimationSet.spells and TryGetSpellAnimation.
+- [x] Removed the explicit-wins resolver branch and spell-level baseName lookup.
+- [x] Removed the obsolete CastAnimationMap compatibility stub.
+- [x] Updated editor inspectors, resolved preview, clip-role inference, spell authoring, validators,
+  tests, and server-side asset contract checks.
 
-## Nuance: the four-set spells (one flavor for all vs. per-class look)
+## Current classification inventory
 
-`GLACIAL_SPIKE`, `BLINDING_LIGHT`, `FROZEN_GRASP` are cast by casters *and* paladins, and today carry
-a different clip per class. Under the flavor model a spell maps to **one** family, so every weapon
-plays that flavor (with its own hand). If you want the paladin look to stay distinct, **keep an
-explicit entry in S&S/Daggers** and only delete the caster (Staff/2H) entries.
+The global map contains:
 
-## Weapon-set hand — set once
+- 34 Direct spells.
+- 3 Raise spells.
+- 47 Call spells.
+- 3 Omni spells.
+- 1 Special spell.
+- 5 fixed exceptions.
 
-| set | profile | suggested `oneHandedCastHand` |
-|---|---|---|
-| Staff | STAFF | (your call) |
-| TwoHandedSword | TWO_HANDED_SWORD | Left (frees the left hand — your ICICLE test) |
-| SwordAndShield | SWORD_AND_SHIELD | (your call — sword hand vs shield hand) |
-| Daggers | DAGGERS | (your call) |
+These counts are guarded by review and asset-contract tests; semantic choices may be adjusted later
+without reintroducing per-set spell rows.
 
-### Left-hand 1H mask now covers the whole cast (2026-07-09)
+## Future normal-spell checklist
 
-A **left-hand one-handed** cast (1H flavor + `oneHandedCastHand=Left`, e.g. the greatsword) plays on
-the masked `LeftGesture` layer, keeping the weapon-bearing **right arm on its base pose** (gripping
-the sword) for **all three archetypes** — instant, charged, and channel. Previously only the instant
-one-shot was masked; the charged/channel hold-loop and the charged release now stay masked too (new
-loop-capable `LeftGestureSpellCastHoldAction1..4` animator states). No authoring change: it's derived
-from the family's hand-style + the weapon's cast hand. 2H flavors and right-hand 1H are unaffected
-(no right-arm mask exists). To opt a spell's charged release back to a full-body finish, that's a
-one-line composer revert — ask.
+- [ ] Add the spell's gameplay and presentation rows through the normal spell pipeline.
+- [ ] Add exactly one Motion entry in Assets/Arena/Resources/SpellCastAnimationMap.asset.
+- [ ] Choose motion by visible movement, not by the source pack's ambiguous folder name.
+- [ ] Confirm every CombatAnimationSet binds that motion to a valid family.
+- [ ] Confirm the family supports the spell's Instant, Charged, or Channel archetype.
+- [ ] Stamp required clip events.
+- [ ] Check Arena/Spell Animation/Resolved View.
+- [ ] Run Combat VFX validation and server/editor tests.
 
-## Checklist — CHARGED (proven; do these first)
+## Future fixed-exception checklist
 
-- [ ] `GLACIAL_SPIKE` — delete: Staff, 2H, S&S, Dag *(four-set: consider keeping S&S/Dag explicit)*
-- [x] `ICICLE` — delete: Staff *(2H already migrated in the first test)*
-- [ ] `INSTANT_BEAM` — delete: Staff, 2H
-- [ ] `METEOR` — delete: Staff, 2H
+- [ ] Confirm the animation must be identical across all combat sets.
+- [ ] Add exactly one Fixed entry in SpellCastAnimationMap.asset.
+- [ ] Author all ground/air, layer, entry-mode, hold, and animated-prop data in that entry.
+- [ ] Leave motion as None and do not also author motion overrides.
+- [ ] Test resolution with at least two unrelated combat sets.
 
-## Checklist — CHANNEL
+## Prohibited regression paths
 
-- [ ] `MAGIC_MISSILE` — delete: Staff, 2H
-- [ ] `FROZEN_SPLINTERS` — delete: Staff, 2H
-- [ ] `ELECTROCUTE` — delete: Staff, 2H *(parked legacy relic — may skip)*
-
-## Checklist — INSTANT (the bulk; elemental projectiles/AoE first, self-buffs last or never)
-
-Projectiles / AoE (want a real cast gesture):
-- [x] `FIREBALL` — Staff, 2H
-- [ ] `VAMPIRIC_ORB` — Staff, 2H
-- [ ] `WITHERING_ORB` — Staff, 2H
-- [ ] `ORBITING_BLADES` — Staff, 2H
-- [ ] `LIGHTNING` — Staff, 2H
-- [ ] `ERUPTION` — Staff, 2H
-- [ ] `FROST_NEEDLE` — Staff, 2H
-- [ ] `FROST_NOVA` — Staff, 2H
-- [ ] `ICE_SPIKES` — Staff, 2H
-- [ ] `FROZEN_GRASP` — Staff, 2H, S&S, Dag *(four-set)*
-- [ ] `GROUND_SLASH` — Staff, 2H
-- [ ] `NEGATE` — Staff, 2H
-- [ ] `BLINDING_LIGHT` — Staff, 2H, S&S, Dag *(four-set)*
-- [ ] `BLESSED_SHIELD` — S&S *(set the map entry's `animatedProp` override — copy it from the explicit entry — so the shield visual survives)*
-- [x] `BLADE_BARRIER` — S&S *(uses the standard left-hand `MagicAttackCall1H02` one-shot; the replaced target-field spell no longer launches or hides an animated sword prop)*
-- [ ] `SACRED_FLAME` — S&S, Dag
-- [ ] `CONSECRATE` — S&S, Dag
-- [ ] `CLEANSING_TOUCH` — S&S, Dag
-- [ ] `ABSOLUTION` — S&S, Dag
-
-Self-buffs / shouts / auras (may keep bespoke baked clips — e.g. warrior shouts):
-- [ ] `INTIMIDATE`, `SHOCKWAVE`, `BATTLE_CRY`, `ENRAGE`, `DEFIANCE`, `FORTIFY`, `MOMENTUM`,
-  `IRON_WILL` — Staff, 2H
-- [ ] `BATTLE_TRANCE`, `BERSERKING`, `FEAST`, `FRENZY`, `SECOND_WIND` — 2H
-- [ ] `FERVOR` — S&S, Dag
-- [ ] `AURA_OF_VENGEANCE`, `MANA_FONT`, `STAMINA_FONT`, `THORNS_AURA`, `WARDING_AURA`,
-  `SERRATED_BLADES` — S&S
+- Do not add a spell id or spell animation array to CombatAnimationSet.
+- Do not put a raw family base name on a spell map entry.
+- Do not add resolver precedence ahead of the global fixed/motion assignment.
+- Do not use a fixed exception for a motion that should vary with weapon pose.
+- Do not preserve stale serialized spell rows as a compatibility fallback.

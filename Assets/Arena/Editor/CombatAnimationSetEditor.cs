@@ -1147,10 +1147,11 @@ namespace Arena.Editor
             }
 
             bool hasMeleeAttacks = set.MeleeAttackCount > 0;
-            bool hasSpellAnimations = set.spells != null && set.spells.Length > 0;
+            SpellCastAnimationMap? spellMap = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
+            bool hasSpellAnimations = spellMap != null && spellMap.Entries.Count > 0;
             if (!hasMeleeAttacks && !hasSpellAnimations)
             {
-                EditorGUILayout.HelpBox("Add a melee attack or spell animation to preview it.", MessageType.None);
+                EditorGUILayout.HelpBox("Add a melee attack or SpellCastAnimationMap assignment to preview it.", MessageType.None);
                 DestroyAttackPreview();
                 return;
             }
@@ -1714,9 +1715,37 @@ namespace Arena.Editor
             previewSelectionKey = 0;
             clipKey = string.Empty;
 
-            if (set.spells == null || set.spells.Length == 0)
+            SpellCastAnimationMap? map = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
+            if (map == null || map.Entries.Count == 0)
             {
-                EditorGUILayout.HelpBox("Add a spell animation entry to preview its animation.", MessageType.None);
+                EditorGUILayout.HelpBox("Add a SpellCastAnimationMap assignment to preview its animation.", MessageType.None);
+                DestroyAttackPreview();
+                return false;
+            }
+
+            Dictionary<string, SpellGameplayAuthoringFacts> gameplayBySpell =
+                SpellPresentationEditorData.LoadSpellGameplayByActionId(out _);
+            var resolvedSpells = new List<(string SpellId, WeaponSpellAnimationEntry Entry)>();
+            foreach (SpellCastAnimationMap.Entry mapEntry in map.Entries)
+            {
+                string spellId = string.IsNullOrWhiteSpace(mapEntry.spellId)
+                    ? string.Empty
+                    : mapEntry.spellId.Trim().ToUpperInvariant();
+                if (spellId.Length == 0)
+                    continue;
+
+                SpellAnimationArchetype archetype = gameplayBySpell.TryGetValue(
+                    spellId,
+                    out SpellGameplayAuthoringFacts gameplay)
+                    ? SpellAnimationArchetypes.Derive(gameplay.CastTimeMs, gameplay.DeliveryKind)
+                    : SpellAnimationArchetype.Instant;
+                if (SpellCastAnimationResolver.TryResolve(set, spellId, archetype, out WeaponSpellAnimationEntry resolved))
+                    resolvedSpells.Add((spellId, resolved));
+            }
+
+            if (resolvedSpells.Count == 0)
+            {
+                EditorGUILayout.HelpBox("No spell assignment resolves through this set's motion bindings.", MessageType.Warning);
                 DestroyAttackPreview();
                 return false;
             }
@@ -1725,15 +1754,12 @@ namespace Arena.Editor
             int selectedSpellIndex = Mathf.Clamp(
                 SessionState.GetInt(previewSpellKey, 0),
                 0,
-                set.spells.Length - 1);
+                resolvedSpells.Count - 1);
 
-            string[] spellLabels = new string[set.spells.Length];
-            for (int spellIndex = 0; spellIndex < set.spells.Length; spellIndex++)
+            string[] spellLabels = new string[resolvedSpells.Count];
+            for (int spellIndex = 0; spellIndex < resolvedSpells.Count; spellIndex++)
             {
-                WeaponSpellAnimationEntry spell = set.spells[spellIndex];
-                string spellId = string.IsNullOrWhiteSpace(spell.SpellIdOrEmpty)
-                    ? "<missing spell id>"
-                    : spell.SpellIdOrEmpty;
+                (string spellId, WeaponSpellAnimationEntry spell) = resolvedSpells[spellIndex];
                 spellLabels[spellIndex] =
                     $"{spellId} [{DescribeSpellPreviewClips(spell)}]";
             }
@@ -1747,7 +1773,7 @@ namespace Arena.Editor
                 _attackPreviewPlaying = false;
             }
 
-            WeaponSpellAnimationEntry selectedSpell = set.spells[selectedSpellIndex];
+            WeaponSpellAnimationEntry selectedSpell = resolvedSpells[selectedSpellIndex].Entry;
             clipOptions = BuildSpellPreviewClipOptions(selectedSpell);
             previewSelectionKey = -(selectedSpellIndex + 1);
             clipKey = BuildSessionKey($"attack-preview.spellClip.{selectedSpellIndex}");

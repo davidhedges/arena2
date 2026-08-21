@@ -1,5 +1,9 @@
 # Branch audit — `spell-presentation-redesign` (2026-07-10)
 
+> Historical audit snapshot. Cast-animation findings were resolved and the legacy explicit path
+> was removed in the 2026-08-22 semantic motion cutover. Use
+> `docs/spell-cast-animation-stitching-2026-07-09.md` for current ownership and resolution.
+
 Multi-agent code review of `git diff main...HEAD` (~50 commits, 36 substantive code files, ~5,800 lines: Rust server, Unity runtime/editor C#, ops). 8 finder angles → dedup → per-candidate adversarial verification. Every finding below survived verification with the verdict shown; refuted candidates are listed at the end so they aren't re-chased.
 
 **Working convention for the fix chat:** check items off as they land; each finding is independently fixable unless grouped.

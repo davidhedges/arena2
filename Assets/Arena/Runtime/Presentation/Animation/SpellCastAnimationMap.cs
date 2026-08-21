@@ -5,6 +5,28 @@ using UnityEngine;
 
 namespace Arena.Presentation
 {
+    /// <summary>
+    /// Weapon-agnostic description of the visible motion a spell cast performs. Combat animation
+    /// sets translate these semantic motions into the animation families appropriate for their
+    /// weapon pose.
+    /// </summary>
+    public enum SpellCastMotion
+    {
+        None = 0,
+        Direct,
+        Raise,
+        Call,
+        Omni,
+        Special,
+    }
+
+    /// <summary>How a spell obtains its cast presentation.</summary>
+    public enum SpellCastAnimationAssignmentKind
+    {
+        Motion = 0,
+        Fixed,
+    }
+
     /// <summary>Optional per-spell playback-layer override. <see cref="Auto"/> keeps the composer's derived layer.</summary>
     public enum SpellCastLayerOverride
     {
@@ -25,13 +47,11 @@ namespace Arena.Presentation
     }
 
     /// <summary>
-    /// Weapon-agnostic assignment of a spell to a cast-animation flavor family (design doc §4/§5):
-    /// <c>spellId → baseName</c>, authored once, plus optional per-spell overrides for the handful of
-    /// spells that need a specific playback layer, entry mode, or an animated prop (e.g.
-    /// <c>BLESSED_SHIELD</c> keeps its shield visual). The resolver
-    /// combines this with the casting weapon's <see cref="CombatAnimationSet.OneHandedCastHand"/> and
-    /// the spell's derived archetype. A spell absent here (or whose weapon authored an explicit entry)
-    /// is unaffected. Lives in Resources so the resolver can load it globally.
+    /// Weapon-agnostic spell cast classification: ordinary spells select a semantic
+    /// <see cref="SpellCastMotion"/>, while exceptional spells may own a fixed animation that ignores
+    /// the active combat animation set. The resolver combines a motion with the active set's family
+    /// binding, casting hand, and the spell's derived archetype. Lives in Resources so this is the
+    /// single global spell-to-motion/fixed-animation authority.
     /// </summary>
     [CreateAssetMenu(menuName = "Arena/Spell Cast Animation Map", fileName = "SpellCastAnimationMap")]
     public sealed class SpellCastAnimationMap : ScriptableObject
@@ -39,10 +59,14 @@ namespace Arena.Presentation
         [Serializable]
         public struct Entry
         {
-            [Tooltip("Runtime spell/action id, e.g. FIREBALL (no SPELL_ prefix — matches CombatAnimationSet spellId).")]
+            [Tooltip("Authoritative runtime action id, e.g. FIREBALL (no SPELL_ prefix — matches progression gameplay action_id).")]
             public string spellId;
-            [Tooltip("Flavor-family base name from the SpellCastAnimationLibrary, e.g. MagicAttackGround01.")]
-            public string baseName;
+            [Tooltip("Motion uses the active CombatAnimationSet's family binding. Fixed always uses fixedAnimation, regardless of combat set.")]
+            public SpellCastAnimationAssignmentKind assignmentKind;
+            [Tooltip("Semantic cast motion used when Assignment Kind is Motion.")]
+            public SpellCastMotion motion;
+            [Tooltip("Complete set-independent presentation used only when Assignment Kind is Fixed. Its spellId is replaced with this entry's spellId at resolution time.")]
+            public WeaponSpellAnimationEntry fixedAnimation;
 
             [Header("Optional overrides (Auto/disabled = the composed default)")]
             [Tooltip("Override the release/instant playback layer. Auto uses the composer default (LeftGesture for left-hand 1H, else UpperBody/two-hand). Right-hand 1H is unsupported until a RightGesture layer exists.")]
@@ -80,9 +104,7 @@ namespace Arena.Presentation
                 {
                     Entry candidate = entries[i];
                     string candidateKey = Normalize(candidate.spellId);
-                    if (candidateKey.Length == 0
-                        || string.IsNullOrWhiteSpace(candidate.baseName)
-                        || _entryBySpellId.ContainsKey(candidateKey))
+                    if (candidateKey.Length == 0 || _entryBySpellId.ContainsKey(candidateKey))
                         continue;
 
                     _entryBySpellId.Add(candidateKey, candidate);

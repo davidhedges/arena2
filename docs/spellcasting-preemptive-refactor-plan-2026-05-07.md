@@ -1,5 +1,9 @@
 # Spellcasting Preemptive Refactor Plan - 2026-05-07
 
+> Historical plan. The cast-animation ownership described here was superseded by the completed
+> 2026-08-22 semantic motion cutover. Use `docs/spell-cast-animation-stitching-2026-07-09.md` for
+> the live spell animation contract; `CombatAnimationSet.spells[]` no longer exists.
+
 ## Purpose
 
 This plan defines the production target for improving spell authoring before adding a larger set of projectile, area, beam, instant-cast, laser, channel, and publisher-sourced VFX spells.

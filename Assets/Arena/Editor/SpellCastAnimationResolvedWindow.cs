@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Arena.Presentation;
 using UnityEditor;
 using UnityEngine;
@@ -9,38 +8,32 @@ using UnityEngine;
 namespace Arena.Editor
 {
     /// <summary>
-    /// Resolved-view for the cast-animation family system: for every mapped spell, shows the derived
-    /// archetype, the flavor family, the composed clips per hand, and — the migration-critical part —
-    /// which weapon sets still carry an <b>explicit</b> entry that would shadow the map. Also flags a
-    /// family missing the clips its archetype needs. Read-only; edit-mode safe (derives the archetype
-    /// from the catalog, so no play session needed).
+    /// Read-only resolved view of spell classification and each CombatAnimationSet's family binding.
+    /// Fixed assignments are shown once because they intentionally ignore the active set.
     /// </summary>
     public sealed class SpellCastAnimationResolvedWindow : EditorWindow
     {
         private Vector2 _scroll;
         private SpellCastAnimationMap? _map;
-        private SpellCastAnimationLibrary? _library;
         private Dictionary<string, SpellGameplayAuthoringFacts> _gameplay = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, string[]> _explicitSetsBySpell = new(StringComparer.Ordinal);
+        private CombatAnimationSet[] _animationSets = Array.Empty<CombatAnimationSet>();
         private readonly List<ResolvedSpellRow> _rows = new();
 
         private sealed class ResolvedSpellRow
         {
             public string SpellId = string.Empty;
-            public string BaseName = string.Empty;
+            public string Assignment = string.Empty;
             public SpellAnimationArchetype Archetype;
             public bool HasGameplay;
-            public bool HasFamily;
-            public string[] ShadowSets = Array.Empty<string>();
-            public ResolvedHandRow[] Hands = Array.Empty<ResolvedHandRow>();
+            public ResolvedSetRow[] Sets = Array.Empty<ResolvedSetRow>();
         }
 
-        private readonly struct ResolvedHandRow
+        private readonly struct ResolvedSetRow
         {
-            public ResolvedHandRow(
+            public ResolvedSetRow(
                 string label,
-                bool composed,
-                SpellAnimationArchetype archetype,
+                string family,
+                bool resolved,
                 SpellAnimationPresentationMode mode,
                 SpellPlaybackLayer layer,
                 string release,
@@ -48,8 +41,8 @@ namespace Arena.Editor
                 string loop)
             {
                 Label = label;
-                Composed = composed;
-                Archetype = archetype;
+                Family = family;
+                Resolved = resolved;
                 Mode = mode;
                 Layer = layer;
                 Release = release;
@@ -58,8 +51,8 @@ namespace Arena.Editor
             }
 
             public string Label { get; }
-            public bool Composed { get; }
-            public SpellAnimationArchetype Archetype { get; }
+            public string Family { get; }
+            public bool Resolved { get; }
             public SpellAnimationPresentationMode Mode { get; }
             public SpellPlaybackLayer Layer { get; }
             public string Release { get; }
@@ -74,10 +67,12 @@ namespace Arena.Editor
 
         private void Reload()
         {
+            SpellCastAnimationResolver.InvalidateCache();
             _map = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
-            _library = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationLibrary>();
-            LoadGameplay();
-            LoadExplicitEntries();
+            _animationSets = SpellPresentationEditorData.LoadCombatAnimationSets();
+            _gameplay = SpellPresentationEditorData.LoadSpellGameplayByActionId(out string warning);
+            if (warning.Length > 0)
+                Debug.LogWarning($"[ResolvedView] {warning}");
             BuildResolvedRows();
         }
 
@@ -86,11 +81,15 @@ namespace Arena.Editor
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.LabelField("Cast-Animation Resolved View", EditorStyles.boldLabel);
-                if (GUILayout.Button("Reload", GUILayout.Width(80))) Reload();
+                if (GUILayout.Button("Reload", GUILayout.Width(80)))
+                    Reload();
             }
 
-            if (_map == null) { EditorGUILayout.HelpBox("No SpellCastAnimationMap asset found.", MessageType.Info); return; }
-            if (_library == null) { EditorGUILayout.HelpBox("No SpellCastAnimationLibrary — run the rescan.", MessageType.Warning); return; }
+            if (_map == null)
+            {
+                EditorGUILayout.HelpBox("No SpellCastAnimationMap asset found.", MessageType.Info);
+                return;
+            }
 
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
             foreach (ResolvedSpellRow row in _rows)
@@ -104,71 +103,38 @@ namespace Arena.Editor
             {
                 EditorGUILayout.LabelField(row.SpellId, EditorStyles.boldLabel);
                 string gameplayWarning = row.HasGameplay ? string.Empty : "  ‹NO GAMEPLAY ROW; SHOWING INSTANT›";
-                string familyWarning = row.HasFamily ? string.Empty : "  ‹NOT IN LIBRARY›";
                 EditorGUILayout.LabelField(
-                    $"archetype: {row.Archetype}{gameplayWarning}    family: {row.BaseName}{familyWarning}",
+                    $"archetype: {row.Archetype}{gameplayWarning}    assignment: {row.Assignment}",
                     EditorStyles.miniLabel);
 
-                foreach (ResolvedHandRow hand in row.Hands)
-                    DrawResolved(hand);
-
-                // Migration-critical: an explicit entry still shadows the map (map has no effect there).
-                if (row.ShadowSets.Length > 0)
-                    EditorGUILayout.HelpBox($"Still shadowed by explicit entries in: {string.Join(", ", row.ShadowSets)} — delete those to use the family.", MessageType.Warning);
-                else
-                    EditorGUILayout.LabelField("✓ no explicit entries shadow this (family is live everywhere)", EditorStyles.miniLabel);
-            }
-        }
-
-        private static void DrawResolved(in ResolvedHandRow hand)
-        {
-            if (!hand.Composed)
-            {
-                EditorGUILayout.LabelField($"   [{hand.Label}] — no clips (family missing what {hand.Archetype} needs)");
-                return;
-            }
-            EditorGUILayout.LabelField($"   [{hand.Label}] mode={hand.Mode} layer={hand.Layer}");
-            EditorGUILayout.LabelField(
-                $"      release={hand.Release}  enter={hand.Enter}  loop={hand.Loop}",
-                EditorStyles.miniLabel);
-        }
-
-        private void LoadGameplay()
-        {
-            _gameplay = SpellPresentationEditorData.LoadSpellGameplayByActionId(out string warning);
-            if (warning.Length > 0)
-                Debug.LogWarning($"[ResolvedView] {warning}");
-        }
-
-        private void LoadExplicitEntries()
-        {
-            var bySpell = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-            foreach (CombatAnimationSet set in SpellPresentationEditorData.LoadCombatAnimationSets())
-            {
-                if (set?.spells == null) continue;
-                string setName = set.name;
-                foreach (WeaponSpellAnimationEntry entry in set.spells)
+                foreach (ResolvedSetRow set in row.Sets)
                 {
-                    string id = entry.SpellIdOrEmpty;
-                    if (id.Length == 0) continue;
-                    if (!bySpell.TryGetValue(id, out var list)) bySpell[id] = list = new List<string>();
-                    if (!list.Contains(setName)) list.Add(setName);
+                    if (!set.Resolved)
+                    {
+                        EditorGUILayout.HelpBox(
+                            $"{set.Label}: family '{set.Family}' did not resolve playable clips.",
+                            MessageType.Warning);
+                        continue;
+                    }
+
+                    EditorGUILayout.LabelField(
+                        $"   [{set.Label}] family={set.Family} mode={set.Mode} layer={set.Layer}");
+                    EditorGUILayout.LabelField(
+                        $"      release={set.Release}  enter={set.Enter}  loop={set.Loop}",
+                        EditorStyles.miniLabel);
                 }
             }
-            _explicitSetsBySpell.Clear();
-            foreach (var kvp in bySpell)
-                _explicitSetsBySpell[kvp.Key] = kvp.Value.OrderBy(name => name, StringComparer.Ordinal).ToArray();
         }
 
         private void BuildResolvedRows()
         {
             _rows.Clear();
-            if (_map == null || _library == null)
+            if (_map == null)
                 return;
 
-            foreach (SpellCastAnimationMap.Entry entry in _map.Entries)
+            foreach (SpellCastAnimationMap.Entry mapEntry in _map.Entries)
             {
-                string spellId = (entry.spellId ?? string.Empty).Trim().ToUpperInvariant();
+                string spellId = (mapEntry.spellId ?? string.Empty).Trim().ToUpperInvariant();
                 if (spellId.Length == 0)
                     continue;
 
@@ -176,67 +142,60 @@ namespace Arena.Editor
                 SpellAnimationArchetype archetype = hasGameplay
                     ? SpellAnimationArchetypes.Derive(gameplay.CastTimeMs, gameplay.DeliveryKind)
                     : SpellAnimationArchetype.Instant;
-                bool hasFamily = _library.TryGetFamily(
-                    entry.baseName ?? string.Empty,
-                    out SpellCastAnimationFamily family);
-                ResolvedHandRow[] hands = Array.Empty<ResolvedHandRow>();
-                if (hasFamily)
+
+                bool fixedAssignment = mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed;
+                var resolvedSets = new List<ResolvedSetRow>();
+                if (fixedAssignment)
                 {
-                    hands = family.handStyle == SpellCastHandStyle.OneHand
-                        ? new[]
-                        {
-                            BuildResolvedHand(spellId, family, SpellCastHand.Left, archetype, "left"),
-                            BuildResolvedHand(spellId, family, SpellCastHand.Right, archetype, "right"),
-                        }
-                        : new[]
-                        {
-                            BuildResolvedHand(spellId, family, SpellCastHand.TwoHand, archetype, "two-hand"),
-                        };
+                    resolvedSets.Add(BuildResolvedSet(null, spellId, "fixed (all sets)", "fixed", archetype));
+                }
+                else
+                {
+                    foreach (CombatAnimationSet set in _animationSets)
+                    {
+                        string family = set.TryGetSpellCastFamily(mapEntry.motion, out string familyBaseName)
+                            ? familyBaseName
+                            : "‹missing binding›";
+                        resolvedSets.Add(BuildResolvedSet(set, spellId, set.name, family, archetype));
+                    }
                 }
 
                 _rows.Add(new ResolvedSpellRow
                 {
                     SpellId = spellId,
-                    BaseName = entry.baseName ?? string.Empty,
+                    Assignment = fixedAssignment ? "Fixed" : mapEntry.motion.ToString(),
                     Archetype = archetype,
                     HasGameplay = hasGameplay,
-                    HasFamily = hasFamily,
-                    ShadowSets = _explicitSetsBySpell.TryGetValue(spellId, out string[] shadowSets)
-                        ? shadowSets
-                        : Array.Empty<string>(),
-                    Hands = hands,
+                    Sets = resolvedSets.ToArray(),
                 });
             }
         }
 
-        private static ResolvedHandRow BuildResolvedHand(
+        private static ResolvedSetRow BuildResolvedSet(
+            CombatAnimationSet? set,
             string spellId,
-            in SpellCastAnimationFamily family,
-            SpellCastHand hand,
-            SpellAnimationArchetype archetype,
-            string label)
+            string label,
+            string family,
+            SpellAnimationArchetype archetype)
         {
-            if (!SpellCastAnimationComposer.TryCompose(
+            if (!SpellCastAnimationResolver.TryResolve(
+                    set,
                     spellId,
-                    family,
-                    hand,
                     archetype,
                     out WeaponSpellAnimationEntry entry))
             {
-                return new ResolvedHandRow(
-                    label, false, archetype, default, default, "—", "—", "—");
+                return new ResolvedSetRow(label, family, false, default, default, "—", "—", "—");
             }
 
-            return new ResolvedHandRow(
+            return new ResolvedSetRow(
                 label,
+                family,
                 true,
-                archetype,
                 entry.presentationMode,
                 entry.playbackLayer,
                 entry.ground != null ? entry.ground.name : "—",
                 entry.holdOverride.enter != null ? entry.holdOverride.enter.name : "—",
                 entry.holdOverride.idleLoop != null ? entry.holdOverride.idleLoop.name : "—");
         }
-
     }
 }

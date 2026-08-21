@@ -141,6 +141,8 @@ namespace Arena.Presentation
                 CollectAnimationClipsForWarmup(_sharedActionProfile, _animationClips, visited);
             if (_spellLibrary != null)
                 CollectAnimationClipsForWarmup(_spellLibrary, _animationClips, visited);
+            if (_spellMap != null)
+                CollectAnimationClipsForWarmup(_spellMap, _animationClips, visited);
 
             GameObject? animationStage = null;
             GameObject? avatar = null;

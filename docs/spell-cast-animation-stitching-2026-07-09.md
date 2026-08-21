@@ -1,229 +1,120 @@
-# Spell Cast-Animation Stitching (Design Doc)
+# Spell Cast-Animation Motion Contract
 
-**Status:** Drafted 2026-07-09. Reframes "step 2 (animation)" of
-`docs/spell-presentation-dry-redesign-2026-07-07.md` after owner clarification: the animation
-problem is **variant stitching driven by cast type**, not entry de-duplication. (The dedup falls
-out of this design for free — see §8.)
-**Scope:** author-time surface + resolver for a spell's *cast animation* — which clip variants play
-and how they stitch. Reuses the existing runtime hold/release playback unchanged.
+**Status:** Implemented and fully cut over 2026-08-22.
 
----
+Spell identity, combat-set pose, and cast timing are separate concerns:
 
-## 0. What the owner asked (restated to lock understanding)
+    spell id -> semantic motion (or fixed exception)
+    combat animation set + semantic motion -> animation family
+    family + cast hand + gameplay archetype -> concrete clips and presentation mode
 
-> Per spell I want to point at **one** animation. The tool figures out — from cast type — which
-> variants to use and how/when to stitch them: a one-shot; a one-shot → loop; or a one-shot → loop →
-> final-cast. I'll stamp transition-timing events on the clips (already supported). I want to declare
-> **per weapon set** whether it casts with the left hand, both hands, etc. A rare spell (warrior
-> shouts) has its own baked animation that takes precedence.
+There is no per-spell animation array on CombatAnimationSet and no spell-level raw family name.
 
-So the authored footprint of a normal spell's animation collapses to **one field: its base
-animation** — everything else is derived.
+## Authoring ownership
 
----
+### Spell classification
 
-## 1. The animation asset convention (verified)
+Assets/Arena/Resources/SpellCastAnimationMap.asset is the only spell-level cast-animation
+authority. Every entry is one of:
 
-Kevin Iglesias magic-cast clips live under
-`Assets/Arena/Content/Animation/Extracted/KevinIglesias/Human Animations/Animations/Male/Combat/Spellcasting/MagicAttacks/`
-in five folders (`Call`, `Directional`, `Ground`, `Omnidirectional`, `Special`). Every base
-animation is a **family of exactly three clips**, by a 100%-regular naming convention:
+- Motion: a semantic SpellCastMotion (Direct, Raise, Call, Omni, or Special).
+- Fixed: a complete WeaponSpellAnimationEntry that ignores the active combat animation set.
 
-| variant | filename | role |
-|---|---|---|
-| **one-shot** (start→middle→end) | `HumanM@{Base}{Hand}.anim` | full instant cast; also the *enter* wind-up for held casts |
-| **loop** | `HumanM@{Base}{Hand} - Load.anim` | the sustained charge/channel loop |
-| **final cast** | `HumanM@{Base}{Hand} - Cast.anim` | the release finish |
+Use Fixed only when the spell's animation is part of the spell's identity rather than a weapon-pose
+choice. Current fixed exceptions are BATTLE_CRY, GROUND_SLASH, RAIN_OF_ARROWS,
+BLESSED_SHIELD, and RADIANT_BURST. Battle Cry therefore uses the GreatSword Buff/Buff_Air
+clips with every combat set.
 
-- `{Hand}` = `_L` / `_R` on one-handed bases (`…1H…`, `Ground`); **absent** on two-handed bases
-  (`…2H…`, `Omni…`, `Special…`) — those are inherently both-hands.
-- The codebase already classifies these by name: `CombatClipRoleNameInference` maps `- Load` →
-  `SpellCastHoldIdle`, `- Cast` → `SpellRelease`, unsuffixed → `SpellCastHoldEnter`
-  (`CombatClipRoleNameInference.cs:58-68`). The stamper templates already exist per role
-  (`CombatClipEventTemplates`).
+UPHEAVAL is classified as Raise.
 
----
+### Combat animation set bindings
 
-## 2. Three cast archetypes → three stitch patterns
+Each CombatAnimationSet owns spellCastMotionBindings. A binding maps one semantic motion to a
+base name in SpellCastAnimationLibrary.
 
-Archetype is **derived** from gameplay (`SpellAnimationArchetypes.Derive(cast_time_ms, behavior)`,
-already built). Each maps to one stitch pattern and one presentation mode:
+The current Greatsword (TwoHandedSword) bindings include:
 
-| archetype | derivation | clips played | presentationMode |
-|---|---|---|---|
-| **Instant** | `cast_time==0 && !channel` | `{Base} - Cast` (the snappy final cast; fall back to one-shot if absent) | `ReleaseOnly` |
-| **Channel** | `behavior==CHANNEL` | `{Base}` (enter, to `OnEnterComplete`) → `{Base} - Load` (loop until released) | `HoldOnly` |
-| **Charged** | `cast_time>0` | `{Base}` (enter) → `{Base} - Load` (loop while charging) → `{Base} - Cast` (release) | `HoldThenRelease` |
+| motion | family |
+|---|---|
+| Direct | MagicAttackDirect1H01 |
+| Raise | MagicAttackCall1H01 |
+| Call | MagicAttackCall1H02 |
+| Omni | MagicAttackOmni01 |
+| Special | SpecialMagicAttack01 |
 
-For held casts the one-shot's *beginning* is the wind-up (enter); its middle/end are skipped in favor
-of the loop, and the finish comes from the `- Cast` clip. **Instant casts skip the wind-up entirely**
-and play just the `- Cast` gesture (revised 2026-07-09) — the full one-shot's wind-up made instant
-spells feel laggy against their fire-on-press gameplay (nothing gates instant on a release frame; the
-projectile + VFX dispatch synchronously on press).
+oneHandedCastHand selects _L or _R for one-handed families. Greatsword currently uses Left,
+so UPHEAVAL resolves to the HumanM@MagicAttackCall1H01_L family and a Call spell resolves to
+HumanM@MagicAttackCall1H02_L. Two-handed families ignore this field.
 
----
+### Family library
 
-## 3. It maps onto today's entry shape without changing stitch selection
+Assets/Arena/Resources/SpellCastAnimationLibrary.asset contains the real clip references. Each
+family contains:
 
-The runtime already plays held casts from `SpellCastHoldProfile { enter, idleLoop }` and the release
-from `ground`/`air` (`CombatActionPlaybackController`, `SpellCastPresentationController`,
-`PlayerAnimator.SpellCastHoldAction1..4`). The resolver just fills those fields from the base family:
+- oneShot: Base — held-cast enter/wind-up.
+- load: Base - Load — charge/channel loop.
+- cast: Base - Cast — release, and the preferred instant gesture.
 
-| archetype | `ground`/`air` (release) | `holdOverride.enter` | `holdOverride.idleLoop` |
-|---|---|---|---|
-| Instant | `{Base}{Hand} - Cast` | — | — |
-| Channel | — (release suppressed, HoldOnly) | `{Base}{Hand}` | `{Base}{Hand} - Load` |
-| Charged | `{Base}{Hand} - Cast` | `{Base}{Hand}` | `{Base}{Hand} - Load` |
+Run Arena/Spell Animation/Rescan Cast Families after adding or renaming source clips.
 
-Release timing keeps coming from the release clip's `OnReleaseFrame`; enter→loop hand-off from the
-enter clip's `OnEnterComplete` — both already stamped/read today. An optional
-`OnInstantCastStart` event on a release clip marks the first frame played by Instant spells. Runtime
-applies that offset only when the synced `SpellDefinition` confirms the gameplay archetype is
-Instant, after explicit-or-composed resolution has selected the clip. Charged and Channel spells
-therefore keep the full opening even when they share that clip, and the resolver's enter/loop/release
-stitch selection remains unchanged. The marker is clamped to `OnReleaseFrame` so it cannot skip the
-visible release pose.
+## Archetype composition
 
----
+SpellAnimationArchetypes derives the archetype from authoritative gameplay. The composer remains
+the only stitch-selection implementation:
 
-## 4. Authoring surface (the whole footprint of a normal spell)
+| archetype | concrete presentation |
+|---|---|
+| Instant | cast (fallback oneShot), ReleaseOnly |
+| Charged | oneShot -> load -> cast, HoldThenRelease |
+| Channel | oneShot -> load, HoldOnly |
 
-**Model confirmed 2026-07-09 (Option 3 — flavor on the spell, hand from the weapon):** the animation
-"flavor" (sky→ground, ground→sky, directional, omni, special = the pack's `Call`/`Ground`/
-`Directional`/`Omni`/`Special` families) is a **per-spell** choice, authored **weapon-agnostically**.
-The hand comes from the weapon. There is **no incompleteness gap**, because the flavor decides
-whether the hand even applies:
-- **1H flavors** (Call, Ground, Directional-1H — the families with `_L`/`_R`) → cast with the
-  weapon's declared hand. Any weapon can free a hand for a one-handed cast (incl. a 2H sword).
-- **2H flavors** (Omni, Special, Directional-2H — no hand suffix) → **both hands, always, any
-  weapon** (the weapon's hand is ignored; the off/shield arm just participates).
+Left-handed one-hand families use the loop-capable LeftGesture states for instant, hold, and
+charged release, keeping the weapon-bearing right arm on its base pose. Other families use the
+existing upper-body/full-body policies in SpellCastAnimationComposer.
 
-So a spell names **one** flavor family; if it's 1H the weapon supplies L/R, if it's 2H both hands are
-used. One assignment per spell, one hand per weapon set — full "author once", no per-weapon or
-per-hand-style duplication. (This supersedes the earlier "1H base + 2H base per spell" note — the
-2H-is-hand-agnostic rule makes that unnecessary.)
+Timing still comes from animation events:
 
-1. **Per spell (weapon-agnostic): one flavor-family reference** — a base name (e.g.
-   `MagicAttackGround01`) in a new weapon-agnostic `SpellCastAnimationMap` (`spellId → baseName`).
-   This *is* the "point it at an animation" field. The base's own `handStyle` (1H vs 2H, from the
-   scan) decides whether the weapon hand applies.
-2. **Per weapon set: a one-handed cast hand** — `Left` / `Right` ("this weapon casts one-handed
-   spells with the left/right hand"). One enum on `CombatAnimationSet`; used only for 1H flavors,
-   ignored for 2H flavors.
-3. **Per clip: stamped transition events** (`OnEnterComplete`, `OnReleaseFrame`, …) — already
-   supported; owner-accepted. Bounded burden: the one-shot needs `OnEnterComplete` (held-cast
-   enter→loop hand-off) + `OnReleaseFrame` (instant release timing); the `- Cast` clip needs
-   `OnReleaseFrame`; the `- Load` loop needs nothing.
-4. **Rare per-spell override: an explicit baked clip** (warrior shouts, greatsword pack). Wins over
-   family resolution — this is today's explicit `WeaponSpellAnimationEntry`, kept as the top
-   resolution layer (explicit-wins, already how `SpellAnimationResolver` layers).
+- OnEnterComplete: enter-to-loop handoff.
+- OnReleaseFrame: gameplay/VFX release alignment.
+- OnInstantCastStart: optional instant-only startup trim.
+- OnLowerBodyUnlock and OnVisualInterruptible: full-body recovery policy.
 
-Everything else (presentationMode, enter/loop/cast selection, loop-capable layer, timing) is derived.
-A spell with no base for the casting weapon's style (never cast by that style in practice) simply
-resolves to nothing — harmless.
+## Resolution contract
 
----
+SpellCastAnimationResolver.TryResolve is the only runtime lookup:
 
-## 5. The family library (auto-built, owner barely touches it)
+1. Normalize the spell id and find its global map entry.
+2. If the entry is Fixed, return its fixed presentation without consulting the combat set.
+3. Otherwise require an active CombatAnimationSet.
+4. Resolve the entry's motion through that set's spellCastMotionBindings.
+5. Resolve the family from SpellCastAnimationLibrary.
+6. Compose family + set hand + authoritative archetype.
+7. Apply the motion entry's optional layer, combat-entry-mode, or animated-prop overrides.
 
-A `SpellCastAnimationFamily` asset per base holds real clip references (so they land in the build —
-Content/ clips can't be `Resources.Load`ed at runtime). One family = one base's variants:
-- `handStyle: OneHand` → `{ baseName, left:{oneShot,load,cast}, right:{oneShot,load,cast} }`
-- `handStyle: TwoHand` → `{ baseName, twoHand:{oneShot,load,cast} }`
+Successful motion resolutions are cached. Validation and asset OnValidate callbacks invalidate the
+cache after authoring changes.
 
-An editor tool **scans the MagicAttacks folders and auto-populates** these from the naming
-convention (one "Rescan families" button) — it groups the three `{Base}` / `{Base} - Load` /
-`{Base} - Cast` clips per (base, hand) and infers OneHand (has `_L`/`_R`) vs TwoHand (no suffix).
-The owner picks families by name per spell (a 1H and/or 2H base); the tool wires the clips.
+Missing map entries, missing set bindings, missing families, and incomplete archetype variants fail
+closed and produce a targeted runtime/editor diagnostic. There is no fallback to a deleted legacy
+spell row or to a spell-level family.
 
-Resolution then composes at the existing choke point:
-`SpellAnimationResolver.Resolve(spell, weapon)` → explicit baked entry (layer 1, wins) → else
-`family = map[spellId]`; if `family.handStyle == OneHand` pick `family.left/right` by
-`weapon.oneHandedCastHand`, else use `family.twoHand` (weapon-agnostic); × `archetype` → concrete
-(enter, idleLoop, release) + derived presentationMode + loop-capable layer.
+## Authoring workflow
 
----
+For a normal spell:
 
-## 6. What this reuses vs. adds
+1. Add one Motion entry to SpellCastAnimationMap.asset.
+2. Ensure every runtime-loadable combat set binds that motion.
+3. Ensure the selected families contain the variants required by the spell's archetype.
+4. Stamp required animation events.
+5. Inspect Arena/Spell Animation/Resolved View.
+6. Run Combat VFX validation and the server/editor test suites.
 
-**Reuses (unchanged):** the animator controller + `SpellCastHoldAction` states; `SpellCastHoldProfile`;
-`CombatActionPlaybackController` hold phases; `SpellCastPresentationController` release scheduling;
-`SpellAnimationArchetypes.Derive`; `SpellAnimationResolver` layering; clip-event stamper + role
-templates; `CombatClipRoleNameInference`.
+For a fixed exception:
 
-**Adds:** (a) `SpellCastAnimationFamily` asset + auto-scan editor tool; (b) weapon-agnostic
-`SpellCastAnimationMap` (`spellId → family`); (c) a `castHand` enum on `CombatAnimationSet`; (d) the
-compose step in the resolver (family × hand × archetype → clips); (e) inspector/validator: preview
-the resolved stitch + flag families missing a required variant.
+1. Add one Fixed entry to SpellCastAnimationMap.asset.
+2. Author its complete ground/air, layer, entry mode, hold, and prop data there.
+3. Verify it resolves to the same clips with at least two different combat sets.
 
----
-
-## 7. Playback layer (the one thing not derivable from cast type)
-
-`playbackLayer` (FullBody / UpperBody / UpperBodyWhileMoving / LeftGesture) is genuinely per-spell/
-per-weapon (§Appendix C of the redesign doc). It stays a template/per-spell default, **not** part of
-the base-animation family. Channel/charged must resolve to a loop-capable layer
-(`SpellCastHoldAction*`) — kept as a validator rule (design doc §6.8).
-
----
-
-## 8. Bonuses (fall out for free)
-
-- **Fixes the presentationMode desync (decision 3).** Today the 4 charged spells are authored
-  `ReleaseOnly` and never stitch; deriving the archetype makes them stitch correctly, and
-  presentationMode stops being hand-authored (it becomes derived output).
-- **Kills the per-weapon duplication.** The spell→animation mapping becomes weapon-agnostic
-  (authored once in `SpellCastAnimationMap`); a weapon set contributes only its hand convention +
-  rare baked overrides. This is the *right* mechanism for the DRY win the redesign doc §0 flagged —
-  no entry copy-paste to maintain.
-
----
-
-## 9. Build phases
-
-1. **Family model + auto-scan — ✅ DONE (2026-07-09, compile- + parse-verified; not yet committed).**
-   `SpellCastAnimationLibrary.cs` (runtime: `SpellCastHandStyle`/`SpellCastHand` enums,
-   `SpellCastClipTriple`, `SpellCastAnimationFamily`, the `SpellCastAnimationLibrary` ScriptableObject)
-   + `SpellCastAnimationLibraryBuilder.cs` (editor: `Arena/Spell Animation/Rescan Cast Families`
-   menu → scans MagicAttacks → writes `Assets/Arena/Resources/SpellCastAnimationLibrary.asset`).
-   Both assemblies compile 0 errors. The parse+group algorithm, replayed against the real 40 clips,
-   yields **9 families** (4 one-handed w/ full L+R triples, 5 two-handed), every triple complete,
-   the stray unprefixed clip deduped. Non-destructive; nothing consumes the library yet. Owner
-   verifies by running the menu item and eyeballing the resulting asset + console summary.
-2. **Resolver compose step — ✅ DONE (2026-07-09, compile- + unit-verified; pending Unity import +
-   commit).** `oneHandedCastHand` (Left/Right) on `CombatAnimationSet`; `SpellCastAnimationMap.cs`
-   (weapon-agnostic spellId→baseName SO, Resources); `SpellCastAnimationComposer.cs` (pure:
-   family×hand×archetype → `WeaponSpellAnimationEntry`); `SpellCastAnimationResolver.cs` (runtime
-   glue: explicit-wins → composed; loads Resources; derives archetype via
-   `conn.Db.SpellDefinition`). Unit test `SpellCastAnimationComposerTests.cs` covers all 3 archetypes
-   + 2H-ignores-hand + missing-clip. All assemblies build 0 errors.
-3. **Wire the runtime consumers — ✅ DONE (same commit).** 5 seams routed through
-   `SpellCastAnimationResolver.TryResolve`: PlayerEntity ×3 (:314/:321/:329),
-   CombatActionPlaybackController.TryBindSpellClip (:998), CombatAnimationSet.TryGetSpellCastHoldProfile
-   (:1587). **Safe by construction:** with no `SpellCastAnimationMap.asset` in Resources, `TryResolve`
-   ≡ `TryGetSpellAnimation` (byte-identical) — nothing changes until a spell is mapped.
-4. **Migrate spells to families** — point each elemental spell at its base; delete the redundant
-   explicit entries; verify in-editor preview + playtest. Warrior shouts stay explicit (baked
-   override).
-5. **Inspector + validator** — resolved-stitch preview; missing-variant + non-loop-capable-layer
-   warnings.
-
----
-
-## 10. Forks (resolved 2026-07-09)
-
-1. **Base reference granularity — RESOLVED (Option 3):** the spell names **one** flavor family
-   (weapon-agnostic) from an auto-scanned dropdown; the hand comes from the weapon. 2H flavors are
-   hand-agnostic (both hands, any weapon), so there is no cross-style/incompleteness gap (§4).
-2. **Where the spell→base map lives — RESOLVED:** one weapon-agnostic `SpellCastAnimationMap`
-   (`spellId → baseName`). Weapon sets add only a `oneHandedCastHand` (Left/Right). Full author-once.
-3. **Instant clip — RESOLVED (revised 2026-07-09):** instant plays the snappy `{Base} - Cast` gesture
-   (falling back to the one-shot only if a family lacks a Cast clip). The full one-shot's wind-up felt
-   laggy against fire-on-press; nothing gates instant on a release frame, so the quick Cast gesture is
-   the right match.
-
-**Honest acceptance answer (owner's question, 2026-07-09):** with clips stamped, assigning a spell
-its **one** flavor family makes the system play the correct one-shot / one-shot→loop /
-one-shot→loop→cast with **no further per-spell work** — archetype from cast type, loop-capable layer
-auto-derived, hand from the weapon set (1H flavors) or both-hands (2H flavors). Truly one field per
-spell + one hand per weapon set.
+Do not add spell-specific animation fields back to CombatAnimationSet. If a new distinction is
+shared by multiple spells and legitimately varies by combat set, add a semantic motion and bind it
+per set. If it must never vary by set, use a fixed exception.

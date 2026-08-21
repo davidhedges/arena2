@@ -78,8 +78,8 @@ namespace Arena.Presentation
 
         /// <summary>
         /// Returns <c>false</c> (with a default entry) when the family has no clips for the requested
-        /// hand, or when the archetype's required clips are missing — the caller then treats the spell
-        /// as having no composed animation (falls through, exactly like an absent explicit entry).
+        /// hand, or when the archetype's required clips are missing. The resolver then reports that
+        /// the semantic motion cannot produce a playable cast animation for the active set.
         /// </summary>
         public static bool TryCompose(
             string spellId,

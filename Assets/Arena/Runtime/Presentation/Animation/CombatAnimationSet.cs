@@ -753,6 +753,23 @@ namespace Arena.Presentation
         }
     }
 
+    /// <summary>
+    /// Maps one semantic spell motion to the cast-animation family used by this combat set. The
+    /// family supplies the cast-hand and Instant/Charged/Channel variants through the shared
+    /// SpellCastAnimationLibrary and composer.
+    /// </summary>
+    [Serializable]
+    public struct SpellCastMotionBinding
+    {
+        public SpellCastMotion motion;
+        [Tooltip("Family base name from SpellCastAnimationLibrary, e.g. MagicAttackCall1H01.")]
+        public string familyBaseName;
+
+        public string FamilyBaseNameOrEmpty => string.IsNullOrWhiteSpace(familyBaseName)
+            ? string.Empty
+            : familyBaseName.Trim();
+    }
+
     [Serializable]
     public struct SpellAnimatedPropHandoff
     {
@@ -1500,12 +1517,13 @@ namespace Arena.Presentation
         public AnimationClip? exitCombatIdle;
         public AnimationClip? exitCombatWalk;
         public AnimationClip? exitCombatRun;
-        [Header("Spell Actions")]
-        [Tooltip("Runtime spell/buff animation overrides keyed by runtime spell/action id.")]
-        public WeaponSpellAnimationEntry[] spells = Array.Empty<WeaponSpellAnimationEntry>();
+
+        [Header("Spell Cast Motions")]
+        [Tooltip("Animation-family bindings keyed by semantic spell cast motion. Spell classification and fixed exceptions live in SpellCastAnimationMap.")]
+        public SpellCastMotionBinding[] spellCastMotionBindings = Array.Empty<SpellCastMotionBinding>();
 
         [Header("Spell Cast Hold")]
-        [Tooltip("Default enter/idle presentation for cast-time spells. Release clips remain authored per spell in Spell Actions.")]
+        [Tooltip("Default enter/idle presentation for cast-time spells. Release clips come from the resolved motion family or fixed spell assignment.")]
         public SpellCastHoldProfile defaultSpellCastHold;
 
         [Tooltip("Which hand this weapon set casts ONE-HANDED spell flavors with (Call/Ground/Directional-1H). Left is the only supported one-hand value until a RightGesture layer/mask exists; two-handed flavors (Omni/Special) always use both hands regardless. Only used by the cast-animation family resolver. See docs/spell-cast-animation-stitching-2026-07-09.md.")]
@@ -1693,6 +1711,7 @@ namespace Arena.Presentation
         {
             EnsureAnimationSetIdentityInitialized();
             EnsureWeaponPresentationProfileInitialized();
+            SpellCastAnimationResolver.InvalidateCache();
         }
 
         public int MeleeAttackCount
@@ -1963,26 +1982,22 @@ namespace Arena.Presentation
             return GetStrikeCombat(strikeIndex).AuthoredStrikeIdOrDefault;
         }
 
-        public bool TryGetSpellAnimation(string spellId, out WeaponSpellAnimationEntry entry)
+        public bool TryGetSpellCastFamily(SpellCastMotion motion, out string familyBaseName)
         {
-            string normalizedSpellId = string.IsNullOrWhiteSpace(spellId)
-                ? string.Empty
-                : spellId.Trim().ToUpperInvariant();
-
-            if (!string.IsNullOrEmpty(normalizedSpellId) && spells != null)
+            if (motion != SpellCastMotion.None && spellCastMotionBindings != null)
             {
-                for (int index = 0; index < spells.Length; index++)
+                for (int index = 0; index < spellCastMotionBindings.Length; index++)
                 {
-                    WeaponSpellAnimationEntry candidate = spells[index];
-                    if (!string.Equals(candidate.SpellIdOrEmpty, normalizedSpellId, StringComparison.Ordinal))
+                    SpellCastMotionBinding candidate = spellCastMotionBindings[index];
+                    if (candidate.motion != motion || candidate.FamilyBaseNameOrEmpty.Length == 0)
                         continue;
 
-                    entry = candidate;
-                    return candidate.HasAnyPresentation;
+                    familyBaseName = candidate.FamilyBaseNameOrEmpty;
+                    return true;
                 }
             }
 
-            entry = default;
+            familyBaseName = string.Empty;
             return false;
         }
 

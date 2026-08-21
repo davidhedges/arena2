@@ -52,7 +52,7 @@ Files: `Assets/Arena/Resources/CombatAnimationSets/*.asset`
 - melee presentation mode
 - melee phased clips
 - melee visual interruption timing
-- spell animation entries
+- semantic spell cast-motion family bindings and one-handed cast-hand convention
 - dodge, block, parry, charge, hit, stagger, stun, knockdown, get-up, and death clips
 
 Future melee and cast phase metadata should be added to `CombatAnimationSet` unless there is a concrete reason to put it somewhere else.
@@ -386,9 +386,9 @@ Recommended categories:
 - rooted cast: full-body until end or explicit lower-body unlock
 - interrupted cast: explicit cancel clip or fast blend-out policy
 
-Spell animation entries in `CombatAnimationSet` remain valid. Future cast phase fields should preserve existing spell entries and add optional timing/policy data beside them.
+Spell classification is global in `SpellCastAnimationMap`: a normal spell selects a semantic motion, while a genuinely set-independent exception owns one fixed presentation. `CombatAnimationSet.spellCastMotionBindings` maps semantic motion to an animation family for the set's weapon pose. Do not add per-spell rows back to a combat set.
 
-The existing spell ground/air clip and effect-time fields are the caster grounded-state axis. Standing, moving, channeled, rooted, and interrupted presentation policy is a separate axis and should be additive, not a replacement for ground/air authoring.
+The resolver still produces a `WeaponSpellAnimationEntry` runtime value. Its ground/air clips are either composed from a family or copied from a fixed global exception. Standing, moving, channeled, rooted, and interrupted presentation policy remains a separate axis.
 
 Current cast lower-body recovery is intentionally narrow:
 

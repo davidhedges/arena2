@@ -307,10 +307,9 @@ namespace Arena.Editor
                     return SpellVfxGenerator.AnchorRightHand;
             }
 
-            // E7: otherwise the concrete cast hand is inferred from the resolved animation/playback layer
-            // (explicit entry or SpellCastAnimationMap composition). Profile-less SPELL_* spells have no
-            // animation set, so fall back to the generator's LEFT_HAND default (14/15 hand cues use LEFT
-            // today — design doc Appendix B "shared modifiers").
+            // E7: otherwise infer the concrete cast hand from the resolved motion-family or fixed
+            // presentation. A profile-less spell has no preview CombatAnimationSet in this window, so
+            // fall back to the generator's LEFT_HAND default.
             if (hasResolvedAnimation
                 && TryInferSpellPresentationHand(resolvedAnimation, out string handAnchor, out _))
             {

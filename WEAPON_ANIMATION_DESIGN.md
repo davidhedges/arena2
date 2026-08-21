@@ -1,5 +1,8 @@
 # Weapon Animation System Design
 
+> Historical design discussion. References to the old `CastAnimationMap` type are superseded by
+> `docs/spell-cast-animation-stitching-2026-07-09.md`; that compatibility stub has been removed.
+
 ---
 
 ## What in the Revised Design Is Solid

@@ -9,37 +9,21 @@ using UnityEngine;
 namespace Arena.Editor
 {
     /// <summary>
-    /// Authoring UI for <see cref="SpellCastAnimationMap"/>: pick each spell's flavor family from a
-    /// dropdown of the scanned library (no typing base names) and its spell id from the animated
-    /// spells, with the optional per-spell overrides inline. Makes the migration grind fast and
-    /// typo-free. Falls back gracefully when the library isn't scanned yet.
+    /// Authoring UI for the single spell-to-motion/fixed-animation map. Family selection belongs to
+    /// CombatAnimationSet; this inspector deliberately exposes no spell-level family field.
     /// </summary>
     [CustomEditor(typeof(SpellCastAnimationMap))]
     public sealed class SpellCastAnimationMapEditor : UnityEditor.Editor
     {
-        private string[] _baseNames = Array.Empty<string>();
         private string[] _spellIds = Array.Empty<string>();
 
         private void OnEnable() => RefreshChoices();
 
         private void RefreshChoices()
         {
-            // Flavor families from the scanned library.
-            SpellCastAnimationLibrary? library = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationLibrary>();
-            _baseNames = library == null
-                ? Array.Empty<string>()
-                : library.Families.Select(f => f.BaseNameOrEmpty).Where(n => n.Length > 0)
-                    .Distinct().OrderBy(n => n, StringComparer.Ordinal).ToArray();
-
-            // Candidate spell ids from every CombatAnimationSet's authored spell entries, plus any
-            // ids already in the map (so migrated-and-deleted spells stay pickable).
             var ids = new SortedSet<string>(StringComparer.Ordinal);
-            foreach (CombatAnimationSet set in SpellPresentationEditorData.LoadCombatAnimationSets())
-            {
-                if (set?.spells == null) continue;
-                foreach (WeaponSpellAnimationEntry e in set.spells)
-                    if (e.SpellIdOrEmpty.Length > 0) ids.Add(e.SpellIdOrEmpty);
-            }
+            foreach (string spellId in SpellPresentationEditorData.LoadSpellGameplayByActionId(out _).Keys)
+                ids.Add(spellId);
             var map = (SpellCastAnimationMap)target;
             foreach (SpellCastAnimationMap.Entry e in map.Entries)
                 if (!string.IsNullOrWhiteSpace(e.spellId)) ids.Add(e.spellId.Trim().ToUpperInvariant());
@@ -52,13 +36,10 @@ namespace Arena.Editor
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField($"Families: {_baseNames.Length}   Spell ids: {_spellIds.Length}", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField($"Spell ids: {_spellIds.Length}", EditorStyles.miniLabel);
                 if (GUILayout.Button("Refresh choices", GUILayout.Width(120)))
                     RefreshChoices();
             }
-            if (_baseNames.Length == 0)
-                EditorGUILayout.HelpBox("No families found — run Arena → Spell Animation → Rescan Cast Families first.", MessageType.Warning);
-
             SerializedProperty entries = serializedObject.FindProperty("entries");
             EditorGUILayout.Space();
 
@@ -67,7 +48,7 @@ namespace Arena.Editor
             {
                 SerializedProperty entry = entries.GetArrayElementAtIndex(i);
                 SerializedProperty spellId = entry.FindPropertyRelative("spellId");
-                SerializedProperty baseName = entry.FindPropertyRelative("baseName");
+                SerializedProperty assignmentKind = entry.FindPropertyRelative("assignmentKind");
 
                 using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
                 {
@@ -76,10 +57,35 @@ namespace Arena.Editor
                         DrawStringDropdown("Spell", spellId, _spellIds, editable: true);
                         if (GUILayout.Button("✕", GUILayout.Width(22))) removeAt = i;
                     }
-                    DrawStringDropdown("Flavor", baseName, _baseNames, editable: false);
-                    EditorGUILayout.PropertyField(entry.FindPropertyRelative("playbackLayer"));
-                    EditorGUILayout.PropertyField(entry.FindPropertyRelative("combatEntryMode"));
-                    EditorGUILayout.PropertyField(entry.FindPropertyRelative("animatedProp"), includeChildren: true);
+                    EditorGUI.BeginChangeCheck();
+                    EditorGUILayout.PropertyField(assignmentKind);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        if ((SpellCastAnimationAssignmentKind)assignmentKind.enumValueIndex
+                            == SpellCastAnimationAssignmentKind.Fixed)
+                        {
+                            entry.FindPropertyRelative("motion").enumValueIndex = (int)SpellCastMotion.None;
+                            entry.FindPropertyRelative("playbackLayer").enumValueIndex = (int)SpellCastLayerOverride.Auto;
+                            entry.FindPropertyRelative("combatEntryMode").enumValueIndex = (int)SpellCastEntryModeOverride.Auto;
+                            entry.FindPropertyRelative("animatedProp").boxedValue = default(SpellAnimatedPropHandoff);
+                        }
+                        else
+                        {
+                            entry.FindPropertyRelative("fixedAnimation").boxedValue = default(WeaponSpellAnimationEntry);
+                        }
+                    }
+                    if ((SpellCastAnimationAssignmentKind)assignmentKind.enumValueIndex
+                        == SpellCastAnimationAssignmentKind.Fixed)
+                    {
+                        EditorGUILayout.PropertyField(entry.FindPropertyRelative("fixedAnimation"), includeChildren: true);
+                    }
+                    else
+                    {
+                        EditorGUILayout.PropertyField(entry.FindPropertyRelative("motion"));
+                        EditorGUILayout.PropertyField(entry.FindPropertyRelative("playbackLayer"));
+                        EditorGUILayout.PropertyField(entry.FindPropertyRelative("combatEntryMode"));
+                        EditorGUILayout.PropertyField(entry.FindPropertyRelative("animatedProp"), includeChildren: true);
+                    }
                 }
             }
 
@@ -88,14 +94,18 @@ namespace Arena.Editor
 
             EditorGUILayout.Space();
             if (GUILayout.Button("Add spell mapping"))
-                entries.InsertArrayElementAtIndex(entries.arraySize);
+            {
+                int newIndex = entries.arraySize;
+                entries.InsertArrayElementAtIndex(newIndex);
+                entries.GetArrayElementAtIndex(newIndex).boxedValue = default(SpellCastAnimationMap.Entry);
+            }
 
             serializedObject.ApplyModifiedProperties();
         }
 
         /// <summary>
         /// A popup bound to a string property. <paramref name="editable"/> adds a free-text field next
-        /// to the popup (spell ids can be typed; flavor names must come from the scanned set).
+        /// to the popup.
         /// </summary>
         private static void DrawStringDropdown(string label, SerializedProperty prop, string[] choices, bool editable)
         {

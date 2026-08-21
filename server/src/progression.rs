@@ -7983,6 +7983,8 @@ mod tests {
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
 
     const GAP_CLOSE_TARGET_ARRIVAL_DISTANCE_METERS: f32 = 2.0;
+    const SPELL_CAST_ANIMATION_MAP_ASSET: &str =
+        include_str!("../../Assets/Arena/Resources/SpellCastAnimationMap.asset");
 
     #[test]
     fn discipline_loadout_selection_accepts_active_and_passive_abilities() {
@@ -8002,7 +8004,7 @@ mod tests {
         assert!((combat_rule_value("KNOCKBACK_SPEED_METERS_PER_SEC") - 24.0).abs() < f32::EPSILON);
     }
 
-    fn parse_spell_ids_from_animation_set_asset(asset_contents: &str) -> HashSet<String> {
+    fn parse_spell_ids_from_cast_animation_map_asset(asset_contents: &str) -> HashSet<String> {
         asset_contents
             .lines()
             .filter_map(|line| line.trim_start().strip_prefix("- spellId: "))
@@ -8131,10 +8133,51 @@ mod tests {
         }
     }
 
+    #[test]
+    fn animation_sets_use_semantic_spell_motion_bindings_without_legacy_spell_rows() {
+        for (profile_id, asset_contents) in animation_set_assets_by_combat_profile() {
+            assert!(
+                asset_contents.contains("  spellCastMotionBindings:"),
+                "{profile_id} must author semantic spell cast motion bindings"
+            );
+            assert!(
+                !asset_contents.contains("  spells:"),
+                "{profile_id} must not retain the legacy per-spell animation array"
+            );
+            for family in [
+                "MagicAttackDirect1H01",
+                "MagicAttackCall1H01",
+                "MagicAttackCall1H02",
+                "MagicAttackOmni01",
+                "SpecialMagicAttack01",
+            ] {
+                assert!(
+                    asset_contents.contains(&format!("    familyBaseName: {family}")),
+                    "{profile_id} is missing required semantic family binding '{family}'"
+                );
+            }
+        }
+
+        assert!(
+            SPELL_CAST_ANIMATION_MAP_ASSET
+                .contains("- spellId: UPHEAVAL\n    assignmentKind: 0\n    motion: 2"),
+            "Upheaval must be classified as Raise"
+        );
+        assert!(
+            SPELL_CAST_ANIMATION_MAP_ASSET
+                .contains("- spellId: BATTLE_CRY\n    assignmentKind: 1\n    motion: 0"),
+            "Battle Cry must be a fixed set-independent animation exception"
+        );
+    }
+
     fn spell_ids_for_combat_profile(combat_profile_id: &str) -> HashSet<String> {
-        parse_spell_ids_from_animation_set_asset(animation_set_asset_for_combat_profile(
-            combat_profile_id,
-        ))
+        let animation_set = animation_set_asset_for_combat_profile(combat_profile_id);
+        assert!(
+            animation_set.contains("  spellCastMotionBindings:"),
+            "combat profile '{}' must author semantic spell cast motion bindings",
+            combat_profile_id
+        );
+        parse_spell_ids_from_cast_animation_map_asset(SPELL_CAST_ANIMATION_MAP_ASSET)
     }
 
     fn parse_current_animation_set_melee_fields(
@@ -8553,7 +8596,7 @@ mod tests {
                         errors.push(CombatAuthoringError::new(
                             CombatAuthoringRule::SelectableSpellHasAnimationEntry,
                             format!(
-                                "spell ability '{}' uses spell '{}' but animation set for combat profile '{}' has no matching spell animation entry",
+                                "spell ability '{}' uses spell '{}' but the semantic cast map or animation set for combat profile '{}' has no matching motion/fixed assignment",
                                 action.ability_id, action.authored_action_id, action.combat_profile_id
                             ),
                         ));
@@ -14142,18 +14185,15 @@ mod tests {
         assert_eq!(normalize_identifier(cue.lifecycle.as_str()), "DURATION");
         assert_eq!(cue.duration_ms, 2500);
 
-        let sword_and_shield_asset = animation_set_assets_by_combat_profile()
-            .get(COMBAT_PROFILE_SWORD_AND_SHIELD)
-            .expect("SwordAndShield animation set");
         assert!(
-            sword_and_shield_asset.contains("- spellId: RADIANT_BURST"),
-            "Radiant Burst must resolve through the SwordAndShield spell animation entries"
+            SPELL_CAST_ANIMATION_MAP_ASSET.contains("- spellId: RADIANT_BURST"),
+            "Radiant Burst must resolve through the global spell cast animation map"
         );
         assert!(
-            sword_and_shield_asset.contains(
+            SPELL_CAST_ANIMATION_MAP_ASSET.contains(
                 "ground: {fileID: 7400000, guid: b77a7a02d110945d7bd3e5e445fbc043, type: 2}"
             ),
-            "Radiant Burst must use the requested SwordAndShield Combo_Attack_01_03 clip"
+            "Radiant Burst must retain its fixed SwordAndShield Combo_Attack_01_03 clip"
         );
     }
 
@@ -15413,7 +15453,7 @@ mod tests {
         let animation_set_spell_ids = spell_ids_for_combat_profile(COMBAT_PROFILE_TWO_HANDED_SWORD);
         assert!(
             animation_set_spell_ids.contains("FEAST"),
-            "expected Feast spell animation entry in the derived greatsword animation set"
+            "expected Feast semantic cast assignment to resolve for greatsword"
         );
     }
 
@@ -15635,9 +15675,7 @@ mod tests {
             );
         }
 
-        let animation_ids = parse_spell_ids_from_animation_set_asset(
-            animation_set_asset_for_combat_profile(COMBAT_PROFILE_DAGGERS),
-        );
+        let animation_ids = spell_ids_for_combat_profile(COMBAT_PROFILE_DAGGERS);
         for spell_id in ["FIND_WEAKNESS", "BLADE_TWISTING", "GOUGE", "TEMPLE_STRIKE"] {
             assert!(
                 animation_ids.contains(spell_id),
@@ -15660,7 +15698,10 @@ mod tests {
             COMBAT_PROFILE_TWO_HANDED_SWORD
         );
         assert!(spell_ids_for_combat_profile(COMBAT_PROFILE_TWO_HANDED_SWORD).contains("DISARM"));
-        assert!(!spell_ids_for_combat_profile(COMBAT_PROFILE_DAGGERS).contains("DISARM"));
+        assert!(
+            spell_ids_for_combat_profile(COMBAT_PROFILE_DAGGERS).contains("DISARM"),
+            "semantic spell classifications resolve through every combat animation set"
+        );
 
         for ability_id in [
             "DAGGER_DARKNESS",
@@ -16005,44 +16046,44 @@ mod tests {
     }
 
     #[test]
-    fn warrior_self_buffs_have_greatsword_spell_animation_entries() {
+    fn warrior_self_buffs_have_semantic_cast_assignments() {
         let animation_set_spell_ids = spell_ids_for_combat_profile(COMBAT_PROFILE_TWO_HANDED_SWORD);
 
         assert!(
             animation_set_spell_ids.contains("MOMENTUM"),
-            "expected Momentum spell animation entry in the derived greatsword animation set"
+            "expected Momentum semantic cast assignment"
         );
         assert!(
             animation_set_spell_ids.contains("BATTLE_CRY"),
-            "expected Battle Cry spell animation entry in the derived greatsword animation set"
+            "expected Battle Cry fixed cast assignment"
         );
         assert!(
             animation_set_spell_ids.contains("FORTIFY"),
-            "expected Fortify spell animation entry in the derived greatsword animation set"
+            "expected Fortify semantic cast assignment"
         );
         assert!(
             animation_set_spell_ids.contains("IRON_WILL"),
-            "expected Iron Will spell animation entry in the derived greatsword animation set"
+            "expected Iron Will semantic cast assignment"
         );
         assert!(
             animation_set_spell_ids.contains("DEFIANCE"),
-            "expected Defiance spell animation entry in the derived greatsword animation set"
+            "expected Defiance semantic cast assignment"
         );
         assert!(
             animation_set_spell_ids.contains("FRENZY"),
-            "expected Frenzy spell animation entry in the derived greatsword animation set"
+            "expected Frenzy semantic cast assignment"
         );
         assert!(
             animation_set_spell_ids.contains("SECOND_WIND"),
-            "expected Second Wind spell animation entry in the derived greatsword animation set"
+            "expected Second Wind semantic cast assignment"
         );
         assert!(
             animation_set_spell_ids.contains("BERSERKING"),
-            "expected Berserking spell animation entry in the derived greatsword animation set"
+            "expected Berserking semantic cast assignment"
         );
         assert!(
             animation_set_spell_ids.contains("BATTLE_TRANCE"),
-            "expected Battle Trance spell animation entry in the derived greatsword animation set"
+            "expected Battle Trance semantic cast assignment"
         );
     }
 

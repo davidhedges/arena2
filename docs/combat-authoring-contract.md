@@ -75,7 +75,7 @@ Own Unity-authored presentation and melee timing:
 - targeted melee recovery timing
 - combo links
 - phased melee clips
-- spell animation entries
+- semantic spell cast-motion bindings
 - weapon presentation data
 
 Melee hit timing comes from `OnStrikeHit`-authored hit windows and recovery timing. The Event Stamper mirrors and exports the affected strike automatically; legacy attacks with no hit event still use their serialized fallback. Hit Windows are gameplay contact/release timing, not lower-body unlock or visual interruption timing. Animation presentation phase rules are defined in `docs/combat-animation-authoring-contract.md`.
@@ -141,7 +141,7 @@ For selectable abilities, `action_id` is the `ability_id`. Do not put an ability
 1. Import the weapon/animation pack and follow `docs/weapon-visual-integration-contract.md` for semantic mount validation.
 2. Create a `CombatAnimationSet` asset under `Assets/Arena/Resources/CombatAnimationSets`.
 3. Set both `animationSetId` and `combatProfileId` on that asset to the new uppercase combat profile id.
-4. Fill weapon presentation, draw/sheath clips, locomotion/combat clips, spell entries, and authored melee attacks.
+4. Fill weapon presentation, draw/sheath clips, locomotion/combat clips, semantic spell cast-motion bindings, and authored melee attacks.
 5. Export `server/src/melee_manifest.shared.json` from the animation set inspector.
 6. Add a `combat_profiles[]` row and a `classes[]` row in `server/src/progression_catalog.shared.json`, with the class `default_combat_profile_id` pointing at the new profile.
 7. Add `auto_attacks[]` gameplay for the new combat profile.
@@ -167,7 +167,7 @@ For selectable abilities, `action_id` is the `ability_id`. Do not put an ability
 3. Set the ability `action_id` to the spell id.
 4. Put spell cooldown/cast/targeting/resource details inside `gameplay`.
 5. Put spell delivery behavior inside `gameplay.delivery`.
-6. Add a spell animation entry for every class combat profile that exposes the spell.
+6. Add one semantic motion or fixed exception in `SpellCastAnimationMap`; ensure every combat animation set binds that motion.
 7. Add an `ABILITY` presentation row, and a `SPELL` presentation row when the spell is directly presented.
 8. Add or update default loadout placement through ActionRef-compatible assignment data.
 9. Run the server tests.
@@ -219,7 +219,7 @@ Runtime rule: pressing the ability only arms a pending replacement. When the nex
 
 ### Self-Buff
 
-Self-buffs are spells with self-targeted `APPLY_STATUS` delivery. Author them as `gameplay.kind: "SPELL"` abilities with `gameplay.targeting: "SELF"` and `gameplay.delivery.kind: "APPLY_STATUS"`. Add combat animation set spell entries for exposing profiles.
+Self-buffs are spells with self-targeted `APPLY_STATUS` delivery. Author them as `gameplay.kind: "SPELL"` abilities with `gameplay.targeting: "SELF"` and `gameplay.delivery.kind: "APPLY_STATUS"`. Classify the visible cast motion once in `SpellCastAnimationMap`.
 
 ## Validation
 
@@ -235,7 +235,7 @@ The current combat authoring validator is the `combat_authoring_graph_validates_
 - `melee-action-id-matches-authored-strike`: a melee ability `action_id` does not match an authored strike id for the class combat profile. Fix the ability row to point at the authored strike id, or author/export the missing strike.
 - `melee-action-id-not-runtime-slot`: a melee ability points at runtime slot plumbing. Use the authored strike id in progression; runtime slot ids stay internal.
 - `spell-action-id-resolves-to-spell`: a spell ability cannot derive a runtime spell row from its `gameplay` block. Fix `gameplay.kind`, `action_id`, or `gameplay.delivery`.
-- `selectable-spell-has-animation-entry`: a selectable spell lacks a combat animation set spell entry for the exposing class profile. Add the entry to the relevant `Assets/Arena/Resources/CombatAnimationSets/*.asset`.
+- `selectable-spell-has-animation-entry`: a selectable spell lacks a semantic/fixed map assignment, or the exposing combat set lacks the assigned motion binding. Fix `SpellCastAnimationMap.asset` or the relevant `CombatAnimationSet.spellCastMotionBindings`.
 - `auto-attack-replacement-resolves`: an auto-attack replacement ability points at a missing replacement row or a replacement row for the wrong combat profile. Fix the ability `action_id` or the replacement row.
 - `auto-attack-replacement-strike-matches-authored-strike`: an auto-attack replacement row references a strike id that does not exist in the class combat profile. Use an authored strike id from the combat animation set, not runtime slot plumbing.
 - `default-loadout-assignment-resolves`: a default loadout assignment references an unknown class, unknown slot, unknown ability, wrong-class ability, slot-incompatible ability, duplicate class/slot pair, or unsupported fixed action. Fix the assignment's slot and ActionRef target.
@@ -255,6 +255,7 @@ These examples use current Warrior and Paladin rows as patterns. They are not ne
 
 Files involved:
 
+- `Assets/Arena/Resources/SpellCastAnimationMap.asset`
 - `Assets/Arena/Resources/CombatAnimationSets/TwoHandedSword.asset`
 - `server/src/melee_manifest.shared.json`
 - `server/src/progression_catalog.shared.json`
@@ -293,7 +294,7 @@ Authoring path:
    - `delivery.kind`: `APPLY_STATUS`
    - self-buff payload under `gameplay.delivery.status`
 3. The runtime spell catalog derives a `MOMENTUM` spell row from that ability gameplay.
-4. The greatsword combat animation set contains a spell animation entry for `MOMENTUM`, because Warrior derives to `TWO_HANDED_SWORD`.
+4. `SpellCastAnimationMap` classifies `MOMENTUM` as `Call`; the greatsword combat set maps `Call` to its selected cast family.
 5. `ABILITY` and `SPELL` presentation rows provide player-facing display data.
 6. A default loadout assignment places `WARRIOR_MOMENTUM` in a loadout slot through ability placement.
 
