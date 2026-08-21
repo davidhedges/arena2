@@ -50,6 +50,7 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Col<MeleeGapCloseCatalog, string> CollisionPolicy { get; }
         public global::SpacetimeDB.Col<MeleeGapCloseCatalog, bool> RequireArrivalForSwing { get; }
         public global::SpacetimeDB.Col<MeleeGapCloseCatalog, bool> RequiresTargetFacing { get; }
+        public global::SpacetimeDB.Col<MeleeGapCloseCatalog, bool> ActivateOutsideImpactReach { get; }
 
         public MeleeGapCloseCatalogCols(string tableName)
         {
@@ -63,6 +64,7 @@ namespace Arena.MatchDb
             CollisionPolicy = new global::SpacetimeDB.Col<MeleeGapCloseCatalog, string>(tableName, "collision_policy");
             RequireArrivalForSwing = new global::SpacetimeDB.Col<MeleeGapCloseCatalog, bool>(tableName, "require_arrival_for_swing");
             RequiresTargetFacing = new global::SpacetimeDB.Col<MeleeGapCloseCatalog, bool>(tableName, "requires_target_facing");
+            ActivateOutsideImpactReach = new global::SpacetimeDB.Col<MeleeGapCloseCatalog, bool>(tableName, "activate_outside_impact_reach");
         }
     }
 

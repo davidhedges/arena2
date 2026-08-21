@@ -163,6 +163,7 @@ const GAP_CLOSE_DESTINATION_TARGET_SIDE_RIGHT: &str = "TARGET_SIDE_RIGHT";
 const GAP_CLOSE_DESTINATION_CURRENT_LINE: &str = "CURRENT_LINE";
 const GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH: &str = "REQUIRE_CLEAR_PATH";
 const MELEE_GAP_CLOSE_KIND_PREFIX: &str = "MELEE_GAP_CLOSE";
+const MELEE_SEQUENCE_IMPACT_REACH_GAP_CLOSE_ACTIVE: &str = "IMPACT_REACH_GAP_CLOSE_ACTIVE";
 const MELEE_GAP_CLOSE_LEAP_ARC_HEIGHT_PER_METER: f32 = 0.08;
 const MELEE_GAP_CLOSE_LEAP_MAX_ARC_HEIGHT_METERS: f32 = 0.75;
 const MELEE_TARGET_FACING_ARC_RADIANS: f32 = std::f32::consts::PI;
@@ -509,6 +510,17 @@ impl AirborneTargetingMode {
 #[serde(deny_unknown_fields)]
 struct StrikeHitWindowData {
     impact_delay_ms: u64,
+    #[serde(default)]
+    impact_phase: String,
+    #[serde(default)]
+    phase_delay_ms: u64,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StrikePhasedGapCloseTimingData {
+    start_duration_ms: u64,
+    loop_duration_ms: u64,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -569,6 +581,8 @@ struct StrikeData {
     aerial_execution_mode: AerialExecutionMode,
     #[serde(default)]
     projectile: Option<StrikeProjectileData>,
+    #[serde(default)]
+    phased_gap_close_timing: Option<StrikePhasedGapCloseTimingData>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2301,8 +2315,17 @@ fn melee_gap_close_for_ability(
 fn gap_close_activation_satisfied(
     gap_close: &MeleeGapCloseCatalog,
     target_is_disabled: bool,
+    horizontal_distance: f32,
+    target_hit_radius: f32,
 ) -> bool {
-    gap_close.kind.as_str() != GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED || target_is_disabled
+    if gap_close.kind.as_str() == GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED
+        && !target_is_disabled
+    {
+        return false;
+    }
+
+    !gap_close.activate_outside_impact_reach
+        || horizontal_distance > gap_close.impact_range.max(0.0) + target_hit_radius.max(0.0)
 }
 
 fn inactive_conditional_gap_close_range(
@@ -2658,6 +2681,74 @@ fn scheduled_melee_impact_at(
         .map(|gap_close| now + Duration::from_millis(gap_close.duration_ms))
         .unwrap_or(now);
     authored_impact_at.max(arrival_at)
+}
+
+fn distance_scaled_gap_close_impact_delay_ms(
+    strike: &StrikeData,
+    hit_window: &StrikeHitWindowData,
+    gap_close: Option<&MeleeGapCloseCatalog>,
+    gap_close_active: bool,
+    resolved_gap_close: Option<ResolvedMeleeGapClose>,
+    horizontal_distance: f32,
+    target_hit_radius: f32,
+) -> u64 {
+    let Some(gap_close) = gap_close.filter(|gap_close| gap_close.activate_outside_impact_reach)
+    else {
+        return hit_window.impact_delay_ms;
+    };
+    let Some(timing) = strike.phased_gap_close_timing else {
+        return hit_window.impact_delay_ms;
+    };
+    if !hit_window.impact_phase.eq_ignore_ascii_case("END") {
+        return hit_window.impact_delay_ms;
+    }
+
+    let pre_end_duration_ms = if gap_close_active {
+        resolved_gap_close
+            .map(|resolved| resolved.duration_ms)
+            .unwrap_or(0)
+            .max(timing.start_duration_ms)
+    } else {
+        let impact_reach = gap_close.impact_range.max(0.0) + target_hit_radius.max(0.0);
+        let loop_scale = if impact_reach > 0.001 {
+            (horizontal_distance.max(0.0) / impact_reach).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        (timing.loop_duration_ms as f32 * loop_scale).round() as u64
+    };
+
+    pre_end_duration_ms.saturating_add(hit_window.phase_delay_ms)
+}
+
+fn resolved_melee_impact_delays(
+    strike: &StrikeData,
+    authored_impact_delays_ms: &[u64],
+    gap_close: Option<&MeleeGapCloseCatalog>,
+    gap_close_active: bool,
+    resolved_gap_close: Option<ResolvedMeleeGapClose>,
+    horizontal_distance: f32,
+    target_hit_radius: f32,
+) -> Vec<u64> {
+    strike
+        .hit_windows
+        .iter()
+        .zip(authored_impact_delays_ms.iter().copied())
+        .map(|(hit_window, authored_delay_ms)| {
+            if gap_close.is_none() || strike.phased_gap_close_timing.is_none() {
+                return authored_delay_ms;
+            }
+            distance_scaled_gap_close_impact_delay_ms(
+                strike,
+                hit_window,
+                gap_close,
+                gap_close_active,
+                resolved_gap_close,
+                horizontal_distance,
+                target_hit_radius,
+            )
+        })
+        .collect()
 }
 
 fn pending_melee_impact_range(
@@ -3917,10 +4008,16 @@ fn perform_melee_attack_for_internal(
                 ActionRejectReason::InvalidTarget,
             ));
         }
+        let activation_dx = target_snapshot.pos_x - caster_phys.pos_x;
+        let activation_dz = target_snapshot.pos_z - caster_phys.pos_z;
+        let activation_horizontal_distance =
+            (activation_dx * activation_dx + activation_dz * activation_dz).sqrt();
         if let Some(gap_close) = gap_close.as_ref() {
             gap_close_active = gap_close_activation_satisfied(
                 gap_close,
                 has_active_disabling_status(ctx, target, now),
+                activation_horizontal_distance,
+                target_snapshot.hit_radius,
             );
             if !gap_close_active {
                 resolved_effective_range =
@@ -4137,6 +4234,26 @@ fn perform_melee_attack_for_internal(
             ActionRejectReason::GapCloseBlocked,
         ));
     }
+
+    let (impact_cast_distance, impact_target_hit_radius) = target_context
+        .as_ref()
+        .map(|(_, target_snapshot, _, _, horizontal_distance)| {
+            (*horizontal_distance, target_snapshot.hit_radius)
+        })
+        .unwrap_or((0.0, 0.0));
+    let resolved_impact_delays_ms = if gameplay.channel.is_none() {
+        resolved_melee_impact_delays(
+            &strike,
+            impact_delays_ms.as_slice(),
+            gap_close.as_ref(),
+            gap_close_active,
+            resolved_gap_close,
+            impact_cast_distance,
+            impact_target_hit_radius,
+        )
+    } else {
+        impact_delays_ms.clone()
+    };
 
     if let Some(resolved_cost) = action_resource_cost.as_ref() {
         if !pay_action_resource_cost(ctx, caster, &resolved_cost.cost, now) {
@@ -4365,10 +4482,18 @@ fn perform_melee_attack_for_internal(
         max_distance: resolved_effective_range,
         scalar_kind: COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS.to_string(),
         scalar_value: gameplay.channel.map_or_else(
-            || impact_delays_ms.last().copied().unwrap_or(0) as f32 / 1000.0,
+            || resolved_impact_delays_ms.last().copied().unwrap_or(0) as f32 / 1000.0,
             |channel| channel.duration_ms as f32 / 1000.0,
         ),
-        sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
+        sequence_kind: if gap_close
+            .as_ref()
+            .is_some_and(|gap_close| gap_close.activate_outside_impact_reach)
+            && gap_close_active
+        {
+            MELEE_SEQUENCE_IMPACT_REACH_GAP_CLOSE_ACTIVE.to_string()
+        } else {
+            COMBAT_SEQUENCE_NONE.to_string()
+        },
         sequence_index: 0,
         sequence_count: 0,
         point_x: target_point_x,
@@ -4382,7 +4507,7 @@ fn perform_melee_attack_for_internal(
         metadata_value: cast_metadata_value.to_string(),
     });
 
-    for (hit_index, impact_delay_ms) in impact_delays_ms.iter().copied().enumerate() {
+    for (hit_index, impact_delay_ms) in resolved_impact_delays_ms.iter().copied().enumerate() {
         let impact_at = scheduled_melee_impact_at(now, impact_delay_ms, resolved_gap_close);
         let active_until = impact_at;
         let recovery_until = active_until + Duration::from_millis(strike.recovery_ms);
@@ -6597,7 +6722,8 @@ mod tests {
         auto_attack_catalog_resolution_keys, auto_attack_reference_for_profile,
         auto_attack_sequence_step_for_profile, canonical_slot_id, combo_input_decision,
         default_aerial_execution_mode, find_combo_root_for_authorization,
-        gap_close_activation_satisfied, gap_close_arc_height, gap_close_destination_within_epsilon,
+        distance_scaled_gap_close_impact_delay_ms, gap_close_activation_satisfied,
+        gap_close_arc_height, gap_close_destination_within_epsilon,
         gap_close_has_horizontal_travel, gap_close_movement_facing, gap_close_pre_commit_decision,
         gap_close_target_facing_satisfied, inactive_conditional_gap_close_range,
         melee_channel_movement_canceled, melee_channel_tick_delays,
@@ -6615,7 +6741,8 @@ mod tests {
         AirborneTargetingMode, ComboInputDecision, GapCloseActorSnapshot,
         GapClosePreCommitDecision, MeleeAuthorization, PendingMeleeImpact,
         ResolvedMeleeAttackModifiers, ResolvedMeleeGapClose, ResolvedMeleeTargeting, SpellVec3,
-        StaggerDirection, StrikeData, StrikeHitWindowData, DAGGER_COUP_DE_GRACE_ABILITY_ID,
+        StaggerDirection, StrikeData, StrikeHitWindowData, StrikePhasedGapCloseTimingData,
+        DAGGER_COUP_DE_GRACE_ABILITY_ID,
         GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH, GAP_CLOSE_DESTINATION_BEHIND_TARGET,
         GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT, GAP_CLOSE_KIND_LEAP, GAP_CLOSE_KIND_LINEAR,
         GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED, MELEE_GAP_CLOSE_LEAP_MAX_ARC_HEIGHT_METERS,
@@ -6835,6 +6962,53 @@ mod tests {
             "melee manifest must contain the default combat profile {}",
             DEFAULT_COMBAT_PROFILE
         );
+    }
+
+    #[test]
+    fn dagger_impact_reach_gap_closers_keep_phase_local_hit_timing() {
+        let profile = melee_manifest()
+            .profiles
+            .iter()
+            .find(|profile| profile.combat_profile == "DAGGERS")
+            .expect("DAGGERS profile must exist");
+
+        for (strike_id, impact_delay_ms, phase_delay_ms, start_ms, loop_ms) in [
+            ("DAGGER_DEATH_CROSS", 628, 238, 140, 250),
+            ("DAGGER_DIVING_STRIKE", 684, 70, 280, 333),
+        ] {
+            let strike = profile
+                .strikes
+                .iter()
+                .find(|strike| strike.id == strike_id)
+                .unwrap_or_else(|| panic!("{strike_id} must exist"));
+            let timing = strike
+                .phased_gap_close_timing
+                .unwrap_or_else(|| panic!("{strike_id} must author phased gap-close timing"));
+
+            assert_eq!(timing.start_duration_ms, start_ms, "{strike_id}");
+            assert_eq!(timing.loop_duration_ms, loop_ms, "{strike_id}");
+            assert_eq!(strike.hit_windows.len(), 1, "{strike_id}");
+            assert_eq!(
+                strike.hit_windows[0].impact_delay_ms, impact_delay_ms,
+                "{strike_id}"
+            );
+            assert_eq!(strike.hit_windows[0].impact_phase, "END", "{strike_id}");
+            assert_eq!(
+                strike.hit_windows[0].phase_delay_ms, phase_delay_ms,
+                "{strike_id}"
+            );
+        }
+
+        let coup = profile
+            .strikes
+            .iter()
+            .find(|strike| strike.id == DAGGER_COUP_DE_GRACE_ABILITY_ID)
+            .expect("DAGGER_COUP_DE_GRACE must exist");
+        assert!(coup.phased_gap_close_timing.is_none());
+        assert!(coup
+            .hit_windows
+            .iter()
+            .all(|window| window.impact_phase.is_empty()));
     }
 
     #[test]
@@ -7782,9 +7956,13 @@ mod tests {
             hit_windows: vec![
                 StrikeHitWindowData {
                     impact_delay_ms: 100,
+                    impact_phase: String::new(),
+                    phase_delay_ms: 0,
                 },
                 StrikeHitWindowData {
                     impact_delay_ms: 200,
+                    impact_phase: String::new(),
+                    phase_delay_ms: 0,
                 },
             ],
             recovery_ms: 250,
@@ -7794,6 +7972,7 @@ mod tests {
             combo_grace_ms: 0,
             aerial_execution_mode: default_aerial_execution_mode(),
             projectile: None,
+            phased_gap_close_timing: None,
         };
 
         let resolved = resolved_hit_window_damages(&strike, 31);
@@ -7840,12 +8019,18 @@ mod tests {
             hit_windows: vec![
                 StrikeHitWindowData {
                     impact_delay_ms: 320,
+                    impact_phase: String::new(),
+                    phase_delay_ms: 0,
                 },
                 StrikeHitWindowData {
                     impact_delay_ms: 1503,
+                    impact_phase: String::new(),
+                    phase_delay_ms: 0,
                 },
                 StrikeHitWindowData {
                     impact_delay_ms: 2743,
+                    impact_phase: String::new(),
+                    phase_delay_ms: 0,
                 },
             ],
             recovery_ms: 250,
@@ -7855,6 +8040,7 @@ mod tests {
             combo_grace_ms: 0,
             aerial_execution_mode: default_aerial_execution_mode(),
             projectile: None,
+            phased_gap_close_timing: None,
         };
 
         assert_eq!(
@@ -7963,6 +8149,8 @@ mod tests {
                         slot_id: "authored_slot".to_string(),
                         hit_windows: vec![StrikeHitWindowData {
                             impact_delay_ms: 100,
+                            impact_phase: String::new(),
+                            phase_delay_ms: 0,
                         }],
                         recovery_ms: 250,
                         is_gap_closer: false,
@@ -7971,12 +8159,15 @@ mod tests {
                         combo_grace_ms: 0,
                         aerial_execution_mode: default_aerial_execution_mode(),
                         projectile: None,
+                        phased_gap_close_timing: None,
                     },
                     StrikeData {
                         id: "OTHER_STRIKE".to_string(),
                         slot_id: "utility_1".to_string(),
                         hit_windows: vec![StrikeHitWindowData {
                             impact_delay_ms: 100,
+                            impact_phase: String::new(),
+                            phase_delay_ms: 0,
                         }],
                         recovery_ms: 250,
                         is_gap_closer: false,
@@ -7985,6 +8176,7 @@ mod tests {
                         combo_grace_ms: 0,
                         aerial_execution_mode: default_aerial_execution_mode(),
                         projectile: None,
+                        phased_gap_close_timing: None,
                     },
                 ]
             })
@@ -8294,6 +8486,7 @@ mod tests {
             collision_policy: GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH.to_string(),
             require_arrival_for_swing: true,
             requires_target_facing: false,
+            activate_outside_impact_reach: false,
         }
     }
 
@@ -8313,8 +8506,8 @@ mod tests {
         let mut gap = test_gap_close(GAP_CLOSE_DESTINATION_BEHIND_TARGET);
         gap.kind = GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED.to_string();
 
-        assert!(!gap_close_activation_satisfied(&gap, false));
-        assert!(gap_close_activation_satisfied(&gap, true));
+        assert!(!gap_close_activation_satisfied(&gap, false, 10.0, 0.5));
+        assert!(gap_close_activation_satisfied(&gap, true, 10.0, 0.5));
         assert_eq!(inactive_conditional_gap_close_range(12.0, &gap), 2.5);
     }
 
@@ -8322,8 +8515,96 @@ mod tests {
     fn unconditional_gap_close_preserves_existing_activation() {
         let gap = test_gap_close(GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT);
 
-        assert!(gap_close_activation_satisfied(&gap, false));
-        assert!(gap_close_activation_satisfied(&gap, true));
+        assert!(gap_close_activation_satisfied(&gap, false, 1.0, 0.5));
+        assert!(gap_close_activation_satisfied(&gap, true, 10.0, 0.5));
+    }
+
+    #[test]
+    fn impact_reach_activated_gap_close_moves_only_beyond_impact_contact_distance() {
+        let mut gap = test_gap_close(GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT);
+        gap.activate_outside_impact_reach = true;
+
+        assert!(!gap_close_activation_satisfied(&gap, false, 3.0, 0.5));
+        assert!(gap_close_activation_satisfied(&gap, false, 3.01, 0.5));
+    }
+
+    #[test]
+    fn impact_reach_phased_timing_scales_close_loop_and_uses_start_for_gap_close() {
+        let mut gap = test_gap_close(GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT);
+        gap.activate_outside_impact_reach = true;
+        let strike = StrikeData {
+            id: "TEST_ADAPTIVE_GAP_CLOSE".to_string(),
+            slot_id: "utility_1".to_string(),
+            hit_windows: vec![StrikeHitWindowData {
+                impact_delay_ms: 680,
+                impact_phase: "END".to_string(),
+                phase_delay_ms: 70,
+            }],
+            recovery_ms: 250,
+            is_gap_closer: false,
+            combo_from: None,
+            combo_open_ms: 0,
+            combo_grace_ms: 0,
+            aerial_execution_mode: default_aerial_execution_mode(),
+            projectile: None,
+            phased_gap_close_timing: Some(StrikePhasedGapCloseTimingData {
+                start_duration_ms: 280,
+                loop_duration_ms: 330,
+            }),
+        };
+        let hit_window = &strike.hit_windows[0];
+
+        assert_eq!(
+            distance_scaled_gap_close_impact_delay_ms(
+                &strike,
+                hit_window,
+                Some(&gap),
+                false,
+                None,
+                1.5,
+                0.5,
+            ),
+            235,
+            "half of the impact reach plays half of Loop before the stamped End hit"
+        );
+
+        let short_gap_close = ResolvedMeleeGapClose {
+            end: SpellVec3::new(0.0, 0.0, 0.1),
+            duration_ms: 40,
+            impact_range: gap.impact_range,
+            arc_height: 0.0,
+        };
+        assert_eq!(
+            distance_scaled_gap_close_impact_delay_ms(
+                &strike,
+                hit_window,
+                Some(&gap),
+                true,
+                Some(short_gap_close),
+                3.1,
+                0.5,
+            ),
+            350,
+            "a moving cast always completes Start before entering Loop and the stamped End hit"
+        );
+
+        let long_gap_close = ResolvedMeleeGapClose {
+            duration_ms: 500,
+            ..short_gap_close
+        };
+        assert_eq!(
+            distance_scaled_gap_close_impact_delay_ms(
+                &strike,
+                hit_window,
+                Some(&gap),
+                true,
+                Some(long_gap_close),
+                10.0,
+                0.5,
+            ),
+            570,
+            "Loop holds until the baked movement duration before the stamped End hit"
+        );
     }
 
     #[test]

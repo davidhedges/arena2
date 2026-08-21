@@ -27,6 +27,7 @@ namespace Arena.EditModeTests
         private const string ControllerTypeName = "Arena.Presentation.CombatActionPlaybackController";
         private const string PhaseTypeName = "Arena.Presentation.PhasedMeleePlaybackPhase";
         private const string AuthorityTypeName = "Arena.Presentation.CombatAnimationAuthority";
+        private const string GeometryTypeName = "Arena.Combat.MeleeStrikeGeometry";
 
         // Mirror PlayerAnimator's authored thresholds so the cases pin the
         // shipped policy, not arbitrary numbers.
@@ -38,6 +39,81 @@ namespace Arena.EditModeTests
         private static readonly Type ControllerType = RequireRuntimeType(ControllerTypeName);
         private static readonly Type PhaseType = RequireRuntimeType(PhaseTypeName);
         private static readonly Type AuthorityType = RequireRuntimeType(AuthorityTypeName);
+        private static readonly Type GeometryType = RequireRuntimeType(GeometryTypeName);
+
+        [Test]
+        public void ImpactReachActivationAndLoopScaleShareTheContactBoundary()
+        {
+            Assert.That(
+                (bool)RequireMethod(
+                        GeometryType,
+                        "ShouldActivateGapCloseOutsideImpactReach",
+                        typeof(float),
+                        typeof(float),
+                        typeof(float))
+                    .Invoke(null, new object[] { 3f, 2.5f, 0.5f })!,
+                Is.False);
+            Assert.That(
+                (bool)RequireMethod(
+                        GeometryType,
+                        "ShouldActivateGapCloseOutsideImpactReach",
+                        typeof(float),
+                        typeof(float),
+                        typeof(float))
+                    .Invoke(null, new object[] { 3.01f, 2.5f, 0.5f })!,
+                Is.True);
+            Assert.That(
+                (float)RequireMethod(
+                        GeometryType,
+                        "ImpactReachLoopScale",
+                        typeof(float),
+                        typeof(float),
+                        typeof(float))
+                    .Invoke(null, new object[] { 1.5f, 2.5f, 0.5f })!,
+                Is.EqualTo(0.5f).Within(0.001f));
+        }
+
+        [Test]
+        public void CloseImpactReachPlayback_StartsAtLoopAndUsesRequestedFraction()
+        {
+            object controller = Activator.CreateInstance(ControllerType)!;
+            AnimationClip start = CreateOneSecondClip();
+            AnimationClip loop = CreateOneSecondClip();
+            AnimationClip end = CreateOneSecondClip();
+
+            try
+            {
+                RequireMethod(
+                        ControllerType,
+                        "BeginPhasedMelee",
+                        typeof(int),
+                        typeof(AnimationClip),
+                        typeof(AnimationClip),
+                        typeof(AnimationClip),
+                        typeof(bool),
+                        typeof(bool),
+                        typeof(bool),
+                        typeof(bool),
+                        typeof(float))
+                    .Invoke(
+                        controller,
+                        new object[] { 1, start, loop, end, false, false, false, true, 0.25f });
+
+                Assert.That(GetBool(controller, "PhasedMeleeStartsAtLoop"), Is.True);
+                SetSegment(controller, "Loop", stateHash: 22, phaseLengthSeconds: 1f);
+
+                Assert.That(ResolveTimeDrivenTransition(controller, 0.24f).Transitioned, Is.False);
+                var atRequestedExit = ResolveTimeDrivenTransition(controller, 0.25f);
+                Assert.That(atRequestedExit.Transitioned, Is.True);
+                Assert.That(atRequestedExit.NextPhase, Is.EqualTo("End"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(start);
+                UnityEngine.Object.DestroyImmediate(loop);
+                UnityEngine.Object.DestroyImmediate(end);
+            }
+        }
 
         // -------------------------------------------------------------------
         // Handoff math: predicted windup elapsed → track-sampling segment/offset
@@ -430,6 +506,32 @@ namespace Arena.EditModeTests
                     activeIsSpecialMovementDriven,
                     activeEndRequested,
                 })!;
+        }
+
+        private static (bool Transitioned, string NextPhase, bool ShouldCancel) ResolveTimeDrivenTransition(
+            object controller,
+            float normalizedTime)
+        {
+            MethodInfo method = RequireMethod(
+                ControllerType,
+                "TryResolvePhasedMeleeTransition",
+                typeof(float),
+                typeof(float),
+                typeof(float),
+                typeof(float),
+                PhaseType.MakeByRefType(),
+                typeof(bool).MakeByRefType());
+            object?[] args =
+            {
+                normalizedTime,
+                StartOnlyEndTriggerNormalizedTime,
+                SegmentTransitionNormalizedTime,
+                EndCompleteNormalizedTime,
+                Enum.Parse(PhaseType, "None"),
+                false,
+            };
+            bool transitioned = (bool)method.Invoke(controller, args)!;
+            return (transitioned, args[4]!.ToString()!, (bool)args[5]!);
         }
 
         private static bool CanReleaseLowerBody(

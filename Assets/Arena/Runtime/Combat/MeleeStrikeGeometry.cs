@@ -26,6 +26,29 @@ namespace Arena.Combat
         public static float MinimumContactDistance(float minimumRange, float targetRadius)
             => minimumRange + Mathf.Max(0f, targetRadius);
 
+        public static float ImpactReachLoopScale(
+            float horizontalDistance,
+            float impactRange,
+            float targetRadius)
+        {
+            float impactContactDistance = MaximumContactDistance(
+                Mathf.Max(0f, impactRange),
+                targetRadius);
+            return impactContactDistance > 0.001f
+                ? Mathf.Clamp01(Mathf.Max(0f, horizontalDistance) / impactContactDistance)
+                : 1f;
+        }
+
+        public static bool ShouldActivateGapCloseOutsideImpactReach(
+            float horizontalDistance,
+            float impactRange,
+            float targetRadius)
+        {
+            return horizontalDistance > MaximumContactDistance(
+                Mathf.Max(0f, impactRange),
+                targetRadius);
+        }
+
         /// <summary>
         /// Combined range gate: inside the strike's reach and, when a minimum
         /// range is authored, outside it. Boundary values pass, matching the

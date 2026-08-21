@@ -7424,7 +7424,6 @@
         "base_damage": 44,
         "applies_stagger": false,
         "range": 12,
-        "minimum_range": 4,
         "cooldown_ms": 1400,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -7439,7 +7438,8 @@
           "impact_range": 2.5,
           "collision_policy": "STOP_AT_BLOCK",
           "require_arrival_for_swing": true,
-          "requires_target_facing": false
+          "requires_target_facing": false,
+          "activate_outside_impact_reach": true
         }
       }
     },
@@ -7461,7 +7461,6 @@
         "base_damage": 50,
         "applies_stagger": false,
         "range": 12,
-        "minimum_range": 4,
         "cooldown_ms": 2200,
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
@@ -7476,7 +7475,8 @@
           "impact_range": 2.5,
           "collision_policy": "STOP_AT_BLOCK",
           "require_arrival_for_swing": true,
-          "requires_target_facing": false
+          "requires_target_facing": false,
+          "activate_outside_impact_reach": true
         }
       }
     },

@@ -2769,6 +2769,14 @@ namespace Arena.Editor
                     if (projectileProperty < 0)
                         strike.projectile = null;
 
+                    int phasedGapCloseTimingProperty = json.IndexOf(
+                        "\"phased_gap_close_timing\"",
+                        objectStart,
+                        objectEnd - objectStart + 1,
+                        StringComparison.Ordinal);
+                    if (phasedGapCloseTimingProperty < 0)
+                        strike.phased_gap_close_timing = null;
+
                     searchStart = objectEnd + 1;
                 }
             }
@@ -2911,12 +2919,30 @@ namespace Arena.Editor
             AppendJsonProperty(builder, indent + 1, "combo_from", strike.combo_from, trailingComma: true);
             AppendJsonProperty(builder, indent + 1, "combo_open_ms", strike.combo_open_ms, trailingComma: true);
             AppendJsonProperty(builder, indent + 1, "combo_grace_ms", strike.combo_grace_ms, trailingComma: true);
-            AppendJsonProperty(builder, indent + 1, "aerial_execution_mode", strike.aerial_execution_mode, trailingComma: strike.projectile != null);
+            bool hasPhasedGapCloseTiming = strike.phased_gap_close_timing != null;
+            AppendJsonProperty(
+                builder,
+                indent + 1,
+                "aerial_execution_mode",
+                strike.aerial_execution_mode,
+                trailingComma: strike.projectile != null || hasPhasedGapCloseTiming);
             if (strike.projectile != null)
             {
                 AppendIndent(builder, indent + 1);
                 builder.Append("\"projectile\": {\n");
                 AppendMeleeManifestProjectile(builder, strike.projectile, indent + 2);
+                AppendIndent(builder, indent + 1);
+                builder.Append(hasPhasedGapCloseTiming ? "},\n" : "}\n");
+            }
+
+            if (hasPhasedGapCloseTiming)
+            {
+                AppendIndent(builder, indent + 1);
+                builder.Append("\"phased_gap_close_timing\": {\n");
+                AppendMeleeManifestPhasedGapCloseTiming(
+                    builder,
+                    strike.phased_gap_close_timing!,
+                    indent + 2);
                 AppendIndent(builder, indent + 1);
                 builder.Append("}\n");
             }
@@ -2929,9 +2955,29 @@ namespace Arena.Editor
         {
             AppendIndent(builder, indent);
             builder.Append("{\n");
-            AppendJsonProperty(builder, indent + 1, "impact_delay_ms", hitWindow.impact_delay_ms, trailingComma: false);
+            bool hasPhaseTiming = !string.IsNullOrWhiteSpace(hitWindow.impact_phase);
+            AppendJsonProperty(
+                builder,
+                indent + 1,
+                "impact_delay_ms",
+                hitWindow.impact_delay_ms,
+                trailingComma: hasPhaseTiming);
+            if (hasPhaseTiming)
+            {
+                AppendJsonProperty(builder, indent + 1, "impact_phase", hitWindow.impact_phase, trailingComma: true);
+                AppendJsonProperty(builder, indent + 1, "phase_delay_ms", hitWindow.phase_delay_ms, trailingComma: false);
+            }
             AppendIndent(builder, indent);
             builder.Append('}');
+        }
+
+        private static void AppendMeleeManifestPhasedGapCloseTiming(
+            StringBuilder builder,
+            MeleeManifestPhasedGapCloseTiming timing,
+            int indent)
+        {
+            AppendJsonProperty(builder, indent, "start_duration_ms", timing.start_duration_ms, trailingComma: true);
+            AppendJsonProperty(builder, indent, "loop_duration_ms", timing.loop_duration_ms, trailingComma: false);
         }
 
         private static void AppendMeleeManifestProjectile(StringBuilder builder, MeleeManifestProjectile projectile, int indent)

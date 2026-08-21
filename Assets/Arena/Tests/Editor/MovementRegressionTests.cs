@@ -823,6 +823,10 @@ namespace Arena.Tests.Editor
             Assert.That(
                 (bool)phasedEntryType.GetField("drivePhasesFromSpecialMovement")!.GetValue(phasedEntry)!,
                 Is.True);
+            Assert.That(
+                (bool)phasedEntryType.GetField("scaleGapClosePhasesFromImpactReach")!.GetValue(phasedEntry)!,
+                Is.False,
+                "Coup de Grace keeps its existing conditional teleport presentation");
 
             object?[] clipSetArgs = { true, null };
             bool resolved = (bool)RequireMethod(
@@ -853,6 +857,9 @@ namespace Arena.Tests.Editor
                 GetExportedStrikes(export),
                 "DAGGER_COUP_DE_GRACE");
             Assert.That(GetImpactDelayMs(strike), Is.EqualTo(new[] { 60, 60 }));
+            Assert.That(
+                strike.GetType().GetField("phased_gap_close_timing")!.GetValue(strike),
+                Is.Null);
         }
 
         [Test]
@@ -982,7 +989,6 @@ namespace Arena.Tests.Editor
                 ("DAGGER_PRECISION_STRIKE", "Combo_Attack_05_01"),
                 ("DAGGER_EVISCERATE", "Combo_Attack_05_02"),
                 ("DAGGER_VITAL_STRIKE", "Execution_03"),
-                ("DAGGER_DEATH_CROSS", "Attack_Air_to_Floor_02_End"),
                 ("DAGGER_DISEMBOWEL", "Attack_Up_01"),
             })
             {
@@ -992,26 +998,46 @@ namespace Arena.Tests.Editor
             }
 
             AssertPhasedEntry(
+                "DAGGER_DEATH_CROSS",
+                "Attack_Air_to_Floor_02_Start",
+                "Attack_Air_to_Floor_02_Loop",
+                "Attack_Air_to_Floor_02_End",
+                specialMovementDriven: true,
+                combatLifecycleDriven: false,
+                impactReachScaled: true);
+            AssertPhasedEntry(
                 "DAGGER_DIVING_STRIKE",
                 "Attack_Air_to_Floor_03_Start",
                 "Attack_Air_to_Floor_03_Loop",
                 "Attack_Air_to_Floor_03_End",
                 specialMovementDriven: true,
-                combatLifecycleDriven: false);
+                combatLifecycleDriven: false,
+                impactReachScaled: true);
             AssertPhasedEntry(
                 "DAGGER_FLAY",
                 "Skill_04_Start",
                 "Skill_04_Loop",
                 "Skill_04_End",
                 specialMovementDriven: false,
-                combatLifecycleDriven: true);
+                combatLifecycleDriven: true,
+                impactReachScaled: false);
+
+            object export = InvokeInstanceMethod(instance, "BuildMeleeExport");
+            object deathCross = FindExportedStrike(GetExportedStrikes(export), "DAGGER_DEATH_CROSS");
+            object divingStrike = FindExportedStrike(GetExportedStrikes(export), "DAGGER_DIVING_STRIKE");
+            Assert.That(GetImpactDelayMs(deathCross), Is.EqualTo(new[] { 628 }));
+            Assert.That(GetImpactDelayMs(divingStrike), Is.EqualTo(new[] { 684 }));
+            AssertPhasedTiming(deathCross, expectedStartMs: 140, expectedLoopMs: 250);
+            AssertPhasedTiming(divingStrike, expectedStartMs: 280, expectedLoopMs: 333);
+
             void AssertPhasedEntry(
                 string actionId,
                 string expectedStart,
                 string expectedLoop,
                 string expectedEnd,
                 bool specialMovementDriven,
-                bool combatLifecycleDriven)
+                bool combatLifecycleDriven,
+                bool impactReachScaled)
             {
                 object?[] phasedArgs = { actionId, null };
                 bool found = (bool)RequireMethod(
@@ -1030,6 +1056,10 @@ namespace Arena.Tests.Editor
                 Assert.That(
                     (bool)phasedEntryType.GetField("drivePhasesFromCombatLifecycle")!.GetValue(entry)!,
                     Is.EqualTo(combatLifecycleDriven),
+                    actionId);
+                Assert.That(
+                    (bool)phasedEntryType.GetField("scaleGapClosePhasesFromImpactReach")!.GetValue(entry)!,
+                    Is.EqualTo(impactReachScaled),
                     actionId);
 
                 object?[] clipSetArgs = { true, null };
@@ -1054,6 +1084,18 @@ namespace Arena.Tests.Editor
                     ((AnimationClip)resolvedPhaseSetType.GetProperty("End")!.GetValue(clipSet)!).name,
                     Is.EqualTo(expectedEnd),
                     actionId);
+            }
+
+            static void AssertPhasedTiming(object strike, int expectedStartMs, int expectedLoopMs)
+            {
+                object? timing = strike.GetType().GetField("phased_gap_close_timing")!.GetValue(strike);
+                Assert.That(timing, Is.Not.Null);
+                Assert.That(
+                    (int)timing!.GetType().GetField("start_duration_ms")!.GetValue(timing)!,
+                    Is.EqualTo(expectedStartMs));
+                Assert.That(
+                    (int)timing.GetType().GetField("loop_duration_ms")!.GetValue(timing)!,
+                    Is.EqualTo(expectedLoopMs));
             }
         }
 

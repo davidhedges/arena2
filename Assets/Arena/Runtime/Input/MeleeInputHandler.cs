@@ -178,6 +178,9 @@ namespace Arena.Input
             MeleeGapCloseCatalog? configuredGapClose =
                 ResolveGapCloseForAction(conn, entity.Identity, combatProfile, slotId);
             MeleeGapCloseCatalog? gapClose = configuredGapClose;
+            bool scalesGapClosePhasesFromImpactReach =
+                configuredGapClose?.ActivateOutsideImpactReach == true;
+            float gapCloseLoopScale = 1f;
             if (!HasResourceForMeleeAction(conn, entity, slotId, pressedActionId))
                 return false;
 
@@ -214,7 +217,13 @@ namespace Arena.Input
                         $"melee rejected: {slotId} target audience {TraceAudience(gameplay.TargetAudience)} rejects relation={relation} target={target.DisplayName}");
                 }
                 if (configuredGapClose != null
-                    && !GapCloseActivationSatisfied(conn, configuredGapClose, target.TargetIdentity, nowMs))
+                    && !GapCloseActivationSatisfied(
+                        conn,
+                        entity,
+                        configuredGapClose,
+                        target,
+                        nowMs,
+                        out gapCloseLoopScale))
                 {
                     gapClose = null;
                     ActionBarTrace.Trace(
@@ -385,8 +394,15 @@ namespace Arena.Input
                 return true;
             }
 
-            TriggerLocalStrike(entity, slotId, nowMs, token, predictedGapCloseWindup: gapClose != null);
-            if (token.IsPredicted && gapClose == null && requiresTarget)
+            TriggerLocalStrike(
+                entity,
+                slotId,
+                nowMs,
+                token,
+                predictedGapCloseWindup: gapClose != null,
+                scaleGapClosePhasesFromImpactReach: scalesGapClosePhasesFromImpactReach,
+                gapCloseLoopScale: gapCloseLoopScale);
+            if (token.IsPredicted && configuredGapClose == null && requiresTarget)
             {
                 // Predicted contact cue (feel audit F5 slice 2): schedule the
                 // advisory hit test at the authored first hit window.
@@ -512,20 +528,37 @@ namespace Arena.Input
 
         private static bool GapCloseActivationSatisfied(
             DbConnection conn,
+            PlayerEntity entity,
             MeleeGapCloseCatalog gapClose,
-            SpacetimeDB.Identity target,
-            long nowMs)
+            ICombatTargetEntity target,
+            long nowMs,
+            out float loopScale)
         {
+            loopScale = 1f;
             string kind = WireIdentifier.Normalize(gapClose.Kind);
-            if (!string.Equals(
+            if (string.Equals(
                     kind,
                     ConditionalTeleportBehindKind,
-                    System.StringComparison.Ordinal))
+                    System.StringComparison.Ordinal)
+                && !HasActiveDisablingStatus(conn, target.TargetIdentity, nowMs))
             {
-                return true;
+                return false;
             }
 
-            return HasActiveDisablingStatus(conn, target, nowMs);
+            if (!gapClose.ActivateOutsideImpactReach)
+                return true;
+
+            float horizontalDistance = MeleeStrikeGeometry.HorizontalDistance(
+                entity.GameObject.transform.position,
+                target.GetPresentationRoot().position);
+            loopScale = MeleeStrikeGeometry.ImpactReachLoopScale(
+                horizontalDistance,
+                gapClose.ImpactRange,
+                target.HitRadius);
+            return MeleeStrikeGeometry.ShouldActivateGapCloseOutsideImpactReach(
+                horizontalDistance,
+                gapClose.ImpactRange,
+                target.HitRadius);
         }
 
         private static bool HasActiveDisablingStatus(
@@ -644,7 +677,9 @@ namespace Arena.Input
             string slotId,
             long startedAtMs,
             ActionPredictionToken token,
-            bool predictedGapCloseWindup = false)
+            bool predictedGapCloseWindup = false,
+            bool scaleGapClosePhasesFromImpactReach = false,
+            float gapCloseLoopScale = 1f)
         {
             // Gap-close windups skip the combat-stance snap: movement-driven
             // phased playback owns stance flags so the base layer never enters
@@ -671,7 +706,10 @@ namespace Arena.Input
                     CombatEventSources.PlayerInput,
                     activeModifier.StatusKind,
                     activeModifier.StackGroup,
-                    drivePhasesFromSpecialMovement: predictedGapCloseWindup));
+                    drivePhasesFromSpecialMovement: predictedGapCloseWindup,
+                    scaleGapClosePhasesFromImpactReach: scaleGapClosePhasesFromImpactReach,
+                    gapCloseUsedMovementAtCast: predictedGapCloseWindup,
+                    gapCloseLoopScale: gapCloseLoopScale));
             if (token.IsPredicted)
                 RememberPredictedMeleeVisual(token, slotId, runtimeActionId, startedAtMs);
             else

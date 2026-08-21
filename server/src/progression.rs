@@ -915,6 +915,8 @@ struct GapCloseDefinition {
     require_arrival_for_swing: bool,
     #[serde(default)]
     requires_target_facing: bool,
+    #[serde(default)]
+    activate_outside_impact_reach: bool,
 }
 
 #[derive(Clone, Deserialize)]
@@ -1643,6 +1645,7 @@ pub struct MeleeGapCloseCatalog {
     pub collision_policy: String,
     pub require_arrival_for_swing: bool,
     pub requires_target_facing: bool,
+    pub activate_outside_impact_reach: bool,
 }
 
 #[table(accessor = auto_attack_catalog, public)]
@@ -4371,6 +4374,7 @@ fn sync_melee_gap_close_catalog(ctx: &ReducerContext) {
             collision_policy: normalize_identifier(gap_close.collision_policy.as_str()),
             require_arrival_for_swing: gap_close.require_arrival_for_swing,
             requires_target_facing: gap_close.requires_target_facing,
+            activate_outside_impact_reach: gap_close.activate_outside_impact_reach,
         };
         if ctx
             .db
@@ -12629,7 +12633,9 @@ mod tests {
             normalize_identifier(gap_close.destination.as_str()),
             "NEAREST_CONTACT_POINT"
         );
+        assert_eq!(ability.gameplay.minimum_range, None);
         assert!(gap_close.require_arrival_for_swing);
+        assert!(gap_close.activate_outside_impact_reach);
     }
 
     #[test]
@@ -12810,6 +12816,7 @@ mod tests {
             "STOP_AT_BLOCK"
         );
         assert!(gap_close.require_arrival_for_swing);
+        assert!(!gap_close.activate_outside_impact_reach);
     }
 
     #[test]
@@ -12841,6 +12848,7 @@ mod tests {
         );
         assert!(gap_close.require_arrival_for_swing);
         assert!(!gap_close.requires_target_facing);
+        assert!(!gap_close.activate_outside_impact_reach);
     }
 
     #[test]
@@ -12857,7 +12865,7 @@ mod tests {
             .expect("DAGGER_DEATH_CROSS must author gap_close");
 
         assert_eq!(ability.gameplay.range, Some(12.0));
-        assert_eq!(ability.gameplay.minimum_range, Some(4.0));
+        assert_eq!(ability.gameplay.minimum_range, None);
         assert_eq!(normalize_identifier(gap_close.kind.as_str()), "LEAP");
         assert_eq!(
             normalize_identifier(gap_close.destination.as_str()),
@@ -12871,6 +12879,7 @@ mod tests {
         );
         assert!(gap_close.require_arrival_for_swing);
         assert!(!gap_close.requires_target_facing);
+        assert!(gap_close.activate_outside_impact_reach);
     }
 
     #[test]

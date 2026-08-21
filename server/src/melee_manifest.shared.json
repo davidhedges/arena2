@@ -1486,7 +1486,9 @@
                     "slot_id": "dagger_death_cross_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 238
+                            "impact_delay_ms": 628,
+                            "impact_phase": "END",
+                            "phase_delay_ms": 238
                         }
                     ],
                     "recovery_ms": 350,
@@ -1494,14 +1496,20 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY"
+                    "aerial_execution_mode": "GROUNDED_ONLY",
+                    "phased_gap_close_timing": {
+                        "start_duration_ms": 140,
+                        "loop_duration_ms": 250
+                    }
                 },
                 {
                     "id": "DAGGER_DIVING_STRIKE",
                     "slot_id": "dagger_diving_strike_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 684
+                            "impact_delay_ms": 684,
+                            "impact_phase": "END",
+                            "phase_delay_ms": 70
                         }
                     ],
                     "recovery_ms": 350,
@@ -1509,7 +1517,11 @@
                     "combo_from": "",
                     "combo_open_ms": 0,
                     "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_OR_AIRBORNE"
+                    "aerial_execution_mode": "GROUNDED_OR_AIRBORNE",
+                    "phased_gap_close_timing": {
+                        "start_duration_ms": 280,
+                        "loop_duration_ms": 333
+                    }
                 },
                 {
                     "id": "DAGGER_DISEMBOWEL",

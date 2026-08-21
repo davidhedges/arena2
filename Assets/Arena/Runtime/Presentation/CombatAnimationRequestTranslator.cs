@@ -9,6 +9,7 @@ namespace Arena.Presentation
 {
     internal static class CombatAnimationRequestTranslator
     {
+        private const string ImpactReachGapCloseActiveSequence = "IMPACT_REACH_GAP_CLOSE_ACTIVE";
         public static CombatAnimationRequest BuildActorNeutralAuthoritativeFromCombatEvent(
             CombatEvent row)
         {
@@ -58,7 +59,13 @@ namespace Arena.Presentation
                     string.Equals(row.MetadataKind, CombatEventMetadataKinds.ConsumedMeleeModifier, System.StringComparison.Ordinal)
                         ? row.MetadataValue
                         : string.Empty,
-                    ShouldDriveMeleePhasesFromSpecialMovement(conn, combatProfile, row));
+                    ShouldDriveMeleePhasesFromSpecialMovement(conn, combatProfile, row),
+                    ScaleMeleeGapClosePhasesFromImpactReach(conn, combatProfile, row),
+                    string.Equals(
+                        row.SequenceKind,
+                        ImpactReachGapCloseActiveSequence,
+                        System.StringComparison.Ordinal),
+                    Mathf.Max(0f, row.ScalarValue));
             }
 
             return CombatAnimationRequest.Authoritative(
@@ -91,6 +98,24 @@ namespace Arena.Presentation
                 row.ActionKind);
             string expectedKind = $"MELEE_GAP_CLOSE:{runtimeActionId}";
             return string.Equals(runtime.Kind, expectedKind, System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool ScaleMeleeGapClosePhasesFromImpactReach(
+            DbConnection conn,
+            string combatProfile,
+            CombatEvent row)
+        {
+            MeleeGapCloseCatalog? gapClose = string.IsNullOrWhiteSpace(row.AbilityId)
+                ? null
+                : conn.Db.MeleeGapCloseCatalog.AbilityId.Find(row.AbilityId);
+            if (gapClose?.ActivateOutsideImpactReach != true)
+                return false;
+
+            CombatAnimationSet? animationSet = CombatAnimationSetCatalog.Resolve(combatProfile);
+            return animationSet != null
+                && animationSet.TryGetPhasedMeleeEntry(row.ActionKind, out WeaponPhasedActionEntry entry)
+                && entry.drivePhasesFromSpecialMovement
+                && entry.scaleGapClosePhasesFromImpactReach;
         }
     }
 }

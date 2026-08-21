@@ -967,6 +967,8 @@ namespace Arena.Presentation
         public string authoredActionId;
         [Tooltip("When true, this phased melee action holds its loop segment until the matching authoritative special movement ends.")]
         public bool drivePhasesFromSpecialMovement;
+        [Tooltip("When true, casts inside impact reach skip Start and scale Loop by cast distance; casts beyond impact reach use Start and hold Loop for the gap close.")]
+        public bool scaleGapClosePhasesFromImpactReach;
         [Tooltip("When true, this phased melee action holds its loop segment until the matching authoritative combat action releases or fizzles.")]
         public bool drivePhasesFromCombatLifecycle;
         [Tooltip("Grounded phased clips for this authored strike. Leave empty to fall back to Air if that set is complete.")]
@@ -1025,6 +1027,8 @@ namespace Arena.Presentation
         public WeaponPhasedActionClipSet phasedAir;
         [Tooltip("Only for phased movement-coupled attacks. When enabled, Start plays once, Loop holds while special movement is active, and End plays when special movement ends.")]
         public bool drivePhasesFromSpecialMovement;
+        [Tooltip("Opt-in phased gap-close timing. Inside impact reach, skip Start and play a cast-distance-scaled part of Loop. Beyond impact reach, play Start and hold Loop until movement ends.")]
+        public bool scaleGapClosePhasesFromImpactReach;
         [Tooltip("Only for phased channeled attacks. When enabled, Start plays once, Loop holds while the authoritative combat action is active, and End plays when that action releases or fizzles.")]
         public bool drivePhasesFromCombatLifecycle;
         [Tooltip("Deterministic bindings from semantic slots on the selected animation clips to registered VFX ids. Timing and transforms stay on the shared clip track.")]
@@ -1066,6 +1070,7 @@ namespace Arena.Presentation
             {
                 authoredActionId = combat.AuthoredStrikeIdOrDefault,
                 drivePhasesFromSpecialMovement = drivePhasesFromSpecialMovement,
+                scaleGapClosePhasesFromImpactReach = scaleGapClosePhasesFromImpactReach,
                 drivePhasesFromCombatLifecycle = drivePhasesFromCombatLifecycle,
                 ground = phasedGround,
                 air = phasedAir,
@@ -1238,6 +1243,110 @@ namespace Arena.Presentation
             for (int index = 0; index < authoredEventTimesSeconds.Length; index++)
                 eventTimesSeconds[index] = Mathf.Max(0f, authoredEventTimesSeconds[index] - startupTrim);
             return true;
+        }
+
+        public bool TryBuildPhasedGapCloseTiming(out MeleeManifestPhasedGapCloseTiming timing)
+        {
+            timing = null!;
+            if (!UsesPhasedPresentation
+                || !drivePhasesFromSpecialMovement
+                || !scaleGapClosePhasesFromImpactReach
+                || !TryResolvePreferredPhasedClipSet(out ResolvedWeaponPhasedActionClipSet resolved))
+            {
+                return false;
+            }
+
+            timing = new MeleeManifestPhasedGapCloseTiming
+            {
+                start_duration_ms = Mathf.Max(
+                    0,
+                    Mathf.RoundToInt(resolved.ResolveStartTimelineLengthSeconds() * 1000f)),
+                loop_duration_ms = Mathf.Max(
+                    0,
+                    Mathf.RoundToInt(resolved.ResolveLoopTimelineLengthSeconds() * 1000f)),
+            };
+            return true;
+        }
+
+        public bool TryBuildPhasedGapCloseHitWindows(out MeleeManifestHitWindow[] hitWindows)
+        {
+            hitWindows = Array.Empty<MeleeManifestHitWindow>();
+            if (!TryBuildPhasedGapCloseTiming(out _)
+                || !TryResolvePreferredPhasedClipSet(out ResolvedWeaponPhasedActionClipSet resolved))
+            {
+                return false;
+            }
+
+            var windows = new List<MeleeManifestHitWindow>();
+            AppendPhasedGapCloseHitWindows(
+                resolved.Start,
+                "START",
+                timelineOffsetSeconds: 0f,
+                maxLocalTimeSeconds: resolved.ResolveStartTimelineLengthSeconds(),
+                windows);
+
+            float loopOffsetSeconds = resolved.ResolveStartTimelineLengthSeconds();
+            if (!resolved.ReleaseAfterStart)
+            {
+                AppendPhasedGapCloseHitWindows(
+                    resolved.Loop,
+                    "LOOP",
+                    loopOffsetSeconds,
+                    maxLocalTimeSeconds: float.PositiveInfinity,
+                    windows);
+            }
+
+            float endOffsetSeconds = loopOffsetSeconds
+                + (resolved.ReleaseAfterStart ? 0f : resolved.ResolveLoopTimelineLengthSeconds());
+            AppendPhasedGapCloseHitWindows(
+                resolved.End,
+                "END",
+                endOffsetSeconds,
+                maxLocalTimeSeconds: float.PositiveInfinity,
+                windows);
+
+            if (windows.Count == 0)
+                return false;
+
+            windows.Sort((left, right) => left.impact_delay_ms.CompareTo(right.impact_delay_ms));
+            hitWindows = windows.ToArray();
+            return true;
+        }
+
+        private bool TryResolvePreferredPhasedClipSet(
+            out ResolvedWeaponPhasedActionClipSet resolved)
+        {
+            if (phasedGround.TryResolvePlayback(out resolved))
+                return true;
+            return phasedAir.TryResolvePlayback(out resolved);
+        }
+
+        private static void AppendPhasedGapCloseHitWindows(
+            AnimationClip clip,
+            string phase,
+            float timelineOffsetSeconds,
+            float maxLocalTimeSeconds,
+            List<MeleeManifestHitWindow> destination)
+        {
+            var localTimes = new List<float>();
+            CombatAnimationEvents.AppendEventTimes(
+                clip,
+                CombatAnimationEvents.OnStrikeHit,
+                localTimes,
+                offsetSeconds: 0f,
+                maxLocalTimeSeconds: maxLocalTimeSeconds);
+            for (int index = 0; index < localTimes.Count; index++)
+            {
+                float localTimeSeconds = Mathf.Max(0f, localTimes[index]);
+                destination.Add(new MeleeManifestHitWindow
+                {
+                    impact_delay_ms = Mathf.Max(
+                        0,
+                        Mathf.RoundToInt((timelineOffsetSeconds + localTimeSeconds) * 1000f)),
+                    impact_phase = phase,
+                    phase_delay_ms = Mathf.Max(0, Mathf.RoundToInt(localTimeSeconds * 1000f)),
+                });
+            }
         }
 
         public bool TryBuildHitWindowMirrorFromEvents(
@@ -2091,6 +2200,9 @@ namespace Arena.Presentation
                         update_interval_seconds = strike.ProjectileUpdateIntervalSecondsExportValue,
                     }
                     : null,
+                phased_gap_close_timing = attack.TryBuildPhasedGapCloseTiming(out var phasedTiming)
+                    ? phasedTiming
+                    : null,
             };
         }
 
@@ -2098,6 +2210,9 @@ namespace Arena.Presentation
             float timingReferenceLengthSeconds,
             WeaponMeleeAttackAuthoring attack)
         {
+            if (attack.TryBuildPhasedGapCloseHitWindows(out MeleeManifestHitWindow[] phasedHitWindows))
+                return phasedHitWindows;
+
             if (attack.TryGetEffectiveStrikeHitTimesSeconds(out float[] eventTimesSeconds))
             {
                 var eventExported = new MeleeManifestHitWindow[eventTimesSeconds.Length];

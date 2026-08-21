@@ -39,6 +39,15 @@ namespace Arena.Combat
     public sealed class MeleeManifestHitWindow
     {
         public int impact_delay_ms;
+        public string impact_phase = "";
+        public int phase_delay_ms;
+    }
+
+    [Serializable]
+    public sealed class MeleeManifestPhasedGapCloseTiming
+    {
+        public int start_duration_ms;
+        public int loop_duration_ms;
     }
 
     [Serializable]
@@ -68,6 +77,7 @@ namespace Arena.Combat
         public int combo_grace_ms;
         public string aerial_execution_mode = "";
         public MeleeManifestProjectile? projectile;
+        public MeleeManifestPhasedGapCloseTiming? phased_gap_close_timing;
     }
 
     [Serializable]

@@ -33,6 +33,8 @@ namespace SpacetimeDB.Types
         public bool RequireArrivalForSwing;
         [DataMember(Name = "requires_target_facing")]
         public bool RequiresTargetFacing;
+        [DataMember(Name = "activate_outside_impact_reach")]
+        public bool ActivateOutsideImpactReach;
 
         public MeleeGapCloseCatalog(
             string AbilityId,
@@ -44,7 +46,8 @@ namespace SpacetimeDB.Types
             float ImpactRange,
             string CollisionPolicy,
             bool RequireArrivalForSwing,
-            bool RequiresTargetFacing
+            bool RequiresTargetFacing,
+            bool ActivateOutsideImpactReach
         )
         {
             this.AbilityId = AbilityId;
@@ -57,6 +60,7 @@ namespace SpacetimeDB.Types
             this.CollisionPolicy = CollisionPolicy;
             this.RequireArrivalForSwing = RequireArrivalForSwing;
             this.RequiresTargetFacing = RequiresTargetFacing;
+            this.ActivateOutsideImpactReach = ActivateOutsideImpactReach;
         }
 
         public MeleeGapCloseCatalog()

@@ -3076,6 +3076,18 @@ namespace Arena.Presentation
             bool drivesPhasesFromSpecialMovement =
                 phasedMeleeEntry.drivePhasesFromSpecialMovement
                 && request.DrivePhasesFromSpecialMovement;
+            bool scalesGapClosePhasesFromImpactReach =
+                phasedMeleeEntry.drivePhasesFromSpecialMovement
+                && phasedMeleeEntry.scaleGapClosePhasesFromImpactReach
+                && request.ScaleGapClosePhasesFromImpactReach;
+            bool usesTimeDrivenImpactReachScaling = scalesGapClosePhasesFromImpactReach
+                && !drivesPhasesFromSpecialMovement;
+            bool startsAtLoop = usesTimeDrivenImpactReachScaling
+                && !request.GapCloseUsedMovementAtCast
+                && !clipSet.ReleaseAfterStart;
+            float requestedLoopExitNormalizedTime = usesTimeDrivenImpactReachScaling
+                ? ResolveImpactReachScaledLoopExitNormalizedTime(request, clipSet, startsAtLoop)
+                : -1f;
             _actionPlayback.BeginPhasedMelee(
                 ResolveStrikeBankSlot(strikeIndex),
                 clipSet.Start,
@@ -3084,10 +3096,51 @@ namespace Arena.Presentation
                 clipSet.ReleaseAfterStart,
                 specialMovementDriven: drivesPhasesFromSpecialMovement
                     || phasedMeleeEntry.drivePhasesFromCombatLifecycle,
-                specialMovementArrivalDriven: drivesPhasesFromSpecialMovement);
+                specialMovementArrivalDriven: drivesPhasesFromSpecialMovement,
+                startsAtLoop: startsAtLoop,
+                requestedLoopExitNormalizedTime: requestedLoopExitNormalizedTime);
             PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
             ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: true);
-            return PlayPhasedMeleeSegment(PhasedMeleePlaybackPhase.Start, 0f);
+            return PlayPhasedMeleeSegment(
+                startsAtLoop ? PhasedMeleePlaybackPhase.Loop : PhasedMeleePlaybackPhase.Start,
+                0f);
+        }
+
+        private static float ResolveImpactReachScaledLoopExitNormalizedTime(
+            in CombatAnimationRequest request,
+            ResolvedWeaponPhasedActionClipSet clipSet,
+            bool startsAtLoop)
+        {
+            float loopClipLengthSeconds = Mathf.Max(0f, clipSet.Loop.length);
+            if (loopClipLengthSeconds <= 0.001f)
+                return 0f;
+
+            if (request.AuthoritativeImpactDelaySeconds >= 0f)
+            {
+                var endHitTimes = new List<float>();
+                CombatAnimationEvents.AppendEventTimes(
+                    clipSet.End,
+                    CombatAnimationEvents.OnStrikeHit,
+                    endHitTimes);
+                if (endHitTimes.Count > 0)
+                {
+                    float lastEndHitSeconds = 0f;
+                    for (int index = 0; index < endHitTimes.Count; index++)
+                        lastEndHitSeconds = Mathf.Max(lastEndHitSeconds, endHitTimes[index]);
+                    float preEndSeconds = Mathf.Max(
+                        0f,
+                        request.AuthoritativeImpactDelaySeconds - lastEndHitSeconds);
+                    float startSeconds = startsAtLoop
+                        ? 0f
+                        : clipSet.ResolveStartTimelineLengthSeconds();
+                    return Mathf.Clamp01(
+                        Mathf.Max(0f, preEndSeconds - startSeconds) / loopClipLengthSeconds);
+                }
+            }
+
+            float authoredLoopExitNormalizedTime = Mathf.Clamp01(
+                clipSet.ResolveLoopTimelineLengthSeconds() / loopClipLengthSeconds);
+            return authoredLoopExitNormalizedTime * request.GapCloseLoopScale;
         }
 
         private void UpdatePhasedMeleePlayback()

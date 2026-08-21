@@ -47,6 +47,10 @@ namespace Arena.Presentation
         public readonly string ConsumedModifierStatusKind;
         public readonly string ConsumedModifierStackGroup;
         public readonly bool DrivePhasesFromSpecialMovement;
+        public readonly bool ScaleGapClosePhasesFromImpactReach;
+        public readonly bool GapCloseUsedMovementAtCast;
+        public readonly float GapCloseLoopScale;
+        public readonly float AuthoritativeImpactDelaySeconds;
         /// <summary>
         /// Optional request-time replacement for the attack-authored animation
         /// VFX bindings. Null uses the attack bindings; an empty array disables
@@ -69,6 +73,10 @@ namespace Arena.Presentation
             string? consumedModifierStatusKind = null,
             string? consumedModifierStackGroup = null,
             bool drivePhasesFromSpecialMovement = false,
+            bool scaleGapClosePhasesFromImpactReach = false,
+            bool gapCloseUsedMovementAtCast = false,
+            float gapCloseLoopScale = 1f,
+            float authoritativeImpactDelaySeconds = -1f,
             CombatAnimationVfxBinding[]? animationVfxBindings = null)
         {
             ActionId = actionId ?? string.Empty;
@@ -83,6 +91,10 @@ namespace Arena.Presentation
             ConsumedModifierStatusKind = WireIdentifier.Normalize(consumedModifierStatusKind);
             ConsumedModifierStackGroup = WireIdentifier.Normalize(consumedModifierStackGroup);
             DrivePhasesFromSpecialMovement = drivePhasesFromSpecialMovement;
+            ScaleGapClosePhasesFromImpactReach = scaleGapClosePhasesFromImpactReach;
+            GapCloseUsedMovementAtCast = gapCloseUsedMovementAtCast;
+            GapCloseLoopScale = Mathf.Clamp01(gapCloseLoopScale);
+            AuthoritativeImpactDelaySeconds = authoritativeImpactDelaySeconds;
             AnimationVfxBindings = animationVfxBindings == null
                 ? null
                 : (CombatAnimationVfxBinding[])animationVfxBindings.Clone();
@@ -95,6 +107,9 @@ namespace Arena.Presentation
             string? consumedModifierStatusKind = null,
             string? consumedModifierStackGroup = null,
             bool drivePhasesFromSpecialMovement = false,
+            bool scaleGapClosePhasesFromImpactReach = false,
+            bool gapCloseUsedMovementAtCast = false,
+            float gapCloseLoopScale = 1f,
             CombatAnimationVfxBinding[]? animationVfxBindings = null)
         {
             return new CombatAnimationRequest(
@@ -108,6 +123,9 @@ namespace Arena.Presentation
                 consumedModifierStatusKind: consumedModifierStatusKind,
                 consumedModifierStackGroup: consumedModifierStackGroup,
                 drivePhasesFromSpecialMovement: drivePhasesFromSpecialMovement,
+                scaleGapClosePhasesFromImpactReach: scaleGapClosePhasesFromImpactReach,
+                gapCloseUsedMovementAtCast: gapCloseUsedMovementAtCast,
+                gapCloseLoopScale: gapCloseLoopScale,
                 animationVfxBindings: animationVfxBindings);
         }
 
@@ -152,6 +170,9 @@ namespace Arena.Presentation
             string? consumedModifierStatusKind = null,
             string? consumedModifierStackGroup = null,
             bool drivePhasesFromSpecialMovement = false,
+            bool scaleGapClosePhasesFromImpactReach = false,
+            bool gapCloseUsedMovementAtCast = false,
+            float authoritativeImpactDelaySeconds = -1f,
             CombatAnimationVfxBinding[]? animationVfxBindings = null)
         {
             return new CombatAnimationRequest(
@@ -165,8 +186,11 @@ namespace Arena.Presentation
                 facingTargetPoint,
                 consumedModifierStatusKind,
                 consumedModifierStackGroup,
-                drivePhasesFromSpecialMovement,
-                animationVfxBindings);
+                drivePhasesFromSpecialMovement: drivePhasesFromSpecialMovement,
+                scaleGapClosePhasesFromImpactReach: scaleGapClosePhasesFromImpactReach,
+                gapCloseUsedMovementAtCast: gapCloseUsedMovementAtCast,
+                authoritativeImpactDelaySeconds: authoritativeImpactDelaySeconds,
+                animationVfxBindings: animationVfxBindings);
         }
 
         public static CombatAnimationRequest AuthoritativeSpell(
@@ -205,13 +229,16 @@ namespace Arena.Presentation
             string specialMovement = DrivePhasesFromSpecialMovement
                 ? " specialMovementPhased=True"
                 : string.Empty;
+            string impactReachScaled = ScaleGapClosePhasesFromImpactReach
+                ? $" impactReachScaled=True movedAtCast={GapCloseUsedMovementAtCast} loopScale={GapCloseLoopScale:F2} impactDelay={AuthoritativeImpactDelaySeconds:F3}"
+                : string.Empty;
             string animationVfx = AnimationVfxBindings != null
                 ? $" animationVfxBindings={AnimationVfxBindings.Length}"
                 : string.Empty;
             string spellPhase = Category == CombatAnimationCategory.Spell
                 ? $" spellPhase={SpellPhase}"
                 : string.Empty;
-            return $"action={ActionId} category={Category}{spellPhase} authority={Authority} playback={Playback} source={Source ?? "-"} startedAtMs={StartedAtMs}{facing}{modifier}{specialMovement}{animationVfx}";
+            return $"action={ActionId} category={Category}{spellPhase} authority={Authority} playback={Playback} source={Source ?? "-"} startedAtMs={StartedAtMs}{facing}{modifier}{specialMovement}{impactReachScaled}{animationVfx}";
         }
     }
 }
