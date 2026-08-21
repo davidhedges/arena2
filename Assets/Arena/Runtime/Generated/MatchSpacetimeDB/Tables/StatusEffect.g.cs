@@ -100,6 +100,7 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Col<StatusEffect, uint> MaxStacks { get; }
         public global::SpacetimeDB.Col<StatusEffect, string> StackPolicy { get; }
         public global::SpacetimeDB.Col<StatusEffect, SpacetimeDB.Timestamp> AppliedAt { get; }
+        public global::SpacetimeDB.Col<StatusEffect, ulong> BaseDurationMs { get; }
         public global::SpacetimeDB.Col<StatusEffect, SpacetimeDB.Timestamp> ExpiresAt { get; }
         public global::SpacetimeDB.Col<StatusEffect, long> ExpiresAtMicros { get; }
         public global::SpacetimeDB.Col<StatusEffect, float> SlowPct { get; }
@@ -126,6 +127,7 @@ namespace Arena.MatchDb
             MaxStacks = new global::SpacetimeDB.Col<StatusEffect, uint>(tableName, "max_stacks");
             StackPolicy = new global::SpacetimeDB.Col<StatusEffect, string>(tableName, "stack_policy");
             AppliedAt = new global::SpacetimeDB.Col<StatusEffect, SpacetimeDB.Timestamp>(tableName, "applied_at");
+            BaseDurationMs = new global::SpacetimeDB.Col<StatusEffect, ulong>(tableName, "base_duration_ms");
             ExpiresAt = new global::SpacetimeDB.Col<StatusEffect, SpacetimeDB.Timestamp>(tableName, "expires_at");
             ExpiresAtMicros = new global::SpacetimeDB.Col<StatusEffect, long>(tableName, "expires_at_micros");
             SlowPct = new global::SpacetimeDB.Col<StatusEffect, float>(tableName, "slow_pct");

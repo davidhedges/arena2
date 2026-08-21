@@ -142,7 +142,8 @@ const MELEE_MANIFEST_JSON: &str =
 const GIGANTISM_STATUS_GROUP: &str = "GIGANTISM";
 const GIGANTISM_MELEE_RANGE_BONUS_METERS: f32 = 1.5;
 const SERRATED_BLADES_STATUS_GROUP: &str = "SERRATED_BLADES";
-const SERRATED_BLADES_BLEED_STATUS_GROUP: &str = "SERRATED_BLADES_BLEED";
+const SERRATED_BLADES_BLEED_STATUS_GROUP: &str = "BLEED";
+const ESCALATING_BLEED_MAX_STACKS: u32 = 10;
 const SERRATED_BLADES_BLEED_DAMAGE_RATIO: f32 = 0.10;
 const SERRATED_BLADES_BLEED_DURATION_MS: u64 = 2000;
 const SERRATED_BLADES_BLEED_TICK_INTERVAL_MS: u64 = 1000;
@@ -6078,11 +6079,12 @@ fn push_melee_attack_modifier_bleed_effects(
         target_audience: crate::relations::TargetAudience::Hostile,
         duration: Duration::from_millis(SERRATED_BLADES_BLEED_DURATION_MS),
         stack_group: format!(
-            "{}:{}:{}",
-            SERRATED_BLADES_BLEED_STATUS_GROUP, row.spell_id, row.hit_index
+            "{}:{}",
+            SERRATED_BLADES_BLEED_STATUS_GROUP,
+            row.source.to_hex()
         ),
-        max_stacks: 1,
-        stack_policy: StackPolicy::Refresh,
+        max_stacks: ESCALATING_BLEED_MAX_STACKS,
+        stack_policy: StackPolicy::AddStackEscalatingDecay,
         dispel_types: vec![StatusDispelType::Bleed],
     });
 }
@@ -7403,7 +7405,7 @@ mod tests {
     }
 
     #[test]
-    fn melee_attack_modifier_bleed_uses_confirmed_hit_damage_and_stacks_by_hit() {
+    fn melee_attack_modifier_bleed_uses_confirmed_hit_damage_and_source_scoped_pool() {
         let source = test_identity_with_byte(1);
         let target = test_identity_with_byte(2);
         let now = Timestamp::UNIX_EPOCH;
@@ -7484,9 +7486,9 @@ mod tests {
         );
         assert_eq!(*polarity, StatusPolarity::Debuff);
         assert_eq!(*duration, Duration::from_secs(2));
-        assert_eq!(stack_group, "SERRATED_BLADES_BLEED:test:serrated:2");
-        assert_eq!(*max_stacks, 1);
-        assert_eq!(*stack_policy, StackPolicy::Refresh);
+        assert_eq!(stack_group, &format!("BLEED:{}", source.to_hex()));
+        assert_eq!(*max_stacks, 10);
+        assert_eq!(*stack_policy, StackPolicy::AddStackEscalatingDecay);
         assert_eq!(dispel_types, &vec![StatusDispelType::Bleed]);
     }
 

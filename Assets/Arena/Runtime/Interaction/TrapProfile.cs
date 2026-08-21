@@ -81,6 +81,7 @@ namespace Arena.Interaction
         public string stackGroup = string.Empty;
         [Min(1)] public int maxStacks = 1;
         public string stackPolicy = "REFRESH";
+        public string[] dispelTypes = Array.Empty<string>();
     }
 
     /// <summary>

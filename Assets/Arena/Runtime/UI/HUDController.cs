@@ -1333,7 +1333,7 @@ namespace Arena.UI
                     long expMs = se.ExpiresAtMicros / 1000L;
                     float left = Mathf.Max(0f, (expMs - nowMs) / 1000f);
                     SetTextIfChanged(view.Time, left > 1f ? $"{left:F0}" : left > 0.1f ? $"{left:F1}" : "");
-                    string tooltipKey = $"{se.StatusId}:{se.EffectKind}:{se.Stacks}:{se.AbsorbAmount}:{se.ExpiresAtMicros}:{isRimed}";
+                    string tooltipKey = $"{se.StatusId}:{se.EffectKind}:{se.StackPolicy}:{se.Stacks}:{se.TickAmount}:{se.AbsorbAmount}:{se.ExpiresAtMicros}:{isRimed}";
                     if (!string.Equals(view.TooltipKey, tooltipKey, StringComparison.Ordinal))
                     {
                         view.TooltipKey = tooltipKey;

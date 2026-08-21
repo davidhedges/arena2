@@ -64,9 +64,11 @@ namespace Arena.EditModeTests
                 Assert.That(onHit[0]!["effect"]!.Value<string>(), Is.EqualTo("DAMAGE"));
                 Assert.That(onHit[1]!["effect"]!.Value<string>(), Is.EqualTo("DOT"));
                 Assert.That(onHit[1]!["stack_group"]!.Value<string>(), Is.EqualTo("TRAP_BLEED"));
-                Assert.That(onHit[1]!["max_stacks"]!.Value<int>(), Is.EqualTo(5));
+                Assert.That(onHit[1]!["max_stacks"]!.Value<int>(), Is.EqualTo(10));
                 Assert.That(onHit[1]!["stack_policy"]!.Value<string>(),
-                    Is.EqualTo("ADD_STACK_REFRESH"));
+                    Is.EqualTo("ADD_STACK_ESCALATING_DECAY"));
+                Assert.That(onHit[1]!["dispel_types"]!.Values<string>(),
+                    Is.EqualTo(new[] { "BLEED" }));
             }
             finally
             {
@@ -286,8 +288,9 @@ namespace Arena.EditModeTests
                         tickIntervalMs = 1000,
                         durationMs = 6000,
                         stackGroup = "TRAP_BLEED",
-                        maxStacks = 5,
-                        stackPolicy = "ADD_STACK_REFRESH",
+                        maxStacks = 10,
+                        stackPolicy = "ADD_STACK_ESCALATING_DECAY",
+                        dispelTypes = new[] { "BLEED" },
                     },
                 },
                 oneHitPerActivation: true,

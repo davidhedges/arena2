@@ -345,6 +345,10 @@ namespace Arena.Editor
                     ["stack_group"] = NormalizeWire(effect.stackGroup, string.Empty),
                     ["max_stacks"] = Mathf.Max(1, effect.maxStacks),
                     ["stack_policy"] = NormalizeWire(effect.stackPolicy, "REFRESH"),
+                    ["dispel_types"] = new JArray(
+                        effect.dispelTypes
+                            .Where(value => !string.IsNullOrWhiteSpace(value))
+                            .Select(value => NormalizeWire(value, string.Empty))),
                 });
             }
             return records;

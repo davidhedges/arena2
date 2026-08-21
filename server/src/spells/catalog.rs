@@ -4545,7 +4545,9 @@ mod tests {
             }
         );
         assert_eq!(bleed.duration(), Duration::from_secs(6));
-        assert_eq!(bleed.explicit_stack_group(), Some("GRAVEBURST_BLEED"));
+        assert_eq!(bleed.explicit_stack_group(), Some("BLEED:{SOURCE}"));
+        assert_eq!(bleed.max_stacks(), 10);
+        assert_eq!(bleed.stack_policy(), StackPolicy::AddStackEscalatingDecay);
         assert_eq!(bleed.dispel_types(), &[StatusDispelType::Bleed]);
     }
 
@@ -4604,7 +4606,9 @@ mod tests {
             }
         );
         assert_eq!(bleed.duration(), Duration::from_secs(6));
-        assert_eq!(bleed.explicit_stack_group(), Some("GRAVEWAKE_BLEED"));
+        assert_eq!(bleed.explicit_stack_group(), Some("BLEED:{SOURCE}"));
+        assert_eq!(bleed.max_stacks(), 10);
+        assert_eq!(bleed.stack_policy(), StackPolicy::AddStackEscalatingDecay);
         assert_eq!(bleed.dispel_types(), &[StatusDispelType::Bleed]);
     }
 

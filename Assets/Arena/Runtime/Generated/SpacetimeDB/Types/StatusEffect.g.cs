@@ -33,6 +33,8 @@ namespace SpacetimeDB.Types
         public string StackPolicy;
         [DataMember(Name = "applied_at")]
         public SpacetimeDB.Timestamp AppliedAt;
+        [DataMember(Name = "base_duration_ms")]
+        public ulong BaseDurationMs;
         [DataMember(Name = "expires_at")]
         public SpacetimeDB.Timestamp ExpiresAt;
         [DataMember(Name = "expires_at_micros")]
@@ -71,6 +73,7 @@ namespace SpacetimeDB.Types
             uint MaxStacks,
             string StackPolicy,
             SpacetimeDB.Timestamp AppliedAt,
+            ulong BaseDurationMs,
             SpacetimeDB.Timestamp ExpiresAt,
             long ExpiresAtMicros,
             float SlowPct,
@@ -96,6 +99,7 @@ namespace SpacetimeDB.Types
             this.MaxStacks = MaxStacks;
             this.StackPolicy = StackPolicy;
             this.AppliedAt = AppliedAt;
+            this.BaseDurationMs = BaseDurationMs;
             this.ExpiresAt = ExpiresAt;
             this.ExpiresAtMicros = ExpiresAtMicros;
             this.SlowPct = SlowPct;

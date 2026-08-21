@@ -869,12 +869,12 @@
             "status": {
               "kind": "DOT",
               "duration_ms": 6000,
-              "status_stack_group": "WARRIOR_CARVE_BLEED",
+              "status_stack_group": "BLEED:{SOURCE}",
               "tick_damage": 3,
               "damage_type": "PHYSICAL",
               "tick_interval_ms": 1000,
-              "max_stacks": 1,
-              "stack_policy": "REFRESH",
+              "max_stacks": 10,
+              "stack_policy": "ADD_STACK_ESCALATING_DECAY",
               "dispel_types": [
                 "BLEED"
               ]
@@ -2388,10 +2388,12 @@
               "duration_ms": 6000,
               "tick_interval_ms": 1000,
               "tick_damage": 3,
-              "status_stack_group": "GRAVEBURST_BLEED",
+              "status_stack_group": "BLEED:{SOURCE}",
               "dispel_types": [
                 "BLEED"
-              ]
+              ],
+              "max_stacks": 10,
+              "stack_policy": "ADD_STACK_ESCALATING_DECAY"
             }
           ]
         }
@@ -2456,10 +2458,12 @@
               "duration_ms": 6000,
               "tick_interval_ms": 1000,
               "tick_damage": 3,
-              "status_stack_group": "GRAVEWAKE_BLEED",
+              "status_stack_group": "BLEED:{SOURCE}",
               "dispel_types": [
                 "BLEED"
-              ]
+              ],
+              "max_stacks": 10,
+              "stack_policy": "ADD_STACK_ESCALATING_DECAY"
             }
           ]
         }
@@ -7087,12 +7091,12 @@
             "status": {
               "kind": "DOT",
               "duration_ms": 6000,
-              "status_stack_group": "DAGGER_GUT_RIPPER_BLEED",
+              "status_stack_group": "BLEED:{SOURCE}",
               "tick_damage": 3,
               "damage_type": "PHYSICAL",
               "tick_interval_ms": 1000,
-              "max_stacks": 1,
-              "stack_policy": "REFRESH",
+              "max_stacks": 10,
+              "stack_policy": "ADD_STACK_ESCALATING_DECAY",
               "dispel_types": [
                 "BLEED"
               ]
@@ -9446,7 +9450,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_CARVE",
       "display_name": "Carve",
-      "description": "A low-to-high greatsword cut that opens a bleeding wound.",
+      "description": "A low-to-high greatsword cut that adds a Bleed stack. Bleed damage escalates with stacks, but high stacks decay faster.",
       "sort_order": 74
     },
     {
@@ -9614,14 +9618,14 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_GRAVEBURST",
       "display_name": "Graveburst",
-      "description": "Erupts bone spikes at the targeted area after 0.5 seconds, dealing 30 physical damage, slowing enemies by 25% for 3 seconds, and bleeding them for 3 physical damage each second for 6 seconds.",
+      "description": "Erupts bone spikes at the targeted area after 0.5 seconds, dealing 30 physical damage, slowing enemies by 25% for 3 seconds, and adding a Bleed stack with 3 base damage per second.",
       "sort_order": 91
     },
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "SPELL_GRAVEWAKE",
       "display_name": "Gravewake",
-      "description": "Sends a 4.5-meter-wide wave of bones 12 meters forward, dealing 24 physical damage, slowing enemies by 25% for 3 seconds, and bleeding them for 3 physical damage each second for 6 seconds.",
+      "description": "Sends a 4.5-meter-wide wave of bones 12 meters forward, dealing 24 physical damage, slowing enemies by 25% for 3 seconds, and adding a Bleed stack with 3 base damage per second.",
       "sort_order": 92
     },
     {
@@ -10363,7 +10367,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "PALADIN_SERRATED_BLADES",
       "display_name": "Serrated Blades",
-      "description": "For 10s, melee attacks apply a stacking bleed for 10% of the damage dealt.",
+      "description": "For 10s, melee attacks add Bleed base damage equal to 10% of the damage dealt. Bleed damage escalates with stacks, but high stacks decay faster.",
       "sort_order": 148
     },
     {
@@ -10615,7 +10619,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_GUT_RIPPER",
       "display_name": "Gut Ripper",
-      "description": "Rips the target with crossed daggers, leaving a bleeding wound and hemorrhaging them. A hemorrhaging target advances its bleeds by 3 seconds for every meter it moves, so running spends the wound early instead of waiting it out.",
+      "description": "Rips the target with crossed daggers, adding a Bleed stack and hemorrhaging them. A hemorrhaging target advances its bleeds by 3 seconds for every meter it moves, so running spends the wound early instead of waiting it out.",
       "sort_order": 224
     },
     {
@@ -11049,7 +11053,7 @@
       "presentation_kind": "STATUS",
       "presentation_id": "SERRATED_BLADES",
       "display_name": "Serrated Blades",
-      "description": "Melee attacks apply stacking bleeds.",
+      "description": "Melee attacks add to the escalating Bleed stack pool.",
       "sort_order": 10048
     },
     {

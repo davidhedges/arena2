@@ -12728,23 +12728,25 @@ mod tests {
         assert_eq!(ability.gameplay.applies_stagger, Some(false));
         // Containment, not equality: Gut Ripper also carries the hemorrhage
         // marker, and pinning the whole effect list just re-copies the catalog.
-        assert!(melee_impact_effects_for_ability_id("DAGGER_GUT_RIPPER").contains(
-            &MeleeImpactEffectRuntime::ApplyStatus {
-                status: StatusApplication::new(
-                    StatusPayload::Dot {
-                        tick_damage: 3,
-                        damage_type: crate::combat::DamageType::Physical,
-                        tick_interval: Duration::from_secs(1),
-                    },
-                    Duration::from_millis(6000),
-                    Some("DAGGER_GUT_RIPPER_BLEED".to_string()),
-                    StatusStackGroupDefault::InstanceScopedActionSuffix("DOT"),
-                    1,
-                    StackPolicy::Refresh,
-                )
-                .with_dispel_types(vec![StatusDispelType::Bleed]),
-            }
-        ));
+        assert!(
+            melee_impact_effects_for_ability_id("DAGGER_GUT_RIPPER").contains(
+                &MeleeImpactEffectRuntime::ApplyStatus {
+                    status: StatusApplication::new(
+                        StatusPayload::Dot {
+                            tick_damage: 3,
+                            damage_type: crate::combat::DamageType::Physical,
+                            tick_interval: Duration::from_secs(1),
+                        },
+                        Duration::from_millis(6000),
+                        Some("BLEED:{SOURCE}".to_string()),
+                        StatusStackGroupDefault::InstanceScopedActionSuffix("DOT"),
+                        10,
+                        StackPolicy::AddStackEscalatingDecay,
+                    )
+                    .with_dispel_types(vec![StatusDispelType::Bleed]),
+                }
+            )
+        );
     }
 
     #[test]
@@ -12979,10 +12981,10 @@ mod tests {
                         tick_interval: Duration::from_secs(1),
                     },
                     Duration::from_millis(6000),
-                    Some("WARRIOR_CARVE_BLEED".to_string()),
+                    Some("BLEED:{SOURCE}".to_string()),
                     StatusStackGroupDefault::InstanceScopedActionSuffix("DOT"),
-                    1,
-                    StackPolicy::Refresh,
+                    10,
+                    StackPolicy::AddStackEscalatingDecay,
                 )
                 .with_dispel_types(vec![StatusDispelType::Bleed]),
             }]

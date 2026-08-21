@@ -213,7 +213,8 @@
           "duration_ms": 0,
           "stack_group": "",
           "max_stacks": 1,
-          "stack_policy": "REFRESH"
+          "stack_policy": "REFRESH",
+          "dispel_types": []
         },
         {
           "effect": "DOT",
@@ -223,8 +224,11 @@
           "tick_interval_ms": 1000,
           "duration_ms": 6000,
           "stack_group": "TRAP_BLEED",
-          "max_stacks": 5,
-          "stack_policy": "ADD_STACK_REFRESH"
+          "max_stacks": 10,
+          "stack_policy": "ADD_STACK_ESCALATING_DECAY",
+          "dispel_types": [
+            "BLEED"
+          ]
         }
       ],
       "one_hit_per_activation": true
@@ -272,7 +276,8 @@
           "duration_ms": 0,
           "stack_group": "",
           "max_stacks": 1,
-          "stack_policy": "REFRESH"
+          "stack_policy": "REFRESH",
+          "dispel_types": []
         },
         {
           "effect": "DOT",
@@ -282,8 +287,11 @@
           "tick_interval_ms": 1000,
           "duration_ms": 6000,
           "stack_group": "TRAP_BLEED",
-          "max_stacks": 5,
-          "stack_policy": "ADD_STACK_REFRESH"
+          "max_stacks": 10,
+          "stack_policy": "ADD_STACK_ESCALATING_DECAY",
+          "dispel_types": [
+            "BLEED"
+          ]
         }
       ],
       "one_hit_per_activation": true
@@ -348,7 +356,8 @@
           "duration_ms": 0,
           "stack_group": "",
           "max_stacks": 1,
-          "stack_policy": "REFRESH"
+          "stack_policy": "REFRESH",
+          "dispel_types": []
         },
         {
           "effect": "DOT",
@@ -358,8 +367,11 @@
           "tick_interval_ms": 1000,
           "duration_ms": 6000,
           "stack_group": "TRAP_BLEED",
-          "max_stacks": 5,
-          "stack_policy": "ADD_STACK_REFRESH"
+          "max_stacks": 10,
+          "stack_policy": "ADD_STACK_ESCALATING_DECAY",
+          "dispel_types": [
+            "BLEED"
+          ]
         }
       ],
       "one_hit_per_activation": true
@@ -407,7 +419,8 @@
           "duration_ms": 0,
           "stack_group": "",
           "max_stacks": 1,
-          "stack_policy": "REFRESH"
+          "stack_policy": "REFRESH",
+          "dispel_types": []
         }
       ],
       "one_hit_per_activation": true

@@ -24,8 +24,8 @@ use crate::arena::{resolve_player_world_context, ResolvedWorldContext};
 use crate::combat::actor_snapshot::{CombatActorSnapshot, CombatActorSnapshotSet};
 use crate::combat::{
     queue_effects, timestamp_to_micros, CombatEvent, DamageDelivery, DamageType, EffectPacket,
-    StackPolicy, StatusPayload, StatusPolarity, COMBAT_EVENT_IMPACT, COMBAT_METADATA_NONE,
-    COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_TRAP,
+    StackPolicy, StatusDispelType, StatusPayload, StatusPolarity, COMBAT_EVENT_IMPACT,
+    COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_TRAP,
 };
 use crate::relations::TargetAudience;
 
@@ -121,6 +121,8 @@ struct TrapOnHitDefinition {
     stack_group: String,
     max_stacks: u32,
     stack_policy: String,
+    #[serde(default)]
+    dispel_types: Vec<StatusDispelType>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -427,7 +429,7 @@ fn push_on_hit_effects(
                 stack_group: entry.stack_group.clone(),
                 max_stacks: entry.max_stacks.max(1),
                 stack_policy: stack_policy_from_wire(entry.stack_policy.as_str()),
-                dispel_types: Vec::new(),
+                dispel_types: entry.dispel_types.clone(),
             }),
             _ => {}
         }
@@ -698,6 +700,7 @@ fn obb_overlaps_actor(obb: TrapObb, actor: &CombatActorSnapshot) -> bool {
 fn stack_policy_from_wire(value: &str) -> StackPolicy {
     match value {
         "ADD_STACK_REFRESH" => StackPolicy::AddStackRefresh,
+        "ADD_STACK_ESCALATING_DECAY" => StackPolicy::AddStackEscalatingDecay,
         "REPLACE_IF_STRONGER" => StackPolicy::ReplaceIfStronger,
         "IGNORE_IF_WEAKER" => StackPolicy::IgnoreIfWeaker,
         _ => StackPolicy::Refresh,
@@ -1005,16 +1008,22 @@ mod tests {
         let profiles =
             parse_trap_profile_manifest(TRAP_PROFILE_MANIFEST_JSON).expect("trap profiles");
         for profile in &profiles.profiles {
-            let bleeds = profile
+            let bleed = profile
                 .on_hit
                 .iter()
-                .any(|entry| entry.effect == EFFECT_KIND_DOT);
+                .find(|entry| entry.effect == EFFECT_KIND_DOT);
             if profile.profile_id == "TRAP_SPIKES" {
                 assert_eq!(profile.trigger_delay_ms, 350);
-                assert!(!bleeds, "spikes are one flat hit, not a bleed");
+                assert!(bleed.is_none(), "spikes are one flat hit, not a bleed");
             } else {
                 assert_eq!(profile.trigger_delay_ms, 0);
-                assert!(bleeds, "saws trade impact for a stacking bleed");
+                let bleed = bleed.expect("saws trade impact for a stacking bleed");
+                assert_eq!(bleed.max_stacks, 10);
+                assert_eq!(
+                    stack_policy_from_wire(bleed.stack_policy.as_str()),
+                    StackPolicy::AddStackEscalatingDecay
+                );
+                assert_eq!(bleed.dispel_types, vec![StatusDispelType::Bleed]);
             }
         }
     }
@@ -1134,6 +1143,10 @@ mod tests {
         assert_eq!(
             stack_policy_from_wire("ADD_STACK_REFRESH"),
             StackPolicy::AddStackRefresh
+        );
+        assert_eq!(
+            stack_policy_from_wire("ADD_STACK_ESCALATING_DECAY"),
+            StackPolicy::AddStackEscalatingDecay
         );
         assert_eq!(stack_policy_from_wire("REFRESH"), StackPolicy::Refresh);
         assert_eq!(stack_policy_from_wire("nonsense"), StackPolicy::Refresh);

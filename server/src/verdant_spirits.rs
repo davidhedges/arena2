@@ -261,6 +261,7 @@ fn upsert_holder(
         max_stacks: TOTAL_SPIRITS,
         stack_policy: "ADD_STACK_REFRESH".to_string(),
         applied_at: now,
+        base_duration_ms: STATUS_LIFETIME.as_millis().min(u128::from(u64::MAX)) as u64,
         expires_at,
         expires_at_micros: crate::combat::timestamp_to_micros(expires_at),
         slow_pct: 0.0,

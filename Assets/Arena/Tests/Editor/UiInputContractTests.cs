@@ -979,6 +979,19 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void EscalatingDotTooltips_ShowResolvedDamageAndNextStackDecay()
+        {
+            string tooltip = File.ReadAllText(StatusTooltipResolverPath);
+            Assert.That(tooltip, Does.Contain("ADD_STACK_ESCALATING_DECAY"));
+            Assert.That(tooltip, Does.Contain("EscalatingDotDamageBonusBpsPerStackPair = 3_000L"));
+            Assert.That(tooltip, Does.Contain("One stack is lost when the timer expires"));
+
+            string hud = File.ReadAllText(HudControllerPath);
+            Assert.That(hud, Does.Contain("{se.StackPolicy}"));
+            Assert.That(hud, Does.Contain("{se.TickAmount}"));
+        }
+
+        [Test]
         public void Blizzard_UsesTheAuthoredIcicleRainAreaPrefab()
         {
             Assert.That(File.Exists(BlizzardVfxPrefabPath), Is.True);

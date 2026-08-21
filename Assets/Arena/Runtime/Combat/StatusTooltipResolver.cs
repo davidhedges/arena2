@@ -9,6 +9,10 @@ namespace Arena.Combat
 {
     public static class StatusTooltipResolver
     {
+        private const string EscalatingDotStackPolicy = "ADD_STACK_ESCALATING_DECAY";
+        private const long BasisPointsScale = 10_000L;
+        private const long EscalatingDotDamageBonusBpsPerStackPair = 3_000L;
+
         public static TooltipData Resolve(
             DbConnection? conn,
             StatusEffect status,
@@ -139,8 +143,18 @@ namespace Arena.Combat
                 "STAGGER" => "Interrupts actions and briefly shoves the target.",
                 "KNOCKDOWN" => "Knocks the target down and prevents actions.",
                 "SLOW" => $"Reduces movement speed by {FormatPercent(status.SlowPct * stacks)}.",
-                "DOT" => FormatPeriodicDescription("Deals", status.TickAmount, stacks, status.TickIntervalMs),
-                "HOT" => FormatPeriodicDescription("Restores", status.TickAmount, stacks, status.TickIntervalMs),
+                "DOT" => FormatPeriodicDescription(
+                    "Deals",
+                    status.TickAmount,
+                    stacks,
+                    status.TickIntervalMs,
+                    status.StackPolicy),
+                "HOT" => FormatPeriodicDescription(
+                    "Restores",
+                    status.TickAmount,
+                    stacks,
+                    status.TickIntervalMs,
+                    status.StackPolicy),
                 "MOVE_SLOW_IMMUNITY" => "Prevents movement slows from reducing speed.",
                 "MOVEMENT_IMPAIRING_IMMUNITY" => "Prevents slows, roots, and knockbacks.",
                 "STUN_IMMUNITY" => "Prevents stuns.",
@@ -180,11 +194,40 @@ namespace Arena.Combat
             string verb,
             int tickAmount,
             uint stacks,
-            ulong tickIntervalMs)
+            ulong tickIntervalMs,
+            string stackPolicy)
         {
-            int amount = Math.Max(0, tickAmount) * (int)Math.Max(stacks, 1u);
+            int amount = ResolvePeriodicAmount(tickAmount, stacks, stackPolicy);
             float seconds = Math.Max(0.001f, tickIntervalMs / 1000f);
-            return $"{verb} {amount} every {seconds:0.#}s.";
+            string decay = string.Equals(
+                WireIdentifier.Normalize(stackPolicy),
+                EscalatingDotStackPolicy,
+                StringComparison.Ordinal)
+                ? " One stack is lost when the timer expires; higher stacks expire faster."
+                : string.Empty;
+            return $"{verb} {amount} every {seconds:0.#}s.{decay}";
+        }
+
+        private static int ResolvePeriodicAmount(int tickAmount, uint stacks, string stackPolicy)
+        {
+            long safeTickAmount = Math.Max(0, tickAmount);
+            long safeStacks = Math.Max(stacks, 1u);
+            if (!string.Equals(
+                    WireIdentifier.Normalize(stackPolicy),
+                    EscalatingDotStackPolicy,
+                    StringComparison.Ordinal))
+            {
+                return (int)Math.Min(int.MaxValue, safeTickAmount * safeStacks);
+            }
+
+            // Escalating rows carry the accumulated linear contribution of all
+            // stacks in TickAmount. Keep this coefficient synchronized with the
+            // authoritative combat helper.
+            long numerator = BasisPointsScale * 2L
+                + EscalatingDotDamageBonusBpsPerStackPair * (safeStacks - 1L);
+            long denominator = BasisPointsScale * 2L;
+            long scaled = (safeTickAmount * numerator + denominator / 2L) / denominator;
+            return (int)Math.Min(int.MaxValue, scaled);
         }
 
         private static string FormatPercent(float value)

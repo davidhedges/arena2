@@ -2921,6 +2921,7 @@ pub struct PendingRemoveStatus {
 }
 
 #[table(accessor = status_effect, public)]
+#[derive(Clone)]
 pub struct StatusEffect {
     #[primary_key]
     #[auto_inc]
@@ -2937,6 +2938,11 @@ pub struct StatusEffect {
     pub max_stacks: u32,
     pub stack_policy: String,
     pub applied_at: Timestamp,
+    /// Authored duration for one stack at the baseline decay rate. Escalating
+    /// DOT stacks keep this value while `expires_at` becomes the next stack-loss
+    /// deadline, including when another mechanic advances that deadline.
+    #[default(0u64)]
+    pub base_duration_ms: u64,
     pub expires_at: Timestamp,
     // Mirrors `expires_at` for indexed range scans; must stay in sync with expires_at.
     #[index(btree)]
@@ -4616,6 +4622,7 @@ fn status_matches_removal_filter_values(
 pub enum StackPolicy {
     Refresh,
     AddStackRefresh,
+    AddStackEscalatingDecay,
     ReplaceIfStronger,
     IgnoreIfWeaker,
 }
@@ -4625,6 +4632,7 @@ impl StackPolicy {
         match self {
             Self::Refresh => "REFRESH",
             Self::AddStackRefresh => "ADD_STACK_REFRESH",
+            Self::AddStackEscalatingDecay => "ADD_STACK_ESCALATING_DECAY",
             Self::ReplaceIfStronger => "REPLACE_IF_STRONGER",
             Self::IgnoreIfWeaker => "IGNORE_IF_WEAKER",
         }
@@ -4634,11 +4642,96 @@ impl StackPolicy {
         match value {
             "REFRESH" => Some(Self::Refresh),
             "ADD_STACK_REFRESH" => Some(Self::AddStackRefresh),
+            "ADD_STACK_ESCALATING_DECAY" => Some(Self::AddStackEscalatingDecay),
             "REPLACE_IF_STRONGER" => Some(Self::ReplaceIfStronger),
             "IGNORE_IF_WEAKER" => Some(Self::IgnoreIfWeaker),
             _ => None,
         }
     }
+}
+
+const BASIS_POINTS_SCALE: u128 = 10_000;
+/// Each pair of escalating DOT stacks adds 30% of their accumulated linear
+/// base damage. Equal-strength stacks therefore follow
+/// `base * (n + 0.30 * n * (n - 1) / 2)`.
+const ESCALATING_DOT_DAMAGE_BONUS_BPS_PER_STACK_PAIR: u128 = 3_000;
+/// Every extra stack increases the stack-loss rate by 35%.
+const ESCALATING_DOT_DECAY_RATE_BPS_PER_EXTRA_STACK: u128 = 3_500;
+
+fn duration_millis_saturating(duration: Duration) -> u64 {
+    duration.as_millis().min(u128::from(u64::MAX)) as u64
+}
+
+fn escalating_dot_decay_interval(base_duration: Duration, stacks: u32) -> Duration {
+    let stacks = u128::from(stacks.max(1));
+    let rate_bps = BASIS_POINTS_SCALE.saturating_add(
+        ESCALATING_DOT_DECAY_RATE_BPS_PER_EXTRA_STACK.saturating_mul(stacks.saturating_sub(1)),
+    );
+    let base_micros = base_duration.as_micros().max(1);
+    let interval_micros = base_micros
+        .saturating_mul(BASIS_POINTS_SCALE)
+        .saturating_add(rate_bps / 2)
+        / rate_bps;
+    Duration::from_micros(interval_micros.max(1).min(u128::from(u64::MAX)) as u64)
+}
+
+fn escalating_dot_base_total_after_application(
+    existing_total: i32,
+    incoming_base: i32,
+    current_stacks: u32,
+    next_stacks: u32,
+) -> i32 {
+    if next_stacks <= current_stacks {
+        return existing_total.max(0);
+    }
+    existing_total.max(0).saturating_add(incoming_base.max(0))
+}
+
+fn dot_tick_damage(tick_amount: i32, stacks: u32, stack_policy: StackPolicy) -> i32 {
+    let tick_amount = i128::from(tick_amount.max(0));
+    let stacks = u128::from(stacks.max(1));
+    let damage = match stack_policy {
+        StackPolicy::AddStackEscalatingDecay => {
+            // Escalating rows store the accumulated linear base contribution of
+            // every stack in `tick_amount`, allowing variable-strength stacks
+            // such as Serrated Blades to share one pool without losing potency.
+            let multiplier_numerator = BASIS_POINTS_SCALE.saturating_mul(2).saturating_add(
+                ESCALATING_DOT_DAMAGE_BONUS_BPS_PER_STACK_PAIR
+                    .saturating_mul(stacks.saturating_sub(1)),
+            );
+            let multiplier_denominator = BASIS_POINTS_SCALE.saturating_mul(2);
+            tick_amount
+                .saturating_mul(multiplier_numerator as i128)
+                .saturating_add((multiplier_denominator / 2) as i128)
+                / multiplier_denominator as i128
+        }
+        _ => tick_amount.saturating_mul(stacks as i128),
+    };
+    damage.clamp(0, i128::from(i32::MAX)) as i32
+}
+
+fn status_dot_tick_damage(effect: &StatusEffect) -> i32 {
+    dot_tick_damage(
+        effect.tick_amount,
+        effect.stacks,
+        StackPolicy::from_wire(effect.stack_policy.as_str()).unwrap_or(StackPolicy::Refresh),
+    )
+}
+
+fn proportional_tick_amount_after_stack_loss(
+    tick_amount: i32,
+    old_stacks: u32,
+    new_stacks: u32,
+) -> i32 {
+    if tick_amount <= 0 || old_stacks == 0 || new_stacks == 0 {
+        return 0;
+    }
+    let numerator = i128::from(tick_amount).saturating_mul(i128::from(new_stacks));
+    let denominator = i128::from(old_stacks);
+    numerator
+        .saturating_add(denominator / 2)
+        .div_euclid(denominator)
+        .clamp(1, i128::from(i32::MAX)) as i32
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -4721,6 +4814,8 @@ impl StatusApplication {
         self.duration.is_zero()
             || self.payload.is_invalid()
             || self.max_stacks == 0
+            || (self.stack_policy == StackPolicy::AddStackEscalatingDecay
+                && (self.payload.kind() != StatusEffectKind::Dot || self.max_stacks < 2))
             || self
                 .status_stack_group
                 .as_deref()
@@ -8259,6 +8354,19 @@ fn apply_status_internal(
         );
         return;
     }
+    if stack_policy == StackPolicy::AddStackEscalatingDecay
+        && (kind != StatusEffectKind::Dot || max_stacks < 2)
+    {
+        log::warn!(
+            "[COMBAT] Rejected escalating stack decay for non-stacking DOT kind={} max_stacks={} source={} target={} spell_id={}",
+            kind.as_str(),
+            max_stacks,
+            source.to_hex(),
+            target.to_hex(),
+            spell_id
+        );
+        return;
+    }
 
     if !target_is_alive_for_status(ctx, target) {
         return;
@@ -8364,6 +8472,58 @@ fn apply_status_internal(
                     Some(next_stacks),
                     encode_status_dispel_types(&dispel_types),
                 );
+                apply_rime_protection_to_status(ctx, &existing, now);
+                ctx.db.status_effect().status_id().update(existing);
+                apply_status_side_effects(ctx, now, source, target, kind);
+                queue_contagion_spread_if_applicable(
+                    ctx,
+                    now,
+                    source,
+                    target,
+                    spell_id,
+                    payload,
+                    polarity,
+                    duration,
+                    stack_group,
+                    max_stacks,
+                    stack_policy,
+                    dispel_types.as_slice(),
+                );
+                return;
+            }
+        }
+        StackPolicy::AddStackEscalatingDecay => {
+            if let Some(mut existing) = matches.into_iter().next() {
+                let current_stacks = existing.stacks.max(1);
+                let next_stacks = current_stacks.saturating_add(1).min(max_stacks.max(1));
+                let incoming_tick_amount = payload.encode().tick_amount;
+                let merged_tick_amount = escalating_dot_base_total_after_application(
+                    existing.tick_amount,
+                    incoming_tick_amount,
+                    current_stacks,
+                    next_stacks,
+                );
+                let preserved_next_tick_at = existing.next_tick_at;
+                let expires_at = now + escalating_dot_decay_interval(duration, next_stacks);
+                clear_rime_protection_for_status(ctx, target, existing.status_id);
+                apply_status_update(
+                    &mut existing,
+                    source,
+                    spell_id,
+                    polarity,
+                    stack_policy,
+                    payload,
+                    now,
+                    expires_at,
+                    max_stacks.max(1),
+                    Some(next_stacks),
+                    encode_status_dispel_types(&dispel_types),
+                );
+                existing.base_duration_ms = duration_millis_saturating(duration);
+                existing.tick_amount = merged_tick_amount;
+                // Applications increase the damage of the next scheduled tick;
+                // they must not postpone that tick indefinitely under pressure.
+                set_status_next_tick(&mut existing, preserved_next_tick_at);
                 apply_rime_protection_to_status(ctx, &existing, now);
                 ctx.db.status_effect().status_id().update(existing);
                 apply_status_side_effects(ctx, now, source, target, kind);
@@ -9056,6 +9216,10 @@ fn apply_status_update(
     existing.source = source;
     existing.polarity = polarity.as_str().to_string();
     existing.applied_at = now;
+    existing.base_duration_ms = timestamp_to_micros(expires_at)
+        .saturating_sub(timestamp_to_micros(now))
+        .max(0) as u64
+        / 1_000;
     set_status_expires_at(existing, expires_at);
     existing.max_stacks = max_stacks.max(1);
     existing.stack_policy = stack_policy.as_str().to_string();
@@ -9119,6 +9283,18 @@ fn remove_status_by_ability(
 
     for mut effect in matches {
         if let Some(remaining_stacks) = status_stacks_after_removal(effect.stacks, remove_stacks) {
+            if status_uses_escalating_dot_decay(&effect) {
+                effect.tick_amount = proportional_tick_amount_after_stack_loss(
+                    effect.tick_amount,
+                    effect.stacks,
+                    remaining_stacks,
+                );
+                effect.applied_at = now;
+                let base_duration = Duration::from_millis(effect.base_duration_ms.max(1));
+                let expires_at =
+                    now + escalating_dot_decay_interval(base_duration, remaining_stacks);
+                set_status_expires_at(&mut effect, expires_at);
+            }
             effect.stacks = remaining_stacks;
             ctx.db.status_effect().status_id().update(effect);
         } else {
@@ -9524,14 +9700,53 @@ pub fn expire_status_effects(ctx: &ReducerContext, now: Timestamp) {
         .expires_at_micros()
         .filter(..=now_micros)
         .collect();
-    for effect in &expired_statuses {
-        finish_expired_status_effect(ctx, effect, now);
+    for effect in expired_statuses {
+        if let Some(updated) = advance_expired_escalating_dot(effect.clone(), now) {
+            ctx.db.status_effect().status_id().update(updated);
+            continue;
+        }
+        finish_expired_status_effect(ctx, &effect, now);
+        ctx.db.status_effect().status_id().delete(effect.status_id);
     }
-    ctx.db
-        .status_effect()
-        .expires_at_micros()
-        .delete(..=now_micros);
     prune_orphaned_rime_statuses(ctx, now);
+}
+
+fn status_uses_escalating_dot_decay(effect: &StatusEffect) -> bool {
+    effect.effect_kind == StatusEffectKind::Dot.as_str()
+        && StackPolicy::from_wire(effect.stack_policy.as_str())
+            == Some(StackPolicy::AddStackEscalatingDecay)
+}
+
+fn advance_expired_escalating_dot(
+    mut effect: StatusEffect,
+    now: Timestamp,
+) -> Option<StatusEffect> {
+    if !status_uses_escalating_dot_decay(&effect) || now < effect.expires_at {
+        return None;
+    }
+
+    let base_duration = if effect.base_duration_ms > 0 {
+        Duration::from_millis(effect.base_duration_ms)
+    } else {
+        let current_micros = timestamp_to_micros(effect.expires_at)
+            .saturating_sub(timestamp_to_micros(effect.applied_at))
+            .max(1) as u64;
+        Duration::from_micros(current_micros)
+    };
+
+    while effect.stacks > 1 && now >= effect.expires_at {
+        let old_stacks = effect.stacks;
+        let new_stacks = old_stacks - 1;
+        effect.tick_amount =
+            proportional_tick_amount_after_stack_loss(effect.tick_amount, old_stacks, new_stacks);
+        effect.stacks = new_stacks;
+        effect.applied_at = effect.expires_at;
+        let next_expires_at =
+            effect.expires_at + escalating_dot_decay_interval(base_duration, new_stacks);
+        set_status_expires_at(&mut effect, next_expires_at);
+    }
+
+    (now < effect.expires_at).then_some(effect)
 }
 
 fn prune_orphaned_rime_statuses(ctx: &ReducerContext, now: Timestamp) {
@@ -9575,8 +9790,12 @@ fn expire_statuses_for_target(ctx: &ReducerContext, target: Identity, now: Times
         .filter(|effect| now >= effect.expires_at)
         .collect();
     for effect in remove_effects {
-        finish_expired_status_effect(ctx, &effect, now);
-        ctx.db.status_effect().status_id().delete(effect.status_id);
+        if let Some(updated) = advance_expired_escalating_dot(effect.clone(), now) {
+            ctx.db.status_effect().status_id().update(updated);
+        } else {
+            finish_expired_status_effect(ctx, &effect, now);
+            ctx.db.status_effect().status_id().delete(effect.status_id);
+        }
     }
 }
 
@@ -10455,7 +10674,7 @@ pub fn tick_hemorrhage(ctx: &ReducerContext, now: Timestamp, dt: f32) -> usize {
             let used_ms = ticks.saturating_mul(interval_ms);
             consumed_ms = consumed_ms.max(used_ms);
 
-            let per_tick = bleed.tick_amount.max(0) * bleed.stacks.max(1) as i32;
+            let per_tick = status_dot_tick_damage(&bleed);
             let amount = per_tick.saturating_mul(ticks.min(i32::MAX as u64) as i32);
             if amount > 0 {
                 queued.push(EffectPacket::Damage {
@@ -10561,7 +10780,7 @@ fn advance_shadowrend_from_melee(
         }
         let used_ms = ticks.saturating_mul(interval_ms);
 
-        let per_tick = wound.tick_amount.max(0) * wound.stacks.max(1) as i32;
+        let per_tick = status_dot_tick_damage(&wound);
         let amount = per_tick.saturating_mul(ticks.min(i32::MAX as u64) as i32);
         if amount > 0 {
             queued.push(EffectPacket::Damage {
@@ -10699,10 +10918,10 @@ pub fn process_periodic_status_ticks(ctx: &ReducerContext, now: Timestamp) -> us
         } else {
             match kind.expect("validated periodic status kind") {
                 StatusEffectKind::Dot => {
-                    let base = effect.tick_amount.max(0);
-                    if base > 0 {
+                    let amount = status_dot_tick_damage(&effect);
+                    if amount > 0 {
                         queued.push(EffectPacket::Damage {
-                            amount: base.saturating_mul(stacks),
+                            amount,
                             damage_type: DamageType::from_wire(effect.damage_type.as_str()),
                             source: effect.source,
                             target: effect.target,
@@ -10792,33 +11011,35 @@ fn attack_speed_scalar_to_multiplier(modifier_scalar: f32) -> f32 {
 mod tests {
     use super::{
         accumulated_reckoning_damage, action_key_matches_instance, actor_distance_sq,
-        apply_status_update, attack_speed_scalar_to_multiplier, attacker_is_behind_target,
-        battle_trance_hp_after_damage, behind_target_damage_multiplier,
+        advance_expired_escalating_dot, apply_status_update, attack_speed_scalar_to_multiplier,
+        attacker_is_behind_target, battle_trance_hp_after_damage, behind_target_damage_multiplier,
         blight_empowered_hit_is_eligible, bloodlust_passive_spec, burden_damage_split,
         damage_breaks_confusion, damage_breaks_shroud, damage_comes_from_casted_ability,
         damage_source_grants_outgoing_rewards, damaging_area_consumes_mirror_images,
         deterministic_fulmination_candidate_index, disabled_target_damage_multiplier,
-        due_interval_count, event_prune_cutoff_micros, fire_spell_hit_can_trigger_wildfire,
-        fracture_melee_damage_multiplier, fulmination_arc_damage,
-        fulmination_uses_any_target_audience, furnace_mana_restore_amount,
+        dot_tick_damage, due_interval_count, escalating_dot_base_total_after_application,
+        escalating_dot_decay_interval, event_prune_cutoff_micros,
+        fire_spell_hit_can_trigger_wildfire, fracture_melee_damage_multiplier,
+        fulmination_arc_damage, fulmination_uses_any_target_audience, furnace_mana_restore_amount,
         heartseeker_should_auto_crit, hit_is_direct_melee_attack, holy_shield_end_reason,
         immolation_damage_for_stacks, immolation_remaining_tick_count, initial_status_stacks,
         isolated_damage_multiplier, knockback_stagger_duration, melee_attack_can_trigger_fracture,
         mirror_image_intercept_chance, mirror_image_stacks_after_intercept,
         mirror_images_intercept, new_status_effect, opportunist_passive_is_active_for_profile,
         point_blank_damage_multiplier, point_within_radius, potential_stacks_after_spell_strike,
-        quickening_cast_speed_multiplier, resolve_effect_amount_from_roll,
-        resolve_mana_shield_absorb, resolve_temporary_hitpoint_absorb, resolved_shove_tunables,
-        rime_protected_status_id, rime_protection_stack_group, spell_critical_can_charge_capacitor,
+        proportional_tick_amount_after_stack_loss, quickening_cast_speed_multiplier,
+        resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
+        resolve_temporary_hitpoint_absorb, resolved_shove_tunables, rime_protected_status_id,
+        rime_protection_stack_group, spell_critical_can_charge_capacitor,
         spell_critical_can_trigger_chain_reaction, stacked_slow_pct, stagger_shove_tunables,
         stationary_target_damage_multiplier, stationary_target_from_poses,
-        status_application_is_blocked_by_immunity, status_has_dispel_type,
-        status_kind_is_intrinsically_undispellable, status_matches_removal_filter_values,
-        status_stacks_after_removal, status_can_spread_from_contagious_target,
-        AuthoredStatusPayload, DamageDelivery, DamageType,
-        EffectPacket, HolyShieldEndReason, MovementModifiers, PendingHit, StackPolicy,
-        StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
-        StatusRuntimeView, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
+        status_application_is_blocked_by_immunity, status_can_spread_from_contagious_target,
+        status_dot_tick_damage, status_has_dispel_type, status_kind_is_intrinsically_undispellable,
+        status_matches_removal_filter_values, status_stacks_after_removal, AuthoredStatusPayload,
+        DamageDelivery, DamageType, EffectPacket, HolyShieldEndReason, MovementModifiers,
+        PendingHit, StackPolicy, StatusApplication, StatusDispelType, StatusEffect,
+        StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
+        StatusStackGroupDefault, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
         COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_BURDEN_REDIRECT,
         DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PERIODIC, DAMAGE_SOURCE_KIND_PROJECTILE,
         DAMAGE_SOURCE_KIND_SELF_INFLICTED, DAMAGE_SOURCE_KIND_SPELL, HOLY_SHIELD_SPELL_ID,
@@ -10971,6 +11192,116 @@ mod tests {
             expires_at,
             String::new(),
         )
+    }
+
+    #[test]
+    fn escalating_dot_damage_curve_is_superlinear_without_changing_standard_dots() {
+        let samples = [(1, 2), (3, 8), (5, 16), (7, 27), (10, 47)];
+        for (stacks, expected) in samples {
+            assert_eq!(
+                dot_tick_damage(
+                    2 * stacks as i32,
+                    stacks,
+                    StackPolicy::AddStackEscalatingDecay,
+                ),
+                expected,
+                "unexpected escalating damage at {stacks} stacks"
+            );
+            assert_eq!(
+                dot_tick_damage(2, stacks, StackPolicy::AddStackRefresh),
+                2 * stacks as i32,
+                "standard poison/burn behavior must remain linear"
+            );
+        }
+    }
+
+    #[test]
+    fn escalating_dot_decay_interval_shortens_as_stacks_rise() {
+        let base = Duration::from_secs(6);
+        assert_eq!(escalating_dot_decay_interval(base, 1), base);
+        assert_eq!(
+            escalating_dot_decay_interval(base, 5),
+            Duration::from_millis(2500)
+        );
+        assert_eq!(
+            escalating_dot_decay_interval(base, 10),
+            Duration::from_micros(1_445_783)
+        );
+    }
+
+    #[test]
+    fn escalating_dot_expiry_steps_down_and_catches_up_across_deadlines() {
+        let start = Timestamp::UNIX_EPOCH;
+        let base = Duration::from_secs(6);
+        let first_expiry = start + escalating_dot_decay_interval(base, 3);
+        let mut effect = test_status_effect(
+            test_identity(),
+            StatusPayload::Dot {
+                tick_damage: 6,
+                damage_type: DamageType::Physical,
+                tick_interval: Duration::from_secs(1),
+            },
+            start,
+            first_expiry,
+        );
+        effect.stack_policy = StackPolicy::AddStackEscalatingDecay.as_str().to_string();
+        effect.stacks = 3;
+        effect.tick_amount = 6;
+        effect.base_duration_ms = 6_000;
+
+        let after_first = advance_expired_escalating_dot(effect.clone(), first_expiry)
+            .expect("three stacks should step down instead of disappearing");
+        assert_eq!(after_first.stacks, 2);
+        assert_eq!(after_first.tick_amount, 4);
+        assert_eq!(status_dot_tick_damage(&after_first), 5);
+        assert_eq!(after_first.applied_at, first_expiry);
+
+        let caught_up = advance_expired_escalating_dot(effect, start + Duration::from_secs(8))
+            .expect("the low-stack residue should still be active");
+        assert_eq!(caught_up.stacks, 1);
+        assert_eq!(caught_up.tick_amount, 2);
+        assert_eq!(status_dot_tick_damage(&caught_up), 2);
+        assert!(
+            advance_expired_escalating_dot(caught_up, start + Duration::from_secs(14)).is_none()
+        );
+    }
+
+    #[test]
+    fn escalating_dot_pool_accumulates_variable_base_damage_and_loses_it_proportionally() {
+        assert_eq!(escalating_dot_base_total_after_application(4, 7, 1, 2), 11);
+        assert_eq!(
+            escalating_dot_base_total_after_application(11, 9, 10, 10),
+            11,
+            "applications at the cap refresh decay without inflating base damage"
+        );
+        assert_eq!(proportional_tick_amount_after_stack_loss(20, 5, 3), 12);
+    }
+
+    #[test]
+    fn escalating_stack_policy_is_reserved_for_multi_stack_dots() {
+        let invalid_non_dot = StatusApplication::new(
+            StatusPayload::Slow { slow_pct: 0.2 },
+            Duration::from_secs(6),
+            Some("TEST".to_string()),
+            StatusStackGroupDefault::EffectKind,
+            10,
+            StackPolicy::AddStackEscalatingDecay,
+        );
+        assert!(invalid_non_dot.is_invalid());
+
+        let invalid_single_stack = StatusApplication::new(
+            StatusPayload::Dot {
+                tick_damage: 2,
+                damage_type: DamageType::Physical,
+                tick_interval: Duration::from_secs(1),
+            },
+            Duration::from_secs(6),
+            Some("TEST".to_string()),
+            StatusStackGroupDefault::EffectKind,
+            1,
+            StackPolicy::AddStackEscalatingDecay,
+        );
+        assert!(invalid_single_stack.is_invalid());
     }
 
     fn status_runtime_view(
@@ -13687,6 +14018,10 @@ fn new_status_effect(
         max_stacks,
         stack_policy: stack_policy.as_str().to_string(),
         applied_at: now,
+        base_duration_ms: timestamp_to_micros(expires_at)
+            .saturating_sub(timestamp_to_micros(now))
+            .max(0) as u64
+            / 1_000,
         expires_at: now,
         expires_at_micros: 0,
         slow_pct: columns.slow_pct,
