@@ -12616,6 +12616,138 @@ mod tests {
     }
 
     #[test]
+    fn close_range_weapon_melee_reach_preserves_area_and_gap_close_ranges() {
+        const CLOSE_MELEE_RANGE_METERS: f32 = 1.8;
+
+        let catalog = progression_catalog();
+        let close_range_profiles = [
+            COMBAT_PROFILE_DAGGERS,
+            COMBAT_PROFILE_SWORD_AND_SHIELD,
+            COMBAT_PROFILE_TWO_HANDED_SWORD,
+        ];
+        let area_ranges = [
+            ("DAGGER_SPINNING_SLASH", "CASTER_RADIUS", 3.25),
+            ("WARRIOR_CATACLYSM", "CASTER_CONE", 11.5),
+            ("WARRIOR_WHIRLWIND", "CASTER_RADIUS", 3.25),
+            ("PALADIN_SACRED_THRUST", "CASTER_RECTANGLE", 5.0),
+        ];
+        let gap_close_ranges = [
+            ("DAGGER_DASHING_CUT", 12.0, Some(4.0)),
+            ("DAGGER_PURSUE", 12.0, Some(4.0)),
+            ("DAGGER_COUP_DE_GRACE", 12.0, None),
+            ("DAGGER_DEATH_CROSS", 12.0, None),
+            ("DAGGER_DIVING_STRIKE", 12.0, None),
+            ("WARRIOR_EARTHSHATTER", 8.0, None),
+            ("WARRIOR_CHARGE", 18.0, Some(5.0)),
+            ("WARRIOR_IMPALE", 18.0, Some(5.0)),
+            ("PALADIN_CHARGE", 18.0, Some(5.0)),
+            ("PALADIN_AVENGE", 18.0, Some(5.0)),
+            ("PALADIN_AIR_TO_GROUND_1", 18.0, Some(5.0)),
+            ("PALADIN_AIR_TO_GROUND_3", 18.0, Some(0.0)),
+        ];
+
+        let mut targeted_count = 0;
+        let mut area_count = 0;
+        let mut gap_close_count = 0;
+        for ability in catalog.abilities.iter().filter(|ability| {
+            close_range_profiles.contains(
+                &normalize_identifier(ability.combat_profile_id.as_str()).as_str(),
+            ) && ability_gameplay_kind(ability) == "MELEE"
+        }) {
+            let targeting = resolved_melee_targeting_for_catalog(&ability.gameplay);
+            if let Some(gap_close) = ability.gameplay.gap_close.as_ref() {
+                let (_, expected_range, expected_minimum_range) = gap_close_ranges
+                    .iter()
+                    .find(|(ability_id, _, _)| *ability_id == ability.ability_id)
+                    .unwrap_or_else(|| panic!("unexpected gap closer {}", ability.ability_id));
+                assert_eq!(
+                    ability.gameplay.range,
+                    Some(*expected_range),
+                    "{} gap-close acquisition range changed",
+                    ability.ability_id
+                );
+                assert_eq!(
+                    ability.gameplay.minimum_range, *expected_minimum_range,
+                    "{} gap-close minimum range changed",
+                    ability.ability_id
+                );
+                assert_eq!(
+                    gap_close.impact_range, CLOSE_MELEE_RANGE_METERS,
+                    "{} gap-close impact reach must match close melee reach",
+                    ability.ability_id
+                );
+                assert_eq!(
+                    gap_close.arrival_buffer, 1.44,
+                    "{} gap-close arrival distance changed",
+                    ability.ability_id
+                );
+                assert_eq!(
+                    gap_close.arrival_epsilon, 0.05,
+                    "{} gap-close arrival tolerance changed",
+                    ability.ability_id
+                );
+
+                let intended_arrival_center_distance = DEFAULT_HIT_RADIUS
+                    + DEFAULT_HIT_RADIUS
+                    + gap_close.arrival_buffer;
+                assert_eq!(intended_arrival_center_distance, 2.0);
+                let furthest_arrived_center_distance =
+                    intended_arrival_center_distance + gap_close.arrival_epsilon;
+                let impact_center_reach = gap_close.impact_range + DEFAULT_HIT_RADIUS;
+                assert!(
+                    furthest_arrived_center_distance <= impact_center_reach,
+                    "{} can arrive at {:.2}m, outside impact reach {:.2}m",
+                    ability.ability_id,
+                    furthest_arrived_center_distance,
+                    impact_center_reach
+                );
+                gap_close_count += 1;
+            } else if targeting.kind == "TARGET" {
+                assert_eq!(
+                    ability.gameplay.range,
+                    Some(CLOSE_MELEE_RANGE_METERS),
+                    "{} must use close targeted melee reach",
+                    ability.ability_id
+                );
+                targeted_count += 1;
+            } else {
+                let (_, expected_kind, expected_range) = area_ranges
+                    .iter()
+                    .find(|(ability_id, _, _)| *ability_id == ability.ability_id)
+                    .unwrap_or_else(|| panic!("unexpected area melee {}", ability.ability_id));
+                assert_eq!(targeting.kind, *expected_kind);
+                assert_eq!(ability.gameplay.range, Some(*expected_range));
+                area_count += 1;
+            }
+        }
+
+        assert!(targeted_count > 0);
+        assert_eq!(area_count, area_ranges.len());
+        assert_eq!(gap_close_count, gap_close_ranges.len());
+
+        for profile_id in close_range_profiles {
+            let profile_auto_attacks: Vec<_> = catalog
+                .auto_attacks
+                .iter()
+                .filter(|attack| {
+                    normalize_identifier(attack.combat_profile_id.as_str()) == profile_id
+                })
+                .collect();
+            assert!(!profile_auto_attacks.is_empty(), "{profile_id} auto attack");
+            assert!(profile_auto_attacks
+                .iter()
+                .all(|attack| attack.range == CLOSE_MELEE_RANGE_METERS));
+        }
+
+        let dread_strike = catalog
+            .auto_attack_replacements
+            .iter()
+            .find(|replacement| replacement.replacement_id == "WARRIOR_DREAD_STRIKE")
+            .expect("WARRIOR_DREAD_STRIKE auto-attack replacement must exist");
+        assert_eq!(dread_strike.range, CLOSE_MELEE_RANGE_METERS);
+    }
+
+    #[test]
     fn dagger_diving_strike_authors_required_arrival_gap_close() {
         let ability = progression_catalog()
             .abilities
@@ -12841,7 +12973,7 @@ mod tests {
             normalize_identifier(gap_close.destination.as_str()),
             "BEHIND_TARGET"
         );
-        assert_eq!(gap_close.impact_range, 2.5);
+        assert_eq!(gap_close.impact_range, 1.8);
         assert_eq!(
             normalize_identifier(gap_close.collision_policy.as_str()),
             "REQUIRE_CLEAR_PATH"
@@ -12872,7 +13004,7 @@ mod tests {
             "NEAREST_CONTACT_POINT"
         );
         assert_eq!(gap_close.speed, Some(24.0));
-        assert_eq!(gap_close.impact_range, 2.5);
+        assert_eq!(gap_close.impact_range, 1.8);
         assert_eq!(
             normalize_identifier(gap_close.collision_policy.as_str()),
             "STOP_AT_BLOCK"
@@ -13115,7 +13247,7 @@ mod tests {
             assert_eq!(gap_close.speed, Some(23.0));
             assert_eq!(gap_close.arrival_buffer, 1.44);
             assert_eq!(gap_close.arrival_epsilon, 0.05);
-            assert_eq!(gap_close.impact_range, 2.5);
+            assert_eq!(gap_close.impact_range, 1.8);
             assert_eq!(
                 normalize_identifier(gap_close.collision_policy.as_str()),
                 "STOP_AT_BLOCK"
@@ -13215,7 +13347,7 @@ mod tests {
             assert_eq!(gap_close.speed, Some(23.0));
             assert_eq!(gap_close.arrival_buffer, 1.44);
             assert_eq!(gap_close.arrival_epsilon, 0.05);
-            assert_eq!(gap_close.impact_range, 2.5);
+            assert_eq!(gap_close.impact_range, 1.8);
             assert_eq!(
                 normalize_identifier(gap_close.collision_policy.as_str()),
                 "STOP_AT_BLOCK"
