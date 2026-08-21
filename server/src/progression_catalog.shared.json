@@ -924,7 +924,7 @@
         "block_behavior": "BLOCKABLE",
         "airborne_targeting_mode": "ANY_TARGET",
         "gap_close": {
-          "kind": "LEAP",
+          "kind": "LINEAR",
           "destination": "NEAREST_CONTACT_POINT",
           "speed": 18,
           "arrival_buffer": 1.44,
@@ -7224,7 +7224,7 @@
         "block_behavior": "BLOCKABLE",
         "airborne_targeting_mode": "ANY_TARGET",
         "gap_close": {
-          "kind": "LINEAR",
+          "kind": "LEAP",
           "destination": "NEAREST_CONTACT_POINT",
           "speed": 24,
           "arrival_buffer": 1.44,
@@ -7431,7 +7431,7 @@
         "block_behavior": "BLOCKABLE",
         "airborne_targeting_mode": "ANY_TARGET",
         "gap_close": {
-          "kind": "LINEAR",
+          "kind": "LEAP",
           "destination": "NEAREST_CONTACT_POINT",
           "speed": 24,
           "arrival_buffer": 1.44,

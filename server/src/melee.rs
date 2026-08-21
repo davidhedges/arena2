@@ -163,6 +163,8 @@ const GAP_CLOSE_DESTINATION_TARGET_SIDE_RIGHT: &str = "TARGET_SIDE_RIGHT";
 const GAP_CLOSE_DESTINATION_CURRENT_LINE: &str = "CURRENT_LINE";
 const GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH: &str = "REQUIRE_CLEAR_PATH";
 const MELEE_GAP_CLOSE_KIND_PREFIX: &str = "MELEE_GAP_CLOSE";
+const MELEE_GAP_CLOSE_LEAP_ARC_HEIGHT_PER_METER: f32 = 0.08;
+const MELEE_GAP_CLOSE_LEAP_MAX_ARC_HEIGHT_METERS: f32 = 0.75;
 const MELEE_TARGET_FACING_ARC_RADIANS: f32 = std::f32::consts::PI;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1634,6 +1636,7 @@ struct ResolvedMeleeGapClose {
     end: SpellVec3,
     duration_ms: u64,
     impact_range: f32,
+    arc_height: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -2570,6 +2573,7 @@ fn resolve_melee_gap_close(
         end,
         duration_ms,
         impact_range: gap_close.impact_range,
+        arc_height: gap_close_arc_height(gap_close.kind.as_str(), start, end),
     })
 }
 
@@ -2577,6 +2581,17 @@ fn gap_close_has_horizontal_travel(start: SpellVec3, end: SpellVec3) -> bool {
     let dx = end.x - start.x;
     let dz = end.z - start.z;
     dx * dx + dz * dz > 0.0001
+}
+
+fn gap_close_arc_height(kind: &str, start: SpellVec3, end: SpellVec3) -> f32 {
+    if kind != GAP_CLOSE_KIND_LEAP || !gap_close_has_horizontal_travel(start, end) {
+        return 0.0;
+    }
+
+    let dx = end.x - start.x;
+    let dz = end.z - start.z;
+    ((dx * dx + dz * dz).sqrt() * MELEE_GAP_CLOSE_LEAP_ARC_HEIGHT_PER_METER)
+        .min(MELEE_GAP_CLOSE_LEAP_MAX_ARC_HEIGHT_METERS)
 }
 
 fn timed_melee_movement_destination(start: SpellVec3, yaw: f32, distance: f32) -> SpellVec3 {
@@ -4238,22 +4253,39 @@ fn perform_melee_attack_for_internal(
                 target_point_z,
                 caster_phys.yaw,
             );
-            begin_special_movement_with_facing_policy(
-                ctx,
-                caster,
-                &format!(
-                    "{}:{}",
-                    MELEE_GAP_CLOSE_KIND_PREFIX,
-                    runtime_action_id.as_str()
-                ),
-                now,
-                gap_close.duration_ms,
-                movement_start,
-                gap_close.end,
-                movement_facing_yaw,
-                movement_facing_policy,
-                SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+            let movement_kind = format!(
+                "{}:{}",
+                MELEE_GAP_CLOSE_KIND_PREFIX,
+                runtime_action_id.as_str()
             );
+            if gap_close.arc_height > 0.0 {
+                begin_parabolic_arc_special_movement(
+                    ctx,
+                    caster,
+                    movement_kind.as_str(),
+                    now,
+                    gap_close.duration_ms,
+                    movement_start,
+                    gap_close.end,
+                    gap_close.arc_height,
+                    movement_facing_yaw,
+                    movement_facing_policy,
+                    SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y,
+                );
+            } else {
+                begin_special_movement_with_facing_policy(
+                    ctx,
+                    caster,
+                    movement_kind.as_str(),
+                    now,
+                    gap_close.duration_ms,
+                    movement_start,
+                    gap_close.end,
+                    movement_facing_yaw,
+                    movement_facing_policy,
+                    SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+                );
+            }
             arm_lingering_shade_for_voluntary_movement(
                 ctx,
                 caster,
@@ -6565,7 +6597,7 @@ mod tests {
         auto_attack_catalog_resolution_keys, auto_attack_reference_for_profile,
         auto_attack_sequence_step_for_profile, canonical_slot_id, combo_input_decision,
         default_aerial_execution_mode, find_combo_root_for_authorization,
-        gap_close_activation_satisfied, gap_close_destination_within_epsilon,
+        gap_close_activation_satisfied, gap_close_arc_height, gap_close_destination_within_epsilon,
         gap_close_has_horizontal_travel, gap_close_movement_facing, gap_close_pre_commit_decision,
         gap_close_target_facing_satisfied, inactive_conditional_gap_close_range,
         melee_channel_movement_canceled, melee_channel_tick_delays,
@@ -6585,9 +6617,9 @@ mod tests {
         ResolvedMeleeAttackModifiers, ResolvedMeleeGapClose, ResolvedMeleeTargeting, SpellVec3,
         StaggerDirection, StrikeData, StrikeHitWindowData, DAGGER_COUP_DE_GRACE_ABILITY_ID,
         GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH, GAP_CLOSE_DESTINATION_BEHIND_TARGET,
-        GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT, GAP_CLOSE_KIND_LINEAR,
-        GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED, MELEE_MANIFEST_JSON,
-        MELEE_TARGET_FACING_ARC_RADIANS, SPECIAL_MOVEMENT_FACING_FACE_PATH,
+        GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT, GAP_CLOSE_KIND_LEAP, GAP_CLOSE_KIND_LINEAR,
+        GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED, MELEE_GAP_CLOSE_LEAP_MAX_ARC_HEIGHT_METERS,
+        MELEE_MANIFEST_JSON, MELEE_TARGET_FACING_ARC_RADIANS, SPECIAL_MOVEMENT_FACING_FACE_PATH,
         SPECIAL_MOVEMENT_FACING_FACE_START,
     };
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
@@ -8345,6 +8377,27 @@ mod tests {
     }
 
     #[test]
+    fn leap_gap_close_arc_scales_with_travel_and_caps_at_subtle_height() {
+        let start = SpellVec3::new(0.0, 2.0, 0.0);
+
+        assert_eq!(
+            gap_close_arc_height(GAP_CLOSE_KIND_LINEAR, start, SpellVec3::new(0.0, 2.0, 8.0)),
+            0.0
+        );
+        assert_eq!(gap_close_arc_height(GAP_CLOSE_KIND_LEAP, start, start), 0.0);
+        assert!(
+            (gap_close_arc_height(GAP_CLOSE_KIND_LEAP, start, SpellVec3::new(0.0, 2.0, 4.0))
+                - 0.32)
+                .abs()
+                < 0.0001
+        );
+        assert_eq!(
+            gap_close_arc_height(GAP_CLOSE_KIND_LEAP, start, SpellVec3::new(0.0, 2.0, 20.0)),
+            MELEE_GAP_CLOSE_LEAP_MAX_ARC_HEIGHT_METERS
+        );
+    }
+
+    #[test]
     fn gap_close_behind_destination_uses_target_yaw() {
         let gap = test_gap_close(GAP_CLOSE_DESTINATION_BEHIND_TARGET);
         let caster = gap_actor(0.0, 0.0, 0.0, 0.5);
@@ -8547,6 +8600,7 @@ mod tests {
             end: SpellVec3::new(0.0, 0.0, 8.65),
             duration_ms: 500,
             impact_range: gap.impact_range,
+            arc_height: 0.0,
         };
 
         assert_eq!(
@@ -8564,6 +8618,7 @@ mod tests {
             end: SpellVec3::new(0.0, 0.0, 8.65),
             duration_ms: 500,
             impact_range: gap.impact_range,
+            arc_height: 0.0,
         };
 
         assert_eq!(
@@ -8583,6 +8638,7 @@ mod tests {
             end: SpellVec3::new(0.0, 0.0, 8.65),
             duration_ms: 700,
             impact_range: 2.5,
+            arc_height: 0.0,
         };
 
         assert_eq!(

@@ -12633,6 +12633,28 @@ mod tests {
     }
 
     #[test]
+    fn selected_dagger_gap_closers_are_the_only_authored_leaps() {
+        let leap_abilities: HashSet<_> = progression_catalog()
+            .abilities
+            .iter()
+            .filter_map(|ability| {
+                let gap_close = ability.gameplay.gap_close.as_ref()?;
+                (normalize_identifier(gap_close.kind.as_str()) == "LEAP")
+                    .then(|| ability.ability_id.as_str())
+            })
+            .collect();
+
+        assert_eq!(
+            leap_abilities,
+            HashSet::from([
+                "DAGGER_PURSUE",
+                "DAGGER_DEATH_CROSS",
+                "DAGGER_DIVING_STRIKE",
+            ])
+        );
+    }
+
+    #[test]
     fn dagger_roundhouse_staggers_without_knockback() {
         let catalog = progression_catalog();
         let ability = catalog
@@ -12764,7 +12786,7 @@ mod tests {
     }
 
     #[test]
-    fn dagger_pursue_authors_existing_linear_gap_close() {
+    fn dagger_pursue_authors_leap_gap_close() {
         let ability = progression_catalog()
             .abilities
             .iter()
@@ -12777,7 +12799,7 @@ mod tests {
             .expect("DAGGER_PURSUE must author gap_close");
 
         assert_eq!(ability.action_id, "DAGGER_COMBO_ATTACK_01_04");
-        assert_eq!(normalize_identifier(gap_close.kind.as_str()), "LINEAR");
+        assert_eq!(normalize_identifier(gap_close.kind.as_str()), "LEAP");
         assert_eq!(
             normalize_identifier(gap_close.destination.as_str()),
             "NEAREST_CONTACT_POINT"
@@ -12822,7 +12844,7 @@ mod tests {
     }
 
     #[test]
-    fn dagger_death_cross_authors_standard_linear_gap_close() {
+    fn dagger_death_cross_authors_leap_gap_close() {
         let ability = progression_catalog()
             .abilities
             .iter()
@@ -12836,7 +12858,7 @@ mod tests {
 
         assert_eq!(ability.gameplay.range, Some(12.0));
         assert_eq!(ability.gameplay.minimum_range, Some(4.0));
-        assert_eq!(normalize_identifier(gap_close.kind.as_str()), "LINEAR");
+        assert_eq!(normalize_identifier(gap_close.kind.as_str()), "LEAP");
         assert_eq!(
             normalize_identifier(gap_close.destination.as_str()),
             "NEAREST_CONTACT_POINT"
