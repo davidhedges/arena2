@@ -905,8 +905,9 @@ namespace Arena.Editor
 
             _spellAbilities.AddRange(_catalog.abilities
                 .Where(ability => string.Equals(Normalize(ability.gameplay.kind), "SPELL", StringComparison.Ordinal))
-                .OrderBy(ability => ability.sort_order)
-                .ThenBy(ability => Normalize(ability.ability_id)));
+                .OrderBy(
+                    ability => Normalize(ability.ability_id),
+                    StringComparer.Ordinal));
 
             _selectedSpellIndex = Mathf.Clamp(_selectedSpellIndex, 0, Math.Max(0, _spellAbilities.Count - 1));
             if (_spellAbilities.Count > 0)

@@ -1,5 +1,6 @@
 #nullable enable
 
+using System;
 using System.Collections.Generic;
 using Arena.Input;
 using Arena.Presentation;
@@ -37,6 +38,9 @@ namespace Arena.Editor
         private bool _castPreviewGraphCreated;
         private CombatAnimationSet? _castPreviewAnimationSet;
         private AnimationClip? _castPreviewClip;
+        private Renderer[] _castPreviewAvatarRenderers = Array.Empty<Renderer>();
+        private Bounds _castPreviewFrameBounds;
+        private bool _castPreviewHasFrameBounds;
         private string _castPreviewError = string.Empty;
         private float _castPreviewTime;
         private bool _castPreviewPlaying;
@@ -305,6 +309,12 @@ namespace Arena.Editor
                 return;
             }
 
+            PrepareCastPreviewAvatar(binding);
+            _castPreviewFrameBounds = CalculateCastAnimationPreviewBounds(
+                binding.Renderers,
+                binding.AvatarRoot.transform.position);
+            _castPreviewHasFrameBounds = true;
+
             WeaponAttachmentController? attachments =
                 _castPreviewInstance.GetComponentInChildren<WeaponAttachmentController>(true);
             if (attachments != null)
@@ -345,8 +355,32 @@ namespace Arena.Editor
             _castPreviewAnimator = null;
             _castPreviewAnimationSet = null;
             _castPreviewClip = null;
+            _castPreviewAvatarRenderers = Array.Empty<Renderer>();
+            _castPreviewFrameBounds = default;
+            _castPreviewHasFrameBounds = false;
             _castPreviewError = string.Empty;
             _castPreviewPlaying = false;
+        }
+
+        private void PrepareCastPreviewAvatar(RuntimeAvatarBinding binding)
+        {
+            _castPreviewAnimator = binding.Animator;
+            _castPreviewAnimator.enabled = true;
+            _castPreviewAnimator.applyRootMotion = false;
+            _castPreviewAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            _castPreviewAnimator.Rebind();
+            _castPreviewAnimator.Update(0f);
+
+            _castPreviewAvatarRenderers = binding.Renderers ?? Array.Empty<Renderer>();
+            foreach (Renderer renderer in _castPreviewAvatarRenderers)
+            {
+                if (renderer == null)
+                    continue;
+
+                renderer.enabled = true;
+                if (renderer is SkinnedMeshRenderer skinnedRenderer)
+                    skinnedRenderer.updateWhenOffscreen = true;
+            }
         }
 
         private void CreateCastAnimationPreviewGraph(AnimationClip previewClip)
@@ -419,7 +453,10 @@ namespace Arena.Editor
             }
             else
             {
-                _castPreviewClip.SampleAnimation(_castPreviewInstance, _castPreviewTime);
+                GameObject sampleRoot = _castPreviewAnimator != null
+                    ? _castPreviewAnimator.gameObject
+                    : _castPreviewInstance;
+                _castPreviewClip.SampleAnimation(sampleRoot, _castPreviewTime);
             }
         }
 
@@ -437,7 +474,23 @@ namespace Arena.Editor
             if (Event.current.type != EventType.Repaint)
                 return;
 
-            Bounds bounds = CalculateCastAnimationPreviewBounds(_castPreviewInstance);
+            ConfigureCastAnimationPreviewCamera();
+            _castPreviewUtility.BeginPreview(previewRect, GUIStyle.none);
+            _castPreviewUtility.Render(true);
+            Texture texture = _castPreviewUtility.EndPreview();
+            GUI.DrawTexture(previewRect, texture, ScaleMode.StretchToFill, false);
+        }
+
+        private void ConfigureCastAnimationPreviewCamera()
+        {
+            if (_castPreviewUtility == null || _castPreviewInstance == null)
+                return;
+
+            Bounds bounds = _castPreviewHasFrameBounds
+                ? _castPreviewFrameBounds
+                : CalculateCastAnimationPreviewBounds(
+                    _castPreviewAvatarRenderers,
+                    _castPreviewInstance.transform.position);
             Camera camera = _castPreviewUtility.camera;
             camera.clearFlags = CameraClearFlags.Color;
             camera.backgroundColor = new Color(0.16f, 0.16f, 0.16f, 1f);
@@ -453,20 +506,17 @@ namespace Arena.Editor
             camera.transform.rotation = Quaternion.LookRotation(forward, Vector3.up);
             camera.nearClipPlane = 0.01f;
             camera.farClipPlane = Mathf.Max(50f, distance + radius * 4f);
-
-            _castPreviewUtility.BeginPreview(previewRect, GUIStyle.none);
-            _castPreviewUtility.Render(true);
-            Texture texture = _castPreviewUtility.EndPreview();
-            GUI.DrawTexture(previewRect, texture, ScaleMode.StretchToFill, false);
         }
 
-        private static Bounds CalculateCastAnimationPreviewBounds(GameObject previewInstance)
+        private static Bounds CalculateCastAnimationPreviewBounds(
+            IReadOnlyList<Renderer> renderers,
+            Vector3 fallbackOrigin)
         {
-            Renderer[] renderers = previewInstance.GetComponentsInChildren<Renderer>(false);
             bool hasBounds = false;
             Bounds bounds = default;
-            foreach (Renderer renderer in renderers)
+            for (int index = 0; index < renderers.Count; index++)
             {
+                Renderer renderer = renderers[index];
                 if (renderer == null || !renderer.enabled)
                     continue;
 
@@ -481,7 +531,9 @@ namespace Arena.Editor
                 }
             }
 
-            return hasBounds ? bounds : new Bounds(Vector3.up, Vector3.one * 2f);
+            return hasBounds
+                ? bounds
+                : new Bounds(fallbackOrigin + Vector3.up, Vector3.one * 2f);
         }
 
         private void HandleCastAnimationPreviewCameraInput(Rect previewRect)
