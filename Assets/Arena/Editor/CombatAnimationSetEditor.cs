@@ -1803,8 +1803,7 @@ namespace Arena.Editor
         private static List<AttackPreviewClipOption> BuildSpellPreviewClipOptions(WeaponSpellAnimationEntry spell)
         {
             var options = new List<AttackPreviewClipOption>();
-            AddAttackPreviewClipOption(options, "Ground", spell.ground);
-            AddAttackPreviewClipOption(options, "Air", spell.air);
+            AddAttackPreviewClipOption(options, "Cast / Release", spell.clip);
             AddAttackPreviewClipOption(options, "Hold Enter", spell.holdOverride.enter);
             AddAttackPreviewClipOption(options, "Hold Loop", spell.holdOverride.idleLoop);
             return options;
@@ -1812,14 +1811,8 @@ namespace Arena.Editor
 
         private static string DescribeSpellPreviewClips(WeaponSpellAnimationEntry spell)
         {
-            bool hasGround = spell.ground != null;
-            bool hasAir = spell.air != null;
-            if (hasGround && hasAir)
-                return $"{spell.ground!.name} / {spell.air!.name}";
-            if (hasGround)
-                return spell.ground!.name;
-            if (hasAir)
-                return $"air: {spell.air!.name}";
+            if (spell.clip != null)
+                return spell.clip.name;
             if (spell.holdOverride.IsPlayable)
                 return $"{spell.holdOverride.EnterOrIdle!.name} / {spell.holdOverride.IdleOrEnter!.name}";
             if (spell.UsesHoldPresentation)

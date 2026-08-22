@@ -85,11 +85,34 @@ namespace Arena.Editor
             SpellCastAnimationLibrary? library = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationLibrary>();
             if (library != null)
                 ObserveSpellLibrary(library, AssetDatabase.GetAssetPath(library), map);
+            SpellCastAnimationCatalog? catalog = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationCatalog>();
+            if (catalog != null)
+                ObserveSpellCatalog(catalog, AssetDatabase.GetAssetPath(catalog), map);
             SpellCastAnimationMap? spellMap = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
             if (spellMap != null)
                 ObserveFixedSpellAnimations(spellMap, AssetDatabase.GetAssetPath(spellMap), map);
 
             return map;
+        }
+
+        private static void ObserveSpellCatalog(
+            SpellCastAnimationCatalog catalog,
+            string assetPath,
+            Dictionary<AnimationClip, List<CombatClipRoleObservation>> map)
+        {
+            for (int recipeIndex = 0; recipeIndex < catalog.Recipes.Count; recipeIndex++)
+            {
+                SpellCastAnimationRecipe recipe = catalog.Recipes[recipeIndex];
+                string recipeId = recipe.AnimationIdOrEmpty;
+                string root = $".recipes[{recipeIndex}] ({recipeId})";
+                if (recipe.presentationMode != SpellAnimationPresentationMode.HoldOnly)
+                    Add(map, recipe.clip, CombatClipRole.SpellRelease, assetPath, root + ".clip");
+                if (recipe.presentationMode != SpellAnimationPresentationMode.ReleaseOnly)
+                {
+                    Add(map, recipe.hold.enter, CombatClipRole.SpellCastHoldEnter, assetPath, root + ".hold.enter");
+                    Add(map, recipe.hold.idleLoop, CombatClipRole.SpellCastHoldIdle, assetPath, root + ".hold.idleLoop");
+                }
+            }
         }
 
         private static void ObserveSet(
@@ -225,10 +248,7 @@ namespace Arena.Editor
                     ? "<missing spell id>"
                     : assignment.spellId.Trim().ToUpperInvariant();
                 if (entry.PlaysReleasePresentation)
-                {
-                    Add(map, entry.ground, CombatClipRole.SpellRelease, assetPath, $".entries[{entryIndex}].fixedAnimation.ground ({spellId})");
-                    Add(map, entry.air, CombatClipRole.SpellRelease, assetPath, $".entries[{entryIndex}].fixedAnimation.air ({spellId})");
-                }
+                    Add(map, entry.clip, CombatClipRole.SpellRelease, assetPath, $".entries[{entryIndex}].fixedAnimation.clip ({spellId})");
                 Add(map, entry.holdOverride.enter, CombatClipRole.SpellCastHoldEnter, assetPath, $".entries[{entryIndex}].fixedAnimation.holdOverride.enter ({spellId})");
                 Add(map, entry.holdOverride.idleLoop, CombatClipRole.SpellCastHoldIdle, assetPath, $".entries[{entryIndex}].fixedAnimation.holdOverride.idleLoop ({spellId})");
             }

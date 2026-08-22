@@ -31,6 +31,9 @@ namespace Arena.Editor
         private readonly List<string> _knownDisciplineIds = new();
 
         private ProgressionCatalogDocument? _catalog;
+        private SpellCastAnimationMap? _spellAnimationMap;
+        private SpellCastAnimationCatalog? _spellAnimationCatalog;
+        private CombatAnimationSet[] _animationSets = Array.Empty<CombatAnimationSet>();
         private Vector2 _scroll;
         private int _selectedSpellIndex;
         private string _draftAbilityId = "SPELL_NEW_SPELL";
@@ -125,6 +128,9 @@ namespace Arena.Editor
             string disciplineId = Normalize(selected.discipline_id);
             string combatProfileId = Normalize(selected.combat_profile_id);
             string deliveryKind = Normalize(selected.gameplay.delivery.kind);
+            SpellAnimationArchetype archetype = SpellAnimationArchetypes.Derive(
+                (ulong)Math.Max(0, selected.gameplay.cast_time_ms),
+                deliveryKind);
             _selectedAbilityCues.Clear();
             _selectedAbilityCues.AddRange(_catalog!.combat_vfx_cues.Where(cue =>
                 (string.Equals(Normalize(cue.owner_kind), "ABILITY", StringComparison.Ordinal)
@@ -146,6 +152,8 @@ namespace Arena.Editor
                 EditorGUILayout.TextField("Delivery", deliveryKind);
             }
 
+            DrawCastAnimationPicker(spellId, archetype);
+
             if (string.IsNullOrWhiteSpace(combatProfileId))
             {
                 SpellCastAnimationMap? map = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
@@ -159,11 +167,14 @@ namespace Arena.Editor
                     }
                     else
                     {
-                        string assignment = mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed
-                            ? "Fixed (independent of combat set)"
-                            : mapEntry.motion.ToString();
+                        string assignment = mapEntry.assignmentKind switch
+                        {
+                            SpellCastAnimationAssignmentKind.Catalog => $"catalog recipe '{Normalize(mapEntry.animationId)}'",
+                            SpellCastAnimationAssignmentKind.Fixed => "Fixed (independent of combat set)",
+                            _ => $"legacy motion {mapEntry.motion}",
+                        };
                         EditorGUILayout.HelpBox(
-                            $"Profile-less shared spell '{abilityId}' is classified as {assignment}. At runtime its motion resolves through the player's active CombatAnimationSet.",
+                            $"Profile-less shared spell '{abilityId}' is classified as {assignment}. Its global recipe applies across combat sets unless the active set has an explicit spell override.",
                             MessageType.Info);
                     }
                 }
@@ -191,18 +202,18 @@ namespace Arena.Editor
                 {
                     hasResolvedAnimation = true;
                     resolvedAnimation = entry;
-                    if (entry.ResolveClip(grounded: true) != null)
+                    if (entry.ResolveClip() != null)
                     {
-                        EditorGUILayout.HelpBox($"Animation resolves for '{spellId}'. Ground clip assigned.", MessageType.Info);
+                        EditorGUILayout.HelpBox($"Animation resolves for '{spellId}'. Cast clip assigned.", MessageType.Info);
                     }
                     else
                     {
-                        EditorGUILayout.HelpBox($"Animation resolves for '{spellId}', but no ground or fallback clip is assigned yet.", MessageType.Warning);
+                        EditorGUILayout.HelpBox($"Animation resolves for '{spellId}', but no cast/release clip is assigned yet.", MessageType.Warning);
                     }
                 }
                 else
                 {
-                    EditorGUILayout.HelpBox($"The cast-motion/fixed assignment for '{spellId}' does not resolve in '{animationSet.name}'. Check SpellCastAnimationMap and the set's Spell Cast Motion bindings.", MessageType.Warning);
+                    EditorGUILayout.HelpBox($"The cast animation assignment for '{spellId}' does not resolve in '{animationSet.name}'. Check its global recipe and optional set override.", MessageType.Warning);
                     if (GUILayout.Button("Select Spell Cast Map", GUILayout.Width(180f)))
                         Selection.activeObject = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
                 }
@@ -211,6 +222,154 @@ namespace Arena.Editor
             DrawCueAudit(abilityId, deliveryKind, selected.gameplay.cast_time_ms, hasResolvedAnimation, resolvedAnimation);
             EditorGUILayout.Space(12f);
             DrawGeneratedCuePreview(selected, abilityId, hasResolvedAnimation, resolvedAnimation);
+        }
+
+        private void DrawCastAnimationPicker(string spellId, SpellAnimationArchetype archetype)
+        {
+            EditorGUILayout.Space(8f);
+            EditorGUILayout.LabelField("Cast Animation", EditorStyles.boldLabel);
+            if (_spellAnimationMap == null || _spellAnimationCatalog == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "SpellCastAnimationMap or SpellCastAnimationCatalog is missing.",
+                    MessageType.Error);
+                return;
+            }
+
+            var recipes = _spellAnimationCatalog.Recipes
+                .OrderBy(recipe => recipe.CategoryOrDefault, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(recipe => recipe.DisplayNameOrId, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (recipes.Length == 0)
+            {
+                EditorGUILayout.HelpBox("The shared cast animation catalog has no recipes.", MessageType.Warning);
+                return;
+            }
+
+            bool hasMapEntry = _spellAnimationMap.TryGetEntry(spellId, out SpellCastAnimationMap.Entry mapEntry);
+            string currentAnimationId = hasMapEntry
+                && mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Catalog
+                    ? Normalize(mapEntry.animationId)
+                    : string.Empty;
+            int currentRecipeIndex = Array.FindIndex(
+                recipes,
+                recipe => string.Equals(recipe.AnimationIdOrEmpty, currentAnimationId, StringComparison.Ordinal));
+
+            string inheritedLabel = hasMapEntry
+                ? mapEntry.assignmentKind switch
+                {
+                    SpellCastAnimationAssignmentKind.LegacyMotion => $"Legacy / {mapEntry.motion}",
+                    SpellCastAnimationAssignmentKind.Fixed => "Inline fixed presentation",
+                    SpellCastAnimationAssignmentKind.NoAnimation => "No animation",
+                    SpellCastAnimationAssignmentKind.Catalog => $"Missing recipe / {currentAnimationId}",
+                    _ => "Unmapped",
+                }
+                : "Unmapped";
+            var labels = new string[recipes.Length + 1];
+            labels[0] = inheritedLabel;
+            for (int index = 0; index < recipes.Length; index++)
+            {
+                SpellCastAnimationRecipe recipe = recipes[index];
+                labels[index + 1] = recipe.IsCompatibleWith(archetype)
+                    ? recipe.PickerLabel
+                    : $"{recipe.PickerLabel} (not tagged for {archetype})";
+            }
+
+            int popupIndex = currentRecipeIndex >= 0 ? currentRecipeIndex + 1 : 0;
+            int selectedIndex = EditorGUILayout.Popup("Global Recipe", popupIndex, labels);
+            if (selectedIndex > 0 && selectedIndex != popupIndex)
+            {
+                SpellCastAnimationRecipe selectedRecipe = recipes[selectedIndex - 1];
+                Undo.RecordObject(_spellAnimationMap, $"Set {spellId} cast animation");
+                _spellAnimationMap.EditorSetCatalogAssignment(spellId, selectedRecipe.AnimationIdOrEmpty);
+                EditorUtility.SetDirty(_spellAnimationMap);
+                AssetDatabase.SaveAssets();
+                SpellCastAnimationResolver.InvalidateCache();
+            }
+
+            string globalLabel = currentRecipeIndex >= 0
+                ? recipes[currentRecipeIndex].PickerLabel
+                : inheritedLabel;
+            EditorGUILayout.HelpBox(
+                $"{globalLabel} is the default for every CombatAnimationSet. Add only the exceptions below.",
+                MessageType.None);
+
+            string foldoutKey = $"Arena.SpellAuthoring.CastOverrides.{spellId}";
+            bool showOverrides = SessionState.GetBool(foldoutKey, false);
+            showOverrides = EditorGUILayout.Foldout(
+                showOverrides,
+                "CombatAnimationSet Overrides",
+                true,
+                EditorStyles.foldoutHeader);
+            SessionState.SetBool(foldoutKey, showOverrides);
+            if (!showOverrides)
+                return;
+
+            using (new EditorGUI.IndentLevelScope())
+            {
+                foreach (CombatAnimationSet animationSet in _animationSets)
+                {
+                    bool hasOverride = animationSet.TryGetSpellCastAnimationOverride(spellId, out string overrideId);
+                    int overrideRecipeIndex = hasOverride
+                        ? Array.FindIndex(
+                            recipes,
+                            recipe => string.Equals(recipe.AnimationIdOrEmpty, overrideId, StringComparison.Ordinal))
+                        : -1;
+                    var overrideLabels = new string[labels.Length];
+                    overrideLabels[0] = $"Use Global / {globalLabel}";
+                    Array.Copy(labels, 1, overrideLabels, 1, recipes.Length);
+                    int overridePopupIndex = overrideRecipeIndex >= 0 ? overrideRecipeIndex + 1 : 0;
+                    int selectedOverrideIndex = EditorGUILayout.Popup(
+                        animationSet.name,
+                        overridePopupIndex,
+                        overrideLabels);
+                    if (selectedOverrideIndex == overridePopupIndex)
+                        continue;
+
+                    string selectedOverrideId = selectedOverrideIndex == 0
+                        ? string.Empty
+                        : recipes[selectedOverrideIndex - 1].AnimationIdOrEmpty;
+                    SetCombatAnimationOverride(animationSet, spellId, selectedOverrideId);
+                }
+            }
+        }
+
+        private static void SetCombatAnimationOverride(
+            CombatAnimationSet animationSet,
+            string spellId,
+            string animationId)
+        {
+            string normalizedSpellId = Normalize(spellId);
+            string normalizedAnimationId = Normalize(animationId);
+            var overrides = new List<SpellCastAnimationOverride>(
+                animationSet.spellCastAnimationOverrides ?? Array.Empty<SpellCastAnimationOverride>());
+            int existingIndex = overrides.FindIndex(candidate =>
+                string.Equals(candidate.SpellIdOrEmpty, normalizedSpellId, StringComparison.Ordinal));
+
+            Undo.RecordObject(animationSet, $"Override {normalizedSpellId} cast animation");
+            CombatAnimationSetProtection.MarkTrustedMutation(animationSet, "spell-cast-animation-override");
+            if (normalizedAnimationId.Length == 0)
+            {
+                if (existingIndex >= 0)
+                    overrides.RemoveAt(existingIndex);
+            }
+            else
+            {
+                var replacement = new SpellCastAnimationOverride
+                {
+                    spellId = normalizedSpellId,
+                    animationId = normalizedAnimationId,
+                };
+                if (existingIndex >= 0)
+                    overrides[existingIndex] = replacement;
+                else
+                    overrides.Add(replacement);
+            }
+
+            animationSet.spellCastAnimationOverrides = overrides.ToArray();
+            EditorUtility.SetDirty(animationSet);
+            AssetDatabase.SaveAssets();
+            SpellCastAnimationResolver.InvalidateCache();
         }
 
         private void DrawCueAudit(
@@ -349,9 +508,7 @@ namespace Arena.Editor
                 return true;
             }
 
-            if (TryInferSpellPresentationHand(entry.ResolveClip(grounded: true), "ground clip", out expectedHandAnchor, out reason))
-                return true;
-            if (TryInferSpellPresentationHand(entry.ResolveClip(grounded: false), "air clip", out expectedHandAnchor, out reason))
+            if (TryInferSpellPresentationHand(entry.ResolveClip(), "cast clip", out expectedHandAnchor, out reason))
                 return true;
 
             expectedHandAnchor = string.Empty;
@@ -623,6 +780,11 @@ namespace Arena.Editor
             _selectedAbilityCues.Clear();
             _knownTemplateIds.Clear();
             _knownDisciplineIds.Clear();
+            _spellAnimationMap = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
+            _spellAnimationCatalog = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationCatalog>();
+            _animationSets = SpellPresentationEditorData.LoadCombatAnimationSets()
+                .OrderBy(animationSet => animationSet.name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
 
             string absolutePath = SpellPresentationEditorData.AbsoluteProgressionCatalogPath;
             if (!File.Exists(absolutePath))
@@ -655,7 +817,7 @@ namespace Arena.Editor
                 .Select(discipline => Normalize(discipline.discipline_id))
                 .Where(id => !string.IsNullOrWhiteSpace(id)));
 
-            foreach (CombatAnimationSet animationSet in SpellPresentationEditorData.LoadCombatAnimationSets())
+            foreach (CombatAnimationSet animationSet in _animationSets)
             {
                 string profileId = Normalize(animationSet.CombatProfileIdOrDefault);
                 if (!string.IsNullOrWhiteSpace(profileId) && !_animationSetByProfile.ContainsKey(profileId))

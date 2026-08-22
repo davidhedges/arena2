@@ -326,7 +326,7 @@ namespace Arena.Tests.Editor
 
             try
             {
-                RequireField(spellEntryType, "ground").SetValue(spellEntry, clip);
+                RequireField(spellEntryType, "clip").SetValue(spellEntry, clip);
                 SetClipEvents(
                     clip,
                     ("OnLowerBodyUnlock", 0.4f),
@@ -337,9 +337,8 @@ namespace Arena.Tests.Editor
                         "CreateSpellPresentation",
                         typeof(string),
                         typeof(int),
-                        spellEntryType,
-                        typeof(bool))
-                    .Invoke(null, new[] { "FIREBALL", 3, spellEntry, true })!;
+                        spellEntryType)
+                    .Invoke(null, new[] { "FIREBALL", 3, spellEntry })!;
 
                 Assert.That(RequireField(presentation.GetType(), "ActionId").GetValue(presentation), Is.EqualTo("FIREBALL"));
                 Assert.That(RequireField(presentation.GetType(), "BankSlot").GetValue(presentation), Is.EqualTo(3));
@@ -1118,18 +1117,18 @@ namespace Arena.Tests.Editor
                     curve: AnimationCurve.Linear(0f, 0f, 1f, 1f));
 
                 object entry = Activator.CreateInstance(spellEntryType)!;
-                RequireField(spellEntryType, "ground").SetValue(entry, clip);
+                RequireField(spellEntryType, "clip").SetValue(entry, clip);
                 RequireField(spellEntryType, "lowerBodyUnlockAtSeconds").SetValue(entry, 0.35f);
                 RequireField(spellEntryType, "visualInterruptibleAtSeconds").SetValue(entry, 0.65f);
                 SetClipEvents(
                     clip,
                     ("OnLowerBodyUnlock", 0.25f),
                     ("OnVisualInterruptible", 0.75f));
-                MethodInfo resolver = RequireMethod(spellEntryType, "ResolveLowerBodyUnlockAtSeconds", typeof(bool));
-                MethodInfo visualResolver = RequireMethod(spellEntryType, "ResolveVisualInterruptibleAtSeconds", typeof(bool));
+                MethodInfo resolver = RequireMethod(spellEntryType, "ResolveLowerBodyUnlockAtSeconds");
+                MethodInfo visualResolver = RequireMethod(spellEntryType, "ResolveVisualInterruptibleAtSeconds");
 
-                Assert.That((float)resolver.Invoke(entry, new object[] { true })!, Is.EqualTo(0.25f).Within(0.001f));
-                Assert.That((float)visualResolver.Invoke(entry, new object[] { true })!, Is.EqualTo(0.75f).Within(0.001f));
+                Assert.That((float)resolver.Invoke(entry, Array.Empty<object>())!, Is.EqualTo(0.25f).Within(0.001f));
+                Assert.That((float)visualResolver.Invoke(entry, Array.Empty<object>())!, Is.EqualTo(0.75f).Within(0.001f));
             }
             finally
             {
@@ -1145,11 +1144,10 @@ namespace Arena.Tests.Editor
             try
             {
                 object entry = Activator.CreateInstance(spellEntryType)!;
-                RequireField(spellEntryType, "ground").SetValue(entry, clip);
+                RequireField(spellEntryType, "clip").SetValue(entry, clip);
                 MethodInfo resolver = RequireMethod(
                     spellEntryType,
                     "ResolveInstantCastStartupTrimSeconds",
-                    typeof(bool),
                     typeof(bool));
 
                 SetClipEvents(
@@ -1158,11 +1156,11 @@ namespace Arena.Tests.Editor
                     ("OnReleaseFrame", 0.4f));
 
                 Assert.That(
-                    (float)resolver.Invoke(entry, new object[] { true, true })!,
+                    (float)resolver.Invoke(entry, new object[] { true })!,
                     Is.EqualTo(0.2f).Within(0.001f),
                     "confirmed Instant playback should use the clip-authored marker");
                 Assert.That(
-                    (float)resolver.Invoke(entry, new object[] { true, false })!,
+                    (float)resolver.Invoke(entry, new object[] { false })!,
                     Is.Zero,
                     "a Charged/Channel spell sharing the same clip must retain its full opening");
 
@@ -1171,7 +1169,7 @@ namespace Arena.Tests.Editor
                     ("OnReleaseFrame", 0.4f),
                     ("OnInstantCastStart", 0.65f));
                 Assert.That(
-                    (float)resolver.Invoke(entry, new object[] { true, true })!,
+                    (float)resolver.Invoke(entry, new object[] { true })!,
                     Is.EqualTo(0.4f).Within(0.001f),
                     "runtime must never trim past the visible release pose");
             }
@@ -1189,19 +1187,18 @@ namespace Arena.Tests.Editor
             try
             {
                 object entry = Activator.CreateInstance(spellEntryType)!;
-                RequireField(spellEntryType, "ground").SetValue(entry, clip);
+                RequireField(spellEntryType, "clip").SetValue(entry, clip);
                 SetClipEvents(clip, ("OnReleaseFrame", 0.4f));
                 MethodInfo resolver = RequireMethod(
                     spellEntryType,
                     "ResolveReleaseDelayAfterPlaybackStartSeconds",
-                    typeof(bool),
                     typeof(float));
 
                 Assert.That(
-                    (float)resolver.Invoke(entry, new object[] { true, 0.15f })!,
+                    (float)resolver.Invoke(entry, new object[] { 0.15f })!,
                     Is.EqualTo(0.25f).Within(0.001f));
                 Assert.That(
-                    (float)resolver.Invoke(entry, new object[] { true, 0.5f })!,
+                    (float)resolver.Invoke(entry, new object[] { 0.5f })!,
                     Is.Zero,
                     "catch-up at or beyond release must hand the prop off immediately");
             }

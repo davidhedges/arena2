@@ -84,7 +84,7 @@ namespace Arena.Tests.Editor
             (bool ok, object? entry) = Compose(OneHandFamily(Triple(one, load, cast)), "Left", "Instant");
 
             Assert.That(ok, Is.True);
-            Assert.That(Field(entry!, "ground"), Is.SameAs(cast), "instant uses the snappy Cast clip, not the slow one-shot");
+            Assert.That(Field(entry!, "clip"), Is.SameAs(cast), "instant uses the snappy Cast clip, not the slow one-shot");
             Assert.That(Field(entry!, "presentationMode")!.ToString(), Is.EqualTo("ReleaseOnly"));
             Assert.That(HoldField(entry!, "enter"), Is.Null, "instant has no hold enter");
         }
@@ -96,7 +96,7 @@ namespace Arena.Tests.Editor
             (bool ok, object? entry) = Compose(OneHandFamily(Triple(one, null, null)), "Left", "Instant");
 
             Assert.That(ok, Is.True);
-            Assert.That(Field(entry!, "ground"), Is.SameAs(one));
+            Assert.That(Field(entry!, "clip"), Is.SameAs(one));
         }
 
         [Test]
@@ -106,7 +106,7 @@ namespace Arena.Tests.Editor
             (bool ok, object? entry) = Compose(OneHandFamily(Triple(one, load, cast)), "Left", "Charged");
 
             Assert.That(ok, Is.True);
-            Assert.That(Field(entry!, "ground"), Is.SameAs(cast), "charged release = the Cast clip");
+            Assert.That(Field(entry!, "clip"), Is.SameAs(cast), "charged release = the Cast clip");
             Assert.That(HoldField(entry!, "enter"), Is.SameAs(one), "hold enter = the one-shot");
             Assert.That(HoldField(entry!, "idleLoop"), Is.SameAs(load), "hold loop = the Load clip");
             Assert.That(Field(entry!, "presentationMode")!.ToString(), Is.EqualTo("HoldThenRelease"));
@@ -119,7 +119,7 @@ namespace Arena.Tests.Editor
             (bool ok, object? entry) = Compose(OneHandFamily(Triple(one, load, cast)), "Left", "Channel");
 
             Assert.That(ok, Is.True);
-            Assert.That(Field(entry!, "ground"), Is.Null, "channel suppresses the release clip");
+            Assert.That(Field(entry!, "clip"), Is.Null, "channel suppresses the release clip");
             Assert.That(HoldField(entry!, "enter"), Is.SameAs(one));
             Assert.That(HoldField(entry!, "idleLoop"), Is.SameAs(load));
             Assert.That(Field(entry!, "presentationMode")!.ToString(), Is.EqualTo("HoldOnly"));
@@ -133,7 +133,7 @@ namespace Arena.Tests.Editor
             (bool ok, object? entry) = Compose(TwoHandFamily(Triple(one, load, cast)), "Left", "Instant");
 
             Assert.That(ok, Is.True);
-            Assert.That(Field(entry!, "ground"), Is.SameAs(cast), "instant plays the Cast clip from the two-hand triple");
+            Assert.That(Field(entry!, "clip"), Is.SameAs(cast), "instant plays the Cast clip from the two-hand triple");
         }
 
         [Test]
@@ -146,7 +146,7 @@ namespace Arena.Tests.Editor
                 "Instant");
 
             Assert.That(ok, Is.True);
-            Assert.That(Field(entry!, "ground"), Is.SameAs(cast));
+            Assert.That(Field(entry!, "clip"), Is.SameAs(cast));
             Assert.That(Field(entry!, "playbackLayer")!.ToString(), Is.EqualTo("RightGesture"));
         }
 

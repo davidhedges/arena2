@@ -273,16 +273,15 @@ namespace Arena.Editor
                 if (castTimeMs <= 0)
                     continue;
 
-                if (!animationSet.TryGetDefaultSpellCastHoldProfile(out _))
+                SpellCastHoldProfile defaultHold = animationSet.defaultSpellCastHold;
+                if (entry.UsesHoldPresentation
+                    && !entry.TryResolveHoldProfile(defaultHold, out _))
                 {
-                    errors.Add($"spell ability '{abilityId}' action '{actionId}' has cast_time_ms {castTimeMs}, but CombatAnimationSet '{animationSet.name}' has no playable default spell cast hold profile.");
+                    errors.Add($"spell ability '{abilityId}' action '{actionId}' uses {entry.presentationMode}, but neither its recipe nor CombatAnimationSet '{animationSet.name}' supplies a playable hold profile.");
                 }
 
                 if (entry.PlaysReleasePresentation)
-                {
-                    ValidateReleaseTiming(errors, abilityId, actionId, animationSet, entry, castTimeMs, grounded: true);
-                    ValidateReleaseTiming(errors, abilityId, actionId, animationSet, entry, castTimeMs, grounded: false);
-                }
+                    ValidateReleaseTiming(errors, abilityId, actionId, animationSet, entry, castTimeMs);
             }
         }
 
@@ -336,9 +335,7 @@ namespace Arena.Editor
                 return true;
             }
 
-            if (TryInferSpellPresentationHand(entry.ResolveClip(grounded: true), "ground clip", out expectedHandAnchor, out reason))
-                return true;
-            if (TryInferSpellPresentationHand(entry.ResolveClip(grounded: false), "air clip", out expectedHandAnchor, out reason))
+            if (TryInferSpellPresentationHand(entry.ResolveClip(), "cast clip", out expectedHandAnchor, out reason))
                 return true;
 
             expectedHandAnchor = string.Empty;
@@ -415,18 +412,16 @@ namespace Arena.Editor
             string actionId,
             CombatAnimationSet animationSet,
             WeaponSpellAnimationEntry entry,
-            int castTimeMs,
-            bool grounded)
+            int castTimeMs)
         {
-            AnimationClip? clip = entry.ResolveClip(grounded);
+            AnimationClip? clip = entry.ResolveClip();
             if (clip == null)
                 return;
 
-            string stance = grounded ? "ground" : "air";
             if (!TryGetEventTime(clip, CombatAnimationEvents.OnReleaseFrame, out float releaseOffsetSeconds))
             {
                 errors.Add(
-                    $"spell ability '{abilityId}' action '{actionId}' {stance} release clip '{ClipLabel(clip)}' in CombatAnimationSet '{animationSet.name}' is missing required event {CombatAnimationEvents.OnReleaseFrame}.");
+                    $"spell ability '{abilityId}' action '{actionId}' release clip '{ClipLabel(clip)}' in CombatAnimationSet '{animationSet.name}' is missing required event {CombatAnimationEvents.OnReleaseFrame}.");
                 return;
             }
 
@@ -435,7 +430,7 @@ namespace Arena.Editor
                 return;
 
             errors.Add(
-                $"spell ability '{abilityId}' action '{actionId}' {stance} release offset in CombatAnimationSet '{animationSet.name}' is {releaseOffsetSeconds:0.000}s, but gameplay.cast_time_ms is {castSeconds:0.000}s. The release offset must fit inside the cast time. Tolerance is {ReleaseTimingToleranceSeconds:0.000}s.");
+                $"spell ability '{abilityId}' action '{actionId}' release offset in CombatAnimationSet '{animationSet.name}' is {releaseOffsetSeconds:0.000}s, but gameplay.cast_time_ms is {castSeconds:0.000}s. The release offset must fit inside the cast time. Tolerance is {ReleaseTimingToleranceSeconds:0.000}s.");
         }
 
         private static void ValidateInstantCastStartupTrim(
@@ -446,8 +441,7 @@ namespace Arena.Editor
             WeaponSpellAnimationEntry entry)
         {
             var clips = new List<(AnimationClip Clip, string Label)>();
-            AddUniqueClip(clips, entry.ground, "ground");
-            AddUniqueClip(clips, entry.air, "air");
+            AddUniqueClip(clips, entry.clip, "cast");
             foreach ((AnimationClip clip, string label) in clips)
             {
                 AnimationEvent[] trimEvents = clip.events
@@ -888,10 +882,10 @@ namespace Arena.Editor
 
             SpellCastAnimationLibrary? library = LoadFirstAsset<SpellCastAnimationLibrary>();
             if (library == null)
-            {
                 errors.Add("SpellCastAnimationMap exists, but no SpellCastAnimationLibrary asset resolves.");
-                return;
-            }
+            SpellCastAnimationCatalog? animationCatalog = LoadFirstAsset<SpellCastAnimationCatalog>();
+            if (animationCatalog == null)
+                errors.Add("SpellCastAnimationMap exists, but no SpellCastAnimationCatalog asset resolves.");
 
             var spellByActionId = new Dictionary<string, AbilityDefinition>(StringComparer.Ordinal);
             foreach (AbilityDefinition ability in catalog.abilities)
@@ -905,6 +899,24 @@ namespace Arena.Editor
             }
 
             CombatAnimationSet[] animationSets = Resources.LoadAll<CombatAnimationSet>("CombatAnimationSets");
+
+            if (animationCatalog != null)
+            {
+                var seenRecipeIds = new HashSet<string>(StringComparer.Ordinal);
+                foreach (SpellCastAnimationRecipe recipe in animationCatalog.Recipes)
+                {
+                    string recipeId = recipe.AnimationIdOrEmpty;
+                    if (recipeId.Length == 0)
+                    {
+                        errors.Add("SpellCastAnimationCatalog has a recipe with no animationId.");
+                        continue;
+                    }
+                    if (!seenRecipeIds.Add(recipeId))
+                        errors.Add($"SpellCastAnimationCatalog has duplicate recipe id '{recipeId}'.");
+                    if (!recipe.TryBuild("VALIDATION_SPELL", out _))
+                        errors.Add($"SpellCastAnimationCatalog recipe '{recipeId}' has no playable {recipe.presentationMode} presentation.");
+                }
+            }
 
             foreach (CombatAnimationSet animationSet in animationSets)
             {
@@ -931,9 +943,59 @@ namespace Arena.Editor
                         errors.Add($"CombatAnimationSet '{animationSet.name}' uses forbidden cast family 'MagicAttackDirect2H01'. Use Direct2H02 or a Direct1H fallback.");
                         continue;
                     }
-                    if (!library.TryGetFamily(binding.FamilyBaseNameOrEmpty, out _))
+                    if (library != null && !library.TryGetFamily(binding.FamilyBaseNameOrEmpty, out _))
                     {
                         errors.Add($"CombatAnimationSet '{animationSet.name}' motion '{binding.motion}' references family '{binding.FamilyBaseNameOrEmpty}', but SpellCastAnimationLibrary has no matching family.");
+                    }
+                }
+
+                var seenOverrideSpellIds = new HashSet<string>(StringComparer.Ordinal);
+                foreach (SpellCastAnimationOverride animationOverride in animationSet.spellCastAnimationOverrides ?? Array.Empty<SpellCastAnimationOverride>())
+                {
+                    string overrideSpellId = animationOverride.SpellIdOrEmpty;
+                    string overrideAnimationId = animationOverride.AnimationIdOrEmpty;
+                    if (overrideSpellId.Length == 0)
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' has a spell animation override with no spellId.");
+                        continue;
+                    }
+                    if (!seenOverrideSpellIds.Add(overrideSpellId))
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' has duplicate animation overrides for spell '{overrideSpellId}'.");
+                    if (overrideAnimationId.Length == 0)
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' has no animationId.");
+                        continue;
+                    }
+                    if (!spellByActionId.TryGetValue(overrideSpellId, out AbilityDefinition overrideAbility))
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' has no matching SPELL ability in progression_catalog.shared.json.");
+                        continue;
+                    }
+                    if (!map.TryGetEntry(overrideSpellId, out SpellCastAnimationMap.Entry overrideMapEntry))
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' has no SpellCastAnimationMap entry.");
+                        continue;
+                    }
+                    if (overrideMapEntry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation)
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' overrides spell '{overrideSpellId}', but its global mapping explicitly disables animation.");
+                        continue;
+                    }
+                    if (animationCatalog == null
+                        || !animationCatalog.TryGetRecipe(overrideAnimationId, out SpellCastAnimationRecipe overrideRecipe))
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' references missing catalog recipe '{overrideAnimationId}'.");
+                        continue;
+                    }
+
+                    SpellAnimationArchetype overrideArchetype = DeriveSpellAnimationArchetype(overrideAbility);
+                    if (!overrideRecipe.IsCompatibleWith(overrideArchetype))
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' selects recipe '{overrideAnimationId}', which is not marked compatible with {overrideArchetype}.");
+                    }
+                    if (!SpellCastAnimationResolver.TryResolve(animationSet, overrideSpellId, overrideArchetype, out _))
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' did not resolve recipe '{overrideAnimationId}'.");
                     }
                 }
             }
@@ -962,6 +1024,8 @@ namespace Arena.Editor
                 SpellAnimationArchetype archetype = DeriveSpellAnimationArchetype(ability);
                 if (entry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation)
                 {
+                    if (!string.IsNullOrWhiteSpace(entry.animationId))
+                        errors.Add($"SpellCastAnimationMap no-animation entry for spell '{spellId}' contains an unused animationId; clear it.");
                     if (entry.motion != SpellCastMotion.None)
                         errors.Add($"SpellCastAnimationMap no-animation entry for spell '{spellId}' must leave motion as None.");
                     if (entry.fixedAnimation.HasAnyPresentation)
@@ -977,6 +1041,8 @@ namespace Arena.Editor
 
                 if (entry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
                 {
+                    if (!string.IsNullOrWhiteSpace(entry.animationId))
+                        errors.Add($"SpellCastAnimationMap fixed entry for spell '{spellId}' contains an unused animationId; clear it.");
                     if (entry.motion != SpellCastMotion.None)
                         errors.Add($"SpellCastAnimationMap fixed entry for spell '{spellId}' must leave motion as None.");
                     if (!entry.fixedAnimation.HasAnyPresentation)
@@ -989,22 +1055,55 @@ namespace Arena.Editor
                     continue;
                 }
 
-                if (entry.motion == SpellCastMotion.None)
+                if (entry.assignmentKind == SpellCastAnimationAssignmentKind.Catalog)
                 {
-                    errors.Add($"SpellCastAnimationMap motion entry for spell '{spellId}' has motion None.");
+                    string animationId = WireIdentifier.Normalize(entry.animationId);
+                    if (entry.motion != SpellCastMotion.None)
+                        errors.Add($"SpellCastAnimationMap catalog entry for spell '{spellId}' must leave legacy motion as None.");
+                    if (entry.fixedAnimation.HasAnyPresentation)
+                        errors.Add($"SpellCastAnimationMap catalog entry for spell '{spellId}' contains an unused fixed presentation; clear it.");
+                    if (animationId.Length == 0)
+                    {
+                        errors.Add($"SpellCastAnimationMap catalog entry for spell '{spellId}' has no animationId.");
+                        continue;
+                    }
+                    if (animationCatalog == null || !animationCatalog.TryGetRecipe(animationId, out SpellCastAnimationRecipe recipe))
+                    {
+                        errors.Add($"SpellCastAnimationMap catalog entry for spell '{spellId}' references missing recipe '{animationId}'.");
+                        continue;
+                    }
+                    if (!recipe.IsCompatibleWith(archetype))
+                        errors.Add($"SpellCastAnimationMap spell '{spellId}' resolves authored gameplay as {archetype}, but catalog recipe '{animationId}' is not marked compatible.");
+
+                    foreach (CombatAnimationSet animationSet in animationSets)
+                    {
+                        if (!SpellCastAnimationResolver.TryResolve(animationSet, spellId, archetype, out _))
+                            errors.Add($"SpellCastAnimationMap catalog entry for spell '{spellId}' did not resolve in CombatAnimationSet '{animationSet.name}'. Check its optional spell override.");
+                    }
                     continue;
                 }
+
+                if (entry.motion == SpellCastMotion.None)
+                {
+                    errors.Add($"SpellCastAnimationMap legacy-motion entry for spell '{spellId}' has motion None.");
+                    continue;
+                }
+                if (!string.IsNullOrWhiteSpace(entry.animationId))
+                    errors.Add($"SpellCastAnimationMap legacy-motion entry for spell '{spellId}' contains an unused animationId; clear it.");
                 if (entry.fixedAnimation.HasAnyPresentation)
-                    errors.Add($"SpellCastAnimationMap motion entry for spell '{spellId}' also contains a fixed presentation; clear the unused fixed data.");
+                    errors.Add($"SpellCastAnimationMap legacy-motion entry for spell '{spellId}' also contains a fixed presentation; clear the unused fixed data.");
 
                 foreach (CombatAnimationSet animationSet in animationSets)
                 {
+                    if (animationSet.TryGetSpellCastAnimationOverride(spellId, out _))
+                        continue;
+
                     if (!animationSet.TryGetSpellCastFamily(entry.motion, out string familyBaseName))
                     {
                         errors.Add($"SpellCastAnimationMap spell '{spellId}' uses motion '{entry.motion}', but CombatAnimationSet '{animationSet.name}' has no binding for it.");
                         continue;
                     }
-                    if (!library.TryGetFamily(familyBaseName, out SpellCastAnimationFamily family))
+                    if (library == null || !library.TryGetFamily(familyBaseName, out SpellCastAnimationFamily family))
                         continue;
                     SpellCastHand hand = animationSet.OneHandedCastHand;
                     if (SpellCastAnimationComposer.TryCompose(spellId, family, hand, archetype, out _))

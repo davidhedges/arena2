@@ -35,6 +35,7 @@ namespace Arena.Presentation
         private readonly HashSet<AnimationClip> _animationClips = new();
         private SharedActionProfile? _sharedActionProfile;
         private SpellCastAnimationLibrary? _spellLibrary;
+        private SpellCastAnimationCatalog? _spellCatalog;
         private SpellCastAnimationMap? _spellMap;
         private CombatVFXRegistry? _vfxRegistry;
         private GameObject? _runtimeAvatarPrefab;
@@ -109,8 +110,9 @@ namespace Arena.Presentation
 
             _sharedActionProfile = Resources.Load<SharedActionProfile>("ActionProfiles/SharedActions");
             _spellLibrary = Resources.Load<SpellCastAnimationLibrary>(SpellCastAnimationResolver.LibraryResource);
+            _spellCatalog = Resources.Load<SpellCastAnimationCatalog>(SpellCastAnimationResolver.CatalogResource);
             _spellMap = Resources.Load<SpellCastAnimationMap>(SpellCastAnimationResolver.MapResource);
-            SpellCastAnimationResolver.RegisterPreloaded(_spellLibrary, _spellMap);
+            SpellCastAnimationResolver.RegisterPreloaded(_spellLibrary, _spellCatalog, _spellMap);
 
             _vfxRegistry = Resources.Load<CombatVFXRegistry>(CombatVFXRegistry.RegistryResourcePath);
             CombatVFXRegistry.RegisterPreloaded(_vfxRegistry);
@@ -141,6 +143,8 @@ namespace Arena.Presentation
                 CollectAnimationClipsForWarmup(_sharedActionProfile, _animationClips, visited);
             if (_spellLibrary != null)
                 CollectAnimationClipsForWarmup(_spellLibrary, _animationClips, visited);
+            if (_spellCatalog != null)
+                CollectAnimationClipsForWarmup(_spellCatalog, _animationClips, visited);
             if (_spellMap != null)
                 CollectAnimationClipsForWarmup(_spellMap, _animationClips, visited);
 

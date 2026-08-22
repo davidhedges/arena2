@@ -8259,9 +8259,16 @@ mod tests {
             assert_mapping(spell_id, 2, 0);
         }
 
-        for spell_id in ["ICICLE", "FIREBALL", "FLAMING_ORB", "SMITE"] {
+        for spell_id in ["ICICLE", "FIREBALL", "SMITE"] {
             assert_mapping(spell_id, 0, 6);
         }
+
+        assert!(
+            SPELL_CAST_ANIMATION_MAP_ASSET.contains(
+                "- spellId: FLAMING_ORB\n    assignmentKind: 3\n    animationId: MAGE_PROJECTILE_CAST_02\n    motion: 0"
+            ),
+            "Flaming Orb must select the shared Mage Projectile Cast 2 catalog recipe"
+        );
 
         for spell_id in [
             "PLAGUEBOLT",
@@ -14353,7 +14360,7 @@ mod tests {
         );
         assert!(
             SPELL_CAST_ANIMATION_MAP_ASSET.contains(
-                "ground: {fileID: 7400000, guid: b77a7a02d110945d7bd3e5e445fbc043, type: 2}"
+                "clip: {fileID: 7400000, guid: b77a7a02d110945d7bd3e5e445fbc043, type: 2}"
             ),
             "Radiant Burst must retain its fixed SwordAndShield Combo_Attack_01_03 clip"
         );

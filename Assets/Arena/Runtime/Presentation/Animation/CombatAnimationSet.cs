@@ -563,10 +563,9 @@ namespace Arena.Presentation
     {
         [Tooltip("Runtime spell/action id this animation entry responds to. This is for actual spell/buff runtime actions, not authored melee strike ids.")]
         public string spellId;
-        [Tooltip("Clip used when grounded.")]
-        public AnimationClip? ground;
-        [Tooltip("Optional override clip used while airborne. Falls back to Ground if left empty.")]
-        public AnimationClip? air;
+        [FormerlySerializedAs("ground")]
+        [Tooltip("Movement-state-independent cast/release clip. The same presentation is used on the ground and in the air.")]
+        public AnimationClip? clip;
         [Tooltip("Whether this spell should request combat stance before or after playback.")]
         public bool requiresCombatStance;
         [Tooltip("How combat stance is entered when this spell requires it.")]
@@ -578,10 +577,6 @@ namespace Arena.Presentation
         [Tooltip("How this spell should present relative to locomotion. UpperBodyWhileMoving preserves locomotion only while moving; FullBody always uses the spell-action layer; UpperBody always uses the upper-body layer; LeftGesture/RightGesture use single masked pelvis/spine/casting-arm overlays.")]
         [FormerlySerializedAs("movingPlaybackMode")]
         public SpellPlaybackLayer playbackLayer;
-        [Tooltip("Obsolete serialized compatibility field. Runtime reads OnReleaseFrame from the selected clip instead.")]
-        [Range(0f, 1f)] public float groundEffectTime;
-        [Tooltip("Obsolete serialized compatibility field. Runtime reads OnReleaseFrame from the selected clip instead.")]
-        [Range(0f, 1f)] public float airEffectTime;
         [Tooltip("Obsolete serialized compatibility field. Runtime reads OnLowerBodyUnlock from the selected clip instead.")]
         public float lowerBodyUnlockAtSeconds;
         [Tooltip("Obsolete serialized compatibility field. Runtime uses the default lower-body blend-out duration.")]
@@ -595,7 +590,7 @@ namespace Arena.Presentation
             ? string.Empty
             : spellId.Trim().ToUpperInvariant();
 
-        public bool HasAny => ground != null || air != null;
+        public bool HasAny => clip != null;
         public bool UsesUpperBodyWhileMoving => playbackLayer == SpellPlaybackLayer.UpperBodyWhileMoving;
         public bool UsesUpperBody => playbackLayer == SpellPlaybackLayer.UpperBody;
         public bool UsesLeftGesture => playbackLayer == SpellPlaybackLayer.LeftGesture;
@@ -649,37 +644,31 @@ namespace Arena.Presentation
                     && useOverlayPlayback);
         }
 
-        public AnimationClip? ResolveClip(bool grounded)
+        public AnimationClip? ResolveClip() => clip;
+
+        public float ResolveEffectTime()
+            => ResolveReleaseTimeNormalized();
+
+        public float ResolveReleaseTimeNormalized()
         {
-            if (!grounded && air != null)
-                return air;
-
-            return ground ?? air;
-        }
-
-        public float ResolveEffectTime(bool grounded)
-            => ResolveReleaseTimeNormalized(grounded);
-
-        public float ResolveReleaseTimeNormalized(bool grounded)
-        {
-            AnimationClip? clip = ResolveClip(grounded);
-            if (clip == null || clip.length <= 0.001f)
+            AnimationClip? resolvedClip = ResolveClip();
+            if (resolvedClip == null || resolvedClip.length <= 0.001f)
                 return 0f;
 
-            return Mathf.Clamp01(ResolveReleaseOffsetSeconds(grounded) / clip.length);
+            return Mathf.Clamp01(ResolveReleaseOffsetSeconds() / resolvedClip.length);
         }
 
-        public float ResolveTimingReferenceLengthSeconds(bool grounded)
+        public float ResolveTimingReferenceLengthSeconds()
         {
-            AnimationClip? clip = ResolveClip(grounded);
-            return clip != null ? clip.length : 0f;
+            AnimationClip? resolvedClip = ResolveClip();
+            return resolvedClip != null ? resolvedClip.length : 0f;
         }
 
-        public float ResolveReleaseOffsetSeconds(bool grounded)
+        public float ResolveReleaseOffsetSeconds()
         {
-            AnimationClip? clip = ResolveClip(grounded);
+            AnimationClip? resolvedClip = ResolveClip();
             return CombatAnimationEvents.GetRequiredEventTimeOrFallback(
-                clip,
+                resolvedClip,
                 CombatAnimationEvents.OnReleaseFrame,
                 fallbackSeconds: 0f,
                 context: $"spell '{SpellIdOrEmpty}' release alignment");
@@ -691,26 +680,26 @@ namespace Arena.Presentation
         /// carrying the marker. The marker is clamped to OnReleaseFrame so playback never skips the
         /// visible hand-release pose.
         /// </summary>
-        public float ResolveInstantCastStartupTrimSeconds(bool grounded, bool confirmedInstant)
+        public float ResolveInstantCastStartupTrimSeconds(bool confirmedInstant)
         {
             if (!confirmedInstant)
                 return 0f;
 
-            AnimationClip? clip = ResolveClip(grounded);
-            if (clip == null
+            AnimationClip? resolvedClip = ResolveClip();
+            if (resolvedClip == null
                 || !CombatAnimationEvents.TryGetEventTime(
-                    clip,
+                    resolvedClip,
                     CombatAnimationEvents.OnInstantCastStart,
                     out float authoredTrimSeconds))
             {
                 return 0f;
             }
 
-            float releaseOffsetSeconds = ResolveReleaseOffsetSeconds(grounded);
+            float releaseOffsetSeconds = ResolveReleaseOffsetSeconds();
             return Mathf.Clamp(
                 authoredTrimSeconds,
                 0f,
-                Mathf.Min(Mathf.Max(0f, clip.length), releaseOffsetSeconds));
+                Mathf.Min(Mathf.Max(0f, resolvedClip.length), releaseOffsetSeconds));
         }
 
         /// <summary>
@@ -719,21 +708,20 @@ namespace Arena.Presentation
         /// delay the handoff beyond the still-visible portion of the release gesture.
         /// </summary>
         public float ResolveReleaseDelayAfterPlaybackStartSeconds(
-            bool grounded,
             float playbackStartOffsetSeconds)
         {
             return Mathf.Max(
                 0f,
-                ResolveReleaseOffsetSeconds(grounded)
+                ResolveReleaseOffsetSeconds()
                 - Mathf.Max(0f, playbackStartOffsetSeconds));
         }
 
-        public float ResolveLowerBodyUnlockAtSeconds(bool grounded)
+        public float ResolveLowerBodyUnlockAtSeconds()
         {
-            AnimationClip? clip = ResolveClip(grounded);
-            float fallback = clip != null ? clip.length : 0f;
+            AnimationClip? resolvedClip = ResolveClip();
+            float fallback = resolvedClip != null ? resolvedClip.length : 0f;
             return CombatAnimationEvents.GetRequiredEventTimeOrFallback(
-                clip,
+                resolvedClip,
                 CombatAnimationEvents.OnLowerBodyUnlock,
                 fallback,
                 $"spell '{SpellIdOrEmpty}' lower-body unlock");
@@ -744,12 +732,12 @@ namespace Arena.Presentation
             return Mathf.Max(0f, defaultBlendOutSeconds);
         }
 
-        public float ResolveVisualInterruptibleAtSeconds(bool grounded)
+        public float ResolveVisualInterruptibleAtSeconds()
         {
-            AnimationClip? clip = ResolveClip(grounded);
-            float fallback = clip != null ? clip.length : 0f;
+            AnimationClip? resolvedClip = ResolveClip();
+            float fallback = resolvedClip != null ? resolvedClip.length : 0f;
             return CombatAnimationEvents.GetRequiredEventTimeOrFallback(
-                clip,
+                resolvedClip,
                 CombatAnimationEvents.OnVisualInterruptible,
                 fallback,
                 $"spell '{SpellIdOrEmpty}' visual interrupt");
@@ -771,6 +759,28 @@ namespace Arena.Presentation
         public string FamilyBaseNameOrEmpty => string.IsNullOrWhiteSpace(familyBaseName)
             ? string.Empty
             : familyBaseName.Trim();
+    }
+
+    /// <summary>
+    /// Optional escape hatch for a spell whose globally selected cast recipe does not fit one
+    /// combat pose. The override still points into the shared SpellCastAnimationCatalog; it does
+    /// not duplicate clips or recipe timing on the animation set.
+    /// </summary>
+    [Serializable]
+    public struct SpellCastAnimationOverride
+    {
+        [Tooltip("Runtime spell/action id, e.g. FLAMING_ORB.")]
+        public string spellId;
+        [Tooltip("Recipe id from SpellCastAnimationCatalog.")]
+        public string animationId;
+
+        public string SpellIdOrEmpty => string.IsNullOrWhiteSpace(spellId)
+            ? string.Empty
+            : spellId.Trim().ToUpperInvariant();
+
+        public string AnimationIdOrEmpty => string.IsNullOrWhiteSpace(animationId)
+            ? string.Empty
+            : animationId.Trim().ToUpperInvariant();
     }
 
     [Serializable]
@@ -1654,8 +1664,12 @@ namespace Arena.Presentation
         public AnimationClip? exitCombatRun;
 
         [Header("Spell Cast Motions")]
-        [Tooltip("Animation-family bindings keyed by semantic spell cast motion. Spell classification and fixed exceptions live in SpellCastAnimationMap.")]
+        [Tooltip("Legacy migration bindings keyed by semantic spell cast motion. New spell assignments should select a shared catalog recipe instead.")]
         public SpellCastMotionBinding[] spellCastMotionBindings = Array.Empty<SpellCastMotionBinding>();
+
+        [Header("Spell Cast Overrides")]
+        [Tooltip("Optional per-spell overrides for shared catalog recipes that do not fit this combat pose. Leave empty to use each spell's global selection.")]
+        public SpellCastAnimationOverride[] spellCastAnimationOverrides = Array.Empty<SpellCastAnimationOverride>();
 
         [Header("Spell Cast Hold")]
         [Tooltip("Default enter/idle presentation for cast-time spells. Release clips come from the resolved motion family or fixed spell assignment.")]
@@ -2143,6 +2157,31 @@ namespace Arena.Presentation
 
             familyBaseName = string.Empty;
             resolvedMotion = SpellCastMotion.None;
+            return false;
+        }
+
+        public bool TryGetSpellCastAnimationOverride(string spellId, out string animationId)
+        {
+            string normalizedSpellId = string.IsNullOrWhiteSpace(spellId)
+                ? string.Empty
+                : spellId.Trim().ToUpperInvariant();
+            if (normalizedSpellId.Length != 0 && spellCastAnimationOverrides != null)
+            {
+                for (int index = 0; index < spellCastAnimationOverrides.Length; index++)
+                {
+                    SpellCastAnimationOverride candidate = spellCastAnimationOverrides[index];
+                    if (!string.Equals(candidate.SpellIdOrEmpty, normalizedSpellId, StringComparison.Ordinal)
+                        || candidate.AnimationIdOrEmpty.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    animationId = candidate.AnimationIdOrEmpty;
+                    return true;
+                }
+            }
+
+            animationId = string.Empty;
             return false;
         }
 

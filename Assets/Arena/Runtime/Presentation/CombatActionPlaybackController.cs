@@ -1105,15 +1105,14 @@ namespace Arena.Presentation
         public static ActiveSpellPresentation CreateSpellPresentation(
             string actionId,
             int bankSlot,
-            WeaponSpellAnimationEntry spellEntry,
-            bool grounded)
+            WeaponSpellAnimationEntry spellEntry)
         {
             return new ActiveSpellPresentation(
                 actionId,
                 bankSlot,
-                spellEntry.ResolveLowerBodyUnlockAtSeconds(grounded),
+                spellEntry.ResolveLowerBodyUnlockAtSeconds(),
                 spellEntry.ResolveLowerBodyBlendOutSeconds(DefaultLowerBodyBlendOutSeconds),
-                spellEntry.ResolveVisualInterruptibleAtSeconds(grounded));
+                spellEntry.ResolveVisualInterruptibleAtSeconds());
         }
 
         public ActiveMeleePresentation CreateMeleePresentation(
@@ -1156,14 +1155,12 @@ namespace Arena.Presentation
         public void SetActiveSpellPresentation(
             string actionId,
             int bankSlot,
-            WeaponSpellAnimationEntry spellEntry,
-            bool grounded)
+            WeaponSpellAnimationEntry spellEntry)
         {
             ActiveSpellPresentation = CreateSpellPresentation(
                 actionId,
                 bankSlot,
-                spellEntry,
-                grounded);
+                spellEntry);
             ActiveSpellPresentationEntered = false;
         }
 
@@ -1290,7 +1287,6 @@ namespace Arena.Presentation
             AnimatorOverrideController? overrideController,
             CombatAnimationSet? animationSet,
             string spellKind,
-            bool grounded,
             int bankSlot,
             out WeaponSpellAnimationEntry spellEntry,
             out bool confirmedInstant)
@@ -1315,11 +1311,11 @@ namespace Arena.Presentation
                 return false;
             }
 
-            AnimationClip? desiredClip = spellEntry.ResolveClip(grounded);
+            AnimationClip? desiredClip = spellEntry.ResolveClip();
             if (desiredClip == null)
             {
                 Debug.LogWarning(
-                    $"[CombatActionPlaybackController] Spell '{spellKind}' resolved no {(grounded ? "ground" : "air")} clip in animation set '{animationSet.name}'.");
+                    $"[CombatActionPlaybackController] Spell '{spellKind}' resolved no cast clip in animation set '{animationSet.name}'.");
                 return false;
             }
 

@@ -1249,13 +1249,13 @@ namespace Arena.Tests.Editor
             Assert.That(found, Is.True);
 
             object entry = args[3]!;
-            AnimationClip ground = (AnimationClip)entryType.GetField("ground")!.GetValue(entry)!;
-            AnimationClip air = (AnimationClip)entryType.GetField("air")!.GetValue(entry)!;
-            Assert.That(ground.name, Is.EqualTo("Skill_01"));
-            Assert.That(air, Is.SameAs(ground));
+            AnimationClip clip = (AnimationClip)entryType.GetField("clip")!.GetValue(entry)!;
+            Assert.That(clip.name, Is.EqualTo("Skill_01"));
+            Assert.That(entryType.GetField("ground"), Is.Null);
+            Assert.That(entryType.GetField("air"), Is.Null);
             Assert.That(Convert.ToInt32(entryType.GetField("playbackLayer")!.GetValue(entry)!), Is.EqualTo(1));
             Assert.That(
-                (float)entryType.GetMethod("ResolveReleaseOffsetSeconds")!.Invoke(entry, new object[] { true })!,
+                (float)entryType.GetMethod("ResolveReleaseOffsetSeconds")!.Invoke(entry, Array.Empty<object>())!,
                 Is.EqualTo(0.85f).Within(PositionTolerance));
         }
 

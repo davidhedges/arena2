@@ -10,18 +10,18 @@ using UnityEngine;
 namespace Arena.Presentation
 {
     /// <summary>
-    /// The single runtime entry point for spell cast animation. A no-animation assignment explicitly
-    /// suppresses cast playback. A fixed assignment resolves exactly as authored and ignores the
-    /// active combat set. An ordinary assignment resolves its semantic motion through the active set's
-    /// family binding, then composes that family for the set's cast hand and the spell's authoritative
-    /// Instant/Charged/Channel archetype.
+    /// The single runtime entry point for spell cast animation. Shared catalog recipes are the
+    /// primary path, with an optional per-CombatAnimationSet recipe override. Fixed and semantic
+    /// motion assignments remain migration paths for existing content.
     /// </summary>
     public static class SpellCastAnimationResolver
     {
         internal const string LibraryResource = "SpellCastAnimationLibrary";
+        internal const string CatalogResource = "SpellCastAnimationCatalog";
         internal const string MapResource = "SpellCastAnimationMap";
 
         private static SpellCastAnimationLibrary? _library;
+        private static SpellCastAnimationCatalog? _catalog;
         private static SpellCastAnimationMap? _map;
         private static readonly Dictionary<ResolvedCacheKey, WeaponSpellAnimationEntry> ResolvedEntries = new();
 
@@ -74,6 +74,15 @@ namespace Arena.Presentation
             if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation)
                 return false;
 
+            bool catalogResolved = TryResolveCatalogSelection(
+                set,
+                normalizedSpellId,
+                mapEntry,
+                out entry,
+                out bool hasCatalogSelection);
+            if (hasCatalogSelection)
+                return catalogResolved;
+
             if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
                 return TryResolveFixed(normalizedSpellId, mapEntry, out entry);
 
@@ -120,6 +129,15 @@ namespace Arena.Presentation
             if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation)
                 return false;
 
+            bool catalogResolved = TryResolveCatalogSelection(
+                set,
+                normalizedSpellId,
+                mapEntry,
+                out entry,
+                out bool hasCatalogSelection);
+            if (hasCatalogSelection)
+                return catalogResolved;
+
             if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
                 return TryResolveFixed(normalizedSpellId, mapEntry, out entry);
 
@@ -138,6 +156,37 @@ namespace Arena.Presentation
 
             if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation)
                 return false;
+
+            if (TryGetSelectedAnimationId(set, normalizedSpellId, mapEntry, out string animationId, out bool isSetOverride))
+            {
+                EnsureLoaded();
+                if (_catalog == null)
+                {
+                    reason = "SpellCastAnimationCatalog resource is missing";
+                    return true;
+                }
+
+                if (!_catalog.TryGetRecipe(animationId, out SpellCastAnimationRecipe recipe))
+                {
+                    string source = isSetOverride ? $"CombatAnimationSet '{set!.name}' override" : "global mapping";
+                    reason = $"{source} references missing catalog recipe '{animationId}'";
+                    return true;
+                }
+
+                if (!recipe.TryBuild(normalizedSpellId, out _))
+                {
+                    reason = $"catalog recipe '{animationId}' has no playable {recipe.presentationMode} presentation";
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Catalog)
+            {
+                reason = "catalog assignment has no animation id";
+                return true;
+            }
 
             if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
             {
@@ -215,6 +264,69 @@ namespace Arena.Presentation
             ApplyOverrides(mapEntry, ref entry);
             ResolvedEntries[cacheKey] = entry;
             return true;
+        }
+
+        private static bool TryResolveCatalogSelection(
+            CombatAnimationSet? set,
+            string spellId,
+            in SpellCastAnimationMap.Entry mapEntry,
+            out WeaponSpellAnimationEntry entry,
+            out bool hasSelection)
+        {
+            entry = default;
+            hasSelection = TryGetSelectedAnimationId(set, spellId, mapEntry, out string animationId, out _);
+            if (!hasSelection)
+                return false;
+
+            EnsureLoaded();
+            if (_catalog == null
+                || !_catalog.TryGetRecipe(animationId, out SpellCastAnimationRecipe recipe)
+                || !recipe.TryBuild(spellId, out entry))
+            {
+                entry = default;
+                return false;
+            }
+
+            ApplyOverrides(mapEntry, ref entry);
+            return true;
+        }
+
+        public static bool TryGetSelectedAnimationId(
+            CombatAnimationSet? set,
+            string spellId,
+            out string animationId,
+            out bool isSetOverride)
+        {
+            string normalizedSpellId = WireIdentifier.Normalize(spellId);
+            if (!TryGetMapEntry(normalizedSpellId, out SpellCastAnimationMap.Entry mapEntry)
+                || mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation)
+            {
+                animationId = string.Empty;
+                isSetOverride = false;
+                return false;
+            }
+
+            return TryGetSelectedAnimationId(set, normalizedSpellId, mapEntry, out animationId, out isSetOverride);
+        }
+
+        private static bool TryGetSelectedAnimationId(
+            CombatAnimationSet? set,
+            string spellId,
+            in SpellCastAnimationMap.Entry mapEntry,
+            out string animationId,
+            out bool isSetOverride)
+        {
+            if (set != null && set.TryGetSpellCastAnimationOverride(spellId, out animationId))
+            {
+                isSetOverride = true;
+                return true;
+            }
+
+            animationId = mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Catalog
+                ? WireIdentifier.Normalize(mapEntry.animationId)
+                : string.Empty;
+            isSetOverride = false;
+            return animationId.Length != 0;
         }
 
         private static bool TryResolveMotionAssets(
@@ -357,23 +469,29 @@ namespace Arena.Presentation
 
         private static void EnsureLoaded()
         {
-            if (_library != null && _map != null)
+            if (_library != null && _catalog != null && _map != null)
                 return;
 
             SpellCastAnimationLibrary? library = _library;
+            SpellCastAnimationCatalog? catalog = _catalog;
             SpellCastAnimationMap? map = _map;
             library ??= Resources.Load<SpellCastAnimationLibrary>(LibraryResource);
+            catalog ??= Resources.Load<SpellCastAnimationCatalog>(CatalogResource);
             map ??= Resources.Load<SpellCastAnimationMap>(MapResource);
             _library = library;
+            _catalog = catalog;
             _map = map;
         }
 
         internal static void RegisterPreloaded(
             SpellCastAnimationLibrary? library,
+            SpellCastAnimationCatalog? catalog,
             SpellCastAnimationMap? map)
         {
             if (library != null)
                 _library = library;
+            if (catalog != null)
+                _catalog = catalog;
             if (map != null)
                 _map = map;
             ResolvedEntries.Clear();
@@ -382,6 +500,7 @@ namespace Arena.Presentation
         public static void InvalidateCache()
         {
             _library = null;
+            _catalog = null;
             _map = null;
             ResolvedEntries.Clear();
         }

@@ -453,12 +453,12 @@ namespace Arena.Entity
             if (_combatAnimationSet == null
                 || !SpellCastAnimationResolver.TryResolve(_combatAnimationSet, spellActionId, out WeaponSpellAnimationEntry entry)
                 || !entry.PlaysReleasePresentation
-                || entry.ResolveClip(grounded: true) == null)
+                || entry.ResolveClip() == null)
             {
                 return false;
             }
 
-            releaseOffsetSeconds = entry.ResolveReleaseOffsetSeconds(grounded: true);
+            releaseOffsetSeconds = entry.ResolveReleaseOffsetSeconds();
             return true;
         }
         public void StartParry() => _animator?.StartParry();

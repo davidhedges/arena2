@@ -9,8 +9,8 @@ using UnityEngine;
 namespace Arena.Tests.Editor
 {
     /// <summary>
-    /// Covers semantic spell cast classification, per-set family binding, fixed exceptions, and
-    /// archetype-aware family composition. Runtime types are exercised through reflection because
+    /// Covers shared catalog selection, per-set overrides, legacy family migration, and fixed
+    /// exceptions. Runtime types are exercised through reflection because
     /// this editor test assembly cannot statically reference Assembly-CSharp.
     /// </summary>
     public sealed class SpellAnimationResolverTests
@@ -60,8 +60,25 @@ namespace Arena.Tests.Editor
         private static UnityEngine.Object LoadSet(string resourceName) =>
             Resources.Load($"CombatAnimationSets/{resourceName}", T("CombatAnimationSet"));
 
-        private static AnimationClip? Ground(object entry) =>
-            (AnimationClip?)T("WeaponSpellAnimationEntry").GetField("ground")!.GetValue(entry);
+        private static AnimationClip? Clip(object entry) =>
+            (AnimationClip?)T("WeaponSpellAnimationEntry").GetField("clip")!.GetValue(entry);
+
+        private static string AnimationIdFor(string spellId)
+        {
+            Type mapType = T("SpellCastAnimationMap");
+            UnityEngine.Object map = Resources.Load("SpellCastAnimationMap", mapType);
+            IEnumerable entries = (IEnumerable)mapType.GetProperty("Entries")!.GetValue(map)!;
+            foreach (object entry in entries)
+            {
+                Type entryType = entry.GetType();
+                string id = (string)entryType.GetField("spellId")!.GetValue(entry)!;
+                if (string.Equals(id, spellId, StringComparison.OrdinalIgnoreCase))
+                    return (string)entryType.GetField("animationId")!.GetValue(entry)!;
+            }
+
+            Assert.Fail($"No SpellCastAnimationMap entry for {spellId}.");
+            return string.Empty;
+        }
 
         private static string MotionFor(string spellId)
         {
@@ -97,6 +114,28 @@ namespace Arena.Tests.Editor
 
             Assert.Fail($"No SpellCastAnimationMap entry for {spellId}.");
             return string.Empty;
+        }
+
+        private static bool CatalogRecipeIsCompatibleWith(string animationId, string archetypeName)
+        {
+            Type catalogType = T("SpellCastAnimationCatalog");
+            Type archetypeType = T("SpellAnimationArchetype");
+            UnityEngine.Object catalog = Resources.Load("SpellCastAnimationCatalog", catalogType);
+            Assert.That(catalog, Is.Not.Null);
+            IEnumerable recipes = (IEnumerable)catalogType.GetProperty("Recipes")!.GetValue(catalog)!;
+            foreach (object recipe in recipes)
+            {
+                Type recipeType = recipe.GetType();
+                string recipeId = (string)recipeType.GetProperty("AnimationIdOrEmpty")!.GetValue(recipe)!;
+                if (!string.Equals(recipeId, animationId, StringComparison.Ordinal))
+                    continue;
+
+                object archetype = Enum.Parse(archetypeType, archetypeName);
+                return (bool)recipeType.GetMethod("IsCompatibleWith")!.Invoke(recipe, new[] { archetype })!;
+            }
+
+            Assert.Fail($"No SpellCastAnimationCatalog recipe for {animationId}.");
+            return false;
         }
 
         private static bool IsExplicitlyNoAnimation(string spellId) =>
@@ -149,8 +188,10 @@ namespace Arena.Tests.Editor
             Assert.That(Convert.ToInt32(Enum.Parse(motionType, "Ground")), Is.EqualTo(7));
 
             Type assignmentType = T("SpellCastAnimationAssignmentKind");
+            Assert.That(Convert.ToInt32(Enum.Parse(assignmentType, "LegacyMotion")), Is.EqualTo(0));
             Assert.That(Convert.ToInt32(Enum.Parse(assignmentType, "Fixed")), Is.EqualTo(1));
             Assert.That(Convert.ToInt32(Enum.Parse(assignmentType, "NoAnimation")), Is.EqualTo(2));
+            Assert.That(Convert.ToInt32(Enum.Parse(assignmentType, "Catalog")), Is.EqualTo(3));
         }
 
         [Test]
@@ -158,7 +199,7 @@ namespace Arena.Tests.Editor
         {
             foreach ((string motion, string[] spellIds) in new[]
                      {
-                         ("Direct2H", new[] { "ICICLE", "FIREBALL", "FLAMING_ORB", "SMITE" }),
+                         ("Direct2H", new[] { "ICICLE", "FIREBALL", "SMITE" }),
                          ("Direct1H", new[]
                          {
                              "PLAGUEBOLT", "EARTH_BLAST", "LAVA_BLAST", "TIDAL_BLAST",
@@ -180,6 +221,9 @@ namespace Arena.Tests.Editor
                 foreach (string spellId in spellIds)
                     Assert.That(MotionFor(spellId), Is.EqualTo(motion), spellId);
             }
+
+            Assert.That(AssignmentFor("FLAMING_ORB"), Is.EqualTo("Catalog"));
+            Assert.That(AnimationIdFor("FLAMING_ORB"), Is.EqualTo("MAGE_PROJECTILE_CAST_02"));
         }
 
         [Test]
@@ -319,7 +363,7 @@ namespace Arena.Tests.Editor
             UnityEngine.Object set = LoadSet("TwoHandedSword");
             Assert.That(MotionFor("UPHEAVAL"), Is.EqualTo("Raise"));
             Assert.That(Resolve(set, "UPHEAVAL", "Instant", out object entry), Is.True);
-            Assert.That(Ground(entry)?.name, Is.EqualTo("HumanM@MagicAttackCall1H01_L - Cast"));
+            Assert.That(Clip(entry)?.name, Is.EqualTo("HumanM@MagicAttackCall1H01_L - Cast"));
         }
 
         [Test]
@@ -340,8 +384,8 @@ namespace Arena.Tests.Editor
             UnityEngine.Object daggers = LoadSet("Daggers");
             Assert.That(Resolve(greatsword, "BATTLE_CRY", "Instant", out object greatswordEntry), Is.True);
             Assert.That(Resolve(daggers, "BATTLE_CRY", "Instant", out object daggersEntry), Is.True);
-            Assert.That(Ground(greatswordEntry)?.name, Is.EqualTo("Buff"));
-            Assert.That(Ground(daggersEntry), Is.SameAs(Ground(greatswordEntry)));
+            Assert.That(Clip(greatswordEntry)?.name, Is.EqualTo("Buff"));
+            Assert.That(Clip(daggersEntry), Is.SameAs(Clip(greatswordEntry)));
         }
 
         [Test]
@@ -349,24 +393,68 @@ namespace Arena.Tests.Editor
         {
             UnityEngine.Object set = LoadSet("TwoHandedSword");
             Assert.That(Resolve(set, "NOVA", "Instant", out object entry), Is.True);
-            Assert.That(Ground(entry)?.name, Is.EqualTo("HumanM@SpecialMagicAttack01 - Cast"));
+            Assert.That(Clip(entry)?.name, Is.EqualTo("HumanM@SpecialMagicAttack01 - Cast"));
         }
 
         [Test]
-        public void FlamingOrb_ComposesDirectFamilyAsChargedCast()
+        public void FlamingOrb_UsesOneGlobalMageRecipeAcrossCombatSets()
         {
-            UnityEngine.Object set = LoadSet("TwoHandedSword");
-            Assert.That(Resolve(set, "FLAMING_ORB", "Charged", out object entry), Is.True);
+            UnityEngine.Object greatsword = LoadSet("TwoHandedSword");
+            UnityEngine.Object daggers = LoadSet("Daggers");
+            Assert.That(Resolve(greatsword, "FLAMING_ORB", "Charged", out object greatswordEntry), Is.True);
+            Assert.That(Resolve(daggers, "FLAMING_ORB", "Charged", out object daggersEntry), Is.True);
             Type entryType = T("WeaponSpellAnimationEntry");
-            object hold = entryType.GetField("holdOverride")!.GetValue(entry)!;
+            object hold = entryType.GetField("holdOverride")!.GetValue(greatswordEntry)!;
             Type holdType = T("SpellCastHoldProfile");
-            Assert.That(Ground(entry)?.name, Is.EqualTo("HumanM@MagicAttackDirect1H01_L - Cast"));
-            Assert.That(
-                ((AnimationClip?)holdType.GetField("enter")!.GetValue(hold))?.name,
-                Is.EqualTo("HumanM@MagicAttackDirect1H01_L"));
-            Assert.That(
-                ((AnimationClip?)holdType.GetField("idleLoop")!.GetValue(hold))?.name,
-                Is.EqualTo("HumanM@MagicAttackDirect1H01_L - Load"));
+            Assert.That(Clip(greatswordEntry)?.name, Is.EqualTo("Attack_02_02"));
+            Assert.That(Clip(daggersEntry), Is.SameAs(Clip(greatswordEntry)));
+            Assert.That(entryType.GetField("presentationMode")!.GetValue(greatswordEntry)!.ToString(), Is.EqualTo("ReleaseOnly"));
+            Assert.That(holdType.GetField("enter")!.GetValue(hold), Is.Null);
+            Assert.That(holdType.GetField("idleLoop")!.GetValue(hold), Is.Null);
+        }
+
+        [Test]
+        public void CatalogCompatibility_MatchesTheSupportedPresentationLifecycles()
+        {
+            Assert.That(CatalogRecipeIsCompatibleWith("MAGE_PROJECTILE_CAST_02", "Instant"), Is.True);
+            Assert.That(CatalogRecipeIsCompatibleWith("MAGE_PROJECTILE_CAST_02", "Charged"), Is.True);
+            Assert.That(CatalogRecipeIsCompatibleWith("MAGE_PROJECTILE_CAST_02", "Channel"), Is.False);
+            Assert.That(CatalogRecipeIsCompatibleWith("MAGE_AIMED_CAST", "Charged"), Is.True);
+            Assert.That(CatalogRecipeIsCompatibleWith("MAGE_AIMED_CAST", "Channel"), Is.False);
+        }
+
+        [Test]
+        public void CombatSetOverride_ReplacesOnlyThatSetsGlobalRecipe()
+        {
+            Type setType = T("CombatAnimationSet");
+            Type overrideType = T("SpellCastAnimationOverride");
+            var set = ScriptableObject.CreateInstance(setType);
+            try
+            {
+                object animationOverride = Activator.CreateInstance(overrideType)!;
+                overrideType.GetField("spellId")!.SetValue(animationOverride, "FLAMING_ORB");
+                overrideType.GetField("animationId")!.SetValue(animationOverride, "MAGE_SKILL_CAST_03");
+                Array overrides = Array.CreateInstance(overrideType, 1);
+                overrides.SetValue(animationOverride, 0);
+                setType.GetField("spellCastAnimationOverrides")!.SetValue(set, overrides);
+
+                Assert.That(Resolve(set, "FLAMING_ORB", "Charged", out object entry), Is.True);
+                Assert.That(Clip(entry)?.name, Is.EqualTo("Skill_03"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(set);
+            }
+        }
+
+        [Test]
+        public void SpellEntry_HasOneMovementStateIndependentClipAxis()
+        {
+            Type entryType = T("WeaponSpellAnimationEntry");
+            Assert.That(entryType.GetField("clip"), Is.Not.Null);
+            Assert.That(entryType.GetField("ground"), Is.Null);
+            Assert.That(entryType.GetField("air"), Is.Null);
+            Assert.That(entryType.GetMethod("ResolveClip", Type.EmptyTypes), Is.Not.Null);
         }
     }
 }

@@ -1,139 +1,110 @@
-# Spell Cast-Animation Motion Contract
+# Spell Cast-Animation Recipe Contract
 
-**Status:** Implemented and fully cut over 2026-08-22.
+**Status:** Catalog path implemented 2026-08-23; legacy motions remain migration data.
 
-Spell identity, combat-set pose, and cast timing are separate concerns:
+The primary authoring flow is now:
 
-    spell id -> semantic motion, fixed exception, or explicit no-animation assignment
-    combat animation set + semantic motion -> animation family
-    family + cast hand + gameplay archetype -> concrete clips and presentation mode
+    reusable recipe -> global spell selection -> optional CombatAnimationSet spell override
 
-There is no per-spell animation array on CombatAnimationSet and no spell-level raw family name.
+A recipe is an exact presentation. It is either a single cast/release clip or an authored
+Start/Loop/End sequence. The resolver does not rewrite a catalog recipe from the spell's gameplay
+archetype. Archetype is compatibility metadata in the picker and validator.
 
 ## Authoring ownership
 
-### Spell classification
+`Assets/Arena/Resources/SpellCastAnimationCatalog.asset` owns the reusable choices. Each recipe has
+a stable `animationId`, picker label/category, compatibility tags, and its exact clip graph:
 
-Assets/Arena/Resources/SpellCastAnimationMap.asset is the only spell-level cast-animation
-authority. Every entry is one of:
+- `ReleaseOnly`: one movement-state-independent cast/release clip.
+- `HoldThenRelease`: hold Enter, hold Loop, then the cast/release/end clip.
+- `HoldOnly`: hold Enter and Loop without a release clip.
 
-- Motion: a semantic SpellCastMotion (Direct1H, Direct2H, Raise, Call, Ground, Omni, or Special).
-- Fixed: a complete WeaponSpellAnimationEntry that ignores the active combat animation set.
-- NoAnimation: an explicit declaration that the spell plays no cast animation.
+The catalog may reference any compatible humanoid animation. It is intentionally independent of
+weapon/combat profile, so Daggers can select a Mage or Staff-looking recipe. Selected old Magic
+Attacks animations also live in this catalog for sparing reuse.
 
-Use Fixed only when the spell's animation is part of the spell's identity rather than a weapon-pose
-choice. Current fixed exceptions are BATTLE_CRY, GROUND_SLASH, RAIN_OF_ARROWS,
-BLESSED_SHIELD, and RADIANT_BURST. Battle Cry therefore uses the GreatSword Buff/Buff_Air
-clips with every combat set.
+`Assets/Arena/Resources/SpellCastAnimationMap.asset` owns the global selection for each spell. New
+entries use `Catalog` plus an `animationId`. Existing entries may remain `LegacyMotion` while they
+are reviewed. `Fixed` is retained for bespoke inline presentations, and `NoAnimation` remains an
+explicit opt-out.
 
-UPHEAVAL is classified as Raise.
+Each `CombatAnimationSet` has a small `spellCastAnimationOverrides` escape hatch. An override stores
+only `{ spellId, animationId }`; it never duplicates clips or timing. Do not add an override unless
+the global recipe visibly fails that specific combat pose.
 
-### Combat animation set bindings
+## Resolution order
 
-Each CombatAnimationSet owns spellCastMotionBindings. A binding maps one semantic motion to a
-base name in SpellCastAnimationLibrary.
+`SpellCastAnimationResolver.TryResolve` is the only runtime lookup:
 
-The current Greatsword (TwoHandedSword) bindings include:
+1. Find the normalized global spell mapping.
+2. `NoAnimation` suppresses playback.
+3. If the active combat set has a spell override, resolve that catalog recipe.
+4. Otherwise, a `Catalog` mapping resolves its global recipe.
+5. `Fixed` resolves its inline migration presentation.
+6. `LegacyMotion` uses the old motion -> set family -> hand/archetype composer.
+7. A missing or invalid selected recipe fails closed; it does not silently fall back to legacy.
 
-| motion | family |
-|---|---|
-| Direct1H | MagicAttackDirect1H01 |
-| Raise | MagicAttackCall1H01 |
-| Call | MagicAttackCall1H02 |
-| Ground | MagicAttackGround01 |
-| Omni | MagicAttackOmni01 |
-| Special | SpecialMagicAttack01 |
+The catalog recipe's phases and playback layer are copied exactly. Spell-level optional layer,
+combat-entry, and animated-prop overrides are applied last.
 
-oneHandedCastHand selects _L or _R for one-handed families. Greatsword currently uses Left,
-so UPHEAVAL resolves to the HumanM@MagicAttackCall1H01_L family and a Call spell resolves to
-HumanM@MagicAttackCall1H02_L. ArcherBow/Precision uses Left and SwordAndShield uses Right.
-Two-handed families ignore this field.
+## No spell ground/air axis
 
-Ground describes a visibly ground-directed casting gesture; it is not inferred from gameplay
-targeting. Every current set binds Ground to MagicAttackGround01, and oneHandedCastHand selects its
-_L or _R variant.
+`WeaponSpellAnimationEntry` has one `clip`. Grounded state no longer participates in spell clip,
+release timing, lower-body unlock, visual-interrupt, prop-handoff, preview, or validation lookup.
+The same recipe therefore plays when the avatar is grounded or airborne.
 
-Direct2H is a preferred gesture, not a hard requirement. Daggers and Staff bind it explicitly to
-MagicAttackDirect2H02. Sets that cannot free both hands omit the Direct2H binding; the resolver then
-falls back to that set's Direct1H family and oneHandedCastHand. MagicAttackDirect2H01 is prohibited.
+This does not remove ground-directed gestures. A recipe may visibly aim at the ground; it simply is
+not selected from a second airborne clip slot. Melee ground/air presentation remains a separate
+system and is unchanged.
 
-### Family library
+Existing inline fixed entries migrated their prior ground clip to the single clip. The one fixed
+entry that had a distinct airborne alternative (`BATTLE_CRY`) keeps its ground version as the
+canonical presentation.
 
-Assets/Arena/Resources/SpellCastAnimationLibrary.asset contains the real clip references. Each
-family contains:
+## Mage Animation Pack conventions
 
-- oneShot: Base — held-cast enter/wind-up.
-- load: Base - Load — charge/channel loop.
-- cast: Base - Cast — release, and the preferred instant gesture.
+The initial catalog exposes a reviewed subset rather than all imported clips:
 
-Run Arena/Spell Animation/Rescan Cast Families after adding or renaming source clips.
+- Projectile Cast 1 and 2
+- Aimed Cast
+- phased Skill Cast 1 and 2
+- single-shot Skill Cast 3, 4, and 5
+- Buff Cast
+- one retained legacy Direct Cast sequence
 
-## Archetype composition
+Single shots and sequence Start/End clips must be non-looping. Sequence Loop clips remain looping.
+Release/end clips retain `OnReleaseFrame`; use the animation event stamper to tune the physical
+release pose after visual review. Other established markers still apply when the chosen layer needs
+them:
 
-SpellAnimationArchetypes derives the archetype from authoritative gameplay. The composer remains
-the only stitch-selection implementation:
+- `OnEnterComplete`: optional Enter -> Loop handoff tuning.
+- `OnInstantCastStart`: optional startup trim for confirmed instant casts.
+- `OnLowerBodyUnlock` and `OnVisualInterruptible`: full-body recovery timing.
 
-| archetype | concrete presentation |
-|---|---|
-| Instant | cast (fallback oneShot), ReleaseOnly |
-| Charged | oneShot -> load -> cast, HoldThenRelease |
-| Channel | oneShot -> load, HoldOnly |
+The initial single-shot Mage recipes are tagged for instant and timed casts. Start/Loop/End recipes
+are tagged for timed casts only. Channel spells keep their legacy `HoldOnly` presentations until a
+channel-specific recipe is deliberately added; their lifecycle has no completed release/end phase.
 
-One-hand families use the loop-capable LeftGesture or RightGesture states for instant, hold, and
-charged release, keeping the weapon-bearing arm on its base pose. Two-hand families use the
-existing upper-body/full-body policies in SpellCastAnimationComposer.
+## Editor workflow
 
-Timing still comes from animation events:
+1. Open `Arena > Spell Authoring > Open Spell Authoring`.
+2. Select the spell.
+3. Choose `Cast Animation > Global Recipe` from the categorized dropdown.
+4. Expand `CombatAnimationSet Overrides` and change only a set that looks wrong.
+5. Use the CombatAnimationSet spell preview or `Arena > Spell Animation > Resolved View`.
+6. Stamp/tune animation events on the selected clips after visual review.
+7. Run Combat VFX validation and the editor/server gates.
 
-- OnEnterComplete: enter-to-loop handoff.
-- OnReleaseFrame: gameplay/VFX release alignment.
-- OnInstantCastStart: optional instant-only startup trim.
-- OnLowerBodyUnlock and OnVisualInterruptible: full-body recovery policy.
+`FLAMING_ORB` is the migration pilot and currently selects `MAGE_PROJECTILE_CAST_02`. All other
+ordinary spells stay on `LegacyMotion` until they are deliberately handpicked in Spell Authoring.
 
-## Resolution contract
+## Migration rules
 
-SpellCastAnimationResolver.TryResolve is the only runtime lookup:
-
-1. Normalize the spell id and find its global map entry.
-2. If the entry is NoAnimation, suppress cast animation without reporting a resolution failure.
-3. If the entry is Fixed, return its fixed presentation without consulting the combat set.
-4. Otherwise require an active CombatAnimationSet.
-5. Resolve the entry's motion through that set's spellCastMotionBindings.
-6. Resolve the family from SpellCastAnimationLibrary.
-7. Compose family + set hand + authoritative archetype.
-8. Apply the motion entry's optional layer, combat-entry-mode, or animated-prop overrides.
-
-Successful motion resolutions are cached. Validation and asset OnValidate callbacks invalidate the
-cache after authoring changes.
-
-Missing map entries, missing required set bindings, missing families, and incomplete archetype
-variants fail closed and produce a targeted runtime/editor diagnostic. The only semantic fallback
-is Direct2H -> Direct1H when a set intentionally omits Direct2H. There is no fallback to a deleted
-legacy spell row or to a spell-level family.
-
-## Authoring workflow
-
-For a normal spell:
-
-1. Add one Motion entry to SpellCastAnimationMap.asset.
-2. Ensure every runtime-loadable combat set binds that motion.
-3. Ensure the selected families contain the variants required by the spell's archetype.
-4. Stamp required animation events.
-5. Inspect Arena/Spell Animation/Resolved View.
-6. Run Combat VFX validation and the server/editor test suites.
-
-For a fixed exception:
-
-1. Add one Fixed entry to SpellCastAnimationMap.asset.
-2. Author its complete ground/air, layer, entry mode, hold, and prop data there.
-3. Verify it resolves to the same clips with at least two different combat sets.
-
-For a spell that intentionally has no cast animation:
-
-1. Add one NoAnimation entry to SpellCastAnimationMap.asset.
-2. Leave motion, fixed presentation, playback overrides, and animated prop empty.
-3. Do not omit the entry; omission means the spell still needs classification review.
-
-Do not add spell-specific animation fields back to CombatAnimationSet. If a new distinction is
-shared by multiple spells and legitimately varies by combat set, add a semantic motion and bind it
-per set. If it must never vary by set, use a fixed exception.
+- Migrate one spell or tightly related group at a time.
+- Prefer the global recipe; overrides are exceptions, not a parallel assignment table.
+- Do not bulk-map spells by targeting type or semantic motion.
+- Do not expose the entire imported pack as a raw uncurated dropdown.
+- Keep `SpellCastAnimationLibrary`, semantic motion bindings, and the composer only while legacy
+  mappings still use them.
+- Delete a legacy motion/family only after no map entry resolves through it and validation/tests
+  cover the replacement.

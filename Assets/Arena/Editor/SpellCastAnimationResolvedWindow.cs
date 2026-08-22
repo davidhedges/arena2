@@ -8,7 +8,7 @@ using UnityEngine;
 namespace Arena.Editor
 {
     /// <summary>
-    /// Read-only resolved view of spell classification and each CombatAnimationSet's family binding.
+    /// Read-only resolved view of each global recipe and optional CombatAnimationSet override.
     /// Fixed assignments are shown once because they intentionally ignore the active set;
     /// no-animation assignments are listed without per-set resolution rows.
     /// </summary>
@@ -155,14 +155,28 @@ namespace Arena.Editor
                 {
                     foreach (CombatAnimationSet set in _animationSets)
                     {
-                        string family = set.TryGetSpellCastFamily(
-                                mapEntry.motion,
-                                out string familyBaseName,
-                                out SpellCastMotion resolvedMotion)
-                            ? resolvedMotion == mapEntry.motion
-                                ? familyBaseName
-                                : $"{familyBaseName} ({resolvedMotion} fallback)"
-                            : "‹missing binding›";
+                        string family;
+                        if (SpellCastAnimationResolver.TryGetSelectedAnimationId(
+                                set,
+                                spellId,
+                                out string selectedAnimationId,
+                                out bool isSetOverride))
+                        {
+                            family = isSetOverride
+                                ? $"{selectedAnimationId} (set override)"
+                                : $"{selectedAnimationId} (global)";
+                        }
+                        else
+                        {
+                            family = set.TryGetSpellCastFamily(
+                                    mapEntry.motion,
+                                    out string familyBaseName,
+                                    out SpellCastMotion resolvedMotion)
+                                ? resolvedMotion == mapEntry.motion
+                                    ? $"{familyBaseName} (legacy)"
+                                    : $"{familyBaseName} ({resolvedMotion} legacy fallback)"
+                                : "‹missing binding›";
+                        }
                         resolvedSets.Add(BuildResolvedSet(set, spellId, set.name, family, archetype));
                     }
                 }
@@ -174,7 +188,9 @@ namespace Arena.Editor
                         ? "Fixed"
                         : noAnimationAssignment
                             ? "No animation"
-                            : mapEntry.motion.ToString(),
+                            : mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Catalog
+                                ? $"Catalog: {mapEntry.animationId}"
+                                : $"Legacy motion: {mapEntry.motion}",
                     Archetype = archetype,
                     HasGameplay = hasGameplay,
                     Sets = resolvedSets.ToArray(),
@@ -204,7 +220,7 @@ namespace Arena.Editor
                 true,
                 entry.presentationMode,
                 entry.playbackLayer,
-                entry.ground != null ? entry.ground.name : "—",
+                entry.clip != null ? entry.clip.name : "—",
                 entry.holdOverride.enter != null ? entry.holdOverride.enter.name : "—",
                 entry.holdOverride.idleLoop != null ? entry.holdOverride.idleLoop.name : "—");
         }

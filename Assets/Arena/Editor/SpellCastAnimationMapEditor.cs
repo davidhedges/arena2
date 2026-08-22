@@ -9,13 +9,15 @@ using UnityEngine;
 namespace Arena.Editor
 {
     /// <summary>
-    /// Authoring UI for the single spell-to-motion/fixed-animation map. Family selection belongs to
-    /// CombatAnimationSet; this inspector deliberately exposes no spell-level family field.
+    /// Authoring UI for global spell-to-recipe selection, with legacy motion and fixed migration
+    /// paths retained for existing content.
     /// </summary>
     [CustomEditor(typeof(SpellCastAnimationMap))]
     public sealed class SpellCastAnimationMapEditor : UnityEditor.Editor
     {
         private string[] _spellIds = Array.Empty<string>();
+        private string[] _animationIds = Array.Empty<string>();
+        private string[] _animationLabels = Array.Empty<string>();
 
         private void OnEnable() => RefreshChoices();
 
@@ -28,6 +30,14 @@ namespace Arena.Editor
             foreach (SpellCastAnimationMap.Entry e in map.Entries)
                 if (!string.IsNullOrWhiteSpace(e.spellId)) ids.Add(e.spellId.Trim().ToUpperInvariant());
             _spellIds = ids.ToArray();
+
+            SpellCastAnimationCatalog? catalog = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationCatalog>();
+            SpellCastAnimationRecipe[] recipes = catalog?.Recipes
+                .OrderBy(recipe => recipe.CategoryOrDefault, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(recipe => recipe.DisplayNameOrId, StringComparer.OrdinalIgnoreCase)
+                .ToArray() ?? Array.Empty<SpellCastAnimationRecipe>();
+            _animationIds = recipes.Select(recipe => recipe.AnimationIdOrEmpty).ToArray();
+            _animationLabels = recipes.Select(recipe => recipe.PickerLabel).ToArray();
         }
 
         public override void OnInspectorGUI()
@@ -65,6 +75,7 @@ namespace Arena.Editor
                             (SpellCastAnimationAssignmentKind)assignmentKind.enumValueIndex;
                         if (kind == SpellCastAnimationAssignmentKind.Fixed)
                         {
+                            entry.FindPropertyRelative("animationId").stringValue = string.Empty;
                             entry.FindPropertyRelative("motion").enumValueIndex = (int)SpellCastMotion.None;
                             entry.FindPropertyRelative("playbackLayer").enumValueIndex = (int)SpellCastLayerOverride.Auto;
                             entry.FindPropertyRelative("combatEntryMode").enumValueIndex = (int)SpellCastEntryModeOverride.Auto;
@@ -72,14 +83,21 @@ namespace Arena.Editor
                         }
                         else if (kind == SpellCastAnimationAssignmentKind.NoAnimation)
                         {
+                            entry.FindPropertyRelative("animationId").stringValue = string.Empty;
                             entry.FindPropertyRelative("motion").enumValueIndex = (int)SpellCastMotion.None;
                             entry.FindPropertyRelative("fixedAnimation").boxedValue = default(WeaponSpellAnimationEntry);
                             entry.FindPropertyRelative("playbackLayer").enumValueIndex = (int)SpellCastLayerOverride.Auto;
                             entry.FindPropertyRelative("combatEntryMode").enumValueIndex = (int)SpellCastEntryModeOverride.Auto;
                             entry.FindPropertyRelative("animatedProp").boxedValue = default(SpellAnimatedPropHandoff);
                         }
+                        else if (kind == SpellCastAnimationAssignmentKind.Catalog)
+                        {
+                            entry.FindPropertyRelative("motion").enumValueIndex = (int)SpellCastMotion.None;
+                            entry.FindPropertyRelative("fixedAnimation").boxedValue = default(WeaponSpellAnimationEntry);
+                        }
                         else
                         {
+                            entry.FindPropertyRelative("animationId").stringValue = string.Empty;
                             entry.FindPropertyRelative("fixedAnimation").boxedValue = default(WeaponSpellAnimationEntry);
                         }
                     }
@@ -94,6 +112,13 @@ namespace Arena.Editor
                         EditorGUILayout.HelpBox(
                             "This spell intentionally plays no cast animation.",
                             MessageType.Info);
+                    }
+                    else if (assignment == SpellCastAnimationAssignmentKind.Catalog)
+                    {
+                        DrawAnimationDropdown(entry.FindPropertyRelative("animationId"));
+                        EditorGUILayout.PropertyField(entry.FindPropertyRelative("playbackLayer"));
+                        EditorGUILayout.PropertyField(entry.FindPropertyRelative("combatEntryMode"));
+                        EditorGUILayout.PropertyField(entry.FindPropertyRelative("animatedProp"), includeChildren: true);
                     }
                     else
                     {
@@ -117,6 +142,19 @@ namespace Arena.Editor
             }
 
             serializedObject.ApplyModifiedProperties();
+        }
+
+        private void DrawAnimationDropdown(SerializedProperty property)
+        {
+            int currentIndex = Array.IndexOf(_animationIds, property.stringValue);
+            var options = new string[_animationLabels.Length + 1];
+            options[0] = currentIndex >= 0
+                ? _animationLabels[currentIndex]
+                : $"‹{(string.IsNullOrWhiteSpace(property.stringValue) ? "none" : property.stringValue)}›";
+            Array.Copy(_animationLabels, 0, options, 1, _animationLabels.Length);
+            int selected = EditorGUILayout.Popup("Animation", 0, options);
+            if (selected > 0)
+                property.stringValue = _animationIds[selected - 1];
         }
 
         /// <summary>

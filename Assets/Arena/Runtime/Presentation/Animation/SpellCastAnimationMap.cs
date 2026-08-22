@@ -25,9 +25,10 @@ namespace Arena.Presentation
     /// <summary>How a spell obtains its cast presentation, or explicitly opts out of one.</summary>
     public enum SpellCastAnimationAssignmentKind
     {
-        Motion = 0,
+        LegacyMotion = 0,
         Fixed,
         NoAnimation,
+        Catalog,
     }
 
     /// <summary>Optional per-spell playback-layer override. <see cref="Auto"/> keeps the composer's derived layer.</summary>
@@ -51,12 +52,9 @@ namespace Arena.Presentation
     }
 
     /// <summary>
-    /// Weapon-agnostic spell cast classification: ordinary spells select a semantic
-    /// <see cref="SpellCastMotion"/>, exceptional spells may own a fixed animation that ignores the
-    /// active combat animation set, and intentionally unanimated spells opt out explicitly. The
-    /// resolver combines a motion with the active set's family binding, casting hand, and the spell's
-    /// derived archetype. Lives in Resources so this is the single global spell cast-animation
-    /// authority.
+    /// Global spell-to-animation selection. New assignments point at reusable catalog recipes.
+    /// Legacy semantic motions and inline fixed presentations remain migration paths for existing
+    /// content, while intentionally unanimated spells opt out explicitly.
     /// </summary>
     [CreateAssetMenu(menuName = "Arena/Spell Cast Animation Map", fileName = "SpellCastAnimationMap")]
     public sealed class SpellCastAnimationMap : ScriptableObject
@@ -66,9 +64,11 @@ namespace Arena.Presentation
         {
             [Tooltip("Authoritative runtime action id, e.g. FIREBALL (no SPELL_ prefix — matches progression gameplay action_id).")]
             public string spellId;
-            [Tooltip("Motion uses the active CombatAnimationSet's family binding. Fixed always uses fixedAnimation, regardless of combat set. No Animation explicitly suppresses cast animation.")]
+            [Tooltip("Catalog selects a shared reusable recipe. Legacy Motion preserves the old per-set family path. Fixed is an inline exception. No Animation explicitly suppresses playback.")]
             public SpellCastAnimationAssignmentKind assignmentKind;
-            [Tooltip("Semantic cast motion used when Assignment Kind is Motion.")]
+            [Tooltip("Shared recipe id used when Assignment Kind is Catalog.")]
+            public string animationId;
+            [Tooltip("Semantic cast motion used only when Assignment Kind is Legacy Motion.")]
             public SpellCastMotion motion;
             [Tooltip("Complete set-independent presentation used only when Assignment Kind is Fixed. Its spellId is replaced with this entry's spellId at resolution time.")]
             public WeaponSpellAnimationEntry fixedAnimation;
@@ -125,6 +125,41 @@ namespace Arena.Presentation
             _entryBySpellId = null;
             SpellCastAnimationResolver.InvalidateCache();
         }
+
+#if UNITY_EDITOR
+        public void EditorSetCatalogAssignment(string spellId, string animationId)
+        {
+            string normalizedSpellId = Normalize(spellId);
+            if (normalizedSpellId.Length == 0)
+                return;
+
+            for (int index = 0; index < entries.Count; index++)
+            {
+                Entry entry = entries[index];
+                if (!string.Equals(Normalize(entry.spellId), normalizedSpellId, StringComparison.Ordinal))
+                    continue;
+
+                entry.spellId = normalizedSpellId;
+                entry.assignmentKind = SpellCastAnimationAssignmentKind.Catalog;
+                entry.animationId = Normalize(animationId);
+                entry.motion = SpellCastMotion.None;
+                entry.fixedAnimation = default;
+                entries[index] = entry;
+                _entryBySpellId = null;
+                SpellCastAnimationResolver.InvalidateCache();
+                return;
+            }
+
+            entries.Add(new Entry
+            {
+                spellId = normalizedSpellId,
+                assignmentKind = SpellCastAnimationAssignmentKind.Catalog,
+                animationId = Normalize(animationId),
+            });
+            _entryBySpellId = null;
+            SpellCastAnimationResolver.InvalidateCache();
+        }
+#endif
 
         private static string Normalize(string? spellId)
             => string.IsNullOrWhiteSpace(spellId) ? string.Empty : spellId.Trim().ToUpperInvariant();

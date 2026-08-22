@@ -8,10 +8,10 @@ namespace Arena.Presentation
     /// derived archetype, producing a <see cref="WeaponSpellAnimationEntry"/> the existing runtime
     /// already knows how to play (design doc §2/§3):
     /// <list type="bullet">
-    /// <item><b>Instant</b> → <c>ground</c>/<c>air</c> = the full one-shot (<c>ReleaseOnly</c>).</item>
+    /// <item><b>Instant</b> → <c>clip</c> = the full one-shot (<c>ReleaseOnly</c>).</item>
     /// <item><b>Channel</b> → <c>holdOverride.enter</c> = one-shot, <c>idleLoop</c> = Load, no release
     /// (<c>HoldOnly</c>).</item>
-    /// <item><b>Charged</b> → hold enter/loop as Channel, plus <c>ground</c>/<c>air</c> = the final
+    /// <item><b>Charged</b> → hold enter/loop as Channel, plus <c>clip</c> = the final
     /// Cast clip (<c>HoldThenRelease</c>).</item>
     /// </list>
     /// Pure: no assets loaded, no gameplay queried — the caller supplies the archetype (from
@@ -104,8 +104,7 @@ namespace Arena.Presentation
                     AnimationClip? snap = triple.cast ?? triple.oneShot;
                     if (snap == null)
                         return false;
-                    entry.ground = snap;
-                    entry.air = snap;
+                    entry.clip = snap;
                     entry.presentationMode = SpellAnimationPresentationMode.ReleaseOnly;
                     entry.playbackLayer = ResolveInstantLayer(family.handStyle, hand);
                     entry.combatEntryMode = CombatEntryMode.ImmediateForFullBodyAnimatedAfterUpperBody;
@@ -116,8 +115,7 @@ namespace Arena.Presentation
                     // one-shot (enter) → Load (hold) → Cast (release).
                     if (!triple.HasHold || triple.cast == null)
                         return false;
-                    entry.ground = triple.cast;
-                    entry.air = triple.cast;
+                    entry.clip = triple.cast;
                     entry.presentationMode = SpellAnimationPresentationMode.HoldThenRelease;
                     entry.playbackLayer = ResolveChargedReleaseLayer(family.handStyle, hand);
                     entry.combatEntryMode = CombatEntryMode.AnimatedAfterCast;
