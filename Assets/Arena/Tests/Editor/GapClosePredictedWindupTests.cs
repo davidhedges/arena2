@@ -115,6 +115,81 @@ namespace Arena.EditModeTests
             }
         }
 
+        [Test]
+        public void ReleaseAfterStartTail_PlaysOnlyFinalHundredMillisecondsBeforeEnd()
+        {
+            object controller = Activator.CreateInstance(ControllerType)!;
+            AnimationClip openingLoop = CreateOneSecondClip();
+            AnimationClip loopPlaceholder = CreateOneSecondClip();
+            AnimationClip end = CreateOneSecondClip();
+
+            try
+            {
+                RequireMethod(
+                        ControllerType,
+                        "BeginPhasedMelee",
+                        typeof(int),
+                        typeof(AnimationClip),
+                        typeof(AnimationClip),
+                        typeof(AnimationClip),
+                        typeof(bool),
+                        typeof(bool),
+                        typeof(bool),
+                        typeof(bool),
+                        typeof(float),
+                        typeof(float),
+                        typeof(float))
+                    .Invoke(
+                        controller,
+                        new object[]
+                        {
+                            1,
+                            openingLoop,
+                            loopPlaceholder,
+                            end,
+                            true,
+                            false,
+                            false,
+                            false,
+                            -1f,
+                            0.9f,
+                            1f,
+                        });
+                RequireMethod(
+                        ControllerType,
+                        "SetPhasedMeleeSegment",
+                        PhaseType,
+                        typeof(int),
+                        typeof(float),
+                        typeof(float))
+                    .Invoke(
+                        controller,
+                        new object[] { Enum.Parse(PhaseType, "Start"), 11, 1f, 0.9f });
+
+                MethodInfo timingMethod = RequireMethod(
+                    ControllerType,
+                    "TryGetPhasedMeleePresentationTiming",
+                    typeof(float),
+                    typeof(float).MakeByRefType(),
+                    typeof(float).MakeByRefType());
+                object?[] timingArgs = { 0.95f, 0f, 0f };
+                Assert.That((bool)timingMethod.Invoke(controller, timingArgs)!, Is.True);
+                Assert.That((float)timingArgs[1]!, Is.EqualTo(0.05f).Within(0.001f));
+                Assert.That((float)timingArgs[2]!, Is.EqualTo(1.1f).Within(0.001f));
+
+                Assert.That(ResolveTimeDrivenTransition(controller, 0.99f).Transitioned, Is.False);
+                var atTailEnd = ResolveTimeDrivenTransition(controller, 1f);
+                Assert.That(atTailEnd.Transitioned, Is.True);
+                Assert.That(atTailEnd.NextPhase, Is.EqualTo("End"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(openingLoop);
+                UnityEngine.Object.DestroyImmediate(loopPlaceholder);
+                UnityEngine.Object.DestroyImmediate(end);
+            }
+        }
+
         // -------------------------------------------------------------------
         // Handoff math: predicted windup elapsed → track-sampling segment/offset
         // -------------------------------------------------------------------

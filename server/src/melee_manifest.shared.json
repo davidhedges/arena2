@@ -1357,10 +1357,10 @@
                     "slot_id": "dagger_coup_de_grace_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 60
+                            "impact_delay_ms": 143
                         },
                         {
-                            "impact_delay_ms": 60
+                            "impact_delay_ms": 143
                         }
                     ],
                     "recovery_ms": 350,

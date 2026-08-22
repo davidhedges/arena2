@@ -939,6 +939,44 @@ namespace Arena.Presentation
         public AnimationClip End { get; }
         public bool ReleaseAfterStart { get; }
 
+        public float ResolveOpeningTailSeconds(float requestedTailSeconds)
+        {
+            if (!ReleaseAfterStart || requestedTailSeconds <= 0f)
+                return 0f;
+
+            return Mathf.Min(Mathf.Max(0f, requestedTailSeconds), Mathf.Max(0f, Start.length));
+        }
+
+        public float ResolveOpeningStartNormalizedTime(float requestedTailSeconds)
+        {
+            float startLengthSeconds = Mathf.Max(0f, Start.length);
+            float tailSeconds = ResolveOpeningTailSeconds(requestedTailSeconds);
+            return tailSeconds > 0f && startLengthSeconds > 0.001f
+                ? Mathf.Clamp01(1f - tailSeconds / startLengthSeconds)
+                : 0f;
+        }
+
+        public float ResolveStartTimelineLengthSeconds(float requestedTailSeconds)
+        {
+            float tailSeconds = ResolveOpeningTailSeconds(requestedTailSeconds);
+            return tailSeconds > 0f ? tailSeconds : ResolveStartTimelineLengthSeconds();
+        }
+
+        public float ResolveOpeningPlaybackStartSeconds(float requestedTailSeconds)
+        {
+            float tailSeconds = ResolveOpeningTailSeconds(requestedTailSeconds);
+            return tailSeconds > 0f
+                ? Mathf.Max(0f, Start.length - tailSeconds)
+                : 0f;
+        }
+
+        public float ResolveOpeningPlaybackEndSeconds(float requestedTailSeconds)
+        {
+            return ResolveOpeningTailSeconds(requestedTailSeconds) > 0f
+                ? Mathf.Max(0f, Start.length)
+                : ResolveStartTimelineLengthSeconds();
+        }
+
         public float ResolveStartTimelineLengthSeconds()
         {
             float startLengthSeconds = Mathf.Max(0f, Start.length);
@@ -986,6 +1024,8 @@ namespace Arena.Presentation
         public bool drivePhasesFromSpecialMovement;
         [Tooltip("When true, casts inside impact reach skip Start and scale Loop by cast distance; casts beyond impact reach use Start and hold Loop for the gap close.")]
         public bool scaleGapClosePhasesFromImpactReach;
+        [Tooltip("For a two-clip phased action, play only this many seconds from the tail of the opening clip before End. Zero preserves the authored opening marker.")]
+        [Min(0f)] public float phasedOpeningTailSeconds;
         [Tooltip("When true, this phased melee action holds its loop segment until the matching authoritative combat action releases or fizzles.")]
         public bool drivePhasesFromCombatLifecycle;
         [Tooltip("Grounded phased clips for this authored strike. Leave empty to fall back to Air if that set is complete.")]
@@ -1046,6 +1086,8 @@ namespace Arena.Presentation
         public bool drivePhasesFromSpecialMovement;
         [Tooltip("Opt-in phased gap-close timing. Inside impact reach, skip Start and play a cast-distance-scaled part of Loop. Beyond impact reach, play Start and hold Loop until movement ends.")]
         public bool scaleGapClosePhasesFromImpactReach;
+        [Tooltip("For a two-clip phased action, play only this many seconds from the tail of the opening clip before End. Zero preserves the authored opening marker.")]
+        [Min(0f)] public float phasedOpeningTailSeconds;
         [Tooltip("Only for phased channeled attacks. When enabled, Start plays once, Loop holds while the authoritative combat action is active, and End plays when that action releases or fizzles.")]
         public bool drivePhasesFromCombatLifecycle;
         [Tooltip("Deterministic bindings from semantic slots on the selected animation clips to registered VFX ids. Timing and transforms stay on the shared clip track.")]
@@ -1088,6 +1130,7 @@ namespace Arena.Presentation
                 authoredActionId = combat.AuthoredStrikeIdOrDefault,
                 drivePhasesFromSpecialMovement = drivePhasesFromSpecialMovement,
                 scaleGapClosePhasesFromImpactReach = scaleGapClosePhasesFromImpactReach,
+                phasedOpeningTailSeconds = Mathf.Max(0f, phasedOpeningTailSeconds),
                 drivePhasesFromCombatLifecycle = drivePhasesFromCombatLifecycle,
                 ground = phasedGround,
                 air = phasedAir,
@@ -1178,7 +1221,7 @@ namespace Arena.Presentation
             return TryResolvePhasedEventTime(fallback, eventName, out eventTime);
         }
 
-        private static bool TryResolvePhasedEventTime(
+        private bool TryResolvePhasedEventTime(
             WeaponPhasedActionClipSet clipSet,
             string eventName,
             out float eventTime)
@@ -1189,9 +1232,18 @@ namespace Arena.Presentation
 
             bool found = false;
             float offset = 0f;
-            float startTimelineLengthSeconds = resolved.ResolveStartTimelineLengthSeconds();
-            if (CombatAnimationEvents.TryGetEventTime(resolved.Start, eventName, out float startTime)
-                && startTime <= startTimelineLengthSeconds)
+            float startTimelineLengthSeconds =
+                resolved.ResolveStartTimelineLengthSeconds(phasedOpeningTailSeconds);
+            float startPlaybackOffsetSeconds =
+                resolved.ResolveOpeningPlaybackStartSeconds(phasedOpeningTailSeconds);
+            float startPlaybackEndSeconds =
+                resolved.ResolveOpeningPlaybackEndSeconds(phasedOpeningTailSeconds);
+            if (TryGetEventTimeInPlaybackWindow(
+                    resolved.Start,
+                    eventName,
+                    startPlaybackOffsetSeconds,
+                    startPlaybackEndSeconds,
+                    out float startTime))
             {
                 eventTime = startTime;
                 found = true;
@@ -1217,6 +1269,39 @@ namespace Arena.Presentation
                 found = true;
             }
 
+            return found;
+        }
+
+        private static bool TryGetEventTimeInPlaybackWindow(
+            AnimationClip clip,
+            string eventName,
+            float localStartSeconds,
+            float localEndSeconds,
+            out float playbackTimeSeconds)
+        {
+            playbackTimeSeconds = 0f;
+            var localTimes = new List<float>();
+            CombatAnimationEvents.AppendEventTimes(
+                clip,
+                eventName,
+                localTimes,
+                offsetSeconds: 0f,
+                maxLocalTimeSeconds: localEndSeconds);
+
+            bool found = false;
+            float earliest = float.PositiveInfinity;
+            for (int index = 0; index < localTimes.Count; index++)
+            {
+                float localTime = localTimes[index];
+                if (localTime + 0.0001f < localStartSeconds)
+                    continue;
+
+                earliest = Mathf.Min(earliest, localTime - localStartSeconds);
+                found = true;
+            }
+
+            if (found)
+                playbackTimeSeconds = Mathf.Max(0f, earliest);
             return found;
         }
 
@@ -1277,7 +1362,8 @@ namespace Arena.Presentation
             {
                 start_duration_ms = Mathf.Max(
                     0,
-                    Mathf.RoundToInt(resolved.ResolveStartTimelineLengthSeconds() * 1000f)),
+                    Mathf.RoundToInt(
+                        resolved.ResolveStartTimelineLengthSeconds(phasedOpeningTailSeconds) * 1000f)),
                 loop_duration_ms = Mathf.Max(
                     0,
                     Mathf.RoundToInt(resolved.ResolveLoopTimelineLengthSeconds() * 1000f)),
@@ -1295,20 +1381,28 @@ namespace Arena.Presentation
             }
 
             var windows = new List<MeleeManifestHitWindow>();
+            float startTimelineLengthSeconds =
+                resolved.ResolveStartTimelineLengthSeconds(phasedOpeningTailSeconds);
+            float startPlaybackOffsetSeconds =
+                resolved.ResolveOpeningPlaybackStartSeconds(phasedOpeningTailSeconds);
+            float startPlaybackEndSeconds =
+                resolved.ResolveOpeningPlaybackEndSeconds(phasedOpeningTailSeconds);
             AppendPhasedGapCloseHitWindows(
                 resolved.Start,
                 "START",
                 timelineOffsetSeconds: 0f,
-                maxLocalTimeSeconds: resolved.ResolveStartTimelineLengthSeconds(),
+                localStartTimeSeconds: startPlaybackOffsetSeconds,
+                maxLocalTimeSeconds: startPlaybackEndSeconds,
                 windows);
 
-            float loopOffsetSeconds = resolved.ResolveStartTimelineLengthSeconds();
+            float loopOffsetSeconds = startTimelineLengthSeconds;
             if (!resolved.ReleaseAfterStart)
             {
                 AppendPhasedGapCloseHitWindows(
                     resolved.Loop,
                     "LOOP",
                     loopOffsetSeconds,
+                    localStartTimeSeconds: 0f,
                     maxLocalTimeSeconds: float.PositiveInfinity,
                     windows);
             }
@@ -1319,6 +1413,7 @@ namespace Arena.Presentation
                 resolved.End,
                 "END",
                 endOffsetSeconds,
+                localStartTimeSeconds: 0f,
                 maxLocalTimeSeconds: float.PositiveInfinity,
                 windows);
 
@@ -1342,6 +1437,7 @@ namespace Arena.Presentation
             AnimationClip clip,
             string phase,
             float timelineOffsetSeconds,
+            float localStartTimeSeconds,
             float maxLocalTimeSeconds,
             List<MeleeManifestHitWindow> destination)
         {
@@ -1354,7 +1450,10 @@ namespace Arena.Presentation
                 maxLocalTimeSeconds: maxLocalTimeSeconds);
             for (int index = 0; index < localTimes.Count; index++)
             {
-                float localTimeSeconds = Mathf.Max(0f, localTimes[index]);
+                if (localTimes[index] + 0.0001f < localStartTimeSeconds)
+                    continue;
+
+                float localTimeSeconds = Mathf.Max(0f, localTimes[index] - localStartTimeSeconds);
                 destination.Add(new MeleeManifestHitWindow
                 {
                     impact_delay_ms = Mathf.Max(
@@ -1406,7 +1505,7 @@ namespace Arena.Presentation
                 || ReferenceEquals(phasedAir.end, candidate);
         }
 
-        private static bool AppendPhasedStrikeHitEventTimes(
+        private bool AppendPhasedStrikeHitEventTimes(
             WeaponPhasedActionClipSet clipSet,
             List<float> destination)
         {
@@ -1414,14 +1513,21 @@ namespace Arena.Presentation
                 return false;
 
             int initialCount = destination.Count;
-            CombatAnimationEvents.AppendEventTimes(
+            float startTimelineLengthSeconds =
+                resolved.ResolveStartTimelineLengthSeconds(phasedOpeningTailSeconds);
+            float startPlaybackOffsetSeconds =
+                resolved.ResolveOpeningPlaybackStartSeconds(phasedOpeningTailSeconds);
+            float startPlaybackEndSeconds =
+                resolved.ResolveOpeningPlaybackEndSeconds(phasedOpeningTailSeconds);
+            AppendClipEventTimesInPlaybackWindow(
                 resolved.Start,
                 CombatAnimationEvents.OnStrikeHit,
                 destination,
-                offsetSeconds: 0f,
-                maxLocalTimeSeconds: resolved.ResolveStartTimelineLengthSeconds());
+                timelineOffsetSeconds: 0f,
+                localStartTimeSeconds: startPlaybackOffsetSeconds,
+                maxLocalTimeSeconds: startPlaybackEndSeconds);
 
-            float loopPhaseOffsetSeconds = resolved.ResolveStartTimelineLengthSeconds();
+            float loopPhaseOffsetSeconds = startTimelineLengthSeconds;
             if (!resolved.ReleaseAfterStart)
             {
                 CombatAnimationEvents.AppendEventTimes(
@@ -1444,12 +1550,38 @@ namespace Arena.Presentation
             return destination.Count > initialCount;
         }
 
-        private static float ResolvePhasedClipSetLengthSeconds(WeaponPhasedActionClipSet clipSet)
+        private static void AppendClipEventTimesInPlaybackWindow(
+            AnimationClip clip,
+            string eventName,
+            List<float> destination,
+            float timelineOffsetSeconds,
+            float localStartTimeSeconds,
+            float maxLocalTimeSeconds)
+        {
+            var localTimes = new List<float>();
+            CombatAnimationEvents.AppendEventTimes(
+                clip,
+                eventName,
+                localTimes,
+                offsetSeconds: 0f,
+                maxLocalTimeSeconds: maxLocalTimeSeconds);
+            for (int index = 0; index < localTimes.Count; index++)
+            {
+                if (localTimes[index] + 0.0001f < localStartTimeSeconds)
+                    continue;
+
+                destination.Add(
+                    timelineOffsetSeconds
+                    + Mathf.Max(0f, localTimes[index] - localStartTimeSeconds));
+            }
+        }
+
+        private float ResolvePhasedClipSetLengthSeconds(WeaponPhasedActionClipSet clipSet)
         {
             if (!clipSet.TryResolvePlayback(out ResolvedWeaponPhasedActionClipSet resolved))
                 return 0f;
 
-            float total = resolved.ResolveStartTimelineLengthSeconds();
+            float total = resolved.ResolveStartTimelineLengthSeconds(phasedOpeningTailSeconds);
             if (!resolved.ReleaseAfterStart)
                 total += resolved.ResolveLoopTimelineLengthSeconds();
             total += Mathf.Max(0f, resolved.End.length);

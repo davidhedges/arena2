@@ -7005,6 +7005,13 @@ mod tests {
             .find(|strike| strike.id == DAGGER_COUP_DE_GRACE_ABILITY_ID)
             .expect("DAGGER_COUP_DE_GRACE must exist");
         assert!(coup.phased_gap_close_timing.is_none());
+        assert_eq!(
+            coup.hit_windows
+                .iter()
+                .map(|window| window.impact_delay_ms)
+                .collect::<Vec<_>>(),
+            vec![143, 143]
+        );
         assert!(coup
             .hit_windows
             .iter()

@@ -3088,6 +3088,14 @@ namespace Arena.Presentation
             float requestedLoopExitNormalizedTime = usesTimeDrivenImpactReachScaling
                 ? ResolveImpactReachScaledLoopExitNormalizedTime(request, clipSet, startsAtLoop)
                 : -1f;
+            float phasedOpeningTailSeconds =
+                clipSet.ResolveOpeningTailSeconds(phasedMeleeEntry.phasedOpeningTailSeconds);
+            float startPlaybackNormalizedTime = phasedOpeningTailSeconds > 0f
+                ? clipSet.ResolveOpeningStartNormalizedTime(phasedOpeningTailSeconds)
+                : 0f;
+            float requestedStartExitNormalizedTime = phasedOpeningTailSeconds > 0f
+                ? 1f
+                : -1f;
             _actionPlayback.BeginPhasedMelee(
                 ResolveStrikeBankSlot(strikeIndex),
                 clipSet.Start,
@@ -3098,12 +3106,14 @@ namespace Arena.Presentation
                     || phasedMeleeEntry.drivePhasesFromCombatLifecycle,
                 specialMovementArrivalDriven: drivesPhasesFromSpecialMovement,
                 startsAtLoop: startsAtLoop,
-                requestedLoopExitNormalizedTime: requestedLoopExitNormalizedTime);
+                requestedLoopExitNormalizedTime: requestedLoopExitNormalizedTime,
+                startPlaybackNormalizedTime: startPlaybackNormalizedTime,
+                requestedStartExitNormalizedTime: requestedStartExitNormalizedTime);
             PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
             ResetMeleeLowerBodyUnlockState(resetLayerWeight: true, clearUpperBodyRecovery: true);
             return PlayPhasedMeleeSegment(
                 startsAtLoop ? PhasedMeleePlaybackPhase.Loop : PhasedMeleePlaybackPhase.Start,
-                0f);
+                startsAtLoop ? 0f : startPlaybackNormalizedTime);
         }
 
         private static float ResolveImpactReachScaledLoopExitNormalizedTime(
@@ -3355,7 +3365,8 @@ namespace Arena.Presentation
                 _actionPlayback.SetPhasedMeleeSegment(
                     phase,
                     stateHash: 0,
-                    clip.length);
+                    clip.length,
+                    normalizedTime);
                 _overrideController[UpperBodyRecoverySlotName] = clip;
                 PlayUpperBodyState(UpperBodyRecoveryAction1StateHash, normalizedTime);
                 _phasedMeleeSegmentDispatchedFrame = Time.frameCount;
@@ -3384,7 +3395,8 @@ namespace Arena.Presentation
             _actionPlayback.SetPhasedMeleeSegment(
                 phase,
                 segmentStateHash,
-                clip.length);
+                clip.length,
+                normalizedTime);
             _actionPlayback.OverrideStrikeBankSlot(_overrideController, segmentBankSlot, clip);
             int fullPathStateHash = ResolveStrikeFullPathStateHash(segmentBankSlot);
             bool hasFullPathState = fullPathStateHash != 0 && _animator.HasState(MeleeAttackLayerIndex, fullPathStateHash);

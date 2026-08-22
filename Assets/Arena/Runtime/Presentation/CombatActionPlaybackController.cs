@@ -176,11 +176,13 @@ namespace Arena.Presentation
         private AnimationClip? _phasedMeleeEndClip;
         private PhasedMeleePlaybackPhase _phasedMeleePhase = PhasedMeleePlaybackPhase.None;
         private float _phasedMeleeAuthoredStartExitNormalizedTime = -1f;
+        private float _phasedMeleeRequestedStartExitNormalizedTime = -1f;
         private float _phasedMeleeAuthoredLoopExitNormalizedTime = -1f;
         private float _phasedMeleeRequestedLoopExitNormalizedTime = -1f;
         private bool _phasedMeleeStartsAtLoop;
         private float _phasedMeleeElapsedBeforePhase;
         private float _phasedMeleeCurrentPhaseLengthSeconds;
+        private float _phasedMeleeCurrentPhaseStartNormalizedTime;
         private float _phasedMeleeTotalLengthSeconds;
         private bool _phasedMeleeSegmentEntered;
         private bool _phasedMeleeSpecialMovementDriven;
@@ -510,6 +512,31 @@ namespace Arena.Presentation
             bool specialMovementArrivalDriven,
             bool startsAtLoop,
             float requestedLoopExitNormalizedTime)
+            => BeginPhasedMelee(
+                bankSlot,
+                startClip,
+                loopClip,
+                endClip,
+                releaseAfterStart,
+                specialMovementDriven,
+                specialMovementArrivalDriven,
+                startsAtLoop,
+                requestedLoopExitNormalizedTime,
+                startPlaybackNormalizedTime: 0f,
+                requestedStartExitNormalizedTime: -1f);
+
+        public void BeginPhasedMelee(
+            int bankSlot,
+            AnimationClip startClip,
+            AnimationClip loopClip,
+            AnimationClip endClip,
+            bool releaseAfterStart,
+            bool specialMovementDriven,
+            bool specialMovementArrivalDriven,
+            bool startsAtLoop,
+            float requestedLoopExitNormalizedTime,
+            float startPlaybackNormalizedTime,
+            float requestedStartExitNormalizedTime)
         {
             _phasedMeleeBankSlot = bankSlot;
             _phasedMeleeStateHash = 0;
@@ -537,6 +564,18 @@ namespace Arena.Presentation
             float startTimelineLengthSeconds = hasAuthoredStartExit
                 ? Mathf.Max(0f, startClip.length) * _phasedMeleeAuthoredStartExitNormalizedTime
                 : Mathf.Max(0f, startClip.length);
+            float clampedStartPlaybackNormalizedTime = Mathf.Clamp01(startPlaybackNormalizedTime);
+            _phasedMeleeRequestedStartExitNormalizedTime = requestedStartExitNormalizedTime >= 0f
+                ? Mathf.Clamp01(requestedStartExitNormalizedTime)
+                : -1f;
+            if (_phasedMeleeRequestedStartExitNormalizedTime >= 0f)
+            {
+                startTimelineLengthSeconds = Mathf.Max(0f, startClip.length)
+                    * Mathf.Max(
+                        0f,
+                        _phasedMeleeRequestedStartExitNormalizedTime
+                        - clampedStartPlaybackNormalizedTime);
+            }
             bool hasAuthoredLoopExit = !releaseAfterStart
                 && CombatAnimationEvents.TryGetEventNormalizedTime(
                     loopClip,
@@ -570,6 +609,7 @@ namespace Arena.Presentation
             _phasedMeleeStartsAtLoop = startsAtLoop && !releaseAfterStart;
             _phasedMeleeElapsedBeforePhase = 0f;
             _phasedMeleeCurrentPhaseLengthSeconds = 0f;
+            _phasedMeleeCurrentPhaseStartNormalizedTime = 0f;
             _phasedMeleeTotalLengthSeconds = (_phasedMeleeStartsAtLoop ? 0f : startTimelineLengthSeconds)
                 + loopTimelineLengthSeconds
                 + Mathf.Max(0f, endClip.length);
@@ -606,11 +646,13 @@ namespace Arena.Presentation
             _phasedMeleeEndClip = null;
             _phasedMeleePhase = PhasedMeleePlaybackPhase.None;
             _phasedMeleeAuthoredStartExitNormalizedTime = -1f;
+            _phasedMeleeRequestedStartExitNormalizedTime = -1f;
             _phasedMeleeAuthoredLoopExitNormalizedTime = -1f;
             _phasedMeleeRequestedLoopExitNormalizedTime = -1f;
             _phasedMeleeStartsAtLoop = false;
             _phasedMeleeElapsedBeforePhase = 0f;
             _phasedMeleeCurrentPhaseLengthSeconds = 0f;
+            _phasedMeleeCurrentPhaseStartNormalizedTime = 0f;
             _phasedMeleeTotalLengthSeconds = 0f;
             _phasedMeleeSegmentEntered = false;
             _phasedMeleeSpecialMovementDriven = false;
@@ -656,10 +698,22 @@ namespace Arena.Presentation
             PhasedMeleePlaybackPhase phase,
             int stateHash,
             float phaseLengthSeconds)
+            => SetPhasedMeleeSegment(
+                phase,
+                stateHash,
+                phaseLengthSeconds,
+                startNormalizedTime: 0f);
+
+        public void SetPhasedMeleeSegment(
+            PhasedMeleePlaybackPhase phase,
+            int stateHash,
+            float phaseLengthSeconds,
+            float startNormalizedTime)
         {
             _phasedMeleePhase = phase;
             _phasedMeleeStateHash = stateHash;
             _phasedMeleeCurrentPhaseLengthSeconds = Mathf.Max(0f, phaseLengthSeconds);
+            _phasedMeleeCurrentPhaseStartNormalizedTime = Mathf.Clamp01(startNormalizedTime);
             _phasedMeleeSegmentEntered = false;
         }
 
@@ -679,13 +733,20 @@ namespace Arena.Presentation
         public void AddCompletedPhasedMeleePhaseSeconds(float normalizedTime)
         {
             _phasedMeleeElapsedBeforePhase +=
-                Mathf.Max(0f, _phasedMeleeCurrentPhaseLengthSeconds) * Mathf.Clamp01(normalizedTime);
+                Mathf.Max(0f, _phasedMeleeCurrentPhaseLengthSeconds)
+                * Mathf.Max(
+                    0f,
+                    Mathf.Clamp01(normalizedTime)
+                    - _phasedMeleeCurrentPhaseStartNormalizedTime);
         }
 
         public float ResolvePhasedMeleeStartExitNormalizedTime(
             float startOnlyEndTriggerNormalizedTime,
             float segmentTransitionNormalizedTime)
         {
+            if (_phasedMeleeRequestedStartExitNormalizedTime >= 0f)
+                return _phasedMeleeRequestedStartExitNormalizedTime;
+
             if (_phasedMeleeAuthoredStartExitNormalizedTime >= 0f)
             {
                 float safetyNormalizedTime = Mathf.Clamp01(
@@ -729,7 +790,11 @@ namespace Arena.Presentation
                 return false;
 
             elapsedSeconds = _phasedMeleeElapsedBeforePhase
-                + Mathf.Max(0f, _phasedMeleeCurrentPhaseLengthSeconds) * Mathf.Max(0f, normalizedTime);
+                + Mathf.Max(0f, _phasedMeleeCurrentPhaseLengthSeconds)
+                * Mathf.Max(
+                    0f,
+                    Mathf.Max(0f, normalizedTime)
+                    - _phasedMeleeCurrentPhaseStartNormalizedTime);
             return true;
         }
 

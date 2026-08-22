@@ -827,6 +827,10 @@ namespace Arena.Tests.Editor
                 (bool)phasedEntryType.GetField("scaleGapClosePhasesFromImpactReach")!.GetValue(phasedEntry)!,
                 Is.False,
                 "Coup de Grace keeps its existing conditional teleport presentation");
+            Assert.That(
+                (float)phasedEntryType.GetField("phasedOpeningTailSeconds")!.GetValue(phasedEntry)!,
+                Is.EqualTo(0.1f).Within(0.001f),
+                "Coup de Grace samples only the final 100 ms of its Loop opening");
 
             object?[] clipSetArgs = { true, null };
             bool resolved = (bool)RequireMethod(
@@ -856,7 +860,10 @@ namespace Arena.Tests.Editor
             object strike = FindExportedStrike(
                 GetExportedStrikes(export),
                 "DAGGER_COUP_DE_GRACE");
-            Assert.That(GetImpactDelayMs(strike), Is.EqualTo(new[] { 60, 60 }));
+            Assert.That(
+                GetImpactDelayMs(strike),
+                Is.EqualTo(new[] { 143, 143 }),
+                "100 ms of Loop plus the End clip's 43 ms strike stamps");
             Assert.That(
                 strike.GetType().GetField("phased_gap_close_timing")!.GetValue(strike),
                 Is.Null);
