@@ -255,6 +255,9 @@ namespace Arena.Editor
                 }
 
                 SpellAnimationArchetype archetype = DeriveSpellAnimationArchetype(ability);
+                if (SpellCastAnimationResolver.IsExplicitlyNoAnimation(actionId))
+                    continue;
+
                 if (!SpellCastAnimationResolver.TryResolve(animationSet, actionId, archetype, out WeaponSpellAnimationEntry entry))
                 {
                     errors.Add($"spell ability '{abilityId}' action '{actionId}' is selectable but its cast-motion/fixed assignment does not resolve in CombatAnimationSet '{animationSet.name}'.");
@@ -323,6 +326,13 @@ namespace Arena.Editor
             {
                 expectedHandAnchor = AnchorLeftHand;
                 reason = "playbackLayer is LeftGesture";
+                return true;
+            }
+
+            if (entry.playbackLayer == SpellPlaybackLayer.RightGesture)
+            {
+                expectedHandAnchor = AnchorRightHand;
+                reason = "playbackLayer is RightGesture";
                 return true;
             }
 
@@ -913,6 +923,14 @@ namespace Arena.Editor
                         errors.Add($"CombatAnimationSet '{animationSet.name}' motion '{binding.motion}' has no family base name.");
                         continue;
                     }
+                    if (string.Equals(
+                            binding.FamilyBaseNameOrEmpty,
+                            "MagicAttackDirect2H01",
+                            StringComparison.Ordinal))
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' uses forbidden cast family 'MagicAttackDirect2H01'. Use Direct2H02 or a Direct1H fallback.");
+                        continue;
+                    }
                     if (!library.TryGetFamily(binding.FamilyBaseNameOrEmpty, out _))
                     {
                         errors.Add($"CombatAnimationSet '{animationSet.name}' motion '{binding.motion}' references family '{binding.FamilyBaseNameOrEmpty}', but SpellCastAnimationLibrary has no matching family.");
@@ -942,6 +960,21 @@ namespace Arena.Editor
                 }
 
                 SpellAnimationArchetype archetype = DeriveSpellAnimationArchetype(ability);
+                if (entry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation)
+                {
+                    if (entry.motion != SpellCastMotion.None)
+                        errors.Add($"SpellCastAnimationMap no-animation entry for spell '{spellId}' must leave motion as None.");
+                    if (entry.fixedAnimation.HasAnyPresentation)
+                        errors.Add($"SpellCastAnimationMap no-animation entry for spell '{spellId}' contains an unused fixed presentation; clear it.");
+                    if (entry.playbackLayer != SpellCastLayerOverride.Auto
+                        || entry.combatEntryMode != SpellCastEntryModeOverride.Auto
+                        || entry.animatedProp.enabled)
+                    {
+                        errors.Add($"SpellCastAnimationMap no-animation entry for spell '{spellId}' contains unused playback overrides; clear them.");
+                    }
+                    continue;
+                }
+
                 if (entry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
                 {
                     if (entry.motion != SpellCastMotion.None)

@@ -8144,10 +8144,15 @@ mod tests {
                 !asset_contents.contains("  spells:"),
                 "{profile_id} must not retain the legacy per-spell animation array"
             );
+            assert!(
+                !asset_contents.contains("    familyBaseName: MagicAttackDirect2H01"),
+                "{profile_id} must never use the rejected MagicAttackDirect2H01 family"
+            );
             for family in [
                 "MagicAttackDirect1H01",
                 "MagicAttackCall1H01",
                 "MagicAttackCall1H02",
+                "MagicAttackGround01",
                 "MagicAttackOmni01",
                 "SpecialMagicAttack01",
             ] {
@@ -8156,7 +8161,33 @@ mod tests {
                     "{profile_id} is missing required semantic family binding '{family}'"
                 );
             }
+
+            let direct_2h_binding = "  - motion: 6\n    familyBaseName: MagicAttackDirect2H02";
+            if profile_id == "DAGGERS" || profile_id == "STAFF" {
+                assert!(
+                    asset_contents.contains(direct_2h_binding),
+                    "{profile_id} must bind Direct2H to MagicAttackDirect2H02"
+                );
+            } else {
+                assert!(
+                    !asset_contents.contains(direct_2h_binding),
+                    "{profile_id} must fall Direct2H back to its assigned Direct1H hand"
+                );
+            }
         }
+
+        let sword_and_shield = animation_set_asset_for_combat_profile("SWORD_AND_SHIELD");
+        assert_eq!(
+            parse_top_level_animation_set_field(sword_and_shield, "oneHandedCastHand").as_deref(),
+            Some("1"),
+            "SwordAndShield must cast one-hand families with the right hand"
+        );
+        let archer_bow = animation_set_asset_for_combat_profile("ARCHER_BOW");
+        assert_eq!(
+            parse_top_level_animation_set_field(archer_bow, "oneHandedCastHand").as_deref(),
+            Some("0"),
+            "ArcherBow/Precision must cast one-hand families with the left hand"
+        );
 
         assert!(
             SPELL_CAST_ANIMATION_MAP_ASSET
@@ -8167,6 +8198,113 @@ mod tests {
             SPELL_CAST_ANIMATION_MAP_ASSET
                 .contains("- spellId: BATTLE_CRY\n    assignmentKind: 1\n    motion: 0"),
             "Battle Cry must be a fixed set-independent animation exception"
+        );
+    }
+
+    #[test]
+    fn spell_cast_animation_map_matches_requested_semantic_classifications() {
+        let assert_mapping = |spell_id: &str, assignment_kind: u8, motion: u8| {
+            let expected = format!(
+                "- spellId: {spell_id}\n    assignmentKind: {assignment_kind}\n    motion: {motion}"
+            );
+            assert!(
+                SPELL_CAST_ANIMATION_MAP_ASSET.contains(expected.as_str()),
+                "spell '{spell_id}' must author assignmentKind {assignment_kind}, motion {motion}"
+            );
+        };
+
+        for spell_id in [
+            "MIRROR_IMAGE",
+            "RECALL",
+            "MANA_SHIELD",
+            "SHIMMER",
+            "TRANSPOSE",
+            "BLOOD_OFFERING",
+            "RIME",
+            "IMMOLATION",
+            "TELEPORT",
+            "GLACIAL_ADVANCE",
+            "AURA_OF_RENEWAL",
+            "MIASMA",
+            "REAP",
+            "COMBUSTION",
+            "CONTAGION",
+            "MOULT",
+            "STONE_CARAPACE",
+        ] {
+            assert_mapping(spell_id, 2, 0);
+        }
+
+        for spell_id in ["ICICLE", "FIREBALL", "FLAMING_ORB", "SMITE"] {
+            assert_mapping(spell_id, 0, 6);
+        }
+
+        for spell_id in [
+            "PLAGUEBOLT",
+            "EARTH_BLAST",
+            "LAVA_BLAST",
+            "TIDAL_BLAST",
+            "WIND_BLAST",
+            "BOLT",
+            "CAPACITOR",
+            "CAUTERIZE",
+            "BUFFET",
+            "FLASHFIRE",
+            "FLASH_FREEZE",
+            "DEEPENING_COLD",
+            "FULMINATION",
+            "VAMPIRIC_ORB",
+            "WITHERING_ORB",
+        ] {
+            assert_mapping(spell_id, 0, 1);
+        }
+
+        assert_mapping("CLOUDBURST", 0, 3);
+
+        for spell_id in [
+            "GIGANTISM",
+            "FLURRY",
+            "OVERGROWTH",
+            "WELLSPRING",
+            "NECRO_PRISON",
+            "NECROTIC_AURA",
+            "GRAVEBURST",
+            "GRAVEWAKE",
+            "DEFILED_GROUND",
+            "BENEDICTION",
+            "DIVINE_MEND",
+            "FLASH_OF_GRACE",
+            "RESTORATION",
+            "SANCTUARY",
+            "VERDANT_SPIRITS",
+            "TAILWIND",
+        ] {
+            assert_mapping(spell_id, 0, 2);
+        }
+
+        for spell_id in ["EARTHQUAKE", "FISSURE", "BLIZZARD"] {
+            assert_mapping(spell_id, 0, 7);
+        }
+    }
+
+    #[test]
+    fn player_spell_cast_animation_classification_inventory_is_explicit() {
+        let mapped_spell_ids =
+            parse_spell_ids_from_cast_animation_map_asset(SPELL_CAST_ANIMATION_MAP_ASSET);
+        let actual_unclassified: HashSet<String> = progression_catalog()
+            .abilities
+            .iter()
+            .filter(|ability| {
+                ability_gameplay_kind(ability) == "SPELL"
+                    && normalize_identifier(ability.actor_scope.as_str()) == "PLAYER"
+            })
+            .map(|ability| normalize_identifier(ability.action_id.as_str()))
+            .filter(|spell_id| !mapped_spell_ids.contains(spell_id))
+            .collect();
+        assert_eq!(
+            actual_unclassified,
+            HashSet::new(),
+            "every player spell must have a motion, fixed, or explicit no-animation classification"
         );
     }
 

@@ -22,13 +22,14 @@ namespace Arena.Tests.Editor
                 "Assets/Arena/Content/Animation/Arena_Character.controller");
 
             Assert.That(controller, Is.Not.Null);
-            Assert.That(controller.layers.Length, Is.GreaterThanOrEqualTo(6));
+            Assert.That(controller.layers.Length, Is.GreaterThanOrEqualTo(7));
             Assert.That(controller.layers[0].name, Is.EqualTo("Base Layer"));
             Assert.That(controller.layers[1].name, Is.EqualTo("UpperBody"));
             Assert.That(controller.layers[2].name, Is.EqualTo("HitReaction"));
             Assert.That(controller.layers[3].name, Is.EqualTo("MeleeAttack"));
             Assert.That(controller.layers[4].name, Is.EqualTo("SpellAction"));
             Assert.That(controller.layers[5].name, Is.EqualTo("LeftGesture"));
+            Assert.That(controller.layers[6].name, Is.EqualTo("RightGesture"));
         }
 
         [Test]
@@ -69,6 +70,35 @@ namespace Arena.Tests.Editor
             Assert.That(stateNames, Does.Contain("LeftGestureSpellAction2"));
             Assert.That(stateNames, Does.Contain("LeftGestureSpellAction3"));
             Assert.That(stateNames, Does.Contain("LeftGestureSpellAction4"));
+            Assert.That(stateNames, Does.Contain("LeftGestureSpellCastHoldAction1"));
+            Assert.That(stateNames, Does.Contain("LeftGestureSpellCastHoldAction4"));
+        }
+
+        [Test]
+        public void AnimatorController_RightGestureLayerUsesGestureMaskAndSpellBankStates()
+        {
+            AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(
+                "Assets/Arena/Content/Animation/Arena_Character.controller");
+            AvatarMask mask = AssetDatabase.LoadAssetAtPath<AvatarMask>(
+                "Assets/Arena/Content/Animation/RightGestureMask.mask");
+
+            Assert.That(controller, Is.Not.Null);
+            Assert.That(mask, Is.Not.Null);
+
+            AnimatorControllerLayer rightGesture = controller.layers[6];
+            Assert.That(rightGesture.avatarMask, Is.EqualTo(mask));
+
+            string[] stateNames = rightGesture.stateMachine.states
+                .Select(childState => childState.state.name)
+                .OrderBy(name => name)
+                .ToArray();
+            Assert.That(stateNames, Does.Contain("Empty"));
+            Assert.That(stateNames, Does.Contain("RightGestureSpellAction1"));
+            Assert.That(stateNames, Does.Contain("RightGestureSpellAction2"));
+            Assert.That(stateNames, Does.Contain("RightGestureSpellAction3"));
+            Assert.That(stateNames, Does.Contain("RightGestureSpellAction4"));
+            Assert.That(stateNames, Does.Contain("RightGestureSpellCastHoldAction1"));
+            Assert.That(stateNames, Does.Contain("RightGestureSpellCastHoldAction4"));
         }
 
         [Test]
@@ -1588,6 +1618,7 @@ namespace Arena.Tests.Editor
             animator.Play("MeleeAttack.Strike1", 3, 0f);
             animator.Play("SpellAction.SpellAction1", 4, 0f);
             animator.Play("LeftGesture.LeftGestureSpellAction1", 5, 0f);
+            animator.Play("RightGesture.RightGestureSpellAction1", 6, 0f);
             animator.Update(0f);
         }
 
@@ -1598,6 +1629,7 @@ namespace Arena.Tests.Editor
             Assert.That(animator.GetCurrentAnimatorStateInfo(3).shortNameHash, Is.EqualTo(emptyStateHash), "MeleeAttack must be empty.");
             Assert.That(animator.GetCurrentAnimatorStateInfo(4).shortNameHash, Is.EqualTo(emptyStateHash), "SpellAction must be empty.");
             Assert.That(animator.GetCurrentAnimatorStateInfo(5).shortNameHash, Is.EqualTo(emptyStateHash), "LeftGesture must be empty.");
+            Assert.That(animator.GetCurrentAnimatorStateInfo(6).shortNameHash, Is.EqualTo(emptyStateHash), "RightGesture must be empty.");
         }
 
         private static string ReadAssetText(string relativeAssetPath)

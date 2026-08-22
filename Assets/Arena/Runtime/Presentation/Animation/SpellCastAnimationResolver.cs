@@ -10,10 +10,11 @@ using UnityEngine;
 namespace Arena.Presentation
 {
     /// <summary>
-    /// The single runtime entry point for spell cast animation. A fixed assignment resolves exactly
-    /// as authored and ignores the active combat set. An ordinary assignment resolves its semantic
-    /// motion through the active set's family binding, then composes that family for the set's cast
-    /// hand and the spell's authoritative Instant/Charged/Channel archetype.
+    /// The single runtime entry point for spell cast animation. A no-animation assignment explicitly
+    /// suppresses cast playback. A fixed assignment resolves exactly as authored and ignores the
+    /// active combat set. An ordinary assignment resolves its semantic motion through the active set's
+    /// family binding, then composes that family for the set's cast hand and the spell's authoritative
+    /// Instant/Charged/Channel archetype.
     /// </summary>
     public static class SpellCastAnimationResolver
     {
@@ -70,6 +71,9 @@ namespace Arena.Presentation
             if (!TryGetMapEntry(normalizedSpellId, out SpellCastAnimationMap.Entry mapEntry))
                 return false;
 
+            if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation)
+                return false;
+
             if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
                 return TryResolveFixed(normalizedSpellId, mapEntry, out entry);
 
@@ -113,6 +117,9 @@ namespace Arena.Presentation
             if (!TryGetMapEntry(normalizedSpellId, out SpellCastAnimationMap.Entry mapEntry))
                 return false;
 
+            if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation)
+                return false;
+
             if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
                 return TryResolveFixed(normalizedSpellId, mapEntry, out entry);
 
@@ -127,6 +134,9 @@ namespace Arena.Presentation
             reason = string.Empty;
             string normalizedSpellId = WireIdentifier.Normalize(spellId);
             if (!TryGetMapEntry(normalizedSpellId, out SpellCastAnimationMap.Entry mapEntry))
+                return false;
+
+            if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation)
                 return false;
 
             if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
@@ -171,6 +181,13 @@ namespace Arena.Presentation
             }
 
             return false;
+        }
+
+        public static bool IsExplicitlyNoAnimation(string spellId)
+        {
+            string normalizedSpellId = WireIdentifier.Normalize(spellId);
+            return TryGetMapEntry(normalizedSpellId, out SpellCastAnimationMap.Entry mapEntry)
+                && mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation;
         }
 
         private static bool TryResolveMotion(
@@ -250,6 +267,7 @@ namespace Arena.Presentation
             {
                 case SpellCastLayerOverride.UpperBody: entry.playbackLayer = SpellPlaybackLayer.UpperBody; break;
                 case SpellCastLayerOverride.LeftGesture: entry.playbackLayer = SpellPlaybackLayer.LeftGesture; break;
+                case SpellCastLayerOverride.RightGesture: entry.playbackLayer = SpellPlaybackLayer.RightGesture; break;
                 case SpellCastLayerOverride.FullBody: entry.playbackLayer = SpellPlaybackLayer.FullBody; break;
                 case SpellCastLayerOverride.UpperBodyWhileMoving: entry.playbackLayer = SpellPlaybackLayer.UpperBodyWhileMoving; break;
                 case SpellCastLayerOverride.Auto:

@@ -22,6 +22,7 @@ namespace Arena.Editor
             "MeleeAttack",
             "SpellAction",
             "LeftGesture",
+            "RightGesture",
         };
 
         private static readonly HashSet<string> OwnedParameters = new(StringComparer.Ordinal)
@@ -168,6 +169,19 @@ namespace Arena.Editor
             "LeftGesture/LeftGestureSpellAction2",
             "LeftGesture/LeftGestureSpellAction3",
             "LeftGesture/LeftGestureSpellAction4",
+            "LeftGesture/LeftGestureSpellCastHoldAction1",
+            "LeftGesture/LeftGestureSpellCastHoldAction2",
+            "LeftGesture/LeftGestureSpellCastHoldAction3",
+            "LeftGesture/LeftGestureSpellCastHoldAction4",
+            "RightGesture/Empty",
+            "RightGesture/RightGestureSpellAction1",
+            "RightGesture/RightGestureSpellAction2",
+            "RightGesture/RightGestureSpellAction3",
+            "RightGesture/RightGestureSpellAction4",
+            "RightGesture/RightGestureSpellCastHoldAction1",
+            "RightGesture/RightGestureSpellCastHoldAction2",
+            "RightGesture/RightGestureSpellCastHoldAction3",
+            "RightGesture/RightGestureSpellCastHoldAction4",
         };
 
         private static readonly HashSet<string> LegacyRetainedStatePaths = new(StringComparer.Ordinal)

@@ -137,15 +137,32 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void OneHandRight_IsUnsupportedUntilRightGestureLayerExists()
+        public void OneHandRight_UsesRightClipsAndRightGestureLayer()
         {
             AnimationClip one = Clip("right-one"), load = Clip("right-load"), cast = Clip("right-cast");
-            (bool ok, _) = Compose(
+            (bool ok, object? entry) = Compose(
                 OneHandFamily(Triple(null, null, null), Triple(one, load, cast)),
                 "Right",
                 "Instant");
 
-            Assert.That(ok, Is.False, "Right-hand one-hand casts must not silently fall back to unmasked UpperBody");
+            Assert.That(ok, Is.True);
+            Assert.That(Field(entry!, "ground"), Is.SameAs(cast));
+            Assert.That(Field(entry!, "playbackLayer")!.ToString(), Is.EqualTo("RightGesture"));
+        }
+
+        [Test]
+        public void OneHandRight_ChannelUsesLoopCapableRightGestureHold()
+        {
+            AnimationClip one = Clip("right-one"), load = Clip("right-load"), cast = Clip("right-cast");
+            (bool ok, object? entry) = Compose(
+                OneHandFamily(Triple(null, null, null), Triple(one, load, cast)),
+                "Right",
+                "Channel");
+
+            Assert.That(ok, Is.True);
+            Assert.That(HoldField(entry!, "enter"), Is.SameAs(one));
+            Assert.That(HoldField(entry!, "idleLoop"), Is.SameAs(load));
+            Assert.That(HoldField(entry!, "playbackLayer")!.ToString(), Is.EqualTo("RightGesture"));
         }
 
         [Test]

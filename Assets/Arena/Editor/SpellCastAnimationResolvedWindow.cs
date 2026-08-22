@@ -9,7 +9,8 @@ namespace Arena.Editor
 {
     /// <summary>
     /// Read-only resolved view of spell classification and each CombatAnimationSet's family binding.
-    /// Fixed assignments are shown once because they intentionally ignore the active set.
+    /// Fixed assignments are shown once because they intentionally ignore the active set;
+    /// no-animation assignments are listed without per-set resolution rows.
     /// </summary>
     public sealed class SpellCastAnimationResolvedWindow : EditorWindow
     {
@@ -144,17 +145,23 @@ namespace Arena.Editor
                     : SpellAnimationArchetype.Instant;
 
                 bool fixedAssignment = mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed;
+                bool noAnimationAssignment = mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation;
                 var resolvedSets = new List<ResolvedSetRow>();
                 if (fixedAssignment)
                 {
                     resolvedSets.Add(BuildResolvedSet(null, spellId, "fixed (all sets)", "fixed", archetype));
                 }
-                else
+                else if (!noAnimationAssignment)
                 {
                     foreach (CombatAnimationSet set in _animationSets)
                     {
-                        string family = set.TryGetSpellCastFamily(mapEntry.motion, out string familyBaseName)
-                            ? familyBaseName
+                        string family = set.TryGetSpellCastFamily(
+                                mapEntry.motion,
+                                out string familyBaseName,
+                                out SpellCastMotion resolvedMotion)
+                            ? resolvedMotion == mapEntry.motion
+                                ? familyBaseName
+                                : $"{familyBaseName} ({resolvedMotion} fallback)"
                             : "‹missing binding›";
                         resolvedSets.Add(BuildResolvedSet(set, spellId, set.name, family, archetype));
                     }
@@ -163,7 +170,11 @@ namespace Arena.Editor
                 _rows.Add(new ResolvedSpellRow
                 {
                     SpellId = spellId,
-                    Assignment = fixedAssignment ? "Fixed" : mapEntry.motion.ToString(),
+                    Assignment = fixedAssignment
+                        ? "Fixed"
+                        : noAnimationAssignment
+                            ? "No animation"
+                            : mapEntry.motion.ToString(),
                     Archetype = archetype,
                     HasGameplay = hasGameplay,
                     Sets = resolvedSets.ToArray(),

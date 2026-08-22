@@ -13,18 +13,21 @@ namespace Arena.Presentation
     public enum SpellCastMotion
     {
         None = 0,
-        Direct,
+        Direct1H,
         Raise,
         Call,
         Omni,
         Special,
+        Direct2H,
+        Ground,
     }
 
-    /// <summary>How a spell obtains its cast presentation.</summary>
+    /// <summary>How a spell obtains its cast presentation, or explicitly opts out of one.</summary>
     public enum SpellCastAnimationAssignmentKind
     {
         Motion = 0,
         Fixed,
+        NoAnimation,
     }
 
     /// <summary>Optional per-spell playback-layer override. <see cref="Auto"/> keeps the composer's derived layer.</summary>
@@ -35,6 +38,7 @@ namespace Arena.Presentation
         LeftGesture,
         FullBody,
         UpperBodyWhileMoving,
+        RightGesture,
     }
 
     /// <summary>Optional per-spell combat-entry-mode override. <see cref="Auto"/> keeps the composer's derived mode.</summary>
@@ -48,10 +52,11 @@ namespace Arena.Presentation
 
     /// <summary>
     /// Weapon-agnostic spell cast classification: ordinary spells select a semantic
-    /// <see cref="SpellCastMotion"/>, while exceptional spells may own a fixed animation that ignores
-    /// the active combat animation set. The resolver combines a motion with the active set's family
-    /// binding, casting hand, and the spell's derived archetype. Lives in Resources so this is the
-    /// single global spell-to-motion/fixed-animation authority.
+    /// <see cref="SpellCastMotion"/>, exceptional spells may own a fixed animation that ignores the
+    /// active combat animation set, and intentionally unanimated spells opt out explicitly. The
+    /// resolver combines a motion with the active set's family binding, casting hand, and the spell's
+    /// derived archetype. Lives in Resources so this is the single global spell cast-animation
+    /// authority.
     /// </summary>
     [CreateAssetMenu(menuName = "Arena/Spell Cast Animation Map", fileName = "SpellCastAnimationMap")]
     public sealed class SpellCastAnimationMap : ScriptableObject
@@ -61,7 +66,7 @@ namespace Arena.Presentation
         {
             [Tooltip("Authoritative runtime action id, e.g. FIREBALL (no SPELL_ prefix — matches progression gameplay action_id).")]
             public string spellId;
-            [Tooltip("Motion uses the active CombatAnimationSet's family binding. Fixed always uses fixedAnimation, regardless of combat set.")]
+            [Tooltip("Motion uses the active CombatAnimationSet's family binding. Fixed always uses fixedAnimation, regardless of combat set. No Animation explicitly suppresses cast animation.")]
             public SpellCastAnimationAssignmentKind assignmentKind;
             [Tooltip("Semantic cast motion used when Assignment Kind is Motion.")]
             public SpellCastMotion motion;
@@ -69,7 +74,7 @@ namespace Arena.Presentation
             public WeaponSpellAnimationEntry fixedAnimation;
 
             [Header("Optional overrides (Auto/disabled = the composed default)")]
-            [Tooltip("Override the release/instant playback layer. Auto uses the composer default (LeftGesture for left-hand 1H, else UpperBody/two-hand). Right-hand 1H is unsupported until a RightGesture layer exists.")]
+            [Tooltip("Override the release/instant playback layer. Auto uses the composer default (LeftGesture/RightGesture for one-hand casts, else UpperBody/two-hand).")]
             public SpellCastLayerOverride playbackLayer;
             [Tooltip("Override the combat entry mode. Auto uses the composer default.")]
             public SpellCastEntryModeOverride combatEntryMode;

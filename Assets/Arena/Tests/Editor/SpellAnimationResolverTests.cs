@@ -81,6 +81,29 @@ namespace Arena.Tests.Editor
             return string.Empty;
         }
 
+        private static string AssignmentFor(string spellId)
+        {
+            Type mapType = T("SpellCastAnimationMap");
+            UnityEngine.Object map = Resources.Load("SpellCastAnimationMap", mapType);
+            Assert.That(map, Is.Not.Null);
+            IEnumerable entries = (IEnumerable)mapType.GetProperty("Entries")!.GetValue(map)!;
+            foreach (object entry in entries)
+            {
+                Type entryType = entry.GetType();
+                string id = (string)entryType.GetField("spellId")!.GetValue(entry)!;
+                if (string.Equals(id, spellId, StringComparison.OrdinalIgnoreCase))
+                    return entryType.GetField("assignmentKind")!.GetValue(entry)!.ToString()!;
+            }
+
+            Assert.Fail($"No SpellCastAnimationMap entry for {spellId}.");
+            return string.Empty;
+        }
+
+        private static bool IsExplicitlyNoAnimation(string spellId) =>
+            (bool)T("SpellCastAnimationResolver").GetMethod(
+                "IsExplicitlyNoAnimation",
+                new[] { typeof(string) })!.Invoke(null, new object[] { spellId })!;
+
         private static string FamilyFor(UnityEngine.Object set, string motionName)
         {
             Type motionType = T("SpellCastMotion");
@@ -92,6 +115,89 @@ namespace Arena.Tests.Editor
                 .Invoke(set, args)!;
             Assert.That(found, Is.True);
             return (string)args[1]!;
+        }
+
+        private static (string Family, string ResolvedMotion) FamilyAndResolvedMotionFor(
+            UnityEngine.Object set,
+            string motionName)
+        {
+            Type motionType = T("SpellCastMotion");
+            object motion = Enum.Parse(motionType, motionName);
+            object?[] args = { motion, null, null };
+            bool found = (bool)T("CombatAnimationSet").GetMethod(
+                    "TryGetSpellCastFamily",
+                    new[]
+                    {
+                        motionType,
+                        typeof(string).MakeByRefType(),
+                        motionType.MakeByRefType(),
+                    })!
+                .Invoke(set, args)!;
+            Assert.That(found, Is.True);
+            return ((string)args[1]!, args[2]!.ToString()!);
+        }
+
+        private static string OneHandedCastHandFor(UnityEngine.Object set) =>
+            T("CombatAnimationSet").GetProperty("OneHandedCastHand")!.GetValue(set)!.ToString()!;
+
+        [Test]
+        public void DirectMotionSplit_PreservesSerializedDirect1HValueAndAddsDirect2H()
+        {
+            Type motionType = T("SpellCastMotion");
+            Assert.That(Convert.ToInt32(Enum.Parse(motionType, "Direct1H")), Is.EqualTo(1));
+            Assert.That(Convert.ToInt32(Enum.Parse(motionType, "Direct2H")), Is.EqualTo(6));
+            Assert.That(Convert.ToInt32(Enum.Parse(motionType, "Ground")), Is.EqualTo(7));
+
+            Type assignmentType = T("SpellCastAnimationAssignmentKind");
+            Assert.That(Convert.ToInt32(Enum.Parse(assignmentType, "Fixed")), Is.EqualTo(1));
+            Assert.That(Convert.ToInt32(Enum.Parse(assignmentType, "NoAnimation")), Is.EqualTo(2));
+        }
+
+        [Test]
+        public void RequestedSpellClassifications_MatchAuthoredMotions()
+        {
+            foreach ((string motion, string[] spellIds) in new[]
+                     {
+                         ("Direct2H", new[] { "ICICLE", "FIREBALL", "FLAMING_ORB", "SMITE" }),
+                         ("Direct1H", new[]
+                         {
+                             "PLAGUEBOLT", "EARTH_BLAST", "LAVA_BLAST", "TIDAL_BLAST",
+                             "WIND_BLAST", "BOLT", "CAPACITOR", "CAUTERIZE", "BUFFET",
+                             "FLASHFIRE", "FLASH_FREEZE", "DEEPENING_COLD", "FULMINATION",
+                             "VAMPIRIC_ORB", "WITHERING_ORB",
+                         }),
+                         ("Call", new[] { "CLOUDBURST" }),
+                         ("Raise", new[]
+                         {
+                             "GIGANTISM", "FLURRY", "OVERGROWTH", "WELLSPRING", "NECRO_PRISON",
+                             "NECROTIC_AURA", "GRAVEBURST", "GRAVEWAKE", "DEFILED_GROUND",
+                             "BENEDICTION", "DIVINE_MEND", "FLASH_OF_GRACE", "RESTORATION",
+                             "SANCTUARY", "VERDANT_SPIRITS", "TAILWIND",
+                         }),
+                         ("Ground", new[] { "EARTHQUAKE", "FISSURE", "BLIZZARD" }),
+                     })
+            {
+                foreach (string spellId in spellIds)
+                    Assert.That(MotionFor(spellId), Is.EqualTo(motion), spellId);
+            }
+        }
+
+        [Test]
+        public void RequestedNoAnimationSpells_AreExplicitAndDoNotResolve()
+        {
+            UnityEngine.Object set = LoadSet("TwoHandedSword");
+            foreach (string spellId in new[]
+                     {
+                         "MIRROR_IMAGE", "RECALL", "MANA_SHIELD", "SHIMMER", "TRANSPOSE",
+                         "BLOOD_OFFERING", "RIME", "IMMOLATION", "TELEPORT", "GLACIAL_ADVANCE",
+                         "AURA_OF_RENEWAL", "MIASMA", "REAP", "COMBUSTION", "CONTAGION", "MOULT",
+                         "STONE_CARAPACE",
+                     })
+            {
+                Assert.That(AssignmentFor(spellId), Is.EqualTo("NoAnimation"), spellId);
+                Assert.That(IsExplicitlyNoAnimation(spellId), Is.True, spellId);
+                Assert.That(Resolve(set, spellId, "Instant", out _), Is.False, spellId);
+            }
         }
 
         [Test]
@@ -157,6 +263,54 @@ namespace Arena.Tests.Editor
             UnityEngine.Object set = LoadSet("TwoHandedSword");
             Assert.That(FamilyFor(set, "Raise"), Is.EqualTo("MagicAttackCall1H01"));
             Assert.That(FamilyFor(set, "Call"), Is.EqualTo("MagicAttackCall1H02"));
+        }
+
+        [Test]
+        public void Ground_UsesGroundFamilyAndEachSetsAssignedOneHand()
+        {
+            foreach ((string setName, string expectedHand) in new[]
+                     {
+                         ("ArcherBow", "Left"),
+                         ("Daggers", "Left"),
+                         ("Staff", "Left"),
+                         ("SwordAndShield", "Right"),
+                         ("TwoHandedSword", "Left"),
+                     })
+            {
+                UnityEngine.Object set = LoadSet(setName);
+                Assert.That(FamilyFor(set, "Ground"), Is.EqualTo("MagicAttackGround01"), setName);
+                Assert.That(OneHandedCastHandFor(set), Is.EqualTo(expectedHand), setName);
+            }
+        }
+
+        [Test]
+        public void Direct2H_UsesExplicitDaggersAndStaffFamily()
+        {
+            foreach (string setName in new[] { "Daggers", "Staff" })
+            {
+                UnityEngine.Object set = LoadSet(setName);
+                (string family, string resolvedMotion) = FamilyAndResolvedMotionFor(set, "Direct2H");
+                Assert.That(family, Is.EqualTo("MagicAttackDirect2H02"), setName);
+                Assert.That(resolvedMotion, Is.EqualTo("Direct2H"), setName);
+            }
+        }
+
+        [Test]
+        public void Direct2H_FallsBackToSetsAssignedOneHandFamilyAndHand()
+        {
+            foreach ((string setName, string expectedHand) in new[]
+                     {
+                         ("ArcherBow", "Left"),
+                         ("TwoHandedSword", "Left"),
+                         ("SwordAndShield", "Right"),
+                     })
+            {
+                UnityEngine.Object set = LoadSet(setName);
+                (string family, string resolvedMotion) = FamilyAndResolvedMotionFor(set, "Direct2H");
+                Assert.That(family, Is.EqualTo("MagicAttackDirect1H01"), setName);
+                Assert.That(resolvedMotion, Is.EqualTo("Direct1H"), setName);
+                Assert.That(OneHandedCastHandFor(set), Is.EqualTo(expectedHand), setName);
+            }
         }
 
         [Test]

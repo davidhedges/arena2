@@ -61,10 +61,19 @@ namespace Arena.Editor
                     EditorGUILayout.PropertyField(assignmentKind);
                     if (EditorGUI.EndChangeCheck())
                     {
-                        if ((SpellCastAnimationAssignmentKind)assignmentKind.enumValueIndex
-                            == SpellCastAnimationAssignmentKind.Fixed)
+                        SpellCastAnimationAssignmentKind kind =
+                            (SpellCastAnimationAssignmentKind)assignmentKind.enumValueIndex;
+                        if (kind == SpellCastAnimationAssignmentKind.Fixed)
                         {
                             entry.FindPropertyRelative("motion").enumValueIndex = (int)SpellCastMotion.None;
+                            entry.FindPropertyRelative("playbackLayer").enumValueIndex = (int)SpellCastLayerOverride.Auto;
+                            entry.FindPropertyRelative("combatEntryMode").enumValueIndex = (int)SpellCastEntryModeOverride.Auto;
+                            entry.FindPropertyRelative("animatedProp").boxedValue = default(SpellAnimatedPropHandoff);
+                        }
+                        else if (kind == SpellCastAnimationAssignmentKind.NoAnimation)
+                        {
+                            entry.FindPropertyRelative("motion").enumValueIndex = (int)SpellCastMotion.None;
+                            entry.FindPropertyRelative("fixedAnimation").boxedValue = default(WeaponSpellAnimationEntry);
                             entry.FindPropertyRelative("playbackLayer").enumValueIndex = (int)SpellCastLayerOverride.Auto;
                             entry.FindPropertyRelative("combatEntryMode").enumValueIndex = (int)SpellCastEntryModeOverride.Auto;
                             entry.FindPropertyRelative("animatedProp").boxedValue = default(SpellAnimatedPropHandoff);
@@ -74,10 +83,17 @@ namespace Arena.Editor
                             entry.FindPropertyRelative("fixedAnimation").boxedValue = default(WeaponSpellAnimationEntry);
                         }
                     }
-                    if ((SpellCastAnimationAssignmentKind)assignmentKind.enumValueIndex
-                        == SpellCastAnimationAssignmentKind.Fixed)
+                    SpellCastAnimationAssignmentKind assignment =
+                        (SpellCastAnimationAssignmentKind)assignmentKind.enumValueIndex;
+                    if (assignment == SpellCastAnimationAssignmentKind.Fixed)
                     {
                         EditorGUILayout.PropertyField(entry.FindPropertyRelative("fixedAnimation"), includeChildren: true);
+                    }
+                    else if (assignment == SpellCastAnimationAssignmentKind.NoAnimation)
+                    {
+                        EditorGUILayout.HelpBox(
+                            "This spell intentionally plays no cast animation.",
+                            MessageType.Info);
                     }
                     else
                     {

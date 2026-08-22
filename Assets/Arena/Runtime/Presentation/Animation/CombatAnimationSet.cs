@@ -503,6 +503,7 @@ namespace Arena.Presentation
         FullBody = 1,
         UpperBody = 2,
         LeftGesture = 3,
+        RightGesture = 4,
     }
 
     [Serializable]
@@ -574,7 +575,7 @@ namespace Arena.Presentation
         public SpellAnimationPresentationMode presentationMode;
         [Tooltip("Optional per-spell cast/channel hold presentation. Leave empty to use the animation set's Default Spell Cast Hold.")]
         public SpellCastHoldProfile holdOverride;
-        [Tooltip("How this spell should present relative to locomotion. UpperBodyWhileMoving preserves locomotion only while moving; FullBody always uses the spell-action layer; UpperBody always uses the upper-body layer; LeftGesture uses a single masked pelvis/spine/left-arm overlay.")]
+        [Tooltip("How this spell should present relative to locomotion. UpperBodyWhileMoving preserves locomotion only while moving; FullBody always uses the spell-action layer; UpperBody always uses the upper-body layer; LeftGesture/RightGesture use single masked pelvis/spine/casting-arm overlays.")]
         [FormerlySerializedAs("movingPlaybackMode")]
         public SpellPlaybackLayer playbackLayer;
         [Tooltip("Obsolete serialized compatibility field. Runtime reads OnReleaseFrame from the selected clip instead.")]
@@ -598,6 +599,7 @@ namespace Arena.Presentation
         public bool UsesUpperBodyWhileMoving => playbackLayer == SpellPlaybackLayer.UpperBodyWhileMoving;
         public bool UsesUpperBody => playbackLayer == SpellPlaybackLayer.UpperBody;
         public bool UsesLeftGesture => playbackLayer == SpellPlaybackLayer.LeftGesture;
+        public bool UsesRightGesture => playbackLayer == SpellPlaybackLayer.RightGesture;
         public bool HasAnimatedPropHandoff => animatedProp.enabled;
         public bool UsesHoldPresentation => presentationMode == SpellAnimationPresentationMode.HoldThenRelease
             || presentationMode == SpellAnimationPresentationMode.HoldOnly;
@@ -622,6 +624,7 @@ namespace Arena.Presentation
         {
             return playbackLayer == SpellPlaybackLayer.UpperBody
                 || playbackLayer == SpellPlaybackLayer.LeftGesture
+                || playbackLayer == SpellPlaybackLayer.RightGesture
                 || (locomotionRawMagnitude >= movementThreshold
                     && playbackLayer == SpellPlaybackLayer.UpperBodyWhileMoving);
         }
@@ -1658,7 +1661,7 @@ namespace Arena.Presentation
         [Tooltip("Default enter/idle presentation for cast-time spells. Release clips come from the resolved motion family or fixed spell assignment.")]
         public SpellCastHoldProfile defaultSpellCastHold;
 
-        [Tooltip("Which hand this weapon set casts ONE-HANDED spell flavors with (Call/Ground/Directional-1H). Left is the only supported one-hand value until a RightGesture layer/mask exists; two-handed flavors (Omni/Special) always use both hands regardless. Only used by the cast-animation family resolver. See docs/spell-cast-animation-stitching-2026-07-09.md.")]
+        [Tooltip("Which hand this weapon set uses when a spell resolves to a one-handed cast family. Two-handed families always use both hands regardless. Direct2H falls back to Direct1H with this hand when the set has no Direct2H binding. See docs/spell-cast-animation-stitching-2026-07-09.md.")]
         public SpellCastHand oneHandedCastHand = SpellCastHand.Left;
 
         /// <summary>The one-handed cast hand for family resolution (Left/Right only; TwoHand collapses to Left).</summary>
@@ -2115,6 +2118,35 @@ namespace Arena.Presentation
         }
 
         public bool TryGetSpellCastFamily(SpellCastMotion motion, out string familyBaseName)
+            => TryGetSpellCastFamily(motion, out familyBaseName, out _);
+
+        public bool TryGetSpellCastFamily(
+            SpellCastMotion motion,
+            out string familyBaseName,
+            out SpellCastMotion resolvedMotion)
+        {
+            if (TryGetExactSpellCastFamily(motion, out familyBaseName))
+            {
+                resolvedMotion = motion;
+                return true;
+            }
+
+            // A Direct2H classification expresses the spell's preferred gesture. Weapon sets that
+            // cannot free both hands deliberately fall back to their authored Direct1H family and
+            // oneHandedCastHand instead of failing animation resolution.
+            if (motion == SpellCastMotion.Direct2H
+                && TryGetExactSpellCastFamily(SpellCastMotion.Direct1H, out familyBaseName))
+            {
+                resolvedMotion = SpellCastMotion.Direct1H;
+                return true;
+            }
+
+            familyBaseName = string.Empty;
+            resolvedMotion = SpellCastMotion.None;
+            return false;
+        }
+
+        private bool TryGetExactSpellCastFamily(SpellCastMotion motion, out string familyBaseName)
         {
             if (motion != SpellCastMotion.None && spellCastMotionBindings != null)
             {

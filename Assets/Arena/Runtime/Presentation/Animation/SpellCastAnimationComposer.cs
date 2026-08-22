@@ -20,61 +20,59 @@ namespace Arena.Presentation
     public static class SpellCastAnimationComposer
     {
         // Held casts must resolve to a loop-capable animator layer or the loop freezes (design doc
-        // §1.5 / §6.8). Both hold layers used here are loop-capable: UpperBody →
-        // UpperBodySpellCastHoldAction*, LeftGesture → LeftGestureSpellCastHoldAction* (FullBody →
-        // SpellCastHoldAction*). UpperBody is the safe default (keeps facing/aim responsive).
+        // §1.5 / §6.8). All hold layers used here are loop-capable: UpperBody →
+        // UpperBodySpellCastHoldAction*, LeftGesture/RightGesture → their masked
+        // *SpellCastHoldAction* states (FullBody → SpellCastHoldAction*). UpperBody is the safe
+        // default (keeps facing/aim responsive).
         private const SpellPlaybackLayer HoldLayer = SpellPlaybackLayer.UpperBody;
         // The default charged release stays UpperBodyWhileMoving — grounded charges read fine
         // full-body when stationary (kept from the ICICLE tuning the owner signed off on).
         private const SpellPlaybackLayer ChargedReleaseLayer = SpellPlaybackLayer.UpperBodyWhileMoving;
 
         /// <summary>
-        /// Whether a resolved cast is a left-handed one-handed cast — the only supported one-hand
-        /// masking mode. Two-handed flavors use both hands and ignore the cast hand.
+        /// Whether a resolved cast is a left-handed one-handed family.
         /// </summary>
         private static bool IsLeftHandedOneHand(SpellCastHandStyle handStyle, SpellCastHand hand)
             => handStyle == SpellCastHandStyle.OneHand && hand == SpellCastHand.Left;
 
-        /// <summary>
-        /// Right-handed one-hand composition is deliberately disabled until a RightGesture layer/mask
-        /// exists. Falling through to UpperBody would silently move the weapon-bearing arm.
-        /// </summary>
-        private static bool IsUnsupportedRightHandedOneHand(SpellCastHandStyle handStyle, SpellCastHand hand)
+        /// <summary>Whether a resolved cast is a right-handed one-handed family.</summary>
+        private static bool IsRightHandedOneHand(SpellCastHandStyle handStyle, SpellCastHand hand)
             => handStyle == SpellCastHandStyle.OneHand && hand == SpellCastHand.Right;
 
         /// <summary>
-        /// The overlay layer for an instant cast. A left-handed one-handed cast keeps the
-        /// weapon-bearing right arm out of the motion (<see cref="SpellPlaybackLayer.LeftGesture"/>
-        /// masks to pelvis/spine/left-arm, so the right arm holds its base pose — e.g. gripping the
-        /// greatsword). Everything else uses the full upper-body overlay (torso + both arms), which
-        /// still keeps the lower body/stance. Neither stands the caster straight up (that was the
-        /// full-body-when-stationary behavior of UpperBodyWhileMoving).
+        /// The overlay layer for an instant cast. One-handed casts use the matching gesture mask so
+        /// the opposite, weapon-bearing arm holds its base pose. Two-handed families use the full
+        /// upper-body overlay (torso + both arms). Neither path takes over the legs.
         /// </summary>
         private static SpellPlaybackLayer ResolveInstantLayer(SpellCastHandStyle handStyle, SpellCastHand hand)
             => IsLeftHandedOneHand(handStyle, hand)
                 ? SpellPlaybackLayer.LeftGesture
-                : SpellPlaybackLayer.UpperBody;
+                : IsRightHandedOneHand(handStyle, hand)
+                    ? SpellPlaybackLayer.RightGesture
+                    : SpellPlaybackLayer.UpperBody;
 
         /// <summary>
-        /// The loop-capable layer a charged/channel <b>hold</b> (wind-up + loop) plays on. A
-        /// left-handed one-handed cast holds on the loop-capable LeftGesture states so the right arm
-        /// stays on the weapon through the whole charge/channel; everything else holds on UpperBody.
+        /// The loop-capable layer a charged/channel <b>hold</b> (wind-up + loop) plays on. One-handed
+        /// families use their matching gesture layer; two-handed families hold on UpperBody.
         /// </summary>
         private static SpellPlaybackLayer ResolveHoldLayer(SpellCastHandStyle handStyle, SpellCastHand hand)
             => IsLeftHandedOneHand(handStyle, hand)
                 ? SpellPlaybackLayer.LeftGesture
-                : HoldLayer;
+                : IsRightHandedOneHand(handStyle, hand)
+                    ? SpellPlaybackLayer.RightGesture
+                    : HoldLayer;
 
         /// <summary>
-        /// The layer a charged <b>release</b> (the final Cast clip) plays on. Left-handed one-handed
-        /// casts release on LeftGesture too, so the right arm keeps gripping the weapon through the
-        /// release — matching the instant path and the masked hold. Everything else keeps the
-        /// owner-approved UpperBodyWhileMoving release.
+        /// The layer a charged <b>release</b> (the final Cast clip) plays on. One-handed families
+        /// release on their matching gesture layer; two-handed families keep the owner-approved
+        /// UpperBodyWhileMoving release.
         /// </summary>
         private static SpellPlaybackLayer ResolveChargedReleaseLayer(SpellCastHandStyle handStyle, SpellCastHand hand)
             => IsLeftHandedOneHand(handStyle, hand)
                 ? SpellPlaybackLayer.LeftGesture
-                : ChargedReleaseLayer;
+                : IsRightHandedOneHand(handStyle, hand)
+                    ? SpellPlaybackLayer.RightGesture
+                    : ChargedReleaseLayer;
 
         /// <summary>
         /// Returns <c>false</c> (with a default entry) when the family has no clips for the requested
@@ -89,9 +87,6 @@ namespace Arena.Presentation
             out WeaponSpellAnimationEntry entry)
         {
             entry = default;
-            if (IsUnsupportedRightHandedOneHand(family.handStyle, hand))
-                return false;
-
             if (!family.TryGetTriple(hand, out SpellCastClipTriple triple))
                 return false;
 

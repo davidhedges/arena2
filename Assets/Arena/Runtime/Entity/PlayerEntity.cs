@@ -439,6 +439,9 @@ namespace Arena.Entity
 
         public bool PlaysSpellReleasePresentation(string spellActionId)
         {
+            if (SpellCastAnimationResolver.IsExplicitlyNoAnimation(spellActionId))
+                return false;
+
             return _combatAnimationSet == null
                 || !SpellCastAnimationResolver.TryResolve(_combatAnimationSet, spellActionId, out WeaponSpellAnimationEntry entry)
                 || entry.PlaysReleasePresentation;

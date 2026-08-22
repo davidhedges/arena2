@@ -142,6 +142,14 @@ namespace Arena.Presentation
         private static readonly int LeftGestureSpellCastHoldAction2StateHash = Animator.StringToHash("LeftGestureSpellCastHoldAction2");
         private static readonly int LeftGestureSpellCastHoldAction3StateHash = Animator.StringToHash("LeftGestureSpellCastHoldAction3");
         private static readonly int LeftGestureSpellCastHoldAction4StateHash = Animator.StringToHash("LeftGestureSpellCastHoldAction4");
+        private static readonly int RightGestureSpellAction1StateHash = Animator.StringToHash("RightGestureSpellAction1");
+        private static readonly int RightGestureSpellAction2StateHash = Animator.StringToHash("RightGestureSpellAction2");
+        private static readonly int RightGestureSpellAction3StateHash = Animator.StringToHash("RightGestureSpellAction3");
+        private static readonly int RightGestureSpellAction4StateHash = Animator.StringToHash("RightGestureSpellAction4");
+        private static readonly int RightGestureSpellCastHoldAction1StateHash = Animator.StringToHash("RightGestureSpellCastHoldAction1");
+        private static readonly int RightGestureSpellCastHoldAction2StateHash = Animator.StringToHash("RightGestureSpellCastHoldAction2");
+        private static readonly int RightGestureSpellCastHoldAction3StateHash = Animator.StringToHash("RightGestureSpellCastHoldAction3");
+        private static readonly int RightGestureSpellCastHoldAction4StateHash = Animator.StringToHash("RightGestureSpellCastHoldAction4");
         private static readonly int UpperBodyRecoveryAction1StateHash = Animator.StringToHash("UpperBodyRecoveryAction1");
         private static readonly int SpellAction1StateHash = Animator.StringToHash("SpellAction1");
         private static readonly int SpellAction2StateHash = Animator.StringToHash("SpellAction2");
@@ -213,6 +221,7 @@ namespace Arena.Presentation
         private const int MeleeAttackLayerIndex = 3;
         private const int SpellActionLayerIndex = 4;
         private const int LeftGestureLayerIndex = 5;
+        private const int RightGestureLayerIndex = 6;
         private const string UpperBodyRecoverySlotName = "slot_upper_body_recovery_1";
         private const string WorldInteractionSlotName = "slot_spell_4";
         private static readonly int MeleeAttackEmptyStateHash = Animator.StringToHash("Empty");
@@ -1560,7 +1569,10 @@ namespace Arena.Presentation
             _activeSpellPresentationDispatchedFrame = -1;
             ResetSpellLowerBodyUnlockState(resetLayerWeight, clearUpperBodySpell);
             if (clearUpperBodySpell)
+            {
                 ClearLeftGestureSpellPresentation();
+                ClearRightGestureSpellPresentation();
+            }
         }
 
         private void ClearActiveSpellCastHoldPresentation(
@@ -1588,10 +1600,10 @@ namespace Arena.Presentation
                     cleared.ExitBlendOutSeconds,
                     cleared.ExitDelaySeconds,
                     fadeLayerIndex);
-                // Clears the unused overlay layer. ClearLeftGestureSpellPresentation itself refuses
-                // to stomp the layer the fade now owns, so a masked LeftGesture hold blends out
-                // instead of snapping.
+                // Clear the unused gesture layer. Each clear refuses to stomp the layer the fade
+                // now owns, so a masked gesture hold blends out instead of snapping.
                 ClearLeftGestureSpellPresentation();
+                ClearRightGestureSpellPresentation();
                 return;
             }
 
@@ -1601,6 +1613,7 @@ namespace Arena.Presentation
             _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
             PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
             ClearLeftGestureSpellPresentation();
+            ClearRightGestureSpellPresentation();
         }
 
         private void UpdateSpellCastHoldFadeOut()
@@ -1814,11 +1827,18 @@ namespace Arena.Presentation
             {
                 case SpellPlaybackLayer.LeftGesture:
                     PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+                    ClearRightGestureSpellPresentation();
                     PlayLeftGestureState(stateHash, normalizedTime);
+                    break;
+                case SpellPlaybackLayer.RightGesture:
+                    PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+                    ClearLeftGestureSpellPresentation();
+                    PlayRightGestureState(stateHash, normalizedTime);
                     break;
                 case SpellPlaybackLayer.UpperBody:
                 case SpellPlaybackLayer.UpperBodyWhileMoving:
                     ClearLeftGestureSpellPresentation();
+                    ClearRightGestureSpellPresentation();
                     // Restore full weight in case a prior hold's exit fade left the
                     // UpperBody layer partway blended out.
                     _animator!.SetLayerWeight(UpperBodyLayerIndex, 1f);
@@ -1827,6 +1847,7 @@ namespace Arena.Presentation
                 case SpellPlaybackLayer.FullBody:
                 default:
                     ClearLeftGestureSpellPresentation();
+                    ClearRightGestureSpellPresentation();
                     _animator!.SetLayerWeight(SpellActionLayerIndex, 1f);
                     int fullPathHash = ResolveSpellCastHoldActionFullPathHash(bankSlot);
                     _animator.CrossFadeInFixedTime(
@@ -1843,6 +1864,7 @@ namespace Arena.Presentation
             return playbackLayer switch
             {
                 SpellPlaybackLayer.LeftGesture => LeftGestureLayerIndex,
+                SpellPlaybackLayer.RightGesture => RightGestureLayerIndex,
                 SpellPlaybackLayer.UpperBody => UpperBodyLayerIndex,
                 SpellPlaybackLayer.UpperBodyWhileMoving => UpperBodyLayerIndex,
                 _ => SpellActionLayerIndex,
@@ -1854,6 +1876,7 @@ namespace Arena.Presentation
             return playbackLayer switch
             {
                 SpellPlaybackLayer.LeftGesture => ResolveLeftGestureSpellCastHoldStateHash(bankSlot),
+                SpellPlaybackLayer.RightGesture => ResolveRightGestureSpellCastHoldStateHash(bankSlot),
                 SpellPlaybackLayer.UpperBody => ResolveUpperBodySpellCastHoldStateHash(bankSlot),
                 SpellPlaybackLayer.UpperBodyWhileMoving => ResolveUpperBodySpellCastHoldStateHash(bankSlot),
                 _ => ResolveSpellCastHoldActionStateHash(bankSlot),
@@ -1945,30 +1968,42 @@ namespace Arena.Presentation
                 if (spellEntry.UsesLeftGesture)
                 {
                     PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+                    ClearRightGestureSpellPresentation();
                     PlayLeftGestureState(ResolveLeftGestureSpellStateHash(bankSlot), normalizedStart);
                     _actionPlayback.SetActiveOverlaySpellPresentation(
                         spellKind,
                         ResolveLeftGestureSpellStateHash(bankSlot),
-                        usesLeftGesture: true);
+                        SpellPlaybackLayer.LeftGesture);
+                }
+                else if (spellEntry.UsesRightGesture)
+                {
+                    PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+                    ClearLeftGestureSpellPresentation();
+                    PlayRightGestureState(ResolveRightGestureSpellStateHash(bankSlot), normalizedStart);
+                    _actionPlayback.SetActiveOverlaySpellPresentation(
+                        spellKind,
+                        ResolveRightGestureSpellStateHash(bankSlot),
+                        SpellPlaybackLayer.RightGesture);
                 }
                 else
                 {
                     ClearLeftGestureSpellPresentation();
+                    ClearRightGestureSpellPresentation();
                     PlayUpperBodyState(ResolveUpperBodySpellStateHash(bankSlot), normalizedStart);
                     _actionPlayback.SetActiveOverlaySpellPresentation(
                         spellKind,
                         ResolveUpperBodySpellStateHash(bankSlot),
-                        usesLeftGesture: false);
+                        SpellPlaybackLayer.UpperBody);
                 }
                 // A charged hold's exit fade blends its hold layer 1->0. When the release
-                // renders on that same overlay layer (masked LeftGesture, or UpperBody while
+                // renders on that same overlay layer (masked gesture, or UpperBody while
                 // moving), the fade would drag the release out from under itself. The release
                 // now drives that layer at full weight and auto-exits on its own, so cancel
                 // the fade. Full-body/off-layer releases keep the fade (it blends the leftover
                 // hold overlay away while the release plays elsewhere).
                 if (_actionPlayback.IsSpellCastHoldFadeOutActive)
                 {
-                    int releaseLayerIndex = spellEntry.UsesLeftGesture ? LeftGestureLayerIndex : UpperBodyLayerIndex;
+                    int releaseLayerIndex = ResolveOverlaySpellLayerIndex(spellEntry.playbackLayer);
                     if (_actionPlayback.SpellCastHoldFadeOutLayerIndex == releaseLayerIndex)
                     {
                         _actionPlayback.ResetSpellCastHoldFadeOut();
@@ -1982,6 +2017,7 @@ namespace Arena.Presentation
 
             SetActiveSpellPresentation(spellKind, bankSlot, spellEntry, grounded);
             ClearLeftGestureSpellPresentation();
+            ClearRightGestureSpellPresentation();
             int triggerHash = ResolveSpellActionTriggerHash(bankSlot);
             CombatActionPlaybackController.PlayFullBodySpellAction(
                 _animator!,
@@ -2119,6 +2155,26 @@ namespace Arena.Presentation
                 LeftGestureSpellCastHoldAction2StateHash,
                 LeftGestureSpellCastHoldAction3StateHash,
                 LeftGestureSpellCastHoldAction4StateHash);
+        }
+
+        private static int ResolveRightGestureSpellStateHash(int bankSlot)
+        {
+            return CombatActionPlaybackController.ResolveBankedAnimatorHash(
+                bankSlot,
+                RightGestureSpellAction1StateHash,
+                RightGestureSpellAction2StateHash,
+                RightGestureSpellAction3StateHash,
+                RightGestureSpellAction4StateHash);
+        }
+
+        private static int ResolveRightGestureSpellCastHoldStateHash(int bankSlot)
+        {
+            return CombatActionPlaybackController.ResolveBankedAnimatorHash(
+                bankSlot,
+                RightGestureSpellCastHoldAction1StateHash,
+                RightGestureSpellCastHoldAction2StateHash,
+                RightGestureSpellCastHoldAction3StateHash,
+                RightGestureSpellCastHoldAction4StateHash);
         }
 
         private static int ResolveSpellActionTriggerHash(int bankSlot)
@@ -2407,7 +2463,8 @@ namespace Arena.Presentation
                 || IsStrikePresentationStateActiveOnMeleeLayer()
                 || IsSkillPresentationStateActive(UpperBodyLayerIndex, includeStrikeStates: false)
                 || IsSkillPresentationStateActive(SpellActionLayerIndex, includeStrikeStates: false)
-                || IsSkillPresentationStateActive(LeftGestureLayerIndex, includeStrikeStates: false);
+                || IsSkillPresentationStateActive(LeftGestureLayerIndex, includeStrikeStates: false)
+                || IsSkillPresentationStateActive(RightGestureLayerIndex, includeStrikeStates: false);
         }
 
         private void PreemptMeleeAnimationIfActive(bool captureGhost = true)
@@ -2502,6 +2559,10 @@ namespace Arena.Presentation
                 || state.shortNameHash == LeftGestureSpellAction2StateHash
                 || state.shortNameHash == LeftGestureSpellAction3StateHash
                 || state.shortNameHash == LeftGestureSpellAction4StateHash
+                || state.shortNameHash == RightGestureSpellAction1StateHash
+                || state.shortNameHash == RightGestureSpellAction2StateHash
+                || state.shortNameHash == RightGestureSpellAction3StateHash
+                || state.shortNameHash == RightGestureSpellAction4StateHash
                 || state.shortNameHash == UpperBodyRecoveryAction1StateHash
                 || state.shortNameHash == SpellAction1StateHash
                 || state.shortNameHash == SpellAction2StateHash
@@ -3666,7 +3727,7 @@ namespace Arena.Presentation
             {
                 // The overlay record is never lifecycle-cleared, so only cut
                 // while the recorded state is still what the layer is playing.
-                int layerIndex = overlay.UsesLeftGesture ? LeftGestureLayerIndex : UpperBodyLayerIndex;
+                int layerIndex = ResolveOverlaySpellLayerIndex(overlay.PlaybackLayer);
                 bool statePlaying = _animator.GetCurrentAnimatorStateInfo(layerIndex).shortNameHash == overlay.StateHash
                     || (_animator.IsInTransition(layerIndex)
                         && _animator.GetNextAnimatorStateInfo(layerIndex).shortNameHash == overlay.StateHash);
@@ -3676,10 +3737,7 @@ namespace Arena.Presentation
                         _weaponAttachments = GetComponent<WeaponAttachmentController>();
                     _weaponAttachments?.ReleaseTemporaryAnimatedProp(rejectedActionId);
                     _actionPlayback.ClearActiveOverlaySpellPresentation();
-                    if (overlay.UsesLeftGesture)
-                        ClearLeftGestureSpellPresentation();
-                    else
-                        PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+                    ClearOverlaySpellPresentation(overlay.PlaybackLayer);
                 }
             }
         }
@@ -3724,6 +3782,7 @@ namespace Arena.Presentation
                 _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
             PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
             ClearLeftGestureSpellPresentation();
+            ClearRightGestureSpellPresentation();
         }
 
         private void ClearDefensivePresentation()
@@ -3995,6 +4054,16 @@ namespace Arena.Presentation
             _animator!.Play(stateHash, LeftGestureLayerIndex, normalizedTime);
         }
 
+        private void PlayRightGestureState(int stateHash, float normalizedTime)
+        {
+            if (!CanDriveAnimatorState())
+                return;
+
+            CancelSpellCastHoldFadeOutForLayer(RightGestureLayerIndex);
+            _animator!.SetLayerWeight(RightGestureLayerIndex, 1f);
+            _animator!.Play(stateHash, RightGestureLayerIndex, normalizedTime);
+        }
+
         private bool TryHandleSpellCastHoldFadeOutBeforeLayerPlay(
             int layerIndex,
             int stateHash,
@@ -4041,6 +4110,44 @@ namespace Arena.Presentation
                 return;
 
             _animator!.Play(UpperBodyEmptyStateHash, LeftGestureLayerIndex, 0f);
+        }
+
+        private void ClearRightGestureSpellPresentation()
+        {
+            if (!CanDriveAnimatorState())
+                return;
+
+            if (_actionPlayback.IsSpellCastHoldFadeOutActive
+                && _actionPlayback.SpellCastHoldFadeOutLayerIndex == RightGestureLayerIndex)
+                return;
+
+            _animator!.Play(UpperBodyEmptyStateHash, RightGestureLayerIndex, 0f);
+        }
+
+        private static int ResolveOverlaySpellLayerIndex(SpellPlaybackLayer playbackLayer)
+        {
+            return playbackLayer switch
+            {
+                SpellPlaybackLayer.LeftGesture => LeftGestureLayerIndex,
+                SpellPlaybackLayer.RightGesture => RightGestureLayerIndex,
+                _ => UpperBodyLayerIndex,
+            };
+        }
+
+        private void ClearOverlaySpellPresentation(SpellPlaybackLayer playbackLayer)
+        {
+            switch (playbackLayer)
+            {
+                case SpellPlaybackLayer.LeftGesture:
+                    ClearLeftGestureSpellPresentation();
+                    break;
+                case SpellPlaybackLayer.RightGesture:
+                    ClearRightGestureSpellPresentation();
+                    break;
+                default:
+                    PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+                    break;
+            }
         }
 
         private bool CanDriveAnimatorState()

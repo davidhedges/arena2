@@ -151,12 +151,21 @@ namespace Arena.Editor
                 SpellCastAnimationMap? map = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
                 if (map != null && map.TryGetEntry(spellId, out SpellCastAnimationMap.Entry mapEntry))
                 {
-                    string assignment = mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed
-                        ? "Fixed (independent of combat set)"
-                        : mapEntry.motion.ToString();
-                    EditorGUILayout.HelpBox(
-                        $"Profile-less shared spell '{abilityId}' is classified as {assignment}. At runtime its motion resolves through the player's active CombatAnimationSet.",
-                        MessageType.Info);
+                    if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation)
+                    {
+                        EditorGUILayout.HelpBox(
+                            $"Profile-less shared spell '{abilityId}' is explicitly classified as requiring no cast animation.",
+                            MessageType.Info);
+                    }
+                    else
+                    {
+                        string assignment = mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed
+                            ? "Fixed (independent of combat set)"
+                            : mapEntry.motion.ToString();
+                        EditorGUILayout.HelpBox(
+                            $"Profile-less shared spell '{abilityId}' is classified as {assignment}. At runtime its motion resolves through the player's active CombatAnimationSet.",
+                            MessageType.Info);
+                    }
                 }
                 else
                 {
@@ -330,6 +339,13 @@ namespace Arena.Editor
             {
                 expectedHandAnchor = AnchorLeftHand;
                 reason = "playbackLayer is LeftGesture";
+                return true;
+            }
+
+            if (entry.playbackLayer == SpellPlaybackLayer.RightGesture)
+            {
+                expectedHandAnchor = AnchorRightHand;
+                reason = "playbackLayer is RightGesture";
                 return true;
             }
 

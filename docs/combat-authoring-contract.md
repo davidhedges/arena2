@@ -167,7 +167,8 @@ For selectable abilities, `action_id` is the `ability_id`. Do not put an ability
 3. Set the ability `action_id` to the spell id.
 4. Put spell cooldown/cast/targeting/resource details inside `gameplay`.
 5. Put spell delivery behavior inside `gameplay.delivery`.
-6. Add one semantic motion or fixed exception in `SpellCastAnimationMap`; ensure every combat animation set binds that motion.
+6. Add one semantic motion, fixed exception, or explicit `NoAnimation` assignment in
+   `SpellCastAnimationMap`; ensure every combat animation set binds a selected motion.
 7. Add an `ABILITY` presentation row, and a `SPELL` presentation row when the spell is directly presented.
 8. Add or update default loadout placement through ActionRef-compatible assignment data.
 9. Run the server tests.
@@ -235,7 +236,9 @@ The current combat authoring validator is the `combat_authoring_graph_validates_
 - `melee-action-id-matches-authored-strike`: a melee ability `action_id` does not match an authored strike id for the class combat profile. Fix the ability row to point at the authored strike id, or author/export the missing strike.
 - `melee-action-id-not-runtime-slot`: a melee ability points at runtime slot plumbing. Use the authored strike id in progression; runtime slot ids stay internal.
 - `spell-action-id-resolves-to-spell`: a spell ability cannot derive a runtime spell row from its `gameplay` block. Fix `gameplay.kind`, `action_id`, or `gameplay.delivery`.
-- `selectable-spell-has-animation-entry`: a selectable spell lacks a semantic/fixed map assignment, or the exposing combat set lacks the assigned motion binding. Fix `SpellCastAnimationMap.asset` or the relevant `CombatAnimationSet.spellCastMotionBindings`.
+- `selectable-spell-has-animation-entry`: a selectable spell lacks a semantic/fixed/no-animation map
+  assignment, or the exposing combat set lacks the assigned motion binding. Fix
+  `SpellCastAnimationMap.asset` or the relevant `CombatAnimationSet.spellCastMotionBindings`.
 - `auto-attack-replacement-resolves`: an auto-attack replacement ability points at a missing replacement row or a replacement row for the wrong combat profile. Fix the ability `action_id` or the replacement row.
 - `auto-attack-replacement-strike-matches-authored-strike`: an auto-attack replacement row references a strike id that does not exist in the class combat profile. Use an authored strike id from the combat animation set, not runtime slot plumbing.
 - `default-loadout-assignment-resolves`: a default loadout assignment references an unknown class, unknown slot, unknown ability, wrong-class ability, slot-incompatible ability, duplicate class/slot pair, or unsupported fixed action. Fix the assignment's slot and ActionRef target.

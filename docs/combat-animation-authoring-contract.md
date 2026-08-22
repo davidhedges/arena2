@@ -250,6 +250,12 @@ Owns draw weapon, stow weapon, moving casts, channeling, aim, and other torso/ar
 
 Owns left-side cast or gesture overlays that should never use the full-body spell layer. Playback uses a single left-gesture mask including pelvis/spine plus the left shoulder/arm/hand so the source clip can supply posture without taking the legs or right side away from locomotion. This is for authored actions such as pointing or small off-hand gestures.
 
+### Right Gesture
+
+The mirrored right-side cast path. It uses pelvis/spine plus the right shoulder/arm/hand and keeps
+the left side on the base weapon pose. One-hand spell composition chooses LeftGesture or
+RightGesture from the active set's `oneHandedCastHand`.
+
 ### Combat Full Body
 
 Temporarily owns the whole character during committed melee/cast phases when the authored pose needs legs, hips, torso, and arms.
@@ -386,7 +392,20 @@ Recommended categories:
 - rooted cast: full-body until end or explicit lower-body unlock
 - interrupted cast: explicit cancel clip or fast blend-out policy
 
-Spell classification is global in `SpellCastAnimationMap`: a normal spell selects a semantic motion, while a genuinely set-independent exception owns one fixed presentation. `CombatAnimationSet.spellCastMotionBindings` maps semantic motion to an animation family for the set's weapon pose. Do not add per-spell rows back to a combat set.
+Spell classification is global in `SpellCastAnimationMap`: a normal spell selects a semantic motion,
+a genuinely set-independent exception owns one fixed presentation, and a spell that intentionally
+plays no cast animation owns an explicit `NoAnimation` assignment. `CombatAnimationSet.spellCastMotionBindings`
+maps semantic motion to an animation family for the set's weapon pose. Do not add per-spell rows back
+to a combat set, and do not use an absent map entry to mean no animation.
+
+Direct casts are classified as `Direct1H` or `Direct2H` on the spell. Daggers and Staff currently
+bind `Direct2H` to `MagicAttackDirect2H02`; other sets intentionally omit that binding and resolve
+`Direct2H` through their `Direct1H` family plus `oneHandedCastHand`. Never bind
+`MagicAttackDirect2H01`.
+
+`Ground` is the semantic ground-directed gesture and every current combat set binds it to
+`MagicAttackGround01`. It remains an animation classification: do not infer it merely because a
+spell uses point or ground gameplay targeting.
 
 The resolver still produces a `WeaponSpellAnimationEntry` runtime value. Its ground/air clips are either composed from a family or copied from a fixed global exception. Standing, moving, channeled, rooted, and interrupted presentation policy remains a separate axis.
 
@@ -395,6 +414,7 @@ Current cast lower-body recovery is intentionally narrow:
 - `playbackLayer = UpperBody` starts the cast on the masked upper-body layer while locomotion continues.
 - `playbackLayer = UpperBodyWhileMoving` preserves the legacy moving-cast behavior: stationary playback uses the full-body spell layer, while moving playback uses the upper-body layer.
 - `playbackLayer = LeftGesture` uses masked pelvis/spine/left-arm gesture playback. It does not route through the full-body spell layer.
+- `playbackLayer = RightGesture` is the mirrored masked pelvis/spine/right-arm path.
 - `requiresCombatStance` and `combatEntryMode` control whether combat stance is requested before playback, after playback starts, or not at all.
 - Full-body spell actions start on the `SpellAction` layer.
 - `lowerBodyUnlockAtSeconds` is measured in seconds against the selected ground/air spell clip. It is an earliest eligibility time, not a command to fade the lower body immediately. If the player is not moving, the full-body cast keeps its lower-body settling. Unset or invalid values fall back to the selected clip length.

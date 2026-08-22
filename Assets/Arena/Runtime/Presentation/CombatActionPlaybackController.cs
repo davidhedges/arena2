@@ -134,7 +134,7 @@ namespace Arena.Presentation
     }
 
     /// <summary>
-    /// Identity of an instant spell playing on the upper-body/left-gesture
+    /// Identity of an instant spell playing on an upper-body or gesture
     /// overlay layers (the moving-cast path), which records no
     /// <see cref="ActiveSpellPresentation"/>. Kept so a server rejection can
     /// cut the specific overlay state (netcode design review S2); consumers
@@ -145,13 +145,16 @@ namespace Arena.Presentation
     {
         public readonly string ActionId;
         public readonly int StateHash;
-        public readonly bool UsesLeftGesture;
+        public readonly SpellPlaybackLayer PlaybackLayer;
 
-        public ActiveOverlaySpellPresentation(string actionId, int stateHash, bool usesLeftGesture)
+        public ActiveOverlaySpellPresentation(
+            string actionId,
+            int stateHash,
+            SpellPlaybackLayer playbackLayer)
         {
             ActionId = actionId;
             StateHash = stateHash;
-            UsesLeftGesture = usesLeftGesture;
+            PlaybackLayer = playbackLayer;
         }
     }
 
@@ -444,7 +447,7 @@ namespace Arena.Presentation
         public bool IsSpellCastHoldFadeOutActive => _spellCastHoldFadeOut.Unlocked;
 
         // The animator layer the in-progress hold fade-out is blending. Masked holds
-        // (UpperBody / LeftGesture) render on their own layer, not SpellAction, so the
+        // (UpperBody / LeftGesture / RightGesture) render on their own layer, not SpellAction, so the
         // fade must target whichever layer the hold actually played on.
         public int SpellCastHoldFadeOutLayerIndex { get; private set; }
 
@@ -1204,9 +1207,15 @@ namespace Arena.Presentation
             ActiveSpellPresentationEntered = false;
         }
 
-        public void SetActiveOverlaySpellPresentation(string actionId, int stateHash, bool usesLeftGesture)
+        public void SetActiveOverlaySpellPresentation(
+            string actionId,
+            int stateHash,
+            SpellPlaybackLayer playbackLayer)
         {
-            ActiveOverlaySpellPresentation = new ActiveOverlaySpellPresentation(actionId, stateHash, usesLeftGesture);
+            ActiveOverlaySpellPresentation = new ActiveOverlaySpellPresentation(
+                actionId,
+                stateHash,
+                playbackLayer);
         }
 
         public void ClearActiveOverlaySpellPresentation()
