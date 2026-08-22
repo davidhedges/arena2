@@ -2213,10 +2213,18 @@ namespace Arena.Presentation
         public bool TryGetSpellCastHoldProfile(string spellId, out SpellCastHoldProfile profile)
         {
             SpellCastHoldProfile defaultProfile = defaultSpellCastHold;
-            if (SpellCastAnimationResolver.TryResolve(this, spellId, out WeaponSpellAnimationEntry entry)
-                && entry.TryResolveHoldProfile(defaultProfile, out profile))
+            if (SpellCastAnimationResolver.TryResolve(this, spellId, out WeaponSpellAnimationEntry entry))
             {
-                return true;
+                // A catalog recipe owns its complete presentation lifecycle. In particular,
+                // ReleaseOnly must not inherit this combat set's legacy default cast hold.
+                if (!entry.UsesHoldPresentation)
+                {
+                    profile = default;
+                    return false;
+                }
+
+                if (entry.TryResolveHoldProfile(defaultProfile, out profile))
+                    return true;
             }
 
             profile = defaultProfile;

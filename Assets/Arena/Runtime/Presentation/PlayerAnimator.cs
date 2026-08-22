@@ -1759,6 +1759,16 @@ namespace Arena.Presentation
             if (_animator == null || _overrideController == null || _animationSet == null)
                 return;
 
+            if (SpellCastAnimationResolver.IsExplicitlyNoAnimation(request.ActionId)
+                || (SpellCastAnimationResolver.TryResolve(
+                        _animationSet,
+                        request.ActionId,
+                        out WeaponSpellAnimationEntry entry)
+                    && !entry.UsesHoldPresentation))
+            {
+                return;
+            }
+
             if (!_animationSet.TryGetSpellCastHoldProfile(request.ActionId, out SpellCastHoldProfile holdProfile))
             {
                 Debug.LogWarning(

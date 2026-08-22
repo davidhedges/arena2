@@ -63,6 +63,16 @@ namespace Arena.Tests.Editor
         private static AnimationClip? Clip(object entry) =>
             (AnimationClip?)T("WeaponSpellAnimationEntry").GetField("clip")!.GetValue(entry);
 
+        private static bool HasPlayableHold(UnityEngine.Object set, string spellId)
+        {
+            Type holdType = T("SpellCastHoldProfile");
+            object?[] args = { spellId, Activator.CreateInstance(holdType) };
+            return (bool)T("CombatAnimationSet").GetMethod(
+                    "TryGetSpellCastHoldProfile",
+                    new[] { typeof(string), holdType.MakeByRefType() })!
+                .Invoke(set, args)!;
+        }
+
         private static string AnimationIdFor(string spellId)
         {
             Type mapType = T("SpellCastAnimationMap");
@@ -400,17 +410,21 @@ namespace Arena.Tests.Editor
         public void FlamingOrb_UsesOneGlobalMageRecipeAcrossCombatSets()
         {
             UnityEngine.Object greatsword = LoadSet("TwoHandedSword");
-            UnityEngine.Object daggers = LoadSet("Daggers");
+            UnityEngine.Object staff = LoadSet("Staff");
             Assert.That(Resolve(greatsword, "FLAMING_ORB", "Charged", out object greatswordEntry), Is.True);
-            Assert.That(Resolve(daggers, "FLAMING_ORB", "Charged", out object daggersEntry), Is.True);
+            Assert.That(Resolve(staff, "FLAMING_ORB", "Charged", out object staffEntry), Is.True);
             Type entryType = T("WeaponSpellAnimationEntry");
             object hold = entryType.GetField("holdOverride")!.GetValue(greatswordEntry)!;
             Type holdType = T("SpellCastHoldProfile");
             Assert.That(Clip(greatswordEntry)?.name, Is.EqualTo("Attack_02_02"));
-            Assert.That(Clip(daggersEntry), Is.SameAs(Clip(greatswordEntry)));
+            Assert.That(Clip(staffEntry), Is.SameAs(Clip(greatswordEntry)));
             Assert.That(entryType.GetField("presentationMode")!.GetValue(greatswordEntry)!.ToString(), Is.EqualTo("ReleaseOnly"));
             Assert.That(holdType.GetField("enter")!.GetValue(hold), Is.Null);
             Assert.That(holdType.GetField("idleLoop")!.GetValue(hold), Is.Null);
+            Assert.That(HasPlayableHold(greatsword, "FLAMING_ORB"), Is.False);
+            Assert.That(HasPlayableHold(staff, "FLAMING_ORB"), Is.False);
+            Assert.That(HasPlayableHold(greatsword, "ICICLE"), Is.True);
+            Assert.That(HasPlayableHold(staff, "ICICLE"), Is.True);
         }
 
         [Test]
