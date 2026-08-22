@@ -1,7 +1,10 @@
 *.mov filter=lfs diff=lfs merge=lfs -text
 *.fbx filter=lfs diff=lfs merge=lfs -text
 *.FBX filter=lfs diff=lfs merge=lfs -text
-*.anim filter=lfs diff=lfs merge=lfs -text
+# .anim is text YAML: it gzips ~15x and a settings flip deltas to almost nothing,
+# while LFS stores every version whole and uncompressed. Kept out of LFS.
+# -text so vendor clips with CRLF keep their bytes; diff so changes stay readable.
+*.anim -text diff
 *.png filter=lfs diff=lfs merge=lfs -text
 *.ogg filter=lfs diff=lfs merge=lfs -text
 *.prefab filter=lfs diff=lfs merge=lfs -text
