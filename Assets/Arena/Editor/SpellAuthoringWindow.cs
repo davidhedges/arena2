@@ -61,6 +61,10 @@ namespace Arena.Editor
             Load();
         }
 
+        private void OnDisable() => DestroyCastAnimationPreview();
+
+        private void OnDestroy() => DestroyCastAnimationPreview();
+
         private void OnFocus() => InvalidateGeneratedCueCache();
 
         private void OnProjectChange() => InvalidateGeneratedCueCache();
@@ -265,34 +269,91 @@ namespace Arena.Editor
                     _ => "Unmapped",
                 }
                 : "Unmapped";
-            var labels = new string[recipes.Length + 1];
-            labels[0] = inheritedLabel;
+            var recipeLabels = new string[recipes.Length];
             for (int index = 0; index < recipes.Length; index++)
             {
                 SpellCastAnimationRecipe recipe = recipes[index];
-                labels[index + 1] = recipe.IsCompatibleWith(archetype)
+                recipeLabels[index] = recipe.IsCompatibleWith(archetype)
                     ? recipe.PickerLabel
                     : $"{recipe.PickerLabel} (not tagged for {archetype})";
             }
 
-            int popupIndex = currentRecipeIndex >= 0 ? currentRecipeIndex + 1 : 0;
-            int selectedIndex = EditorGUILayout.Popup("Global Recipe", popupIndex, labels);
-            if (selectedIndex > 0 && selectedIndex != popupIndex)
+            string previewRecipeKey = $"Arena.SpellAuthoring.CastPreview.Recipe.{spellId}";
+            string previewRecipeId = SessionState.GetString(
+                previewRecipeKey,
+                currentAnimationId);
+            int previewRecipeIndex = Array.FindIndex(
+                recipes,
+                recipe => string.Equals(
+                    recipe.AnimationIdOrEmpty,
+                    previewRecipeId,
+                    StringComparison.Ordinal));
+            if (previewRecipeIndex < 0 || previewRecipeIndex >= recipes.Length)
+                previewRecipeIndex = currentRecipeIndex >= 0 ? currentRecipeIndex : 0;
+            int selectedPreviewRecipeIndex = EditorGUILayout.Popup(
+                "Preview Recipe",
+                previewRecipeIndex,
+                recipeLabels);
+            if (selectedPreviewRecipeIndex != previewRecipeIndex)
             {
-                SpellCastAnimationRecipe selectedRecipe = recipes[selectedIndex - 1];
-                Undo.RecordObject(_spellAnimationMap, $"Set {spellId} cast animation");
-                _spellAnimationMap.EditorSetCatalogAssignment(spellId, selectedRecipe.AnimationIdOrEmpty);
-                EditorUtility.SetDirty(_spellAnimationMap);
-                AssetDatabase.SaveAssets();
-                SpellCastAnimationResolver.InvalidateCache();
+                previewRecipeIndex = selectedPreviewRecipeIndex;
+                SessionState.SetString(
+                    previewRecipeKey,
+                    recipes[previewRecipeIndex].AnimationIdOrEmpty);
+                ResetCastAnimationPreview();
             }
 
+            SpellCastAnimationRecipe previewRecipe = recipes[previewRecipeIndex];
+            bool previewIsCompatible = previewRecipe.IsCompatibleWith(archetype);
             string globalLabel = currentRecipeIndex >= 0
                 ? recipes[currentRecipeIndex].PickerLabel
                 : inheritedLabel;
+            EditorGUILayout.LabelField("Assigned Globally", globalLabel);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(
+                           !previewIsCompatible || previewRecipeIndex == currentRecipeIndex))
+                {
+                    if (GUILayout.Button("Assign Preview Globally"))
+                    {
+                        SpellCastAnimationRecipe selectedRecipe = recipes[previewRecipeIndex];
+                        Undo.RecordObject(_spellAnimationMap, $"Set {spellId} cast animation");
+                        _spellAnimationMap.EditorSetCatalogAssignment(
+                            spellId,
+                            selectedRecipe.AnimationIdOrEmpty);
+                        EditorUtility.SetDirty(_spellAnimationMap);
+                        AssetDatabase.SaveAssets();
+                        SpellCastAnimationResolver.InvalidateCache();
+                        currentRecipeIndex = previewRecipeIndex;
+                        globalLabel = selectedRecipe.PickerLabel;
+                    }
+                }
+
+                if (currentRecipeIndex >= 0 && previewRecipeIndex != currentRecipeIndex
+                    && GUILayout.Button("Preview Assigned", GUILayout.Width(130f)))
+                {
+                    previewRecipeIndex = currentRecipeIndex;
+                    SessionState.SetString(
+                        previewRecipeKey,
+                        recipes[previewRecipeIndex].AnimationIdOrEmpty);
+                    previewRecipe = recipes[previewRecipeIndex];
+                    previewIsCompatible = previewRecipe.IsCompatibleWith(archetype);
+                    ResetCastAnimationPreview();
+                }
+            }
+
+            if (!previewIsCompatible)
+            {
+                EditorGUILayout.HelpBox(
+                    $"This recipe can be previewed, but it is not tagged for the spell's {archetype} lifecycle and cannot be assigned here.",
+                    MessageType.Warning);
+            }
+
             EditorGUILayout.HelpBox(
                 $"{globalLabel} is the default for every CombatAnimationSet. Add only the exceptions below.",
                 MessageType.None);
+            DrawCastAnimationPreview(spellId, previewRecipe);
 
             string foldoutKey = $"Arena.SpellAuthoring.CastOverrides.{spellId}";
             bool showOverrides = SessionState.GetBool(foldoutKey, false);
@@ -315,9 +376,9 @@ namespace Arena.Editor
                             recipes,
                             recipe => string.Equals(recipe.AnimationIdOrEmpty, overrideId, StringComparison.Ordinal))
                         : -1;
-                    var overrideLabels = new string[labels.Length];
+                    var overrideLabels = new string[recipeLabels.Length + 1];
                     overrideLabels[0] = $"Use Global / {globalLabel}";
-                    Array.Copy(labels, 1, overrideLabels, 1, recipes.Length);
+                    Array.Copy(recipeLabels, 0, overrideLabels, 1, recipes.Length);
                     int overridePopupIndex = overrideRecipeIndex >= 0 ? overrideRecipeIndex + 1 : 0;
                     int selectedOverrideIndex = EditorGUILayout.Popup(
                         animationSet.name,
@@ -773,6 +834,7 @@ namespace Arena.Editor
 
         private void Load()
         {
+            DestroyCastAnimationPreview();
             InvalidateGeneratedCueCache();
             _loadErrors.Clear();
             _animationSetByProfile.Clear();

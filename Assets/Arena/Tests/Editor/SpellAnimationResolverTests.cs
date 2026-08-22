@@ -172,6 +172,25 @@ namespace Arena.Tests.Editor
             return Activator.CreateInstance(entryType)!;
         }
 
+        private static int CatalogRecipeCountWithPrefix(string prefix)
+        {
+            Type catalogType = T("SpellCastAnimationCatalog");
+            UnityEngine.Object catalog = Resources.Load("SpellCastAnimationCatalog", catalogType);
+            Assert.That(catalog, Is.Not.Null);
+            IEnumerable recipes = (IEnumerable)catalogType.GetProperty("Recipes")!.GetValue(catalog)!;
+            int count = 0;
+            foreach (object recipe in recipes)
+            {
+                string recipeId = (string)recipe.GetType()
+                    .GetProperty("AnimationIdOrEmpty")!
+                    .GetValue(recipe)!;
+                if (recipeId.StartsWith(prefix, StringComparison.Ordinal))
+                    count++;
+            }
+
+            return count;
+        }
+
         private static bool IsExplicitlyNoAnimation(string spellId) =>
             (bool)T("SpellCastAnimationResolver").GetMethod(
                 "IsExplicitlyNoAnimation",
@@ -469,14 +488,43 @@ namespace Arena.Tests.Editor
                 "ResolveUsesOverlayPlayback",
                 new[] { typeof(float), typeof(float) })!;
 
+            Assert.That(CatalogRecipeCountWithPrefix("MAGE_"), Is.EqualTo(40));
+
             foreach (string animationId in new[]
                      {
                          "MAGE_PROJECTILE_CAST_01",
                          "MAGE_PROJECTILE_CAST_02",
+                         "MAGE_ATTACK_CAST_01_02",
+                         "MAGE_ATTACK_CAST_02_01",
                          "MAGE_SKILL_CAST_03",
                          "MAGE_SKILL_CAST_04",
                          "MAGE_SKILL_CAST_05",
                          "MAGE_BUFF_CAST",
+                         "MAGE_BUFF_CAST_AIR",
+                         "MAGE_ULTIMATE_CAST_ALL",
+                         "MAGE_ULTIMATE_AIR_CAST_ALL",
+                         "MAGE_COMBO_CAST_01_01",
+                         "MAGE_COMBO_CAST_01_02",
+                         "MAGE_COMBO_CAST_01_03",
+                         "MAGE_COMBO_CAST_01_04",
+                         "MAGE_COMBO_CAST_01_ALL",
+                         "MAGE_COMBO_CAST_02_01",
+                         "MAGE_COMBO_CAST_02_02",
+                         "MAGE_COMBO_CAST_02_03",
+                         "MAGE_COMBO_CAST_02_04",
+                         "MAGE_COMBO_CAST_02_ALL",
+                         "MAGE_COMBO_CAST_03_01",
+                         "MAGE_COMBO_CAST_03_02",
+                         "MAGE_COMBO_CAST_03_ALL",
+                         "MAGE_COMBO_CAST_04_01",
+                         "MAGE_COMBO_CAST_04_02",
+                         "MAGE_COMBO_CAST_04_03",
+                         "MAGE_COMBO_CAST_04_04",
+                         "MAGE_COMBO_CAST_04_ALL",
+                         "MAGE_COMBO_CAST_05_01",
+                         "MAGE_COMBO_CAST_05_02",
+                         "MAGE_COMBO_CAST_05_04",
+                         "MAGE_COMBO_CAST_05_ALL",
                      })
             {
                 object entry = BuildCatalogRecipe(animationId);
@@ -499,6 +547,10 @@ namespace Arena.Tests.Editor
                          "MAGE_AIMED_CAST",
                          "MAGE_SKILL_CAST_01",
                          "MAGE_SKILL_CAST_02",
+                         "MAGE_ULTIMATE_CAST_PHASED",
+                         "MAGE_ULTIMATE_AIR_CAST_PHASED",
+                         "MAGE_COMBO_CAST_03_03",
+                         "MAGE_COMBO_CAST_05_03",
                      })
             {
                 object entry = BuildCatalogRecipe(animationId);
