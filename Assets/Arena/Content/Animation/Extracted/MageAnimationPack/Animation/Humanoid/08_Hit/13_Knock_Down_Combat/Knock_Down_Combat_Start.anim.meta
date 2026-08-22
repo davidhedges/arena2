@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: cbabe4ca03a2d7c4196220fa0b22de0c
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/08_Hit/13_Knock_Down_Combat/Knock_Down_Combat_Start.anim
+  uploadId: 665052

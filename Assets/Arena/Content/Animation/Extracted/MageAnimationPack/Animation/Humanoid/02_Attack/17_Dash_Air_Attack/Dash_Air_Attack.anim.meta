@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 4b301f01b8a8dd9419e6887f9edd5f8a
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/02_Attack/17_Dash_Air_Attack/Dash_Air_Attack.anim
+  uploadId: 665052

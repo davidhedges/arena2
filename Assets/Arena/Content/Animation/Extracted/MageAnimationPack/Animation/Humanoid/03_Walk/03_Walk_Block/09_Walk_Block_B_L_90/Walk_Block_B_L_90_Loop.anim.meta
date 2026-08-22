@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 96e6adbc2892d68488b801e13ed7e723
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/03_Walk/03_Walk_Block/09_Walk_Block_B_L_90/Walk_Block_B_L_90_Loop.anim
+  uploadId: 665052

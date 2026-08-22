@@ -373,6 +373,9 @@ namespace Arena.EditorTools
             Transform? nhanceQuiver = FindDescendant(player.transform, "Back_Quiver");
             Transform? nhanceHipR = FindDescendant(player.transform, "Hip_R");
             Transform? nhanceHipL = FindDescendant(player.transform, "Hip_L");
+            bool hadNhanceWeaponR = nhanceWeaponR != null;
+            Vector3 nhanceWeaponRWorldPosition = nhanceWeaponR != null ? nhanceWeaponR.position : Vector3.zero;
+            Quaternion nhanceWeaponRWorldRotation = nhanceWeaponR != null ? nhanceWeaponR.rotation : Quaternion.identity;
             Transform? nhanceGreatswordHand = AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
                 greatswordAnimatedSocket,
                 nhanceWeaponR,
@@ -384,10 +387,45 @@ namespace Arena.EditorTools
                 FindDescendant(chest, "Back_L") ??
                 FindDescendant(chest, "Back_2HL") ??
                 chest;
-            Transform staffStowed =
+            Transform staffStowedReference =
                 CreateTransferredMount(player.transform, animator, legacyMountPoses, AvatarWeaponMounts.StaffStowedMountId) ??
                 FindDescendant(chest, "Back_2HL") ??
                 mainBack;
+            Vector3 staffStowedReferencePosition = staffStowedReference.position;
+            Quaternion staffStowedReferenceRotation = staffStowedReference.rotation;
+            Transform? mageStaffAnimatedHandSocket = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
+                rightHand,
+                ArenaWeaponMountCalibration.MageStaffAnimatedHandSocket);
+            Transform staffHand = AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
+                mageStaffAnimatedHandSocket,
+                mageStaffAnimatedHandSocket,
+                "Arena_Staff_hand") ?? mainHand;
+            Transform? restoredNhanceWeaponR = hadNhanceWeaponR
+                ? AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
+                    mageStaffAnimatedHandSocket,
+                    nhanceWeaponRWorldPosition,
+                    nhanceWeaponRWorldRotation,
+                    "Arena_NHance_weapon_r")
+                : mageStaffAnimatedHandSocket;
+            Transform? nhanceStaffHand = hadNhanceWeaponR
+                ? AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
+                    mageStaffAnimatedHandSocket,
+                    nhanceWeaponRWorldPosition,
+                    nhanceWeaponRWorldRotation,
+                    "Arena_NHance_staff_hand")
+                : mageStaffAnimatedHandSocket;
+            Transform? mageStaffAnimatedStowedSocket = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
+                chest,
+                ArenaWeaponMountCalibration.MageStaffAnimatedStowedSocket);
+            Transform staffStowed = AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
+                mageStaffAnimatedStowedSocket,
+                mageStaffAnimatedStowedSocket,
+                "Arena_Staff_stowed") ?? staffStowedReference;
+            Transform? nhanceStaffStowed = AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
+                mageStaffAnimatedStowedSocket,
+                staffStowedReferencePosition,
+                staffStowedReferenceRotation,
+                "Arena_NHance_staff_stowed");
             Transform offBack =
                 CreateTransferredMount(player.transform, animator, legacyMountPoses, AvatarWeaponMounts.OffSheathMountId) ??
                 FindDescendant(chest, PropShieldHolder) ??
@@ -420,6 +458,7 @@ namespace Arena.EditorTools
             mounts.SetOrReplaceMount(AvatarWeaponMounts.MainHandMountId, mainHand);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.OffHandMountId, offHand);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.GreatswordHandMountId, greatswordHand);
+            mounts.SetOrReplaceMount(AvatarWeaponMounts.StaffHandMountId, staffHand);
 
             mounts.SetOrReplaceMount(AvatarWeaponMounts.MainSheathMountId, mainBack);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.MainStowedMountId, mainBack);
@@ -434,7 +473,7 @@ namespace Arena.EditorTools
             mounts.SetOrReplaceMount(AvatarWeaponMounts.DaggerMainStowedMountId, daggerMainStowed);
             mounts.SetOrReplaceMount(AvatarWeaponMounts.DaggerOffStowedMountId, daggerOffStowed);
 
-            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceWeaponRMountId, nhanceWeaponR);
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceWeaponRMountId, restoredNhanceWeaponR);
             SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceWeaponLMountId, nhanceWeaponL);
             SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceShieldMountId, nhanceShield);
             SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceBackLMountId, nhanceBackL);
@@ -445,12 +484,15 @@ namespace Arena.EditorTools
             SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceHipRMountId, nhanceHipR);
             SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceHipLMountId, nhanceHipL);
             SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceGreatswordHandMountId, nhanceGreatswordHand);
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceStaffHandMountId, nhanceStaffHand);
+            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceStaffStowedMountId, nhanceStaffStowed);
 
             Debug.Log(
                 $"[{nameof(StylizedPlayerAvatarBuilder)}] Mounts: " +
                 $"main={BuildPath(player.transform, mainHand)}, " +
                 $"off={BuildPath(player.transform, offHand)}, " +
                 $"greatsword={BuildPath(player.transform, greatswordHand)}, " +
+                $"staff={BuildPath(player.transform, staffHand)}, " +
                 $"mainBack={BuildPath(player.transform, mainBack)}, " +
                 $"offBack={BuildPath(player.transform, offBack)}.");
         }

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a24f87d8897eb4b41bf0a73a46db3367
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/06_Dodge/06_Dodge_Combat_to_Run/Dodge_Combat_to_Run_R_90.anim
+  uploadId: 665052

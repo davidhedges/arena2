@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: ef901ca056b0e5c43b34e67ac711414e
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/04_Run/02_Run_Combat/01_Run_Combat_F_0/Run_Combat_F_0_Start.anim
+  uploadId: 665052

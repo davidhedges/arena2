@@ -83,8 +83,8 @@ namespace Arena.Presentation
                     ? AvatarWeaponMounts.NHanceGreatswordHandMountId
                     : AvatarWeaponMounts.NHanceBack2HLMountId,
                 "staff" => inCombat
-                    ? AvatarWeaponMounts.NHanceWeaponRMountId
-                    : AvatarWeaponMounts.NHanceBack2HLMountId,
+                    ? AvatarWeaponMounts.NHanceStaffHandMountId
+                    : AvatarWeaponMounts.NHanceStaffStowedMountId,
                 "sword" => inCombat
                     ? AvatarWeaponMounts.NHanceWeaponRMountId
                     : AvatarWeaponMounts.NHanceBackLMountId,

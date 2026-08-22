@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d857fe1165367bb4f9a4e84611ffbd1e
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/04_Run/02_Run_Combat/01_Run_Combat_F_0/Run_Combat_F_0_Loop.anim
+  uploadId: 665052

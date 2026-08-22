@@ -468,7 +468,6 @@ namespace Arena.EditorTools
                 NHanceWeaponVisual("NEWBIE_BOW_03", "bow_stowed", WeaponPath("Bow", "Bow_Newbie_03_Cl.prefab")),
                 WeaponVisual("NEWBIE_BOW_03", "quiver", "Assets/Arena/Resources/CombatAnimationSets/ArcherQuiverPackAuthored.prefab"),
 
-                WeaponVisual("NEWBIE_STAFF_01", "staff", "Assets/Arena/Resources/CombatAnimationSets/StaffPackAuthored.prefab"),
                 NHanceWeaponVisual("NEWBIE_STAFF_02", "staff", WeaponPath("Staff", "Staff_Newbie_02_Cl.prefab")),
                 NHanceWeaponVisual("NEWBIE_STAFF_03", "staff", WeaponPath("Staff", "Staff_Newbie_03_Cl.prefab")),
                 NHanceWeaponVisual("NEWBIE_STAFF_04", "staff", WeaponPath("Staff", "Staff_Newbie_04_Cl.prefab")),
@@ -539,6 +538,14 @@ namespace Arena.EditorTools
                         ParseWeaponPlacementProfile(
                             variant.quiver_placement_profile_id,
                             $"{family.item_def_id}/{variant.color_id}/quiver")));
+                    break;
+                case "STAFF":
+                    entries.Add(WeaponVisual(
+                        family.item_def_id,
+                        variant.color_id,
+                        "staff",
+                        variant.prefab_path,
+                        placementProfile));
                     break;
                 default:
                     throw new InvalidOperationException(

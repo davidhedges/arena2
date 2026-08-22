@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: ef20fd2b18e30be43af60ad3d56be980
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/05_Jump/02_Jump_Combat/02_Jump_Combat_F_0/Jump_Combat_to_Run_F_0.anim
+  uploadId: 665052

@@ -168,6 +168,24 @@
       ]
     },
     {
+      "item_def_id": "NEWBIE_STAFF_01",
+      "display_name": "Newbie Staff I",
+      "icon_id": "newbie_staff_01",
+      "weapon_kind": "STAFF",
+      "placement_profile_id": "LEGACY_ANIMATION_BINDING",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ARCANA",
+      "sort_order": 0,
+      "default_color_id": "DEFAULT",
+      "variants": [
+        {
+          "color_id": "DEFAULT",
+          "prefab_path": "Assets/Arena/Resources/CombatAnimationSets/StaffPackAuthored.prefab"
+        }
+      ]
+    },
+    {
       "item_def_id": "NH_DAGGER_1H_FANTASY_01",
       "display_name": "Fantasy I Daggers",
       "icon_id": "training_dagger_pair",

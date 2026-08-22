@@ -803,9 +803,25 @@ namespace Arena.UI
         private List<HubWeaponSnapshot> WeaponsForSlot(string slotId)
         {
             return _weapons.Where(row =>
-                    WireIdentifier.Normalize(row.PrimaryDisciplineId) == _primaryDisciplineId
+                    WeaponSupportsPrimaryDiscipline(row)
                     && WireIdentifier.Normalize(row.EquipSlot) == slotId)
                 .ToList();
+        }
+
+        private bool WeaponSupportsPrimaryDiscipline(HubWeaponSnapshot weapon)
+        {
+            if (WireIdentifier.Normalize(weapon.PrimaryDisciplineId) == _primaryDisciplineId)
+                return true;
+
+            return PrimaryDisciplineUsesStaff()
+                && WireIdentifier.Normalize(weapon.WeaponKind) == "STAFF";
+        }
+
+        private bool PrimaryDisciplineUsesStaff()
+        {
+            HubDisciplineSnapshot? discipline = _hubNetwork?.Disciplines.FirstOrDefault(row =>
+                WireIdentifier.Normalize(row.Id) == _primaryDisciplineId);
+            return WireIdentifier.Normalize(discipline?.CombatProfileId) == "STAFF";
         }
 
         private HubWeaponSnapshot? FindWeapon(string? itemDefId)
@@ -930,7 +946,7 @@ namespace Arena.UI
             SetText(
                 _weaponDetailsFlavor,
                 main == null
-                    ? "Choose Subtlety, War, Zeal, or Precision as your primary discipline to unlock its arsenal."
+                    ? "Choose a primary discipline with an authored weapon profile to unlock its arsenal."
                     : $"A curated {FriendlyWeaponKind(main.WeaponKind).ToLowerInvariant()} loadout with complete Arena animation and attachment support.");
             SetText(_weaponDetailsDiscipline, $"{DisciplineDisplayName().ToUpperInvariant()} PRIMARY");
             SetText(_weaponDetailsKind, main == null ? "NO WEAPON TYPE" : FriendlyWeaponKind(main.WeaponKind).ToUpperInvariant());
@@ -1027,6 +1043,9 @@ namespace Arena.UI
 
         private string RuleForPrimaryDiscipline()
         {
+            if (PrimaryDisciplineUsesStaff())
+                return $"{DisciplineDisplayName()} equips staves.";
+
             return _primaryDisciplineId switch
             {
                 "SUBTLETY" => "Subtlety equips paired daggers.",
@@ -1059,6 +1078,7 @@ namespace Arena.UI
                 "ONE_HAND_FIST" => "Fist Weapon",
                 "SHIELD" => "Shield",
                 "BOW" => "Bow",
+                "STAFF" => "Staff",
                 string value => value.Replace('_', ' '),
             };
         }

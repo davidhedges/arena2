@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: fecc5fa0c73b000409e8d5475f37a680
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/01_Idle/04_Offset_Idle_Combat/Idle_Combat_0.anim
+  uploadId: 665052

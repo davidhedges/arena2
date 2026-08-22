@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 64aa8b56a65ee71408272b5811a0e939
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/02_Attack/10_Ultimate_Attack/02_Ultimate_Attack_Air/Ultimate_Attack_Air_Start.anim
+  uploadId: 665052

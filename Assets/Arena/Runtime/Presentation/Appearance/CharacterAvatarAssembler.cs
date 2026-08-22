@@ -369,6 +369,9 @@ namespace Arena.Presentation.Appearance
             Transform? nhanceQuiver = ResolveSocket(nhAvatar, BoneType.Quiver);
             Transform? nhanceHipR = ResolveSocket(nhAvatar, BoneType.HipR);
             Transform? nhanceHipL = ResolveSocket(nhAvatar, BoneType.HipL);
+            bool hadNhanceWeaponR = nhanceWeaponR != null;
+            Vector3 nhanceWeaponRWorldPosition = nhanceWeaponR != null ? nhanceWeaponR.position : Vector3.zero;
+            Quaternion nhanceWeaponRWorldRotation = nhanceWeaponR != null ? nhanceWeaponR.rotation : Quaternion.identity;
 
             Transform? mainHand = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
                 mainHandParent,
@@ -389,7 +392,6 @@ namespace Arena.Presentation.Appearance
             Transform? archerQuiverStowed = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
                 backParent,
                 ArenaWeaponMountCalibration.ArcherQuiverStowed);
-            Transform? staffStowed = ResolveSocket(nhAvatar, BoneType.Back2HL) ?? mainBack;
             Transform? greatswordAnimatedSocket = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
                 mainHandParent,
                 ArenaWeaponMountCalibration.GreatswordAnimatedHandSocket);
@@ -403,6 +405,44 @@ namespace Arena.Presentation.Appearance
             Transform? greatswordStowed = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
                 backParent,
                 ArenaWeaponMountCalibration.GreatswordStowed);
+            Transform? staffStowedReference = nhanceBack2HL ?? mainBack;
+            Vector3 staffStowedReferencePosition = staffStowedReference != null ? staffStowedReference.position : Vector3.zero;
+            Quaternion staffStowedReferenceRotation = staffStowedReference != null ? staffStowedReference.rotation : Quaternion.identity;
+            Transform? mageStaffAnimatedHandSocket = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
+                mainHandParent,
+                ArenaWeaponMountCalibration.MageStaffAnimatedHandSocket);
+            Transform? staffHand = AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
+                mageStaffAnimatedHandSocket,
+                mageStaffAnimatedHandSocket,
+                "Arena_Staff_hand");
+            Transform? restoredNhanceWeaponR = hadNhanceWeaponR
+                ? AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
+                    mageStaffAnimatedHandSocket,
+                    nhanceWeaponRWorldPosition,
+                    nhanceWeaponRWorldRotation,
+                    "Arena_NHance_weapon_r")
+                : mageStaffAnimatedHandSocket;
+            Transform? nhanceStaffHand = hadNhanceWeaponR
+                ? AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
+                    mageStaffAnimatedHandSocket,
+                    nhanceWeaponRWorldPosition,
+                    nhanceWeaponRWorldRotation,
+                    "Arena_NHance_staff_hand")
+                : mageStaffAnimatedHandSocket;
+            Transform? mageStaffAnimatedStowedSocket = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
+                backParent,
+                ArenaWeaponMountCalibration.MageStaffAnimatedStowedSocket);
+            Transform? staffStowed = AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
+                mageStaffAnimatedStowedSocket,
+                mageStaffAnimatedStowedSocket,
+                "Arena_Staff_stowed");
+            Transform? nhanceStaffStowed = staffStowedReference != null
+                ? AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
+                    mageStaffAnimatedStowedSocket,
+                    staffStowedReferencePosition,
+                    staffStowedReferenceRotation,
+                    "Arena_NHance_staff_stowed")
+                : mageStaffAnimatedStowedSocket;
             Transform? daggerMainStowed = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
                 pelvisParent,
                 ArenaWeaponMountCalibration.DaggerMainStowed);
@@ -413,6 +453,7 @@ namespace Arena.Presentation.Appearance
             SetMount(mounts, AvatarWeaponMounts.MainHandMountId, mainHand);
             SetMount(mounts, AvatarWeaponMounts.GreatswordHandMountId, greatswordHand ?? mainHand);
             SetMount(mounts, AvatarWeaponMounts.GreatswordStowedMountId, greatswordStowed);
+            SetMount(mounts, AvatarWeaponMounts.StaffHandMountId, staffHand);
             SetMount(mounts, AvatarWeaponMounts.OffHandMountId, offHand);
             SetMount(mounts, AvatarWeaponMounts.MainBackMountId, mainBack);
             SetMount(mounts, AvatarWeaponMounts.MainStowedMountId, mainBack);
@@ -429,7 +470,7 @@ namespace Arena.Presentation.Appearance
             SetMount(mounts, AvatarWeaponMounts.DaggerMainStowedMountId, daggerMainStowed);
             SetMount(mounts, AvatarWeaponMounts.DaggerOffStowedMountId, daggerOffStowed);
 
-            SetMount(mounts, AvatarWeaponMounts.NHanceWeaponRMountId, nhanceWeaponR);
+            SetMount(mounts, AvatarWeaponMounts.NHanceWeaponRMountId, restoredNhanceWeaponR);
             SetMount(mounts, AvatarWeaponMounts.NHanceWeaponLMountId, nhanceWeaponL);
             SetMount(mounts, AvatarWeaponMounts.NHanceShieldMountId, nhanceShield);
             SetMount(mounts, AvatarWeaponMounts.NHanceBackLMountId, nhanceBackL);
@@ -440,6 +481,8 @@ namespace Arena.Presentation.Appearance
             SetMount(mounts, AvatarWeaponMounts.NHanceHipRMountId, nhanceHipR);
             SetMount(mounts, AvatarWeaponMounts.NHanceHipLMountId, nhanceHipL);
             SetMount(mounts, AvatarWeaponMounts.NHanceGreatswordHandMountId, nhanceGreatswordHand);
+            SetMount(mounts, AvatarWeaponMounts.NHanceStaffHandMountId, nhanceStaffHand);
+            SetMount(mounts, AvatarWeaponMounts.NHanceStaffStowedMountId, nhanceStaffStowed);
         }
 
         private static Transform? ResolveSocket(NHAvatar avatar, BoneType boneType)

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 0f200ed51b8bba843bf0b93f585b02bb
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/01_Idle/03_Offset_Idle/Idle_Up_0.anim
+  uploadId: 665052

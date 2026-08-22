@@ -76,6 +76,22 @@ namespace Arena.Presentation
             Vector3.zero,
             Quaternion.identity);
 
+        // Internal compatibility sockets for MageAnimationPack clips. The pack
+        // animates these exact child paths for hand-to-holder weapon handoffs.
+        // Public staff mount ids live on children so other weapon families keep
+        // their own reference-pose calibration.
+        public static readonly ArenaWeaponMountCalibrationEntry MageStaffAnimatedHandSocket = new(
+            "mage_staff_animation_socket",
+            "Weapon_R",
+            new Vector3(0.10083734f, -0.061607134f, -0.00033453907f),
+            new Quaternion(0.5722083f, 0.5744729f, 0.41228732f, 0.41542476f));
+
+        public static readonly ArenaWeaponMountCalibrationEntry MageStaffAnimatedStowedSocket = new(
+            "mage_staff_stowed_animation_socket",
+            "Weapon_Holder",
+            new Vector3(-0.07540999f, 0.17992947f, -0.020841274f),
+            new Quaternion(0.7472076f, -0.6275675f, 0.15502925f, -0.1542911f));
+
         // Recovered from GreatSwordAnimationPack/Prefabs/9CG_Great_Sword.prefab.
         // The pack's sheath/draw animations are authored against a `sword_holder`
         // bone parented to spine_03 with these exact local pose values.
@@ -149,6 +165,7 @@ namespace Arena.Presentation
         public const string OffSheathMountId = "off_sheath";
         public const string GreatswordHandMountId = "greatsword_hand";
         public const string GreatswordStowedMountId = "greatsword_stowed";
+        public const string StaffHandMountId = "staff_hand";
         public const string StaffStowedMountId = "staff_stowed";
         public const string ArcherBowHandMountId = "archer_bow_hand";
         public const string ArcherBowStowedMountId = "archer_bow_stowed";
@@ -170,6 +187,8 @@ namespace Arena.Presentation
         public const string NHanceHipRMountId = "nhance_hip_r";
         public const string NHanceHipLMountId = "nhance_hip_l";
         public const string NHanceGreatswordHandMountId = "nhance_greatsword_hand";
+        public const string NHanceStaffHandMountId = "nhance_staff_hand";
+        public const string NHanceStaffStowedMountId = "nhance_staff_stowed";
 
         public const string LegacyMainHandMountId = "main_hand";
         public const string LegacyOffHandMountId = "off_hand";
@@ -190,6 +209,7 @@ namespace Arena.Presentation
             [LegacyOffStowedMountId] = new[] { OffStowedMountId, LegacyOffStowedMountId, OffSheathMountId },
             [GreatswordHandMountId] = new[] { GreatswordHandMountId, MainHandMountId, LegacyMainHandMountId },
             [GreatswordStowedMountId] = new[] { GreatswordStowedMountId, MainStowedMountId, MainSheathMountId, LegacyMainStowedMountId },
+            [StaffHandMountId] = new[] { StaffHandMountId, MainHandMountId, LegacyMainHandMountId },
             [StaffStowedMountId] = new[] { StaffStowedMountId, MainBackMountId, MainStowedMountId, MainSheathMountId, LegacyMainStowedMountId },
             [ArcherBowHandMountId] = new[] { ArcherBowHandMountId },
             [ArcherBowStowedMountId] = new[] { ArcherBowStowedMountId },
@@ -197,6 +217,8 @@ namespace Arena.Presentation
             [ArcherQuiverBackMountId] = new[] { ArcherQuiverStowedMountId, ArcherQuiverBackMountId },
             [DaggerMainStowedMountId] = new[] { DaggerMainStowedMountId },
             [DaggerOffStowedMountId] = new[] { DaggerOffStowedMountId },
+            [NHanceStaffHandMountId] = new[] { NHanceStaffHandMountId, NHanceWeaponRMountId, StaffHandMountId },
+            [NHanceStaffStowedMountId] = new[] { NHanceStaffStowedMountId, NHanceBack2HLMountId, StaffStowedMountId },
         };
 
         [SerializeField] private List<AvatarWeaponMountDefinition> _mounts = new();
@@ -278,12 +300,28 @@ namespace Arena.Presentation
             if (animatedParent == null || referenceSocket == null || string.IsNullOrWhiteSpace(markerName))
                 return null;
 
+            return CreateOrUpdateWorldAlignedMountChild(
+                animatedParent,
+                referenceSocket.position,
+                referenceSocket.rotation,
+                markerName);
+        }
+
+        public static Transform? CreateOrUpdateWorldAlignedMountChild(
+            Transform? animatedParent,
+            Vector3 referenceWorldPosition,
+            Quaternion referenceWorldRotation,
+            string markerName)
+        {
+            if (animatedParent == null || string.IsNullOrWhiteSpace(markerName))
+                return null;
+
             Transform marker = animatedParent.Find(markerName);
             if (marker == null)
                 marker = new GameObject(markerName).transform;
 
             marker.SetParent(animatedParent, false);
-            marker.SetPositionAndRotation(referenceSocket.position, referenceSocket.rotation);
+            marker.SetPositionAndRotation(referenceWorldPosition, referenceWorldRotation);
             marker.localScale = Vector3.one;
             return marker;
         }

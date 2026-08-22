@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 17c409e40d6663d449e23dc8d0be972b
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/04_Run/03_Run_to_Run_Combat/Run_to_Run_Combat.anim
+  uploadId: 665052

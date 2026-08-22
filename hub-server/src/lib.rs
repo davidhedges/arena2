@@ -67,6 +67,12 @@ const DISCIPLINE_PRECISION: &str = "PRECISION";
 const DISCIPLINE_BLIGHT: &str = "BLIGHT";
 const DISCIPLINE_MORTALITY: &str = "MORTALITY";
 const DISCIPLINE_RUIN: &str = "RUIN";
+#[cfg(test)]
+const DISCIPLINE_DIVINITY: &str = "DIVINITY";
+const DISCIPLINE_ARCANA: &str = "ARCANA";
+#[cfg(test)]
+const DISCIPLINE_PRIMAL: &str = "PRIMAL";
+const COMBAT_PROFILE_STAFF: &str = "STAFF";
 
 const DEFAULT_HUB_PRIMARY_DISCIPLINE: &str = DISCIPLINE_WAR;
 const DEFAULT_HUB_SECONDARY_DISCIPLINE_1: &str = DISCIPLINE_SUBTLETY;
@@ -86,6 +92,7 @@ const WEAPON_KIND_POLEARM: &str = "POLEARM";
 const WEAPON_KIND_SHIELD: &str = "SHIELD";
 const WEAPON_KIND_DAGGER_PAIR: &str = "DAGGER_PAIR";
 const WEAPON_KIND_BOW: &str = "BOW";
+const WEAPON_KIND_STAFF: &str = "STAFF";
 const HAND_REQUIREMENT_ONE_HAND: &str = "ONE_HAND";
 const HAND_REQUIREMENT_TWO_HAND: &str = "TWO_HAND";
 const HAND_REQUIREMENT_OFF_HAND: &str = "OFF_HAND";
@@ -1578,6 +1585,19 @@ fn parse_weapon_appearance_catalog() -> Result<HubWeaponAppearanceCatalogFile, S
     Ok(catalog)
 }
 
+fn discipline_uses_staff(discipline_id: &str) -> bool {
+    let normalized = normalize_authored_id(discipline_id);
+    serde_json::from_str::<HubProgressionCatalogFile>(PROGRESSION_CATALOG_JSON)
+        .map(|catalog| {
+            catalog.combat_disciplines.iter().any(|discipline| {
+                normalize_authored_id(discipline.discipline_id.as_str()) == normalized
+                    && normalize_authored_id(discipline.combat_profile_id.as_str())
+                        == COMBAT_PROFILE_STAFF
+            })
+        })
+        .unwrap_or(false)
+}
+
 fn weapon_color_key(item_def_id: &str, color_id: &str) -> String {
     format!(
         "{}:{}",
@@ -1630,8 +1650,26 @@ fn weapon_spec_contract_is_valid(spec: &HubWeaponFamilyAuthoring) -> bool {
                 && normalize_authored_id(spec.hand_requirement.as_str())
                     == HAND_REQUIREMENT_TWO_HAND
         }
+        DISCIPLINE_ARCANA => {
+            normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND
+                && normalize_authored_id(spec.weapon_kind.as_str()) == WEAPON_KIND_STAFF
+                && normalize_authored_id(spec.hand_requirement.as_str())
+                    == HAND_REQUIREMENT_TWO_HAND
+        }
         _ => false,
     }
+}
+
+fn weapon_spec_supports_primary(
+    spec: &HubWeaponFamilyAuthoring,
+    primary_discipline_id: &str,
+    primary_uses_staff: bool,
+) -> bool {
+    let authored_primary = normalize_authored_id(spec.primary_discipline_id.as_str());
+    authored_primary == primary_discipline_id
+        || (primary_uses_staff
+            && authored_primary == DISCIPLINE_ARCANA
+            && normalize_authored_id(spec.weapon_kind.as_str()) == WEAPON_KIND_STAFF)
 }
 
 fn weapon_spec(item_def_id: &str) -> Option<HubWeaponFamilyAuthoring> {
@@ -1661,13 +1699,14 @@ fn validated_color_id(spec: &HubWeaponFamilyAuthoring, color_id: &str) -> Result
 
 fn default_weapon_loadout(primary_discipline_id: &str) -> (String, String, String, String) {
     let primary = normalize_authored_id(primary_discipline_id);
+    let primary_uses_staff = discipline_uses_staff(primary.as_str());
     let catalog = parse_weapon_appearance_catalog().ok();
     let main_hand = catalog
         .as_ref()
         .into_iter()
         .flat_map(|catalog| catalog.families.iter())
         .find(|spec| {
-            normalize_authored_id(spec.primary_discipline_id.as_str()) == primary
+            weapon_spec_supports_primary(spec, primary.as_str(), primary_uses_staff)
                 && normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND
                 && weapon_spec_contract_is_valid(spec)
         });
@@ -1676,7 +1715,7 @@ fn default_weapon_loadout(primary_discipline_id: &str) -> (String, String, Strin
         .into_iter()
         .flat_map(|catalog| catalog.families.iter())
         .find(|spec| {
-            normalize_authored_id(spec.primary_discipline_id.as_str()) == primary
+            weapon_spec_supports_primary(spec, primary.as_str(), primary_uses_staff)
                 && normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_OFF_HAND
                 && weapon_spec_contract_is_valid(spec)
         });
@@ -1704,12 +1743,15 @@ fn validate_hub_weapon_loadout(
     off_hand_color_id: &str,
 ) -> Result<(String, String, String, String), String> {
     let primary = normalize_authored_id(primary_discipline_id);
+    let primary_uses_staff = discipline_uses_staff(primary.as_str());
     let main_hand = normalize_authored_id(main_hand_item_def_id);
     let off_hand = normalize_authored_id(off_hand_item_def_id);
-    if !matches!(
-        primary.as_str(),
-        DISCIPLINE_SUBTLETY | DISCIPLINE_WAR | DISCIPLINE_ZEAL | DISCIPLINE_PRECISION
-    ) {
+    if !primary_uses_staff
+        && !matches!(
+            primary.as_str(),
+            DISCIPLINE_SUBTLETY | DISCIPLINE_WAR | DISCIPLINE_ZEAL | DISCIPLINE_PRECISION
+        )
+    {
         return Err(format!(
             "primary discipline '{primary}' does not support a weapon loadout"
         ));
@@ -1717,7 +1759,7 @@ fn validate_hub_weapon_loadout(
 
     let main_spec = weapon_spec(main_hand.as_str())
         .ok_or_else(|| format!("unknown selectable weapon '{main_hand}'"))?;
-    if normalize_authored_id(main_spec.primary_discipline_id.as_str()) != primary
+    if !weapon_spec_supports_primary(&main_spec, primary.as_str(), primary_uses_staff)
         || normalize_authored_id(main_spec.equip_slot.as_str()) != EQUIP_SLOT_MAIN_HAND
         || !weapon_spec_contract_is_valid(&main_spec)
     {
@@ -2563,14 +2605,14 @@ mod tests {
             .iter()
             .map(|spec| spec.item_def_id.as_str())
             .collect();
-        assert_eq!(ids.len(), 126);
+        assert_eq!(ids.len(), 127);
         assert_eq!(
             catalog
                 .families
                 .iter()
                 .map(|family| family.variants.len())
                 .sum::<usize>(),
-            387
+            388
         );
         assert!(ids.contains("NH_FIST_1H_DOUBLECLAW"));
         assert!(ids.contains("NH_FIST_1H_METALPUNCH"));
@@ -2580,6 +2622,7 @@ mod tests {
             "TRAINING_ONE_HAND_SWORD",
             "TRAINING_SHIELD",
             "TRAINING_BOW",
+            "NEWBIE_STAFF_01",
             "NEWBIE_DAGGER_PAIR_01",
             "NEWBIE_TWO_HAND_SWORD_01",
             "NEWBIE_ONE_HAND_SWORD_01",
@@ -2595,6 +2638,12 @@ mod tests {
             DISCIPLINE_WAR,
             DISCIPLINE_ZEAL,
             DISCIPLINE_PRECISION,
+            DISCIPLINE_BLIGHT,
+            DISCIPLINE_MORTALITY,
+            DISCIPLINE_RUIN,
+            DISCIPLINE_DIVINITY,
+            DISCIPLINE_ARCANA,
+            DISCIPLINE_PRIMAL,
         ] {
             let (main_hand, main_color, off_hand, off_color) = default_weapon_loadout(primary);
             assert!(validate_hub_weapon_loadout(
@@ -2605,6 +2654,25 @@ mod tests {
                 &off_color
             )
             .is_ok());
+        }
+
+        for primary in [
+            DISCIPLINE_BLIGHT,
+            DISCIPLINE_MORTALITY,
+            DISCIPLINE_RUIN,
+            DISCIPLINE_DIVINITY,
+            DISCIPLINE_ARCANA,
+            DISCIPLINE_PRIMAL,
+        ] {
+            assert_eq!(
+                default_weapon_loadout(primary),
+                (
+                    "NEWBIE_STAFF_01".to_string(),
+                    "DEFAULT".to_string(),
+                    String::new(),
+                    String::new(),
+                )
+            );
         }
 
         assert!(
@@ -2637,6 +2705,21 @@ mod tests {
             .combat_disciplines
             .iter()
             .any(|discipline| discipline.discipline_id == DISCIPLINE_MORTALITY));
+        for discipline_id in [
+            DISCIPLINE_BLIGHT,
+            DISCIPLINE_MORTALITY,
+            DISCIPLINE_RUIN,
+            DISCIPLINE_DIVINITY,
+            DISCIPLINE_ARCANA,
+            DISCIPLINE_PRIMAL,
+        ] {
+            let discipline = authored
+                .combat_disciplines
+                .iter()
+                .find(|discipline| discipline.discipline_id == discipline_id)
+                .expect("magical discipline must be authored");
+            assert_eq!(discipline.combat_profile_id, COMBAT_PROFILE_STAFF);
+        }
         assert!(authored.abilities.iter().any(|ability| {
             ability.ability_id == "SPELL_NECROTIC_AURA"
                 && ability.discipline_id == DISCIPLINE_MORTALITY

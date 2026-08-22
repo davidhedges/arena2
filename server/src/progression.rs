@@ -80,6 +80,7 @@ const FALLBACK_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 1500;
 const MAX_DEFAULT_GLOBAL_COOLDOWN_MS: u64 = 60_000;
 pub(crate) const COMBAT_PROFILE_ARCHER_BOW: &str = "ARCHER_BOW";
 pub(crate) const COMBAT_PROFILE_DAGGERS: &str = "DAGGERS";
+pub(crate) const COMBAT_PROFILE_STAFF: &str = "STAFF";
 pub(crate) const COMBAT_PROFILE_SWORD_AND_SHIELD: &str = "SWORD_AND_SHIELD";
 pub(crate) const COMBAT_PROFILE_TWO_HANDED_SWORD: &str = "TWO_HANDED_SWORD";
 pub(crate) const DISCIPLINE_SUBTLETY: &str = "SUBTLETY";
@@ -92,6 +93,19 @@ pub(crate) const DISCIPLINE_RUIN: &str = "RUIN";
 pub(crate) const DISCIPLINE_DIVINITY: &str = "DIVINITY";
 pub(crate) const DISCIPLINE_ARCANA: &str = "ARCANA";
 pub(crate) const DISCIPLINE_PRIMAL: &str = "PRIMAL";
+
+pub(crate) fn discipline_uses_staff(discipline_id: &str) -> bool {
+    matches!(
+        normalize_identifier(discipline_id).as_str(),
+        DISCIPLINE_BLIGHT
+            | DISCIPLINE_MORTALITY
+            | DISCIPLINE_RUIN
+            | DISCIPLINE_DIVINITY
+            | DISCIPLINE_ARCANA
+            | DISCIPLINE_PRIMAL
+    )
+}
+
 const DISCIPLINE_KIND_WEAPON: &str = "WEAPON";
 const DISCIPLINE_KIND_SPELL_SCHOOL: &str = "SPELL_SCHOOL";
 pub(crate) const RESOURCE_KIND_STAMINA: &str = "STAMINA";
@@ -2431,7 +2445,7 @@ fn discipline_id_for_combat_profile(combat_profile_id: &str) -> Option<&'static 
         COMBAT_PROFILE_TWO_HANDED_SWORD => Some(DISCIPLINE_WAR),
         COMBAT_PROFILE_SWORD_AND_SHIELD => Some(DISCIPLINE_ZEAL),
         COMBAT_PROFILE_ARCHER_BOW => Some(DISCIPLINE_PRECISION),
-        "STAFF" => Some(DISCIPLINE_ARCANA),
+        COMBAT_PROFILE_STAFF => Some(DISCIPLINE_ARCANA),
         _ => None,
     }
 }
@@ -5465,9 +5479,10 @@ fn validate_combat_discipline_catalog() {
             DISCIPLINE_WAR => (DISCIPLINE_KIND_WEAPON, COMBAT_PROFILE_TWO_HANDED_SWORD),
             DISCIPLINE_ZEAL => (DISCIPLINE_KIND_WEAPON, COMBAT_PROFILE_SWORD_AND_SHIELD),
             DISCIPLINE_PRECISION => (DISCIPLINE_KIND_WEAPON, COMBAT_PROFILE_ARCHER_BOW),
-            DISCIPLINE_ARCANA => (DISCIPLINE_KIND_SPELL_SCHOOL, "STAFF"),
             DISCIPLINE_BLIGHT | DISCIPLINE_MORTALITY | DISCIPLINE_RUIN | DISCIPLINE_DIVINITY
-            | DISCIPLINE_PRIMAL => (DISCIPLINE_KIND_SPELL_SCHOOL, ""),
+            | DISCIPLINE_ARCANA | DISCIPLINE_PRIMAL => {
+                (DISCIPLINE_KIND_SPELL_SCHOOL, COMBAT_PROFILE_STAFF)
+            }
             _ => panic!("unsupported combat discipline '{}'", discipline_id),
         };
         assert_eq!(
@@ -5492,11 +5507,19 @@ fn validate_combat_discipline_catalog() {
                 discipline_id,
                 discipline.combat_profile_id
             );
-            assert!(
-                profile_ids.insert(combat_profile_id.clone()),
-                "combat profile '{}' is assigned to multiple disciplines",
-                combat_profile_id
-            );
+            if combat_profile_id == COMBAT_PROFILE_STAFF {
+                assert_eq!(
+                    discipline_kind, DISCIPLINE_KIND_SPELL_SCHOOL,
+                    "the shared STAFF profile is reserved for spell-school disciplines"
+                );
+                profile_ids.insert(combat_profile_id.clone());
+            } else {
+                assert!(
+                    profile_ids.insert(combat_profile_id.clone()),
+                    "combat profile '{}' is assigned to multiple disciplines",
+                    combat_profile_id
+                );
+            }
         }
         if discipline_kind == DISCIPLINE_KIND_WEAPON {
             assert!(
@@ -7971,7 +7994,8 @@ mod tests {
         AUTO_ATTACK_MOVEMENT_ALLOW_MOVING, AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
         BLIGHT_TOXIC_WEAPON_ABILITY_ID,
         COMBAT_MODE_FULL_DRAW, COMBAT_MODE_READY, COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED,
-        COMBAT_PROFILE_ARCHER_BOW, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_SWORD_AND_SHIELD,
+        COMBAT_PROFILE_ARCHER_BOW, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_STAFF,
+        COMBAT_PROFILE_SWORD_AND_SHIELD,
         COMBAT_PROFILE_TWO_HANDED_SWORD, DAGGER_SHROUD_ABILITY_ID, DISCIPLINE_BLIGHT,
         DISCIPLINE_DIVINITY, DISCIPLINE_MORTALITY, DISCIPLINE_PRECISION, DISCIPLINE_PRIMAL,
         DISCIPLINE_RUIN, DISCIPLINE_WAR, GLOBAL_ACTION_BAR_PROFILE, PRIMAL_ADAPTATION_ABILITY_ID,
@@ -8163,7 +8187,7 @@ mod tests {
             }
 
             let direct_2h_binding = "  - motion: 6\n    familyBaseName: MagicAttackDirect2H02";
-            if profile_id == "DAGGERS" || profile_id == "STAFF" {
+            if profile_id == COMBAT_PROFILE_DAGGERS || profile_id == COMBAT_PROFILE_STAFF {
                 assert!(
                     asset_contents.contains(direct_2h_binding),
                     "{profile_id} must bind Direct2H to MagicAttackDirect2H02"

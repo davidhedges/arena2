@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 43b9fc5fd6ff16f49aebb4a83f7bc858
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/07_Roll/03_Roll_to_Run/Roll_to_Run_B_180.anim
+  uploadId: 665052

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 955689e76fe6b5f499d10010702ff674
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/02_Attack/07_Skill_Attack/Skill_01_01_Loop.anim
+  uploadId: 665052

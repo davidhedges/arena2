@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 03abb8300c434c14fb831d84f58bf288
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/03_Walk/02_Walk_Combat/10_Walk_Combat_B_R_90/Walk_Combat_B_R_90_Stop.anim
+  uploadId: 665052

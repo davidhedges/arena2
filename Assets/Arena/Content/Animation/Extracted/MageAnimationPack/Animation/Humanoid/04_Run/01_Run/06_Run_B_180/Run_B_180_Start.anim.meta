@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 38ce93c8f0dcf2647bd1613e8469e0c0
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/04_Run/01_Run/06_Run_B_180/Run_B_180_Start.anim
+  uploadId: 665052

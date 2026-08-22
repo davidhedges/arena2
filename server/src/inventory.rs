@@ -13,9 +13,9 @@ use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::player_physics::player_physics as _;
 use crate::player_state::player_state as _;
 use crate::progression::{
-    default_global_cooldown_ms, sync_progression_for_equipment_change, AllocatedStatTotals,
-    COMBAT_PROFILE_ARCHER_BOW, DISCIPLINE_ARCANA, DISCIPLINE_PRECISION, DISCIPLINE_SUBTLETY,
-    DISCIPLINE_WAR, DISCIPLINE_ZEAL,
+    default_global_cooldown_ms, discipline_uses_staff, sync_progression_for_equipment_change,
+    AllocatedStatTotals, COMBAT_PROFILE_ARCHER_BOW, DISCIPLINE_ARCANA, DISCIPLINE_PRECISION,
+    DISCIPLINE_SUBTLETY, DISCIPLINE_WAR, DISCIPLINE_ZEAL,
 };
 use crate::relations::TargetAudience;
 use crate::resources::grant_primary_resource_amount_for_kind;
@@ -2740,6 +2740,7 @@ fn combat_profile_for_weapon_family(family: &WeaponFamilyAuthoring) -> &'static 
         DISCIPLINE_WAR => COMBAT_PROFILE_TWO_HANDED_SWORD,
         DISCIPLINE_ZEAL => DEFAULT_COMBAT_PROFILE,
         DISCIPLINE_PRECISION => COMBAT_PROFILE_ARCHER_BOW,
+        DISCIPLINE_ARCANA => COMBAT_PROFILE_STAFF,
         _ => "",
     }
 }
@@ -4846,6 +4847,11 @@ fn weapon_definition_pair_is_allowed_for_discipline(
                 && main_hand.hand_requirement == HAND_REQUIREMENT_TWO_HAND
                 && off_hand.is_none()
         }
+        _ if discipline_uses_staff(discipline_id) => {
+            main_hand.weapon_kind == WEAPON_KIND_STAFF
+                && main_hand.hand_requirement == HAND_REQUIREMENT_TWO_HAND
+                && off_hand.is_none()
+        }
         _ => false,
     }
 }
@@ -4886,23 +4892,25 @@ fn ensure_hub_weapon_item_instance(
 }
 
 fn starter_weapon_definition_for_discipline(discipline_id: &str) -> Option<&'static str> {
-    match normalize_id(discipline_id).as_str() {
+    let discipline_id = normalize_id(discipline_id);
+    match discipline_id.as_str() {
         DISCIPLINE_SUBTLETY => Some("TRAINING_DAGGER_PAIR"),
         DISCIPLINE_WAR => Some("TRAINING_TWO_HAND_SWORD"),
         DISCIPLINE_ZEAL => Some("TRAINING_SWORD_AND_SHIELD"),
         DISCIPLINE_PRECISION => Some("TRAINING_BOW"),
-        DISCIPLINE_ARCANA => Some("NEWBIE_STAFF_01"),
+        _ if discipline_uses_staff(discipline_id.as_str()) => Some("NEWBIE_STAFF_01"),
         _ => None,
     }
 }
 
 fn combat_profile_for_discipline(discipline_id: &str) -> &'static str {
-    match normalize_id(discipline_id).as_str() {
+    let discipline_id = normalize_id(discipline_id);
+    match discipline_id.as_str() {
         DISCIPLINE_SUBTLETY => COMBAT_PROFILE_DAGGERS,
         DISCIPLINE_WAR => COMBAT_PROFILE_TWO_HANDED_SWORD,
         DISCIPLINE_ZEAL => DEFAULT_COMBAT_PROFILE,
         DISCIPLINE_PRECISION => COMBAT_PROFILE_ARCHER_BOW,
-        DISCIPLINE_ARCANA => COMBAT_PROFILE_STAFF,
+        _ if discipline_uses_staff(discipline_id.as_str()) => COMBAT_PROFILE_STAFF,
         _ => "",
     }
 }
@@ -6802,14 +6810,14 @@ mod tests {
     #[test]
     fn shared_weapon_appearance_catalog_groups_models_and_colors() {
         let catalog = parse_weapon_appearance_catalog().expect("shared weapon appearance catalog");
-        assert_eq!(catalog.families.len(), 126);
+        assert_eq!(catalog.families.len(), 127);
         assert_eq!(
             catalog
                 .families
                 .iter()
                 .map(|family| family.variants.len())
                 .sum::<usize>(),
-            387
+            388
         );
         let family_ids: std::collections::HashSet<_> = catalog
             .families
@@ -6822,6 +6830,7 @@ mod tests {
             "TRAINING_ONE_HAND_SWORD",
             "TRAINING_SHIELD",
             "TRAINING_BOW",
+            "NEWBIE_STAFF_01",
             "NEWBIE_DAGGER_PAIR_01",
             "NEWBIE_TWO_HAND_SWORD_01",
             "NEWBIE_ONE_HAND_SWORD_01",
@@ -7098,6 +7107,25 @@ mod tests {
             &bow,
             None
         ));
+        for discipline_id in [
+            "BLIGHT",
+            "MORTALITY",
+            "RUIN",
+            "DIVINITY",
+            DISCIPLINE_ARCANA,
+            "PRIMAL",
+        ] {
+            assert!(weapon_definition_pair_is_allowed_for_discipline(
+                discipline_id,
+                &staff,
+                None
+            ));
+            assert!(!weapon_definition_pair_is_allowed_for_discipline(
+                discipline_id,
+                &greatsword,
+                None
+            ));
+        }
     }
 
     #[test]
@@ -7183,7 +7211,12 @@ mod tests {
             (DISCIPLINE_WAR, "TRAINING_TWO_HAND_SWORD"),
             (DISCIPLINE_ZEAL, "TRAINING_SWORD_AND_SHIELD"),
             (DISCIPLINE_PRECISION, "TRAINING_BOW"),
+            ("BLIGHT", "NEWBIE_STAFF_01"),
+            ("MORTALITY", "NEWBIE_STAFF_01"),
+            ("RUIN", "NEWBIE_STAFF_01"),
+            ("DIVINITY", "NEWBIE_STAFF_01"),
             (DISCIPLINE_ARCANA, "NEWBIE_STAFF_01"),
+            ("PRIMAL", "NEWBIE_STAFF_01"),
         ];
 
         for (discipline_id, item_def_id) in expected {

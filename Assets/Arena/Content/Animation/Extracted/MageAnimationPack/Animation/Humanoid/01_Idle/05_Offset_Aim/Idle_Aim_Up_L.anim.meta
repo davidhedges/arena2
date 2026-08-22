@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: b61215894e41d45498e753b188d0cda5
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/01_Idle/05_Offset_Aim/Idle_Aim_Up_L.anim
+  uploadId: 665052

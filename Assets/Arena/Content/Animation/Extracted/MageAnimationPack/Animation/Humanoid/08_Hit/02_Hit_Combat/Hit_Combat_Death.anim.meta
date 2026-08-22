@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 193a6b3e3fb931746842e9841f0b029a
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/08_Hit/02_Hit_Combat/Hit_Combat_Death.anim
+  uploadId: 665052

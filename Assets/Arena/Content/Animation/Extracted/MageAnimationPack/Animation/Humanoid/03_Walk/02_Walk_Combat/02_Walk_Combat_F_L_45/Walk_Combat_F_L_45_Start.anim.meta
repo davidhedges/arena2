@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a11e8299ddd48554d8cdd95eabd01e8c
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/03_Walk/02_Walk_Combat/02_Walk_Combat_F_L_45/Walk_Combat_F_L_45_Start.anim
+  uploadId: 665052

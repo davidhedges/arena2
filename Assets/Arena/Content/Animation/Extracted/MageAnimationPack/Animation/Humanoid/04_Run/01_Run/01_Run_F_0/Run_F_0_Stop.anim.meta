@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 5f3a5cf9a028be240b904cdb421d0e1b
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/04_Run/01_Run/01_Run_F_0/Run_F_0_Stop.anim
+  uploadId: 665052

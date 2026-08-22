@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: cdcaf120cef664741b8acf60d548fab2
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/03_Walk/03_Walk_Block/02_Walk_BLock_F_L_45/Walk_Block_F_L_45_Stop.anim
+  uploadId: 665052

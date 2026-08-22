@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a3b53aa63d04bf645954af17dc9872cc
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/03_Walk/01_Walk/05_Walk_F_R_90/Walk_F_R_90_Start.anim
+  uploadId: 665052

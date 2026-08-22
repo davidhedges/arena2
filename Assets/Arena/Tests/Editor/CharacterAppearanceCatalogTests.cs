@@ -127,6 +127,7 @@ namespace Arena.Tests.Editor
             AssertWeaponPlacementProfile(visuals, "NEWBIE_BOW_01", "CL", "bow_drawn", 1);
             AssertWeaponPlacementProfile(visuals, "NEWBIE_BOW_01", "CL", "bow_stowed", 1);
             AssertWeaponPlacementProfile(visuals, "NEWBIE_BOW_01", "CL", "quiver", 0);
+            AssertWeaponPlacementProfile(visuals, "NEWBIE_STAFF_01", "DEFAULT", "staff", 0);
         }
 
         [Test]
@@ -160,8 +161,8 @@ namespace Arena.Tests.Editor
             AssertResolvedPlacement(tryResolve, nativeProfile, "dagger_off", false, "nhance_hip_l");
             AssertResolvedPlacement(tryResolve, nativeProfile, "greatsword", true, "nhance_greatsword_hand");
             AssertResolvedPlacement(tryResolve, nativeProfile, "greatsword", false, "nhance_back_2hl");
-            AssertResolvedPlacement(tryResolve, nativeProfile, "staff", true, "nhance_weapon_r");
-            AssertResolvedPlacement(tryResolve, nativeProfile, "staff", false, "nhance_back_2hl");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "staff", true, "nhance_staff_hand");
+            AssertResolvedPlacement(tryResolve, nativeProfile, "staff", false, "nhance_staff_stowed");
             AssertResolvedPlacement(tryResolve, nativeProfile, "bow_drawn", true, "nhance_weapon_l");
             AssertResolvedPlacement(tryResolve, nativeProfile, "bow_drawn", false, "nhance_weapon_l");
             AssertResolvedPlacement(tryResolve, nativeProfile, "bow_stowed", true, "nhance_back_bow");
@@ -317,6 +318,8 @@ namespace Arena.Tests.Editor
                 AssertMountExists(archerMounts, "nhance_hip_r");
                 AssertMountExists(archerMounts, "nhance_hip_l");
                 AssertMountExists(archerMounts, "nhance_greatsword_hand");
+                AssertMountExists(archerMounts, "nhance_staff_hand");
+                AssertMountExists(archerMounts, "nhance_staff_stowed");
 
                 Transform nativeWeaponR = ResolveMount(archerMounts, "nhance_weapon_r");
                 Transform greatswordCorrection = ResolveMount(archerMounts, "nhance_greatsword_hand");
@@ -473,6 +476,10 @@ namespace Arena.Tests.Editor
             MethodInfo tryGetMount = RequireMethod(mountsType, "TryGetMount");
             object?[] mountArgs = { "main_weapon_hand", null };
             Assert.That((bool)tryGetMount.Invoke(mounts, mountArgs)!, Is.True, "Assembled avatars must expose a main-hand weapon mount.");
+            AssertMountExists(mounts, "staff_hand");
+            AssertMountExists(mounts, "staff_stowed");
+            AssertMountExists(mounts, "nhance_staff_hand");
+            AssertMountExists(mounts, "nhance_staff_stowed");
         }
 
         private static ScriptableObject LoadRequiredAsset(string assetPath, string typeName)

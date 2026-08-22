@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: ce2113968e7cb30489dbeb83aff9e489
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+AssetOrigin:
+  serializedVersion: 1
+  productId: 283730
+  packageName: Mage Animation Pack
+  packageVersion: 1.0
+  assetPath: Assets/MageAnimationPack/Animation/Humanoid/08_Hit/09_Hit_Air_Large_To_Floor/Hit_Air_Large_To_Floor_End.anim
+  uploadId: 665052

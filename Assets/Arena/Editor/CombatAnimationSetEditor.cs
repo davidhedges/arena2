@@ -177,6 +177,8 @@ namespace Arena.Editor
             new("Sword_Holder", "root/pelvis/spine_01/spine_02/spine_03/Sword_Holder", AvatarWeaponMounts.MainStowedMountId),
             new("Shield_Holder", "root/pelvis/spine_01/spine_02/spine_03/Shield_Holder", AvatarWeaponMounts.OffStowedMountId),
             new("weapon_r", "root/pelvis/spine_01/spine_02/spine_03/clavicle_r/upperarm_r/lowerarm_r/hand_r/weapon_r", AvatarWeaponMounts.GreatswordHandMountId),
+            new("Weapon_R", "root/pelvis/spine_01/spine_02/spine_03/clavicle_r/upperarm_r/lowerarm_r/hand_r/Weapon_R", AvatarWeaponMounts.StaffHandMountId),
+            new("Weapon_Holder", "root/pelvis/spine_01/spine_02/spine_03/Weapon_Holder", AvatarWeaponMounts.StaffStowedMountId),
         };
 
         static CombatAnimationSetEditor()
