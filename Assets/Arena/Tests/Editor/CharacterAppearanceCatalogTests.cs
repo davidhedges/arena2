@@ -76,6 +76,30 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void StaffCombatPrefab_UsesProjectAuthoredUrpMaterial()
+        {
+            const string materialPath = "Assets/Arena/Resources/CombatAnimationSets/StaffPackAuthored.mat";
+            const string prefabPath = "Assets/Arena/Resources/CombatAnimationSets/StaffPackAuthored.prefab";
+
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+            Assert.That(material, Is.Not.Null);
+            Assert.That(material!.shader, Is.Not.Null);
+            Assert.That(material.shader.name, Is.EqualTo("Universal Render Pipeline/Lit"));
+            Assert.That(material.GetTexture("_BaseMap"), Is.Not.Null);
+
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            Assert.That(prefab, Is.Not.Null);
+            Renderer[] renderers = prefab!.GetComponentsInChildren<Renderer>(true);
+            Assert.That(renderers, Is.Not.Empty);
+            foreach (Material rendererMaterial in renderers.SelectMany(renderer => renderer.sharedMaterials))
+            {
+                Assert.That(rendererMaterial, Is.Not.Null);
+                Assert.That(AssetDatabase.GetAssetPath(rendererMaterial), Is.EqualTo(materialPath));
+                Assert.That(rendererMaterial!.shader.name, Is.EqualTo("Universal Render Pipeline/Lit"));
+            }
+        }
+
+        [Test]
         public void EquipmentAppearanceCatalog_ContainsCompleteApprenticeSetVisuals()
         {
             object equipmentCatalog = LoadRequiredAsset(EquipmentAppearanceCatalogPath, "Arena.Presentation.Appearance.EquipmentAppearanceCatalog");
