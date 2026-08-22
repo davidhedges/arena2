@@ -148,6 +148,30 @@ namespace Arena.Tests.Editor
             return false;
         }
 
+        private static object BuildCatalogRecipe(string animationId)
+        {
+            Type catalogType = T("SpellCastAnimationCatalog");
+            Type entryType = T("WeaponSpellAnimationEntry");
+            UnityEngine.Object catalog = Resources.Load("SpellCastAnimationCatalog", catalogType);
+            Assert.That(catalog, Is.Not.Null);
+            IEnumerable recipes = (IEnumerable)catalogType.GetProperty("Recipes")!.GetValue(catalog)!;
+            foreach (object recipe in recipes)
+            {
+                Type recipeType = recipe.GetType();
+                string recipeId = (string)recipeType.GetProperty("AnimationIdOrEmpty")!.GetValue(recipe)!;
+                if (!string.Equals(recipeId, animationId, StringComparison.Ordinal))
+                    continue;
+
+                object?[] args = { "TEST_SPELL", Activator.CreateInstance(entryType) };
+                bool built = (bool)recipeType.GetMethod("TryBuild")!.Invoke(recipe, args)!;
+                Assert.That(built, Is.True, animationId);
+                return args[1]!;
+            }
+
+            Assert.Fail($"No SpellCastAnimationCatalog recipe for {animationId}.");
+            return Activator.CreateInstance(entryType)!;
+        }
+
         private static bool IsExplicitlyNoAnimation(string spellId) =>
             (bool)T("SpellCastAnimationResolver").GetMethod(
                 "IsExplicitlyNoAnimation",
@@ -435,6 +459,54 @@ namespace Arena.Tests.Editor
             Assert.That(CatalogRecipeIsCompatibleWith("MAGE_PROJECTILE_CAST_02", "Channel"), Is.False);
             Assert.That(CatalogRecipeIsCompatibleWith("MAGE_AIMED_CAST", "Charged"), Is.True);
             Assert.That(CatalogRecipeIsCompatibleWith("MAGE_AIMED_CAST", "Channel"), Is.False);
+        }
+
+        [Test]
+        public void MageSingleShotRecipes_AreFullBodyAtRestAndUpperBodyWhileMoving()
+        {
+            Type entryType = T("WeaponSpellAnimationEntry");
+            MethodInfo resolveOverlay = entryType.GetMethod(
+                "ResolveUsesOverlayPlayback",
+                new[] { typeof(float), typeof(float) })!;
+
+            foreach (string animationId in new[]
+                     {
+                         "MAGE_PROJECTILE_CAST_01",
+                         "MAGE_PROJECTILE_CAST_02",
+                         "MAGE_SKILL_CAST_03",
+                         "MAGE_SKILL_CAST_04",
+                         "MAGE_SKILL_CAST_05",
+                         "MAGE_BUFF_CAST",
+                     })
+            {
+                object entry = BuildCatalogRecipe(animationId);
+                Assert.That(
+                    entryType.GetField("playbackLayer")!.GetValue(entry)!.ToString(),
+                    Is.EqualTo("UpperBodyWhileMoving"),
+                    animationId);
+                Assert.That(
+                    (bool)resolveOverlay.Invoke(entry, new object[] { 0f, 0.1f })!,
+                    Is.False,
+                    $"{animationId} should use full-body playback at rest");
+                Assert.That(
+                    (bool)resolveOverlay.Invoke(entry, new object[] { 1f, 0.1f })!,
+                    Is.True,
+                    $"{animationId} should use upper-body playback while moving");
+            }
+
+            foreach (string animationId in new[]
+                     {
+                         "MAGE_AIMED_CAST",
+                         "MAGE_SKILL_CAST_01",
+                         "MAGE_SKILL_CAST_02",
+                     })
+            {
+                object entry = BuildCatalogRecipe(animationId);
+                Assert.That(
+                    entryType.GetField("playbackLayer")!.GetValue(entry)!.ToString(),
+                    Is.EqualTo("UpperBody"),
+                    $"{animationId} should retain its phased upper-body playback");
+            }
         }
 
         [Test]
