@@ -52,8 +52,8 @@ namespace Arena.Editor
             string spellId,
             SpellCastAnimationRecipe recipe)
         {
-            string foldoutKey = $"Arena.SpellAuthoring.CastPreview.Visible.{spellId}";
-            bool expanded = SessionState.GetBool(foldoutKey, true);
+            string foldoutKey = $"Arena.SpellAuthoring.CastPreview.Visible.V2.{spellId}";
+            bool expanded = SessionState.GetBool(foldoutKey, false);
             expanded = EditorGUILayout.Foldout(
                 expanded,
                 "Animation Preview",
@@ -61,7 +61,11 @@ namespace Arena.Editor
                 EditorStyles.foldoutHeader);
             SessionState.SetBool(foldoutKey, expanded);
             if (!expanded)
+            {
+                if (_castPreviewUtility != null || _castPreviewInstance != null)
+                    DestroyCastAnimationPreview();
                 return;
+            }
 
             if (EditorApplication.isPlayingOrWillChangePlaymode)
             {
@@ -165,6 +169,7 @@ namespace Arena.Editor
 
         private CombatAnimationSet? DrawCastPreviewAnimationSetPicker()
         {
+            EnsureAnimationSetsLoaded();
             if (_animationSets.Length == 0)
             {
                 EditorGUILayout.HelpBox(
@@ -379,7 +384,10 @@ namespace Arena.Editor
 
                 renderer.enabled = true;
                 if (renderer is SkinnedMeshRenderer skinnedRenderer)
+                {
                     skinnedRenderer.updateWhenOffscreen = true;
+                    skinnedRenderer.forceMatrixRecalculationPerRender = true;
+                }
             }
         }
 

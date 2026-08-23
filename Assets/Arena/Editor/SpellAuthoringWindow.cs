@@ -29,11 +29,13 @@ namespace Arena.Editor
         private readonly List<CombatVfxCueDefinition> _selectedAbilityCues = new();
         private readonly List<string> _knownTemplateIds = new();
         private readonly List<string> _knownDisciplineIds = new();
+        private bool _knownTemplateIdsLoaded;
 
         private ProgressionCatalogDocument? _catalog;
         private SpellCastAnimationMap? _spellAnimationMap;
         private SpellCastAnimationCatalog? _spellAnimationCatalog;
         private CombatAnimationSet[] _animationSets = Array.Empty<CombatAnimationSet>();
+        private bool _animationSetsLoaded;
         private Vector2 _scroll;
         private int _selectedSpellIndex;
         private string _draftAbilityId = "SPELL_NEW_SPELL";
@@ -53,7 +55,6 @@ namespace Arena.Editor
         {
             var window = GetWindow<SpellAuthoringWindow>("Spell Authoring");
             window.minSize = new Vector2(680f, 620f);
-            window.Load();
         }
 
         private void OnEnable()
@@ -160,7 +161,7 @@ namespace Arena.Editor
 
             if (string.IsNullOrWhiteSpace(combatProfileId))
             {
-                SpellCastAnimationMap? map = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
+                SpellCastAnimationMap? map = _spellAnimationMap;
                 if (map != null && map.TryGetEntry(spellId, out SpellCastAnimationMap.Entry mapEntry))
                 {
                     if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.NoAnimation)
@@ -189,43 +190,109 @@ namespace Arena.Editor
                         MessageType.Warning);
                 }
             }
-            else if (!_animationSetByProfile.TryGetValue(combatProfileId, out CombatAnimationSet animationSet))
-            {
-                EditorGUILayout.HelpBox($"No CombatAnimationSet found for combat profile '{combatProfileId}'.", MessageType.Error);
-            }
             else
             {
-                using (new EditorGUILayout.HorizontalScope())
+                string resolutionKey =
+                    $"Arena.SpellAuthoring.CombatSetResolution.Visible.V2.{spellId}.{combatProfileId}";
+                bool showCombatSetResolution = SessionState.GetBool(resolutionKey, false);
+                showCombatSetResolution = EditorGUILayout.Foldout(
+                    showCombatSetResolution,
+                    "Combat Set Resolution",
+                    true,
+                    EditorStyles.foldoutHeader);
+                SessionState.SetBool(resolutionKey, showCombatSetResolution);
+                if (showCombatSetResolution)
                 {
-                    EditorGUILayout.ObjectField("Animation Set", animationSet, typeof(CombatAnimationSet), false);
-                    if (GUILayout.Button("Select", GUILayout.Width(70f)))
-                        Selection.activeObject = animationSet;
-                }
-
-                if (TryResolveSpellAnimationEntry(animationSet, spellId, out WeaponSpellAnimationEntry entry))
-                {
-                    hasResolvedAnimation = true;
-                    resolvedAnimation = entry;
-                    if (entry.ResolveClip() != null)
+                    EnsureAnimationSetsLoaded();
+                    if (!_animationSetByProfile.TryGetValue(
+                            combatProfileId,
+                            out CombatAnimationSet animationSet))
                     {
-                        EditorGUILayout.HelpBox($"Animation resolves for '{spellId}'. Cast clip assigned.", MessageType.Info);
+                        EditorGUILayout.HelpBox(
+                            $"No CombatAnimationSet found for combat profile '{combatProfileId}'.",
+                            MessageType.Error);
                     }
                     else
                     {
-                        EditorGUILayout.HelpBox($"Animation resolves for '{spellId}', but no cast/release clip is assigned yet.", MessageType.Warning);
+                        using (new EditorGUILayout.HorizontalScope())
+                        {
+                            EditorGUILayout.ObjectField(
+                                "Animation Set",
+                                animationSet,
+                                typeof(CombatAnimationSet),
+                                false);
+                            if (GUILayout.Button("Select", GUILayout.Width(70f)))
+                                Selection.activeObject = animationSet;
+                        }
+
+                        if (TryResolveSpellAnimationEntry(
+                                animationSet,
+                                spellId,
+                                out WeaponSpellAnimationEntry entry))
+                        {
+                            hasResolvedAnimation = true;
+                            resolvedAnimation = entry;
+                            if (entry.ResolveClip() != null)
+                            {
+                                EditorGUILayout.HelpBox(
+                                    $"Animation resolves for '{spellId}'. Cast clip assigned.",
+                                    MessageType.Info);
+                            }
+                            else
+                            {
+                                EditorGUILayout.HelpBox(
+                                    $"Animation resolves for '{spellId}', but no cast/release clip is assigned yet.",
+                                    MessageType.Warning);
+                            }
+                        }
+                        else
+                        {
+                            EditorGUILayout.HelpBox(
+                                $"The cast animation assignment for '{spellId}' does not resolve in '{animationSet.name}'. Check its global recipe and optional set override.",
+                                MessageType.Warning);
+                            if (GUILayout.Button("Select Spell Cast Map", GUILayout.Width(180f)))
+                                Selection.activeObject = _spellAnimationMap;
+                        }
                     }
-                }
-                else
-                {
-                    EditorGUILayout.HelpBox($"The cast animation assignment for '{spellId}' does not resolve in '{animationSet.name}'. Check its global recipe and optional set override.", MessageType.Warning);
-                    if (GUILayout.Button("Select Spell Cast Map", GUILayout.Width(180f)))
-                        Selection.activeObject = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
                 }
             }
 
-            DrawCueAudit(abilityId, deliveryKind, selected.gameplay.cast_time_ms, hasResolvedAnimation, resolvedAnimation);
-            EditorGUILayout.Space(12f);
-            DrawGeneratedCuePreview(selected, abilityId, hasResolvedAnimation, resolvedAnimation);
+            string vfxAuditKey = $"Arena.SpellAuthoring.VfxAudit.Visible.V2.{abilityId}";
+            bool showVfxAudit = SessionState.GetBool(vfxAuditKey, false);
+            showVfxAudit = EditorGUILayout.Foldout(
+                showVfxAudit,
+                "VFX Audit",
+                true,
+                EditorStyles.foldoutHeader);
+            SessionState.SetBool(vfxAuditKey, showVfxAudit);
+            if (showVfxAudit)
+            {
+                if (!hasResolvedAnimation
+                    && !string.IsNullOrWhiteSpace(combatProfileId))
+                {
+                    EnsureAnimationSetsLoaded();
+                    if (_animationSetByProfile.TryGetValue(
+                            combatProfileId,
+                            out CombatAnimationSet animationSet)
+                        && TryResolveSpellAnimationEntry(
+                            animationSet,
+                            spellId,
+                            out WeaponSpellAnimationEntry entry))
+                    {
+                        hasResolvedAnimation = true;
+                        resolvedAnimation = entry;
+                    }
+                }
+
+                DrawCueAudit(
+                    abilityId,
+                    deliveryKind,
+                    selected.gameplay.cast_time_ms,
+                    hasResolvedAnimation,
+                    resolvedAnimation);
+                EditorGUILayout.Space(12f);
+                DrawGeneratedCuePreview(selected, abilityId, hasResolvedAnimation, resolvedAnimation);
+            }
         }
 
         private void DrawCastAnimationPicker(string spellId, SpellAnimationArchetype archetype)
@@ -366,6 +433,7 @@ namespace Arena.Editor
             if (!showOverrides)
                 return;
 
+            EnsureAnimationSetsLoaded();
             using (new EditorGUI.IndentLevelScope())
             {
                 foreach (CombatAnimationSet animationSet in _animationSets)
@@ -647,6 +715,15 @@ namespace Arena.Editor
                 "This first-pass tool does not write progression_catalog.shared.json. It generates snippets so the catalog remains hand-reviewable until a tested JSON writer exists.",
                 MessageType.Info);
 
+            if (!_knownTemplateIdsLoaded)
+            {
+                EditorGUILayout.HelpBox(
+                    "VFX template choices are loaded on demand so opening Spell Authoring stays fast. VFX ids remain directly editable below.",
+                    MessageType.None);
+                if (GUILayout.Button("Load VFX Template Choices", GUILayout.Width(190f)))
+                    LoadKnownTemplateIds();
+            }
+
             _draftAbilityId = NormalizeEditorText(EditorGUILayout.TextField("Ability Id", _draftAbilityId));
             _draftSpellId = NormalizeEditorText(EditorGUILayout.TextField("Spell Id", _draftSpellId));
             if (_knownDisciplineIds.Count > 0)
@@ -715,6 +792,57 @@ namespace Arena.Editor
             }
 
             return normalized;
+        }
+
+        private void LoadKnownTemplateIds()
+        {
+            _knownTemplateIds.Clear();
+            CombatVFXRegistry? registry = CombatVFXRegistry.LoadShared();
+            if (registry != null)
+            {
+                _knownTemplateIds.AddRange(registry.Entries
+                    .Select(entry => Normalize(entry.vfxId))
+                    .Where(id => !string.IsNullOrWhiteSpace(id)));
+            }
+
+            _knownTemplateIds.AddRange(CombatVFXTemplateRegistry.KnownScriptedTemplateIds
+                .Select(Normalize)
+                .Where(id => !string.IsNullOrWhiteSpace(id)));
+            _knownTemplateIds.Sort(StringComparer.Ordinal);
+            for (int index = _knownTemplateIds.Count - 1; index > 0; index--)
+            {
+                if (string.Equals(
+                        _knownTemplateIds[index],
+                        _knownTemplateIds[index - 1],
+                        StringComparison.Ordinal))
+                {
+                    _knownTemplateIds.RemoveAt(index);
+                }
+            }
+
+            _knownTemplateIdsLoaded = true;
+        }
+
+        private void EnsureAnimationSetsLoaded()
+        {
+            if (_animationSetsLoaded)
+                return;
+
+            _animationSets = SpellPresentationEditorData.LoadCombatAnimationSets()
+                .OrderBy(animationSet => animationSet.name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            _animationSetByProfile.Clear();
+            foreach (CombatAnimationSet animationSet in _animationSets)
+            {
+                string profileId = Normalize(animationSet.CombatProfileIdOrDefault);
+                if (!string.IsNullOrWhiteSpace(profileId)
+                    && !_animationSetByProfile.ContainsKey(profileId))
+                {
+                    _animationSetByProfile.Add(profileId, animationSet);
+                }
+            }
+
+            _animationSetsLoaded = true;
         }
 
         private static bool TryResolveSpellAnimationEntry(
@@ -841,12 +969,12 @@ namespace Arena.Editor
             _spellAbilities.Clear();
             _selectedAbilityCues.Clear();
             _knownTemplateIds.Clear();
+            _knownTemplateIdsLoaded = false;
             _knownDisciplineIds.Clear();
             _spellAnimationMap = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
             _spellAnimationCatalog = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationCatalog>();
-            _animationSets = SpellPresentationEditorData.LoadCombatAnimationSets()
-                .OrderBy(animationSet => animationSet.name, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            _animationSets = Array.Empty<CombatAnimationSet>();
+            _animationSetsLoaded = false;
 
             string absolutePath = SpellPresentationEditorData.AbsoluteProgressionCatalogPath;
             if (!File.Exists(absolutePath))
@@ -878,30 +1006,6 @@ namespace Arena.Editor
                 .ThenBy(discipline => Normalize(discipline.discipline_id), StringComparer.Ordinal)
                 .Select(discipline => Normalize(discipline.discipline_id))
                 .Where(id => !string.IsNullOrWhiteSpace(id)));
-
-            foreach (CombatAnimationSet animationSet in _animationSets)
-            {
-                string profileId = Normalize(animationSet.CombatProfileIdOrDefault);
-                if (!string.IsNullOrWhiteSpace(profileId) && !_animationSetByProfile.ContainsKey(profileId))
-                    _animationSetByProfile.Add(profileId, animationSet);
-            }
-
-            CombatVFXRegistry? registry = CombatVFXRegistry.LoadShared();
-            if (registry != null)
-            {
-                _knownTemplateIds.AddRange(registry.Entries
-                    .Select(entry => Normalize(entry.vfxId))
-                    .Where(id => !string.IsNullOrWhiteSpace(id)));
-            }
-            _knownTemplateIds.AddRange(CombatVFXTemplateRegistry.KnownScriptedTemplateIds
-                .Select(Normalize)
-                .Where(id => !string.IsNullOrWhiteSpace(id)));
-            _knownTemplateIds.Sort(StringComparer.Ordinal);
-            for (int index = _knownTemplateIds.Count - 1; index > 0; index--)
-            {
-                if (string.Equals(_knownTemplateIds[index], _knownTemplateIds[index - 1], StringComparison.Ordinal))
-                    _knownTemplateIds.RemoveAt(index);
-            }
 
             _spellAbilities.AddRange(_catalog.abilities
                 .Where(ability => string.Equals(Normalize(ability.gameplay.kind), "SPELL", StringComparison.Ordinal))
