@@ -1709,7 +1709,10 @@ namespace Arena.Entity
                     $"authoritative COMBAT_CAST received for local caster: {row.ActionKind} source={row.SourceKind}");
             }
 
-            if (IsCastTimeSpellEvent(row))
+            bool isCastTimeSpellEvent = IsCastTimeSpellEvent(row);
+            bool isAuthoredHoldPulse = TryGetLivePlayer(row.Caster, out var castTimeCaster)
+                && castTimeCaster.PlaysSpellHoldPulsePresentation(row.ActionKind);
+            if (isCastTimeSpellEvent && !isAuthoredHoldPulse)
             {
                 if (_hasLocalIdentity && row.Caster == _localIdentity)
                 {
@@ -1724,16 +1727,11 @@ namespace Arena.Entity
             var conn = NetworkManager.Instance?.Conn;
             if (TryGetLivePlayer(row.Caster, out var casterEntity))
             {
-                // HoldOnly channel spells own their entire presentation through the
-                // ActiveCast row (enter/idle loop until the ActiveCast ends) and never play
-                // a release. Dispatching the COMBAT_CAST as a Spell animation request reaches
-                // PlayerAnimator.RequestCombatAnimation while the cast hold is active, which
-                // preempts (InterruptWithoutGhost) and clears it — cutting the channel's hold
-                // loop. Cast-time spells are already excluded above via IsCastTimeSpellEvent;
-                // this covers zero-cast-time HoldOnly channels. HoldThenRelease spells keep
-                // the COMBAT_CAST — it drives their authored hold->release handoff — so gate
-                // on "no release presentation" (HoldOnly) rather than "uses hold".
-                if (!casterEntity.PlaysSpellReleasePresentation(row.ActionKind))
+                // HoldOnly channels suppress COMBAT_CAST because their ActiveCast-owned loop is
+                // the whole presentation. HoldWithPulse is the deliberate exception: each cast
+                // event temporarily plays an attack/return pair, then PlayerAnimator resumes the
+                // still-active hold loop without ending the channel.
+                if (!casterEntity.PlaysSpellCombatEventPresentation(row.ActionKind))
                 {
                     return;
                 }

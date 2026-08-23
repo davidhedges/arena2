@@ -521,6 +521,7 @@ namespace Arena.Presentation
         ReleaseOnly = 0,
         HoldThenRelease = 1,
         HoldOnly = 2,
+        HoldWithPulse = 3,
     }
 
     [Serializable]
@@ -530,6 +531,8 @@ namespace Arena.Presentation
         public AnimationClip? enter;
         [Tooltip("Looping clip held while the cast waits for its scheduled release animation.")]
         public AnimationClip? idleLoop;
+        [Tooltip("Optional non-looping exit played when the hold or channel ends without a cast/release clip, including cancellation.")]
+        public AnimationClip? exit;
         [Tooltip("How the cast hold should present relative to locomotion. Do not use a full-body stationary hold for mobile casts unless gameplay prevents movement.")]
         public SpellPlaybackLayer playbackLayer;
         [Tooltip("Seconds to hold the cast pose at full layer weight after release fires. Use this to keep legs/torso aligned with the spell motion until the release animation is mostly done. 0 = blend immediately.")]
@@ -537,10 +540,11 @@ namespace Arena.Presentation
         [Tooltip("Seconds the layer weight takes to blend from 1 to 0 once the hold delay elapses. 0 = snap.")]
         [Min(0f)] public float exitBlendOutSeconds;
 
-        public bool HasAny => enter != null || idleLoop != null;
+        public bool HasAny => enter != null || idleLoop != null || exit != null;
         public bool IsPlayable => enter != null && idleLoop != null;
         public AnimationClip? EnterOrIdle => enter ?? idleLoop;
         public AnimationClip? IdleOrEnter => idleLoop ?? enter;
+        public bool HasExit => exit != null;
         public float ResolveExitDelaySeconds(float fallback) => exitDelaySeconds > 0f ? exitDelaySeconds : fallback;
         public float ResolveExitBlendOutSeconds(float fallback) => exitBlendOutSeconds > 0f ? exitBlendOutSeconds : fallback;
         public float ResolveEnterCompleteNormalizedTime(float fallback)
@@ -566,11 +570,13 @@ namespace Arena.Presentation
         [FormerlySerializedAs("ground")]
         [Tooltip("Movement-state-independent cast/release clip. The same presentation is used on the ground and in the air.")]
         public AnimationClip? clip;
+        [Tooltip("For HoldWithPulse, the authored transition that returns from Clip to the hold loop.")]
+        public AnimationClip? returnToHold;
         [Tooltip("Whether this spell should request combat stance before or after playback.")]
         public bool requiresCombatStance;
         [Tooltip("How combat stance is entered when this spell requires it.")]
         public CombatEntryMode combatEntryMode;
-        [Tooltip("ReleaseOnly plays this entry's cast/release clip. HoldThenRelease enters the hold profile first, then plays the release clip. HoldOnly enters/loops the hold profile and does not play a release clip.")]
+        [Tooltip("ReleaseOnly plays the clip. HoldThenRelease holds then releases. HoldOnly holds until exit. HoldWithPulse temporarily plays Clip/Return To Hold while preserving the hold.")]
         public SpellAnimationPresentationMode presentationMode;
         [Tooltip("Optional per-spell cast/channel hold presentation. Leave empty to use the animation set's Default Spell Cast Hold.")]
         public SpellCastHoldProfile holdOverride;
@@ -597,8 +603,11 @@ namespace Arena.Presentation
         public bool UsesRightGesture => playbackLayer == SpellPlaybackLayer.RightGesture;
         public bool HasAnimatedPropHandoff => animatedProp.enabled;
         public bool UsesHoldPresentation => presentationMode == SpellAnimationPresentationMode.HoldThenRelease
-            || presentationMode == SpellAnimationPresentationMode.HoldOnly;
-        public bool PlaysReleasePresentation => presentationMode != SpellAnimationPresentationMode.HoldOnly;
+            || presentationMode == SpellAnimationPresentationMode.HoldOnly
+            || presentationMode == SpellAnimationPresentationMode.HoldWithPulse;
+        public bool PlaysReleasePresentation => presentationMode != SpellAnimationPresentationMode.HoldOnly
+            && presentationMode != SpellAnimationPresentationMode.HoldWithPulse;
+        public bool PlaysHoldPulsePresentation => presentationMode == SpellAnimationPresentationMode.HoldWithPulse;
         public bool HasAnyPresentation => HasAny || UsesHoldPresentation || holdOverride.HasAny;
 
         public bool TryResolveHoldProfile(

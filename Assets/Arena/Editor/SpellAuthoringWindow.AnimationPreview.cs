@@ -223,7 +223,12 @@ namespace Arena.Editor
                 AddCastPreviewClipOption(options, "Hold Loop", recipe.hold.idleLoop);
             }
 
-            AddCastPreviewClipOption(options, "Cast / Release", recipe.clip);
+            string primaryLabel = recipe.presentationMode == SpellAnimationPresentationMode.HoldWithPulse
+                ? "Pulse Attack"
+                : "Cast / Release";
+            AddCastPreviewClipOption(options, primaryLabel, recipe.clip);
+            AddCastPreviewClipOption(options, "Return to Hold", recipe.returnToHold);
+            AddCastPreviewClipOption(options, "Hold Exit / Cancel", recipe.hold.exit);
             return options;
         }
 
@@ -248,7 +253,18 @@ namespace Arena.Editor
                 SpellPlaybackLayer.RightGesture => "right-side gesture layer",
                 _ => recipe.playbackLayer.ToString(),
             };
-            return $"{recipe.presentationMode}; runtime release playback is {layerDescription}. "
+            string exitDescription = recipe.hold.exit != null
+                ? $" Hold exit/cancel uses {recipe.hold.exit.name}."
+                : string.Empty;
+            string lifecycleDescription = recipe.presentationMode switch
+            {
+                SpellAnimationPresentationMode.HoldWithPulse =>
+                    "pulse attack temporarily leaves the hold and Return to Hold resumes its loop",
+                SpellAnimationPresentationMode.HoldOnly =>
+                    "the hold loop persists until the channel ends",
+                _ => $"runtime release playback is {layerDescription}",
+            };
+            return $"{recipe.presentationMode}; {lifecycleDescription}.{exitDescription} "
                 + "This viewport shows the unmasked source clip so the full authored motion remains visible.";
         }
 

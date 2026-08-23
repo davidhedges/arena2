@@ -447,6 +447,30 @@ namespace Arena.Entity
                 || entry.PlaysReleasePresentation;
         }
 
+        public bool PlaysSpellCombatEventPresentation(string spellActionId)
+        {
+            if (SpellCastAnimationResolver.IsExplicitlyNoAnimation(spellActionId))
+                return false;
+
+            return _combatAnimationSet == null
+                || !SpellCastAnimationResolver.TryResolve(
+                    _combatAnimationSet,
+                    spellActionId,
+                    out WeaponSpellAnimationEntry entry)
+                || entry.PlaysReleasePresentation
+                || entry.PlaysHoldPulsePresentation;
+        }
+
+        public bool PlaysSpellHoldPulsePresentation(string spellActionId)
+        {
+            return _combatAnimationSet != null
+                && SpellCastAnimationResolver.TryResolve(
+                    _combatAnimationSet,
+                    spellActionId,
+                    out WeaponSpellAnimationEntry entry)
+                && entry.PlaysHoldPulsePresentation;
+        }
+
         public bool TryResolveSpellReleaseOffsetSeconds(string spellActionId, out float releaseOffsetSeconds)
         {
             releaseOffsetSeconds = 0f;

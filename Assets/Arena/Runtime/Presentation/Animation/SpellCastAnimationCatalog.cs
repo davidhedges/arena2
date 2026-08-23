@@ -38,9 +38,11 @@ namespace Arena.Presentation
         [Header("Presentation")]
         [Tooltip("The cast/release/end clip. This clip is movement-state-independent.")]
         public AnimationClip? clip;
-        [Tooltip("ReleaseOnly uses Clip alone. HoldThenRelease plays Enter/Loop and then Clip. HoldOnly plays Enter/Loop without Clip.")]
+        [Tooltip("For HoldWithPulse, the authored transition that returns from Clip to the hold loop.")]
+        public AnimationClip? returnToHold;
+        [Tooltip("ReleaseOnly uses Clip alone. HoldThenRelease plays Enter/Loop then Clip. HoldOnly plays Enter/Loop until exit. HoldWithPulse temporarily plays Clip/Return To Hold while keeping the hold active.")]
         public SpellAnimationPresentationMode presentationMode;
-        [Tooltip("Optional authored Start/Loop sequence. Required for HoldThenRelease and HoldOnly recipes.")]
+        [Tooltip("Optional authored Start/Loop/Exit sequence. Start and Loop are required for every hold mode; Exit is used when a hold/channel closes without a release clip.")]
         public SpellCastHoldProfile hold;
         [Tooltip("Whether selecting this recipe should request combat stance.")]
         public bool requiresCombatStance;
@@ -81,6 +83,7 @@ namespace Arena.Presentation
             {
                 spellId = Normalize(spellId),
                 clip = clip,
+                returnToHold = returnToHold,
                 requiresCombatStance = requiresCombatStance,
                 combatEntryMode = combatEntryMode,
                 presentationMode = presentationMode,
@@ -97,6 +100,8 @@ namespace Arena.Presentation
                 SpellAnimationPresentationMode.ReleaseOnly => clip != null,
                 SpellAnimationPresentationMode.HoldThenRelease => clip != null && hold.IsPlayable,
                 SpellAnimationPresentationMode.HoldOnly => hold.IsPlayable,
+                SpellAnimationPresentationMode.HoldWithPulse =>
+                    clip != null && returnToHold != null && hold.IsPlayable,
                 _ => false,
             };
         }

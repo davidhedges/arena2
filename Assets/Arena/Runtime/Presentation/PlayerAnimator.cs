@@ -194,6 +194,7 @@ namespace Arena.Presentation
         private const float SpellCastHoldEnterCrossFadeDurationSeconds = 0.22f;
         private const float SpellCastHoldPhaseCrossFadeDurationSeconds = 0.15f;
         private const float SpellCastHoldExitCrossFadeDurationSeconds = 0.28f;
+        private const float SpellHoldPulseAdvanceNormalizedTime = 0.9f;
         // Hold the cast pose for this long after release fires before blending out.
         // Keeps the legs/torso aligned with the spell motion until the release animation
         // is mostly done, instead of snapping back to idle combat mid-cast.
@@ -271,6 +272,7 @@ namespace Arena.Presentation
         private readonly CombatActionPlaybackController _actionPlayback = new();
         private CombatStatusReactionController? _statusReactionController;
         private ActiveWorldInteractionPresentation? _worldInteractionPresentation;
+        private PendingSpellHoldPulse? _pendingSpellHoldPulse;
         private AnimationClip? _worldInteractionPriorSlotClip;
         private AnimationClip? _worldInteractionAppliedClip;
         private float _worldInteractionReleaseAt;
@@ -338,6 +340,21 @@ namespace Arena.Presentation
             public WorldInteractionPlaybackPhase Phase;
             public Transform? FacingTransform;
             public Quaternion PriorFacingLocalRotation;
+        }
+
+        private enum SpellHoldPulsePhase
+        {
+            Attack = 0,
+            ReturnToHold = 1,
+        }
+
+        private sealed class PendingSpellHoldPulse
+        {
+            public string ActionId = string.Empty;
+            public WeaponSpellAnimationEntry Entry;
+            public AnimationClip ReturnToHold = null!;
+            public SpellHoldPulsePhase Phase;
+            public float AdvanceAtSeconds;
         }
 
         private enum CombatStanceTransitionBand
@@ -660,6 +677,16 @@ namespace Arena.Presentation
                 TraceCombatAnimation(
                     $"request-dropped action={request.ActionId} category={request.Category} " +
                     $"reason=animator-or-override-missing");
+                return;
+            }
+
+            if (request.Category == CombatAnimationCategory.Spell
+                && request.SpellPhase == CombatSpellAnimationPhase.Release
+                && TryPlaySpellCastHoldPulse(request))
+            {
+                TraceCombatAnimation(
+                    $"request-complete action={request.ActionId} category={request.Category} " +
+                    "mode=hold-pulse");
                 return;
             }
 
@@ -1723,6 +1750,8 @@ namespace Arena.Presentation
                     if (_weaponAttachments == null)
                         _weaponAttachments = GetComponent<WeaponAttachmentController>();
                     _weaponAttachments?.ReleaseTemporaryAnimatedProp(request.ActionId);
+                    if (TryPlaySpellCastHoldExit(request))
+                        return;
                     // The preempt path (RequestCombatAnimation -> InterruptWithoutGhost)
                     // already started the smooth hold-exit fade before this ran. Don't
                     // hard-clear over it — that would snap the layer to Empty instantly.
@@ -1754,10 +1783,195 @@ namespace Arena.Presentation
             PlaySpellAnimation(request, preserveFullBodyHoldBlendOut);
         }
 
+        private bool TryPlaySpellCastHoldExit(in CombatAnimationRequest request)
+        {
+            if (_animator == null || _overrideController == null || _animationSet == null)
+                return false;
+
+            _pendingSpellHoldPulse = null;
+
+            if (!SpellCastAnimationResolver.TryResolve(
+                    _animationSet,
+                    request.ActionId,
+                    out WeaponSpellAnimationEntry spellEntry)
+                || !spellEntry.UsesHoldPresentation
+                || !_animationSet.TryGetSpellCastHoldProfile(
+                    request.ActionId,
+                    out SpellCastHoldProfile holdProfile)
+                || holdProfile.exit == null)
+            {
+                return false;
+            }
+
+            AnimationClip exitClip = holdProfile.exit;
+            int bankSlot = ResolveNextSpellBankSlot();
+            if (!_actionPlayback.TryBindSpellBankClip(
+                    _overrideController,
+                    bankSlot,
+                    exitClip))
+            {
+                return false;
+            }
+
+            // The hold has already been softly preempted before Cancel is dispatched. Reuse the
+            // normal one-shot playback path for the authored recovery, but do not let a channel
+            // exit masquerade as a gameplay release or restart a temporary spell prop.
+            spellEntry.clip = exitClip;
+            spellEntry.presentationMode = SpellAnimationPresentationMode.ReleaseOnly;
+            spellEntry.playbackLayer = holdProfile.playbackLayer;
+            spellEntry.animatedProp = default;
+            PlayResolvedSpellAnimation(
+                request.ActionId,
+                bankSlot,
+                spellEntry,
+                exitClip,
+                normalizedStart: 0f,
+                confirmedInstant: false,
+                preserveFullBodyHoldBlendOut: _actionPlayback.IsSpellCastHoldFadeOutActive);
+            return true;
+        }
+
+        private bool TryPlaySpellCastHoldPulse(in CombatAnimationRequest request)
+        {
+            if (_animator == null || _overrideController == null || _animationSet == null)
+                return false;
+
+            if (_pendingSpellHoldPulse != null
+                && string.Equals(
+                    _pendingSpellHoldPulse.ActionId,
+                    request.ActionId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (_actionPlayback.ActiveSpellCastHoldPresentation is not { } activeHold
+                || !string.Equals(
+                    activeHold.ActionId,
+                    request.ActionId,
+                    StringComparison.OrdinalIgnoreCase)
+                || !SpellCastAnimationResolver.TryResolve(
+                    _animationSet,
+                    request.ActionId,
+                    out WeaponSpellAnimationEntry spellEntry)
+                || !spellEntry.PlaysHoldPulsePresentation
+                || spellEntry.ResolveClip() is not { } attackClip
+                || spellEntry.returnToHold == null)
+            {
+                return false;
+            }
+
+            int bankSlot = ResolveNextSpellBankSlot();
+            if (!_actionPlayback.TryBindSpellBankClip(
+                    _overrideController,
+                    bankSlot,
+                    attackClip))
+            {
+                return false;
+            }
+
+            PlayResolvedSpellAnimation(
+                request.ActionId,
+                bankSlot,
+                spellEntry,
+                attackClip,
+                normalizedStart: 0f,
+                confirmedInstant: false,
+                preserveFullBodyHoldBlendOut: false);
+            _pendingSpellHoldPulse = new PendingSpellHoldPulse
+            {
+                ActionId = request.ActionId,
+                Entry = spellEntry,
+                ReturnToHold = spellEntry.returnToHold,
+                Phase = SpellHoldPulsePhase.Attack,
+                AdvanceAtSeconds = Time.time + Mathf.Max(
+                    0.01f,
+                    attackClip.length * SpellHoldPulseAdvanceNormalizedTime),
+            };
+            return true;
+        }
+
+        private void UpdateSpellCastHoldPulse()
+        {
+            PendingSpellHoldPulse? pending = _pendingSpellHoldPulse;
+            if (pending == null || Time.time < pending.AdvanceAtSeconds)
+                return;
+
+            if (_animator == null
+                || _overrideController == null
+                || _actionPlayback.ActiveSpellCastHoldPresentation is not { } activeHold
+                || !string.Equals(
+                    activeHold.ActionId,
+                    pending.ActionId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _pendingSpellHoldPulse = null;
+                return;
+            }
+
+            if (pending.Phase == SpellHoldPulsePhase.Attack)
+            {
+                int bankSlot = ResolveNextSpellBankSlot();
+                if (!_actionPlayback.TryBindSpellBankClip(
+                        _overrideController,
+                        bankSlot,
+                        pending.ReturnToHold))
+                {
+                    _pendingSpellHoldPulse = null;
+                    return;
+                }
+
+                WeaponSpellAnimationEntry returnEntry = pending.Entry;
+                returnEntry.clip = pending.ReturnToHold;
+                returnEntry.returnToHold = null;
+                returnEntry.animatedProp = default;
+                PlayResolvedSpellAnimation(
+                    pending.ActionId,
+                    bankSlot,
+                    returnEntry,
+                    pending.ReturnToHold,
+                    normalizedStart: 0f,
+                    confirmedInstant: false,
+                    preserveFullBodyHoldBlendOut: false);
+                pending.Phase = SpellHoldPulsePhase.ReturnToHold;
+                pending.AdvanceAtSeconds = Time.time + Mathf.Max(
+                    0.01f,
+                    pending.ReturnToHold.length * SpellHoldPulseAdvanceNormalizedTime);
+                return;
+            }
+
+            ClearActiveSpellPresentation(resetLayerWeight: true, clearUpperBodySpell: false);
+            _actionPlayback.ClearActiveOverlaySpellPresentation();
+            _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
+            if (!_animationSet!.TryGetSpellCastHoldProfile(
+                    pending.ActionId,
+                    out SpellCastHoldProfile holdProfile)
+                || holdProfile.IdleOrEnter == null
+                || !_actionPlayback.TryBindSpellBankClip(
+                    _overrideController,
+                    activeHold.IdleBankSlot,
+                    holdProfile.IdleOrEnter))
+            {
+                _pendingSpellHoldPulse = null;
+                ClearActiveSpellCastHoldPresentation(
+                    clearAnimatorState: true,
+                    softFullBodyClear: true);
+                return;
+            }
+            PlaySpellCastHoldState(
+                activeHold.PlaybackLayer,
+                activeHold.IdleBankSlot,
+                0f,
+                SpellCastHoldPhaseCrossFadeDurationSeconds);
+            _pendingSpellHoldPulse = null;
+        }
+
         private void PlaySpellCastHold(in CombatAnimationRequest request)
         {
             if (_animator == null || _overrideController == null || _animationSet == null)
                 return;
+
+            _pendingSpellHoldPulse = null;
 
             if (SpellCastAnimationResolver.IsExplicitlyNoAnimation(request.ActionId)
                 || (SpellCastAnimationResolver.TryResolve(
@@ -1944,6 +2158,25 @@ namespace Arena.Presentation
                 spellEntry,
                 spellClip,
                 confirmedInstant);
+            PlayResolvedSpellAnimation(
+                spellKind,
+                bankSlot,
+                spellEntry,
+                spellClip,
+                normalizedStart,
+                confirmedInstant,
+                preserveFullBodyHoldBlendOut);
+        }
+
+        private void PlayResolvedSpellAnimation(
+            string spellKind,
+            int bankSlot,
+            WeaponSpellAnimationEntry spellEntry,
+            AnimationClip spellClip,
+            float normalizedStart,
+            bool confirmedInstant,
+            bool preserveFullBodyHoldBlendOut)
+        {
             BeginAnimatedSpellPropHandoff(
                 spellKind,
                 spellEntry,
@@ -3761,6 +3994,7 @@ namespace Arena.Presentation
             if (_animator == null)
                 return;
 
+            _pendingSpellHoldPulse = null;
             PreemptMeleeAnimationIfActive(captureMeleeGhost);
             CancelPhasedMeleePlayback();
 
@@ -3834,6 +4068,7 @@ namespace Arena.Presentation
             UpdateWorldInteractionAnimation();
             UpdatePhasedMeleePlayback();
             UpdateSpellCastHoldPlayback();
+            UpdateSpellCastHoldPulse();
             UpdateSpellCastHoldFadeOut();
             UpdateMeleeLowerBodyUnlock();
             UpdateSpellLowerBodyUnlock();

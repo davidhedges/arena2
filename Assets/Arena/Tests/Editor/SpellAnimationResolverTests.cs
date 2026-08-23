@@ -63,6 +63,18 @@ namespace Arena.Tests.Editor
         private static AnimationClip? Clip(object entry) =>
             (AnimationClip?)T("WeaponSpellAnimationEntry").GetField("clip")!.GetValue(entry);
 
+        private static AnimationClip? EntryClip(object entry, string fieldName) =>
+            (AnimationClip?)T("WeaponSpellAnimationEntry").GetField(fieldName)!.GetValue(entry);
+
+        private static AnimationClip? HoldClip(object entry, string fieldName)
+        {
+            object hold = T("WeaponSpellAnimationEntry").GetField("holdOverride")!.GetValue(entry)!;
+            return (AnimationClip?)T("SpellCastHoldProfile").GetField(fieldName)!.GetValue(hold);
+        }
+
+        private static string PresentationMode(object entry) =>
+            T("WeaponSpellAnimationEntry").GetField("presentationMode")!.GetValue(entry)!.ToString()!;
+
         private static bool HasPlayableHold(UnityEngine.Object set, string spellId)
         {
             Type holdType = T("SpellCastHoldProfile");
@@ -478,6 +490,71 @@ namespace Arena.Tests.Editor
             Assert.That(CatalogRecipeIsCompatibleWith("MAGE_PROJECTILE_CAST_02", "Channel"), Is.False);
             Assert.That(CatalogRecipeIsCompatibleWith("MAGE_AIMED_CAST", "Charged"), Is.True);
             Assert.That(CatalogRecipeIsCompatibleWith("MAGE_AIMED_CAST", "Channel"), Is.False);
+            Assert.That(CatalogRecipeIsCompatibleWith("MAGE_SKILL_CAST_01", "Charged"), Is.False);
+            Assert.That(CatalogRecipeIsCompatibleWith("MAGE_SKILL_CAST_01", "Channel"), Is.True);
+            Assert.That(CatalogRecipeIsCompatibleWith("MAGE_SKILL_CAST_02", "Channel"), Is.True);
+            Assert.That(CatalogRecipeIsCompatibleWith("MAGE_ULTIMATE_CAST_PHASED", "Channel"), Is.True);
+            Assert.That(CatalogRecipeIsCompatibleWith("MAGE_COMBO_CAST_05_03", "Channel"), Is.True);
+        }
+
+        [Test]
+        public void MageAuthoredChannels_UseStartLoopAndEndWithoutARelease()
+        {
+            foreach ((string animationId, string start, string loop, string end) in new[]
+                     {
+                         ("MAGE_SKILL_CAST_01", "Skill_01_01_Start", "Skill_01_01_Loop", "Skill_01_01_End"),
+                         ("MAGE_SKILL_CAST_02", "Skill_02_01_Start", "Skill_02_01_Loop", "Skill_02_01_End"),
+                         ("MAGE_ULTIMATE_CAST_PHASED", "Ultimate_Attack_Start", "Ultimate_Attack_Loop", "Ultimate_Attack_End"),
+                         ("MAGE_COMBO_CAST_05_03", "Combo_Attack_05_03_Start", "Combo_Attack_05_03_Loop", "Combo_Attack_05_03_End"),
+                     })
+            {
+                object entry = BuildCatalogRecipe(animationId);
+                Assert.That(PresentationMode(entry), Is.EqualTo("HoldOnly"), animationId);
+                Assert.That(Clip(entry), Is.Null, animationId);
+                Assert.That(
+                    (bool)T("WeaponSpellAnimationEntry").GetProperty("PlaysReleasePresentation")!.GetValue(entry)!,
+                    Is.False,
+                    animationId);
+                Assert.That(HoldClip(entry, "enter")?.name, Is.EqualTo(start), animationId);
+                Assert.That(HoldClip(entry, "idleLoop")?.name, Is.EqualTo(loop), animationId);
+                Assert.That(HoldClip(entry, "exit")?.name, Is.EqualTo(end), animationId);
+            }
+        }
+
+        [Test]
+        public void MageAimedAttacks_DistinguishOneShotReleaseFromReturnToAimPulse()
+        {
+            foreach ((string releaseId, string pulseId, string attack, string returnToAim) in new[]
+                     {
+                         ("MAGE_AIMED_RELEASE_01", "MAGE_AIMED_CHANNEL_ATTACK_01", "Attack_01_01", "Attack_01_02"),
+                         ("MAGE_AIMED_RELEASE_02", "MAGE_AIMED_CHANNEL_ATTACK_02", "Attack_02_01", "Attack_02_02"),
+                     })
+            {
+                object release = BuildCatalogRecipe(releaseId);
+                Assert.That(PresentationMode(release), Is.EqualTo("HoldThenRelease"), releaseId);
+                Assert.That(Clip(release)?.name, Is.EqualTo(attack), releaseId);
+                Assert.That(EntryClip(release, "returnToHold"), Is.Null, releaseId);
+                Assert.That(CatalogRecipeIsCompatibleWith(releaseId, "Charged"), Is.True);
+                Assert.That(CatalogRecipeIsCompatibleWith(releaseId, "Channel"), Is.False);
+
+                object pulse = BuildCatalogRecipe(pulseId);
+                Assert.That(PresentationMode(pulse), Is.EqualTo("HoldWithPulse"), pulseId);
+                Assert.That(Clip(pulse)?.name, Is.EqualTo(attack), pulseId);
+                Assert.That(EntryClip(pulse, "returnToHold")?.name, Is.EqualTo(returnToAim), pulseId);
+                Assert.That(
+                    (bool)T("WeaponSpellAnimationEntry").GetProperty("PlaysReleasePresentation")!.GetValue(pulse)!,
+                    Is.False,
+                    pulseId);
+                Assert.That(
+                    (bool)T("WeaponSpellAnimationEntry").GetProperty("PlaysHoldPulsePresentation")!.GetValue(pulse)!,
+                    Is.True,
+                    pulseId);
+                Assert.That(HoldClip(pulse, "enter")?.name, Is.EqualTo("Aim_The_Target_Start"), pulseId);
+                Assert.That(HoldClip(pulse, "idleLoop")?.name, Is.EqualTo("Aim_The_Target_Loop"), pulseId);
+                Assert.That(HoldClip(pulse, "exit")?.name, Is.EqualTo("Aim_The_Target_End"), pulseId);
+                Assert.That(CatalogRecipeIsCompatibleWith(pulseId, "Charged"), Is.False);
+                Assert.That(CatalogRecipeIsCompatibleWith(pulseId, "Channel"), Is.True);
+            }
         }
 
         [Test]
@@ -488,7 +565,7 @@ namespace Arena.Tests.Editor
                 "ResolveUsesOverlayPlayback",
                 new[] { typeof(float), typeof(float) })!;
 
-            Assert.That(CatalogRecipeCountWithPrefix("MAGE_"), Is.EqualTo(40));
+            Assert.That(CatalogRecipeCountWithPrefix("MAGE_"), Is.EqualTo(44));
 
             foreach (string animationId in new[]
                      {
