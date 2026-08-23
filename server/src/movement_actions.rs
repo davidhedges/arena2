@@ -1110,10 +1110,7 @@ pub(crate) fn tick_movement_actions(ctx: &ReducerContext, now: Timestamp) {
         };
 
         if !state.alive || has_active_disabling_status(ctx, action.owner, now) {
-            ctx.db
-                .special_movement_runtime()
-                .owner()
-                .delete(action.owner);
+            crate::game_loop::cancel_special_movement_for_player(ctx, action.owner, now);
             clear_movement_action_for_owner(ctx, action.owner);
             continue;
         }

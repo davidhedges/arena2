@@ -8859,7 +8859,7 @@ pub(crate) fn interrupt_player_actions_for_stagger(ctx: &ReducerContext, target:
         .find(target)
         .is_some_and(|runtime| is_externally_imposed_movement_kind(runtime.kind.as_str()))
     {
-        ctx.db.special_movement_runtime().owner().delete(target);
+        crate::game_loop::cancel_special_movement_for_player(ctx, target, ctx.timestamp);
     }
     ctx.db.pending_melee_timed_movement().owner().delete(target);
 

@@ -43,8 +43,10 @@ namespace Arena.Input
         private float _intentYaw;
         private bool _keyboardTurningActive;
         private bool _cameraAlignActive;
+        private bool _hasImposedFacing;
 
         private const float TurnInputThreshold = 0.1f;
+        private const float LookTurnInputThreshold = 0.01f;
         private const float KeyboardTurnSpeedDegreesPerSecond = 120f;
         private const float MovingKeyboardTurnSpeedDegreesPerSecond = 72f;
         private const float CameraAlignTurnSpeedDegreesPerSecond = 360f;
@@ -85,10 +87,30 @@ namespace Arena.Input
             _intentYaw = NormalizeRadians(yawRadians);
         }
 
+        /// <summary>
+        /// Adopts an ability-owned facing and HOLDS it until the player asks to
+        /// turn. Used at a special-movement boundary, where the server owns the
+        /// yaw: without the hold the next sampled intent immediately overwrites
+        /// the arrival facing with the camera yaw (camera-align mode) or with a
+        /// pre-movement yaw the keyboard turn branch is still accumulating
+        /// from, which is why a gap closer only sometimes landed facing its
+        /// target. The hold releases on the first real turn input, so it never
+        /// fights the player for control.
+        /// </summary>
+        public void ImposeFacingYaw(float yawRadians)
+        {
+            if (float.IsNaN(yawRadians) || float.IsInfinity(yawRadians))
+                return;
+
+            _intentYaw = NormalizeRadians(yawRadians);
+            _hasImposedFacing = true;
+        }
+
         public void EnablePredictedAuthority(LocalPlayerStateProvider stateProvider)
         {
             _stateProvider = stateProvider;
             _predictedAuthority = true;
+            _hasImposedFacing = false;
             _intentYaw = CurrentFacingYaw;
         }
 
@@ -162,7 +184,7 @@ namespace Arena.Input
                 _intentStrafe = 0.0f;
                 _keyboardTurningActive = false;
                 _cameraAlignActive = false;
-                _intentYaw = CurrentFacingYaw;
+                SetIntentYaw(CurrentFacingYaw);
                 return;
             }
 
@@ -170,12 +192,13 @@ namespace Arena.Input
             Vector2 keyboardTurnAxes = ResolveKeyboardTurnAxes(_input.RawMove);
             _keyboardTurningActive = false;
             _cameraAlignActive = false;
+            ReleaseImposedFacingOnTurnInput(keyboardTurnAxes);
 
             if (_stateProvider != null && _stateProvider.HasAimYawOverride)
             {
                 _intentForward = move.y;
                 _intentStrafe = move.x;
-                _intentYaw = CurrentFacingYaw;
+                SetIntentYaw(CurrentFacingYaw);
                 return;
             }
 
@@ -184,7 +207,7 @@ namespace Arena.Input
                 _intentForward = move.y;
                 _intentStrafe = move.x;
                 _cameraAlignActive = true;
-                _intentYaw = CurrentCameraYaw;
+                SetIntentYaw(CurrentCameraYaw);
                 return;
             }
 
@@ -192,7 +215,7 @@ namespace Arena.Input
             {
                 _intentForward = 0.0f;
                 _intentStrafe = 0.0f;
-                _intentYaw = CurrentFacingYaw;
+                SetIntentYaw(CurrentFacingYaw);
                 return;
             }
 
@@ -214,7 +237,29 @@ namespace Arena.Input
             }
             else
             {
-                _intentYaw = CurrentFacingYaw;
+                SetIntentYaw(CurrentFacingYaw);
+            }
+        }
+
+        private void SetIntentYaw(float yaw)
+        {
+            if (_hasImposedFacing)
+                return;
+
+            _intentYaw = yaw;
+        }
+
+        private void ReleaseImposedFacingOnTurnInput(Vector2 keyboardTurnAxes)
+        {
+            if (!_hasImposedFacing || _input == null)
+                return;
+
+            bool aiming = _stateProvider != null && _stateProvider.HasAimYawOverride;
+            if (aiming
+                || _input.Look.sqrMagnitude >= LookTurnInputThreshold
+                || Mathf.Abs(keyboardTurnAxes.x) > TurnInputThreshold)
+            {
+                _hasImposedFacing = false;
             }
         }
 

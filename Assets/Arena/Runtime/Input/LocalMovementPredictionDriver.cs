@@ -59,6 +59,8 @@ namespace Arena.Input
         private bool _wasDrivingSpecialMovement;
         private SpecialMovementTrack _lastSpecialMovementTrack;
         private bool _hasLastSpecialMovementTrack;
+        private float _lastSpecialMovementFacingYaw;
+        private bool _hasLastSpecialMovementFacingYaw;
         private bool _hasPendingSpecialMovementSettleCheck;
         private SpecialMovementTrack _pendingSpecialMovementTrack;
         private Vector3 _pendingSpecialMovementTransformPosition;
@@ -203,8 +205,19 @@ namespace Arena.Input
                 return;
             }
 
-            if (_wasDrivingSpecialMovement)
+            // The boundary latch is the authoritative end-of-runtime signal: a
+            // zero-duration teleport can start and finish between two frames,
+            // so _wasDrivingSpecialMovement alone would miss it and leave the
+            // client replaying commands the server already discarded.
+            bool endedThisFrame = _simState.ConsumeSpecialMovementBoundary(out float boundaryFacingYaw);
+            if (_wasDrivingSpecialMovement || endedThisFrame)
             {
+                if (endedThisFrame)
+                {
+                    _lastSpecialMovementFacingYaw = boundaryFacingYaw;
+                    _hasLastSpecialMovementFacingYaw = true;
+                }
+
                 ResetAfterSpecialMovement();
                 _wasDrivingSpecialMovement = false;
             }
@@ -437,8 +450,6 @@ namespace Arena.Input
             _lastSpecialMovementTrack = track;
             _hasLastSpecialMovementTrack = true;
 
-            AdvanceCommandHistoryOnly();
-
             long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             Func<float, float, float, float>? sampleGroundHeight =
                 _environment != null ? _environment.SampleGroundHeight : null;
@@ -447,6 +458,17 @@ namespace Arena.Input
                 nowMs,
                 sampleGroundHeight);
             Vector3 sampledPosition = sampled.Position;
+
+            // The server owns facing for the whole runtime (FACE_START/FACE_PATH),
+            // so anchor the sampled intent on it BEFORE this frame's command is
+            // authored. Without this the motor keeps authoring a yaw of its own
+            // and the first command consumed after the handoff turns the
+            // character straight back off the arrival facing.
+            _lastSpecialMovementFacingYaw = sampled.FacingYawRadians;
+            _hasLastSpecialMovementFacingYaw = true;
+            _motor.ImposeFacingYaw(sampled.FacingYawRadians);
+
+            AdvanceCommandHistoryOnly();
             uint lastProcessedTick = _simState.HasState
                 ? _simState.LastProcessedTick
                 : (_hasCurrentPredictedState ? _currentPredictedState.LastProcessedTick : 0u);
@@ -745,6 +767,13 @@ namespace Arena.Input
             // jump or strafe edges. Re-anchor local input at both boundaries.
             ResetSpecialMovementInputBoundary();
 
+            // Carry the runtime's final facing into the first re-anchored
+            // command. The server hands off at exactly this yaw, so anything
+            // else here reads on screen as an instant turn away from whatever
+            // the ability aimed the character at.
+            if (_hasLastSpecialMovementFacingYaw)
+                _motor?.ImposeFacingYaw(_lastSpecialMovementFacingYaw);
+
             _stateProvider?.ClearPredictedState();
             _hasCurrentPredictedState = false;
             _lastProcessedSnapshotVersion = 0;
@@ -760,6 +789,8 @@ namespace Arena.Input
             ClearPendingPredictedJumps();
             _hasLastSpecialMovementTrack = false;
             _lastSpecialMovementTrack = default;
+            _hasLastSpecialMovementFacingYaw = false;
+            _lastSpecialMovementFacingYaw = 0.0f;
         }
 
         private void ResetSpecialMovementInputBoundary()
@@ -780,8 +811,18 @@ namespace Arena.Input
                 uint anchor = _leadController.ComputeForwardAnchorTick(
                     estimate,
                     _commandHistory.HighestAuthoredTick);
-                uint discardFloor = _simState.LastProcessedTick
-                    + (uint)MovementNetcodeConfig.SpecialMovementInputDiscardLeadTicks + 1u;
+                // The server set its receive cursor from the tick it was ON when
+                // the runtime finished, not from the last tick this client has
+                // heard about. LastProcessedTick trails that by the downstream
+                // delay, so an ack-anchored floor can land INSIDE the discard
+                // window: the client predicts those commands, the server drops
+                // them silently, and the difference comes back as a backward
+                // correction. Floor on the estimated server tick as well.
+                uint discardLead = (uint)MovementNetcodeConfig.SpecialMovementInputDiscardLeadTicks;
+                uint discardFloor = (uint)Mathf.Max(0.0f, Mathf.Ceil(estimate)) + discardLead + 1u;
+                uint ackDiscardFloor = _simState.LastProcessedTick + discardLead + 1u;
+                if (discardFloor < ackDiscardFloor)
+                    discardFloor = ackDiscardFloor;
                 if (anchor < discardFloor)
                     anchor = discardFloor;
                 _commandHistory.Reset(anchor);

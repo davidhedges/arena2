@@ -1782,6 +1782,52 @@ fn tick_special_movement_runtimes(ctx: &ReducerContext, now: Timestamp) {
     }
 }
 
+/// Deletes an in-flight special movement runtime the way the normal completion
+/// path ends one: the input boundary is applied too, not just the row drop.
+///
+/// The client re-anchors its command numbering whenever the runtime row
+/// disappears, whatever made it disappear. A cancel that only deletes the row
+/// leaves the server free-running a stale fallback intent (and consuming stale
+/// queued commands) across a window the client has already thrown away — the
+/// same divergence the completion path exists to prevent. Every out-of-band
+/// cancel for a player owner routes through here.
+pub(crate) fn cancel_special_movement_for_player(
+    ctx: &ReducerContext,
+    identity: Identity,
+    now: Timestamp,
+) {
+    if ctx
+        .db
+        .special_movement_runtime()
+        .owner()
+        .find(identity)
+        .is_none()
+    {
+        return;
+    }
+
+    ctx.db.special_movement_runtime().owner().delete(identity);
+
+    let Some(physics) = ctx.db.player_physics().identity().find(identity) else {
+        return;
+    };
+
+    reset_player_intent_after_special_movement(
+        ctx,
+        identity,
+        physics.last_processed_tick,
+        physics.yaw,
+        now,
+    );
+    clear_pending_player_commands_through_tick(
+        ctx,
+        identity,
+        physics
+            .last_processed_tick
+            .saturating_add(SPECIAL_MOVEMENT_INPUT_DISCARD_LEAD_TICKS),
+    );
+}
+
 fn reset_player_intent_after_special_movement(
     ctx: &ReducerContext,
     identity: Identity,
@@ -1804,9 +1850,18 @@ fn apply_special_movement_handoff_intent(
     yaw: f32,
     now: Timestamp,
 ) {
-    // Forward and strafe are continuous state, so retain the latest values
-    // consumed during the special movement. Jump is an edge and must remain
-    // cleared along with the queued commands to prevent a delayed launch.
+    // Every axis is cleared, not retained. The client discards its own
+    // in-flight input at this boundary and re-anchors command numbering
+    // forward of the estimated server tick, so the ticks between this handoff
+    // and the first re-anchored command carry no client command at all. A
+    // retained forward/strafe would free-run those ticks against the newly
+    // imposed facing yaw — motion the client's replay model does not contain
+    // and cannot reproduce, which lands as a ~1m post-dash slide once the
+    // correction arrives. Zero axes make the server's model of that window
+    // identical to the client's: nothing happened. Jump is an edge and must
+    // stay cleared along with the queued commands to prevent a delayed launch.
+    intent.forward = 0.0;
+    intent.strafe = 0.0;
     intent.yaw = yaw;
     intent.jump = false;
     intent.input_tick = input_tick;
@@ -2515,14 +2570,17 @@ mod tests {
     }
 
     #[test]
-    fn special_movement_handoff_preserves_axes_and_clears_jump() {
+    fn special_movement_handoff_clears_axes_and_jump() {
         let now = Timestamp::from_micros_since_unix_epoch(123_000);
         let mut current = intent(0.75, -0.25, true);
 
         apply_special_movement_handoff_intent(&mut current, 42, -1.5, now);
 
-        assert_eq!(current.forward, 0.75);
-        assert_eq!(current.strafe, -0.25);
+        // Runtime invariant: the client throws its in-flight input away at this
+        // boundary, so the fallback intent must not free-run the ticks before
+        // the first re-anchored command arrives.
+        assert_eq!(current.forward, 0.0);
+        assert_eq!(current.strafe, 0.0);
         assert_eq!(current.yaw, -1.5);
         assert!(!current.jump);
         assert_eq!(current.input_tick, 42);

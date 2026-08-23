@@ -750,8 +750,13 @@ namespace Arena.Entity
                 && string.Equals(
                     row.Kind,
                     CoupDeGraceGapCloseKind,
-                    System.StringComparison.OrdinalIgnoreCase))
+                    System.StringComparison.OrdinalIgnoreCase)
+                && Arena.Input.MeleeInputHandler.ConsumeGapCloseCameraAlign(
+                    System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()))
             {
+                // Arrival facing, not the press-time approach direction: the
+                // teleport lands behind the target, so FacingYawStart is the
+                // only yaw that puts the camera behind the character.
                 entity.GameObject.GetComponent<CameraOrbitController>()?.AlignBehind(
                     row.FacingYawStart);
             }

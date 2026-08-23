@@ -31,6 +31,11 @@ namespace Arena.Input
         private const long PendingLocalMeleeEventHoldMs = 250L;
         private const string ConditionalTeleportBehindKind = "TELEPORT_BEHIND_TARGET_DISABLED";
         private const string CoupDeGraceAbilityId = "DAGGER_COUP_DE_GRACE";
+        // Gap-close camera arm: set at press, consumed when the runtime row
+        // lands. The TTL only bounds a press the server silently dropped.
+        private const long GapCloseCameraAlignTtlMs = 1500L;
+        private static bool _gapCloseCameraAlignArmed;
+        private static long _gapCloseCameraAlignExpiresAtMs;
         private readonly Dictionary<string, long> _predictedStrikeVisualUntilMs = new();
         private readonly Dictionary<string, PendingPredictedMeleeVisual> _pendingPredictedMeleeByToken = new();
         private readonly Dictionary<string, AcceptedPredictedMeleeAction> _acceptedPredictedMeleeByActionInstance = new();
@@ -268,6 +273,8 @@ namespace Arena.Input
             var localPos = entity.GameObject.transform.position;
             float strikeRange = 0f;
             float minimumRange = 0f;
+            float targetHorizontalDistance = 0f;
+            float targetHitRadius = 0f;
             if (requiresTarget)
             {
                 strikeRange = MeleeAttackModifierResolver.ResolveEffectiveRange(
@@ -281,6 +288,8 @@ namespace Arena.Input
                 var targetPos = target!.GetPresentationRoot().position;
                 float horizDist = MeleeStrikeGeometry.HorizontalDistance(localPos, targetPos);
                 float targetRadius = Mathf.Max(0f, target.HitRadius);
+                targetHorizontalDistance = horizDist;
+                targetHitRadius = targetRadius;
                 float strictAllowedDistance = MeleeStrikeGeometry.MaximumContactDistance(strikeRange, targetRadius);
                 if (horizDist > strictAllowedDistance)
                 {
@@ -325,7 +334,30 @@ namespace Arena.Input
             }
 
             if (requiresTarget && automaticallyFacesTarget)
-                AlignCoupDeGraceFacing(entity, target!);
+            {
+                if (gapClose == null)
+                {
+                    // No authored movement is coming, so nothing else will ever
+                    // point the caster at the target. Turn now.
+                    FaceTargetImmediately(entity, target!);
+                }
+
+                // Facing and camera are both left to the arrival when a
+                // behind-target teleport is coming: it lands the caster facing
+                // roughly OPPOSITE the press-time approach direction, so a
+                // press-time snap aims at the wrong yaw and then fights the
+                // arrival. Only a press that was actually used as a gap closer
+                // arms the camera — a point-blank execute still repositions
+                // behind a disabled target, but leaves the camera exactly where
+                // the player put it.
+                ArmGapCloseCameraAlign(
+                    gapClose != null
+                        && MeleeStrikeGeometry.ShouldActivateGapCloseOutsideImpactReach(
+                            targetHorizontalDistance,
+                            gapClose.ImpactRange,
+                            targetHitRadius),
+                    nowMs);
+            }
 
             // Send to server for authoritative validation, damage, and remote sync.
             bool predictsLocalVisual = !strikeChoice.shouldQueue;
@@ -441,7 +473,7 @@ namespace Arena.Input
             return false;
         }
 
-        private static void AlignCoupDeGraceFacing(
+        private static void FaceTargetImmediately(
             PlayerEntity entity,
             ICombatTargetEntity target)
         {
@@ -464,8 +496,28 @@ namespace Arena.Input
                 entity.GameObject.transform.rotation =
                     Quaternion.Euler(0f, targetYaw * Mathf.Rad2Deg, 0f);
             }
+        }
 
-            entity.GameObject.GetComponent<CameraOrbitController>()?.AlignBehind(targetYaw);
+        /// <summary>
+        /// Records whether the press that is about to open a gap-close runtime
+        /// was used as a gap closer. EntityRegistry consumes this when the
+        /// runtime row lands, so the camera follows the server's arrival facing
+        /// only for a real gap close. Every qualifying press writes the flag —
+        /// including a false — so a point-blank press immediately disarms a
+        /// previous arm rather than inheriting it.
+        /// </summary>
+        private static void ArmGapCloseCameraAlign(bool armed, long nowMs)
+        {
+            _gapCloseCameraAlignArmed = armed;
+            _gapCloseCameraAlignExpiresAtMs = armed ? nowMs + GapCloseCameraAlignTtlMs : 0L;
+        }
+
+        public static bool ConsumeGapCloseCameraAlign(long nowMs)
+        {
+            bool armed = _gapCloseCameraAlignArmed && nowMs < _gapCloseCameraAlignExpiresAtMs;
+            _gapCloseCameraAlignArmed = false;
+            _gapCloseCameraAlignExpiresAtMs = 0L;
+            return armed;
         }
 
         private static bool AutomaticallyFacesTarget(string abilityId)

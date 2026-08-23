@@ -137,6 +137,8 @@ namespace Arena.Simulation
         private bool _hasAny;
         private bool _isLocalPlayer;
         private bool _hasSpecialMovementTrack;
+        private bool _hasPendingSpecialMovementBoundary;
+        private float _pendingSpecialMovementBoundaryYaw;
         private bool _hasMovementActionState;
         private bool _grounded;
         private uint _lastProcessedTick;
@@ -188,6 +190,9 @@ namespace Arena.Simulation
         {
             _specialMovementTrack = SpecialMovementTrack.FromRow(row);
             _hasSpecialMovementTrack = true;
+            // A new runtime supersedes any un-consumed boundary from the last
+            // one; the boundary re-latches when THIS runtime ends.
+            _hasPendingSpecialMovementBoundary = false;
         }
 
         public void SetMovementActionState(SpacetimeDB.Types.MovementActionState row)
@@ -208,12 +213,31 @@ namespace Arena.Simulation
             {
                 long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 if (_isLocalPlayer)
+                {
                     SeedLocalAuthoritativePositionFromSpecialMovementEnd(_specialMovementTrack, nowMs);
+                    _pendingSpecialMovementBoundaryYaw = _serverYaw;
+                    _hasPendingSpecialMovementBoundary = true;
+                }
                 else
                     SeedRemoteInterpolationFromSpecialMovementEnd(_specialMovementTrack, nowMs);
             }
             _hasSpecialMovementTrack = false;
             _specialMovementTrack = default;
+        }
+
+        /// <summary>
+        /// True once per special movement that ended, handing back the facing
+        /// the server handed off at. Latched on the row-delete callback rather
+        /// than observed by the frame loop: a zero-duration runtime (any
+        /// TELEPORT gap close) can begin and end between two client frames, and
+        /// the input boundary still has to run for it.
+        /// </summary>
+        public bool ConsumeSpecialMovementBoundary(out float finalFacingYawRadians)
+        {
+            finalFacingYawRadians = _pendingSpecialMovementBoundaryYaw;
+            bool pending = _hasPendingSpecialMovementBoundary;
+            _hasPendingSpecialMovementBoundary = false;
+            return pending;
         }
 
         private void SeedLocalAuthoritativePositionFromSpecialMovementEnd(

@@ -9407,7 +9407,7 @@ fn cancel_authored_movement_for_transpose(ctx: &ReducerContext, identity: Identi
     if has_active_movement_delivery {
         clear_active_cast(ctx, identity);
     }
-    ctx.db.special_movement_runtime().owner().delete(identity);
+    crate::game_loop::cancel_special_movement_for_player(ctx, identity, ctx.timestamp);
     clear_movement_action_for_owner(ctx, identity);
     ctx.db
         .pending_melee_timed_movement()
@@ -10973,7 +10973,11 @@ mod tests {
         for marker in [
             "movement_delivery_for_action_id",
             "clear_active_cast",
-            "special_movement_runtime()",
+            // Stronger than a bare row delete: the shared helper drops the row
+            // AND applies the special-movement input boundary, so the server
+            // stops free-running a stale intent across the window the client
+            // has already thrown away.
+            "cancel_special_movement_for_player",
             "clear_movement_action_for_owner",
             "pending_melee_timed_movement()",
             "clear_npc_forced_movement",
