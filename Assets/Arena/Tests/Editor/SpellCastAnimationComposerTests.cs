@@ -148,6 +148,20 @@ namespace Arena.Tests.Editor
             Assert.That(ok, Is.True);
             Assert.That(Field(entry!, "clip"), Is.SameAs(cast));
             Assert.That(Field(entry!, "playbackLayer")!.ToString(), Is.EqualTo("RightGesture"));
+            Assert.That(Field(entry!, "castOrigin")!.ToString(), Is.EqualTo("RightHand"));
+        }
+
+        [Test]
+        public void OneHandLeft_AuthorsLeftCastOrigin()
+        {
+            AnimationClip cast = Clip("left-cast");
+            (bool ok, object? entry) = Compose(
+                OneHandFamily(Triple(null, null, cast)),
+                "Left",
+                "Instant");
+
+            Assert.That(ok, Is.True);
+            Assert.That(Field(entry!, "castOrigin")!.ToString(), Is.EqualTo("LeftHand"));
         }
 
         [Test]

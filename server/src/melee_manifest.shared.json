@@ -1648,7 +1648,7 @@
                     "slot_id": "light_combo_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 76
+                            "impact_delay_ms": 32
                         }
                     ],
                     "recovery_ms": 250,
@@ -1663,7 +1663,7 @@
                     "slot_id": "alt_light_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 149
+                            "impact_delay_ms": 59
                         }
                     ],
                     "recovery_ms": 250,
@@ -1693,7 +1693,7 @@
                     "slot_id": "auto_attack_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 76
+                            "impact_delay_ms": 32
                         }
                     ],
                     "recovery_ms": 250,
@@ -1708,7 +1708,7 @@
                     "slot_id": "maim",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 76
+                            "impact_delay_ms": 32
                         }
                     ],
                     "recovery_ms": 250,
@@ -1723,7 +1723,7 @@
                     "slot_id": "light_combo_2",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 49
+                            "impact_delay_ms": 3
                         }
                     ],
                     "recovery_ms": 250,
@@ -1738,7 +1738,7 @@
                     "slot_id": "light_3",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 52
+                            "impact_delay_ms": 78
                         }
                     ],
                     "recovery_ms": 300,
@@ -1787,6 +1787,66 @@
                         }
                     ],
                     "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_2_3_DISENGAGE",
+                    "slot_id": "alt_light_3",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 0
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "WARRIOR_DISENGAGE_STRIKE",
+                    "slot_id": "warrior_disengage_strike_melee_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 0
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_4_1_SPIN",
+                    "slot_id": "combo_attack_4_1_spin",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 177
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "COMBO_ATTACK_3_3_GROUND_TO_AIR",
+                    "slot_id": "utility_3",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 245
+                        }
+                    ],
+                    "recovery_ms": 300,
                     "is_gap_closer": false,
                     "combo_from": "",
                     "combo_open_ms": 0,

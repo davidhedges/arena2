@@ -91,6 +91,11 @@ namespace Arena.Presentation
                 return false;
 
             entry.spellId = spellId;
+            entry.castOrigin = family.handStyle == SpellCastHandStyle.OneHand
+                ? hand == SpellCastHand.Right
+                    ? SpellCastOrigin.RightHand
+                    : SpellCastOrigin.LeftHand
+                : SpellCastOrigin.UseVfxCue;
             // requiresCombatStance is a constant across the authored corpus (87/87 entries).
             entry.requiresCombatStance = true;
 

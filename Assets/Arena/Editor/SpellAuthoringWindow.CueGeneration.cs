@@ -297,8 +297,20 @@ namespace Arena.Editor
             bool hasResolvedAnimation,
             WeaponSpellAnimationEntry resolvedAnimation)
         {
-            // An explicit per-spell override wins — the authored E7 hand for spells the animation resolves
-            // wrongly (or can't resolve), e.g. an explicitly right-handed launch.
+            // Animation-owned origin is the primary source. It must travel with a mirrored
+            // CombatAnimationSet presentation so generated cast/projectile cues agree with runtime.
+            if (hasResolvedAnimation
+                && resolvedAnimation.HasAuthoredCastOrigin
+                && TryInferSpellPresentationHand(
+                    resolvedAnimation,
+                    out string authoredAnimationHand,
+                    out _))
+            {
+                return authoredAnimationHand;
+            }
+
+            // The older per-spell VFX override remains a migration fallback for recipes that have
+            // not yet declared an animation-owned origin.
             if (spellOverrides != null && spellOverrides.TryGet(abilityId, out SpellVfxAbilityOverride spellOverride))
             {
                 if (spellOverride.castHand == SpellVfxCastHandOverride.Left)

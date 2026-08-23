@@ -7,8 +7,6 @@ using Arena.Presentation;
 using Arena.Presentation.Appearance;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Animations;
-using UnityEngine.Playables;
 
 namespace Arena.Editor
 {
@@ -17,6 +15,13 @@ namespace Arena.Editor
         private const float CastPreviewHeight = 260f;
         private const float CastPreviewMinDistance = 0.5f;
         private const float CastPreviewMaxDistance = 2.5f;
+        private const int CastPreviewSpellActionLayerIndex = 4;
+        private const string CastPreviewControllerPath =
+            "Assets/Arena/Content/Animation/Arena_Character.controller";
+        private static readonly int CastPreviewStateHash =
+            Animator.StringToHash("SpellAction.SpellCastHoldAction1");
+        private static readonly int CastPreviewMirrorHash =
+            Animator.StringToHash("MirrorSpellAction");
 
         private readonly struct CastPreviewClipOption
         {
@@ -33,11 +38,10 @@ namespace Arena.Editor
         private PreviewRenderUtility? _castPreviewUtility;
         private GameObject? _castPreviewInstance;
         private Animator? _castPreviewAnimator;
-        private PlayableGraph _castPreviewGraph;
-        private AnimationClipPlayable _castPreviewPlayable;
-        private bool _castPreviewGraphCreated;
+        private AnimatorOverrideController? _castPreviewOverrideController;
         private CombatAnimationSet? _castPreviewAnimationSet;
         private AnimationClip? _castPreviewClip;
+        private bool _castPreviewMirrored;
         private Renderer[] _castPreviewAvatarRenderers = Array.Empty<Renderer>();
         private Bounds _castPreviewFrameBounds;
         private bool _castPreviewHasFrameBounds;
@@ -77,6 +81,11 @@ namespace Arena.Editor
             }
 
             CombatAnimationSet? previewSet = DrawCastPreviewAnimationSetPicker();
+            bool mirrored = previewSet != null
+                && previewSet.TryGetSpellCastAnimationOverride(
+                    spellId,
+                    out SpellCastAnimationOverride animationOverride)
+                && animationOverride.mirrorPresentation;
             List<CastPreviewClipOption> clipOptions = BuildCastPreviewClipOptions(recipe);
             if (clipOptions.Count == 0)
             {
@@ -109,8 +118,16 @@ namespace Arena.Editor
             }
 
             AnimationClip previewClip = clipOptions[selectedPhaseIndex].Clip;
-            EnsureCastAnimationPreview(previewSet, previewClip);
+            EnsureCastAnimationPreview(previewSet, previewClip, mirrored);
             UpdateCastAnimationPreviewPlayback(previewClip);
+
+            SpellCastOrigin effectiveOrigin = ResolvePreviewCastOrigin(
+                recipe.castOrigin,
+                mirrored);
+            EditorGUILayout.LabelField("Natural Cast Origin", DescribeCastOrigin(recipe.castOrigin));
+            EditorGUILayout.LabelField(
+                "Preview Cast Origin",
+                $"{DescribeCastOrigin(effectiveOrigin)}{(mirrored ? " (mirrored)" : string.Empty)}");
 
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -265,17 +282,19 @@ namespace Arena.Editor
                 _ => $"runtime release playback is {layerDescription}",
             };
             return $"{recipe.presentationMode}; {lifecycleDescription}.{exitDescription} "
-                + "This viewport shows the unmasked source clip so the full authored motion remains visible.";
+                + "This viewport uses the canonical full-body spell state, including the selected CombatAnimationSet mirror, so the humanoid and equipped weapon follow runtime playback.";
         }
 
         private void EnsureCastAnimationPreview(
             CombatAnimationSet? animationSet,
-            AnimationClip previewClip)
+            AnimationClip previewClip,
+            bool mirrored)
         {
             if (_castPreviewUtility != null
                 && _castPreviewInstance != null
                 && ReferenceEquals(_castPreviewAnimationSet, animationSet)
-                && ReferenceEquals(_castPreviewClip, previewClip))
+                && ReferenceEquals(_castPreviewClip, previewClip)
+                && _castPreviewMirrored == mirrored)
             {
                 return;
             }
@@ -283,6 +302,7 @@ namespace Arena.Editor
             DestroyCastAnimationPreview();
             _castPreviewAnimationSet = animationSet;
             _castPreviewClip = previewClip;
+            _castPreviewMirrored = mirrored;
             _castPreviewTime = 0f;
             _castPreviewLastEditorTime = EditorApplication.timeSinceStartup;
 
@@ -349,7 +369,7 @@ namespace Arena.Editor
 
             SetCastPreviewHideFlags(_castPreviewInstance, HideFlags.HideAndDontSave);
             _castPreviewAnimator = binding.Animator;
-            CreateCastAnimationPreviewGraph(previewClip);
+            CreateCastAnimationPreviewController(previewClip);
             _castPreviewUtility.AddSingleGO(_castPreviewInstance);
             SampleCastAnimationPreview();
         }
@@ -362,7 +382,7 @@ namespace Arena.Editor
 
         private void DestroyCastAnimationPreview()
         {
-            DestroyCastAnimationPreviewGraph();
+            DestroyCastAnimationPreviewController();
             if (_castPreviewUtility != null)
             {
                 _castPreviewUtility.Cleanup();
@@ -376,6 +396,7 @@ namespace Arena.Editor
             _castPreviewAnimator = null;
             _castPreviewAnimationSet = null;
             _castPreviewClip = null;
+            _castPreviewMirrored = false;
             _castPreviewAvatarRenderers = Array.Empty<Renderer>();
             _castPreviewFrameBounds = default;
             _castPreviewHasFrameBounds = false;
@@ -407,30 +428,35 @@ namespace Arena.Editor
             }
         }
 
-        private void CreateCastAnimationPreviewGraph(AnimationClip previewClip)
+        private void CreateCastAnimationPreviewController(AnimationClip previewClip)
         {
             if (_castPreviewAnimator == null)
                 return;
 
-            _castPreviewGraph = PlayableGraph.Create("SpellAuthoringWindowPreview");
-            _castPreviewGraphCreated = _castPreviewGraph.IsValid();
-            _castPreviewGraph.SetTimeUpdateMode(DirectorUpdateMode.Manual);
-            _castPreviewPlayable = AnimationClipPlayable.Create(_castPreviewGraph, previewClip);
-            _castPreviewPlayable.SetApplyFootIK(false);
-            _castPreviewPlayable.SetApplyPlayableIK(false);
-            AnimationPlayableOutput output = AnimationPlayableOutput.Create(
-                _castPreviewGraph,
-                "PreviewAnimation",
-                _castPreviewAnimator);
-            output.SetSourcePlayable(_castPreviewPlayable);
-            _castPreviewGraph.Play();
+            RuntimeAnimatorController? controller = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(
+                CastPreviewControllerPath);
+            if (controller == null)
+            {
+                _castPreviewError = $"Canonical animator controller is missing at {CastPreviewControllerPath}.";
+                return;
+            }
+
+            _castPreviewOverrideController = new AnimatorOverrideController(controller)
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            _castPreviewOverrideController["slot_spell_1"] = previewClip;
+            _castPreviewAnimator.runtimeAnimatorController = _castPreviewOverrideController;
+            _castPreviewAnimator.Rebind();
+            _castPreviewAnimator.SetBool(CastPreviewMirrorHash, _castPreviewMirrored);
+            _castPreviewAnimator.SetLayerWeight(CastPreviewSpellActionLayerIndex, 1f);
         }
 
-        private void DestroyCastAnimationPreviewGraph()
+        private void DestroyCastAnimationPreviewController()
         {
-            if (_castPreviewGraph.IsValid())
-                _castPreviewGraph.Destroy();
-            _castPreviewGraphCreated = false;
+            if (_castPreviewOverrideController != null)
+                DestroyImmediate(_castPreviewOverrideController);
+            _castPreviewOverrideController = null;
         }
 
         private void UpdateCastAnimationPreviewPlayback(AnimationClip previewClip)
@@ -470,18 +496,44 @@ namespace Arena.Editor
                 _castPreviewTime,
                 0f,
                 Mathf.Max(0f, _castPreviewClip.length));
-            if (_castPreviewGraphCreated && _castPreviewPlayable.IsValid())
+            if (_castPreviewAnimator == null || _castPreviewOverrideController == null)
+                return;
+
+            float normalizedTime = _castPreviewClip.length > 0.001f
+                ? Mathf.Clamp01(_castPreviewTime / _castPreviewClip.length)
+                : 0f;
+            _castPreviewAnimator.SetBool(CastPreviewMirrorHash, _castPreviewMirrored);
+            _castPreviewAnimator.SetLayerWeight(CastPreviewSpellActionLayerIndex, 1f);
+            _castPreviewAnimator.Play(
+                CastPreviewStateHash,
+                CastPreviewSpellActionLayerIndex,
+                normalizedTime);
+            _castPreviewAnimator.Update(0f);
+        }
+
+        private static SpellCastOrigin ResolvePreviewCastOrigin(
+            SpellCastOrigin naturalOrigin,
+            bool mirrored)
+        {
+            if (!mirrored)
+                return naturalOrigin;
+
+            return naturalOrigin switch
             {
-                _castPreviewPlayable.SetTime(_castPreviewTime);
-                _castPreviewGraph.Evaluate(0f);
-            }
-            else
+                SpellCastOrigin.LeftHand => SpellCastOrigin.RightHand,
+                SpellCastOrigin.RightHand => SpellCastOrigin.LeftHand,
+                _ => SpellCastOrigin.UseVfxCue,
+            };
+        }
+
+        private static string DescribeCastOrigin(SpellCastOrigin castOrigin)
+        {
+            return castOrigin switch
             {
-                GameObject sampleRoot = _castPreviewAnimator != null
-                    ? _castPreviewAnimator.gameObject
-                    : _castPreviewInstance;
-                _castPreviewClip.SampleAnimation(sampleRoot, _castPreviewTime);
-            }
+                SpellCastOrigin.LeftHand => "Left Hand",
+                SpellCastOrigin.RightHand => "Right Hand",
+                _ => "Use legacy VFX cue",
+            };
         }
 
         private void DrawCastAnimationPreviewViewport(Rect previewRect)

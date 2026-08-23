@@ -485,6 +485,30 @@ namespace Arena.Entity
             releaseOffsetSeconds = entry.ResolveReleaseOffsetSeconds();
             return true;
         }
+
+        /// <summary>
+        /// Resolves the same animation-owned cast origin used by spell playback. A mirrored
+        /// CombatAnimationSet override swaps both the humanoid motion and this origin.
+        /// </summary>
+        public bool TryResolveSpellCastOrigin(
+            string spellActionId,
+            out SpellCastOrigin castOrigin)
+        {
+            castOrigin = SpellCastOrigin.UseVfxCue;
+            if (_combatAnimationSet == null
+                || !SpellCastAnimationResolver.TryResolve(
+                    _combatAnimationSet,
+                    spellActionId,
+                    out WeaponSpellAnimationEntry entry)
+                || !entry.HasAuthoredCastOrigin)
+            {
+                return false;
+            }
+
+            castOrigin = entry.EffectiveCastOrigin;
+            return castOrigin == SpellCastOrigin.LeftHand
+                || castOrigin == SpellCastOrigin.RightHand;
+        }
         public void StartParry() => _animator?.StartParry();
         public void TriggerParryHit() => _animator?.TriggerParryHit();
         public void SetParryArmed(bool armed) => _animator?.SetParryArmed(armed);

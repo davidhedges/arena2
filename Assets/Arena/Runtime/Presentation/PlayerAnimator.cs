@@ -86,6 +86,7 @@ namespace Arena.Presentation
         private static readonly int TriggerSpellAction2Hash = Animator.StringToHash("TriggerSpellAction2");
         private static readonly int TriggerSpellAction3Hash = Animator.StringToHash("TriggerSpellAction3");
         private static readonly int TriggerSpellAction4Hash = Animator.StringToHash("TriggerSpellAction4");
+        private static readonly int MirrorSpellActionHash = Animator.StringToHash("MirrorSpellAction");
         private static readonly int TriggerParryHitHash  = Animator.StringToHash("TriggerParryHit");
         private static readonly int IsBlockingHash       = Animator.StringToHash("IsBlocking");
         private static readonly int TriggerBlockStartHash = Animator.StringToHash("TriggerBlockStart");
@@ -935,6 +936,7 @@ namespace Arena.Presentation
 
             _overrideController[WorldInteractionSlotName] = clip;
             _worldInteractionAppliedClip = clip;
+            _animator.SetBool(MirrorSpellActionHash, false);
             bool upperBody =
                 _worldInteractionPresentation?.Profile.BodyMode
                     == InteractionAnimationBodyMode.UpperBody;
@@ -1973,12 +1975,12 @@ namespace Arena.Presentation
 
             _pendingSpellHoldPulse = null;
 
+            bool hasResolvedEntry = SpellCastAnimationResolver.TryResolve(
+                _animationSet,
+                request.ActionId,
+                out WeaponSpellAnimationEntry entry);
             if (SpellCastAnimationResolver.IsExplicitlyNoAnimation(request.ActionId)
-                || (SpellCastAnimationResolver.TryResolve(
-                        _animationSet,
-                        request.ActionId,
-                        out WeaponSpellAnimationEntry entry)
-                    && !entry.UsesHoldPresentation))
+                || (hasResolvedEntry && !entry.UsesHoldPresentation))
             {
                 return;
             }
@@ -1994,6 +1996,10 @@ namespace Arena.Presentation
             AnimationClip? idleClip = holdProfile.IdleOrEnter;
             if (enterClip == null || idleClip == null)
                 return;
+
+            _animator.SetBool(
+                MirrorSpellActionHash,
+                hasResolvedEntry && entry.mirrorPresentation);
 
             bool needsCombatVisualStance = !_inCombat || (_weaponAttachments != null && !_weaponAttachments.IsInCombatVisual);
             if (needsCombatVisualStance)
@@ -2177,6 +2183,7 @@ namespace Arena.Presentation
             bool confirmedInstant,
             bool preserveFullBodyHoldBlendOut)
         {
+            _animator!.SetBool(MirrorSpellActionHash, spellEntry.mirrorPresentation);
             BeginAnimatedSpellPropHandoff(
                 spellKind,
                 spellEntry,

@@ -35,6 +35,12 @@ namespace Arena.Presentation
         internal static Vector3 ResolvePosition(CombatVfxAnchorFact fact, CombatVfxCueCatalog cue)
         {
             string anchor = WireIdentifier.Normalize(cue.Anchor);
+            return ResolvePosition(fact, anchor);
+        }
+
+        internal static Vector3 ResolvePosition(CombatVfxAnchorFact fact, string anchor)
+        {
+            anchor = WireIdentifier.Normalize(anchor);
             if (string.Equals(anchor, AnchorOrigin, StringComparison.Ordinal))
                 return fact.Origin;
             if (string.Equals(anchor, AnchorAreaOrigin, StringComparison.Ordinal))
@@ -56,6 +62,12 @@ namespace Arena.Presentation
         internal static Transform? ResolveFollowAnchor(CombatVfxAnchorFact fact, CombatVfxCueCatalog cue)
         {
             string anchor = WireIdentifier.Normalize(cue.Anchor);
+            return ResolveFollowAnchor(fact, anchor);
+        }
+
+        internal static Transform? ResolveFollowAnchor(CombatVfxAnchorFact fact, string anchor)
+        {
+            anchor = WireIdentifier.Normalize(anchor);
             return TryResolveTransform(fact, anchor, out Transform transform) ? transform : null;
         }
 

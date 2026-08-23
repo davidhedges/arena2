@@ -47,6 +47,7 @@ namespace Arena.Editor
             "TriggerSpellAction2",
             "TriggerSpellAction3",
             "TriggerSpellAction4",
+            "MirrorSpellAction",
             "StopX",
             "StopZ",
             "JumpX",

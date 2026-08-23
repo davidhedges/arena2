@@ -46,8 +46,8 @@ namespace Arena.Editor
         private string _draftCastVfxId = "VFX_CAST_HAND_01";
         private string _draftProjectileVfxId = "VFX_PROJECTILE_01";
         private string _draftImpactVfxId = "VFX_HIT_01";
-        private bool _includeLeftHandCastCue = true;
-        private bool _includeRightHandCastCue;
+        private bool _includeFallbackCastHandCue = true;
+        private SpellCastOrigin _draftFallbackCastOrigin = SpellCastOrigin.LeftHand;
         private string _generatedSnippet = string.Empty;
 
         [MenuItem("Arena/Spell Authoring/Open Spell Authoring", false, 490)]
@@ -158,6 +158,17 @@ namespace Arena.Editor
             }
 
             DrawCastAnimationPicker(spellId, archetype);
+
+            if (string.IsNullOrWhiteSpace(combatProfileId)
+                && SpellCastAnimationResolver.TryResolve(
+                    null,
+                    spellId,
+                    archetype,
+                    out WeaponSpellAnimationEntry sharedEntry))
+            {
+                hasResolvedAnimation = true;
+                resolvedAnimation = sharedEntry;
+            }
 
             if (string.IsNullOrWhiteSpace(combatProfileId))
             {
@@ -376,6 +387,31 @@ namespace Arena.Editor
                 ? recipes[currentRecipeIndex].PickerLabel
                 : inheritedLabel;
             EditorGUILayout.LabelField("Assigned Globally", globalLabel);
+            SpellCastOrigin selectedOrigin = (SpellCastOrigin)EditorGUILayout.EnumPopup(
+                new GUIContent(
+                    "Animation Cast Origin",
+                    "Natural emission hand owned by this shared animation recipe. A mirrored CombatAnimationSet override swaps this hand together with the humanoid motion."),
+                previewRecipe.castOrigin);
+            if (selectedOrigin != previewRecipe.castOrigin)
+            {
+                Undo.RecordObject(
+                    _spellAnimationCatalog,
+                    $"Set {previewRecipe.AnimationIdOrEmpty} cast origin");
+                if (_spellAnimationCatalog.EditorSetCastOrigin(
+                        previewRecipe.AnimationIdOrEmpty,
+                        selectedOrigin))
+                {
+                    previewRecipe.castOrigin = selectedOrigin;
+                    recipes[previewRecipeIndex] = previewRecipe;
+                    EditorUtility.SetDirty(_spellAnimationCatalog);
+                    AssetDatabase.SaveAssets();
+                    SpellCastAnimationResolver.InvalidateCache();
+                }
+            }
+            EditorGUILayout.LabelField(
+                "",
+                "Recipe origin changes save immediately.",
+                EditorStyles.miniLabel);
 
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -438,8 +474,14 @@ namespace Arena.Editor
             {
                 foreach (CombatAnimationSet animationSet in _animationSets)
                 {
-                    bool hasOverride = animationSet.TryGetSpellCastAnimationOverride(spellId, out string overrideId);
-                    int overrideRecipeIndex = hasOverride
+                    bool hasOverride = animationSet.TryGetSpellCastAnimationOverride(
+                        spellId,
+                        out SpellCastAnimationOverride animationOverride);
+                    string overrideId = hasOverride
+                        ? animationOverride.AnimationIdOrEmpty
+                        : string.Empty;
+                    bool mirrored = hasOverride && animationOverride.mirrorPresentation;
+                    int overrideRecipeIndex = overrideId.Length != 0
                         ? Array.FindIndex(
                             recipes,
                             recipe => string.Equals(recipe.AnimationIdOrEmpty, overrideId, StringComparison.Ordinal))
@@ -448,17 +490,45 @@ namespace Arena.Editor
                     overrideLabels[0] = $"Use Global / {globalLabel}";
                     Array.Copy(recipeLabels, 0, overrideLabels, 1, recipes.Length);
                     int overridePopupIndex = overrideRecipeIndex >= 0 ? overrideRecipeIndex + 1 : 0;
-                    int selectedOverrideIndex = EditorGUILayout.Popup(
-                        animationSet.name,
-                        overridePopupIndex,
-                        overrideLabels);
-                    if (selectedOverrideIndex == overridePopupIndex)
-                        continue;
+                    int selectedOverrideIndex;
+                    bool selectedMirrored;
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        EditorGUILayout.PrefixLabel(animationSet.name);
+                        selectedOverrideIndex = EditorGUILayout.Popup(
+                            overridePopupIndex,
+                            overrideLabels);
+                        selectedMirrored = GUILayout.Toggle(
+                            mirrored,
+                            new GUIContent(
+                                "Mirror",
+                                "Mirrors the complete humanoid cast and swaps the recipe's authored Left/Right cast origin."),
+                            GUILayout.Width(62f));
+                    }
+                    if (selectedOverrideIndex != overridePopupIndex
+                        || selectedMirrored != mirrored)
+                    {
+                        string selectedOverrideId = selectedOverrideIndex == 0
+                            ? string.Empty
+                            : recipes[selectedOverrideIndex - 1].AnimationIdOrEmpty;
+                        SetCombatAnimationOverride(
+                            animationSet,
+                            spellId,
+                            selectedOverrideId,
+                            selectedMirrored);
+                    }
 
-                    string selectedOverrideId = selectedOverrideIndex == 0
-                        ? string.Empty
-                        : recipes[selectedOverrideIndex - 1].AnimationIdOrEmpty;
-                    SetCombatAnimationOverride(animationSet, spellId, selectedOverrideId);
+                    int effectiveRecipeIndex = selectedOverrideIndex > 0
+                        ? selectedOverrideIndex - 1
+                        : currentRecipeIndex;
+                    if (selectedMirrored
+                        && effectiveRecipeIndex >= 0
+                        && recipes[effectiveRecipeIndex].castOrigin == SpellCastOrigin.UseVfxCue)
+                    {
+                        EditorGUILayout.HelpBox(
+                            $"{animationSet.name} mirrors the body, but {recipes[effectiveRecipeIndex].PickerLabel} has no animation-owned cast origin yet. Set its Animation Cast Origin above so the launch hand mirrors too.",
+                            MessageType.Warning);
+                    }
                 }
             }
         }
@@ -466,7 +536,8 @@ namespace Arena.Editor
         private static void SetCombatAnimationOverride(
             CombatAnimationSet animationSet,
             string spellId,
-            string animationId)
+            string animationId,
+            bool mirrorPresentation)
         {
             string normalizedSpellId = Normalize(spellId);
             string normalizedAnimationId = Normalize(animationId);
@@ -477,7 +548,7 @@ namespace Arena.Editor
 
             Undo.RecordObject(animationSet, $"Override {normalizedSpellId} cast animation");
             CombatAnimationSetProtection.MarkTrustedMutation(animationSet, "spell-cast-animation-override");
-            if (normalizedAnimationId.Length == 0)
+            if (normalizedAnimationId.Length == 0 && !mirrorPresentation)
             {
                 if (existingIndex >= 0)
                     overrides.RemoveAt(existingIndex);
@@ -488,6 +559,7 @@ namespace Arena.Editor
                 {
                     spellId = normalizedSpellId,
                     animationId = normalizedAnimationId,
+                    mirrorPresentation = mirrorPresentation,
                 };
                 if (existingIndex >= 0)
                     overrides[existingIndex] = replacement;
@@ -592,7 +664,7 @@ namespace Arena.Editor
             if (string.Equals(anchor, expectedHandAnchor, StringComparison.Ordinal))
                 return false;
 
-            warning = $"Cast hand cue uses {anchor}, but the CombatAnimationSet implies {expectedHandAnchor} because {expectedHandReason}.";
+            warning = $"Authored cue fallback uses {anchor}, but runtime will use {expectedHandAnchor} because {expectedHandReason}.";
             return true;
         }
 
@@ -623,6 +695,24 @@ namespace Arena.Editor
             out string expectedHandAnchor,
             out string reason)
         {
+            if (entry.EffectiveCastOrigin == SpellCastOrigin.LeftHand)
+            {
+                expectedHandAnchor = AnchorLeftHand;
+                reason = entry.mirrorPresentation
+                    ? "the animation recipe's right-hand origin is mirrored"
+                    : "the animation recipe authors a left-hand origin";
+                return true;
+            }
+
+            if (entry.EffectiveCastOrigin == SpellCastOrigin.RightHand)
+            {
+                expectedHandAnchor = AnchorRightHand;
+                reason = entry.mirrorPresentation
+                    ? "the animation recipe's left-hand origin is mirrored"
+                    : "the animation recipe authors a right-hand origin";
+                return true;
+            }
+
             if (entry.playbackLayer == SpellPlaybackLayer.LeftGesture)
             {
                 expectedHandAnchor = AnchorLeftHand;
@@ -714,6 +804,9 @@ namespace Arena.Editor
             EditorGUILayout.HelpBox(
                 "This first-pass tool does not write progression_catalog.shared.json. It generates snippets so the catalog remains hand-reviewable until a tested JSON writer exists.",
                 MessageType.Info);
+            EditorGUILayout.HelpBox(
+                "The hand below is only the legacy VFX fallback written into a new-spell snippet. Runtime uses the assigned animation recipe's Cast Origin, including any CombatAnimationSet mirror.",
+                MessageType.None);
 
             if (!_knownTemplateIdsLoaded)
             {
@@ -746,8 +839,17 @@ namespace Arena.Editor
             _draftCastVfxId = DrawVfxTemplateField("Cast VFX Id", _draftCastVfxId);
             _draftProjectileVfxId = DrawVfxTemplateField("Projectile VFX Id", _draftProjectileVfxId);
             _draftImpactVfxId = DrawVfxTemplateField("Impact VFX Id", _draftImpactVfxId);
-            _includeLeftHandCastCue = EditorGUILayout.Toggle("Left Hand Cast Cue", _includeLeftHandCastCue);
-            _includeRightHandCastCue = EditorGUILayout.Toggle("Right Hand Cast Cue", _includeRightHandCastCue);
+            _includeFallbackCastHandCue = EditorGUILayout.Toggle(
+                "Include Fallback Cast Cue",
+                _includeFallbackCastHandCue);
+            int fallbackHandIndex = _draftFallbackCastOrigin == SpellCastOrigin.RightHand ? 1 : 0;
+            fallbackHandIndex = EditorGUILayout.Popup(
+                "Legacy VFX Fallback Hand",
+                fallbackHandIndex,
+                new[] { "Left Hand", "Right Hand" });
+            _draftFallbackCastOrigin = fallbackHandIndex == 1
+                ? SpellCastOrigin.RightHand
+                : SpellCastOrigin.LeftHand;
 
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -911,13 +1013,13 @@ namespace Arena.Editor
 
             int sort = 10;
             bool wroteCue = false;
-            if (_includeLeftHandCastCue)
-                AppendCue(builder, ref wroteCue, "SPELL_CAST", "LEFT_HAND", _draftCastVfxId, "FOLLOW_ANCHOR", "ATTACHED", "UNTIL_RELEASE_EVENT", 0, 0, sort);
+            string fallbackHandAnchor = _draftFallbackCastOrigin == SpellCastOrigin.RightHand
+                ? AnchorRightHand
+                : AnchorLeftHand;
+            if (_includeFallbackCastHandCue)
+                AppendCue(builder, ref wroteCue, "SPELL_CAST", fallbackHandAnchor, _draftCastVfxId, "FOLLOW_ANCHOR", "ATTACHED", "UNTIL_RELEASE_EVENT", 0, 0, sort);
             sort += 10;
-            if (_includeRightHandCastCue)
-                AppendCue(builder, ref wroteCue, "SPELL_CAST", "RIGHT_HAND", _draftCastVfxId, "FOLLOW_ANCHOR", "ATTACHED", "UNTIL_RELEASE_EVENT", 0, 0, sort);
-            sort += 10;
-            AppendCue(builder, ref wroteCue, "SPELL_RELEASE", "RIGHT_HAND", _draftProjectileVfxId, "SPAWN_WORLD", "PROJECTILE_BODY", "UNTIL_TERMINAL_EVENT", 0, 0, sort);
+            AppendCue(builder, ref wroteCue, "SPELL_RELEASE", fallbackHandAnchor, _draftProjectileVfxId, "SPAWN_WORLD", "PROJECTILE_BODY", "UNTIL_TERMINAL_EVENT", 0, 0, sort);
             sort += 10;
             AppendCue(builder, ref wroteCue, "SPELL_IMPACT", "IMPACT_POINT", _draftImpactVfxId, "SPAWN_WORLD", "ONE_SHOT", "DURATION", 0, 1200, sort);
 

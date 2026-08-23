@@ -1283,7 +1283,10 @@ namespace Arena.Presentation
                 if (cue.ProjectileSequenceIndex != (int)row.SequenceIndex)
                     continue;
 
-                string anchor = WireIdentifier.Normalize(cue.Anchor);
+                string anchor = ResolveEffectiveSpellCastAnchor(
+                    row.Caster,
+                    row.ActionKind,
+                    cue.Anchor);
                 if (!IsCasterSocketAnchor(anchor))
                     return null;
 
@@ -1292,7 +1295,7 @@ namespace Arena.Presentation
                     row.Hit,
                     new Vector3(row.OriginX, row.OriginY, row.OriginZ),
                     new Vector3(row.PointX, row.PointY, row.PointZ));
-                Transform? socket = CombatVFXAnchorResolver.ResolveFollowAnchor(fact, cue);
+                Transform? socket = CombatVFXAnchorResolver.ResolveFollowAnchor(fact, anchor);
                 if (socket == null)
                     return null;
 
@@ -1316,6 +1319,32 @@ namespace Arena.Presentation
                 || string.Equals(anchor, AnchorRightHand, StringComparison.Ordinal)
                 || string.Equals(anchor, AnchorWeaponMainHand, StringComparison.Ordinal)
                 || string.Equals(anchor, AnchorWeaponOffHand, StringComparison.Ordinal);
+        }
+
+        private static string ResolveEffectiveSpellCastAnchor(
+            Identity caster,
+            string spellActionId,
+            string cueAnchor)
+        {
+            string fallback = WireIdentifier.Normalize(cueAnchor);
+            if (!string.Equals(fallback, AnchorLeftHand, StringComparison.Ordinal)
+                && !string.Equals(fallback, AnchorRightHand, StringComparison.Ordinal))
+            {
+                return fallback;
+            }
+
+            if (EntityRegistry.Instance == null
+                || !EntityRegistry.Instance.TryGetEntity(caster, out PlayerEntity entity)
+                || !entity.TryResolveSpellCastOrigin(
+                    spellActionId,
+                    out SpellCastOrigin castOrigin))
+            {
+                return fallback;
+            }
+
+            return castOrigin == SpellCastOrigin.RightHand
+                ? AnchorRightHand
+                : AnchorLeftHand;
         }
 
         private void DispatchProjectileContactCue(ProjectilePresentationEvent row)
@@ -1634,7 +1663,7 @@ namespace Arena.Presentation
                 Terminal = false,
             };
 
-            ProjectileVisuals.Start(row);
+            ProjectileVisuals.Start(row, TryResolveProjectileHandLaunchOrigin(row));
             return true;
         }
 
@@ -1877,14 +1906,19 @@ namespace Arena.Presentation
                 && !string.Equals(attachMode, AttachModeWorldAlignedToFacing, StringComparison.Ordinal))
                 return;
 
-            Vector3 position = CombatVFXAnchorResolver.ResolvePosition(fact.ToAnchorFact(), cue);
+            string resolvedAnchor = fact.IsSpell
+                ? ResolveEffectiveSpellCastAnchor(fact.Caster, fact.ActionKind, cue.Anchor)
+                : WireIdentifier.Normalize(cue.Anchor);
+            Vector3 position = CombatVFXAnchorResolver.ResolvePosition(
+                fact.ToAnchorFact(),
+                resolvedAnchor);
             bool followsTransform = string.Equals(attachMode, AttachModeFollowAnchor, StringComparison.Ordinal);
             bool followsGroundPosition = string.Equals(
                 attachMode,
                 AttachModeFollowGroundPosition,
                 StringComparison.Ordinal);
             Transform? followAnchor = followsTransform || followsGroundPosition
-                ? CombatVFXAnchorResolver.ResolveFollowAnchor(fact.ToAnchorFact(), cue)
+                ? CombatVFXAnchorResolver.ResolveFollowAnchor(fact.ToAnchorFact(), resolvedAnchor)
                 : null;
             if ((followsTransform || followsGroundPosition) && followAnchor == null)
                 return;

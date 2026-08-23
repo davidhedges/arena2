@@ -102,6 +102,34 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void AnimatorController_SpellBankStatesShareTheMirrorParameter()
+        {
+            AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(
+                "Assets/Arena/Content/Animation/Arena_Character.controller");
+
+            Assert.That(controller, Is.Not.Null);
+            AnimatorControllerParameter mirrorParameter = controller.parameters.Single(
+                parameter => parameter.name == "MirrorSpellAction");
+            Assert.That(mirrorParameter.type, Is.EqualTo(AnimatorControllerParameterType.Bool));
+
+            foreach (int layerIndex in new[] { 1, 4, 5, 6 })
+            {
+                AnimatorControllerLayer layer = controller.layers[layerIndex];
+                AnimatorState[] spellStates = layer.stateMachine.states
+                    .Select(childState => childState.state)
+                    .Where(state => state.name.Contains("SpellAction", StringComparison.Ordinal)
+                        || state.name.Contains("SpellCastHoldAction", StringComparison.Ordinal))
+                    .ToArray();
+                Assert.That(spellStates.Length, Is.EqualTo(8), layer.name);
+                foreach (AnimatorState state in spellStates)
+                {
+                    Assert.That(state.mirrorParameterActive, Is.True, $"{layer.name}/{state.name}");
+                    Assert.That(state.mirrorParameter, Is.EqualTo("MirrorSpellAction"), $"{layer.name}/{state.name}");
+                }
+            }
+        }
+
+        [Test]
         public void AnimatorController_UpperBodyHasDedicatedRecoverySlot()
         {
             AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(

@@ -663,6 +663,62 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void CombatSetMirrorOverride_MirrorsTheRecipeAndItsCastOriginTogether()
+        {
+            Type setType = T("CombatAnimationSet");
+            Type overrideType = T("SpellCastAnimationOverride");
+            Type entryType = T("WeaponSpellAnimationEntry");
+            var set = ScriptableObject.CreateInstance(setType);
+            try
+            {
+                object animationOverride = Activator.CreateInstance(overrideType)!;
+                overrideType.GetField("spellId")!.SetValue(animationOverride, "FLAMING_ORB");
+                overrideType.GetField("mirrorPresentation")!.SetValue(animationOverride, true);
+                Array overrides = Array.CreateInstance(overrideType, 1);
+                overrides.SetValue(animationOverride, 0);
+                setType.GetField("spellCastAnimationOverrides")!.SetValue(set, overrides);
+
+                Assert.That(Resolve(set, "FLAMING_ORB", "Charged", out object entry), Is.True);
+                Assert.That(Clip(entry)?.name, Is.EqualTo("Attack_02_02"));
+                Assert.That(entryType.GetField("mirrorPresentation")!.GetValue(entry), Is.True);
+                Assert.That(entryType.GetField("castOrigin")!.GetValue(entry)!.ToString(), Is.EqualTo("RightHand"));
+                Assert.That(entryType.GetProperty("EffectiveCastOrigin")!.GetValue(entry)!.ToString(), Is.EqualTo("LeftHand"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(set);
+            }
+        }
+
+        [Test]
+        public void CombatSetMirrorOverride_AlsoMirrorsLegacySemanticAnimations()
+        {
+            Type setType = T("CombatAnimationSet");
+            Type overrideType = T("SpellCastAnimationOverride");
+            Type entryType = T("WeaponSpellAnimationEntry");
+            UnityEngine.Object sourceSet = LoadSet("Daggers");
+            var set = UnityEngine.Object.Instantiate(sourceSet);
+            try
+            {
+                object animationOverride = Activator.CreateInstance(overrideType)!;
+                overrideType.GetField("spellId")!.SetValue(animationOverride, "FIREBALL");
+                overrideType.GetField("mirrorPresentation")!.SetValue(animationOverride, true);
+                Array overrides = Array.CreateInstance(overrideType, 1);
+                overrides.SetValue(animationOverride, 0);
+                setType.GetField("spellCastAnimationOverrides")!.SetValue(set, overrides);
+
+                Assert.That(Resolve(set, "FIREBALL", "Charged", out object entry), Is.True);
+                Assert.That(entryType.GetField("mirrorPresentation")!.GetValue(entry), Is.True);
+                Assert.That(entryType.GetField("castOrigin")!.GetValue(entry)!.ToString(), Is.EqualTo("LeftHand"));
+                Assert.That(entryType.GetProperty("EffectiveCastOrigin")!.GetValue(entry)!.ToString(), Is.EqualTo("RightHand"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(set);
+            }
+        }
+
+        [Test]
         public void SpellEntry_HasOneMovementStateIndependentClipAxis()
         {
             Type entryType = T("WeaponSpellAnimationEntry");

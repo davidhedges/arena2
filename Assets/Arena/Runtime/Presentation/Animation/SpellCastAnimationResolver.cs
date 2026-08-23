@@ -84,7 +84,13 @@ namespace Arena.Presentation
                 return catalogResolved;
 
             if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
-                return TryResolveFixed(normalizedSpellId, mapEntry, out entry);
+            {
+                if (!TryResolveFixed(normalizedSpellId, mapEntry, out entry))
+                    return false;
+
+                ApplyCombatSetOverride(set, normalizedSpellId, ref entry);
+                return true;
+            }
 
             if (!TryDeriveArchetype(normalizedSpellId, out SpellAnimationArchetype archetype, out _))
                 return false;
@@ -139,7 +145,13 @@ namespace Arena.Presentation
                 return catalogResolved;
 
             if (mapEntry.assignmentKind == SpellCastAnimationAssignmentKind.Fixed)
-                return TryResolveFixed(normalizedSpellId, mapEntry, out entry);
+            {
+                if (!TryResolveFixed(normalizedSpellId, mapEntry, out entry))
+                    return false;
+
+                ApplyCombatSetOverride(set, normalizedSpellId, ref entry);
+                return true;
+            }
 
             return TryResolveMotion(set, normalizedSpellId, mapEntry, archetype, out entry);
         }
@@ -262,6 +274,7 @@ namespace Arena.Presentation
                 return false;
 
             ApplyOverrides(mapEntry, ref entry);
+            ApplyCombatSetOverride(set, spellId, ref entry);
             ResolvedEntries[cacheKey] = entry;
             return true;
         }
@@ -288,6 +301,7 @@ namespace Arena.Presentation
             }
 
             ApplyOverrides(mapEntry, ref entry);
+            ApplyCombatSetOverride(set, spellId, ref entry);
             return true;
         }
 
@@ -316,8 +330,13 @@ namespace Arena.Presentation
             out string animationId,
             out bool isSetOverride)
         {
-            if (set != null && set.TryGetSpellCastAnimationOverride(spellId, out animationId))
+            if (set != null
+                && set.TryGetSpellCastAnimationOverride(
+                    spellId,
+                    out SpellCastAnimationOverride animationOverride)
+                && animationOverride.AnimationIdOrEmpty.Length != 0)
             {
+                animationId = animationOverride.AnimationIdOrEmpty;
                 isSetOverride = true;
                 return true;
             }
@@ -397,6 +416,44 @@ namespace Arena.Presentation
 
             if (mapEntry.animatedProp.enabled)
                 entry.animatedProp = mapEntry.animatedProp;
+        }
+
+        private static void ApplyCombatSetOverride(
+            CombatAnimationSet? set,
+            string spellId,
+            ref WeaponSpellAnimationEntry entry)
+        {
+            if (set != null
+                && set.TryGetSpellCastAnimationOverride(
+                    spellId,
+                    out SpellCastAnimationOverride animationOverride))
+            {
+                ApplyCombatSetOverride(animationOverride, ref entry);
+            }
+        }
+
+        private static void ApplyCombatSetOverride(
+            in SpellCastAnimationOverride animationOverride,
+            ref WeaponSpellAnimationEntry entry)
+        {
+            entry.mirrorPresentation = animationOverride.mirrorPresentation;
+            if (!entry.mirrorPresentation)
+                return;
+
+            entry.playbackLayer = MirrorGestureLayer(entry.playbackLayer);
+            SpellCastHoldProfile hold = entry.holdOverride;
+            hold.playbackLayer = MirrorGestureLayer(hold.playbackLayer);
+            entry.holdOverride = hold;
+        }
+
+        private static SpellPlaybackLayer MirrorGestureLayer(SpellPlaybackLayer layer)
+        {
+            return layer switch
+            {
+                SpellPlaybackLayer.LeftGesture => SpellPlaybackLayer.RightGesture,
+                SpellPlaybackLayer.RightGesture => SpellPlaybackLayer.LeftGesture,
+                _ => layer,
+            };
         }
 
         public static bool HasMapping(string spellId)

@@ -50,6 +50,8 @@ namespace Arena.Presentation
         public CombatEntryMode combatEntryMode;
         [Tooltip("The animator layer used by the cast/release clip.")]
         public SpellPlaybackLayer playbackLayer;
+        [Tooltip("Natural spell-emission hand for this animation. CombatAnimationSet mirroring swaps this hand with the humanoid motion. Use VFX Cue preserves legacy cue-authored handedness.")]
+        public SpellCastOrigin castOrigin;
         [Tooltip("Optional temporary weapon/shield visual driven by the recipe.")]
         public SpellAnimatedPropHandoff animatedProp;
 
@@ -89,6 +91,7 @@ namespace Arena.Presentation
                 presentationMode = presentationMode,
                 holdOverride = hold,
                 playbackLayer = playbackLayer,
+                castOrigin = castOrigin,
                 animatedProp = animatedProp,
             };
 
@@ -167,6 +170,31 @@ namespace Arena.Presentation
         {
             recipes = replacements ?? new List<SpellCastAnimationRecipe>();
             _recipeById = null;
+        }
+
+        public bool EditorSetCastOrigin(string animationId, SpellCastOrigin castOrigin)
+        {
+            string normalizedAnimationId = Normalize(animationId);
+            if (normalizedAnimationId.Length == 0)
+                return false;
+
+            for (int index = 0; index < recipes.Count; index++)
+            {
+                SpellCastAnimationRecipe recipe = recipes[index];
+                if (!string.Equals(recipe.AnimationIdOrEmpty, normalizedAnimationId, StringComparison.Ordinal))
+                    continue;
+
+                if (recipe.castOrigin == castOrigin)
+                    return false;
+
+                recipe.castOrigin = castOrigin;
+                recipes[index] = recipe;
+                _recipeById = null;
+                SpellCastAnimationResolver.InvalidateCache();
+                return true;
+            }
+
+            return false;
         }
 #endif
 

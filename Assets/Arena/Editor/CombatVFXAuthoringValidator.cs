@@ -293,6 +293,12 @@ namespace Arena.Editor
             CombatAnimationSet animationSet,
             WeaponSpellAnimationEntry entry)
         {
+            // Animation-owned origins deliberately supersede concrete LEFT_HAND/RIGHT_HAND cue
+            // anchors at runtime, including per-set mirroring. The cue remains a compatibility
+            // fallback for casters without a resolved player animation set.
+            if (entry.HasAuthoredCastOrigin)
+                return;
+
             if (!TryInferSpellPresentationHand(entry, out string expectedHandAnchor, out string reason))
                 return;
 
@@ -961,11 +967,6 @@ namespace Arena.Editor
                     }
                     if (!seenOverrideSpellIds.Add(overrideSpellId))
                         errors.Add($"CombatAnimationSet '{animationSet.name}' has duplicate animation overrides for spell '{overrideSpellId}'.");
-                    if (overrideAnimationId.Length == 0)
-                    {
-                        errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' has no animationId.");
-                        continue;
-                    }
                     if (!spellByActionId.TryGetValue(overrideSpellId, out AbilityDefinition overrideAbility))
                     {
                         errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' has no matching SPELL ability in progression_catalog.shared.json.");
@@ -981,21 +982,52 @@ namespace Arena.Editor
                         errors.Add($"CombatAnimationSet '{animationSet.name}' overrides spell '{overrideSpellId}', but its global mapping explicitly disables animation.");
                         continue;
                     }
-                    if (animationCatalog == null
-                        || !animationCatalog.TryGetRecipe(overrideAnimationId, out SpellCastAnimationRecipe overrideRecipe))
+                    string resolvedOverrideAnimationId = overrideAnimationId;
+                    if (resolvedOverrideAnimationId.Length == 0)
                     {
-                        errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' references missing catalog recipe '{overrideAnimationId}'.");
+                        if (!animationOverride.mirrorPresentation)
+                        {
+                            errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' has no animationId or mirror setting.");
+                            continue;
+                        }
+
+                        SpellAnimationArchetype inheritedArchetype = DeriveSpellAnimationArchetype(overrideAbility);
+                        if (!SpellCastAnimationResolver.TryResolve(
+                                animationSet,
+                                overrideSpellId,
+                                inheritedArchetype,
+                                out WeaponSpellAnimationEntry inheritedEntry))
+                        {
+                            errors.Add($"CombatAnimationSet '{animationSet.name}' mirror-only override for spell '{overrideSpellId}' did not resolve its global presentation.");
+                            continue;
+                        }
+                        if (!inheritedEntry.HasAuthoredCastOrigin)
+                        {
+                            errors.Add($"CombatAnimationSet '{animationSet.name}' mirrors the global presentation for spell '{overrideSpellId}', but that presentation still uses the legacy VFX cue origin. Author a Left Hand or Right Hand animation origin before mirroring it.");
+                        }
                         continue;
+                    }
+                    if (animationCatalog == null
+                        || !animationCatalog.TryGetRecipe(resolvedOverrideAnimationId, out SpellCastAnimationRecipe overrideRecipe))
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' references missing catalog recipe '{resolvedOverrideAnimationId}'.");
+                        continue;
+                    }
+
+                    if (animationOverride.mirrorPresentation
+                        && overrideRecipe.castOrigin == SpellCastOrigin.UseVfxCue)
+                    {
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' mirrors recipe '{resolvedOverrideAnimationId}' for spell '{overrideSpellId}', but the recipe still uses the legacy VFX cue origin. Author Left Hand or Right Hand on the recipe so the launch origin mirrors with the body.");
                     }
 
                     SpellAnimationArchetype overrideArchetype = DeriveSpellAnimationArchetype(overrideAbility);
                     if (!overrideRecipe.IsCompatibleWith(overrideArchetype))
                     {
-                        errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' selects recipe '{overrideAnimationId}', which is not marked compatible with {overrideArchetype}.");
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' selects recipe '{resolvedOverrideAnimationId}', which is not marked compatible with {overrideArchetype}.");
                     }
                     if (!SpellCastAnimationResolver.TryResolve(animationSet, overrideSpellId, overrideArchetype, out _))
                     {
-                        errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' did not resolve recipe '{overrideAnimationId}'.");
+                        errors.Add($"CombatAnimationSet '{animationSet.name}' override for spell '{overrideSpellId}' did not resolve recipe '{resolvedOverrideAnimationId}'.");
                     }
                 }
             }
@@ -1095,7 +1127,7 @@ namespace Arena.Editor
 
                 foreach (CombatAnimationSet animationSet in animationSets)
                 {
-                    if (animationSet.TryGetSpellCastAnimationOverride(spellId, out _))
+                    if (animationSet.TryGetSpellCastAnimationOverride(spellId, out string _))
                         continue;
 
                     if (!animationSet.TryGetSpellCastFamily(entry.motion, out string familyBaseName))

@@ -524,6 +524,18 @@ namespace Arena.Presentation
         HoldWithPulse = 3,
     }
 
+    /// <summary>
+    /// Natural spell-emission origin authored by a cast animation. UseVfxCue preserves the
+    /// concrete LEFT_HAND/RIGHT_HAND anchor already present in legacy VFX cue data.
+    /// </summary>
+    [Serializable]
+    public enum SpellCastOrigin
+    {
+        UseVfxCue = 0,
+        LeftHand = 1,
+        RightHand = 2,
+    }
+
     [Serializable]
     public struct SpellCastHoldProfile
     {
@@ -583,6 +595,10 @@ namespace Arena.Presentation
         [Tooltip("How this spell should present relative to locomotion. UpperBodyWhileMoving preserves locomotion only while moving; FullBody always uses the spell-action layer; UpperBody always uses the upper-body layer; LeftGesture/RightGesture use single masked pelvis/spine/casting-arm overlays.")]
         [FormerlySerializedAs("movingPlaybackMode")]
         public SpellPlaybackLayer playbackLayer;
+        [Tooltip("Natural hand the authored animation emits from. Use VFX Cue preserves legacy cue-authored handedness.")]
+        public SpellCastOrigin castOrigin;
+        [Tooltip("Mirror the complete humanoid spell presentation. The effective cast origin is mirrored with it.")]
+        public bool mirrorPresentation;
         [Tooltip("Obsolete serialized compatibility field. Runtime reads OnLowerBodyUnlock from the selected clip instead.")]
         public float lowerBodyUnlockAtSeconds;
         [Tooltip("Obsolete serialized compatibility field. Runtime uses the default lower-body blend-out duration.")]
@@ -602,6 +618,16 @@ namespace Arena.Presentation
         public bool UsesLeftGesture => playbackLayer == SpellPlaybackLayer.LeftGesture;
         public bool UsesRightGesture => playbackLayer == SpellPlaybackLayer.RightGesture;
         public bool HasAnimatedPropHandoff => animatedProp.enabled;
+        public bool HasAuthoredCastOrigin => castOrigin == SpellCastOrigin.LeftHand
+            || castOrigin == SpellCastOrigin.RightHand;
+        public SpellCastOrigin EffectiveCastOrigin => mirrorPresentation
+            ? castOrigin switch
+            {
+                SpellCastOrigin.LeftHand => SpellCastOrigin.RightHand,
+                SpellCastOrigin.RightHand => SpellCastOrigin.LeftHand,
+                _ => SpellCastOrigin.UseVfxCue,
+            }
+            : castOrigin;
         public bool UsesHoldPresentation => presentationMode == SpellAnimationPresentationMode.HoldThenRelease
             || presentationMode == SpellAnimationPresentationMode.HoldOnly
             || presentationMode == SpellAnimationPresentationMode.HoldWithPulse;
@@ -782,6 +808,8 @@ namespace Arena.Presentation
         public string spellId;
         [Tooltip("Recipe id from SpellCastAnimationCatalog.")]
         public string animationId;
+        [Tooltip("Mirror the selected recipe for this combat animation set. Its authored cast origin mirrors with the body.")]
+        public bool mirrorPresentation;
 
         public string SpellIdOrEmpty => string.IsNullOrWhiteSpace(spellId)
             ? string.Empty
@@ -790,6 +818,8 @@ namespace Arena.Presentation
         public string AnimationIdOrEmpty => string.IsNullOrWhiteSpace(animationId)
             ? string.Empty
             : animationId.Trim().ToUpperInvariant();
+
+        public bool HasAny => AnimationIdOrEmpty.Length != 0 || mirrorPresentation;
     }
 
     [Serializable]
@@ -1677,7 +1707,7 @@ namespace Arena.Presentation
         public SpellCastMotionBinding[] spellCastMotionBindings = Array.Empty<SpellCastMotionBinding>();
 
         [Header("Spell Cast Overrides")]
-        [Tooltip("Optional per-spell overrides for shared catalog recipes that do not fit this combat pose. Leave empty to use each spell's global selection.")]
+        [Tooltip("Optional per-spell recipe and mirror exceptions for shared catalog animations that do not fit this combat pose. Leave empty to use each spell's global unmirrored selection.")]
         public SpellCastAnimationOverride[] spellCastAnimationOverrides = Array.Empty<SpellCastAnimationOverride>();
 
         [Header("Spell Cast Hold")]
@@ -2169,7 +2199,9 @@ namespace Arena.Presentation
             return false;
         }
 
-        public bool TryGetSpellCastAnimationOverride(string spellId, out string animationId)
+        public bool TryGetSpellCastAnimationOverride(
+            string spellId,
+            out SpellCastAnimationOverride animationOverride)
         {
             string normalizedSpellId = string.IsNullOrWhiteSpace(spellId)
                 ? string.Empty
@@ -2180,14 +2212,29 @@ namespace Arena.Presentation
                 {
                     SpellCastAnimationOverride candidate = spellCastAnimationOverrides[index];
                     if (!string.Equals(candidate.SpellIdOrEmpty, normalizedSpellId, StringComparison.Ordinal)
-                        || candidate.AnimationIdOrEmpty.Length == 0)
+                        || !candidate.HasAny)
                     {
                         continue;
                     }
 
-                    animationId = candidate.AnimationIdOrEmpty;
+                    animationOverride = candidate;
                     return true;
                 }
+            }
+
+            animationOverride = default;
+            return false;
+        }
+
+        public bool TryGetSpellCastAnimationOverride(string spellId, out string animationId)
+        {
+            if (TryGetSpellCastAnimationOverride(
+                    spellId,
+                    out SpellCastAnimationOverride animationOverride)
+                && animationOverride.AnimationIdOrEmpty.Length != 0)
+            {
+                animationId = animationOverride.AnimationIdOrEmpty;
+                return true;
             }
 
             animationId = string.Empty;
