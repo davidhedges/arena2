@@ -908,6 +908,12 @@ namespace Arena.Editor
 
             if (animationCatalog != null)
             {
+                if (!animationCatalog.DefaultCastLeadIn.IsPlayable)
+                {
+                    errors.Add(
+                        "SpellCastAnimationCatalog Default Cast Lead-In requires playable Start and Loop clips.");
+                }
+
                 var seenRecipeIds = new HashSet<string>(StringComparer.Ordinal);
                 foreach (SpellCastAnimationRecipe recipe in animationCatalog.Recipes)
                 {
@@ -921,6 +927,13 @@ namespace Arena.Editor
                         errors.Add($"SpellCastAnimationCatalog has duplicate recipe id '{recipeId}'.");
                     if (!recipe.TryBuild("VALIDATION_SPELL", out _))
                         errors.Add($"SpellCastAnimationCatalog recipe '{recipeId}' has no playable {recipe.presentationMode} presentation.");
+                    if (recipe.presentationMode == SpellAnimationPresentationMode.ReleaseOnly
+                        && recipe.castLeadInPolicy == SpellCastLeadInPolicy.Custom
+                        && !recipe.customCastLeadIn.IsPlayable)
+                    {
+                        errors.Add(
+                            $"SpellCastAnimationCatalog recipe '{recipeId}' selects a Custom cast lead-in without playable Start and Loop clips.");
+                    }
                 }
             }
 

@@ -651,6 +651,41 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void SpellCastPresentation_ShortCastSkipsReleasePrefixToKeepMarkerAligned()
+        {
+            Type controllerType = RequireRuntimeType("Arena.Presentation.SpellCastPresentationController");
+            MethodInfo method = RequireMethod(
+                controllerType,
+                "ComputeReleasePlaybackStartOffsetSeconds",
+                typeof(long),
+                typeof(long),
+                typeof(float));
+
+            object? result = method.Invoke(null, new object[] { 1_000L, 1_200L, 0.75f });
+
+            Assert.That((float)result!, Is.EqualTo(0.55f).Within(0.001f));
+        }
+
+        [Test]
+        public void SpellCastHold_UsesFullBodyAtRestAndUpperBodyWhileMoving()
+        {
+            Type animatorType = RequireRuntimeType("Arena.Presentation.PlayerAnimator");
+            Type playbackLayerType = RequireRuntimeType("Arena.Presentation.SpellPlaybackLayer");
+            MethodInfo method = RequireMethod(
+                animatorType,
+                "ResolveSpellCastHoldPlaybackLayer",
+                playbackLayerType,
+                typeof(float));
+            object dynamicLayer = Enum.Parse(playbackLayerType, "UpperBodyWhileMoving");
+
+            object? atRest = method.Invoke(null, new[] { dynamicLayer, (object)0f });
+            object? moving = method.Invoke(null, new[] { dynamicLayer, (object)1f });
+
+            Assert.That(atRest?.ToString(), Is.EqualTo("FullBody"));
+            Assert.That(moving?.ToString(), Is.EqualTo("UpperBody"));
+        }
+
+        [Test]
         public void SpellCastPresentation_ReleaseStartTreatsInvalidAuthoredOffsetsAsImmediateRelease()
         {
             Type controllerType = RequireRuntimeType("Arena.Presentation.SpellCastPresentationController");

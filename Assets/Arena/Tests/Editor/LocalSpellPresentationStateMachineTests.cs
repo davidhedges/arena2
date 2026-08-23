@@ -67,6 +67,22 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void ScheduledRelease_CarriesCastSpeedPlaybackOffset()
+        {
+            object machine = CreateStateMachine();
+            Invoke(machine, "Predict", PredictInput("ICICLE", "p1", 1UL));
+            Invoke(machine, "PredictedActionResultInserted", Result("c1", "p1", 1UL, "accepted"));
+            Invoke(machine, "ActiveCastInserted", ActiveCast("c1", "ICICLE"));
+
+            object release = Invoke(machine, "ScheduledReleaseDue", 1_500L, 0.55f);
+
+            Assert.That(CommandKind(release), Is.EqualTo("RequestRelease"));
+            Assert.That(
+                (float)Field(release.GetType(), "PlaybackStartOffsetSeconds").GetValue(release)!,
+                Is.EqualTo(0.55f).Within(0.001f));
+        }
+
+        [Test]
         public void ConfirmedPredictionKeepsLocalStartWhenAuthoritativeStartIsDelayed()
         {
             object machine = CreateStateMachine();

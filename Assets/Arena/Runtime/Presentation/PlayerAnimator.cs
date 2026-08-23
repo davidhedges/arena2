@@ -1796,7 +1796,7 @@ namespace Arena.Presentation
                     _animationSet,
                     request.ActionId,
                     out WeaponSpellAnimationEntry spellEntry)
-                || !spellEntry.UsesHoldPresentation
+                || !spellEntry.CanPlayRequestedHold
                 || !_animationSet.TryGetSpellCastHoldProfile(
                     request.ActionId,
                     out SpellCastHoldProfile holdProfile)
@@ -1980,7 +1980,7 @@ namespace Arena.Presentation
                 request.ActionId,
                 out WeaponSpellAnimationEntry entry);
             if (SpellCastAnimationResolver.IsExplicitlyNoAnimation(request.ActionId)
-                || (hasResolvedEntry && !entry.UsesHoldPresentation))
+                || (hasResolvedEntry && !entry.CanPlayRequestedHold))
             {
                 return;
             }
@@ -2022,6 +2022,11 @@ namespace Arena.Presentation
             float enterCompleteNt = holdProfile.ResolveEnterCompleteNormalizedTime(SpellCastHoldEnterToIdleNormalizedTime);
             float exitBlendOut = holdProfile.ResolveExitBlendOutSeconds(SpellCastHoldExitCrossFadeDurationSeconds);
             float exitDelay = holdProfile.ResolveExitDelaySeconds(SpellCastHoldExitDelaySeconds);
+            bool usesUpperBodyWhileMoving =
+                holdProfile.playbackLayer == SpellPlaybackLayer.UpperBodyWhileMoving;
+            SpellPlaybackLayer activePlaybackLayer = ResolveSpellCastHoldPlaybackLayer(
+                holdProfile.playbackLayer,
+                _latestLocomotionRawMagnitude);
 
             // Starting a fresh hold cancels any exit fade left running from a prior one.
             _actionPlayback.ResetSpellCastHoldFadeOut();
@@ -2029,13 +2034,14 @@ namespace Arena.Presentation
                 request.ActionId,
                 enterBankSlot,
                 idleBankSlot,
-                holdProfile.playbackLayer,
+                activePlaybackLayer,
+                usesUpperBodyWhileMoving,
                 enterCompleteNt,
                 exitBlendOut,
                 exitDelay);
 
             PlaySpellCastHoldState(
-                holdProfile.playbackLayer,
+                activePlaybackLayer,
                 enterBankSlot,
                 0f,
                 SpellCastHoldEnterCrossFadeDurationSeconds);
@@ -2117,6 +2123,8 @@ namespace Arena.Presentation
                 return;
 
             ActiveSpellCastHoldPresentation active = _actionPlayback.ActiveSpellCastHoldPresentation.Value;
+            if (TryUpdateSpellCastHoldLocomotionLayer(active))
+                active = _actionPlayback.ActiveSpellCastHoldPresentation!.Value;
             if (_actionPlayback.SpellCastHoldPhase != SpellCastHoldPlaybackPhase.Enter)
             {
                 return;
@@ -2142,6 +2150,70 @@ namespace Arena.Presentation
                 active.IdleBankSlot,
                 0f,
                 SpellCastHoldPhaseCrossFadeDurationSeconds);
+        }
+
+        private bool TryUpdateSpellCastHoldLocomotionLayer(
+            ActiveSpellCastHoldPresentation active)
+        {
+            if (_animator == null
+                || !active.UsesUpperBodyWhileMoving
+                || _pendingSpellHoldPulse != null)
+            {
+                return false;
+            }
+
+            SpellPlaybackLayer desiredLayer = ResolveSpellCastHoldPlaybackLayer(
+                SpellPlaybackLayer.UpperBodyWhileMoving,
+                _latestLocomotionRawMagnitude);
+            if (desiredLayer == active.PlaybackLayer)
+                return false;
+
+            int currentLayerIndex = ResolveSpellCastHoldLayerIndex(active.PlaybackLayer);
+            int currentBankSlot = _actionPlayback.SpellCastHoldPhase == SpellCastHoldPlaybackPhase.Idle
+                ? active.IdleBankSlot
+                : active.EnterBankSlot;
+            int currentStateHash = ResolveSpellCastHoldStateHash(
+                active.PlaybackLayer,
+                currentBankSlot);
+            AnimatorStateInfo state = _animator.GetCurrentAnimatorStateInfo(currentLayerIndex);
+            if (state.shortNameHash != currentStateHash)
+            {
+                if (!_animator.IsInTransition(currentLayerIndex))
+                    return false;
+
+                AnimatorStateInfo next = _animator.GetNextAnimatorStateInfo(currentLayerIndex);
+                if (next.shortNameHash != currentStateHash)
+                    return false;
+                state = next;
+            }
+
+            float normalizedTime = _actionPlayback.SpellCastHoldPhase == SpellCastHoldPlaybackPhase.Enter
+                ? Mathf.Clamp01(state.normalizedTime)
+                : Mathf.Repeat(state.normalizedTime, 1f);
+            if (active.PlaybackLayer == SpellPlaybackLayer.FullBody)
+                _animator.Play(SpellActionEmptyStateHash, SpellActionLayerIndex, 0f);
+            else
+                PlayUpperBodyState(UpperBodyEmptyStateHash, 0f);
+
+            _actionPlayback.SetSpellCastHoldPlaybackLayer(desiredLayer);
+            PlaySpellCastHoldState(
+                desiredLayer,
+                currentBankSlot,
+                normalizedTime,
+                SpellCastHoldPhaseCrossFadeDurationSeconds);
+            return true;
+        }
+
+        internal static SpellPlaybackLayer ResolveSpellCastHoldPlaybackLayer(
+            SpellPlaybackLayer requestedLayer,
+            float locomotionRawMagnitude)
+        {
+            if (requestedLayer != SpellPlaybackLayer.UpperBodyWhileMoving)
+                return requestedLayer;
+
+            return locomotionRawMagnitude >= StopTriggerThreshold
+                ? SpellPlaybackLayer.UpperBody
+                : SpellPlaybackLayer.FullBody;
         }
 
         private void PlaySpellAnimation(in CombatAnimationRequest request, bool preserveFullBodyHoldBlendOut = false)
@@ -2281,7 +2353,9 @@ namespace Arena.Presentation
         {
             float clipLengthSeconds = Mathf.Max(0f, spellClip.length);
             float authoredReleasePointSeconds = spellEntry.ResolveReleaseOffsetSeconds();
-            float startupTrimSeconds = spellEntry.ResolveInstantCastStartupTrimSeconds(confirmedInstant);
+            float startupTrimSeconds = Mathf.Max(
+                spellEntry.ResolveInstantCastStartupTrimSeconds(confirmedInstant),
+                request.SpellPlaybackStartOffsetSeconds);
             float effectiveReleasePointSeconds = Mathf.Max(
                 0f,
                 authoredReleasePointSeconds - startupTrimSeconds);

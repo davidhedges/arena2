@@ -100,6 +100,19 @@ namespace Arena.Editor
             string assetPath,
             Dictionary<AnimationClip, List<CombatClipRoleObservation>> map)
         {
+            Add(
+                map,
+                catalog.DefaultCastLeadIn.enter,
+                CombatClipRole.SpellCastHoldEnter,
+                assetPath,
+                ".defaultCastLeadIn.enter");
+            Add(
+                map,
+                catalog.DefaultCastLeadIn.idleLoop,
+                CombatClipRole.SpellCastHoldIdle,
+                assetPath,
+                ".defaultCastLeadIn.idleLoop");
+
             for (int recipeIndex = 0; recipeIndex < catalog.Recipes.Count; recipeIndex++)
             {
                 SpellCastAnimationRecipe recipe = catalog.Recipes[recipeIndex];
@@ -111,6 +124,11 @@ namespace Arena.Editor
                 {
                     Add(map, recipe.hold.enter, CombatClipRole.SpellCastHoldEnter, assetPath, root + ".hold.enter");
                     Add(map, recipe.hold.idleLoop, CombatClipRole.SpellCastHoldIdle, assetPath, root + ".hold.idleLoop");
+                }
+                else if (recipe.castLeadInPolicy == SpellCastLeadInPolicy.Custom)
+                {
+                    Add(map, recipe.customCastLeadIn.enter, CombatClipRole.SpellCastHoldEnter, assetPath, root + ".customCastLeadIn.enter");
+                    Add(map, recipe.customCastLeadIn.idleLoop, CombatClipRole.SpellCastHoldIdle, assetPath, root + ".customCastLeadIn.idleLoop");
                 }
             }
         }

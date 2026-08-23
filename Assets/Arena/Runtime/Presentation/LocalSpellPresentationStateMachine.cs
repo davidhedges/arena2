@@ -53,6 +53,7 @@ namespace Arena.Presentation
             string.Empty,
             default,
             0L,
+            0f,
             LocalSpellPresentationCommandAuthority.Predicted);
 
         private LocalSpellPresentationCommand(
@@ -61,6 +62,7 @@ namespace Arena.Presentation
             string targetId,
             LocalSpellPresentationPoint aimPoint,
             long startedAtMs,
+            float playbackStartOffsetSeconds,
             LocalSpellPresentationCommandAuthority authority)
         {
             Kind = kind;
@@ -68,6 +70,7 @@ namespace Arena.Presentation
             TargetId = targetId ?? string.Empty;
             AimPoint = aimPoint;
             StartedAtMs = startedAtMs;
+            PlaybackStartOffsetSeconds = playbackStartOffsetSeconds;
             Authority = authority;
         }
 
@@ -76,6 +79,7 @@ namespace Arena.Presentation
         public readonly string TargetId;
         public readonly LocalSpellPresentationPoint AimPoint;
         public readonly long StartedAtMs;
+        public readonly float PlaybackStartOffsetSeconds;
         public readonly LocalSpellPresentationCommandAuthority Authority;
 
         public static LocalSpellPresentationCommand None => NoneCommand;
@@ -93,6 +97,7 @@ namespace Arena.Presentation
                 targetId,
                 aimPoint,
                 startedAtMs,
+                0f,
                 authority);
         }
 
@@ -104,6 +109,7 @@ namespace Arena.Presentation
                 string.Empty,
                 default,
                 0L,
+                0f,
                 LocalSpellPresentationCommandAuthority.Authoritative);
         }
 
@@ -111,7 +117,8 @@ namespace Arena.Presentation
             string spellActionId,
             string targetId,
             LocalSpellPresentationPoint aimPoint,
-            long startedAtMs)
+            long startedAtMs,
+            float playbackStartOffsetSeconds = 0f)
         {
             return new LocalSpellPresentationCommand(
                 LocalSpellPresentationCommandKind.RequestRelease,
@@ -119,6 +126,7 @@ namespace Arena.Presentation
                 targetId,
                 aimPoint,
                 startedAtMs,
+                playbackStartOffsetSeconds,
                 LocalSpellPresentationCommandAuthority.Authoritative);
         }
     }
@@ -535,6 +543,11 @@ namespace Arena.Presentation
         }
 
         public LocalSpellPresentationCommand ScheduledReleaseDue(long releaseStartMs)
+            => ScheduledReleaseDue(releaseStartMs, 0f);
+
+        public LocalSpellPresentationCommand ScheduledReleaseDue(
+            long releaseStartMs,
+            float playbackStartOffsetSeconds)
         {
             if (!_activeCast.HasValue)
                 return LocalSpellPresentationCommand.None;
@@ -549,7 +562,8 @@ namespace Arena.Presentation
                 active.SpellActionId,
                 active.TargetId,
                 active.AimPoint,
-                releaseStartMs);
+                releaseStartMs,
+                playbackStartOffsetSeconds);
         }
 
         private LocalSpellPresentationActiveCast WithAcceptedToken(LocalSpellPresentationActiveCast activeCast)

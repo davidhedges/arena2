@@ -25,14 +25,102 @@ namespace Arena.Editor
 
         private readonly struct CastPreviewClipOption
         {
-            public CastPreviewClipOption(string label, AnimationClip clip)
+            public CastPreviewClipOption(string label, AnimationClip clip, bool isTimeline = false)
             {
                 Label = label;
                 Clip = clip;
+                IsTimeline = isTimeline;
             }
 
             public string Label { get; }
             public AnimationClip Clip { get; }
+            public bool IsTimeline { get; }
+        }
+
+        private readonly struct CastPreviewTimeline
+        {
+            public CastPreviewTimeline(
+                SpellCastHoldProfile leadIn,
+                AnimationClip release,
+                float castDurationSeconds,
+                float releaseOffsetSeconds)
+            {
+                Enter = leadIn.EnterOrIdle;
+                Loop = leadIn.IdleOrEnter;
+                Release = release;
+                CastDurationSeconds = Mathf.Max(0f, castDurationSeconds);
+                ReleaseOffsetSeconds = Mathf.Clamp(
+                    releaseOffsetSeconds,
+                    0f,
+                    Mathf.Max(0f, release.length));
+                ReleaseStartsAtSeconds = Mathf.Max(
+                    0f,
+                    CastDurationSeconds - ReleaseOffsetSeconds);
+                ReleasePlaybackStartOffsetSeconds = Mathf.Max(
+                    0f,
+                    ReleaseOffsetSeconds - CastDurationSeconds);
+                EnterDurationSeconds = Enter != null
+                    ? Mathf.Min(
+                        Enter.length,
+                        Enter.length * leadIn.ResolveEnterCompleteNormalizedTime(0.85f))
+                    : 0f;
+                DurationSeconds = Mathf.Max(
+                    CastDurationSeconds,
+                    ReleaseStartsAtSeconds
+                    + Mathf.Max(0.001f, release.length - ReleasePlaybackStartOffsetSeconds));
+            }
+
+            public AnimationClip? Enter { get; }
+            public AnimationClip? Loop { get; }
+            public AnimationClip Release { get; }
+            public float CastDurationSeconds { get; }
+            public float ReleaseOffsetSeconds { get; }
+            public float ReleaseStartsAtSeconds { get; }
+            public float ReleasePlaybackStartOffsetSeconds { get; }
+            public float EnterDurationSeconds { get; }
+            public float DurationSeconds { get; }
+
+            public void ResolveSample(
+                float timelineTime,
+                out AnimationClip clip,
+                out float clipTime,
+                out string phase)
+            {
+                float time = Mathf.Clamp(timelineTime, 0f, DurationSeconds);
+                if (time >= ReleaseStartsAtSeconds)
+                {
+                    clip = Release;
+                    clipTime = Mathf.Clamp(
+                        ReleasePlaybackStartOffsetSeconds + time - ReleaseStartsAtSeconds,
+                        0f,
+                        Mathf.Max(0f, Release.length));
+                    phase = "Release";
+                    return;
+                }
+
+                if (Enter != null && (Loop == null || time < EnterDurationSeconds))
+                {
+                    clip = Enter;
+                    clipTime = Mathf.Clamp(time, 0f, Mathf.Max(0f, Enter.length));
+                    phase = "Aim Start";
+                    return;
+                }
+
+                if (Loop != null)
+                {
+                    clip = Loop;
+                    float loopTime = Mathf.Max(0f, time - EnterDurationSeconds);
+                    clipTime = Loop.length > 0.001f
+                        ? Mathf.Repeat(loopTime, Loop.length)
+                        : 0f;
+                    phase = "Aim Loop";
+                    return;
+                }
+
+                clip = Release;
+                clipTime = 0f;
+                phase = "Waiting (no lead-in)";
+            }
         }
 
         private PreviewRenderUtility? _castPreviewUtility;
@@ -40,7 +128,9 @@ namespace Arena.Editor
         private Animator? _castPreviewAnimator;
         private AnimatorOverrideController? _castPreviewOverrideController;
         private CombatAnimationSet? _castPreviewAnimationSet;
+        private AnimationClip? _castPreviewPrimaryClip;
         private AnimationClip? _castPreviewClip;
+        private CastPreviewTimeline? _castPreviewTimeline;
         private bool _castPreviewMirrored;
         private Renderer[] _castPreviewAvatarRenderers = Array.Empty<Renderer>();
         private Bounds _castPreviewFrameBounds;
@@ -54,7 +144,8 @@ namespace Arena.Editor
 
         private void DrawCastAnimationPreview(
             string spellId,
-            SpellCastAnimationRecipe recipe)
+            SpellCastAnimationRecipe recipe,
+            int authoredCastTimeMs)
         {
             string foldoutKey = $"Arena.SpellAuthoring.CastPreview.Visible.V2.{spellId}";
             bool expanded = SessionState.GetBool(foldoutKey, false);
@@ -86,7 +177,30 @@ namespace Arena.Editor
                     spellId,
                     out SpellCastAnimationOverride animationOverride)
                 && animationOverride.mirrorPresentation;
-            List<CastPreviewClipOption> clipOptions = BuildCastPreviewClipOptions(recipe);
+            SpellCastHoldProfile effectiveLeadIn = ResolveCastPreviewLeadIn(recipe);
+            string castDurationKey =
+                $"Arena.SpellAuthoring.CastPreview.Duration.{spellId}";
+            float authoredCastDurationSeconds = Mathf.Max(0f, authoredCastTimeMs / 1000f);
+            float simulatedCastDurationSeconds = SessionState.GetFloat(
+                castDurationKey,
+                authoredCastDurationSeconds);
+            EditorGUI.BeginChangeCheck();
+            simulatedCastDurationSeconds = Mathf.Max(
+                0f,
+                EditorGUILayout.FloatField(
+                    new GUIContent(
+                        "Simulated Cast Duration",
+                        "Preview-only duration. Runtime still uses the authoritative cast-time and cast-speed-scaled ActiveCast window."),
+                    simulatedCastDurationSeconds));
+            if (EditorGUI.EndChangeCheck())
+            {
+                SessionState.SetFloat(castDurationKey, simulatedCastDurationSeconds);
+                ResetCastAnimationPreview();
+            }
+
+            List<CastPreviewClipOption> clipOptions = BuildCastPreviewClipOptions(
+                recipe,
+                effectiveLeadIn);
             if (clipOptions.Count == 0)
             {
                 DestroyCastAnimationPreview();
@@ -117,9 +231,28 @@ namespace Arena.Editor
                 ResetCastAnimationPreview();
             }
 
-            AnimationClip previewClip = clipOptions[selectedPhaseIndex].Clip;
-            EnsureCastAnimationPreview(previewSet, previewClip, mirrored);
-            UpdateCastAnimationPreviewPlayback(previewClip);
+            CastPreviewClipOption selectedOption = clipOptions[selectedPhaseIndex];
+            AnimationClip previewClip = selectedOption.Clip;
+            CastPreviewTimeline? timeline = null;
+            AnimationClip initialClip = previewClip;
+            if (selectedOption.IsTimeline)
+            {
+                var builtTimeline = new CastPreviewTimeline(
+                    effectiveLeadIn,
+                    previewClip,
+                    simulatedCastDurationSeconds,
+                    ResolveCastPreviewReleaseOffsetSeconds(recipe));
+                timeline = builtTimeline;
+                builtTimeline.ResolveSample(0f, out initialClip, out _, out _);
+            }
+
+            EnsureCastAnimationPreview(
+                previewSet,
+                previewClip,
+                initialClip,
+                mirrored,
+                timeline);
+            UpdateCastAnimationPreviewPlayback();
 
             SpellCastOrigin effectiveOrigin = ResolvePreviewCastOrigin(
                 recipe.castOrigin,
@@ -151,7 +284,7 @@ namespace Arena.Editor
                     SessionState.SetBool(loopKey, nextLoop);
 
                 GUILayout.Label(
-                    $"{_castPreviewTime:0.000}s / {previewClip.length:0.000}s",
+                    $"{_castPreviewTime:0.000}s / {ResolveCastPreviewDuration():0.000}s",
                     GUILayout.Width(130f));
             }
 
@@ -160,7 +293,7 @@ namespace Arena.Editor
                 "Timeline",
                 _castPreviewTime,
                 0f,
-                Mathf.Max(0.001f, previewClip.length));
+                Mathf.Max(0.001f, ResolveCastPreviewDuration()));
             if (EditorGUI.EndChangeCheck())
             {
                 _castPreviewTime = scrubbedTime;
@@ -168,8 +301,31 @@ namespace Arena.Editor
                 SampleCastAnimationPreview();
             }
 
+            if (timeline.HasValue)
+            {
+                CastPreviewTimeline activeTimeline = timeline.Value;
+                activeTimeline.ResolveSample(
+                    _castPreviewTime,
+                    out _,
+                    out _,
+                    out string phase);
+                EditorGUILayout.LabelField("Timeline Phase", phase);
+                EditorGUILayout.LabelField(
+                    "Release Animation Starts",
+                    $"{activeTimeline.ReleaseStartsAtSeconds:0.000}s");
+                EditorGUILayout.LabelField(
+                    "Gameplay / VFX Release",
+                    $"{activeTimeline.CastDurationSeconds:0.000}s (OnReleaseFrame)");
+                if (activeTimeline.ReleasePlaybackStartOffsetSeconds > 0.001f)
+                {
+                    EditorGUILayout.HelpBox(
+                        $"This cast is shorter than the release wind-up, so runtime enters {activeTimeline.ReleasePlaybackStartOffsetSeconds:0.000}s into the release clip. Its OnReleaseFrame still lands at cast completion.",
+                        MessageType.Info);
+                }
+            }
+
             EditorGUILayout.HelpBox(
-                DescribeCastPreviewPlayback(recipe),
+                DescribeCastPreviewPlayback(recipe, effectiveLeadIn, timeline.HasValue),
                 MessageType.None);
             EditorGUILayout.LabelField("Preview Viewport", EditorStyles.miniBoldLabel);
             Rect previewRect = GUILayoutUtility.GetRect(
@@ -230,14 +386,49 @@ namespace Arena.Editor
             return _animationSets[selectedSetIndex];
         }
 
+        private SpellCastHoldProfile ResolveCastPreviewLeadIn(
+            in SpellCastAnimationRecipe recipe)
+        {
+            if (recipe.presentationMode == SpellAnimationPresentationMode.ReleaseOnly)
+            {
+                return _spellAnimationCatalog != null
+                    ? _spellAnimationCatalog.ResolveCastTimeLeadIn(recipe)
+                    : recipe.ResolveCastTimeLeadIn(default);
+            }
+
+            return recipe.hold;
+        }
+
+        private static float ResolveCastPreviewReleaseOffsetSeconds(
+            in SpellCastAnimationRecipe recipe)
+        {
+            var entry = new WeaponSpellAnimationEntry
+            {
+                spellId = recipe.AnimationIdOrEmpty,
+                clip = recipe.clip,
+            };
+            return entry.ResolveReleaseOffsetSeconds();
+        }
+
         private static List<CastPreviewClipOption> BuildCastPreviewClipOptions(
-            SpellCastAnimationRecipe recipe)
+            SpellCastAnimationRecipe recipe,
+            SpellCastHoldProfile effectiveLeadIn)
         {
             var options = new List<CastPreviewClipOption>();
-            if (recipe.presentationMode != SpellAnimationPresentationMode.ReleaseOnly)
+            bool playsRelease = recipe.presentationMode == SpellAnimationPresentationMode.ReleaseOnly
+                || recipe.presentationMode == SpellAnimationPresentationMode.HoldThenRelease;
+            if (playsRelease && recipe.clip != null)
             {
-                AddCastPreviewClipOption(options, "Hold Start", recipe.hold.enter);
-                AddCastPreviewClipOption(options, "Hold Loop", recipe.hold.idleLoop);
+                options.Add(new CastPreviewClipOption(
+                    $"Full Cast Timeline: {recipe.DisplayNameOrId}",
+                    recipe.clip,
+                    isTimeline: true));
+            }
+
+            if (effectiveLeadIn.HasAny)
+            {
+                AddCastPreviewClipOption(options, "Cast Lead-In Start", effectiveLeadIn.enter);
+                AddCastPreviewClipOption(options, "Cast Lead-In Loop", effectiveLeadIn.idleLoop);
             }
 
             string primaryLabel = recipe.presentationMode == SpellAnimationPresentationMode.HoldWithPulse
@@ -245,7 +436,7 @@ namespace Arena.Editor
                 : "Cast / Release";
             AddCastPreviewClipOption(options, primaryLabel, recipe.clip);
             AddCastPreviewClipOption(options, "Return to Hold", recipe.returnToHold);
-            AddCastPreviewClipOption(options, "Hold Exit / Cancel", recipe.hold.exit);
+            AddCastPreviewClipOption(options, "Hold Exit / Cancel", effectiveLeadIn.exit);
             return options;
         }
 
@@ -258,7 +449,10 @@ namespace Arena.Editor
                 options.Add(new CastPreviewClipOption($"{label}: {clip.name}", clip));
         }
 
-        private static string DescribeCastPreviewPlayback(SpellCastAnimationRecipe recipe)
+        private static string DescribeCastPreviewPlayback(
+            SpellCastAnimationRecipe recipe,
+            SpellCastHoldProfile effectiveLeadIn,
+            bool isTimeline)
         {
             string layerDescription = recipe.playbackLayer switch
             {
@@ -270,8 +464,8 @@ namespace Arena.Editor
                 SpellPlaybackLayer.RightGesture => "right-side gesture layer",
                 _ => recipe.playbackLayer.ToString(),
             };
-            string exitDescription = recipe.hold.exit != null
-                ? $" Hold exit/cancel uses {recipe.hold.exit.name}."
+            string exitDescription = effectiveLeadIn.exit != null
+                ? $" Cancellation before release uses {effectiveLeadIn.exit.name}."
                 : string.Empty;
             string lifecycleDescription = recipe.presentationMode switch
             {
@@ -281,27 +475,36 @@ namespace Arena.Editor
                     "the hold loop persists until the channel ends",
                 _ => $"runtime release playback is {layerDescription}",
             };
-            return $"{recipe.presentationMode}; {lifecycleDescription}.{exitDescription} "
+            string timelineDescription = isTimeline
+                ? " The cast bar continues through the release wind-up and completes at the clip's OnReleaseFrame marker."
+                : string.Empty;
+            return $"{recipe.presentationMode}; {lifecycleDescription}.{exitDescription}{timelineDescription} "
                 + "This viewport uses the canonical full-body spell state, including the selected CombatAnimationSet mirror, so the humanoid and equipped weapon follow runtime playback.";
         }
 
         private void EnsureCastAnimationPreview(
             CombatAnimationSet? animationSet,
-            AnimationClip previewClip,
-            bool mirrored)
+            AnimationClip primaryClip,
+            AnimationClip initialClip,
+            bool mirrored,
+            CastPreviewTimeline? timeline)
         {
             if (_castPreviewUtility != null
                 && _castPreviewInstance != null
                 && ReferenceEquals(_castPreviewAnimationSet, animationSet)
-                && ReferenceEquals(_castPreviewClip, previewClip)
-                && _castPreviewMirrored == mirrored)
+                && ReferenceEquals(_castPreviewPrimaryClip, primaryClip)
+                && _castPreviewMirrored == mirrored
+                && _castPreviewTimeline.HasValue == timeline.HasValue)
             {
+                _castPreviewTimeline = timeline;
                 return;
             }
 
             DestroyCastAnimationPreview();
             _castPreviewAnimationSet = animationSet;
-            _castPreviewClip = previewClip;
+            _castPreviewPrimaryClip = primaryClip;
+            _castPreviewClip = initialClip;
+            _castPreviewTimeline = timeline;
             _castPreviewMirrored = mirrored;
             _castPreviewTime = 0f;
             _castPreviewLastEditorTime = EditorApplication.timeSinceStartup;
@@ -369,7 +572,7 @@ namespace Arena.Editor
 
             SetCastPreviewHideFlags(_castPreviewInstance, HideFlags.HideAndDontSave);
             _castPreviewAnimator = binding.Animator;
-            CreateCastAnimationPreviewController(previewClip);
+            CreateCastAnimationPreviewController(initialClip);
             _castPreviewUtility.AddSingleGO(_castPreviewInstance);
             SampleCastAnimationPreview();
         }
@@ -395,7 +598,9 @@ namespace Arena.Editor
             _castPreviewInstance = null;
             _castPreviewAnimator = null;
             _castPreviewAnimationSet = null;
+            _castPreviewPrimaryClip = null;
             _castPreviewClip = null;
+            _castPreviewTimeline = null;
             _castPreviewMirrored = false;
             _castPreviewAvatarRenderers = Array.Empty<Renderer>();
             _castPreviewFrameBounds = default;
@@ -459,12 +664,13 @@ namespace Arena.Editor
             _castPreviewOverrideController = null;
         }
 
-        private void UpdateCastAnimationPreviewPlayback(AnimationClip previewClip)
+        private void UpdateCastAnimationPreviewPlayback()
         {
             if (!_castPreviewPlaying)
                 return;
 
-            if (previewClip.length <= 0f)
+            float previewDuration = ResolveCastPreviewDuration();
+            if (previewDuration <= 0f)
             {
                 _castPreviewTime = 0f;
                 _castPreviewPlaying = false;
@@ -477,11 +683,11 @@ namespace Arena.Editor
             _castPreviewLastEditorTime = now;
             _castPreviewTime += delta;
             bool loop = SessionState.GetBool("Arena.SpellAuthoring.CastPreview.Loop", true);
-            if (_castPreviewTime > previewClip.length)
+            if (_castPreviewTime > previewDuration)
                 _castPreviewTime = loop
-                    ? Mathf.Repeat(_castPreviewTime, previewClip.length)
-                    : previewClip.length;
-            if (!loop && Mathf.Approximately(_castPreviewTime, previewClip.length))
+                    ? Mathf.Repeat(_castPreviewTime, previewDuration)
+                    : previewDuration;
+            if (!loop && Mathf.Approximately(_castPreviewTime, previewDuration))
                 _castPreviewPlaying = false;
 
             SampleCastAnimationPreview();
@@ -492,15 +698,28 @@ namespace Arena.Editor
             if (_castPreviewInstance == null || _castPreviewClip == null)
                 return;
 
+            float previewDuration = ResolveCastPreviewDuration();
             _castPreviewTime = Mathf.Clamp(
                 _castPreviewTime,
                 0f,
-                Mathf.Max(0f, _castPreviewClip.length));
+                Mathf.Max(0f, previewDuration));
             if (_castPreviewAnimator == null || _castPreviewOverrideController == null)
                 return;
 
-            float normalizedTime = _castPreviewClip.length > 0.001f
-                ? Mathf.Clamp01(_castPreviewTime / _castPreviewClip.length)
+            AnimationClip sampleClip = _castPreviewClip;
+            float sampleTime = _castPreviewTime;
+            if (_castPreviewTimeline.HasValue)
+            {
+                _castPreviewTimeline.Value.ResolveSample(
+                    _castPreviewTime,
+                    out sampleClip,
+                    out sampleTime,
+                    out _);
+                BindCastAnimationPreviewClip(sampleClip);
+            }
+
+            float normalizedTime = sampleClip.length > 0.001f
+                ? Mathf.Clamp01(sampleTime / sampleClip.length)
                 : 0f;
             _castPreviewAnimator.SetBool(CastPreviewMirrorHash, _castPreviewMirrored);
             _castPreviewAnimator.SetLayerWeight(CastPreviewSpellActionLayerIndex, 1f);
@@ -509,6 +728,30 @@ namespace Arena.Editor
                 CastPreviewSpellActionLayerIndex,
                 normalizedTime);
             _castPreviewAnimator.Update(0f);
+        }
+
+        private float ResolveCastPreviewDuration()
+        {
+            if (_castPreviewTimeline.HasValue)
+                return _castPreviewTimeline.Value.DurationSeconds;
+
+            return _castPreviewClip != null ? Mathf.Max(0f, _castPreviewClip.length) : 0f;
+        }
+
+        private void BindCastAnimationPreviewClip(AnimationClip clip)
+        {
+            if (_castPreviewAnimator == null
+                || _castPreviewOverrideController == null
+                || ReferenceEquals(_castPreviewClip, clip))
+            {
+                return;
+            }
+
+            _castPreviewOverrideController["slot_spell_1"] = clip;
+            _castPreviewClip = clip;
+            _castPreviewAnimator.Rebind();
+            _castPreviewAnimator.SetBool(CastPreviewMirrorHash, _castPreviewMirrored);
+            _castPreviewAnimator.SetLayerWeight(CastPreviewSpellActionLayerIndex, 1f);
         }
 
         private static SpellCastOrigin ResolvePreviewCastOrigin(

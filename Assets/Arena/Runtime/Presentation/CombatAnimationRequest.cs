@@ -42,6 +42,11 @@ namespace Arena.Presentation
         public readonly CombatSpellAnimationPhase SpellPhase;
         public readonly string? Source;
         public readonly long StartedAtMs;
+        /// <summary>
+        /// Presentation-only offset into a spell release clip. Cast-speed compression may require
+        /// entering after the beginning so OnReleaseFrame still lands on authoritative cast end.
+        /// </summary>
+        public readonly float SpellPlaybackStartOffsetSeconds;
         public readonly bool HasFacingTargetPoint;
         public readonly Vector3 FacingTargetPoint;
         public readonly string ConsumedModifierStatusKind;
@@ -77,7 +82,8 @@ namespace Arena.Presentation
             bool gapCloseUsedMovementAtCast = false,
             float gapCloseLoopScale = 1f,
             float authoritativeImpactDelaySeconds = -1f,
-            CombatAnimationVfxBinding[]? animationVfxBindings = null)
+            CombatAnimationVfxBinding[]? animationVfxBindings = null,
+            float spellPlaybackStartOffsetSeconds = 0f)
         {
             ActionId = actionId ?? string.Empty;
             Category = category;
@@ -86,6 +92,10 @@ namespace Arena.Presentation
             SpellPhase = spellPhase;
             Source = source;
             StartedAtMs = startedAtMs;
+            SpellPlaybackStartOffsetSeconds = float.IsNaN(spellPlaybackStartOffsetSeconds)
+                || float.IsInfinity(spellPlaybackStartOffsetSeconds)
+                    ? 0f
+                    : Mathf.Max(0f, spellPlaybackStartOffsetSeconds);
             HasFacingTargetPoint = facingTargetPoint.HasValue;
             FacingTargetPoint = facingTargetPoint ?? Vector3.zero;
             ConsumedModifierStatusKind = WireIdentifier.Normalize(consumedModifierStatusKind);
@@ -198,7 +208,8 @@ namespace Arena.Presentation
             long startedAtMs,
             CombatSpellAnimationPhase phase,
             string? source = CombatEventSources.Spell,
-            Vector3? facingTargetPoint = null)
+            Vector3? facingTargetPoint = null,
+            float playbackStartOffsetSeconds = 0f)
         {
             return new CombatAnimationRequest(
                 actionId,
@@ -208,7 +219,8 @@ namespace Arena.Presentation
                 phase,
                 source,
                 startedAtMs,
-                facingTargetPoint);
+                facingTargetPoint,
+                spellPlaybackStartOffsetSeconds: playbackStartOffsetSeconds);
         }
 
         public static CombatAnimationCategory ResolveMeleeCategory(string? source)

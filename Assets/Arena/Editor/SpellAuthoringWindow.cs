@@ -157,7 +157,7 @@ namespace Arena.Editor
                 EditorGUILayout.TextField("Delivery", deliveryKind);
             }
 
-            DrawCastAnimationPicker(spellId, archetype);
+            DrawCastAnimationPicker(spellId, archetype, selected.gameplay.cast_time_ms);
 
             if (string.IsNullOrWhiteSpace(combatProfileId)
                 && SpellCastAnimationResolver.TryResolve(
@@ -306,7 +306,10 @@ namespace Arena.Editor
             }
         }
 
-        private void DrawCastAnimationPicker(string spellId, SpellAnimationArchetype archetype)
+        private void DrawCastAnimationPicker(
+            string spellId,
+            SpellAnimationArchetype archetype,
+            int authoredCastTimeMs)
         {
             EditorGUILayout.Space(8f);
             EditorGUILayout.LabelField("Cast Animation", EditorStyles.boldLabel);
@@ -387,6 +390,63 @@ namespace Arena.Editor
                 ? recipes[currentRecipeIndex].PickerLabel
                 : inheritedLabel;
             EditorGUILayout.LabelField("Assigned Globally", globalLabel);
+            if (previewRecipe.presentationMode == SpellAnimationPresentationMode.ReleaseOnly)
+            {
+                EditorGUI.BeginChangeCheck();
+                SpellCastLeadInPolicy selectedLeadInPolicy =
+                    (SpellCastLeadInPolicy)EditorGUILayout.EnumPopup(
+                        new GUIContent(
+                            "Cast Lead-In",
+                            "Preparation used when this release recipe is assigned to a spell with cast time. Instant spells skip it."),
+                        previewRecipe.castLeadInPolicy);
+                SpellCastHoldProfile selectedCustomLeadIn = previewRecipe.customCastLeadIn;
+                if (selectedLeadInPolicy == SpellCastLeadInPolicy.Custom)
+                {
+                    using (new EditorGUI.IndentLevelScope())
+                        selectedCustomLeadIn = DrawCastLeadInProfileFields(selectedCustomLeadIn);
+
+                    if (!selectedCustomLeadIn.IsPlayable)
+                    {
+                        EditorGUILayout.HelpBox(
+                            "A custom cast lead-in requires both Start and Loop clips. Cancel Exit is optional.",
+                            MessageType.Warning);
+                    }
+                }
+                else if (selectedLeadInPolicy == SpellCastLeadInPolicy.Default)
+                {
+                    SpellCastHoldProfile shared = _spellAnimationCatalog.DefaultCastLeadIn;
+                    string sharedClips = shared.IsPlayable
+                        ? $"{shared.enter?.name} → {shared.idleLoop?.name}"
+                        : "not configured";
+                    EditorGUILayout.LabelField("Shared Lead-In", sharedClips);
+                }
+
+                bool leadInGuiChanged = EditorGUI.EndChangeCheck();
+                if (selectedLeadInPolicy != previewRecipe.castLeadInPolicy
+                    || leadInGuiChanged)
+                {
+                    Undo.RecordObject(
+                        _spellAnimationCatalog,
+                        $"Set {previewRecipe.AnimationIdOrEmpty} cast lead-in");
+                    _spellAnimationCatalog.EditorSetCastLeadIn(
+                        previewRecipe.AnimationIdOrEmpty,
+                        selectedLeadInPolicy,
+                        selectedCustomLeadIn);
+                    previewRecipe.castLeadInPolicy = selectedLeadInPolicy;
+                    previewRecipe.customCastLeadIn = selectedCustomLeadIn;
+                    recipes[previewRecipeIndex] = previewRecipe;
+                    EditorUtility.SetDirty(_spellAnimationCatalog);
+                    AssetDatabase.SaveAssets();
+                    SpellCastAnimationResolver.InvalidateCache();
+                    ResetCastAnimationPreview();
+                }
+
+                EditorGUILayout.LabelField(
+                    "",
+                    "Lead-in changes save immediately and affect every spell using this recipe.",
+                    EditorStyles.miniLabel);
+            }
+
             SpellCastOrigin selectedOrigin = (SpellCastOrigin)EditorGUILayout.EnumPopup(
                 new GUIContent(
                     "Animation Cast Origin",
@@ -456,7 +516,7 @@ namespace Arena.Editor
             EditorGUILayout.HelpBox(
                 $"{globalLabel} is the default for every CombatAnimationSet. Add only the exceptions below.",
                 MessageType.None);
-            DrawCastAnimationPreview(spellId, previewRecipe);
+            DrawCastAnimationPreview(spellId, previewRecipe, authoredCastTimeMs);
 
             string foldoutKey = $"Arena.SpellAuthoring.CastOverrides.{spellId}";
             bool showOverrides = SessionState.GetBool(foldoutKey, false);
@@ -531,6 +591,36 @@ namespace Arena.Editor
                     }
                 }
             }
+        }
+
+        private static SpellCastHoldProfile DrawCastLeadInProfileFields(
+            SpellCastHoldProfile profile)
+        {
+            profile.enter = EditorGUILayout.ObjectField(
+                "Start",
+                profile.enter,
+                typeof(AnimationClip),
+                false) as AnimationClip;
+            profile.idleLoop = EditorGUILayout.ObjectField(
+                "Loop",
+                profile.idleLoop,
+                typeof(AnimationClip),
+                false) as AnimationClip;
+            profile.exit = EditorGUILayout.ObjectField(
+                "Cancel Exit",
+                profile.exit,
+                typeof(AnimationClip),
+                false) as AnimationClip;
+            profile.playbackLayer = (SpellPlaybackLayer)EditorGUILayout.EnumPopup(
+                "Playback Layer",
+                profile.playbackLayer);
+            profile.exitDelaySeconds = Mathf.Max(
+                0f,
+                EditorGUILayout.FloatField("Exit Delay", profile.exitDelaySeconds));
+            profile.exitBlendOutSeconds = Mathf.Max(
+                0f,
+                EditorGUILayout.FloatField("Exit Blend", profile.exitBlendOutSeconds));
+            return profile;
         }
 
         private static void SetCombatAnimationOverride(

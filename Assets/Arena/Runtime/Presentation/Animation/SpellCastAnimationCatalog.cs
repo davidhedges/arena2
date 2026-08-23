@@ -42,6 +42,10 @@ namespace Arena.Presentation
         public AnimationClip? returnToHold;
         [Tooltip("ReleaseOnly uses Clip alone. HoldThenRelease plays Enter/Loop then Clip. HoldOnly plays Enter/Loop until exit. HoldWithPulse temporarily plays Clip/Return To Hold while keeping the hold active.")]
         public SpellAnimationPresentationMode presentationMode;
+        [Tooltip("For ReleaseOnly recipes, choose the preparation shown only when the spell has cast time. Default uses the catalog's shared Aim Target lead-in; None goes directly to release; Custom uses the profile below.")]
+        public SpellCastLeadInPolicy castLeadInPolicy;
+        [Tooltip("Used by ReleaseOnly only when Cast Lead-In is Custom. Enter and Loop are required; Exit is used on cancellation before release begins.")]
+        public SpellCastHoldProfile customCastLeadIn;
         [Tooltip("Optional authored Start/Loop/Exit sequence. Start and Loop are required for every hold mode; Exit is used when a hold/channel closes without a release clip.")]
         public SpellCastHoldProfile hold;
         [Tooltip("Whether selecting this recipe should request combat stance.")]
@@ -80,6 +84,12 @@ namespace Arena.Presentation
         }
 
         public bool TryBuild(string spellId, out WeaponSpellAnimationEntry entry)
+            => TryBuild(spellId, default, out entry);
+
+        public bool TryBuild(
+            string spellId,
+            SpellCastHoldProfile defaultCastTimeLeadIn,
+            out WeaponSpellAnimationEntry entry)
         {
             entry = new WeaponSpellAnimationEntry
             {
@@ -90,6 +100,7 @@ namespace Arena.Presentation
                 combatEntryMode = combatEntryMode,
                 presentationMode = presentationMode,
                 holdOverride = hold,
+                castTimeLeadIn = ResolveCastTimeLeadIn(defaultCastTimeLeadIn),
                 playbackLayer = playbackLayer,
                 castOrigin = castOrigin,
                 animatedProp = animatedProp,
@@ -109,6 +120,20 @@ namespace Arena.Presentation
             };
         }
 
+        public SpellCastHoldProfile ResolveCastTimeLeadIn(
+            SpellCastHoldProfile defaultCastTimeLeadIn)
+        {
+            if (presentationMode != SpellAnimationPresentationMode.ReleaseOnly)
+                return default;
+
+            return castLeadInPolicy switch
+            {
+                SpellCastLeadInPolicy.Default => defaultCastTimeLeadIn,
+                SpellCastLeadInPolicy.Custom => customCastLeadIn,
+                _ => default,
+            };
+        }
+
         private static string Normalize(string? value)
             => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToUpperInvariant();
     }
@@ -120,10 +145,14 @@ namespace Arena.Presentation
     [CreateAssetMenu(menuName = "Arena/Spell Cast Animation Catalog", fileName = "SpellCastAnimationCatalog")]
     public sealed class SpellCastAnimationCatalog : ScriptableObject
     {
+        [SerializeField]
+        [Tooltip("Shared preparation for cast-time ReleaseOnly recipes whose Cast Lead-In is Default. Aim_The_Target Start/Loop/End is the project default.")]
+        private SpellCastHoldProfile defaultCastLeadIn;
         [SerializeField] private List<SpellCastAnimationRecipe> recipes = new();
         [NonSerialized] private Dictionary<string, SpellCastAnimationRecipe>? _recipeById;
 
         public IReadOnlyList<SpellCastAnimationRecipe> Recipes => recipes;
+        public SpellCastHoldProfile DefaultCastLeadIn => defaultCastLeadIn;
 
         public bool TryGetRecipe(string animationId, out SpellCastAnimationRecipe recipe)
         {
@@ -134,6 +163,22 @@ namespace Arena.Presentation
             recipe = default;
             return false;
         }
+
+        public bool TryBuildRecipe(
+            string animationId,
+            string spellId,
+            out WeaponSpellAnimationEntry entry)
+        {
+            if (TryGetRecipe(animationId, out SpellCastAnimationRecipe recipe))
+                return recipe.TryBuild(spellId, defaultCastLeadIn, out entry);
+
+            entry = default;
+            return false;
+        }
+
+        public SpellCastHoldProfile ResolveCastTimeLeadIn(
+            in SpellCastAnimationRecipe recipe)
+            => recipe.ResolveCastTimeLeadIn(defaultCastLeadIn);
 
         private Dictionary<string, SpellCastAnimationRecipe> RecipeById
         {
@@ -188,6 +233,32 @@ namespace Arena.Presentation
                     return false;
 
                 recipe.castOrigin = castOrigin;
+                recipes[index] = recipe;
+                _recipeById = null;
+                SpellCastAnimationResolver.InvalidateCache();
+                return true;
+            }
+
+            return false;
+        }
+
+        public bool EditorSetCastLeadIn(
+            string animationId,
+            SpellCastLeadInPolicy policy,
+            SpellCastHoldProfile customProfile)
+        {
+            string normalizedAnimationId = Normalize(animationId);
+            if (normalizedAnimationId.Length == 0)
+                return false;
+
+            for (int index = 0; index < recipes.Count; index++)
+            {
+                SpellCastAnimationRecipe recipe = recipes[index];
+                if (!string.Equals(recipe.AnimationIdOrEmpty, normalizedAnimationId, StringComparison.Ordinal))
+                    continue;
+
+                recipe.castLeadInPolicy = policy;
+                recipe.customCastLeadIn = customProfile;
                 recipes[index] = recipe;
                 _recipeById = null;
                 SpellCastAnimationResolver.InvalidateCache();

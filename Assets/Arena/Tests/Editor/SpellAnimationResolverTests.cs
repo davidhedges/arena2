@@ -470,14 +470,28 @@ namespace Arena.Tests.Editor
             Assert.That(Resolve(staff, "FLAMING_ORB", "Charged", out object staffEntry), Is.True);
             Type entryType = T("WeaponSpellAnimationEntry");
             object hold = entryType.GetField("holdOverride")!.GetValue(greatswordEntry)!;
+            object castTimeLeadIn = entryType.GetField("castTimeLeadIn")!.GetValue(greatswordEntry)!;
             Type holdType = T("SpellCastHoldProfile");
-            Assert.That(Clip(greatswordEntry)?.name, Is.EqualTo("Attack_02_02"));
+            Assert.That(Clip(greatswordEntry)?.name, Is.EqualTo("Attack_02_01"));
             Assert.That(Clip(staffEntry), Is.SameAs(Clip(greatswordEntry)));
             Assert.That(entryType.GetField("presentationMode")!.GetValue(greatswordEntry)!.ToString(), Is.EqualTo("ReleaseOnly"));
             Assert.That(holdType.GetField("enter")!.GetValue(hold), Is.Null);
             Assert.That(holdType.GetField("idleLoop")!.GetValue(hold), Is.Null);
-            Assert.That(HasPlayableHold(greatsword, "FLAMING_ORB"), Is.False);
-            Assert.That(HasPlayableHold(staff, "FLAMING_ORB"), Is.False);
+            Assert.That(
+                holdType.GetField("enter")!.GetValue(castTimeLeadIn) as AnimationClip,
+                Has.Property("name").EqualTo("Aim_The_Target_Start"));
+            Assert.That(
+                holdType.GetField("idleLoop")!.GetValue(castTimeLeadIn) as AnimationClip,
+                Has.Property("name").EqualTo("Aim_The_Target_Loop"));
+            Assert.That(
+                (bool)entryType.GetProperty("UsesHoldPresentation")!.GetValue(greatswordEntry)!,
+                Is.False,
+                "The cast-time lead-in must not turn instant release recipes into authored holds.");
+            Assert.That(
+                (bool)entryType.GetProperty("UsesCastTimeLeadIn")!.GetValue(greatswordEntry)!,
+                Is.True);
+            Assert.That(HasPlayableHold(greatsword, "FLAMING_ORB"), Is.True);
+            Assert.That(HasPlayableHold(staff, "FLAMING_ORB"), Is.True);
             Assert.That(HasPlayableHold(greatsword, "ICICLE"), Is.True);
             Assert.That(HasPlayableHold(staff, "ICICLE"), Is.True);
         }
@@ -565,13 +579,12 @@ namespace Arena.Tests.Editor
                 "ResolveUsesOverlayPlayback",
                 new[] { typeof(float), typeof(float) })!;
 
-            Assert.That(CatalogRecipeCountWithPrefix("MAGE_"), Is.EqualTo(44));
+            Assert.That(CatalogRecipeCountWithPrefix("MAGE_"), Is.EqualTo(43));
 
             foreach (string animationId in new[]
                      {
                          "MAGE_PROJECTILE_CAST_01",
                          "MAGE_PROJECTILE_CAST_02",
-                         "MAGE_ATTACK_CAST_01_02",
                          "MAGE_ATTACK_CAST_02_01",
                          "MAGE_SKILL_CAST_03",
                          "MAGE_SKILL_CAST_04",
@@ -679,7 +692,7 @@ namespace Arena.Tests.Editor
                 setType.GetField("spellCastAnimationOverrides")!.SetValue(set, overrides);
 
                 Assert.That(Resolve(set, "FLAMING_ORB", "Charged", out object entry), Is.True);
-                Assert.That(Clip(entry)?.name, Is.EqualTo("Attack_02_02"));
+                Assert.That(Clip(entry)?.name, Is.EqualTo("Attack_02_01"));
                 Assert.That(entryType.GetField("mirrorPresentation")!.GetValue(entry), Is.True);
                 Assert.That(entryType.GetField("castOrigin")!.GetValue(entry)!.ToString(), Is.EqualTo("RightHand"));
                 Assert.That(entryType.GetProperty("EffectiveCastOrigin")!.GetValue(entry)!.ToString(), Is.EqualTo("LeftHand"));

@@ -189,7 +189,13 @@ namespace Arena.Presentation
             if (ArenaServerClock.ServerNowMs < releaseStartMs)
                 return;
 
-            Dispatch(_stateMachine.ScheduledReleaseDue(releaseStartMs));
+            float playbackStartOffsetSeconds = ComputeReleasePlaybackStartOffsetSeconds(
+                active.StartedAtMs,
+                active.EndsAtMs,
+                releaseOffsetSeconds);
+            Dispatch(_stateMachine.ScheduledReleaseDue(
+                releaseStartMs,
+                playbackStartOffsetSeconds));
         }
 
         internal static long ComputeReleaseStartMs(
@@ -205,6 +211,16 @@ namespace Arena.Presentation
             long authoredOffsetMs = ResolveFiniteOffsetMs(authoredReleaseOffsetSeconds);
             long effectiveOffsetMs = System.Math.Min(authoredOffsetMs, castDurationMs);
             return endsAtMs - effectiveOffsetMs;
+        }
+
+        internal static float ComputeReleasePlaybackStartOffsetSeconds(
+            long startedAtMs,
+            long endsAtMs,
+            float authoredReleaseOffsetSeconds)
+        {
+            long castDurationMs = System.Math.Max(0L, endsAtMs - startedAtMs);
+            long authoredOffsetMs = ResolveFiniteOffsetMs(authoredReleaseOffsetSeconds);
+            return System.Math.Max(0L, authoredOffsetMs - castDurationMs) / 1000f;
         }
 
         private static long ResolveFiniteOffsetMs(float offsetSeconds)
@@ -279,7 +295,8 @@ namespace Arena.Presentation
                     command.StartedAtMs,
                     CombatSpellAnimationPhase.Release,
                     CombatEventSources.Spell,
-                    facing));
+                    facing,
+                    command.PlaybackStartOffsetSeconds));
         }
 
         private void RequestCancel(string spellActionId)

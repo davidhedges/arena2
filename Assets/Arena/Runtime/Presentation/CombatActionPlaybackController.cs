@@ -110,6 +110,7 @@ namespace Arena.Presentation
         public readonly int EnterBankSlot;
         public readonly int IdleBankSlot;
         public readonly SpellPlaybackLayer PlaybackLayer;
+        public readonly bool UsesUpperBodyWhileMoving;
         public readonly float EnterCompleteNormalizedTime;
         public readonly float ExitBlendOutSeconds;
         public readonly float ExitDelaySeconds;
@@ -119,6 +120,7 @@ namespace Arena.Presentation
             int enterBankSlot,
             int idleBankSlot,
             SpellPlaybackLayer playbackLayer,
+            bool usesUpperBodyWhileMoving,
             float enterCompleteNormalizedTime,
             float exitBlendOutSeconds,
             float exitDelaySeconds)
@@ -127,9 +129,24 @@ namespace Arena.Presentation
             EnterBankSlot = enterBankSlot;
             IdleBankSlot = idleBankSlot;
             PlaybackLayer = playbackLayer;
+            UsesUpperBodyWhileMoving = usesUpperBodyWhileMoving;
             EnterCompleteNormalizedTime = Mathf.Clamp01(enterCompleteNormalizedTime);
             ExitBlendOutSeconds = Mathf.Max(0f, exitBlendOutSeconds);
             ExitDelaySeconds = Mathf.Max(0f, exitDelaySeconds);
+        }
+
+        public ActiveSpellCastHoldPresentation WithPlaybackLayer(
+            SpellPlaybackLayer playbackLayer)
+        {
+            return new ActiveSpellCastHoldPresentation(
+                ActionId,
+                EnterBankSlot,
+                IdleBankSlot,
+                playbackLayer,
+                UsesUpperBodyWhileMoving,
+                EnterCompleteNormalizedTime,
+                ExitBlendOutSeconds,
+                ExitDelaySeconds);
         }
     }
 
@@ -1169,6 +1186,7 @@ namespace Arena.Presentation
             int enterBankSlot,
             int idleBankSlot,
             SpellPlaybackLayer playbackLayer,
+            bool usesUpperBodyWhileMoving,
             float enterCompleteNormalizedTime,
             float exitBlendOutSeconds,
             float exitDelaySeconds)
@@ -1178,10 +1196,20 @@ namespace Arena.Presentation
                 enterBankSlot,
                 idleBankSlot,
                 playbackLayer,
+                usesUpperBodyWhileMoving,
                 enterCompleteNormalizedTime,
                 exitBlendOutSeconds,
                 exitDelaySeconds);
             _spellCastHoldPhase = SpellCastHoldPlaybackPhase.Enter;
+        }
+
+        public void SetSpellCastHoldPlaybackLayer(SpellPlaybackLayer playbackLayer)
+        {
+            if (ActiveSpellCastHoldPresentation.HasValue)
+            {
+                ActiveSpellCastHoldPresentation =
+                    ActiveSpellCastHoldPresentation.Value.WithPlaybackLayer(playbackLayer);
+            }
         }
 
         public void SetSpellCastHoldPhase(SpellCastHoldPlaybackPhase phase)

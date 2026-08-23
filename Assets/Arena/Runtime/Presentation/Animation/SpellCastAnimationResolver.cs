@@ -185,7 +185,7 @@ namespace Arena.Presentation
                     return true;
                 }
 
-                if (!recipe.TryBuild(normalizedSpellId, out _))
+                if (!_catalog.TryBuildRecipe(animationId, normalizedSpellId, out _))
                 {
                     reason = $"catalog recipe '{animationId}' has no playable {recipe.presentationMode} presentation";
                     return true;
@@ -293,8 +293,7 @@ namespace Arena.Presentation
 
             EnsureLoaded();
             if (_catalog == null
-                || !_catalog.TryGetRecipe(animationId, out SpellCastAnimationRecipe recipe)
-                || !recipe.TryBuild(spellId, out entry))
+                || !_catalog.TryBuildRecipe(animationId, spellId, out entry))
             {
                 entry = default;
                 return false;

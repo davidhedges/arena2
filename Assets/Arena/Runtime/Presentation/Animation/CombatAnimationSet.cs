@@ -525,6 +525,19 @@ namespace Arena.Presentation
     }
 
     /// <summary>
+    /// Chooses the preparation shown before a cast-time spell enters a release-only recipe.
+    /// Instant casts never request this lead-in. Authored hold/channel recipes continue to own
+    /// their complete lifecycle through <see cref="SpellCastHoldProfile"/>.
+    /// </summary>
+    [Serializable]
+    public enum SpellCastLeadInPolicy
+    {
+        Default = 0,
+        None = 1,
+        Custom = 2,
+    }
+
+    /// <summary>
     /// Natural spell-emission origin authored by a cast animation. UseVfxCue preserves the
     /// concrete LEFT_HAND/RIGHT_HAND anchor already present in legacy VFX cue data.
     /// </summary>
@@ -592,6 +605,8 @@ namespace Arena.Presentation
         public SpellAnimationPresentationMode presentationMode;
         [Tooltip("Optional per-spell cast/channel hold presentation. Leave empty to use the animation set's Default Spell Cast Hold.")]
         public SpellCastHoldProfile holdOverride;
+        [Tooltip("Resolved preparation used only when a cast-time spell requests a hold before a ReleaseOnly recipe. This never makes an instant spell start a hold.")]
+        public SpellCastHoldProfile castTimeLeadIn;
         [Tooltip("How this spell should present relative to locomotion. UpperBodyWhileMoving preserves locomotion only while moving; FullBody always uses the spell-action layer; UpperBody always uses the upper-body layer; LeftGesture/RightGesture use single masked pelvis/spine/casting-arm overlays.")]
         [FormerlySerializedAs("movingPlaybackMode")]
         public SpellPlaybackLayer playbackLayer;
@@ -631,6 +646,9 @@ namespace Arena.Presentation
         public bool UsesHoldPresentation => presentationMode == SpellAnimationPresentationMode.HoldThenRelease
             || presentationMode == SpellAnimationPresentationMode.HoldOnly
             || presentationMode == SpellAnimationPresentationMode.HoldWithPulse;
+        public bool UsesCastTimeLeadIn => presentationMode == SpellAnimationPresentationMode.ReleaseOnly
+            && castTimeLeadIn.IsPlayable;
+        public bool CanPlayRequestedHold => UsesHoldPresentation || UsesCastTimeLeadIn;
         public bool PlaysReleasePresentation => presentationMode != SpellAnimationPresentationMode.HoldOnly
             && presentationMode != SpellAnimationPresentationMode.HoldWithPulse;
         public bool PlaysHoldPulsePresentation => presentationMode == SpellAnimationPresentationMode.HoldWithPulse;
@@ -640,6 +658,18 @@ namespace Arena.Presentation
             SpellCastHoldProfile defaultProfile,
             out SpellCastHoldProfile profile)
         {
+            if (UsesCastTimeLeadIn)
+            {
+                profile = castTimeLeadIn;
+                return true;
+            }
+
+            if (!UsesHoldPresentation)
+            {
+                profile = default;
+                return false;
+            }
+
             if (holdOverride.IsPlayable)
             {
                 profile = holdOverride;
@@ -2271,9 +2301,9 @@ namespace Arena.Presentation
             SpellCastHoldProfile defaultProfile = defaultSpellCastHold;
             if (SpellCastAnimationResolver.TryResolve(this, spellId, out WeaponSpellAnimationEntry entry))
             {
-                // A catalog recipe owns its complete presentation lifecycle. In particular,
-                // ReleaseOnly must not inherit this combat set's legacy default cast hold.
-                if (!entry.UsesHoldPresentation)
+                // Catalog ReleaseOnly recipes may opt into their shared/custom cast-time lead-in,
+                // but must never inherit this combat set's legacy (Kevin) default hold.
+                if (!entry.CanPlayRequestedHold)
                 {
                     profile = default;
                     return false;
