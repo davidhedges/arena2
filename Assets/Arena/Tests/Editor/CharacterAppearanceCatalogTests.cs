@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
@@ -200,7 +201,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void EquipmentAppearanceCatalog_ContainsEveryShippedCompleteArmorSetVisual()
+        public void EquipmentAppearanceCatalog_ContainsEveryShippedArmorPresetVisual()
         {
             object equipmentCatalog = LoadRequiredAsset(
                 EquipmentAppearanceCatalogPath,
@@ -209,12 +210,16 @@ namespace Arena.Tests.Editor
                     .GetValue(equipmentCatalog)!)
                 .Cast<object>()
                 .ToArray();
-            string[] expectedSlots = { "HEAD", "SHOULDER", "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES" };
+            string[] validSlots = { "HEAD", "SHOULDER", "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES" };
 
-            Assert.That(armorSets.Length, Is.EqualTo(40));
+            Assert.That(armorSets.Length, Is.EqualTo(84));
             Assert.That(
                 armorSets.Select(entry => RequireField<string>(entry, "armorSetId")).Distinct().Count(),
                 Is.EqualTo(armorSets.Length));
+            Assert.That(
+                armorSets.Select(entry => RequireField<string>(entry, "armorSetId")),
+                Does.Contain("DBRINGER_BK").And.Contain("DBRINGER_BL")
+                    .And.Contain("DBRINGER_GN").And.Contain("DBRINGER_RD"));
 
             MethodInfo tryGetItems = RequireMethod(equipmentCatalog.GetType(), "TryGetItems");
             foreach (object armorSet in armorSets)
@@ -225,10 +230,12 @@ namespace Arena.Tests.Editor
                 Assert.That(RequireField<string>(armorSet, "sexId"), Is.EqualTo("MALE"), armorSetId);
 
                 object[] slots = RequireField<IList>(armorSet, "slots").Cast<object>().ToArray();
-                Assert.That(
-                    slots.Select(slot => RequireField<string>(slot, "equipSlot")).OrderBy(slot => slot),
-                    Is.EqualTo(expectedSlots.OrderBy(slot => slot)),
-                    armorSetId);
+                string[] slotIds = slots
+                    .Select(slot => RequireField<string>(slot, "equipSlot"))
+                    .ToArray();
+                Assert.That(slotIds, Is.Not.Empty, armorSetId);
+                Assert.That(slotIds.Distinct().Count(), Is.EqualTo(slotIds.Length), armorSetId);
+                Assert.That(slotIds, Is.SubsetOf(validSlots), armorSetId);
 
                 foreach (object slot in slots)
                 {
@@ -256,6 +263,67 @@ namespace Arena.Tests.Editor
                     Assert.That(args[4], Is.Not.Null);
                 }
             }
+        }
+
+        [Test]
+        public void EveryHumanMalePreset_IsExposedOnEquipmentScreen()
+        {
+            const string presetFolder =
+                "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Presets";
+            const string humanMalePrefix = "Hu_M_";
+
+            string[] importedPresetIds = AssetDatabase.FindAssets("t:Prefab", new[] { presetFolder })
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Select(Path.GetFileNameWithoutExtension)
+                .Where(name => name.StartsWith(humanMalePrefix, StringComparison.Ordinal))
+                .Select(name => name.Substring(humanMalePrefix.Length).ToUpperInvariant())
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToArray();
+
+            object equipmentCatalog = LoadRequiredAsset(
+                EquipmentAppearanceCatalogPath,
+                "Arena.Presentation.Appearance.EquipmentAppearanceCatalog");
+            string[] completeSetIds = ((IEnumerable)RequireProperty(equipmentCatalog, "ArmorSets")
+                    .GetValue(equipmentCatalog)!)
+                .Cast<object>()
+                .Select(entry => RequireField<string>(entry, "armorSetId"))
+                .ToArray();
+
+            string[] corePresetIds =
+            {
+                "NWARRIOR_BL",
+                "NWARRIOR_GN",
+                "NRANGER_GN",
+                "PEASANT_BR",
+            };
+            string[] classifiedPresetIds = completeSetIds
+                .Concat(corePresetIds)
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToArray();
+
+            Assert.That(importedPresetIds, Is.EqualTo(classifiedPresetIds),
+                "Every imported Human Male preset must be exposed as an Equipment-screen armor set.");
+        }
+
+        [Test]
+        public void EquipmentScreen_PreservesAuthoredPartialPresetSlots()
+        {
+            MethodInfo armorAppearanceFor = RequireMethod(
+                RequireType("Arena.UI.EquipmentScreen"),
+                "ArmorAppearanceFor");
+
+            AssertArmorAppearanceSlots(
+                armorAppearanceFor,
+                "PEASANT_BL",
+                "HEAD", "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES");
+            AssertArmorAppearanceSlots(
+                armorAppearanceFor,
+                "SMAGE_BL",
+                "HEAD", "SHOULDER", "CHEST", "LEGS", "BOOTS", "GLOVES");
+            AssertArmorAppearanceSlots(
+                armorAppearanceFor,
+                "NARCHER_BL",
+                "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES");
         }
 
         [Test]
@@ -529,6 +597,22 @@ namespace Arena.Tests.Editor
             Assert.That(entry, Is.Not.Null, $"Missing equipment visual for {itemDefId}/{equipSlot}.");
             Assert.That(RequireField<bool>(entry!, "enabled"), Is.True);
             Assert.That(RequireField<IList>(entry!, "items").Count, Is.GreaterThan(0));
+        }
+
+        private static void AssertArmorAppearanceSlots(
+            MethodInfo armorAppearanceFor,
+            string armorSetId,
+            params string[] expectedSlots)
+        {
+            IDictionary appearance = (IDictionary)armorAppearanceFor.Invoke(null, new object?[] { armorSetId })!;
+            Assert.That(appearance.Keys.Cast<string>(), Is.EquivalentTo(expectedSlots), armorSetId);
+            foreach (string slot in expectedSlots)
+            {
+                Assert.That(
+                    (string)appearance[slot]!,
+                    Is.EqualTo($"ARMOR_SET_{armorSetId}_{slot}"),
+                    $"{armorSetId}:{slot}");
+            }
         }
 
         private static T RequireField<T>(object instance, string fieldName)

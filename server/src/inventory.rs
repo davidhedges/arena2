@@ -504,6 +504,7 @@ struct CompleteArmorSetSpec {
     armor_set_id: &'static str,
     display_name: &'static str,
     armor_tier: &'static str,
+    pieces: &'static [&'static str],
     sort_order: u32,
 }
 
@@ -572,7 +573,7 @@ impl ResolvedArmorSetSpec {
     fn piece_count(self) -> usize {
         match self {
             Self::Core(spec) => spec.pieces.len(),
-            Self::Complete(_) => ARMOR_EQUIPMENT_SLOT_IDS.len(),
+            Self::Complete(spec) => spec.pieces.len(),
         }
     }
 
@@ -581,7 +582,7 @@ impl ResolvedArmorSetSpec {
             Self::Core(spec) => {
                 armor_set_piece_for_slot(spec, slot_id).map(|piece| piece.item_def_id.to_string())
             }
-            Self::Complete(_) if ARMOR_EQUIPMENT_SLOT_IDS.contains(&slot_id) => Some(format!(
+            Self::Complete(spec) if spec.pieces.contains(&slot_id) => Some(format!(
                 "ARMOR_SET_{}_{}",
                 self.armor_set_id(),
                 normalize_id(slot_id)
@@ -842,10 +843,49 @@ const ARMOR_SET_SPECS: &[ArmorSetSpec] = &[
     ),
 ];
 
-// Complete human-male armor variants already shipped in the character pack.
-// The five core sets above keep their stable item ids; these variants use the
-// deterministic ARMOR_SET_<SET>_<SLOT> item-id convention.
+// Human-male armor presets already shipped in the character pack. Some authored
+// presets intentionally omit slots. The five core sets above keep their stable
+// item ids; these variants use the deterministic ARMOR_SET_<SET>_<SLOT> item-id
+// convention for the pieces they contain.
+const PEASANT_PRESET_ARMOR_SLOT_IDS: &[&str] = &[
+    EQUIP_SLOT_HEAD,
+    EQUIP_SLOT_CAPE,
+    EQUIP_SLOT_CHEST,
+    EQUIP_SLOT_LEGS,
+    EQUIP_SLOT_BOOTS,
+    EQUIP_SLOT_GLOVES,
+];
+const NARCHER_PRESET_ARMOR_SLOT_IDS: &[&str] = &[
+    EQUIP_SLOT_CAPE,
+    EQUIP_SLOT_CHEST,
+    EQUIP_SLOT_LEGS,
+    EQUIP_SLOT_BOOTS,
+    EQUIP_SLOT_GLOVES,
+];
+const SMAGE_PRESET_ARMOR_SLOT_IDS: &[&str] = &[
+    EQUIP_SLOT_HEAD,
+    EQUIP_SLOT_SHOULDER,
+    EQUIP_SLOT_CHEST,
+    EQUIP_SLOT_LEGS,
+    EQUIP_SLOT_BOOTS,
+    EQUIP_SLOT_GLOVES,
+];
+
 const COMPLETE_ARMOR_SET_SPECS: &[CompleteArmorSetSpec] = &[
+    partial_armor_set(
+        "PEASANT_BL",
+        "Blue Peasant Attire",
+        ARMOR_TIER_LIGHT,
+        PEASANT_PRESET_ARMOR_SLOT_IDS,
+        60,
+    ),
+    partial_armor_set(
+        "PEASANT_RD",
+        "Red Peasant Attire",
+        ARMOR_TIER_LIGHT,
+        PEASANT_PRESET_ARMOR_SLOT_IDS,
+        61,
+    ),
     complete_armor_set("FMAGE_BL", "Blue Mage Vestments", ARMOR_TIER_LIGHT, 70),
     complete_armor_set("FMAGE_GN", "Green Mage Vestments", ARMOR_TIER_LIGHT, 71),
     complete_armor_set("FMAGE_RD", "Red Mage Vestments", ARMOR_TIER_LIGHT, 72),
@@ -867,8 +907,142 @@ const COMPLETE_ARMOR_SET_SPECS: &[CompleteArmorSetSpec] = &[
         ARMOR_TIER_LIGHT,
         82,
     ),
-    complete_armor_set("WIZARD_PE", "Purple Wizard Vestments", ARMOR_TIER_LIGHT, 90),
-    complete_armor_set("WIZARD_VT", "Violet Wizard Vestments", ARMOR_TIER_LIGHT, 91),
+    complete_armor_set("WIZARD_BL", "Blue Wizard Vestments", ARMOR_TIER_LIGHT, 90),
+    complete_armor_set("WIZARD_PE", "Purple Wizard Vestments", ARMOR_TIER_LIGHT, 91),
+    complete_armor_set("WIZARD_VT", "Violet Wizard Vestments", ARMOR_TIER_LIGHT, 92),
+    complete_armor_set("CLERIC_BL", "Blue Cleric Vestments", ARMOR_TIER_LIGHT, 100),
+    complete_armor_set("CLERIC_GO", "Gold Cleric Vestments", ARMOR_TIER_LIGHT, 101),
+    complete_armor_set("CLERIC_WH", "White Cleric Vestments", ARMOR_TIER_LIGHT, 102),
+    complete_armor_set(
+        "NMAGE_BL",
+        "Blue Northern Mage Vestments",
+        ARMOR_TIER_LIGHT,
+        110,
+    ),
+    complete_armor_set(
+        "NMAGE_GN",
+        "Green Northern Mage Vestments",
+        ARMOR_TIER_LIGHT,
+        111,
+    ),
+    complete_armor_set(
+        "NMAGE_RD",
+        "Red Northern Mage Vestments",
+        ARMOR_TIER_LIGHT,
+        112,
+    ),
+    complete_armor_set(
+        "NECR_BL",
+        "Blue Necromancer Vestments",
+        ARMOR_TIER_LIGHT,
+        120,
+    ),
+    complete_armor_set(
+        "NECR_GR",
+        "Gray Necromancer Vestments",
+        ARMOR_TIER_LIGHT,
+        121,
+    ),
+    complete_armor_set(
+        "NECR_PE",
+        "Purple Necromancer Vestments",
+        ARMOR_TIER_LIGHT,
+        122,
+    ),
+    complete_armor_set(
+        "SKEEPER_BK",
+        "Black Soul Keeper Vestments",
+        ARMOR_TIER_LIGHT,
+        130,
+    ),
+    complete_armor_set(
+        "SKEEPER_GN",
+        "Green Soul Keeper Vestments",
+        ARMOR_TIER_LIGHT,
+        131,
+    ),
+    complete_armor_set(
+        "SKEEPER_PE",
+        "Purple Soul Keeper Vestments",
+        ARMOR_TIER_LIGHT,
+        132,
+    ),
+    complete_armor_set(
+        "SKEEPER_RD",
+        "Red Soul Keeper Vestments",
+        ARMOR_TIER_LIGHT,
+        133,
+    ),
+    partial_armor_set(
+        "SMAGE_BL",
+        "Blue Storm Mage Vestments",
+        ARMOR_TIER_LIGHT,
+        SMAGE_PRESET_ARMOR_SLOT_IDS,
+        140,
+    ),
+    partial_armor_set(
+        "SMAGE_CN",
+        "Cyan Storm Mage Vestments",
+        ARMOR_TIER_LIGHT,
+        SMAGE_PRESET_ARMOR_SLOT_IDS,
+        141,
+    ),
+    partial_armor_set(
+        "SMAGE_RD",
+        "Red Storm Mage Vestments",
+        ARMOR_TIER_LIGHT,
+        SMAGE_PRESET_ARMOR_SLOT_IDS,
+        142,
+    ),
+    partial_armor_set(
+        "NARCHER_BL",
+        "Blue Archer Leathers",
+        ARMOR_TIER_MEDIUM,
+        NARCHER_PRESET_ARMOR_SLOT_IDS,
+        180,
+    ),
+    partial_armor_set(
+        "NARCHER_GN",
+        "Green Archer Leathers",
+        ARMOR_TIER_MEDIUM,
+        NARCHER_PRESET_ARMOR_SLOT_IDS,
+        181,
+    ),
+    partial_armor_set(
+        "NARCHER_RD",
+        "Red Archer Leathers",
+        ARMOR_TIER_MEDIUM,
+        NARCHER_PRESET_ARMOR_SLOT_IDS,
+        182,
+    ),
+    partial_armor_set(
+        "NARCHER_OLD_BL",
+        "Weathered Blue Archer Leathers",
+        ARMOR_TIER_MEDIUM,
+        NARCHER_PRESET_ARMOR_SLOT_IDS,
+        183,
+    ),
+    partial_armor_set(
+        "NARCHER_OLD_GN",
+        "Weathered Green Archer Leathers",
+        ARMOR_TIER_MEDIUM,
+        NARCHER_PRESET_ARMOR_SLOT_IDS,
+        184,
+    ),
+    partial_armor_set(
+        "NARCHER_OLD_PE",
+        "Weathered Purple Archer Leathers",
+        ARMOR_TIER_MEDIUM,
+        NARCHER_PRESET_ARMOR_SLOT_IDS,
+        185,
+    ),
+    partial_armor_set(
+        "NARCHER_OLD_WH",
+        "Weathered White Archer Leathers",
+        ARMOR_TIER_MEDIUM,
+        NARCHER_PRESET_ARMOR_SLOT_IDS,
+        186,
+    ),
     complete_armor_set(
         "BARBARIAN_BL",
         "Blue Barbarian Leathers",
@@ -922,6 +1096,37 @@ const COMPLETE_ARMOR_SET_SPECS: &[CompleteArmorSetSpec] = &[
     complete_armor_set("ROGUE_BL", "Blue Rogue Leathers", ARMOR_TIER_MEDIUM, 250),
     complete_armor_set("ROGUE_GN", "Green Rogue Leathers", ARMOR_TIER_MEDIUM, 251),
     complete_armor_set("ROGUE_RD", "Red Rogue Leathers", ARMOR_TIER_MEDIUM, 252),
+    complete_armor_set("DRUID_BL", "Blue Druid Leathers", ARMOR_TIER_MEDIUM, 260),
+    complete_armor_set("DRUID_RD", "Red Druid Leathers", ARMOR_TIER_MEDIUM, 261),
+    complete_armor_set("DRUID_YE", "Yellow Druid Leathers", ARMOR_TIER_MEDIUM, 262),
+    complete_armor_set("THIEF_BK", "Black Thief Leathers", ARMOR_TIER_MEDIUM, 270),
+    complete_armor_set("THIEF_BR", "Brown Thief Leathers", ARMOR_TIER_MEDIUM, 271),
+    complete_armor_set("THIEF_GN", "Green Thief Leathers", ARMOR_TIER_MEDIUM, 272),
+    complete_armor_set("THIEF_RD", "Red Thief Leathers", ARMOR_TIER_MEDIUM, 273),
+    complete_armor_set(
+        "TOMBSEEKER_GN",
+        "Green Tomb Seeker Leathers",
+        ARMOR_TIER_MEDIUM,
+        280,
+    ),
+    complete_armor_set(
+        "TOMBSEEKER_PE",
+        "Purple Tomb Seeker Leathers",
+        ARMOR_TIER_MEDIUM,
+        281,
+    ),
+    complete_armor_set(
+        "TOMBSEEKER_RD",
+        "Red Tomb Seeker Leathers",
+        ARMOR_TIER_MEDIUM,
+        282,
+    ),
+    complete_armor_set(
+        "TOMBSEEKER_WH",
+        "White Tomb Seeker Leathers",
+        ARMOR_TIER_MEDIUM,
+        283,
+    ),
     complete_armor_set("DK_BL", "Blue Death Knight Plate", ARMOR_TIER_HEAVY, 400),
     complete_armor_set("DK_GN", "Green Death Knight Plate", ARMOR_TIER_HEAVY, 401),
     complete_armor_set("DK_RD", "Red Death Knight Plate", ARMOR_TIER_HEAVY, 402),
@@ -946,6 +1151,33 @@ const COMPLETE_ARMOR_SET_SPECS: &[CompleteArmorSetSpec] = &[
     complete_armor_set("WARRIOR_GN", "Green Warrior Plate", ARMOR_TIER_HEAVY, 440),
     complete_armor_set("WARRIOR_PE", "Purple Warrior Plate", ARMOR_TIER_HEAVY, 441),
     complete_armor_set("WARRIOR_RD", "Red Warrior Plate", ARMOR_TIER_HEAVY, 442),
+    complete_armor_set(
+        "DBRINGER_BK",
+        "Black Deathbringer Plate",
+        ARMOR_TIER_MEDIUM,
+        450,
+    ),
+    complete_armor_set(
+        "DBRINGER_BL",
+        "Blue Deathbringer Plate",
+        ARMOR_TIER_MEDIUM,
+        451,
+    ),
+    complete_armor_set(
+        "DBRINGER_GN",
+        "Green Deathbringer Plate",
+        ARMOR_TIER_MEDIUM,
+        452,
+    ),
+    complete_armor_set(
+        "DBRINGER_RD",
+        "Red Deathbringer Plate",
+        ARMOR_TIER_MEDIUM,
+        453,
+    ),
+    complete_armor_set("FOOTMAN_BL", "Blue Footman Plate", ARMOR_TIER_HEAVY, 460),
+    complete_armor_set("FOOTMAN_GO", "Gold Footman Plate", ARMOR_TIER_HEAVY, 461),
+    complete_armor_set("FOOTMAN_GR", "Gray Footman Plate", ARMOR_TIER_HEAVY, 462),
 ];
 
 const LEGACY_STARTER_WEAPON_DEFINITION_IDS: &[&str] = &[
@@ -1837,6 +2069,23 @@ const fn complete_armor_set(
         armor_set_id,
         display_name,
         armor_tier,
+        pieces: &ARMOR_EQUIPMENT_SLOT_IDS,
+        sort_order,
+    }
+}
+
+const fn partial_armor_set(
+    armor_set_id: &'static str,
+    display_name: &'static str,
+    armor_tier: &'static str,
+    pieces: &'static [&'static str],
+    sort_order: u32,
+) -> CompleteArmorSetSpec {
+    CompleteArmorSetSpec {
+        armor_set_id,
+        display_name,
+        armor_tier,
+        pieces,
         sort_order,
     }
 }
@@ -7343,32 +7592,42 @@ mod tests {
         );
 
         let catalog = armor_set_catalog().collect::<Vec<_>>();
-        assert_eq!(catalog.len(), 45);
+        assert_eq!(catalog.len(), 89);
         assert_eq!(
             catalog
                 .iter()
                 .filter(|spec| spec.armor_tier() == ARMOR_TIER_LIGHT)
                 .count(),
-            10
+            29
         );
         assert_eq!(
             catalog
                 .iter()
                 .filter(|spec| spec.armor_tier() == ARMOR_TIER_MEDIUM)
                 .count(),
-            19
+            41
         );
         assert_eq!(
             catalog
                 .iter()
                 .filter(|spec| spec.armor_tier() == ARMOR_TIER_HEAVY)
                 .count(),
-            16
+            19
         );
 
         let unique_set_ids: std::collections::HashSet<_> =
             catalog.iter().map(|spec| spec.armor_set_id()).collect();
         assert_eq!(unique_set_ids.len(), catalog.len());
+        for armor_set_id in ["DBRINGER_BK", "DBRINGER_BL", "DBRINGER_GN", "DBRINGER_RD"] {
+            assert_eq!(
+                catalog
+                    .iter()
+                    .find(|spec| spec.armor_set_id() == armor_set_id)
+                    .map(|spec| spec.armor_tier()),
+                Some(ARMOR_TIER_MEDIUM),
+                "{armor_set_id} must remain Medium armor"
+            );
+        }
 
         let mut unique_item_ids = std::collections::HashSet::new();
         for spec in catalog {
@@ -7402,7 +7661,7 @@ mod tests {
                 other => panic!("unexpected armor tier {other}"),
             }
         }
-        assert_eq!(unique_item_ids.len(), 312);
+        assert_eq!(unique_item_ids.len(), 601);
     }
 
     #[test]

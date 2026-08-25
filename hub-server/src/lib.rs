@@ -1182,14 +1182,70 @@ const HUB_ARMOR_SET_SPECS: &[HubArmorSetSpec] = &[
     hub_armor_set("LEATHER", "Ranger Leathers", "MEDIUM", 7, 30),
     hub_armor_set("IRON", "Iron Warplate", "HEAVY", 7, 40),
     hub_armor_set("GILDED", "Gilded Warplate", "HEAVY", 7, 50),
+    hub_armor_set("PEASANT_BL", "Blue Peasant Attire", "LIGHT", 6, 60),
+    hub_armor_set("PEASANT_RD", "Red Peasant Attire", "LIGHT", 6, 61),
     hub_armor_set("FMAGE_BL", "Blue Mage Vestments", "LIGHT", 7, 70),
     hub_armor_set("FMAGE_GN", "Green Mage Vestments", "LIGHT", 7, 71),
     hub_armor_set("FMAGE_RD", "Red Mage Vestments", "LIGHT", 7, 72),
     hub_armor_set("WARLOCK_GN", "Green Warlock Vestments", "LIGHT", 7, 80),
     hub_armor_set("WARLOCK_PE", "Purple Warlock Vestments", "LIGHT", 7, 81),
     hub_armor_set("WARLOCK_VT", "Violet Warlock Vestments", "LIGHT", 7, 82),
-    hub_armor_set("WIZARD_PE", "Purple Wizard Vestments", "LIGHT", 7, 90),
-    hub_armor_set("WIZARD_VT", "Violet Wizard Vestments", "LIGHT", 7, 91),
+    hub_armor_set("WIZARD_BL", "Blue Wizard Vestments", "LIGHT", 7, 90),
+    hub_armor_set("WIZARD_PE", "Purple Wizard Vestments", "LIGHT", 7, 91),
+    hub_armor_set("WIZARD_VT", "Violet Wizard Vestments", "LIGHT", 7, 92),
+    hub_armor_set("CLERIC_BL", "Blue Cleric Vestments", "LIGHT", 7, 100),
+    hub_armor_set("CLERIC_GO", "Gold Cleric Vestments", "LIGHT", 7, 101),
+    hub_armor_set("CLERIC_WH", "White Cleric Vestments", "LIGHT", 7, 102),
+    hub_armor_set("NMAGE_BL", "Blue Northern Mage Vestments", "LIGHT", 7, 110),
+    hub_armor_set("NMAGE_GN", "Green Northern Mage Vestments", "LIGHT", 7, 111),
+    hub_armor_set("NMAGE_RD", "Red Northern Mage Vestments", "LIGHT", 7, 112),
+    hub_armor_set("NECR_BL", "Blue Necromancer Vestments", "LIGHT", 7, 120),
+    hub_armor_set("NECR_GR", "Gray Necromancer Vestments", "LIGHT", 7, 121),
+    hub_armor_set("NECR_PE", "Purple Necromancer Vestments", "LIGHT", 7, 122),
+    hub_armor_set("SKEEPER_BK", "Black Soul Keeper Vestments", "LIGHT", 7, 130),
+    hub_armor_set("SKEEPER_GN", "Green Soul Keeper Vestments", "LIGHT", 7, 131),
+    hub_armor_set(
+        "SKEEPER_PE",
+        "Purple Soul Keeper Vestments",
+        "LIGHT",
+        7,
+        132,
+    ),
+    hub_armor_set("SKEEPER_RD", "Red Soul Keeper Vestments", "LIGHT", 7, 133),
+    hub_armor_set("SMAGE_BL", "Blue Storm Mage Vestments", "LIGHT", 6, 140),
+    hub_armor_set("SMAGE_CN", "Cyan Storm Mage Vestments", "LIGHT", 6, 141),
+    hub_armor_set("SMAGE_RD", "Red Storm Mage Vestments", "LIGHT", 6, 142),
+    hub_armor_set("NARCHER_BL", "Blue Archer Leathers", "MEDIUM", 5, 180),
+    hub_armor_set("NARCHER_GN", "Green Archer Leathers", "MEDIUM", 5, 181),
+    hub_armor_set("NARCHER_RD", "Red Archer Leathers", "MEDIUM", 5, 182),
+    hub_armor_set(
+        "NARCHER_OLD_BL",
+        "Weathered Blue Archer Leathers",
+        "MEDIUM",
+        5,
+        183,
+    ),
+    hub_armor_set(
+        "NARCHER_OLD_GN",
+        "Weathered Green Archer Leathers",
+        "MEDIUM",
+        5,
+        184,
+    ),
+    hub_armor_set(
+        "NARCHER_OLD_PE",
+        "Weathered Purple Archer Leathers",
+        "MEDIUM",
+        5,
+        185,
+    ),
+    hub_armor_set(
+        "NARCHER_OLD_WH",
+        "Weathered White Archer Leathers",
+        "MEDIUM",
+        5,
+        186,
+    ),
     hub_armor_set("BARBARIAN_BL", "Blue Barbarian Leathers", "MEDIUM", 7, 200),
     hub_armor_set("BARBARIAN_GN", "Green Barbarian Leathers", "MEDIUM", 7, 201),
     hub_armor_set("BARBARIAN_RD", "Red Barbarian Leathers", "MEDIUM", 7, 202),
@@ -1220,6 +1276,41 @@ const HUB_ARMOR_SET_SPECS: &[HubArmorSetSpec] = &[
     hub_armor_set("ROGUE_BL", "Blue Rogue Leathers", "MEDIUM", 7, 250),
     hub_armor_set("ROGUE_GN", "Green Rogue Leathers", "MEDIUM", 7, 251),
     hub_armor_set("ROGUE_RD", "Red Rogue Leathers", "MEDIUM", 7, 252),
+    hub_armor_set("DRUID_BL", "Blue Druid Leathers", "MEDIUM", 7, 260),
+    hub_armor_set("DRUID_RD", "Red Druid Leathers", "MEDIUM", 7, 261),
+    hub_armor_set("DRUID_YE", "Yellow Druid Leathers", "MEDIUM", 7, 262),
+    hub_armor_set("THIEF_BK", "Black Thief Leathers", "MEDIUM", 7, 270),
+    hub_armor_set("THIEF_BR", "Brown Thief Leathers", "MEDIUM", 7, 271),
+    hub_armor_set("THIEF_GN", "Green Thief Leathers", "MEDIUM", 7, 272),
+    hub_armor_set("THIEF_RD", "Red Thief Leathers", "MEDIUM", 7, 273),
+    hub_armor_set(
+        "TOMBSEEKER_GN",
+        "Green Tomb Seeker Leathers",
+        "MEDIUM",
+        7,
+        280,
+    ),
+    hub_armor_set(
+        "TOMBSEEKER_PE",
+        "Purple Tomb Seeker Leathers",
+        "MEDIUM",
+        7,
+        281,
+    ),
+    hub_armor_set(
+        "TOMBSEEKER_RD",
+        "Red Tomb Seeker Leathers",
+        "MEDIUM",
+        7,
+        282,
+    ),
+    hub_armor_set(
+        "TOMBSEEKER_WH",
+        "White Tomb Seeker Leathers",
+        "MEDIUM",
+        7,
+        283,
+    ),
     hub_armor_set("DK_BL", "Blue Death Knight Plate", "HEAVY", 7, 400),
     hub_armor_set("DK_GN", "Green Death Knight Plate", "HEAVY", 7, 401),
     hub_armor_set("DK_RD", "Red Death Knight Plate", "HEAVY", 7, 402),
@@ -1234,6 +1325,13 @@ const HUB_ARMOR_SET_SPECS: &[HubArmorSetSpec] = &[
     hub_armor_set("WARRIOR_GN", "Green Warrior Plate", "HEAVY", 7, 440),
     hub_armor_set("WARRIOR_PE", "Purple Warrior Plate", "HEAVY", 7, 441),
     hub_armor_set("WARRIOR_RD", "Red Warrior Plate", "HEAVY", 7, 442),
+    hub_armor_set("DBRINGER_BK", "Black Deathbringer Plate", "MEDIUM", 7, 450),
+    hub_armor_set("DBRINGER_BL", "Blue Deathbringer Plate", "MEDIUM", 7, 451),
+    hub_armor_set("DBRINGER_GN", "Green Deathbringer Plate", "MEDIUM", 7, 452),
+    hub_armor_set("DBRINGER_RD", "Red Deathbringer Plate", "MEDIUM", 7, 453),
+    hub_armor_set("FOOTMAN_BL", "Blue Footman Plate", "HEAVY", 7, 460),
+    hub_armor_set("FOOTMAN_GO", "Gold Footman Plate", "HEAVY", 7, 461),
+    hub_armor_set("FOOTMAN_GR", "Gray Footman Plate", "HEAVY", 7, 462),
 ];
 
 fn ensure_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
@@ -2591,10 +2689,43 @@ mod tests {
             .iter()
             .map(|spec| spec.armor_set_id)
             .collect();
+        assert_eq!(HUB_ARMOR_SET_SPECS.len(), 89);
         assert_eq!(ids.len(), HUB_ARMOR_SET_SPECS.len());
+        for armor_set_id in ["DBRINGER_BK", "DBRINGER_BL", "DBRINGER_GN", "DBRINGER_RD"] {
+            assert_eq!(
+                HUB_ARMOR_SET_SPECS
+                    .iter()
+                    .find(|spec| spec.armor_set_id == armor_set_id)
+                    .map(|spec| spec.armor_tier),
+                Some("MEDIUM"),
+                "{armor_set_id} must remain Medium armor"
+            );
+        }
         assert!(HUB_ARMOR_SET_SPECS.iter().all(|spec| {
-            matches!(spec.armor_tier, "LIGHT" | "MEDIUM" | "HEAVY") && spec.piece_count > 0
+            matches!(spec.armor_tier, "LIGHT" | "MEDIUM" | "HEAVY")
+                && (4..=7).contains(&spec.piece_count)
         }));
+        assert_eq!(
+            HUB_ARMOR_SET_SPECS
+                .iter()
+                .filter(|spec| spec.armor_tier == "LIGHT")
+                .count(),
+            29
+        );
+        assert_eq!(
+            HUB_ARMOR_SET_SPECS
+                .iter()
+                .filter(|spec| spec.armor_tier == "MEDIUM")
+                .count(),
+            41
+        );
+        assert_eq!(
+            HUB_ARMOR_SET_SPECS
+                .iter()
+                .filter(|spec| spec.armor_tier == "HEAVY")
+                .count(),
+            19
+        );
     }
 
     #[test]

@@ -110,6 +110,28 @@ namespace Arena.UI
                         ("GLOVES", "GILDED_GLOVES"))),
             };
 
+        private static readonly string[] AllArmorSlotIds =
+        {
+            "HEAD", "SHOULDER", "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES",
+        };
+
+        private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> PartialPresetSlots =
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+            {
+                ["PEASANT_BL"] = new[] { "HEAD", "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES" },
+                ["PEASANT_RD"] = new[] { "HEAD", "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES" },
+                ["SMAGE_BL"] = new[] { "HEAD", "SHOULDER", "CHEST", "LEGS", "BOOTS", "GLOVES" },
+                ["SMAGE_CN"] = new[] { "HEAD", "SHOULDER", "CHEST", "LEGS", "BOOTS", "GLOVES" },
+                ["SMAGE_RD"] = new[] { "HEAD", "SHOULDER", "CHEST", "LEGS", "BOOTS", "GLOVES" },
+                ["NARCHER_BL"] = new[] { "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES" },
+                ["NARCHER_GN"] = new[] { "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES" },
+                ["NARCHER_RD"] = new[] { "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES" },
+                ["NARCHER_OLD_BL"] = new[] { "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES" },
+                ["NARCHER_OLD_GN"] = new[] { "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES" },
+                ["NARCHER_OLD_PE"] = new[] { "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES" },
+                ["NARCHER_OLD_WH"] = new[] { "CAPE", "CHEST", "LEGS", "BOOTS", "GLOVES" },
+            };
+
         private readonly List<HubArmorSetSnapshot> _sets = new();
         private readonly List<HubWeaponSnapshot> _weapons = new();
         private PanelSettings? _panelSettings;
@@ -1295,14 +1317,15 @@ namespace Arena.UI
 
         private static IReadOnlyDictionary<string, string> CompleteArmorPieces(string armorSetId)
         {
-            return ArmorPieces(
-                ("HEAD", $"ARMOR_SET_{armorSetId}_HEAD"),
-                ("SHOULDER", $"ARMOR_SET_{armorSetId}_SHOULDER"),
-                ("CAPE", $"ARMOR_SET_{armorSetId}_CAPE"),
-                ("CHEST", $"ARMOR_SET_{armorSetId}_CHEST"),
-                ("LEGS", $"ARMOR_SET_{armorSetId}_LEGS"),
-                ("BOOTS", $"ARMOR_SET_{armorSetId}_BOOTS"),
-                ("GLOVES", $"ARMOR_SET_{armorSetId}_GLOVES"));
+            IReadOnlyList<string> slots = PartialPresetSlots.TryGetValue(
+                armorSetId,
+                out IReadOnlyList<string>? partialSlots)
+                ? partialSlots
+                : AllArmorSlotIds;
+            return slots.ToDictionary(
+                slot => slot,
+                slot => $"ARMOR_SET_{armorSetId}_{slot}",
+                StringComparer.Ordinal);
         }
 
         internal static IReadOnlyDictionary<string, string> ArmorAppearanceFor(string? armorSetId)
