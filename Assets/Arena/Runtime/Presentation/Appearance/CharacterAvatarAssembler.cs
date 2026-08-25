@@ -415,9 +415,13 @@ namespace Arena.Presentation.Appearance
                 mageStaffAnimatedHandSocket,
                 mageStaffAnimatedHandSocket,
                 "Arena_Staff_hand");
+            // The mage socket recalibrates the hand's native Weapon_R node onto the
+            // MageAnimationPack bind pose, and the pack's clips drive it. Restore the
+            // native socket under the hand itself, not under the mage socket: this mount
+            // carries swords and main-hand daggers, which must not inherit staff motion.
             Transform? restoredNhanceWeaponR = hadNhanceWeaponR
                 ? AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
-                    mageStaffAnimatedHandSocket,
+                    mainHandParent,
                     nhanceWeaponRWorldPosition,
                     nhanceWeaponRWorldRotation,
                     "Arena_NHance_weapon_r")

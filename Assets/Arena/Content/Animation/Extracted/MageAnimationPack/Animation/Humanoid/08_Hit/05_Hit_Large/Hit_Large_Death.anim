@@ -2419,7 +2419,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    path: root/pelvis/spine_01/spine_02/spine_03/clavicle_r/upperarm_r/lowerarm_r/hand_r/Weapon_R
+    path: Root/Pelvis/spine_01/spine_02/spine_03/clavicle_r/upperarm_r/lowerarm_r/hand_r/Weapon_R
   - curve:
       serializedVersion: 2
       m_Curve:
@@ -3623,7 +3623,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    path: root/pelvis/spine_01/spine_02/spine_03/Weapon_Holder
+    path: Root/Pelvis/spine_01/spine_02/spine_03/Weapon_Holder
   m_CompressedRotationCurves: []
   m_EulerCurves: []
   m_PositionCurves:
@@ -6034,7 +6034,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    path: root/pelvis/spine_01/spine_02/spine_03/clavicle_r/upperarm_r/lowerarm_r/hand_r/Weapon_R
+    path: Root/Pelvis/spine_01/spine_02/spine_03/clavicle_r/upperarm_r/lowerarm_r/hand_r/Weapon_R
   - curve:
       serializedVersion: 2
       m_Curve:
@@ -7238,7 +7238,7 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    path: root/pelvis/spine_01/spine_02/spine_03/Weapon_Holder
+    path: Root/Pelvis/spine_01/spine_02/spine_03/Weapon_Holder
   m_ScaleCurves: []
   m_FloatCurves:
   - curve:

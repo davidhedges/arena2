@@ -400,9 +400,12 @@ namespace Arena.EditorTools
                 mageStaffAnimatedHandSocket,
                 mageStaffAnimatedHandSocket,
                 "Arena_Staff_hand") ?? mainHand;
+            // Restored under the hand, not under the mage socket: this mount carries
+            // swords and main-hand daggers, which must not inherit staff motion once
+            // MageAnimationPack clips drive Weapon_R. Mirrors CharacterAvatarAssembler.
             Transform? restoredNhanceWeaponR = hadNhanceWeaponR
                 ? AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
-                    mageStaffAnimatedHandSocket,
+                    rightHand,
                     nhanceWeaponRWorldPosition,
                     nhanceWeaponRWorldRotation,
                     "Arena_NHance_weapon_r")

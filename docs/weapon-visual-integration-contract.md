@@ -112,6 +112,37 @@ Weapon mount ids and animation object-curve paths solve different problems.
 
 When a weapon appears correct in the vendor preview but wrong in Arena, check the clip's serialized `path:` entries before adjusting mount offsets or contacting the asset developer. For extracted clips used by Arena, retarget the extracted copy's prop-object paths to the runtime hierarchy and keep package names out of authored mount ids.
 
+### The Studio 9CG case mismatch
+
+Every Studio 9CG player pack serializes its prop paths against the vendor skeleton, whose first two bones are lowercase:
+
+```
+root/pelvis/spine_01/spine_02/spine_03/clavicle_r/upperarm_r/lowerarm_r/hand_r/Weapon_R
+```
+
+The runtime avatar is the N-Hance Stylized Modular Human, which capitalises them:
+
+```
+Root/Pelvis/spine_01/spine_02/spine_03/clavicle_r/upperarm_r/lowerarm_r/hand_r/Weapon_R
+```
+
+Object-curve binding is case-sensitive, and so is the `Transform.Find` this file's validator uses. Measured in a 6000.4.0f1 batchmode probe: a curve authored at `root/...` leaves a `Root/...` node completely untouched — no warning, no error, the prop simply never moves. **This is silent. A pack can ship 962 prop curves that do nothing.**
+
+Retarget with:
+
+```
+ops/retarget-9cg-prop-curve-paths.py --pack MageAnimationPack --apply
+```
+
+It rewrites only prop paths whose runtime node is an Arena animation socket *calibrated to that pack's bind pose* (the `SOCKETS` table, mirroring `ArenaWeaponMountCalibration`), resolves the target casing out of `PlayerArmature.prefab` rather than hardcoding it, and is idempotent.
+
+Two rules the tool encodes, and the reasons they are not negotiable:
+
+- **Do not "fix" this in the mount calibration.** The socket is authored at the pack's *bind* pose on purpose: that is what makes a bound curve read as an absolute pose, and what lets the `Arena_NHance_*` wrapper children ride the delta from bind. The mage pack's combat clips hold `Weapon_R` at bind rolled 34.927° about the socket's local X, so baking that constant into `ArenaWeaponMountCalibration` looks right today and double-applies the moment the curves bind.
+- **Do not retarget a prop node that shares a runtime socket with another weapon family.** The runtime `Weapon_L` is the raw N-Hance off-hand socket, still at N-Hance's own pose and shared with `dagger_off` / `bow_drawn`; binding the mage pack's `Weapon_L` curves to it would snap those weapons into the 9CG frame. Retargeting a pack makes its props live, so audit every mount that hangs off the socket being driven first.
+
+Status: `MageAnimationPack` is retargeted (`Weapon_R`, `Weapon_Holder`). `GreatSwordAnimations` has the same latent defect on `weapon_r` — 992 curve paths, one clip (`Run_Attack_02.anim`) hand-retargeted long ago — and is deliberately left alone until someone wants that behaviour change.
+
 ## Recovering Stowed Mount Calibration From Animation Packs
 
 A weapon pack's sheath/draw animations are authored against a specific holder bone in the *pack's* skeleton — `sword_holder` in the greatsword pack, `Back_Bow` / `Back_Quiver` in StylizedCharacter archer presets, similar bones in future packs. The authored local pose of that bone is the source of truth for where the prop sits while stowed.

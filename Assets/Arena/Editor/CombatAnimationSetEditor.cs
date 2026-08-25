@@ -170,6 +170,13 @@ namespace Arena.Editor
             public string MountId { get; }
         }
 
+        // These are matched against a clip's serialized object-curve paths, so the
+        // casing has to be the casing the clip actually carries. The vendor packs
+        // ship the 9CG skeleton's `root/pelvis/...`; the runtime avatar is
+        // `Root/Pelvis/...`, and object-curve binding is case-sensitive, so a pack
+        // path only drives anything once it has been retargeted by
+        // ops/retarget-9cg-prop-curve-paths.py. MageAnimationPack is retargeted;
+        // the other packs are not, and their entries stay on the vendor casing.
         private static readonly AnimatedPropRequirement[] AnimatedPropRequirements =
         {
             new("Sword", "root/pelvis/spine_01/spine_02/spine_03/clavicle_r/upperarm_r/lowerarm_r/hand_r/Sword", AvatarWeaponMounts.MainHandMountId),
@@ -177,8 +184,8 @@ namespace Arena.Editor
             new("Sword_Holder", "root/pelvis/spine_01/spine_02/spine_03/Sword_Holder", AvatarWeaponMounts.MainStowedMountId),
             new("Shield_Holder", "root/pelvis/spine_01/spine_02/spine_03/Shield_Holder", AvatarWeaponMounts.OffStowedMountId),
             new("weapon_r", "root/pelvis/spine_01/spine_02/spine_03/clavicle_r/upperarm_r/lowerarm_r/hand_r/weapon_r", AvatarWeaponMounts.GreatswordHandMountId),
-            new("Weapon_R", "root/pelvis/spine_01/spine_02/spine_03/clavicle_r/upperarm_r/lowerarm_r/hand_r/Weapon_R", AvatarWeaponMounts.StaffHandMountId),
-            new("Weapon_Holder", "root/pelvis/spine_01/spine_02/spine_03/Weapon_Holder", AvatarWeaponMounts.StaffStowedMountId),
+            new("Weapon_R", "Root/Pelvis/spine_01/spine_02/spine_03/clavicle_r/upperarm_r/lowerarm_r/hand_r/Weapon_R", AvatarWeaponMounts.StaffHandMountId),
+            new("Weapon_Holder", "Root/Pelvis/spine_01/spine_02/spine_03/Weapon_Holder", AvatarWeaponMounts.StaffStowedMountId),
         };
 
         static CombatAnimationSetEditor()
