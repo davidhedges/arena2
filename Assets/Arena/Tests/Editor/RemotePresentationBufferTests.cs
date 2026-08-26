@@ -367,7 +367,8 @@ namespace Arena.EditModeTests
         private static object Snapshot(
             float posX, float posY, float posZ, float velX, float yaw, float receivedTime, long serverTimeMs)
             => Activator.CreateInstance(
-                SnapshotType, posX, posY, posZ, velX, 0f, 0f, yaw, true, 0u, receivedTime, serverTimeMs)!;
+                SnapshotType, posX, posY, posZ, velX, 0f, 0f, yaw, true, 0u, receivedTime,
+                serverTimeMs, true, 0)!;
 
         private static void Push(object buffer, object snapshot)
         {

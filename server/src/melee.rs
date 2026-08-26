@@ -7100,7 +7100,7 @@ mod tests {
             ),
         ] {
             assert!(
-                source.contains("spacetime call \"$ARENA_DATABASE\" publish_melee_definitions"),
+                source.contains("\"$ARENA_DATABASE\" publish_melee_definitions"),
                 "{relative_path} must publish melee definitions after a data-preserving publish"
             );
         }
@@ -7324,7 +7324,7 @@ mod tests {
             .expect("expected Whirlwind strike");
 
         assert_eq!(canonical_slot_id(whirlwind), "finisher_1");
-        assert_eq!(whirlwind.hit_windows.len(), 4);
+        assert_eq!(whirlwind.hit_windows.len(), 2);
     }
 
     #[test]

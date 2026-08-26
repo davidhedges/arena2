@@ -2,9 +2,10 @@
 
 Date: 2026-08-26
 
-Status: **PLANNING ONLY — owner rulings are captured below; implementation is
-not authorized by this document. Each implementation phase requires explicit
-approval.**
+Status: **PHASE 0 COMPLETE — rule lock, baseline repair, fixtures, consumer
+inventory, protected local-data strategy, and all Phase 0 verification gates
+are complete. Phase 1 and later implementation are not authorized by this
+document; each requires explicit approval.**
 
 ## 1. Goal
 
@@ -394,6 +395,12 @@ setup or catalog command.
 
 Exit gate: no unresolved catalog identity, data-retention choice, or failing
 baseline test.
+
+Phase 0 completion: **PASS on 2026-08-26.** The evidence log records 824/824
+server tests, 18/18 Hub tests, 22/22 provisioner tests, 87/87 Unity EditMode
+tests, clean C# compilation, a data-preserving canonical local publish, all 33
+protected Hub loadout rows unchanged, and a successful disposable-match
+initial-state and cleanup sample. No Phase 1 work started.
 
 ### Phase 1 — canonical catalog and pure contract
 

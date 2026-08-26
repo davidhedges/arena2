@@ -8036,6 +8036,42 @@ mod tests {
             .collect()
     }
 
+    fn spell_cast_animation_mapping(asset_contents: &str, spell_id: &str) -> (u8, u8, String) {
+        let expected_header = format!("- spellId: {}", normalize_identifier(spell_id));
+        let mut entry_lines = asset_contents
+            .lines()
+            .skip_while(|line| line.trim() != expected_header);
+        assert_eq!(
+            entry_lines.next().map(str::trim),
+            Some(expected_header.as_str()),
+            "spell '{spell_id}' must exist in the cast animation map"
+        );
+
+        let mut assignment_kind = None;
+        let mut motion = None;
+        let mut animation_id = String::new();
+        for line in entry_lines {
+            let trimmed = line.trim();
+            if trimmed.starts_with("- spellId: ") {
+                break;
+            }
+            if let Some(value) = trimmed.strip_prefix("assignmentKind: ") {
+                assignment_kind = value.parse::<u8>().ok();
+            } else if let Some(value) = trimmed.strip_prefix("motion: ") {
+                motion = value.parse::<u8>().ok();
+            } else if let Some(value) = trimmed.strip_prefix("animationId: ") {
+                animation_id = normalize_identifier(value);
+            }
+        }
+
+        (
+            assignment_kind
+                .unwrap_or_else(|| panic!("spell '{spell_id}' must author assignmentKind")),
+            motion.unwrap_or_else(|| panic!("spell '{spell_id}' must author motion")),
+            animation_id,
+        )
+    }
+
     fn json_ability_gameplay_kind(object: &serde_json::Map<String, serde_json::Value>) -> &str {
         object
             .get("gameplay")
@@ -8213,14 +8249,16 @@ mod tests {
             "ArcherBow/Precision must cast one-hand families with the left hand"
         );
 
-        assert!(
-            SPELL_CAST_ANIMATION_MAP_ASSET
-                .contains("- spellId: UPHEAVAL\n    assignmentKind: 0\n    motion: 2"),
+        let upheaval = spell_cast_animation_mapping(SPELL_CAST_ANIMATION_MAP_ASSET, "UPHEAVAL");
+        assert_eq!(
+            (upheaval.0, upheaval.1),
+            (0, 2),
             "Upheaval must be classified as Raise"
         );
-        assert!(
-            SPELL_CAST_ANIMATION_MAP_ASSET
-                .contains("- spellId: BATTLE_CRY\n    assignmentKind: 1\n    motion: 0"),
+        let battle_cry = spell_cast_animation_mapping(SPELL_CAST_ANIMATION_MAP_ASSET, "BATTLE_CRY");
+        assert_eq!(
+            (battle_cry.0, battle_cry.1),
+            (1, 0),
             "Battle Cry must be a fixed set-independent animation exception"
         );
     }
@@ -8228,11 +8266,10 @@ mod tests {
     #[test]
     fn spell_cast_animation_map_matches_requested_semantic_classifications() {
         let assert_mapping = |spell_id: &str, assignment_kind: u8, motion: u8| {
-            let expected = format!(
-                "- spellId: {spell_id}\n    assignmentKind: {assignment_kind}\n    motion: {motion}"
-            );
-            assert!(
-                SPELL_CAST_ANIMATION_MAP_ASSET.contains(expected.as_str()),
+            let mapping = spell_cast_animation_mapping(SPELL_CAST_ANIMATION_MAP_ASSET, spell_id);
+            assert_eq!(
+                (mapping.0, mapping.1),
+                (assignment_kind, motion),
                 "spell '{spell_id}' must author assignmentKind {assignment_kind}, motion {motion}"
             );
         };
@@ -8259,14 +8296,19 @@ mod tests {
             assert_mapping(spell_id, 2, 0);
         }
 
-        for spell_id in ["ICICLE", "FIREBALL", "SMITE"] {
+        for spell_id in ["FIREBALL", "SMITE"] {
             assert_mapping(spell_id, 0, 6);
         }
 
-        assert!(
-            SPELL_CAST_ANIMATION_MAP_ASSET.contains(
-                "- spellId: FLAMING_ORB\n    assignmentKind: 3\n    animationId: MAGE_PROJECTILE_CAST_02\n    motion: 0"
-            ),
+        assert_eq!(
+            spell_cast_animation_mapping(SPELL_CAST_ANIMATION_MAP_ASSET, "ICICLE"),
+            (3, 0, "MAGE_AIMED_RELEASE_01".to_string()),
+            "Icicle must select the shared Mage Aimed Release recipe"
+        );
+
+        assert_eq!(
+            spell_cast_animation_mapping(SPELL_CAST_ANIMATION_MAP_ASSET, "FLAMING_ORB"),
+            (3, 0, "MAGE_PROJECTILE_CAST_02".to_string()),
             "Flaming Orb must select the shared Mage Projectile Cast 2 catalog recipe"
         );
 
@@ -8276,21 +8318,29 @@ mod tests {
             "LAVA_BLAST",
             "TIDAL_BLAST",
             "WIND_BLAST",
-            "BOLT",
-            "CAPACITOR",
             "CAUTERIZE",
-            "BUFFET",
             "FLASHFIRE",
             "FLASH_FREEZE",
             "DEEPENING_COLD",
             "FULMINATION",
             "VAMPIRIC_ORB",
-            "WITHERING_ORB",
         ] {
             assert_mapping(spell_id, 0, 1);
         }
 
-        assert_mapping("CLOUDBURST", 0, 3);
+        for (spell_id, animation_id) in [
+            ("BOLT", "MAGE_COMBO_CAST_04_01"),
+            ("CAPACITOR", "MAGE_COMBO_CAST_01_02"),
+            ("BUFFET", "MAGE_COMBO_CAST_01_01"),
+            ("WITHERING_ORB", "MAGE_COMBO_CAST_01_01"),
+            ("CLOUDBURST", "MAGE_SKILL_CAST_05"),
+        ] {
+            assert_eq!(
+                spell_cast_animation_mapping(SPELL_CAST_ANIMATION_MAP_ASSET, spell_id),
+                (3, 0, animation_id.to_string()),
+                "spell '{spell_id}' must retain its shared Mage catalog recipe"
+            );
+        }
 
         for spell_id in [
             "GIGANTISM",
@@ -8299,11 +8349,7 @@ mod tests {
             "WELLSPRING",
             "NECRO_PRISON",
             "NECROTIC_AURA",
-            "GRAVEBURST",
-            "GRAVEWAKE",
-            "DEFILED_GROUND",
             "BENEDICTION",
-            "DIVINE_MEND",
             "FLASH_OF_GRACE",
             "RESTORATION",
             "SANCTUARY",
@@ -8313,9 +8359,28 @@ mod tests {
             assert_mapping(spell_id, 0, 2);
         }
 
-        for spell_id in ["EARTHQUAKE", "FISSURE", "BLIZZARD"] {
-            assert_mapping(spell_id, 0, 7);
+        for spell_id in ["GRAVEBURST", "GRAVEWAKE", "DEFILED_GROUND"] {
+            assert_eq!(
+                spell_cast_animation_mapping(SPELL_CAST_ANIMATION_MAP_ASSET, spell_id),
+                (3, 0, "MAGE_SKILL_CAST_03".to_string()),
+                "spell '{spell_id}' must retain its shared Mage Skill Cast 3 recipe"
+            );
         }
+
+        assert_eq!(
+            spell_cast_animation_mapping(SPELL_CAST_ANIMATION_MAP_ASSET, "DIVINE_MEND"),
+            (3, 0, "LEGACY_CALL_CAST_1H_01_L_CHARGED".to_string()),
+            "Divine Mend must retain its shared charged call-cast recipe"
+        );
+
+        for spell_id in ["EARTHQUAKE", "FISSURE"] {
+            assert_eq!(
+                spell_cast_animation_mapping(SPELL_CAST_ANIMATION_MAP_ASSET, spell_id),
+                (3, 0, "MAGE_SKILL_CAST_04".to_string()),
+                "spell '{spell_id}' must retain its shared Mage Skill Cast 4 recipe"
+            );
+        }
+        assert_mapping("BLIZZARD", 0, 7);
     }
 
     #[test]

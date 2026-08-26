@@ -1269,21 +1269,6 @@
                     "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
-                    "id": "DAGGER_RIPOSTE",
-                    "slot_id": "dagger_riposte_slot",
-                    "hit_windows": [
-                        {
-                            "impact_delay_ms": 504
-                        }
-                    ],
-                    "recovery_ms": 350,
-                    "is_gap_closer": false,
-                    "combo_from": "",
-                    "combo_open_ms": 450,
-                    "combo_grace_ms": 100,
-                    "aerial_execution_mode": "GROUNDED_ONLY"
-                },
-                {
                     "id": "DAGGER_COMBO_ATTACK_04_01",
                     "slot_id": "dagger_combo_attack_04_01_slot",
                     "hit_windows": [
@@ -1571,42 +1556,6 @@
                         }
                     ],
                     "recovery_ms": 350,
-                    "is_gap_closer": false,
-                    "combo_from": "",
-                    "combo_open_ms": 0,
-                    "combo_grace_ms": 0,
-                    "aerial_execution_mode": "GROUNDED_ONLY"
-                },
-                {
-                    "id": "DAGGER_FLURRY",
-                    "slot_id": "dagger_flurry_slot",
-                    "hit_windows": [
-                        {
-                            "impact_delay_ms": 107
-                        },
-                        {
-                            "impact_delay_ms": 247
-                        },
-                        {
-                            "impact_delay_ms": 409
-                        },
-                        {
-                            "impact_delay_ms": 553
-                        },
-                        {
-                            "impact_delay_ms": 727
-                        },
-                        {
-                            "impact_delay_ms": 807
-                        },
-                        {
-                            "impact_delay_ms": 807
-                        },
-                        {
-                            "impact_delay_ms": 1081
-                        }
-                    ],
-                    "recovery_ms": 400,
                     "is_gap_closer": false,
                     "combo_from": "",
                     "combo_open_ms": 0,

@@ -80,6 +80,9 @@ mod tests {
         let src_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut on_disk = Vec::new();
         collect_shared_json(&src_root, &src_root, &mut on_disk);
+        // build.rs also compiles this Unity-owned shared catalog from outside
+        // src/ so the client can verify the authoritative server stamp.
+        on_disk.push("weapon_appearance_catalog.shared.json".to_string());
         on_disk.sort();
 
         let mut listed: Vec<String> = SHARED_FILE_HASHES

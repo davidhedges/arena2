@@ -6883,16 +6883,12 @@ mod tests {
 
     #[test]
     fn random_dungeon_uses_baked_lower_floors_without_a_flat_ground_plane() {
-        let lower_floor = try_open_world_surface_height_at_y(
-            &RANDOM_DUNGEON_PROFILE,
-            7.3333335,
-            -3.3333333,
-            -8.0,
-        )
-        .expect("baked lower dungeon floor should be walkable");
+        let lower_floor =
+            try_open_world_surface_height_at_y(&RANDOM_DUNGEON_PROFILE, -48.0, -12.0, -4.0)
+                .expect("baked lower dungeon floor should be walkable");
         assert!(
-            (lower_floor + 8.0).abs() < 0.01,
-            "expected baked floor at y=-8, got {lower_floor}"
+            (lower_floor + 4.0).abs() < 0.01,
+            "expected baked floor at y=-4, got {lower_floor}"
         );
 
         assert!(

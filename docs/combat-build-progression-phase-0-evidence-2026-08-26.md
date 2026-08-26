@@ -2,10 +2,11 @@
 
 Date: 2026-08-26
 
-Status: **IN PROGRESS — inventory and target fixtures are complete and the
-local-data strategy is approved; the Phase 0 exit gate is blocked by nine
-pre-existing server test failures and unexecuted Unity EditMode tests. No
-schema or runtime implementation has started.**
+Status: **COMPLETE — inventory and target fixtures are complete, the local-data
+strategy is approved, the nine pre-existing server failures are repaired with
+all 824 tests passing, and the freshly authorized Unity verification run passes
+all 87 EditMode tests. No combat-build schema or runtime cutover implementation
+has started.**
 
 ## 1. Approved boundary
 
@@ -150,6 +151,104 @@ The Unity test runner was not executed. Repository policy prohibits Unity
 batch mode without explicit current-chat authorization, and no non-batch
 automated Unity runner was available in this session. This is recorded as an
 unexecuted Phase 0 result, not represented as a test pass.
+
+### Approved baseline-repair follow-up
+
+The owner approved an isolated repair of the nine recorded server failures and
+one specific Unity batch-mode EditMode run. The repair did not begin Phase 1 or
+change the combat-build schema. It:
+
+- taught the shared-file hash test about the intentionally external
+  Unity-owned weapon-appearance catalog;
+- accepted the explicit `-s` server selector in the data-preserving republish
+  scripts;
+- removed two dagger manifest strikes already removed from their progression
+  and Unity authoring sources;
+- added the hidden Staff Strike II combo-followup gameplay row required by the
+  Staff animation set's reachable authored combo;
+- refreshed Whirlwind and Random Dungeon assertions against their current
+  authored/exported data; and
+- replaced adjacency-sensitive spell-map string checks with entry parsing,
+  preserving the current semantic and shared-recipe classifications.
+
+Server verification:
+
+```sh
+cd server
+cargo test
+```
+
+Result: **PASS — 824 passed, 0 failed.** Each of the nine formerly failing
+tests also passed individually before the full suite.
+
+Additional verification:
+
+```sh
+cd hub-server && cargo test
+python3 -m unittest match_provisioner/test_worker.py
+python3 ops/test_benchmark_local_match_start.py
+bash ops/test-setup-local-multiplayer.sh
+dotnet build Assembly-CSharp.csproj --nologo
+dotnet build Arena.EditModeTests.csproj --nologo
+```
+
+Results:
+
+- Hub: **PASS — 18 passed, 0 failed**;
+- provisioner: **PASS — 22 passed, 0 failed**;
+- benchmark helpers: **PASS — 3 passed, 0 failed**;
+- canonical setup-script tests: **PASS**;
+- runtime C# assembly: **PASS — 0 errors**; and
+- EditMode test assembly: **PASS — 0 errors**.
+
+`cargo fmt --all -- --check` remains red because of pre-existing rustfmt drift
+in unrelated portions of the server source, including files not changed by
+this repair. The changed Rust hunks match rustfmt's requested form, and
+`git diff --check` passes. The unrelated formatter drift was not expanded into
+this isolated slice.
+
+Authorized Unity command:
+
+```sh
+/Applications/Unity/Hub/Editor/6000.4.0f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -quit \
+  -projectPath /Users/davidhedges/Projects/arena2 \
+  -executeMethod Arena.Editor.BuildBlockingEditModeTestGate.ValidateBuildBlockingEditModeTestsBatch
+```
+
+Result: **FAILED — 69 passed, 18 failed, 87 total.** Ten
+`PredictedMeleeContactCueTests` calls omitted the newer optional
+`isAutoAttack` reflection argument; eight `RemotePresentationBufferTests`
+calls omitted the newer `consumedCommand` and `bufferedCommands` constructor
+arguments. Reflection does not apply C# optional defaults. The test adapters
+now pass the runtime defaults explicitly, and both affected assemblies compile
+with zero errors.
+
+Freshly authorized verification result: **PASS — 87 passed, 0 failed, 87
+total.** Unity logged the build-blocking gate pass and exited batch mode
+successfully.
+
+Canonical post-repair local verification:
+
+```sh
+ops/setup-local-multiplayer.sh setup
+ops/setup-local-multiplayer.sh status
+python3 /Users/davidhedges/.codex/skills/arena-spell-pipeline/scripts/hub_loadout_guard.py \
+  verify --repo . \
+  --file Library/ArenaLocalMultiplayer/spell-release-loadouts.before.json
+python3 ops/benchmark-local-match-start.py --samples 1
+```
+
+Results:
+
+- data-preserving Hub publish completed;
+- optimized disposable-match WASM passed its size guard at
+  `3,340,642 / 3,500,000` bytes;
+- SpacetimeDB, both cached artifacts, and the managed provisioner were ready;
+- all 33 protected pre-existing Hub loadout rows were unchanged;
+- the one match sample reached authenticated initial state in `1,724.895 ms`
+  from request, including `208.358 ms` from ready to initial state; and
+- cleanup completed for the sampled disposable database (`1 / 1`).
 
 ## 4. Machine-readable consumer inventory
 
@@ -318,8 +417,9 @@ approves the strategy only. The destructive reset itself still requires a
 separate explicit approval after the converter report is reviewed.
 
 The owner also authorized a separate isolated repair slice for the nine server
-baseline failures and one specific Unity batch-mode EditMode test run to close
-Phase 0. Phase 0 still cannot satisfy its literal exit gate until those results
-pass and are recorded.
+baseline failures and two specific Unity batch-mode EditMode test runs. The
+server repair and every non-Unity post-repair gate pass. The first Unity run
+exposed 18 stale test adapters; after their repair, the freshly authorized
+verification run passed all 87 tests. Phase 0's literal exit gate is satisfied.
 
 No Phase 1 catalog/schema work is authorized or started by this evidence log.

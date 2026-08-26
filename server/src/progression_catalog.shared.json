@@ -8117,6 +8117,31 @@
       }
     },
     {
+      "ability_id": "STAFF_STRIKE_2",
+      "actor_scope": "PLAYER",
+      "discipline_id": "ARCANA",
+      "combat_profile_id": "STAFF",
+      "action_id": "COMBO_ATTACK_1_2_LOW_TO_HIGH",
+      "display_name": "Staff Strike II",
+      "resource_kind": "STAMINA",
+      "resource_cost": 12,
+      "ability_tags": [
+        "COMBO_FOLLOWUP"
+      ],
+      "sort_order": 11,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 26,
+        "applies_stagger": false,
+        "range": 3,
+        "cooldown_ms": 500,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
       "ability_id": "STAFF_SWEEP",
       "actor_scope": "PLAYER",
       "discipline_id": "ARCANA",

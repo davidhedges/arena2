@@ -328,7 +328,7 @@ namespace Arena.EditModeTests
             public int SuppressedAuthoritativeCues => GetCounter("SuppressedAuthoritativeCues");
 
             public void Schedule(string tokenKey, string targetKey, long fireAtMs, int predictedHitIndex)
-                => Invoke("Schedule", tokenKey, targetKey, fireAtMs, predictedHitIndex);
+                => Invoke("Schedule", tokenKey, targetKey, fireAtMs, predictedHitIndex, false);
 
             public void MapAcceptedActionInstance(string actionInstanceId, string tokenKey)
                 => Invoke("MapAcceptedActionInstance", actionInstanceId, tokenKey);

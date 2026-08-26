@@ -7160,7 +7160,7 @@ mod tests {
             let source = fs::read_to_string(repo_root.join(relative_path))
                 .unwrap_or_else(|error| panic!("{relative_path} should be readable: {error}"));
             assert!(
-                source.contains("spacetime call \"$ARENA_DATABASE\" publish_item_definitions"),
+                source.contains("\"$ARENA_DATABASE\" publish_item_definitions"),
                 "{relative_path} must publish item definitions after a data-preserving publish"
             );
         }
