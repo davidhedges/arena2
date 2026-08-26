@@ -63,6 +63,9 @@ namespace Arena.Editor
                         "OnReleaseFrame", 0.50f, required: true,
                         "Visible release moment. VFX/projectile body cue should align here."),
                     new CombatClipEventTemplate(
+                        "OnCastReleaseEntry", 0.25f, required: false,
+                        "Optional first frame sampled when a charged cast lead-in hands off to this release clip. Clip start is used when absent."),
+                    new CombatClipEventTemplate(
                         "OnHoldFadeStart", 0.60f, required: true,
                         "When the SpellAction layer should begin fading the cast-hold pose out."),
                     new CombatClipEventTemplate(

@@ -367,6 +367,7 @@ namespace Arena.Editor
                 EditorGUILayout.Space(8f);
                 DrawCustomEventStamp();
                 DrawDodgeTiming();
+                DrawCastReleaseEntry();
                 DrawInstantCastStartupTrim();
                 DrawHitWindowSynchronization();
                 DrawExistingEvents();
@@ -1095,6 +1096,174 @@ namespace Arena.Editor
                     _hitWindowSyncStatus,
                     _hitWindowSyncSucceeded ? MessageType.Info : MessageType.Error);
             }
+        }
+
+        private void DrawCastReleaseEntry()
+        {
+            CombatClipRole role = ResolveActiveRole();
+            AnimationEvent[] clipEvents = AnimationUtility.GetAnimationEvents(_clip!);
+            AnimationEvent[] entryEvents = clipEvents
+                .Where(animationEvent => string.Equals(
+                    animationEvent.functionName,
+                    CombatAnimationEvents.OnCastReleaseEntry,
+                    StringComparison.Ordinal))
+                .OrderBy(animationEvent => animationEvent.time)
+                .ToArray();
+            if (role != CombatClipRole.SpellRelease && entryEvents.Length == 0)
+                return;
+
+            EditorGUILayout.Space(8f);
+            using EditorGUILayout.VerticalScope section = new(EditorStyles.helpBox);
+            EditorGUILayout.LabelField("Cast-release receiving point", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(
+                $"{CombatAnimationEvents.OnCastReleaseEntry} is the first frame sampled in this receiving release clip when a charged cast hands off from its lead-in. " +
+                $"The lead-in continues until the remaining interval to {CombatAnimationEvents.OnReleaseFrame} fits exactly before cast completion. Instant casts keep their separate startup marker.",
+                MessageType.Info);
+
+            AnimationEvent[] releaseEvents = clipEvents
+                .Where(animationEvent => string.Equals(
+                    animationEvent.functionName,
+                    CombatAnimationEvents.OnReleaseFrame,
+                    StringComparison.Ordinal))
+                .OrderBy(animationEvent => animationEvent.time)
+                .ToArray();
+            bool hasReleaseEvent = releaseEvents.Length > 0;
+            float releaseSeconds = hasReleaseEvent ? releaseEvents[0].time : 0f;
+            float authoredEntrySeconds = entryEvents.Length > 0 ? entryEvents[0].time : 0f;
+
+            if (entryEvents.Length > 1)
+            {
+                EditorGUILayout.HelpBox(
+                    $"This clip has {entryEvents.Length} {CombatAnimationEvents.OnCastReleaseEntry} events. Setting an entry here will replace them with one marker.",
+                    MessageType.Warning);
+            }
+
+            if (!hasReleaseEvent)
+            {
+                EditorGUILayout.HelpBox(
+                    $"Stamp {CombatAnimationEvents.OnReleaseFrame} at the visible release pose before setting the receiving point.",
+                    MessageType.Warning);
+            }
+            else
+            {
+                EditorGUI.BeginChangeCheck();
+                float enteredEntrySeconds = EditorGUILayout.DelayedFloatField(
+                    new GUIContent(
+                        "Receiving point (seconds)",
+                        $"The first frame played after a charged cast lead-in. Limited to {CombatAnimationEvents.OnReleaseFrame}. Zero uses the clip start."),
+                    authoredEntrySeconds);
+                if (EditorGUI.EndChangeCheck())
+                    ApplyCastReleaseEntry(enteredEntrySeconds, releaseSeconds);
+
+                float resolvedEntrySeconds = Mathf.Clamp(
+                    authoredEntrySeconds,
+                    0f,
+                    releaseSeconds);
+                EditorGUILayout.LabelField(
+                    $"Charged release playback enters at {resolvedEntrySeconds:0.000}s; " +
+                    $"the visible release follows after {Mathf.Max(0f, releaseSeconds - resolvedEntrySeconds):0.000}s.",
+                    EditorStyles.wordWrappedMiniLabel);
+
+                bool playheadCanBeEntry = _time <= releaseSeconds + 0.0001f;
+                if (position.width < 560f)
+                {
+                    using (new EditorGUI.DisabledScope(!playheadCanBeEntry))
+                    {
+                        if (GUILayout.Button($"Set Receiving Point Here ({_time:0.000}s)"))
+                            ApplyCastReleaseEntry(_time, releaseSeconds);
+                    }
+                    using (new EditorGUI.DisabledScope(entryEvents.Length == 0))
+                    {
+                        if (GUILayout.Button("Use Clip Start"))
+                            RemoveCastReleaseEntry();
+                    }
+                }
+                else
+                {
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        using (new EditorGUI.DisabledScope(!playheadCanBeEntry))
+                        {
+                            if (GUILayout.Button($"Set Receiving Point Here ({_time:0.000}s)"))
+                                ApplyCastReleaseEntry(_time, releaseSeconds);
+                        }
+                        using (new EditorGUI.DisabledScope(entryEvents.Length == 0))
+                        {
+                            if (GUILayout.Button("Use Clip Start", GUILayout.Width(110f)))
+                                RemoveCastReleaseEntry();
+                        }
+                    }
+                }
+
+                EditorGUILayout.LabelField(
+                    playheadCanBeEntry
+                        ? "The current playhead can be used as the charged-cast receiving point."
+                        : $"Scrub to or before {CombatAnimationEvents.OnReleaseFrame} to set the receiving point.",
+                    EditorStyles.wordWrappedMiniLabel);
+            }
+
+            if (!hasReleaseEvent && entryEvents.Length > 0 && GUILayout.Button("Use Clip Start"))
+                RemoveCastReleaseEntry();
+        }
+
+        private void ApplyCastReleaseEntry(float requestedEntrySeconds, float releaseSeconds)
+        {
+            if (_clip == null)
+                return;
+
+            float resolvedEntrySeconds = Mathf.Clamp(
+                requestedEntrySeconds,
+                0f,
+                Mathf.Min(Mathf.Max(0f, _clip.length), Mathf.Max(0f, releaseSeconds)));
+            if (resolvedEntrySeconds <= 0.0001f)
+            {
+                RemoveCastReleaseEntry();
+                return;
+            }
+
+            Undo.RegisterCompleteObjectUndo(_clip, "Set cast-release receiving point");
+            List<AnimationEvent> events = AnimationUtility.GetAnimationEvents(_clip)
+                .Where(animationEvent => !string.Equals(
+                    animationEvent.functionName,
+                    CombatAnimationEvents.OnCastReleaseEntry,
+                    StringComparison.Ordinal))
+                .ToList();
+            events.Add(new AnimationEvent
+            {
+                functionName = CombatAnimationEvents.OnCastReleaseEntry,
+                time = resolvedEntrySeconds,
+            });
+            AnimationUtility.SetAnimationEvents(
+                _clip,
+                events.OrderBy(animationEvent => animationEvent.time).ToArray());
+            EditorUtility.SetDirty(_clip);
+            AssetDatabase.SaveAssetIfDirty(_clip);
+            ShowNotification(new GUIContent(
+                $"Charged casts now enter this release at {resolvedEntrySeconds:0.000}s."));
+            Repaint();
+        }
+
+        private void RemoveCastReleaseEntry()
+        {
+            if (_clip == null)
+                return;
+
+            AnimationEvent[] existing = AnimationUtility.GetAnimationEvents(_clip);
+            AnimationEvent[] remaining = existing
+                .Where(animationEvent => !string.Equals(
+                    animationEvent.functionName,
+                    CombatAnimationEvents.OnCastReleaseEntry,
+                    StringComparison.Ordinal))
+                .ToArray();
+            if (remaining.Length == existing.Length)
+                return;
+
+            Undo.RegisterCompleteObjectUndo(_clip, "Use release clip start for charged casts");
+            AnimationUtility.SetAnimationEvents(_clip, remaining);
+            EditorUtility.SetDirty(_clip);
+            AssetDatabase.SaveAssetIfDirty(_clip);
+            ShowNotification(new GUIContent("Charged casts now enter this release at clip start."));
+            Repaint();
         }
 
         private void DrawInstantCastStartupTrim()

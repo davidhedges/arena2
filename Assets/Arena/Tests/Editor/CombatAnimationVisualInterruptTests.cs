@@ -1180,13 +1180,14 @@ namespace Arena.Tests.Editor
 
                 SetClipEvents(
                     clip,
+                    ("OnCastReleaseEntry", 0.1f),
                     ("OnInstantCastStart", 0.2f),
                     ("OnReleaseFrame", 0.4f));
 
                 Assert.That(
                     (float)resolver.Invoke(entry, new object[] { true })!,
                     Is.EqualTo(0.2f).Within(0.001f),
-                    "confirmed Instant playback should use the clip-authored marker");
+                    "confirmed Instant playback should use its own clip-authored marker, not the charged-cast receiving point");
                 Assert.That(
                     (float)resolver.Invoke(entry, new object[] { false })!,
                     Is.Zero,
@@ -1205,6 +1206,86 @@ namespace Arena.Tests.Editor
             {
                 UnityEngine.Object.DestroyImmediate(clip);
             }
+        }
+
+        [Test]
+        public void WeaponSpellAnimationEntry_CastReleaseEntryIsAClampedReceiverPoint()
+        {
+            Type spellEntryType = RequireRuntimeType("Arena.Presentation.WeaponSpellAnimationEntry");
+            AnimationClip clip = CreateOneSecondClip();
+            try
+            {
+                object entry = Activator.CreateInstance(spellEntryType)!;
+                RequireField(spellEntryType, "clip").SetValue(entry, clip);
+                MethodInfo entryResolver = RequireMethod(
+                    spellEntryType,
+                    "ResolveCastReleaseEntrySeconds");
+                MethodInfo leadInResolver = RequireMethod(
+                    spellEntryType,
+                    "ResolveCastReleaseLeadInSeconds");
+
+                SetClipEvents(
+                    clip,
+                    ("OnCastReleaseEntry", 0.2f),
+                    ("OnReleaseFrame", 0.6f));
+
+                Assert.That(
+                    (float)entryResolver.Invoke(entry, Array.Empty<object>())!,
+                    Is.EqualTo(0.2f).Within(0.001f));
+                Assert.That(
+                    (float)leadInResolver.Invoke(entry, Array.Empty<object>())!,
+                    Is.EqualTo(0.4f).Within(0.001f),
+                    "charged handoff timing should use only the receiving-point-to-release interval");
+
+                SetClipEvents(clip, ("OnReleaseFrame", 0.6f));
+                Assert.That(
+                    (float)entryResolver.Invoke(entry, Array.Empty<object>())!,
+                    Is.Zero,
+                    "missing receiving markers must preserve legacy playback from clip start");
+                Assert.That(
+                    (float)leadInResolver.Invoke(entry, Array.Empty<object>())!,
+                    Is.EqualTo(0.6f).Within(0.001f));
+
+                SetClipEvents(
+                    clip,
+                    ("OnReleaseFrame", 0.6f),
+                    ("OnCastReleaseEntry", 0.8f));
+                Assert.That(
+                    (float)entryResolver.Invoke(entry, Array.Empty<object>())!,
+                    Is.EqualTo(0.6f).Within(0.001f),
+                    "runtime must never receive the release clip after its visible release pose");
+                Assert.That(
+                    (float)leadInResolver.Invoke(entry, Array.Empty<object>())!,
+                    Is.Zero);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(clip);
+            }
+        }
+
+        [Test]
+        public void SpellReleaseEventTemplates_ExposeCastReleaseEntryAsAStandardOptionalButton()
+        {
+            Assembly editorAssembly = AppDomain.CurrentDomain.Load("Assembly-CSharp-Editor");
+            Type roleType = editorAssembly.GetType("Arena.Editor.CombatClipRole", throwOnError: true)!;
+            Type templatesType = editorAssembly.GetType(
+                "Arena.Editor.CombatClipEventTemplates",
+                throwOnError: true)!;
+            object spellReleaseRole = Enum.Parse(roleType, "SpellRelease");
+            MethodInfo getTemplates = RequireMethod(templatesType, "GetTemplates", roleType);
+            Array templates = (Array)getTemplates.Invoke(null, new[] { spellReleaseRole })!;
+            object receiverTemplate = templates
+                .Cast<object>()
+                .Single(template => string.Equals(
+                    RequireField(template.GetType(), "FunctionName").GetValue(template) as string,
+                    "OnCastReleaseEntry",
+                    StringComparison.Ordinal));
+
+            Assert.That(
+                (bool)RequireField(receiverTemplate.GetType(), "Required").GetValue(receiverTemplate)!,
+                Is.False,
+                "the receiving point must remain optional so legacy release clips use clip start");
         }
 
         [Test]

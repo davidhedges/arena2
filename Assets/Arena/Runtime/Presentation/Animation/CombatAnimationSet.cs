@@ -10,6 +10,7 @@ namespace Arena.Presentation
     public static class CombatAnimationEvents
     {
         public const string OnReleaseFrame = "OnReleaseFrame";
+        public const string OnCastReleaseEntry = "OnCastReleaseEntry";
         public const string OnInstantCastStart = "OnInstantCastStart";
         public const string OnDodgeStart = "OnDodgeStart";
         public const string OnDodgeTravelEnd = "OnDodgeTravelEnd";
@@ -737,6 +738,42 @@ namespace Arena.Presentation
                 CombatAnimationEvents.OnReleaseFrame,
                 fallbackSeconds: 0f,
                 context: $"spell '{SpellIdOrEmpty}' release alignment");
+        }
+
+        /// <summary>
+        /// Resolves the receiver-side entry point used when a cast lead-in hands off to this
+        /// release clip. Missing markers preserve legacy playback from clip time zero. The entry
+        /// is clamped to OnReleaseFrame so the handoff can never skip the visible release pose.
+        /// Instant casts use their independent OnInstantCastStart marker instead.
+        /// </summary>
+        public float ResolveCastReleaseEntrySeconds()
+        {
+            AnimationClip? resolvedClip = ResolveClip();
+            if (resolvedClip == null
+                || !CombatAnimationEvents.TryGetEventTime(
+                    resolvedClip,
+                    CombatAnimationEvents.OnCastReleaseEntry,
+                    out float authoredEntrySeconds))
+            {
+                return 0f;
+            }
+
+            float releaseOffsetSeconds = ResolveReleaseOffsetSeconds();
+            return Mathf.Clamp(
+                authoredEntrySeconds,
+                0f,
+                Mathf.Min(Mathf.Max(0f, resolvedClip.length), releaseOffsetSeconds));
+        }
+
+        /// <summary>
+        /// Time that remains between the receiver-side release entry and OnReleaseFrame. Charged
+        /// casts schedule their lead-in-to-release handoff this far before cast completion.
+        /// </summary>
+        public float ResolveCastReleaseLeadInSeconds()
+        {
+            return Mathf.Max(
+                0f,
+                ResolveReleaseOffsetSeconds() - ResolveCastReleaseEntrySeconds());
         }
 
         /// <summary>

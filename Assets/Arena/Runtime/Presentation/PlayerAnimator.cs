@@ -28,6 +28,7 @@ namespace Arena.Presentation
         }
 
         public void OnReleaseFrame() { }
+        public void OnCastReleaseEntry() { }
         public void OnInstantCastStart() { }
         public void OnDodgeStart() { }
         public void OnDodgeTravelEnd() { }
@@ -1828,7 +1829,6 @@ namespace Arena.Presentation
                 spellEntry,
                 exitClip,
                 normalizedStart: 0f,
-                confirmedInstant: false,
                 preserveFullBodyHoldBlendOut: _actionPlayback.IsSpellCastHoldFadeOutActive);
             return true;
         }
@@ -1878,7 +1878,6 @@ namespace Arena.Presentation
                 spellEntry,
                 attackClip,
                 normalizedStart: 0f,
-                confirmedInstant: false,
                 preserveFullBodyHoldBlendOut: false);
             _pendingSpellHoldPulse = new PendingSpellHoldPulse
             {
@@ -1933,7 +1932,6 @@ namespace Arena.Presentation
                     returnEntry,
                     pending.ReturnToHold,
                     normalizedStart: 0f,
-                    confirmedInstant: false,
                     preserveFullBodyHoldBlendOut: false);
                 pending.Phase = SpellHoldPulsePhase.ReturnToHold;
                 pending.AdvanceAtSeconds = Time.time + Mathf.Max(
@@ -2242,7 +2240,6 @@ namespace Arena.Presentation
                 spellEntry,
                 spellClip,
                 normalizedStart,
-                confirmedInstant,
                 preserveFullBodyHoldBlendOut);
         }
 
@@ -2252,17 +2249,13 @@ namespace Arena.Presentation
             WeaponSpellAnimationEntry spellEntry,
             AnimationClip spellClip,
             float normalizedStart,
-            bool confirmedInstant,
             bool preserveFullBodyHoldBlendOut)
         {
             _animator!.SetBool(MirrorSpellActionHash, spellEntry.mirrorPresentation);
             BeginAnimatedSpellPropHandoff(
                 spellKind,
                 spellEntry,
-                // Keep legacy prop timing byte-for-byte for every other archetype.
-                confirmedInstant
-                    ? normalizedStart * Mathf.Max(0f, spellClip.length)
-                    : 0f);
+                normalizedStart * Mathf.Max(0f, spellClip.length));
 
             bool useOverlaySpellPlayback = spellEntry.ResolveUsesOverlayPlayback(
                 _latestLocomotionRawMagnitude,

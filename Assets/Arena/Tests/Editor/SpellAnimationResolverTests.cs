@@ -555,6 +555,10 @@ namespace Arena.Tests.Editor
                     Is.EqualTo(origin),
                     instantId);
                 Assert.That(CatalogRecipeIsCompatibleWith(instantId, "Instant"), Is.True, instantId);
+                Assert.That(
+                    CatalogRecipeIsCompatibleWith(instantId, "Charged"),
+                    Is.True,
+                    $"{instantId} is a reusable release clip; charged spells may prepend a cast lead-in.");
 
                 object charged = BuildCatalogRecipe(chargedId);
                 Assert.That(PresentationMode(charged), Is.EqualTo("HoldThenRelease"), chargedId);

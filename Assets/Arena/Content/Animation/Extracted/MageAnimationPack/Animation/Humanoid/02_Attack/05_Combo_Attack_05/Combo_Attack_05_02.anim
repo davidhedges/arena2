@@ -144719,7 +144719,7 @@ AnimationClip:
       isIntCurve: 0
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
-      path: 3491952752
+      path: 4121061019
       attribute: 1
       script: {fileID: 0}
       typeID: 4
@@ -144728,7 +144728,7 @@ AnimationClip:
       isIntCurve: 0
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
-      path: 4236312036
+      path: 3929936100
       attribute: 1
       script: {fileID: 0}
       typeID: 4
@@ -144746,7 +144746,7 @@ AnimationClip:
       isIntCurve: 0
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
-      path: 3491952752
+      path: 4121061019
       attribute: 2
       script: {fileID: 0}
       typeID: 4
@@ -144755,7 +144755,7 @@ AnimationClip:
       isIntCurve: 0
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
-      path: 4236312036
+      path: 3929936100
       attribute: 2
       script: {fileID: 0}
       typeID: 4
@@ -144861,6 +144861,13 @@ AnimationClip:
   m_HasGenericRootTransform: 0
   m_HasMotionFloatCurves: 0
   m_Events:
+  - time: 0.075593956
+    functionName: OnInstantCastStart
+    data: 
+    objectReferenceParameter: {fileID: 0}
+    floatParameter: 0
+    intParameter: 0
+    messageOptions: 0
   - time: 0.41684666
     functionName: OnReleaseFrame
     data: 

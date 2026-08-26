@@ -266,6 +266,9 @@ namespace Arena.Editor
 
                 ValidateSpellCueHandAnchors(catalog, errors, abilityId, actionId, animationSet, entry);
 
+                if (entry.PlaysReleasePresentation)
+                    ValidateCastReleaseEntry(errors, abilityId, actionId, animationSet, entry);
+
                 if (archetype == SpellAnimationArchetype.Instant && entry.PlaysReleasePresentation)
                     ValidateInstantCastStartupTrim(errors, abilityId, actionId, animationSet, entry);
 
@@ -432,11 +435,68 @@ namespace Arena.Editor
             }
 
             float castSeconds = castTimeMs / 1000f;
-            if (releaseOffsetSeconds <= castSeconds + ReleaseTimingToleranceSeconds)
+            float releaseEntrySeconds = entry.ResolveCastReleaseEntrySeconds();
+            float releaseLeadInSeconds = Mathf.Max(
+                0f,
+                releaseOffsetSeconds - releaseEntrySeconds);
+            if (releaseLeadInSeconds <= castSeconds + ReleaseTimingToleranceSeconds)
                 return;
 
             errors.Add(
-                $"spell ability '{abilityId}' action '{actionId}' release offset in CombatAnimationSet '{animationSet.name}' is {releaseOffsetSeconds:0.000}s, but gameplay.cast_time_ms is {castSeconds:0.000}s. The release offset must fit inside the cast time. Tolerance is {ReleaseTimingToleranceSeconds:0.000}s.");
+                $"spell ability '{abilityId}' action '{actionId}' release entry-to-release interval in CombatAnimationSet '{animationSet.name}' is {releaseLeadInSeconds:0.000}s ({CombatAnimationEvents.OnCastReleaseEntry} {releaseEntrySeconds:0.000}s to {CombatAnimationEvents.OnReleaseFrame} {releaseOffsetSeconds:0.000}s), but gameplay.cast_time_ms is {castSeconds:0.000}s. The interval must fit inside the cast time. Tolerance is {ReleaseTimingToleranceSeconds:0.000}s.");
+        }
+
+        private static void ValidateCastReleaseEntry(
+            List<string> errors,
+            string abilityId,
+            string actionId,
+            CombatAnimationSet animationSet,
+            WeaponSpellAnimationEntry entry)
+        {
+            AnimationClip? clip = entry.ResolveClip();
+            if (clip == null)
+                return;
+
+            ValidateCastReleaseEntry(
+                errors,
+                $"spell ability '{abilityId}' action '{actionId}' release clip '{ClipLabel(clip)}' in CombatAnimationSet '{animationSet.name}'",
+                clip);
+        }
+
+        private static void ValidateCastReleaseEntry(
+            List<string> errors,
+            string context,
+            AnimationClip clip)
+        {
+            AnimationEvent[] entryEvents = clip.events
+                .Where(animationEvent => string.Equals(
+                    animationEvent.functionName,
+                    CombatAnimationEvents.OnCastReleaseEntry,
+                    StringComparison.Ordinal))
+                .OrderBy(animationEvent => animationEvent.time)
+                .ToArray();
+            if (entryEvents.Length == 0)
+                return;
+
+            if (entryEvents.Length > 1)
+            {
+                errors.Add(
+                    $"{context} has {entryEvents.Length} {CombatAnimationEvents.OnCastReleaseEntry} events; author exactly one receiving-point marker.");
+            }
+
+            if (!TryGetEventTime(clip, CombatAnimationEvents.OnReleaseFrame, out float releaseOffsetSeconds))
+            {
+                errors.Add(
+                    $"{context} uses {CombatAnimationEvents.OnCastReleaseEntry} but is missing required event {CombatAnimationEvents.OnReleaseFrame}.");
+                return;
+            }
+
+            float entrySeconds = entryEvents[0].time;
+            if (entrySeconds > releaseOffsetSeconds + 0.0001f)
+            {
+                errors.Add(
+                    $"{context} receives charged-cast playback at {entrySeconds:0.000}s, after {CombatAnimationEvents.OnReleaseFrame} at {releaseOffsetSeconds:0.000}s. The receiving point must not skip the visible release pose.");
+            }
         }
 
         private static void ValidateInstantCastStartupTrim(
@@ -927,6 +987,15 @@ namespace Arena.Editor
                         errors.Add($"SpellCastAnimationCatalog has duplicate recipe id '{recipeId}'.");
                     if (!recipe.TryBuild("VALIDATION_SPELL", out _))
                         errors.Add($"SpellCastAnimationCatalog recipe '{recipeId}' has no playable {recipe.presentationMode} presentation.");
+                    if (recipe.clip != null
+                        && (recipe.presentationMode == SpellAnimationPresentationMode.ReleaseOnly
+                            || recipe.presentationMode == SpellAnimationPresentationMode.HoldThenRelease))
+                    {
+                        ValidateCastReleaseEntry(
+                            errors,
+                            $"SpellCastAnimationCatalog recipe '{recipeId}' release clip '{ClipLabel(recipe.clip)}'",
+                            recipe.clip);
+                    }
                     if (recipe.presentationMode == SpellAnimationPresentationMode.ReleaseOnly
                         && recipe.castLeadInPolicy == SpellCastLeadInPolicy.Custom
                         && !recipe.customCastLeadIn.IsPlayable)

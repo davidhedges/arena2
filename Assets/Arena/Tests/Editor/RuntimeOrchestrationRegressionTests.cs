@@ -659,11 +659,123 @@ namespace Arena.Tests.Editor
                 "ComputeReleasePlaybackStartOffsetSeconds",
                 typeof(long),
                 typeof(long),
+                typeof(float),
                 typeof(float));
 
-            object? result = method.Invoke(null, new object[] { 1_000L, 1_200L, 0.75f });
+            object? result = method.Invoke(null, new object[] { 1_000L, 1_200L, 0.75f, 0f });
 
             Assert.That((float)result!, Is.EqualTo(0.55f).Within(0.001f));
+        }
+
+        [Test]
+        public void SpellCastPresentation_ReceiverPointIsTheNormalPlaybackStart()
+        {
+            Type controllerType = RequireRuntimeType("Arena.Presentation.SpellCastPresentationController");
+            MethodInfo method = RequireMethod(
+                controllerType,
+                "ComputeReleasePlaybackStartOffsetSeconds",
+                typeof(long),
+                typeof(long),
+                typeof(float),
+                typeof(float));
+
+            object? result = method.Invoke(
+                null,
+                new object[] { 1_000L, 2_200L, 0.3f, 0.2f });
+
+            Assert.That((float)result!, Is.EqualTo(0.2f).Within(0.001f));
+        }
+
+        [Test]
+        public void SpellCastPresentation_ShortCastCatchesUpFromReceiverPoint()
+        {
+            Type controllerType = RequireRuntimeType("Arena.Presentation.SpellCastPresentationController");
+            MethodInfo method = RequireMethod(
+                controllerType,
+                "ComputeReleasePlaybackStartOffsetSeconds",
+                typeof(long),
+                typeof(long),
+                typeof(float),
+                typeof(float));
+
+            object? result = method.Invoke(
+                null,
+                new object[] { 1_000L, 1_200L, 0.75f, 0.1f });
+
+            Assert.That(
+                (float)result!,
+                Is.EqualTo(0.65f).Within(0.001f),
+                "catch-up should advance beyond the receiving point just enough to keep OnReleaseFrame aligned");
+        }
+
+        [Test]
+        public void SpellAuthoringPreview_UsesTheSameReleaseReceiverAndCatchupTiming()
+        {
+            Type timelineType = AppDomain.CurrentDomain
+                .Load("Assembly-CSharp-Editor")
+                .GetType(
+                    "Arena.Editor.SpellAuthoringWindow+CastPreviewTimeline",
+                    throwOnError: true)!;
+            Type holdType = RequireRuntimeType("Arena.Presentation.SpellCastHoldProfile");
+            object hold = Activator.CreateInstance(holdType)!;
+            AnimationClip clip = new();
+            clip.SetCurve(
+                relativePath: string.Empty,
+                type: typeof(Transform),
+                propertyName: "localPosition.x",
+                curve: AnimationCurve.Linear(0f, 0f, 1f, 1f));
+
+            try
+            {
+                ConstructorInfo constructor = timelineType.GetConstructor(
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                    binder: null,
+                    types: new[]
+                    {
+                        holdType,
+                        typeof(AnimationClip),
+                        typeof(float),
+                        typeof(float),
+                        typeof(float),
+                    },
+                    modifiers: null)
+                    ?? throw new AssertionException("Missing CastPreviewTimeline receiver-point constructor");
+                MethodInfo resolveSample = RequireMethod(
+                    timelineType,
+                    "ResolveSample",
+                    typeof(float),
+                    typeof(AnimationClip).MakeByRefType(),
+                    typeof(float).MakeByRefType(),
+                    typeof(string).MakeByRefType());
+
+                object ordinary = constructor.Invoke(new[] { hold, clip, 1.5f, 0.5f, 0.2f });
+                Assert.That(
+                    (float)RequireProperty(timelineType, "ReleaseStartsAtSeconds").GetValue(ordinary)!,
+                    Is.EqualTo(1.2f).Within(0.001f));
+                Assert.That(
+                    (float)RequireProperty(timelineType, "ReleasePlaybackStartOffsetSeconds").GetValue(ordinary)!,
+                    Is.EqualTo(0.2f).Within(0.001f));
+                object?[] ordinarySample = { 1.2f, null, 0f, null };
+                resolveSample.Invoke(ordinary, ordinarySample);
+                Assert.That((float)ordinarySample[2]!, Is.EqualTo(0.2f).Within(0.001f));
+                Assert.That(ordinarySample[3], Is.EqualTo("Release"));
+
+                object shortCast = constructor.Invoke(new[] { hold, clip, 0.1f, 0.5f, 0.2f });
+                Assert.That(
+                    (float)RequireProperty(timelineType, "ReleaseStartsAtSeconds").GetValue(shortCast)!,
+                    Is.Zero.Within(0.001f));
+                Assert.That(
+                    (float)RequireProperty(timelineType, "ReleasePlaybackStartOffsetSeconds").GetValue(shortCast)!,
+                    Is.EqualTo(0.4f).Within(0.001f));
+                object?[] shortSample = { 0f, null, 0f, null };
+                resolveSample.Invoke(shortCast, shortSample);
+                Assert.That((float)shortSample[2]!, Is.EqualTo(0.4f).Within(0.001f));
+                Assert.That(shortSample[3], Is.EqualTo("Release"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(clip);
+            }
         }
 
         [Test]

@@ -43,7 +43,8 @@ namespace Arena.Editor
                 SpellCastHoldProfile leadIn,
                 AnimationClip release,
                 float castDurationSeconds,
-                float releaseOffsetSeconds)
+                float releaseOffsetSeconds,
+                float releaseEntrySeconds)
             {
                 Enter = leadIn.EnterOrIdle;
                 Loop = leadIn.IdleOrEnter;
@@ -53,12 +54,19 @@ namespace Arena.Editor
                     releaseOffsetSeconds,
                     0f,
                     Mathf.Max(0f, release.length));
+                ReleaseEntrySeconds = Mathf.Clamp(
+                    releaseEntrySeconds,
+                    0f,
+                    ReleaseOffsetSeconds);
+                ReleaseLeadInSeconds = Mathf.Max(
+                    0f,
+                    ReleaseOffsetSeconds - ReleaseEntrySeconds);
                 ReleaseStartsAtSeconds = Mathf.Max(
                     0f,
-                    CastDurationSeconds - ReleaseOffsetSeconds);
-                ReleasePlaybackStartOffsetSeconds = Mathf.Max(
+                    CastDurationSeconds - ReleaseLeadInSeconds);
+                ReleasePlaybackStartOffsetSeconds = ReleaseEntrySeconds + Mathf.Max(
                     0f,
-                    ReleaseOffsetSeconds - CastDurationSeconds);
+                    ReleaseLeadInSeconds - CastDurationSeconds);
                 EnterDurationSeconds = Enter != null
                     ? Mathf.Min(
                         Enter.length,
@@ -75,6 +83,8 @@ namespace Arena.Editor
             public AnimationClip Release { get; }
             public float CastDurationSeconds { get; }
             public float ReleaseOffsetSeconds { get; }
+            public float ReleaseEntrySeconds { get; }
+            public float ReleaseLeadInSeconds { get; }
             public float ReleaseStartsAtSeconds { get; }
             public float ReleasePlaybackStartOffsetSeconds { get; }
             public float EnterDurationSeconds { get; }
@@ -241,7 +251,8 @@ namespace Arena.Editor
                     effectiveLeadIn,
                     previewClip,
                     simulatedCastDurationSeconds,
-                    ResolveCastPreviewReleaseOffsetSeconds(recipe));
+                    ResolveCastPreviewReleaseOffsetSeconds(recipe),
+                    ResolveCastPreviewReleaseEntrySeconds(recipe));
                 timeline = builtTimeline;
                 builtTimeline.ResolveSample(0f, out initialClip, out _, out _);
             }
@@ -314,12 +325,24 @@ namespace Arena.Editor
                     "Release Animation Starts",
                     $"{activeTimeline.ReleaseStartsAtSeconds:0.000}s");
                 EditorGUILayout.LabelField(
+                    "Release Clip Entry",
+                    activeTimeline.ReleaseEntrySeconds > 0.001f
+                        ? $"{activeTimeline.ReleaseEntrySeconds:0.000}s (OnCastReleaseEntry)"
+                        : "0.000s (clip start; no receiving marker)");
+                EditorGUILayout.LabelField(
                     "Gameplay / VFX Release",
                     $"{activeTimeline.CastDurationSeconds:0.000}s (OnReleaseFrame)");
-                if (activeTimeline.ReleasePlaybackStartOffsetSeconds > 0.001f)
+                if (activeTimeline.ReleaseEntrySeconds > 0.001f)
                 {
                     EditorGUILayout.HelpBox(
-                        $"This cast is shorter than the release wind-up, so runtime enters {activeTimeline.ReleasePlaybackStartOffsetSeconds:0.000}s into the release clip. Its OnReleaseFrame still lands at cast completion.",
+                        $"The cast lead-in hands off at {activeTimeline.ReleaseStartsAtSeconds:0.000}s and the receiving release clip begins at {activeTimeline.ReleaseEntrySeconds:0.000}s. Its OnReleaseFrame still lands at cast completion.",
+                        MessageType.Info);
+                }
+                if (activeTimeline.ReleasePlaybackStartOffsetSeconds
+                    > activeTimeline.ReleaseEntrySeconds + 0.001f)
+                {
+                    EditorGUILayout.HelpBox(
+                        $"This cast is shorter than the authored release entry-to-release interval, so runtime catches up to {activeTimeline.ReleasePlaybackStartOffsetSeconds:0.000}s in the release clip. Its OnReleaseFrame still lands at cast completion.",
                         MessageType.Info);
                 }
             }
@@ -408,6 +431,17 @@ namespace Arena.Editor
                 clip = recipe.clip,
             };
             return entry.ResolveReleaseOffsetSeconds();
+        }
+
+        private static float ResolveCastPreviewReleaseEntrySeconds(
+            in SpellCastAnimationRecipe recipe)
+        {
+            var entry = new WeaponSpellAnimationEntry
+            {
+                spellId = recipe.AnimationIdOrEmpty,
+                clip = recipe.clip,
+            };
+            return entry.ResolveCastReleaseEntrySeconds();
         }
 
         private static List<CastPreviewClipOption> BuildCastPreviewClipOptions(

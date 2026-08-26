@@ -182,17 +182,27 @@ namespace Arena.Presentation
             if (!_owner.PlaysSpellReleasePresentation(active.SpellActionId))
                 return;
 
-            if (!_owner.TryResolveSpellReleaseOffsetSeconds(active.SpellActionId, out float releaseOffsetSeconds))
-                releaseOffsetSeconds = 0f;
+            if (!_owner.TryResolveSpellReleaseTimingSeconds(
+                    active.SpellActionId,
+                    out float releaseLeadInSeconds,
+                    out float releaseEntrySeconds))
+            {
+                releaseLeadInSeconds = 0f;
+                releaseEntrySeconds = 0f;
+            }
 
-            long releaseStartMs = ComputeReleaseStartMs(active.StartedAtMs, active.EndsAtMs, releaseOffsetSeconds);
+            long releaseStartMs = ComputeReleaseStartMs(
+                active.StartedAtMs,
+                active.EndsAtMs,
+                releaseLeadInSeconds);
             if (ArenaServerClock.ServerNowMs < releaseStartMs)
                 return;
 
             float playbackStartOffsetSeconds = ComputeReleasePlaybackStartOffsetSeconds(
                 active.StartedAtMs,
                 active.EndsAtMs,
-                releaseOffsetSeconds);
+                releaseLeadInSeconds,
+                releaseEntrySeconds);
             Dispatch(_stateMachine.ScheduledReleaseDue(
                 releaseStartMs,
                 playbackStartOffsetSeconds));
@@ -201,14 +211,15 @@ namespace Arena.Presentation
         internal static long ComputeReleaseStartMs(
             long startedAtMs,
             long endsAtMs,
-            float authoredReleaseOffsetSeconds)
+            float authoredReleaseLeadInSeconds)
         {
-            // Release alignment is authored by OnReleaseFrame in clip seconds.
-            // ActiveCast is the authoritative, cast-speed-scaled server window.
-            // Clamp the authored lead-in so fast casts never schedule release before
-            // the server says the cast actually started.
+            // Release alignment is the authored interval from OnCastReleaseEntry (or clip time
+            // zero when absent) to OnReleaseFrame. ActiveCast remains the authoritative,
+            // cast-speed-scaled server window.
+            // Clamp the release lead-in so fast casts never schedule release before the server
+            // says the cast actually started.
             long castDurationMs = System.Math.Max(0L, endsAtMs - startedAtMs);
-            long authoredOffsetMs = ResolveFiniteOffsetMs(authoredReleaseOffsetSeconds);
+            long authoredOffsetMs = ResolveFiniteOffsetMs(authoredReleaseLeadInSeconds);
             long effectiveOffsetMs = System.Math.Min(authoredOffsetMs, castDurationMs);
             return endsAtMs - effectiveOffsetMs;
         }
@@ -216,19 +227,26 @@ namespace Arena.Presentation
         internal static float ComputeReleasePlaybackStartOffsetSeconds(
             long startedAtMs,
             long endsAtMs,
-            float authoredReleaseOffsetSeconds)
+            float authoredReleaseLeadInSeconds,
+            float authoredReleaseEntrySeconds)
         {
-            long castDurationMs = System.Math.Max(0L, endsAtMs - startedAtMs);
-            long authoredOffsetMs = ResolveFiniteOffsetMs(authoredReleaseOffsetSeconds);
-            return System.Math.Max(0L, authoredOffsetMs - castDurationMs) / 1000f;
+            float castDurationSeconds = System.Math.Max(0L, endsAtMs - startedAtMs) / 1000f;
+            float resolvedLeadInSeconds = ResolveFiniteOffsetSeconds(authoredReleaseLeadInSeconds);
+            float resolvedEntrySeconds = ResolveFiniteOffsetSeconds(authoredReleaseEntrySeconds);
+            return resolvedEntrySeconds + Mathf.Max(
+                0f,
+                resolvedLeadInSeconds - castDurationSeconds);
         }
 
         private static long ResolveFiniteOffsetMs(float offsetSeconds)
+            => System.Math.Max(0L, Mathf.RoundToInt(ResolveFiniteOffsetSeconds(offsetSeconds) * 1000f));
+
+        private static float ResolveFiniteOffsetSeconds(float offsetSeconds)
         {
             if (float.IsNaN(offsetSeconds) || float.IsInfinity(offsetSeconds) || offsetSeconds <= 0f)
-                return 0L;
+                return 0f;
 
-            return System.Math.Max(0L, Mathf.RoundToInt(offsetSeconds * 1000f));
+            return offsetSeconds;
         }
 
         private bool ShouldTrackActiveCast(ActiveCast row, ulong castTimeMs)

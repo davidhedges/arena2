@@ -471,9 +471,13 @@ namespace Arena.Entity
                 && entry.PlaysHoldPulsePresentation;
         }
 
-        public bool TryResolveSpellReleaseOffsetSeconds(string spellActionId, out float releaseOffsetSeconds)
+        public bool TryResolveSpellReleaseTimingSeconds(
+            string spellActionId,
+            out float releaseLeadInSeconds,
+            out float releaseEntrySeconds)
         {
-            releaseOffsetSeconds = 0f;
+            releaseLeadInSeconds = 0f;
+            releaseEntrySeconds = 0f;
             if (_combatAnimationSet == null
                 || !SpellCastAnimationResolver.TryResolve(_combatAnimationSet, spellActionId, out WeaponSpellAnimationEntry entry)
                 || !entry.PlaysReleasePresentation
@@ -482,7 +486,8 @@ namespace Arena.Entity
                 return false;
             }
 
-            releaseOffsetSeconds = entry.ResolveReleaseOffsetSeconds();
+            releaseLeadInSeconds = entry.ResolveCastReleaseLeadInSeconds();
+            releaseEntrySeconds = entry.ResolveCastReleaseEntrySeconds();
             return true;
         }
 

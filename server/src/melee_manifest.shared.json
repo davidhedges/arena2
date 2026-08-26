@@ -1648,7 +1648,7 @@
                     "slot_id": "light_combo_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 32
+                            "impact_delay_ms": 35
                         }
                     ],
                     "recovery_ms": 250,
@@ -1663,7 +1663,7 @@
                     "slot_id": "alt_light_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 59
+                            "impact_delay_ms": 180
                         }
                     ],
                     "recovery_ms": 250,
@@ -1693,7 +1693,7 @@
                     "slot_id": "auto_attack_1",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 32
+                            "impact_delay_ms": 35
                         }
                     ],
                     "recovery_ms": 250,
@@ -1708,7 +1708,7 @@
                     "slot_id": "maim",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 32
+                            "impact_delay_ms": 35
                         }
                     ],
                     "recovery_ms": 250,
@@ -1723,7 +1723,7 @@
                     "slot_id": "light_combo_2",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 3
+                            "impact_delay_ms": 141
                         }
                     ],
                     "recovery_ms": 250,
@@ -1738,7 +1738,7 @@
                     "slot_id": "light_3",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 58
+                            "impact_delay_ms": 192
                         }
                     ],
                     "recovery_ms": 300,
@@ -1753,7 +1753,7 @@
                     "slot_id": "alt_light_2",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 190
+                            "impact_delay_ms": 272
                         }
                     ],
                     "recovery_ms": 250,
@@ -1768,7 +1768,7 @@
                     "slot_id": "alt_heavy_gapclose",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 166
+                            "impact_delay_ms": 283
                         }
                     ],
                     "recovery_ms": 350,
@@ -1798,7 +1798,7 @@
                     "slot_id": "alt_light_3",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 0
+                            "impact_delay_ms": 72
                         }
                     ],
                     "recovery_ms": 300,
@@ -1813,7 +1813,7 @@
                     "slot_id": "warrior_disengage_strike_melee_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 0
+                            "impact_delay_ms": 72
                         }
                     ],
                     "recovery_ms": 250,
@@ -1828,7 +1828,7 @@
                     "slot_id": "combo_attack_4_1_spin",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 177
+                            "impact_delay_ms": 289
                         }
                     ],
                     "recovery_ms": 250,
@@ -1843,7 +1843,7 @@
                     "slot_id": "utility_3",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 245
+                            "impact_delay_ms": 346
                         }
                     ],
                     "recovery_ms": 300,
