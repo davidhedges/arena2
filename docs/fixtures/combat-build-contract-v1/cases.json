@@ -1,0 +1,947 @@
+{
+  "fixture_version": 1,
+  "contract_status": "pre_schema_target",
+  "source_plan": "docs/combat-build-progression-cutover-plan-2026-08-26.md",
+  "rules": {
+    "combat_discipline_ids": [
+      "DAGGERS",
+      "TWO_HANDED_SWORD",
+      "SWORD_AND_SHIELD",
+      "ARCHER_BOW",
+      "STAFF"
+    ],
+    "staff_school_ids": [
+      "BLIGHT",
+      "MORTALITY",
+      "RUIN",
+      "DIVINITY",
+      "ARCANA",
+      "PRIMAL"
+    ],
+    "minimum_selected_disciplines": 1,
+    "maximum_selected_disciplines": 3,
+    "minimum_staff_schools_when_selected": 1,
+    "maximum_staff_schools_when_selected": 3,
+    "combined_ability_budget": 20,
+    "maximum_active_abilities": 16,
+    "minimum_counted_abilities_per_selected_discipline": 1,
+    "default_starting_discipline": "selected_disciplines[0]"
+  },
+  "cases": [
+    {
+      "id": "valid_one_discipline_one_active",
+      "expected": {
+        "valid": true,
+        "active_count": 1,
+        "passive_count": 0,
+        "combined_count": 1,
+        "starting_discipline_id": "DAGGERS"
+      },
+      "build": {
+        "revision": 1,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "DAGGER_QUICK_CUT" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "valid_passive_only_satisfies_selected_discipline_minimum",
+      "expected": {
+        "valid": true,
+        "active_count": 0,
+        "passive_count": 1,
+        "combined_count": 1,
+        "starting_discipline_id": "ARCHER_BOW"
+      },
+      "build": {
+        "revision": 2,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "ARCHER_BOW" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "ARCHER_BOW",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_BOW",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [],
+            "passive_ability_ids": ["ARCHER_MAVERICK"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "valid_daggers_bow_staff_ruin_arcana_at_16_active_4_passive",
+      "expected": {
+        "valid": true,
+        "active_count": 16,
+        "passive_count": 4,
+        "combined_count": 20,
+        "starting_discipline_id": "DAGGERS",
+        "staff_bar_count": 1,
+        "staff_weapon_count": 1
+      },
+      "build": {
+        "revision": 7,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" },
+          { "slot_index": 1, "combat_discipline_id": "ARCHER_BOW" },
+          { "slot_index": 2, "combat_discipline_id": "STAFF" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "DAGGER_QUICK_CUT" },
+              { "action_slot": "slot_0_1", "ability_id": "DAGGER_SLICE" },
+              { "action_slot": "slot_0_2", "ability_id": "DAGGER_DASHING_CUT" },
+              { "action_slot": "slot_0_3", "ability_id": "DAGGER_ROUNDHOUSE" },
+              { "action_slot": "slot_0_4", "ability_id": "DAGGER_GUT_RIPPER" },
+              { "action_slot": "slot_0_5", "ability_id": "DAGGER_SPINNING_SLASH" }
+            ],
+            "passive_ability_ids": [
+              "SUBTLETY_OPPORTUNIST",
+              "SUBTLETY_TACTICAL_ADVANTAGE"
+            ]
+          },
+          {
+            "combat_discipline_id": "ARCHER_BOW",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_BOW",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "ARCHER_POWER_SHOT" },
+              { "action_slot": "slot_0_1", "ability_id": "ARCHER_TRIPLE_SHOT" },
+              { "action_slot": "slot_0_2", "ability_id": "ARCHER_DOUBLE_SHOT" },
+              { "action_slot": "slot_0_3", "ability_id": "ARCHER_BACKSTEP" },
+              { "action_slot": "slot_0_4", "ability_id": "ARCHER_RAPID_FIRE" }
+            ],
+            "passive_ability_ids": ["ARCHER_MAVERICK"]
+          },
+          {
+            "combat_discipline_id": "STAFF",
+            "weapon": {
+              "main_hand_item_def_id": "NEWBIE_STAFF_01",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": ["RUIN", "ARCANA"],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "SPELL_FIREBALL" },
+              { "action_slot": "slot_0_1", "ability_id": "SPELL_MAGIC_MISSILE" },
+              { "action_slot": "slot_0_2", "ability_id": "SPELL_NEGATE" },
+              { "action_slot": "slot_0_3", "ability_id": "SPELL_METEOR" },
+              { "action_slot": "slot_0_4", "ability_id": "SPELL_TELEPORT" }
+            ],
+            "passive_ability_ids": ["RUIN_FURNACE"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "valid_15_active_5_passive_at_combined_cap",
+      "expected": {
+        "valid": true,
+        "active_count": 15,
+        "passive_count": 5,
+        "combined_count": 20,
+        "starting_discipline_id": "DAGGERS"
+      },
+      "build": {
+        "revision": 8,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" },
+          { "slot_index": 1, "combat_discipline_id": "ARCHER_BOW" },
+          { "slot_index": 2, "combat_discipline_id": "STAFF" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "DAGGER_QUICK_CUT" },
+              { "action_slot": "slot_0_1", "ability_id": "DAGGER_SLICE" },
+              { "action_slot": "slot_0_2", "ability_id": "DAGGER_DASHING_CUT" },
+              { "action_slot": "slot_0_3", "ability_id": "DAGGER_ROUNDHOUSE" },
+              { "action_slot": "slot_0_4", "ability_id": "DAGGER_GUT_RIPPER" },
+              { "action_slot": "slot_0_5", "ability_id": "DAGGER_SPINNING_SLASH" }
+            ],
+            "passive_ability_ids": [
+              "SUBTLETY_OPPORTUNIST",
+              "SUBTLETY_TACTICAL_ADVANTAGE"
+            ]
+          },
+          {
+            "combat_discipline_id": "ARCHER_BOW",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_BOW",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "ARCHER_POWER_SHOT" },
+              { "action_slot": "slot_0_1", "ability_id": "ARCHER_TRIPLE_SHOT" },
+              { "action_slot": "slot_0_2", "ability_id": "ARCHER_DOUBLE_SHOT" },
+              { "action_slot": "slot_0_3", "ability_id": "ARCHER_BACKSTEP" },
+              { "action_slot": "slot_0_4", "ability_id": "ARCHER_RAPID_FIRE" }
+            ],
+            "passive_ability_ids": ["ARCHER_MAVERICK", "ARCHER_POINT_BLANK"]
+          },
+          {
+            "combat_discipline_id": "STAFF",
+            "weapon": {
+              "main_hand_item_def_id": "NEWBIE_STAFF_01",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": ["RUIN", "ARCANA"],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "SPELL_FIREBALL" },
+              { "action_slot": "slot_0_1", "ability_id": "SPELL_MAGIC_MISSILE" },
+              { "action_slot": "slot_0_2", "ability_id": "SPELL_NEGATE" },
+              { "action_slot": "slot_0_3", "ability_id": "SPELL_METEOR" }
+            ],
+            "passive_ability_ids": ["RUIN_FURNACE"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "valid_explicit_starting_discipline_overrides_slot_zero",
+      "expected": {
+        "valid": true,
+        "active_count": 2,
+        "passive_count": 0,
+        "combined_count": 2,
+        "starting_discipline_id": "ARCHER_BOW"
+      },
+      "build": {
+        "revision": 9,
+        "starting_discipline_id": "ARCHER_BOW",
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" },
+          { "slot_index": 1, "combat_discipline_id": "ARCHER_BOW" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "DAGGER_QUICK_CUT" }
+            ],
+            "passive_ability_ids": []
+          },
+          {
+            "combat_discipline_id": "ARCHER_BOW",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_BOW",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "ARCHER_POWER_SHOT" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "valid_dormant_configuration_does_not_count",
+      "expected": {
+        "valid": true,
+        "active_count": 1,
+        "passive_count": 0,
+        "combined_count": 1,
+        "starting_discipline_id": "DAGGERS",
+        "dormant_configuration_count": 1
+      },
+      "build": {
+        "revision": 10,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "DAGGER_QUICK_CUT" }
+            ],
+            "passive_ability_ids": []
+          },
+          {
+            "combat_discipline_id": "STAFF",
+            "weapon": {
+              "main_hand_item_def_id": "NEWBIE_STAFF_01",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": ["RUIN", "ARCANA", "PRIMAL"],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "SPELL_FIREBALL" },
+              { "action_slot": "slot_0_1", "ability_id": "SPELL_MAGIC_MISSILE" },
+              { "action_slot": "slot_0_2", "ability_id": "SPELL_LIGHTNING" }
+            ],
+            "passive_ability_ids": ["RUIN_FURNACE"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_zero_disciplines",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_DISCIPLINE_COUNT" },
+      "build": {
+        "revision": 11,
+        "starting_discipline_id": null,
+        "selected_disciplines": [],
+        "discipline_configurations": []
+      }
+    },
+    {
+      "id": "invalid_four_disciplines",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_DISCIPLINE_COUNT" },
+      "build": {
+        "revision": 12,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" },
+          { "slot_index": 1, "combat_discipline_id": "ARCHER_BOW" },
+          { "slot_index": 2, "combat_discipline_id": "STAFF" },
+          { "slot_index": 3, "combat_discipline_id": "TWO_HANDED_SWORD" }
+        ],
+        "discipline_configurations": []
+      }
+    },
+    {
+      "id": "invalid_duplicate_discipline",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_DUPLICATE_DISCIPLINE" },
+      "build": {
+        "revision": 13,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" },
+          { "slot_index": 1, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": []
+      }
+    },
+    {
+      "id": "invalid_noncontiguous_discipline_slots",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_DISCIPLINE_SLOT_ORDER" },
+      "build": {
+        "revision": 14,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" },
+          { "slot_index": 2, "combat_discipline_id": "ARCHER_BOW" }
+        ],
+        "discipline_configurations": []
+      }
+    },
+    {
+      "id": "invalid_starting_discipline_not_selected",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_STARTING_DISCIPLINE_NOT_SELECTED" },
+      "build": {
+        "revision": 15,
+        "starting_discipline_id": "STAFF",
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": []
+      }
+    },
+    {
+      "id": "invalid_selected_discipline_has_no_ability",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_DISCIPLINE_ABILITY_MINIMUM" },
+      "build": {
+        "revision": 16,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_17_active_even_below_combined_cap",
+      "expected": {
+        "valid": false,
+        "error_code": "COMBAT_BUILD_ACTIVE_BUDGET_EXCEEDED",
+        "active_count": 17,
+        "passive_count": 0,
+        "combined_count": 17
+      },
+      "build": {
+        "revision": 17,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "DAGGER_QUICK_CUT" },
+              { "action_slot": "slot_0_1", "ability_id": "DAGGER_SLICE" },
+              { "action_slot": "slot_0_2", "ability_id": "DAGGER_DASHING_CUT" },
+              { "action_slot": "slot_0_3", "ability_id": "DAGGER_ROUNDHOUSE" },
+              { "action_slot": "slot_0_4", "ability_id": "DAGGER_GUT_RIPPER" },
+              { "action_slot": "slot_0_5", "ability_id": "DAGGER_SPINNING_SLASH" },
+              { "action_slot": "slot_0_6", "ability_id": "DAGGER_BLADE_FLURRY" },
+              { "action_slot": "slot_0_7", "ability_id": "DAGGER_DEADLY_FLOURISH" },
+              { "action_slot": "slot_0_8", "ability_id": "DAGGER_PURSUE" },
+              { "action_slot": "slot_1_0", "ability_id": "DAGGER_DOWNWARD_SLASH" },
+              { "action_slot": "slot_1_1", "ability_id": "DAGGER_NERVE_STRIKE" },
+              { "action_slot": "slot_1_2", "ability_id": "DAGGER_COUP_DE_GRACE" },
+              { "action_slot": "slot_1_3", "ability_id": "DAGGER_PRECISION_STRIKE" },
+              { "action_slot": "slot_1_4", "ability_id": "DAGGER_EVISCERATE" },
+              { "action_slot": "slot_1_5", "ability_id": "DAGGER_VITAL_STRIKE" },
+              { "action_slot": "slot_1_6", "ability_id": "DAGGER_DEATH_CROSS" },
+              { "action_slot": "slot_1_7", "ability_id": "DAGGER_DIVING_STRIKE" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_21_combined_with_16_active",
+      "expected": {
+        "valid": false,
+        "error_code": "COMBAT_BUILD_COMBINED_BUDGET_EXCEEDED",
+        "active_count": 16,
+        "passive_count": 5,
+        "combined_count": 21
+      },
+      "build": {
+        "revision": 18,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "DAGGER_QUICK_CUT" },
+              { "action_slot": "slot_0_1", "ability_id": "DAGGER_SLICE" },
+              { "action_slot": "slot_0_2", "ability_id": "DAGGER_DASHING_CUT" },
+              { "action_slot": "slot_0_3", "ability_id": "DAGGER_ROUNDHOUSE" },
+              { "action_slot": "slot_0_4", "ability_id": "DAGGER_GUT_RIPPER" },
+              { "action_slot": "slot_0_5", "ability_id": "DAGGER_SPINNING_SLASH" },
+              { "action_slot": "slot_0_6", "ability_id": "DAGGER_BLADE_FLURRY" },
+              { "action_slot": "slot_0_7", "ability_id": "DAGGER_DEADLY_FLOURISH" },
+              { "action_slot": "slot_0_8", "ability_id": "DAGGER_PURSUE" },
+              { "action_slot": "slot_1_0", "ability_id": "DAGGER_DOWNWARD_SLASH" },
+              { "action_slot": "slot_1_1", "ability_id": "DAGGER_NERVE_STRIKE" },
+              { "action_slot": "slot_1_2", "ability_id": "DAGGER_COUP_DE_GRACE" },
+              { "action_slot": "slot_1_3", "ability_id": "DAGGER_PRECISION_STRIKE" },
+              { "action_slot": "slot_1_4", "ability_id": "DAGGER_EVISCERATE" },
+              { "action_slot": "slot_1_5", "ability_id": "DAGGER_VITAL_STRIKE" },
+              { "action_slot": "slot_1_6", "ability_id": "DAGGER_DEATH_CROSS" }
+            ],
+            "passive_ability_ids": [
+              "SUBTLETY_OPPORTUNIST",
+              "SUBTLETY_SURPRISE_ATTACKS",
+              "SUBTLETY_TACTICAL_ADVANTAGE",
+              "SUBTLETY_FLEET_FOOTED",
+              "SUBTLETY_LINGERING_SHADE"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_staff_without_school",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_STAFF_SCHOOL_COUNT" },
+      "build": {
+        "revision": 19,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "STAFF" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "STAFF",
+            "weapon": {
+              "main_hand_item_def_id": "NEWBIE_STAFF_01",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "SPELL_FIREBALL" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_staff_with_four_schools",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_STAFF_SCHOOL_COUNT" },
+      "build": {
+        "revision": 20,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "STAFF" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "STAFF",
+            "weapon": {
+              "main_hand_item_def_id": "NEWBIE_STAFF_01",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": ["RUIN", "ARCANA", "PRIMAL", "BLIGHT"],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "SPELL_FIREBALL" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_duplicate_staff_school",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_DUPLICATE_STAFF_SCHOOL" },
+      "build": {
+        "revision": 21,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "STAFF" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "STAFF",
+            "weapon": {
+              "main_hand_item_def_id": "NEWBIE_STAFF_01",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": ["RUIN", "RUIN"],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "SPELL_FIREBALL" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_damage_type_used_as_staff_school",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_UNKNOWN_STAFF_SCHOOL" },
+      "build": {
+        "revision": 22,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "STAFF" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "STAFF",
+            "weapon": {
+              "main_hand_item_def_id": "NEWBIE_STAFF_01",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": ["FIRE"],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "SPELL_FIREBALL" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_staff_ability_from_unselected_school",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_STAFF_SCHOOL_NOT_SELECTED" },
+      "build": {
+        "revision": 23,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "STAFF" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "STAFF",
+            "weapon": {
+              "main_hand_item_def_id": "NEWBIE_STAFF_01",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": ["RUIN", "ARCANA"],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "SPELL_LIGHTNING" }
+            ],
+            "passive_ability_ids": ["PRIMAL_PHOTOSYNTHESIS"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_non_staff_configuration_has_school",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_NON_STAFF_SCHOOL_SELECTION" },
+      "build": {
+        "revision": 24,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": ["RUIN"],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "DAGGER_QUICK_CUT" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_duplicate_active_ability_across_bars",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_DUPLICATE_ABILITY" },
+      "build": {
+        "revision": 25,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" },
+          { "slot_index": 1, "combat_discipline_id": "ARCHER_BOW" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "DAGGER_QUICK_CUT" }
+            ],
+            "passive_ability_ids": []
+          },
+          {
+            "combat_discipline_id": "ARCHER_BOW",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_BOW",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "DAGGER_QUICK_CUT" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_active_passive_overlap",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_DUPLICATE_ABILITY" },
+      "build": {
+        "revision": 26,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "SUBTLETY_OPPORTUNIST" }
+            ],
+            "passive_ability_ids": ["SUBTLETY_OPPORTUNIST"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_ability_owned_by_different_discipline",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_ABILITY_DISCIPLINE_MISMATCH" },
+      "build": {
+        "revision": 27,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "ARCHER_POWER_SHOT" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_passive_assigned_to_action_slot",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_ABILITY_KIND" },
+      "build": {
+        "revision": 28,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "SUBTLETY_OPPORTUNIST" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_active_selected_as_passive",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_ABILITY_KIND" },
+      "build": {
+        "revision": 29,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [],
+            "passive_ability_ids": ["DAGGER_QUICK_CUT"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_action_slot",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_INVALID_ACTION_SLOT" },
+      "build": {
+        "revision": 30,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_99_99", "ability_id": "DAGGER_QUICK_CUT" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_cross_discipline_weapon",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_INVALID_WEAPON_LOADOUT" },
+      "build": {
+        "revision": 31,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_BOW",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "DAGGER_QUICK_CUT" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_unknown_ability",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_UNKNOWN_ABILITY" },
+      "build": {
+        "revision": 32,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "DAGGERS" }
+        ],
+        "discipline_configurations": [
+          {
+            "combat_discipline_id": "DAGGERS",
+            "weapon": {
+              "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+              "main_hand_color_id": "",
+              "off_hand_item_def_id": "",
+              "off_hand_color_id": ""
+            },
+            "staff_school_ids": [],
+            "active_assignments": [
+              { "action_slot": "slot_0_0", "ability_id": "NOT_A_REAL_ABILITY" }
+            ],
+            "passive_ability_ids": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid_unknown_discipline",
+      "expected": { "valid": false, "error_code": "COMBAT_BUILD_UNKNOWN_DISCIPLINE" },
+      "build": {
+        "revision": 33,
+        "starting_discipline_id": null,
+        "selected_disciplines": [
+          { "slot_index": 0, "combat_discipline_id": "RUIN" }
+        ],
+        "discipline_configurations": []
+      }
+    }
+  ]
+}

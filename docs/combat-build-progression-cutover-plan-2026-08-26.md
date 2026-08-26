@@ -370,6 +370,20 @@ Deliverables:
   results recorded in the evidence log; and
 - explicit owner approval for the local database cutover strategy.
 
+Phase 0 working artifacts:
+
+- `docs/combat-build-legacy-consumer-inventory-2026-08-26.json`;
+- `docs/fixtures/combat-build-contract-v1/cases.json`; and
+- `docs/combat-build-progression-phase-0-evidence-2026-08-26.md`.
+
+The evidence log records the current gate state. Listing these artifacts does
+not authorize Phase 1 or waive an unresolved exit condition.
+
+Owner ruling on 2026-08-26: the recommended protected-export, offline-converter,
+explicit-local-reset, and verified-import strategy is approved. The strategy
+approval is not approval to execute the destructive reset before the converter
+report is reviewed.
+
 Recommended cutover strategy: because there is no production database, export
 any wanted local Hub builds, republish the final schema with an explicitly
 approved local reset, and import through a temporary offline conversion tool.

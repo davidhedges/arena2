@@ -1,0 +1,868 @@
+{
+  "schema_version": 1,
+  "inventory_id": "combat-build-progression-cutover-2026-08-26",
+  "source_plan": "docs/combat-build-progression-cutover-plan-2026-08-26.md#10-required-deletion-ledger",
+  "scope": {
+    "roots": [
+      "server",
+      "hub-server",
+      "match-server",
+      "match_provisioner",
+      "ops",
+      "Assets/Arena",
+      "docs"
+    ],
+    "excluded_from_required_removal": [
+      "docs/archive/**",
+      "documents explicitly marked superseded or archived in docs/combat-build-documentation-conflict-audit-2026-08-26.md"
+    ],
+    "status_meaning": {
+      "open": "legacy production or current-source authority remains",
+      "archived": "retained only as explicitly superseded historical documentation",
+      "not_present": "no current implementation exists; keep the audit search",
+      "closed": "removed and verified by the final negative and positive audits"
+    }
+  },
+  "entries": [
+    {
+      "id": "CBL-001",
+      "legacy_concept": "primary and secondary discipline rule constants",
+      "symbols": [
+        "PRIMARY_DISCIPLINE_ABILITY_MINIMUM",
+        "SECONDARY_DISCIPLINE_ABILITY_MINIMUM",
+        "MAX_DISCIPLINE_LOADOUT_ABILITIES",
+        "DEFAULT_HUB_PRIMARY_DISCIPLINE",
+        "DEFAULT_HUB_SECONDARY_DISCIPLINE_1",
+        "DEFAULT_HUB_SECONDARY_DISCIPLINE_2",
+        "DisciplineLoadoutRules.PrimaryAbilityMinimum",
+        "DisciplineLoadoutRules.SecondaryAbilityMinimum",
+        "DisciplineLoadoutRules.SecondaryDisciplineMaximum",
+        "DisciplineLoadoutRules.AbilityPointBudget",
+        "DisciplineLoadoutRules.CanBePrimary",
+        "DisciplineLoadoutRules.CanAddSecondary",
+        "DisciplineLoadoutRules.IsValid"
+      ],
+      "locations": [
+        "server/src/progression.rs",
+        "hub-server/src/lib.rs",
+        "Assets/Arena/Runtime/UI/Toolkit/DisciplineLoadoutRules.cs",
+        "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs",
+        "Assets/Arena/Tests/Editor/DisciplineLoadoutRulesTests.cs"
+      ],
+      "final_state": "remove primary/secondary minima and the parallel 25-point client budget; consume the one projected 20-total/16-active rules contract",
+      "target_phases": [1, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "PRIMARY_DISCIPLINE_ABILITY_MINIMUM",
+        "SECONDARY_DISCIPLINE_ABILITY_MINIMUM",
+        "PrimaryAbilityMinimum",
+        "SecondaryAbilityMinimum",
+        "SecondaryDisciplineMaximum",
+        "AbilityPointBudget"
+      ]
+    },
+    {
+      "id": "CBL-002",
+      "legacy_concept": "fixed primary plus two secondary durable loadout",
+      "symbols": [
+        "CharacterDisciplineLoadout",
+        "HubPlayerLoadout",
+        "MyHubLoadout",
+        "MatchPlayerLoadoutSnapshot",
+        "MatchReservation",
+        "primary_discipline_id",
+        "secondary_discipline_id_1",
+        "secondary_discipline_id_2",
+        "PrimaryDisciplineId",
+        "SecondaryDisciplineId1",
+        "SecondaryDisciplineId2"
+      ],
+      "locations": [
+        "server/src/progression.rs",
+        "server/src/match_contract.rs",
+        "hub-server/src/lib.rs",
+        "match_provisioner/worker.py",
+        "match_provisioner/test_worker.py",
+        "ops/benchmark-local-match-start.py",
+        "ops/test_benchmark_local_match_start.py",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Types/CharacterDisciplineLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Tables/CharacterDisciplineLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Types/MatchReservation.g.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/HubPlayerLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/MyHubLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/MatchPlayerLoadoutSnapshot.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Types/CharacterDisciplineLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Types/MatchReservation.g.cs"
+      ],
+      "final_state": "replace with ordered one-to-three canonical disciplines and one structured versioned frozen build snapshot",
+      "target_phases": [2, 3, 7],
+      "status": "open",
+      "audit_patterns": [
+        "primary_discipline_id",
+        "secondary_discipline_id_1",
+        "secondary_discipline_id_2",
+        "PrimaryDisciplineId",
+        "SecondaryDisciplineId1",
+        "SecondaryDisciplineId2"
+      ]
+    },
+    {
+      "id": "CBL-003",
+      "legacy_concept": "undifferentiated selected ability list",
+      "symbols": [
+        "CharacterDisciplineAbilitySelection",
+        "selected_ability_ids",
+        "SelectedAbilityIds",
+        "validate_character_discipline_ability_selection",
+        "replace_character_discipline_ability_selections",
+        "reconcile_selected_ability_ids",
+        "default_hub_selected_ability_ids",
+        "DisciplinesScreen.BuildSelectedAbilityIds"
+      ],
+      "locations": [
+        "server/src/progression.rs",
+        "server/src/match_contract.rs",
+        "hub-server/src/lib.rs",
+        "match_provisioner/worker.py",
+        "match_provisioner/test_worker.py",
+        "ops/benchmark-local-match-start.py",
+        "ops/test_benchmark_local_match_start.py",
+        "Assets/Arena/Runtime/Network/HubNetworkManager.cs",
+        "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Reducers/SaveHubDisciplineLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/HubPlayerLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/MyHubLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/MatchPlayerLoadoutSnapshot.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Types/MatchReservation.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Types/MatchReservation.g.cs"
+      ],
+      "final_state": "active selection derives only from exact per-discipline slot assignments and passive selection derives only from explicit passive rows",
+      "target_phases": [1, 2, 3, 4, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "selected_ability_ids",
+        "SelectedAbilityIds",
+        "CharacterDisciplineAbilitySelection",
+        "BuildSelectedAbilityIds"
+      ]
+    },
+    {
+      "id": "CBL-004",
+      "legacy_concept": "spell schools stored as combat disciplines",
+      "symbols": [
+        "combat_disciplines[].discipline_kind=SPELL_SCHOOL",
+        "DISCIPLINE_BLIGHT",
+        "DISCIPLINE_MORTALITY",
+        "DISCIPLINE_RUIN",
+        "DISCIPLINE_DIVINITY",
+        "DISCIPLINE_ARCANA",
+        "DISCIPLINE_PRIMAL",
+        "HubCombatDisciplineDefinition",
+        "CombatDisciplineCatalog"
+      ],
+      "locations": [
+        "server/src/progression_catalog.shared.json",
+        "server/src/progression.rs",
+        "hub-server/src/lib.rs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Types/CombatDisciplineCatalog.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Tables/CombatDisciplineCatalog.g.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/HubCombatDisciplineDefinition.g.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Tables/HubCombatDisciplineDefinition.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Types/CombatDisciplineCatalog.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Tables/CombatDisciplineCatalog.g.cs",
+        "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs"
+      ],
+      "final_state": "combat discipline catalog contains exactly the five weapon IDs and the six Staff schools live in a separate spell-school catalog",
+      "target_phases": [1, 2, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "SPELL_SCHOOL",
+        "discipline_kind",
+        "DisciplineKind"
+      ]
+    },
+    {
+      "id": "CBL-005",
+      "legacy_concept": "school-as-discipline branching and helpers",
+      "symbols": [
+        "discipline_kind == SPELL_SCHOOL",
+        "discipline_uses_staff",
+        "reconcile_restructured_spell_school_disciplines",
+        "is_spell_school_passive",
+        "generic spell-school ability"
+      ],
+      "locations": [
+        "server/src/progression.rs",
+        "server/src/inventory.rs",
+        "hub-server/src/lib.rs",
+        "Assets/Arena/Runtime/Network/HubNetworkManager.cs",
+        "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs"
+      ],
+      "final_state": "Staff configuration owns one-to-three school IDs; no school participates in discipline selection or weapon/profile fallback",
+      "target_phases": [1, 2, 4, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "SPELL_SCHOOL",
+        "discipline_uses_staff",
+        "reconcile_restructured_spell_school_disciplines",
+        "is_spell_school_passive"
+      ]
+    },
+    {
+      "id": "CBL-006",
+      "legacy_concept": "legacy selectable IDs and bidirectional discipline/profile mapping",
+      "symbols": [
+        "SUBTLETY",
+        "WAR",
+        "ZEAL",
+        "PRECISION",
+        "discipline_id_for_combat_profile",
+        "combat_discipline_for_profile",
+        "combat_profile_for_discipline",
+        "DISCIPLINE_ARCANA as Staff fallback"
+      ],
+      "locations": [
+        "server/src/progression_catalog.shared.json",
+        "server/src/progression.rs",
+        "server/src/inventory.rs",
+        "hub-server/src/lib.rs",
+        "ops/generate-weapon-appearance-catalog.py",
+        "Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json",
+        "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs",
+        "Assets/Arena/Resources/UI/Toolkit/Disciplines.uxml"
+      ],
+      "final_state": "select and persist only DAGGERS, TWO_HANDED_SWORD, SWORD_AND_SHIELD, ARCHER_BOW, and STAFF; legacy IDs survive only in archived history or one approved offline conversion fixture",
+      "target_phases": [1, 2, 3, 4, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "discipline_id_for_combat_profile",
+        "combat_discipline_for_profile",
+        "combat_profile_for_discipline",
+        "Some(DISCIPLINE_ARCANA)"
+      ]
+    },
+    {
+      "id": "CBL-007",
+      "legacy_concept": "public independently selected combat profile authority",
+      "symbols": [
+        "CombatProfileCatalog",
+        "combat_profile_catalog",
+        "combat_profile_id",
+        "CombatProfileId",
+        "CombatProfileResolver",
+        "ActiveCombatDiscipline.combat_profile_id"
+      ],
+      "locations": [
+        "server/src/progression.rs",
+        "server/src/progression_catalog.shared.json",
+        "Assets/Arena/Runtime/Network/GameplaySubscriptionPlanner.cs",
+        "Assets/Arena/Runtime/Combat/GameplayContracts.cs",
+        "Assets/Arena/Runtime/UI/CharacterActionBarPanel.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Types/CombatProfileCatalog.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Tables/CombatProfileCatalog.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/SpacetimeDBClient.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Types/CombatProfileCatalog.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Tables/CombatProfileCatalog.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/SpacetimeDBClient.g.cs"
+      ],
+      "final_state": "delete public profile catalog/state/selection; any remaining CombatProfile type is private and purely derived from canonical discipline for animation/runtime mechanics",
+      "target_phases": [1, 3, 4, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "CombatProfileCatalog",
+        "combat_profile_catalog",
+        "CombatProfileResolver",
+        "ActiveCombatDiscipline"
+      ]
+    },
+    {
+      "id": "CBL-008",
+      "legacy_concept": "weapon metadata keyed by primary discipline",
+      "symbols": [
+        "primary_discipline_id",
+        "HubWeaponDefinition.PrimaryDisciplineId",
+        "HubWeaponFamilyAuthoring.primary_discipline_id",
+        "WeaponSupportsPrimaryDiscipline",
+        "weapon_spec_supports_primary"
+      ],
+      "locations": [
+        "Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json",
+        "ops/generate-weapon-appearance-catalog.py",
+        "hub-server/src/lib.rs",
+        "server/src/inventory.rs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/HubWeaponDefinition.g.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Tables/HubWeaponDefinition.g.cs",
+        "Assets/Arena/Runtime/UI/Toolkit/EquipmentScreen.cs"
+      ],
+      "final_state": "key weapon legality by canonical combat_discipline_id and validate each discipline configuration independently",
+      "target_phases": [1, 2, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "primary_discipline_id",
+        "PrimaryDisciplineId",
+        "WeaponSupportsPrimaryDiscipline",
+        "weapon_spec_supports_primary"
+      ]
+    },
+    {
+      "id": "CBL-009",
+      "legacy_concept": "one global Hub weapon pair attached to the primary discipline",
+      "symbols": [
+        "HubPlayerLoadout.main_hand_item_def_id",
+        "HubPlayerLoadout.main_hand_color_id",
+        "HubPlayerLoadout.off_hand_item_def_id",
+        "HubPlayerLoadout.off_hand_color_id",
+        "save_hub_weapon_loadout",
+        "default_weapon_loadout",
+        "validate_hub_weapon_loadout",
+        "SaveHubWeaponLoadout"
+      ],
+      "locations": [
+        "hub-server/src/lib.rs",
+        "Assets/Arena/Runtime/Network/HubNetworkManager.cs",
+        "Assets/Arena/Runtime/UI/Toolkit/EquipmentScreen.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Reducers/SaveHubWeaponLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/HubPlayerLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/MyHubLoadout.g.cs"
+      ],
+      "final_state": "store weapon/color pairs in per-discipline durable configurations and update them only through the atomic combat-build save contract",
+      "target_phases": [2, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "save_hub_weapon_loadout",
+        "SaveHubWeaponLoadout",
+        "default_weapon_loadout"
+      ]
+    },
+    {
+      "id": "CBL-010",
+      "legacy_concept": "match-side durable discipline loadout writer",
+      "symbols": [
+        "save_character_discipline_loadout",
+        "SaveCharacterDisciplineLoadout",
+        "ensure_default_character_discipline_loadout",
+        "ensure_default_character_discipline_ability_selections"
+      ],
+      "locations": [
+        "server/src/progression.rs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Reducers/SaveCharacterDisciplineLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Reducers/SaveCharacterDisciplineLoadout.g.cs"
+      ],
+      "final_state": "remove match-side durable saving and defaulting; disposable matches only materialize and revalidate the frozen Hub snapshot",
+      "target_phases": [3, 7],
+      "status": "open",
+      "audit_patterns": [
+        "save_character_discipline_loadout",
+        "SaveCharacterDisciplineLoadout",
+        "ensure_default_character_discipline_loadout"
+      ]
+    },
+    {
+      "id": "CBL-011",
+      "legacy_concept": "profile-neutral abilities copied to multiple action bars",
+      "symbols": [
+        "reconcile_character_action_bar_for_discipline_loadout",
+        "profile_ability_ids",
+        "applies_to_profile",
+        "ability_profile.is_empty()",
+        "profile-neutral player ability",
+        "ActionBarScopes.Global"
+      ],
+      "locations": [
+        "server/src/progression.rs",
+        "Assets/Arena/Runtime/Combat/GameplayContracts.cs",
+        "Assets/Arena/Runtime/UI/CharacterActionBarPanel.cs",
+        "Assets/Arena/Runtime/Input/ActionBarInputDispatcher.cs"
+      ],
+      "final_state": "resolve exact assignments only on the owning discipline bar; true universal actions use one explicit intrinsic-action path outside the selectable budget",
+      "target_phases": [1, 4, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "profile_ability_ids",
+        "applies_to_profile",
+        "profile-neutral",
+        "MatchesGlobal",
+        "ActionBarScopes.Global"
+      ]
+    },
+    {
+      "id": "CBL-012",
+      "legacy_concept": "passives authorized by profile, discipline, or bespoke tuning lookup instead of explicit selection",
+      "symbols": [
+        "bloodlust_passive_eligible",
+        "combat_stacking_passive_eligible",
+        "opportunist_passive_damage_multiplier",
+        "opportunist_passive_is_active_for_profile",
+        "tactical_advantage_passive_damage_multiplier",
+        "character_has_selected_discipline",
+        "derived_combat_profile_id_for_owner",
+        "primal_photosynthesis_for_owner",
+        "ruin_wildfire_ignite_for_owner",
+        "ruin_potential_crit_chance_per_stack_for_owner",
+        "precision_maverick_for_owner",
+        "precision_point_blank_for_owner",
+        "precision_careful_aim_for_owner",
+        "trigger_critical_strike_passives"
+      ],
+      "locations": [
+        "server/src/combat.rs",
+        "server/src/progression.rs",
+        "server/src/spells/casting.rs",
+        "server/src/spells/mod.rs"
+      ],
+      "final_state": "route every player passive effect through one selected-passive predicate that also requires the owning discipline in the frozen active build and does not require current equipment",
+      "target_phases": [1, 4, 7],
+      "status": "open",
+      "audit_patterns": [
+        "passive_eligible",
+        "passive_is_active_for_profile",
+        "character_has_selected_discipline",
+        "trigger_critical_strike_passives"
+      ]
+    },
+    {
+      "id": "CBL-013",
+      "legacy_concept": "learned spell and spellbook alternate player authorization",
+      "symbols": [
+        "PlayerKnownSpell",
+        "player_known_spell",
+        "player_knows_spell",
+        "learn_spell",
+        "LearnSpell",
+        "ItemSpell",
+        "item_spell",
+        "assign_equipped_spellbook_spell",
+        "AssignEquippedSpellbookSpell",
+        "ResolveEquippedSpellbookAction",
+        "ResolveKnownSpellAction",
+        "SpellbookPanel",
+        "SpellCatalogPanel"
+      ],
+      "locations": [
+        "server/src/progression.rs",
+        "server/src/inventory.rs",
+        "server/src/spells/casting.rs",
+        "server/src/spells/mod.rs",
+        "Assets/Arena/Runtime/Combat/GameplayContracts.cs",
+        "Assets/Arena/Runtime/Input/ActionBarInputDispatcher.cs",
+        "Assets/Arena/Runtime/UI/SpellbookPanel.cs",
+        "Assets/Arena/Runtime/UI/SpellCatalogPanel.cs",
+        "Assets/Arena/Runtime/UI/CharacterActionBarPanel.cs",
+        "Assets/Arena/Runtime/Network/GameplaySubscriptionPlanner.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Reducers/LearnSpell.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Reducers/AssignEquippedSpellbookSpell.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Types/PlayerKnownSpell.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Tables/PlayerKnownSpell.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Types/ItemSpell.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Tables/ItemSpell.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Reducers/LearnSpell.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Reducers/AssignEquippedSpellbookSpell.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Types/PlayerKnownSpell.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Tables/PlayerKnownSpell.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Types/ItemSpell.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Tables/ItemSpell.g.cs"
+      ],
+      "final_state": "remove these paths from player bar and cast authorization; any retained collection/item purpose must be separately designed and cannot grant combat availability",
+      "target_phases": [4, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "player_knows_spell",
+        "PlayerKnownSpell",
+        "learn_spell",
+        "LearnSpell",
+        "ResolveEquippedSpellbookAction",
+        "ResolveKnownSpellAction"
+      ]
+    },
+    {
+      "id": "CBL-014",
+      "legacy_concept": "positional match bootstrap loadout parameters",
+      "symbols": [
+        "bootstrap_unranked_2v2_bot_match positional arguments 7-10",
+        "bootstrap_open_world_instance positional loadout arguments",
+        "BootstrapUnranked2V2BotMatch",
+        "BootstrapOpenWorldInstance"
+      ],
+      "locations": [
+        "server/src/match_contract.rs",
+        "match_provisioner/worker.py",
+        "match_provisioner/test_worker.py",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Reducers/BootstrapUnranked2V2BotMatch.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Reducers/BootstrapOpenWorldInstance.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Reducers/BootstrapUnranked2V2BotMatch.g.cs"
+      ],
+      "final_state": "transport one versioned structured build snapshot without positional reinterpretation or fallback substitution",
+      "target_phases": [3, 7],
+      "status": "open",
+      "audit_patterns": [
+        "bootstrap_unranked_2v2_bot_match",
+        "bootstrap_open_world_instance",
+        "arguments[7]",
+        "arguments[8]",
+        "arguments[9]",
+        "arguments[10]"
+      ]
+    },
+    {
+      "id": "CBL-015",
+      "legacy_concept": "legacy Unity Hub loadout DTO, subscription, and write call",
+      "symbols": [
+        "HubLoadoutSnapshot",
+        "HubNetworkManager.SaveDisciplineLoadout",
+        "OnSaveDisciplineLoadoutResult",
+        "SaveHubDisciplineLoadout",
+        "MyHubLoadout"
+      ],
+      "locations": [
+        "Assets/Arena/Runtime/Network/HubNetworkManager.cs",
+        "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs",
+        "Assets/Arena/Runtime/UI/Toolkit/HubScreen.cs",
+        "Assets/Arena/Runtime/UI/HubController.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Reducers/SaveHubDisciplineLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/MyHubLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Tables/MyHubLoadout.g.cs"
+      ],
+      "final_state": "consume a generated canonical combat-build model and one revision-checked atomic save; no legacy writer or DTO remains",
+      "target_phases": [2, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "HubLoadoutSnapshot",
+        "SaveDisciplineLoadout",
+        "SaveHubDisciplineLoadout",
+        "OnSaveDisciplineLoadoutResult"
+      ]
+    },
+    {
+      "id": "CBL-016",
+      "legacy_concept": "legacy Disciplines screen model and writer",
+      "symbols": [
+        "DisciplinesScreen",
+        "_primaryId",
+        "_secondaryIds",
+        "BuildSelectedAbilityIds",
+        "AddAuthoritativeSecondary",
+        "SaveCurrentLoadout"
+      ],
+      "locations": [
+        "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs",
+        "Assets/Arena/Runtime/UI/Toolkit/HubScreen.cs",
+        "Assets/Arena/Resources/UI/Toolkit/Disciplines.uxml",
+        "Assets/Arena/Resources/UI/Toolkit/Disciplines.uss",
+        "Assets/Arena/Tests/Editor/DisciplineLoadoutRulesTests.cs"
+      ],
+      "final_state": "disable the writer during backend cutover and remove it when the future replacement UI lands; it may not write or reconstruct a legacy shape",
+      "target_phases": [5, 6, 7],
+      "status": "open",
+      "audit_patterns": [
+        "DisciplinesScreen",
+        "_primaryId",
+        "_secondaryIds",
+        "BuildSelectedAbilityIds"
+      ]
+    },
+    {
+      "id": "CBL-017",
+      "legacy_concept": "session-only stat allocation presented inside combat progression",
+      "symbols": [
+        "DisciplinesScreen.StatView",
+        "StatDefinitions",
+        "_stats",
+        "RenderStats",
+        "ChangeStat",
+        "AllocatedPoints",
+        "RemainingPoints",
+        "DisciplineLoadoutRules.RemainingPoints"
+      ],
+      "locations": [
+        "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs",
+        "Assets/Arena/Runtime/UI/Toolkit/DisciplineLoadoutRules.cs",
+        "Assets/Arena/Resources/UI/Toolkit/Disciplines.uxml",
+        "Assets/Arena/Resources/UI/Toolkit/Disciplines.uss",
+        "Assets/Arena/Tests/Editor/DisciplineLoadoutRulesTests.cs"
+      ],
+      "final_state": "remove from the combat-build screen without inventing a replacement stat progression system in this migration",
+      "target_phases": [5, 6, 7],
+      "status": "open",
+      "audit_patterns": [
+        "StatView",
+        "StatDefinitions",
+        "RenderStats",
+        "ChangeStat",
+        "RemainingPoints"
+      ]
+    },
+    {
+      "id": "CBL-018",
+      "legacy_concept": "Hub summary and controller consumers of fixed primary/secondary slots",
+      "symbols": [
+        "HubScreen.RefreshDisciplineLoadout",
+        "HubController primary discipline display",
+        "PrimaryDisciplineId",
+        "SecondaryDisciplineId1",
+        "SecondaryDisciplineId2"
+      ],
+      "locations": [
+        "Assets/Arena/Runtime/UI/Toolkit/HubScreen.cs",
+        "Assets/Arena/Runtime/UI/HubController.cs"
+      ],
+      "final_state": "render the ordered canonical discipline collection and selected starting discipline without assigning primary/secondary semantics",
+      "target_phases": [5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "SecondaryDisciplineId1",
+        "SecondaryDisciplineId2"
+      ]
+    },
+    {
+      "id": "CBL-019",
+      "legacy_concept": "Equipment screen edits the primary discipline's global weapon pair",
+      "symbols": [
+        "EquipmentScreen._primaryDisciplineId",
+        "WeaponSupportsPrimaryDiscipline",
+        "PrimaryDisciplineUsesStaff",
+        "RuleForPrimaryDiscipline",
+        "SaveWeaponLoadout"
+      ],
+      "locations": [
+        "Assets/Arena/Runtime/UI/Toolkit/EquipmentScreen.cs",
+        "Assets/Arena/Runtime/Network/HubNetworkManager.cs",
+        "Assets/Arena/Tests/Editor/UiInputContractTests.cs"
+      ],
+      "final_state": "edit the selected canonical discipline configuration through the same atomic combat-build draft or disable weapon editing until it can do so",
+      "target_phases": [5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "_primaryDisciplineId",
+        "WeaponSupportsPrimaryDiscipline",
+        "PrimaryDisciplineUsesStaff",
+        "RuleForPrimaryDiscipline"
+      ]
+    },
+    {
+      "id": "CBL-020",
+      "legacy_concept": "client action-bar resolution uses combat profile, global replication, and spellbook fallbacks",
+      "symbols": [
+        "ActiveActionBarResolver",
+        "ActionBarAssignmentScope.MatchesActiveProfile",
+        "ActionBarAssignmentScope.MatchesGlobal",
+        "DisciplineAbilitySelectionResolver",
+        "ResolveEquippedSpellbookAction",
+        "ResolveKnownSpellAction",
+        "CombatProfileResolver.AbilityMatchesOwner",
+        "ActionBarInputDispatcher"
+      ],
+      "locations": [
+        "Assets/Arena/Runtime/Combat/GameplayContracts.cs",
+        "Assets/Arena/Runtime/Input/ActionBarInputDispatcher.cs",
+        "Assets/Arena/Runtime/UI/CharacterActionBarPanel.cs",
+        "Assets/Arena/Tests/Editor/UiInputContractTests.cs"
+      ],
+      "final_state": "resolve only the current discipline's exact assignments plus explicit intrinsic actions; no profile/global/spellbook player fallback",
+      "target_phases": [4, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "MatchesActiveProfile",
+        "MatchesGlobal",
+        "ResolveEquippedSpellbookAction",
+        "ResolveKnownSpellAction",
+        "AbilityMatchesOwner"
+      ]
+    },
+    {
+      "id": "CBL-021",
+      "legacy_concept": "runtime active discipline/profile pair and independent set reducer",
+      "symbols": [
+        "ActiveCombatDiscipline",
+        "set_combat_discipline",
+        "SetCombatDiscipline",
+        "assign_combat_discipline_weapon_loadout",
+        "AssignCombatDisciplineWeaponLoadout"
+      ],
+      "locations": [
+        "server/src/progression.rs",
+        "server/src/inventory.rs",
+        "Assets/Arena/Runtime/Combat/GameplayContracts.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Types/ActiveCombatDiscipline.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Tables/ActiveCombatDiscipline.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Reducers/SetCombatDiscipline.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Reducers/AssignCombatDisciplineWeaponLoadout.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Types/ActiveCombatDiscipline.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Tables/ActiveCombatDiscipline.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Reducers/SetCombatDiscipline.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Reducers/AssignCombatDisciplineWeaponLoadout.g.cs"
+      ],
+      "final_state": "one atomic switch selects a discipline from the frozen build and projects that same configuration's weapon, mode, and bar; no independent profile or weapon-loadout request",
+      "target_phases": [3, 4, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "ActiveCombatDiscipline",
+        "set_combat_discipline",
+        "SetCombatDiscipline",
+        "AssignCombatDisciplineWeaponLoadout"
+      ]
+    },
+    {
+      "id": "CBL-022",
+      "legacy_concept": "legacy action-bar rows scoped by combat profile rather than canonical discipline",
+      "symbols": [
+        "CharacterActionBarAssignment.combat_profile_id",
+        "assign_character_action_bar_ability_to_slot",
+        "assign_character_action_bar_slot",
+        "AssignCharacterActionBarAbilityToSlot",
+        "AssignCharacterActionBarSlot",
+        "ClearCharacterActionBarSlot"
+      ],
+      "locations": [
+        "server/src/progression.rs",
+        "Assets/Arena/Runtime/Combat/GameplayContracts.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Types/CharacterActionBarAssignment.g.cs",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/Tables/CharacterActionBarAssignment.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Types/CharacterActionBarAssignment.g.cs",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Tables/CharacterActionBarAssignment.g.cs"
+      ],
+      "final_state": "durable exact assignments are owned by canonical combat discipline in Hub; match rows are frozen projections and cannot create alternate durable truth",
+      "target_phases": [1, 2, 3, 4, 7],
+      "status": "open",
+      "audit_patterns": [
+        "CharacterActionBarAssignment",
+        "AssignCharacterActionBarAbilityToSlot",
+        "AssignCharacterActionBarSlot"
+      ]
+    },
+    {
+      "id": "CBL-023",
+      "legacy_concept": "benchmark and probe assumptions about fixed slots and undifferentiated abilities",
+      "symbols": [
+        "extract_hub_loadout",
+        "selected_ability_ids set comparison",
+        "minimum eight selected abilities assertion",
+        "primary_discipline_id handoff assertions"
+      ],
+      "locations": [
+        "ops/benchmark-local-match-start.py",
+        "ops/test_benchmark_local_match_start.py",
+        "match_provisioner/test_worker.py"
+      ],
+      "final_state": "assert full versioned snapshot identity, revision, discipline order, exact slots, passives, Staff schools, and per-discipline weapons",
+      "target_phases": [3, 7],
+      "status": "open",
+      "audit_patterns": [
+        "selected_ability_ids",
+        "len(self.hub_loadout",
+        "primary_discipline_id"
+      ]
+    },
+    {
+      "id": "CBL-024",
+      "legacy_concept": "generated bindings that expose the legacy schema",
+      "symbols": [
+        "SaveHubDisciplineLoadout",
+        "HubPlayerLoadout",
+        "MyHubLoadout",
+        "MatchPlayerLoadoutSnapshot",
+        "CharacterDisciplineLoadout",
+        "MatchReservation",
+        "CombatProfileCatalog",
+        "PlayerKnownSpell",
+        "LearnSpell",
+        "AssignEquippedSpellbookSpell"
+      ],
+      "locations": [
+        "Assets/Arena/Runtime/Generated/HubSpacetimeDB/**",
+        "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/**",
+        "Assets/Arena/Runtime/Generated/SpacetimeDB/**"
+      ],
+      "final_state": "regenerate from the final schemas; never hand-edit generated compatibility fields",
+      "target_phases": [2, 3, 5, 7],
+      "status": "open",
+      "audit_patterns": [
+        "SaveHubDisciplineLoadout",
+        "CharacterDisciplineLoadout",
+        "MatchPlayerLoadoutSnapshot",
+        "CombatProfileCatalog",
+        "PlayerKnownSpell"
+      ]
+    },
+    {
+      "id": "CBL-025",
+      "legacy_concept": "current and prototype Disciplines UI presents school rows as disciplines",
+      "symbols": [
+        "Disciplines.uxml PrimaryName",
+        "SecondaryDisciplineGrid",
+        "PrimaryAbilityHeading",
+        "docs/ui-prototypes/disciplines"
+      ],
+      "locations": [
+        "Assets/Arena/Resources/UI/Toolkit/Disciplines.uxml",
+        "Assets/Arena/Resources/UI/Toolkit/Disciplines.uss",
+        "docs/ui-prototypes/disciplines/README.md",
+        "docs/ui-prototypes/disciplines/index.html",
+        "docs/ui-prototypes/disciplines/disciplines.js",
+        "docs/ui-prototypes/disciplines/disciplines.css"
+      ],
+      "final_state": "legacy Toolkit writer is disabled/removed and prototype remains only as explicitly archived provenance until the future UI replaces it",
+      "target_phases": [5, 6, 7],
+      "status": "open",
+      "audit_patterns": [
+        "SecondaryDisciplineGrid",
+        "PrimaryAbilityHeading",
+        "PRIMARY"
+      ]
+    },
+    {
+      "id": "CBL-026",
+      "legacy_concept": "conflicting current documentation",
+      "symbols": [
+        "spellbook -> known -> action bar -> cast authority chain",
+        "school-as-discipline combat authoring contract",
+        "damage types labeled as spell schools"
+      ],
+      "locations": [
+        "docs/combat-authoring-contract.md",
+        "docs/spellbook-composer-design-2026-07-20.md",
+        "docs/reward-choice-flow-design-2026-07-25.md",
+        "docs/ui-prototypes/reward-choice/**",
+        "docs/ui-prototypes/disciplines/**"
+      ],
+      "final_state": "retain only the reconciled or explicitly archived state classified by the documentation conflict audit",
+      "target_phases": [0, 7],
+      "status": "archived",
+      "audit_patterns": [
+        "Status: SUPERSEDED",
+        "Status: ARCHIVED"
+      ],
+      "evidence": "docs/combat-build-documentation-conflict-audit-2026-08-26.md"
+    },
+    {
+      "id": "CBL-027",
+      "legacy_concept": "temporary migration adapters, dual writers, and runtime conversion reducers",
+      "symbols": [
+        "temporary combat-build converter",
+        "legacy combat-build read adapter",
+        "dual-write combat build"
+      ],
+      "locations": [],
+      "final_state": "no production instance may be introduced; any approved offline converter is named, test-only/offline, used once, recorded, then deleted",
+      "target_phases": [2, 7],
+      "status": "not_present",
+      "audit_patterns": [
+        "legacy.*combat.*build.*adapter",
+        "dual.*write.*combat.*build",
+        "migrate.*combat.*build"
+      ]
+    }
+  ],
+  "completion_requirements": {
+    "phase_0": [
+      "every entry has concrete symbols, locations or an explicit not_present result, and a final state",
+      "new discoveries are appended rather than silently folded into a broad row",
+      "archived documentation is classified and excluded only through the documented allowlist"
+    ],
+    "phase_7": [
+      "all open entries are closed",
+      "all audit patterns are rerun against production and current sources",
+      "every remaining hit is either removed or has a reviewed archive/conversion allowlist reason",
+      "positive ownership proofs in plan section 12.2 pass"
+    ]
+  }
+}
