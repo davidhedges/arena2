@@ -23,6 +23,16 @@
       "closed": "removed and verified by the final negative and positive audits"
     }
   },
+  "phase_checkpoints": {
+    "phase_1": {
+      "status": "complete",
+      "evidence": "docs/combat-build-progression-phase-1-evidence-2026-08-26.md",
+      "canonical_contract": "server/src/combat_build.rs",
+      "canonical_catalog_projection": "server/src/progression_catalog.shared.json#combat_build_contract",
+      "open_legacy_policy": "all legacy entries remain open unless already archived or not_present; Phase 1 added no runtime reader, writer, reducer, table, bootstrap field, generated schema, or UI path",
+      "next_authorized_phase": null
+    }
+  },
   "entries": [
     {
       "id": "CBL-001",

@@ -22,6 +22,10 @@ mod arena_maps;
 mod auto_attack;
 mod bot_matches;
 mod combat;
+// Phase 1 compiles and tests the target contract without switching any
+// reducer, persistence, bootstrap, or runtime authorization consumer yet.
+#[allow(dead_code)]
+mod combat_build;
 mod confusion;
 mod contract_version;
 mod defense;

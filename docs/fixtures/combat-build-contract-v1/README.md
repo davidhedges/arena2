@@ -1,7 +1,7 @@
 # Combat-build contract fixtures v1
 
-Status: **Phase 0 target fixtures; no production schema or validator is
-implemented here.**
+Status: **Frozen in Phase 0 and executed by the Phase 1 production pure
+validator in `server/src/combat_build.rs`.**
 
 `cases.json` freezes the product rules that Phase 1's canonical catalog and
 pure validator must implement. It intentionally uses the target contract
@@ -20,12 +20,10 @@ The fixture set covers:
 - dormant configuration exclusion from active counts;
 - duplicate, kind, ownership, slot, weapon, and unknown-reference failures.
 
-The error-code strings are the target stable codes for Phase 1. Phase 1 must
-execute every case through the production pure validator; Hub save, snapshot
-freeze, match bootstrap, and runtime defense-in-depth tests must reuse the same
-fixtures rather than copying their rules.
+The error-code strings are the stable production codes. All 29 cases execute
+through `CombatBuildCatalog::validate_draft`; Hub save, snapshot freeze, match
+bootstrap, and runtime defense-in-depth tests must reuse that validator and
+these fixtures rather than copying their rules.
 
-Phase 0 verification is intentionally limited to JSON parsing, fixture-shape
-checks, declared count consistency, and catalog-reference review. Adding a
-second standalone semantic validator here would create the parallel authority
-this migration is meant to eliminate.
+The fixtures remain data only. Adding a second standalone semantic validator
+here would create the parallel authority this migration is meant to eliminate.

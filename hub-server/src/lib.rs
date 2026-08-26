@@ -104,6 +104,7 @@ const WEAPON_APPEARANCE_CATALOG_JSON: &str =
     include_str!("../../Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json");
 const HUB_CATALOG_HASH_OFFSET: u64 = 0xcbf29ce484222325;
 const HUB_CATALOG_HASH_PRIME: u64 = 0x100000001b3;
+#[allow(long_running_const_eval)]
 const PROGRESSION_CATALOG_HASH: u64 =
     extend_catalog_hash(HUB_CATALOG_HASH_OFFSET, PROGRESSION_CATALOG_JSON.as_bytes());
 const WEAPON_APPEARANCE_CATALOG_HASH: u64 = extend_catalog_hash(

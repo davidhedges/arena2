@@ -82,6 +82,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
+      "combat_discipline_id": "DAGGERS",
       "sort_order": 0,
       "default_color_id": "DEFAULT",
       "variants": [
@@ -101,6 +102,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 0,
       "default_color_id": "DEFAULT",
       "variants": [
@@ -119,6 +121,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 0,
       "default_color_id": "DEFAULT",
       "variants": [
@@ -137,6 +140,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 0,
       "default_color_id": "DEFAULT",
       "variants": [
@@ -155,6 +159,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 0,
       "default_color_id": "DEFAULT",
       "variants": [
@@ -176,6 +181,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ARCANA",
+      "combat_discipline_id": "STAFF",
       "sort_order": 0,
       "default_color_id": "DEFAULT",
       "variants": [
@@ -194,6 +200,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
+      "combat_discipline_id": "DAGGERS",
       "sort_order": 1,
       "default_color_id": "BL",
       "variants": [
@@ -223,6 +230,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
+      "combat_discipline_id": "DAGGERS",
       "sort_order": 2,
       "default_color_id": "CN",
       "variants": [
@@ -252,6 +260,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
+      "combat_discipline_id": "DAGGERS",
       "sort_order": 3,
       "default_color_id": "CL",
       "variants": [
@@ -286,6 +295,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
+      "combat_discipline_id": "DAGGERS",
       "sort_order": 4,
       "default_color_id": "CL",
       "variants": [
@@ -320,6 +330,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
+      "combat_discipline_id": "DAGGERS",
       "sort_order": 5,
       "default_color_id": "CL",
       "variants": [
@@ -354,6 +365,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "SUBTLETY",
+      "combat_discipline_id": "DAGGERS",
       "sort_order": 6,
       "default_color_id": "BL",
       "variants": [
@@ -383,6 +395,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 7,
       "default_color_id": "CN",
       "variants": [
@@ -409,6 +422,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 8,
       "default_color_id": "GN",
       "variants": [
@@ -435,6 +449,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 9,
       "default_color_id": "BL",
       "variants": [
@@ -461,6 +476,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 10,
       "default_color_id": "BL",
       "variants": [
@@ -487,6 +503,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 11,
       "default_color_id": "BL",
       "variants": [
@@ -513,6 +530,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 12,
       "default_color_id": "BL",
       "variants": [
@@ -539,6 +557,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 13,
       "default_color_id": "BL",
       "variants": [
@@ -565,6 +584,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 14,
       "default_color_id": "BL",
       "variants": [
@@ -591,6 +611,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 15,
       "default_color_id": "CL",
       "variants": [
@@ -621,6 +642,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 16,
       "default_color_id": "CL",
       "variants": [
@@ -651,6 +673,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 17,
       "default_color_id": "BL",
       "variants": [
@@ -677,6 +700,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 18,
       "default_color_id": "BL",
       "variants": [
@@ -703,6 +727,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 19,
       "default_color_id": "BL",
       "variants": [
@@ -729,6 +754,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 20,
       "default_color_id": "BL",
       "variants": [
@@ -755,6 +781,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 21,
       "default_color_id": "BL",
       "variants": [
@@ -781,6 +808,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 22,
       "default_color_id": "BL",
       "variants": [
@@ -807,6 +835,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 23,
       "default_color_id": "BL",
       "variants": [
@@ -833,6 +862,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 24,
       "default_color_id": "PE",
       "variants": [
@@ -859,6 +889,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 25,
       "default_color_id": "CN",
       "variants": [
@@ -885,6 +916,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 26,
       "default_color_id": "BL",
       "variants": [
@@ -911,6 +943,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 27,
       "default_color_id": "GN",
       "variants": [
@@ -937,6 +970,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 28,
       "default_color_id": "BL",
       "variants": [
@@ -963,6 +997,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 29,
       "default_color_id": "BL",
       "variants": [
@@ -989,6 +1024,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 30,
       "default_color_id": "GN",
       "variants": [
@@ -1015,6 +1051,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 31,
       "default_color_id": "GN",
       "variants": [
@@ -1041,6 +1078,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 32,
       "default_color_id": "CL",
       "variants": [
@@ -1071,6 +1109,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 33,
       "default_color_id": "BL",
       "variants": [
@@ -1097,6 +1136,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 34,
       "default_color_id": "BL",
       "variants": [
@@ -1123,6 +1163,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 35,
       "default_color_id": "BL",
       "variants": [
@@ -1149,6 +1190,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 36,
       "default_color_id": "GN",
       "variants": [
@@ -1175,6 +1217,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 37,
       "default_color_id": "BL",
       "variants": [
@@ -1201,6 +1244,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 38,
       "default_color_id": "BL",
       "variants": [
@@ -1231,6 +1275,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 39,
       "default_color_id": "BL",
       "variants": [
@@ -1257,6 +1302,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "WAR",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
       "sort_order": 40,
       "default_color_id": "BL",
       "variants": [
@@ -1283,6 +1329,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 41,
       "default_color_id": "BL",
       "variants": [
@@ -1309,6 +1356,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 42,
       "default_color_id": "BL",
       "variants": [
@@ -1335,6 +1383,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 43,
       "default_color_id": "BL",
       "variants": [
@@ -1361,6 +1410,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 44,
       "default_color_id": "BL",
       "variants": [
@@ -1387,6 +1437,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 45,
       "default_color_id": "BL",
       "variants": [
@@ -1413,6 +1464,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 46,
       "default_color_id": "BL",
       "variants": [
@@ -1439,6 +1491,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 47,
       "default_color_id": "BL",
       "variants": [
@@ -1465,6 +1518,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 48,
       "default_color_id": "BL",
       "variants": [
@@ -1491,6 +1545,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 49,
       "default_color_id": "GO",
       "variants": [
@@ -1517,6 +1572,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 50,
       "default_color_id": "CL",
       "variants": [
@@ -1547,6 +1603,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 51,
       "default_color_id": "CL",
       "variants": [
@@ -1577,6 +1634,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 52,
       "default_color_id": "BL",
       "variants": [
@@ -1603,6 +1661,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 53,
       "default_color_id": "GN",
       "variants": [
@@ -1629,6 +1688,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 54,
       "default_color_id": "CN",
       "variants": [
@@ -1655,6 +1715,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 55,
       "default_color_id": "BL",
       "variants": [
@@ -1681,6 +1742,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 56,
       "default_color_id": "OR",
       "variants": [
@@ -1707,6 +1769,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 57,
       "default_color_id": "BL",
       "variants": [
@@ -1733,6 +1796,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 58,
       "default_color_id": "GN",
       "variants": [
@@ -1759,6 +1823,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 59,
       "default_color_id": "GN",
       "variants": [
@@ -1785,6 +1850,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 60,
       "default_color_id": "BL",
       "variants": [
@@ -1811,6 +1877,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 61,
       "default_color_id": "BL",
       "variants": [
@@ -1837,6 +1904,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 62,
       "default_color_id": "BL",
       "variants": [
@@ -1863,6 +1931,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 63,
       "default_color_id": "BL",
       "variants": [
@@ -1889,6 +1958,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 64,
       "default_color_id": "BL",
       "variants": [
@@ -1915,6 +1985,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 65,
       "default_color_id": "BL",
       "variants": [
@@ -1941,6 +2012,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 66,
       "default_color_id": "GN",
       "variants": [
@@ -1967,6 +2039,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 67,
       "default_color_id": "GN",
       "variants": [
@@ -1993,6 +2066,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 68,
       "default_color_id": "GN",
       "variants": [
@@ -2019,6 +2093,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 69,
       "default_color_id": "BL",
       "variants": [
@@ -2045,6 +2120,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 70,
       "default_color_id": "BL",
       "variants": [
@@ -2071,6 +2147,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 71,
       "default_color_id": "BL",
       "variants": [
@@ -2097,6 +2174,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 72,
       "default_color_id": "GN",
       "variants": [
@@ -2123,6 +2201,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 73,
       "default_color_id": "BL",
       "variants": [
@@ -2149,6 +2228,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 74,
       "default_color_id": "BL",
       "variants": [
@@ -2175,6 +2255,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 75,
       "default_color_id": "CL",
       "variants": [
@@ -2205,6 +2286,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 76,
       "default_color_id": "CL",
       "variants": [
@@ -2235,6 +2317,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 77,
       "default_color_id": "CL",
       "variants": [
@@ -2265,6 +2348,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 78,
       "default_color_id": "BL",
       "variants": [
@@ -2291,6 +2375,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 79,
       "default_color_id": "BL",
       "variants": [
@@ -2317,6 +2402,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 80,
       "default_color_id": "BL",
       "variants": [
@@ -2343,6 +2429,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 81,
       "default_color_id": "BL",
       "variants": [
@@ -2369,6 +2456,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 82,
       "default_color_id": "BK",
       "variants": [
@@ -2395,6 +2483,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 83,
       "default_color_id": "BL",
       "variants": [
@@ -2421,6 +2510,7 @@
       "hand_requirement": "ONE_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 84,
       "default_color_id": "BL",
       "variants": [
@@ -2447,6 +2537,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 85,
       "default_color_id": "BL",
       "variants": [
@@ -2473,6 +2564,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 86,
       "default_color_id": "BL",
       "variants": [
@@ -2499,6 +2591,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 87,
       "default_color_id": "CN",
       "variants": [
@@ -2525,6 +2618,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 88,
       "default_color_id": "BR",
       "variants": [
@@ -2551,6 +2645,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 89,
       "default_color_id": "BL",
       "variants": [
@@ -2577,6 +2672,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 90,
       "default_color_id": "BR",
       "variants": [
@@ -2603,6 +2699,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 91,
       "default_color_id": "GN",
       "variants": [
@@ -2629,6 +2726,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 92,
       "default_color_id": "GN",
       "variants": [
@@ -2655,6 +2753,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 93,
       "default_color_id": "BL",
       "variants": [
@@ -2681,6 +2780,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 94,
       "default_color_id": "BL",
       "variants": [
@@ -2707,6 +2807,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 95,
       "default_color_id": "CL",
       "variants": [
@@ -2737,6 +2838,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 96,
       "default_color_id": "CL",
       "variants": [
@@ -2767,6 +2869,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 97,
       "default_color_id": "CL",
       "variants": [
@@ -2797,6 +2900,7 @@
       "hand_requirement": "OFF_HAND",
       "equip_slot": "OFF_HAND",
       "primary_discipline_id": "ZEAL",
+      "combat_discipline_id": "SWORD_AND_SHIELD",
       "sort_order": 98,
       "default_color_id": "GN",
       "variants": [
@@ -2823,6 +2927,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 99,
       "default_color_id": "BL",
       "variants": [
@@ -2852,6 +2957,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 100,
       "default_color_id": "BL",
       "variants": [
@@ -2881,6 +2987,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 101,
       "default_color_id": "BL",
       "variants": [
@@ -2910,6 +3017,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 102,
       "default_color_id": "BL",
       "variants": [
@@ -2939,6 +3047,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 103,
       "default_color_id": "BL",
       "variants": [
@@ -2968,6 +3077,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 104,
       "default_color_id": "BL",
       "variants": [
@@ -2997,6 +3107,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 105,
       "default_color_id": "BL",
       "variants": [
@@ -3026,6 +3137,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 106,
       "default_color_id": "BL",
       "variants": [
@@ -3055,6 +3167,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 107,
       "default_color_id": "BL",
       "variants": [
@@ -3084,6 +3197,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 108,
       "default_color_id": "BL",
       "variants": [
@@ -3113,6 +3227,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 109,
       "default_color_id": "BL",
       "variants": [
@@ -3142,6 +3257,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 110,
       "default_color_id": "BL",
       "variants": [
@@ -3171,6 +3287,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 111,
       "default_color_id": "BL",
       "variants": [
@@ -3200,6 +3317,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 112,
       "default_color_id": "BL",
       "variants": [
@@ -3229,6 +3347,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 113,
       "default_color_id": "BL",
       "variants": [
@@ -3258,6 +3377,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 114,
       "default_color_id": "BL",
       "variants": [
@@ -3287,6 +3407,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 115,
       "default_color_id": "BL",
       "variants": [
@@ -3316,6 +3437,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 116,
       "default_color_id": "BL",
       "variants": [
@@ -3350,6 +3472,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 117,
       "default_color_id": "CL",
       "variants": [
@@ -3384,6 +3507,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 118,
       "default_color_id": "CL",
       "variants": [
@@ -3418,6 +3542,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 119,
       "default_color_id": "CL",
       "variants": [
@@ -3452,6 +3577,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 120,
       "default_color_id": "GN",
       "variants": [
@@ -3481,6 +3607,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "PRECISION",
+      "combat_discipline_id": "ARCHER_BOW",
       "sort_order": 121,
       "default_color_id": "BL",
       "variants": [
@@ -3510,6 +3637,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ARCANA",
+      "combat_discipline_id": "STAFF",
       "sort_order": 122,
       "default_color_id": "BL",
       "variants": [
@@ -3536,6 +3664,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ARCANA",
+      "combat_discipline_id": "STAFF",
       "sort_order": 123,
       "default_color_id": "BL",
       "variants": [
@@ -3562,6 +3691,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ARCANA",
+      "combat_discipline_id": "STAFF",
       "sort_order": 124,
       "default_color_id": "BL",
       "variants": [
@@ -3588,6 +3718,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ARCANA",
+      "combat_discipline_id": "STAFF",
       "sort_order": 125,
       "default_color_id": "BL",
       "variants": [
@@ -3614,6 +3745,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ARCANA",
+      "combat_discipline_id": "STAFF",
       "sort_order": 126,
       "default_color_id": "BL",
       "variants": [
@@ -3640,6 +3772,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ARCANA",
+      "combat_discipline_id": "STAFF",
       "sort_order": 127,
       "default_color_id": "BL",
       "variants": [
@@ -3666,6 +3799,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ARCANA",
+      "combat_discipline_id": "STAFF",
       "sort_order": 128,
       "default_color_id": "BL",
       "variants": [
@@ -3692,6 +3826,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ARCANA",
+      "combat_discipline_id": "STAFF",
       "sort_order": 129,
       "default_color_id": "CL",
       "variants": [
@@ -3722,6 +3857,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ARCANA",
+      "combat_discipline_id": "STAFF",
       "sort_order": 130,
       "default_color_id": "CL",
       "variants": [
@@ -3752,6 +3888,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ARCANA",
+      "combat_discipline_id": "STAFF",
       "sort_order": 131,
       "default_color_id": "CL",
       "variants": [
@@ -3782,6 +3919,7 @@
       "hand_requirement": "TWO_HAND",
       "equip_slot": "MAIN_HAND",
       "primary_discipline_id": "ARCANA",
+      "combat_discipline_id": "STAFF",
       "sort_order": 132,
       "default_color_id": "CL",
       "variants": [

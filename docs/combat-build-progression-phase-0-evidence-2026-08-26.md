@@ -2,6 +2,11 @@
 
 Date: 2026-08-26
 
+Historical checkpoint: this document records the repository at the Phase 0
+exit gate. Phase 1 was subsequently approved and completed; its current
+evidence is in
+`docs/combat-build-progression-phase-1-evidence-2026-08-26.md`.
+
 Status: **COMPLETE — inventory and target fixtures are complete, the local-data
 strategy is approved, the nine pre-existing server failures are repaired with
 all 824 tests passing, and the freshly authorized Unity verification run passes

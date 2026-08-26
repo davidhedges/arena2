@@ -265,6 +265,18 @@ struct AbilityDefinition {
     actor_scope: String,
     #[serde(default)]
     discipline_id: String,
+    // Phase 1 canonical build metadata is validated by combat_build. The
+    // legacy runtime parser retains these fields without consuming them until
+    // the atomic runtime cutover.
+    #[serde(default)]
+    #[allow(dead_code)]
+    selection_kind: String,
+    #[serde(default)]
+    #[allow(dead_code)]
+    combat_discipline_id: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    spell_school_id: Option<String>,
     combat_profile_id: String,
     gameplay: AbilityGameplayDefinition,
     action_id: String,

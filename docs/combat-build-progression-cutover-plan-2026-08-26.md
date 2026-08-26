@@ -2,9 +2,10 @@
 
 Date: 2026-08-26
 
-Status: **PHASE 0 COMPLETE — rule lock, baseline repair, fixtures, consumer
-inventory, protected local-data strategy, and all Phase 0 verification gates
-are complete. Phase 1 and later implementation are not authorized by this
+Status: **PHASE 1 COMPLETE — the canonical catalog projection, ability/weapon
+ownership metadata, shared rules, typed draft/snapshot contract, pure
+validator, exhaustive catalog validation, and Phase 1 verification gates are
+complete. Phase 2 and later implementation are not authorized by this
 document; each requires explicit approval.**
 
 ## 1. Goal
@@ -422,6 +423,20 @@ are needed for tests, they stay test-only.
 
 Exit gate: all catalog rows map exactly once, all rules tests pass, and no
 runtime consumer has been partially switched.
+
+Phase 1 completion: **PASS on 2026-08-26.** The canonical
+`combat_build_contract` projection contains exactly five weapon disciplines,
+six separate Staff schools, and the one authored rules set. All 216 player
+abilities and 138 weapon definitions have explicit canonical ownership; NPC
+abilities remain explicitly intrinsic and outside the player build. The pure
+validator executes all 29 frozen fixtures and the additional structural,
+dormant-reference, catalog-mutation, hand-pairing, exact-ID, and stale-revision
+tests. The full server suite passes 832/832 and the Hub suite passes 18/18.
+No Hub reducer/table, match handoff, runtime authorization, generated schema,
+or UI consumer was switched. The legacy projection remains the sole current
+runtime path and stays open in the deletion ledger until its atomic later-phase
+cutover. Detailed commands and audit evidence are in
+`docs/combat-build-progression-phase-1-evidence-2026-08-26.md`.
 
 ### Phase 2 — Hub durable state and atomic save
 

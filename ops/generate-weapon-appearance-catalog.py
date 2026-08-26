@@ -36,6 +36,13 @@ COLOR_ORDER = ("Default", "Cl", "Bk", "Bl", "Br", "Cn", "Gn", "Go", "Gr", "Or", 
 COLOR_SORT = {color_id: index for index, color_id in enumerate(COLOR_ORDER)}
 
 DISCIPLINE_ORDER = {"SUBTLETY": 0, "WAR": 1, "ZEAL": 2, "PRECISION": 3, "ARCANA": 4}
+CANONICAL_DISCIPLINE_BY_LEGACY = {
+    "SUBTLETY": "DAGGERS",
+    "WAR": "TWO_HANDED_SWORD",
+    "ZEAL": "SWORD_AND_SHIELD",
+    "PRECISION": "ARCHER_BOW",
+    "ARCANA": "STAFF",
+}
 KIND_ORDER = {
     "DAGGER_PAIR": 0,
     "TWO_HAND_SWORD": 0,
@@ -238,6 +245,17 @@ def weapon_contract(stem: str) -> tuple[str, str, str, str] | None:
     return None
 
 
+def with_canonical_discipline(family: dict[str, object]) -> dict[str, object]:
+    canonical_family: dict[str, object] = {}
+    for key, value in family.items():
+        canonical_family[key] = value
+        if key == "primary_discipline_id":
+            canonical_family["combat_discipline_id"] = CANONICAL_DISCIPLINE_BY_LEGACY[
+                str(value)
+            ]
+    return canonical_family
+
+
 def roman(value: int) -> str:
     if value <= 0 or value > 39:
         return str(value)
@@ -353,6 +371,7 @@ def build_catalog() -> dict[str, object]:
     # Keep established weapons first as the deterministic fallback for existing
     # players whose older loadout has no appearance selection yet.
     families[0:0] = TRAINING_FAMILIES
+    families = [with_canonical_discipline(family) for family in families]
     family_ids = {str(family["item_def_id"]) for family in families}
     if len(family_ids) != len(families):
         raise SystemExit("Weapon appearance catalog contains duplicate item definition ids")
