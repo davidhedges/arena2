@@ -169,7 +169,7 @@
     },
     {
       "item_def_id": "NEWBIE_STAFF_01",
-      "display_name": "Newbie Staff I",
+      "display_name": "Mage Staff",
       "icon_id": "newbie_staff_01",
       "weapon_kind": "STAFF",
       "placement_profile_id": "LEGACY_ANIMATION_BINDING",
@@ -3498,6 +3498,308 @@
           "color_id": "RD",
           "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Bow/Bow_Ud_01_Rd.prefab",
           "quiver_placement_profile_id": "LEGACY_ANIMATION_BINDING"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_STAFF_CLERIC",
+      "display_name": "Cleric Staff",
+      "icon_id": "newbie_staff_01",
+      "weapon_kind": "STAFF",
+      "placement_profile_id": "NHANCE_NATIVE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ARCANA",
+      "sort_order": 122,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Cleric_Bl.prefab"
+        },
+        {
+          "color_id": "GO",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Cleric_Go.prefab"
+        },
+        {
+          "color_id": "WH",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Cleric_Wh.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_STAFF_FMAGE",
+      "display_name": "Mage Staff",
+      "icon_id": "newbie_staff_01",
+      "weapon_kind": "STAFF",
+      "placement_profile_id": "NHANCE_NATIVE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ARCANA",
+      "sort_order": 123,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_FMage_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_FMage_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_FMage_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_STAFF_FANTASY_01",
+      "display_name": "Fantasy I Staff",
+      "icon_id": "newbie_staff_01",
+      "weapon_kind": "STAFF",
+      "placement_profile_id": "NHANCE_NATIVE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ARCANA",
+      "sort_order": 124,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Fantasy_01_Bl.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Fantasy_01_Rd.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Fantasy_01_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_STAFF_FANTASY_02",
+      "display_name": "Fantasy II Staff",
+      "icon_id": "newbie_staff_01",
+      "weapon_kind": "STAFF",
+      "placement_profile_id": "NHANCE_NATIVE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ARCANA",
+      "sort_order": 125,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Fantasy_02_Bl.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Fantasy_02_Rd.prefab"
+        },
+        {
+          "color_id": "YE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Fantasy_02_Ye.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_STAFF_FANTASY_03",
+      "display_name": "Fantasy III Staff",
+      "icon_id": "newbie_staff_01",
+      "weapon_kind": "STAFF",
+      "placement_profile_id": "NHANCE_NATIVE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ARCANA",
+      "sort_order": 126,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Fantasy_03_Bl.prefab"
+        },
+        {
+          "color_id": "GO",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Fantasy_03_Go.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Fantasy_03_Pe.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_STAFF_FANTASY_04",
+      "display_name": "Fantasy IV Staff",
+      "icon_id": "newbie_staff_01",
+      "weapon_kind": "STAFF",
+      "placement_profile_id": "NHANCE_NATIVE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ARCANA",
+      "sort_order": 127,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Fantasy_04_Bl.prefab"
+        },
+        {
+          "color_id": "CN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Fantasy_04_Cn.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Fantasy_04_Pe.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_STAFF_NECR",
+      "display_name": "Necromancer Staff",
+      "icon_id": "newbie_staff_01",
+      "weapon_kind": "STAFF",
+      "placement_profile_id": "NHANCE_NATIVE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ARCANA",
+      "sort_order": 128,
+      "default_color_id": "BL",
+      "variants": [
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Necr_Bl.prefab"
+        },
+        {
+          "color_id": "GR",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Necr_Gr.prefab"
+        },
+        {
+          "color_id": "PE",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Necr_Pe.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NH_STAFF_NEWBIE_01",
+      "display_name": "Newbie I Staff",
+      "icon_id": "newbie_staff_01",
+      "weapon_kind": "STAFF",
+      "placement_profile_id": "NHANCE_NATIVE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ARCANA",
+      "sort_order": 129,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_01_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_01_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_01_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_01_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_STAFF_02",
+      "display_name": "Newbie Staff II",
+      "icon_id": "newbie_staff_02",
+      "weapon_kind": "STAFF",
+      "placement_profile_id": "NHANCE_NATIVE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ARCANA",
+      "sort_order": 130,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_02_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_02_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_02_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_02_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_STAFF_03",
+      "display_name": "Newbie Staff III",
+      "icon_id": "newbie_staff_03",
+      "weapon_kind": "STAFF",
+      "placement_profile_id": "NHANCE_NATIVE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ARCANA",
+      "sort_order": 131,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_03_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_03_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_03_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_03_Rd.prefab"
+        }
+      ]
+    },
+    {
+      "item_def_id": "NEWBIE_STAFF_04",
+      "display_name": "Newbie Staff IV",
+      "icon_id": "newbie_staff_04",
+      "weapon_kind": "STAFF",
+      "placement_profile_id": "NHANCE_NATIVE",
+      "hand_requirement": "TWO_HAND",
+      "equip_slot": "MAIN_HAND",
+      "primary_discipline_id": "ARCANA",
+      "sort_order": 132,
+      "default_color_id": "CL",
+      "variants": [
+        {
+          "color_id": "CL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_04_Cl.prefab"
+        },
+        {
+          "color_id": "BL",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_04_Bl.prefab"
+        },
+        {
+          "color_id": "GN",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_04_Gn.prefab"
+        },
+        {
+          "color_id": "RD",
+          "prefab_path": "Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/Prefabs/Item/Weapon/Staff/Staff_Newbie_04_Rd.prefab"
         }
       ]
     }

@@ -65,6 +65,16 @@ namespace Arena.Presentation
             0f,
             0.064879383f);
 
+        // MageAnimationPack's authored staff and animation sockets use local +Y
+        // as the shaft axis. Every raw N-Hance staff mesh uses local +Z. Normalize
+        // that asset-space difference here so every staff appearance is attached
+        // to the same public staff mounts in the same frame in every visual state.
+        private static readonly Quaternion NHanceStaffToMageFrame = new(
+            -0.70710678f,
+            0f,
+            0f,
+            0.70710678f);
+
         public static bool TryResolve(
             WeaponAppearancePlacementProfile profile,
             string? roleId,
@@ -83,8 +93,8 @@ namespace Arena.Presentation
                     ? AvatarWeaponMounts.NHanceGreatswordHandMountId
                     : AvatarWeaponMounts.NHanceBack2HLMountId,
                 "staff" => inCombat
-                    ? AvatarWeaponMounts.NHanceStaffHandMountId
-                    : AvatarWeaponMounts.NHanceStaffStowedMountId,
+                    ? AvatarWeaponMounts.StaffHandMountId
+                    : AvatarWeaponMounts.StaffStowedMountId,
                 "sword" => inCombat
                     ? AvatarWeaponMounts.NHanceWeaponRMountId
                     : AvatarWeaponMounts.NHanceBackLMountId,
@@ -113,6 +123,7 @@ namespace Arena.Presentation
             {
                 "dagger_main" when inCombat => NHanceDaggerMainReverseGrip,
                 "dagger_off" when inCombat => NHanceDaggerOffReverseGrip,
+                "staff" => NHanceStaffToMageFrame,
                 _ => Quaternion.identity,
             };
 

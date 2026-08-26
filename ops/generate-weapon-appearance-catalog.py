@@ -35,7 +35,7 @@ COLOR_SPECS = {
 COLOR_ORDER = ("Default", "Cl", "Bk", "Bl", "Br", "Cn", "Gn", "Go", "Gr", "Or", "Pe", "Rd", "Wh", "Ye")
 COLOR_SORT = {color_id: index for index, color_id in enumerate(COLOR_ORDER)}
 
-DISCIPLINE_ORDER = {"SUBTLETY": 0, "WAR": 1, "ZEAL": 2, "PRECISION": 3}
+DISCIPLINE_ORDER = {"SUBTLETY": 0, "WAR": 1, "ZEAL": 2, "PRECISION": 3, "ARCANA": 4}
 KIND_ORDER = {
     "DAGGER_PAIR": 0,
     "TWO_HAND_SWORD": 0,
@@ -48,6 +48,7 @@ KIND_ORDER = {
     "ONE_HAND_FIST": 3,
     "SHIELD": 4,
     "BOW": 0,
+    "STAFF": 0,
 }
 ICON_BY_KIND = {
     "DAGGER_PAIR": "training_dagger_pair",
@@ -61,12 +62,21 @@ ICON_BY_KIND = {
     "ONE_HAND_FIST": "training_one_hand_sword",
     "SHIELD": "training_shield",
     "BOW": "training_bow",
+    "STAFF": "newbie_staff_01",
+}
+ICON_BY_FAMILY = {
+    "Staff_Newbie_01": "newbie_staff_01",
+    "Staff_Newbie_02": "newbie_staff_02",
+    "Staff_Newbie_03": "newbie_staff_03",
+    "Staff_Newbie_04": "newbie_staff_04",
 }
 
 # These item ids predate the appearance picker and are already used by
 # inventories, starter loadouts, combat tests, and authored Unity visuals.
 # Reuse them as the canonical ids for the matching N-Hance model families
-# instead of publishing visually duplicate NH_* choices.
+# instead of publishing visually duplicate NH_* choices. NEWBIE_STAFF_01 is
+# intentionally excluded: that id belongs to Arena's original Mage Animation
+# Pack staff and must remain distinct from the N-Hance Staff_Newbie_01 model.
 LEGACY_FAMILY_ALIASES = {
     "Dagger_1H_Newbie_01": ("NEWBIE_DAGGER_PAIR_01", "Newbie Daggers I"),
     "Dagger_1H_Newbie_02": ("NEWBIE_DAGGER_PAIR_02", "Newbie Daggers II"),
@@ -84,6 +94,9 @@ LEGACY_FAMILY_ALIASES = {
     "Bow_Newbie_01": ("NEWBIE_BOW_01", "Newbie Bow I"),
     "Bow_Newbie_02": ("NEWBIE_BOW_02", "Newbie Bow II"),
     "Bow_Newbie_03": ("NEWBIE_BOW_03", "Newbie Bow III"),
+    "Staff_Newbie_02": ("NEWBIE_STAFF_02", "Newbie Staff II"),
+    "Staff_Newbie_03": ("NEWBIE_STAFF_03", "Newbie Staff III"),
+    "Staff_Newbie_04": ("NEWBIE_STAFF_04", "Newbie Staff IV"),
 }
 
 TRAINING_FAMILIES = (
@@ -171,6 +184,22 @@ TRAINING_FAMILIES = (
             "quiver_placement_profile_id": LEGACY_PLACEMENT_PROFILE,
         }],
     },
+    {
+        "item_def_id": "NEWBIE_STAFF_01",
+        "display_name": "Mage Staff",
+        "icon_id": "newbie_staff_01",
+        "weapon_kind": "STAFF",
+        "placement_profile_id": LEGACY_PLACEMENT_PROFILE,
+        "hand_requirement": "TWO_HAND",
+        "equip_slot": "MAIN_HAND",
+        "primary_discipline_id": "ARCANA",
+        "sort_order": 0,
+        "default_color_id": "DEFAULT",
+        "variants": [{
+            "color_id": "DEFAULT",
+            "prefab_path": "Assets/Arena/Resources/CombatAnimationSets/StaffPackAuthored.prefab",
+        }],
+    },
 )
 
 LEGACY_SELECTABLE_IDS = {
@@ -204,6 +233,8 @@ def weapon_contract(stem: str) -> tuple[str, str, str, str] | None:
         return "ZEAL", "SHIELD", "OFF_HAND", "OFF_HAND"
     if stem.startswith("Bow_"):
         return "PRECISION", "BOW", "TWO_HAND", "MAIN_HAND"
+    if stem.startswith("Staff_"):
+        return "ARCANA", "STAFF", "TWO_HAND", "MAIN_HAND"
     return None
 
 
@@ -219,7 +250,7 @@ def roman(value: int) -> str:
 
 
 def display_name(family_stem: str, weapon_kind: str) -> str:
-    prefixes = ("Dagger_1H_", "Axe_2HL_", "Axe_2H_", "Axe_1H_", "Sword_2H_", "Sword_1H_", "Hammer_2H_", "Hammer_1H_", "Fist_1H_", "Polearm_", "Shield_", "Bow_")
+    prefixes = ("Dagger_1H_", "Axe_2HL_", "Axe_2H_", "Axe_1H_", "Sword_2H_", "Sword_1H_", "Hammer_2H_", "Hammer_1H_", "Fist_1H_", "Polearm_", "Shield_", "Bow_", "Staff_")
     core = next((family_stem[len(prefix):] for prefix in prefixes if family_stem.startswith(prefix)), family_stem)
     words: list[str] = []
     aliases = {
@@ -228,6 +259,8 @@ def display_name(family_stem: str, weapon_kind: str) -> str:
         "NArcher": "Northern Archer",
         "NRanger": "Northern Ranger",
         "NWarrior": "Northern Warrior",
+        "FMage": "Mage",
+        "Necr": "Necromancer",
         "Ud": "Undead",
     }
     for token in core.split("_"):
@@ -247,6 +280,7 @@ def display_name(family_stem: str, weapon_kind: str) -> str:
         "ONE_HAND_FIST": "Fist Weapon",
         "SHIELD": "Shield",
         "BOW": "Bow",
+        "STAFF": "Staff",
     }[weapon_kind]
     return f"{' '.join(words)} {kind_label}".strip()
 
@@ -298,7 +332,7 @@ def build_catalog() -> dict[str, object]:
             {
                 "item_def_id": item_def_id,
                 "display_name": authored_display_name,
-                "icon_id": ICON_BY_KIND[weapon_kind],
+                "icon_id": ICON_BY_FAMILY.get(family_stem, ICON_BY_KIND[weapon_kind]),
                 "weapon_kind": weapon_kind,
                 "placement_profile_id": NHANCE_PLACEMENT_PROFILE,
                 "hand_requirement": hand_requirement,
@@ -311,13 +345,13 @@ def build_catalog() -> dict[str, object]:
         )
 
     nhance_variant_count = sum(len(family["variants"]) for family in families)
-    if len(families) != 121 or nhance_variant_count != 382:
+    if len(families) != 132 or nhance_variant_count != 419:
         raise SystemExit(
             f"Unexpected compatible N-Hance catalog shape: {len(families)} families, {nhance_variant_count} variants"
         )
 
-    # Keep established training weapons first as the deterministic fallback for
-    # existing players whose older loadout has no appearance selection yet.
+    # Keep established weapons first as the deterministic fallback for existing
+    # players whose older loadout has no appearance selection yet.
     families[0:0] = TRAINING_FAMILIES
     family_ids = {str(family["item_def_id"]) for family in families}
     if len(family_ids) != len(families):
@@ -326,7 +360,7 @@ def build_catalog() -> dict[str, object]:
         missing = sorted(LEGACY_SELECTABLE_IDS - family_ids)
         raise SystemExit(f"Weapon appearance catalog omitted legacy selectable ids: {missing}")
     variant_count = sum(len(family["variants"]) for family in families)
-    if len(families) != 126 or variant_count != 387:
+    if len(families) != 138 or variant_count != 425:
         raise SystemExit(f"Unexpected combined weapon catalog shape: {len(families)} families, {variant_count} variants")
 
     represented_prefabs = {

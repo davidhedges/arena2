@@ -79,6 +79,8 @@ def visual_roles(family: dict[str, object], variant: dict[str, str]) -> list[tup
                 variant["quiver_placement_profile_id"],
             ),
         ]
+    if kind == "STAFF":
+        return [("staff", prefab_path, placement_profile)]
     raise SystemExit(f"Unsupported weapon kind in shared catalog: {kind}")
 
 

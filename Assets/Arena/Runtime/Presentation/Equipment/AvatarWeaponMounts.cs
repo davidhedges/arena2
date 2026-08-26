@@ -174,8 +174,9 @@ namespace Arena.Presentation
         public const string DaggerMainStowedMountId = "dagger_main_stowed";
         public const string DaggerOffStowedMountId = "dagger_off_stowed";
 
-        // Raw N-Hance weapon prefabs are authored at identity under these native
-        // sockets. Keep them separate from Arena's calibrated wrapper mounts.
+        // Most raw N-Hance weapon prefabs are authored at identity under these native
+        // sockets. Staffs are normalized to the canonical Mage frame by the placement
+        // resolver so every staff shares the public staff mounts.
         public const string NHanceWeaponRMountId = "nhance_weapon_r";
         public const string NHanceWeaponLMountId = "nhance_weapon_l";
         public const string NHanceShieldMountId = "nhance_weapon_shield";
@@ -187,8 +188,6 @@ namespace Arena.Presentation
         public const string NHanceHipRMountId = "nhance_hip_r";
         public const string NHanceHipLMountId = "nhance_hip_l";
         public const string NHanceGreatswordHandMountId = "nhance_greatsword_hand";
-        public const string NHanceStaffHandMountId = "nhance_staff_hand";
-        public const string NHanceStaffStowedMountId = "nhance_staff_stowed";
 
         public const string LegacyMainHandMountId = "main_hand";
         public const string LegacyOffHandMountId = "off_hand";
@@ -217,8 +216,6 @@ namespace Arena.Presentation
             [ArcherQuiverBackMountId] = new[] { ArcherQuiverStowedMountId, ArcherQuiverBackMountId },
             [DaggerMainStowedMountId] = new[] { DaggerMainStowedMountId },
             [DaggerOffStowedMountId] = new[] { DaggerOffStowedMountId },
-            [NHanceStaffHandMountId] = new[] { NHanceStaffHandMountId, NHanceWeaponRMountId, StaffHandMountId },
-            [NHanceStaffStowedMountId] = new[] { NHanceStaffStowedMountId, NHanceBack2HLMountId, StaffStowedMountId },
         };
 
         [SerializeField] private List<AvatarWeaponMountDefinition> _mounts = new();

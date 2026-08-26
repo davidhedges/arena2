@@ -391,8 +391,6 @@ namespace Arena.EditorTools
                 CreateTransferredMount(player.transform, animator, legacyMountPoses, AvatarWeaponMounts.StaffStowedMountId) ??
                 FindDescendant(chest, "Back_2HL") ??
                 mainBack;
-            Vector3 staffStowedReferencePosition = staffStowedReference.position;
-            Quaternion staffStowedReferenceRotation = staffStowedReference.rotation;
             Transform? mageStaffAnimatedHandSocket = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
                 rightHand,
                 ArenaWeaponMountCalibration.MageStaffAnimatedHandSocket);
@@ -410,13 +408,6 @@ namespace Arena.EditorTools
                     nhanceWeaponRWorldRotation,
                     "Arena_NHance_weapon_r")
                 : mageStaffAnimatedHandSocket;
-            Transform? nhanceStaffHand = hadNhanceWeaponR
-                ? AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
-                    mageStaffAnimatedHandSocket,
-                    nhanceWeaponRWorldPosition,
-                    nhanceWeaponRWorldRotation,
-                    "Arena_NHance_staff_hand")
-                : mageStaffAnimatedHandSocket;
             Transform? mageStaffAnimatedStowedSocket = ArenaWeaponMountCalibration.CreateOrUpdateMountChild(
                 chest,
                 ArenaWeaponMountCalibration.MageStaffAnimatedStowedSocket);
@@ -424,11 +415,6 @@ namespace Arena.EditorTools
                 mageStaffAnimatedStowedSocket,
                 mageStaffAnimatedStowedSocket,
                 "Arena_Staff_stowed") ?? staffStowedReference;
-            Transform? nhanceStaffStowed = AvatarWeaponMounts.CreateOrUpdateWorldAlignedMountChild(
-                mageStaffAnimatedStowedSocket,
-                staffStowedReferencePosition,
-                staffStowedReferenceRotation,
-                "Arena_NHance_staff_stowed");
             Transform offBack =
                 CreateTransferredMount(player.transform, animator, legacyMountPoses, AvatarWeaponMounts.OffSheathMountId) ??
                 FindDescendant(chest, PropShieldHolder) ??
@@ -487,8 +473,6 @@ namespace Arena.EditorTools
             SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceHipRMountId, nhanceHipR);
             SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceHipLMountId, nhanceHipL);
             SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceGreatswordHandMountId, nhanceGreatswordHand);
-            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceStaffHandMountId, nhanceStaffHand);
-            SetMountIfPresent(mounts, AvatarWeaponMounts.NHanceStaffStowedMountId, nhanceStaffStowed);
 
             Debug.Log(
                 $"[{nameof(StylizedPlayerAvatarBuilder)}] Mounts: " +

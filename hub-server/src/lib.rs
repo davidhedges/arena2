@@ -78,6 +78,7 @@ const DEFAULT_HUB_PRIMARY_DISCIPLINE: &str = DISCIPLINE_WAR;
 const DEFAULT_HUB_SECONDARY_DISCIPLINE_1: &str = DISCIPLINE_SUBTLETY;
 const DEFAULT_HUB_SECONDARY_DISCIPLINE_2: &str = DISCIPLINE_RUIN;
 const DEFAULT_HUB_ARMOR_SET: &str = "PEASANT";
+const DEFAULT_STAFF_ITEM_DEF_ID: &str = "NEWBIE_STAFF_01";
 
 const EQUIP_SLOT_MAIN_HAND: &str = "MAIN_HAND";
 const EQUIP_SLOT_OFF_HAND: &str = "OFF_HAND";
@@ -1799,15 +1800,26 @@ fn default_weapon_loadout(primary_discipline_id: &str) -> (String, String, Strin
     let primary = normalize_authored_id(primary_discipline_id);
     let primary_uses_staff = discipline_uses_staff(primary.as_str());
     let catalog = parse_weapon_appearance_catalog().ok();
-    let main_hand = catalog
-        .as_ref()
-        .into_iter()
-        .flat_map(|catalog| catalog.families.iter())
-        .find(|spec| {
+    let main_hand = catalog.as_ref().and_then(|catalog| {
+        let eligible = |spec: &&HubWeaponFamilyAuthoring| {
             weapon_spec_supports_primary(spec, primary.as_str(), primary_uses_staff)
                 && normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND
                 && weapon_spec_contract_is_valid(spec)
-        });
+        };
+        if primary_uses_staff {
+            catalog
+                .families
+                .iter()
+                .find(|spec| {
+                    eligible(spec)
+                        && normalize_authored_id(spec.item_def_id.as_str())
+                            == DEFAULT_STAFF_ITEM_DEF_ID
+                })
+                .or_else(|| catalog.families.iter().find(eligible))
+        } else {
+            catalog.families.iter().find(eligible)
+        }
+    });
     let off_hand = catalog
         .as_ref()
         .into_iter()
@@ -1900,15 +1912,33 @@ fn preserve_or_default_weapon_loadout(
     existing: Option<&HubPlayerLoadout>,
 ) -> (String, String, String, String) {
     if let Some(existing) = existing {
+        let main_hand = existing
+            .main_hand_item_def_id
+            .as_deref()
+            .unwrap_or_default();
+        let off_hand = existing.off_hand_item_def_id.as_deref().unwrap_or_default();
         if let Ok(valid) = validate_hub_weapon_loadout(
             primary_discipline_id,
-            existing
-                .main_hand_item_def_id
-                .as_deref()
-                .unwrap_or_default(),
+            main_hand,
             existing.main_hand_color_id.as_deref().unwrap_or_default(),
-            existing.off_hand_item_def_id.as_deref().unwrap_or_default(),
+            off_hand,
             existing.off_hand_color_id.as_deref().unwrap_or_default(),
+        ) {
+            return valid;
+        }
+
+        let migrated_main_color = weapon_spec(main_hand)
+            .map(|spec| normalize_authored_id(spec.default_color_id.as_str()))
+            .unwrap_or_default();
+        let migrated_off_color = weapon_spec(off_hand)
+            .map(|spec| normalize_authored_id(spec.default_color_id.as_str()))
+            .unwrap_or_default();
+        if let Ok(valid) = validate_hub_weapon_loadout(
+            primary_discipline_id,
+            main_hand,
+            migrated_main_color.as_str(),
+            off_hand,
+            migrated_off_color.as_str(),
         ) {
             return valid;
         }
@@ -2736,14 +2766,14 @@ mod tests {
             .iter()
             .map(|spec| spec.item_def_id.as_str())
             .collect();
-        assert_eq!(ids.len(), 127);
+        assert_eq!(ids.len(), 138);
         assert_eq!(
             catalog
                 .families
                 .iter()
                 .map(|family| family.variants.len())
                 .sum::<usize>(),
-            388
+            425
         );
         assert!(ids.contains("NH_FIST_1H_DOUBLECLAW"));
         assert!(ids.contains("NH_FIST_1H_METALPUNCH"));
@@ -2754,6 +2784,9 @@ mod tests {
             "TRAINING_SHIELD",
             "TRAINING_BOW",
             "NEWBIE_STAFF_01",
+            "NEWBIE_STAFF_02",
+            "NEWBIE_STAFF_03",
+            "NEWBIE_STAFF_04",
             "NEWBIE_DAGGER_PAIR_01",
             "NEWBIE_TWO_HAND_SWORD_01",
             "NEWBIE_ONE_HAND_SWORD_01",
@@ -2804,6 +2837,78 @@ mod tests {
                     String::new(),
                 )
             );
+        }
+
+        let legacy_staff_color_loadout = HubPlayerLoadout {
+            owner: Identity::ZERO,
+            primary_discipline_id: DISCIPLINE_BLIGHT.to_string(),
+            secondary_discipline_id_1: String::new(),
+            secondary_discipline_id_2: String::new(),
+            selected_ability_ids: Vec::new(),
+            armor_set_id: DEFAULT_HUB_ARMOR_SET.to_string(),
+            revision: 1,
+            updated_at: Timestamp::UNIX_EPOCH,
+            main_hand_item_def_id: Some("NEWBIE_STAFF_03".to_string()),
+            off_hand_item_def_id: None,
+            main_hand_color_id: Some("DEFAULT".to_string()),
+            off_hand_color_id: None,
+        };
+        assert_eq!(
+            preserve_or_default_weapon_loadout(
+                DISCIPLINE_BLIGHT,
+                Some(&legacy_staff_color_loadout)
+            ),
+            (
+                "NEWBIE_STAFF_03".to_string(),
+                "CL".to_string(),
+                String::new(),
+                String::new(),
+            )
+        );
+
+        let remapped_mage_staff_loadout = HubPlayerLoadout {
+            main_hand_item_def_id: Some("NEWBIE_STAFF_01".to_string()),
+            main_hand_color_id: Some("CL".to_string()),
+            ..legacy_staff_color_loadout.clone()
+        };
+        assert_eq!(
+            preserve_or_default_weapon_loadout(
+                DISCIPLINE_BLIGHT,
+                Some(&remapped_mage_staff_loadout)
+            ),
+            (
+                "NEWBIE_STAFF_01".to_string(),
+                "DEFAULT".to_string(),
+                String::new(),
+                String::new(),
+            ),
+            "the temporarily remapped staff selection must migrate back to the Mage Animation Pack staff"
+        );
+
+        let staff_specs: Vec<_> = catalog
+            .families
+            .iter()
+            .filter(|spec| normalize_authored_id(spec.weapon_kind.as_str()) == WEAPON_KIND_STAFF)
+            .collect();
+        assert_eq!(staff_specs.len(), 12);
+        assert_eq!(
+            staff_specs
+                .iter()
+                .map(|spec| spec.variants.len())
+                .sum::<usize>(),
+            38
+        );
+        for staff in staff_specs {
+            for variant in &staff.variants {
+                assert!(validate_hub_weapon_loadout(
+                    DISCIPLINE_BLIGHT,
+                    staff.item_def_id.as_str(),
+                    variant.color_id.as_str(),
+                    "",
+                    ""
+                )
+                .is_ok());
+            }
         }
 
         assert!(

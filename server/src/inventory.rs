@@ -7059,14 +7059,14 @@ mod tests {
     #[test]
     fn shared_weapon_appearance_catalog_groups_models_and_colors() {
         let catalog = parse_weapon_appearance_catalog().expect("shared weapon appearance catalog");
-        assert_eq!(catalog.families.len(), 127);
+        assert_eq!(catalog.families.len(), 138);
         assert_eq!(
             catalog
                 .families
                 .iter()
                 .map(|family| family.variants.len())
                 .sum::<usize>(),
-            388
+            425
         );
         let family_ids: std::collections::HashSet<_> = catalog
             .families
@@ -7080,6 +7080,9 @@ mod tests {
             "TRAINING_SHIELD",
             "TRAINING_BOW",
             "NEWBIE_STAFF_01",
+            "NEWBIE_STAFF_02",
+            "NEWBIE_STAFF_03",
+            "NEWBIE_STAFF_04",
             "NEWBIE_DAGGER_PAIR_01",
             "NEWBIE_TWO_HAND_SWORD_01",
             "NEWBIE_ONE_HAND_SWORD_01",
@@ -7093,6 +7096,22 @@ mod tests {
         }
         assert!(family_ids.contains("NH_FIST_1H_DOUBLECLAW"));
         assert!(family_ids.contains("NH_FIST_1H_METALPUNCH"));
+        let staff_families: Vec<_> = catalog
+            .families
+            .iter()
+            .filter(|family| normalize_id(family.weapon_kind.as_str()) == WEAPON_KIND_STAFF)
+            .collect();
+        assert_eq!(staff_families.len(), 12);
+        assert_eq!(
+            staff_families
+                .iter()
+                .map(|family| family.variants.len())
+                .sum::<usize>(),
+            38
+        );
+        assert!(staff_families
+            .iter()
+            .all(|family| combat_profile_for_weapon_family(family) == COMBAT_PROFILE_STAFF));
         assert!(catalog.families.iter().all(|family| {
             family.variants.iter().any(|variant| {
                 normalize_id(variant.color_id.as_str())

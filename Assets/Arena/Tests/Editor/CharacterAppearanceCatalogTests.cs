@@ -153,10 +153,18 @@ namespace Arena.Tests.Editor
             AssertWeaponPlacementProfile(visuals, "NEWBIE_BOW_01", "CL", "bow_stowed", 1);
             AssertWeaponPlacementProfile(visuals, "NEWBIE_BOW_01", "CL", "quiver", 0);
             AssertWeaponPlacementProfile(visuals, "NEWBIE_STAFF_01", "DEFAULT", "staff", 0);
+            AssertWeaponPlacementProfile(visuals, "NH_STAFF_NEWBIE_01", "CL", "staff", 1);
+            AssertWeaponPlacementProfile(visuals, "NH_STAFF_CLERIC", "BL", "staff", 1);
+            Assert.That(
+                visuals.Count(visual =>
+                    string.Equals(RequireField<string>(visual, "visualRoleId"), "staff", StringComparison.Ordinal)
+                    && Convert.ToInt32(RequireField<object>(visual, "placementProfile")) == 1),
+                Is.EqualTo(37),
+                "Every N-Hance staff variant must use the shared native-to-Mage staff-frame normalization.");
         }
 
         [Test]
-        public void NHanceWeaponPlacementProfile_UsesRoleAndStateSpecificNativeMounts()
+        public void NHanceWeaponPlacementProfile_UsesRoleSpecificMountsAndNormalizesStaffFrame()
         {
             Type profileType = RequireType("Arena.Presentation.Appearance.WeaponAppearancePlacementProfile");
             Type resolverType = RequireType("Arena.Presentation.WeaponAppearancePlacementResolver");
@@ -186,8 +194,13 @@ namespace Arena.Tests.Editor
             AssertResolvedPlacement(tryResolve, nativeProfile, "dagger_off", false, "nhance_hip_l");
             AssertResolvedPlacement(tryResolve, nativeProfile, "greatsword", true, "nhance_greatsword_hand");
             AssertResolvedPlacement(tryResolve, nativeProfile, "greatsword", false, "nhance_back_2hl");
-            AssertResolvedPlacement(tryResolve, nativeProfile, "staff", true, "nhance_staff_hand");
-            AssertResolvedPlacement(tryResolve, nativeProfile, "staff", false, "nhance_staff_stowed");
+            Quaternion staffFrameCorrection = new(-0.70710678f, 0f, 0f, 0.70710678f);
+            AssertResolvedPlacement(tryResolve, nativeProfile, "staff", true, "staff_hand", staffFrameCorrection);
+            AssertResolvedPlacement(tryResolve, nativeProfile, "staff", false, "staff_stowed", staffFrameCorrection);
+            Assert.That(
+                Vector3.Angle(staffFrameCorrection * Vector3.forward, Vector3.up),
+                Is.LessThan(0.001f),
+                "Raw N-Hance staff +Z must resolve to the Mage staff +Y shaft axis.");
             AssertResolvedPlacement(tryResolve, nativeProfile, "bow_drawn", true, "nhance_weapon_l");
             AssertResolvedPlacement(tryResolve, nativeProfile, "bow_drawn", false, "nhance_weapon_l");
             AssertResolvedPlacement(tryResolve, nativeProfile, "bow_stowed", true, "nhance_back_bow");
@@ -410,8 +423,6 @@ namespace Arena.Tests.Editor
                 AssertMountExists(archerMounts, "nhance_hip_r");
                 AssertMountExists(archerMounts, "nhance_hip_l");
                 AssertMountExists(archerMounts, "nhance_greatsword_hand");
-                AssertMountExists(archerMounts, "nhance_staff_hand");
-                AssertMountExists(archerMounts, "nhance_staff_stowed");
 
                 Transform nativeWeaponR = ResolveMount(archerMounts, "nhance_weapon_r");
                 Transform greatswordCorrection = ResolveMount(archerMounts, "nhance_greatsword_hand");
@@ -570,8 +581,6 @@ namespace Arena.Tests.Editor
             Assert.That((bool)tryGetMount.Invoke(mounts, mountArgs)!, Is.True, "Assembled avatars must expose a main-hand weapon mount.");
             AssertMountExists(mounts, "staff_hand");
             AssertMountExists(mounts, "staff_stowed");
-            AssertMountExists(mounts, "nhance_staff_hand");
-            AssertMountExists(mounts, "nhance_staff_stowed");
         }
 
         private static ScriptableObject LoadRequiredAsset(string assetPath, string typeName)
