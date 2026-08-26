@@ -20,8 +20,8 @@ a stable `animationId`, picker label/category, compatibility tags, and its exact
 - `HoldOnly`: hold Enter and Loop without a release clip.
 
 The catalog may reference any compatible humanoid animation. It is intentionally independent of
-weapon/combat profile, so Daggers can select a Mage or Staff-looking recipe. Selected old Magic
-Attacks animations also live in this catalog for sparing reuse.
+weapon/combat profile, so Daggers can select a Mage or Staff-looking recipe. The old Magic Attacks
+families are exposed as explicit, stable recipes rather than a raw library-driven picker.
 
 `Assets/Arena/Resources/SpellCastAnimationMap.asset` owns the global selection for each spell. New
 entries use `Catalog` plus an `animationId`. Existing entries may remain `LegacyMotion` while they
@@ -63,14 +63,19 @@ canonical presentation.
 
 ## Mage Animation Pack conventions
 
-The initial catalog exposes a reviewed subset rather than all imported clips:
+The Mage portion of the catalog exposes reviewed recipes rather than every imported Mage clip:
 
 - Projectile Cast 1 and 2
 - Aimed Cast
 - phased Skill Cast 1 and 2
 - single-shot Skill Cast 3, 4, and 5
 - Buff Cast
-- one retained legacy Direct Cast sequence
+
+The legacy Magic Attacks portion exposes all 13 concrete gestures: left/right recipes for the four
+one-handed families and one recipe for each of the five two-handed families. Every gesture has an
+exact `Instant`, `Charged`, and `Channel` recipe. These 39 recipes reuse the already-authored
+one-shot/load/cast triples; they do not change any spell mapping until selected in Spell Authoring.
+The original charged `LEGACY_DIRECT_CAST_2H_02` id remains stable for existing references.
 
 Single shots and sequence Start/End clips must be non-looping. Sequence Loop clips remain looping.
 Release/end clips retain `OnReleaseFrame`; use the animation event stamper to tune the physical
@@ -81,9 +86,9 @@ them:
 - `OnInstantCastStart`: optional startup trim for confirmed instant casts.
 - `OnLowerBodyUnlock` and `OnVisualInterruptible`: full-body recovery timing.
 
-The initial single-shot Mage recipes are tagged for instant and timed casts. Start/Loop/End recipes
-are tagged for timed casts only. Channel spells keep their legacy `HoldOnly` presentations until a
-channel-specific recipe is deliberately added; their lifecycle has no completed release/end phase.
+The initial single-shot Mage recipes are tagged for instant and timed casts. Mage Start/Loop/End
+recipes are tagged for their authored lifecycle. Legacy channel recipes use `HoldOnly`; their
+lifecycle has no completed release/end phase.
 
 ## Editor workflow
 
@@ -95,15 +100,17 @@ channel-specific recipe is deliberately added; their lifecycle has no completed 
 6. Stamp/tune animation events on the selected clips after visual review.
 7. Run Combat VFX validation and the editor/server gates.
 
-`FLAMING_ORB` is the migration pilot and currently selects `MAGE_PROJECTILE_CAST_02`. All other
-ordinary spells stay on `LegacyMotion` until they are deliberately handpicked in Spell Authoring.
+Existing spell mappings keep their current `Catalog`, `LegacyMotion`, `Fixed`, or `NoAnimation`
+assignment until they are deliberately changed in Spell Authoring. Adding a recipe alone never
+migrates a spell.
 
 ## Migration rules
 
 - Migrate one spell or tightly related group at a time.
 - Prefer the global recipe; overrides are exceptions, not a parallel assignment table.
 - Do not bulk-map spells by targeting type or semantic motion.
-- Do not expose the entire imported pack as a raw uncurated dropdown.
+- Do not expose imported clips as a raw library-driven dropdown. Promote complete, validated clip
+  graphs into stable recipes with explicit lifecycle, hand origin, and playback layer metadata.
 - Keep `SpellCastAnimationLibrary`, semantic motion bindings, and the composer only while legacy
   mappings still use them.
 - Delete a legacy motion/family only after no map entry resolves through it and validation/tests

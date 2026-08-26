@@ -175,7 +175,10 @@ namespace Arena.Tests.Editor
                     continue;
 
                 object?[] args = { "TEST_SPELL", Activator.CreateInstance(entryType) };
-                bool built = (bool)recipeType.GetMethod("TryBuild")!.Invoke(recipe, args)!;
+                MethodInfo tryBuild = recipeType.GetMethod(
+                    "TryBuild",
+                    new[] { typeof(string), entryType.MakeByRefType() })!;
+                bool built = (bool)tryBuild.Invoke(recipe, args)!;
                 Assert.That(built, Is.True, animationId);
                 return args[1]!;
             }
@@ -509,6 +512,80 @@ namespace Arena.Tests.Editor
             Assert.That(CatalogRecipeIsCompatibleWith("MAGE_SKILL_CAST_02", "Channel"), Is.True);
             Assert.That(CatalogRecipeIsCompatibleWith("MAGE_ULTIMATE_CAST_PHASED", "Channel"), Is.True);
             Assert.That(CatalogRecipeIsCompatibleWith("MAGE_COMBO_CAST_05_03", "Channel"), Is.True);
+        }
+
+        [Test]
+        public void LegacyCatalogRecipes_ExposeEveryConcreteGestureAndLifecycle()
+        {
+            Assert.That(CatalogRecipeCountWithPrefix("LEGACY_"), Is.EqualTo(39));
+
+            Type entryType = T("WeaponSpellAnimationEntry");
+            foreach ((string stem, string clipBase, string layer, string origin, bool keepsLegacyChargedId) in new[]
+                     {
+                         ("LEGACY_CALL_CAST_1H_01_L", "HumanM@MagicAttackCall1H01_L", "LeftGesture", "LeftHand", false),
+                         ("LEGACY_CALL_CAST_1H_01_R", "HumanM@MagicAttackCall1H01_R", "RightGesture", "RightHand", false),
+                         ("LEGACY_CALL_CAST_1H_02_L", "HumanM@MagicAttackCall1H02_L", "LeftGesture", "LeftHand", false),
+                         ("LEGACY_CALL_CAST_1H_02_R", "HumanM@MagicAttackCall1H02_R", "RightGesture", "RightHand", false),
+                         ("LEGACY_DIRECT_CAST_1H_01_L", "HumanM@MagicAttackDirect1H01_L", "LeftGesture", "LeftHand", false),
+                         ("LEGACY_DIRECT_CAST_1H_01_R", "HumanM@MagicAttackDirect1H01_R", "RightGesture", "RightHand", false),
+                         ("LEGACY_DIRECT_CAST_2H_01", "HumanM@MagicAttackDirect2H01", "UpperBody", "UseVfxCue", false),
+                         ("LEGACY_DIRECT_CAST_2H_02", "HumanM@MagicAttackDirect2H02", "UpperBody", "UseVfxCue", true),
+                         ("LEGACY_GROUND_CAST_01_L", "HumanM@MagicAttackGround01_L", "LeftGesture", "LeftHand", false),
+                         ("LEGACY_GROUND_CAST_01_R", "HumanM@MagicAttackGround01_R", "RightGesture", "RightHand", false),
+                         ("LEGACY_OMNI_CAST_01", "HumanM@MagicAttackOmni01", "UpperBody", "UseVfxCue", false),
+                         ("LEGACY_OMNI_CAST_02", "HumanM@MagicAttackOmni02", "UpperBody", "UseVfxCue", false),
+                         ("LEGACY_SPECIAL_CAST_01", "HumanM@SpecialMagicAttack01", "UpperBody", "UseVfxCue", false),
+                     })
+            {
+                string instantId = $"{stem}_INSTANT";
+                string chargedId = keepsLegacyChargedId ? stem : $"{stem}_CHARGED";
+                string channelId = $"{stem}_CHANNEL";
+
+                object instant = BuildCatalogRecipe(instantId);
+                Assert.That(PresentationMode(instant), Is.EqualTo("ReleaseOnly"), instantId);
+                Assert.That(Clip(instant)?.name, Is.EqualTo($"{clipBase} - Cast"), instantId);
+                Assert.That(HoldClip(instant, "enter"), Is.Null, instantId);
+                Assert.That(HoldClip(instant, "idleLoop"), Is.Null, instantId);
+                Assert.That(
+                    entryType.GetField("playbackLayer")!.GetValue(instant)!.ToString(),
+                    Is.EqualTo(layer),
+                    instantId);
+                Assert.That(
+                    entryType.GetField("castOrigin")!.GetValue(instant)!.ToString(),
+                    Is.EqualTo(origin),
+                    instantId);
+                Assert.That(CatalogRecipeIsCompatibleWith(instantId, "Instant"), Is.True, instantId);
+
+                object charged = BuildCatalogRecipe(chargedId);
+                Assert.That(PresentationMode(charged), Is.EqualTo("HoldThenRelease"), chargedId);
+                Assert.That(Clip(charged)?.name, Is.EqualTo($"{clipBase} - Cast"), chargedId);
+                Assert.That(HoldClip(charged, "enter")?.name, Is.EqualTo(clipBase), chargedId);
+                Assert.That(HoldClip(charged, "idleLoop")?.name, Is.EqualTo($"{clipBase} - Load"), chargedId);
+                Assert.That(
+                    entryType.GetField("playbackLayer")!.GetValue(charged)!.ToString(),
+                    Is.EqualTo(layer == "UpperBody" ? "UpperBodyWhileMoving" : layer),
+                    chargedId);
+                Assert.That(
+                    entryType.GetField("castOrigin")!.GetValue(charged)!.ToString(),
+                    Is.EqualTo(origin),
+                    chargedId);
+                Assert.That(CatalogRecipeIsCompatibleWith(chargedId, "Charged"), Is.True, chargedId);
+
+                object channel = BuildCatalogRecipe(channelId);
+                Assert.That(PresentationMode(channel), Is.EqualTo("HoldOnly"), channelId);
+                Assert.That(Clip(channel), Is.Null, channelId);
+                Assert.That(HoldClip(channel, "enter")?.name, Is.EqualTo(clipBase), channelId);
+                Assert.That(HoldClip(channel, "idleLoop")?.name, Is.EqualTo($"{clipBase} - Load"), channelId);
+                Assert.That(
+                    entryType.GetField("playbackLayer")!.GetValue(channel)!.ToString(),
+                    Is.EqualTo(layer),
+                    channelId);
+                Assert.That(
+                    entryType.GetField("castOrigin")!.GetValue(channel)!.ToString(),
+                    Is.EqualTo(origin),
+                    channelId);
+                Assert.That(CatalogRecipeIsCompatibleWith(channelId, "Channel"), Is.True, channelId);
+            }
         }
 
         [Test]
