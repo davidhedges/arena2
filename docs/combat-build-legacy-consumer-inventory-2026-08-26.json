@@ -31,6 +31,26 @@
       "canonical_catalog_projection": "server/src/progression_catalog.shared.json#combat_build_contract",
       "open_legacy_policy": "all legacy entries remain open unless already archived or not_present; Phase 1 added no runtime reader, writer, reducer, table, bootstrap field, generated schema, or UI path",
       "next_authorized_phase": null
+    },
+    "phase_2": {
+      "status": "complete",
+      "evidence": "docs/combat-build-progression-phase-2-evidence-2026-08-26.md",
+      "canonical_hub_writer": "hub-server/src/lib.rs::save_combat_build",
+      "canonical_hub_reader": "hub-server/src/lib.rs::my_combat_build",
+      "canonical_hub_state": [
+        "combat_build",
+        "combat_build_discipline",
+        "discipline_configuration",
+        "staff_school_selection",
+        "discipline_action_bar_assignment",
+        "discipline_passive_selection"
+      ],
+      "removed_legacy_writers": [
+        "save_hub_discipline_loadout",
+        "save_hub_weapon_loadout"
+      ],
+      "open_legacy_policy": "Phase 3 handoff still reads the positional HubPlayerLoadout compatibility row; it is not written by save_combat_build and remains open on the deletion ledger. Armor is separately scoped. No dual-write or runtime conversion adapter exists.",
+      "next_authorized_phase": null
     }
   },
   "entries": [

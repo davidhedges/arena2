@@ -39,6 +39,7 @@ HUB_QUERIES = [
     'SELECT * FROM "my_hub_player"',
     'SELECT * FROM "my_hub_loadout"',
     'SELECT * FROM "my_match_status"',
+    'SELECT * FROM "my_combat_build"',
 ]
 PVP_STATIC_TABLES = [
     "ability_catalog",

@@ -458,15 +458,13 @@ namespace Arena.Network
             string secondaryDisciplineId2,
             List<string> selectedAbilityIds)
         {
-            if (!IsReady || _conn == null)
-                return false;
-
-            _conn.Reducers.SaveHubDisciplineLoadout(
-                primaryDisciplineId,
-                secondaryDisciplineId1,
-                secondaryDisciplineId2,
-                selectedAbilityIds);
-            return true;
+            const string message =
+                "The legacy discipline editor can no longer save combat builds. "
+                + "Use the canonical combat-build editor.";
+            LastError = message;
+            DisciplineLoadoutSaveCompleted?.Invoke(false, message);
+            NotifyChanged();
+            return false;
         }
 
         internal bool SaveArmorSet(string armorSetId)
@@ -484,15 +482,13 @@ namespace Arena.Network
             string offHandItemDefId,
             string offHandColorId)
         {
-            if (!IsReady || _conn == null)
-                return false;
-
-            _conn.Reducers.SaveHubWeaponLoadout(
-                mainHandItemDefId,
-                mainHandColorId,
-                offHandItemDefId,
-                offHandColorId);
-            return true;
+            const string message =
+                "The legacy weapon editor can no longer save combat builds. "
+                + "Use the canonical combat-build editor.";
+            LastError = message;
+            WeaponLoadoutSaveCompleted?.Invoke(false, message);
+            NotifyChanged();
+            return false;
         }
 
         internal void CancelCurrentTicket()
@@ -555,9 +551,7 @@ namespace Arena.Network
             BindRows(conn);
             conn.Reducers.OnRequestUnranked2V2BotMatch += OnRequestMatchResult;
             conn.Reducers.OnRequestOpenWorldInstance += OnRequestOpenWorldInstanceResult;
-            conn.Reducers.OnSaveHubDisciplineLoadout += OnSaveDisciplineLoadoutResult;
             conn.Reducers.OnSaveHubArmorSet += OnSaveArmorSetResult;
-            conn.Reducers.OnSaveHubWeaponLoadout += OnSaveWeaponLoadoutResult;
             State = HubConnectionState.Subscribing;
             NotifyChanged();
             _subscription = conn
@@ -569,6 +563,7 @@ namespace Arena.Network
                     new Arena.HubDb.QueryBuilder().From.MyHubPlayer().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.MyMatchStatus().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.MyHubLoadout().ToSql(),
+                    new Arena.HubDb.QueryBuilder().From.MyCombatBuild().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.HubCombatDisciplineDefinition().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.HubAbilityDefinition().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.HubArmorSetDefinition().ToSql(),
@@ -703,9 +698,7 @@ namespace Arena.Network
             conn.Db.HubWeaponColorDefinition.OnDelete -= OnWeaponColorDelete;
             conn.Reducers.OnRequestUnranked2V2BotMatch -= OnRequestMatchResult;
             conn.Reducers.OnRequestOpenWorldInstance -= OnRequestOpenWorldInstanceResult;
-            conn.Reducers.OnSaveHubDisciplineLoadout -= OnSaveDisciplineLoadoutResult;
             conn.Reducers.OnSaveHubArmorSet -= OnSaveArmorSetResult;
-            conn.Reducers.OnSaveHubWeaponLoadout -= OnSaveWeaponLoadoutResult;
         }
 
         private void OnHubPlayerInsert(HubEventContext _, HubPlayerRow row) => ApplyPlayer(row);
@@ -966,22 +959,6 @@ namespace Arena.Network
             NotifyChanged();
         }
 
-        private void OnSaveDisciplineLoadoutResult(
-            HubReducerEventContext context,
-            string primaryDisciplineId,
-            string secondaryDisciplineId1,
-            string secondaryDisciplineId2,
-            List<string> selectedAbilityIds)
-        {
-            if (!_hasIdentity || context.Event.CallerIdentity != _identity)
-                return;
-
-            bool committed = context.Event.Status is Status.Committed;
-            DisciplineLoadoutSaveCompleted?.Invoke(
-                committed,
-                ReducerFailureMessage(context.Event.Status, "The Hub did not save the discipline loadout."));
-        }
-
         private void OnSaveArmorSetResult(HubReducerEventContext context, string armorSetId)
         {
             if (!_hasIdentity || context.Event.CallerIdentity != _identity)
@@ -991,22 +968,6 @@ namespace Arena.Network
             ArmorSetSaveCompleted?.Invoke(
                 committed,
                 ReducerFailureMessage(context.Event.Status, "The Hub did not save the armor set."));
-        }
-
-        private void OnSaveWeaponLoadoutResult(
-            HubReducerEventContext context,
-            string mainHandItemDefId,
-            string mainHandColorId,
-            string offHandItemDefId,
-            string offHandColorId)
-        {
-            if (!_hasIdentity || context.Event.CallerIdentity != _identity)
-                return;
-
-            bool committed = context.Event.Status is Status.Committed;
-            WeaponLoadoutSaveCompleted?.Invoke(
-                committed,
-                ReducerFailureMessage(context.Event.Status, "The Hub did not save the weapon loadout."));
         }
 
         private static string ReducerFailureMessage(Status status, string fallback)

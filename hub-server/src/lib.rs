@@ -13,6 +13,18 @@ use spacetimedb::{
     ViewContext,
 };
 
+#[path = "../../server/src/combat_build.rs"]
+#[allow(dead_code)]
+mod combat_build_contract;
+
+use combat_build_contract::{
+    CombatBuildCatalog, CombatBuildDraft,
+    DisciplineActionBarAssignment as ContractActionAssignment,
+    DisciplineConfiguration as ContractDisciplineConfiguration,
+    DisciplineWeaponConfiguration as ContractWeaponConfiguration,
+    SelectedCombatDiscipline as ContractSelectedDiscipline, ValidatedCombatBuild,
+};
+
 const SERVICE_CONFIG_ID: u8 = 0;
 const PROVISIONER_WAKEUP_ID: u8 = 0;
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(60);
@@ -121,9 +133,9 @@ pub struct HubPlayer {
     pub updated_at: Timestamp,
 }
 
-/// Durable build selection. Item instances and simulation state deliberately
-/// stay out of the Hub; equipment choices are stable authored definition ids
-/// that the disposable match resolves to fresh item instances.
+/// Legacy Phase 3 handoff state. Combat-build edits no longer write this row;
+/// it remains immutable except for the separately scoped armor selection and
+/// catalog reconciliation until the structured ticket snapshot replaces it.
 #[table(accessor = hub_player_loadout)]
 #[derive(Clone)]
 pub struct HubPlayerLoadout {
@@ -144,6 +156,77 @@ pub struct HubPlayerLoadout {
     pub main_hand_color_id: Option<String>,
     #[default(None::<String>)]
     pub off_hand_color_id: Option<String>,
+}
+
+/// Canonical durable combat-build root. Child rows hold every selected and
+/// dormant discipline configuration; only `save_combat_build` may replace
+/// this aggregate.
+#[table(accessor = combat_build)]
+#[derive(Clone, PartialEq)]
+pub struct CombatBuild {
+    #[primary_key]
+    pub owner: Identity,
+    pub starting_discipline_id: Option<String>,
+    pub revision: u64,
+    pub updated_at: Timestamp,
+}
+
+#[table(accessor = combat_build_discipline)]
+#[derive(Clone, PartialEq)]
+pub struct CombatBuildDiscipline {
+    #[primary_key]
+    pub build_slot_key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub slot_index: u8,
+    pub combat_discipline_id: String,
+}
+
+#[table(accessor = discipline_configuration)]
+#[derive(Clone, PartialEq)]
+pub struct DisciplineConfiguration {
+    #[primary_key]
+    pub owner_discipline_key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub combat_discipline_id: String,
+    pub main_hand_item_def_id: String,
+    pub main_hand_color_id: String,
+    pub off_hand_item_def_id: String,
+    pub off_hand_color_id: String,
+}
+
+#[table(accessor = staff_school_selection)]
+#[derive(Clone, PartialEq)]
+pub struct StaffSchoolSelection {
+    #[primary_key]
+    pub owner_school_key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub spell_school_id: String,
+}
+
+#[table(accessor = discipline_action_bar_assignment)]
+#[derive(Clone, PartialEq)]
+pub struct DisciplineActionBarAssignment {
+    #[primary_key]
+    pub owner_discipline_slot_key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub combat_discipline_id: String,
+    pub action_slot: String,
+    pub ability_id: String,
+}
+
+#[table(accessor = discipline_passive_selection)]
+#[derive(Clone, PartialEq)]
+pub struct DisciplinePassiveSelection {
+    #[primary_key]
+    pub owner_discipline_ability_key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub combat_discipline_id: String,
+    pub ability_id: String,
 }
 
 /// Prevents every Hub connection from reparsing and rescanning the authored
@@ -323,7 +406,8 @@ pub struct MyHubPlayer {
     pub updated_at: Timestamp,
 }
 
-/// Public projection of only the caller's durable build selection.
+/// Legacy caller-only positional projection retained for the Phase 3 handoff.
+/// It is not a reader for the canonical combat-build aggregate.
 #[derive(SpacetimeType)]
 pub struct MyHubLoadout {
     pub owner: Identity,
@@ -337,6 +421,56 @@ pub struct MyHubLoadout {
     pub main_hand_color_id: String,
     pub off_hand_color_id: String,
     pub revision: u64,
+    pub updated_at: Timestamp,
+}
+
+/// Typed wire draft for the single canonical combat-build save reducer. These
+/// DTOs contain no validation rules; they adapt generated clients to the one
+/// pure contract validator shared from `server/src/combat_build.rs`.
+#[derive(Clone, SpacetimeType)]
+pub struct CombatBuildSelectedDisciplineInput {
+    pub slot_index: u8,
+    pub combat_discipline_id: String,
+}
+
+#[derive(Clone, SpacetimeType)]
+pub struct CombatBuildWeaponInput {
+    pub main_hand_item_def_id: String,
+    pub main_hand_color_id: String,
+    pub off_hand_item_def_id: String,
+    pub off_hand_color_id: String,
+}
+
+#[derive(Clone, SpacetimeType)]
+pub struct CombatBuildActionAssignmentInput {
+    pub action_slot: String,
+    pub ability_id: String,
+}
+
+#[derive(Clone, SpacetimeType)]
+pub struct CombatBuildDisciplineConfigurationInput {
+    pub combat_discipline_id: String,
+    pub weapon: CombatBuildWeaponInput,
+    pub staff_school_ids: Vec<String>,
+    pub active_assignments: Vec<CombatBuildActionAssignmentInput>,
+    pub passive_ability_ids: Vec<String>,
+}
+
+#[derive(Clone, SpacetimeType)]
+pub struct CombatBuildDraftInput {
+    pub revision: u64,
+    pub starting_discipline_id: Option<String>,
+    pub selected_disciplines: Vec<CombatBuildSelectedDisciplineInput>,
+    pub discipline_configurations: Vec<CombatBuildDisciplineConfigurationInput>,
+}
+
+#[derive(SpacetimeType)]
+pub struct MyCombatBuild {
+    pub owner: Identity,
+    pub starting_discipline_id: Option<String>,
+    pub revision: u64,
+    pub selected_disciplines: Vec<CombatBuildSelectedDisciplineInput>,
+    pub discipline_configurations: Vec<CombatBuildDisciplineConfigurationInput>,
     pub updated_at: Timestamp,
 }
 
@@ -400,6 +534,108 @@ pub fn my_hub_loadout(ctx: &ViewContext) -> Option<MyHubLoadout> {
             revision: loadout.revision,
             updated_at: loadout.updated_at,
         })
+}
+
+#[view(accessor = my_combat_build, public)]
+pub fn my_combat_build(ctx: &ViewContext) -> Option<MyCombatBuild> {
+    let build = ctx.db.combat_build().owner().find(ctx.sender())?;
+
+    let mut selected_disciplines: Vec<_> = ctx
+        .db
+        .combat_build_discipline()
+        .owner()
+        .filter(ctx.sender())
+        .map(|row| CombatBuildSelectedDisciplineInput {
+            slot_index: row.slot_index,
+            combat_discipline_id: row.combat_discipline_id,
+        })
+        .collect();
+    selected_disciplines.sort_by_key(|row| row.slot_index);
+
+    let mut staff_school_ids: Vec<_> = ctx
+        .db
+        .staff_school_selection()
+        .owner()
+        .filter(ctx.sender())
+        .map(|row| row.spell_school_id)
+        .collect();
+    staff_school_ids.sort();
+
+    let mut assignments_by_discipline: HashMap<String, Vec<_>> = HashMap::new();
+    for row in ctx
+        .db
+        .discipline_action_bar_assignment()
+        .owner()
+        .filter(ctx.sender())
+    {
+        assignments_by_discipline
+            .entry(row.combat_discipline_id)
+            .or_default()
+            .push(CombatBuildActionAssignmentInput {
+                action_slot: row.action_slot,
+                ability_id: row.ability_id,
+            });
+    }
+    for assignments in assignments_by_discipline.values_mut() {
+        assignments.sort_by(|left, right| left.action_slot.cmp(&right.action_slot));
+    }
+
+    let mut passives_by_discipline: HashMap<String, Vec<_>> = HashMap::new();
+    for row in ctx
+        .db
+        .discipline_passive_selection()
+        .owner()
+        .filter(ctx.sender())
+    {
+        passives_by_discipline
+            .entry(row.combat_discipline_id)
+            .or_default()
+            .push(row.ability_id);
+    }
+    for passives in passives_by_discipline.values_mut() {
+        passives.sort();
+    }
+
+    let mut discipline_configurations: Vec<_> = ctx
+        .db
+        .discipline_configuration()
+        .owner()
+        .filter(ctx.sender())
+        .map(|row| {
+            let combat_discipline_id = row.combat_discipline_id;
+            CombatBuildDisciplineConfigurationInput {
+                staff_school_ids: if combat_discipline_id == "STAFF" {
+                    staff_school_ids.clone()
+                } else {
+                    Vec::new()
+                },
+                active_assignments: assignments_by_discipline
+                    .remove(combat_discipline_id.as_str())
+                    .unwrap_or_default(),
+                passive_ability_ids: passives_by_discipline
+                    .remove(combat_discipline_id.as_str())
+                    .unwrap_or_default(),
+                combat_discipline_id,
+                weapon: CombatBuildWeaponInput {
+                    main_hand_item_def_id: row.main_hand_item_def_id,
+                    main_hand_color_id: row.main_hand_color_id,
+                    off_hand_item_def_id: row.off_hand_item_def_id,
+                    off_hand_color_id: row.off_hand_color_id,
+                },
+            }
+        })
+        .collect();
+    discipline_configurations
+        .sort_by(|left, right| left.combat_discipline_id.cmp(&right.combat_discipline_id));
+
+    Some(MyCombatBuild {
+        owner: build.owner,
+        starting_discipline_id: build.starting_discipline_id,
+        revision: build.revision,
+        selected_disciplines,
+        discipline_configurations,
+        updated_at: build.updated_at,
+    })
 }
 
 #[view(accessor = my_match_status, public)]
@@ -483,50 +719,30 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     // whose existing databases do not rerun init.
     ensure_hub_loadout_catalogs(ctx)?;
     ensure_default_hub_player_loadout(ctx, ctx.sender())?;
+    ensure_default_combat_build(ctx, ctx.sender())?;
     Ok(())
 }
 
 #[reducer]
-pub fn save_hub_discipline_loadout(
-    ctx: &ReducerContext,
-    primary_discipline_id: String,
-    secondary_discipline_id_1: String,
-    secondary_discipline_id_2: String,
-    selected_ability_ids: Vec<String>,
-) -> Result<(), String> {
+pub fn save_combat_build(ctx: &ReducerContext, draft: CombatBuildDraftInput) -> Result<(), String> {
     ensure_hub_player(ctx, ctx.sender());
-    let (primary, secondary_1, secondary_2, abilities) = validate_hub_discipline_loadout(
-        ctx,
-        primary_discipline_id,
-        secondary_discipline_id_1,
-        secondary_discipline_id_2,
-        selected_ability_ids,
-    )?;
-    let existing = ctx.db.hub_player_loadout().owner().find(ctx.sender());
-    let (main_hand_item_def_id, main_hand_color_id, off_hand_item_def_id, off_hand_color_id) =
-        preserve_or_default_weapon_loadout(primary.as_str(), existing.as_ref());
-    let row = HubPlayerLoadout {
-        owner: ctx.sender(),
-        primary_discipline_id: primary,
-        secondary_discipline_id_1: secondary_1,
-        secondary_discipline_id_2: secondary_2,
-        selected_ability_ids: abilities,
-        armor_set_id: existing
-            .as_ref()
-            .map(|loadout| loadout.armor_set_id.clone())
-            .unwrap_or_default(),
-        main_hand_item_def_id: Some(main_hand_item_def_id),
-        off_hand_item_def_id: Some(off_hand_item_def_id),
-        main_hand_color_id: Some(main_hand_color_id),
-        off_hand_color_id: Some(off_hand_color_id),
-        revision: next_loadout_revision(existing.as_ref().map(|loadout| loadout.revision)),
-        updated_at: ctx.timestamp,
-    };
-    if existing.is_some() {
-        ctx.db.hub_player_loadout().owner().update(row);
-    } else {
-        ctx.db.hub_player_loadout().insert(row);
-    }
+    let expected_revision = ctx
+        .db
+        .combat_build()
+        .owner()
+        .find(ctx.sender())
+        .ok_or_else(|| {
+            "COMBAT_BUILD_NOT_INITIALIZED: caller has no canonical combat build".to_string()
+        })?
+        .revision;
+    let starting_discipline_id = draft.starting_discipline_id.clone();
+    let contract_draft = contract_draft_from_input(draft);
+    let catalog = CombatBuildCatalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_CATALOG_INVALID: {error}"))?;
+    let validated = catalog
+        .validate_draft(&contract_draft, expected_revision)
+        .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
+    replace_combat_build(ctx, ctx.sender(), starting_discipline_id, validated);
     Ok(())
 }
 
@@ -583,55 +799,6 @@ pub fn save_hub_armor_set(ctx: &ReducerContext, armor_set_id: String) -> Result<
     } else {
         ctx.db.hub_player_loadout().insert(row);
     }
-    Ok(())
-}
-
-#[reducer]
-pub fn save_hub_weapon_loadout(
-    ctx: &ReducerContext,
-    main_hand_item_def_id: String,
-    main_hand_color_id: String,
-    off_hand_item_def_id: String,
-    off_hand_color_id: String,
-) -> Result<(), String> {
-    ensure_hub_player(ctx, ctx.sender());
-    let existing = ctx
-        .db
-        .hub_player_loadout()
-        .owner()
-        .find(ctx.sender())
-        .ok_or_else(|| "save a primary discipline before equipping weapons".to_string())?;
-    let (main_hand_item_def_id, main_hand_color_id, off_hand_item_def_id, off_hand_color_id) =
-        validate_hub_weapon_loadout(
-            existing.primary_discipline_id.as_str(),
-            main_hand_item_def_id.as_str(),
-            main_hand_color_id.as_str(),
-            off_hand_item_def_id.as_str(),
-            off_hand_color_id.as_str(),
-        )?;
-    if existing.main_hand_item_def_id.as_deref() == Some(main_hand_item_def_id.as_str())
-        && existing.off_hand_item_def_id.as_deref() == Some(off_hand_item_def_id.as_str())
-        && existing.main_hand_color_id.as_deref() == Some(main_hand_color_id.as_str())
-        && existing.off_hand_color_id.as_deref() == Some(off_hand_color_id.as_str())
-    {
-        return Ok(());
-    }
-
-    let row = HubPlayerLoadout {
-        owner: existing.owner,
-        primary_discipline_id: existing.primary_discipline_id,
-        secondary_discipline_id_1: existing.secondary_discipline_id_1,
-        secondary_discipline_id_2: existing.secondary_discipline_id_2,
-        selected_ability_ids: existing.selected_ability_ids,
-        armor_set_id: existing.armor_set_id,
-        main_hand_item_def_id: Some(main_hand_item_def_id),
-        off_hand_item_def_id: Some(off_hand_item_def_id),
-        main_hand_color_id: Some(main_hand_color_id),
-        off_hand_color_id: Some(off_hand_color_id),
-        revision: next_loadout_revision(Some(existing.revision)),
-        updated_at: ctx.timestamp,
-    };
-    ctx.db.hub_player_loadout().owner().update(row);
     Ok(())
 }
 
@@ -1908,45 +2075,6 @@ fn validate_hub_weapon_loadout(
     Ok((main_hand, main_color, String::new(), String::new()))
 }
 
-fn preserve_or_default_weapon_loadout(
-    primary_discipline_id: &str,
-    existing: Option<&HubPlayerLoadout>,
-) -> (String, String, String, String) {
-    if let Some(existing) = existing {
-        let main_hand = existing
-            .main_hand_item_def_id
-            .as_deref()
-            .unwrap_or_default();
-        let off_hand = existing.off_hand_item_def_id.as_deref().unwrap_or_default();
-        if let Ok(valid) = validate_hub_weapon_loadout(
-            primary_discipline_id,
-            main_hand,
-            existing.main_hand_color_id.as_deref().unwrap_or_default(),
-            off_hand,
-            existing.off_hand_color_id.as_deref().unwrap_or_default(),
-        ) {
-            return valid;
-        }
-
-        let migrated_main_color = weapon_spec(main_hand)
-            .map(|spec| normalize_authored_id(spec.default_color_id.as_str()))
-            .unwrap_or_default();
-        let migrated_off_color = weapon_spec(off_hand)
-            .map(|spec| normalize_authored_id(spec.default_color_id.as_str()))
-            .unwrap_or_default();
-        if let Ok(valid) = validate_hub_weapon_loadout(
-            primary_discipline_id,
-            main_hand,
-            migrated_main_color.as_str(),
-            off_hand,
-            migrated_off_color.as_str(),
-        ) {
-            return valid;
-        }
-    }
-    default_weapon_loadout(primary_discipline_id)
-}
-
 fn validate_hub_discipline_loadout(
     ctx: &ReducerContext,
     primary_discipline_id: String,
@@ -2129,6 +2257,254 @@ fn ensure_hub_player(ctx: &ReducerContext, identity: Identity) {
         created_at: ctx.timestamp,
         updated_at: ctx.timestamp,
     });
+}
+
+fn contract_draft_from_input(draft: CombatBuildDraftInput) -> CombatBuildDraft {
+    CombatBuildDraft {
+        revision: draft.revision,
+        starting_discipline_id: draft.starting_discipline_id,
+        selected_disciplines: draft
+            .selected_disciplines
+            .into_iter()
+            .map(|selected| ContractSelectedDiscipline {
+                slot_index: selected.slot_index,
+                combat_discipline_id: selected.combat_discipline_id,
+            })
+            .collect(),
+        discipline_configurations: draft
+            .discipline_configurations
+            .into_iter()
+            .map(|configuration| ContractDisciplineConfiguration {
+                combat_discipline_id: configuration.combat_discipline_id,
+                weapon: ContractWeaponConfiguration {
+                    main_hand_item_def_id: configuration.weapon.main_hand_item_def_id,
+                    main_hand_color_id: configuration.weapon.main_hand_color_id,
+                    off_hand_item_def_id: configuration.weapon.off_hand_item_def_id,
+                    off_hand_color_id: configuration.weapon.off_hand_color_id,
+                },
+                staff_school_ids: configuration.staff_school_ids,
+                active_assignments: configuration
+                    .active_assignments
+                    .into_iter()
+                    .map(|assignment| ContractActionAssignment {
+                        action_slot: assignment.action_slot,
+                        ability_id: assignment.ability_id,
+                    })
+                    .collect(),
+                passive_ability_ids: configuration.passive_ability_ids,
+            })
+            .collect(),
+    }
+}
+
+fn default_combat_build_draft() -> CombatBuildDraft {
+    CombatBuildDraft {
+        revision: 0,
+        starting_discipline_id: None,
+        selected_disciplines: vec![ContractSelectedDiscipline {
+            slot_index: 0,
+            combat_discipline_id: "DAGGERS".to_string(),
+        }],
+        discipline_configurations: vec![ContractDisciplineConfiguration {
+            combat_discipline_id: "DAGGERS".to_string(),
+            weapon: ContractWeaponConfiguration {
+                main_hand_item_def_id: "TRAINING_DAGGER_PAIR".to_string(),
+                main_hand_color_id: String::new(),
+                off_hand_item_def_id: String::new(),
+                off_hand_color_id: String::new(),
+            },
+            staff_school_ids: Vec::new(),
+            active_assignments: vec![ContractActionAssignment {
+                action_slot: "slot_0_0".to_string(),
+                ability_id: "DAGGER_QUICK_CUT".to_string(),
+            }],
+            passive_ability_ids: Vec::new(),
+        }],
+    }
+}
+
+fn ensure_default_combat_build(ctx: &ReducerContext, identity: Identity) -> Result<(), String> {
+    if ctx.db.combat_build().owner().find(identity).is_some() {
+        return Ok(());
+    }
+
+    let catalog = CombatBuildCatalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_CATALOG_INVALID: {error}"))?;
+    let default_draft = default_combat_build_draft();
+    let validated = catalog
+        .validate_draft(&default_draft, 0)
+        .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
+    replace_combat_build(ctx, identity, None, validated);
+    Ok(())
+}
+
+fn replace_combat_build(
+    ctx: &ReducerContext,
+    owner: Identity,
+    starting_discipline_id: Option<String>,
+    validated: ValidatedCombatBuild,
+) {
+    delete_combat_build_children(ctx, owner);
+
+    let revision = validated.snapshot.revision.saturating_add(1);
+    let build = CombatBuild {
+        owner,
+        starting_discipline_id,
+        revision,
+        updated_at: ctx.timestamp,
+    };
+    if ctx.db.combat_build().owner().find(owner).is_some() {
+        ctx.db.combat_build().owner().update(build);
+    } else {
+        ctx.db.combat_build().insert(build);
+    }
+
+    for selected in validated.snapshot.selected_disciplines {
+        ctx.db
+            .combat_build_discipline()
+            .insert(CombatBuildDiscipline {
+                build_slot_key: combat_build_key(
+                    owner,
+                    &[selected.slot_index.to_string().as_str()],
+                ),
+                owner,
+                slot_index: selected.slot_index,
+                combat_discipline_id: selected.combat_discipline_id,
+            });
+    }
+
+    for configuration in validated.snapshot.discipline_configurations {
+        let discipline_id = configuration.combat_discipline_id;
+        ctx.db
+            .discipline_configuration()
+            .insert(DisciplineConfiguration {
+                owner_discipline_key: combat_build_key(owner, &[discipline_id.as_str()]),
+                owner,
+                combat_discipline_id: discipline_id.clone(),
+                main_hand_item_def_id: configuration.weapon.main_hand_item_def_id,
+                main_hand_color_id: configuration.weapon.main_hand_color_id,
+                off_hand_item_def_id: configuration.weapon.off_hand_item_def_id,
+                off_hand_color_id: configuration.weapon.off_hand_color_id,
+            });
+
+        for school_id in configuration.staff_school_ids {
+            ctx.db
+                .staff_school_selection()
+                .insert(StaffSchoolSelection {
+                    owner_school_key: combat_build_key(owner, &[school_id.as_str()]),
+                    owner,
+                    spell_school_id: school_id,
+                });
+        }
+        for assignment in configuration.active_assignments {
+            ctx.db
+                .discipline_action_bar_assignment()
+                .insert(DisciplineActionBarAssignment {
+                    owner_discipline_slot_key: combat_build_key(
+                        owner,
+                        &[discipline_id.as_str(), assignment.action_slot.as_str()],
+                    ),
+                    owner,
+                    combat_discipline_id: discipline_id.clone(),
+                    action_slot: assignment.action_slot,
+                    ability_id: assignment.ability_id,
+                });
+        }
+        for ability_id in configuration.passive_ability_ids {
+            ctx.db
+                .discipline_passive_selection()
+                .insert(DisciplinePassiveSelection {
+                    owner_discipline_ability_key: combat_build_key(
+                        owner,
+                        &[discipline_id.as_str(), ability_id.as_str()],
+                    ),
+                    owner,
+                    combat_discipline_id: discipline_id.clone(),
+                    ability_id,
+                });
+        }
+    }
+}
+
+fn delete_combat_build_children(ctx: &ReducerContext, owner: Identity) {
+    let build_slot_keys: Vec<_> = ctx
+        .db
+        .combat_build_discipline()
+        .owner()
+        .filter(owner)
+        .map(|row| row.build_slot_key)
+        .collect();
+    for key in build_slot_keys {
+        ctx.db
+            .combat_build_discipline()
+            .build_slot_key()
+            .delete(key);
+    }
+
+    let configuration_keys: Vec<_> = ctx
+        .db
+        .discipline_configuration()
+        .owner()
+        .filter(owner)
+        .map(|row| row.owner_discipline_key)
+        .collect();
+    for key in configuration_keys {
+        ctx.db
+            .discipline_configuration()
+            .owner_discipline_key()
+            .delete(key);
+    }
+
+    let school_keys: Vec<_> = ctx
+        .db
+        .staff_school_selection()
+        .owner()
+        .filter(owner)
+        .map(|row| row.owner_school_key)
+        .collect();
+    for key in school_keys {
+        ctx.db
+            .staff_school_selection()
+            .owner_school_key()
+            .delete(key);
+    }
+
+    let assignment_keys: Vec<_> = ctx
+        .db
+        .discipline_action_bar_assignment()
+        .owner()
+        .filter(owner)
+        .map(|row| row.owner_discipline_slot_key)
+        .collect();
+    for key in assignment_keys {
+        ctx.db
+            .discipline_action_bar_assignment()
+            .owner_discipline_slot_key()
+            .delete(key);
+    }
+
+    let passive_keys: Vec<_> = ctx
+        .db
+        .discipline_passive_selection()
+        .owner()
+        .filter(owner)
+        .map(|row| row.owner_discipline_ability_key)
+        .collect();
+    for key in passive_keys {
+        ctx.db
+            .discipline_passive_selection()
+            .owner_discipline_ability_key()
+            .delete(key);
+    }
+}
+
+fn combat_build_key(owner: Identity, parts: &[&str]) -> String {
+    let mut key = owner.to_hex().to_string();
+    for part in parts {
+        key.push(':');
+        key.push_str(part);
+    }
+    key
 }
 
 fn ensure_default_hub_player_loadout(
@@ -2684,6 +3060,34 @@ mod tests {
     }
 
     #[test]
+    fn canonical_combat_build_default_is_deterministic_and_validator_owned() {
+        let draft = default_combat_build_draft();
+        let catalog = CombatBuildCatalog::from_shared_catalogs().expect("canonical catalogs");
+        let validated = catalog
+            .validate_draft(&draft, 0)
+            .expect("canonical default must pass the production validator");
+
+        assert_eq!(validated.active_count, 1);
+        assert_eq!(validated.passive_count, 0);
+        assert_eq!(validated.snapshot.starting_discipline_id, "DAGGERS");
+        assert_eq!(validated.snapshot.selected_disciplines.len(), 1);
+        assert_eq!(
+            validated.snapshot.selected_disciplines[0].combat_discipline_id,
+            "DAGGERS"
+        );
+        assert_eq!(
+            validated.snapshot.discipline_configurations[0]
+                .weapon
+                .main_hand_item_def_id,
+            "TRAINING_DAGGER_PAIR"
+        );
+        assert_eq!(
+            validated.snapshot.discipline_configurations[0].active_assignments[0].ability_id,
+            "DAGGER_QUICK_CUT"
+        );
+    }
+
+    #[test]
     fn default_hub_loadout_matches_the_existing_ui_starter_selection() {
         assert_eq!(
             default_hub_selected_ability_ids().expect("canonical Hub starter abilities"),
@@ -2839,52 +3243,6 @@ mod tests {
                 )
             );
         }
-
-        let legacy_staff_color_loadout = HubPlayerLoadout {
-            owner: Identity::ZERO,
-            primary_discipline_id: DISCIPLINE_BLIGHT.to_string(),
-            secondary_discipline_id_1: String::new(),
-            secondary_discipline_id_2: String::new(),
-            selected_ability_ids: Vec::new(),
-            armor_set_id: DEFAULT_HUB_ARMOR_SET.to_string(),
-            revision: 1,
-            updated_at: Timestamp::UNIX_EPOCH,
-            main_hand_item_def_id: Some("NEWBIE_STAFF_03".to_string()),
-            off_hand_item_def_id: None,
-            main_hand_color_id: Some("DEFAULT".to_string()),
-            off_hand_color_id: None,
-        };
-        assert_eq!(
-            preserve_or_default_weapon_loadout(
-                DISCIPLINE_BLIGHT,
-                Some(&legacy_staff_color_loadout)
-            ),
-            (
-                "NEWBIE_STAFF_03".to_string(),
-                "CL".to_string(),
-                String::new(),
-                String::new(),
-            )
-        );
-
-        let remapped_mage_staff_loadout = HubPlayerLoadout {
-            main_hand_item_def_id: Some("NEWBIE_STAFF_01".to_string()),
-            main_hand_color_id: Some("CL".to_string()),
-            ..legacy_staff_color_loadout.clone()
-        };
-        assert_eq!(
-            preserve_or_default_weapon_loadout(
-                DISCIPLINE_BLIGHT,
-                Some(&remapped_mage_staff_loadout)
-            ),
-            (
-                "NEWBIE_STAFF_01".to_string(),
-                "DEFAULT".to_string(),
-                String::new(),
-                String::new(),
-            ),
-            "the temporarily remapped staff selection must migrate back to the Mage Animation Pack staff"
-        );
 
         let staff_specs: Vec<_> = catalog
             .families

@@ -2,11 +2,13 @@
 
 Date: 2026-08-26
 
-Status: **PHASE 1 COMPLETE — the canonical catalog projection, ability/weapon
-ownership metadata, shared rules, typed draft/snapshot contract, pure
-validator, exhaustive catalog validation, and Phase 1 verification gates are
-complete. Phase 2 and later implementation are not authorized by this
-document; each requires explicit approval.**
+Status: **PHASE 2 COMPLETE — the canonical catalog/validator and the persistent
+Hub combat-build aggregate are live locally. One revision-checked atomic
+`save_combat_build` reducer is the only Hub combat-build writer; the single
+caller-filtered `my_combat_build` aggregate view and regenerated bindings expose
+the canonical state. Phase 3 and later
+implementation are not authorized by this document; each requires explicit
+approval.**
 
 ## 1. Goal
 
@@ -447,7 +449,7 @@ Deliverables:
 - deterministic defaults using canonical IDs;
 - per-discipline weapon validation and dormant-configuration persistence;
 - Staff school persistence; and
-- caller-filtered Hub subscriptions plus regenerated Hub bindings.
+- one caller-filtered Hub aggregate subscription plus regenerated Hub bindings.
 
 Legacy Hub write reducers become unavailable in the same release. A temporary
 read adapter is permitted only inside an explicitly named migration build and
@@ -455,6 +457,23 @@ must be on the deletion ledger; there is no dual-write period.
 
 Exit gate: save/reload, stale-revision rejection, invalid-draft rollback,
 dormant remove/re-add, and weapon-per-discipline tests pass against Hub state.
+
+Phase 2 completion: **PASS on 2026-08-26.** The Hub now stores the canonical
+build in one root plus selected-discipline, discipline-configuration, Staff
+school, action-assignment, and passive-selection child tables. The sole
+`save_combat_build` reducer consumes one typed draft, checks the saved revision,
+and invokes the exact Phase 1 validator source before replacing any rows in the
+reducer transaction. The legacy discipline and weapon save reducers and their
+generated bindings are removed; the single `my_combat_build` view returns the
+complete nested caller-owned aggregate, and no public child view remains. There
+is no dual-write or runtime converter.
+The positional `HubPlayerLoadout` remains read-only combat staging solely for
+the still-unmodified Phase 3 ticket handoff (armor continues to be a separate
+setting). A live anonymous Hub probe passed deterministic default, save/reload,
+stale-revision, invalid rollback, dormant remove/re-add, Staff-school, and
+per-discipline weapon checks. Detailed commands, residual-ledger classification,
+and publish evidence are in
+`docs/combat-build-progression-phase-2-evidence-2026-08-26.md`.
 
 ### Phase 3 — frozen snapshot, provisioner, and match materialization
 

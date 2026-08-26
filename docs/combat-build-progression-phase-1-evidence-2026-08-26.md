@@ -2,9 +2,13 @@
 
 Date: 2026-08-26
 
+Historical checkpoint: this document records the repository when Phase 1
+closed. Phase 2 was subsequently approved and completed; current authority is
+the main cutover plan plus
+`docs/combat-build-progression-phase-2-evidence-2026-08-26.md`.
+
 Status: **COMPLETE — the canonical catalog and pure contract exit gate passes.
-No runtime or persistence consumer was partially switched. Phase 2 has not
-started and is not authorized by this document.**
+No runtime or persistence consumer was partially switched at this checkpoint.**
 
 ## 1. Approved boundary
 
@@ -219,5 +223,6 @@ Phase 1 exit gate: **PASS**.
 - all frozen rule fixtures and exhaustive catalog/structure tests pass; and
 - no runtime consumer is partially switched.
 
-Phase 2 remains the next plan item and requires explicit owner approval before
-any Hub durable schema or atomic save implementation begins.
+At this historical checkpoint, Phase 2 was the next unapproved item. It was
+subsequently owner-approved and completed; this document does not retroactively
+claim that its implementation existed during the Phase 1 gate.

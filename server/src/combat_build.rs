@@ -1,8 +1,8 @@
 //! Pure combat-build contract and catalog validation.
 //!
-//! Phase 1 deliberately does not connect this module to reducers or runtime
-//! authorization. It is the target contract that later phases will reuse when
-//! they replace the legacy persistence and match handoff in one cutover.
+//! The persistent Hub save path and later match/runtime phases reuse this same
+//! source so catalog legality and stable error codes cannot drift across
+//! environment boundaries.
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
