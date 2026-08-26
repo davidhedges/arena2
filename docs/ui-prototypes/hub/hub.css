@@ -505,12 +505,12 @@
     background-size: contain;
 }
 
-.loadout-icon--subtlety { border-color: #9f78c2; }
-.loadout-icon--ruin { border-color: #bd6a4c; }
-.loadout-icon--arcana { border-color: #6f83c4; }
-.loadout-art--subtlety { background-image: url("../../../Assets/Arena/Resources/UI/AbilityIcons/COMBAT_DISCIPLINE_SWITCH/SUBTLETY.png"); }
-.loadout-art--ruin { background-image: url("../../../Assets/Arena/Resources/UI/AbilityIcons/ABILITY/SPELL_FIREBALL.png"); }
-.loadout-art--arcana { background-image: url("../../../Assets/Arena/Resources/UI/AbilityIcons/COMBAT_DISCIPLINE_SWITCH/ARCANA.png"); }
+.loadout-icon--daggers { border-color: #9f78c2; }
+.loadout-icon--staff { border-color: #6f83c4; }
+.loadout-icon--bow { border-color: #6f9f69; }
+.loadout-art--daggers { background-image: url("../../../Assets/Arena/Resources/UI/AbilityIcons/COMBAT_DISCIPLINE_SWITCH/SUBTLETY.png"); }
+.loadout-art--staff { background-image: url("../../../Assets/Arena/Resources/UI/AbilityIcons/COMBAT_DISCIPLINE_SWITCH/ARCANA.png"); }
+.loadout-art--bow { background-image: url("../../../Assets/Arena/Resources/UI/AbilityIcons/COMBAT_DISCIPLINE_SWITCH/PRECISION.png"); }
 
 .loadout-copy {
     display: flex;

@@ -1,9 +1,12 @@
 <!doctype html>
+<!-- ARCHIVED IN PLACE 2026-08-26: legacy reward/unlock prototype with
+     damage types mislabeled as spell schools. Do not implement. See README.md
+     and ../../combat-build-progression-cutover-plan-2026-08-26.md. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Arena — Level Up Reward (UI spec)</title>
+<title>ARCHIVED — Arena Level Up Reward legacy prototype</title>
 <link rel="stylesheet" href="../tokens.css">
 <link rel="stylesheet" href="../kit.css">
 <link rel="stylesheet" href="reward-choice.css">
@@ -35,6 +38,18 @@ html, body {
 }
 
 .sc-shell { height: 100%; display: flex; flex-direction: column; }
+.sc-archive-notice {
+  height: 42px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2b1212;
+  border-bottom: 1px solid #a44f4f;
+  color: #f0c2b5;
+  font: 700 14px "Cinzel", serif;
+  letter-spacing: 1px;
+}
 .sc-stagewrap {
   flex: 1;
   display: flex;
@@ -66,6 +81,7 @@ html, body {
 </head>
 <body>
 <div class="sc-shell">
+  <div class="sc-archive-notice">ARCHIVED LEGACY PROTOTYPE · DO NOT IMPLEMENT · SEE README</div>
   <div class="sc-stagewrap">
     <div class="sc-stage" id="Stage">
       <canvas class="sc-backdrop" id="Backdrop" width="1920" height="1080"></canvas>

@@ -2,6 +2,15 @@
 
 This is the current entry point for adding or reviewing combat actions. It summarizes the source-of-truth files, the identity rules between them, and the minimum checklist for each common action type.
 
+> **Progression transition notice (2026-08-26):**
+> `docs/combat-build-progression-cutover-plan-2026-08-26.md` is the
+> authoritative target for player combat-build ownership. The current runtime
+> still exposes legacy discipline/profile fields, so this contract identifies
+> those fields as temporary adapters where authors must still populate them.
+> Do not use the legacy schema below as precedent for new loadout architecture,
+> do not add another school-as-discipline path, and do not deepen
+> primary/secondary or spellbook-based player authorization.
+
 Prefer Unity editor authoring tools when they exist for an action type. Until then, `docs/ability-implementation-prompt-template-2026-04-22.md` is the manual/LLM fallback prompt.
 
 See also: `docs/combat-animation-authoring-contract.md` for animation layer ownership, Hit Windows, lower-body unlock, visual interruption, root motion, movement actions, casts, and reaction priority.
@@ -27,40 +36,54 @@ Owns player-facing combat data:
 - fixed-action bindings
 - loadout slots
 
-`ability_tags` controls loadout eligibility. `ACTION_BAR_ACTION` means the ability
-can be assigned to normal action-bar slots, while `PASSIVE` exposes a selectable
-passive. Starter assignments are authored independently in
+The current runtime derives loadout eligibility from `ability_tags`.
+`ACTION_BAR_ACTION` means the ability can be assigned to normal action-bar
+slots, while `PASSIVE` exposes a selectable passive. This is transitional: the
+combat-build cutover replaces scattered tag parsing with one explicit
+selection kind. Starter assignments are currently authored independently in
 `combat_profile_action_bar_defaults`. Generic fixed actions such as `DODGE` and
 `PARRY` are input actions rather than default ability assignments.
 
 It does not own melee clip timing, melee phased clips, VFX implementation, or server code for new behavior kinds.
 
-### Discipline Ownership
+### Combat Build Ownership
 
-Every player ability row authors exactly one `discipline_id`. Discipline ownership
-controls build eligibility; it is independent from `combat_profile_id`, damage type,
-and VFX school.
+The planned canonical model has exactly five selectable weapon disciplines:
 
-Weapon-profile abilities use their profile's discipline:
+- `DAGGERS`
+- `TWO_HANDED_SWORD`
+- `SWORD_AND_SHIELD`
+- `ARCHER_BOW`
+- `STAFF`
+
+Every selectable active/passive belongs to exactly one of those disciplines.
+Staff abilities additionally belong to exactly one consolidated Staff school:
+`BLIGHT`, `MORTALITY`, `RUIN`, `DIVINITY`, `ARCANA`, or `PRIMAL`. Selecting up
+to three of these schools configures one Staff discipline, weapon, and action
+bar; a school never consumes a discipline slot.
+
+Granular values such as Fire, Cold, Lightning, Holy, Shadow, Air, and
+Necromancy are damage or presentation types, not Staff schools. They do not
+determine build ownership. The target catalog fields are
+`combat_discipline_id` for every selectable ability and `spell_school_id` for
+Staff actives/passives.
+
+#### Temporary legacy catalog adapter
+
+Until the cutover plan is implemented, the live catalog still requires the old
+`discipline_id` values. Populate them only as this deterministic compatibility
+mapping:
 
 - `DAGGERS` → `SUBTLETY`
 - `TWO_HANDED_SWORD` → `WAR`
 - `SWORD_AND_SHIELD` → `ZEAL`
 - `ARCHER_BOW` → `PRECISION`
-- `STAFF` → `ARCANA`
+- Staff ability → its consolidated school ID (`BLIGHT`, `MORTALITY`, `RUIN`,
+  `DIVINITY`, `ARCANA`, or `PRIMAL`)
 
-Profile-neutral spells use one of the consolidated spell-school disciplines:
-
-- `BLIGHT`: Frost and Cold spell themes
-- `MORTALITY`: Necromancy, Shadow, and Necrotic spell themes
-- `RUIN`: Fire and Lightning spell themes
-- `DIVINITY`: Holy spell themes
-- `ARCANA`: Arcane spell themes
-- `PRIMAL`: Air/Wind spell themes, plus non-damaging natural-world spells such as `UPHEAVAL`
-
-Keep granular authored `damage_type` and presentation `vfx_school` values intact.
-For example, `BLIGHT` owns Cold spells while `RUIN` owns Fire and Lightning spells.
-Those fields do not determine build ownership at runtime; `discipline_id` does.
+This adapter describes current storage, not the desired player model. It must
+be removed with the legacy catalog fields and may not be used to create new
+loadout, action-bar, passive, or cast-authorization paths.
 
 ### Combat Animation Sets
 
@@ -87,6 +110,12 @@ File: `server/src/melee_manifest.shared.json`
 This is a generated/exported bridge from Unity combat animation sets to the server. Do not hand-edit it to fix identity drift. Event Stamper changes to `OnStrikeHit` update the affected manifest strike automatically; other combat-profile changes still use the animation-set manifest export.
 
 ### Loadout Assignments
+
+This section describes the current ActionRef placement representation. Under
+the combat-build cutover, exact active assignment is stored per canonical
+weapon discipline and is itself the active-selection record; there is no
+parallel `selected_active_ability_ids` list. `SavedSpecSlotAssignment` must not
+be promoted into a second durable authority.
 
 `SavedSpecSlotAssignment` uses ActionRef placement:
 
@@ -121,7 +150,12 @@ For selectable abilities, `action_id` is the `ability_id`. Do not put an ability
 ## Glossary
 
 - `ability_id`: player-facing ability row id in `abilities[]`.
-- `discipline_id`: the single discipline that owns a player ability for build eligibility.
+- `combat_discipline_id`: planned canonical weapon discipline that owns a
+  selectable ability for build eligibility.
+- `spell_school_id`: planned consolidated Staff-school ownership for a Staff
+  active/passive.
+- `discipline_id`: temporary legacy catalog adapter described above; not the
+  target build identity.
 - `gameplay.kind`: ability category, currently `MELEE`, `SPELL`, `MOVEMENT`, `AUTO_ATTACK_REPLACEMENT`, or `COMBAT_MODE_TOGGLE`.
 - `ability_kind`: derived public table compatibility field. Do not author it in `progression_catalog.shared.json`.
 - authored strike id: design-facing melee strike id authored in a combat animation set. Melee ability `action_id` values point here.
@@ -153,7 +187,9 @@ For selectable abilities, `action_id` is the `ability_id`. Do not put an ability
 
 1. Author or select a melee strike in the class combat profile's combat animation set.
 2. Re-export `server/src/melee_manifest.shared.json`.
-3. Add an `abilities[]` row with `gameplay.kind: "MELEE"` and the discipline required by its combat profile.
+3. Add an `abilities[]` row with `gameplay.kind: "MELEE"`. While the legacy
+   schema remains, populate `discipline_id` from the temporary adapter above;
+   after cutover, use the canonical weapon `combat_discipline_id`.
 4. Set the ability `action_id` to the authored strike id, not the runtime slot id.
 5. Put melee damage/range/cooldown/defense tuning inside `gameplay`; keep player-facing resource cost at the ability row level.
 6. Add an `ABILITY` presentation row.
@@ -163,7 +199,9 @@ For selectable abilities, `action_id` is the `ability_id`. Do not put an ability
 ### Selectable Spell
 
 1. Add or update an `abilities[]` row with `gameplay.kind: "SPELL"`.
-2. Set `discipline_id` to the owning weapon discipline or consolidated spell-school discipline.
+2. Set canonical ownership to the weapon discipline. Staff spells additionally
+   use one consolidated `spell_school_id`. While the legacy schema remains,
+   populate its required `discipline_id` with the temporary adapter above.
 3. Set the ability `action_id` to the spell id.
 4. Put spell cooldown/cast/targeting/resource details inside `gameplay`.
 5. Put spell delivery behavior inside `gameplay.delivery`.
@@ -196,7 +234,11 @@ Movement delivery abilities are class-owned gameplay abilities that move the cas
 
 ### Auto-Attack
 
-Auto-attacks are intrinsic combat-profile behavior. Author the strike identity in the combat animation set, export the melee manifest, and tune gameplay plus profile-derived `discipline_id` in `auto_attacks[]`. Do not expose auto-attacks as selectable loadout abilities.
+Auto-attacks are intrinsic weapon-discipline behavior. Author the strike
+identity in the combat animation set, export the melee manifest, and tune its
+gameplay. While the legacy schema remains, also populate the profile-derived
+`discipline_id` adapter in `auto_attacks[]`. Do not expose auto-attacks as
+selectable loadout abilities.
 
 Per-hit primary resource gain is intrinsic auto-attack behavior. Selectable melee resource changes should come from authored costs or explicit behavior, not generic hit gain.
 

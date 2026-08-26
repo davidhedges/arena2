@@ -1,7 +1,10 @@
-/* Level Up Reward — browser prototype screen spec.
- * Host-supplied collections render the allocatable stats, spell schools, and
- * combat disciplines. The browser scaffold demonstrates the existing dice
- * presenter's resolved-roll motion contract. Must pass ops/uss_dialect_lint.py. */
+/* ARCHIVED IN PLACE 2026-08-26 — superseded Level Up Reward prototype.
+ * Do not translate or extend; see README.md and the combat-build plan.
+ *
+ * Historical host-supplied collections render allocatable stats, mislabeled
+ * damage/presentation “schools,” and legacy combat disciplines. The browser
+ * scaffold demonstrates the existing dice presenter's resolved-roll motion
+ * contract. Must pass ops/uss_dialect_lint.py. */
 
 .level-up {
     position: absolute;

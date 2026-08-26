@@ -1,6 +1,17 @@
 # Spellbook Composer — Pages & Glyphs Design
 
-**Status:** Drafted 2026-07-20. Awaiting owner rulings on the forks in §10 before phase 1 build.
+> **ARCHIVED IN PLACE — SUPERSEDED 2026-08-26. DO NOT IMPLEMENT.**
+>
+> The attachment and glyph-modifier research is retained as historical design
+> input, but this document's spell-availability chain conflicts with
+> `docs/combat-build-progression-cutover-plan-2026-08-26.md`. All authored
+> abilities are owned/unlocked, and the current combat build—not spellbook
+> contents, known-spell rows, or spellbook capacity—is the sole player-facing
+> match authorization source. Any future spellbook-composer proposal must be
+> redesigned as a modifier/collection feature that cannot independently grant
+> an action-bar assignment or cast.
+
+**Status:** Archived and superseded. Its phases and unresolved forks are closed without implementation.
 **Rev 2026-07-20b:** revised after static review. Cutover of the spell-list source is now an atomic server+client phase (ItemSpell has seven client consumers, including input dispatch); `SpellbookPageView` now feeds client cast gating and prediction, not just tooltips; glyph values are snapshotted at cast commit and carried on every long-lived runtime row (ActiveCast, projectiles, channels, persistent areas, auras/emanations) with an exhaustive per-behavior coverage table; an explicit attachment-subtree ownership/deletion invariant added; publish strategy corrected (schema changes go through `republish-local-clear.sh`, and fork 5 now couples schema strategy with migration); atomic `move_attachment` reducer added for socket-to-socket drags.
 **Scope:** Item-level design (pages, glyphs, attachment), server cast-path modifier plumbing, resolved-stat display/gating contract, and the composer UI screen. Out of scope: economy tuning (drop rates, vendor pricing), new glyph kinds beyond the first four, and any change to spell *behavior* authoring (`progression_catalog.shared.json` stays untouched).
 

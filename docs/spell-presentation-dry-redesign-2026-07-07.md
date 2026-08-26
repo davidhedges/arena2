@@ -3,6 +3,13 @@
 > Historical redesign input for cast animation. Its animation inventory and explicit-wins proposal
 > were superseded by the completed 2026-08-22 semantic motion cutover. Use
 > `docs/spell-cast-animation-stitching-2026-07-09.md` for the live animation contract.
+>
+> **Terminology note (2026-08-26):** “school” in this historical document means
+> a legacy VFX theme/palette key (`vfx_school`), not a selectable Staff spell
+> school. Values such as Fire, Cold, Lightning, Holy, Shadow, Air, and
+> Necromancy are damage/presentation types. The only player-facing Staff
+> schools are `BLIGHT`, `MORTALITY`, `RUIN`, `DIVINITY`, `ARCANA`, and `PRIMAL`;
+> see `docs/combat-build-progression-cutover-plan-2026-08-26.md`.
 
 **Status:** Implemented authoring architecture; this document remains the contract record.
 **Date:** 2026-07-07 · **Rev 2026-07-07b:** incorporated external review — fixed `vfx_school` precedence (§2.3), specified slot identity + legacy inference (§3.4, decision 6), gave the rule table a concrete Class A/B shape (§4.3, decision 5), fenced step 0 to cue-row cleanup only (decision 7). · **Rev 2026-07-07c:** added generator wiring table (Appendix B); fixed `scale`-in-palette bug (§3.1); resolved CHANNEL beam lifecycle → `UNTIL_CAST_END` (§B.7, decision 8). · **Rev 2026-07-07d:** parked ELECTROCUTE as legacy relic (decision 9, downgrades decision 8 to deferred); added animation template table (Appendix C). · **Rev 2026-07-07e (implementation begins):** step 0 verified NO-OP (ICE_SPIKES SPELL cue is a tested spell-kind fallback, not an orphan — decision 7 corrected); logged `CombatVfxCueResolver` prior art (VFX resolver + override model already exist; step-1 work is the animation face). · **Rev 2026-07-07f (end-state alignment):** registry+palette merge into per-school VFX sets + generator=Unity editor tool (decision 10); **all spell types supported**, AURA un-deferred via new `UNTIL_STATUS_END` lifecycle (decision 11); full `delivery.kind`→archetype coverage table + projectile-body no-drop guarantee (Rule 18) in B.9. · **Rev 2026-07-08a (implementation):** Class-A single-cue rules unified behind one shared checker (`vfx_generation::check_cue_field_rules`), consumed by both the generator's `validate_wiring` and the server contract (decisions 5/10, Rust half); corrected Appendix A — the server contract is a **test-time** check (`#[cfg(test)] mod tests`), not a catalog-load guard, and no separate production relational validator exists. Editor-side (C#) Class-A consumption remains pending the Unity generator tool (decision 10). · **Rev 2026-07-13:** every spell archetype now supports `cast_glow` plus repeatable caster-root `character_fx`; projectile archetypes now request optional `muzzle` and `projectile_trail` slots directly.

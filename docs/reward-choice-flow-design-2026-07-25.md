@@ -1,6 +1,17 @@
 # Level Up Reward — Web Prototype Specification
 
-**Status:** Current approved web proof of concept as of 2026-07-29.
+> **ARCHIVED IN PLACE — SUPERSEDED 2026-08-26. DO NOT IMPLEMENT.**
+>
+> This proof of concept conflicts with
+> `docs/combat-build-progression-cutover-plan-2026-08-26.md`: it labels granular
+> damage/presentation types as spell schools, exposes legacy
+> `SUBTLETY`/`WAR`/`ZEAL`/`PRECISION`/`ARCANA` choices as the top-level combat
+> disciplines, and frames schools/disciplines as mutually exclusive unlock
+> rewards even though all combat abilities are owned/unlocked. The linked web
+> prototype is archived with this document as visual history only. It is not a
+> progression, terminology, data, or UI source of truth.
+
+**Status:** Archived and superseded. The former 2026-07-29 approval is revoked.
 
 This specification supersedes the earlier staged parchment-card reward flow.
 The earlier reward-type, school, and weapon-style screens are not retained.

@@ -1,7 +1,9 @@
-/* Arena Disciplines — browser approval spec.
+/* ARCHIVED IN PLACE 2026-08-26 — superseded legacy Disciplines prototype.
+ * Do not translate or extend; see README.md and the combat-build plan.
+ *
  * The screen uses fixed reference metrics, flat RGBA surfaces, borders,
- * flex layouts, absolute positioning, and existing raster assets so it can be
- * translated directly into UXML/USS without a browser-only visual effect. */
+ * flex layouts, absolute positioning, and existing raster assets. It was
+ * originally authored for one-way UXML/USS translation. */
 
 .disciplines-screen {
     position: absolute;

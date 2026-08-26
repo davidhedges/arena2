@@ -1,13 +1,16 @@
-/* Canonical reward-choice browser interaction scaffold.
+/* ARCHIVED IN PLACE 2026-08-26. This legacy unlock/reward interaction uses
+ * damage/presentation types as “spell schools” and legacy discipline IDs.
+ * Do not implement or extend it; see README.md and the combat-build plan.
  *
- * Source grounding for the default host data:
+ * Historical source grounding for the default host data:
  * - abilityStats: server/src/progression.rs AllocatedStatTotals
- * - spellSchools: docs/reward-choice-flow-design-2026-07-25.md current
- *   player-facing roster (Frost is display copy for internal COLD)
+ * - spellSchools: archived docs/reward-choice-flow-design-2026-07-25.md roster;
+ *   this historical property name incorrectly describes damage/presentation
+ *   types (Frost is display copy for internal COLD)
  * - combatDisciplines: server/src/progression_catalog.shared.json
  *
- * The collections are inputs, not individually wired controls. The future
- * runtime host can supply the same shape without changing the screen layout.
+ * The collections are inputs, not individually wired controls. They are not a
+ * contract for a future runtime host.
  */
 (function () {
   "use strict";

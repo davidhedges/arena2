@@ -1,12 +1,14 @@
-/* Arena Disciplines browser interaction scaffold.
+/* ARCHIVED IN PLACE 2026-08-26. This legacy primary/secondary and
+ * school-as-discipline interaction is retained only as visual history.
+ * Do not implement or extend it; see README.md and the combat-build plan.
  *
- * Canonical inputs:
+ * Historical inputs:
  * - discipline roster and kind: server/src/progression_catalog.shared.json
  * - ability ownership: abilities[].discipline_id from the same catalog
  * - ability copy: ABILITY rows in action_presentations[]
  * - stat collection: server/src/progression.rs AllocatedStatTotals
  *
- * This prototype deliberately keeps state in memory. It does not call a
+ * This archived prototype deliberately keeps state in memory. It does not call a
  * reducer, persist a build, or imply a server-authoritative mutation path. */
 (function () {
   "use strict";
