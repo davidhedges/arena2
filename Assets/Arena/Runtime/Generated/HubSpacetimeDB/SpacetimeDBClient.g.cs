@@ -30,7 +30,11 @@ namespace Arena.HubDb
         {
             AddTable(HubAbilityDefinition = new(conn));
             AddTable(HubArmorSetDefinition = new(conn));
+            AddTable(HubCombatBuildAbilityDefinition = new(conn));
+            AddTable(HubCombatBuildContractDefinition = new(conn));
+            AddTable(HubCombatBuildDisciplineDefinition = new(conn));
             AddTable(HubCombatDisciplineDefinition = new(conn));
+            AddTable(HubSpellSchoolDefinition = new(conn));
             AddTable(HubWeaponColorDefinition = new(conn));
             AddTable(HubWeaponDefinition = new(conn));
             AddTable(MyCombatBuild = new(conn));
@@ -536,7 +540,11 @@ namespace Arena.HubDb
         {
             new QueryBuilder().From.HubAbilityDefinition().ToSql(),
             new QueryBuilder().From.HubArmorSetDefinition().ToSql(),
+            new QueryBuilder().From.HubCombatBuildAbilityDefinition().ToSql(),
+            new QueryBuilder().From.HubCombatBuildContractDefinition().ToSql(),
+            new QueryBuilder().From.HubCombatBuildDisciplineDefinition().ToSql(),
             new QueryBuilder().From.HubCombatDisciplineDefinition().ToSql(),
+            new QueryBuilder().From.HubSpellSchoolDefinition().ToSql(),
             new QueryBuilder().From.HubWeaponColorDefinition().ToSql(),
             new QueryBuilder().From.HubWeaponDefinition().ToSql(),
             new QueryBuilder().From.MyCombatBuild().ToSql(),
@@ -552,7 +560,11 @@ namespace Arena.HubDb
     {
         public global::SpacetimeDB.Table<HubAbilityDefinition, HubAbilityDefinitionCols, HubAbilityDefinitionIxCols> HubAbilityDefinition() => new("hub_ability_definition", new HubAbilityDefinitionCols("hub_ability_definition"), new HubAbilityDefinitionIxCols("hub_ability_definition"));
         public global::SpacetimeDB.Table<HubArmorSetDefinition, HubArmorSetDefinitionCols, HubArmorSetDefinitionIxCols> HubArmorSetDefinition() => new("hub_armor_set_definition", new HubArmorSetDefinitionCols("hub_armor_set_definition"), new HubArmorSetDefinitionIxCols("hub_armor_set_definition"));
+        public global::SpacetimeDB.Table<HubCombatBuildAbilityDefinition, HubCombatBuildAbilityDefinitionCols, HubCombatBuildAbilityDefinitionIxCols> HubCombatBuildAbilityDefinition() => new("hub_combat_build_ability_definition", new HubCombatBuildAbilityDefinitionCols("hub_combat_build_ability_definition"), new HubCombatBuildAbilityDefinitionIxCols("hub_combat_build_ability_definition"));
+        public global::SpacetimeDB.Table<HubCombatBuildContractDefinition, HubCombatBuildContractDefinitionCols, HubCombatBuildContractDefinitionIxCols> HubCombatBuildContractDefinition() => new("hub_combat_build_contract_definition", new HubCombatBuildContractDefinitionCols("hub_combat_build_contract_definition"), new HubCombatBuildContractDefinitionIxCols("hub_combat_build_contract_definition"));
+        public global::SpacetimeDB.Table<HubCombatBuildDisciplineDefinition, HubCombatBuildDisciplineDefinitionCols, HubCombatBuildDisciplineDefinitionIxCols> HubCombatBuildDisciplineDefinition() => new("hub_combat_build_discipline_definition", new HubCombatBuildDisciplineDefinitionCols("hub_combat_build_discipline_definition"), new HubCombatBuildDisciplineDefinitionIxCols("hub_combat_build_discipline_definition"));
         public global::SpacetimeDB.Table<HubCombatDisciplineDefinition, HubCombatDisciplineDefinitionCols, HubCombatDisciplineDefinitionIxCols> HubCombatDisciplineDefinition() => new("hub_combat_discipline_definition", new HubCombatDisciplineDefinitionCols("hub_combat_discipline_definition"), new HubCombatDisciplineDefinitionIxCols("hub_combat_discipline_definition"));
+        public global::SpacetimeDB.Table<HubSpellSchoolDefinition, HubSpellSchoolDefinitionCols, HubSpellSchoolDefinitionIxCols> HubSpellSchoolDefinition() => new("hub_spell_school_definition", new HubSpellSchoolDefinitionCols("hub_spell_school_definition"), new HubSpellSchoolDefinitionIxCols("hub_spell_school_definition"));
         public global::SpacetimeDB.Table<HubWeaponColorDefinition, HubWeaponColorDefinitionCols, HubWeaponColorDefinitionIxCols> HubWeaponColorDefinition() => new("hub_weapon_color_definition", new HubWeaponColorDefinitionCols("hub_weapon_color_definition"), new HubWeaponColorDefinitionIxCols("hub_weapon_color_definition"));
         public global::SpacetimeDB.Table<HubWeaponDefinition, HubWeaponDefinitionCols, HubWeaponDefinitionIxCols> HubWeaponDefinition() => new("hub_weapon_definition", new HubWeaponDefinitionCols("hub_weapon_definition"), new HubWeaponDefinitionIxCols("hub_weapon_definition"));
         public global::SpacetimeDB.Table<MyCombatBuild, MyCombatBuildCols, MyCombatBuildIxCols> MyCombatBuild() => new("my_combat_build", new MyCombatBuildCols("my_combat_build"), new MyCombatBuildIxCols("my_combat_build"));

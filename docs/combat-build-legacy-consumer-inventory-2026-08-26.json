@@ -121,6 +121,26 @@
       ],
       "open_legacy_policy": "Unity has one canonical build read/write path and one exact frozen HUD/input path. The disabled legacy Toolkit assets, collection-only spell/inventory surfaces, generated legacy schema and reducers, weapon-catalog PrimaryDisciplineId metadata, armor-only MyHubLoadout projection, local-direct server compatibility, and physical schema tombstones remain classified for Phase 6 or destructive Phase 7 removal. None is a live Unity combat-build writer or provisioned-match action-bar fallback.",
       "next_authorized_phase": null
+    },
+    "phase_6": {
+      "status": "complete",
+      "evidence": "docs/combat-build-progression-phase-6-evidence-2026-08-26.md",
+      "canonical_unity_editor": "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs",
+      "canonical_unity_draft_editor": "Assets/Arena/Runtime/Network/HubCombatBuildEditorModel.cs",
+      "canonical_hub_display_projection": [
+        "hub_combat_build_contract_definition",
+        "hub_combat_build_discipline_definition",
+        "hub_spell_school_definition",
+        "hub_combat_build_ability_definition"
+      ],
+      "removed_or_replaced_unity_residue": [
+        "disabled Disciplines compatibility shell",
+        "primary/secondary Toolkit layout",
+        "session-only stat allocation Toolkit labels and styles",
+        "school-as-discipline Toolkit presentation"
+      ],
+      "open_legacy_policy": "The live Disciplines UI is canonical and submits one whole combat-build draft. The archived school-as-discipline prototype, generated legacy schemas/reducers, armor-only MyHubLoadout projection, weapon-catalog PrimaryDisciplineId metadata, local-direct compatibility, collection-only spell rows, and physical data-preserving tombstones remain classified for destructive Phase 7. Phase 6 did not delete or reset those surfaces.",
+      "next_authorized_phase": null
     }
   },
   "entries": [
@@ -673,7 +693,8 @@
         "Assets/Arena/Tests/Editor/DisciplineLoadoutRulesTests.cs"
       ],
       "phase_5_resolution": "DisciplinesScreen is a disabled shell that warns and closes immediately. It does not load the old model or invoke any reducer. Its UXML/USS remain unreachable for the explicitly future Phase 6 replacement/Phase 7 deletion decision.",
-      "final_state": "disable the writer during backend cutover and remove it when the future replacement UI lands; it may not write or reconstruct a legacy shape",
+      "phase_6_resolution": "DisciplinesScreen and its Toolkit assets are now the canonical replacement editor. They present equal ordered combat disciplines, Staff-only schools, exact active slots, ordered passives, add/remove/starting controls, dormant restoration, and one revision-checked whole-draft SaveCombatBuild call. No legacy loadout shape or writer remains in this screen; the entry stays open only for the Phase 7 final negative audit.",
+      "final_state": "the live replacement editor writes only one canonical whole-build draft and contains no legacy model, writer, or reconstructed shape",
       "target_phases": [5, 6, 7],
       "status": "open",
       "audit_patterns": [
@@ -704,6 +725,7 @@
         "Assets/Arena/Tests/Editor/DisciplineLoadoutRulesTests.cs"
       ],
       "phase_5_resolution": "The session-only stat allocator and DisciplineLoadoutRules implementation were deleted with the disabled writer. No replacement stat schema, service, or UI path was invented; labels in unreachable legacy assets remain Phase 6/7 physical residue.",
+      "phase_6_resolution": "The replacement UXML/USS contain no stat-allocation panel, labels, controls, model, or persistence path. Phase 6 did not invent a replacement character-stat system; the entry stays open only for the Phase 7 final negative audit.",
       "final_state": "remove from the combat-build screen without inventing a replacement stat progression system in this migration",
       "target_phases": [5, 6, 7],
       "status": "open",
@@ -936,7 +958,8 @@
         "docs/ui-prototypes/disciplines/disciplines.css"
       ],
       "phase_5_resolution": "The current Toolkit screen is disabled and cannot load or write the school-as-discipline model. Its UXML/USS and archived prototype remain unreachable provenance pending the separately approved Phase 6 replacement and Phase 7 final audit.",
-      "final_state": "legacy Toolkit writer is disabled/removed and prototype remains only as explicitly archived provenance until the future UI replaces it",
+      "phase_6_resolution": "The live Toolkit screen now presents exactly the five canonical combat disciplines. The six spell schools appear only as toggles inside the selected Staff card, filter Staff ability choices, and never create discipline cards, weapons, or independent bars. The old docs/ui-prototypes/disciplines artifact remains unchanged as archived provenance pending Phase 7.",
+      "final_state": "live Toolkit presents weapon disciplines with Staff schools nested only inside Staff; the old prototype remains only as explicitly archived provenance until the final audit",
       "target_phases": [5, 6, 7],
       "status": "open",
       "audit_patterns": [

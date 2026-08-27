@@ -2,11 +2,11 @@
 
 Date: 2026-08-26
 
-Status: **PHASE 5 COMPLETE — the canonical combat build now drives the Unity
-Hub draft, equipment save, gameplay subscriptions, exact HUD/action-bar reads,
-and three-discipline switching. Legacy Unity writers are disabled or removed.
-The replacement UI and destructive final schema cleanup have not started;
-Phases 6 and 7 each require explicit approval.**
+Status: **PHASE 6 COMPLETE — the canonical replacement Disciplines UI edits
+ordered disciplines, Staff schools, exact active slots, and passives through
+the one atomic Hub draft. Server-projected rules drive its display and reducer
+failures remain verbatim. Phase 7 destructive cleanup has not started and
+still requires explicit approval.**
 
 ## 1. Goal
 
@@ -23,8 +23,8 @@ discipline slot, weapon, action bar, or independent equipment loadout.
 This plan covers the catalog, validation, durable Hub state, match snapshot,
 provisioner handoff, match runtime, action-bar and passive authorization,
 migration, generated client contract, documentation, and removal of the old
-paths. It deliberately does **not** build the replacement UI. The future UI is
-described only far enough to lock the backend contract it will consume.
+paths. Phases 1–5 locked and cut over the backend contract before Phase 6
+replaced the Disciplines UI that consumes it.
 
 Character-stat allocation is not part of this combat-build contract. The
 current screen's session-only stat controls are a placeholder, not durable
@@ -579,9 +579,9 @@ Hub preservation verified all 60 pre-existing rows unchanged. Detailed
 evidence and the classified Phase 6/7 residue are in
 `docs/combat-build-progression-phase-5-evidence-2026-08-26.md`.
 
-### Phase 6 — replacement UI (future session)
+### Phase 6 — replacement UI
 
-Backend contract consumed by that future task:
+Backend contract consumed by this phase:
 
 - ordered selection of one to three disciplines;
 - optional starting/default discipline selection;
@@ -594,6 +594,21 @@ Backend contract consumed by that future task:
 
 Exit gate: UI behavior tests exercise the same server error codes and do not
 reimplement validation as an independent authority.
+
+Completion record (2026-08-26): **PASS.** The former disabled shell and legacy
+Toolkit layout were replaced with a canonical editor showing the ordered one
+to three disciplines, an add slot below the projected maximum, optional
+starting discipline, Staff-only school selection, all projected exact action
+slots, ordered passives, and discipline/kind/school-filtered pickers. Removing
+and re-adding a discipline restores its dormant configuration. The editor
+submits one revision-checked `HubCombatBuildDraft`; it owns no rule constants
+or validation-code map. Four focused behavior/authority tests compile in the
+Unity test assembly and pass against the compiled runtime assembly, including
+round-tripping every stable server `COMBAT_BUILD_*` code verbatim. The
+three-assembly compile gate, 836 server tests, 27 Hub tests, live combat-build
+runtime probe, persistent-loadout guard, and anonymous Hub-to-match benchmark
+pass. Detailed evidence and the classified Phase 7 residue are in
+`docs/combat-build-progression-phase-6-evidence-2026-08-26.md`.
 
 ### Phase 7 — destructive legacy removal and final audit
 

@@ -55,7 +55,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void LegacyEditors_CannotWriteRetiredShapes()
+        public void CanonicalEditors_CannotWriteRetiredShapes()
         {
             string disciplines = File.ReadAllText(
                 "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs");
@@ -66,8 +66,11 @@ namespace Arena.Tests.Editor
             string equipment = File.ReadAllText(
                 "Assets/Arena/Runtime/UI/Toolkit/EquipmentScreen.cs");
 
-            Assert.That(disciplines, Does.Contain("retired Disciplines screen is disabled"));
+            Assert.That(disciplines, Does.Contain("_hub.SaveCombatBuild(_model.ToDraft())"));
+            Assert.That(disciplines, Does.Contain("contract.ActionSlotIds"));
             Assert.That(disciplines, Does.Not.Contain("SaveDisciplineLoadout"));
+            Assert.That(disciplines, Does.Not.Contain("PRIMARY"));
+            Assert.That(disciplines, Does.Not.Contain("SECONDARY"));
             Assert.That(actionBar, Does.Contain("enabled = false"));
             Assert.That(actionBar, Does.Not.Contain("AssignCharacterActionBar"));
             Assert.That(dragDrop, Does.Not.Contain("AssignCharacterActionBar"));

@@ -123,6 +123,10 @@ const WEAPON_APPEARANCE_CATALOG_HASH: u64 = extend_catalog_hash(
     PROGRESSION_CATALOG_HASH,
     WEAPON_APPEARANCE_CATALOG_JSON.as_bytes(),
 );
+const HUB_CATALOG_PROJECTION_HASH: u64 = extend_catalog_hash(
+    WEAPON_APPEARANCE_CATALOG_HASH,
+    b"combat-build-editor-projection-v1",
+);
 
 #[table(accessor = hub_player)]
 pub struct HubPlayer {
@@ -305,6 +309,63 @@ pub struct HubAbilityDefinition {
     pub resource_kind: String,
     pub resource_cost: f32,
     pub ability_tags: String,
+    pub description: String,
+    pub sort_order: u32,
+}
+
+/// Canonical, display-only combat-build catalog consumed by the Hub editor.
+/// These additive tables deliberately coexist with the legacy display catalog
+/// until the separately approved destructive cleanup phase.
+#[table(accessor = hub_combat_build_contract_definition, public)]
+#[derive(Clone, PartialEq)]
+pub struct HubCombatBuildContractDefinition {
+    #[primary_key]
+    pub singleton_id: u8,
+    pub schema_version: u32,
+    pub minimum_selected_disciplines: u32,
+    pub maximum_selected_disciplines: u32,
+    pub minimum_staff_schools_when_selected: u32,
+    pub maximum_staff_schools_when_selected: u32,
+    pub combined_ability_budget: u32,
+    pub maximum_active_abilities: u32,
+    pub minimum_counted_abilities_per_selected_discipline: u32,
+    pub action_slot_ids: Vec<String>,
+}
+
+#[table(accessor = hub_combat_build_discipline_definition, public)]
+#[derive(Clone, PartialEq)]
+pub struct HubCombatBuildDisciplineDefinition {
+    #[primary_key]
+    pub combat_discipline_id: String,
+    pub display_name: String,
+    pub sort_order: u32,
+    pub starter_main_hand_item_def_id: String,
+    pub starter_main_hand_color_id: String,
+    pub starter_off_hand_item_def_id: String,
+    pub starter_off_hand_color_id: String,
+}
+
+#[table(accessor = hub_spell_school_definition, public)]
+#[derive(Clone, PartialEq)]
+pub struct HubSpellSchoolDefinition {
+    #[primary_key]
+    pub spell_school_id: String,
+    pub display_name: String,
+    pub sort_order: u32,
+}
+
+#[table(accessor = hub_combat_build_ability_definition, public)]
+#[derive(Clone, PartialEq)]
+pub struct HubCombatBuildAbilityDefinition {
+    #[primary_key]
+    pub ability_id: String,
+    #[index(btree)]
+    pub combat_discipline_id: String,
+    pub spell_school_id: Option<String>,
+    pub selection_kind: String,
+    pub display_name: String,
+    pub resource_kind: String,
+    pub resource_cost: f32,
     pub description: String,
     pub sort_order: u32,
 }
@@ -1270,10 +1331,45 @@ pub fn hub_maintenance_tick(
 
 #[derive(Deserialize)]
 struct HubProgressionCatalogFile {
+    combat_build_contract: HubCombatBuildContractAuthoring,
     combat_disciplines: Vec<HubDisciplineAuthoring>,
     abilities: Vec<HubAbilityAuthoring>,
     #[serde(default)]
     action_presentations: Vec<HubActionPresentationAuthoring>,
+}
+
+#[derive(Deserialize)]
+struct HubCombatBuildContractAuthoring {
+    schema_version: u32,
+    combat_disciplines: Vec<HubCombatBuildDisciplineAuthoring>,
+    spell_schools: Vec<HubSpellSchoolAuthoring>,
+    rules: HubCombatBuildRulesAuthoring,
+}
+
+#[derive(Deserialize)]
+struct HubCombatBuildDisciplineAuthoring {
+    combat_discipline_id: String,
+    display_name: String,
+    sort_order: u32,
+}
+
+#[derive(Deserialize)]
+struct HubSpellSchoolAuthoring {
+    spell_school_id: String,
+    display_name: String,
+    sort_order: u32,
+}
+
+#[derive(Deserialize)]
+struct HubCombatBuildRulesAuthoring {
+    minimum_selected_disciplines: u32,
+    maximum_selected_disciplines: u32,
+    minimum_staff_schools_when_selected: u32,
+    maximum_staff_schools_when_selected: u32,
+    combined_ability_budget: u32,
+    maximum_active_abilities: u32,
+    minimum_counted_abilities_per_selected_discipline: u32,
+    action_slot_ids: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -1291,6 +1387,9 @@ struct HubAbilityAuthoring {
     actor_scope: String,
     #[serde(default)]
     discipline_id: String,
+    selection_kind: String,
+    combat_discipline_id: Option<String>,
+    spell_school_id: Option<String>,
     display_name: String,
     resource_kind: String,
     #[serde(default)]
@@ -1331,6 +1430,7 @@ struct HubWeaponFamilyAuthoring {
     hand_requirement: String,
     equip_slot: String,
     primary_discipline_id: String,
+    combat_discipline_id: String,
     sort_order: u32,
     default_color_id: String,
     variants: Vec<HubWeaponVariantAuthoring>,
@@ -1555,7 +1655,7 @@ fn sync_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
     let weapon_catalog = parse_weapon_appearance_catalog()?;
     let descriptions: HashMap<String, String> = authored
         .action_presentations
-        .into_iter()
+        .iter()
         .filter(|presentation| {
             normalize_authored_id(presentation.presentation_kind.as_str()) == "ABILITY"
         })
@@ -1566,6 +1666,8 @@ fn sync_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
             )
         })
         .collect();
+
+    sync_canonical_combat_build_catalogs(ctx, &authored, &weapon_catalog, &descriptions)?;
 
     let discipline_rows: Vec<HubCombatDisciplineDefinition> = authored
         .combat_disciplines
@@ -1837,6 +1939,277 @@ fn sync_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
     Ok(())
 }
 
+fn sync_canonical_combat_build_catalogs(
+    ctx: &ReducerContext,
+    authored: &HubProgressionCatalogFile,
+    weapon_catalog: &HubWeaponAppearanceCatalogFile,
+    descriptions: &HashMap<String, String>,
+) -> Result<(), String> {
+    let contract = &authored.combat_build_contract;
+    let rules = &contract.rules;
+    let rule_row = HubCombatBuildContractDefinition {
+        singleton_id: 0,
+        schema_version: contract.schema_version,
+        minimum_selected_disciplines: rules.minimum_selected_disciplines,
+        maximum_selected_disciplines: rules.maximum_selected_disciplines,
+        minimum_staff_schools_when_selected: rules.minimum_staff_schools_when_selected,
+        maximum_staff_schools_when_selected: rules.maximum_staff_schools_when_selected,
+        combined_ability_budget: rules.combined_ability_budget,
+        maximum_active_abilities: rules.maximum_active_abilities,
+        minimum_counted_abilities_per_selected_discipline: rules
+            .minimum_counted_abilities_per_selected_discipline,
+        action_slot_ids: rules.action_slot_ids.clone(),
+    };
+    match ctx
+        .db
+        .hub_combat_build_contract_definition()
+        .singleton_id()
+        .find(0)
+    {
+        Some(existing) if existing == rule_row => {}
+        Some(_) => {
+            ctx.db
+                .hub_combat_build_contract_definition()
+                .singleton_id()
+                .update(rule_row);
+        }
+        None => {
+            ctx.db
+                .hub_combat_build_contract_definition()
+                .insert(rule_row);
+        }
+    }
+
+    let mut discipline_rows = Vec::with_capacity(contract.combat_disciplines.len());
+    for discipline in &contract.combat_disciplines {
+        let combat_discipline_id = normalize_authored_id(discipline.combat_discipline_id.as_str());
+        let (main_hand, main_color, off_hand, off_color) =
+            starter_weapon_projection(weapon_catalog, combat_discipline_id.as_str())?;
+        discipline_rows.push(HubCombatBuildDisciplineDefinition {
+            combat_discipline_id,
+            display_name: discipline.display_name.trim().to_string(),
+            sort_order: discipline.sort_order,
+            starter_main_hand_item_def_id: main_hand,
+            starter_main_hand_color_id: main_color,
+            starter_off_hand_item_def_id: off_hand,
+            starter_off_hand_color_id: off_color,
+        });
+    }
+    let discipline_ids: HashSet<String> = discipline_rows
+        .iter()
+        .map(|row| row.combat_discipline_id.clone())
+        .collect();
+    for row in discipline_rows {
+        match ctx
+            .db
+            .hub_combat_build_discipline_definition()
+            .combat_discipline_id()
+            .find(row.combat_discipline_id.clone())
+        {
+            Some(existing) if existing == row => {}
+            Some(_) => {
+                ctx.db
+                    .hub_combat_build_discipline_definition()
+                    .combat_discipline_id()
+                    .update(row);
+            }
+            None => {
+                ctx.db.hub_combat_build_discipline_definition().insert(row);
+            }
+        }
+    }
+    let stale_discipline_ids: Vec<String> = ctx
+        .db
+        .hub_combat_build_discipline_definition()
+        .iter()
+        .map(|row| row.combat_discipline_id)
+        .filter(|id| !discipline_ids.contains(id))
+        .collect();
+    for id in stale_discipline_ids {
+        ctx.db
+            .hub_combat_build_discipline_definition()
+            .combat_discipline_id()
+            .delete(id);
+    }
+
+    let school_rows: Vec<HubSpellSchoolDefinition> = contract
+        .spell_schools
+        .iter()
+        .map(|school| HubSpellSchoolDefinition {
+            spell_school_id: normalize_authored_id(school.spell_school_id.as_str()),
+            display_name: school.display_name.trim().to_string(),
+            sort_order: school.sort_order,
+        })
+        .collect();
+    let school_ids: HashSet<String> = school_rows
+        .iter()
+        .map(|row| row.spell_school_id.clone())
+        .collect();
+    for row in school_rows {
+        match ctx
+            .db
+            .hub_spell_school_definition()
+            .spell_school_id()
+            .find(row.spell_school_id.clone())
+        {
+            Some(existing) if existing == row => {}
+            Some(_) => {
+                ctx.db
+                    .hub_spell_school_definition()
+                    .spell_school_id()
+                    .update(row);
+            }
+            None => {
+                ctx.db.hub_spell_school_definition().insert(row);
+            }
+        }
+    }
+    let stale_school_ids: Vec<String> = ctx
+        .db
+        .hub_spell_school_definition()
+        .iter()
+        .map(|row| row.spell_school_id)
+        .filter(|id| !school_ids.contains(id))
+        .collect();
+    for id in stale_school_ids {
+        ctx.db
+            .hub_spell_school_definition()
+            .spell_school_id()
+            .delete(id);
+    }
+
+    let ability_rows: Vec<HubCombatBuildAbilityDefinition> = authored
+        .abilities
+        .iter()
+        .filter(|ability| normalize_authored_id(ability.actor_scope.as_str()) == "PLAYER")
+        .filter(|ability| {
+            matches!(
+                normalize_authored_id(ability.selection_kind.as_str()).as_str(),
+                "ACTIVE" | "PASSIVE"
+            )
+        })
+        .filter_map(|ability| {
+            let combat_discipline_id = ability.combat_discipline_id.as_ref()?;
+            let ability_id = normalize_authored_id(ability.ability_id.as_str());
+            Some(HubCombatBuildAbilityDefinition {
+                description: descriptions.get(&ability_id).cloned().unwrap_or_default(),
+                ability_id,
+                combat_discipline_id: normalize_authored_id(combat_discipline_id.as_str()),
+                spell_school_id: ability
+                    .spell_school_id
+                    .as_ref()
+                    .map(|id| normalize_authored_id(id.as_str())),
+                selection_kind: normalize_authored_id(ability.selection_kind.as_str()),
+                display_name: ability.display_name.trim().to_string(),
+                resource_kind: normalize_authored_id(ability.resource_kind.as_str()),
+                resource_cost: ability.resource_cost,
+                sort_order: ability.sort_order,
+            })
+        })
+        .collect();
+    let ability_ids: HashSet<String> = ability_rows
+        .iter()
+        .map(|row| row.ability_id.clone())
+        .collect();
+    for row in ability_rows {
+        match ctx
+            .db
+            .hub_combat_build_ability_definition()
+            .ability_id()
+            .find(row.ability_id.clone())
+        {
+            Some(existing) if existing == row => {}
+            Some(_) => {
+                ctx.db
+                    .hub_combat_build_ability_definition()
+                    .ability_id()
+                    .update(row);
+            }
+            None => {
+                ctx.db.hub_combat_build_ability_definition().insert(row);
+            }
+        }
+    }
+    let stale_ability_ids: Vec<String> = ctx
+        .db
+        .hub_combat_build_ability_definition()
+        .iter()
+        .map(|row| row.ability_id)
+        .filter(|id| !ability_ids.contains(id))
+        .collect();
+    for id in stale_ability_ids {
+        ctx.db
+            .hub_combat_build_ability_definition()
+            .ability_id()
+            .delete(id);
+    }
+
+    Ok(())
+}
+
+fn starter_weapon_projection(
+    weapon_catalog: &HubWeaponAppearanceCatalogFile,
+    combat_discipline_id: &str,
+) -> Result<(String, String, String, String), String> {
+    let mut main_hands: Vec<&HubWeaponFamilyAuthoring> = weapon_catalog
+        .families
+        .iter()
+        .filter(|weapon| {
+            normalize_authored_id(weapon.combat_discipline_id.as_str()) == combat_discipline_id
+                && normalize_authored_id(weapon.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND
+        })
+        .collect();
+    main_hands.sort_by(|left, right| {
+        (left.sort_order, left.item_def_id.as_str())
+            .cmp(&(right.sort_order, right.item_def_id.as_str()))
+    });
+    let main_hand = if combat_discipline_id == COMBAT_PROFILE_STAFF {
+        main_hands
+            .iter()
+            .copied()
+            .find(|weapon| {
+                normalize_authored_id(weapon.item_def_id.as_str()) == DEFAULT_STAFF_ITEM_DEF_ID
+            })
+            .or_else(|| main_hands.first().copied())
+    } else {
+        main_hands.first().copied()
+    }
+    .ok_or_else(|| {
+        format!("canonical discipline '{combat_discipline_id}' has no starter main-hand weapon")
+    })?;
+
+    let mut off_hands: Vec<&HubWeaponFamilyAuthoring> = weapon_catalog
+        .families
+        .iter()
+        .filter(|weapon| {
+            normalize_authored_id(weapon.combat_discipline_id.as_str()) == combat_discipline_id
+                && normalize_authored_id(weapon.equip_slot.as_str()) == EQUIP_SLOT_OFF_HAND
+        })
+        .collect();
+    off_hands.sort_by(|left, right| {
+        (left.sort_order, left.item_def_id.as_str())
+            .cmp(&(right.sort_order, right.item_def_id.as_str()))
+    });
+    let off_hand = if combat_discipline_id == "SWORD_AND_SHIELD" {
+        Some(off_hands.first().copied().ok_or_else(|| {
+            "canonical Sword & Shield discipline has no starter off-hand weapon".to_string()
+        })?)
+    } else {
+        None
+    };
+
+    Ok((
+        normalize_authored_id(main_hand.item_def_id.as_str()),
+        normalize_authored_id(main_hand.default_color_id.as_str()),
+        off_hand
+            .map(|weapon| normalize_authored_id(weapon.item_def_id.as_str()))
+            .unwrap_or_default(),
+        off_hand
+            .map(|weapon| normalize_authored_id(weapon.default_color_id.as_str()))
+            .unwrap_or_default(),
+    ))
+}
+
 const fn extend_catalog_hash(mut hash: u64, bytes: &[u8]) -> u64 {
     let mut index = 0;
     while index < bytes.len() {
@@ -1848,15 +2221,14 @@ const fn extend_catalog_hash(mut hash: u64, bytes: &[u8]) -> u64 {
 }
 
 fn hub_catalog_revision() -> u64 {
-    let armor_hash =
-        HUB_ARMOR_SET_SPECS
-            .iter()
-            .fold(WEAPON_APPEARANCE_CATALOG_HASH, |hash, spec| {
-                let hash = extend_catalog_hash(hash, spec.armor_set_id.as_bytes());
-                let hash = extend_catalog_hash(hash, spec.display_name.as_bytes());
-                let hash = extend_catalog_hash(hash, spec.armor_tier.as_bytes());
-                hash ^ ((spec.piece_count as u64) << 32) ^ spec.sort_order as u64
-            });
+    let armor_hash = HUB_ARMOR_SET_SPECS
+        .iter()
+        .fold(HUB_CATALOG_PROJECTION_HASH, |hash, spec| {
+            let hash = extend_catalog_hash(hash, spec.armor_set_id.as_bytes());
+            let hash = extend_catalog_hash(hash, spec.display_name.as_bytes());
+            let hash = extend_catalog_hash(hash, spec.armor_tier.as_bytes());
+            hash ^ ((spec.piece_count as u64) << 32) ^ spec.sort_order as u64
+        });
     armor_hash
 }
 
@@ -3421,6 +3793,52 @@ mod tests {
     fn canonical_progression_catalog_parses_for_hub_projection() {
         let authored: HubProgressionCatalogFile =
             serde_json::from_str(PROGRESSION_CATALOG_JSON).expect("canonical progression JSON");
+        assert_eq!(authored.combat_build_contract.schema_version, 1);
+        assert_eq!(authored.combat_build_contract.combat_disciplines.len(), 5);
+        assert_eq!(authored.combat_build_contract.spell_schools.len(), 6);
+        assert_eq!(
+            authored.combat_build_contract.rules.combined_ability_budget,
+            20
+        );
+        assert_eq!(
+            authored
+                .combat_build_contract
+                .rules
+                .maximum_active_abilities,
+            16
+        );
+        assert_eq!(
+            authored.combat_build_contract.rules.action_slot_ids.len(),
+            27
+        );
+        let weapon_catalog =
+            parse_weapon_appearance_catalog().expect("canonical weapon appearance JSON");
+        for discipline in &authored.combat_build_contract.combat_disciplines {
+            let (main_hand, main_color, off_hand, off_color) = starter_weapon_projection(
+                &weapon_catalog,
+                discipline.combat_discipline_id.as_str(),
+            )
+            .expect("every canonical discipline needs an editor starter weapon");
+            assert!(!main_hand.is_empty());
+            assert!(!main_color.is_empty());
+            if discipline.combat_discipline_id == "SWORD_AND_SHIELD" {
+                assert!(!off_hand.is_empty());
+                assert!(!off_color.is_empty());
+            } else {
+                assert!(off_hand.is_empty());
+                assert!(off_color.is_empty());
+            }
+        }
+        assert!(authored.abilities.iter().any(|ability| {
+            ability.selection_kind == "ACTIVE"
+                && ability.combat_discipline_id.as_deref() == Some("STAFF")
+                && ability.spell_school_id.as_deref() == Some("RUIN")
+        }));
+        assert!(authored.abilities.iter().any(|ability| {
+            ability.selection_kind == "PASSIVE"
+                && ability.combat_discipline_id.as_deref() == Some("DAGGERS")
+                && ability.spell_school_id.is_none()
+        }));
         assert!(!authored.combat_disciplines.is_empty());
         assert!(authored
             .combat_disciplines

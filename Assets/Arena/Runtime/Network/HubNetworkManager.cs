@@ -16,8 +16,10 @@ using HubPlayerRow = Arena.HubDb.MyHubPlayer;
 using HubMatchStatusRow = Arena.HubDb.MyMatchStatus;
 using HubLoadoutRow = Arena.HubDb.MyHubLoadout;
 using HubCombatBuildRow = Arena.HubDb.MyCombatBuild;
-using HubDisciplineRow = Arena.HubDb.HubCombatDisciplineDefinition;
-using HubAbilityRow = Arena.HubDb.HubAbilityDefinition;
+using HubCombatBuildContractRow = Arena.HubDb.HubCombatBuildContractDefinition;
+using HubDisciplineRow = Arena.HubDb.HubCombatBuildDisciplineDefinition;
+using HubSchoolRow = Arena.HubDb.HubSpellSchoolDefinition;
+using HubAbilityRow = Arena.HubDb.HubCombatBuildAbilityDefinition;
 using HubArmorSetRow = Arena.HubDb.HubArmorSetDefinition;
 using HubWeaponRow = Arena.HubDb.HubWeaponDefinition;
 using HubWeaponColorRow = Arena.HubDb.HubWeaponColorDefinition;
@@ -119,52 +121,94 @@ namespace Arena.Network
         internal HubDisciplineSnapshot(
             string id,
             string name,
-            string kind,
-            string combatProfileId,
-            uint sortOrder)
+            uint sortOrder,
+            HubCombatBuildWeapon starterWeapon)
         {
             Id = id;
             Name = name;
-            Kind = kind;
-            CombatProfileId = combatProfileId;
+            SortOrder = sortOrder;
+            StarterWeapon = starterWeapon;
+        }
+
+        internal string Id { get; }
+        internal string Name { get; }
+        internal string CombatProfileId => Id;
+        internal uint SortOrder { get; }
+        internal HubCombatBuildWeapon StarterWeapon { get; }
+    }
+
+    internal sealed class HubSpellSchoolSnapshot
+    {
+        internal HubSpellSchoolSnapshot(string id, string name, uint sortOrder)
+        {
+            Id = id;
+            Name = name;
             SortOrder = sortOrder;
         }
 
         internal string Id { get; }
         internal string Name { get; }
-        internal string Kind { get; }
-        internal string CombatProfileId { get; }
         internal uint SortOrder { get; }
+    }
+
+    internal sealed class HubCombatBuildContractSnapshot
+    {
+        internal HubCombatBuildContractSnapshot(HubCombatBuildContractRow row)
+        {
+            SchemaVersion = row.SchemaVersion;
+            MinimumSelectedDisciplines = checked((int)row.MinimumSelectedDisciplines);
+            MaximumSelectedDisciplines = checked((int)row.MaximumSelectedDisciplines);
+            MinimumStaffSchoolsWhenSelected = checked((int)row.MinimumStaffSchoolsWhenSelected);
+            MaximumStaffSchoolsWhenSelected = checked((int)row.MaximumStaffSchoolsWhenSelected);
+            CombinedAbilityBudget = checked((int)row.CombinedAbilityBudget);
+            MaximumActiveAbilities = checked((int)row.MaximumActiveAbilities);
+            MinimumCountedAbilitiesPerSelectedDiscipline =
+                checked((int)row.MinimumCountedAbilitiesPerSelectedDiscipline);
+            ActionSlotIds = row.ActionSlotIds.ToArray();
+        }
+
+        internal uint SchemaVersion { get; }
+        internal int MinimumSelectedDisciplines { get; }
+        internal int MaximumSelectedDisciplines { get; }
+        internal int MinimumStaffSchoolsWhenSelected { get; }
+        internal int MaximumStaffSchoolsWhenSelected { get; }
+        internal int CombinedAbilityBudget { get; }
+        internal int MaximumActiveAbilities { get; }
+        internal int MinimumCountedAbilitiesPerSelectedDiscipline { get; }
+        internal IReadOnlyList<string> ActionSlotIds { get; }
     }
 
     internal sealed class HubAbilitySnapshot
     {
         internal HubAbilitySnapshot(
             string id,
-            string disciplineId,
+            string combatDisciplineId,
+            string? spellSchoolId,
+            string selectionKind,
             string name,
             string resource,
             float cost,
-            string tags,
             string description,
             uint sortOrder)
         {
             Id = id;
-            DisciplineId = disciplineId;
+            CombatDisciplineId = combatDisciplineId;
+            SpellSchoolId = spellSchoolId;
+            SelectionKind = selectionKind;
             Name = name;
             Resource = resource;
             Cost = cost;
-            Tags = tags;
             Description = description;
             SortOrder = sortOrder;
         }
 
         internal string Id { get; }
-        internal string DisciplineId { get; }
+        internal string CombatDisciplineId { get; }
+        internal string? SpellSchoolId { get; }
+        internal string SelectionKind { get; }
         internal string Name { get; }
         internal string Resource { get; }
         internal float Cost { get; }
-        internal string Tags { get; }
         internal string Description { get; }
         internal uint SortOrder { get; }
     }
@@ -308,7 +352,9 @@ namespace Arena.Network
         private HubMatchStatusSnapshot? _matchStatus;
         private HubArmorLoadoutSnapshot? _armorLoadout;
         private HubCombatBuildDraft? _combatBuild;
+        private HubCombatBuildContractSnapshot? _combatBuildContract;
         private IReadOnlyList<HubDisciplineSnapshot> _disciplines = Array.Empty<HubDisciplineSnapshot>();
+        private IReadOnlyList<HubSpellSchoolSnapshot> _staffSchools = Array.Empty<HubSpellSchoolSnapshot>();
         private IReadOnlyList<HubAbilitySnapshot> _abilities = Array.Empty<HubAbilitySnapshot>();
         private IReadOnlyList<HubArmorSetSnapshot> _armorSets = Array.Empty<HubArmorSetSnapshot>();
         private IReadOnlyList<HubWeaponSnapshot> _weapons = Array.Empty<HubWeaponSnapshot>();
@@ -323,7 +369,9 @@ namespace Arena.Network
         internal HubMatchStatusSnapshot? MatchStatus => _matchStatus;
         internal HubArmorLoadoutSnapshot? ArmorLoadout => _armorLoadout;
         internal HubCombatBuildDraft? CombatBuild => _combatBuild;
+        internal HubCombatBuildContractSnapshot? CombatBuildContract => _combatBuildContract;
         internal IReadOnlyList<HubDisciplineSnapshot> Disciplines => _disciplines;
+        internal IReadOnlyList<HubSpellSchoolSnapshot> StaffSchools => _staffSchools;
         internal IReadOnlyList<HubAbilitySnapshot> Abilities => _abilities;
         internal IReadOnlyList<HubArmorSetSnapshot> ArmorSets => _armorSets;
         internal IReadOnlyList<HubWeaponSnapshot> Weapons => _weapons;
@@ -520,8 +568,10 @@ namespace Arena.Network
                     new Arena.HubDb.QueryBuilder().From.MyMatchStatus().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.MyHubLoadout().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.MyCombatBuild().ToSql(),
-                    new Arena.HubDb.QueryBuilder().From.HubCombatDisciplineDefinition().ToSql(),
-                    new Arena.HubDb.QueryBuilder().From.HubAbilityDefinition().ToSql(),
+                    new Arena.HubDb.QueryBuilder().From.HubCombatBuildContractDefinition().ToSql(),
+                    new Arena.HubDb.QueryBuilder().From.HubCombatBuildDisciplineDefinition().ToSql(),
+                    new Arena.HubDb.QueryBuilder().From.HubSpellSchoolDefinition().ToSql(),
+                    new Arena.HubDb.QueryBuilder().From.HubCombatBuildAbilityDefinition().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.HubArmorSetDefinition().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.HubWeaponDefinition().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.HubWeaponColorDefinition().ToSql(),
@@ -612,12 +662,18 @@ namespace Arena.Network
             conn.Db.MyCombatBuild.OnInsert += OnCombatBuildInsert;
             conn.Db.MyCombatBuild.OnUpdate += OnCombatBuildUpdate;
             conn.Db.MyCombatBuild.OnDelete += OnCombatBuildDelete;
-            conn.Db.HubCombatDisciplineDefinition.OnInsert += OnDisciplineInsert;
-            conn.Db.HubCombatDisciplineDefinition.OnUpdate += OnDisciplineUpdate;
-            conn.Db.HubCombatDisciplineDefinition.OnDelete += OnDisciplineDelete;
-            conn.Db.HubAbilityDefinition.OnInsert += OnAbilityInsert;
-            conn.Db.HubAbilityDefinition.OnUpdate += OnAbilityUpdate;
-            conn.Db.HubAbilityDefinition.OnDelete += OnAbilityDelete;
+            conn.Db.HubCombatBuildContractDefinition.OnInsert += OnCombatBuildContractInsert;
+            conn.Db.HubCombatBuildContractDefinition.OnUpdate += OnCombatBuildContractUpdate;
+            conn.Db.HubCombatBuildContractDefinition.OnDelete += OnCombatBuildContractDelete;
+            conn.Db.HubCombatBuildDisciplineDefinition.OnInsert += OnDisciplineInsert;
+            conn.Db.HubCombatBuildDisciplineDefinition.OnUpdate += OnDisciplineUpdate;
+            conn.Db.HubCombatBuildDisciplineDefinition.OnDelete += OnDisciplineDelete;
+            conn.Db.HubSpellSchoolDefinition.OnInsert += OnSchoolInsert;
+            conn.Db.HubSpellSchoolDefinition.OnUpdate += OnSchoolUpdate;
+            conn.Db.HubSpellSchoolDefinition.OnDelete += OnSchoolDelete;
+            conn.Db.HubCombatBuildAbilityDefinition.OnInsert += OnAbilityInsert;
+            conn.Db.HubCombatBuildAbilityDefinition.OnUpdate += OnAbilityUpdate;
+            conn.Db.HubCombatBuildAbilityDefinition.OnDelete += OnAbilityDelete;
             conn.Db.HubArmorSetDefinition.OnInsert += OnArmorSetInsert;
             conn.Db.HubArmorSetDefinition.OnUpdate += OnArmorSetUpdate;
             conn.Db.HubArmorSetDefinition.OnDelete += OnArmorSetDelete;
@@ -643,12 +699,18 @@ namespace Arena.Network
             conn.Db.MyCombatBuild.OnInsert -= OnCombatBuildInsert;
             conn.Db.MyCombatBuild.OnUpdate -= OnCombatBuildUpdate;
             conn.Db.MyCombatBuild.OnDelete -= OnCombatBuildDelete;
-            conn.Db.HubCombatDisciplineDefinition.OnInsert -= OnDisciplineInsert;
-            conn.Db.HubCombatDisciplineDefinition.OnUpdate -= OnDisciplineUpdate;
-            conn.Db.HubCombatDisciplineDefinition.OnDelete -= OnDisciplineDelete;
-            conn.Db.HubAbilityDefinition.OnInsert -= OnAbilityInsert;
-            conn.Db.HubAbilityDefinition.OnUpdate -= OnAbilityUpdate;
-            conn.Db.HubAbilityDefinition.OnDelete -= OnAbilityDelete;
+            conn.Db.HubCombatBuildContractDefinition.OnInsert -= OnCombatBuildContractInsert;
+            conn.Db.HubCombatBuildContractDefinition.OnUpdate -= OnCombatBuildContractUpdate;
+            conn.Db.HubCombatBuildContractDefinition.OnDelete -= OnCombatBuildContractDelete;
+            conn.Db.HubCombatBuildDisciplineDefinition.OnInsert -= OnDisciplineInsert;
+            conn.Db.HubCombatBuildDisciplineDefinition.OnUpdate -= OnDisciplineUpdate;
+            conn.Db.HubCombatBuildDisciplineDefinition.OnDelete -= OnDisciplineDelete;
+            conn.Db.HubSpellSchoolDefinition.OnInsert -= OnSchoolInsert;
+            conn.Db.HubSpellSchoolDefinition.OnUpdate -= OnSchoolUpdate;
+            conn.Db.HubSpellSchoolDefinition.OnDelete -= OnSchoolDelete;
+            conn.Db.HubCombatBuildAbilityDefinition.OnInsert -= OnAbilityInsert;
+            conn.Db.HubCombatBuildAbilityDefinition.OnUpdate -= OnAbilityUpdate;
+            conn.Db.HubCombatBuildAbilityDefinition.OnDelete -= OnAbilityDelete;
             conn.Db.HubArmorSetDefinition.OnInsert -= OnArmorSetInsert;
             conn.Db.HubArmorSetDefinition.OnUpdate -= OnArmorSetUpdate;
             conn.Db.HubArmorSetDefinition.OnDelete -= OnArmorSetDelete;
@@ -720,9 +782,21 @@ namespace Arena.Network
             NotifyChanged();
         }
 
+        private void OnCombatBuildContractInsert(HubEventContext _, HubCombatBuildContractRow __)
+            => RefreshCatalogSnapshots();
+        private void OnCombatBuildContractUpdate(
+            HubEventContext _,
+            HubCombatBuildContractRow __,
+            HubCombatBuildContractRow ___)
+            => RefreshCatalogSnapshots();
+        private void OnCombatBuildContractDelete(HubEventContext _, HubCombatBuildContractRow __)
+            => RefreshCatalogSnapshots();
         private void OnDisciplineInsert(HubEventContext _, HubDisciplineRow __) => RefreshCatalogSnapshots();
         private void OnDisciplineUpdate(HubEventContext _, HubDisciplineRow __, HubDisciplineRow ___) => RefreshCatalogSnapshots();
         private void OnDisciplineDelete(HubEventContext _, HubDisciplineRow __) => RefreshCatalogSnapshots();
+        private void OnSchoolInsert(HubEventContext _, HubSchoolRow __) => RefreshCatalogSnapshots();
+        private void OnSchoolUpdate(HubEventContext _, HubSchoolRow __, HubSchoolRow ___) => RefreshCatalogSnapshots();
+        private void OnSchoolDelete(HubEventContext _, HubSchoolRow __) => RefreshCatalogSnapshots();
         private void OnAbilityInsert(HubEventContext _, HubAbilityRow __) => RefreshCatalogSnapshots();
         private void OnAbilityUpdate(HubEventContext _, HubAbilityRow __, HubAbilityRow ___) => RefreshCatalogSnapshots();
         private void OnAbilityDelete(HubEventContext _, HubAbilityRow __) => RefreshCatalogSnapshots();
@@ -786,26 +860,41 @@ namespace Arena.Network
             if (conn == null)
                 return;
 
-            _disciplines = conn.Db.HubCombatDisciplineDefinition.Iter()
+            _combatBuildContract = conn.Db.HubCombatBuildContractDefinition.Iter()
+                .Select(row => new HubCombatBuildContractSnapshot(row))
+                .FirstOrDefault();
+            _disciplines = conn.Db.HubCombatBuildDisciplineDefinition.Iter()
                 .OrderBy(row => row.SortOrder)
-                .ThenBy(row => row.DisciplineId, StringComparer.Ordinal)
+                .ThenBy(row => row.CombatDisciplineId, StringComparer.Ordinal)
                 .Select(row => new HubDisciplineSnapshot(
-                    row.DisciplineId,
+                    row.CombatDisciplineId,
                     row.DisplayName,
-                    row.DisciplineKind,
-                    row.CombatProfileId,
+                    row.SortOrder,
+                    new HubCombatBuildWeapon(
+                        row.StarterMainHandItemDefId,
+                        row.StarterMainHandColorId,
+                        row.StarterOffHandItemDefId,
+                        row.StarterOffHandColorId)))
+                .ToArray();
+            _staffSchools = conn.Db.HubSpellSchoolDefinition.Iter()
+                .OrderBy(row => row.SortOrder)
+                .ThenBy(row => row.SpellSchoolId, StringComparer.Ordinal)
+                .Select(row => new HubSpellSchoolSnapshot(
+                    row.SpellSchoolId,
+                    row.DisplayName,
                     row.SortOrder))
                 .ToArray();
-            _abilities = conn.Db.HubAbilityDefinition.Iter()
+            _abilities = conn.Db.HubCombatBuildAbilityDefinition.Iter()
                 .OrderBy(row => row.SortOrder)
                 .ThenBy(row => row.AbilityId, StringComparer.Ordinal)
                 .Select(row => new HubAbilitySnapshot(
                     row.AbilityId,
-                    row.DisciplineId,
+                    row.CombatDisciplineId,
+                    row.SpellSchoolId,
+                    row.SelectionKind,
                     row.DisplayName,
                     row.ResourceKind,
                     row.ResourceCost,
-                    row.AbilityTags,
                     row.Description,
                     row.SortOrder))
                 .ToArray();
@@ -1006,7 +1095,9 @@ namespace Arena.Network
         {
             _armorLoadout = null;
             _combatBuild = null;
+            _combatBuildContract = null;
             _disciplines = Array.Empty<HubDisciplineSnapshot>();
+            _staffSchools = Array.Empty<HubSpellSchoolSnapshot>();
             _abilities = Array.Empty<HubAbilitySnapshot>();
             _armorSets = Array.Empty<HubArmorSetSnapshot>();
             _weapons = Array.Empty<HubWeaponSnapshot>();
