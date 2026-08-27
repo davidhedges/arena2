@@ -6,6 +6,10 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+default = []
+pvp_match = []
+
 [dependencies]
 log = "0.4"
 # Keep the Hub contract on the same SDK release already locked by `server/`.

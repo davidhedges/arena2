@@ -494,6 +494,29 @@ Exit gate: the Hub snapshot, provisioner arguments, reservation, and applied
 match rows are structurally and semantically identical for the captured
 revision. Failure is closed; no default legacy loadout is substituted.
 
+Phase 3 completion: **PASS on 2026-08-26.** Ticket creation now validates the
+saved canonical aggregate and freezes one compact, versioned JSON snapshot plus
+the separately scoped armor selection. The provisioner transports that JSON
+unchanged, verifies exact reservation equality on recovery, and fails closed on
+missing, malformed, or mismatched metadata. Match bootstrap parses and
+revalidates the same shared contract, rejects noncanonical bytes, retains the
+exact frozen snapshot in its reservation, and materializes selected-discipline,
+Staff-school, exact action-slot, passive, and per-discipline weapon rows. The
+first selected discipline supplies the starting weapon when no future explicit
+default is present. Provisioned players receive no positional default loadout
+or undifferentiated ability-selection substitute.
+
+The old Hub `MatchPlayerLoadoutSnapshot` table is retained only as a
+data-preserving schema tombstone because removing it would have required an
+unapproved destructive Hub reset. No reducer or provisioner inserts or reads
+it; cleanup can only delete pre-cutover terminal rows. Its physical removal
+remains explicitly ledgered for the final destructive cutover. The match-side
+legacy save reducer and generated bindings are removed. A data-preserving local
+publish, protected-loadout verification, full Rust/Python/C# gates, and a live
+one-sample exact handoff/cleanup probe passed. Detailed commands and residual
+classification are in
+`docs/combat-build-progression-phase-3-evidence-2026-08-26.md`.
+
 ### Phase 4 — runtime bar, switch, cast, and passive cutover
 
 Deliverables:

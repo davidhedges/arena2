@@ -51,6 +51,28 @@
       ],
       "open_legacy_policy": "Phase 3 handoff still reads the positional HubPlayerLoadout compatibility row; it is not written by save_combat_build and remains open on the deletion ledger. Armor is separately scoped. No dual-write or runtime conversion adapter exists.",
       "next_authorized_phase": null
+    },
+    "phase_3": {
+      "status": "complete",
+      "evidence": "docs/combat-build-progression-phase-3-evidence-2026-08-26.md",
+      "canonical_ticket_snapshot": "hub-server/src/lib.rs::MatchPlayerCombatBuildSnapshot",
+      "canonical_transport": "match_provisioner/worker.py::combat_build_snapshots",
+      "canonical_match_state": [
+        "match_combat_build",
+        "match_combat_build_discipline",
+        "match_discipline_configuration",
+        "match_staff_school_selection",
+        "match_discipline_action_bar_assignment",
+        "match_discipline_passive_selection"
+      ],
+      "removed_legacy_surfaces": [
+        "positional provisioner bootstrap fields",
+        "save_character_discipline_loadout",
+        "SaveCharacterDisciplineLoadout generated reducers",
+        "benchmark fixed-slot and undifferentiated-ability assertions"
+      ],
+      "open_legacy_policy": "No production ticket, provisioner, reservation, or match materialization path reads the positional Hub loadout. MatchPlayerLoadoutSnapshot remains only as a data-preserving Hub schema tombstone with no insert/read path; Hub UI/armor compatibility and local-direct runtime structures remain explicitly open for Phases 4, 5, and 7. There is no dual transport, fallback substitution, or runtime converter.",
+      "next_authorized_phase": null
     }
   },
   "entries": [
@@ -124,6 +146,7 @@
         "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Types/CharacterDisciplineLoadout.g.cs",
         "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Types/MatchReservation.g.cs"
       ],
+      "phase_3_resolution": "The production Hub-to-match path now freezes and transports one versioned canonical snapshot. MatchReservation contains schema version, revision, exact snapshot JSON, and armor only. Fixed-slot Hub/runtime compatibility remains open for later phases; MatchPlayerLoadoutSnapshot is an unread schema tombstone retained solely to avoid a destructive Hub reset.",
       "final_state": "replace with ordered one-to-three canonical disciplines and one structured versioned frozen build snapshot",
       "target_phases": [2, 3, 7],
       "status": "open",
@@ -166,6 +189,7 @@
         "Assets/Arena/Runtime/Generated/SpacetimeDB/Types/MatchReservation.g.cs",
         "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Types/MatchReservation.g.cs"
       ],
+      "phase_3_resolution": "The production snapshot, provisioner, reservation, materialized match rows, and benchmark no longer carry or infer selected_ability_ids. Exact active slots and explicit passive rows are transported. Legacy runtime authorization tables remain open for Phase 4.",
       "final_state": "active selection derives only from exact per-discipline slot assignments and passive selection derives only from explicit passive rows",
       "target_phases": [1, 2, 3, 4, 5, 7],
       "status": "open",
@@ -378,6 +402,7 @@
         "Assets/Arena/Runtime/Generated/SpacetimeDB/Reducers/SaveCharacterDisciplineLoadout.g.cs",
         "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Reducers/SaveCharacterDisciplineLoadout.g.cs"
       ],
+      "phase_3_resolution": "The public match-side save reducer and both generated reducer bindings are removed. Provisioned players skip the legacy loadout and ability-selection defaults; local-direct compatibility helpers remain open for the runtime/final cutovers.",
       "final_state": "remove match-side durable saving and defaulting; disposable matches only materialize and revalidate the frozen Hub snapshot",
       "target_phases": [3, 7],
       "status": "open",
@@ -521,6 +546,7 @@
         "Assets/Arena/Runtime/Generated/SpacetimeDB/Reducers/BootstrapOpenWorldInstance.g.cs",
         "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Reducers/BootstrapUnranked2V2BotMatch.g.cs"
       ],
+      "phase_3_resolution": "Both production bootstrap reducers now accept one opaque canonical combat_build_snapshot_json plus separately scoped armor after the allocation identity fields. The provisioner passes nine total arguments, never parses the JSON, and exact-compares an existing reservation during recovery.",
       "final_state": "transport one versioned structured build snapshot without positional reinterpretation or fallback substitution",
       "target_phases": [3, 7],
       "status": "open",
@@ -773,6 +799,7 @@
         "ops/test_benchmark_local_match_start.py",
         "match_provisioner/test_worker.py"
       ],
+      "phase_3_resolution": "The benchmark now compares contract version, revision, selected order, Staff schools, exact action slots, passives, per-discipline weapon definitions, materialized item identities, starting equipment, armor, and exact cleanup. No fixed-slot or undifferentiated-ability assertion remains in these probes.",
       "final_state": "assert full versioned snapshot identity, revision, discipline order, exact slots, passives, Staff schools, and per-discipline weapons",
       "target_phases": [3, 7],
       "status": "open",
@@ -802,6 +829,7 @@
         "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/**",
         "Assets/Arena/Runtime/Generated/SpacetimeDB/**"
       ],
+      "phase_3_resolution": "Hub and match bindings were regenerated from their schemas. Canonical match tables and compact bootstrap/reservation shapes are present, and SaveCharacterDisciplineLoadout bindings are absent. Other legacy runtime/client types plus the data-preserving MatchPlayerLoadoutSnapshot tombstone remain ledgered for later phases.",
       "final_state": "regenerate from the final schemas; never hand-edit generated compatibility fields",
       "target_phases": [2, 3, 5, 7],
       "status": "open",

@@ -110,7 +110,7 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
         ensure_default_character_appearance_for_identity(ctx, identity)?;
         ensure_player_inventory_for_identity(ctx, identity);
         if let Some(reservation) = reservation.as_ref() {
-            crate::match_contract::apply_reserved_player_loadout(ctx, reservation)?;
+            crate::match_contract::apply_reserved_player_combat_build(ctx, reservation)?;
         }
         sync_primary_resource_for_player(ctx, identity, now);
         log::info!(
@@ -152,7 +152,7 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     ensure_default_character_appearance_for_identity(ctx, identity)?;
     ensure_player_inventory_for_identity(ctx, identity);
     if let Some(reservation) = reservation.as_ref() {
-        crate::match_contract::apply_reserved_player_loadout(ctx, reservation)?;
+        crate::match_contract::apply_reserved_player_combat_build(ctx, reservation)?;
     }
     sync_primary_resource_for_player(ctx, identity, now);
 

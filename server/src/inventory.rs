@@ -178,7 +178,7 @@ const STARTER_INSIGHT_RING_ITEM_DEF_ID: &str = "BRONZE_RING";
 const STARTER_INSIGHT_RING_AFFIX_ID: &str = "AFFIX_INSIGHT_STARTER";
 pub(crate) const AFFIX_KNOCKBACK_RESISTANCE_MINOR: &str = "AFFIX_KNOCKBACK_RESISTANCE_MINOR";
 const STARTER_INSIGHT_RING_VALUE: f32 = 10.0;
-const WEAPON_APPEARANCE_CATALOG_JSON: &str = include_str!(concat!(
+pub(crate) const WEAPON_APPEARANCE_CATALOG_JSON: &str = include_str!(concat!(
     env!("OUT_DIR"),
     "/weapon_appearance_catalog.shared.json"
 ));
@@ -470,7 +470,6 @@ struct WeaponFamilyAuthoring {
     hand_requirement: String,
     equip_slot: String,
     primary_discipline_id: String,
-    #[allow(dead_code)]
     default_color_id: String,
     variants: Vec<WeaponVariantAuthoring>,
 }
@@ -4818,6 +4817,22 @@ pub(crate) fn combat_discipline_weapon_loadout_is_available(
     if expected_profile.is_empty() {
         return false;
     }
+    weapon_loadout_is_available_for_combat_profile(
+        ctx,
+        owner,
+        expected_profile,
+        main_hand_item_id,
+        off_hand_item_id,
+    )
+}
+
+fn weapon_loadout_is_available_for_combat_profile(
+    ctx: &ReducerContext,
+    owner: Identity,
+    expected_profile: &str,
+    main_hand_item_id: Option<&str>,
+    off_hand_item_id: Option<&str>,
+) -> bool {
     let Some(main_hand_item_id) = main_hand_item_id.filter(|value| !value.trim().is_empty()) else {
         return false;
     };
@@ -4843,16 +4858,39 @@ pub(crate) fn apply_combat_discipline_weapon_loadout(
     main_hand_item_id: Option<&str>,
     off_hand_item_id: Option<&str>,
 ) -> Result<(), String> {
-    if !combat_discipline_weapon_loadout_is_available(
+    let expected_profile = combat_profile_for_discipline(discipline_id);
+    if expected_profile.is_empty() {
+        return Err(format!(
+            "unknown combat discipline '{}'",
+            normalize_id(discipline_id)
+        ));
+    }
+    apply_weapon_loadout_for_combat_profile(
         ctx,
         owner,
-        discipline_id,
+        expected_profile,
+        main_hand_item_id,
+        off_hand_item_id,
+    )
+}
+
+fn apply_weapon_loadout_for_combat_profile(
+    ctx: &ReducerContext,
+    owner: Identity,
+    expected_profile: &str,
+    main_hand_item_id: Option<&str>,
+    off_hand_item_id: Option<&str>,
+) -> Result<(), String> {
+    if !weapon_loadout_is_available_for_combat_profile(
+        ctx,
+        owner,
+        expected_profile,
         main_hand_item_id,
         off_hand_item_id,
     ) {
         return Err(format!(
-            "saved weapon loadout is not available for discipline '{}'",
-            normalize_id(discipline_id)
+            "saved weapon loadout is not available for combat profile '{}'",
+            normalize_id(expected_profile)
         ));
     }
 
@@ -4949,6 +4987,125 @@ pub(crate) fn equip_starter_weapon_for_discipline(
 /// Resolves a Hub-authored cosmetic weapon selection to match-local item
 /// instances. The Hub stores definition ids only; disposable matches retain
 /// ownership of instance identity and revalidate the discipline contract.
+pub(crate) fn materialize_combat_build_weapon_configuration(
+    ctx: &ReducerContext,
+    owner: Identity,
+    combat_discipline_id: &str,
+    main_hand_item_def_id: &str,
+    main_hand_color_id: &str,
+    off_hand_item_def_id: &str,
+    off_hand_color_id: &str,
+) -> Result<(String, Option<String>), String> {
+    ensure_player_inventory_for_identity(ctx, owner);
+    let expected_profile = normalize_id(combat_discipline_id);
+    let main_hand_definition = require_item_definition(ctx, main_hand_item_def_id)?;
+    let off_hand_definition = if off_hand_item_def_id.trim().is_empty() {
+        None
+    } else {
+        Some(require_item_definition(ctx, off_hand_item_def_id)?)
+    };
+    if combat_profile_for_weapon_pair(Some(&main_hand_definition), off_hand_definition.as_ref())
+        != expected_profile
+    {
+        return Err(format!(
+            "weapon definitions '{}' and '{}' are not allowed for combat discipline '{}'",
+            normalize_id(main_hand_item_def_id),
+            normalize_id(off_hand_item_def_id),
+            expected_profile
+        ));
+    }
+    require_weapon_family_color(main_hand_item_def_id, main_hand_color_id)?;
+    if off_hand_item_def_id.trim().is_empty() {
+        if !off_hand_color_id.trim().is_empty() {
+            return Err("an off-hand color requires an off-hand weapon".to_string());
+        }
+    } else {
+        require_weapon_family_color(off_hand_item_def_id, off_hand_color_id)?;
+    }
+
+    let main_hand_item_id = ensure_hub_weapon_item_instance(ctx, owner, &main_hand_definition)?;
+    let off_hand_item_id = off_hand_definition
+        .as_ref()
+        .map(|definition| ensure_hub_weapon_item_instance(ctx, owner, definition))
+        .transpose()?;
+    Ok((main_hand_item_id, off_hand_item_id))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn equip_materialized_combat_build_weapon_configuration(
+    ctx: &ReducerContext,
+    owner: Identity,
+    combat_discipline_id: &str,
+    main_hand_item_def_id: &str,
+    main_hand_color_id: &str,
+    off_hand_item_def_id: &str,
+    off_hand_color_id: &str,
+    main_hand_item_id: &str,
+    off_hand_item_id: Option<&str>,
+) -> Result<(), String> {
+    let expected_profile = normalize_id(combat_discipline_id);
+    let main_hand_definition = item_definition_for_owned_instance(ctx, owner, main_hand_item_id)
+        .ok_or_else(|| "materialized main-hand item is missing or not owned".to_string())?;
+    if normalize_id(main_hand_definition.item_def_id.as_str())
+        != normalize_id(main_hand_item_def_id)
+    {
+        return Err("materialized main-hand item does not match its frozen definition".to_string());
+    }
+    let off_hand_definition = off_hand_item_id
+        .map(|item_id| {
+            item_definition_for_owned_instance(ctx, owner, item_id)
+                .ok_or_else(|| "materialized off-hand item is missing or not owned".to_string())
+        })
+        .transpose()?;
+    if off_hand_definition.as_ref().map(|definition| {
+        normalize_id(definition.item_def_id.as_str()) != normalize_id(off_hand_item_def_id)
+    }) == Some(true)
+        || (off_hand_definition.is_none() && !off_hand_item_def_id.trim().is_empty())
+    {
+        return Err("materialized off-hand item does not match its frozen definition".to_string());
+    }
+    if combat_profile_for_weapon_pair(Some(&main_hand_definition), off_hand_definition.as_ref())
+        != expected_profile
+    {
+        return Err(format!(
+            "materialized weapon pair does not match combat discipline '{expected_profile}'"
+        ));
+    }
+    let main_hand_color_id =
+        require_weapon_family_color(main_hand_item_def_id, main_hand_color_id)?;
+    let off_hand_color_id = if off_hand_item_def_id.trim().is_empty() {
+        if !off_hand_color_id.trim().is_empty() {
+            return Err("an off-hand color requires an off-hand weapon".to_string());
+        }
+        String::new()
+    } else {
+        require_weapon_family_color(off_hand_item_def_id, off_hand_color_id)?
+    };
+
+    upsert_equipped_weapon_appearance(
+        ctx,
+        EquippedWeaponAppearance {
+            owner,
+            main_hand_item_def_id: normalize_id(main_hand_item_def_id),
+            main_hand_color_id,
+            off_hand_item_def_id: normalize_id(off_hand_item_def_id),
+            off_hand_color_id,
+            updated_at: ctx.timestamp,
+        },
+    );
+    apply_weapon_loadout_for_combat_profile(
+        ctx,
+        owner,
+        expected_profile.as_str(),
+        Some(main_hand_item_id),
+        off_hand_item_id,
+    )?;
+    sync_equipment_presentation_for_owner(ctx, owner);
+    Ok(())
+}
+
+/// Legacy runtime projection retained until the Phase 4 discipline-switch
+/// cutover. New match materialization uses the canonical helpers above.
 pub(crate) fn equip_weapon_definitions_for_discipline(
     ctx: &ReducerContext,
     owner: Identity,
@@ -5017,13 +5174,18 @@ pub(crate) fn equip_weapon_definitions_for_discipline(
 
 fn require_weapon_family_color(item_def_id: &str, color_id: &str) -> Result<String, String> {
     let normalized_item_def_id = normalize_id(item_def_id);
-    let normalized_color_id = normalize_id(color_id);
     let catalog = parse_weapon_appearance_catalog()?;
     let family = catalog
         .families
         .iter()
         .find(|family| normalize_id(family.item_def_id.as_str()) == normalized_item_def_id)
         .ok_or_else(|| format!("unknown weapon appearance family '{normalized_item_def_id}'"))?;
+    let requested_color_id = normalize_id(color_id);
+    let normalized_color_id = if requested_color_id.is_empty() {
+        normalize_id(family.default_color_id.as_str())
+    } else {
+        requested_color_id
+    };
     if family
         .variants
         .iter()
@@ -7118,6 +7280,20 @@ mod tests {
                     == normalize_id(family.default_color_id.as_str())
             })
         }));
+    }
+
+    #[test]
+    fn empty_weapon_color_resolves_to_the_authored_default() {
+        assert_eq!(
+            require_weapon_family_color("TRAINING_DAGGER_PAIR", "")
+                .expect("default dagger color"),
+            "DEFAULT"
+        );
+        assert_eq!(
+            require_weapon_family_color("TRAINING_DAGGER_PAIR", "default")
+                .expect("explicit dagger color"),
+            "DEFAULT"
+        );
     }
 
     #[test]

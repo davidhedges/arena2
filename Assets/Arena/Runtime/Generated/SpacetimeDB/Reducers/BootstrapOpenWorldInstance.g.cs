@@ -12,12 +12,12 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void BootstrapOpenWorldInstanceHandler(ReducerEventContext ctx, string matchId, string matchBuildId, string destination, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName, string primaryDisciplineId, string secondaryDisciplineId1, string secondaryDisciplineId2, System.Collections.Generic.List<string> selectedAbilityIds, string armorSetId, string mainHandItemDefId, string mainHandColorId, string offHandItemDefId, string offHandColorId);
+        public delegate void BootstrapOpenWorldInstanceHandler(ReducerEventContext ctx, string matchId, string matchBuildId, string destination, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName, string combatBuildSnapshotJson, string armorSetId);
         public event BootstrapOpenWorldInstanceHandler? OnBootstrapOpenWorldInstance;
 
-        public void BootstrapOpenWorldInstance(string matchId, string matchBuildId, string destination, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName, string primaryDisciplineId, string secondaryDisciplineId1, string secondaryDisciplineId2, System.Collections.Generic.List<string> selectedAbilityIds, string armorSetId, string mainHandItemDefId, string mainHandColorId, string offHandItemDefId, string offHandColorId)
+        public void BootstrapOpenWorldInstance(string matchId, string matchBuildId, string destination, ulong seed, SpacetimeDB.Timestamp allocationExpiresAt, SpacetimeDB.Identity reservedPlayerIdentity, string reservedDisplayName, string combatBuildSnapshotJson, string armorSetId)
         {
-            conn.InternalCallReducer(new Reducer.BootstrapOpenWorldInstance(matchId, matchBuildId, destination, seed, allocationExpiresAt, reservedPlayerIdentity, reservedDisplayName, primaryDisciplineId, secondaryDisciplineId1, secondaryDisciplineId2, selectedAbilityIds, armorSetId, mainHandItemDefId, mainHandColorId, offHandItemDefId, offHandColorId));
+            conn.InternalCallReducer(new Reducer.BootstrapOpenWorldInstance(matchId, matchBuildId, destination, seed, allocationExpiresAt, reservedPlayerIdentity, reservedDisplayName, combatBuildSnapshotJson, armorSetId));
         }
 
         public bool InvokeBootstrapOpenWorldInstance(ReducerEventContext ctx, Reducer.BootstrapOpenWorldInstance args)
@@ -43,15 +43,8 @@ namespace SpacetimeDB.Types
                 args.AllocationExpiresAt,
                 args.ReservedPlayerIdentity,
                 args.ReservedDisplayName,
-                args.PrimaryDisciplineId,
-                args.SecondaryDisciplineId1,
-                args.SecondaryDisciplineId2,
-                args.SelectedAbilityIds,
-                args.ArmorSetId,
-                args.MainHandItemDefId,
-                args.MainHandColorId,
-                args.OffHandItemDefId,
-                args.OffHandColorId
+                args.CombatBuildSnapshotJson,
+                args.ArmorSetId
             );
             return true;
         }
@@ -77,24 +70,10 @@ namespace SpacetimeDB.Types
             public SpacetimeDB.Identity ReservedPlayerIdentity;
             [DataMember(Name = "reserved_display_name")]
             public string ReservedDisplayName;
-            [DataMember(Name = "primary_discipline_id")]
-            public string PrimaryDisciplineId;
-            [DataMember(Name = "secondary_discipline_id_1")]
-            public string SecondaryDisciplineId1;
-            [DataMember(Name = "secondary_discipline_id_2")]
-            public string SecondaryDisciplineId2;
-            [DataMember(Name = "selected_ability_ids")]
-            public System.Collections.Generic.List<string> SelectedAbilityIds;
+            [DataMember(Name = "combat_build_snapshot_json")]
+            public string CombatBuildSnapshotJson;
             [DataMember(Name = "armor_set_id")]
             public string ArmorSetId;
-            [DataMember(Name = "main_hand_item_def_id")]
-            public string MainHandItemDefId;
-            [DataMember(Name = "main_hand_color_id")]
-            public string MainHandColorId;
-            [DataMember(Name = "off_hand_item_def_id")]
-            public string OffHandItemDefId;
-            [DataMember(Name = "off_hand_color_id")]
-            public string OffHandColorId;
 
             public BootstrapOpenWorldInstance(
                 string MatchId,
@@ -104,15 +83,8 @@ namespace SpacetimeDB.Types
                 SpacetimeDB.Timestamp AllocationExpiresAt,
                 SpacetimeDB.Identity ReservedPlayerIdentity,
                 string ReservedDisplayName,
-                string PrimaryDisciplineId,
-                string SecondaryDisciplineId1,
-                string SecondaryDisciplineId2,
-                System.Collections.Generic.List<string> SelectedAbilityIds,
-                string ArmorSetId,
-                string MainHandItemDefId,
-                string MainHandColorId,
-                string OffHandItemDefId,
-                string OffHandColorId
+                string CombatBuildSnapshotJson,
+                string ArmorSetId
             )
             {
                 this.MatchId = MatchId;
@@ -122,15 +94,8 @@ namespace SpacetimeDB.Types
                 this.AllocationExpiresAt = AllocationExpiresAt;
                 this.ReservedPlayerIdentity = ReservedPlayerIdentity;
                 this.ReservedDisplayName = ReservedDisplayName;
-                this.PrimaryDisciplineId = PrimaryDisciplineId;
-                this.SecondaryDisciplineId1 = SecondaryDisciplineId1;
-                this.SecondaryDisciplineId2 = SecondaryDisciplineId2;
-                this.SelectedAbilityIds = SelectedAbilityIds;
+                this.CombatBuildSnapshotJson = CombatBuildSnapshotJson;
                 this.ArmorSetId = ArmorSetId;
-                this.MainHandItemDefId = MainHandItemDefId;
-                this.MainHandColorId = MainHandColorId;
-                this.OffHandItemDefId = OffHandItemDefId;
-                this.OffHandColorId = OffHandColorId;
             }
 
             public BootstrapOpenWorldInstance()
@@ -139,15 +104,8 @@ namespace SpacetimeDB.Types
                 this.MatchBuildId = "";
                 this.Destination = "";
                 this.ReservedDisplayName = "";
-                this.PrimaryDisciplineId = "";
-                this.SecondaryDisciplineId1 = "";
-                this.SecondaryDisciplineId2 = "";
-                this.SelectedAbilityIds = new();
+                this.CombatBuildSnapshotJson = "";
                 this.ArmorSetId = "";
-                this.MainHandItemDefId = "";
-                this.MainHandColorId = "";
-                this.OffHandItemDefId = "";
-                this.OffHandColorId = "";
             }
 
             string IReducerArgs.ReducerName => "bootstrap_open_world_instance";

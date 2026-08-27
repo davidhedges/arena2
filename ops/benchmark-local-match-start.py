@@ -4,9 +4,10 @@
 The probe keeps one anonymous identity for the entire run, requests serial
 unranked 2v2 bot matches through the public Hub API, authenticates to every
 assigned match with that same identity, and applies the production 44-query
-PvP initial subscription. Each ticket is cancelled after its sample, and the
-probe waits for the provisioner's exact-identity cleanup ledger to report all
-sampled databases CLEANED.
+PvP initial subscription plus a canonical combat-build audit subscription.
+Each ticket is cancelled after its sample, and the probe waits for the
+provisioner's exact-identity cleanup ledger to report all sampled databases
+CLEANED.
 
 This intentionally measures through the match initial-state boundary, not
 Unity scene loading. Pair its JSON output with the provisioner's correlated
@@ -81,6 +82,45 @@ PVP_LOCAL_FILTERS = [
     ("player_equipment_presentation", "owner"),
     ("active_armor_set", "owner"),
 ]
+MATCH_COMBAT_BUILD_TABLES = (
+    "match_combat_build",
+    "match_combat_build_discipline",
+    "match_discipline_configuration",
+    "match_staff_school_selection",
+    "match_discipline_action_bar_assignment",
+    "match_discipline_passive_selection",
+)
+WEAPON_APPEARANCE_CATALOG_PATH = (
+    pathlib.Path(__file__).resolve().parents[1]
+    / "Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json"
+)
+
+
+def effective_weapon_color_id(item_def_id: str, configured_color_id: str) -> str:
+    item_def_id = item_def_id.strip().upper()
+    configured_color_id = configured_color_id.strip().upper()
+    if not item_def_id:
+        if configured_color_id:
+            raise RuntimeError("a configured weapon color requires a weapon definition")
+        return ""
+    if configured_color_id:
+        return configured_color_id
+
+    catalog = json.loads(WEAPON_APPEARANCE_CATALOG_PATH.read_text())
+    for family in catalog.get("families", []):
+        if str(family.get("item_def_id", "")).strip().upper() != item_def_id:
+            continue
+        default_color_id = str(family.get("default_color_id", "")).strip().upper()
+        variant_color_ids = {
+            str(variant.get("color_id", "")).strip().upper()
+            for variant in family.get("variants", [])
+        }
+        if not default_color_id or default_color_id not in variant_color_ids:
+            raise RuntimeError(
+                f"weapon {item_def_id!r} has no valid authored default color"
+            )
+        return default_color_id
+    raise RuntimeError(f"unknown weapon appearance family {item_def_id!r}")
 
 
 def normalize_identity(value: Any) -> str:
@@ -168,27 +208,106 @@ def parse_match_status(row: DatabaseRow) -> dict[str, str]:
     }
 
 
-def parse_hub_loadout(row: DatabaseRow) -> dict[str, Any]:
+def parse_hub_armor(row: DatabaseRow) -> dict[str, Any]:
     if len(row) < 12:
         raise RuntimeError(f"unexpected my_hub_loadout row length: {len(row)}")
-    selected_value = row_value(row, 4, "selected_ability_ids")
-    selected_ability_ids = selected_value if isinstance(selected_value, list) else []
     return {
         "owner": normalize_identity(row_value(row, 0, "owner")),
-        "primary_discipline_id": str(row_value(row, 1, "primary_discipline_id")),
-        "secondary_discipline_id_1": str(
-            row_value(row, 2, "secondary_discipline_id_1")
-        ),
-        "secondary_discipline_id_2": str(
-            row_value(row, 3, "secondary_discipline_id_2")
-        ),
-        "selected_ability_ids": [str(value) for value in selected_ability_ids],
         "armor_set_id": str(row_value(row, 5, "armor_set_id")),
-        "main_hand_item_def_id": str(row_value(row, 6, "main_hand_item_def_id")),
-        "off_hand_item_def_id": str(row_value(row, 7, "off_hand_item_def_id")),
-        "main_hand_color_id": str(row_value(row, 8, "main_hand_color_id")),
-        "off_hand_color_id": str(row_value(row, 9, "off_hand_color_id")),
-        "revision": int(row_value(row, 10, "revision")),
+    }
+
+
+def parse_hub_combat_build(row: DatabaseRow) -> dict[str, Any]:
+    selected_rows = row_value(row, 3, "selected_disciplines")
+    configuration_rows = row_value(row, 4, "discipline_configurations")
+    if not isinstance(selected_rows, list) or not isinstance(configuration_rows, list):
+        raise RuntimeError("Hub combat build contains malformed nested rows")
+    selected = [
+        {
+            "slot_index": int(row_value(selected_row, 0, "slot_index")),
+            "combat_discipline_id": str(
+                row_value(selected_row, 1, "combat_discipline_id")
+            ),
+        }
+        for selected_row in selected_rows
+    ]
+    selected.sort(key=lambda value: value["slot_index"])
+    if not selected:
+        raise RuntimeError("Hub combat build has no selected disciplines")
+
+    selected_ids = {value["combat_discipline_id"] for value in selected}
+    configurations = []
+    schools = []
+    assignments = []
+    passives = []
+    for configuration_row in configuration_rows:
+        discipline_id = str(
+            row_value(configuration_row, 0, "combat_discipline_id")
+        )
+        if discipline_id not in selected_ids:
+            continue
+        weapon = row_value(configuration_row, 1, "weapon")
+        configurations.append(
+            {
+                "combat_discipline_id": discipline_id,
+                "main_hand_item_def_id": str(
+                    row_value(weapon, 0, "main_hand_item_def_id")
+                ),
+                "main_hand_color_id": str(
+                    row_value(weapon, 1, "main_hand_color_id")
+                ),
+                "off_hand_item_def_id": str(
+                    row_value(weapon, 2, "off_hand_item_def_id")
+                ),
+                "off_hand_color_id": str(
+                    row_value(weapon, 3, "off_hand_color_id")
+                ),
+            }
+        )
+        staff_school_ids = row_value(configuration_row, 2, "staff_school_ids")
+        active_assignments = row_value(configuration_row, 3, "active_assignments")
+        passive_ability_ids = row_value(configuration_row, 4, "passive_ability_ids")
+        if not all(
+            isinstance(values, list)
+            for values in (staff_school_ids, active_assignments, passive_ability_ids)
+        ):
+            raise RuntimeError("Hub combat-build configuration contains malformed arrays")
+        schools.extend(str(value) for value in staff_school_ids)
+        assignments.extend(
+            {
+                "combat_discipline_id": discipline_id,
+                "action_slot": str(row_value(value, 0, "action_slot")),
+                "ability_id": str(row_value(value, 1, "ability_id")),
+            }
+            for value in active_assignments
+        )
+        passives.extend(
+            {"combat_discipline_id": discipline_id, "ability_id": str(value)}
+            for value in passive_ability_ids
+        )
+
+    starting_discipline_id = str(
+        option_value(row_value(row, 1, "starting_discipline_id"))
+        or selected[0]["combat_discipline_id"]
+    )
+    configurations.sort(key=lambda value: value["combat_discipline_id"])
+    schools.sort()
+    assignments.sort(
+        key=lambda value: (value["combat_discipline_id"], value["action_slot"])
+    )
+    passives.sort(
+        key=lambda value: (value["combat_discipline_id"], value["ability_id"])
+    )
+    return {
+        "owner": normalize_identity(row_value(row, 0, "owner")),
+        "contract_schema_version": 1,
+        "revision": int(row_value(row, 2, "revision")),
+        "starting_discipline_id": starting_discipline_id,
+        "selected_disciplines": selected,
+        "discipline_configurations": configurations,
+        "staff_school_ids": schools,
+        "active_assignments": assignments,
+        "passive_selections": passives,
     }
 
 
@@ -204,52 +323,112 @@ def require_single_inserted_row(
     return rows[0]
 
 
-def parse_applied_match_loadout(
+def parse_applied_match_combat_build(
     rows_by_table: dict[str, list[DatabaseRow]],
 ) -> dict[str, Any] | None:
     singular_tables = (
-        "character_discipline_loadout",
+        "match_combat_build",
         "active_armor_set",
         "player_equipment_presentation",
     )
     if any(len(rows_by_table.get(table_name, [])) != 1 for table_name in singular_tables):
         return None
-    selected_abilities = rows_by_table.get("character_discipline_ability_selection", [])
-    if not selected_abilities:
+    selected_rows = rows_by_table.get("match_combat_build_discipline", [])
+    configuration_rows = rows_by_table.get("match_discipline_configuration", [])
+    if not selected_rows or len(configuration_rows) != len(selected_rows):
         return None
 
-    discipline = rows_by_table["character_discipline_loadout"][0]
+    build = rows_by_table["match_combat_build"][0]
     armor = rows_by_table["active_armor_set"][0]
     equipment = rows_by_table["player_equipment_presentation"][0]
+    selected_disciplines = [
+        {
+            "slot_index": int(row_value(row, 2, "slot_index")),
+            "combat_discipline_id": str(row_value(row, 3, "combat_discipline_id")),
+        }
+        for row in selected_rows
+    ]
+    selected_disciplines.sort(key=lambda value: value["slot_index"])
+    configurations = [
+        {
+            "combat_discipline_id": str(row_value(row, 2, "combat_discipline_id")),
+            "main_hand_item_def_id": str(row_value(row, 3, "main_hand_item_def_id")),
+            "main_hand_color_id": str(row_value(row, 4, "main_hand_color_id")),
+            "off_hand_item_def_id": str(row_value(row, 5, "off_hand_item_def_id")),
+            "off_hand_color_id": str(row_value(row, 6, "off_hand_color_id")),
+            "main_hand_item_id": str(option_value(row_value(row, 7, "main_hand_item_id")) or ""),
+            "off_hand_item_id": str(option_value(row_value(row, 8, "off_hand_item_id")) or ""),
+        }
+        for row in configuration_rows
+    ]
+    configurations.sort(key=lambda value: value["combat_discipline_id"])
+    schools = sorted(
+        str(row_value(row, 2, "spell_school_id"))
+        for row in rows_by_table.get("match_staff_school_selection", [])
+    )
+    assignments = sorted(
+        (
+            {
+                "combat_discipline_id": str(
+                    row_value(row, 2, "combat_discipline_id")
+                ),
+                "action_slot": str(row_value(row, 3, "action_slot")),
+                "ability_id": str(row_value(row, 4, "ability_id")),
+            }
+            for row in rows_by_table.get(
+                "match_discipline_action_bar_assignment", []
+            )
+        ),
+        key=lambda value: (value["combat_discipline_id"], value["action_slot"]),
+    )
+    passives = sorted(
+        (
+            {
+                "combat_discipline_id": str(
+                    row_value(row, 2, "combat_discipline_id")
+                ),
+                "ability_id": str(row_value(row, 3, "ability_id")),
+            }
+            for row in rows_by_table.get("match_discipline_passive_selection", [])
+        ),
+        key=lambda value: (value["combat_discipline_id"], value["ability_id"]),
+    )
+    canonical_owners = {normalize_identity(row_value(build, 0, "owner"))}
+    for table_name in MATCH_COMBAT_BUILD_TABLES[1:]:
+        canonical_owners.update(
+            normalize_identity(row_value(row, 1, "owner"))
+            for row in rows_by_table.get(table_name, [])
+        )
     return {
-        "discipline_owner": normalize_identity(row_value(discipline, 0, "owner")),
-        "primary_discipline_id": str(
-            row_value(discipline, 1, "primary_discipline_id")
+        "build_owner": normalize_identity(row_value(build, 0, "owner")),
+        "canonical_owners": canonical_owners,
+        "contract_schema_version": int(
+            row_value(build, 1, "contract_schema_version")
         ),
-        "secondary_discipline_id_1": str(
-            row_value(discipline, 2, "secondary_discipline_id_1")
+        "revision": int(row_value(build, 2, "revision")),
+        "starting_discipline_id": str(
+            row_value(build, 3, "starting_discipline_id")
         ),
-        "secondary_discipline_id_2": str(
-            row_value(discipline, 3, "secondary_discipline_id_2")
-        ),
+        "selected_disciplines": selected_disciplines,
+        "discipline_configurations": configurations,
+        "staff_school_ids": schools,
+        "active_assignments": assignments,
+        "passive_selections": passives,
         "armor_owner": normalize_identity(row_value(armor, 0, "owner")),
         "armor_set_id": str(row_value(armor, 1, "armor_set_id")),
         "equipment_owner": normalize_identity(row_value(equipment, 0, "owner")),
-        "main_hand_item_def_id": str(
+        "equipped_main_hand_item_def_id": str(
             option_value(row_value(equipment, 8, "main_hand_item_def_id")) or ""
         ),
-        "off_hand_item_def_id": str(
+        "equipped_off_hand_item_def_id": str(
             option_value(row_value(equipment, 9, "off_hand_item_def_id")) or ""
         ),
-        "main_hand_color_id": str(row_value(equipment, 12, "main_hand_color_id")),
-        "off_hand_color_id": str(row_value(equipment, 13, "off_hand_color_id")),
-        "selected_ability_owners": {
-            normalize_identity(row_value(row, 1, "owner")) for row in selected_abilities
-        },
-        "selected_ability_ids": {
-            str(row_value(row, 3, "ability_id")) for row in selected_abilities
-        },
-        "selected_ability_count": len(selected_abilities),
+        "equipped_main_hand_color_id": str(
+            row_value(equipment, 12, "main_hand_color_id")
+        ),
+        "equipped_off_hand_color_id": str(
+            row_value(equipment, 13, "off_hand_color_id")
+        ),
     }
 
 
@@ -450,27 +629,26 @@ class Benchmark:
         self.hub = Connection(server_uri, hub_database, timeout_seconds)
         subscription = self.hub.subscribe(HUB_QUERIES)
         initial = self.hub.wait_for_initial_subscription(subscription)
-        self.hub_loadout = parse_hub_loadout(
+        update = initial.get("database_update")
+        self.hub_armor = parse_hub_armor(
             require_single_inserted_row(initial.get("database_update"), "my_hub_loadout")
         )
-        if self.hub_loadout["owner"] != self.hub.identity:
-            raise RuntimeError("Hub loadout owner does not match the authenticated identity")
-        missing = [
-            field
-            for field in (
-                "primary_discipline_id",
-                "armor_set_id",
-                "main_hand_item_def_id",
-                "main_hand_color_id",
-            )
-            if not self.hub_loadout[field]
-        ]
-        if missing:
-            raise RuntimeError("Hub loadout is incomplete: " + ", ".join(missing))
-        if len(self.hub_loadout["selected_ability_ids"]) < 8:
-            raise RuntimeError("Hub loadout has fewer than eight selected abilities")
-        if self.hub_loadout["revision"] < 1:
-            raise RuntimeError("Hub loadout revision was not initialized")
+        self.hub_combat_build = parse_hub_combat_build(
+            require_single_inserted_row(update, "my_combat_build")
+        )
+        if {
+            self.hub_armor["owner"],
+            self.hub_combat_build["owner"],
+        } != {self.hub.identity}:
+            raise RuntimeError("Hub build state does not belong to the authenticated identity")
+        if not self.hub_armor["armor_set_id"]:
+            raise RuntimeError("Hub armor selection is empty")
+        if self.hub_combat_build["revision"] < 1:
+            raise RuntimeError("Hub combat-build revision was not initialized")
+        if len(self.hub_combat_build["selected_disciplines"]) != len(
+            self.hub_combat_build["discipline_configurations"]
+        ):
+            raise RuntimeError("Hub combat build lacks a selected-discipline configuration")
 
     def wait_for_hub_status(self, expected: str) -> dict[str, str]:
         def select(frame: dict[str, Any]) -> dict[str, str] | None:
@@ -516,7 +694,6 @@ class Benchmark:
                 )
             initial_request = match.subscribe(pvp_initial_queries(self.hub.identity))
             initial = match.wait_for_initial_subscription(initial_request)
-            initial_at = time.perf_counter()
             update = initial.get("database_update")
             tables = {
                 table.get("table_name")
@@ -529,99 +706,102 @@ class Benchmark:
                     "initial PvP subscription omitted required tables: " + ", ".join(sorted(missing))
                 )
 
-            expected_abilities = set(self.hub_loadout["selected_ability_ids"])
-            tracked_tables = (
-                "character_discipline_loadout",
-                "character_discipline_ability_selection",
-                "active_armor_set",
-                "player_equipment_presentation",
+            identity_literal = f"0x{self.hub.identity}"
+            audit_request = match.subscribe(
+                [
+                    f'SELECT * FROM "{table_name}" '
+                    f'WHERE ("{table_name}"."owner" = {identity_literal})'
+                    for table_name in MATCH_COMBAT_BUILD_TABLES
+                ]
             )
+            audit = match.wait_for_initial_subscription(audit_request)
+            audit_update = audit.get("database_update")
             observed = {
-                table_name: inserted_rows(update, table_name)
-                for table_name in tracked_tables
+                table_name: inserted_rows(audit_update, table_name)
+                for table_name in MATCH_COMBAT_BUILD_TABLES
             }
-            last_candidate: dict[str, Any] | None = None
-
-            def select_applied_loadout(frame: dict[str, Any]) -> dict[str, Any] | None:
-                nonlocal last_candidate
-                frame_update = database_update(frame)
-                for table_name in tracked_tables:
-                    rows = inserted_rows(frame_update, table_name)
-                    if rows:
-                        observed[table_name] = rows
-                candidate = parse_applied_match_loadout(observed)
-                if candidate is None:
-                    return None
-                last_candidate = candidate
-                expected_fields = (
-                    "primary_discipline_id",
-                    "secondary_discipline_id_1",
-                    "secondary_discipline_id_2",
-                    "armor_set_id",
-                    "main_hand_item_def_id",
-                    "off_hand_item_def_id",
-                    "main_hand_color_id",
-                    "off_hand_color_id",
-                )
-                if any(
-                    candidate[field] != self.hub_loadout[field]
-                    for field in expected_fields
-                ):
-                    return None
-                if candidate["selected_ability_owners"] != {self.hub.identity}:
-                    return None
-                if candidate["selected_ability_ids"] != expected_abilities:
-                    return None
-                if candidate["selected_ability_count"] != len(expected_abilities):
-                    return None
-                return candidate
-
-            applied = select_applied_loadout({})
+            for table_name in ("active_armor_set", "player_equipment_presentation"):
+                observed[table_name] = inserted_rows(update, table_name)
+            applied = parse_applied_match_combat_build(observed)
             if applied is None:
-                try:
-                    applied = match.wait_for(select_applied_loadout)
-                except TimeoutError as error:
-                    counts = {
-                        table_name: len(rows)
-                        for table_name, rows in observed.items()
-                    }
-                    raise RuntimeError(
-                        "timed out waiting for the exact Hub loadout in the match; "
-                        f"initial tables={sorted(tables)}; observed rows={counts}; "
-                        f"observed loadout={last_candidate}"
-                    ) from error
+                counts = {
+                    table_name: len(rows) for table_name, rows in observed.items()
+                }
+                raise RuntimeError(
+                    "match canonical combat build is incomplete; "
+                    f"initial tables={sorted(tables)}; observed rows={counts}"
+                )
             initial_at = time.perf_counter()
-            if any(
+            if applied["canonical_owners"] != {self.hub.identity} or any(
                 applied[field] != self.hub.identity
-                for field in ("discipline_owner", "armor_owner", "equipment_owner")
-            ):
-                raise RuntimeError("match loadout rows do not belong to the authenticated identity")
-            for field in (
-                "primary_discipline_id",
-                "secondary_discipline_id_1",
-                "secondary_discipline_id_2",
-                "armor_set_id",
-                "main_hand_item_def_id",
-                "off_hand_item_def_id",
-                "main_hand_color_id",
-                "off_hand_color_id",
-            ):
-                if applied[field] != self.hub_loadout[field]:
-                    raise RuntimeError(
-                        f"match {field} {applied[field]!r} does not match Hub "
-                        f"value {self.hub_loadout[field]!r}"
-                    )
-            if applied["selected_ability_owners"] != {self.hub.identity}:
-                raise RuntimeError("match ability selections belong to a different identity")
-            if (
-                applied["selected_ability_ids"] != expected_abilities
-                or applied["selected_ability_count"] != len(expected_abilities)
+                for field in ("build_owner", "armor_owner", "equipment_owner")
             ):
                 raise RuntimeError(
-                    "match selected abilities do not match the Hub loadout: "
-                    f"missing={sorted(expected_abilities - applied['selected_ability_ids'])} "
-                    f"extra={sorted(applied['selected_ability_ids'] - expected_abilities)}"
+                    "match combat-build rows do not belong to the authenticated identity"
                 )
+            for field in (
+                "contract_schema_version",
+                "revision",
+                "starting_discipline_id",
+                "selected_disciplines",
+                "staff_school_ids",
+                "active_assignments",
+                "passive_selections",
+            ):
+                if applied[field] != self.hub_combat_build[field]:
+                    raise RuntimeError(
+                        f"match combat-build {field} differs from the frozen Hub value"
+                    )
+            applied_configuration_contract = [
+                {
+                    key: value
+                    for key, value in configuration.items()
+                    if key not in {"main_hand_item_id", "off_hand_item_id"}
+                }
+                for configuration in applied["discipline_configurations"]
+            ]
+            if applied_configuration_contract != self.hub_combat_build[
+                "discipline_configurations"
+            ]:
+                raise RuntimeError(
+                    "match per-discipline weapon configurations differ from the frozen Hub build"
+                )
+            for configuration in applied["discipline_configurations"]:
+                if not configuration["main_hand_item_id"]:
+                    raise RuntimeError("match discipline weapon was not materialized")
+                if bool(configuration["off_hand_item_id"]) != bool(
+                    configuration["off_hand_item_def_id"]
+                ):
+                    raise RuntimeError("match off-hand materialization differs from its definition")
+            if applied["armor_set_id"] != self.hub_armor["armor_set_id"]:
+                raise RuntimeError("match armor differs from the frozen Hub selection")
+            starting_configuration = next(
+                configuration
+                for configuration in self.hub_combat_build[
+                    "discipline_configurations"
+                ]
+                if configuration["combat_discipline_id"]
+                == self.hub_combat_build["starting_discipline_id"]
+            )
+            for match_field, expected_field in (
+                ("equipped_main_hand_item_def_id", "main_hand_item_def_id"),
+                ("equipped_off_hand_item_def_id", "off_hand_item_def_id"),
+                ("equipped_main_hand_color_id", "main_hand_color_id"),
+                ("equipped_off_hand_color_id", "off_hand_color_id"),
+            ):
+                expected_value = starting_configuration[expected_field]
+                if expected_field == "main_hand_color_id":
+                    expected_value = effective_weapon_color_id(
+                        starting_configuration["main_hand_item_def_id"], expected_value
+                    )
+                elif expected_field == "off_hand_color_id":
+                    expected_value = effective_weapon_color_id(
+                        starting_configuration["off_hand_item_def_id"], expected_value
+                    )
+                if applied[match_field] != expected_value:
+                    raise RuntimeError(
+                        f"starting discipline equipment {match_field} differs from its configuration"
+                    )
 
             result = {
                 "sample": ordinal,
@@ -629,10 +809,18 @@ class Benchmark:
                 "match": assignment["match_id"],
                 "match_build_id": assignment["match_build_id"],
                 "map_id": assignment["map_id"],
-                "hub_loadout_revision": self.hub_loadout["revision"],
-                "primary_discipline_id": self.hub_loadout["primary_discipline_id"],
-                "armor_set_id": self.hub_loadout["armor_set_id"],
-                "main_hand_item_def_id": self.hub_loadout["main_hand_item_def_id"],
+                "contract_schema_version": self.hub_combat_build[
+                    "contract_schema_version"
+                ],
+                "combat_build_revision": self.hub_combat_build["revision"],
+                "starting_discipline_id": self.hub_combat_build[
+                    "starting_discipline_id"
+                ],
+                "selected_disciplines": [
+                    value["combat_discipline_id"]
+                    for value in self.hub_combat_build["selected_disciplines"]
+                ],
+                "armor_set_id": self.hub_armor["armor_set_id"],
                 "request_to_ready_ms": round((ready_at - request_started) * 1000.0, 3),
                 "ready_to_match_transport_ms": round((transport_at - ready_at) * 1000.0, 3),
                 "match_transport_to_initial_state_ms": round((initial_at - transport_at) * 1000.0, 3),

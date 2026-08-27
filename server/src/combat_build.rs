@@ -11,11 +11,18 @@ const CONTRACT_SCHEMA_VERSION: u32 = 1;
 const STAFF_DISCIPLINE_ID: &str = "STAFF";
 const ACTION_SLOT_GROUP: &str = "ACTION_BAR_ACTION";
 
+#[cfg(not(feature = "pvp_match"))]
 const PROGRESSION_CATALOG_JSON: &str = include_str!("progression_catalog.shared.json");
+#[cfg(feature = "pvp_match")]
+const PROGRESSION_CATALOG_JSON: &str = crate::progression::PROGRESSION_CATALOG_JSON;
+
+#[cfg(not(feature = "pvp_match"))]
 const WEAPON_APPEARANCE_CATALOG_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json"
 ));
+#[cfg(feature = "pvp_match")]
+const WEAPON_APPEARANCE_CATALOG_JSON: &str = crate::inventory::WEAPON_APPEARANCE_CATALOG_JSON;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -81,6 +88,7 @@ pub(crate) struct ValidatedCombatBuild {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CombatBuildErrorCode {
+    UnsupportedSchemaVersion,
     StaleRevision,
     DisciplineCount,
     UnknownDiscipline,
@@ -109,6 +117,7 @@ pub(crate) enum CombatBuildErrorCode {
 impl CombatBuildErrorCode {
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
+            Self::UnsupportedSchemaVersion => "COMBAT_BUILD_UNSUPPORTED_SCHEMA_VERSION",
             Self::StaleRevision => "COMBAT_BUILD_STALE_REVISION",
             Self::DisciplineCount => "COMBAT_BUILD_DISCIPLINE_COUNT",
             Self::UnknownDiscipline => "COMBAT_BUILD_UNKNOWN_DISCIPLINE",
@@ -600,6 +609,32 @@ impl CombatBuildCatalog {
             active_count,
             passive_count,
         })
+    }
+
+    /// Revalidates a frozen cross-environment snapshot without inventing a
+    /// second bootstrap policy. A snapshot always carries its effective start
+    /// discipline, so converting it back to a draft is lossless.
+    pub(crate) fn validate_snapshot(
+        &self,
+        snapshot: &CombatBuildSnapshot,
+    ) -> Result<ValidatedCombatBuild, CombatBuildValidationError> {
+        if snapshot.contract_schema_version != CONTRACT_SCHEMA_VERSION {
+            return Err(CombatBuildValidationError::new(
+                CombatBuildErrorCode::UnsupportedSchemaVersion,
+                format!(
+                    "snapshot schema version {} is unsupported; expected {CONTRACT_SCHEMA_VERSION}",
+                    snapshot.contract_schema_version
+                ),
+            ));
+        }
+
+        let draft = CombatBuildDraft {
+            revision: snapshot.revision,
+            starting_discipline_id: Some(snapshot.starting_discipline_id.clone()),
+            selected_disciplines: snapshot.selected_disciplines.clone(),
+            discipline_configurations: snapshot.discipline_configurations.clone(),
+        };
+        self.validate_draft(&draft, snapshot.revision)
     }
 
     fn validate_school_selection(

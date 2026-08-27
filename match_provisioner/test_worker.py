@@ -38,6 +38,39 @@ PLAYER_TWO = "33" * 32
 OTHER_OWNER = "44" * 32
 
 
+def combat_build_snapshot_json(revision: int = 4) -> str:
+    return json.dumps(
+        {
+            "contract_schema_version": 1,
+            "revision": revision,
+            "starting_discipline_id": "DAGGERS",
+            "selected_disciplines": [
+                {"slot_index": 0, "combat_discipline_id": "DAGGERS"}
+            ],
+            "discipline_configurations": [
+                {
+                    "combat_discipline_id": "DAGGERS",
+                    "weapon": {
+                        "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+                        "main_hand_color_id": "",
+                        "off_hand_item_def_id": "",
+                        "off_hand_color_id": "",
+                    },
+                    "staff_school_ids": [],
+                    "active_assignments": [
+                        {
+                            "action_slot": "slot_0_0",
+                            "ability_id": "DAGGER_QUICK_CUT",
+                        }
+                    ],
+                    "passive_ability_ids": [],
+                }
+            ],
+        },
+        separators=(",", ":"),
+    )
+
+
 class FakeApi:
     def __init__(self):
         self.hub_database = "arena-hub-local"
@@ -45,7 +78,7 @@ class FakeApi:
         self.tickets: dict[str, dict[str, Any]] = {}
         self.assignments: dict[str, dict[str, Any]] = {}
         self.players: dict[str, dict[str, Any]] = {}
-        self.loadouts: dict[str, dict[str, Any]] = {}
+        self.combat_build_snapshots: dict[str, dict[str, Any]] = {}
         self.databases: dict[str, dict[str, Any]] = {}
         self.database_names: dict[str, str] = {}
         self.calls: list[tuple[str, str, list[Any]]] = []
@@ -78,29 +111,13 @@ class FakeApi:
             "created_at": timestamp_arg(created_at),
             "updated_at": timestamp_arg(created_at),
         }
-        self.loadouts[ticket_id] = {
+        self.combat_build_snapshots[ticket_id] = {
             "ticket_id": ticket_id,
             "player_identity": identity_arg(player_identity),
-            "primary_discipline_id": "WAR",
-            "secondary_discipline_id_1": "RUIN",
-            "secondary_discipline_id_2": "",
-            "selected_ability_ids": [
-                "WARRIOR_HEW",
-                "WARRIOR_MAIM",
-                "WARRIOR_GROUND_TO_AIR",
-                "WARRIOR_AIR_TO_GROUND",
-                "WARRIOR_CRUSHING_BLOW",
-                "WARRIOR_CATACLYSM",
-                "WARRIOR_BUZZSAW",
-                "WARRIOR_SKYFALL",
-                "SPELL_FIREBALL",
-            ],
+            "contract_schema_version": 1,
+            "combat_build_revision": 4,
+            "combat_build_snapshot_json": combat_build_snapshot_json(),
             "armor_set_id": "IRON",
-            "main_hand_item_def_id": [0, "NH_SWORD_2H_NEWBIE_02"],
-            "main_hand_color_id": [0, "CL"],
-            "off_hand_item_def_id": [1, []],
-            "off_hand_color_id": [1, []],
-            "loadout_revision": 4,
             "captured_at": timestamp_arg(created_at),
         }
 
@@ -126,8 +143,8 @@ class FakeApi:
                 return list(self.assignments.values())
             if table == "hub_player":
                 return list(self.players.values())
-            if table == "match_player_loadout_snapshot":
-                return list(self.loadouts.values())
+            if table == "match_player_combat_build_snapshot":
+                return list(self.combat_build_snapshots.values())
         match_database = self._database(database)
         if match_database is None:
             raise ProvisionerError("match database does not exist")
@@ -194,9 +211,13 @@ class FakeApi:
         match_database = self._database(database)
         if match_database is None:
             raise ProvisionerError("match database does not exist")
-        if reducer == "bootstrap_unranked_2_v_2_bot_match":
+        if reducer in {
+            "bootstrap_unranked_2_v_2_bot_match",
+            "bootstrap_open_world_instance",
+        }:
             if self.fail_bootstrap:
                 raise ProvisionerError("injected bootstrap failure")
+            combat_build = json.loads(str(arguments[7]))
             match_database["config"] = {
                 "singleton_id": 0,
                 "match_id": str(arguments[0]),
@@ -209,15 +230,12 @@ class FakeApi:
                 {
                     "player_identity": arguments[5],
                     "display_name": str(arguments[6]),
-                    "primary_discipline_id": str(arguments[7]),
-                    "secondary_discipline_id_1": str(arguments[8]),
-                    "secondary_discipline_id_2": str(arguments[9]),
-                    "selected_ability_ids": list(arguments[10]),
-                    "armor_set_id": str(arguments[11]),
-                    "main_hand_item_def_id": str(arguments[12]),
-                    "main_hand_color_id": str(arguments[13]),
-                    "off_hand_item_def_id": str(arguments[14]),
-                    "off_hand_color_id": str(arguments[15]),
+                    "contract_schema_version": combat_build[
+                        "contract_schema_version"
+                    ],
+                    "combat_build_revision": combat_build["revision"],
+                    "combat_build_snapshot_json": str(arguments[7]),
+                    "armor_set_id": str(arguments[8]),
                 }
             ]
             return
@@ -406,20 +424,10 @@ class ProvisionerTests(unittest.TestCase):
         bootstrap_calls = [call for call in self.api.calls if call[1].startswith("bootstrap_")]
         self.assertEqual(len(bootstrap_calls), 1)
         bootstrap_args = bootstrap_calls[0][2]
-        frozen = self.api.loadouts["ticket-one"]
-        self.assertEqual(bootstrap_args[7], frozen["primary_discipline_id"])
-        self.assertEqual(bootstrap_args[8], frozen["secondary_discipline_id_1"])
-        self.assertEqual(bootstrap_args[9], frozen["secondary_discipline_id_2"])
-        self.assertEqual(bootstrap_args[10], frozen["selected_ability_ids"])
-        self.assertEqual(bootstrap_args[11], frozen["armor_set_id"])
-        self.assertEqual(
-            bootstrap_args[12], unwrap_option(frozen["main_hand_item_def_id"])
-        )
-        self.assertEqual(
-            bootstrap_args[13], unwrap_option(frozen["main_hand_color_id"])
-        )
-        self.assertEqual(bootstrap_args[14], "")
-        self.assertEqual(bootstrap_args[15], "")
+        frozen = self.api.combat_build_snapshots["ticket-one"]
+        self.assertEqual(len(bootstrap_args), 9)
+        self.assertEqual(bootstrap_args[7], frozen["combat_build_snapshot_json"])
+        self.assertEqual(bootstrap_args[8], frozen["armor_set_id"])
 
     def test_stale_sources_fail_the_ticket_without_publishing(self) -> None:
         provisioner = self.provisioner()
@@ -554,7 +562,15 @@ class ProvisionerTests(unittest.TestCase):
                 "phase": "WAITING",
                 "allocation_expires_at": timestamp_arg(self.now + 120),
             },
-            "reservations": [{"player_identity": identity_arg(PLAYER_ONE)}],
+            "reservations": [
+                {
+                    "player_identity": identity_arg(PLAYER_ONE),
+                    "contract_schema_version": 1,
+                    "combat_build_revision": 4,
+                    "combat_build_snapshot_json": combat_build_snapshot_json(),
+                    "armor_set_id": "IRON",
+                }
+            ],
         }
         self.api.tickets[ticket_id]["status"] = "PROVISIONING"
         allocation = Allocation(
@@ -583,6 +599,23 @@ class ProvisionerTests(unittest.TestCase):
         self.assertEqual(self.api.publish_count, 0)
         self.assertEqual(self.api.tickets[ticket_id]["status"], "READY")
         self.assertEqual(self.store.get(ticket_id).state, "READY")
+
+    def test_reserved_combat_build_drift_quarantines_database(self) -> None:
+        self.api.add_ticket("ticket-one", PLAYER_ONE)
+        provisioner = self.provisioner()
+        self.run_quietly(provisioner)
+        allocation = self.store.get("ticket-one")
+        database = self.api.databases[allocation.database_identity]
+        database["reservations"][0]["combat_build_snapshot_json"] = (
+            combat_build_snapshot_json(revision=5)
+        )
+
+        self.run_quietly(provisioner)
+
+        self.assertEqual(self.store.get("ticket-one").state, "ORPHANED")
+        self.assertEqual(self.api.tickets["ticket-one"]["status"], "CLOSED")
+        self.assertEqual(self.api.delete_count, 0)
+        self.assertIn(allocation.database_identity, self.api.databases)
 
     def test_terminal_match_deletes_exact_identity_and_closes_ticket(self) -> None:
         self.api.add_ticket("ticket-one", PLAYER_ONE)

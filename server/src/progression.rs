@@ -22,6 +22,8 @@ use crate::relations::TARGET_AUDIENCE_HOSTILE;
 use crate::spells::{is_on_named_cooldown, player_knows_spell, stamp_named_cooldown_for_duration};
 
 #[allow(unused_imports)]
+use crate::match_contract::match_combat_build as _;
+#[allow(unused_imports)]
 use crate::player::player as _;
 #[allow(unused_imports)]
 use crate::player_state::player_state as _;
@@ -64,7 +66,7 @@ use crate::progression::resource_catalog as _;
 #[allow(unused_imports)]
 use crate::progression::stat_scaling_catalog as _;
 
-const PROGRESSION_CATALOG_JSON: &str =
+pub(crate) const PROGRESSION_CATALOG_JSON: &str =
     include_str!(concat!(env!("OUT_DIR"), "/progression_catalog.shared.json"));
 const ACTION_KIND_ABILITY: &str = "ABILITY";
 const ACTION_KIND_FIXED: &str = "FIXED";
@@ -2179,70 +2181,6 @@ pub fn set_combat_discipline(ctx: &ReducerContext, discipline_id: String) -> Res
     Ok(())
 }
 
-#[reducer]
-pub fn save_character_discipline_loadout(
-    ctx: &ReducerContext,
-    primary_discipline_id: String,
-    secondary_discipline_id_1: String,
-    secondary_discipline_id_2: String,
-    selected_ability_ids: Vec<String>,
-) -> Result<(), String> {
-    save_character_discipline_loadout_for_owner(
-        ctx,
-        ctx.sender(),
-        primary_discipline_id,
-        secondary_discipline_id_1,
-        secondary_discipline_id_2,
-        selected_ability_ids,
-    )
-}
-
-pub(crate) fn save_character_discipline_loadout_for_owner(
-    ctx: &ReducerContext,
-    owner: Identity,
-    primary_discipline_id: String,
-    secondary_discipline_id_1: String,
-    secondary_discipline_id_2: String,
-    selected_ability_ids: Vec<String>,
-) -> Result<(), String> {
-    let primary_discipline_id =
-        require_combat_discipline(ctx, primary_discipline_id.as_str())?.discipline_id;
-    let secondary_discipline_id_1 =
-        normalize_selected_secondary_discipline(ctx, secondary_discipline_id_1)?;
-    let secondary_discipline_id_2 =
-        normalize_selected_secondary_discipline(ctx, secondary_discipline_id_2)?;
-    validate_character_discipline_selection(
-        primary_discipline_id.as_str(),
-        secondary_discipline_id_1.as_str(),
-        secondary_discipline_id_2.as_str(),
-    )?;
-
-    let selected_abilities = validate_character_discipline_ability_selection(
-        ctx,
-        primary_discipline_id.as_str(),
-        secondary_discipline_id_1.as_str(),
-        secondary_discipline_id_2.as_str(),
-        selected_ability_ids,
-    )?;
-
-    let loadout = CharacterDisciplineLoadout {
-        owner,
-        primary_discipline_id,
-        secondary_discipline_id_1,
-        secondary_discipline_id_2,
-        updated_at: ctx.timestamp,
-    };
-    upsert_character_discipline_loadout(ctx, loadout);
-    replace_character_discipline_ability_selections(
-        ctx,
-        owner,
-        selected_abilities.as_slice(),
-        ctx.timestamp,
-    );
-    sync_selected_discipline_action_bars(ctx, owner, selected_abilities.as_slice(), ctx.timestamp);
-    Ok(())
-}
-
 pub(crate) fn sync_progression_catalogs(ctx: &ReducerContext) {
     sync_combat_profile_catalog(ctx);
     sync_combat_discipline_catalog(ctx);
@@ -2429,13 +2367,22 @@ pub(crate) fn ensure_default_progression_for_identity(
     let Some(_player) = ctx.db.player().identity().find(owner) else {
         return Err("player row not found".to_string());
     };
+    let uses_frozen_combat_build = crate::match_contract::is_provisioned(ctx)
+        && ctx.db.match_combat_build().owner().find(owner).is_some();
     ensure_default_combat_discipline_state(ctx, owner, ctx.timestamp);
-    ensure_default_character_discipline_loadout(ctx, owner, ctx.timestamp);
+    if !uses_frozen_combat_build {
+        // Local-direct compatibility still uses the legacy runtime projection.
+        // A provisioned player must never receive a default positional
+        // discipline loadout in place of the frozen canonical build.
+        ensure_default_character_discipline_loadout(ctx, owner, ctx.timestamp);
+    }
     sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
     clear_generic_fixed_action_bar_assignments_for_owner(ctx, owner, ctx.timestamp);
     ensure_default_character_action_bar_assignments(ctx, owner, ctx.timestamp);
-    ensure_default_character_discipline_ability_selections(ctx, owner, ctx.timestamp);
-    sync_persisted_discipline_action_bars(ctx, owner, ctx.timestamp);
+    if !uses_frozen_combat_build {
+        ensure_default_character_discipline_ability_selections(ctx, owner, ctx.timestamp);
+        sync_persisted_discipline_action_bars(ctx, owner, ctx.timestamp);
+    }
 
     Ok(())
 }

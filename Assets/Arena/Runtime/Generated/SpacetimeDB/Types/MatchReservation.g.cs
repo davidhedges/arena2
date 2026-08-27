@@ -21,24 +21,14 @@ namespace SpacetimeDB.Types
         public byte TeamSlot;
         [DataMember(Name = "display_name")]
         public string DisplayName;
-        [DataMember(Name = "primary_discipline_id")]
-        public string PrimaryDisciplineId;
-        [DataMember(Name = "secondary_discipline_id_1")]
-        public string SecondaryDisciplineId1;
-        [DataMember(Name = "secondary_discipline_id_2")]
-        public string SecondaryDisciplineId2;
-        [DataMember(Name = "selected_ability_ids")]
-        public System.Collections.Generic.List<string> SelectedAbilityIds;
+        [DataMember(Name = "contract_schema_version")]
+        public uint ContractSchemaVersion;
+        [DataMember(Name = "combat_build_revision")]
+        public ulong CombatBuildRevision;
+        [DataMember(Name = "combat_build_snapshot_json")]
+        public string CombatBuildSnapshotJson;
         [DataMember(Name = "armor_set_id")]
         public string ArmorSetId;
-        [DataMember(Name = "main_hand_item_def_id")]
-        public string MainHandItemDefId;
-        [DataMember(Name = "main_hand_color_id")]
-        public string MainHandColorId;
-        [DataMember(Name = "off_hand_item_def_id")]
-        public string OffHandItemDefId;
-        [DataMember(Name = "off_hand_color_id")]
-        public string OffHandColorId;
         [DataMember(Name = "reserved_at")]
         public SpacetimeDB.Timestamp ReservedAt;
 
@@ -47,15 +37,10 @@ namespace SpacetimeDB.Types
             byte TeamId,
             byte TeamSlot,
             string DisplayName,
-            string PrimaryDisciplineId,
-            string SecondaryDisciplineId1,
-            string SecondaryDisciplineId2,
-            System.Collections.Generic.List<string> SelectedAbilityIds,
+            uint ContractSchemaVersion,
+            ulong CombatBuildRevision,
+            string CombatBuildSnapshotJson,
             string ArmorSetId,
-            string MainHandItemDefId,
-            string MainHandColorId,
-            string OffHandItemDefId,
-            string OffHandColorId,
             SpacetimeDB.Timestamp ReservedAt
         )
         {
@@ -63,30 +48,18 @@ namespace SpacetimeDB.Types
             this.TeamId = TeamId;
             this.TeamSlot = TeamSlot;
             this.DisplayName = DisplayName;
-            this.PrimaryDisciplineId = PrimaryDisciplineId;
-            this.SecondaryDisciplineId1 = SecondaryDisciplineId1;
-            this.SecondaryDisciplineId2 = SecondaryDisciplineId2;
-            this.SelectedAbilityIds = SelectedAbilityIds;
+            this.ContractSchemaVersion = ContractSchemaVersion;
+            this.CombatBuildRevision = CombatBuildRevision;
+            this.CombatBuildSnapshotJson = CombatBuildSnapshotJson;
             this.ArmorSetId = ArmorSetId;
-            this.MainHandItemDefId = MainHandItemDefId;
-            this.MainHandColorId = MainHandColorId;
-            this.OffHandItemDefId = OffHandItemDefId;
-            this.OffHandColorId = OffHandColorId;
             this.ReservedAt = ReservedAt;
         }
 
         public MatchReservation()
         {
             this.DisplayName = "";
-            this.PrimaryDisciplineId = "";
-            this.SecondaryDisciplineId1 = "";
-            this.SecondaryDisciplineId2 = "";
-            this.SelectedAbilityIds = new();
+            this.CombatBuildSnapshotJson = "";
             this.ArmorSetId = "";
-            this.MainHandItemDefId = "";
-            this.MainHandColorId = "";
-            this.OffHandItemDefId = "";
-            this.OffHandColorId = "";
         }
     }
 }

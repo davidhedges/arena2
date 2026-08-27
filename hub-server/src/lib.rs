@@ -133,9 +133,10 @@ pub struct HubPlayer {
     pub updated_at: Timestamp,
 }
 
-/// Legacy Phase 3 handoff state. Combat-build edits no longer write this row;
-/// it remains immutable except for the separately scoped armor selection and
-/// catalog reconciliation until the structured ticket snapshot replaces it.
+/// Legacy UI/armor compatibility state. The canonical combat-build writer and
+/// ticket handoff do not read or write its discipline, ability, or weapon
+/// fields. Armor remains separately scoped here until the later client/final
+/// cutover, and new callers receive a row so the current armor UI still works.
 #[table(accessor = hub_player_loadout)]
 #[derive(Clone)]
 pub struct HubPlayerLoadout {
@@ -238,8 +239,9 @@ struct HubCatalogState {
     revision: u64,
 }
 
-/// Frozen at ticket creation so later Hub edits cannot alter a match that is
-/// already being provisioned.
+/// Data-preserving schema tombstone for Hub rows created before the canonical
+/// combat-build handoff. No reducer inserts or reads this table. Phase 7 removes
+/// it with the explicitly destructive final schema cutover.
 #[table(accessor = match_player_loadout_snapshot)]
 pub struct MatchPlayerLoadoutSnapshot {
     #[primary_key]
@@ -261,6 +263,22 @@ pub struct MatchPlayerLoadoutSnapshot {
     pub main_hand_color_id: Option<String>,
     #[default(None::<String>)]
     pub off_hand_color_id: Option<String>,
+}
+
+/// One exact canonical combat-build revision frozen at ticket creation. The
+/// provisioner transports `combat_build_snapshot_json` without interpreting
+/// it; the disposable module parses and revalidates the shared typed contract.
+#[table(accessor = match_player_combat_build_snapshot)]
+pub struct MatchPlayerCombatBuildSnapshot {
+    #[primary_key]
+    pub ticket_id: String,
+    #[index(btree)]
+    pub player_identity: Identity,
+    pub contract_schema_version: u32,
+    pub combat_build_revision: u64,
+    pub combat_build_snapshot_json: String,
+    pub armor_set_id: String,
+    pub captured_at: Timestamp,
 }
 
 /// Display-only Hub copy of the source-controlled combat catalog. Match
@@ -406,8 +424,9 @@ pub struct MyHubPlayer {
     pub updated_at: Timestamp,
 }
 
-/// Legacy caller-only positional projection retained for the Phase 3 handoff.
-/// It is not a reader for the canonical combat-build aggregate.
+/// Legacy caller-only projection retained for the current UI and separately
+/// scoped armor selection. It is not a match-handoff or canonical combat-build
+/// reader.
 #[derive(SpacetimeType)]
 pub struct MyHubLoadout {
     pub owner: Identity,
@@ -812,6 +831,7 @@ pub fn request_unranked_2v2_bot_match(
     ensure_hub_player(ctx, player_identity);
     ensure_hub_loadout_catalogs(ctx)?;
     ensure_default_hub_player_loadout(ctx, player_identity)?;
+    ensure_default_combat_build(ctx, player_identity)?;
 
     if let Some(existing) = ctx
         .db
@@ -851,7 +871,7 @@ pub fn request_unranked_2v2_bot_match(
         lease_until: None,
         failure_code: None,
     });
-    freeze_player_loadout_for_ticket(ctx, ticket_id, player_identity);
+    freeze_player_combat_build_for_ticket(ctx, ticket_id, player_identity)?;
     bump_provisioner_wakeup(ctx);
     Ok(())
 }
@@ -877,6 +897,7 @@ pub fn request_open_world_instance(
     ensure_hub_player(ctx, player_identity);
     ensure_hub_loadout_catalogs(ctx)?;
     ensure_default_hub_player_loadout(ctx, player_identity)?;
+    ensure_default_combat_build(ctx, player_identity)?;
 
     if let Some(existing) = ctx
         .db
@@ -916,7 +937,7 @@ pub fn request_open_world_instance(
         lease_until: None,
         failure_code: None,
     });
-    freeze_player_loadout_for_ticket(ctx, ticket_id, player_identity);
+    freeze_player_combat_build_for_ticket(ctx, ticket_id, player_identity)?;
     bump_provisioner_wakeup(ctx);
     Ok(())
 }
@@ -2191,55 +2212,44 @@ fn normalize_authored_id(value: &str) -> String {
     value.trim().to_ascii_uppercase()
 }
 
-fn freeze_player_loadout_for_ticket(
+fn freeze_player_combat_build_for_ticket(
     ctx: &ReducerContext,
     ticket_id: String,
     player_identity: Identity,
-) {
-    let loadout = ctx.db.hub_player_loadout().owner().find(player_identity);
+) -> Result<(), String> {
+    let validated = validated_combat_build_for_owner(ctx, player_identity)?;
+    let combat_build_snapshot_json = serde_json::to_string(&validated.snapshot)
+        .map_err(|error| format!("COMBAT_BUILD_SNAPSHOT_SERIALIZATION_FAILED: {error}"))?;
+    let armor_set_id = ctx
+        .db
+        .hub_player_loadout()
+        .owner()
+        .find(player_identity)
+        .map(|row| row.armor_set_id)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "MATCH_ARMOR_NOT_INITIALIZED: caller has no armor selection".to_string())?;
+
     ctx.db
-        .match_player_loadout_snapshot()
-        .insert(MatchPlayerLoadoutSnapshot {
+        .match_player_combat_build_snapshot()
+        .insert(MatchPlayerCombatBuildSnapshot {
             ticket_id,
             player_identity,
-            primary_discipline_id: loadout
-                .as_ref()
-                .map(|row| row.primary_discipline_id.clone())
-                .unwrap_or_default(),
-            secondary_discipline_id_1: loadout
-                .as_ref()
-                .map(|row| row.secondary_discipline_id_1.clone())
-                .unwrap_or_default(),
-            secondary_discipline_id_2: loadout
-                .as_ref()
-                .map(|row| row.secondary_discipline_id_2.clone())
-                .unwrap_or_default(),
-            selected_ability_ids: loadout
-                .as_ref()
-                .map(|row| row.selected_ability_ids.clone())
-                .unwrap_or_default(),
-            armor_set_id: loadout
-                .as_ref()
-                .map(|row| row.armor_set_id.clone())
-                .unwrap_or_default(),
-            main_hand_item_def_id: loadout
-                .as_ref()
-                .and_then(|row| row.main_hand_item_def_id.clone()),
-            off_hand_item_def_id: loadout
-                .as_ref()
-                .and_then(|row| row.off_hand_item_def_id.clone()),
-            main_hand_color_id: loadout
-                .as_ref()
-                .and_then(|row| row.main_hand_color_id.clone()),
-            off_hand_color_id: loadout
-                .as_ref()
-                .and_then(|row| row.off_hand_color_id.clone()),
-            loadout_revision: loadout.as_ref().map(|row| row.revision).unwrap_or_default(),
+            contract_schema_version: validated.snapshot.contract_schema_version,
+            combat_build_revision: validated.snapshot.revision,
+            combat_build_snapshot_json,
+            armor_set_id,
             captured_at: ctx.timestamp,
         });
+    Ok(())
 }
 
 fn delete_loadout_snapshot_for_ticket(ctx: &ReducerContext, ticket_id: &str) {
+    ctx.db
+        .match_player_combat_build_snapshot()
+        .ticket_id()
+        .delete(ticket_id.to_string());
+    // Old terminal tickets may still own a pre-cutover tombstone row. Deleting
+    // it is cleanup only; no request or provisioner path can create/read one.
     ctx.db
         .match_player_loadout_snapshot()
         .ticket_id()
@@ -2257,6 +2267,122 @@ fn ensure_hub_player(ctx: &ReducerContext, identity: Identity) {
         created_at: ctx.timestamp,
         updated_at: ctx.timestamp,
     });
+}
+
+fn validated_combat_build_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Result<ValidatedCombatBuild, String> {
+    let build = ctx.db.combat_build().owner().find(owner).ok_or_else(|| {
+        "COMBAT_BUILD_NOT_INITIALIZED: caller has no canonical combat build".to_string()
+    })?;
+
+    let mut selected_disciplines: Vec<_> = ctx
+        .db
+        .combat_build_discipline()
+        .owner()
+        .filter(owner)
+        .map(|row| ContractSelectedDiscipline {
+            slot_index: row.slot_index,
+            combat_discipline_id: row.combat_discipline_id,
+        })
+        .collect();
+    selected_disciplines.sort_by_key(|row| row.slot_index);
+
+    let mut staff_school_ids: Vec<_> = ctx
+        .db
+        .staff_school_selection()
+        .owner()
+        .filter(owner)
+        .map(|row| row.spell_school_id)
+        .collect();
+    staff_school_ids.sort();
+
+    let mut assignments_by_discipline: HashMap<String, Vec<_>> = HashMap::new();
+    for row in ctx
+        .db
+        .discipline_action_bar_assignment()
+        .owner()
+        .filter(owner)
+    {
+        assignments_by_discipline
+            .entry(row.combat_discipline_id)
+            .or_default()
+            .push(ContractActionAssignment {
+                action_slot: row.action_slot,
+                ability_id: row.ability_id,
+            });
+    }
+    for assignments in assignments_by_discipline.values_mut() {
+        assignments.sort_by(|left, right| left.action_slot.cmp(&right.action_slot));
+    }
+
+    let mut passives_by_discipline: HashMap<String, Vec<_>> = HashMap::new();
+    for row in ctx.db.discipline_passive_selection().owner().filter(owner) {
+        passives_by_discipline
+            .entry(row.combat_discipline_id)
+            .or_default()
+            .push(row.ability_id);
+    }
+    for passives in passives_by_discipline.values_mut() {
+        passives.sort();
+    }
+
+    let mut found_staff_configuration = false;
+    let mut discipline_configurations: Vec<_> = ctx
+        .db
+        .discipline_configuration()
+        .owner()
+        .filter(owner)
+        .map(|row| {
+            let combat_discipline_id = row.combat_discipline_id;
+            let is_staff = combat_discipline_id == "STAFF";
+            found_staff_configuration |= is_staff;
+            ContractDisciplineConfiguration {
+                staff_school_ids: if is_staff {
+                    staff_school_ids.clone()
+                } else {
+                    Vec::new()
+                },
+                active_assignments: assignments_by_discipline
+                    .remove(combat_discipline_id.as_str())
+                    .unwrap_or_default(),
+                passive_ability_ids: passives_by_discipline
+                    .remove(combat_discipline_id.as_str())
+                    .unwrap_or_default(),
+                combat_discipline_id,
+                weapon: ContractWeaponConfiguration {
+                    main_hand_item_def_id: row.main_hand_item_def_id,
+                    main_hand_color_id: row.main_hand_color_id,
+                    off_hand_item_def_id: row.off_hand_item_def_id,
+                    off_hand_color_id: row.off_hand_color_id,
+                },
+            }
+        })
+        .collect();
+    discipline_configurations
+        .sort_by(|left, right| left.combat_discipline_id.cmp(&right.combat_discipline_id));
+
+    if !assignments_by_discipline.is_empty()
+        || !passives_by_discipline.is_empty()
+        || (!staff_school_ids.is_empty() && !found_staff_configuration)
+    {
+        return Err(
+            "COMBAT_BUILD_STORAGE_INCONSISTENT: child rows have no discipline configuration"
+                .to_string(),
+        );
+    }
+
+    let draft = CombatBuildDraft {
+        revision: build.revision,
+        starting_discipline_id: build.starting_discipline_id,
+        selected_disciplines,
+        discipline_configurations,
+    };
+    CombatBuildCatalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_CATALOG_INVALID: {error}"))?
+        .validate_draft(&draft, build.revision)
+        .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))
 }
 
 fn contract_draft_from_input(draft: CombatBuildDraftInput) -> CombatBuildDraft {

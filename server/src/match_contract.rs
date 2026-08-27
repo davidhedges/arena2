@@ -6,10 +6,11 @@
 //! - the module owner explicitly enables the temporary local-direct
 //!   compatibility mode used by the current Hub button.
 //!
-//! Provisioned tables are private. Gameplay clients learn match phase from the
-//! existing public arena runtime rows, not from orchestration credentials or
-//! reservations.
+//! Orchestration configuration and reservations are private. The validated,
+//! selected-only combat-build materialization is public gameplay state and
+//! contains no provisioner credentials.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
@@ -19,17 +20,31 @@ use crate::arena::arena_instance as _;
 use crate::arena_maps::require_arena_map_id;
 #[allow(unused_imports)]
 use crate::bot_matches::arena_match as _;
+use crate::combat_build::{CombatBuildCatalog, CombatBuildSnapshot, ValidatedCombatBuild};
 #[allow(unused_imports)]
 use crate::match_contract::match_bootstrap_config as _;
+#[allow(unused_imports)]
+use crate::match_contract::match_combat_build as _;
+#[allow(unused_imports)]
+use crate::match_contract::match_combat_build_discipline as _;
+#[allow(unused_imports)]
+use crate::match_contract::match_discipline_action_bar_assignment as _;
+#[allow(unused_imports)]
+use crate::match_contract::match_discipline_configuration as _;
+#[allow(unused_imports)]
+use crate::match_contract::match_discipline_passive_selection as _;
 #[allow(unused_imports)]
 use crate::match_contract::match_module_owner as _;
 #[allow(unused_imports)]
 use crate::match_contract::match_reservation as _;
 #[allow(unused_imports)]
+use crate::match_contract::match_staff_school_selection as _;
+#[allow(unused_imports)]
 use crate::player::player as _;
 
 const SINGLETON_ID: u8 = 0;
 const MAX_ALLOCATION_DURATION: Duration = Duration::from_secs(15 * 60);
+const MAX_COMBAT_BUILD_SNAPSHOT_BYTES: usize = 64 * 1024;
 
 const MODE_UNCONFIGURED: &str = "UNCONFIGURED";
 const MODE_LOCAL_DIRECT: &str = "LOCAL_DIRECT";
@@ -91,16 +106,80 @@ pub struct MatchReservation {
     pub team_id: u8,
     pub team_slot: u8,
     pub display_name: String,
-    pub primary_discipline_id: String,
-    pub secondary_discipline_id_1: String,
-    pub secondary_discipline_id_2: String,
-    pub selected_ability_ids: Vec<String>,
+    pub contract_schema_version: u32,
+    pub combat_build_revision: u64,
+    pub combat_build_snapshot_json: String,
     pub armor_set_id: String,
+    pub reserved_at: Timestamp,
+}
+
+/// Selected-only canonical build root materialized from the immutable Hub
+/// snapshot. Phase 4 consumes these rows for runtime authorization and switch
+/// behavior; no match reducer can edit them.
+#[table(accessor = match_combat_build, public)]
+pub struct MatchCombatBuild {
+    #[primary_key]
+    pub owner: Identity,
+    pub contract_schema_version: u32,
+    pub revision: u64,
+    pub starting_discipline_id: String,
+    pub materialized_at: Timestamp,
+}
+
+#[table(accessor = match_combat_build_discipline, public)]
+pub struct MatchCombatBuildDiscipline {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub slot_index: u8,
+    pub combat_discipline_id: String,
+}
+
+#[table(accessor = match_discipline_configuration, public)]
+pub struct MatchDisciplineConfiguration {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub combat_discipline_id: String,
     pub main_hand_item_def_id: String,
     pub main_hand_color_id: String,
     pub off_hand_item_def_id: String,
     pub off_hand_color_id: String,
-    pub reserved_at: Timestamp,
+    pub main_hand_item_id: Option<String>,
+    pub off_hand_item_id: Option<String>,
+    pub materialized_at: Timestamp,
+}
+
+#[table(accessor = match_staff_school_selection, public)]
+pub struct MatchStaffSchoolSelection {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub spell_school_id: String,
+}
+
+#[table(accessor = match_discipline_action_bar_assignment, public)]
+pub struct MatchDisciplineActionBarAssignment {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub combat_discipline_id: String,
+    pub action_slot: String,
+    pub ability_id: String,
+}
+
+#[table(accessor = match_discipline_passive_selection, public)]
+pub struct MatchDisciplinePassiveSelection {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub combat_discipline_id: String,
+    pub ability_id: String,
 }
 
 pub(crate) enum ConnectionAdmission {
@@ -376,15 +455,125 @@ struct ProvisionedBootstrap {
     allocation_expires_at: Timestamp,
     reserved_player_identity: Identity,
     reserved_display_name: String,
-    primary_discipline_id: String,
-    secondary_discipline_id_1: String,
-    secondary_discipline_id_2: String,
-    selected_ability_ids: Vec<String>,
+    combat_build_snapshot_json: String,
     armor_set_id: String,
-    main_hand_item_def_id: String,
-    main_hand_color_id: String,
-    off_hand_item_def_id: String,
-    off_hand_color_id: String,
+}
+
+fn validate_combat_build_snapshot_json(
+    snapshot_json: String,
+) -> Result<(String, ValidatedCombatBuild), String> {
+    if snapshot_json.is_empty() || snapshot_json.len() > MAX_COMBAT_BUILD_SNAPSHOT_BYTES {
+        return Err(format!(
+            "COMBAT_BUILD_SNAPSHOT_SIZE: snapshot must contain 1..={MAX_COMBAT_BUILD_SNAPSHOT_BYTES} bytes"
+        ));
+    }
+    let snapshot: CombatBuildSnapshot = serde_json::from_str(snapshot_json.as_str())
+        .map_err(|error| format!("COMBAT_BUILD_SNAPSHOT_INVALID_JSON: {error}"))?;
+    let catalog = CombatBuildCatalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_CATALOG_INVALID: {error}"))?;
+    let validated = catalog
+        .validate_snapshot(&snapshot)
+        .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
+    let canonical_json = serde_json::to_string(&validated.snapshot)
+        .map_err(|error| format!("COMBAT_BUILD_SNAPSHOT_SERIALIZATION_FAILED: {error}"))?;
+    if snapshot_json != canonical_json {
+        return Err(
+            "COMBAT_BUILD_SNAPSHOT_NOT_CANONICAL: payload differs from validated serialization"
+                .to_string(),
+        );
+    }
+    Ok((canonical_json, validated))
+}
+
+fn materialize_validated_combat_build(
+    ctx: &ReducerContext,
+    owner: Identity,
+    validated: &ValidatedCombatBuild,
+) {
+    let snapshot = &validated.snapshot;
+    ctx.db.match_combat_build().insert(MatchCombatBuild {
+        owner,
+        contract_schema_version: snapshot.contract_schema_version,
+        revision: snapshot.revision,
+        starting_discipline_id: snapshot.starting_discipline_id.clone(),
+        materialized_at: ctx.timestamp,
+    });
+
+    let configurations: HashMap<_, _> = snapshot
+        .discipline_configurations
+        .iter()
+        .map(|configuration| (configuration.combat_discipline_id.as_str(), configuration))
+        .collect();
+    for selected in &snapshot.selected_disciplines {
+        let discipline_id = selected.combat_discipline_id.as_str();
+        let configuration = configurations
+            .get(discipline_id)
+            .expect("validated selected discipline must have a configuration");
+        ctx.db
+            .match_combat_build_discipline()
+            .insert(MatchCombatBuildDiscipline {
+                key: match_combat_build_key(owner, &[selected.slot_index.to_string().as_str()]),
+                owner,
+                slot_index: selected.slot_index,
+                combat_discipline_id: selected.combat_discipline_id.clone(),
+            });
+        ctx.db
+            .match_discipline_configuration()
+            .insert(MatchDisciplineConfiguration {
+                key: match_combat_build_key(owner, &[discipline_id]),
+                owner,
+                combat_discipline_id: selected.combat_discipline_id.clone(),
+                main_hand_item_def_id: configuration.weapon.main_hand_item_def_id.clone(),
+                main_hand_color_id: configuration.weapon.main_hand_color_id.clone(),
+                off_hand_item_def_id: configuration.weapon.off_hand_item_def_id.clone(),
+                off_hand_color_id: configuration.weapon.off_hand_color_id.clone(),
+                main_hand_item_id: None,
+                off_hand_item_id: None,
+                materialized_at: ctx.timestamp,
+            });
+        for school_id in &configuration.staff_school_ids {
+            ctx.db
+                .match_staff_school_selection()
+                .insert(MatchStaffSchoolSelection {
+                    key: match_combat_build_key(owner, &[school_id.as_str()]),
+                    owner,
+                    spell_school_id: school_id.clone(),
+                });
+        }
+        for assignment in &configuration.active_assignments {
+            ctx.db.match_discipline_action_bar_assignment().insert(
+                MatchDisciplineActionBarAssignment {
+                    key: match_combat_build_key(
+                        owner,
+                        &[discipline_id, assignment.action_slot.as_str()],
+                    ),
+                    owner,
+                    combat_discipline_id: selected.combat_discipline_id.clone(),
+                    action_slot: assignment.action_slot.clone(),
+                    ability_id: assignment.ability_id.clone(),
+                },
+            );
+        }
+        for ability_id in &configuration.passive_ability_ids {
+            ctx.db
+                .match_discipline_passive_selection()
+                .insert(MatchDisciplinePassiveSelection {
+                    key: match_combat_build_key(owner, &[discipline_id, ability_id.as_str()]),
+                    owner,
+                    combat_discipline_id: selected.combat_discipline_id.clone(),
+                    ability_id: ability_id.clone(),
+                });
+        }
+    }
+}
+
+fn match_combat_build_key(owner: Identity, parts: &[&str]) -> String {
+    let mut key = owner.to_hex().to_string();
+    for part in parts {
+        key.push(':');
+        key.push_str(part);
+    }
+    key
 }
 
 /// Latches this database into PROVISIONED mode and freezes the caller's Hub
@@ -429,17 +618,9 @@ fn claim_provisioned_database(
     let match_id = validate_identifier("match id", request.match_id, 8, 96)?;
     let match_build_id = validate_identifier("match build id", request.match_build_id, 1, 96)?;
     let reserved_display_name = validate_display_name(request.reserved_display_name)?;
-    let primary_discipline_id = validate_optional_loadout_id(request.primary_discipline_id)?;
-    let secondary_discipline_id_1 =
-        validate_optional_loadout_id(request.secondary_discipline_id_1)?;
-    let secondary_discipline_id_2 =
-        validate_optional_loadout_id(request.secondary_discipline_id_2)?;
-    let selected_ability_ids = validate_loadout_ability_ids(request.selected_ability_ids)?;
-    let armor_set_id = validate_optional_loadout_id(request.armor_set_id)?;
-    let main_hand_item_def_id = validate_optional_loadout_id(request.main_hand_item_def_id)?;
-    let main_hand_color_id = validate_optional_loadout_id(request.main_hand_color_id)?;
-    let off_hand_item_def_id = validate_optional_loadout_id(request.off_hand_item_def_id)?;
-    let off_hand_color_id = validate_optional_loadout_id(request.off_hand_color_id)?;
+    let (combat_build_snapshot_json, validated_build) =
+        validate_combat_build_snapshot_json(request.combat_build_snapshot_json)?;
+    let armor_set_id = validate_identifier("armor set id", request.armor_set_id, 1, 64)?;
     validate_future_deadline(ctx.timestamp, request.allocation_expires_at)?;
 
     owner.deployment_mode = MODE_PROVISIONED.to_string();
@@ -467,17 +648,13 @@ fn claim_provisioned_database(
         team_id: 0,
         team_slot: 0,
         display_name: reserved_display_name,
-        primary_discipline_id,
-        secondary_discipline_id_1,
-        secondary_discipline_id_2,
-        selected_ability_ids,
+        contract_schema_version: validated_build.snapshot.contract_schema_version,
+        combat_build_revision: validated_build.snapshot.revision,
+        combat_build_snapshot_json,
         armor_set_id,
-        main_hand_item_def_id,
-        main_hand_color_id,
-        off_hand_item_def_id,
-        off_hand_color_id,
         reserved_at: ctx.timestamp,
     });
+    materialize_validated_combat_build(ctx, request.reserved_player_identity, &validated_build);
     Ok(())
 }
 
@@ -492,15 +669,8 @@ pub fn bootstrap_unranked_2v2_bot_match(
     allocation_expires_at: Timestamp,
     reserved_player_identity: Identity,
     reserved_display_name: String,
-    primary_discipline_id: String,
-    secondary_discipline_id_1: String,
-    secondary_discipline_id_2: String,
-    selected_ability_ids: Vec<String>,
+    combat_build_snapshot_json: String,
     armor_set_id: String,
-    main_hand_item_def_id: String,
-    main_hand_color_id: String,
-    off_hand_item_def_id: String,
-    off_hand_color_id: String,
 ) -> Result<(), String> {
     let map_id = require_arena_map_id(map_id.trim())?.as_str().to_string();
     claim_provisioned_database(
@@ -516,15 +686,8 @@ pub fn bootstrap_unranked_2v2_bot_match(
             allocation_expires_at,
             reserved_player_identity,
             reserved_display_name,
-            primary_discipline_id,
-            secondary_discipline_id_1,
-            secondary_discipline_id_2,
-            selected_ability_ids,
+            combat_build_snapshot_json,
             armor_set_id,
-            main_hand_item_def_id,
-            main_hand_color_id,
-            off_hand_item_def_id,
-            off_hand_color_id,
         },
     )?;
 
@@ -564,15 +727,8 @@ pub fn bootstrap_open_world_instance(
     allocation_expires_at: Timestamp,
     reserved_player_identity: Identity,
     reserved_display_name: String,
-    primary_discipline_id: String,
-    secondary_discipline_id_1: String,
-    secondary_discipline_id_2: String,
-    selected_ability_ids: Vec<String>,
+    combat_build_snapshot_json: String,
     armor_set_id: String,
-    main_hand_item_def_id: String,
-    main_hand_color_id: String,
-    off_hand_item_def_id: String,
-    off_hand_color_id: String,
 ) -> Result<(), String> {
     let destination = destination.trim().to_string();
     if !crate::open_world_scene::is_known_open_world_scene(destination.as_str()) {
@@ -591,15 +747,8 @@ pub fn bootstrap_open_world_instance(
             allocation_expires_at,
             reserved_player_identity,
             reserved_display_name,
-            primary_discipline_id,
-            secondary_discipline_id_1,
-            secondary_discipline_id_2,
-            selected_ability_ids,
+            combat_build_snapshot_json,
             armor_set_id,
-            main_hand_item_def_id,
-            main_hand_color_id,
-            off_hand_item_def_id,
-            off_hand_color_id,
         },
     )?;
     set_provisioned_phase(ctx, PHASE_WAITING, None)?;
@@ -611,46 +760,111 @@ pub fn bootstrap_open_world_instance(
     Ok(())
 }
 
-/// Applies the Hub-frozen build only after the ordinary player lifecycle has
-/// seeded progression, inventory, and authored catalogs in this disposable DB.
-pub(crate) fn apply_reserved_player_loadout(
+/// Resolves every selected discipline's frozen weapon definitions to
+/// match-local item instances after the ordinary player lifecycle has seeded
+/// inventory. Only the configured starting discipline is projected into the
+/// currently equipped weapon slots.
+pub(crate) fn apply_reserved_player_combat_build(
     ctx: &ReducerContext,
     reservation: &MatchReservation,
 ) -> Result<(), String> {
-    if !reservation.armor_set_id.is_empty() {
-        crate::inventory::equip_armor_set_for_owner(
-            ctx,
-            reservation.player_identity,
-            reservation.armor_set_id.clone(),
-        )?;
+    let build = ctx
+        .db
+        .match_combat_build()
+        .owner()
+        .find(reservation.player_identity)
+        .ok_or_else(|| "Reserved canonical combat build is missing".to_string())?;
+    if build.contract_schema_version != reservation.contract_schema_version
+        || build.revision != reservation.combat_build_revision
+    {
+        return Err(
+            "Reserved combat-build materialization does not match its snapshot".to_string(),
+        );
     }
-    if !reservation.primary_discipline_id.is_empty() {
-        crate::progression::save_character_discipline_loadout_for_owner(
-            ctx,
+
+    let mut selected_disciplines: Vec<_> = ctx
+        .db
+        .match_combat_build_discipline()
+        .owner()
+        .filter(reservation.player_identity)
+        .collect();
+    selected_disciplines.sort_by_key(|row| row.slot_index);
+    for selected in selected_disciplines {
+        let key = match_combat_build_key(
             reservation.player_identity,
-            reservation.primary_discipline_id.clone(),
-            reservation.secondary_discipline_id_1.clone(),
-            reservation.secondary_discipline_id_2.clone(),
-            reservation.selected_ability_ids.clone(),
-        )?;
-        if reservation.main_hand_item_def_id.is_empty() {
-            crate::inventory::equip_starter_weapon_for_discipline(
+            &[selected.combat_discipline_id.as_str()],
+        );
+        let mut configuration = ctx
+            .db
+            .match_discipline_configuration()
+            .key()
+            .find(key)
+            .ok_or_else(|| {
+                format!(
+                    "Selected combat discipline '{}' has no match configuration",
+                    selected.combat_discipline_id
+                )
+            })?;
+        let (main_hand_item_id, off_hand_item_id) =
+            crate::inventory::materialize_combat_build_weapon_configuration(
                 ctx,
                 reservation.player_identity,
-                reservation.primary_discipline_id.as_str(),
+                configuration.combat_discipline_id.as_str(),
+                configuration.main_hand_item_def_id.as_str(),
+                configuration.main_hand_color_id.as_str(),
+                configuration.off_hand_item_def_id.as_str(),
+                configuration.off_hand_color_id.as_str(),
             )?;
-        } else {
-            crate::inventory::equip_weapon_definitions_for_discipline(
-                ctx,
-                reservation.player_identity,
-                reservation.primary_discipline_id.as_str(),
-                reservation.main_hand_item_def_id.as_str(),
-                reservation.main_hand_color_id.as_str(),
-                reservation.off_hand_item_def_id.as_str(),
-                reservation.off_hand_color_id.as_str(),
-            )?;
-        }
+        configuration.main_hand_item_id = Some(main_hand_item_id);
+        configuration.off_hand_item_id = off_hand_item_id;
+        configuration.materialized_at = ctx.timestamp;
+        ctx.db
+            .match_discipline_configuration()
+            .key()
+            .update(configuration);
     }
+
+    let starting_key = match_combat_build_key(
+        reservation.player_identity,
+        &[build.starting_discipline_id.as_str()],
+    );
+    let starting_configuration = ctx
+        .db
+        .match_discipline_configuration()
+        .key()
+        .find(starting_key)
+        .ok_or_else(|| "Starting discipline has no match configuration".to_string())?;
+    crate::inventory::equip_materialized_combat_build_weapon_configuration(
+        ctx,
+        reservation.player_identity,
+        starting_configuration.combat_discipline_id.as_str(),
+        starting_configuration.main_hand_item_def_id.as_str(),
+        starting_configuration.main_hand_color_id.as_str(),
+        starting_configuration.off_hand_item_def_id.as_str(),
+        starting_configuration.off_hand_color_id.as_str(),
+        starting_configuration
+            .main_hand_item_id
+            .as_deref()
+            .ok_or_else(|| "Starting discipline main-hand instance is missing".to_string())?,
+        starting_configuration.off_hand_item_id.as_deref(),
+    )?;
+
+    crate::inventory::equip_armor_set_for_owner(
+        ctx,
+        reservation.player_identity,
+        reservation.armor_set_id.clone(),
+    )?;
+
+    let validated_snapshot: CombatBuildSnapshot =
+        serde_json::from_str(reservation.combat_build_snapshot_json.as_str())
+            .map_err(|error| format!("Reserved combat-build snapshot is unreadable: {error}"))?;
+    if validated_snapshot.revision != build.revision
+        || validated_snapshot.contract_schema_version != build.contract_schema_version
+        || validated_snapshot.starting_discipline_id != build.starting_discipline_id
+    {
+        return Err("Reserved snapshot and canonical match root diverged".to_string());
+    }
+
     Ok(())
 }
 
@@ -759,28 +973,6 @@ fn validate_display_name(value: String) -> Result<String, String> {
     Ok(value)
 }
 
-fn validate_optional_loadout_id(value: String) -> Result<String, String> {
-    let normalized = value.trim().to_ascii_uppercase();
-    if normalized.is_empty() {
-        return Ok(normalized);
-    }
-    validate_identifier("loadout id", normalized, 1, 96)
-}
-
-fn validate_loadout_ability_ids(values: Vec<String>) -> Result<Vec<String>, String> {
-    if values.len() > 128 {
-        return Err("loadout may contain at most 128 selected abilities".to_string());
-    }
-    let mut normalized = Vec::with_capacity(values.len());
-    for value in values {
-        let value = validate_optional_loadout_id(value)?;
-        if !value.is_empty() && !normalized.contains(&value) {
-            normalized.push(value);
-        }
-    }
-    Ok(normalized)
-}
-
 fn validate_future_deadline(now: Timestamp, deadline: Timestamp) -> Result<(), String> {
     if deadline <= now {
         return Err("allocation deadline must be in the future".to_string());
@@ -823,6 +1015,37 @@ fn validate_provisioned_gameplay_admission(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::combat_build::{
+        DisciplineActionBarAssignment, DisciplineConfiguration, DisciplineWeaponConfiguration,
+        SelectedCombatDiscipline,
+    };
+
+    fn canonical_snapshot() -> CombatBuildSnapshot {
+        CombatBuildSnapshot {
+            contract_schema_version: 1,
+            revision: 7,
+            starting_discipline_id: "DAGGERS".to_string(),
+            selected_disciplines: vec![SelectedCombatDiscipline {
+                slot_index: 0,
+                combat_discipline_id: "DAGGERS".to_string(),
+            }],
+            discipline_configurations: vec![DisciplineConfiguration {
+                combat_discipline_id: "DAGGERS".to_string(),
+                weapon: DisciplineWeaponConfiguration {
+                    main_hand_item_def_id: "TRAINING_DAGGER_PAIR".to_string(),
+                    main_hand_color_id: String::new(),
+                    off_hand_item_def_id: String::new(),
+                    off_hand_color_id: String::new(),
+                },
+                staff_school_ids: Vec::new(),
+                active_assignments: vec![DisciplineActionBarAssignment {
+                    action_slot: "slot_0_0".to_string(),
+                    ability_id: "DAGGER_QUICK_CUT".to_string(),
+                }],
+                passive_ability_ids: Vec::new(),
+            }],
+        }
+    }
 
     #[test]
     fn only_live_provisioned_phases_run_simulation() {
@@ -863,20 +1086,23 @@ mod tests {
     }
 
     #[test]
-    fn frozen_loadout_ability_ids_are_bounded_unique_and_path_safe() {
-        assert_eq!(
-            validate_loadout_ability_ids(vec!["WARRIOR_HEW".to_string()]),
-            Ok(vec!["WARRIOR_HEW".to_string()])
-        );
-        assert_eq!(
-            validate_loadout_ability_ids(vec![
-                "WARRIOR_HEW".to_string(),
-                "WARRIOR_HEW".to_string(),
-            ]),
-            Ok(vec!["WARRIOR_HEW".to_string()])
-        );
-        assert!(validate_loadout_ability_ids(vec!["../../ability".to_string()]).is_err());
-        assert!(validate_loadout_ability_ids(vec!["ABILITY".to_string(); 129]).is_err());
+    fn frozen_combat_build_is_typed_bounded_canonical_and_revalidated() {
+        let snapshot = canonical_snapshot();
+        let json = serde_json::to_string(&snapshot).expect("serialize canonical snapshot");
+        let (canonical_json, validated) =
+            validate_combat_build_snapshot_json(json.clone()).expect("validate snapshot");
+        assert_eq!(canonical_json, json);
+        assert_eq!(validated.snapshot, snapshot);
+
+        let mut wrong_schema = canonical_snapshot();
+        wrong_schema.contract_schema_version = 2;
+        let wrong_schema_json =
+            serde_json::to_string(&wrong_schema).expect("serialize wrong-schema snapshot");
+        assert!(validate_combat_build_snapshot_json(wrong_schema_json)
+            .unwrap_err()
+            .starts_with("COMBAT_BUILD_UNSUPPORTED_SCHEMA_VERSION"));
+        assert!(validate_combat_build_snapshot_json("{}".to_string()).is_err());
+        assert!(validate_combat_build_snapshot_json("x".repeat(65 * 1024)).is_err());
     }
 
     #[test]

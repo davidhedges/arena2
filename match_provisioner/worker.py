@@ -852,14 +852,16 @@ class Provisioner:
             ticket = snapshot["tickets"].get(allocation.ticket_id)
             assignment = snapshot["assignments"].get(allocation.ticket_id)
             player = snapshot["players"].get(allocation.player_identity)
-            loadout = snapshot["loadouts"].get(allocation.ticket_id)
+            combat_build_snapshot = snapshot["combat_build_snapshots"].get(
+                allocation.ticket_id
+            )
             try:
                 self._reconcile_allocation(
                     allocation,
                     ticket,
                     assignment,
                     player,
-                    loadout,
+                    combat_build_snapshot,
                     service_identity,
                     now,
                 )
@@ -883,10 +885,12 @@ class Provisioner:
             for ticket in pending[:capacity]:
                 player_identity = normalize_identity(ticket["player_identity"])
                 player = snapshot["players"].get(player_identity)
-                loadout = snapshot["loadouts"].get(str(ticket["ticket_id"]))
+                combat_build_snapshot = snapshot["combat_build_snapshots"].get(
+                    str(ticket["ticket_id"])
+                )
                 try:
                     self._claim_and_provision(
-                        ticket, player, loadout, service_identity, now
+                        ticket, player, combat_build_snapshot, service_identity, now
                     )
                 except ProvisionerError as error:
                     log_event(
@@ -914,11 +918,11 @@ class Provisioner:
             normalize_identity(row["identity"]): row
             for row in self.api.sql(self.config.hub_database, "SELECT * FROM hub_player")
         }
-        loadouts = {
+        combat_build_snapshots = {
             str(row["ticket_id"]): row
             for row in self.api.sql(
                 self.config.hub_database,
-                "SELECT * FROM match_player_loadout_snapshot",
+                "SELECT * FROM match_player_combat_build_snapshot",
             )
         }
         return {
@@ -926,7 +930,7 @@ class Provisioner:
             "tickets": tickets,
             "assignments": assignments,
             "players": players,
-            "loadouts": loadouts,
+            "combat_build_snapshots": combat_build_snapshots,
         }
 
     def _ticket_destination(self, ticket: dict[str, Any], queue_kind: str) -> str:
@@ -976,7 +980,7 @@ class Provisioner:
         self,
         ticket: dict[str, Any],
         player: dict[str, Any] | None,
-        loadout: dict[str, Any] | None,
+        combat_build_snapshot: dict[str, Any] | None,
         service_identity: str,
         now: int,
     ) -> None:
@@ -1027,7 +1031,7 @@ class Provisioner:
             allocation,
             ticket,
             player,
-            loadout,
+            combat_build_snapshot,
             service_identity,
             now,
             ticket_created_micros,
@@ -1105,7 +1109,7 @@ class Provisioner:
         allocation: Allocation,
         ticket: dict[str, Any],
         player: dict[str, Any] | None,
-        loadout: dict[str, Any] | None,
+        combat_build_snapshot: dict[str, Any] | None,
         service_identity: str,
         now: int,
         ticket_created_micros: int,
@@ -1133,7 +1137,7 @@ class Provisioner:
                 allocation,
                 ticket,
                 player,
-                loadout,
+                combat_build_snapshot,
                 now,
                 timings_ms,
             )
@@ -1313,12 +1317,31 @@ class Provisioner:
         allocation: Allocation,
         ticket: dict[str, Any],
         player: dict[str, Any] | None,
-        loadout: dict[str, Any] | None,
+        combat_build_snapshot: dict[str, Any] | None,
         now: int,
         timings_ms: dict[str, float],
     ) -> bool:
         if allocation.database_identity is None:
             raise ProvisionerError("cannot bootstrap without an exact database identity")
+        if player is None:
+            raise ProvisionerError("Hub player snapshot is missing")
+        if combat_build_snapshot is None:
+            raise ProvisionerError("Hub combat-build snapshot is missing")
+        if str(combat_build_snapshot.get("ticket_id", "")) != allocation.ticket_id:
+            raise ProvisionerError("Hub combat-build snapshot belongs to another ticket")
+        if normalize_identity(combat_build_snapshot.get("player_identity")) != (
+            allocation.player_identity
+        ):
+            raise ProvisionerError("Hub combat-build snapshot belongs to another player")
+        frozen_combat_build_json = self._frozen_combat_build_json(
+            combat_build_snapshot
+        )
+        armor_set_id = str(combat_build_snapshot.get("armor_set_id", "")).strip()
+        if not armor_set_id:
+            raise ProvisionerError("Hub combat-build snapshot armor set is empty")
+        display_name = str(player.get("display_name", "")).strip()
+        if not display_name:
+            raise ProvisionerError("Hub player display name is empty")
         lookup_started = time.perf_counter()
         try:
             config_rows = self.api.sql(
@@ -1327,16 +1350,10 @@ class Provisioner:
         finally:
             timings_ms["bootstrap_lookup"] = self._elapsed_ms(lookup_started)
         if config_rows:
-            self._validate_existing_bootstrap(allocation, config_rows[0])
+            self._validate_existing_bootstrap(
+                allocation, config_rows[0], combat_build_snapshot
+            )
             return False
-
-        if player is None:
-            raise ProvisionerError("Hub player snapshot is missing")
-        if loadout is None:
-            raise ProvisionerError("Hub match loadout snapshot is missing")
-        display_name = str(player.get("display_name", "")).strip()
-        if not display_name:
-            raise ProvisionerError("Hub player display name is empty")
         _, _, seed = allocation_keys(allocation.ticket_id, self.config.database_prefix)
         # Both bootstraps take the same frozen Hub build in the same order;
         # only the destination argument's vocabulary differs.
@@ -1354,15 +1371,8 @@ class Provisioner:
             timestamp_arg(now + self.config.allocation_seconds),
             identity_arg(allocation.player_identity),
             display_name,
-            str(loadout.get("primary_discipline_id", "")),
-            str(loadout.get("secondary_discipline_id_1", "")),
-            str(loadout.get("secondary_discipline_id_2", "")),
-            [str(value) for value in loadout.get("selected_ability_ids", [])],
-            str(loadout.get("armor_set_id", "")),
-            str(unwrap_option(loadout.get("main_hand_item_def_id")) or ""),
-            str(unwrap_option(loadout.get("main_hand_color_id")) or ""),
-            str(unwrap_option(loadout.get("off_hand_item_def_id")) or ""),
-            str(unwrap_option(loadout.get("off_hand_color_id")) or ""),
+            frozen_combat_build_json,
+            armor_set_id,
         ]
         bootstrap_started = time.perf_counter()
         try:
@@ -1371,8 +1381,25 @@ class Provisioner:
             timings_ms["bootstrap_call"] = self._elapsed_ms(bootstrap_started)
         return True
 
+    @staticmethod
+    def _frozen_combat_build_json(snapshot: dict[str, Any]) -> str:
+        try:
+            schema_version = int(snapshot.get("contract_schema_version", 0))
+            revision = int(snapshot.get("combat_build_revision", 0))
+        except (TypeError, ValueError) as error:
+            raise ProvisionerError(
+                "Hub combat-build snapshot metadata is malformed"
+            ) from error
+        frozen_json = str(snapshot.get("combat_build_snapshot_json", ""))
+        if schema_version <= 0 or revision <= 0 or not frozen_json:
+            raise ProvisionerError("Hub combat-build snapshot metadata is incomplete")
+        return frozen_json
+
     def _validate_existing_bootstrap(
-        self, allocation: Allocation, match_config: dict[str, Any]
+        self,
+        allocation: Allocation,
+        match_config: dict[str, Any],
+        combat_build_snapshot: dict[str, Any] | None,
     ) -> None:
         if (
             str(match_config.get("match_id")) != allocation.match_id
@@ -1383,6 +1410,8 @@ class Provisioner:
             raise SafetyError("existing database bootstrap belongs to different match work")
         if allocation.database_identity is None:
             raise SafetyError("existing bootstrap has no recorded database identity")
+        if combat_build_snapshot is None:
+            raise SafetyError("frozen Hub combat-build snapshot is missing")
         reservations = self.api.sql(
             allocation.database_identity, "SELECT * FROM match_reservation"
         )
@@ -1390,6 +1419,27 @@ class Provisioner:
             reservations[0].get("player_identity")
         ) != allocation.player_identity:
             raise SafetyError("existing database reservation does not match the Hub ticket")
+        reservation = reservations[0]
+        try:
+            frozen_json = self._frozen_combat_build_json(combat_build_snapshot)
+            schema_version = int(combat_build_snapshot.get("contract_schema_version", 0))
+            revision = int(combat_build_snapshot.get("combat_build_revision", 0))
+            reserved_schema_version = int(
+                reservation.get("contract_schema_version", 0)
+            )
+            reserved_revision = int(reservation.get("combat_build_revision", 0))
+        except (ProvisionerError, TypeError, ValueError) as error:
+            raise SafetyError("frozen Hub combat-build snapshot is invalid") from error
+        if (
+            str(reservation.get("combat_build_snapshot_json", "")) != frozen_json
+            or reserved_schema_version != schema_version
+            or reserved_revision != revision
+            or str(reservation.get("armor_set_id", ""))
+            != str(combat_build_snapshot.get("armor_set_id", ""))
+        ):
+            raise SafetyError(
+                "existing database reservation combat build differs from frozen Hub snapshot"
+            )
 
     def _reconcile_allocation(
         self,
@@ -1397,7 +1447,7 @@ class Provisioner:
         ticket: dict[str, Any] | None,
         assignment: dict[str, Any] | None,
         player: dict[str, Any] | None,
-        loadout: dict[str, Any] | None,
+        combat_build_snapshot: dict[str, Any] | None,
         service_identity: str,
         now: int,
     ) -> None:
@@ -1450,7 +1500,7 @@ class Provisioner:
                     allocation,
                     ticket,
                     player,
-                    loadout,
+                    combat_build_snapshot,
                     service_identity,
                     now,
                     timestamp_microseconds(ticket["created_at"]),
@@ -1492,7 +1542,7 @@ class Provisioner:
                     allocation,
                     ticket,
                     player,
-                    loadout,
+                    combat_build_snapshot,
                     service_identity,
                     now,
                     timestamp_microseconds(ticket["created_at"]),
@@ -1507,7 +1557,9 @@ class Provisioner:
 
         match_config = config_rows[0]
         try:
-            self._validate_existing_bootstrap(allocation, match_config)
+            self._validate_existing_bootstrap(
+                allocation, match_config, combat_build_snapshot
+            )
         except SafetyError as error:
             self._mark_orphaned(allocation, ticket, error, now)
             return
