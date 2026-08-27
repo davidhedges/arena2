@@ -65,8 +65,8 @@ use crate::player_intent::PlayerIntent;
 use crate::player_physics::{commit_player_physics, PhysicsWriteMode, PlayerPhysics};
 use crate::progression::{
     ability_catalog as _, active_selectable_ability_for_authored_action,
-    authored_npc_spell_ability_id, derived_combat_profile_id_for_owner,
-    movement_delivery_for_action_id, spell_ability_id_for_action_id, MovementDeliveryRuntime,
+    authored_npc_spell_ability_id, movement_delivery_for_action_id, spell_ability_id_for_action_id,
+    MovementDeliveryRuntime,
 };
 use crate::relations::{can_harm, target_audience_allows, TargetAudience};
 use crate::resources::{
@@ -96,7 +96,7 @@ use super::manifest::{
     MeteorSkyOrigin, SpellDefinition,
 };
 use super::{
-    normalize_vec3, player_knows_spell, ActiveBespokeSpell, ActiveCast, ActivePersistentArea,
+    normalize_vec3, ActiveBespokeSpell, ActiveCast, ActivePersistentArea,
     CastPredictionCorrelation, ChannelCastRuntime, PendingAreaImpact, PendingCastCancel,
     PendingCastRequest, RecallSlot, SpecialMovementRuntime, SpellBehavior, SpellId,
     EVENT_AREA_IMPACT, EVENT_CAST, EVENT_CONTACT, EVENT_FIZZLE, EVENT_IMPACT, EVENT_RELEASE,
@@ -2443,39 +2443,7 @@ fn ability_id_for_spell(ctx: &ReducerContext, caster: Identity, spell_kind: &Spe
     if let Some(ability) = npc_spell_ability_for_actor(ctx, caster, spell_kind) {
         return ability.ability_id;
     }
-
-    if !player_knows_spell(ctx, caster, spell_kind.as_str()) {
-        return String::new();
-    }
-
-    let active_profile = derived_combat_profile_id_for_owner(ctx, caster).unwrap_or_default();
-    let mut fallback: Option<(u32, String)> = None;
-    for ability in ctx.db.ability_catalog().iter() {
-        if !ability.ability_kind.eq_ignore_ascii_case("SPELL")
-            || !ability.action_id.eq_ignore_ascii_case(spell_kind.as_str())
-        {
-            continue;
-        }
-
-        if !active_profile.is_empty()
-            && ability
-                .combat_profile_id
-                .eq_ignore_ascii_case(active_profile.as_str())
-        {
-            return ability.ability_id;
-        }
-
-        if fallback
-            .as_ref()
-            .map_or(true, |(sort_order, _)| ability.sort_order < *sort_order)
-        {
-            fallback = Some((ability.sort_order, ability.ability_id));
-        }
-    }
-
-    fallback
-        .map(|(_, ability_id)| ability_id)
-        .unwrap_or_default()
+    String::new()
 }
 
 fn npc_spell_ability_for_actor(
@@ -9758,11 +9726,9 @@ fn cast_remove_status(
     }
     // The burn is the price of the cleanse, so it lands on every successful cast
     // whether or not the filter found anything to remove.
-    if let Some(burn_amount) = max_health_fraction_amount(
-        ctx,
-        target,
-        remove_status.damage_target_max_health_fraction,
-    ) {
+    if let Some(burn_amount) =
+        max_health_fraction_amount(ctx, target, remove_status.damage_target_max_health_fraction)
+    {
         effects.push(EffectPacket::Damage {
             amount: burn_amount,
             damage_type: definition.damage_type,

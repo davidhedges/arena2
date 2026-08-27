@@ -5,7 +5,7 @@ use spacetimedb::{Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::players_share_world_context;
 use crate::combat::StatusEffect;
-use crate::progression::character_has_selected_ability;
+use crate::progression::player_build_contains_active_ability;
 use crate::relations::{target_audience_allows, TargetAudience};
 
 #[allow(unused_imports)]
@@ -31,7 +31,8 @@ pub(crate) fn reconcile_all(ctx: &ReducerContext, now: Timestamp) {
         .alive()
         .filter(true)
         .filter(|state| {
-            !state.is_dummy && character_has_selected_ability(ctx, state.player_id, ABILITY_ID)
+            !state.is_dummy
+                && player_build_contains_active_ability(ctx, state.player_id, ABILITY_ID)
         })
         .map(|state| state.player_id)
         .collect();
@@ -70,7 +71,7 @@ pub(crate) fn bestow(
     };
     if !origin_state.alive
         || origin_state.is_dummy
-        || !character_has_selected_ability(ctx, origin, ABILITY_ID)
+        || !player_build_contains_active_ability(ctx, origin, ABILITY_ID)
     {
         return Err("Verdant Spirits is not active for this player".to_string());
     }
@@ -136,7 +137,7 @@ pub(crate) fn origin_is_active(ctx: &ReducerContext, origin: Identity) -> bool {
         .is_some_and(|state| {
             state.alive
                 && !state.is_dummy
-                && character_has_selected_ability(ctx, origin, ABILITY_ID)
+                && player_build_contains_active_ability(ctx, origin, ABILITY_ID)
         })
 }
 

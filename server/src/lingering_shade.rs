@@ -8,9 +8,7 @@ use crate::action_prediction::{
 use crate::arena::{resolve_player_world_context, ResolvedWorldContext};
 use crate::combat::{has_active_disabling_status, timestamp_to_micros};
 use crate::defense::clear_interruptible_defense_for_owner;
-use crate::progression::{
-    character_has_selected_discipline, subtlety_movement_return_window, DISCIPLINE_SUBTLETY,
-};
+use crate::progression::{player_has_selected_passive_ability, subtlety_movement_return_window};
 use crate::spells::{
     bake_linear_special_movement, begin_instant_special_movement, SpellVec3,
     SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK, SPECIAL_MOVEMENT_FACING_FACE_START,
@@ -35,6 +33,7 @@ const WORLD_KIND_OPEN: &str = "OPEN";
 const WORLD_KIND_INSTANCE: &str = "INSTANCE";
 const RETURN_ENDPOINT_EPSILON_SQ: f32 = 0.0025;
 const MOVEMENT_EPSILON_SQ: f32 = 0.0001;
+const LINGERING_SHADE_PASSIVE_ID: &str = "SUBTLETY_LINGERING_SHADE";
 
 #[table(accessor = lingering_shade_state, public)]
 #[derive(Clone)]
@@ -78,7 +77,7 @@ pub(crate) fn arm_lingering_shade_for_voluntary_movement(
         || !start.y.is_finite()
         || !start.z.is_finite()
         || !facing_yaw.is_finite()
-        || !character_has_selected_discipline(ctx, owner, DISCIPLINE_SUBTLETY)
+        || !player_has_selected_passive_ability(ctx, owner, LINGERING_SHADE_PASSIVE_ID)
     {
         return false;
     }
@@ -221,7 +220,7 @@ pub fn return_to_lingering_shade(
             now,
         );
     }
-    if !character_has_selected_discipline(ctx, owner, DISCIPLINE_SUBTLETY)
+    if !player_has_selected_passive_ability(ctx, owner, LINGERING_SHADE_PASSIVE_ID)
         || !anchor_matches_current_world(ctx, owner, &anchor)
     {
         clear_lingering_shade_for_owner(ctx, owner);

@@ -13,9 +13,9 @@ use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::player_physics::player_physics as _;
 use crate::player_state::player_state as _;
 use crate::progression::{
-    default_global_cooldown_ms, discipline_uses_staff, sync_progression_for_equipment_change,
-    AllocatedStatTotals, COMBAT_PROFILE_ARCHER_BOW, DISCIPLINE_ARCANA, DISCIPLINE_PRECISION,
-    DISCIPLINE_SUBTLETY, DISCIPLINE_WAR, DISCIPLINE_ZEAL,
+    default_global_cooldown_ms, sync_progression_for_equipment_change, AllocatedStatTotals,
+    COMBAT_PROFILE_ARCHER_BOW, DISCIPLINE_ARCANA, DISCIPLINE_PRECISION, DISCIPLINE_SUBTLETY,
+    DISCIPLINE_WAR, DISCIPLINE_ZEAL,
 };
 use crate::relations::TargetAudience;
 use crate::resources::grant_primary_resource_amount_for_kind;
@@ -3854,10 +3854,6 @@ impl EquipmentModifierTotals {
         .clamp(0.0, MAX_EQUIPMENT_MAGIC_RESISTANCE)
     }
 
-    pub(crate) fn spell_slot_capacity(self) -> u32 {
-        self.spell_slots
-    }
-
     pub(crate) fn allocated_stat_totals(self) -> AllocatedStatTotals {
         AllocatedStatTotals {
             might: equipment_stat_points(self.might),
@@ -3979,15 +3975,6 @@ pub(crate) fn equipment_modifier_totals_for_owner(
         .clamp(0.0, MAX_EQUIPMENT_STEAL_RATIO);
     totals.stealth_aggro_reduction = totals.stealth_aggro_reduction.clamp(0.0, 1.0);
     totals
-}
-
-pub(crate) fn equipment_spell_slot_capacity_for_owner(
-    ctx: &ReducerContext,
-    owner: Identity,
-) -> u32 {
-    equipment_modifier_totals_for_owner(ctx, owner)
-        .spell_slot_capacity()
-        .saturating_add(equipped_spellbook_spell_ids_for_owner(ctx, owner).len() as u32)
 }
 
 pub(crate) fn tick_equipment_periodic_effects(
@@ -4732,50 +4719,6 @@ fn spellbook_spell_hash(owner: Identity, item_instance_id: &str, stream: u32) ->
     fnv1a_update(hash, &stream.to_le_bytes())
 }
 
-pub(crate) fn equipped_spellbook_contains_spell(
-    ctx: &ReducerContext,
-    owner: Identity,
-    spell_id: &str,
-) -> bool {
-    let spell_id = normalize_id(spell_id);
-    if spell_id.is_empty() {
-        return false;
-    }
-    equipped_spellbook_spell_ids_for_owner(ctx, owner)
-        .into_iter()
-        .any(|candidate| candidate == spell_id)
-}
-
-pub(crate) fn equipped_spellbook_spell_ids_for_owner(
-    ctx: &ReducerContext,
-    owner: Identity,
-) -> Vec<String> {
-    let Some(equipment) = ctx.db.equipment_loadout().owner().find(owner) else {
-        return Vec::new();
-    };
-    let Some(spellbook_item_id) = equipment.spellbook_item_id.as_deref() else {
-        return Vec::new();
-    };
-    let Some(definition) = item_definition_for_instance(ctx, spellbook_item_id) else {
-        return Vec::new();
-    };
-    if definition.item_kind != ITEM_KIND_SPELLBOOK {
-        return Vec::new();
-    }
-
-    let mut rows: Vec<_> = ctx
-        .db
-        .item_spell()
-        .item_instance_id()
-        .filter(spellbook_item_id)
-        .collect();
-    rows.sort_by_key(|row| row.slot_index);
-    rows.into_iter()
-        .map(|row| normalize_id(row.spell_id.as_str()))
-        .filter(|spell_id| !spell_id.is_empty())
-        .collect()
-}
-
 pub(crate) fn equipment_combat_profile_id_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
@@ -4944,46 +4887,6 @@ fn apply_weapon_loadout_for_combat_profile(
     Ok(())
 }
 
-/// Disposable PvP matches receive a durable discipline choice but no durable
-/// item-instance inventory. Resolve that choice to the matching weapon already
-/// seeded in the match player's starter inventory, then use the ordinary
-/// equipment/progression synchronization path to activate the discipline.
-pub(crate) fn equip_starter_weapon_for_discipline(
-    ctx: &ReducerContext,
-    owner: Identity,
-    discipline_id: &str,
-) -> Result<(), String> {
-    let item_def_id = starter_weapon_definition_for_discipline(discipline_id).ok_or_else(|| {
-        format!(
-            "combat discipline '{}' has no starter weapon",
-            normalize_id(discipline_id)
-        )
-    })?;
-    let mut item_instance_ids: Vec<String> = ctx
-        .db
-        .item_instance()
-        .iter()
-        .filter(|item| item.current_owner == Some(owner) && item.item_def_id == item_def_id)
-        .map(|item| item.item_instance_id)
-        .collect();
-    item_instance_ids.sort();
-    let item_instance_id = item_instance_ids.into_iter().next().ok_or_else(|| {
-        format!(
-            "starter weapon '{}' is missing for discipline '{}'",
-            item_def_id,
-            normalize_id(discipline_id)
-        )
-    })?;
-
-    apply_combat_discipline_weapon_loadout(
-        ctx,
-        owner,
-        discipline_id,
-        Some(item_instance_id.as_str()),
-        None,
-    )
-}
-
 /// Resolves a Hub-authored cosmetic weapon selection to match-local item
 /// instances. The Hub stores definition ids only; disposable matches retain
 /// ownership of instance identity and revalidate the discipline contract.
@@ -5104,74 +5007,6 @@ pub(crate) fn equip_materialized_combat_build_weapon_configuration(
     Ok(())
 }
 
-/// Legacy runtime projection retained until the Phase 4 discipline-switch
-/// cutover. New match materialization uses the canonical helpers above.
-pub(crate) fn equip_weapon_definitions_for_discipline(
-    ctx: &ReducerContext,
-    owner: Identity,
-    discipline_id: &str,
-    main_hand_item_def_id: &str,
-    main_hand_color_id: &str,
-    off_hand_item_def_id: &str,
-    off_hand_color_id: &str,
-) -> Result<(), String> {
-    ensure_player_inventory_for_identity(ctx, owner);
-    let main_hand_definition = require_item_definition(ctx, main_hand_item_def_id)?;
-    let off_hand_definition = if off_hand_item_def_id.trim().is_empty() {
-        None
-    } else {
-        Some(require_item_definition(ctx, off_hand_item_def_id)?)
-    };
-    if !weapon_definition_pair_is_allowed_for_discipline(
-        discipline_id,
-        &main_hand_definition,
-        off_hand_definition.as_ref(),
-    ) {
-        return Err(format!(
-            "weapon definitions '{}' and '{}' are not allowed for primary discipline '{}'",
-            normalize_id(main_hand_item_def_id),
-            normalize_id(off_hand_item_def_id),
-            normalize_id(discipline_id)
-        ));
-    }
-    let main_hand_color_id =
-        require_weapon_family_color(main_hand_item_def_id, main_hand_color_id)?;
-    let off_hand_color_id = if off_hand_item_def_id.trim().is_empty() {
-        if !off_hand_color_id.trim().is_empty() {
-            return Err("an off-hand color requires an off-hand weapon".to_string());
-        }
-        String::new()
-    } else {
-        require_weapon_family_color(off_hand_item_def_id, off_hand_color_id)?
-    };
-
-    let main_hand_item_id = ensure_hub_weapon_item_instance(ctx, owner, &main_hand_definition)?;
-    let off_hand_item_id = off_hand_definition
-        .as_ref()
-        .map(|definition| ensure_hub_weapon_item_instance(ctx, owner, definition))
-        .transpose()?;
-    upsert_equipped_weapon_appearance(
-        ctx,
-        EquippedWeaponAppearance {
-            owner,
-            main_hand_item_def_id: normalize_id(main_hand_item_def_id),
-            main_hand_color_id,
-            off_hand_item_def_id: normalize_id(off_hand_item_def_id),
-            off_hand_color_id,
-            updated_at: ctx.timestamp,
-        },
-    );
-    apply_combat_discipline_weapon_loadout(
-        ctx,
-        owner,
-        discipline_id,
-        Some(main_hand_item_id.as_str()),
-        off_hand_item_id.as_deref(),
-    )?;
-    sync_equipment_presentation_for_owner(ctx, owner);
-    Ok(())
-}
-
 fn require_weapon_family_color(item_def_id: &str, color_id: &str) -> Result<String, String> {
     let normalized_item_def_id = normalize_id(item_def_id);
     let catalog = parse_weapon_appearance_catalog()?;
@@ -5224,12 +5059,12 @@ fn weapon_definition_pair_is_allowed_for_discipline(
     }
 
     match normalize_id(discipline_id).as_str() {
-        DISCIPLINE_SUBTLETY => {
+        COMBAT_PROFILE_DAGGERS => {
             main_hand.weapon_kind == WEAPON_KIND_DAGGER_PAIR
                 && main_hand.hand_requirement == HAND_REQUIREMENT_TWO_HAND
                 && off_hand.is_none()
         }
-        DISCIPLINE_WAR => {
+        COMBAT_PROFILE_TWO_HANDED_SWORD => {
             matches!(
                 main_hand.weapon_kind.as_str(),
                 WEAPON_KIND_TWO_HAND_SWORD
@@ -5239,7 +5074,7 @@ fn weapon_definition_pair_is_allowed_for_discipline(
             ) && main_hand.hand_requirement == HAND_REQUIREMENT_TWO_HAND
                 && off_hand.is_none()
         }
-        DISCIPLINE_ZEAL => {
+        DEFAULT_COMBAT_PROFILE => {
             matches!(
                 main_hand.weapon_kind.as_str(),
                 WEAPON_KIND_ONE_HAND_SWORD
@@ -5253,12 +5088,12 @@ fn weapon_definition_pair_is_allowed_for_discipline(
                         && definition.hand_requirement == HAND_REQUIREMENT_OFF_HAND
                 })
         }
-        DISCIPLINE_PRECISION => {
+        COMBAT_PROFILE_ARCHER_BOW => {
             main_hand.weapon_kind == WEAPON_KIND_BOW
                 && main_hand.hand_requirement == HAND_REQUIREMENT_TWO_HAND
                 && off_hand.is_none()
         }
-        _ if discipline_uses_staff(discipline_id) => {
+        COMBAT_PROFILE_STAFF => {
             main_hand.weapon_kind == WEAPON_KIND_STAFF
                 && main_hand.hand_requirement == HAND_REQUIREMENT_TWO_HAND
                 && off_hand.is_none()
@@ -5305,11 +5140,11 @@ fn ensure_hub_weapon_item_instance(
 fn starter_weapon_definition_for_discipline(discipline_id: &str) -> Option<&'static str> {
     let discipline_id = normalize_id(discipline_id);
     match discipline_id.as_str() {
-        DISCIPLINE_SUBTLETY => Some("TRAINING_DAGGER_PAIR"),
-        DISCIPLINE_WAR => Some("TRAINING_TWO_HAND_SWORD"),
-        DISCIPLINE_ZEAL => Some("TRAINING_SWORD_AND_SHIELD"),
-        DISCIPLINE_PRECISION => Some("TRAINING_BOW"),
-        _ if discipline_uses_staff(discipline_id.as_str()) => Some("NEWBIE_STAFF_01"),
+        COMBAT_PROFILE_DAGGERS => Some("TRAINING_DAGGER_PAIR"),
+        COMBAT_PROFILE_TWO_HANDED_SWORD => Some("TRAINING_TWO_HAND_SWORD"),
+        DEFAULT_COMBAT_PROFILE => Some("TRAINING_SWORD_AND_SHIELD"),
+        COMBAT_PROFILE_ARCHER_BOW => Some("TRAINING_BOW"),
+        COMBAT_PROFILE_STAFF => Some("NEWBIE_STAFF_01"),
         _ => None,
     }
 }
@@ -5317,11 +5152,11 @@ fn starter_weapon_definition_for_discipline(discipline_id: &str) -> Option<&'sta
 fn combat_profile_for_discipline(discipline_id: &str) -> &'static str {
     let discipline_id = normalize_id(discipline_id);
     match discipline_id.as_str() {
-        DISCIPLINE_SUBTLETY => COMBAT_PROFILE_DAGGERS,
-        DISCIPLINE_WAR => COMBAT_PROFILE_TWO_HANDED_SWORD,
-        DISCIPLINE_ZEAL => DEFAULT_COMBAT_PROFILE,
-        DISCIPLINE_PRECISION => COMBAT_PROFILE_ARCHER_BOW,
-        _ if discipline_uses_staff(discipline_id.as_str()) => COMBAT_PROFILE_STAFF,
+        COMBAT_PROFILE_DAGGERS => COMBAT_PROFILE_DAGGERS,
+        COMBAT_PROFILE_TWO_HANDED_SWORD => COMBAT_PROFILE_TWO_HANDED_SWORD,
+        DEFAULT_COMBAT_PROFILE => DEFAULT_COMBAT_PROFILE,
+        COMBAT_PROFILE_ARCHER_BOW => COMBAT_PROFILE_ARCHER_BOW,
+        COMBAT_PROFILE_STAFF => COMBAT_PROFILE_STAFF,
         _ => "",
     }
 }
@@ -7285,8 +7120,7 @@ mod tests {
     #[test]
     fn empty_weapon_color_resolves_to_the_authored_default() {
         assert_eq!(
-            require_weapon_family_color("TRAINING_DAGGER_PAIR", "")
-                .expect("default dagger color"),
+            require_weapon_family_color("TRAINING_DAGGER_PAIR", "").expect("default dagger color"),
             "DEFAULT"
         );
         assert_eq!(
@@ -7297,7 +7131,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_weapon_families_obey_primary_discipline_contracts() {
+    fn shared_weapon_families_project_to_canonical_weapon_disciplines() {
         let catalog = parse_weapon_appearance_catalog().expect("shared weapon appearance catalog");
         for family in catalog.families {
             let main = item_definition(
@@ -7305,12 +7139,13 @@ mod tests {
                 normalize_id(family.hand_requirement.as_str()).as_str(),
             );
             let shield = item_definition(WEAPON_KIND_SHIELD, HAND_REQUIREMENT_OFF_HAND);
-            let off_hand = (normalize_id(family.primary_discipline_id.as_str()) == DISCIPLINE_ZEAL
+            let combat_discipline_id = combat_profile_for_weapon_family(&family);
+            let off_hand = (combat_discipline_id == DEFAULT_COMBAT_PROFILE
                 && normalize_id(family.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND)
                 .then_some(&shield);
             if normalize_id(family.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND {
                 assert!(weapon_definition_pair_is_allowed_for_discipline(
-                    family.primary_discipline_id.as_str(),
+                    combat_discipline_id,
                     &main,
                     off_hand
                 ));
@@ -7496,7 +7331,7 @@ mod tests {
     }
 
     #[test]
-    fn primary_disciplines_accept_only_their_authored_weapon_categories() {
+    fn canonical_disciplines_accept_only_their_authored_weapon_categories() {
         let daggers = item_definition(WEAPON_KIND_DAGGER_PAIR, HAND_REQUIREMENT_TWO_HAND);
         let greatsword = item_definition(WEAPON_KIND_TWO_HAND_SWORD, HAND_REQUIREMENT_TWO_HAND);
         let greataxe = item_definition(WEAPON_KIND_TWO_HAND_AXE, HAND_REQUIREMENT_TWO_HAND);
@@ -7507,69 +7342,60 @@ mod tests {
         let shield = item_definition(WEAPON_KIND_SHIELD, HAND_REQUIREMENT_OFF_HAND);
 
         assert!(weapon_definition_pair_is_allowed_for_discipline(
-            DISCIPLINE_SUBTLETY,
+            COMBAT_PROFILE_DAGGERS,
             &daggers,
             None
         ));
         assert!(weapon_definition_pair_is_allowed_for_discipline(
-            DISCIPLINE_WAR,
+            COMBAT_PROFILE_TWO_HANDED_SWORD,
             &greatsword,
             None
         ));
         assert!(weapon_definition_pair_is_allowed_for_discipline(
-            DISCIPLINE_WAR,
+            COMBAT_PROFILE_TWO_HANDED_SWORD,
             &greataxe,
             None
         ));
         assert!(!weapon_definition_pair_is_allowed_for_discipline(
-            DISCIPLINE_WAR,
+            COMBAT_PROFILE_TWO_HANDED_SWORD,
             &staff,
             None
         ));
         assert!(!weapon_definition_pair_is_allowed_for_discipline(
-            DISCIPLINE_WAR,
+            COMBAT_PROFILE_TWO_HANDED_SWORD,
             &bow,
             None
         ));
         assert!(weapon_definition_pair_is_allowed_for_discipline(
-            DISCIPLINE_ZEAL,
+            DEFAULT_COMBAT_PROFILE,
             &one_hand_sword,
             Some(&shield)
         ));
         assert!(!weapon_definition_pair_is_allowed_for_discipline(
-            DISCIPLINE_ZEAL,
+            DEFAULT_COMBAT_PROFILE,
             &one_hand_sword,
             None
         ));
         assert!(weapon_definition_pair_is_allowed_for_discipline(
-            DISCIPLINE_ZEAL,
+            DEFAULT_COMBAT_PROFILE,
             &fist_weapon,
             Some(&shield)
         ));
         assert!(weapon_definition_pair_is_allowed_for_discipline(
-            DISCIPLINE_PRECISION,
+            COMBAT_PROFILE_ARCHER_BOW,
             &bow,
             None
         ));
-        for discipline_id in [
-            "BLIGHT",
-            "MORTALITY",
-            "RUIN",
-            "DIVINITY",
-            DISCIPLINE_ARCANA,
-            "PRIMAL",
-        ] {
-            assert!(weapon_definition_pair_is_allowed_for_discipline(
-                discipline_id,
-                &staff,
-                None
-            ));
-            assert!(!weapon_definition_pair_is_allowed_for_discipline(
-                discipline_id,
-                &greatsword,
-                None
-            ));
-        }
+        assert!(weapon_definition_pair_is_allowed_for_discipline(
+            COMBAT_PROFILE_STAFF,
+            &staff,
+            None
+        ));
+        assert!(!weapon_definition_pair_is_allowed_for_discipline(
+            COMBAT_PROFILE_STAFF,
+            &greatsword,
+            None
+        ));
     }
 
     #[test]
@@ -7645,22 +7471,17 @@ mod tests {
     }
 
     #[test]
-    fn every_combat_discipline_resolves_to_an_authored_starter_weapon() {
+    fn every_canonical_combat_discipline_resolves_to_an_authored_starter_weapon() {
         let authored_definitions: std::collections::HashSet<_> = STARTER_ITEM_DEFINITIONS
             .iter()
             .map(|definition| definition.item_def_id)
             .collect();
         let expected = [
-            (DISCIPLINE_SUBTLETY, "TRAINING_DAGGER_PAIR"),
-            (DISCIPLINE_WAR, "TRAINING_TWO_HAND_SWORD"),
-            (DISCIPLINE_ZEAL, "TRAINING_SWORD_AND_SHIELD"),
-            (DISCIPLINE_PRECISION, "TRAINING_BOW"),
-            ("BLIGHT", "NEWBIE_STAFF_01"),
-            ("MORTALITY", "NEWBIE_STAFF_01"),
-            ("RUIN", "NEWBIE_STAFF_01"),
-            ("DIVINITY", "NEWBIE_STAFF_01"),
-            (DISCIPLINE_ARCANA, "NEWBIE_STAFF_01"),
-            ("PRIMAL", "NEWBIE_STAFF_01"),
+            (COMBAT_PROFILE_DAGGERS, "TRAINING_DAGGER_PAIR"),
+            (COMBAT_PROFILE_TWO_HANDED_SWORD, "TRAINING_TWO_HAND_SWORD"),
+            (DEFAULT_COMBAT_PROFILE, "TRAINING_SWORD_AND_SHIELD"),
+            (COMBAT_PROFILE_ARCHER_BOW, "TRAINING_BOW"),
+            (COMBAT_PROFILE_STAFF, "NEWBIE_STAFF_01"),
         ];
 
         for (discipline_id, item_def_id) in expected {

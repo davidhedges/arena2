@@ -24,17 +24,16 @@ use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WOR
 use crate::player_state::PlayerState;
 use crate::practice::resolve_respawn_pose;
 use crate::progression::{
-    ability_belongs_to_discipline, blight_fracture_melee_damage_bonus,
-    character_has_selected_discipline, combat_rule_value, derived_combat_profile_id_for_owner,
-    precision_careful_aim_for_owner, precision_heartseeker_stationary_rule,
-    precision_maverick_for_owner, precision_point_blank_for_owner, primal_adaptation_for_owner,
-    primal_photosynthesis_for_owner, primal_slipstream_cooldown_reduction_for_owner,
-    ruin_acceleration_cooldown_reduction_for_owner, ruin_chain_reaction_spell_for_owner,
-    ruin_furnace_mana_restore_ratio_for_owner, ruin_potential_crit_chance_per_stack_for_owner,
-    ruin_quickening_for_owner, ruin_wildfire_ignite_for_owner, soulstealer_empowered_damage_bonus,
+    ability_belongs_to_discipline, blight_fracture_melee_damage_bonus, combat_rule_value,
+    player_has_selected_passive_ability, precision_careful_aim_for_owner,
+    precision_heartseeker_stationary_rule, precision_maverick_for_owner,
+    precision_point_blank_for_owner, primal_adaptation_for_owner, primal_photosynthesis_for_owner,
+    primal_slipstream_cooldown_reduction_for_owner, ruin_acceleration_cooldown_reduction_for_owner,
+    ruin_chain_reaction_spell_for_owner, ruin_furnace_mana_restore_ratio_for_owner,
+    ruin_potential_crit_chance_per_stack_for_owner, ruin_quickening_for_owner,
+    ruin_wildfire_ignite_for_owner, soulstealer_empowered_damage_bonus,
     subtlety_behind_target_damage_bonus, subtlety_disabled_target_damage_bonus,
-    ARCHER_HEARTSEEKER_ABILITY_ID, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_TWO_HANDED_SWORD,
-    DISCIPLINE_BLIGHT, DISCIPLINE_MORTALITY, DISCIPLINE_SUBTLETY,
+    ARCHER_HEARTSEEKER_ABILITY_ID, DISCIPLINE_MORTALITY,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, combat_relation, target_audience_allows, CombatRelation,
@@ -210,6 +209,9 @@ const COMBAT_REASON_KNOCKBACK: &str = "KNOCKBACK";
 const COMBAT_REASON_HELPFUL_ASSIST: &str = "HELPFUL_ASSIST";
 const RESTLESS_PASSIVE_ID: &str = "WARRIOR_RESTLESS";
 const BLOODLUST_PASSIVE_ID: &str = "WARRIOR_BLOODLUST";
+const FRACTURE_PASSIVE_ID: &str = "RUIN_FRACTURE";
+const OPPORTUNIST_PASSIVE_ID: &str = "SUBTLETY_OPPORTUNIST";
+const TACTICAL_ADVANTAGE_PASSIVE_ID: &str = "SUBTLETY_TACTICAL_ADVANTAGE";
 const PASSIVE_STATUS_REFRESH_DURATION: Duration = Duration::from_secs(60 * 60);
 const AURA_STACK_GROUP_PREFIX: &str = "AURA:";
 const PALADIN_AURA_OF_VENGEANCE_MARK_SPELL_ID: &str = "PALADIN_AURA_OF_VENGEANCE_MARK";
@@ -1043,7 +1045,6 @@ pub fn clear_combat_engagement_for_identity(ctx: &ReducerContext, identity: Iden
 
 struct CombatStackingPassiveSpec {
     passive_id: &'static str,
-    combat_profile_id: &'static str,
     stack_group: &'static str,
     status_kind: StatusEffectKind,
     max_stacks: u32,
@@ -1056,7 +1057,6 @@ struct CombatStackingPassiveSpec {
 
 struct BloodlustPassiveSpec {
     passive_id: &'static str,
-    combat_profile_id: &'static str,
     stack_group: &'static str,
     radius_meters: f32,
     max_stacks: u32,
@@ -1068,7 +1068,6 @@ struct BloodlustPassiveSpec {
 fn restless_passive_spec() -> CombatStackingPassiveSpec {
     CombatStackingPassiveSpec {
         passive_id: RESTLESS_PASSIVE_ID,
-        combat_profile_id: COMBAT_PROFILE_TWO_HANDED_SWORD,
         stack_group: RESTLESS_PASSIVE_ID,
         status_kind: StatusEffectKind::DirectDamageAmp,
         max_stacks: 50,
@@ -1083,7 +1082,6 @@ fn restless_passive_spec() -> CombatStackingPassiveSpec {
 fn bloodlust_passive_spec() -> BloodlustPassiveSpec {
     BloodlustPassiveSpec {
         passive_id: BLOODLUST_PASSIVE_ID,
-        combat_profile_id: COMBAT_PROFILE_TWO_HANDED_SWORD,
         stack_group: BLOODLUST_PASSIVE_ID,
         radius_meters: 10.0,
         max_stacks: 50,
@@ -1095,11 +1093,6 @@ fn bloodlust_passive_spec() -> BloodlustPassiveSpec {
 
 pub fn tick_combat_stacking_passives(ctx: &ReducerContext, now: Timestamp) {
     let spec = restless_passive_spec();
-    // Only alive non-dummy players can acquire these passives; per-owner
-    // eligibility resolves the equipment-derived combat profile, so seeding
-    // every player row made this scale with dummy population (tick audit T5).
-    // Owners that somehow still hold rows (death, despawn races) stay covered
-    // by the runtime/status arms below and get cleaned up there.
     let mut owners: HashSet<Identity> = ctx
         .db
         .player_state()
@@ -1111,6 +1104,7 @@ pub fn tick_combat_stacking_passives(ctx: &ReducerContext, now: Timestamp) {
         ctx.db
             .combat_stacking_passive_runtime()
             .iter()
+            .filter(|row| row.passive_id == spec.passive_id)
             .map(|row| row.owner),
     );
     owners.extend(
@@ -1471,9 +1465,7 @@ fn bloodlust_passive_eligible(
     owner: Identity,
     spec: &BloodlustPassiveSpec,
 ) -> bool {
-    derived_combat_profile_id_for_owner(ctx, owner).is_some_and(|combat_profile_id| {
-        combat_profile_id.eq_ignore_ascii_case(spec.combat_profile_id)
-    })
+    player_has_selected_passive_ability(ctx, owner, spec.passive_id)
 }
 
 fn nearby_bleeding_hostile_target_count(
@@ -2531,9 +2523,7 @@ fn combat_stacking_passive_eligible(
     owner: Identity,
     spec: &CombatStackingPassiveSpec,
 ) -> bool {
-    derived_combat_profile_id_for_owner(ctx, owner).is_some_and(|combat_profile_id| {
-        combat_profile_id.eq_ignore_ascii_case(spec.combat_profile_id)
-    })
+    player_has_selected_passive_ability(ctx, owner, spec.passive_id)
 }
 
 fn combat_stacking_passive_stacks(
@@ -5977,7 +5967,6 @@ fn apply_damage_to_player_state(
     let mut resolved = resolve_damage_amount(ctx, hit, temporary_modifiers);
     let resolved_amount = redirect_burden_damage(ctx, hit, resolved.final_amount);
     let damage_delivery = DamageDelivery::from_wire(hit.damage_delivery.as_str());
-    let is_direct_damage = damage_delivery == DamageDelivery::Direct;
     let grants_outgoing_rewards = damage_grants_outgoing_rewards(ctx, hit);
     let is_assist_cost = damage_is_assist_cost(hit.damage_source_kind.as_str());
     if !is_assist_cost && damage_breaks_shroud(damage_delivery, resolved_amount) {
@@ -6054,7 +6043,7 @@ fn apply_damage_to_player_state(
         queue_wildfire_ignites_if_applicable(ctx, hit, hp_damage);
         advance_shadowrend_from_melee(ctx, hit, hp_damage);
     }
-    if grants_outgoing_rewards && hp_damage > 0 && is_direct_damage {
+    if grants_outgoing_rewards && hp_damage > 0 && damage_delivery == DamageDelivery::Direct {
         let action_key = if hit.direct_action_key.trim().is_empty() {
             hit.spell_id.as_str()
         } else {
@@ -6827,7 +6816,7 @@ fn active_fracture_freezes_for_melee_attack(
                 && effect.polarity == StatusPolarity::Debuff.as_str()
                 && effect.source != Identity::ZERO
                 && ctx.timestamp < effect.expires_at
-                && character_has_selected_discipline(ctx, effect.source, DISCIPLINE_BLIGHT)
+                && player_has_selected_passive_ability(ctx, effect.source, FRACTURE_PASSIVE_ID)
         })
         .collect()
 }
@@ -7315,8 +7304,8 @@ fn opportunist_passive_damage_multiplier(
     hit: &PendingHit,
     temporary_modifiers: &TemporaryCombatModifiers,
 ) -> f32 {
-    let passive_is_active = derived_combat_profile_id_for_owner(ctx, hit.source)
-        .is_some_and(|profile_id| opportunist_passive_is_active_for_profile(profile_id.as_str()));
+    let passive_is_active =
+        player_has_selected_passive_ability(ctx, hit.source, OPPORTUNIST_PASSIVE_ID);
     let target_is_disabled =
         temporary_modifiers.is_disabled(&hit.target) && can_harm(ctx, hit.source, hit.target);
     disabled_target_damage_multiplier(
@@ -7324,10 +7313,6 @@ fn opportunist_passive_damage_multiplier(
         target_is_disabled,
         subtlety_disabled_target_damage_bonus(),
     )
-}
-
-fn opportunist_passive_is_active_for_profile(combat_profile_id: &str) -> bool {
-    combat_profile_id.eq_ignore_ascii_case(COMBAT_PROFILE_DAGGERS)
 }
 
 fn disabled_target_damage_multiplier(
@@ -7343,7 +7328,8 @@ fn disabled_target_damage_multiplier(
 }
 
 fn tactical_advantage_passive_damage_multiplier(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
-    let passive_is_active = character_has_selected_discipline(ctx, hit.source, DISCIPLINE_SUBTLETY);
+    let passive_is_active =
+        player_has_selected_passive_ability(ctx, hit.source, TACTICAL_ADVANTAGE_PASSIVE_ID);
     let attacker_is_behind = can_harm(ctx, hit.source, hit.target)
         && actor_snapshot::actor_snapshot_for(ctx, hit.source)
             .zip(actor_snapshot::actor_snapshot_for(ctx, hit.target))
@@ -7630,6 +7616,7 @@ fn queue_surprise_attack_stun_if_applicable(
 ) {
     if hp_damage <= 0
         || hit.source == Identity::ZERO
+        || !player_has_selected_passive_ability(ctx, hit.source, "SUBTLETY_SURPRISE_ATTACKS")
         || DamageDelivery::from_wire(hit.damage_delivery.as_str()) != DamageDelivery::Direct
     {
         return;
@@ -10729,11 +10716,7 @@ pub fn tick_hemorrhage(ctx: &ReducerContext, now: Timestamp, dt: f32) -> usize {
 ///
 /// The payout is queued as PERIODIC damage, which is not a melee attack, so it
 /// cannot advance the wound again.
-fn advance_shadowrend_from_melee(
-    ctx: &ReducerContext,
-    hit: &PendingHit,
-    confirmed_hp_damage: i32,
-) {
+fn advance_shadowrend_from_melee(ctx: &ReducerContext, hit: &PendingHit, confirmed_hp_damage: i32) {
     if confirmed_hp_damage <= 0 || !hit_is_direct_melee_attack(hit) {
         return;
     }
@@ -10771,9 +10754,7 @@ fn advance_shadowrend_from_melee(
         let interval_ms = wound.tick_interval_ms.max(1);
         // Only whole ticks are spent. A wound with less than one interval left
         // is already inside its final tick and simply runs out.
-        let spendable_ms = advance_ticks
-            .saturating_mul(interval_ms)
-            .min(remaining_ms);
+        let spendable_ms = advance_ticks.saturating_mul(interval_ms).min(remaining_ms);
         let ticks = spendable_ms / interval_ms;
         if ticks == 0 {
             continue;
@@ -10835,12 +10816,7 @@ pub(crate) fn active_stalk_mark_target(
 }
 
 pub(crate) fn clear_stalk_mark(ctx: &ReducerContext, victim: Identity) {
-    remove_active_status_group(
-        ctx,
-        victim,
-        StatusEffectKind::Stalked,
-        STALK_STATUS_GROUP,
-    );
+    remove_active_status_group(ctx, victim, StatusEffectKind::Stalked, STALK_STATUS_GROUP);
 }
 
 /// One shadow at a time: attaching it to someone new takes it off whoever was
@@ -11025,12 +11001,12 @@ mod tests {
         immolation_damage_for_stacks, immolation_remaining_tick_count, initial_status_stacks,
         isolated_damage_multiplier, knockback_stagger_duration, melee_attack_can_trigger_fracture,
         mirror_image_intercept_chance, mirror_image_stacks_after_intercept,
-        mirror_images_intercept, new_status_effect, opportunist_passive_is_active_for_profile,
-        point_blank_damage_multiplier, point_within_radius, potential_stacks_after_spell_strike,
+        mirror_images_intercept, new_status_effect, point_blank_damage_multiplier,
+        point_within_radius, potential_stacks_after_spell_strike,
         proportional_tick_amount_after_stack_loss, quickening_cast_speed_multiplier,
         resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
-        resolve_temporary_hitpoint_absorb, resolved_shove_tunables, rime_protected_status_id,
-        rime_protection_stack_group, spell_critical_can_charge_capacitor,
+        resolve_temporary_hitpoint_absorb, resolved_shove_tunables, restless_passive_spec,
+        rime_protected_status_id, rime_protection_stack_group, spell_critical_can_charge_capacitor,
         spell_critical_can_trigger_chain_reaction, stacked_slow_pct, stagger_shove_tunables,
         stationary_target_damage_multiplier, stationary_target_from_poses,
         status_application_is_blocked_by_immunity, status_can_spread_from_contagious_target,
@@ -11043,7 +11019,7 @@ mod tests {
         COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_BURDEN_REDIRECT,
         DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PERIODIC, DAMAGE_SOURCE_KIND_PROJECTILE,
         DAMAGE_SOURCE_KIND_SELF_INFLICTED, DAMAGE_SOURCE_KIND_SPELL, HOLY_SHIELD_SPELL_ID,
-        HOLY_SHIELD_STATUS_GROUP, PLAYER_EVENT_RETENTION,
+        HOLY_SHIELD_STATUS_GROUP, PLAYER_EVENT_RETENTION, RESTLESS_PASSIVE_ID,
     };
     use crate::movement::FIXED_TICK_MILLIS;
     use crate::relations::TargetAudience;
@@ -11331,12 +11307,25 @@ mod tests {
     }
 
     #[test]
-    fn opportunist_passive_is_profile_active_and_only_bonuses_disabled_targets() {
-        assert!(opportunist_passive_is_active_for_profile("DAGGERS"));
-        assert!(opportunist_passive_is_active_for_profile("daggers"));
-        assert!(!opportunist_passive_is_active_for_profile(
-            "TWO_HANDED_SWORD"
-        ));
+    fn restless_passive_spec_preserves_existing_stack_tuning() {
+        let spec = restless_passive_spec();
+
+        assert_eq!(spec.passive_id, RESTLESS_PASSIVE_ID);
+        assert_eq!(spec.stack_group, RESTLESS_PASSIVE_ID);
+        assert_eq!(spec.status_kind, StatusEffectKind::DirectDamageAmp);
+        assert_eq!(spec.max_stacks, 50);
+        assert_eq!(spec.gain_delay, Duration::from_secs(4));
+        assert_eq!(spec.gain_interval, Duration::from_secs(1));
+        assert_eq!(
+            spec.out_of_combat_decay_interval,
+            Duration::from_millis(500)
+        );
+        assert_eq!(spec.consume_on_direct_damage, 10);
+        assert_eq!(spec.damage_amp_per_stack, 0.02);
+    }
+
+    #[test]
+    fn opportunist_bonus_requires_selected_passive_and_disabled_target_inputs() {
         assert!((disabled_target_damage_multiplier(true, true, 0.15) - 1.15).abs() < 0.0001);
         assert_eq!(disabled_target_damage_multiplier(false, true, 0.15), 1.0);
         assert_eq!(disabled_target_damage_multiplier(true, false, 0.15), 1.0);

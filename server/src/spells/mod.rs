@@ -533,18 +533,6 @@ pub(crate) fn migrate_renamed_spell_storage(ctx: &ReducerContext) -> usize {
     migrated
 }
 
-pub(crate) fn player_knows_spell(ctx: &ReducerContext, owner: Identity, spell_id: &str) -> bool {
-    let Ok(spell_id) = SpellId::new(spell_id) else {
-        return false;
-    };
-    ctx.db
-        .player_known_spell()
-        .key()
-        .find(player_known_spell_key(owner, spell_id.as_str()))
-        .is_some()
-        || crate::inventory::equipped_spellbook_contains_spell(ctx, owner, spell_id.as_str())
-}
-
 pub(crate) fn ensure_player_knows_spell(
     ctx: &ReducerContext,
     owner: Identity,
@@ -646,12 +634,8 @@ pub fn cast_request(
     let kind = &definition.kind;
     let authored_action_id = AuthoredActionId::new(kind.as_str());
     if action_id_is_selectable_action_bar_action(ctx, &authored_action_id)
-        && !spell_cast_is_authorized_by_action_bar_or_spellbook(
-            ctx,
-            ctx.sender(),
-            &authored_action_id,
-            kind.as_str(),
-        )
+        && active_selectable_ability_for_authored_action(ctx, ctx.sender(), &authored_action_id)
+            .is_none()
     {
         return Err(format!(
             "spell '{}' is not assigned on the action bar",
@@ -763,16 +747,6 @@ fn cast_request_executes_immediately(behavior: SpellBehavior, cast_time: Duratio
         behavior,
         SpellBehavior::InstantBeam | SpellBehavior::Channel
     ) || cast_time == Duration::ZERO
-}
-
-fn spell_cast_is_authorized_by_action_bar_or_spellbook(
-    ctx: &ReducerContext,
-    owner: Identity,
-    authored_action_id: &AuthoredActionId,
-    spell_id: &str,
-) -> bool {
-    active_selectable_ability_for_authored_action(ctx, owner, authored_action_id).is_some()
-        || player_knows_spell(ctx, owner, spell_id)
 }
 
 #[cfg(test)]

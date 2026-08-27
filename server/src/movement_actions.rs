@@ -19,9 +19,8 @@ use crate::defense::clear_interruptible_defense_for_owner;
 use crate::lingering_shade::arm_lingering_shade_for_voluntary_movement;
 use crate::movement::FIXED_TICK_MILLIS;
 use crate::progression::{
-    character_has_selected_discipline, primary_resource_gain_on_action_accept,
+    player_has_selected_passive_ability, primary_resource_gain_on_action_accept,
     subtlety_dodge_recharge_time_reduction, AbilityCatalog, MovementDeliveryRuntime,
-    DISCIPLINE_SUBTLETY,
 };
 use crate::resources::{
     can_pay_action_resource_cost, grant_primary_resource_amount, pay_action_resource_cost,
@@ -53,6 +52,7 @@ const ACTION_KIND_DODGE: &str = "DODGE";
 const ACTION_KIND_DASH_TO_TARGET: &str = "DASH_TO_TARGET";
 const DODGE_MAX_CHARGES: u32 = 10;
 const DODGE_RECHARGE_MS: u64 = 10_000;
+const FLEET_FOOTED_PASSIVE_ID: &str = "SUBTLETY_FLEET_FOOTED";
 const DODGE_DISTANCE_METERS: f32 = 8.0;
 const DODGE_SPEED_METERS_PER_SECOND: f32 = 24.0;
 const DODGE_RECOVERY_MS: u64 = 220;
@@ -964,7 +964,7 @@ fn fixed_action_charge_config_for_owner(
     action_id: &str,
 ) -> (u32, u64) {
     let dodge_recharge_time_reduction = if action_id == ACTION_KIND_DODGE
-        && character_has_selected_discipline(ctx, owner, DISCIPLINE_SUBTLETY)
+        && player_has_selected_passive_ability(ctx, owner, FLEET_FOOTED_PASSIVE_ID)
     {
         subtlety_dodge_recharge_time_reduction()
     } else {

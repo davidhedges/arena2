@@ -5736,6 +5736,25 @@
       }
     },
     {
+      "ability_id": "WARRIOR_RESTLESS",
+      "actor_scope": "PLAYER",
+      "discipline_id": "WAR",
+      "selection_kind": "PASSIVE",
+      "combat_discipline_id": "TWO_HANDED_SWORD",
+      "spell_school_id": null,
+      "combat_profile_id": "TWO_HANDED_SWORD",
+      "action_id": "RESTLESS",
+      "display_name": "Restless",
+      "resource_kind": "STAMINA",
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 89,
+      "gameplay": {
+        "kind": "PASSIVE"
+      }
+    },
+    {
       "ability_id": "WARRIOR_BLOODLUST",
       "actor_scope": "PLAYER",
       "discipline_id": "WAR",
@@ -11099,6 +11118,13 @@
       "display_name": "Frenzy",
       "description": "Drives the wielder into a frenzy, increasing auto-attack speed.",
       "sort_order": 88
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "WARRIOR_RESTLESS",
+      "display_name": "Restless",
+      "description": "After 4 seconds in combat, gains one stack each second, increasing direct damage by 2% per stack up to 50 stacks. Direct damage consumes 10 stacks and resets the delay; stacks decay out of combat.",
+      "sort_order": 89
     },
     {
       "presentation_kind": "ABILITY",

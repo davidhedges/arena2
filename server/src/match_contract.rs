@@ -824,29 +824,10 @@ pub(crate) fn apply_reserved_player_combat_build(
             .update(configuration);
     }
 
-    let starting_key = match_combat_build_key(
-        reservation.player_identity,
-        &[build.starting_discipline_id.as_str()],
-    );
-    let starting_configuration = ctx
-        .db
-        .match_discipline_configuration()
-        .key()
-        .find(starting_key)
-        .ok_or_else(|| "Starting discipline has no match configuration".to_string())?;
-    crate::inventory::equip_materialized_combat_build_weapon_configuration(
+    crate::progression::activate_frozen_combat_discipline(
         ctx,
         reservation.player_identity,
-        starting_configuration.combat_discipline_id.as_str(),
-        starting_configuration.main_hand_item_def_id.as_str(),
-        starting_configuration.main_hand_color_id.as_str(),
-        starting_configuration.off_hand_item_def_id.as_str(),
-        starting_configuration.off_hand_color_id.as_str(),
-        starting_configuration
-            .main_hand_item_id
-            .as_deref()
-            .ok_or_else(|| "Starting discipline main-hand instance is missing".to_string())?,
-        starting_configuration.off_hand_item_id.as_deref(),
+        build.starting_discipline_id.as_str(),
     )?;
 
     crate::inventory::equip_armor_set_for_owner(

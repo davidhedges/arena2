@@ -1393,7 +1393,7 @@ mod tests {
         assert_eq!(catalog.discipline_ids.len(), 5);
         assert_eq!(catalog.staff_school_ids.len(), 6);
         assert_eq!(catalog.weapons.len(), 138);
-        assert_eq!(catalog.abilities.len(), 413);
+        assert_eq!(catalog.abilities.len(), 414);
         assert_eq!(catalog.rules.action_slot_ids.len(), 27);
         assert_eq!(
             source
@@ -1401,7 +1401,7 @@ mod tests {
                 .iter()
                 .filter(|ability| ability.actor_scope == "PLAYER")
                 .count(),
-            216
+            217
         );
         assert_eq!(
             source

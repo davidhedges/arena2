@@ -2,13 +2,11 @@
 
 Date: 2026-08-26
 
-Status: **PHASE 2 COMPLETE — the canonical catalog/validator and the persistent
-Hub combat-build aggregate are live locally. One revision-checked atomic
-`save_combat_build` reducer is the only Hub combat-build writer; the single
-caller-filtered `my_combat_build` aggregate view and regenerated bindings expose
-the canonical state. Phase 3 and later
-implementation are not authorized by this document; each requires explicit
-approval.**
+Status: **PHASE 4 COMPLETE — the canonical catalog, persistent Hub aggregate,
+frozen match handoff, exact per-discipline runtime bars, atomic weapon switch,
+build-only active authorization, and selected-passive authorization are live
+locally. Phase 5 and later implementation have not started; each requires
+explicit approval.**
 
 ## 1. Goal
 
@@ -531,6 +529,21 @@ Deliverables:
 
 Exit gate: the runtime scenarios in §11 pass, and instrumented denials prove
 that dormant/unassigned/wrong-school abilities cannot execute.
+
+Completion record (2026-08-26): **PASS.** Provisioned players resolve only the
+current frozen discipline's exact action assignments; switching a selected
+discipline atomically restores its materialized weapon and projects its exact
+bar. Learned-spell and spellbook collection rows no longer grant player cast
+authorization. All 24 authored player passives are inventoried against one
+selected-passive predicate that is independent of the equipped discipline.
+`WARRIOR_RESTLESS` is now an explicit Two-Handed passive while preserving its
+existing stack, delay, consumption, decay, and damage-amplification mechanics.
+A live Daggers/Bow/Staff probe passed exact-bar, switch, frozen-mutation,
+positive-cast, collection-only denial, instrumented denial-reason, persistent
+Hub-data, and allocation-cleanup gates. Detailed evidence and the residual
+legacy classification are in
+`docs/combat-build-progression-phase-4-evidence-2026-08-26.md`. Phase 5 was not
+started.
 
 ### Phase 5 — Unity plumbing for the future editor (no new screen)
 
