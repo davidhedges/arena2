@@ -179,7 +179,7 @@ namespace Arena.Presentation
             if (_lastScheduleResolved)
                 return;
 
-            CombatAnimationSet? animationSet = CombatAnimationSetCatalog.Resolve(row.CombatProfileId);
+            CombatAnimationSet? animationSet = CombatAnimationSetCatalog.Resolve(row.CombatDisciplineId);
             if (!SupportsLocalPrediction(animationSet))
             {
                 // The current prediction ledger correlates one local swing to
@@ -319,7 +319,7 @@ namespace Arena.Presentation
             long fireAtClientMs,
             double serverMinusClientMs)
         {
-            string combatProfile = CombatProfileResolver.ResolveForEntity(conn, entity);
+            string combatProfile = RuntimeCombatProfile.ResolveForEntity(conn, entity);
             string runtimeActionId = CombatActionIds.ResolveRuntimeActionId(conn, combatProfile, row.StrikeId);
             if (string.IsNullOrWhiteSpace(runtimeActionId))
                 return;
@@ -377,7 +377,7 @@ namespace Arena.Presentation
             if (_instance == null)
                 return false;
 
-            string combatProfile = CombatProfileResolver.ResolveForEntity(conn, entity);
+            string combatProfile = RuntimeCombatProfile.ResolveForEntity(conn, entity);
             CombatAnimationSet? animationSet = CombatAnimationSetCatalog.Resolve(combatProfile);
             if (animationSet?.IsAutoAttackVisualSequenceContinuation(request.ActionId) == true)
             {
@@ -454,7 +454,7 @@ namespace Arena.Presentation
 
         private static AutoAttackCatalog? ResolveAutoAttackGameplay(DbConnection conn, AutoAttackState row)
         {
-            string profile = row.CombatProfileId?.Trim().ToUpperInvariant() ?? string.Empty;
+            string profile = row.CombatDisciplineId?.Trim().ToUpperInvariant() ?? string.Empty;
             string mode = row.ModeId?.Trim().ToUpperInvariant() ?? string.Empty;
             string action = NormalizeAuthoredActionId(row.StrikeId);
             if (profile.Length == 0 || action.Length == 0)

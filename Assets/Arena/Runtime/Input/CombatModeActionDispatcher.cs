@@ -17,7 +17,7 @@ namespace Arena.Input
                 return false;
 
             Identity owner = conn.Identity.Value;
-            string combatProfile = CombatProfileResolver.ResolveForOwner(conn, owner);
+            string combatProfile = RuntimeCombatProfile.ResolveForOwner(conn, owner);
             if (string.IsNullOrWhiteSpace(combatProfile))
                 return false;
 
@@ -55,7 +55,7 @@ namespace Arena.Input
             foreach (CombatModeCatalog row in conn.Db.CombatModeCatalog.Iter())
             {
                 if (string.Equals(
-                        WireIdentifier.Normalize(row.CombatProfileId),
+                        WireIdentifier.Normalize(row.CombatDisciplineId),
                         combatProfile,
                         StringComparison.Ordinal))
                 {
@@ -84,7 +84,7 @@ namespace Arena.Input
         {
             ActiveCombatMode? active = conn.Db.ActiveCombatMode.Owner.Find(owner);
             if (active != null
-                && string.Equals(WireIdentifier.Normalize(active.CombatProfileId), combatProfile, StringComparison.Ordinal)
+                && string.Equals(WireIdentifier.Normalize(active.CombatDisciplineId), combatProfile, StringComparison.Ordinal)
                 && ContainsMode(modes, active.ModeId))
             {
                 return WireIdentifier.Normalize(active.ModeId);

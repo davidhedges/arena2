@@ -12,7 +12,7 @@ Rows expire ~10 seconds after insert server-side, so run this during or
 immediately after the presses being measured.
 
 Enum cells are matched on the live `spacetime sql` rendering (verified
-2026-07-04 against an s4-los-probe run: enum columns print as
+2026-07-04 against the retired pre-cutover S4 LOS harness: enum columns print as
 `(camelCaseTag = ())`, e.g. `(lineOfSightBlocked = ())`), never on Rust
 constant names.
 
@@ -88,7 +88,7 @@ def main():
     rows = parse_rows(run_sql(args.database, args.server))
     if not rows:
         print("No predicted_action_result rows in the live window (~10 s retention).")
-        print("Press actions (or run ops/s4-los-probe.py) and rerun immediately.")
+        print("Press actions (or run retired pre-cutover S4 LOS harness) and rerun immediately.")
         return
 
     counts = Counter((r["family"], r["result"], r["reason"]) for r in rows)

@@ -2,93 +2,80 @@
 
 Date: 2026-08-26
 
-Status: **Documentation reconciliation complete. Runtime, schema, generated
-binding, catalog, and UI implementation remain unchanged.**
+Final reconciliation: 2026-08-27
+
+Status: **COMPLETE — current documentation describes only the canonical
+combat-build authority. Conflicting designs remain only as explicitly archived
+history.**
 
 Authority: `docs/combat-build-progression-cutover-plan-2026-08-26.md`
 
 ## Scope and method
 
-This audit searched current, non-`docs/archive/` documentation, plans, and web
-prototypes for assertions involving:
+The final Phase 7 audit searched current documentation and prototypes for:
 
-- primary/secondary disciplines or their persisted field names;
-- school-as-discipline catalog rows;
-- legacy selectable IDs (`SUBTLETY`, `WAR`, `ZEAL`, `PRECISION`, and Staff as
-  `ARCANA`);
-- spell/known-spell/spellbook action-bar authorization;
-- granular damage/presentation types called spell schools; and
-- ambiguous selected-ability lists and discipline-loadout terminology.
+- primary/secondary discipline persistence or validation;
+- schools represented as discipline rows;
+- legacy selectable discipline IDs or Staff-to-Arcana fallback mappings;
+- learned-spell, spellbook-content, or inventory-based cast authorization;
+- ambiguous selected-ability lists;
+- legacy Hub, match, generated-binding, bootstrap, or action-bar names; and
+- granular damage/presentation types described as the six Staff schools.
 
-Each hit was inspected in context. A text match was not automatically treated
-as a conflict: dated current-state audits, asset paths, and unrelated uses of
-the English word “precision” are not competing design authority.
+Every retained hit was inspected in context. A dated migration record or an
+explicitly archived design is not current authority, but it remains allowlisted
+only when its status and purpose are unambiguous.
 
-## Confirmed conflicts and disposition
+## Current documents reconciled
 
-| Document/prototype | Conflict | Disposition |
-|---|---|---|
-| `docs/combat-authoring-contract.md` | Normatively described weapon-family IDs and consolidated Staff schools as peer disciplines; treated `ability_tags` and the current ActionRef/loadout shape as the future model | Revised in place. The canonical five weapon disciplines and six Staff schools are now explicit. Current `discipline_id`, tag, and ActionRef behavior is labeled a temporary implementation adapter that must not seed new architecture. |
-| `docs/spellbook-composer-design-2026-07-20.md` | Preserved `spellbook -> known -> action bar -> cast` as the availability chain | Archived in place with its phases revoked. Attachment/glyph research is historical only; any future composer must be a modifier/collection feature and cannot grant player combat availability. |
-| `docs/reward-choice-flow-design-2026-07-25.md` | Called Air/Arcane/Cold/Fire/Holy/Lightning/Necromancy/Shadow spell schools, exposed old discipline identities, and made school/discipline unlocks mutually exclusive | Archived in place and former approval revoked. It is visual history only. |
-| `docs/ui-prototypes/reward-choice/` | Executable presentation of the conflicting reward design | Archived in place with a README, source headers, an archived page title, and a visible do-not-implement banner. Kept at the path only to preserve asset/provenance links. |
-| `docs/ui-prototypes/disciplines/` | Executable primary/secondary UI with schools as disciplines and 8/1 minima | Archived in place with a README, source headers, an archived page title, and a visible supersession banner. The future replacement UI remains a separate task. |
-| `docs/ui-prototypes/hub/` | Current Hub example showed `SUBTLETY` as primary and `RUIN`/`ARCANA` as secondary disciplines | Corrected in place to three equal top-level weapon disciplines: Daggers, Staff, and Archer Bow. Existing legacy icon files are presentation assets, not build identities. |
-| `docs/spell-presentation-dry-redesign-2026-07-07.md` and `docs/spell-vfx-migration-map.md` | Historical/current presentation `vfx_school` and palette terminology could be mistaken for player-facing Staff schools | Kept as linked presentation evidence, with explicit notes that their “schools” are legacy VFX themes/damage-presentation types, not Staff schools. |
-
-“Archived in place” is intentional. Several live code comments, later design
-documents, and prototype asset links cite these paths. Moving them would erase
-useful provenance and create broken references. Their explicit archived status,
-revoked approval, source headers, and visible browser notices remove current
-design authority without pretending the historical artifacts never existed.
-
-## Inspected non-conflicts
-
-| Document | Why it remains |
+| Document | Final disposition |
 |---|---|
-| `docs/independent-vertical-slice-audit-2026-07-10.md` | A dated inventory notes that known-spell tables existed. It does not prescribe them as the future player authorization model. |
-| `docs/netcode-sync-audit-2026-07-02.md` | `ItemSpell` appears in a dated replication/table inventory, not a loadout design rule. |
-| `docs/survival-mode-design-2026-08-03.md` | `ItemSpell` appears in item aggregate/cleanup examples. Those statements do not independently grant combat actions and will be revisited only if the table is removed by implementation. |
-| `docs/ui-art-direction.md` | “Arena has combat disciplines, not classes” is compatible with the five weapon-discipline model. |
-| `docs/spell-cast-animation-migration-checklist.md` | `Precision` is part of a historical animation-set/profile label, not a selectable combat-build identity. |
-| `docs/lag-compensation-design-2026-07-04.md` and `docs/server-event-scheduling-design-2026-07-16.md` | “Precision” is ordinary English and unrelated to the legacy discipline ID. |
+| `docs/combat-authoring-contract.md` | Rewritten as the post-cutover contract: five weapon disciplines, six Staff-only schools, exact active assignments, explicit passives, and one current Hub build. |
+| `docs/ability-icon-style.md` | Uses canonical actor scope, selection kind, gameplay kind, discipline, and Staff-school filters. |
+| `docs/npc-system-design-2026-07-11.md` | Player authorization is the exact frozen build assignment; NPC authoring remains separate. |
+| `docs/open-world-disposable-instances-2026-08-18.md` | Names the durable canonical build and `freeze_player_combat_build_for_ticket`; no legacy Hub row is presented as current. |
+| `docs/survival-mode-design-2026-08-03.md` | Item snapshot examples use only current inventory children and do not claim a removed spell-list table exists. |
+| Netcode, latency, rewind, and projectile design documents touched by Phase 7 | Deleted direct-match probes are identified as retired pre-cutover harnesses rather than runnable current operations. |
 
-## Remaining boundary
+## Explicitly archived conflicts
 
-This reconciliation removes competing **documentation authority**. It does not
-claim the codebase has completed the progression cutover. The old Toolkit
-screen, Hub/match schemas, generated bindings, validators, spellbook/known-spell
-authorization, and other runtime paths remain on the cutover plan's required
-deletion ledger until their separately approved implementation phases pass.
+| Document/prototype | Reason it remains |
+|---|---|
+| `docs/spellbook-composer-design-2026-07-20.md` | Archived and superseded in place. Its former availability chain is historical; any future composer must be a non-authorizing modifier/collection feature. |
+| `docs/reward-choice-flow-design-2026-07-25.md` | Archived and superseded in place because it treated damage types and legacy identities as selectable schools/disciplines. |
+| `docs/ui-prototypes/reward-choice/` | Visible archived banner and source headers preserve presentation provenance only. |
+| `docs/ui-prototypes/disciplines/` | Visible archived banner and README preserve the former primary/secondary mockup only. |
+| `docs/spell-presentation-dry-redesign-2026-07-07.md` and `docs/spell-vfx-migration-map.md` | Their legacy VFX-theme terminology is explicitly presentation-only and not a Staff-school selection contract. |
 
-## Verification expectations
+Moving these files would break provenance links. Their archive headers revoke
+implementation authority without erasing historical context.
 
-Documentation is considered reconciled when:
+## Final allowlist
 
-- every retained conflicting artifact has an explicit archived/superseded or
-  transitional status and points to the canonical plan;
-- current examples do not present schools as discipline slots or old
-  weapon-family IDs as the five top-level choices;
-- current normative docs distinguish the six consolidated Staff schools from
-  granular damage/presentation types; and
-- scoped terminology searches classify every remaining hit as canonical plan
-  language, a documented temporary adapter, an explicitly archived artifact,
-  historical evidence, or an asset path.
+The final terminology search permits legacy strings only in these classes:
 
-Source/test execution is unnecessary for this documentation-only slice. No
-Unity, SpacetimeDB, Hub, match, provisioner, or player data was touched.
+1. the cutover plan, machine-readable ledger, and dated Phase 1–7 evidence;
+2. the explicitly archived/superseded documents and prototypes above;
+3. dated audits such as `docs/netcode-sync-audit-2026-07-02.md` and
+   `docs/independent-vertical-slice-audit-2026-07-10.md`, where old names record
+   what existed at that time rather than prescribe current behavior;
+4. immutable authored ability IDs that retain words such as `SUBTLETY` or
+   `PRECISION`; these are ability identifiers, not selectable discipline IDs;
+5. generic spellbook item/equipment or art-direction terminology that does not
+   grant a cast, action-bar slot, school, or discipline; and
+6. private runtime/presentation helpers containing “profile” when the value is
+   derived from one canonical discipline and owns no public catalog,
+   persistence, selection, reducer, or action bar.
 
-## Executed checks
+No current normative document or runnable prototype remains allowlisted for a
+legacy persistence, selection, bootstrap, cast-authorization, or UI-writing
+path.
 
-- `node --check` passed for both archived prototype controllers.
-- `ops/uss_dialect_lint.py` passed for the still-current Hub prototype and the
-  archived reward prototype stylesheets.
-- The archived Disciplines stylesheet still reports its pre-existing
-  browser-only/non-USS constructs when linted as a whole. No style rule was
-  changed in this slice—only its archive header—and it is explicitly no longer
-  a translation source.
-- All concrete `docs/*.md` references introduced or inspected here resolve;
-  the plan's `...evidence-YYYY-MM-DD.md` name is intentionally a future
-  artifact template.
-- JavaScript syntax checks, trailing-whitespace checks for new files, and
-  `git diff --check` passed.
+## Verification result
+
+- Scoped production searches returned no removed schema, reducer, field,
+  helper, generated DTO, or authorization path.
+- Current documentation searches found no unclassified legacy assertion.
+- Archived documents retain explicit archive/supersession status.
+- The complete commands and results are recorded in
+  `docs/combat-build-progression-cutover-evidence-2026-08-27.md`.

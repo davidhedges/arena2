@@ -3,7 +3,7 @@
 
 Server-data half of the S6 acceptance (local auto-attack swing scheduling):
 a headless websocket player (client_connected spawns a live player; reducers
-ride the same socket — ops/s4-los-probe.py mechanics) subscribes to
+ride the same socket — retired pre-cutover S4 LOS harness mechanics) subscribes to
 auto_attack_state exactly like the Unity client does and verifies the data
 contract the client scheduler relies on:
 
@@ -18,7 +18,7 @@ contract the client scheduler relies on:
               walking back releases the swing at an arbitrary later time
               (>> next_swing_at), which is why the client never predicts a
               held swing. (The behind-cover hold is the same mark_pending_due
-              path, verified live by ops/s4-los-probe.py.)
+              path, verified live by retired pre-cutover S4 LOS harness.)
 
 Run against a throwaway DB — one-shot `spacetime call` cannot leave
 per-identity state, and disconnect cleanup wipes the player:
@@ -133,7 +133,7 @@ class Probe:
     def _parse_aas_row(insert):
         """Rows arrive as JSON-encoded positional arrays; Identity and
         Timestamp cells are single-element arrays (verified live 2026-07-04):
-        [["0x<owner>"], ["0x<target>"], combat_profile_id, mode_id, strike_id,
+        [["0x<owner>"], ["0x<target>"], combat_discipline_id, mode_id, strike_id,
          [cadence_micros], [next_swing_micros], pending_due, movement_epoch]."""
         try:
             value = json.loads(insert) if isinstance(insert, str) else insert

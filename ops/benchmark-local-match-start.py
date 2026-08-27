@@ -3,7 +3,7 @@
 
 The probe keeps one anonymous identity for the entire run, requests serial
 unranked 2v2 bot matches through the public Hub API, authenticates to every
-assigned match with that same identity, and applies the production 44-query
+assigned match with that same identity, and applies the production 36-query
 PvP initial subscription plus a canonical combat-build audit subscription.
 Each ticket is cancelled after its sample, and the probe waits for the
 provisioner's exact-identity cleanup ledger to report all sampled databases
@@ -38,7 +38,7 @@ PROTOCOL = "v1.json.spacetimedb"
 DatabaseRow = list[Any] | dict[str, Any]
 HUB_QUERIES = [
     'SELECT * FROM "my_hub_player"',
-    'SELECT * FROM "my_hub_loadout"',
+    'SELECT * FROM "my_hub_armor_selection"',
     'SELECT * FROM "my_match_status"',
     'SELECT * FROM "my_combat_build"',
 ]
@@ -47,8 +47,6 @@ PVP_STATIC_TABLES = [
     "action_presentation_catalog",
     "combat_vfx_cue_catalog",
     "combat_projectile_definition",
-    "combat_profile_catalog",
-    "combat_discipline_catalog",
     "combat_mode_catalog",
     "action_bar_slot_catalog",
     "item_definition",
@@ -65,17 +63,12 @@ PVP_STATIC_TABLES = [
     "stat_scaling_catalog",
 ]
 PVP_LOCAL_FILTERS = [
-    ("character_action_bar_assignment", "owner"),
     ("character_appearance", "owner"),
-    ("player_known_spell", "owner"),
     ("global_cooldown", "caster"),
     ("spell_cooldown", "caster"),
     ("predicted_action_result", "owner"),
     ("fixed_action_charge_state", "owner"),
-    ("active_combat_discipline", "owner"),
-    ("character_discipline_loadout", "owner"),
-    ("character_discipline_ability_selection", "owner"),
-    ("character_combat_discipline_weapon_loadout", "owner"),
+    ("active_combat_build_discipline", "owner"),
     ("active_combat_mode", "owner"),
     ("auto_attack_state", "owner"),
     ("equipment_loadout", "owner"),
@@ -209,11 +202,11 @@ def parse_match_status(row: DatabaseRow) -> dict[str, str]:
 
 
 def parse_hub_armor(row: DatabaseRow) -> dict[str, Any]:
-    if len(row) < 12:
-        raise RuntimeError(f"unexpected my_hub_loadout row length: {len(row)}")
+    if len(row) < 4:
+        raise RuntimeError(f"unexpected my_hub_armor_selection row length: {len(row)}")
     return {
         "owner": normalize_identity(row_value(row, 0, "owner")),
-        "armor_set_id": str(row_value(row, 5, "armor_set_id")),
+        "armor_set_id": str(row_value(row, 1, "armor_set_id")),
     }
 
 
@@ -493,17 +486,12 @@ def pvp_initial_queries(identity: str) -> list[str]:
         f'WHERE ("item_instance"."current_owner_key" = \'{identity}\')'
     )
     queries.append(
-        'SELECT "item_spell".* FROM "item_instance" '
-        'JOIN "item_spell" ON "item_instance"."item_instance_id" = "item_spell"."item_instance_id" '
-        f'WHERE ("item_instance"."current_owner_key" = \'{identity}\')'
-    )
-    queries.append(
         'SELECT "item_affix_instance".* FROM "item_instance" '
         'JOIN "item_affix_instance" ON '
         '"item_instance"."item_instance_id" = "item_affix_instance"."item_instance_id" '
         f'WHERE ("item_instance"."current_owner_key" = \'{identity}\')'
     )
-    if len(queries) != 44:
+    if len(queries) != 36:
         raise AssertionError(f"PvP initial query count changed: {len(queries)}")
     return queries
 
@@ -631,7 +619,9 @@ class Benchmark:
         initial = self.hub.wait_for_initial_subscription(subscription)
         update = initial.get("database_update")
         self.hub_armor = parse_hub_armor(
-            require_single_inserted_row(initial.get("database_update"), "my_hub_loadout")
+            require_single_inserted_row(
+                initial.get("database_update"), "my_hub_armor_selection"
+            )
         )
         self.hub_combat_build = parse_hub_combat_build(
             require_single_inserted_row(update, "my_combat_build")

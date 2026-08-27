@@ -2,11 +2,12 @@
 
 Date: 2026-08-26
 
-Status: **PHASE 6 COMPLETE — the canonical replacement Disciplines UI edits
-ordered disciplines, Staff schools, exact active slots, and passives through
-the one atomic Hub draft. Server-projected rules drive its display and reducer
-failures remain verbatim. Phase 7 destructive cleanup has not started and
-still requires explicit approval.**
+Status: **PHASE 7 COMPLETE — the legacy persistence, authorization, generated
+schema, UI, operations, and current-documentation paths are removed. The local
+Hub reset was explicitly approved; 64 obsolete local legacy current-state rows
+were discarded without import. The final canonical schema, ownership audits,
+live Hub-to-match probes, preservation check, and deletion ledger pass. Phase 8
+has not begun.**
 
 ## 1. Goal
 
@@ -632,7 +633,29 @@ Exit gate: zero unresolved ledger items, zero unapproved allowlist hits, and all
 tests/interactive probes pass. Until this gate passes, the migration is not
 finished and must not be reported as complete.
 
+Completion record (2026-08-27): **PASS.** The user explicitly approved
+resetting the local `arena-hub-local` database and discarding all 64 obsolete
+legacy current-state records, so no conversion/import path was retained. The
+final publish removed every production legacy schema/reducer/field and
+regenerated Hub and match bindings from the canonical modules. The scoped
+negative audit has no production hits; the positive audit confirms one atomic
+Hub writer/validator, one versioned frozen snapshot, exact active/passive
+authorization, atomic discipline switching, and Staff-school validation at
+every boundary. All 25 open ledger entries are closed; one historical-doc entry
+remains explicitly archived and the prohibited adapter entry remains
+`not_present`. Full Rust, Python, generator, setup, non-batch C# compilation,
+live runtime, canonical-state preservation, and anonymous startup gates pass.
+Detailed results are in
+`docs/combat-build-progression-cutover-evidence-2026-08-27.md`. Phase 8 is not
+authorized by this completion record.
+
 ## 9. Deterministic legacy-data conversion
+
+Phase 7 disposition (2026-08-27): conversion/import was not performed. A
+read-only report found 64 valid legacy current-state records, after which the
+user explicitly approved discarding local Hub data. The temporary offline
+converter was deleted before the final publish, and no migration reducer,
+adapter, dual writer, report payload, or history table is shipped.
 
 If Phase 0 approves preserving current local Hub builds, the offline converter
 must be pure, versioned, tested, and deleted from production after use:

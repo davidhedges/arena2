@@ -41,7 +41,7 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.Col<AutoAttackState, SpacetimeDB.Identity> Owner { get; }
         public global::SpacetimeDB.Col<AutoAttackState, SpacetimeDB.Identity> Target { get; }
-        public global::SpacetimeDB.Col<AutoAttackState, string> CombatProfileId { get; }
+        public global::SpacetimeDB.Col<AutoAttackState, string> CombatDisciplineId { get; }
         public global::SpacetimeDB.Col<AutoAttackState, string> ModeId { get; }
         public global::SpacetimeDB.Col<AutoAttackState, string> StrikeId { get; }
         public global::SpacetimeDB.Col<AutoAttackState, SpacetimeDB.Timestamp> CadenceStartedAt { get; }
@@ -55,7 +55,7 @@ namespace SpacetimeDB.Types
         {
             Owner = new global::SpacetimeDB.Col<AutoAttackState, SpacetimeDB.Identity>(tableName, "owner");
             Target = new global::SpacetimeDB.Col<AutoAttackState, SpacetimeDB.Identity>(tableName, "target");
-            CombatProfileId = new global::SpacetimeDB.Col<AutoAttackState, string>(tableName, "combat_profile_id");
+            CombatDisciplineId = new global::SpacetimeDB.Col<AutoAttackState, string>(tableName, "combat_discipline_id");
             ModeId = new global::SpacetimeDB.Col<AutoAttackState, string>(tableName, "mode_id");
             StrikeId = new global::SpacetimeDB.Col<AutoAttackState, string>(tableName, "strike_id");
             CadenceStartedAt = new global::SpacetimeDB.Col<AutoAttackState, SpacetimeDB.Timestamp>(tableName, "cadence_started_at");

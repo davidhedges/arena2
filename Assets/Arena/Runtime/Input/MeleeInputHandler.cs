@@ -137,7 +137,7 @@ namespace Arena.Input
                     $"melee rejected: {slotId} has no live local entity");
             }
 
-            string combatProfile = CombatProfileResolver.ResolveForEntity(conn, entity);
+            string combatProfile = RuntimeCombatProfile.ResolveForEntity(conn, entity);
             MeleeDefinition? pressedDefinition = GetStrikeDefinition(conn, combatProfile, slotId);
             ActionBarTrace.Diagnostic(
                 $"melee evaluate pressed={slotId} profile={combatProfile} " +
@@ -561,8 +561,8 @@ namespace Arena.Input
                 if (!string.Equals(ability.AbilityKind, "MELEE", System.StringComparison.OrdinalIgnoreCase))
                     continue;
                 if (!string.Equals(
-                    CombatProfileResolver.ResolveForAbility(conn, ability),
-                    CombatProfileResolver.ResolveForAbility(conn, rootAbility),
+                    RuntimeCombatProfile.ResolveForAbility(conn, ability),
+                    RuntimeCombatProfile.ResolveForAbility(conn, rootAbility),
                     System.StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
@@ -743,7 +743,7 @@ namespace Arena.Input
             var conn = NetworkManager.Instance?.Conn;
             if (conn != null)
             {
-                string combatProfile = CombatProfileResolver.ResolveForEntity(conn, entity);
+                string combatProfile = RuntimeCombatProfile.ResolveForEntity(conn, entity);
                 runtimeActionId = CombatActionIds.ResolveRuntimeActionId(conn, combatProfile, slotId);
                 activeModifier = MeleeAttackModifierResolver.ResolveActiveModifierIdentity(
                     conn,
@@ -786,7 +786,7 @@ namespace Arena.Input
             string actionId,
             long nowMs)
         {
-            string combatProfile = CombatProfileResolver.ResolveForEntity(conn, entity);
+            string combatProfile = RuntimeCombatProfile.ResolveForEntity(conn, entity);
             string runtimeActionId = CombatActionIds.ResolveRuntimeActionId(conn, combatProfile, actionId);
             if (string.IsNullOrWhiteSpace(runtimeActionId))
                 return false;
@@ -811,7 +811,7 @@ namespace Arena.Input
                 return true;
             }
 
-            string combatProfile = CombatProfileResolver.ResolveForEntity(conn, entity);
+            string combatProfile = RuntimeCombatProfile.ResolveForEntity(conn, entity);
             string runtimeActionId = CombatActionIds.ResolveRuntimeActionId(conn, combatProfile, request.ActionId);
             if (!string.IsNullOrWhiteSpace(runtimeActionId)
                 && HasPendingPredictedMeleeForRuntimeAction(runtimeActionId, nowMs))

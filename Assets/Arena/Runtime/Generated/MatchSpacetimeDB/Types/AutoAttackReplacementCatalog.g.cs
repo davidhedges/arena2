@@ -16,8 +16,8 @@ namespace Arena.MatchDb
     {
         [DataMember(Name = "replacement_id")]
         public string ReplacementId;
-        [DataMember(Name = "combat_profile_id")]
-        public string CombatProfileId;
+        [DataMember(Name = "combat_discipline_id")]
+        public string CombatDisciplineId;
         [DataMember(Name = "authored_melee_strike_id")]
         public string AuthoredMeleeStrikeId;
         [DataMember(Name = "base_damage")]
@@ -51,7 +51,7 @@ namespace Arena.MatchDb
 
         public AutoAttackReplacementCatalog(
             string ReplacementId,
-            string CombatProfileId,
+            string CombatDisciplineId,
             string AuthoredMeleeStrikeId,
             int BaseDamage,
             string DamageType,
@@ -70,7 +70,7 @@ namespace Arena.MatchDb
         )
         {
             this.ReplacementId = ReplacementId;
-            this.CombatProfileId = CombatProfileId;
+            this.CombatDisciplineId = CombatDisciplineId;
             this.AuthoredMeleeStrikeId = AuthoredMeleeStrikeId;
             this.BaseDamage = BaseDamage;
             this.DamageType = DamageType;
@@ -91,7 +91,7 @@ namespace Arena.MatchDb
         public AutoAttackReplacementCatalog()
         {
             this.ReplacementId = "";
-            this.CombatProfileId = "";
+            this.CombatDisciplineId = "";
             this.AuthoredMeleeStrikeId = "";
             this.DamageType = "";
             this.ParryBehavior = "";

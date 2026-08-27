@@ -33,7 +33,7 @@ namespace Arena.MatchDb
             AddTable(ActionPresentationCatalog = new(conn));
             AddTable(ActiveArmorSet = new(conn));
             AddTable(ActiveCast = new(conn));
-            AddTable(ActiveCombatDiscipline = new(conn));
+            AddTable(ActiveCombatBuildDiscipline = new(conn));
             AddTable(ActiveCombatMode = new(conn));
             AddTable(ActiveNecroPrison = new(conn));
             AddTable(ActivePersistentArea = new(conn));
@@ -46,17 +46,11 @@ namespace Arena.MatchDb
             AddTable(AutoAttackCatalog = new(conn));
             AddTable(AutoAttackState = new(conn));
             AddTable(CapacitorState = new(conn));
-            AddTable(CharacterActionBarAssignment = new(conn));
             AddTable(CharacterAppearance = new(conn));
-            AddTable(CharacterCombatDisciplineWeaponLoadout = new(conn));
-            AddTable(CharacterDisciplineAbilitySelection = new(conn));
-            AddTable(CharacterDisciplineLoadout = new(conn));
-            AddTable(CombatDisciplineCatalog = new(conn));
             AddTable(CombatEffectEvent = new(conn));
             AddTable(CombatEngagement = new(conn));
             AddTable(CombatEvent = new(conn));
             AddTable(CombatModeCatalog = new(conn));
-            AddTable(CombatProfileCatalog = new(conn));
             AddTable(CombatProjectileDefinition = new(conn));
             AddTable(CombatProjectileTickMetrics = new(conn));
             AddTable(CombatRuleCatalog = new(conn));
@@ -72,7 +66,6 @@ namespace Arena.MatchDb
             AddTable(ItemAffixInstance = new(conn));
             AddTable(ItemDefinition = new(conn));
             AddTable(ItemInstance = new(conn));
-            AddTable(ItemSpell = new(conn));
             AddTable(LingeringShadeState = new(conn));
             AddTable(MatchCombatBuild = new(conn));
             AddTable(MatchCombatBuildDiscipline = new(conn));
@@ -98,7 +91,6 @@ namespace Arena.MatchDb
             AddTable(PlayerEquipmentPresentation = new(conn));
             AddTable(PlayerEvent = new(conn));
             AddTable(PlayerIntent = new(conn));
-            AddTable(PlayerKnownSpell = new(conn));
             AddTable(PlayerPhysics = new(conn));
             AddTable(PlayerResource = new(conn));
             AddTable(PlayerState = new(conn));
@@ -613,7 +605,7 @@ namespace Arena.MatchDb
             new QueryBuilder().From.ActionPresentationCatalog().ToSql(),
             new QueryBuilder().From.ActiveArmorSet().ToSql(),
             new QueryBuilder().From.ActiveCast().ToSql(),
-            new QueryBuilder().From.ActiveCombatDiscipline().ToSql(),
+            new QueryBuilder().From.ActiveCombatBuildDiscipline().ToSql(),
             new QueryBuilder().From.ActiveCombatMode().ToSql(),
             new QueryBuilder().From.ActiveNecroPrison().ToSql(),
             new QueryBuilder().From.ActivePersistentArea().ToSql(),
@@ -626,17 +618,11 @@ namespace Arena.MatchDb
             new QueryBuilder().From.AutoAttackCatalog().ToSql(),
             new QueryBuilder().From.AutoAttackState().ToSql(),
             new QueryBuilder().From.CapacitorState().ToSql(),
-            new QueryBuilder().From.CharacterActionBarAssignment().ToSql(),
             new QueryBuilder().From.CharacterAppearance().ToSql(),
-            new QueryBuilder().From.CharacterCombatDisciplineWeaponLoadout().ToSql(),
-            new QueryBuilder().From.CharacterDisciplineAbilitySelection().ToSql(),
-            new QueryBuilder().From.CharacterDisciplineLoadout().ToSql(),
-            new QueryBuilder().From.CombatDisciplineCatalog().ToSql(),
             new QueryBuilder().From.CombatEffectEvent().ToSql(),
             new QueryBuilder().From.CombatEngagement().ToSql(),
             new QueryBuilder().From.CombatEvent().ToSql(),
             new QueryBuilder().From.CombatModeCatalog().ToSql(),
-            new QueryBuilder().From.CombatProfileCatalog().ToSql(),
             new QueryBuilder().From.CombatProjectileDefinition().ToSql(),
             new QueryBuilder().From.CombatProjectileTickMetrics().ToSql(),
             new QueryBuilder().From.CombatRuleCatalog().ToSql(),
@@ -652,7 +638,6 @@ namespace Arena.MatchDb
             new QueryBuilder().From.ItemAffixInstance().ToSql(),
             new QueryBuilder().From.ItemDefinition().ToSql(),
             new QueryBuilder().From.ItemInstance().ToSql(),
-            new QueryBuilder().From.ItemSpell().ToSql(),
             new QueryBuilder().From.LingeringShadeState().ToSql(),
             new QueryBuilder().From.MatchCombatBuild().ToSql(),
             new QueryBuilder().From.MatchCombatBuildDiscipline().ToSql(),
@@ -678,7 +663,6 @@ namespace Arena.MatchDb
             new QueryBuilder().From.PlayerEquipmentPresentation().ToSql(),
             new QueryBuilder().From.PlayerEvent().ToSql(),
             new QueryBuilder().From.PlayerIntent().ToSql(),
-            new QueryBuilder().From.PlayerKnownSpell().ToSql(),
             new QueryBuilder().From.PlayerPhysics().ToSql(),
             new QueryBuilder().From.PlayerResource().ToSql(),
             new QueryBuilder().From.PlayerState().ToSql(),
@@ -703,7 +687,7 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Table<ActionPresentationCatalog, ActionPresentationCatalogCols, ActionPresentationCatalogIxCols> ActionPresentationCatalog() => new("action_presentation_catalog", new ActionPresentationCatalogCols("action_presentation_catalog"), new ActionPresentationCatalogIxCols("action_presentation_catalog"));
         public global::SpacetimeDB.Table<ActiveArmorSet, ActiveArmorSetCols, ActiveArmorSetIxCols> ActiveArmorSet() => new("active_armor_set", new ActiveArmorSetCols("active_armor_set"), new ActiveArmorSetIxCols("active_armor_set"));
         public global::SpacetimeDB.Table<ActiveCast, ActiveCastCols, ActiveCastIxCols> ActiveCast() => new("active_cast", new ActiveCastCols("active_cast"), new ActiveCastIxCols("active_cast"));
-        public global::SpacetimeDB.Table<ActiveCombatDiscipline, ActiveCombatDisciplineCols, ActiveCombatDisciplineIxCols> ActiveCombatDiscipline() => new("active_combat_discipline", new ActiveCombatDisciplineCols("active_combat_discipline"), new ActiveCombatDisciplineIxCols("active_combat_discipline"));
+        public global::SpacetimeDB.Table<ActiveCombatBuildDiscipline, ActiveCombatBuildDisciplineCols, ActiveCombatBuildDisciplineIxCols> ActiveCombatBuildDiscipline() => new("active_combat_build_discipline", new ActiveCombatBuildDisciplineCols("active_combat_build_discipline"), new ActiveCombatBuildDisciplineIxCols("active_combat_build_discipline"));
         public global::SpacetimeDB.Table<ActiveCombatMode, ActiveCombatModeCols, ActiveCombatModeIxCols> ActiveCombatMode() => new("active_combat_mode", new ActiveCombatModeCols("active_combat_mode"), new ActiveCombatModeIxCols("active_combat_mode"));
         public global::SpacetimeDB.Table<ActiveNecroPrison, ActiveNecroPrisonCols, ActiveNecroPrisonIxCols> ActiveNecroPrison() => new("active_necro_prison", new ActiveNecroPrisonCols("active_necro_prison"), new ActiveNecroPrisonIxCols("active_necro_prison"));
         public global::SpacetimeDB.Table<ActivePersistentArea, ActivePersistentAreaCols, ActivePersistentAreaIxCols> ActivePersistentArea() => new("active_persistent_area", new ActivePersistentAreaCols("active_persistent_area"), new ActivePersistentAreaIxCols("active_persistent_area"));
@@ -716,17 +700,11 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Table<AutoAttackCatalog, AutoAttackCatalogCols, AutoAttackCatalogIxCols> AutoAttackCatalog() => new("auto_attack_catalog", new AutoAttackCatalogCols("auto_attack_catalog"), new AutoAttackCatalogIxCols("auto_attack_catalog"));
         public global::SpacetimeDB.Table<AutoAttackState, AutoAttackStateCols, AutoAttackStateIxCols> AutoAttackState() => new("auto_attack_state", new AutoAttackStateCols("auto_attack_state"), new AutoAttackStateIxCols("auto_attack_state"));
         public global::SpacetimeDB.Table<CapacitorState, CapacitorStateCols, CapacitorStateIxCols> CapacitorState() => new("capacitor_state", new CapacitorStateCols("capacitor_state"), new CapacitorStateIxCols("capacitor_state"));
-        public global::SpacetimeDB.Table<CharacterActionBarAssignment, CharacterActionBarAssignmentCols, CharacterActionBarAssignmentIxCols> CharacterActionBarAssignment() => new("character_action_bar_assignment", new CharacterActionBarAssignmentCols("character_action_bar_assignment"), new CharacterActionBarAssignmentIxCols("character_action_bar_assignment"));
         public global::SpacetimeDB.Table<CharacterAppearance, CharacterAppearanceCols, CharacterAppearanceIxCols> CharacterAppearance() => new("character_appearance", new CharacterAppearanceCols("character_appearance"), new CharacterAppearanceIxCols("character_appearance"));
-        public global::SpacetimeDB.Table<CharacterCombatDisciplineWeaponLoadout, CharacterCombatDisciplineWeaponLoadoutCols, CharacterCombatDisciplineWeaponLoadoutIxCols> CharacterCombatDisciplineWeaponLoadout() => new("character_combat_discipline_weapon_loadout", new CharacterCombatDisciplineWeaponLoadoutCols("character_combat_discipline_weapon_loadout"), new CharacterCombatDisciplineWeaponLoadoutIxCols("character_combat_discipline_weapon_loadout"));
-        public global::SpacetimeDB.Table<CharacterDisciplineAbilitySelection, CharacterDisciplineAbilitySelectionCols, CharacterDisciplineAbilitySelectionIxCols> CharacterDisciplineAbilitySelection() => new("character_discipline_ability_selection", new CharacterDisciplineAbilitySelectionCols("character_discipline_ability_selection"), new CharacterDisciplineAbilitySelectionIxCols("character_discipline_ability_selection"));
-        public global::SpacetimeDB.Table<CharacterDisciplineLoadout, CharacterDisciplineLoadoutCols, CharacterDisciplineLoadoutIxCols> CharacterDisciplineLoadout() => new("character_discipline_loadout", new CharacterDisciplineLoadoutCols("character_discipline_loadout"), new CharacterDisciplineLoadoutIxCols("character_discipline_loadout"));
-        public global::SpacetimeDB.Table<CombatDisciplineCatalog, CombatDisciplineCatalogCols, CombatDisciplineCatalogIxCols> CombatDisciplineCatalog() => new("combat_discipline_catalog", new CombatDisciplineCatalogCols("combat_discipline_catalog"), new CombatDisciplineCatalogIxCols("combat_discipline_catalog"));
         public global::SpacetimeDB.Table<CombatEffectEvent, CombatEffectEventCols, CombatEffectEventIxCols> CombatEffectEvent() => new("combat_effect_event", new CombatEffectEventCols("combat_effect_event"), new CombatEffectEventIxCols("combat_effect_event"));
         public global::SpacetimeDB.Table<CombatEngagement, CombatEngagementCols, CombatEngagementIxCols> CombatEngagement() => new("combat_engagement", new CombatEngagementCols("combat_engagement"), new CombatEngagementIxCols("combat_engagement"));
         public global::SpacetimeDB.Table<CombatEvent, CombatEventCols, CombatEventIxCols> CombatEvent() => new("combat_event", new CombatEventCols("combat_event"), new CombatEventIxCols("combat_event"));
         public global::SpacetimeDB.Table<CombatModeCatalog, CombatModeCatalogCols, CombatModeCatalogIxCols> CombatModeCatalog() => new("combat_mode_catalog", new CombatModeCatalogCols("combat_mode_catalog"), new CombatModeCatalogIxCols("combat_mode_catalog"));
-        public global::SpacetimeDB.Table<CombatProfileCatalog, CombatProfileCatalogCols, CombatProfileCatalogIxCols> CombatProfileCatalog() => new("combat_profile_catalog", new CombatProfileCatalogCols("combat_profile_catalog"), new CombatProfileCatalogIxCols("combat_profile_catalog"));
         public global::SpacetimeDB.Table<CombatProjectileDefinition, CombatProjectileDefinitionCols, CombatProjectileDefinitionIxCols> CombatProjectileDefinition() => new("combat_projectile_definition", new CombatProjectileDefinitionCols("combat_projectile_definition"), new CombatProjectileDefinitionIxCols("combat_projectile_definition"));
         public global::SpacetimeDB.Table<CombatProjectileTickMetrics, CombatProjectileTickMetricsCols, CombatProjectileTickMetricsIxCols> CombatProjectileTickMetrics() => new("combat_projectile_tick_metrics", new CombatProjectileTickMetricsCols("combat_projectile_tick_metrics"), new CombatProjectileTickMetricsIxCols("combat_projectile_tick_metrics"));
         public global::SpacetimeDB.Table<CombatRuleCatalog, CombatRuleCatalogCols, CombatRuleCatalogIxCols> CombatRuleCatalog() => new("combat_rule_catalog", new CombatRuleCatalogCols("combat_rule_catalog"), new CombatRuleCatalogIxCols("combat_rule_catalog"));
@@ -742,7 +720,6 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Table<ItemAffixInstance, ItemAffixInstanceCols, ItemAffixInstanceIxCols> ItemAffixInstance() => new("item_affix_instance", new ItemAffixInstanceCols("item_affix_instance"), new ItemAffixInstanceIxCols("item_affix_instance"));
         public global::SpacetimeDB.Table<ItemDefinition, ItemDefinitionCols, ItemDefinitionIxCols> ItemDefinition() => new("item_definition", new ItemDefinitionCols("item_definition"), new ItemDefinitionIxCols("item_definition"));
         public global::SpacetimeDB.Table<ItemInstance, ItemInstanceCols, ItemInstanceIxCols> ItemInstance() => new("item_instance", new ItemInstanceCols("item_instance"), new ItemInstanceIxCols("item_instance"));
-        public global::SpacetimeDB.Table<ItemSpell, ItemSpellCols, ItemSpellIxCols> ItemSpell() => new("item_spell", new ItemSpellCols("item_spell"), new ItemSpellIxCols("item_spell"));
         public global::SpacetimeDB.Table<LingeringShadeState, LingeringShadeStateCols, LingeringShadeStateIxCols> LingeringShadeState() => new("lingering_shade_state", new LingeringShadeStateCols("lingering_shade_state"), new LingeringShadeStateIxCols("lingering_shade_state"));
         public global::SpacetimeDB.Table<MatchCombatBuild, MatchCombatBuildCols, MatchCombatBuildIxCols> MatchCombatBuild() => new("match_combat_build", new MatchCombatBuildCols("match_combat_build"), new MatchCombatBuildIxCols("match_combat_build"));
         public global::SpacetimeDB.Table<MatchCombatBuildDiscipline, MatchCombatBuildDisciplineCols, MatchCombatBuildDisciplineIxCols> MatchCombatBuildDiscipline() => new("match_combat_build_discipline", new MatchCombatBuildDisciplineCols("match_combat_build_discipline"), new MatchCombatBuildDisciplineIxCols("match_combat_build_discipline"));
@@ -768,7 +745,6 @@ namespace Arena.MatchDb
         public global::SpacetimeDB.Table<PlayerEquipmentPresentation, PlayerEquipmentPresentationCols, PlayerEquipmentPresentationIxCols> PlayerEquipmentPresentation() => new("player_equipment_presentation", new PlayerEquipmentPresentationCols("player_equipment_presentation"), new PlayerEquipmentPresentationIxCols("player_equipment_presentation"));
         public global::SpacetimeDB.Table<PlayerEvent, PlayerEventCols, PlayerEventIxCols> PlayerEvent() => new("player_event", new PlayerEventCols("player_event"), new PlayerEventIxCols("player_event"));
         public global::SpacetimeDB.Table<PlayerIntent, PlayerIntentCols, PlayerIntentIxCols> PlayerIntent() => new("player_intent", new PlayerIntentCols("player_intent"), new PlayerIntentIxCols("player_intent"));
-        public global::SpacetimeDB.Table<PlayerKnownSpell, PlayerKnownSpellCols, PlayerKnownSpellIxCols> PlayerKnownSpell() => new("player_known_spell", new PlayerKnownSpellCols("player_known_spell"), new PlayerKnownSpellIxCols("player_known_spell"));
         public global::SpacetimeDB.Table<PlayerPhysics, PlayerPhysicsCols, PlayerPhysicsIxCols> PlayerPhysics() => new("player_physics", new PlayerPhysicsCols("player_physics"), new PlayerPhysicsIxCols("player_physics"));
         public global::SpacetimeDB.Table<PlayerResource, PlayerResourceCols, PlayerResourceIxCols> PlayerResource() => new("player_resource", new PlayerResourceCols("player_resource"), new PlayerResourceIxCols("player_resource"));
         public global::SpacetimeDB.Table<PlayerState, PlayerStateCols, PlayerStateIxCols> PlayerState() => new("player_state", new PlayerStateCols("player_state"), new PlayerStateIxCols("player_state"));
@@ -864,17 +840,13 @@ namespace Arena.MatchDb
             return reducer switch
             {
                 Reducer.AbortMatch args => Reducers.InvokeAbortMatch(eventContext, args),
+                Reducer.ActivateCombatBuildDiscipline args => Reducers.InvokeActivateCombatBuildDiscipline(eventContext, args),
                 Reducer.ArmAutoAttackReplacement args => Reducers.InvokeArmAutoAttackReplacement(eventContext, args),
                 Reducer.ArmAutoAttackTarget args => Reducers.InvokeArmAutoAttackTarget(eventContext, args),
-                Reducer.AssignCharacterActionBarAbilityToSlot args => Reducers.InvokeAssignCharacterActionBarAbilityToSlot(eventContext, args),
-                Reducer.AssignCharacterActionBarSlot args => Reducers.InvokeAssignCharacterActionBarSlot(eventContext, args),
-                Reducer.AssignCombatDisciplineWeaponLoadout args => Reducers.InvokeAssignCombatDisciplineWeaponLoadout(eventContext, args),
-                Reducer.AssignEquippedSpellbookSpell args => Reducers.InvokeAssignEquippedSpellbookSpell(eventContext, args),
                 Reducer.BootstrapUnranked2V2BotMatch args => Reducers.InvokeBootstrapUnranked2V2BotMatch(eventContext, args),
                 Reducer.CancelActiveCastRequest args => Reducers.InvokeCancelActiveCastRequest(eventContext, args),
                 Reducer.CastRequest args => Reducers.InvokeCastRequest(eventContext, args),
                 Reducer.ClearAutoAttackTarget args => Reducers.InvokeClearAutoAttackTarget(eventContext, args),
-                Reducer.ClearCharacterActionBarSlot args => Reducers.InvokeClearCharacterActionBarSlot(eventContext, args),
                 Reducer.ConsumeItem args => Reducers.InvokeConsumeItem(eventContext, args),
                 Reducer.CreateInstance args => Reducers.InvokeCreateInstance(eventContext, args),
                 Reducer.CreateOrUpdateCharacter args => Reducers.InvokeCreateOrUpdateCharacter(eventContext, args),
@@ -884,7 +856,6 @@ namespace Arena.MatchDb
                 Reducer.EquipArmorSet args => Reducers.InvokeEquipArmorSet(eventContext, args),
                 Reducer.EquipItem args => Reducers.InvokeEquipItem(eventContext, args),
                 Reducer.JoinInstance args => Reducers.InvokeJoinInstance(eventContext, args),
-                Reducer.LearnSpell args => Reducers.InvokeLearnSpell(eventContext, args),
                 Reducer.LeaveInstance args => Reducers.InvokeLeaveInstance(eventContext, args),
                 Reducer.ListOpenInstances args => Reducers.InvokeListOpenInstances(eventContext, args),
                 Reducer.MeleeAttack args => Reducers.InvokeMeleeAttack(eventContext, args),
@@ -904,7 +875,6 @@ namespace Arena.MatchDb
                 Reducer.RunStatusRuntimeHarness args => Reducers.InvokeRunStatusRuntimeHarness(eventContext, args),
                 Reducer.SaveCharacterAppearance args => Reducers.InvokeSaveCharacterAppearance(eventContext, args),
                 Reducer.SendMovementIntent args => Reducers.InvokeSendMovementIntent(eventContext, args),
-                Reducer.SetCombatDiscipline args => Reducers.InvokeSetCombatDiscipline(eventContext, args),
                 Reducer.SetCombatMode args => Reducers.InvokeSetCombatMode(eventContext, args),
                 Reducer.SetLagCompConfig args => Reducers.InvokeSetLagCompConfig(eventContext, args),
                 Reducer.SetNpcTargetOverride args => Reducers.InvokeSetNpcTargetOverride(eventContext, args),

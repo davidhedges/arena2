@@ -14,8 +14,7 @@ use crate::player_physics::player_physics as _;
 use crate::player_state::player_state as _;
 use crate::progression::{
     default_global_cooldown_ms, sync_progression_for_equipment_change, AllocatedStatTotals,
-    COMBAT_PROFILE_ARCHER_BOW, DISCIPLINE_ARCANA, DISCIPLINE_PRECISION, DISCIPLINE_SUBTLETY,
-    DISCIPLINE_WAR, DISCIPLINE_ZEAL,
+    COMBAT_PROFILE_ARCHER_BOW,
 };
 use crate::relations::TargetAudience;
 use crate::resources::grant_primary_resource_amount_for_kind;
@@ -58,8 +57,6 @@ use crate::inventory::item_affix_instance as _;
 use crate::inventory::item_definition as _;
 #[allow(unused_imports)]
 use crate::inventory::item_instance as _;
-#[allow(unused_imports)]
-use crate::inventory::item_spell as _;
 #[allow(unused_imports)]
 use crate::inventory::player_equipment_presentation as _;
 
@@ -173,7 +170,6 @@ const COMBAT_PROFILE_TWO_HANDED_SWORD: &str = "TWO_HANDED_SWORD";
 const COMBAT_PROFILE_DAGGERS: &str = "DAGGERS";
 const COMBAT_PROFILE_STAFF: &str = "STAFF";
 const STARTER_SPELLBOOK_ITEM_DEF_ID: &str = "APPRENTICE_SPELLBOOK";
-const STARTER_SPELLBOOK_SPELL_COUNT: u32 = 10;
 const STARTER_INSIGHT_RING_ITEM_DEF_ID: &str = "BRONZE_RING";
 const STARTER_INSIGHT_RING_AFFIX_ID: &str = "AFFIX_INSIGHT_STARTER";
 pub(crate) const AFFIX_KNOCKBACK_RESISTANCE_MINOR: &str = "AFFIX_KNOCKBACK_RESISTANCE_MINOR";
@@ -230,7 +226,7 @@ pub struct ItemDefinition {
     pub weapon_kind: String,
     pub hand_requirement: String,
     pub unique_equipped: bool,
-    pub combat_profile_id: String,
+    pub combat_discipline_id: String,
     pub armor_kind: String,
     pub physical_resistance: f32,
     pub consumable_effect_kind: String,
@@ -278,17 +274,6 @@ pub struct ItemInstance {
     pub current_owner: Option<Identity>,
     pub quantity: u32,
     pub created_at: Timestamp,
-}
-
-#[table(accessor = item_spell, public)]
-#[derive(Clone)]
-pub struct ItemSpell {
-    #[primary_key]
-    pub key: String,
-    #[index(btree)]
-    pub item_instance_id: String,
-    pub slot_index: u32,
-    pub spell_id: String,
 }
 
 #[table(accessor = inventory_container, public)]
@@ -447,7 +432,7 @@ struct ItemDefinitionSpec {
     weapon_kind: &'static str,
     hand_requirement: &'static str,
     unique_equipped: bool,
-    combat_profile_id: &'static str,
+    combat_discipline_id: &'static str,
     armor_kind: &'static str,
     physical_resistance: f32,
     consumable_effect_kind: &'static str,
@@ -469,7 +454,7 @@ struct WeaponFamilyAuthoring {
     weapon_kind: String,
     hand_requirement: String,
     equip_slot: String,
-    primary_discipline_id: String,
+    combat_discipline_id: String,
     default_color_id: String,
     variants: Vec<WeaponVariantAuthoring>,
 }
@@ -653,7 +638,6 @@ struct SurvivalItemSnapshot {
     quantity: u32,
     created_at_micros: i64,
     affixes: Vec<SurvivalAffixSnapshot>,
-    spells: Vec<SurvivalSpellSnapshot>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
@@ -663,13 +647,6 @@ struct SurvivalAffixSnapshot {
     modifier_kind: String,
     value: f32,
     sort_order: u32,
-}
-
-#[derive(Debug, Deserialize, PartialEq, Serialize)]
-struct SurvivalSpellSnapshot {
-    key: String,
-    slot_index: u32,
-    spell_id: String,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
@@ -1700,7 +1677,7 @@ const STARTER_ITEM_DEFINITIONS: &[ItemDefinitionSpec] = &[
         weapon_kind: "",
         hand_requirement: HAND_REQUIREMENT_NONE,
         unique_equipped: false,
-        combat_profile_id: "",
+        combat_discipline_id: "",
         armor_kind: "",
         physical_resistance: 0.0,
         consumable_effect_kind: "",
@@ -2019,7 +1996,7 @@ const fn armor(
         weapon_kind: "",
         hand_requirement: HAND_REQUIREMENT_NONE,
         unique_equipped: false,
-        combat_profile_id: "",
+        combat_discipline_id: "",
         armor_kind,
         physical_resistance,
         consumable_effect_kind: "",
@@ -2136,7 +2113,7 @@ const fn jewelry(
         weapon_kind: "",
         hand_requirement: HAND_REQUIREMENT_NONE,
         unique_equipped,
-        combat_profile_id: "",
+        combat_discipline_id: "",
         armor_kind: "",
         physical_resistance: 0.0,
         consumable_effect_kind: "",
@@ -2151,7 +2128,7 @@ const fn weapon(
     icon_id: &'static str,
     weapon_kind: &'static str,
     hand_requirement: &'static str,
-    combat_profile_id: &'static str,
+    combat_discipline_id: &'static str,
 ) -> ItemDefinitionSpec {
     ItemDefinitionSpec {
         item_def_id,
@@ -2166,7 +2143,7 @@ const fn weapon(
         weapon_kind,
         hand_requirement,
         unique_equipped: false,
-        combat_profile_id,
+        combat_discipline_id,
         armor_kind: "",
         physical_resistance: 0.0,
         consumable_effect_kind: "",
@@ -2193,7 +2170,7 @@ const fn spellbook(
         weapon_kind: "",
         hand_requirement: HAND_REQUIREMENT_NONE,
         unique_equipped: false,
-        combat_profile_id: "",
+        combat_discipline_id: "",
         armor_kind: "",
         physical_resistance: 0.0,
         consumable_effect_kind: "",
@@ -2223,7 +2200,7 @@ const fn consumable(
         weapon_kind: "",
         hand_requirement: HAND_REQUIREMENT_NONE,
         unique_equipped: false,
-        combat_profile_id: "",
+        combat_discipline_id: "",
         armor_kind: "",
         physical_resistance: 0.0,
         consumable_effect_kind,
@@ -2797,7 +2774,6 @@ pub fn equip_item(
     if item.quantity != 1 {
         return Err("only single item instances can be equipped".to_string());
     }
-    ensure_spellbook_spells_for_item(ctx, owner, item.item_instance_id.as_str());
 
     let source_slot = require_slot_for_accessible_item(ctx, owner, item.item_instance_id.as_str())?;
     let source_container =
@@ -2983,12 +2959,12 @@ fn parse_weapon_appearance_catalog() -> Result<WeaponAppearanceCatalogFile, Stri
 }
 
 fn combat_profile_for_weapon_family(family: &WeaponFamilyAuthoring) -> &'static str {
-    match normalize_id(family.primary_discipline_id.as_str()).as_str() {
-        DISCIPLINE_SUBTLETY => COMBAT_PROFILE_DAGGERS,
-        DISCIPLINE_WAR => COMBAT_PROFILE_TWO_HANDED_SWORD,
-        DISCIPLINE_ZEAL => DEFAULT_COMBAT_PROFILE,
-        DISCIPLINE_PRECISION => COMBAT_PROFILE_ARCHER_BOW,
-        DISCIPLINE_ARCANA => COMBAT_PROFILE_STAFF,
+    match normalize_id(family.combat_discipline_id.as_str()).as_str() {
+        COMBAT_PROFILE_DAGGERS => COMBAT_PROFILE_DAGGERS,
+        COMBAT_PROFILE_TWO_HANDED_SWORD => COMBAT_PROFILE_TWO_HANDED_SWORD,
+        DEFAULT_COMBAT_PROFILE => DEFAULT_COMBAT_PROFILE,
+        COMBAT_PROFILE_ARCHER_BOW => COMBAT_PROFILE_ARCHER_BOW,
+        COMBAT_PROFILE_STAFF => COMBAT_PROFILE_STAFF,
         _ => "",
     }
 }
@@ -3015,7 +2991,7 @@ fn sync_weapon_appearance_item_definitions(ctx: &ReducerContext) {
             weapon_kind: normalize_id(family.weapon_kind.as_str()),
             hand_requirement: normalize_id(family.hand_requirement.as_str()),
             unique_equipped: false,
-            combat_profile_id: combat_profile_for_weapon_family(&family).to_string(),
+            combat_discipline_id: combat_profile_for_weapon_family(&family).to_string(),
             armor_kind: String::new(),
             physical_resistance: 0.0,
             consumable_effect_kind: String::new(),
@@ -3041,7 +3017,7 @@ pub(crate) fn sync_item_definitions(ctx: &ReducerContext) {
             weapon_kind: normalize_id(spec.weapon_kind),
             hand_requirement: normalize_id(spec.hand_requirement),
             unique_equipped: spec.unique_equipped,
-            combat_profile_id: normalize_id(spec.combat_profile_id),
+            combat_discipline_id: normalize_id(spec.combat_discipline_id),
             armor_kind: normalize_id(spec.armor_kind),
             physical_resistance: spec
                 .physical_resistance
@@ -3073,7 +3049,7 @@ pub(crate) fn sync_item_definitions(ctx: &ReducerContext) {
                 weapon_kind: String::new(),
                 hand_requirement: HAND_REQUIREMENT_NONE.to_string(),
                 unique_equipped: false,
-                combat_profile_id: String::new(),
+                combat_discipline_id: String::new(),
                 armor_kind: armor_kind_for_tier(set.armor_tier).to_string(),
                 physical_resistance: 0.0,
                 consumable_effect_kind: String::new(),
@@ -3609,16 +3585,6 @@ pub(crate) fn delete_item_aggregate(ctx: &ReducerContext, item_instance_id: &str
     for key in affix_keys {
         ctx.db.item_affix_instance().key().delete(key);
     }
-    let spell_keys: Vec<String> = ctx
-        .db
-        .item_spell()
-        .item_instance_id()
-        .filter(item_instance_id)
-        .map(|row| row.key)
-        .collect();
-    for key in spell_keys {
-        ctx.db.item_spell().key().delete(key);
-    }
     ctx.db
         .item_instance()
         .item_instance_id()
@@ -3663,25 +3629,12 @@ fn snapshot_item_aggregate(
         })
         .collect();
     affixes.sort_by(|left, right| left.key.cmp(&right.key));
-    let mut spells: Vec<SurvivalSpellSnapshot> = ctx
-        .db
-        .item_spell()
-        .item_instance_id()
-        .filter(item_instance_id)
-        .map(|row| SurvivalSpellSnapshot {
-            key: row.key,
-            slot_index: row.slot_index,
-            spell_id: row.spell_id,
-        })
-        .collect();
-    spells.sort_by_key(|row| row.slot_index);
     Ok(SurvivalItemSnapshot {
         item_instance_id: item.item_instance_id,
         item_def_id: item.item_def_id,
         quantity: item.quantity,
         created_at_micros: item.created_at.to_micros_since_unix_epoch(),
         affixes,
-        spells,
     })
 }
 
@@ -3702,14 +3655,6 @@ fn restore_item_aggregate(ctx: &ReducerContext, owner: Identity, snapshot: &Surv
             modifier_kind: affix.modifier_kind.clone(),
             value: affix.value,
             sort_order: affix.sort_order,
-        });
-    }
-    for spell in &snapshot.spells {
-        ctx.db.item_spell().insert(ItemSpell {
-            key: spell.key.clone(),
-            item_instance_id: snapshot.item_instance_id.clone(),
-            slot_index: spell.slot_index,
-            spell_id: spell.spell_id.clone(),
         });
     }
 }
@@ -4573,153 +4518,7 @@ fn item_affix_instance_key(item_instance_id: &str, affix_id: &str) -> String {
     format!("{}:{}", item_instance_id, normalize_id(affix_id))
 }
 
-fn item_spell_key(item_instance_id: &str, slot_index: u32) -> String {
-    format!("{item_instance_id}:spell:{slot_index}")
-}
-
-#[reducer]
-pub fn assign_equipped_spellbook_spell(
-    ctx: &ReducerContext,
-    slot_index: u32,
-    spell_id: String,
-) -> Result<(), String> {
-    let owner = ctx.sender();
-    let spell_id = normalize_id(spell_id.as_str());
-    if spell_id.is_empty() {
-        return Err("spell id is required".to_string());
-    }
-    if crate::spells::spell_definition_by_str(spell_id.as_str()).is_none() {
-        return Err(format!("unknown spell '{spell_id}'"));
-    }
-
-    let Some(equipment) = ctx.db.equipment_loadout().owner().find(owner) else {
-        return Err("no equipment loadout found".to_string());
-    };
-    let Some(spellbook_item_id) = equipment.spellbook_item_id.as_deref() else {
-        return Err("no spellbook equipped".to_string());
-    };
-    let Some(definition) = item_definition_for_instance(ctx, spellbook_item_id) else {
-        return Err("equipped spellbook definition not found".to_string());
-    };
-    if definition.item_kind != ITEM_KIND_SPELLBOOK {
-        return Err("equipped item is not a spellbook".to_string());
-    }
-
-    let key = item_spell_key(spellbook_item_id, slot_index);
-    if let Some(mut row) = ctx.db.item_spell().key().find(key.clone()) {
-        row.spell_id = spell_id;
-        ctx.db.item_spell().key().update(row);
-        return Ok(());
-    }
-
-    ctx.db.item_spell().insert(ItemSpell {
-        key,
-        item_instance_id: spellbook_item_id.to_string(),
-        slot_index,
-        spell_id,
-    });
-    Ok(())
-}
-
-fn ensure_spellbook_spells_for_item(ctx: &ReducerContext, owner: Identity, item_instance_id: &str) {
-    let Some(item) = ctx
-        .db
-        .item_instance()
-        .item_instance_id()
-        .find(item_instance_id.to_string())
-    else {
-        return;
-    };
-    let Some(definition) = ctx
-        .db
-        .item_definition()
-        .item_def_id()
-        .find(item.item_def_id.clone())
-    else {
-        return;
-    };
-    if definition.item_kind != ITEM_KIND_SPELLBOOK {
-        return;
-    }
-    if ctx
-        .db
-        .item_spell()
-        .item_instance_id()
-        .filter(item_instance_id)
-        .next()
-        .is_some()
-    {
-        return;
-    }
-
-    let spell_ids = random_spellbook_spell_ids(
-        owner,
-        item_instance_id,
-        spellbook_spell_count_for_definition(&definition),
-    );
-    if spell_ids.is_empty() {
-        log::warn!(
-            "[INVENTORY] Spellbook '{}' could not seed spells because no spell definitions are available",
-            item_instance_id
-        );
-        return;
-    }
-
-    for (index, spell_id) in spell_ids.into_iter().enumerate() {
-        ctx.db.item_spell().insert(ItemSpell {
-            key: item_spell_key(item_instance_id, index as u32),
-            item_instance_id: item_instance_id.to_string(),
-            slot_index: index as u32,
-            spell_id,
-        });
-    }
-}
-
-fn spellbook_spell_count_for_definition(definition: &ItemDefinition) -> u32 {
-    match normalize_id(definition.item_def_id.as_str()).as_str() {
-        STARTER_SPELLBOOK_ITEM_DEF_ID => STARTER_SPELLBOOK_SPELL_COUNT,
-        _ => STARTER_SPELLBOOK_SPELL_COUNT,
-    }
-}
-
-fn random_spellbook_spell_ids(
-    owner: Identity,
-    item_instance_id: &str,
-    requested_count: u32,
-) -> Vec<String> {
-    let mut available = crate::spells::spell_definition_ids();
-    available.sort();
-    available.dedup();
-    let mut selected = Vec::new();
-    let count = (requested_count as usize).min(available.len());
-    for index in 0..count {
-        let pick =
-            spellbook_spell_roll_index(owner, item_instance_id, index as u32, available.len());
-        selected.push(available.remove(pick));
-    }
-    selected
-}
-
-fn spellbook_spell_roll_index(
-    owner: Identity,
-    item_instance_id: &str,
-    stream: u32,
-    len: usize,
-) -> usize {
-    if len <= 1 {
-        return 0;
-    }
-    (spellbook_spell_hash(owner, item_instance_id, stream) as usize) % len
-}
-
-fn spellbook_spell_hash(owner: Identity, item_instance_id: &str, stream: u32) -> u64 {
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    hash = fnv1a_update(hash, owner.to_hex().as_bytes());
-    hash = fnv1a_update(hash, item_instance_id.as_bytes());
-    fnv1a_update(hash, &stream.to_le_bytes())
-}
-
-pub(crate) fn equipment_combat_profile_id_for_owner(
+pub(crate) fn equipment_combat_discipline_id_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> Option<String> {
@@ -4734,39 +4533,7 @@ pub(crate) fn equipment_combat_profile_id_for_owner(
         .and_then(|item_id| item_definition_for_instance(ctx, item_id));
 
     let profile = combat_profile_for_weapon_pair(main_hand.as_ref(), off_hand.as_ref());
-    if profile.is_empty() {
-        None
-    } else {
-        Some(profile)
-    }
-}
-
-pub(crate) fn equipped_weapon_item_ids_for_owner(
-    ctx: &ReducerContext,
-    owner: Identity,
-) -> Option<(Option<String>, Option<String>)> {
-    let equipment = ctx.db.equipment_loadout().owner().find(owner)?;
-    Some((equipment.main_hand_item_id, equipment.off_hand_item_id))
-}
-
-pub(crate) fn combat_discipline_weapon_loadout_is_available(
-    ctx: &ReducerContext,
-    owner: Identity,
-    discipline_id: &str,
-    main_hand_item_id: Option<&str>,
-    off_hand_item_id: Option<&str>,
-) -> bool {
-    let expected_profile = combat_profile_for_discipline(discipline_id);
-    if expected_profile.is_empty() {
-        return false;
-    }
-    weapon_loadout_is_available_for_combat_profile(
-        ctx,
-        owner,
-        expected_profile,
-        main_hand_item_id,
-        off_hand_item_id,
-    )
+    (!profile.is_empty()).then_some(profile)
 }
 
 fn weapon_loadout_is_available_for_combat_profile(
@@ -4792,29 +4559,6 @@ fn weapon_loadout_is_available_for_combat_profile(
         .filter(|value| !value.trim().is_empty())
         .and_then(|item_id| item_definition_for_owned_instance(ctx, owner, item_id));
     combat_profile_for_weapon_pair(Some(&main_hand), off_hand.as_ref()) == expected_profile
-}
-
-pub(crate) fn apply_combat_discipline_weapon_loadout(
-    ctx: &ReducerContext,
-    owner: Identity,
-    discipline_id: &str,
-    main_hand_item_id: Option<&str>,
-    off_hand_item_id: Option<&str>,
-) -> Result<(), String> {
-    let expected_profile = combat_profile_for_discipline(discipline_id);
-    if expected_profile.is_empty() {
-        return Err(format!(
-            "unknown combat discipline '{}'",
-            normalize_id(discipline_id)
-        ));
-    }
-    apply_weapon_loadout_for_combat_profile(
-        ctx,
-        owner,
-        expected_profile,
-        main_hand_item_id,
-        off_hand_item_id,
-    )
 }
 
 fn apply_weapon_loadout_for_combat_profile(
@@ -5049,8 +4793,9 @@ fn upsert_equipped_weapon_appearance(ctx: &ReducerContext, row: EquippedWeaponAp
     }
 }
 
-fn weapon_definition_pair_is_allowed_for_discipline(
-    discipline_id: &str,
+#[cfg(test)]
+fn weapon_definition_pair_is_allowed_for_combat_discipline(
+    combat_discipline_id: &str,
     main_hand: &ItemDefinition,
     off_hand: Option<&ItemDefinition>,
 ) -> bool {
@@ -5058,7 +4803,7 @@ fn weapon_definition_pair_is_allowed_for_discipline(
         return false;
     }
 
-    match normalize_id(discipline_id).as_str() {
+    match normalize_id(combat_discipline_id).as_str() {
         COMBAT_PROFILE_DAGGERS => {
             main_hand.weapon_kind == WEAPON_KIND_DAGGER_PAIR
                 && main_hand.hand_requirement == HAND_REQUIREMENT_TWO_HAND
@@ -5137,27 +4882,18 @@ fn ensure_hub_weapon_item_instance(
     Ok(item_instance_id)
 }
 
-fn starter_weapon_definition_for_discipline(discipline_id: &str) -> Option<&'static str> {
-    let discipline_id = normalize_id(discipline_id);
-    match discipline_id.as_str() {
+#[cfg(test)]
+fn starter_weapon_definition_for_combat_discipline(
+    combat_discipline_id: &str,
+) -> Option<&'static str> {
+    let combat_discipline_id = normalize_id(combat_discipline_id);
+    match combat_discipline_id.as_str() {
         COMBAT_PROFILE_DAGGERS => Some("TRAINING_DAGGER_PAIR"),
         COMBAT_PROFILE_TWO_HANDED_SWORD => Some("TRAINING_TWO_HAND_SWORD"),
         DEFAULT_COMBAT_PROFILE => Some("TRAINING_SWORD_AND_SHIELD"),
         COMBAT_PROFILE_ARCHER_BOW => Some("TRAINING_BOW"),
         COMBAT_PROFILE_STAFF => Some("NEWBIE_STAFF_01"),
         _ => None,
-    }
-}
-
-fn combat_profile_for_discipline(discipline_id: &str) -> &'static str {
-    let discipline_id = normalize_id(discipline_id);
-    match discipline_id.as_str() {
-        COMBAT_PROFILE_DAGGERS => COMBAT_PROFILE_DAGGERS,
-        COMBAT_PROFILE_TWO_HANDED_SWORD => COMBAT_PROFILE_TWO_HANDED_SWORD,
-        DEFAULT_COMBAT_PROFILE => DEFAULT_COMBAT_PROFILE,
-        COMBAT_PROFILE_ARCHER_BOW => COMBAT_PROFILE_ARCHER_BOW,
-        COMBAT_PROFILE_STAFF => COMBAT_PROFILE_STAFF,
-        _ => "",
     }
 }
 
@@ -5177,7 +4913,7 @@ fn combat_profile_for_weapon_pair(
         }
 
         let weapon_kind = normalize_id(definition.weapon_kind.as_str());
-        let profile = normalize_id(definition.combat_profile_id.as_str());
+        let profile = normalize_id(definition.combat_discipline_id.as_str());
         if profile.is_empty() {
             return String::new();
         }
@@ -5484,7 +5220,6 @@ fn seed_baseline_equipment(
             created_at: ctx.timestamp,
         });
         seed_starter_equipment_affixes(ctx, item_instance_id.as_str(), item_def_id.as_str());
-        ensure_spellbook_spells_for_item(ctx, owner, item_instance_id.as_str());
         if let Err(error) = set_equipment_slot(&mut equipment, spec.slot_id, Some(item_instance_id))
         {
             log::warn!(
@@ -5660,8 +5395,7 @@ fn reconcile_spellbook_equipment(
     owner: Identity,
     mut equipment: EquipmentLoadout,
 ) {
-    if let Some(spellbook_item_id) = equipment.spellbook_item_id.clone() {
-        ensure_spellbook_spells_for_item(ctx, owner, spellbook_item_id.as_str());
+    if equipment.spellbook_item_id.is_some() {
         return;
     }
 
@@ -5690,7 +5424,6 @@ fn reconcile_spellbook_equipment(
         quantity: 1,
         created_at: ctx.timestamp,
     });
-    ensure_spellbook_spells_for_item(ctx, owner, item_instance_id.as_str());
     equipment.spellbook_item_id = Some(item_instance_id);
     equipment.revision = equipment.revision.saturating_add(1);
     equipment.updated_at = ctx.timestamp;
@@ -7002,7 +6735,6 @@ mod tests {
             "pub fn equip_item",
             "pub fn unequip_item",
             "pub(crate) fn create_corpse_loot_for_npc",
-            "pub(crate) fn apply_combat_discipline_weapon_loadout",
         ] {
             assert!(
                 !source_function(&source, signature).contains("sync_item_definitions(ctx)"),
@@ -7144,7 +6876,7 @@ mod tests {
                 && normalize_id(family.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND)
                 .then_some(&shield);
             if normalize_id(family.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND {
-                assert!(weapon_definition_pair_is_allowed_for_discipline(
+                assert!(weapon_definition_pair_is_allowed_for_combat_discipline(
                     combat_discipline_id,
                     &main,
                     off_hand
@@ -7155,8 +6887,8 @@ mod tests {
                     WEAPON_KIND_SHIELD
                 );
                 assert_eq!(
-                    normalize_id(family.primary_discipline_id.as_str()),
-                    DISCIPLINE_ZEAL
+                    normalize_id(family.combat_discipline_id.as_str()),
+                    DEFAULT_COMBAT_PROFILE
                 );
             }
         }
@@ -7202,7 +6934,7 @@ mod tests {
             weapon_kind: weapon_kind.to_string(),
             hand_requirement: hand_requirement.to_string(),
             unique_equipped: false,
-            combat_profile_id: String::new(),
+            combat_discipline_id: String::new(),
             armor_kind: String::new(),
             physical_resistance: 0.0,
             consumable_effect_kind: String::new(),
@@ -7314,10 +7046,10 @@ mod tests {
     #[test]
     fn sword_and_shield_profile_requires_pair_or_paired_item() {
         let mut sword = item_definition(WEAPON_KIND_ONE_HAND_SWORD, HAND_REQUIREMENT_ONE_HAND);
-        sword.combat_profile_id = DEFAULT_COMBAT_PROFILE.to_string();
+        sword.combat_discipline_id = DEFAULT_COMBAT_PROFILE.to_string();
         let shield = item_definition(WEAPON_KIND_SHIELD, HAND_REQUIREMENT_OFF_HAND);
         let mut paired = item_definition(WEAPON_KIND_SWORD_AND_SHIELD, HAND_REQUIREMENT_TWO_HAND);
-        paired.combat_profile_id = DEFAULT_COMBAT_PROFILE.to_string();
+        paired.combat_discipline_id = DEFAULT_COMBAT_PROFILE.to_string();
 
         assert_eq!(combat_profile_for_weapon_pair(Some(&sword), None), "");
         assert_eq!(
@@ -7341,57 +7073,57 @@ mod tests {
         let fist_weapon = item_definition(WEAPON_KIND_ONE_HAND_FIST, HAND_REQUIREMENT_ONE_HAND);
         let shield = item_definition(WEAPON_KIND_SHIELD, HAND_REQUIREMENT_OFF_HAND);
 
-        assert!(weapon_definition_pair_is_allowed_for_discipline(
+        assert!(weapon_definition_pair_is_allowed_for_combat_discipline(
             COMBAT_PROFILE_DAGGERS,
             &daggers,
             None
         ));
-        assert!(weapon_definition_pair_is_allowed_for_discipline(
+        assert!(weapon_definition_pair_is_allowed_for_combat_discipline(
             COMBAT_PROFILE_TWO_HANDED_SWORD,
             &greatsword,
             None
         ));
-        assert!(weapon_definition_pair_is_allowed_for_discipline(
+        assert!(weapon_definition_pair_is_allowed_for_combat_discipline(
             COMBAT_PROFILE_TWO_HANDED_SWORD,
             &greataxe,
             None
         ));
-        assert!(!weapon_definition_pair_is_allowed_for_discipline(
+        assert!(!weapon_definition_pair_is_allowed_for_combat_discipline(
             COMBAT_PROFILE_TWO_HANDED_SWORD,
             &staff,
             None
         ));
-        assert!(!weapon_definition_pair_is_allowed_for_discipline(
+        assert!(!weapon_definition_pair_is_allowed_for_combat_discipline(
             COMBAT_PROFILE_TWO_HANDED_SWORD,
             &bow,
             None
         ));
-        assert!(weapon_definition_pair_is_allowed_for_discipline(
+        assert!(weapon_definition_pair_is_allowed_for_combat_discipline(
             DEFAULT_COMBAT_PROFILE,
             &one_hand_sword,
             Some(&shield)
         ));
-        assert!(!weapon_definition_pair_is_allowed_for_discipline(
+        assert!(!weapon_definition_pair_is_allowed_for_combat_discipline(
             DEFAULT_COMBAT_PROFILE,
             &one_hand_sword,
             None
         ));
-        assert!(weapon_definition_pair_is_allowed_for_discipline(
+        assert!(weapon_definition_pair_is_allowed_for_combat_discipline(
             DEFAULT_COMBAT_PROFILE,
             &fist_weapon,
             Some(&shield)
         ));
-        assert!(weapon_definition_pair_is_allowed_for_discipline(
+        assert!(weapon_definition_pair_is_allowed_for_combat_discipline(
             COMBAT_PROFILE_ARCHER_BOW,
             &bow,
             None
         ));
-        assert!(weapon_definition_pair_is_allowed_for_discipline(
+        assert!(weapon_definition_pair_is_allowed_for_combat_discipline(
             COMBAT_PROFILE_STAFF,
             &staff,
             None
         ));
-        assert!(!weapon_definition_pair_is_allowed_for_discipline(
+        assert!(!weapon_definition_pair_is_allowed_for_combat_discipline(
             COMBAT_PROFILE_STAFF,
             &greatsword,
             None
@@ -7486,7 +7218,7 @@ mod tests {
 
         for (discipline_id, item_def_id) in expected {
             assert_eq!(
-                starter_weapon_definition_for_discipline(discipline_id),
+                starter_weapon_definition_for_combat_discipline(discipline_id),
                 Some(item_def_id)
             );
             assert!(
@@ -7494,7 +7226,10 @@ mod tests {
                 "{discipline_id} starter weapon {item_def_id} must be authored"
             );
         }
-        assert_eq!(starter_weapon_definition_for_discipline("UNKNOWN"), None);
+        assert_eq!(
+            starter_weapon_definition_for_combat_discipline("UNKNOWN"),
+            None
+        );
     }
 
     #[test]
@@ -7880,7 +7615,7 @@ mod tests {
             weapon_kind: WEAPON_KIND_ONE_HAND_SWORD,
             hand_requirement: HAND_REQUIREMENT_ONE_HAND,
             unique_equipped: false,
-            combat_profile_id: "",
+            combat_discipline_id: "",
             armor_kind: "",
             physical_resistance: 0.0,
             consumable_effect_kind: "",
@@ -7927,7 +7662,7 @@ mod tests {
             weapon_kind: "",
             hand_requirement: HAND_REQUIREMENT_NONE,
             unique_equipped: false,
-            combat_profile_id: "",
+            combat_discipline_id: "",
             armor_kind: ARMOR_KIND_CLOTH,
             physical_resistance: 0.0,
             consumable_effect_kind: "",

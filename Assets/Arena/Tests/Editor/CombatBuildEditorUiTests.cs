@@ -134,7 +134,6 @@ namespace Arena.Tests.Editor
             Assert.That(screen, Does.Contain("contract.ActionSlotIds"));
             Assert.That(screen, Does.Contain("BuildAddDisciplineCard"));
             Assert.That(screen, Does.Contain("_hub.SaveCombatBuild(_model.ToDraft())"));
-            Assert.That(screen, Does.Not.Contain("SaveDisciplineLoadout"));
             Assert.That(screen, Does.Not.Contain("SaveWeaponLoadout"));
         }
 

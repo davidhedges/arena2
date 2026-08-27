@@ -20,8 +20,6 @@ namespace Arena.Network
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
                 new QueryBuilder().From.CombatProjectileTickMetrics().ToSql(),
 #endif
-                new QueryBuilder().From.CombatProfileCatalog().ToSql(),
-                new QueryBuilder().From.CombatDisciplineCatalog().ToSql(),
                 new QueryBuilder().From.CombatModeCatalog().ToSql(),
                 new QueryBuilder().From.ActionBarSlotCatalog().ToSql(),
                 new QueryBuilder().From.ItemDefinition().ToSql(),
@@ -57,8 +55,6 @@ namespace Arena.Network
                 new QueryBuilder().From.ActionPresentationCatalog().ToSql(),
                 new QueryBuilder().From.CombatVfxCueCatalog().ToSql(),
                 new QueryBuilder().From.CombatProjectileDefinition().ToSql(),
-                new QueryBuilder().From.CombatProfileCatalog().ToSql(),
-                new QueryBuilder().From.CombatDisciplineCatalog().ToSql(),
                 new QueryBuilder().From.CombatModeCatalog().ToSql(),
                 new QueryBuilder().From.ActionBarSlotCatalog().ToSql(),
                 new QueryBuilder().From.ItemDefinition().ToSql(),
@@ -96,7 +92,6 @@ namespace Arena.Network
                 qb.From.PlayerWorld().Where(c => c.Identity.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PlayerOpenWorldScene().Where(c => c.Identity.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.CharacterAppearance().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.PlayerKnownSpell().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.GlobalCooldown().Where(c => c.Caster.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.SpellCooldown().Where(c => c.Caster.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.RecallSlot().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
@@ -104,7 +99,7 @@ namespace Arena.Network
                 new QueryBuilder().From.PredictedActionResult().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.ActiveDiceRoll().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.FixedActionChargeState().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.ActiveCombatDiscipline().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.ActiveCombatBuildDiscipline().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.MatchCombatBuild().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.MatchCombatBuildDiscipline().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.MatchDisciplineConfiguration().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
@@ -137,9 +132,6 @@ namespace Arena.Network
                     .ToSql(),
                 new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwnerKey.Eq(localIdentityKey)).ToSql(),
                 new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwnerKey.Eq(localIdentityKey))
-                    .RightSemijoin(new QueryBuilder().From.ItemSpell(), (item, spell) => item.ItemInstanceId.Eq(spell.ItemInstanceId))
-                    .ToSql(),
-                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwnerKey.Eq(localIdentityKey))
                     .RightSemijoin(new QueryBuilder().From.ItemAffixInstance(), (item, affix) => item.ItemInstanceId.Eq(affix.ItemInstanceId))
                     .ToSql(),
                 // World-loot item rows cannot be world-scoped in one
@@ -147,9 +139,6 @@ namespace Arena.Network
                 // chain), so unowned items and their spell/affix children are
                 // replicated globally. Loot expires, so this set stays small.
                 new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwnerKey.Eq(string.Empty)).ToSql(),
-                new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwnerKey.Eq(string.Empty))
-                    .RightSemijoin(new QueryBuilder().From.ItemSpell(), (item, spell) => item.ItemInstanceId.Eq(spell.ItemInstanceId))
-                    .ToSql(),
                 new QueryBuilder().From.ItemInstance().Where(c => c.CurrentOwnerKey.Eq(string.Empty))
                     .RightSemijoin(new QueryBuilder().From.ItemAffixInstance(), (item, affix) => item.ItemInstanceId.Eq(affix.ItemInstanceId))
                     .ToSql(),
@@ -191,7 +180,7 @@ namespace Arena.Network
                 new QueryBuilder().From.FixedActionChargeState()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
-                new QueryBuilder().From.ActiveCombatDiscipline()
+                new QueryBuilder().From.ActiveCombatBuildDiscipline()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
                 new QueryBuilder().From.MatchCombatBuild()
@@ -232,12 +221,6 @@ namespace Arena.Network
                 // participate in a disposable arena match.
                 new QueryBuilder().From.ItemInstance()
                     .Where(c => c.CurrentOwnerKey.Eq(localIdentityKey))
-                    .ToSql(),
-                new QueryBuilder().From.ItemInstance()
-                    .Where(c => c.CurrentOwnerKey.Eq(localIdentityKey))
-                    .RightSemijoin(
-                        new QueryBuilder().From.ItemSpell(),
-                        (item, spell) => item.ItemInstanceId.Eq(spell.ItemInstanceId))
                     .ToSql(),
                 new QueryBuilder().From.ItemInstance()
                     .Where(c => c.CurrentOwnerKey.Eq(localIdentityKey))

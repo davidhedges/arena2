@@ -40,14 +40,14 @@ namespace SpacetimeDB.Types
     public sealed class ActiveCombatModeCols
     {
         public global::SpacetimeDB.Col<ActiveCombatMode, SpacetimeDB.Identity> Owner { get; }
-        public global::SpacetimeDB.Col<ActiveCombatMode, string> CombatProfileId { get; }
+        public global::SpacetimeDB.Col<ActiveCombatMode, string> CombatDisciplineId { get; }
         public global::SpacetimeDB.Col<ActiveCombatMode, string> ModeId { get; }
         public global::SpacetimeDB.Col<ActiveCombatMode, SpacetimeDB.Timestamp> ChangedAt { get; }
 
         public ActiveCombatModeCols(string tableName)
         {
             Owner = new global::SpacetimeDB.Col<ActiveCombatMode, SpacetimeDB.Identity>(tableName, "owner");
-            CombatProfileId = new global::SpacetimeDB.Col<ActiveCombatMode, string>(tableName, "combat_profile_id");
+            CombatDisciplineId = new global::SpacetimeDB.Col<ActiveCombatMode, string>(tableName, "combat_discipline_id");
             ModeId = new global::SpacetimeDB.Col<ActiveCombatMode, string>(tableName, "mode_id");
             ChangedAt = new global::SpacetimeDB.Col<ActiveCombatMode, SpacetimeDB.Timestamp>(tableName, "changed_at");
         }

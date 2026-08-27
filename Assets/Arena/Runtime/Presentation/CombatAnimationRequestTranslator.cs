@@ -42,7 +42,7 @@ namespace Arena.Presentation
             CombatEvent row)
         {
             string combatProfile = conn != null
-                ? CombatProfileResolver.ResolveForEntity(conn, entity)
+                ? RuntimeCombatProfile.ResolveForEntity(conn, entity)
                 : string.Empty;
             if (conn != null
                 && CombatActionIds.FindMeleeDefinition(conn, combatProfile, row.ActionKind) != null)

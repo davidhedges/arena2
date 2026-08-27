@@ -909,7 +909,7 @@ namespace Arena.Presentation
             if (caster == null || caster.IsDestroyed || target == null || target.IsDestroyed)
                 return;
 
-            string combatProfile = CombatProfileResolver.ResolveForEntity(conn, caster);
+            string combatProfile = RuntimeCombatProfile.ResolveForEntity(conn, caster);
             string strikeId = WireIdentifier.Normalize(
                 CombatActionIds.ResolveAuthoredStrikeId(conn, combatProfile, runtimeActionId));
             if (string.IsNullOrWhiteSpace(strikeId))
@@ -1866,7 +1866,7 @@ namespace Arena.Presentation
             if (EntityRegistry.Instance != null
                 && EntityRegistry.Instance.TryGetEntity(row.Caster, out PlayerEntity caster))
             {
-                string combatProfile = CombatProfileResolver.ResolveForEntity(conn, caster);
+                string combatProfile = RuntimeCombatProfile.ResolveForEntity(conn, caster);
                 string authored = CombatActionIds.ResolveAuthoredStrikeId(conn, combatProfile, row.ActionKind);
                 if (!string.IsNullOrWhiteSpace(authored))
                     return WireIdentifier.Normalize(authored);

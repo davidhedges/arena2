@@ -18,6 +18,15 @@ namespace Arena.HubDb
         {
             protected override string RemoteTableName => "hub_weapon_definition";
 
+            public sealed class CombatDisciplineIdIndex : BTreeIndexBase<string>
+            {
+                protected override string GetKey(HubWeaponDefinition row) => row.CombatDisciplineId;
+
+                public CombatDisciplineIdIndex(HubWeaponDefinitionHandle table) : base(table) { }
+            }
+
+            public readonly CombatDisciplineIdIndex CombatDisciplineId;
+
             public sealed class ItemDefIdUniqueIndex : UniqueIndexBase<string>
             {
                 protected override string GetKey(HubWeaponDefinition row) => row.ItemDefId;
@@ -27,19 +36,10 @@ namespace Arena.HubDb
 
             public readonly ItemDefIdUniqueIndex ItemDefId;
 
-            public sealed class PrimaryDisciplineIdIndex : BTreeIndexBase<string>
-            {
-                protected override string GetKey(HubWeaponDefinition row) => row.PrimaryDisciplineId;
-
-                public PrimaryDisciplineIdIndex(HubWeaponDefinitionHandle table) : base(table) { }
-            }
-
-            public readonly PrimaryDisciplineIdIndex PrimaryDisciplineId;
-
             internal HubWeaponDefinitionHandle(DbConnection conn) : base(conn)
             {
+                CombatDisciplineId = new(this);
                 ItemDefId = new(this);
-                PrimaryDisciplineId = new(this);
             }
 
             protected override object GetPrimaryKey(HubWeaponDefinition row) => row.ItemDefId;
@@ -56,7 +56,7 @@ namespace Arena.HubDb
         public global::SpacetimeDB.Col<HubWeaponDefinition, string> WeaponKind { get; }
         public global::SpacetimeDB.Col<HubWeaponDefinition, string> HandRequirement { get; }
         public global::SpacetimeDB.Col<HubWeaponDefinition, string> EquipSlot { get; }
-        public global::SpacetimeDB.Col<HubWeaponDefinition, string> PrimaryDisciplineId { get; }
+        public global::SpacetimeDB.Col<HubWeaponDefinition, string> CombatDisciplineId { get; }
         public global::SpacetimeDB.Col<HubWeaponDefinition, uint> SortOrder { get; }
 
         public HubWeaponDefinitionCols(string tableName)
@@ -67,7 +67,7 @@ namespace Arena.HubDb
             WeaponKind = new global::SpacetimeDB.Col<HubWeaponDefinition, string>(tableName, "weapon_kind");
             HandRequirement = new global::SpacetimeDB.Col<HubWeaponDefinition, string>(tableName, "hand_requirement");
             EquipSlot = new global::SpacetimeDB.Col<HubWeaponDefinition, string>(tableName, "equip_slot");
-            PrimaryDisciplineId = new global::SpacetimeDB.Col<HubWeaponDefinition, string>(tableName, "primary_discipline_id");
+            CombatDisciplineId = new global::SpacetimeDB.Col<HubWeaponDefinition, string>(tableName, "combat_discipline_id");
             SortOrder = new global::SpacetimeDB.Col<HubWeaponDefinition, uint>(tableName, "sort_order");
         }
     }
@@ -75,12 +75,12 @@ namespace Arena.HubDb
     public sealed class HubWeaponDefinitionIxCols
     {
         public global::SpacetimeDB.IxCol<HubWeaponDefinition, string> ItemDefId { get; }
-        public global::SpacetimeDB.IxCol<HubWeaponDefinition, string> PrimaryDisciplineId { get; }
+        public global::SpacetimeDB.IxCol<HubWeaponDefinition, string> CombatDisciplineId { get; }
 
         public HubWeaponDefinitionIxCols(string tableName)
         {
             ItemDefId = new global::SpacetimeDB.IxCol<HubWeaponDefinition, string>(tableName, "item_def_id");
-            PrimaryDisciplineId = new global::SpacetimeDB.IxCol<HubWeaponDefinition, string>(tableName, "primary_discipline_id");
+            CombatDisciplineId = new global::SpacetimeDB.IxCol<HubWeaponDefinition, string>(tableName, "combat_discipline_id");
         }
     }
 }

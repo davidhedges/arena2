@@ -385,7 +385,7 @@ namespace Arena.Combat
         }
     }
 
-    public static class CombatProfileResolver
+    public static class RuntimeCombatProfile
     {
         public static string ResolveForPlayer(DbConnection? conn, Player? player)
         {
@@ -399,18 +399,18 @@ namespace Arena.Combat
             if (conn == null || !owner.HasValue)
                 return CombatProfileIds.Default;
 
-            ActiveCombatDiscipline? discipline =
-                conn.Db.ActiveCombatDiscipline.Owner.Find(owner.Value);
-            return discipline == null || string.IsNullOrWhiteSpace(discipline.CombatProfileId)
+            ActiveCombatBuildDiscipline? discipline =
+                conn.Db.ActiveCombatBuildDiscipline.Owner.Find(owner.Value);
+            return discipline == null || string.IsNullOrWhiteSpace(discipline.CombatDisciplineId)
                 ? CombatProfileIds.Default
-                : CombatProfileIds.Normalize(discipline.CombatProfileId);
+                : CombatProfileIds.Normalize(discipline.CombatDisciplineId);
         }
 
         public static string ResolveForAbility(DbConnection? conn, AbilityCatalog? ability)
         {
             return ability == null
                 ? string.Empty
-                : WireIdentifier.Normalize(ability.CombatProfileId);
+                : WireIdentifier.Normalize(ability.CombatDisciplineId);
         }
 
         public static string ResolveForEntity(DbConnection? conn, PlayerEntity? entity)
@@ -618,12 +618,12 @@ namespace Arena.Combat
             if (conn == null || !owner.HasValue)
                 return string.Empty;
 
-            ActiveCombatDiscipline? active =
-                conn.Db.ActiveCombatDiscipline.Owner.Find(owner.Value);
+            ActiveCombatBuildDiscipline? active =
+                conn.Db.ActiveCombatBuildDiscipline.Owner.Find(owner.Value);
             if (active == null)
                 return string.Empty;
 
-            string activeDisciplineId = WireIdentifier.Normalize(active.DisciplineId);
+            string activeDisciplineId = WireIdentifier.Normalize(active.CombatDisciplineId);
             if (string.IsNullOrWhiteSpace(activeDisciplineId))
                 return string.Empty;
 
@@ -658,7 +658,7 @@ namespace Arena.Combat
                 ? WireIdentifier.Normalize(ability.ActionId)
                 : CombatActionIds.ResolveRuntimeActionId(
                     conn,
-                    CombatProfileResolver.ResolveForOwner(conn, owner),
+                    RuntimeCombatProfile.ResolveForOwner(conn, owner),
                     ability.ActionId);
             string displayName = ActionPresentation.ResolveAbilityDisplayName(
                 conn,
@@ -687,14 +687,12 @@ namespace Arena.Combat
             if (string.IsNullOrWhiteSpace(normalizedDisciplineId))
                 return Empty(slotId);
 
-            CombatDisciplineCatalog? discipline =
-                conn.Db.CombatDisciplineCatalog.DisciplineId.Find(normalizedDisciplineId);
             ActionPresentationCatalog? presentation = ActionPresentation.FindPresentation(
                 conn,
                 ActionTooltipResolver.PresentationKindCombatDisciplineSwitch,
                 normalizedDisciplineId);
             string displayName = string.IsNullOrWhiteSpace(presentation?.DisplayName)
-                ? discipline?.DisplayName ?? normalizedDisciplineId
+                ? normalizedDisciplineId.Replace('_', ' ')
                 : presentation.DisplayName;
 
             return new ActiveActionBarAction(
@@ -706,7 +704,7 @@ namespace Arena.Combat
                 normalizedDisciplineId,
                 normalizedDisciplineId,
                 displayName,
-                discipline?.PrimaryResourceKind ?? string.Empty,
+                string.Empty,
                 0f);
         }
 
@@ -759,8 +757,8 @@ namespace Arena.Combat
                 if (!string.Equals(ability.AbilityKind, "MELEE", StringComparison.OrdinalIgnoreCase))
                     continue;
                 if (!string.Equals(
-                    CombatProfileResolver.ResolveForAbility(conn, ability),
-                    CombatProfileResolver.ResolveForAbility(conn, rootAbility),
+                    RuntimeCombatProfile.ResolveForAbility(conn, ability),
+                    RuntimeCombatProfile.ResolveForAbility(conn, rootAbility),
                     StringComparison.OrdinalIgnoreCase))
                     continue;
                 if (!string.Equals(ability.ActionId, authoredActionId, StringComparison.OrdinalIgnoreCase))

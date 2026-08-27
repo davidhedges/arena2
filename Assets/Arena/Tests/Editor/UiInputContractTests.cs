@@ -27,7 +27,6 @@ namespace Arena.Tests.Editor
         private const string HubControllerPath = "Assets/Arena/Runtime/UI/HubController.cs";
         private const string CharacterCreationControllerPath = "Assets/Arena/Runtime/UI/CharacterCreationController.cs";
         private const string ActionTooltipResolverPath = "Assets/Arena/Runtime/Combat/ActionTooltipResolver.cs";
-        private const string SpellCatalogPanelPath = "Assets/Arena/Runtime/UI/SpellCatalogPanel.cs";
         private const string CharacterActionBarPanelPath = "Assets/Arena/Runtime/UI/CharacterActionBarPanel.cs";
         private const string ActionBarSlotViewFactoryPath = "Assets/Arena/Runtime/UI/ActionBarSlotViewFactory.cs";
         private const string ActionBarDragDropPath = "Assets/Arena/Runtime/UI/ActionBarDragDrop.cs";
@@ -448,7 +447,6 @@ namespace Arena.Tests.Editor
 
             string contracts = File.ReadAllText(GameplayContractsPath);
             Assert.That(contracts, Does.Contain("MatchDisciplineActionBarAssignment"));
-            Assert.That(contracts, Does.Not.Contain("SpellbookResolver"));
         }
 
         [Test]
@@ -496,10 +494,6 @@ namespace Arena.Tests.Editor
             Assert.That(contracts, Does.Contain("assignment.CombatDisciplineId"));
             Assert.That(contracts, Does.Contain("assignment.ActionSlot"));
             Assert.That(contracts, Does.Contain("assignment.AbilityId"));
-            Assert.That(contracts, Does.Not.Contain("CharacterDisciplineAbilitySelection"));
-            Assert.That(contracts, Does.Not.Contain("CharacterActionBarAssignment"));
-            Assert.That(contracts, Does.Not.Contain("PlayerKnownSpell"));
-            Assert.That(contracts, Does.Not.Contain("ItemSpell"));
         }
 
         [Test]
@@ -507,7 +501,6 @@ namespace Arena.Tests.Editor
         {
             string contracts = File.ReadAllText(GameplayContractsPath);
             Assert.That(contracts, Does.Contain("ResolveExactAbilityAssignment"));
-            Assert.That(contracts, Does.Not.Contain("AbilityMatchesOwner"));
             Assert.That(contracts, Does.Not.Contain("KnowsSpell"));
             Assert.That(contracts, Does.Not.Contain("IsSpellAssignmentEnabled"));
 
@@ -586,24 +579,6 @@ namespace Arena.Tests.Editor
 
             string hud = File.ReadAllText(HudControllerPath);
             Assert.That(hud, Does.Contain("ActionBarKeymap.KeyLabelForCell"));
-        }
-
-        [Test]
-        public void SpellbookCollection_DoesNotAuthorizeHudOrInputActions()
-        {
-            string contracts = File.ReadAllText(GameplayContractsPath);
-            string actionBarDispatcher = File.ReadAllText(ActionBarInputDispatcherPath);
-            string hud = File.ReadAllText(HudControllerPath);
-            string panel = File.ReadAllText(CharacterActionBarPanelPath);
-
-            Assert.That(contracts, Does.Not.Contain("SpellbookResolver"));
-            Assert.That(contracts, Does.Not.Contain("SpellSlotResolver"));
-            Assert.That(contracts, Does.Not.Contain("ResolveEquippedSpellbookAction"));
-            Assert.That(actionBarDispatcher, Does.Not.Contain("SpellbookKeymap.SelectableBindings"));
-            Assert.That(actionBarDispatcher, Does.Not.Contain("ItemSpell"));
-            Assert.That(hud, Does.Not.Contain("RefreshSpellbookStaticState"));
-            Assert.That(hud, Does.Not.Contain("ResolveEquippedSpellbookAction"));
-            Assert.That(panel, Does.Contain("enabled = false"));
         }
 
         [Test]

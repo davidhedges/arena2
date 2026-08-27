@@ -26,19 +26,19 @@ namespace SpacetimeDB.Types
 
             public readonly AbilityIdUniqueIndex AbilityId;
 
-            public sealed class DisciplineIdIndex : BTreeIndexBase<string>
+            public sealed class CombatDisciplineIdIndex : BTreeIndexBase<string>
             {
-                protected override string GetKey(AbilityCatalog row) => row.DisciplineId;
+                protected override string GetKey(AbilityCatalog row) => row.CombatDisciplineId;
 
-                public DisciplineIdIndex(AbilityCatalogHandle table) : base(table) { }
+                public CombatDisciplineIdIndex(AbilityCatalogHandle table) : base(table) { }
             }
 
-            public readonly DisciplineIdIndex DisciplineId;
+            public readonly CombatDisciplineIdIndex CombatDisciplineId;
 
             internal AbilityCatalogHandle(DbConnection conn) : base(conn)
             {
                 AbilityId = new(this);
-                DisciplineId = new(this);
+                CombatDisciplineId = new(this);
             }
 
             protected override object GetPrimaryKey(AbilityCatalog row) => row.AbilityId;
@@ -51,8 +51,9 @@ namespace SpacetimeDB.Types
     {
         public global::SpacetimeDB.Col<AbilityCatalog, string> AbilityId { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> ActorScope { get; }
-        public global::SpacetimeDB.Col<AbilityCatalog, string> DisciplineId { get; }
-        public global::SpacetimeDB.Col<AbilityCatalog, string> CombatProfileId { get; }
+        public global::SpacetimeDB.Col<AbilityCatalog, string> CombatDisciplineId { get; }
+        public global::SpacetimeDB.Col<AbilityCatalog, string> SpellSchoolId { get; }
+        public global::SpacetimeDB.Col<AbilityCatalog, string> SelectionKind { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> AbilityKind { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> ActionId { get; }
         public global::SpacetimeDB.Col<AbilityCatalog, string> DisplayName { get; }
@@ -65,8 +66,9 @@ namespace SpacetimeDB.Types
         {
             AbilityId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "ability_id");
             ActorScope = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "actor_scope");
-            DisciplineId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "discipline_id");
-            CombatProfileId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "combat_profile_id");
+            CombatDisciplineId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "combat_discipline_id");
+            SpellSchoolId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "spell_school_id");
+            SelectionKind = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "selection_kind");
             AbilityKind = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "ability_kind");
             ActionId = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "action_id");
             DisplayName = new global::SpacetimeDB.Col<AbilityCatalog, string>(tableName, "display_name");
@@ -80,12 +82,12 @@ namespace SpacetimeDB.Types
     public sealed class AbilityCatalogIxCols
     {
         public global::SpacetimeDB.IxCol<AbilityCatalog, string> AbilityId { get; }
-        public global::SpacetimeDB.IxCol<AbilityCatalog, string> DisciplineId { get; }
+        public global::SpacetimeDB.IxCol<AbilityCatalog, string> CombatDisciplineId { get; }
 
         public AbilityCatalogIxCols(string tableName)
         {
             AbilityId = new global::SpacetimeDB.IxCol<AbilityCatalog, string>(tableName, "ability_id");
-            DisciplineId = new global::SpacetimeDB.IxCol<AbilityCatalog, string>(tableName, "discipline_id");
+            CombatDisciplineId = new global::SpacetimeDB.IxCol<AbilityCatalog, string>(tableName, "combat_discipline_id");
         }
     }
 }

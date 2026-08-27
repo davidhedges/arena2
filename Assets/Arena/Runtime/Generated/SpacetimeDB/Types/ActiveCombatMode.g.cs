@@ -15,8 +15,8 @@ namespace SpacetimeDB.Types
     {
         [DataMember(Name = "owner")]
         public SpacetimeDB.Identity Owner;
-        [DataMember(Name = "combat_profile_id")]
-        public string CombatProfileId;
+        [DataMember(Name = "combat_discipline_id")]
+        public string CombatDisciplineId;
         [DataMember(Name = "mode_id")]
         public string ModeId;
         [DataMember(Name = "changed_at")]
@@ -24,20 +24,20 @@ namespace SpacetimeDB.Types
 
         public ActiveCombatMode(
             SpacetimeDB.Identity Owner,
-            string CombatProfileId,
+            string CombatDisciplineId,
             string ModeId,
             SpacetimeDB.Timestamp ChangedAt
         )
         {
             this.Owner = Owner;
-            this.CombatProfileId = CombatProfileId;
+            this.CombatDisciplineId = CombatDisciplineId;
             this.ModeId = ModeId;
             this.ChangedAt = ChangedAt;
         }
 
         public ActiveCombatMode()
         {
-            this.CombatProfileId = "";
+            this.CombatDisciplineId = "";
             this.ModeId = "";
         }
     }

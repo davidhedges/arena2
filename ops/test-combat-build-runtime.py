@@ -29,7 +29,7 @@ import websocket
 PROTOCOL = "v1.json.spacetimedb"
 DatabaseRow = list[Any] | dict[str, Any]
 HUB_QUERIES = [
-    'SELECT * FROM "my_hub_loadout"',
+    'SELECT * FROM "my_hub_armor_selection"',
     'SELECT * FROM "my_combat_build"',
     'SELECT * FROM "my_match_status"',
 ]
@@ -40,13 +40,8 @@ MATCH_OWNER_TABLES = (
     "match_staff_school_selection",
     "match_discipline_action_bar_assignment",
     "match_discipline_passive_selection",
-    "active_combat_discipline",
+    "active_combat_build_discipline",
     "player_equipment_presentation",
-    "character_action_bar_assignment",
-    "character_discipline_loadout",
-    "character_discipline_ability_selection",
-    "character_combat_discipline_weapon_loadout",
-    "player_known_spell",
     "equipment_loadout",
 )
 EXPECTED_SELECTED = ["DAGGERS", "ARCHER_BOW", "STAFF"]
@@ -377,10 +372,6 @@ def match_queries(identity: str) -> list[str]:
             f'WHERE ("player_physics"."identity" = {identity_literal})',
             'SELECT * FROM "status_effect" '
             f'WHERE ("status_effect"."target" = {identity_literal})',
-            'SELECT "item_spell".* FROM "item_instance" '
-            'JOIN "item_spell" ON '
-            '"item_instance"."item_instance_id" = "item_spell"."item_instance_id" '
-            f'WHERE ("item_instance"."current_owner_key" = \'{identity}\')',
         ]
     )
     return queries
@@ -395,7 +386,7 @@ def snapshot(
     update = connection.subscribe(match_queries(identity))
     return {
         table_name: inserted_rows(update, table_name)
-        for table_name in (*MATCH_OWNER_TABLES, "player_physics", "status_effect", "item_spell")
+        for table_name in (*MATCH_OWNER_TABLES, "player_physics", "status_effect")
     }
 
 
@@ -454,15 +445,12 @@ def assert_frozen_snapshot(
     if passives != {("STAFF", "RUIN_FLAMING_WEAPON")}:
         raise RuntimeError(f"frozen passive selections differ: {passives}")
 
-    if len(rows["active_combat_discipline"]) != 1:
+    if len(rows["active_combat_build_discipline"]) != 1:
         raise RuntimeError("active combat discipline row is missing or duplicated")
-    active = rows["active_combat_discipline"][0]
-    active_discipline = str(row_value(active, 1, "discipline_id"))
-    active_profile = str(row_value(active, 2, "combat_profile_id"))
-    if active_discipline != expected_active or active_profile != expected_active:
-        raise RuntimeError(
-            f"active discipline/profile differs: {active_discipline}/{active_profile}"
-        )
+    active = rows["active_combat_build_discipline"][0]
+    active_discipline = str(row_value(active, 1, "combat_discipline_id"))
+    if active_discipline != expected_active:
+        raise RuntimeError(f"active discipline differs: {active_discipline}")
 
     if len(rows["player_equipment_presentation"]) != 1:
         raise RuntimeError("equipment presentation row is missing or duplicated")
@@ -475,52 +463,6 @@ def assert_frozen_snapshot(
             f"{expected_active} equipped {main_hand_item_def_id!r}, expected "
             f"{EXPECTED_WEAPONS[expected_active]!r}"
         )
-
-    bars = rows["character_action_bar_assignment"]
-    switches = {
-        (
-            str(row_value(row, 2, "combat_profile_id")),
-            str(row_value(row, 3, "slot_id")),
-            str(row_value(row, 4, "action_kind")),
-            str(row_value(row, 5, "action_id")),
-        )
-        for row in bars
-        if str(row_value(row, 4, "action_kind")) == "COMBAT_DISCIPLINE_SWITCH"
-    }
-    expected_switches = {
-        ("GLOBAL", f"DISCIPLINE_{index}", "COMBAT_DISCIPLINE_SWITCH", discipline)
-        for index, discipline in enumerate(EXPECTED_SELECTED)
-    }
-    if switches != expected_switches:
-        raise RuntimeError(f"global discipline switches differ: {switches}")
-
-    projected_abilities = {
-        (
-            str(row_value(row, 2, "combat_profile_id")),
-            str(row_value(row, 3, "slot_id")),
-            str(row_value(row, 6, "ability_id")),
-        )
-        for row in bars
-        if str(row_value(row, 4, "action_kind")) == "ABILITY"
-        and str(row_value(row, 2, "combat_profile_id")) != "GLOBAL"
-    }
-    expected_projected_abilities = {
-        (discipline, action_slot.upper(), ability_id)
-        for discipline, action_slot, ability_id in EXPECTED_ASSIGNMENTS
-    }
-    if projected_abilities != expected_projected_abilities:
-        raise RuntimeError(
-            f"per-discipline compatibility action bars differ: {projected_abilities}"
-        )
-
-    for legacy_table in (
-        "character_discipline_loadout",
-        "character_discipline_ability_selection",
-    ):
-        if rows[legacy_table]:
-            raise RuntimeError(
-                f"provisioned frozen build unexpectedly populated {legacy_table}"
-            )
 
     return {
         "active_discipline": active_discipline,
@@ -704,31 +646,14 @@ def main() -> int:
         rows = snapshot(match, hub.identity)
         switch_sequence.append(assert_frozen_snapshot(rows, "DAGGERS"))
 
-        for label, reducer, reducer_args in (
-            (
-                "assign_action_bar",
-                "assign_character_action_bar_ability_to_slot",
-                ["slot_0_5", "DAGGER_QUICK_CUT"],
-            ),
-            ("clear_action_bar", "clear_character_action_bar_slot", ["slot_0_0"]),
-            (
-                "assign_weapon",
-                "assign_combat_discipline_weapon_loadout",
-                ["DAGGERS", None, None],
-            ),
-        ):
-            denial_details[label] = require_status(
-                match.call(reducer, reducer_args), "failed", "frozen"
-            )
-
-        require_status(match.call("set_combat_discipline", ["ARCHER_BOW"]), "committed")
+        require_status(match.call("activate_combat_build_discipline", ["ARCHER_BOW"]), "committed")
         rows = snapshot(match, hub.identity)
         switch_sequence.append(assert_frozen_snapshot(rows, "ARCHER_BOW"))
         denial_details["wrong_action_bar"] = require_status(
             match.call("cast_request", cast_args("MANA_SHIELD", rows)), "failed"
         )
 
-        require_status(match.call("set_combat_discipline", ["STAFF"]), "committed")
+        require_status(match.call("activate_combat_build_discipline", ["STAFF"]), "committed")
         rows = snapshot(match, hub.identity)
         switch_sequence.append(assert_frozen_snapshot(rows, "STAFF"))
 
@@ -741,33 +666,12 @@ def main() -> int:
                 match.call("cast_request", cast_args(action_id, rows)), "failed"
             )
 
-        require_status(match.call("learn_spell", ["NOVA"]), "committed")
-        denial_details["learned_only"] = require_status(
-            match.call("cast_request", cast_args("NOVA", rows)), "failed"
-        )
-        require_status(
-            match.call("assign_equipped_spellbook_spell", [0, "BOLT"]), "committed"
-        )
-        denial_details["spellbook_only"] = require_status(
-            match.call("cast_request", cast_args("BOLT", rows)), "failed"
-        )
-
-        rows = snapshot(match, hub.identity)
-        known_spells = {
-            str(row_value(row, 2, "spell_id")) for row in rows["player_known_spell"]
-        }
-        if "NOVA" not in known_spells:
-            raise RuntimeError("learn_spell did not persist NOVA collection ownership")
-        item_spells = {str(row_value(row, 3, "spell_id")) for row in rows["item_spell"]}
-        if "BOLT" not in item_spells:
-            raise RuntimeError("spellbook assignment did not persist BOLT")
-
         require_status(
             match.call("cast_request", cast_args("MANA_SHIELD", rows)), "committed"
         )
         rows = wait_for_status(match, hub.identity, "MANA_SHIELD")
 
-        require_status(match.call("set_combat_discipline", ["DAGGERS"]), "committed")
+        require_status(match.call("activate_combat_build_discipline", ["DAGGERS"]), "committed")
         rows = snapshot(match, hub.identity)
         switch_sequence.append(assert_frozen_snapshot(rows, "DAGGERS"))
         auth_logs = capture_authorization_logs(assignment["database_identity"])
@@ -809,7 +713,7 @@ def main() -> int:
                     }
                 ),
                 "positive_cast": "MANA_SHIELD",
-                "collection_only_checks": ["learned:NOVA", "spellbook:BOLT"],
+                "alternate_authority_schema": "ABSENT",
                 "cleanup": "CLEANED",
             },
             sort_keys=True,

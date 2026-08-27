@@ -179,9 +179,9 @@ namespace Arena.Tests.Editor
             var usageByVfxId = (IDictionary)load.Invoke(null, args)!;
 
             Assert.That(args[1], Is.EqualTo(string.Empty));
-            Assert.That(DisciplineIds("VFX_DARK_BURST_01_ARENA2"), Is.EqualTo(new[] { "WAR" }));
-            Assert.That(DisciplineIds("VFX_PRIMAL_FOUR_ELEMENTS_FORWARD_01"), Is.EqualTo(new[] { "PRIMAL" }));
-            Assert.That(DisciplineIds("VFX_ARCANE_CAST_HAND_01"), Is.EqualTo(new[] { "RUIN", "ARCANA" }));
+            Assert.That(DisciplineIds("VFX_DARK_BURST_01_ARENA2"), Is.EqualTo(new[] { "TWO_HANDED_SWORD" }));
+            Assert.That(DisciplineIds("VFX_PRIMAL_FOUR_ELEMENTS_FORWARD_01"), Is.EqualTo(new[] { "STAFF" }));
+            Assert.That(DisciplineIds("VFX_ARCANE_CAST_HAND_01"), Is.EqualTo(new[] { "STAFF" }));
             Assert.That(DisciplineIds("ARROW_STANDARD"), Is.Empty);
             Assert.That(usageByVfxId.Contains("VFX_DARK_BURST_01_ARENA"), Is.False);
 

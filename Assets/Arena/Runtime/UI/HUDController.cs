@@ -1422,7 +1422,7 @@ namespace Arena.UI
                 return;
             }
 
-            string combatProfile = CombatProfileResolver.ResolveForOwner(conn, owner);
+            string combatProfile = RuntimeCombatProfile.ResolveForOwner(conn, owner);
             if (!TryResolveCurrentCombatMode(conn, owner, combatProfile, out CombatModeCatalog mode))
             {
                 SetSelfCombatModeIconVisible(false);
@@ -1479,7 +1479,7 @@ namespace Arena.UI
                 return false;
 
             var modes = new List<CombatModeCatalog>();
-            foreach (CombatModeCatalog row in conn.Db.CombatModeCatalog.CombatProfileId.Filter(normalizedProfile))
+            foreach (CombatModeCatalog row in conn.Db.CombatModeCatalog.CombatDisciplineId.Filter(normalizedProfile))
                 modes.Add(row);
 
             if (modes.Count == 0)
@@ -1487,7 +1487,7 @@ namespace Arena.UI
 
             ActiveCombatMode? active = conn.Db.ActiveCombatMode.Owner.Find(owner);
             if (active != null
-                && string.Equals(WireIdentifier.Normalize(active.CombatProfileId), normalizedProfile, StringComparison.Ordinal))
+                && string.Equals(WireIdentifier.Normalize(active.CombatDisciplineId), normalizedProfile, StringComparison.Ordinal))
             {
                 string activeMode = WireIdentifier.Normalize(active.ModeId);
                 for (int i = 0; i < modes.Count; i++)
@@ -2222,7 +2222,7 @@ namespace Arena.UI
                 return true;
 
             string resolvedCombatProfile = string.IsNullOrWhiteSpace(combatProfile)
-                ? CombatProfileResolver.ResolveForOwner(conn, conn.Identity)
+                ? RuntimeCombatProfile.ResolveForOwner(conn, conn.Identity)
                 : combatProfile;
 
             var meleeGameplay = MeleeGameplayResolver.ResolveForAction(

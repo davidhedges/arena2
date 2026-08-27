@@ -68,46 +68,40 @@ const STATUS_FAILED: &str = "FAILED";
 const STATUS_CLOSED: &str = "CLOSED";
 
 const FAILURE_TICKET_EXPIRED: &str = "TICKET_EXPIRED";
-const PRIMARY_DISCIPLINE_ABILITY_MINIMUM: usize = 8;
-const SECONDARY_DISCIPLINE_ABILITY_MINIMUM: usize = 1;
-const MAX_DISCIPLINE_LOADOUT_ABILITIES: usize = 128;
-
-const DISCIPLINE_SUBTLETY: &str = "SUBTLETY";
-const DISCIPLINE_WAR: &str = "WAR";
-const DISCIPLINE_ZEAL: &str = "ZEAL";
-const DISCIPLINE_PRECISION: &str = "PRECISION";
-const DISCIPLINE_BLIGHT: &str = "BLIGHT";
-const DISCIPLINE_MORTALITY: &str = "MORTALITY";
-const DISCIPLINE_RUIN: &str = "RUIN";
-#[cfg(test)]
-const DISCIPLINE_DIVINITY: &str = "DIVINITY";
-const DISCIPLINE_ARCANA: &str = "ARCANA";
-#[cfg(test)]
-const DISCIPLINE_PRIMAL: &str = "PRIMAL";
-const COMBAT_PROFILE_STAFF: &str = "STAFF";
-
-const DEFAULT_HUB_PRIMARY_DISCIPLINE: &str = DISCIPLINE_WAR;
-const DEFAULT_HUB_SECONDARY_DISCIPLINE_1: &str = DISCIPLINE_SUBTLETY;
-const DEFAULT_HUB_SECONDARY_DISCIPLINE_2: &str = DISCIPLINE_RUIN;
 const DEFAULT_HUB_ARMOR_SET: &str = "PEASANT";
 const DEFAULT_STAFF_ITEM_DEF_ID: &str = "NEWBIE_STAFF_01";
 
 const EQUIP_SLOT_MAIN_HAND: &str = "MAIN_HAND";
 const EQUIP_SLOT_OFF_HAND: &str = "OFF_HAND";
+#[cfg(test)]
 const WEAPON_KIND_TWO_HAND_SWORD: &str = "TWO_HAND_SWORD";
+#[cfg(test)]
 const WEAPON_KIND_ONE_HAND_SWORD: &str = "ONE_HAND_SWORD";
+#[cfg(test)]
 const WEAPON_KIND_TWO_HAND_AXE: &str = "TWO_HAND_AXE";
+#[cfg(test)]
 const WEAPON_KIND_ONE_HAND_AXE: &str = "ONE_HAND_AXE";
+#[cfg(test)]
 const WEAPON_KIND_TWO_HAND_HAMMER: &str = "TWO_HAND_HAMMER";
+#[cfg(test)]
 const WEAPON_KIND_ONE_HAND_HAMMER: &str = "ONE_HAND_HAMMER";
+#[cfg(test)]
 const WEAPON_KIND_ONE_HAND_FIST: &str = "ONE_HAND_FIST";
+#[cfg(test)]
 const WEAPON_KIND_POLEARM: &str = "POLEARM";
+#[cfg(test)]
 const WEAPON_KIND_SHIELD: &str = "SHIELD";
+#[cfg(test)]
 const WEAPON_KIND_DAGGER_PAIR: &str = "DAGGER_PAIR";
+#[cfg(test)]
 const WEAPON_KIND_BOW: &str = "BOW";
+#[cfg(test)]
 const WEAPON_KIND_STAFF: &str = "STAFF";
+#[cfg(test)]
 const HAND_REQUIREMENT_ONE_HAND: &str = "ONE_HAND";
+#[cfg(test)]
 const HAND_REQUIREMENT_TWO_HAND: &str = "TWO_HAND";
+#[cfg(test)]
 const HAND_REQUIREMENT_OFF_HAND: &str = "OFF_HAND";
 
 const PROGRESSION_CATALOG_JSON: &str =
@@ -137,30 +131,16 @@ pub struct HubPlayer {
     pub updated_at: Timestamp,
 }
 
-/// Legacy UI/armor compatibility state. The canonical combat-build writer and
-/// ticket handoff do not read or write its discipline, ability, or weapon
-/// fields. Armor remains separately scoped here until the later client/final
-/// cutover, and new callers receive a row so the current armor UI still works.
-#[table(accessor = hub_player_loadout)]
+/// Durable armor selection, intentionally independent from the canonical
+/// combat-build aggregate.
+#[table(accessor = hub_player_armor_selection)]
 #[derive(Clone)]
-pub struct HubPlayerLoadout {
+pub struct HubPlayerArmorSelection {
     #[primary_key]
     pub owner: Identity,
-    pub primary_discipline_id: String,
-    pub secondary_discipline_id_1: String,
-    pub secondary_discipline_id_2: String,
-    pub selected_ability_ids: Vec<String>,
     pub armor_set_id: String,
     pub revision: u64,
     pub updated_at: Timestamp,
-    #[default(None::<String>)]
-    pub main_hand_item_def_id: Option<String>,
-    #[default(None::<String>)]
-    pub off_hand_item_def_id: Option<String>,
-    #[default(None::<String>)]
-    pub main_hand_color_id: Option<String>,
-    #[default(None::<String>)]
-    pub off_hand_color_id: Option<String>,
 }
 
 /// Canonical durable combat-build root. Child rows hold every selected and
@@ -243,32 +223,6 @@ struct HubCatalogState {
     revision: u64,
 }
 
-/// Data-preserving schema tombstone for Hub rows created before the canonical
-/// combat-build handoff. No reducer inserts or reads this table. Phase 7 removes
-/// it with the explicitly destructive final schema cutover.
-#[table(accessor = match_player_loadout_snapshot)]
-pub struct MatchPlayerLoadoutSnapshot {
-    #[primary_key]
-    pub ticket_id: String,
-    #[index(btree)]
-    pub player_identity: Identity,
-    pub primary_discipline_id: String,
-    pub secondary_discipline_id_1: String,
-    pub secondary_discipline_id_2: String,
-    pub selected_ability_ids: Vec<String>,
-    pub armor_set_id: String,
-    pub loadout_revision: u64,
-    pub captured_at: Timestamp,
-    #[default(None::<String>)]
-    pub main_hand_item_def_id: Option<String>,
-    #[default(None::<String>)]
-    pub off_hand_item_def_id: Option<String>,
-    #[default(None::<String>)]
-    pub main_hand_color_id: Option<String>,
-    #[default(None::<String>)]
-    pub off_hand_color_id: Option<String>,
-}
-
 /// One exact canonical combat-build revision frozen at ticket creation. The
 /// provisioner transports `combat_build_snapshot_json` without interpreting
 /// it; the disposable module parses and revalidates the shared typed contract.
@@ -285,37 +239,7 @@ pub struct MatchPlayerCombatBuildSnapshot {
     pub captured_at: Timestamp,
 }
 
-/// Display-only Hub copy of the source-controlled combat catalog. Match
-/// databases remain authoritative for combat behavior and tuning.
-#[table(accessor = hub_combat_discipline_definition, public)]
-#[derive(Clone, PartialEq)]
-pub struct HubCombatDisciplineDefinition {
-    #[primary_key]
-    pub discipline_id: String,
-    pub discipline_kind: String,
-    pub combat_profile_id: String,
-    pub display_name: String,
-    pub sort_order: u32,
-}
-
-#[table(accessor = hub_ability_definition, public)]
-#[derive(Clone, PartialEq)]
-pub struct HubAbilityDefinition {
-    #[primary_key]
-    pub ability_id: String,
-    #[index(btree)]
-    pub discipline_id: String,
-    pub display_name: String,
-    pub resource_kind: String,
-    pub resource_cost: f32,
-    pub ability_tags: String,
-    pub description: String,
-    pub sort_order: u32,
-}
-
 /// Canonical, display-only combat-build catalog consumed by the Hub editor.
-/// These additive tables deliberately coexist with the legacy display catalog
-/// until the separately approved destructive cleanup phase.
 #[table(accessor = hub_combat_build_contract_definition, public)]
 #[derive(Clone, PartialEq)]
 pub struct HubCombatBuildContractDefinition {
@@ -398,7 +322,7 @@ pub struct HubWeaponDefinition {
     pub hand_requirement: String,
     pub equip_slot: String,
     #[index(btree)]
-    pub primary_discipline_id: String,
+    pub combat_discipline_id: String,
     pub sort_order: u32,
 }
 
@@ -485,21 +409,11 @@ pub struct MyHubPlayer {
     pub updated_at: Timestamp,
 }
 
-/// Legacy caller-only projection retained for the current UI and separately
-/// scoped armor selection. It is not a match-handoff or canonical combat-build
-/// reader.
+/// Caller-only projection of the independently durable armor selection.
 #[derive(SpacetimeType)]
-pub struct MyHubLoadout {
+pub struct MyHubArmorSelection {
     pub owner: Identity,
-    pub primary_discipline_id: String,
-    pub secondary_discipline_id_1: String,
-    pub secondary_discipline_id_2: String,
-    pub selected_ability_ids: Vec<String>,
     pub armor_set_id: String,
-    pub main_hand_item_def_id: String,
-    pub off_hand_item_def_id: String,
-    pub main_hand_color_id: String,
-    pub off_hand_color_id: String,
     pub revision: u64,
     pub updated_at: Timestamp,
 }
@@ -594,25 +508,17 @@ pub fn my_hub_player(ctx: &ViewContext) -> Option<MyHubPlayer> {
         })
 }
 
-#[view(accessor = my_hub_loadout, public)]
-pub fn my_hub_loadout(ctx: &ViewContext) -> Option<MyHubLoadout> {
+#[view(accessor = my_hub_armor_selection, public)]
+pub fn my_hub_armor_selection(ctx: &ViewContext) -> Option<MyHubArmorSelection> {
     ctx.db
-        .hub_player_loadout()
+        .hub_player_armor_selection()
         .owner()
         .find(ctx.sender())
-        .map(|loadout| MyHubLoadout {
-            owner: loadout.owner,
-            primary_discipline_id: loadout.primary_discipline_id,
-            secondary_discipline_id_1: loadout.secondary_discipline_id_1,
-            secondary_discipline_id_2: loadout.secondary_discipline_id_2,
-            selected_ability_ids: loadout.selected_ability_ids,
-            armor_set_id: loadout.armor_set_id,
-            main_hand_item_def_id: loadout.main_hand_item_def_id.unwrap_or_default(),
-            off_hand_item_def_id: loadout.off_hand_item_def_id.unwrap_or_default(),
-            main_hand_color_id: loadout.main_hand_color_id.unwrap_or_default(),
-            off_hand_color_id: loadout.off_hand_color_id.unwrap_or_default(),
-            revision: loadout.revision,
-            updated_at: loadout.updated_at,
+        .map(|selection| MyHubArmorSelection {
+            owner: selection.owner,
+            armor_set_id: selection.armor_set_id,
+            revision: selection.revision,
+            updated_at: selection.updated_at,
         })
 }
 
@@ -798,7 +704,7 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     // Reconcile display-only authored data after data-preserving publishes,
     // whose existing databases do not rerun init.
     ensure_hub_loadout_catalogs(ctx)?;
-    ensure_default_hub_player_loadout(ctx, ctx.sender())?;
+    ensure_default_hub_player_armor_selection(ctx, ctx.sender())?;
     ensure_default_combat_build(ctx, ctx.sender())?;
     Ok(())
 }
@@ -839,45 +745,21 @@ pub fn save_hub_armor_set(ctx: &ReducerContext, armor_set_id: String) -> Result<
     {
         return Err(format!("unknown armor set '{armor_set_id}'"));
     }
-    let existing = ctx.db.hub_player_loadout().owner().find(ctx.sender());
-    let row = HubPlayerLoadout {
+    let existing = ctx
+        .db
+        .hub_player_armor_selection()
+        .owner()
+        .find(ctx.sender());
+    let row = HubPlayerArmorSelection {
         owner: ctx.sender(),
-        primary_discipline_id: existing
-            .as_ref()
-            .map(|loadout| loadout.primary_discipline_id.clone())
-            .unwrap_or_default(),
-        secondary_discipline_id_1: existing
-            .as_ref()
-            .map(|loadout| loadout.secondary_discipline_id_1.clone())
-            .unwrap_or_default(),
-        secondary_discipline_id_2: existing
-            .as_ref()
-            .map(|loadout| loadout.secondary_discipline_id_2.clone())
-            .unwrap_or_default(),
-        selected_ability_ids: existing
-            .as_ref()
-            .map(|loadout| loadout.selected_ability_ids.clone())
-            .unwrap_or_default(),
         armor_set_id,
-        main_hand_item_def_id: existing
-            .as_ref()
-            .and_then(|loadout| loadout.main_hand_item_def_id.clone()),
-        off_hand_item_def_id: existing
-            .as_ref()
-            .and_then(|loadout| loadout.off_hand_item_def_id.clone()),
-        main_hand_color_id: existing
-            .as_ref()
-            .and_then(|loadout| loadout.main_hand_color_id.clone()),
-        off_hand_color_id: existing
-            .as_ref()
-            .and_then(|loadout| loadout.off_hand_color_id.clone()),
         revision: next_loadout_revision(existing.as_ref().map(|loadout| loadout.revision)),
         updated_at: ctx.timestamp,
     };
     if existing.is_some() {
-        ctx.db.hub_player_loadout().owner().update(row);
+        ctx.db.hub_player_armor_selection().owner().update(row);
     } else {
-        ctx.db.hub_player_loadout().insert(row);
+        ctx.db.hub_player_armor_selection().insert(row);
     }
     Ok(())
 }
@@ -891,7 +773,7 @@ pub fn request_unranked_2v2_bot_match(
     let player_identity = ctx.sender();
     ensure_hub_player(ctx, player_identity);
     ensure_hub_loadout_catalogs(ctx)?;
-    ensure_default_hub_player_loadout(ctx, player_identity)?;
+    ensure_default_hub_player_armor_selection(ctx, player_identity)?;
     ensure_default_combat_build(ctx, player_identity)?;
 
     if let Some(existing) = ctx
@@ -957,7 +839,7 @@ pub fn request_open_world_instance(
     let player_identity = ctx.sender();
     ensure_hub_player(ctx, player_identity);
     ensure_hub_loadout_catalogs(ctx)?;
-    ensure_default_hub_player_loadout(ctx, player_identity)?;
+    ensure_default_hub_player_armor_selection(ctx, player_identity)?;
     ensure_default_combat_build(ctx, player_identity)?;
 
     if let Some(existing) = ctx
@@ -1332,7 +1214,6 @@ pub fn hub_maintenance_tick(
 #[derive(Deserialize)]
 struct HubProgressionCatalogFile {
     combat_build_contract: HubCombatBuildContractAuthoring,
-    combat_disciplines: Vec<HubDisciplineAuthoring>,
     abilities: Vec<HubAbilityAuthoring>,
     #[serde(default)]
     action_presentations: Vec<HubActionPresentationAuthoring>,
@@ -1373,20 +1254,9 @@ struct HubCombatBuildRulesAuthoring {
 }
 
 #[derive(Deserialize)]
-struct HubDisciplineAuthoring {
-    discipline_id: String,
-    discipline_kind: String,
-    combat_profile_id: String,
-    display_name: String,
-    sort_order: u32,
-}
-
-#[derive(Deserialize)]
 struct HubAbilityAuthoring {
     ability_id: String,
     actor_scope: String,
-    #[serde(default)]
-    discipline_id: String,
     selection_kind: String,
     combat_discipline_id: Option<String>,
     spell_school_id: Option<String>,
@@ -1394,8 +1264,6 @@ struct HubAbilityAuthoring {
     resource_kind: String,
     #[serde(default)]
     resource_cost: f32,
-    #[serde(default)]
-    ability_tags: Vec<String>,
     sort_order: u32,
 }
 
@@ -1429,7 +1297,6 @@ struct HubWeaponFamilyAuthoring {
     weapon_kind: String,
     hand_requirement: String,
     equip_slot: String,
-    primary_discipline_id: String,
     combat_discipline_id: String,
     sort_order: u32,
     default_color_id: String,
@@ -1669,117 +1536,6 @@ fn sync_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
 
     sync_canonical_combat_build_catalogs(ctx, &authored, &weapon_catalog, &descriptions)?;
 
-    let discipline_rows: Vec<HubCombatDisciplineDefinition> = authored
-        .combat_disciplines
-        .into_iter()
-        .map(|discipline| HubCombatDisciplineDefinition {
-            discipline_id: normalize_authored_id(discipline.discipline_id.as_str()),
-            discipline_kind: normalize_authored_id(discipline.discipline_kind.as_str()),
-            combat_profile_id: normalize_authored_id(discipline.combat_profile_id.as_str()),
-            display_name: discipline.display_name.trim().to_string(),
-            sort_order: discipline.sort_order,
-        })
-        .collect();
-    let discipline_ids: HashSet<String> = discipline_rows
-        .iter()
-        .map(|row| row.discipline_id.clone())
-        .collect();
-    for row in discipline_rows {
-        match ctx
-            .db
-            .hub_combat_discipline_definition()
-            .discipline_id()
-            .find(row.discipline_id.clone())
-        {
-            Some(existing) if existing == row => {}
-            Some(_) => {
-                ctx.db
-                    .hub_combat_discipline_definition()
-                    .discipline_id()
-                    .update(row);
-            }
-            None => {
-                ctx.db.hub_combat_discipline_definition().insert(row);
-            }
-        }
-    }
-    let stale_discipline_ids: Vec<String> = ctx
-        .db
-        .hub_combat_discipline_definition()
-        .iter()
-        .map(|row| row.discipline_id)
-        .filter(|id| !discipline_ids.contains(id))
-        .collect();
-    for id in stale_discipline_ids {
-        ctx.db
-            .hub_combat_discipline_definition()
-            .discipline_id()
-            .delete(id);
-    }
-
-    let ability_rows: Vec<HubAbilityDefinition> = authored
-        .abilities
-        .into_iter()
-        .filter(|ability| normalize_authored_id(ability.actor_scope.as_str()) == "PLAYER")
-        .filter(|ability| {
-            ability.ability_tags.iter().any(|tag| {
-                matches!(
-                    normalize_authored_id(tag.as_str()).as_str(),
-                    "ACTION_BAR_ACTION" | "PASSIVE"
-                )
-            })
-        })
-        .map(|ability| {
-            let ability_id = normalize_authored_id(ability.ability_id.as_str());
-            HubAbilityDefinition {
-                description: descriptions.get(&ability_id).cloned().unwrap_or_default(),
-                ability_id,
-                discipline_id: normalize_authored_id(ability.discipline_id.as_str()),
-                display_name: ability.display_name.trim().to_string(),
-                resource_kind: normalize_authored_id(ability.resource_kind.as_str()),
-                resource_cost: ability.resource_cost,
-                ability_tags: ability
-                    .ability_tags
-                    .into_iter()
-                    .map(|tag| normalize_authored_id(tag.as_str()))
-                    .collect::<Vec<_>>()
-                    .join(","),
-                sort_order: ability.sort_order,
-            }
-        })
-        .collect();
-    let ability_ids: HashSet<String> = ability_rows
-        .iter()
-        .map(|row| row.ability_id.clone())
-        .collect();
-    for row in ability_rows {
-        match ctx
-            .db
-            .hub_ability_definition()
-            .ability_id()
-            .find(row.ability_id.clone())
-        {
-            Some(existing) if existing == row => {}
-            Some(_) => {
-                ctx.db.hub_ability_definition().ability_id().update(row);
-            }
-            None => {
-                ctx.db.hub_ability_definition().insert(row);
-            }
-        }
-    }
-    let stale_ability_ids: Vec<String> = ctx
-        .db
-        .hub_ability_definition()
-        .iter()
-        .map(|row| row.ability_id)
-        .filter(|id| !ability_ids.contains(id))
-        .collect();
-    for id in stale_ability_ids {
-        ctx.db.hub_ability_definition().ability_id().delete(id);
-    }
-    reconcile_hub_player_loadouts_for_catalog(ctx);
-
     let armor_rows: Vec<HubArmorSetDefinition> = HUB_ARMOR_SET_SPECS
         .iter()
         .map(|spec| {
@@ -1842,7 +1598,7 @@ fn sync_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
             weapon_kind: normalize_authored_id(spec.weapon_kind.as_str()),
             hand_requirement: normalize_authored_id(spec.hand_requirement.as_str()),
             equip_slot: normalize_authored_id(spec.equip_slot.as_str()),
-            primary_discipline_id: normalize_authored_id(spec.primary_discipline_id.as_str()),
+            combat_discipline_id: normalize_authored_id(spec.combat_discipline_id.as_str()),
             sort_order: spec.sort_order,
         })
         .collect();
@@ -2163,7 +1919,7 @@ fn starter_weapon_projection(
         (left.sort_order, left.item_def_id.as_str())
             .cmp(&(right.sort_order, right.item_def_id.as_str()))
     });
-    let main_hand = if combat_discipline_id == COMBAT_PROFILE_STAFF {
+    let main_hand = if combat_discipline_id == "STAFF" {
         main_hands
             .iter()
             .copied()
@@ -2245,19 +2001,6 @@ fn parse_weapon_appearance_catalog() -> Result<HubWeaponAppearanceCatalogFile, S
     Ok(catalog)
 }
 
-fn discipline_uses_staff(discipline_id: &str) -> bool {
-    let normalized = normalize_authored_id(discipline_id);
-    serde_json::from_str::<HubProgressionCatalogFile>(PROGRESSION_CATALOG_JSON)
-        .map(|catalog| {
-            catalog.combat_disciplines.iter().any(|discipline| {
-                normalize_authored_id(discipline.discipline_id.as_str()) == normalized
-                    && normalize_authored_id(discipline.combat_profile_id.as_str())
-                        == COMBAT_PROFILE_STAFF
-            })
-        })
-        .unwrap_or(false)
-}
-
 fn weapon_color_key(item_def_id: &str, color_id: &str) -> String {
     format!(
         "{}:{}",
@@ -2266,15 +2009,16 @@ fn weapon_color_key(item_def_id: &str, color_id: &str) -> String {
     )
 }
 
+#[cfg(test)]
 fn weapon_spec_contract_is_valid(spec: &HubWeaponFamilyAuthoring) -> bool {
-    match normalize_authored_id(spec.primary_discipline_id.as_str()).as_str() {
-        DISCIPLINE_SUBTLETY => {
+    match normalize_authored_id(spec.combat_discipline_id.as_str()).as_str() {
+        "DAGGERS" => {
             normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND
                 && normalize_authored_id(spec.weapon_kind.as_str()) == WEAPON_KIND_DAGGER_PAIR
                 && normalize_authored_id(spec.hand_requirement.as_str())
                     == HAND_REQUIREMENT_TWO_HAND
         }
-        DISCIPLINE_WAR => {
+        "TWO_HANDED_SWORD" => {
             normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND
                 && matches!(
                     normalize_authored_id(spec.weapon_kind.as_str()).as_str(),
@@ -2286,7 +2030,7 @@ fn weapon_spec_contract_is_valid(spec: &HubWeaponFamilyAuthoring) -> bool {
                 && normalize_authored_id(spec.hand_requirement.as_str())
                     == HAND_REQUIREMENT_TWO_HAND
         }
-        DISCIPLINE_ZEAL => match normalize_authored_id(spec.equip_slot.as_str()).as_str() {
+        "SWORD_AND_SHIELD" => match normalize_authored_id(spec.equip_slot.as_str()).as_str() {
             EQUIP_SLOT_MAIN_HAND => {
                 matches!(
                     normalize_authored_id(spec.weapon_kind.as_str()).as_str(),
@@ -2304,13 +2048,13 @@ fn weapon_spec_contract_is_valid(spec: &HubWeaponFamilyAuthoring) -> bool {
             }
             _ => false,
         },
-        DISCIPLINE_PRECISION => {
+        "ARCHER_BOW" => {
             normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND
                 && normalize_authored_id(spec.weapon_kind.as_str()) == WEAPON_KIND_BOW
                 && normalize_authored_id(spec.hand_requirement.as_str())
                     == HAND_REQUIREMENT_TWO_HAND
         }
-        DISCIPLINE_ARCANA => {
+        "STAFF" => {
             normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND
                 && normalize_authored_id(spec.weapon_kind.as_str()) == WEAPON_KIND_STAFF
                 && normalize_authored_id(spec.hand_requirement.as_str())
@@ -2318,262 +2062,6 @@ fn weapon_spec_contract_is_valid(spec: &HubWeaponFamilyAuthoring) -> bool {
         }
         _ => false,
     }
-}
-
-fn weapon_spec_supports_primary(
-    spec: &HubWeaponFamilyAuthoring,
-    primary_discipline_id: &str,
-    primary_uses_staff: bool,
-) -> bool {
-    let authored_primary = normalize_authored_id(spec.primary_discipline_id.as_str());
-    authored_primary == primary_discipline_id
-        || (primary_uses_staff
-            && authored_primary == DISCIPLINE_ARCANA
-            && normalize_authored_id(spec.weapon_kind.as_str()) == WEAPON_KIND_STAFF)
-}
-
-fn weapon_spec(item_def_id: &str) -> Option<HubWeaponFamilyAuthoring> {
-    let normalized = normalize_authored_id(item_def_id);
-    parse_weapon_appearance_catalog()
-        .ok()?
-        .families
-        .into_iter()
-        .find(|spec| normalize_authored_id(spec.item_def_id.as_str()) == normalized)
-}
-
-fn validated_color_id(spec: &HubWeaponFamilyAuthoring, color_id: &str) -> Result<String, String> {
-    let normalized = normalize_authored_id(color_id);
-    if spec
-        .variants
-        .iter()
-        .any(|variant| normalize_authored_id(variant.color_id.as_str()) == normalized)
-    {
-        Ok(normalized)
-    } else {
-        Err(format!(
-            "weapon '{}' does not have color '{}'",
-            spec.item_def_id, normalized
-        ))
-    }
-}
-
-fn default_weapon_loadout(primary_discipline_id: &str) -> (String, String, String, String) {
-    let primary = normalize_authored_id(primary_discipline_id);
-    let primary_uses_staff = discipline_uses_staff(primary.as_str());
-    let catalog = parse_weapon_appearance_catalog().ok();
-    let main_hand = catalog.as_ref().and_then(|catalog| {
-        let eligible = |spec: &&HubWeaponFamilyAuthoring| {
-            weapon_spec_supports_primary(spec, primary.as_str(), primary_uses_staff)
-                && normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_MAIN_HAND
-                && weapon_spec_contract_is_valid(spec)
-        };
-        if primary_uses_staff {
-            catalog
-                .families
-                .iter()
-                .find(|spec| {
-                    eligible(spec)
-                        && normalize_authored_id(spec.item_def_id.as_str())
-                            == DEFAULT_STAFF_ITEM_DEF_ID
-                })
-                .or_else(|| catalog.families.iter().find(eligible))
-        } else {
-            catalog.families.iter().find(eligible)
-        }
-    });
-    let off_hand = catalog
-        .as_ref()
-        .into_iter()
-        .flat_map(|catalog| catalog.families.iter())
-        .find(|spec| {
-            weapon_spec_supports_primary(spec, primary.as_str(), primary_uses_staff)
-                && normalize_authored_id(spec.equip_slot.as_str()) == EQUIP_SLOT_OFF_HAND
-                && weapon_spec_contract_is_valid(spec)
-        });
-    (
-        main_hand
-            .map(|spec| normalize_authored_id(spec.item_def_id.as_str()))
-            .unwrap_or_default(),
-        main_hand
-            .map(|spec| normalize_authored_id(spec.default_color_id.as_str()))
-            .unwrap_or_default(),
-        off_hand
-            .map(|spec| normalize_authored_id(spec.item_def_id.as_str()))
-            .unwrap_or_default(),
-        off_hand
-            .map(|spec| normalize_authored_id(spec.default_color_id.as_str()))
-            .unwrap_or_default(),
-    )
-}
-
-fn validate_hub_weapon_loadout(
-    primary_discipline_id: &str,
-    main_hand_item_def_id: &str,
-    main_hand_color_id: &str,
-    off_hand_item_def_id: &str,
-    off_hand_color_id: &str,
-) -> Result<(String, String, String, String), String> {
-    let primary = normalize_authored_id(primary_discipline_id);
-    let primary_uses_staff = discipline_uses_staff(primary.as_str());
-    let main_hand = normalize_authored_id(main_hand_item_def_id);
-    let off_hand = normalize_authored_id(off_hand_item_def_id);
-    if !primary_uses_staff
-        && !matches!(
-            primary.as_str(),
-            DISCIPLINE_SUBTLETY | DISCIPLINE_WAR | DISCIPLINE_ZEAL | DISCIPLINE_PRECISION
-        )
-    {
-        return Err(format!(
-            "primary discipline '{primary}' does not support a weapon loadout"
-        ));
-    }
-
-    let main_spec = weapon_spec(main_hand.as_str())
-        .ok_or_else(|| format!("unknown selectable weapon '{main_hand}'"))?;
-    if !weapon_spec_supports_primary(&main_spec, primary.as_str(), primary_uses_staff)
-        || normalize_authored_id(main_spec.equip_slot.as_str()) != EQUIP_SLOT_MAIN_HAND
-        || !weapon_spec_contract_is_valid(&main_spec)
-    {
-        return Err(format!(
-            "weapon '{}' is not allowed for primary discipline '{}'",
-            main_spec.item_def_id, primary
-        ));
-    }
-    let main_color = validated_color_id(&main_spec, main_hand_color_id)?;
-
-    if primary == DISCIPLINE_ZEAL {
-        let off_spec = weapon_spec(off_hand.as_str())
-            .ok_or_else(|| "Zeal requires an authored shield".to_string())?;
-        if normalize_authored_id(off_spec.primary_discipline_id.as_str()) != primary
-            || normalize_authored_id(off_spec.equip_slot.as_str()) != EQUIP_SLOT_OFF_HAND
-            || !weapon_spec_contract_is_valid(&off_spec)
-        {
-            return Err(format!(
-                "off-hand weapon '{}' is not an allowed Zeal shield",
-                off_spec.item_def_id
-            ));
-        }
-        let off_color = validated_color_id(&off_spec, off_hand_color_id)?;
-        return Ok((main_hand, main_color, off_hand, off_color));
-    } else if !off_hand.is_empty() {
-        return Err(format!(
-            "primary discipline '{primary}' cannot equip an off-hand weapon"
-        ));
-    } else if !normalize_authored_id(off_hand_color_id).is_empty() {
-        return Err(format!(
-            "primary discipline '{primary}' cannot select an off-hand color"
-        ));
-    }
-
-    Ok((main_hand, main_color, String::new(), String::new()))
-}
-
-fn validate_hub_discipline_loadout(
-    ctx: &ReducerContext,
-    primary_discipline_id: String,
-    secondary_discipline_id_1: String,
-    secondary_discipline_id_2: String,
-    selected_ability_ids: Vec<String>,
-) -> Result<(String, String, String, Vec<String>), String> {
-    let primary = normalize_authored_id(primary_discipline_id.as_str());
-    let secondary_1 = normalize_authored_id(secondary_discipline_id_1.as_str());
-    let secondary_2 = normalize_authored_id(secondary_discipline_id_2.as_str());
-    if primary.is_empty()
-        || ctx
-            .db
-            .hub_combat_discipline_definition()
-            .discipline_id()
-            .find(primary.clone())
-            .is_none()
-    {
-        return Err("a known primary combat discipline is required".to_string());
-    }
-    for secondary in [&secondary_1, &secondary_2] {
-        if !secondary.is_empty()
-            && ctx
-                .db
-                .hub_combat_discipline_definition()
-                .discipline_id()
-                .find(secondary.clone())
-                .is_none()
-        {
-            return Err(format!("unknown secondary combat discipline '{secondary}'"));
-        }
-    }
-    if secondary_1 == primary || secondary_2 == primary {
-        return Err("the primary combat discipline cannot also be secondary".to_string());
-    }
-    if !secondary_1.is_empty() && secondary_1 == secondary_2 {
-        return Err("secondary combat disciplines must be unique".to_string());
-    }
-    if selected_ability_ids.len() > MAX_DISCIPLINE_LOADOUT_ABILITIES {
-        return Err(format!(
-            "discipline loadout may contain at most {MAX_DISCIPLINE_LOADOUT_ABILITIES} abilities"
-        ));
-    }
-
-    let selected_disciplines: HashSet<&str> =
-        [primary.as_str(), secondary_1.as_str(), secondary_2.as_str()]
-            .into_iter()
-            .filter(|id| !id.is_empty())
-            .collect();
-    let mut seen = HashSet::new();
-    let mut abilities = Vec::new();
-    let mut counts: HashMap<String, usize> = HashMap::new();
-    for ability_id in selected_ability_ids {
-        let ability_id = normalize_authored_id(ability_id.as_str());
-        if ability_id.is_empty() || !seen.insert(ability_id.clone()) {
-            continue;
-        }
-        let ability = ctx
-            .db
-            .hub_ability_definition()
-            .ability_id()
-            .find(ability_id.clone())
-            .ok_or_else(|| format!("unknown ability '{ability_id}'"))?;
-        if !selected_disciplines.contains(ability.discipline_id.as_str()) {
-            return Err(format!(
-                "ability '{}' does not belong to a selected discipline",
-                ability.ability_id
-            ));
-        }
-        if !ability_tags_allow_discipline_selection(ability.ability_tags.as_str()) {
-            return Err(format!(
-                "ability '{}' cannot be selected for a discipline loadout",
-                ability.ability_id
-            ));
-        }
-        *counts.entry(ability.discipline_id).or_default() += 1;
-        abilities.push(ability_id);
-    }
-    if counts.get(&primary).copied().unwrap_or_default() < PRIMARY_DISCIPLINE_ABILITY_MINIMUM {
-        return Err(format!(
-            "primary discipline requires at least {PRIMARY_DISCIPLINE_ABILITY_MINIMUM} selected abilities"
-        ));
-    }
-    for secondary in [&secondary_1, &secondary_2] {
-        if !secondary.is_empty()
-            && counts.get(secondary).copied().unwrap_or_default()
-                < SECONDARY_DISCIPLINE_ABILITY_MINIMUM
-        {
-            return Err(format!(
-                "secondary discipline '{secondary}' requires at least {SECONDARY_DISCIPLINE_ABILITY_MINIMUM} selected ability"
-            ));
-        }
-    }
-    Ok((primary, secondary_1, secondary_2, abilities))
-}
-
-fn ability_tags_allow_discipline_selection(ability_tags: &str) -> bool {
-    ability_tags_contain(ability_tags, "ACTION_BAR_ACTION")
-        || ability_tags_contain(ability_tags, "PASSIVE")
-}
-
-fn ability_tags_contain(ability_tags: &str, expected_tag: &str) -> bool {
-    let expected_tag = normalize_authored_id(expected_tag);
-    ability_tags
-        .split(',')
-        .any(|tag| normalize_authored_id(tag) == expected_tag)
 }
 
 fn next_loadout_revision(current: Option<u64>) -> u64 {
@@ -2594,7 +2082,7 @@ fn freeze_player_combat_build_for_ticket(
         .map_err(|error| format!("COMBAT_BUILD_SNAPSHOT_SERIALIZATION_FAILED: {error}"))?;
     let armor_set_id = ctx
         .db
-        .hub_player_loadout()
+        .hub_player_armor_selection()
         .owner()
         .find(player_identity)
         .map(|row| row.armor_set_id)
@@ -2618,12 +2106,6 @@ fn freeze_player_combat_build_for_ticket(
 fn delete_loadout_snapshot_for_ticket(ctx: &ReducerContext, ticket_id: &str) {
     ctx.db
         .match_player_combat_build_snapshot()
-        .ticket_id()
-        .delete(ticket_id.to_string());
-    // Old terminal tickets may still own a pre-cutover tombstone row. Deleting
-    // it is cleanup only; no request or provisioner path can create/read one.
-    ctx.db
-        .match_player_loadout_snapshot()
         .ticket_id()
         .delete(ticket_id.to_string());
 }
@@ -3005,23 +2487,19 @@ fn combat_build_key(owner: Identity, parts: &[&str]) -> String {
     key
 }
 
-fn ensure_default_hub_player_loadout(
+fn ensure_default_hub_player_armor_selection(
     ctx: &ReducerContext,
     identity: Identity,
 ) -> Result<(), String> {
-    if ctx.db.hub_player_loadout().owner().find(identity).is_some() {
+    if ctx
+        .db
+        .hub_player_armor_selection()
+        .owner()
+        .find(identity)
+        .is_some()
+    {
         return Ok(());
     }
-
-    let selected_ability_ids = default_hub_selected_ability_ids()?;
-    let (primary, secondary_1, secondary_2, selected_ability_ids) =
-        validate_hub_discipline_loadout(
-            ctx,
-            DEFAULT_HUB_PRIMARY_DISCIPLINE.to_string(),
-            DEFAULT_HUB_SECONDARY_DISCIPLINE_1.to_string(),
-            DEFAULT_HUB_SECONDARY_DISCIPLINE_2.to_string(),
-            selected_ability_ids,
-        )?;
     if ctx
         .db
         .hub_armor_set_definition()
@@ -3034,281 +2512,15 @@ fn ensure_default_hub_player_loadout(
         ));
     }
 
-    let (main_hand, main_color, off_hand, off_hand_color) =
-        default_weapon_loadout(primary.as_str());
-    let (main_hand, main_color, off_hand, off_hand_color) = validate_hub_weapon_loadout(
-        primary.as_str(),
-        main_hand.as_str(),
-        main_color.as_str(),
-        off_hand.as_str(),
-        off_hand_color.as_str(),
-    )?;
-    ctx.db.hub_player_loadout().insert(HubPlayerLoadout {
-        owner: identity,
-        primary_discipline_id: primary,
-        secondary_discipline_id_1: secondary_1,
-        secondary_discipline_id_2: secondary_2,
-        selected_ability_ids,
-        armor_set_id: DEFAULT_HUB_ARMOR_SET.to_string(),
-        main_hand_item_def_id: Some(main_hand),
-        off_hand_item_def_id: Some(off_hand),
-        main_hand_color_id: Some(main_color),
-        off_hand_color_id: Some(off_hand_color),
-        revision: next_loadout_revision(None),
-        updated_at: ctx.timestamp,
-    });
+    ctx.db
+        .hub_player_armor_selection()
+        .insert(HubPlayerArmorSelection {
+            owner: identity,
+            armor_set_id: DEFAULT_HUB_ARMOR_SET.to_string(),
+            revision: next_loadout_revision(None),
+            updated_at: ctx.timestamp,
+        });
     Ok(())
-}
-
-fn default_hub_selected_ability_ids() -> Result<Vec<String>, String> {
-    let authored: HubProgressionCatalogFile = serde_json::from_str(PROGRESSION_CATALOG_JSON)
-        .map_err(|error| format!("Hub progression catalog is invalid: {error}"))?;
-    let mut abilities = authored.abilities;
-    abilities.sort_by_key(|ability| {
-        (
-            ability.sort_order,
-            normalize_authored_id(ability.ability_id.as_str()),
-        )
-    });
-
-    let requirements = [
-        (
-            DEFAULT_HUB_PRIMARY_DISCIPLINE,
-            PRIMARY_DISCIPLINE_ABILITY_MINIMUM,
-        ),
-        (
-            DEFAULT_HUB_SECONDARY_DISCIPLINE_1,
-            SECONDARY_DISCIPLINE_ABILITY_MINIMUM,
-        ),
-        (
-            DEFAULT_HUB_SECONDARY_DISCIPLINE_2,
-            SECONDARY_DISCIPLINE_ABILITY_MINIMUM,
-        ),
-    ];
-    let mut selected = Vec::new();
-    for (discipline_id, minimum) in requirements {
-        let available: Vec<String> = abilities
-            .iter()
-            .filter(|ability| {
-                normalize_authored_id(ability.actor_scope.as_str()) == "PLAYER"
-                    && normalize_authored_id(ability.discipline_id.as_str()) == discipline_id
-                    && authored_ability_has_tag(ability, "ACTION_BAR_ACTION")
-                    && !authored_ability_has_tag(ability, "PASSIVE")
-            })
-            .map(|ability| normalize_authored_id(ability.ability_id.as_str()))
-            .collect();
-        if available.len() < minimum {
-            return Err(format!(
-                "default Hub discipline '{discipline_id}' requires {minimum} active abilities but only {} are authored",
-                available.len()
-            ));
-        }
-        selected.extend(available.into_iter().take(minimum));
-    }
-    Ok(selected)
-}
-
-fn authored_ability_has_tag(ability: &HubAbilityAuthoring, expected_tag: &str) -> bool {
-    ability
-        .ability_tags
-        .iter()
-        .any(|tag| normalize_authored_id(tag.as_str()) == expected_tag)
-}
-
-fn reconcile_restructured_spell_school_disciplines(
-    selected_ability_ids: &[String],
-    primary_discipline_id: &str,
-    secondary_discipline_id_1: &str,
-    secondary_discipline_id_2: &str,
-    ability_rows: &[HubAbilityDefinition],
-) -> (String, String, String) {
-    let ability_by_id: HashMap<&str, &HubAbilityDefinition> = ability_rows
-        .iter()
-        .map(|ability| (ability.ability_id.as_str(), ability))
-        .collect();
-    let mut selected_counts: HashMap<String, usize> = HashMap::new();
-    for selected_id in selected_ability_ids {
-        let selected_id = normalize_authored_id(selected_id);
-        let Some(ability) = ability_by_id.get(selected_id.as_str()) else {
-            continue;
-        };
-        if ability_tags_allow_discipline_selection(ability.ability_tags.as_str()) {
-            *selected_counts
-                .entry(ability.discipline_id.clone())
-                .or_default() += 1;
-        }
-    }
-
-    let mut disciplines = [
-        normalize_authored_id(primary_discipline_id),
-        normalize_authored_id(secondary_discipline_id_1),
-        normalize_authored_id(secondary_discipline_id_2),
-    ];
-
-    let mortality_count = selected_counts
-        .get(DISCIPLINE_MORTALITY)
-        .copied()
-        .unwrap_or_default();
-    if mortality_count > 0 && !disciplines.iter().any(|id| id == DISCIPLINE_MORTALITY) {
-        if let Some(index) = disciplines.iter().position(|id| id == DISCIPLINE_BLIGHT) {
-            disciplines[index] = DISCIPLINE_MORTALITY.to_string();
-        }
-    }
-
-    let blight_count = selected_counts
-        .get(DISCIPLINE_BLIGHT)
-        .copied()
-        .unwrap_or_default();
-    let ruin_count = selected_counts
-        .get(DISCIPLINE_RUIN)
-        .copied()
-        .unwrap_or_default();
-    if blight_count > 0
-        && !disciplines.iter().any(|id| id == DISCIPLINE_BLIGHT)
-        && disciplines.iter().any(|id| id == DISCIPLINE_RUIN)
-    {
-        if ruin_count == 0 {
-            if let Some(index) = disciplines.iter().position(|id| id == DISCIPLINE_RUIN) {
-                disciplines[index] = DISCIPLINE_BLIGHT.to_string();
-            }
-        } else if let Some(index) =
-            (1..disciplines.len()).find(|index| disciplines[*index].is_empty())
-        {
-            disciplines[index] = DISCIPLINE_BLIGHT.to_string();
-        } else if blight_count > ruin_count {
-            if let Some(index) = disciplines.iter().position(|id| id == DISCIPLINE_RUIN) {
-                disciplines[index] = DISCIPLINE_BLIGHT.to_string();
-            }
-        }
-    }
-
-    (
-        disciplines[0].clone(),
-        disciplines[1].clone(),
-        disciplines[2].clone(),
-    )
-}
-
-fn reconcile_selected_ability_ids(
-    selected_ability_ids: &[String],
-    primary_discipline_id: &str,
-    secondary_discipline_id_1: &str,
-    secondary_discipline_id_2: &str,
-    ability_rows: &[HubAbilityDefinition],
-) -> Vec<String> {
-    let selected_disciplines: HashSet<String> = [
-        primary_discipline_id,
-        secondary_discipline_id_1,
-        secondary_discipline_id_2,
-    ]
-    .into_iter()
-    .map(normalize_authored_id)
-    .filter(|discipline_id| !discipline_id.is_empty())
-    .collect();
-    let ability_by_id: HashMap<&str, &HubAbilityDefinition> = ability_rows
-        .iter()
-        .map(|ability| (ability.ability_id.as_str(), ability))
-        .collect();
-    let mut reconciled = Vec::new();
-    let mut counts: HashMap<String, usize> = HashMap::new();
-
-    for selected_id in selected_ability_ids {
-        let selected_id = normalize_authored_id(selected_id.as_str());
-        let Some(ability) = ability_by_id.get(selected_id.as_str()).copied() else {
-            continue;
-        };
-        if !selected_disciplines.contains(ability.discipline_id.as_str())
-            || !ability_tags_allow_discipline_selection(ability.ability_tags.as_str())
-            || reconciled.contains(&ability.ability_id)
-        {
-            continue;
-        }
-        *counts.entry(ability.discipline_id.clone()).or_default() += 1;
-        reconciled.push(ability.ability_id.clone());
-    }
-
-    let mut ordered_active_abilities: Vec<&HubAbilityDefinition> = ability_rows
-        .iter()
-        .filter(|ability| ability_tags_contain(ability.ability_tags.as_str(), "ACTION_BAR_ACTION"))
-        .collect();
-    ordered_active_abilities
-        .sort_by_key(|ability| (ability.sort_order, ability.ability_id.as_str()));
-
-    for (discipline_id, minimum) in [
-        (
-            normalize_authored_id(primary_discipline_id),
-            PRIMARY_DISCIPLINE_ABILITY_MINIMUM,
-        ),
-        (
-            normalize_authored_id(secondary_discipline_id_1),
-            SECONDARY_DISCIPLINE_ABILITY_MINIMUM,
-        ),
-        (
-            normalize_authored_id(secondary_discipline_id_2),
-            SECONDARY_DISCIPLINE_ABILITY_MINIMUM,
-        ),
-    ] {
-        if discipline_id.is_empty() {
-            continue;
-        }
-        for ability in ordered_active_abilities
-            .iter()
-            .copied()
-            .filter(|ability| ability.discipline_id == discipline_id)
-        {
-            if counts.get(&discipline_id).copied().unwrap_or_default() >= minimum
-                || reconciled.len() >= MAX_DISCIPLINE_LOADOUT_ABILITIES
-            {
-                break;
-            }
-            if reconciled.contains(&ability.ability_id) {
-                continue;
-            }
-            reconciled.push(ability.ability_id.clone());
-            *counts.entry(discipline_id.clone()).or_default() += 1;
-        }
-    }
-
-    reconciled
-}
-
-fn reconcile_hub_player_loadouts_for_catalog(ctx: &ReducerContext) {
-    let ability_rows: Vec<HubAbilityDefinition> = ctx.db.hub_ability_definition().iter().collect();
-    let loadouts: Vec<HubPlayerLoadout> = ctx.db.hub_player_loadout().iter().collect();
-    for mut loadout in loadouts {
-        let (primary, secondary_1, secondary_2) = reconcile_restructured_spell_school_disciplines(
-            loadout.selected_ability_ids.as_slice(),
-            loadout.primary_discipline_id.as_str(),
-            loadout.secondary_discipline_id_1.as_str(),
-            loadout.secondary_discipline_id_2.as_str(),
-            ability_rows.as_slice(),
-        );
-        let reconciled = reconcile_selected_ability_ids(
-            loadout.selected_ability_ids.as_slice(),
-            primary.as_str(),
-            secondary_1.as_str(),
-            secondary_2.as_str(),
-            ability_rows.as_slice(),
-        );
-        if primary == loadout.primary_discipline_id
-            && secondary_1 == loadout.secondary_discipline_id_1
-            && secondary_2 == loadout.secondary_discipline_id_2
-            && reconciled == loadout.selected_ability_ids
-        {
-            continue;
-        }
-        log::info!(
-            "[HUB_CATALOG] Reconciled saved disciplines and abilities for {} after catalog revision",
-            &loadout.owner.to_hex()[..8]
-        );
-        loadout.primary_discipline_id = primary;
-        loadout.secondary_discipline_id_1 = secondary_1;
-        loadout.secondary_discipline_id_2 = secondary_2;
-        loadout.selected_ability_ids = reconciled;
-        loadout.revision = next_loadout_revision(Some(loadout.revision));
-        loadout.updated_at = ctx.timestamp;
-        ctx.db.hub_player_loadout().owner().update(loadout);
-    }
 }
 
 fn bump_provisioner_wakeup(ctx: &ReducerContext) {
@@ -3586,34 +2798,10 @@ mod tests {
     }
 
     #[test]
-    fn default_hub_loadout_matches_the_existing_ui_starter_selection() {
-        assert_eq!(
-            default_hub_selected_ability_ids().expect("canonical Hub starter abilities"),
-            [
-                "WARRIOR_GROUND_TO_AIR_PLACEHOLDER",
-                "WARRIOR_HEW",
-                "WARRIOR_MAIM",
-                "WARRIOR_CRUSHING_BLOW",
-                "WARRIOR_CATACLYSM",
-                "WARRIOR_BUZZSAW",
-                "WARRIOR_WHIRLWIND",
-                "WARRIOR_SUNDER",
-                "DAGGER_QUICK_CUT",
-                "SPELL_FIREBALL",
-            ]
-        );
+    fn default_hub_armor_selection_is_authored() {
         assert!(HUB_ARMOR_SET_SPECS
             .iter()
             .any(|spec| spec.armor_set_id == DEFAULT_HUB_ARMOR_SET));
-        assert_eq!(
-            default_weapon_loadout(DEFAULT_HUB_PRIMARY_DISCIPLINE),
-            (
-                "TRAINING_TWO_HAND_SWORD".to_string(),
-                "DEFAULT".to_string(),
-                String::new(),
-                String::new(),
-            )
-        );
     }
 
     #[test]
@@ -3662,7 +2850,7 @@ mod tests {
     }
 
     #[test]
-    fn hub_weapon_catalog_is_unique_and_enforces_primary_discipline_rules() {
+    fn hub_weapon_catalog_is_unique_and_enforces_canonical_discipline_rules() {
         let catalog = parse_weapon_appearance_catalog().expect("shared weapon appearance catalog");
         let ids: HashSet<&str> = catalog
             .families
@@ -3699,48 +2887,21 @@ mod tests {
             assert!(ids.contains(legacy_id), "missing legacy weapon {legacy_id}");
         }
         assert!(catalog.families.iter().all(weapon_spec_contract_is_valid));
-
-        for primary in [
-            DISCIPLINE_SUBTLETY,
-            DISCIPLINE_WAR,
-            DISCIPLINE_ZEAL,
-            DISCIPLINE_PRECISION,
-            DISCIPLINE_BLIGHT,
-            DISCIPLINE_MORTALITY,
-            DISCIPLINE_RUIN,
-            DISCIPLINE_DIVINITY,
-            DISCIPLINE_ARCANA,
-            DISCIPLINE_PRIMAL,
-        ] {
-            let (main_hand, main_color, off_hand, off_color) = default_weapon_loadout(primary);
-            assert!(validate_hub_weapon_loadout(
-                primary,
-                &main_hand,
-                &main_color,
-                &off_hand,
-                &off_color
-            )
-            .is_ok());
-        }
-
-        for primary in [
-            DISCIPLINE_BLIGHT,
-            DISCIPLINE_MORTALITY,
-            DISCIPLINE_RUIN,
-            DISCIPLINE_DIVINITY,
-            DISCIPLINE_ARCANA,
-            DISCIPLINE_PRIMAL,
-        ] {
-            assert_eq!(
-                default_weapon_loadout(primary),
-                (
-                    "NEWBIE_STAFF_01".to_string(),
-                    "DEFAULT".to_string(),
-                    String::new(),
-                    String::new(),
-                )
-            );
-        }
+        let canonical_ids: HashSet<_> = catalog
+            .families
+            .iter()
+            .map(|family| family.combat_discipline_id.as_str())
+            .collect();
+        assert_eq!(
+            canonical_ids,
+            HashSet::from([
+                "DAGGERS",
+                "TWO_HANDED_SWORD",
+                "SWORD_AND_SHIELD",
+                "ARCHER_BOW",
+                "STAFF",
+            ])
+        );
 
         let staff_specs: Vec<_> = catalog
             .families
@@ -3755,38 +2916,9 @@ mod tests {
                 .sum::<usize>(),
             38
         );
-        for staff in staff_specs {
-            for variant in &staff.variants {
-                assert!(validate_hub_weapon_loadout(
-                    DISCIPLINE_BLIGHT,
-                    staff.item_def_id.as_str(),
-                    variant.color_id.as_str(),
-                    "",
-                    ""
-                )
-                .is_ok());
-            }
-        }
-
-        assert!(
-            validate_hub_weapon_loadout(DISCIPLINE_WAR, "NH_BOW_FANTASY_01", "BL", "", "").is_err()
-        );
-        assert!(validate_hub_weapon_loadout(
-            DISCIPLINE_WAR,
-            "NH_SWORD_2H_FANTASY_01",
-            "NOT_A_COLOR",
-            "",
-            ""
-        )
-        .is_err());
-        assert!(validate_hub_weapon_loadout(
-            DISCIPLINE_SUBTLETY,
-            "NH_DAGGER_1H_FANTASY_01",
-            "BL",
-            "NH_SHIELD_FANTASY_01",
-            "BL"
-        )
-        .is_err());
+        assert!(staff_specs
+            .iter()
+            .all(|staff| staff.combat_discipline_id == "STAFF"));
     }
 
     #[test]
@@ -3839,193 +2971,16 @@ mod tests {
                 && ability.combat_discipline_id.as_deref() == Some("DAGGERS")
                 && ability.spell_school_id.is_none()
         }));
-        assert!(!authored.combat_disciplines.is_empty());
-        assert!(authored
-            .combat_disciplines
-            .iter()
-            .any(|discipline| discipline.discipline_id == DISCIPLINE_MORTALITY));
-        for discipline_id in [
-            DISCIPLINE_BLIGHT,
-            DISCIPLINE_MORTALITY,
-            DISCIPLINE_RUIN,
-            DISCIPLINE_DIVINITY,
-            DISCIPLINE_ARCANA,
-            DISCIPLINE_PRIMAL,
-        ] {
-            let discipline = authored
-                .combat_disciplines
-                .iter()
-                .find(|discipline| discipline.discipline_id == discipline_id)
-                .expect("magical discipline must be authored");
-            assert_eq!(discipline.combat_profile_id, COMBAT_PROFILE_STAFF);
-        }
         assert!(authored.abilities.iter().any(|ability| {
             ability.ability_id == "SPELL_NECROTIC_AURA"
-                && ability.discipline_id == DISCIPLINE_MORTALITY
+                && ability.combat_discipline_id.as_deref() == Some("STAFF")
+                && ability.spell_school_id.as_deref() == Some("MORTALITY")
         }));
         assert!(authored.abilities.iter().any(|ability| {
-            ability.ability_id == "SPELL_ICICLE" && ability.discipline_id == DISCIPLINE_BLIGHT
+            ability.ability_id == "SPELL_ICICLE"
+                && ability.combat_discipline_id.as_deref() == Some("STAFF")
+                && ability.spell_school_id.as_deref() == Some("BLIGHT")
         }));
-        assert!(authored.abilities.iter().any(|ability| {
-            ability.actor_scope == "PLAYER"
-                && ability
-                    .ability_tags
-                    .iter()
-                    .any(|tag| tag == "ACTION_BAR_ACTION")
-        }));
-    }
-
-    #[test]
-    fn discipline_loadout_selection_accepts_active_and_passive_abilities() {
-        assert!(ability_tags_allow_discipline_selection("ACTION_BAR_ACTION"));
-        assert!(ability_tags_allow_discipline_selection("PASSIVE"));
-        assert!(ability_tags_allow_discipline_selection(
-            "ACTION_BAR_ACTION,PASSIVE"
-        ));
-        assert!(!ability_tags_allow_discipline_selection("INTERNAL_ONLY"));
-    }
-
-    #[test]
-    fn catalog_reconciliation_drops_stale_or_misowned_abilities_and_restores_minimums() {
-        let mut abilities: Vec<HubAbilityDefinition> = (1..=8)
-            .map(|index| HubAbilityDefinition {
-                ability_id: format!("SUBTLETY_{index}"),
-                discipline_id: DISCIPLINE_SUBTLETY.to_string(),
-                display_name: format!("Subtlety {index}"),
-                resource_kind: "STAMINA".to_string(),
-                resource_cost: 0.0,
-                ability_tags: "ACTION_BAR_ACTION".to_string(),
-                description: String::new(),
-                sort_order: index,
-            })
-            .collect();
-        abilities.push(HubAbilityDefinition {
-            ability_id: "BLIGHT_ACTION".to_string(),
-            discipline_id: "BLIGHT".to_string(),
-            display_name: "Blight Action".to_string(),
-            resource_kind: "MANA".to_string(),
-            resource_cost: 0.0,
-            ability_tags: "ACTION_BAR_ACTION".to_string(),
-            description: String::new(),
-            sort_order: 1,
-        });
-        let selected = [
-            "SUBTLETY_1",
-            "SUBTLETY_2",
-            "SUBTLETY_3",
-            "SUBTLETY_4",
-            "SUBTLETY_5",
-            "SUBTLETY_6",
-            "SUBTLETY_7",
-            "REMOVED_ACTION",
-            "BLIGHT_ACTION",
-        ]
-        .into_iter()
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-
-        assert_eq!(
-            reconcile_selected_ability_ids(
-                selected.as_slice(),
-                DISCIPLINE_SUBTLETY,
-                "BLIGHT",
-                "",
-                abilities.as_slice(),
-            ),
-            [
-                "SUBTLETY_1",
-                "SUBTLETY_2",
-                "SUBTLETY_3",
-                "SUBTLETY_4",
-                "SUBTLETY_5",
-                "SUBTLETY_6",
-                "SUBTLETY_7",
-                "BLIGHT_ACTION",
-                "SUBTLETY_8",
-            ]
-        );
-        assert_eq!(
-            reconcile_selected_ability_ids(
-                selected.as_slice(),
-                DISCIPLINE_SUBTLETY,
-                "",
-                "",
-                abilities.as_slice(),
-            ),
-            [
-                "SUBTLETY_1",
-                "SUBTLETY_2",
-                "SUBTLETY_3",
-                "SUBTLETY_4",
-                "SUBTLETY_5",
-                "SUBTLETY_6",
-                "SUBTLETY_7",
-                "SUBTLETY_8",
-            ]
-        );
-    }
-
-    #[test]
-    fn catalog_reconciliation_migrates_restructured_spell_school_slots() {
-        let ability = |ability_id: &str, discipline_id: &str| HubAbilityDefinition {
-            ability_id: ability_id.to_string(),
-            discipline_id: discipline_id.to_string(),
-            display_name: ability_id.to_string(),
-            resource_kind: "MANA".to_string(),
-            resource_cost: 0.0,
-            ability_tags: "ACTION_BAR_ACTION".to_string(),
-            description: String::new(),
-            sort_order: 1,
-        };
-        let abilities = [
-            ability("NECROTIC_AURA", DISCIPLINE_MORTALITY),
-            ability("ICICLE", DISCIPLINE_BLIGHT),
-            ability("FIREBALL", DISCIPLINE_RUIN),
-            ability("FROST_NOVA", DISCIPLINE_BLIGHT),
-        ];
-
-        assert_eq!(
-            reconcile_restructured_spell_school_disciplines(
-                &["NECROTIC_AURA".to_string(), "ICICLE".to_string()],
-                DISCIPLINE_BLIGHT,
-                DISCIPLINE_RUIN,
-                "",
-                &abilities,
-            ),
-            (
-                DISCIPLINE_MORTALITY.to_string(),
-                DISCIPLINE_BLIGHT.to_string(),
-                String::new(),
-            )
-        );
-        assert_eq!(
-            reconcile_restructured_spell_school_disciplines(
-                &["ICICLE".to_string()],
-                DISCIPLINE_RUIN,
-                "",
-                "",
-                &abilities,
-            ),
-            (DISCIPLINE_BLIGHT.to_string(), String::new(), String::new(),)
-        );
-        assert_eq!(
-            reconcile_restructured_spell_school_disciplines(
-                &[
-                    "ICICLE".to_string(),
-                    "FROST_NOVA".to_string(),
-                    "FIREBALL".to_string(),
-                ],
-                DISCIPLINE_RUIN,
-                DISCIPLINE_SUBTLETY,
-                DISCIPLINE_WAR,
-                &abilities,
-            ),
-            (
-                DISCIPLINE_BLIGHT.to_string(),
-                DISCIPLINE_SUBTLETY.to_string(),
-                DISCIPLINE_WAR.to_string(),
-            )
-        );
     }
 
     #[test]

@@ -56,10 +56,9 @@ canonical prompt.
   `server/src/progression_catalog.shared.json`; do not rely on a copied list in
   this document.
 - For the **J → Spells** section specifically, select `abilities` whose
-  `combat_profile_id` is empty, whose `gameplay.kind` is `SPELL`, and whose
-  `ability_tags` contain `ACTION_BAR_ACTION`. Use each row's `ability_id` for
-  the filename and its display name/gameplay meaning to choose the single icon
-  subject.
+  `actor_scope` is `PLAYER` or `BOTH`, whose `selection_kind` is `ACTIVE`, and
+  whose `gameplay.kind` is `SPELL`. Use each row's `ability_id` for the filename
+  and its display name/gameplay meaning to choose the single icon subject.
 - Generate each distinct ability with a separate image-generation call. Add
   only a concise subject description to the canonical prompt; do not introduce
   a second style prompt or batch multiple icons into one image.

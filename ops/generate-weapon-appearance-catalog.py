@@ -35,13 +35,12 @@ COLOR_SPECS = {
 COLOR_ORDER = ("Default", "Cl", "Bk", "Bl", "Br", "Cn", "Gn", "Go", "Gr", "Or", "Pe", "Rd", "Wh", "Ye")
 COLOR_SORT = {color_id: index for index, color_id in enumerate(COLOR_ORDER)}
 
-DISCIPLINE_ORDER = {"SUBTLETY": 0, "WAR": 1, "ZEAL": 2, "PRECISION": 3, "ARCANA": 4}
-CANONICAL_DISCIPLINE_BY_LEGACY = {
-    "SUBTLETY": "DAGGERS",
-    "WAR": "TWO_HANDED_SWORD",
-    "ZEAL": "SWORD_AND_SHIELD",
-    "PRECISION": "ARCHER_BOW",
-    "ARCANA": "STAFF",
+DISCIPLINE_ORDER = {
+    "DAGGERS": 0,
+    "TWO_HANDED_SWORD": 1,
+    "SWORD_AND_SHIELD": 2,
+    "ARCHER_BOW": 3,
+    "STAFF": 4,
 }
 KIND_ORDER = {
     "DAGGER_PAIR": 0,
@@ -115,7 +114,7 @@ TRAINING_FAMILIES = (
         "placement_profile_id": LEGACY_PLACEMENT_PROFILE,
         "hand_requirement": "TWO_HAND",
         "equip_slot": "MAIN_HAND",
-        "primary_discipline_id": "SUBTLETY",
+        "combat_discipline_id": "DAGGERS",
         "sort_order": 0,
         "default_color_id": "DEFAULT",
         "variants": [{
@@ -132,7 +131,7 @@ TRAINING_FAMILIES = (
         "placement_profile_id": LEGACY_PLACEMENT_PROFILE,
         "hand_requirement": "TWO_HAND",
         "equip_slot": "MAIN_HAND",
-        "primary_discipline_id": "WAR",
+        "combat_discipline_id": "TWO_HANDED_SWORD",
         "sort_order": 0,
         "default_color_id": "DEFAULT",
         "variants": [{
@@ -148,7 +147,7 @@ TRAINING_FAMILIES = (
         "placement_profile_id": LEGACY_PLACEMENT_PROFILE,
         "hand_requirement": "ONE_HAND",
         "equip_slot": "MAIN_HAND",
-        "primary_discipline_id": "ZEAL",
+        "combat_discipline_id": "SWORD_AND_SHIELD",
         "sort_order": 0,
         "default_color_id": "DEFAULT",
         "variants": [{
@@ -164,7 +163,7 @@ TRAINING_FAMILIES = (
         "placement_profile_id": LEGACY_PLACEMENT_PROFILE,
         "hand_requirement": "OFF_HAND",
         "equip_slot": "OFF_HAND",
-        "primary_discipline_id": "ZEAL",
+        "combat_discipline_id": "SWORD_AND_SHIELD",
         "sort_order": 0,
         "default_color_id": "DEFAULT",
         "variants": [{
@@ -180,7 +179,7 @@ TRAINING_FAMILIES = (
         "placement_profile_id": LEGACY_PLACEMENT_PROFILE,
         "hand_requirement": "TWO_HAND",
         "equip_slot": "MAIN_HAND",
-        "primary_discipline_id": "PRECISION",
+        "combat_discipline_id": "ARCHER_BOW",
         "sort_order": 0,
         "default_color_id": "DEFAULT",
         "variants": [{
@@ -199,7 +198,7 @@ TRAINING_FAMILIES = (
         "placement_profile_id": LEGACY_PLACEMENT_PROFILE,
         "hand_requirement": "TWO_HAND",
         "equip_slot": "MAIN_HAND",
-        "primary_discipline_id": "ARCANA",
+        "combat_discipline_id": "STAFF",
         "sort_order": 0,
         "default_color_id": "DEFAULT",
         "variants": [{
@@ -219,41 +218,30 @@ def weapon_contract(stem: str) -> tuple[str, str, str, str] | None:
     if "_Off_" in stem:
         return None
     if stem.startswith("Dagger_1H_"):
-        return "SUBTLETY", "DAGGER_PAIR", "TWO_HAND", "MAIN_HAND"
+        return "DAGGERS", "DAGGER_PAIR", "TWO_HAND", "MAIN_HAND"
     if stem.startswith(("Axe_2H_", "Axe_2HL_")):
-        return "WAR", "TWO_HAND_AXE", "TWO_HAND", "MAIN_HAND"
+        return "TWO_HANDED_SWORD", "TWO_HAND_AXE", "TWO_HAND", "MAIN_HAND"
     if stem.startswith("Sword_2H_"):
-        return "WAR", "TWO_HAND_SWORD", "TWO_HAND", "MAIN_HAND"
+        return "TWO_HANDED_SWORD", "TWO_HAND_SWORD", "TWO_HAND", "MAIN_HAND"
     if stem.startswith("Hammer_2H_"):
-        return "WAR", "TWO_HAND_HAMMER", "TWO_HAND", "MAIN_HAND"
+        return "TWO_HANDED_SWORD", "TWO_HAND_HAMMER", "TWO_HAND", "MAIN_HAND"
     if stem.startswith("Polearm_"):
-        return "WAR", "POLEARM", "TWO_HAND", "MAIN_HAND"
+        return "TWO_HANDED_SWORD", "POLEARM", "TWO_HAND", "MAIN_HAND"
     if stem.startswith("Axe_1H_"):
-        return "ZEAL", "ONE_HAND_AXE", "ONE_HAND", "MAIN_HAND"
+        return "SWORD_AND_SHIELD", "ONE_HAND_AXE", "ONE_HAND", "MAIN_HAND"
     if stem.startswith("Sword_1H_"):
-        return "ZEAL", "ONE_HAND_SWORD", "ONE_HAND", "MAIN_HAND"
+        return "SWORD_AND_SHIELD", "ONE_HAND_SWORD", "ONE_HAND", "MAIN_HAND"
     if stem.startswith("Hammer_1H_"):
-        return "ZEAL", "ONE_HAND_HAMMER", "ONE_HAND", "MAIN_HAND"
+        return "SWORD_AND_SHIELD", "ONE_HAND_HAMMER", "ONE_HAND", "MAIN_HAND"
     if stem.startswith("Fist_1H_"):
-        return "ZEAL", "ONE_HAND_FIST", "ONE_HAND", "MAIN_HAND"
+        return "SWORD_AND_SHIELD", "ONE_HAND_FIST", "ONE_HAND", "MAIN_HAND"
     if stem.startswith("Shield_"):
-        return "ZEAL", "SHIELD", "OFF_HAND", "OFF_HAND"
+        return "SWORD_AND_SHIELD", "SHIELD", "OFF_HAND", "OFF_HAND"
     if stem.startswith("Bow_"):
-        return "PRECISION", "BOW", "TWO_HAND", "MAIN_HAND"
+        return "ARCHER_BOW", "BOW", "TWO_HAND", "MAIN_HAND"
     if stem.startswith("Staff_"):
-        return "ARCANA", "STAFF", "TWO_HAND", "MAIN_HAND"
+        return "STAFF", "STAFF", "TWO_HAND", "MAIN_HAND"
     return None
-
-
-def with_canonical_discipline(family: dict[str, object]) -> dict[str, object]:
-    canonical_family: dict[str, object] = {}
-    for key, value in family.items():
-        canonical_family[key] = value
-        if key == "primary_discipline_id":
-            canonical_family["combat_discipline_id"] = CANONICAL_DISCIPLINE_BY_LEGACY[
-                str(value)
-            ]
-    return canonical_family
 
 
 def roman(value: int) -> str:
@@ -355,7 +343,7 @@ def build_catalog() -> dict[str, object]:
                 "placement_profile_id": NHANCE_PLACEMENT_PROFILE,
                 "hand_requirement": hand_requirement,
                 "equip_slot": equip_slot,
-                "primary_discipline_id": discipline_id,
+                "combat_discipline_id": discipline_id,
                 "sort_order": sort_order,
                 "default_color_id": default_variant["color_id"],
                 "variants": variants,
@@ -371,7 +359,6 @@ def build_catalog() -> dict[str, object]:
     # Keep established weapons first as the deterministic fallback for existing
     # players whose older loadout has no appearance selection yet.
     families[0:0] = TRAINING_FAMILIES
-    families = [with_canonical_discipline(family) for family in families]
     family_ids = {str(family["item_def_id"]) for family in families}
     if len(family_ids) != len(families):
         raise SystemExit("Weapon appearance catalog contains duplicate item definition ids")

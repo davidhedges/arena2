@@ -244,13 +244,13 @@ namespace Arena.Editor
                 if (!IsSelectableAbility(ability, actionBarDefaultAbilityIds))
                     continue;
 
-                string combatProfileId = WireIdentifier.Normalize(ability.combat_profile_id);
-                if (string.IsNullOrWhiteSpace(combatProfileId))
+                string combatDisciplineId = WireIdentifier.Normalize(ability.combat_discipline_id);
+                if (string.IsNullOrWhiteSpace(combatDisciplineId))
                     continue;
 
-                if (!animationSetByProfile.TryGetValue(combatProfileId, out CombatAnimationSet animationSet))
+                if (!animationSetByProfile.TryGetValue(combatDisciplineId, out CombatAnimationSet animationSet))
                 {
-                    errors.Add($"spell ability '{abilityId}' requires combat profile '{combatProfileId}', but no CombatAnimationSet asset resolves for that profile.");
+                    errors.Add($"spell ability '{abilityId}' requires combat discipline '{combatDisciplineId}', but no CombatAnimationSet asset resolves for that discipline.");
                     continue;
                 }
 
@@ -1453,7 +1453,7 @@ namespace Arena.Editor
         private sealed class AbilityDefinition
         {
             public string ability_id = string.Empty;
-            public string combat_profile_id = string.Empty;
+            public string combat_discipline_id = string.Empty;
             public string action_id = string.Empty;
             public List<string> ability_tags = new();
             public GameplayDefinition gameplay = new();

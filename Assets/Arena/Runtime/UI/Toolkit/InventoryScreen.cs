@@ -731,8 +731,6 @@ namespace Arena.UI
                 return;
             }
 
-            if (evt.button == 0 && element.userData is ItemRef itemRef && IsSpellbook(itemRef.Definition))
-                SpellbookPanel.Open(itemRef.ItemInstanceId, itemRef.Definition?.DisplayName ?? "Spellbook");
         }
 
         private void OnSlotPointerUp(VisualElement slot, PointerUpEvent evt)
@@ -753,8 +751,6 @@ namespace Arena.UI
                 return;
             }
 
-            if (evt.button == 0 && state.HasItem && IsSpellbook(state.Definition))
-                SpellbookPanel.Open(state.ItemInstanceId, state.Definition?.DisplayName ?? "Spellbook");
         }
 
         private void CancelDrag()
@@ -1116,7 +1112,6 @@ namespace Arena.UI
                     parts.Add("Unique-equipped");
             }
 
-            AppendSpellbookTooltipParts(conn, item.ItemInstanceId, parts);
             return string.Join("\n", parts);
         }
 
@@ -1172,42 +1167,13 @@ namespace Arena.UI
             }
         }
 
-        private static void AppendSpellbookTooltipParts(DbConnection? conn, string itemInstanceId, List<string> parts)
-        {
-            if (conn == null || string.IsNullOrWhiteSpace(itemInstanceId))
-                return;
-
-            List<ItemSpell> spells = new();
-            foreach (ItemSpell spell in conn.Db.ItemSpell.ItemInstanceId.Filter(itemInstanceId))
-                spells.Add(spell);
-            if (spells.Count == 0)
-                return;
-
-            spells.Sort((left, right) =>
-            {
-                int sort = left.SlotIndex.CompareTo(right.SlotIndex);
-                return sort != 0 ? sort : string.Compare(left.Key, right.Key, StringComparison.Ordinal);
-            });
-
-            parts.Add($"Spells: {spells.Count}");
-            foreach (ItemSpell spell in spells)
-            {
-                string spellId = WireIdentifier.Normalize(spell.SpellId);
-                if (string.IsNullOrWhiteSpace(spellId))
-                    continue;
-
-                string displayName = ActionPresentation.ResolveDisplayName(conn, conn.Identity, spellId, spellId);
-                parts.Add($"- {displayName}");
-            }
-        }
-
         private static string BuildCellFootnote(string context, ItemDefinition? definition)
         {
             if (string.Equals(context, "Loot", StringComparison.Ordinal))
                 return "Right-click to take";
 
             if (IsSpellbook(definition))
-                return "Left-click to open - Right-click to equip";
+                return "Right-click to equip";
 
             if (IsConsumable(definition))
                 return "Right-click to consume";

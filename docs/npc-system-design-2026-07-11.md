@@ -86,7 +86,7 @@ The original imported-package rollout was implemented in coherent slices through
 - `dotnet build Assembly-CSharp.csproj`: succeeds with 0 errors and existing warnings in third-party/current Unity code.
 - `dotnet build Assembly-CSharp-Editor.csproj`: succeeds with 0 errors and existing warnings after a full rebuild.
 - All 27 Fab profile manifests pass idempotent generator dry runs. Static validation proves one-to-one coverage across 125 new profiles, their deterministic profile/prefab GUID references, every template melee action mapping, the 329-row Unity catalog, and the server's 329 visual IDs.
-- `ops/npc-support-decision-probe.py`: passed against fresh isolated database `npcinterruptprobe`. At full health the Lich applied Bone Ward to a 125/125 Kobold; after one real player auto-attack reduced it to 103/125, Lich Mend raised it to 121/125. The Skeleton Wizard then applied Frostbite's shared slow and selected Ice Lock only during an authoritative player Icicle cast; Ice Lock's shared stun impact caused the existing crowd-control lifecycle to emit the Icicle `COMBAT_FIZZLE`.
+- The historical pre-cutover NPC support-decision probe passed against fresh isolated database `npcinterruptprobe`. That harness was retired during the combat-build cutover. At full health the Lich applied Bone Ward to a 125/125 Kobold; after one real player auto-attack reduced it to 103/125, Lich Mend raised it to 121/125. The Skeleton Wizard then applied Frostbite's shared slow and selected Ice Lock only during an authoritative player Icicle cast; Ice Lock's shared stun impact caused the existing crowd-control lifecycle to emit the Icicle `COMBAT_FIZZLE`.
 - Static catalog and planner coverage pins Frostbite's `SLOW` payload, Ice Lock's `STUN` payload, deterministic Wizard action order, and the inspector's `TARGET_CASTING` rejection.
 - Shared Kobold telegraph parity remains covered through the actor-generic pending-melee path; the legacy single-attack kobold abilities were replaced in active kits by the complete stance-specific authored sets.
 - Two-client mixed-exemplar acceptance: passed after the shared melee migration against isolated database `npcmixedprobe`. The observer materialized four NPCs owned by the separate websocket client; Kobold entered `Combat_1H_Attack`, Archer entered `attack`, Wizard entered `SpellCast`, and Lich entered `SpellA`. All four emitted CAST/IMPACT, Archer and Wizard emitted RELEASE plus projectile RELEASE/IMPACT, three shared projectile visuals started, four shared VFX instances spawned, and no projectile/VFX template was missing.
@@ -323,11 +323,15 @@ VFX stays entirely in the existing cue catalog and dispatcher. NPC casts use the
 
 An action kit is the explicit list of actions the NPC may choose. Each entry references an action authored in the same combat/progression system used by players. NPC-only attacks and spells are still normal authored combat actions; they are not implemented in `npcs.rs` as special effect code.
 
-That reuse requires an explicit ability-catalog migration; it is not free. The current schema is partly actor-neutral—generic spells may already have an empty `combat_profile_id`, `ability_tags` are optional, and practice actors reuse spell definitions—but player melee authorization still depends on combat profiles/action-bar assignments and the current content is overwhelmingly tagged for the action bar.
+That reuse requires an explicit ability-catalog migration; it is not free. The
+current catalog is actor-scoped, and practice actors reuse spell definitions,
+but player authorization comes only from the active discipline's frozen exact
+assignments while NPC authorization comes from NPC action kits.
 
 Add a first-class `actor_scope` such as `PLAYER`, `NPC`, or `BOTH`, then validate by scope:
 
-- player-available actions follow the current combat-profile, spellbook, equipment, and action-bar authorization rules
+- player-available actions require an exact assignment in the current frozen
+  combat discipline (or an explicit intrinsic path)
 - NPC-available actions must be granted by an NPC action kit
 - profile-less NPC melee actions are legal and resolve directly by ability ID after the executor is generalized
 - no NPC-only action needs a fake weapon loadout, action-bar slot, or `ACTION_BAR_ACTION` tag
@@ -523,7 +527,7 @@ Before threat selection lands:
 
 - add explicit harness control that can pin a fixture NPC's target or seed exact threat
 - expose the development decision/threat summary needed for SQL verification
-- migrate `ops/s7-lap-probe.py`, `ops/s8-lag-comp-probe.py`, and `ops/s9-auto-rewind-probe.py`
+- migrate `ops/s7-lap-probe.py`, `retired pre-cutover S8 lag-compensation harness`, and `retired pre-cutover S9 auto-rewind harness`
 - keep the existing attack-stop-range behavior available through authored movement/action range, not through a legacy production AI branch
 
 S4–S6 do not need a blanket NPC-AI migration: their core fixtures use player-like playground targets. Probe dependencies should be updated individually rather than preserving nearest-wins globally.

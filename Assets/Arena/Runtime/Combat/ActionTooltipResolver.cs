@@ -87,7 +87,7 @@ namespace Arena.Combat
                 ? WireIdentifier.Normalize(ability.ActionId)
                 : CombatActionIds.ResolveRuntimeActionId(
                     conn,
-                    CombatProfileResolver.ResolveForOwner(conn, owner),
+                    RuntimeCombatProfile.ResolveForOwner(conn, owner),
                     ability.ActionId);
 
             return ResolveForSelectableAction(

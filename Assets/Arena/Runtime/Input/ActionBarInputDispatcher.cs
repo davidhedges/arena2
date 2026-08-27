@@ -120,7 +120,7 @@ namespace Arena.Input
             if (!action.IsMeleeAbility || string.IsNullOrWhiteSpace(action.ActionId))
                 return false;
 
-            string combatProfile = CombatProfileResolver.ResolveForOwner(conn, conn.Identity);
+            string combatProfile = RuntimeCombatProfile.ResolveForOwner(conn, conn.Identity);
             MeleeDefinition? definition =
                 CombatActionIds.FindMeleeDefinition(conn, combatProfile, action.ActionId);
             if (definition == null || !definition.Holdable)
@@ -166,7 +166,7 @@ namespace Arena.Input
             {
                 if (!string.IsNullOrWhiteSpace(keyLabel))
                     ActionBarTrace.Trace($"{keyLabel} -> {slotId} discipline={action.ActionId}");
-                conn.Reducers.SetCombatDiscipline(action.ActionId);
+                conn.Reducers.ActivateCombatBuildDiscipline(action.ActionId);
                 return true;
             }
 
@@ -241,7 +241,7 @@ namespace Arena.Input
                 return false;
             }
 
-            string combatProfile = CombatProfileResolver.ResolveForEntity(conn, entity);
+            string combatProfile = RuntimeCombatProfile.ResolveForEntity(conn, entity);
             if (CombatActionIds.FindMeleeDefinition(conn, combatProfile, actionId) == null)
             {
                 ActionBarTrace.Diagnostic(
@@ -271,9 +271,9 @@ namespace Arena.Input
             string slotId)
         {
             SpacetimeDB.Identity? owner = conn.Identity;
-            string ownerProfile = CombatProfileResolver.ResolveForOwner(conn, owner);
-            ActiveCombatDiscipline? discipline = owner.HasValue
-                ? conn.Db.ActiveCombatDiscipline.Owner.Find(owner.Value)
+            string ownerProfile = RuntimeCombatProfile.ResolveForOwner(conn, owner);
+            ActiveCombatBuildDiscipline? discipline = owner.HasValue
+                ? conn.Db.ActiveCombatBuildDiscipline.Owner.Find(owner.Value)
                 : null;
             EquipmentLoadout? equipment = owner.HasValue
                 ? conn.Db.EquipmentLoadout.Owner.Find(owner.Value)
@@ -281,7 +281,7 @@ namespace Arena.Input
             AbilityCatalog? ability = string.IsNullOrWhiteSpace(action.AbilityId)
                 ? null
                 : conn.Db.AbilityCatalog.AbilityId.Find(action.AbilityId);
-            string abilityProfile = CombatProfileResolver.ResolveForAbility(conn, ability);
+            string abilityProfile = RuntimeCombatProfile.ResolveForAbility(conn, ability);
             MeleeDefinition? definition = action.IsMeleeAbility
                 ? CombatActionIds.FindMeleeDefinition(conn, ownerProfile, action.ActionId)
                 : null;
@@ -300,8 +300,7 @@ namespace Arena.Input
                 $"authored={action.AuthoredActionId} runtime={action.ActionId} " +
                 $"assigned={action.HasAssignedAction} available={action.IsAvailable} canTrigger={action.CanTrigger} " +
                 $"exactAssigned={action.HasAssignedAction} ownerProfile={ownerProfile} " +
-                $"activeDiscipline={discipline?.DisciplineId ?? "<missing>"} " +
-                $"activeProfile={discipline?.CombatProfileId ?? "<missing>"} " +
+                $"activeDiscipline={discipline?.CombatDisciplineId ?? "<missing>"} " +
                 $"abilityProfile={(string.IsNullOrWhiteSpace(abilityProfile) ? "<missing>" : abilityProfile)} " +
                 $"catalogAction={ability?.ActionId ?? "<missing>"} " +
                 $"mainHand={equipment?.MainHandItemId ?? "<missing>"} offHand={equipment?.OffHandItemId ?? "<missing>"} " +

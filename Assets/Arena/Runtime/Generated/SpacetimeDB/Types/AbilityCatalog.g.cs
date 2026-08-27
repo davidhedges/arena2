@@ -17,10 +17,12 @@ namespace SpacetimeDB.Types
         public string AbilityId;
         [DataMember(Name = "actor_scope")]
         public string ActorScope;
-        [DataMember(Name = "discipline_id")]
-        public string DisciplineId;
-        [DataMember(Name = "combat_profile_id")]
-        public string CombatProfileId;
+        [DataMember(Name = "combat_discipline_id")]
+        public string CombatDisciplineId;
+        [DataMember(Name = "spell_school_id")]
+        public string SpellSchoolId;
+        [DataMember(Name = "selection_kind")]
+        public string SelectionKind;
         [DataMember(Name = "ability_kind")]
         public string AbilityKind;
         [DataMember(Name = "action_id")]
@@ -39,8 +41,9 @@ namespace SpacetimeDB.Types
         public AbilityCatalog(
             string AbilityId,
             string ActorScope,
-            string DisciplineId,
-            string CombatProfileId,
+            string CombatDisciplineId,
+            string SpellSchoolId,
+            string SelectionKind,
             string AbilityKind,
             string ActionId,
             string DisplayName,
@@ -52,8 +55,9 @@ namespace SpacetimeDB.Types
         {
             this.AbilityId = AbilityId;
             this.ActorScope = ActorScope;
-            this.DisciplineId = DisciplineId;
-            this.CombatProfileId = CombatProfileId;
+            this.CombatDisciplineId = CombatDisciplineId;
+            this.SpellSchoolId = SpellSchoolId;
+            this.SelectionKind = SelectionKind;
             this.AbilityKind = AbilityKind;
             this.ActionId = ActionId;
             this.DisplayName = DisplayName;
@@ -67,8 +71,9 @@ namespace SpacetimeDB.Types
         {
             this.AbilityId = "";
             this.ActorScope = "";
-            this.DisciplineId = "";
-            this.CombatProfileId = "";
+            this.CombatDisciplineId = "";
+            this.SpellSchoolId = "";
+            this.SelectionKind = "";
             this.AbilityKind = "";
             this.ActionId = "";
             this.DisplayName = "";

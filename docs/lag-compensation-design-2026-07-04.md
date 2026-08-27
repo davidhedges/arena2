@@ -9,7 +9,7 @@ code today.
 
 **Status 2026-07-04 — DELIVERED, acceptance recorded, slice closed.**
 Rulings D1–D5 signed (§6) and the design implemented the same day; server
-half verified live by `ops/s8-lag-comp-probe.py` (all-green record runs).
+half verified live by `retired pre-cutover S8 lag-compensation harness` (all-green record runs).
 Owner shaped acceptance same day (+40/+40, OFF/ON legs): no feel regression
 with ON, and the analyzer confirmed the real client's wiring — 51 press-gate
 + 35 impact-recheck evaluations carried view reports with history-sourced
@@ -296,7 +296,7 @@ counts and flip rate by check and switch state, rewind_ms distribution,
 pose-source mix (history / barrier_clamp / active_sm / oldest_clamp),
 spell-overlay pose deltas.
 
-**Headless probe leg (server truth):** `ops/s8-lag-comp-probe.py`,
+**Headless probe leg (server truth):** `retired pre-cutover S8 lag-compensation harness`,
 self-verifying (prints PASS/FAIL per check), two identities + NPCs on a
 throwaway measurement-build DB (`ARENA_NPC_HARMLESS=1
 ARENA_NPC_AGGRO_RADIUS=100`):
@@ -377,7 +377,7 @@ whether rewound verdicts are *used*.
 - Schema: two private tables (+ barrier stamp), new args on `melee_attack`
   and `cast_request` — bindings regen (canonical bin-path), no public-row
   changes, no client subscription changes.
-- Existing headless probes that press attacks (`ops/s4-los-probe.py`,
+- Existing headless probes that press attacks (`retired pre-cutover S4 LOS harness`,
   `ops/s6-auto-swing-probe.py`) must add the new reducer args (0 is a valid
   no-report value).
 - Tests: deferred until the contract stabilizes (standing churn ruling).

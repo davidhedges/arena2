@@ -840,8 +840,8 @@ namespace Arena.UI
         private bool WeaponSupportsCombatDiscipline(HubWeaponSnapshot weapon)
         {
             return string.Equals(
-                WireIdentifier.Normalize(weapon.LegacyWeaponDisciplineId),
-                WeaponCatalogDisciplineId(_weaponDisciplineId),
+                WireIdentifier.Normalize(weapon.CombatDisciplineId),
+                WireIdentifier.Normalize(_weaponDisciplineId),
                 StringComparison.Ordinal);
         }
 
@@ -851,19 +851,6 @@ namespace Arena.UI
                 _weaponDisciplineId,
                 "STAFF",
                 StringComparison.Ordinal);
-        }
-
-        private static string WeaponCatalogDisciplineId(string combatDisciplineId)
-        {
-            return WireIdentifier.Normalize(combatDisciplineId) switch
-            {
-                "DAGGERS" => "SUBTLETY",
-                "TWO_HANDED_SWORD" => "WAR",
-                "SWORD_AND_SHIELD" => "ZEAL",
-                "ARCHER_BOW" => "PRECISION",
-                "STAFF" => "ARCANA",
-                _ => string.Empty,
-            };
         }
 
         private HubWeaponSnapshot? FindWeapon(string? itemDefId)

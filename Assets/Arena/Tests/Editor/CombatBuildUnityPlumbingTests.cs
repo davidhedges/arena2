@@ -42,7 +42,6 @@ namespace Arena.Tests.Editor
             Assert.That(network, Does.Contain("From.MyCombatBuild().ToSql()"));
             Assert.That(network, Does.Contain("conn.Db.MyCombatBuild.OnInsert"));
             Assert.That(network, Does.Contain("_conn.Reducers.SaveCombatBuild"));
-            Assert.That(network, Does.Not.Contain("SaveDisciplineLoadout"));
             Assert.That(network, Does.Not.Contain("SaveWeaponLoadout"));
             Assert.That(draft, Does.Contain("CombatBuildDraftInput ToReducerInput()"));
             Assert.That(draft, Does.Contain("SelectedDisciplines"));
@@ -68,7 +67,6 @@ namespace Arena.Tests.Editor
 
             Assert.That(disciplines, Does.Contain("_hub.SaveCombatBuild(_model.ToDraft())"));
             Assert.That(disciplines, Does.Contain("contract.ActionSlotIds"));
-            Assert.That(disciplines, Does.Not.Contain("SaveDisciplineLoadout"));
             Assert.That(disciplines, Does.Not.Contain("PRIMARY"));
             Assert.That(disciplines, Does.Not.Contain("SECONDARY"));
             Assert.That(actionBar, Does.Contain("enabled = false"));

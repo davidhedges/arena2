@@ -131,11 +131,11 @@ namespace Arena.Editor
                     return result;
 
                 var disciplineById = new Dictionary<string, CombatDisciplineAuthoringFacts>(StringComparer.Ordinal);
-                if (catalog.combat_disciplines != null)
+                if (catalog.combat_build_contract?.combat_disciplines != null)
                 {
-                    foreach (CombatDisciplineRow row in catalog.combat_disciplines)
+                    foreach (CombatDisciplineRow row in catalog.combat_build_contract.combat_disciplines)
                     {
-                        string disciplineId = WireIdentifier.Normalize(row.discipline_id);
+                        string disciplineId = WireIdentifier.Normalize(row.combat_discipline_id);
                         if (disciplineId.Length == 0)
                             continue;
 
@@ -195,14 +195,14 @@ namespace Arena.Editor
                         if (string.Equals(ownerKind, "ABILITY", StringComparison.Ordinal))
                         {
                             if (abilityById.TryGetValue(ownerId, out AbilityRow ability))
-                                AddDisciplineId(disciplineIds, ability.discipline_id);
+                                AddDisciplineId(disciplineIds, ability.combat_discipline_id);
                             continue;
                         }
 
                         if (!abilitiesByActionId.TryGetValue(ownerId, out List<AbilityRow> ownerAbilities))
                             continue;
                         foreach (AbilityRow ability in ownerAbilities)
-                            AddDisciplineId(disciplineIds, ability.discipline_id);
+                            AddDisciplineId(disciplineIds, ability.combat_discipline_id);
                     }
                 }
 
@@ -245,15 +245,21 @@ namespace Arena.Editor
         private sealed class CatalogDocument
         {
             public List<AbilityRow>? abilities;
-            public List<CombatDisciplineRow>? combat_disciplines;
+            public CombatBuildContractRow? combat_build_contract;
             public List<CombatVfxCueRow>? combat_vfx_cues;
+        }
+
+        [Serializable]
+        private sealed class CombatBuildContractRow
+        {
+            public List<CombatDisciplineRow>? combat_disciplines;
         }
 
         [Serializable]
         private sealed class AbilityRow
         {
             public string ability_id = string.Empty;
-            public string? discipline_id;
+            public string? combat_discipline_id;
             public string action_id = string.Empty;
             public GameplayRow? gameplay;
         }
@@ -261,7 +267,7 @@ namespace Arena.Editor
         [Serializable]
         private sealed class CombatDisciplineRow
         {
-            public string discipline_id = string.Empty;
+            public string combat_discipline_id = string.Empty;
             public string display_name = string.Empty;
             public int sort_order;
         }

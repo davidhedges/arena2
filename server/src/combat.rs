@@ -24,7 +24,7 @@ use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WOR
 use crate::player_state::PlayerState;
 use crate::practice::resolve_respawn_pose;
 use crate::progression::{
-    ability_belongs_to_discipline, blight_fracture_melee_damage_bonus, combat_rule_value,
+    ability_belongs_to_build_selection, blight_fracture_melee_damage_bonus, combat_rule_value,
     player_has_selected_passive_ability, precision_careful_aim_for_owner,
     precision_heartseeker_stationary_rule, precision_maverick_for_owner,
     precision_point_blank_for_owner, primal_adaptation_for_owner, primal_photosynthesis_for_owner,
@@ -33,7 +33,7 @@ use crate::progression::{
     ruin_potential_crit_chance_per_stack_for_owner, ruin_quickening_for_owner,
     ruin_wildfire_ignite_for_owner, soulstealer_empowered_damage_bonus,
     subtlety_behind_target_damage_bonus, subtlety_disabled_target_damage_bonus,
-    ARCHER_HEARTSEEKER_ABILITY_ID, DISCIPLINE_MORTALITY,
+    ARCHER_HEARTSEEKER_ABILITY_ID,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, combat_relation, target_audience_allows, CombatRelation,
@@ -1314,7 +1314,7 @@ fn tick_bloodlust_passive_for_owner(
         .player_id()
         .find(owner)
         .is_some_and(|state| state.alive);
-    if !alive || !bloodlust_passive_eligible(ctx, owner, spec) {
+    if !alive || !bloodlust_is_selected(ctx, owner, spec) {
         clear_bloodlust_passive(ctx, owner, spec);
         return;
     }
@@ -1460,7 +1460,7 @@ fn bloodlust_passive_status(
     matches.into_iter().next()
 }
 
-fn bloodlust_passive_eligible(
+fn bloodlust_is_selected(
     ctx: &ReducerContext,
     owner: Identity,
     spec: &BloodlustPassiveSpec,
@@ -2340,7 +2340,7 @@ fn tick_combat_stacking_passive_for_owner(
         .player_id()
         .find(owner)
         .is_some_and(|state| state.alive);
-    if !alive || !combat_stacking_passive_eligible(ctx, owner, spec) {
+    if !alive || !combat_stacking_passive_is_selected(ctx, owner, spec) {
         clear_combat_stacking_passive(ctx, owner, spec);
         return;
     }
@@ -2473,7 +2473,7 @@ fn record_successful_direct_damage(
     }
 
     let spec = restless_passive_spec();
-    if !combat_stacking_passive_eligible(ctx, source, &spec) {
+    if !combat_stacking_passive_is_selected(ctx, source, &spec) {
         return;
     }
 
@@ -2518,7 +2518,7 @@ fn record_successful_direct_damage(
     set_combat_stacking_passive_stacks(ctx, source, &spec, next_stacks, now);
 }
 
-fn combat_stacking_passive_eligible(
+fn combat_stacking_passive_is_selected(
     ctx: &ReducerContext,
     owner: Identity,
     spec: &CombatStackingPassiveSpec,
@@ -6643,7 +6643,7 @@ fn resolve_damage_amount(
         }
     }
     update_potential_after_spell_strike(ctx, hit, resolved.was_critical);
-    trigger_critical_strike_passives(ctx, hit, resolved.was_critical);
+    apply_selected_critical_strike_effects(ctx, hit, resolved.was_critical);
     resolved
 }
 
@@ -6694,7 +6694,7 @@ fn blight_empowered_damage_multiplier(ctx: &ReducerContext, hit: &PendingHit) ->
     else {
         return 1.0;
     };
-    if !ability_belongs_to_discipline(event.ability_id.as_str(), DISCIPLINE_MORTALITY) {
+    if !ability_belongs_to_build_selection(event.ability_id.as_str(), "MORTALITY") {
         return 1.0;
     }
 
@@ -6736,7 +6736,11 @@ fn blight_empowered_hit_is_eligible(hit: &PendingHit) -> bool {
         )
 }
 
-fn trigger_critical_strike_passives(ctx: &ReducerContext, hit: &PendingHit, was_critical: bool) {
+fn apply_selected_critical_strike_effects(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    was_critical: bool,
+) {
     if !was_critical || hit.source == Identity::ZERO {
         return;
     }

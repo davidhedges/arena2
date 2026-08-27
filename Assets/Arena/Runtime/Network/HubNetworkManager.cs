@@ -14,7 +14,7 @@ using HubSubscriptionEventContext = Arena.HubDb.SubscriptionEventContext;
 using HubSubscriptionHandle = Arena.HubDb.SubscriptionHandle;
 using HubPlayerRow = Arena.HubDb.MyHubPlayer;
 using HubMatchStatusRow = Arena.HubDb.MyMatchStatus;
-using HubLoadoutRow = Arena.HubDb.MyHubLoadout;
+using HubArmorSelectionRow = Arena.HubDb.MyHubArmorSelection;
 using HubCombatBuildRow = Arena.HubDb.MyCombatBuild;
 using HubCombatBuildContractRow = Arena.HubDb.HubCombatBuildContractDefinition;
 using HubDisciplineRow = Arena.HubDb.HubCombatBuildDisciplineDefinition;
@@ -132,7 +132,7 @@ namespace Arena.Network
 
         internal string Id { get; }
         internal string Name { get; }
-        internal string CombatProfileId => Id;
+        internal string CombatDisciplineId => Id;
         internal uint SortOrder { get; }
         internal HubCombatBuildWeapon StarterWeapon { get; }
     }
@@ -260,7 +260,7 @@ namespace Arena.Network
             string weaponKind,
             string handRequirement,
             string equipSlot,
-            string legacyWeaponDisciplineId,
+            string combatDisciplineId,
             uint sortOrder)
         {
             ItemDefId = itemDefId;
@@ -269,7 +269,7 @@ namespace Arena.Network
             WeaponKind = weaponKind;
             HandRequirement = handRequirement;
             EquipSlot = equipSlot;
-            LegacyWeaponDisciplineId = legacyWeaponDisciplineId;
+            CombatDisciplineId = combatDisciplineId;
             SortOrder = sortOrder;
         }
 
@@ -279,7 +279,7 @@ namespace Arena.Network
         internal string WeaponKind { get; }
         internal string HandRequirement { get; }
         internal string EquipSlot { get; }
-        internal string LegacyWeaponDisciplineId { get; }
+        internal string CombatDisciplineId { get; }
         internal uint SortOrder { get; }
     }
 
@@ -566,7 +566,7 @@ namespace Arena.Network
                 {
                     new Arena.HubDb.QueryBuilder().From.MyHubPlayer().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.MyMatchStatus().ToSql(),
-                    new Arena.HubDb.QueryBuilder().From.MyHubLoadout().ToSql(),
+                    new Arena.HubDb.QueryBuilder().From.MyHubArmorSelection().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.MyCombatBuild().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.HubCombatBuildContractDefinition().ToSql(),
                     new Arena.HubDb.QueryBuilder().From.HubCombatBuildDisciplineDefinition().ToSql(),
@@ -656,9 +656,9 @@ namespace Arena.Network
             conn.Db.MyMatchStatus.OnInsert += OnMatchStatusInsert;
             conn.Db.MyMatchStatus.OnUpdate += OnMatchStatusUpdate;
             conn.Db.MyMatchStatus.OnDelete += OnMatchStatusDelete;
-            conn.Db.MyHubLoadout.OnInsert += OnLoadoutInsert;
-            conn.Db.MyHubLoadout.OnUpdate += OnLoadoutUpdate;
-            conn.Db.MyHubLoadout.OnDelete += OnLoadoutDelete;
+            conn.Db.MyHubArmorSelection.OnInsert += OnArmorSelectionInsert;
+            conn.Db.MyHubArmorSelection.OnUpdate += OnArmorSelectionUpdate;
+            conn.Db.MyHubArmorSelection.OnDelete += OnArmorSelectionDelete;
             conn.Db.MyCombatBuild.OnInsert += OnCombatBuildInsert;
             conn.Db.MyCombatBuild.OnUpdate += OnCombatBuildUpdate;
             conn.Db.MyCombatBuild.OnDelete += OnCombatBuildDelete;
@@ -693,9 +693,9 @@ namespace Arena.Network
             conn.Db.MyMatchStatus.OnInsert -= OnMatchStatusInsert;
             conn.Db.MyMatchStatus.OnUpdate -= OnMatchStatusUpdate;
             conn.Db.MyMatchStatus.OnDelete -= OnMatchStatusDelete;
-            conn.Db.MyHubLoadout.OnInsert -= OnLoadoutInsert;
-            conn.Db.MyHubLoadout.OnUpdate -= OnLoadoutUpdate;
-            conn.Db.MyHubLoadout.OnDelete -= OnLoadoutDelete;
+            conn.Db.MyHubArmorSelection.OnInsert -= OnArmorSelectionInsert;
+            conn.Db.MyHubArmorSelection.OnUpdate -= OnArmorSelectionUpdate;
+            conn.Db.MyHubArmorSelection.OnDelete -= OnArmorSelectionDelete;
             conn.Db.MyCombatBuild.OnInsert -= OnCombatBuildInsert;
             conn.Db.MyCombatBuild.OnUpdate -= OnCombatBuildUpdate;
             conn.Db.MyCombatBuild.OnDelete -= OnCombatBuildDelete;
@@ -747,19 +747,19 @@ namespace Arena.Network
             NotifyChanged();
         }
 
-        private void OnLoadoutInsert(HubEventContext _, HubLoadoutRow row) => ApplyLoadout(row);
-        private void OnLoadoutUpdate(HubEventContext _, HubLoadoutRow __, HubLoadoutRow row) => ApplyLoadout(row);
+        private void OnArmorSelectionInsert(HubEventContext _, HubArmorSelectionRow row) => ApplyArmorSelection(row);
+        private void OnArmorSelectionUpdate(HubEventContext _, HubArmorSelectionRow __, HubArmorSelectionRow row) => ApplyArmorSelection(row);
 
-        private void OnLoadoutDelete(HubEventContext context, HubLoadoutRow __)
+        private void OnArmorSelectionDelete(HubEventContext context, HubArmorSelectionRow __)
         {
             // Views do not expose a primary key in the generated client bindings.
             // Updating the backing row is therefore delivered as an insert of the
             // replacement followed by a delete of the old projection. The cache is
             // already fully updated before callbacks run, so retain any replacement
             // instead of treating the delete callback as proof that the view is empty.
-            foreach (HubLoadoutRow row in context.Db.MyHubLoadout.Iter())
+            foreach (HubArmorSelectionRow row in context.Db.MyHubArmorSelection.Iter())
             {
-                ApplyLoadout(row);
+                ApplyArmorSelection(row);
                 return;
             }
 
@@ -840,7 +840,7 @@ namespace Arena.Network
             NotifyChanged();
         }
 
-        private void ApplyLoadout(HubLoadoutRow row)
+        private void ApplyArmorSelection(HubArmorSelectionRow row)
         {
             _armorLoadout = new HubArmorLoadoutSnapshot(
                 row.ArmorSetId,
@@ -922,7 +922,7 @@ namespace Arena.Network
                     row.WeaponKind,
                     row.HandRequirement,
                     row.EquipSlot,
-                    row.PrimaryDisciplineId,
+                    row.CombatDisciplineId,
                     row.SortOrder))
                 .ToArray();
             _weaponColors = conn.Db.HubWeaponColorDefinition.Iter()
@@ -972,7 +972,7 @@ namespace Arena.Network
             }
 
             _armorLoadout = null;
-            foreach (HubLoadoutRow row in conn.Db.MyHubLoadout.Iter())
+            foreach (HubArmorSelectionRow row in conn.Db.MyHubArmorSelection.Iter())
             {
                 _armorLoadout = new HubArmorLoadoutSnapshot(
                     row.ArmorSetId,

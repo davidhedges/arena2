@@ -141,6 +141,24 @@
       ],
       "open_legacy_policy": "The live Disciplines UI is canonical and submits one whole combat-build draft. The archived school-as-discipline prototype, generated legacy schemas/reducers, armor-only MyHubLoadout projection, weapon-catalog PrimaryDisciplineId metadata, local-direct compatibility, collection-only spell rows, and physical data-preserving tombstones remain classified for destructive Phase 7. Phase 6 did not delete or reset those surfaces.",
       "next_authorized_phase": null
+    },
+    "phase_7": {
+      "status": "complete",
+      "evidence": "docs/combat-build-progression-cutover-evidence-2026-08-27.md",
+      "approved_local_data_disposition": "reset arena-hub-local and discard all 64 legacy current-state rows; no conversion or import",
+      "final_canonical_hub_state": [
+        "combat_build",
+        "combat_build_discipline",
+        "discipline_configuration",
+        "staff_school_selection",
+        "discipline_action_bar_assignment",
+        "discipline_passive_selection",
+        "hub_player_armor_selection"
+      ],
+      "legacy_entries_closed": 25,
+      "archived_entries": 1,
+      "not_present_entries": 1,
+      "next_authorized_phase": null
     }
   },
   "entries": [
@@ -171,8 +189,12 @@
       ],
       "phase_5_resolution": "DisciplineLoadoutRules, its 25-point budget, primary/secondary minima, and its EditMode tests were deleted. The canonical Unity draft carries server inputs without locally reimplementing the 20-total/16-active rules.",
       "final_state": "remove primary/secondary minima and the parallel 25-point client budget; consume the one projected 20-total/16-active rules contract",
-      "target_phases": [1, 5, 7],
-      "status": "open",
+      "target_phases": [
+        1,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "PRIMARY_DISCIPLINE_ABILITY_MINIMUM",
         "SECONDARY_DISCIPLINE_ABILITY_MINIMUM",
@@ -180,7 +202,8 @@
         "SecondaryAbilityMinimum",
         "SecondaryDisciplineMaximum",
         "AbilityPointBudget"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-002",
@@ -217,8 +240,12 @@
       ],
       "phase_3_resolution": "The production Hub-to-match path now freezes and transports one versioned canonical snapshot. MatchReservation contains schema version, revision, exact snapshot JSON, and armor only. Fixed-slot Hub/runtime compatibility remains open for later phases; MatchPlayerLoadoutSnapshot is an unread schema tombstone retained solely to avoid a destructive Hub reset.",
       "final_state": "replace with ordered one-to-three canonical disciplines and one structured versioned frozen build snapshot",
-      "target_phases": [2, 3, 7],
-      "status": "open",
+      "target_phases": [
+        2,
+        3,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "primary_discipline_id",
         "secondary_discipline_id_1",
@@ -226,7 +253,8 @@
         "PrimaryDisciplineId",
         "SecondaryDisciplineId1",
         "SecondaryDisciplineId2"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-003",
@@ -262,14 +290,22 @@
       "phase_4_resolution": "Provisioned runtime active authorization now reads only exact match_discipline_action_bar_assignment rows for the current frozen discipline, and passive authorization reads only explicit match_discipline_passive_selection rows. CharacterDisciplineAbilitySelection remains a local-direct/schema/client compatibility surface and cannot authorize a provisioned player.",
       "phase_5_resolution": "Unity gameplay no longer subscribes to or reads CharacterDisciplineAbilitySelection. ActiveActionBarResolver reads exact MatchDisciplineActionBarAssignment rows, while the canonical Hub draft preserves explicit active assignments and passives separately.",
       "final_state": "active selection derives only from exact per-discipline slot assignments and passive selection derives only from explicit passive rows",
-      "target_phases": [1, 2, 3, 4, 5, 7],
-      "status": "open",
+      "target_phases": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "selected_ability_ids",
         "SelectedAbilityIds",
         "CharacterDisciplineAbilitySelection",
         "BuildSelectedAbilityIds"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-004",
@@ -299,13 +335,19 @@
       ],
       "phase_5_resolution": "The live Unity Hub summary, showcase, equipment path, switch inputs, and HUD use only the five exact weapon-discipline IDs. The disabled old Disciplines screen cannot present school rows as selectable disciplines; physical legacy assets remain open for Phase 6/7.",
       "final_state": "combat discipline catalog contains exactly the five weapon IDs and the six Staff schools live in a separate spell-school catalog",
-      "target_phases": [1, 2, 5, 7],
-      "status": "open",
+      "target_phases": [
+        1,
+        2,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "SPELL_SCHOOL",
         "discipline_kind",
         "DisciplineKind"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-005",
@@ -327,14 +369,21 @@
       "phase_4_resolution": "The frozen runtime path recognizes only the five canonical weapon disciplines. Staff schools are validated only as MatchStaffSchoolSelection configuration metadata; discipline_uses_staff and school-as-discipline weapon branching were removed. Legacy catalog labels and current Unity editing remain classified for Phases 5 and 7.",
       "phase_5_resolution": "HubCombatBuildDraft stores StaffSchoolIds only inside the Staff discipline configuration. Unity action-bar and equipment resolution contains no school-as-discipline weapon or profile fallback.",
       "final_state": "Staff configuration owns one-to-three school IDs; no school participates in discipline selection or weapon/profile fallback",
-      "target_phases": [1, 2, 4, 5, 7],
-      "status": "open",
+      "target_phases": [
+        1,
+        2,
+        4,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "SPELL_SCHOOL",
         "discipline_uses_staff",
         "reconcile_restructured_spell_school_disciplines",
         "is_spell_school_passive"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-006",
@@ -362,14 +411,22 @@
       "phase_4_resolution": "Frozen match activation, authorization, weapon legality, and action-bar projection use canonical weapon discipline IDs directly. Bidirectional legacy discipline/profile mapping remains reachable only in the explicitly classified local-direct compatibility path and current client surfaces, which remain open for Phases 5 and 7.",
       "phase_5_resolution": "All non-generated Unity combat-build identity and switching code uses exactly DAGGERS, TWO_HANDED_SWORD, SWORD_AND_SHIELD, ARCHER_BOW, and STAFF. Legacy catalog-key translation is isolated under CBL-008 and remains open for Phase 7.",
       "final_state": "select and persist only DAGGERS, TWO_HANDED_SWORD, SWORD_AND_SHIELD, ARCHER_BOW, and STAFF; legacy IDs survive only in archived history or one approved offline conversion fixture",
-      "target_phases": [1, 2, 3, 4, 5, 7],
-      "status": "open",
+      "target_phases": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "discipline_id_for_combat_profile",
         "combat_discipline_for_profile",
         "combat_profile_for_discipline",
         "Some(DISCIPLINE_ARCANA)"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-007",
@@ -398,14 +455,21 @@
       "phase_4_resolution": "Frozen activation writes the same canonical weapon discipline ID to discipline_id and the temporary combat_profile_id compatibility field; no separate profile choice or resolver can override it for a provisioned player. Physical profile schema and current Unity profile consumers remain open for Phases 5 and 7.",
       "phase_5_resolution": "Unity no longer uses CombatProfileCatalog or a profile selection to decide available actions, equipment, or bar ownership. CombatProfileResolver is limited to derived mechanics/presentation from ActiveCombatDiscipline; generated/public profile schema remains Phase 7 residue.",
       "final_state": "delete public profile catalog/state/selection; any remaining CombatProfile type is private and purely derived from canonical discipline for animation/runtime mechanics",
-      "target_phases": [1, 3, 4, 5, 7],
-      "status": "open",
+      "target_phases": [
+        1,
+        3,
+        4,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "CombatProfileCatalog",
         "combat_profile_catalog",
         "CombatProfileResolver",
         "ActiveCombatDiscipline"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-008",
@@ -428,14 +492,20 @@
       ],
       "phase_5_resolution": "Equipment saves the selected canonical discipline configuration atomically. The generated Hub weapon catalog still exposes PrimaryDisciplineId, isolated behind WeaponCatalogDisciplineId for listing only; its schema/catalog rename remains explicitly open for Phase 7.",
       "final_state": "key weapon legality by canonical combat_discipline_id and validate each discipline configuration independently",
-      "target_phases": [1, 2, 5, 7],
-      "status": "open",
+      "target_phases": [
+        1,
+        2,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "primary_discipline_id",
         "PrimaryDisciplineId",
         "WeaponSupportsPrimaryDiscipline",
         "weapon_spec_supports_primary"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-009",
@@ -460,13 +530,18 @@
       ],
       "phase_5_resolution": "The Unity SaveWeaponLoadout path and event were removed. Equipment updates one preserved per-discipline configuration with HubCombatBuildDraft.WithWeapon and submits the complete draft through SaveCombatBuild.",
       "final_state": "store weapon/color pairs in per-discipline durable configurations and update them only through the atomic combat-build save contract",
-      "target_phases": [2, 5, 7],
-      "status": "open",
+      "target_phases": [
+        2,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "save_hub_weapon_loadout",
         "SaveHubWeaponLoadout",
         "default_weapon_loadout"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-010",
@@ -484,13 +559,17 @@
       ],
       "phase_3_resolution": "The public match-side save reducer and both generated reducer bindings are removed. Provisioned players skip the legacy loadout and ability-selection defaults; local-direct compatibility helpers remain open for the runtime/final cutovers.",
       "final_state": "remove match-side durable saving and defaulting; disposable matches only materialize and revalidate the frozen Hub snapshot",
-      "target_phases": [3, 7],
-      "status": "open",
+      "target_phases": [
+        3,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "save_character_discipline_loadout",
         "SaveCharacterDisciplineLoadout",
         "ensure_default_character_discipline_loadout"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-011",
@@ -512,15 +591,21 @@
       "phase_4_resolution": "Frozen action-bar projection deletes non-global legacy projections and emits each exact assignment only under its owning canonical discipline. No profile-neutral ability is copied to multiple frozen bars. Local-direct profile bars and current Unity global/profile resolution remain open for Phases 5 and 7.",
       "phase_5_resolution": "ActiveActionBarResolver reads only the current discipline's exact frozen assignment. Dodge/parry and other fixed controls remain on the explicit intrinsic input path; Unity has no profile-neutral bar replication or multi-bar copy fallback.",
       "final_state": "resolve exact assignments only on the owning discipline bar; true universal actions use one explicit intrinsic-action path outside the selectable budget",
-      "target_phases": [1, 4, 5, 7],
-      "status": "open",
+      "target_phases": [
+        1,
+        4,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "profile_ability_ids",
         "applies_to_profile",
         "profile-neutral",
         "MatchesGlobal",
         "ActionBarScopes.Global"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-012",
@@ -549,14 +634,19 @@
       ],
       "phase_4_resolution": "Every one of the 24 authored player passives is listed in PLAYER_PASSIVE_RUNTIME_INVENTORY and every runtime entry point routes through player_has_selected_passive_ability. The predicate requires an explicit frozen passive row, selected owning discipline, valid PASSIVE catalog metadata, and selected Staff school where applicable; it deliberately does not inspect current equipment. Legacy wrapper names and physical compatibility schema remain open until the final Phase 7 audit.",
       "final_state": "route every player passive effect through one selected-passive predicate that also requires the owning discipline in the frozen active build and does not require current equipment",
-      "target_phases": [1, 4, 7],
-      "status": "open",
+      "target_phases": [
+        1,
+        4,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "passive_eligible",
         "passive_is_active_for_profile",
         "character_has_selected_discipline",
         "trigger_critical_strike_passives"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-013",
@@ -603,8 +693,12 @@
       "phase_4_resolution": "Server player cast authorization no longer calls player_knows_spell, PlayerKnownSpell, equipped spellbook contents, or spell-slot capacity. Learned and ItemSpell rows remain collection/schema-only and the live probe proves that adding NOVA to learned rows and BOLT to the equipped spellbook does not grant either cast. Current Unity collection fallbacks and eventual physical schema disposition remain open for Phases 5 and 7.",
       "phase_5_resolution": "PlayerKnownSpell and ItemSpell were removed from Unity HUD/input action resolution and from the disposable PvP initial subscription. Remaining uses are collection/inventory presentation only and cannot grant an action-bar slot or provisioned-player cast.",
       "final_state": "remove these paths from player bar and cast authorization; any retained collection/item purpose must be separately designed and cannot grant combat availability",
-      "target_phases": [4, 5, 7],
-      "status": "open",
+      "target_phases": [
+        4,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "player_knows_spell",
         "PlayerKnownSpell",
@@ -612,7 +706,8 @@
         "LearnSpell",
         "ResolveEquippedSpellbookAction",
         "ResolveKnownSpellAction"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-014",
@@ -633,8 +728,11 @@
       ],
       "phase_3_resolution": "Both production bootstrap reducers now accept one opaque canonical combat_build_snapshot_json plus separately scoped armor after the allocation identity fields. The provisioner passes nine total arguments, never parses the JSON, and exact-compares an existing reservation during recovery.",
       "final_state": "transport one versioned structured build snapshot without positional reinterpretation or fallback substitution",
-      "target_phases": [3, 7],
-      "status": "open",
+      "target_phases": [
+        3,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "bootstrap_unranked_2v2_bot_match",
         "bootstrap_open_world_instance",
@@ -642,7 +740,8 @@
         "arguments[8]",
         "arguments[9]",
         "arguments[10]"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-015",
@@ -665,14 +764,19 @@
       ],
       "phase_5_resolution": "HubNetworkManager now consumes generated MyCombatBuild through HubCombatBuildDraft and exposes one revision-checked SaveCombatBuild writer. Legacy combat-build save methods/events and DTO fields were removed; MyHubLoadout is retained only behind an armor-only snapshot until Phase 7 schema deletion.",
       "final_state": "consume a generated canonical combat-build model and one revision-checked atomic save; no legacy writer or DTO remains",
-      "target_phases": [2, 5, 7],
-      "status": "open",
+      "target_phases": [
+        2,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "HubLoadoutSnapshot",
         "SaveDisciplineLoadout",
         "SaveHubDisciplineLoadout",
         "OnSaveDisciplineLoadoutResult"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-016",
@@ -695,14 +799,19 @@
       "phase_5_resolution": "DisciplinesScreen is a disabled shell that warns and closes immediately. It does not load the old model or invoke any reducer. Its UXML/USS remain unreachable for the explicitly future Phase 6 replacement/Phase 7 deletion decision.",
       "phase_6_resolution": "DisciplinesScreen and its Toolkit assets are now the canonical replacement editor. They present equal ordered combat disciplines, Staff-only schools, exact active slots, ordered passives, add/remove/starting controls, dormant restoration, and one revision-checked whole-draft SaveCombatBuild call. No legacy loadout shape or writer remains in this screen; the entry stays open only for the Phase 7 final negative audit.",
       "final_state": "the live replacement editor writes only one canonical whole-build draft and contains no legacy model, writer, or reconstructed shape",
-      "target_phases": [5, 6, 7],
-      "status": "open",
+      "target_phases": [
+        5,
+        6,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "DisciplinesScreen",
         "_primaryId",
         "_secondaryIds",
         "BuildSelectedAbilityIds"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-017",
@@ -727,15 +836,20 @@
       "phase_5_resolution": "The session-only stat allocator and DisciplineLoadoutRules implementation were deleted with the disabled writer. No replacement stat schema, service, or UI path was invented; labels in unreachable legacy assets remain Phase 6/7 physical residue.",
       "phase_6_resolution": "The replacement UXML/USS contain no stat-allocation panel, labels, controls, model, or persistence path. Phase 6 did not invent a replacement character-stat system; the entry stays open only for the Phase 7 final negative audit.",
       "final_state": "remove from the combat-build screen without inventing a replacement stat progression system in this migration",
-      "target_phases": [5, 6, 7],
-      "status": "open",
+      "target_phases": [
+        5,
+        6,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "StatView",
         "StatDefinitions",
         "RenderStats",
         "ChangeStat",
         "RemainingPoints"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-018",
@@ -753,12 +867,16 @@
       ],
       "phase_5_resolution": "HubScreen renders three ordered equal combat-discipline slots, and HubController resolves the configured starting discipline or deterministic first-selected fallback for the showcase. Primary/secondary labels and selection logic are gone.",
       "final_state": "render the ordered canonical discipline collection and selected starting discipline without assigning primary/secondary semantics",
-      "target_phases": [5, 7],
-      "status": "open",
+      "target_phases": [
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "SecondaryDisciplineId1",
         "SecondaryDisciplineId2"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-019",
@@ -777,14 +895,18 @@
       ],
       "phase_5_resolution": "EquipmentScreen edits the starting/first selected canonical discipline through HubCombatBuildDraft.WithWeapon and the same atomic SaveCombatBuild call, preserving every other selected and dormant configuration field.",
       "final_state": "edit the selected canonical discipline configuration through the same atomic combat-build draft or disable weapon editing until it can do so",
-      "target_phases": [5, 7],
-      "status": "open",
+      "target_phases": [
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "_primaryDisciplineId",
         "WeaponSupportsPrimaryDiscipline",
         "PrimaryDisciplineUsesStaff",
         "RuleForPrimaryDiscipline"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-020",
@@ -808,15 +930,20 @@
       "phase_4_resolution": "The authoritative server path is exact-current-discipline only, and the compatibility projection contains exact per-discipline rows plus canonical global switch actions. Client ActiveActionBarResolver, profile/global matching, and spellbook fallbacks were not changed in this no-UI Phase 4 slice and remain explicitly open for Phase 5.",
       "phase_5_resolution": "ActiveActionBarResolver and ActionBarInputDispatcher now resolve only MatchDisciplineActionBarAssignment rows for ActiveCombatDiscipline plus explicit intrinsic inputs. Combat-profile, global replicated assignment, selection, learned-spell, and spellbook fallbacks were removed.",
       "final_state": "resolve only the current discipline's exact assignments plus explicit intrinsic actions; no profile/global/spellbook player fallback",
-      "target_phases": [4, 5, 7],
-      "status": "open",
+      "target_phases": [
+        4,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "MatchesActiveProfile",
         "MatchesGlobal",
         "ResolveEquippedSpellbookAction",
         "ResolveKnownSpellAction",
         "AbilityMatchesOwner"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-021",
@@ -844,14 +971,20 @@
       "phase_4_resolution": "set_combat_discipline now routes frozen players through one atomic activation that validates selection, equips the materialized configuration, writes the same canonical discipline/profile ID, clears discipline-specific transient state, synchronizes mode, and projects exact bars. The independent weapon-loadout reducer rejects frozen-build mutation. Legacy local-direct behavior and generated/client surfaces remain open for Phases 5 and 7.",
       "phase_5_resolution": "Unity's F1/F2/F3 switch inputs resolve exact ordered IDs from MatchCombatBuildDiscipline and call only SetCombatDiscipline. HUD labels read the same frozen order; Unity has no independent profile or weapon-loadout switch request.",
       "final_state": "one atomic switch selects a discipline from the frozen build and projects that same configuration's weapon, mode, and bar; no independent profile or weapon-loadout request",
-      "target_phases": [3, 4, 5, 7],
-      "status": "open",
+      "target_phases": [
+        3,
+        4,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "ActiveCombatDiscipline",
         "set_combat_discipline",
         "SetCombatDiscipline",
         "AssignCombatDisciplineWeaponLoadout"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-022",
@@ -875,13 +1008,20 @@
       "phase_4_resolution": "The canonical match_discipline_action_bar_assignment rows remain the authorization truth. CharacterActionBarAssignment is now only an exact read-only compatibility projection for frozen players, scoped by the canonical discipline ID despite its legacy field name; all three edit reducers reject frozen-build mutation. Physical projection schema remains open for Phase 7.",
       "phase_5_resolution": "Unity gameplay subscriptions and resolution no longer consume CharacterActionBarAssignment. The legacy action-bar editor and drag/drop writer are disabled/removed; generated rows and reducers remain physical Phase 7 schema residue only.",
       "final_state": "durable exact assignments are owned by canonical combat discipline in Hub; match rows are frozen projections and cannot create alternate durable truth",
-      "target_phases": [1, 2, 3, 4, 7],
-      "status": "open",
+      "target_phases": [
+        1,
+        2,
+        3,
+        4,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "CharacterActionBarAssignment",
         "AssignCharacterActionBarAbilityToSlot",
         "AssignCharacterActionBarSlot"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-023",
@@ -899,13 +1039,17 @@
       ],
       "phase_3_resolution": "The benchmark now compares contract version, revision, selected order, Staff schools, exact action slots, passives, per-discipline weapon definitions, materialized item identities, starting equipment, armor, and exact cleanup. No fixed-slot or undifferentiated-ability assertion remains in these probes.",
       "final_state": "assert full versioned snapshot identity, revision, discipline order, exact slots, passives, Staff schools, and per-discipline weapons",
-      "target_phases": [3, 7],
-      "status": "open",
+      "target_phases": [
+        3,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "selected_ability_ids",
         "len(self.hub_loadout",
         "primary_discipline_id"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-024",
@@ -930,15 +1074,21 @@
       "phase_3_resolution": "Hub and match bindings were regenerated from their schemas. Canonical match tables and compact bootstrap/reservation shapes are present, and SaveCharacterDisciplineLoadout bindings are absent. Other legacy runtime/client types plus the data-preserving MatchPlayerLoadoutSnapshot tombstone remain ledgered for later phases.",
       "phase_5_resolution": "Canonical Hub and match generated bindings are consumed directly and were regenerated through ops/setup-local-multiplayer.sh with no hand edits. Generated compatibility reducers, tables, and metadata remain classified for final Phase 7 schema regeneration/removal.",
       "final_state": "regenerate from the final schemas; never hand-edit generated compatibility fields",
-      "target_phases": [2, 3, 5, 7],
-      "status": "open",
+      "target_phases": [
+        2,
+        3,
+        5,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "SaveHubDisciplineLoadout",
         "CharacterDisciplineLoadout",
         "MatchPlayerLoadoutSnapshot",
         "CombatProfileCatalog",
         "PlayerKnownSpell"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-025",
@@ -960,13 +1110,18 @@
       "phase_5_resolution": "The current Toolkit screen is disabled and cannot load or write the school-as-discipline model. Its UXML/USS and archived prototype remain unreachable provenance pending the separately approved Phase 6 replacement and Phase 7 final audit.",
       "phase_6_resolution": "The live Toolkit screen now presents exactly the five canonical combat disciplines. The six spell schools appear only as toggles inside the selected Staff card, filter Staff ability choices, and never create discipline cards, weapons, or independent bars. The old docs/ui-prototypes/disciplines artifact remains unchanged as archived provenance pending Phase 7.",
       "final_state": "live Toolkit presents weapon disciplines with Staff schools nested only inside Staff; the old prototype remains only as explicitly archived provenance until the final audit",
-      "target_phases": [5, 6, 7],
-      "status": "open",
+      "target_phases": [
+        5,
+        6,
+        7
+      ],
+      "status": "closed",
       "audit_patterns": [
         "SecondaryDisciplineGrid",
         "PrimaryAbilityHeading",
         "PRIMARY"
-      ]
+      ],
+      "phase_7_resolution": "Closed by the final Phase 7 schema regeneration and the scoped negative/positive ownership audits recorded in docs/combat-build-progression-cutover-evidence-2026-08-27.md."
     },
     {
       "id": "CBL-026",
@@ -984,13 +1139,17 @@
         "docs/ui-prototypes/disciplines/**"
       ],
       "final_state": "retain only the reconciled or explicitly archived state classified by the documentation conflict audit",
-      "target_phases": [0, 7],
+      "target_phases": [
+        0,
+        7
+      ],
       "status": "archived",
       "audit_patterns": [
         "Status: SUPERSEDED",
         "Status: ARCHIVED"
       ],
-      "evidence": "docs/combat-build-documentation-conflict-audit-2026-08-26.md"
+      "evidence": "docs/combat-build-documentation-conflict-audit-2026-08-26.md",
+      "phase_7_resolution": "Retained only as explicitly archived or superseded history under the final documentation allowlist; it is not current product authority."
     },
     {
       "id": "CBL-027",
@@ -1002,13 +1161,17 @@
       ],
       "locations": [],
       "final_state": "no production instance may be introduced; any approved offline converter is named, test-only/offline, used once, recorded, then deleted",
-      "target_phases": [2, 7],
+      "target_phases": [
+        2,
+        7
+      ],
       "status": "not_present",
       "audit_patterns": [
         "legacy.*combat.*build.*adapter",
         "dual.*write.*combat.*build",
         "migrate.*combat.*build"
-      ]
+      ],
+      "phase_7_resolution": "No production adapter, dual writer, runtime converter, or migration reducer remains. The temporary offline report tool was deleted without import after the user approved discarding local legacy rows."
     }
   ],
   "completion_requirements": {

@@ -51,7 +51,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<ItemDefinition, string> WeaponKind { get; }
         public global::SpacetimeDB.Col<ItemDefinition, string> HandRequirement { get; }
         public global::SpacetimeDB.Col<ItemDefinition, bool> UniqueEquipped { get; }
-        public global::SpacetimeDB.Col<ItemDefinition, string> CombatProfileId { get; }
+        public global::SpacetimeDB.Col<ItemDefinition, string> CombatDisciplineId { get; }
         public global::SpacetimeDB.Col<ItemDefinition, string> ArmorKind { get; }
         public global::SpacetimeDB.Col<ItemDefinition, float> PhysicalResistance { get; }
         public global::SpacetimeDB.Col<ItemDefinition, string> ConsumableEffectKind { get; }
@@ -72,7 +72,7 @@ namespace SpacetimeDB.Types
             WeaponKind = new global::SpacetimeDB.Col<ItemDefinition, string>(tableName, "weapon_kind");
             HandRequirement = new global::SpacetimeDB.Col<ItemDefinition, string>(tableName, "hand_requirement");
             UniqueEquipped = new global::SpacetimeDB.Col<ItemDefinition, bool>(tableName, "unique_equipped");
-            CombatProfileId = new global::SpacetimeDB.Col<ItemDefinition, string>(tableName, "combat_profile_id");
+            CombatDisciplineId = new global::SpacetimeDB.Col<ItemDefinition, string>(tableName, "combat_discipline_id");
             ArmorKind = new global::SpacetimeDB.Col<ItemDefinition, string>(tableName, "armor_kind");
             PhysicalResistance = new global::SpacetimeDB.Col<ItemDefinition, float>(tableName, "physical_resistance");
             ConsumableEffectKind = new global::SpacetimeDB.Col<ItemDefinition, string>(tableName, "consumable_effect_kind");

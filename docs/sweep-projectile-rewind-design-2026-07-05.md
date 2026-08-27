@@ -26,9 +26,9 @@ true 250 true false` reverts S10 alone if it ever regresses. G1/G2 owner-signed
 impacts present-time; G2 = no-target casts report the shared S7 connection
 budget); G3–G5 proceeding as recommended. Server + Unity C# compile; bindings
 regenerated; the 4-arg `set_lag_comp_config` + `sweep_rewind_enabled` column
-verified live. `ops/s10-sweep-rewind-probe.py` **PASS** on a throwaway
-measurement-build DB — vehicle `ICE_SPIKES` (a no-target SPELL AREA CASTER_CONE,
-7.5 m), learned deterministically via `learn_spell` and cast through
+verified live. The historical pre-cutover probe **PASS** on a throwaway
+measurement-build DB used `ICE_SPIKES` (a no-target SPELL AREA CASTER_CONE,
+7.5 m), cast through
 `cast_request` → `resolve_area_impact` → the shared `sweep_rewind_membership`
 helper (the spell-area path a headless probe can reach without character
 progression; the melee caster-cone path shares the identical helper and is
@@ -329,11 +329,11 @@ to `CHECKS` and the `GATE_RE` alternation; the existing per-check / per-signal
 reopens projectiles, add `projectile_impact` the same way.)
 
 **Headless probe leg (server truth) — PASS 2026-07-05:**
-`ops/s10-sweep-rewind-probe.py`, self-verifying PASS/FAIL, throwaway
+The now-retired pre-cutover harness was a self-verifying PASS/FAIL, throwaway
 measurement-build DB (`ARENA_NPC_HARMLESS=1 ARENA_NPC_AGGRO_RADIUS=100`),
 reusing the S8/S9 arrangement. Vehicle: the attacker probe casts **`ICE_SPIKES`**
-(a no-target SPELL AREA CASTER_CONE, 7.5 m, learned via `learn_spell` since the
-starter spellbook is random) with `view_server_time_ms = now − 250 ms` while a
+(a no-target SPELL AREA CASTER_CONE, 7.5 m) with
+`view_server_time_ms = now − 250 ms` while a
 slowly-shuttled kobold sweeps through the cone's range boundary. This exercises
 the spell-area path (`resolve_area_impact`) and the shared
 `sweep_rewind_membership` helper / `[LAG_COMP] sweep_hit` grammar that the melee
@@ -446,7 +446,7 @@ F-numbers for feel-audit items.)*
   other client changes. Server-side, one shared helper
   (`position_history::sweep_rewind_membership`) serves both the spell-area and
   melee caster-cone/radius loops.
-- Ops: probes that call `set_lag_comp_config` (`ops/s8-lag-comp-probe.py`,
-  `ops/s9-auto-rewind-probe.py`) add the new arg (`false` is the no-op value).
+- Ops: probes that call `set_lag_comp_config` (`retired pre-cutover S8 lag-compensation harness`,
+  `retired pre-cutover S9 auto-rewind harness`) add the new arg (`false` is the no-op value).
   Analyzer extended in place.
 - Tests: deferred until the contract stabilizes (standing churn ruling).

@@ -89,11 +89,11 @@ pub fn request_open_world_instance(
 
 - Reuse the existing `MatchTicket` row shape: `queue_kind = "open_world"`,
   `format = <destination>`. **This avoids a `MatchTicket` schema change**, which
-  matters because republishing the hub module risks the durable
-  `HubPlayerLoadout` rows.
+  matters because republishing the Hub module risks each player's durable
+  canonical `CombatBuild` aggregate.
 - Validate `destination` against an allow-list so a client cannot ask the
   provisioner to publish arbitrary strings.
-- Reuse `request_decision`, `freeze_player_loadout_for_ticket`, and
+- Reuse `request_decision`, `freeze_player_combat_build_for_ticket`, and
   `bump_provisioner_wakeup` unchanged.
 
 ### 4.1b server (Rust) — open-world bootstrap reducer  **[SETTLED — option 1]**

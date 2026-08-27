@@ -43,11 +43,11 @@ use crate::combat::actor_snapshot::CombatActorSnapshotSet;
 use crate::combat::{
     clear_statuses_for_dead_players, expire_combat_engagements, expire_status_effects,
     has_due_pending_effects, normalize_legacy_hot_status_rows, process_periodic_status_ticks,
-    tick_hemorrhage,
     prune_combat_events, prune_surprise_attack_runtimes, resolve_pending_effects, respawn_player,
     sync_combat_projectile_definitions, sync_player_state_derived_stats, tick_auras,
     tick_combat_projectiles_with_snapshots, tick_combat_stacking_passives, tick_emanations,
-    tick_immolations, MovementModifiers, StatusRuntimeView, TemporaryCombatModifiers,
+    tick_hemorrhage, tick_immolations, MovementModifiers, StatusRuntimeView,
+    TemporaryCombatModifiers,
 };
 use crate::defense::prune_defense_states;
 use crate::derived_stats::{
@@ -82,19 +82,14 @@ use crate::player_intent::PlayerIntent;
 use crate::player_physics::{commit_player_physics, PhysicsWriteMode, PlayerPhysics};
 use crate::playground_targets::is_playground_target;
 use crate::practice::tick_practice;
-use crate::progression::{
-    backfill_character_action_bar_rows, backfill_sword_and_shield_visible_action_bar_rows,
-    clear_generic_fixed_action_bar_assignments, expire_shrouds,
-    migrate_generic_spell_action_bar_assignments, migrate_renamed_melee_action_bar_assignments,
-    sync_progression_catalogs,
-};
+use crate::progression::{expire_shrouds, sync_progression_catalogs};
 use crate::resources::{
     reset_player_resources_to_full, sync_all_player_resources,
     sync_primary_resource_for_player_with, tick_primary_resource_for_player, ResourceSpecInputs,
 };
 use crate::spells::{
-    has_due_pending_area_impacts, migrate_renamed_spell_storage, resolve_pending_area_impacts,
-    resolve_pending_casts, resolve_special_movement_y, sync_spell_definitions, tick_active_casts,
+    has_due_pending_area_impacts, resolve_pending_area_impacts, resolve_pending_casts,
+    resolve_special_movement_y, sync_spell_definitions, tick_active_casts,
     tick_bespoke_spells_with_snapshots, tick_persistent_areas,
 };
 use crate::survival::tick_survival;
@@ -750,52 +745,9 @@ fn bootstrap_server_state(ctx: &ReducerContext) {
     sync_item_definitions(ctx);
     sync_combat_projectile_definitions(ctx);
     sync_spell_definitions(ctx);
-    let migrated_spell_storage_rows = migrate_renamed_spell_storage(ctx);
-    if migrated_spell_storage_rows > 0 {
-        log::warn!(
-            "[INIT] Migrated {} renamed learned/spellbook spell row(s)",
-            migrated_spell_storage_rows
-        );
-    }
     sync_melee_definitions(ctx);
     sync_all_player_resources(ctx, ctx.timestamp);
     sync_all_fixed_action_charge_states(ctx, ctx.timestamp);
-    let removed_generic_fixed_action_bar_rows = clear_generic_fixed_action_bar_assignments(ctx);
-    if removed_generic_fixed_action_bar_rows > 0 {
-        log::warn!(
-            "[INIT] Removed {} legacy generic fixed action-bar assignment row(s)",
-            removed_generic_fixed_action_bar_rows
-        );
-    }
-    let migrated_melee_action_bar_rows = migrate_renamed_melee_action_bar_assignments(ctx);
-    if migrated_melee_action_bar_rows > 0 {
-        log::warn!(
-            "[INIT] Migrated {} renamed melee action-bar assignment row(s)",
-            migrated_melee_action_bar_rows
-        );
-    }
-    let migrated_generic_spell_action_bar_rows = migrate_generic_spell_action_bar_assignments(ctx);
-    if migrated_generic_spell_action_bar_rows > 0 {
-        log::warn!(
-            "[INIT] Migrated {} generic spell action-bar assignment row(s)",
-            migrated_generic_spell_action_bar_rows
-        );
-    }
-    let repaired_action_bar_rows = backfill_character_action_bar_rows(ctx);
-    if repaired_action_bar_rows > 0 {
-        log::warn!(
-            "[INIT] Backfilled default action bars for {} character(s)",
-            repaired_action_bar_rows
-        );
-    }
-    let repaired_sword_and_shield_visible_rows =
-        backfill_sword_and_shield_visible_action_bar_rows(ctx);
-    if repaired_sword_and_shield_visible_rows > 0 {
-        log::warn!(
-            "[INIT] Backfilled {} SwordAndShield visible action-bar assignment row(s)",
-            repaired_sword_and_shield_visible_rows
-        );
-    }
     let repaired_appearance_rows = backfill_character_appearance_rows(ctx);
     if repaired_appearance_rows > 0 {
         log::warn!(

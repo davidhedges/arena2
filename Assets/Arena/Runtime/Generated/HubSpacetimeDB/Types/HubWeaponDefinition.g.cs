@@ -26,8 +26,8 @@ namespace Arena.HubDb
         public string HandRequirement;
         [DataMember(Name = "equip_slot")]
         public string EquipSlot;
-        [DataMember(Name = "primary_discipline_id")]
-        public string PrimaryDisciplineId;
+        [DataMember(Name = "combat_discipline_id")]
+        public string CombatDisciplineId;
         [DataMember(Name = "sort_order")]
         public uint SortOrder;
 
@@ -38,7 +38,7 @@ namespace Arena.HubDb
             string WeaponKind,
             string HandRequirement,
             string EquipSlot,
-            string PrimaryDisciplineId,
+            string CombatDisciplineId,
             uint SortOrder
         )
         {
@@ -48,7 +48,7 @@ namespace Arena.HubDb
             this.WeaponKind = WeaponKind;
             this.HandRequirement = HandRequirement;
             this.EquipSlot = EquipSlot;
-            this.PrimaryDisciplineId = PrimaryDisciplineId;
+            this.CombatDisciplineId = CombatDisciplineId;
             this.SortOrder = SortOrder;
         }
 
@@ -60,7 +60,7 @@ namespace Arena.HubDb
             this.WeaponKind = "";
             this.HandRequirement = "";
             this.EquipSlot = "";
-            this.PrimaryDisciplineId = "";
+            this.CombatDisciplineId = "";
         }
     }
 }

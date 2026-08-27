@@ -17,8 +17,8 @@ namespace SpacetimeDB.Types
         public SpacetimeDB.Identity Owner;
         [DataMember(Name = "target")]
         public SpacetimeDB.Identity Target;
-        [DataMember(Name = "combat_profile_id")]
-        public string CombatProfileId;
+        [DataMember(Name = "combat_discipline_id")]
+        public string CombatDisciplineId;
         [DataMember(Name = "mode_id")]
         public string ModeId;
         [DataMember(Name = "strike_id")]
@@ -39,7 +39,7 @@ namespace SpacetimeDB.Types
         public AutoAttackState(
             SpacetimeDB.Identity Owner,
             SpacetimeDB.Identity Target,
-            string CombatProfileId,
+            string CombatDisciplineId,
             string ModeId,
             string StrikeId,
             SpacetimeDB.Timestamp CadenceStartedAt,
@@ -52,7 +52,7 @@ namespace SpacetimeDB.Types
         {
             this.Owner = Owner;
             this.Target = Target;
-            this.CombatProfileId = CombatProfileId;
+            this.CombatDisciplineId = CombatDisciplineId;
             this.ModeId = ModeId;
             this.StrikeId = StrikeId;
             this.CadenceStartedAt = CadenceStartedAt;
@@ -65,7 +65,7 @@ namespace SpacetimeDB.Types
 
         public AutoAttackState()
         {
-            this.CombatProfileId = "";
+            this.CombatDisciplineId = "";
             this.ModeId = "";
             this.StrikeId = "";
         }

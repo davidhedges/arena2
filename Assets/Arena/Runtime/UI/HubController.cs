@@ -522,14 +522,14 @@ namespace Arena.UI
                             WireIdentifier.Normalize(candidate.Id),
                             disciplineId,
                             System.StringComparison.Ordinal));
-                    if (!string.IsNullOrWhiteSpace(discipline?.CombatProfileId))
-                        return discipline.CombatProfileId;
+                    if (!string.IsNullOrWhiteSpace(discipline?.CombatDisciplineId))
+                        return discipline.CombatDisciplineId;
                 }
 
                 DbConnection? conn = NetworkManager.Instance?.Conn;
                 Identity? identity = conn?.Identity;
                 if (conn != null && identity.HasValue)
-                    return CombatProfileResolver.ResolveForOwner(conn, identity.Value);
+                    return RuntimeCombatProfile.ResolveForOwner(conn, identity.Value);
             }
 
             return CombatProfileIds.SwordAndShield;

@@ -222,8 +222,6 @@ struct CatalogWeapon {
 #[derive(Deserialize)]
 struct ProgressionCatalogSource {
     combat_build_contract: CombatBuildContractSource,
-    combat_profiles: Vec<CombatProfileSource>,
-    combat_disciplines: Vec<LegacyDisciplineSource>,
     combat_modes: Vec<CombatModeSource>,
     abilities: Vec<AbilitySource>,
     slots: Vec<ActionSlotSource>,
@@ -252,20 +250,8 @@ struct SpellSchoolSource {
 }
 
 #[derive(Deserialize)]
-struct CombatProfileSource {
-    combat_profile_id: String,
-}
-
-#[derive(Deserialize)]
-struct LegacyDisciplineSource {
-    discipline_id: String,
-    discipline_kind: String,
-    combat_profile_id: String,
-}
-
-#[derive(Deserialize)]
 struct CombatModeSource {
-    combat_profile_id: String,
+    combat_discipline_id: String,
     mode_id: String,
 }
 
@@ -279,8 +265,6 @@ struct ActionSlotSource {
 struct AbilitySource {
     ability_id: String,
     actor_scope: String,
-    #[serde(default)]
-    discipline_id: String,
     selection_kind: String,
     combat_discipline_id: Option<String>,
     spell_school_id: Option<String>,
@@ -307,7 +291,6 @@ struct WeaponSource {
     weapon_kind: String,
     hand_requirement: String,
     equip_slot: String,
-    primary_discipline_id: String,
     combat_discipline_id: String,
     variants: Vec<WeaponVariantSource>,
 }
@@ -539,7 +522,7 @@ impl CombatBuildCatalog {
             self.validate_weapon_configuration(discipline_id, &configuration.weapon)?;
         }
 
-        let mut selected_ability_ids = HashSet::new();
+        let mut selected_ids = HashSet::new();
         for configuration in &draft.discipline_configurations {
             for ability_id in configuration
                 .active_assignments
@@ -547,7 +530,7 @@ impl CombatBuildCatalog {
                 .map(|assignment| assignment.ability_id.as_str())
                 .chain(configuration.passive_ability_ids.iter().map(String::as_str))
             {
-                if !selected_ability_ids.insert(ability_id.to_string()) {
+                if !selected_ids.insert(ability_id.to_string()) {
                     return Err(CombatBuildValidationError::new(
                         CombatBuildErrorCode::DuplicateAbility,
                         format!("ability '{ability_id}' is selected more than once"),
@@ -807,23 +790,6 @@ fn normalized_option(value: Option<String>) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-/// Temporary Phase 1 audit bridge. Runtime consumers still read the legacy
-/// projection; this function proves every legacy catalog row and newly authored
-/// canonical field has exactly one deterministic target. It is not a save or
-/// authorization fallback and is deleted with the legacy projection.
-fn canonical_discipline_for_legacy(value: &str) -> Option<&'static str> {
-    match normalized(value).as_str() {
-        "SUBTLETY" => Some("DAGGERS"),
-        "WAR" => Some("TWO_HANDED_SWORD"),
-        "ZEAL" => Some("SWORD_AND_SHIELD"),
-        "PRECISION" => Some("ARCHER_BOW"),
-        "BLIGHT" | "MORTALITY" | "RUIN" | "DIVINITY" | "ARCANA" | "PRIMAL" => {
-            Some(STAFF_DISCIPLINE_ID)
-        }
-        _ => None,
-    }
-}
-
 fn validate_contract_catalog(
     source: &ProgressionCatalogSource,
     weapon_source: &WeaponCatalogSource,
@@ -943,65 +909,11 @@ fn validate_contract_catalog(
     }
     validate_rule_ranges(&contract.rules)?;
 
-    let profile_ids = unique_nonempty_rows(
-        "combat profile",
-        source
-            .combat_profiles
-            .iter()
-            .map(|row| row.combat_profile_id.as_str()),
-    )?;
-    if source
-        .combat_profiles
-        .iter()
-        .any(|row| row.combat_profile_id != normalized(row.combat_profile_id.as_str()))
-    {
-        return Err("runtime combat-profile IDs must use exact canonical wire IDs".to_string());
-    }
-    if profile_ids != discipline_ids {
-        return Err(
-            "runtime combat profiles must map one-to-one to canonical disciplines".to_string(),
-        );
-    }
-
-    let mut legacy_ids = HashSet::new();
-    for row in &source.combat_disciplines {
-        let legacy_id = normalized(row.discipline_id.as_str());
-        if row.discipline_id != legacy_id {
-            return Err(format!(
-                "legacy discipline '{}' is not an exact authored wire id",
-                row.discipline_id
-            ));
-        }
-        if !legacy_ids.insert(legacy_id.clone()) {
-            return Err(format!("duplicate legacy discipline '{legacy_id}'"));
-        }
-        let Some(canonical_id) = canonical_discipline_for_legacy(legacy_id.as_str()) else {
-            return Err(format!(
-                "legacy discipline '{legacy_id}' has no canonical mapping"
-            ));
-        };
-        let expected_kind = if canonical_id == STAFF_DISCIPLINE_ID {
-            "SPELL_SCHOOL"
-        } else {
-            "WEAPON"
-        };
-        if normalized(row.discipline_kind.as_str()) != expected_kind
-            || normalized(row.combat_profile_id.as_str()) != canonical_id
-        {
-            return Err(format!(
-                "legacy discipline '{legacy_id}' does not map exactly to '{canonical_id}'"
-            ));
-        }
-    }
-    if legacy_ids.len() != 10 {
-        return Err("legacy runtime projection must contain its ten audited rows".to_string());
-    }
-
     let mut mode_keys = HashSet::new();
     for mode in &source.combat_modes {
-        let profile_id = normalized(mode.combat_profile_id.as_str());
+        let profile_id = normalized(mode.combat_discipline_id.as_str());
         let mode_id = normalized(mode.mode_id.as_str());
-        if mode.combat_profile_id != profile_id || mode.mode_id != mode_id {
+        if mode.combat_discipline_id != profile_id || mode.mode_id != mode_id {
             return Err("combat-mode IDs must use exact authored wire IDs".to_string());
         }
         if !discipline_ids.contains(profile_id.as_str()) {
@@ -1127,12 +1039,6 @@ fn validate_abilities(
         if actor_scope != "PLAYER" {
             return Err(format!("ability '{ability_id}' has unknown actor scope"));
         }
-        if ability.discipline_id != normalized(ability.discipline_id.as_str()) {
-            return Err(format!(
-                "player ability '{ability_id}' legacy ownership is not an exact authored wire id"
-            ));
-        }
-
         let expected_kind = if ability
             .ability_tags
             .iter()
@@ -1168,23 +1074,11 @@ fn validate_abilities(
                 "player ability '{ability_id}' references unknown canonical discipline"
             ));
         }
-        let expected_canonical = canonical_discipline_for_legacy(ability.discipline_id.as_str())
-            .ok_or_else(|| {
-                format!("player ability '{ability_id}' has unmapped legacy ownership")
-            })?;
-        if canonical_id != expected_canonical {
-            return Err(format!(
-                "player ability '{ability_id}' canonical ownership does not match its audited mapping"
-            ));
-        }
-
         if canonical_id == STAFF_DISCIPLINE_ID {
             let school_id = school_id.ok_or_else(|| {
                 format!("Staff ability '{ability_id}' must have one spell_school_id")
             })?;
-            if !school_ids.contains(school_id.as_str())
-                || school_id != normalized(ability.discipline_id.as_str())
-            {
+            if !school_ids.contains(school_id.as_str()) {
                 return Err(format!(
                     "Staff ability '{ability_id}' has invalid spell-school ownership"
                 ));
@@ -1211,7 +1105,6 @@ fn validate_weapons(
         }
         let canonical_id = normalized(weapon.combat_discipline_id.as_str());
         if weapon.combat_discipline_id != canonical_id
-            || weapon.primary_discipline_id != normalized(weapon.primary_discipline_id.as_str())
             || weapon.weapon_kind != normalized(weapon.weapon_kind.as_str())
             || weapon.hand_requirement != normalized(weapon.hand_requirement.as_str())
             || weapon.equip_slot != normalized(weapon.equip_slot.as_str())
@@ -1223,13 +1116,6 @@ fn validate_weapons(
         if !discipline_ids.contains(canonical_id.as_str()) {
             return Err(format!(
                 "weapon '{item_id}' references unknown canonical discipline '{canonical_id}'"
-            ));
-        }
-        if canonical_discipline_for_legacy(weapon.primary_discipline_id.as_str())
-            != Some(canonical_id.as_str())
-        {
-            return Err(format!(
-                "weapon '{item_id}' canonical ownership does not match its audited legacy mapping"
             ));
         }
         validate_weapon_shape(weapon, canonical_id.as_str())?;
@@ -1411,7 +1297,7 @@ mod tests {
                 .count(),
             197
         );
-        assert_eq!(source.combat_disciplines.len(), 10);
+        assert_eq!(source.combat_build_contract.combat_disciplines.len(), 5);
         assert!(source.abilities.iter().all(|ability| {
             if ability.actor_scope == "PLAYER" {
                 ability.combat_discipline_id.is_some()
@@ -1741,7 +1627,7 @@ mod tests {
             (
                 "mode ownership",
                 Box::new(|p, _| {
-                    p["combat_modes"][0]["combat_profile_id"] =
+                    p["combat_modes"][0]["combat_discipline_id"] =
                         serde_json::Value::String("RUIN".to_string());
                 }),
             ),

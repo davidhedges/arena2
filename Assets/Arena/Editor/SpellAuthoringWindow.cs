@@ -28,7 +28,7 @@ namespace Arena.Editor
         private readonly List<AbilityDefinition> _spellAbilities = new();
         private readonly List<CombatVfxCueDefinition> _selectedAbilityCues = new();
         private readonly List<string> _knownTemplateIds = new();
-        private readonly List<string> _knownDisciplineIds = new();
+        private readonly List<string> _knownSpellSchoolIds = new();
         private bool _knownTemplateIdsLoaded;
 
         private ProgressionCatalogDocument? _catalog;
@@ -40,8 +40,8 @@ namespace Arena.Editor
         private int _selectedSpellIndex;
         private string _draftAbilityId = "SPELL_NEW_SPELL";
         private string _draftSpellId = "NEW_SPELL";
-        private string _draftDisciplineId = "ARCANA";
-        private string _draftCombatProfileId = string.Empty;
+        private string _draftSpellSchoolId = "ARCANA";
+        private string _draftCombatDisciplineId = string.Empty;
         private string _draftDisplayName = "New Spell";
         private string _draftCastVfxId = "VFX_CAST_HAND_01";
         private string _draftProjectileVfxId = "VFX_PROJECTILE_01";
@@ -130,8 +130,8 @@ namespace Arena.Editor
             AbilityDefinition selected = _spellAbilities[_selectedSpellIndex];
             string abilityId = Normalize(selected.ability_id);
             string spellId = Normalize(selected.action_id);
-            string disciplineId = Normalize(selected.discipline_id);
-            string combatProfileId = Normalize(selected.combat_profile_id);
+            string spellSchoolId = Normalize(selected.spell_school_id);
+            string combatDisciplineId = Normalize(selected.combat_discipline_id);
             string deliveryKind = Normalize(selected.gameplay.delivery.kind);
             SpellAnimationArchetype archetype = SpellAnimationArchetypes.Derive(
                 (ulong)Math.Max(0, selected.gameplay.cast_time_ms),
@@ -150,8 +150,8 @@ namespace Arena.Editor
             {
                 EditorGUILayout.TextField("Ability Id", abilityId);
                 EditorGUILayout.TextField("Spell Id", spellId);
-                EditorGUILayout.TextField("Discipline", disciplineId);
-                EditorGUILayout.TextField("Combat Profile", combatProfileId);
+                EditorGUILayout.TextField("Spell School", spellSchoolId);
+                EditorGUILayout.TextField("Combat Discipline", combatDisciplineId);
                 EditorGUILayout.TextField("Display Name", selected.display_name);
                 EditorGUILayout.IntField("Cast Time Ms", selected.gameplay.cast_time_ms);
                 EditorGUILayout.TextField("Delivery", deliveryKind);
@@ -159,7 +159,7 @@ namespace Arena.Editor
 
             DrawCastAnimationPicker(spellId, archetype, selected.gameplay.cast_time_ms);
 
-            if (string.IsNullOrWhiteSpace(combatProfileId)
+            if (string.IsNullOrWhiteSpace(combatDisciplineId)
                 && SpellCastAnimationResolver.TryResolve(
                     null,
                     spellId,
@@ -170,7 +170,7 @@ namespace Arena.Editor
                 resolvedAnimation = sharedEntry;
             }
 
-            if (string.IsNullOrWhiteSpace(combatProfileId))
+            if (string.IsNullOrWhiteSpace(combatDisciplineId))
             {
                 SpellCastAnimationMap? map = _spellAnimationMap;
                 if (map != null && map.TryGetEntry(spellId, out SpellCastAnimationMap.Entry mapEntry))
@@ -204,7 +204,7 @@ namespace Arena.Editor
             else
             {
                 string resolutionKey =
-                    $"Arena.SpellAuthoring.CombatSetResolution.Visible.V2.{spellId}.{combatProfileId}";
+                    $"Arena.SpellAuthoring.CombatSetResolution.Visible.V2.{spellId}.{combatDisciplineId}";
                 bool showCombatSetResolution = SessionState.GetBool(resolutionKey, false);
                 showCombatSetResolution = EditorGUILayout.Foldout(
                     showCombatSetResolution,
@@ -216,11 +216,11 @@ namespace Arena.Editor
                 {
                     EnsureAnimationSetsLoaded();
                     if (!_animationSetByProfile.TryGetValue(
-                            combatProfileId,
+                            combatDisciplineId,
                             out CombatAnimationSet animationSet))
                     {
                         EditorGUILayout.HelpBox(
-                            $"No CombatAnimationSet found for combat profile '{combatProfileId}'.",
+                            $"No CombatAnimationSet found for combat discipline '{combatDisciplineId}'.",
                             MessageType.Error);
                     }
                     else
@@ -279,11 +279,11 @@ namespace Arena.Editor
             if (showVfxAudit)
             {
                 if (!hasResolvedAnimation
-                    && !string.IsNullOrWhiteSpace(combatProfileId))
+                    && !string.IsNullOrWhiteSpace(combatDisciplineId))
                 {
                     EnsureAnimationSetsLoaded();
                     if (_animationSetByProfile.TryGetValue(
-                            combatProfileId,
+                            combatDisciplineId,
                             out CombatAnimationSet animationSet)
                         && TryResolveSpellAnimationEntry(
                             animationSet,
@@ -909,22 +909,22 @@ namespace Arena.Editor
 
             _draftAbilityId = NormalizeEditorText(EditorGUILayout.TextField("Ability Id", _draftAbilityId));
             _draftSpellId = NormalizeEditorText(EditorGUILayout.TextField("Spell Id", _draftSpellId));
-            if (_knownDisciplineIds.Count > 0)
+            if (_knownSpellSchoolIds.Count > 0)
             {
-                int disciplineIndex = Mathf.Max(0, _knownDisciplineIds.FindIndex(id =>
-                    string.Equals(id, Normalize(_draftDisciplineId), StringComparison.Ordinal)));
+                int disciplineIndex = Mathf.Max(0, _knownSpellSchoolIds.FindIndex(id =>
+                    string.Equals(id, Normalize(_draftSpellSchoolId), StringComparison.Ordinal)));
                 disciplineIndex = EditorGUILayout.Popup(
                     "Discipline",
                     disciplineIndex,
-                    _knownDisciplineIds.ToArray());
-                _draftDisciplineId = _knownDisciplineIds[disciplineIndex];
+                    _knownSpellSchoolIds.ToArray());
+                _draftSpellSchoolId = _knownSpellSchoolIds[disciplineIndex];
             }
             else
             {
-                _draftDisciplineId = NormalizeEditorText(
-                    EditorGUILayout.TextField("Discipline", _draftDisciplineId));
+                _draftSpellSchoolId = NormalizeEditorText(
+                    EditorGUILayout.TextField("Spell School", _draftSpellSchoolId));
             }
-            _draftCombatProfileId = NormalizeEditorText(EditorGUILayout.TextField("Combat Profile Id", _draftCombatProfileId));
+            _draftCombatDisciplineId = NormalizeEditorText(EditorGUILayout.TextField("Combat Discipline Id", _draftCombatDisciplineId));
             _draftDisplayName = EditorGUILayout.TextField("Display Name", _draftDisplayName);
             _draftCastVfxId = DrawVfxTemplateField("Cast VFX Id", _draftCastVfxId);
             _draftProjectileVfxId = DrawVfxTemplateField("Projectile VFX Id", _draftProjectileVfxId);
@@ -1053,8 +1053,8 @@ namespace Arena.Editor
             AbilityDefinition selected = _spellAbilities[Mathf.Clamp(_selectedSpellIndex, 0, _spellAbilities.Count - 1)];
             _draftAbilityId = Normalize(selected.ability_id);
             _draftSpellId = Normalize(selected.action_id);
-            _draftDisciplineId = Normalize(selected.discipline_id);
-            _draftCombatProfileId = Normalize(selected.combat_profile_id);
+            _draftSpellSchoolId = Normalize(selected.spell_school_id);
+            _draftCombatDisciplineId = Normalize(selected.combat_discipline_id);
             _draftDisplayName = selected.display_name;
         }
 
@@ -1065,8 +1065,8 @@ namespace Arena.Editor
             builder.AppendLine("  {");
             builder.AppendLine($"    \"ability_id\": \"{Normalize(_draftAbilityId)}\",");
             builder.AppendLine("    \"actor_scope\": \"PLAYER\",");
-            builder.AppendLine($"    \"discipline_id\": \"{Normalize(_draftDisciplineId)}\",");
-            builder.AppendLine($"    \"combat_profile_id\": \"{Normalize(_draftCombatProfileId)}\",");
+            builder.AppendLine($"    \"spell_school_id\": \"{Normalize(_draftSpellSchoolId)}\",");
+            builder.AppendLine($"    \"combat_discipline_id\": \"{Normalize(_draftCombatDisciplineId)}\",");
             builder.AppendLine($"    \"action_id\": \"{Normalize(_draftSpellId)}\",");
             builder.AppendLine($"    \"display_name\": \"{EscapeJson(_draftDisplayName)}\",");
             builder.AppendLine("    \"resource_kind\": \"MANA\",");
@@ -1162,7 +1162,7 @@ namespace Arena.Editor
             _selectedAbilityCues.Clear();
             _knownTemplateIds.Clear();
             _knownTemplateIdsLoaded = false;
-            _knownDisciplineIds.Clear();
+            _knownSpellSchoolIds.Clear();
             _spellAnimationMap = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationMap>();
             _spellAnimationCatalog = SpellPresentationEditorData.FindFirstAsset<SpellCastAnimationCatalog>();
             _animationSets = Array.Empty<CombatAnimationSet>();
@@ -1193,10 +1193,10 @@ namespace Arena.Editor
                 return;
             }
 
-            _knownDisciplineIds.AddRange(_catalog.combat_disciplines
-                .OrderBy(discipline => discipline.sort_order)
-                .ThenBy(discipline => Normalize(discipline.discipline_id), StringComparer.Ordinal)
-                .Select(discipline => Normalize(discipline.discipline_id))
+            _knownSpellSchoolIds.AddRange(_catalog.combat_build_contract.spell_schools
+                .OrderBy(school => school.sort_order)
+                .ThenBy(school => Normalize(school.spell_school_id), StringComparer.Ordinal)
+                .Select(school => Normalize(school.spell_school_id))
                 .Where(id => !string.IsNullOrWhiteSpace(id)));
 
             _spellAbilities.AddRange(_catalog.abilities
@@ -1228,15 +1228,21 @@ namespace Arena.Editor
         [Serializable]
         private sealed class ProgressionCatalogDocument
         {
-            public List<CombatDisciplineDefinition> combat_disciplines = new();
+            public CombatBuildContractDefinition combat_build_contract = new();
             public List<AbilityDefinition> abilities = new();
             public List<CombatVfxCueDefinition> combat_vfx_cues = new();
         }
 
         [Serializable]
-        private sealed class CombatDisciplineDefinition
+        private sealed class CombatBuildContractDefinition
         {
-            public string discipline_id = string.Empty;
+            public List<SpellSchoolDefinition> spell_schools = new();
+        }
+
+        [Serializable]
+        private sealed class SpellSchoolDefinition
+        {
+            public string spell_school_id = string.Empty;
             public int sort_order = 0;
         }
 
@@ -1244,8 +1250,8 @@ namespace Arena.Editor
         private sealed class AbilityDefinition
         {
             public string ability_id = string.Empty;
-            public string discipline_id = string.Empty;
-            public string combat_profile_id = string.Empty;
+            public string spell_school_id = string.Empty;
+            public string combat_discipline_id = string.Empty;
             public string action_id = string.Empty;
             public string display_name = string.Empty;
             public int sort_order = 0;

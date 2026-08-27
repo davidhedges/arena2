@@ -15,8 +15,8 @@ namespace SpacetimeDB.Types
     {
         [DataMember(Name = "key")]
         public string Key;
-        [DataMember(Name = "combat_profile_id")]
-        public string CombatProfileId;
+        [DataMember(Name = "combat_discipline_id")]
+        public string CombatDisciplineId;
         [DataMember(Name = "mode_id")]
         public string ModeId;
         [DataMember(Name = "display_name")]
@@ -28,7 +28,7 @@ namespace SpacetimeDB.Types
 
         public CombatModeCatalog(
             string Key,
-            string CombatProfileId,
+            string CombatDisciplineId,
             string ModeId,
             string DisplayName,
             bool IsDefault,
@@ -36,7 +36,7 @@ namespace SpacetimeDB.Types
         )
         {
             this.Key = Key;
-            this.CombatProfileId = CombatProfileId;
+            this.CombatDisciplineId = CombatDisciplineId;
             this.ModeId = ModeId;
             this.DisplayName = DisplayName;
             this.IsDefault = IsDefault;
@@ -46,7 +46,7 @@ namespace SpacetimeDB.Types
         public CombatModeCatalog()
         {
             this.Key = "";
-            this.CombatProfileId = "";
+            this.CombatDisciplineId = "";
             this.ModeId = "";
             this.DisplayName = "";
         }

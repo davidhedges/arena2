@@ -37,16 +37,16 @@ use crate::combat::status_effect as _;
 use crate::combat::{
     advance_slipstream_after_movement_ability, arm_quickening_after_movement_ability,
     combat_projectile_definition_for_id, has_active_disabling_status, has_active_status,
-    has_active_status_group, has_due_pending_effects, hostile_targeted_ability_misses, AttackAim,
+    has_active_status_group, has_due_pending_effects, hostile_targeted_ability_misses,
     mark_harmful_combat_action, queue_effects, remove_active_status_group, resolve_pending_effects,
-    status_matches_removal_filter, ActiveCombatProjectile, CombatEvent, CombatProjectileDefinition,
-    DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent, StackPolicy,
-    StatusDispelType, StatusEffectKind, StatusPayload, StatusPolarity, COMBAT_EVENT_AREA_IMPACT,
-    COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST, COMBAT_EVENT_EVADE, COMBAT_EVENT_FIZZLE,
-    COMBAT_EVENT_IMPACT, COMBAT_EVENT_MISS, COMBAT_EVENT_PARRY, COMBAT_EVENT_RELEASE,
-    COMBAT_METADATA_CONSUMED_MELEE_MODIFIER, COMBAT_METADATA_FLURRY_PROC, COMBAT_METADATA_NONE,
-    COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
-    DAMAGE_SOURCE_KIND_MELEE,
+    status_matches_removal_filter, ActiveCombatProjectile, AttackAim, CombatEvent,
+    CombatProjectileDefinition, DamageDelivery, DamageType, EffectPacket,
+    ProjectilePresentationEvent, StackPolicy, StatusDispelType, StatusEffectKind, StatusPayload,
+    StatusPolarity, COMBAT_EVENT_AREA_IMPACT, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST,
+    COMBAT_EVENT_EVADE, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_MISS,
+    COMBAT_EVENT_PARRY, COMBAT_EVENT_RELEASE, COMBAT_METADATA_CONSUMED_MELEE_MODIFIER,
+    COMBAT_METADATA_FLURRY_PROC, COMBAT_METADATA_NONE, COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS,
+    COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_MELEE,
 };
 use crate::defense::{
     begin_evasion_window, clear_interruptible_defense_for_owner, resolve_defensible_combat_hit,
@@ -56,30 +56,28 @@ use crate::lingering_shade::arm_lingering_shade_for_voluntary_movement;
 use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::progression::{
     active_action_bar_assignment_debug_summary, active_selectable_ability_for_authored_action,
-    blight_toxic_weapon_on_hit_for_owner, derived_combat_profile_id_for_owner,
-    melee_channel_for_ability_id,
-    melee_channel_for_authored_strike,
+    blight_toxic_weapon_on_hit_for_owner, derived_combat_discipline_id_for_owner,
+    melee_channel_for_ability_id, melee_channel_for_authored_strike,
     melee_evasive_leap_for_ability_id, melee_impact_effects_for_ability_id,
     melee_timed_movement_for_ability_id, primary_resource_gain_on_action_accept,
     resolved_auto_attack_mode_for_owner, ruin_flaming_weapon_on_hit_for_owner, AbilityCatalog,
     AutoAttackCatalog, AutoAttackReplacementCatalog, MeleeAbilityCatalog, MeleeChannelRuntime,
-    MeleeEvasiveLeapRuntime, MeleeFireOnHitRuntime, MeleeGapCloseCatalog,
-    MeleePoisonOnHitRuntime, MeleeTimedMovementRuntime,
+    MeleeEvasiveLeapRuntime, MeleeFireOnHitRuntime, MeleeGapCloseCatalog, MeleePoisonOnHitRuntime,
+    MeleeTimedMovementRuntime,
 };
 use crate::relations::{can_harm, combat_relation, target_audience_allows, TargetAudience};
 use crate::resources::{
     can_pay_action_resource_cost, grant_primary_resource_amount,
     grant_primary_resource_amount_for_kind, grant_primary_resource_for_melee_hit,
     pay_action_resource_cost, resolve_ability_action_resource_cost,
-    resolve_ability_action_resource_cost_amount, ResolvedActionResourceCost,
-    RESOURCE_KIND_MANA,
+    resolve_ability_action_resource_cost_amount, ResolvedActionResourceCost, RESOURCE_KIND_MANA,
 };
 use crate::spells::{
     aoe_hits_player, approach_line_contact_point_xz, bake_linear_special_movement,
     begin_parabolic_arc_special_movement, begin_special_movement_with_facing_policy,
     contact_distance_from_radii, horizontal_movement_duration_ms, is_on_global_cooldown,
-    is_on_named_cooldown, stamp_global_cooldown_for_duration,
-    stamp_named_cooldown_for_duration, SpellVec3, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+    is_on_named_cooldown, stamp_global_cooldown_for_duration, stamp_named_cooldown_for_duration,
+    SpellVec3, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
     SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y, SPECIAL_MOVEMENT_FACING_FACE_PATH,
     SPECIAL_MOVEMENT_FACING_FACE_START,
 };
@@ -1991,23 +1989,23 @@ fn authored_melee_gameplay_for_profile(
     let ability = ctx.db.ability_catalog().iter().find(|ability| {
         ability.ability_kind.eq_ignore_ascii_case("MELEE")
             && ability.action_id == authored_action_id.as_str()
-            && derived_combat_profile_id_for_ability(ctx, ability).is_some_and(|ability_profile| {
-                ability_profile.eq_ignore_ascii_case(profile.as_str())
-            })
+            && derived_combat_discipline_id_for_ability(ctx, ability).is_some_and(
+                |ability_profile| ability_profile.eq_ignore_ascii_case(profile.as_str()),
+            )
     })?;
     melee_gameplay_for_ability(ctx, &ability)
 }
 
-fn derived_combat_profile_id_for_ability(
+fn derived_combat_discipline_id_for_ability(
     ctx: &ReducerContext,
     ability: &AbilityCatalog,
 ) -> Option<String> {
     let _ = ctx;
-    let combat_profile_id = ability.combat_profile_id.trim().to_ascii_uppercase();
-    if combat_profile_id.is_empty() {
+    let combat_discipline_id = ability.combat_discipline_id.trim().to_ascii_uppercase();
+    if combat_discipline_id.is_empty() {
         None
     } else {
-        Some(combat_profile_id)
+        Some(combat_discipline_id)
     }
 }
 
@@ -2063,8 +2061,8 @@ fn active_melee_gameplay_for_resolved_action(
 
     let Some(followup_ability) = ctx.db.ability_catalog().iter().find(|ability| {
         ability.ability_kind.eq_ignore_ascii_case("MELEE")
-            && derived_combat_profile_id_for_ability(ctx, ability)
-                == derived_combat_profile_id_for_ability(ctx, &root_ability)
+            && derived_combat_discipline_id_for_ability(ctx, ability)
+                == derived_combat_discipline_id_for_ability(ctx, &root_ability)
             && ability.action_id == resolved.authored_id.as_str()
     }) else {
         return Err(format!(
@@ -2988,7 +2986,7 @@ fn clear_queued_melee_followup(ctx: &ReducerContext, caster: Identity) {
 }
 
 fn combat_profile_for_identity(ctx: &ReducerContext, identity: Identity) -> String {
-    derived_combat_profile_id_for_owner(ctx, identity)
+    derived_combat_discipline_id_for_owner(ctx, identity)
         .filter(|profile| !profile.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_COMBAT_PROFILE.to_string())
 }
@@ -3466,10 +3464,10 @@ pub(crate) fn perform_intrinsic_auto_attack_replacement_for(
     let authored_strike_id = AuthoredActionId::new(replacement.authored_melee_strike_id.as_str());
     let (combat_profile, resolved) =
         resolve_melee_authored_action_for_caster(ctx, caster, &authored_strike_id)?;
-    if !combat_profile.eq_ignore_ascii_case(replacement.combat_profile_id.as_str()) {
+    if !combat_profile.eq_ignore_ascii_case(replacement.combat_discipline_id.as_str()) {
         return Err(format!(
             "auto-attack replacement '{}' is authored for combat profile '{}' but caster resolved '{}'",
-            replacement.replacement_id, replacement.combat_profile_id, combat_profile
+            replacement.replacement_id, replacement.combat_discipline_id, combat_profile
         ));
     }
 
@@ -6721,32 +6719,31 @@ mod tests {
     use super::{
         auto_attack_catalog_resolution_keys, auto_attack_reference_for_profile,
         auto_attack_sequence_step_for_profile, canonical_slot_id, combo_input_decision,
-        default_aerial_execution_mode, find_combo_root_for_authorization,
-        distance_scaled_gap_close_impact_delay_ms, gap_close_activation_satisfied,
-        gap_close_arc_height, gap_close_destination_within_epsilon,
-        gap_close_has_horizontal_travel, gap_close_movement_facing, gap_close_pre_commit_decision,
+        default_aerial_execution_mode, distance_scaled_gap_close_impact_delay_ms,
+        find_combo_root_for_authorization, gap_close_activation_satisfied, gap_close_arc_height,
+        gap_close_destination_within_epsilon, gap_close_has_horizontal_travel,
+        gap_close_movement_facing, gap_close_pre_commit_decision,
         gap_close_target_facing_satisfied, inactive_conditional_gap_close_range,
         melee_channel_movement_canceled, melee_channel_tick_delays,
         melee_hit_volume_contains_player, melee_impact_delays, melee_manifest,
         melee_target_impact_point_y, pending_commitment_belongs_to_channel,
         pending_melee_impact_range, positive_projectile_override,
         projectile_max_distance_for_policy, push_flaming_weapon_effects,
-        push_toxic_weapon_effects, toxic_weapon_proc_succeeds,
         push_melee_impact_status_effects, push_stagger_effect_with_duration_if_applicable,
-        resolve_gap_close_destination, resolve_melee_action_reference,
+        push_toxic_weapon_effects, resolve_gap_close_destination, resolve_melee_action_reference,
         resolve_melee_action_reference_in_strikes, resolved_hit_window_damages,
         scaled_auto_attack_cadence_ms, scaled_impact_area_damage, scheduled_melee_impact_at,
         strike_total_duration_ms, targeted_melee_requires_current_facing,
-        timed_melee_movement_destination, AerialExecutionMode,
+        timed_melee_movement_destination, toxic_weapon_proc_succeeds, AerialExecutionMode,
         AirborneTargetingMode, ComboInputDecision, GapCloseActorSnapshot,
         GapClosePreCommitDecision, MeleeAuthorization, PendingMeleeImpact,
         ResolvedMeleeAttackModifiers, ResolvedMeleeGapClose, ResolvedMeleeTargeting, SpellVec3,
         StaggerDirection, StrikeData, StrikeHitWindowData, StrikePhasedGapCloseTimingData,
-        DAGGER_COUP_DE_GRACE_ABILITY_ID,
-        GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH, GAP_CLOSE_DESTINATION_BEHIND_TARGET,
-        GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT, GAP_CLOSE_KIND_LEAP, GAP_CLOSE_KIND_LINEAR,
-        GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED, MELEE_GAP_CLOSE_LEAP_MAX_ARC_HEIGHT_METERS,
-        MELEE_MANIFEST_JSON, MELEE_TARGET_FACING_ARC_RADIANS, SPECIAL_MOVEMENT_FACING_FACE_PATH,
+        DAGGER_COUP_DE_GRACE_ABILITY_ID, GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH,
+        GAP_CLOSE_DESTINATION_BEHIND_TARGET, GAP_CLOSE_DESTINATION_NEAREST_CONTACT_POINT,
+        GAP_CLOSE_KIND_LEAP, GAP_CLOSE_KIND_LINEAR, GAP_CLOSE_KIND_TELEPORT_BEHIND_TARGET_DISABLED,
+        MELEE_GAP_CLOSE_LEAP_MAX_ARC_HEIGHT_METERS, MELEE_MANIFEST_JSON,
+        MELEE_TARGET_FACING_ARC_RADIANS, SPECIAL_MOVEMENT_FACING_FACE_PATH,
         SPECIAL_MOVEMENT_FACING_FACE_START,
     };
     use crate::action_ids::{AuthoredActionId, RuntimeActionId};
@@ -6759,8 +6756,7 @@ mod tests {
     use crate::player::{DEFAULT_COMBAT_PROFILE, TWO_HANDED_SWORD_COMBAT_PROFILE};
     use crate::player_state::PlayerState;
     use crate::progression::{
-        MeleeChannelRuntime, MeleeFireOnHitRuntime, MeleeGapCloseCatalog,
-        MeleePoisonOnHitRuntime,
+        MeleeChannelRuntime, MeleeFireOnHitRuntime, MeleeGapCloseCatalog, MeleePoisonOnHitRuntime,
     };
 
     const TEST_GAP_CLOSE_DESTINATION_EPSILON_METERS: f32 = 0.10;
@@ -7128,12 +7124,15 @@ mod tests {
                 continue;
             }
 
-            let profile_id = ability
-                .get("combat_profile_id")
+            let Some(profile_id) = ability
+                .get("combat_discipline_id")
                 .and_then(Value::as_str)
+                .filter(|discipline_id| !discipline_id.trim().is_empty())
                 .map(AuthoredActionId::new)
-                .expect("melee ability must declare combat_profile_id")
-                .into_string();
+                .map(AuthoredActionId::into_string)
+            else {
+                continue;
+            };
             let action_id = ability
                 .get("action_id")
                 .and_then(Value::as_str)
@@ -8059,9 +8058,9 @@ mod tests {
                     tick_interval_ms: 0,
                     cancel_on_movement: true,
                     use_authored_hit_windows: true,
-                holdable: false,
-                resource_cost_per_release: 0.0,
-                resource_kind_per_release: "",
+                    holdable: false,
+                    resource_cost_per_release: 0.0,
+                    resource_kind_per_release: "",
                 })
             ),
             vec![320, 1503, 2743]

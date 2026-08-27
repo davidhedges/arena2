@@ -206,7 +206,7 @@ referenced but not repeated.
   behind-wall gap-close press rejects `LineOfSightBlocked` ("No line of
   sight") and never dashes, while a clear-sight blocked dash path stays
   `GapCloseBlocked` ("Path blocked") — distinct reasons, verified live
-  via `ops/s4-los-probe.py`. The F5 slice-1 "rejected press (out of
+  via `retired pre-cutover S4 LOS harness`. The F5 slice-1 "rejected press (out of
   range / LOS)" wording now applies to gap-closers too.
 - **Design-review backlog (2026-07-03, flagged by live testing — owner has
   ruled these disputed, not endorsed). Review delivered:

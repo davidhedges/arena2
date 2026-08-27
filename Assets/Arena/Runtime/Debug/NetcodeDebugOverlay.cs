@@ -280,7 +280,7 @@ namespace Arena.Debugging
             y += lineHeight;
             GUI.Label(new Rect(x, y, 400, lineHeight), $"Predicted pos: ({predictedPos.x:F2}, {predictedPos.y:F2}, {predictedPos.z:F2})", _style);
             y += lineHeight;
-            string combatProfile = CombatProfileResolver.ResolveForEntity(NetworkManager.Instance?.Conn, entity);
+            string combatProfile = RuntimeCombatProfile.ResolveForEntity(NetworkManager.Instance?.Conn, entity);
             GUI.Label(new Rect(x, y, 400, lineHeight), $"Combat profile: {combatProfile}", _style);
             y += lineHeight;
 

@@ -267,7 +267,7 @@ all existing tables by `signal`, add the auto-check section, add a
 `[DEFENSE_LATE]` section (count, rate per combat-minute, late_by_ms
 distribution by kind).
 
-**Headless probe leg (server truth):** `ops/s9-auto-rewind-probe.py`,
+**Headless probe leg (server truth):** `retired pre-cutover S9 auto-rewind harness`,
 self-verifying PASS/FAIL, throwaway measurement-build DB
 (`ARENA_NPC_HARMLESS=1 ARENA_NPC_AGGRO_RADIUS=100`), reusing the S8
 arrangement — runner probe tows a chasing kobold; attacker probe parks off
@@ -308,7 +308,7 @@ needed — flips accumulate in seconds, no single target need survive the leg.
 OFF/ON legs, scored by the analyzer (`auto_reach [signal=standing]` flip
 rate: ~0 OFF, nonzero ON) plus the existing contact-cue ledger.
 
-**Headless leg result (2026-07-04): PASS.** `ops/s9-auto-rewind-probe.py`
+**Headless leg result (2026-07-04): PASS.** `retired pre-cutover S9 auto-rewind harness`
 against a throwaway `ARENA_NPC_HARMLESS` DB — all gates green: config default
 OFF; standing write/clamp(250 ms)/zero-delete/flow; OFF audits would-be flips
 but dispatches nothing on the standing stamp; ON puts the rewound verdict in
@@ -376,6 +376,6 @@ and all audit/telemetry logging stay on regardless of both flags.
   the armed-auto-target handle; `AttackerViewTime` already computes the
   value); no other client changes.
 - Ops: probes that call `ping_clock` or `set_lag_comp_config`
-  (`ops/s8-lag-comp-probe.py`, any lap/input probes sending pings) add the
+  (`retired pre-cutover S8 lag-compensation harness`, any lap/input probes sending pings) add the
   new args (0 / `false` are the no-op values). Analyzer extended in place.
 - Tests: deferred until the contract stabilizes (standing churn ruling).

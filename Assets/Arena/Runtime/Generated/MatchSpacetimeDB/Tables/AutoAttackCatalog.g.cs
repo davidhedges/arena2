@@ -41,8 +41,7 @@ namespace Arena.MatchDb
     public sealed class AutoAttackCatalogCols
     {
         public global::SpacetimeDB.Col<AutoAttackCatalog, string> Key { get; }
-        public global::SpacetimeDB.Col<AutoAttackCatalog, string> DisciplineId { get; }
-        public global::SpacetimeDB.Col<AutoAttackCatalog, string> CombatProfileId { get; }
+        public global::SpacetimeDB.Col<AutoAttackCatalog, string> CombatDisciplineId { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, string> ModeId { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, string> ActionId { get; }
         public global::SpacetimeDB.Col<AutoAttackCatalog, int> BaseDamage { get; }
@@ -61,8 +60,7 @@ namespace Arena.MatchDb
         public AutoAttackCatalogCols(string tableName)
         {
             Key = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "key");
-            DisciplineId = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "discipline_id");
-            CombatProfileId = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "combat_profile_id");
+            CombatDisciplineId = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "combat_discipline_id");
             ModeId = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "mode_id");
             ActionId = new global::SpacetimeDB.Col<AutoAttackCatalog, string>(tableName, "action_id");
             BaseDamage = new global::SpacetimeDB.Col<AutoAttackCatalog, int>(tableName, "base_damage");

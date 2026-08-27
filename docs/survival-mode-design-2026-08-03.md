@@ -89,7 +89,7 @@ carried factual errors of their own, noted below.
 | F12 | Parking a second `PLAYER_BAG` is impossible — `player_bag_container_id` derives **one fixed id per owner**, and the client returns the first owned bag | `inventory.rs:4946`, `InventoryScreen.cs:1325` | reuse the singleton, §9.1 |
 | F13 | Public `spawn_npc` still lets a player inject NPCs — including `FRIENDLY` allies — into their own survival instance, bypassing `SurvivalNpc`, the cap and the ceiling | `npcs.rs:1017` | reject in-survival callers, §8.1 |
 | F14 | Disconnect semantics contradictory: §6.3 promised offers survive reconnect while §9.2 said inventory is session-scoped; disconnect also **deletes the arena** at zero players and cleans only player-owned NPCs | `arena.rs:370` | disconnect abandons the run, §3.1 |
-| F15 | Adding `instance_kind` alters a **public** row type, which the repo's own publish contract says auto-migration rejects | `spellbook-composer-design-2026-07-20.md:38` | explicit cutover, §2.1 |
+| F15 | Adding `instance_kind` alters a **public** row type, which the repo's own publish contract says auto-migration rejects | current generated inventory bindings | explicit cutover, §2.1 |
 | F16 | Shop had no offer count, weighting, modifier values, stack caps, prices or quality curve — slice 3 would require inventing economy rules | design draft §6.3 | concrete economy, §6.4 |
 | F17 | Spell cadence still diverged: script used a fixed `cast_time + 250`, runtime applies `npc_action_recovery_ms` after the cast | `npcs.rs:1671` | script fixed, §4 |
 | F18 | No lifetime rule for offers and pre-rolled item aggregates; and deleting `SurvivalRun` at teardown leaves the results screen with nothing to read | design draft §2 | rollover + `SurvivalResult`, §3.2 |
@@ -827,7 +827,7 @@ character-owned item into the run bag when a starter or shop weapon is equipped.
 pub struct SurvivalStash {
     #[primary_key] pub owner: Identity,
     pub equipment_json: String,   // the 13 slot ids + original revision
-    pub items_json: String,       // ItemInstance + affix + ItemSpell aggregates
+    pub items_json: String,       // ItemInstance + current owned child aggregates
     pub placements_json: String,  // bag grid: item id → (x, y, w, h)
     pub captured_at: Timestamp,
 }
@@ -881,12 +881,13 @@ Rules:
   `clear_inventory_for_owner` on every path that reaches it. Restoring after is
   a no-op on deleted rows.
 - **Snapshot aggregates, not IDs.** The stash captures whole item aggregates —
-  `ItemInstance`, its `ItemAffixInstance` rows, its `ItemSpell` rows, and slot
-  placements — so restore can rebuild them even if the originals were deleted.
+  `ItemInstance`, its current owned child rows such as `ItemAffixInstance`, and
+  slot placements — so restore can rebuild them even if the originals were
+  deleted. Removed spell-list child schema is not part of this aggregate.
 - **Restore is idempotent** and re-entrant from run end, death, leave-instance
   and a watchdog.
-- **Teardown deletes child rows too.** Dropping `ItemInstance` alone orphans
-  affix and item-spell rows.
+- **Teardown deletes child rows too.** Dropping `ItemInstance` alone can orphan
+  current owned children such as affix rows.
 
 **The restore order is load-bearing [F20].** Run items can be *equipped* when a
 run ends — that is the normal case, since the player fights in what they bought.
@@ -898,9 +899,9 @@ the §3.1 teardown expand to:
 1. **Clear run equipment first.** Drop every `EquipmentLoadout` reference to a
    `SurvivalRunItem` — clear the loadout wholesale, since by construction every
    equipped item is a run item.
-2. **Then delete run items** and their affix/`ItemSpell`/slot child rows.
+2. **Then delete run items** and their affix/slot child rows.
 3. **Restore the snapshotted item aggregates** — `ItemInstance` first, then
-   affix and `ItemSpell` children.
+   current owned children such as affixes.
 4. **Restore bag placements** exactly, so the grid layout the player left with
    is the grid layout they return to.
 5. **Restore the `EquipmentLoadout` row wholesale**, with `revision` bumped

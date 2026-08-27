@@ -411,19 +411,19 @@ namespace Arena.Entity
             entity.SetEquippedArmorItemDefIdsBySlot(new Dictionary<string, string>(System.StringComparer.Ordinal));
         }
 
-        public void OnActiveCombatDisciplineInsert(EventContext ctx, ActiveCombatDiscipline row)
+        public void OnActiveCombatBuildDisciplineInsert(EventContext ctx, ActiveCombatBuildDiscipline row)
         {
             ApplyOwnerCombatProfile(row.Owner);
         }
 
-        public void OnActiveCombatDisciplineUpdate(EventContext ctx, ActiveCombatDiscipline oldRow, ActiveCombatDiscipline newRow)
+        public void OnActiveCombatBuildDisciplineUpdate(EventContext ctx, ActiveCombatBuildDiscipline oldRow, ActiveCombatBuildDiscipline newRow)
         {
             ApplyOwnerCombatProfile(oldRow.Owner);
             if (oldRow.Owner != newRow.Owner)
                 ApplyOwnerCombatProfile(newRow.Owner);
         }
 
-        public void OnActiveCombatDisciplineDelete(EventContext ctx, ActiveCombatDiscipline row)
+        public void OnActiveCombatBuildDisciplineDelete(EventContext ctx, ActiveCombatBuildDiscipline row)
         {
             ApplyOwnerCombatProfile(row.Owner);
         }
@@ -1520,7 +1520,7 @@ namespace Arena.Entity
                 return;
 
             var conn = NetworkManager.Instance?.Conn;
-            string combatProfile = CombatProfileResolver.ResolveForOwner(conn, owner);
+            string combatProfile = RuntimeCombatProfile.ResolveForOwner(conn, owner);
             entity.SetCombatProfile(combatProfile);
 
             CombatAnimationSet? animationSet = ResolveAnimationSet(combatProfile);
@@ -1542,7 +1542,7 @@ namespace Arena.Entity
             string modeId = string.Empty;
             if (active != null
                 && string.Equals(
-                    WireIdentifier.Normalize(active.CombatProfileId),
+                    WireIdentifier.Normalize(active.CombatDisciplineId),
                     CombatProfileIds.Normalize(entity.CombatProfile),
                     System.StringComparison.Ordinal))
             {

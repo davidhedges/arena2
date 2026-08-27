@@ -18,14 +18,14 @@ namespace Arena.MatchDb
         {
             protected override string RemoteTableName => "combat_mode_catalog";
 
-            public sealed class CombatProfileIdIndex : BTreeIndexBase<string>
+            public sealed class CombatDisciplineIdIndex : BTreeIndexBase<string>
             {
-                protected override string GetKey(CombatModeCatalog row) => row.CombatProfileId;
+                protected override string GetKey(CombatModeCatalog row) => row.CombatDisciplineId;
 
-                public CombatProfileIdIndex(CombatModeCatalogHandle table) : base(table) { }
+                public CombatDisciplineIdIndex(CombatModeCatalogHandle table) : base(table) { }
             }
 
-            public readonly CombatProfileIdIndex CombatProfileId;
+            public readonly CombatDisciplineIdIndex CombatDisciplineId;
 
             public sealed class KeyUniqueIndex : UniqueIndexBase<string>
             {
@@ -38,7 +38,7 @@ namespace Arena.MatchDb
 
             internal CombatModeCatalogHandle(DbConnection conn) : base(conn)
             {
-                CombatProfileId = new(this);
+                CombatDisciplineId = new(this);
                 Key = new(this);
             }
 
@@ -51,7 +51,7 @@ namespace Arena.MatchDb
     public sealed class CombatModeCatalogCols
     {
         public global::SpacetimeDB.Col<CombatModeCatalog, string> Key { get; }
-        public global::SpacetimeDB.Col<CombatModeCatalog, string> CombatProfileId { get; }
+        public global::SpacetimeDB.Col<CombatModeCatalog, string> CombatDisciplineId { get; }
         public global::SpacetimeDB.Col<CombatModeCatalog, string> ModeId { get; }
         public global::SpacetimeDB.Col<CombatModeCatalog, string> DisplayName { get; }
         public global::SpacetimeDB.Col<CombatModeCatalog, bool> IsDefault { get; }
@@ -60,7 +60,7 @@ namespace Arena.MatchDb
         public CombatModeCatalogCols(string tableName)
         {
             Key = new global::SpacetimeDB.Col<CombatModeCatalog, string>(tableName, "key");
-            CombatProfileId = new global::SpacetimeDB.Col<CombatModeCatalog, string>(tableName, "combat_profile_id");
+            CombatDisciplineId = new global::SpacetimeDB.Col<CombatModeCatalog, string>(tableName, "combat_discipline_id");
             ModeId = new global::SpacetimeDB.Col<CombatModeCatalog, string>(tableName, "mode_id");
             DisplayName = new global::SpacetimeDB.Col<CombatModeCatalog, string>(tableName, "display_name");
             IsDefault = new global::SpacetimeDB.Col<CombatModeCatalog, bool>(tableName, "is_default");
@@ -71,12 +71,12 @@ namespace Arena.MatchDb
     public sealed class CombatModeCatalogIxCols
     {
         public global::SpacetimeDB.IxCol<CombatModeCatalog, string> Key { get; }
-        public global::SpacetimeDB.IxCol<CombatModeCatalog, string> CombatProfileId { get; }
+        public global::SpacetimeDB.IxCol<CombatModeCatalog, string> CombatDisciplineId { get; }
 
         public CombatModeCatalogIxCols(string tableName)
         {
             Key = new global::SpacetimeDB.IxCol<CombatModeCatalog, string>(tableName, "key");
-            CombatProfileId = new global::SpacetimeDB.IxCol<CombatModeCatalog, string>(tableName, "combat_profile_id");
+            CombatDisciplineId = new global::SpacetimeDB.IxCol<CombatModeCatalog, string>(tableName, "combat_discipline_id");
         }
     }
 }

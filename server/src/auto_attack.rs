@@ -24,7 +24,7 @@ use crate::melee::{
 use crate::movement_actions::MovementActionKind;
 use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::progression::{
-    active_selectable_ability_for_ability_id, derived_combat_profile_id_for_owner,
+    active_selectable_ability_for_ability_id, derived_combat_discipline_id_for_owner,
     movement_delivery_for_action_id, resolved_auto_attack_mode_for_owner, AutoAttackCatalog,
     AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
 };
@@ -62,7 +62,7 @@ pub struct AutoAttackState {
     #[primary_key]
     pub owner: Identity,
     pub target: Identity,
-    pub combat_profile_id: String,
+    pub combat_discipline_id: String,
     pub mode_id: String,
     pub strike_id: String,
     pub cadence_started_at: Timestamp,
@@ -130,26 +130,26 @@ pub fn arm_auto_attack_replacement(ctx: &ReducerContext, ability_id: String) -> 
         return Ok(());
     };
 
-    let combat_profile_id = derived_combat_profile_id_for_owner(ctx, owner)
+    let combat_discipline_id = derived_combat_discipline_id_for_owner(ctx, owner)
         .filter(|profile| !profile.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_COMBAT_PROFILE.to_string());
     if !replacement
-        .combat_profile_id
-        .eq_ignore_ascii_case(combat_profile_id.as_str())
+        .combat_discipline_id
+        .eq_ignore_ascii_case(combat_discipline_id.as_str())
     {
         log::info!(
             "[AUTO_ATTACK_REPLACEMENT] owner={} arm_rejected reason=profile_mismatch ability={} replacement={} profile={} expected_profile={}",
             short_identity(owner),
             ability.ability_id,
             replacement.replacement_id,
-            combat_profile_id,
-            replacement.combat_profile_id
+            combat_discipline_id,
+            replacement.combat_discipline_id
         );
         return Ok(());
     }
 
     let authored_strike_id = AuthoredActionId::new(replacement.authored_melee_strike_id.as_str());
-    if get_melee_definition_for_authored(ctx, combat_profile_id.as_str(), &authored_strike_id)
+    if get_melee_definition_for_authored(ctx, combat_discipline_id.as_str(), &authored_strike_id)
         .is_none()
     {
         log::info!(
@@ -158,7 +158,7 @@ pub fn arm_auto_attack_replacement(ctx: &ReducerContext, ability_id: String) -> 
             ability.ability_id,
             replacement.replacement_id,
             replacement.authored_melee_strike_id,
-            combat_profile_id
+            combat_discipline_id
         );
         return Ok(());
     }
@@ -209,7 +209,7 @@ pub fn arm_auto_attack_target(ctx: &ReducerContext, target_id: String) -> Result
                 "[AUTO_ATTACK] owner={} source=right_click kept_existing target={} profile={} mode={} strike={} next_at_micros={} pending_due={}",
                 short_identity(owner),
                 short_identity(existing.target),
-                existing.combat_profile_id,
+                existing.combat_discipline_id,
                 existing.mode_id,
                 existing.strike_id,
                 existing.next_swing_at.to_micros_since_unix_epoch(),
@@ -291,17 +291,17 @@ fn schedule_auto_attack_after_cadence(
     };
     let authored_strike_id = AuthoredActionId::new(runtime.strike_id.as_str());
     let mode_id =
-        resolved_auto_attack_mode_for_owner(ctx, owner, runtime.combat_profile_id.as_str());
+        resolved_auto_attack_mode_for_owner(ctx, owner, runtime.combat_discipline_id.as_str());
     let Some(gameplay) = auto_attack_gameplay_for_profile_mode_action(
         ctx,
-        runtime.combat_profile_id.as_str(),
+        runtime.combat_discipline_id.as_str(),
         mode_id.as_str(),
         &authored_strike_id,
     ) else {
         log::info!(
             "[AUTO_ATTACK] owner={} clear reason=missing_gameplay profile={} mode={} strike={}",
             short_identity(owner),
-            runtime.combat_profile_id,
+            runtime.combat_discipline_id,
             mode_id,
             runtime.strike_id
         );
@@ -321,7 +321,7 @@ fn schedule_auto_attack_after_cadence(
         gameplay.cooldown_ms.max(1),
         attack_speed_multiplier,
     ));
-    let combat_profile_id = runtime.combat_profile_id;
+    let combat_discipline_id = runtime.combat_discipline_id;
     let strike_id = runtime.strike_id;
     let next_swing_at = from_time + cadence;
 
@@ -330,7 +330,7 @@ fn schedule_auto_attack_after_cadence(
         AutoAttackState {
             owner,
             target,
-            combat_profile_id: combat_profile_id.clone(),
+            combat_discipline_id: combat_discipline_id.clone(),
             mode_id: mode_id.clone(),
             strike_id: strike_id.clone(),
             cadence_started_at: from_time,
@@ -345,7 +345,7 @@ fn schedule_auto_attack_after_cadence(
         "[AUTO_ATTACK] owner={} armed target={} profile={} mode={} strike={} cadence_ms={} next_at_micros={}",
         short_identity(owner),
         short_identity(target),
-        combat_profile_id,
+        combat_discipline_id,
         mode_id,
         strike_id,
         cadence.as_millis(),
@@ -419,30 +419,30 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
         let authored_strike_id = AuthoredActionId::new(row.strike_id.as_str());
         let Some(_strike) = get_melee_definition_for_authored(
             ctx,
-            row.combat_profile_id.as_str(),
+            row.combat_discipline_id.as_str(),
             &authored_strike_id,
         ) else {
             log::info!(
                 "[AUTO_ATTACK] owner={} clear reason=missing_definition profile={} strike={}",
                 short_identity(row.owner),
-                row.combat_profile_id,
+                row.combat_discipline_id,
                 row.strike_id
             );
             clear_auto_attack_for_owner(ctx, row.owner);
             continue;
         };
         let current_mode =
-            resolved_auto_attack_mode_for_owner(ctx, row.owner, row.combat_profile_id.as_str());
+            resolved_auto_attack_mode_for_owner(ctx, row.owner, row.combat_discipline_id.as_str());
         let Some(gameplay) = auto_attack_gameplay_for_profile_mode_action(
             ctx,
-            row.combat_profile_id.as_str(),
+            row.combat_discipline_id.as_str(),
             current_mode.as_str(),
             &authored_strike_id,
         ) else {
             log::info!(
                 "[AUTO_ATTACK] owner={} clear reason=missing_gameplay profile={} mode={} strike={}",
                 short_identity(row.owner),
-                row.combat_profile_id,
+                row.combat_discipline_id,
                 current_mode,
                 row.strike_id
             );
@@ -464,7 +464,7 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
                 "[AUTO_ATTACK] owner={} target={} reset reason=voluntary_move profile={} mode={} strike={} previous_epoch={} current_epoch={}",
                 short_identity(row.owner),
                 short_identity(row.target),
-                row.combat_profile_id,
+                row.combat_discipline_id,
                 row.mode_id,
                 row.strike_id,
                 row.movement_epoch_at_schedule,
@@ -477,14 +477,14 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
         if row.pending_sequence_index > 0 && now >= row.next_sequence_at {
             let sequence_index = row.pending_sequence_index as usize;
             let Some(sequence_step) = auto_attack_sequence_step_for_profile(
-                row.combat_profile_id.as_str(),
+                row.combat_discipline_id.as_str(),
                 sequence_index,
             ) else {
                 log::info!(
                     "[AUTO_ATTACK] owner={} target={} sequence_cancelled reason=invalid_step profile={} index={}",
                     short_identity(row.owner),
                     short_identity(row.target),
-                    row.combat_profile_id,
+                    row.combat_discipline_id,
                     sequence_index
                 );
                 clear_pending_auto_attack_sequence(ctx, row.owner);
@@ -955,20 +955,20 @@ fn schedule_auto_attack_sequence_step(
     let Some(mut row) = ctx.db.auto_attack_state().owner().find(owner) else {
         return Ok(());
     };
-    let sequence_len = auto_attack_sequence_len_for_profile(row.combat_profile_id.as_str())
-        .ok_or_else(|| format!("missing melee profile '{}'", row.combat_profile_id))?;
+    let sequence_len = auto_attack_sequence_len_for_profile(row.combat_discipline_id.as_str())
+        .ok_or_else(|| format!("missing melee profile '{}'", row.combat_discipline_id))?;
     if sequence_index >= sequence_len {
         clear_pending_auto_attack_sequence(ctx, owner);
         return Ok(());
     }
     let sequence_step = auto_attack_sequence_step_for_profile(
-        row.combat_profile_id.as_str(),
+        row.combat_discipline_id.as_str(),
         sequence_index,
     )
     .ok_or_else(|| {
         format!(
             "auto-attack sequence step {} for profile '{}' is not a valid authored combo transition",
-            sequence_index, row.combat_profile_id
+            sequence_index, row.combat_discipline_id
         )
     })?;
     let execute_at = started_at + Duration::from_millis(sequence_step.transition_delay_ms);
@@ -1074,15 +1074,15 @@ fn attempt_auto_attack_replacement(
         return None;
     };
     if !replacement
-        .combat_profile_id
-        .eq_ignore_ascii_case(row.combat_profile_id.as_str())
+        .combat_discipline_id
+        .eq_ignore_ascii_case(row.combat_discipline_id.as_str())
     {
         log::info!(
             "[AUTO_ATTACK_REPLACEMENT] owner={} skipped reason=profile_mismatch replacement={} row_profile={} replacement_profile={}",
             short_identity(row.owner),
             replacement.replacement_id,
-            row.combat_profile_id,
-            replacement.combat_profile_id
+            row.combat_discipline_id,
+            replacement.combat_discipline_id
         );
         return None;
     }
@@ -1133,22 +1133,22 @@ fn resolved_auto_attack_runtime(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> Option<ResolvedAutoAttackRuntime> {
-    let combat_profile_id = derived_combat_profile_id_for_owner(ctx, owner)
+    let combat_discipline_id = derived_combat_discipline_id_for_owner(ctx, owner)
         .filter(|profile| !profile.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_COMBAT_PROFILE.to_string());
-    let authored_strike_id = auto_attack_reference_for_profile(combat_profile_id.as_str())?;
+    let authored_strike_id = auto_attack_reference_for_profile(combat_discipline_id.as_str())?;
     let authored_action_id = AuthoredActionId::new(authored_strike_id.as_str());
     let _definition =
-        get_melee_definition_for_authored(ctx, combat_profile_id.as_str(), &authored_action_id)?;
-    let mode_id = resolved_auto_attack_mode_for_owner(ctx, owner, combat_profile_id.as_str());
+        get_melee_definition_for_authored(ctx, combat_discipline_id.as_str(), &authored_action_id)?;
+    let mode_id = resolved_auto_attack_mode_for_owner(ctx, owner, combat_discipline_id.as_str());
     let _gameplay = auto_attack_gameplay_for_profile_mode_action(
         ctx,
-        combat_profile_id.as_str(),
+        combat_discipline_id.as_str(),
         mode_id.as_str(),
         &authored_action_id,
     )?;
     Some(ResolvedAutoAttackRuntime {
-        combat_profile_id,
+        combat_discipline_id,
         strike_id: authored_strike_id,
     })
 }
@@ -1283,7 +1283,7 @@ fn preserve_cadence_for_mode_change(
         "[AUTO_ATTACK] owner={} target={} mode_changed profile={} mode={} strike={} cadence_ms={} elapsed_ms={} due={}",
         short_identity(row.owner),
         short_identity(row.target),
-        row.combat_profile_id,
+        row.combat_discipline_id,
         row.mode_id,
         row.strike_id,
         cadence.as_millis(),
@@ -1375,7 +1375,7 @@ fn short_identity(identity: Identity) -> String {
 }
 
 struct ResolvedAutoAttackRuntime {
-    combat_profile_id: String,
+    combat_discipline_id: String,
     strike_id: String,
 }
 
@@ -1386,8 +1386,8 @@ fn existing_auto_attack_matches_request(
 ) -> bool {
     existing.target == target
         && existing
-            .combat_profile_id
-            .eq_ignore_ascii_case(runtime.combat_profile_id.as_str())
+            .combat_discipline_id
+            .eq_ignore_ascii_case(runtime.combat_discipline_id.as_str())
         && existing
             .strike_id
             .eq_ignore_ascii_case(runtime.strike_id.as_str())
@@ -1410,11 +1410,11 @@ mod tests {
         Identity::from_hex(format!("{byte:064x}").as_str()).unwrap()
     }
 
-    fn test_auto_attack_state(target: Identity, combat_profile_id: &str) -> AutoAttackState {
+    fn test_auto_attack_state(target: Identity, combat_discipline_id: &str) -> AutoAttackState {
         AutoAttackState {
             owner: test_identity(1),
             target,
-            combat_profile_id: combat_profile_id.to_string(),
+            combat_discipline_id: combat_discipline_id.to_string(),
             mode_id: String::new(),
             strike_id: "AUTO_ATTACK_1".to_string(),
             cadence_started_at: Timestamp::UNIX_EPOCH,
@@ -1469,7 +1469,7 @@ mod tests {
         let target = test_identity(2);
         let existing = test_auto_attack_state(target, "TWO_HANDED_SWORD");
         let runtime = ResolvedAutoAttackRuntime {
-            combat_profile_id: "TWO_HANDED_SWORD".to_string(),
+            combat_discipline_id: "TWO_HANDED_SWORD".to_string(),
             strike_id: "AUTO_ATTACK_1".to_string(),
         };
 
@@ -1484,11 +1484,11 @@ mod tests {
         let other_target = test_identity(3);
         let existing = test_auto_attack_state(target, "TWO_HANDED_SWORD");
         let same_profile = ResolvedAutoAttackRuntime {
-            combat_profile_id: "TWO_HANDED_SWORD".to_string(),
+            combat_discipline_id: "TWO_HANDED_SWORD".to_string(),
             strike_id: "AUTO_ATTACK_1".to_string(),
         };
         let changed_profile = ResolvedAutoAttackRuntime {
-            combat_profile_id: "DAGGERS".to_string(),
+            combat_discipline_id: "DAGGERS".to_string(),
             strike_id: "AUTO_ATTACK_1".to_string(),
         };
 
