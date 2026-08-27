@@ -7,10 +7,9 @@ namespace Arena.UI
     internal static class ActionBarLayout
     {
         public const int Rows = 3;
-        public const int VisibleActionRows = 2;
+        public const int VisibleActionRows = Rows;
         public const int DisplayRows = 3;
-        public const int SpellbookDisplayRow = 0;
-        public const int FirstActionDisplayRow = 1;
+        public const int FirstActionDisplayRow = 0;
         public const int Columns = 9;
         public const int CellCount = Rows * Columns;
         public const float SlotSize = 68f;
@@ -36,11 +35,6 @@ namespace Arena.UI
         public static Vector2 ActionCellPosition(int actionRow, int col)
         {
             return DisplayCellPosition(FirstActionDisplayRow + actionRow, col);
-        }
-
-        public static Vector2 SpellbookCellPosition(int col)
-        {
-            return DisplayCellPosition(SpellbookDisplayRow, col);
         }
 
         public static Vector2 DisplayCellPosition(int displayRow, int col)

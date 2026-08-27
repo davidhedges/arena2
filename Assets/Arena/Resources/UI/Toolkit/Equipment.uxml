@@ -100,7 +100,7 @@
             <ui:VisualElement name="WeaponSelectionPanel" class="selection-panel panel-surface equipment-panel-hidden">
                 <ui:VisualElement class="panel-heading">
                     <ui:VisualElement>
-                        <ui:Label class="section-kicker" text="PRIMARY DISCIPLINE" />
+                        <ui:Label class="section-kicker" text="DEFAULT COMBAT DISCIPLINE" />
                         <ui:Label name="WeaponDisciplineName" class="section-heading" text="WEAPONS" />
                     </ui:VisualElement>
                     <ui:Label name="WeaponCount" class="availability" text="0 AVAILABLE" />
@@ -120,7 +120,7 @@
                     <ui:Label class="note-glyph" text="◆" />
                     <ui:VisualElement class="note-copy">
                         <ui:Label class="note-title" text="DISCIPLINE-BOUND ARSENAL" />
-                        <ui:Label name="WeaponRuleNote" class="note-body" text="Your primary discipline determines which weapons you can equip." />
+                        <ui:Label name="WeaponRuleNote" class="note-body" text="This edits the default combat discipline's saved weapon configuration." />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
@@ -193,13 +193,13 @@
                 <ui:VisualElement class="details-heading">
                     <ui:Label class="section-kicker" text="SELECTED WEAPON LOADOUT" />
                     <ui:Label name="WeaponDetailsName" class="details-name" text="WEAPON" />
-                    <ui:Label name="WeaponDetailsFlavor" class="details-flavor" text="Choose a weapon allowed by your primary discipline." />
+                    <ui:Label name="WeaponDetailsFlavor" class="details-flavor" text="Choose a weapon allowed by the default combat discipline." />
                 </ui:VisualElement>
 
                 <ui:VisualElement class="weapon-summary">
                     <ui:VisualElement name="WeaponDetailsIcon" class="weapon-details-icon" picking-mode="Ignore" />
                     <ui:VisualElement class="summary-copy" picking-mode="Ignore">
-                        <ui:Label name="WeaponDetailsDiscipline" class="summary-tier" text="PRIMARY DISCIPLINE" />
+                        <ui:Label name="WeaponDetailsDiscipline" class="summary-tier" text="DEFAULT COMBAT DISCIPLINE" />
                         <ui:Label name="WeaponDetailsKind" class="summary-headline" text="WEAPON TYPE" />
                     </ui:VisualElement>
                     <ui:Label name="WeaponEquippedChip" class="equipped-chip" text="EQUIPPED" />

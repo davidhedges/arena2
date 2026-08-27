@@ -256,6 +256,15 @@ namespace Arena.Input
                     case KeyCode.BackQuote:
                         button = keyboard.backquoteKey;
                         return true;
+                    case KeyCode.F1:
+                        button = keyboard.f1Key;
+                        return true;
+                    case KeyCode.F2:
+                        button = keyboard.f2Key;
+                        return true;
+                    case KeyCode.F3:
+                        button = keyboard.f3Key;
+                        return true;
                     case KeyCode.Alpha1:
                         button = keyboard.digit1Key;
                         return true;

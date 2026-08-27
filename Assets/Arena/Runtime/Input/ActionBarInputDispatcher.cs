@@ -27,7 +27,7 @@ namespace Arena.Input
                 if (consumedPressKeys.Contains(binding.KeyCode)) continue;
                 if (!input.WasKeyPressedThisFrame(binding.KeyCode)) continue;
 
-                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveGlobalActionBarAction(
+                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveCombatDisciplineSwitchAction(
                     conn,
                     conn.Identity,
                     binding.SlotId);
@@ -40,28 +40,6 @@ namespace Arena.Input
 
                 consumedPressKeys.Add(binding.KeyCode);
                 TryTrigger(resolved, conn, spellInput, binding.KeyLabel, binding.SlotId);
-            }
-
-            foreach (SpellbookSlotBinding binding in SpellbookKeymap.SelectableBindings)
-            {
-                if (binding.RequiresShift != shiftHeld) continue;
-                if (consumedPressKeys.Contains(binding.KeyCode)) continue;
-                if (!input.WasKeyPressedThisFrame(binding.KeyCode)) continue;
-
-                string slotId = SpellbookKeymap.SlotIdForIndex(binding.SlotIndex);
-                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveEquippedSpellbookAction(
-                    conn,
-                    conn.Identity,
-                    binding.SlotIndex);
-                if (!resolved.HasAssignedAction)
-                {
-                    ActionBarTrace.Diagnostic(
-                        $"{binding.KeyLabel} -> {slotId} unresolved (assigned={resolved.HasAssignedAction})");
-                    continue;
-                }
-                consumedPressKeys.Add(binding.KeyCode);
-
-                TryTrigger(resolved, conn, spellInput, binding.KeyLabel, slotId);
             }
 
             foreach (ActionBarSlotBinding binding in ActionBarKeymap.SelectableBindings)
@@ -86,32 +64,6 @@ namespace Arena.Input
             }
 
             var consumedReleaseKeys = new HashSet<UnityEngine.KeyCode>();
-            foreach (SpellbookSlotBinding binding in SpellbookKeymap.SelectableBindings)
-            {
-                if (binding.RequiresShift != shiftHeld) continue;
-                if (consumedReleaseKeys.Contains(binding.KeyCode)) continue;
-                if (!input.WasKeyReleasedThisFrame(binding.KeyCode)) continue;
-
-                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveEquippedSpellbookAction(
-                    conn,
-                    conn.Identity,
-                    binding.SlotIndex);
-                string? actionId = resolved.ActionId;
-                if (string.IsNullOrWhiteSpace(actionId)) continue;
-                consumedReleaseKeys.Add(binding.KeyCode);
-                if (TryReleaseHeldMeleeChannel(conn, resolved, binding.KeyLabel))
-                    continue;
-                if (!resolved.IsSpellAbility)
-                    continue;
-                if (!SpellDefinitionContracts.CastsOnRelease(GetSpellDefinition(conn, actionId))) continue;
-                ActionBarTrace.Trace($"{binding.KeyLabel} release -> cast release {actionId}");
-                CastActionToken token = LocalCombatState.Instance.CurrentCastTokenForRelease(actionId);
-                conn.Reducers.ReleaseCastRequest(
-                    actionId,
-                    token.PredictedCastId,
-                    token.ClientActionSeq);
-            }
-
             foreach (ActionBarSlotBinding binding in ActionBarKeymap.SelectableBindings)
             {
                 if (binding.RequiresShift != shiftHeld) continue;
@@ -330,8 +282,6 @@ namespace Arena.Input
                 ? null
                 : conn.Db.AbilityCatalog.AbilityId.Find(action.AbilityId);
             string abilityProfile = CombatProfileResolver.ResolveForAbility(conn, ability);
-            bool abilitySelected = owner.HasValue
-                && DisciplineAbilitySelectionResolver.IsSelected(conn, owner, action.AbilityId);
             MeleeDefinition? definition = action.IsMeleeAbility
                 ? CombatActionIds.FindMeleeDefinition(conn, ownerProfile, action.ActionId)
                 : null;
@@ -349,7 +299,7 @@ namespace Arena.Input
                 $"kind={action.ActionKind}/{action.AbilityKind} ability={action.AbilityId} " +
                 $"authored={action.AuthoredActionId} runtime={action.ActionId} " +
                 $"assigned={action.HasAssignedAction} available={action.IsAvailable} canTrigger={action.CanTrigger} " +
-                $"selected={abilitySelected} ownerProfile={ownerProfile} " +
+                $"exactAssigned={action.HasAssignedAction} ownerProfile={ownerProfile} " +
                 $"activeDiscipline={discipline?.DisciplineId ?? "<missing>"} " +
                 $"activeProfile={discipline?.CombatProfileId ?? "<missing>"} " +
                 $"abilityProfile={(string.IsNullOrWhiteSpace(abilityProfile) ? "<missing>" : abilityProfile)} " +

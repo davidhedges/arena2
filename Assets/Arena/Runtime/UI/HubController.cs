@@ -513,14 +513,14 @@ namespace Arena.UI
             if (Application.isPlaying)
             {
                 HubNetworkManager? hub = HubNetworkManager.Instance;
-                HubLoadoutSnapshot? loadout = hub?.Loadout;
-                if (hub != null && loadout.HasValue)
+                HubCombatBuildDraft? build = hub?.CombatBuild;
+                if (hub != null && build != null)
                 {
-                    string primaryId = WireIdentifier.Normalize(loadout.Value.PrimaryDisciplineId);
+                    string disciplineId = ResolveShowcaseDisciplineId(build);
                     HubDisciplineSnapshot? discipline = hub.Disciplines.FirstOrDefault(candidate =>
                         string.Equals(
                             WireIdentifier.Normalize(candidate.Id),
-                            primaryId,
+                            disciplineId,
                             System.StringComparison.Ordinal));
                     if (!string.IsNullOrWhiteSpace(discipline?.CombatProfileId))
                         return discipline.CombatProfileId;
@@ -576,7 +576,12 @@ namespace Arena.UI
 
         private ShowcaseWeaponSelection ResolveShowcaseWeaponSelection()
         {
-            HubLoadoutSnapshot? loadout = HubNetworkManager.Instance?.Loadout;
+            HubCombatBuildDraft? build = HubNetworkManager.Instance?.CombatBuild;
+            string disciplineId = build == null
+                ? string.Empty
+                : ResolveShowcaseDisciplineId(build);
+            HubCombatBuildDisciplineConfiguration? configuration =
+                build?.FindConfiguration(disciplineId);
             return _hasShowcaseWeaponPreview
                 ? new ShowcaseWeaponSelection(
                     _showcaseMainHandPreviewId,
@@ -584,10 +589,21 @@ namespace Arena.UI
                     _showcaseOffHandPreviewId,
                     _showcaseOffHandPreviewColorId)
                 : new ShowcaseWeaponSelection(
-                    loadout?.MainHandItemDefId,
-                    loadout?.MainHandColorId,
-                    loadout?.OffHandItemDefId,
-                    loadout?.OffHandColorId);
+                    configuration?.Weapon.MainHandItemDefId,
+                    configuration?.Weapon.MainHandColorId,
+                    configuration?.Weapon.OffHandItemDefId,
+                    configuration?.Weapon.OffHandColorId);
+        }
+
+        private static string ResolveShowcaseDisciplineId(HubCombatBuildDraft build)
+        {
+            if (!string.IsNullOrWhiteSpace(build.StartingDisciplineId))
+                return WireIdentifier.Normalize(build.StartingDisciplineId);
+
+            return build.SelectedDisciplines
+                .OrderBy(selected => selected.SlotIndex)
+                .Select(selected => WireIdentifier.Normalize(selected.CombatDisciplineId))
+                .FirstOrDefault() ?? string.Empty;
         }
 
         private IReadOnlyDictionary<string, EquippedWeaponVisual>? ResolveShowcaseWeaponVisuals(
@@ -805,9 +821,9 @@ namespace Arena.UI
 
         private static IReadOnlyDictionary<string, string> ResolveLocalArmorAppearance()
         {
-            HubLoadoutSnapshot? hubLoadout = HubNetworkManager.Instance?.Loadout;
-            if (hubLoadout.HasValue && !string.IsNullOrWhiteSpace(hubLoadout.Value.ArmorSetId))
-                return EquipmentScreen.ArmorAppearanceFor(hubLoadout.Value.ArmorSetId);
+            HubArmorLoadoutSnapshot? armorLoadout = HubNetworkManager.Instance?.ArmorLoadout;
+            if (armorLoadout.HasValue && !string.IsNullOrWhiteSpace(armorLoadout.Value.ArmorSetId))
+                return EquipmentScreen.ArmorAppearanceFor(armorLoadout.Value.ArmorSetId);
 
             var armorBySlot = new Dictionary<string, string>(System.StringComparer.Ordinal);
             DbConnection? connection = NetworkManager.Instance?.Conn;

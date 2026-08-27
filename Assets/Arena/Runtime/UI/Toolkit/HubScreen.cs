@@ -40,21 +40,21 @@ namespace Arena.UI
         private VisualElement? _root;
         private VisualElement? _showcase;
         private Label? _playerName;
-        private VisualElement? _loadoutPrimaryRow;
-        private VisualElement? _loadoutSecondary1Row;
-        private VisualElement? _loadoutSecondary2Row;
-        private VisualElement? _loadoutPrimaryIcon;
-        private VisualElement? _loadoutSecondary1Icon;
-        private VisualElement? _loadoutSecondary2Icon;
-        private VisualElement? _loadoutPrimaryArt;
-        private VisualElement? _loadoutSecondary1Art;
-        private VisualElement? _loadoutSecondary2Art;
-        private Label? _loadoutPrimaryName;
-        private Label? _loadoutSecondary1Name;
-        private Label? _loadoutSecondary2Name;
-        private Label? _loadoutPrimaryGlyph;
-        private Label? _loadoutSecondary1Glyph;
-        private Label? _loadoutSecondary2Glyph;
+        private VisualElement? _loadoutSlot0Row;
+        private VisualElement? _loadoutSlot1Row;
+        private VisualElement? _loadoutSlot2Row;
+        private VisualElement? _loadoutSlot0Icon;
+        private VisualElement? _loadoutSlot1Icon;
+        private VisualElement? _loadoutSlot2Icon;
+        private VisualElement? _loadoutSlot0Art;
+        private VisualElement? _loadoutSlot1Art;
+        private VisualElement? _loadoutSlot2Art;
+        private Label? _loadoutSlot0Name;
+        private Label? _loadoutSlot1Name;
+        private Label? _loadoutSlot2Name;
+        private Label? _loadoutSlot0Glyph;
+        private Label? _loadoutSlot1Glyph;
+        private Label? _loadoutSlot2Glyph;
         private Label? _partyCount;
         private Button? _practiceButton;
         private Button? _navDisciplines;
@@ -308,21 +308,21 @@ namespace Arena.UI
 
             _showcase = _root.Q<VisualElement>("PlayerShowcase");
             _playerName = _root.Q<Label>("PlayerName");
-            _loadoutPrimaryRow = _root.Q<VisualElement>("LoadoutPrimaryRow");
-            _loadoutSecondary1Row = _root.Q<VisualElement>("LoadoutSecondary1Row");
-            _loadoutSecondary2Row = _root.Q<VisualElement>("LoadoutSecondary2Row");
-            _loadoutPrimaryIcon = _root.Q<VisualElement>("LoadoutPrimaryIcon");
-            _loadoutSecondary1Icon = _root.Q<VisualElement>("LoadoutSecondary1Icon");
-            _loadoutSecondary2Icon = _root.Q<VisualElement>("LoadoutSecondary2Icon");
-            _loadoutPrimaryArt = _root.Q<VisualElement>("LoadoutPrimaryArt");
-            _loadoutSecondary1Art = _root.Q<VisualElement>("LoadoutSecondary1Art");
-            _loadoutSecondary2Art = _root.Q<VisualElement>("LoadoutSecondary2Art");
-            _loadoutPrimaryName = _root.Q<Label>("LoadoutPrimaryName");
-            _loadoutSecondary1Name = _root.Q<Label>("LoadoutSecondary1Name");
-            _loadoutSecondary2Name = _root.Q<Label>("LoadoutSecondary2Name");
-            _loadoutPrimaryGlyph = _root.Q<Label>("LoadoutPrimaryGlyph");
-            _loadoutSecondary1Glyph = _root.Q<Label>("LoadoutSecondary1Glyph");
-            _loadoutSecondary2Glyph = _root.Q<Label>("LoadoutSecondary2Glyph");
+            _loadoutSlot0Row = _root.Q<VisualElement>("LoadoutSlot0Row");
+            _loadoutSlot1Row = _root.Q<VisualElement>("LoadoutSlot1Row");
+            _loadoutSlot2Row = _root.Q<VisualElement>("LoadoutSlot2Row");
+            _loadoutSlot0Icon = _root.Q<VisualElement>("LoadoutSlot0Icon");
+            _loadoutSlot1Icon = _root.Q<VisualElement>("LoadoutSlot1Icon");
+            _loadoutSlot2Icon = _root.Q<VisualElement>("LoadoutSlot2Icon");
+            _loadoutSlot0Art = _root.Q<VisualElement>("LoadoutSlot0Art");
+            _loadoutSlot1Art = _root.Q<VisualElement>("LoadoutSlot1Art");
+            _loadoutSlot2Art = _root.Q<VisualElement>("LoadoutSlot2Art");
+            _loadoutSlot0Name = _root.Q<Label>("LoadoutSlot0Name");
+            _loadoutSlot1Name = _root.Q<Label>("LoadoutSlot1Name");
+            _loadoutSlot2Name = _root.Q<Label>("LoadoutSlot2Name");
+            _loadoutSlot0Glyph = _root.Q<Label>("LoadoutSlot0Glyph");
+            _loadoutSlot1Glyph = _root.Q<Label>("LoadoutSlot1Glyph");
+            _loadoutSlot2Glyph = _root.Q<Label>("LoadoutSlot2Glyph");
             _partyCount = _root.Q<Label>("PartyCount");
             _practiceButton = _root.Q<Button>("PracticeButton");
             _navDisciplines = _root.Q<Button>("NavDisciplines");
@@ -670,59 +670,62 @@ namespace Arena.UI
                 _playerName.text = hubPlayer.Value.DisplayName.Trim().ToUpperInvariant();
             }
 
-            RefreshDisciplineLoadout(hub);
+            RefreshCombatBuild(hub);
 
             if (_partyCount != null)
                 _partyCount.text = "1 / 4";
         }
 
-        private void RefreshDisciplineLoadout(HubNetworkManager? hub)
+        private void RefreshCombatBuild(HubNetworkManager? hub)
         {
-            HubLoadoutSnapshot? loadout = hub?.Loadout;
-            if (loadout.HasValue && !string.IsNullOrWhiteSpace(loadout.Value.PrimaryDisciplineId))
-            {
-                HubLoadoutSnapshot saved = loadout.Value;
-                BindDisciplineRow(
-                    hub,
-                    _loadoutPrimaryRow,
-                    _loadoutPrimaryName,
-                    _loadoutPrimaryIcon,
-                    _loadoutPrimaryArt,
-                    _loadoutPrimaryGlyph,
-                    saved.PrimaryDisciplineId,
-                    visibleWhenEmpty: true);
-                BindDisciplineRow(
-                    hub,
-                    _loadoutSecondary1Row,
-                    _loadoutSecondary1Name,
-                    _loadoutSecondary1Icon,
-                    _loadoutSecondary1Art,
-                    _loadoutSecondary1Glyph,
-                    saved.SecondaryDisciplineId1,
-                    visibleWhenEmpty: false);
-                BindDisciplineRow(
-                    hub,
-                    _loadoutSecondary2Row,
-                    _loadoutSecondary2Name,
-                    _loadoutSecondary2Icon,
-                    _loadoutSecondary2Art,
-                    _loadoutSecondary2Glyph,
-                    saved.SecondaryDisciplineId2,
-                    visibleWhenEmpty: false);
-                return;
-            }
+            HubCombatBuildDraft? build = hub?.CombatBuild;
+            HubCombatBuildSelectedDiscipline? slot0 = FindSelectedDiscipline(build, 0);
+            HubCombatBuildSelectedDiscipline? slot1 = FindSelectedDiscipline(build, 1);
+            HubCombatBuildSelectedDiscipline? slot2 = FindSelectedDiscipline(build, 2);
 
             BindDisciplineRow(
                 hub,
-                _loadoutPrimaryRow,
-                _loadoutPrimaryName,
-                _loadoutPrimaryIcon,
-                _loadoutPrimaryArt,
-                _loadoutPrimaryGlyph,
-                null,
+                _loadoutSlot0Row,
+                _loadoutSlot0Name,
+                _loadoutSlot0Icon,
+                _loadoutSlot0Art,
+                _loadoutSlot0Glyph,
+                slot0?.CombatDisciplineId,
                 visibleWhenEmpty: true);
-            SetRowVisible(_loadoutSecondary1Row, false);
-            SetRowVisible(_loadoutSecondary2Row, false);
+            BindDisciplineRow(
+                hub,
+                _loadoutSlot1Row,
+                _loadoutSlot1Name,
+                _loadoutSlot1Icon,
+                _loadoutSlot1Art,
+                _loadoutSlot1Glyph,
+                slot1?.CombatDisciplineId,
+                visibleWhenEmpty: false);
+            BindDisciplineRow(
+                hub,
+                _loadoutSlot2Row,
+                _loadoutSlot2Name,
+                _loadoutSlot2Icon,
+                _loadoutSlot2Art,
+                _loadoutSlot2Glyph,
+                slot2?.CombatDisciplineId,
+                visibleWhenEmpty: false);
+        }
+
+        private static HubCombatBuildSelectedDiscipline? FindSelectedDiscipline(
+            HubCombatBuildDraft? build,
+            byte slotIndex)
+        {
+            if (build == null)
+                return null;
+
+            foreach (HubCombatBuildSelectedDiscipline selected in build.SelectedDisciplines)
+            {
+                if (selected.SlotIndex == slotIndex)
+                    return selected;
+            }
+
+            return null;
         }
 
         private static void BindDisciplineRow(

@@ -96,6 +96,31 @@
       },
       "open_legacy_policy": "Provisioned-match runtime is cut over and fails closed without a frozen build. Local-direct compatibility tables and helpers, collection-only learned/item spell schema, current Unity consumers, generated legacy surfaces, and physical schema tombstones remain open for their already-planned Phase 5 or Phase 7 removal; none can authorize a provisioned player cast or passive.",
       "next_authorized_phase": null
+    },
+    "phase_5": {
+      "status": "complete",
+      "evidence": "docs/combat-build-progression-phase-5-evidence-2026-08-26.md",
+      "canonical_unity_hub_model": "Assets/Arena/Runtime/Network/HubCombatBuildDraft.cs",
+      "canonical_unity_hub_writer": "Assets/Arena/Runtime/Network/HubNetworkManager.cs::SaveCombatBuild",
+      "canonical_unity_runtime_reader": "Assets/Arena/Runtime/Combat/GameplayContracts.cs::ActiveActionBarResolver",
+      "canonical_match_subscriptions": [
+        "match_combat_build",
+        "match_combat_build_discipline",
+        "match_discipline_configuration",
+        "match_staff_school_selection",
+        "match_discipline_action_bar_assignment",
+        "match_discipline_passive_selection"
+      ],
+      "removed_or_disabled_unity_alternates": [
+        "primary/secondary Hub presentation",
+        "local 25-point discipline validator",
+        "legacy Disciplines writer",
+        "legacy action-bar editor writer",
+        "global Hub weapon-pair writer",
+        "profile/global/selection/spellbook HUD fallbacks"
+      ],
+      "open_legacy_policy": "Unity has one canonical build read/write path and one exact frozen HUD/input path. The disabled legacy Toolkit assets, collection-only spell/inventory surfaces, generated legacy schema and reducers, weapon-catalog PrimaryDisciplineId metadata, armor-only MyHubLoadout projection, local-direct server compatibility, and physical schema tombstones remain classified for Phase 6 or destructive Phase 7 removal. None is a live Unity combat-build writer or provisioned-match action-bar fallback.",
+      "next_authorized_phase": null
     }
   },
   "entries": [
@@ -124,6 +149,7 @@
         "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs",
         "Assets/Arena/Tests/Editor/DisciplineLoadoutRulesTests.cs"
       ],
+      "phase_5_resolution": "DisciplineLoadoutRules, its 25-point budget, primary/secondary minima, and its EditMode tests were deleted. The canonical Unity draft carries server inputs without locally reimplementing the 20-total/16-active rules.",
       "final_state": "remove primary/secondary minima and the parallel 25-point client budget; consume the one projected 20-total/16-active rules contract",
       "target_phases": [1, 5, 7],
       "status": "open",
@@ -214,6 +240,7 @@
       ],
       "phase_3_resolution": "The production snapshot, provisioner, reservation, materialized match rows, and benchmark no longer carry or infer selected_ability_ids. Exact active slots and explicit passive rows are transported. Legacy runtime authorization tables remain open for Phase 4.",
       "phase_4_resolution": "Provisioned runtime active authorization now reads only exact match_discipline_action_bar_assignment rows for the current frozen discipline, and passive authorization reads only explicit match_discipline_passive_selection rows. CharacterDisciplineAbilitySelection remains a local-direct/schema/client compatibility surface and cannot authorize a provisioned player.",
+      "phase_5_resolution": "Unity gameplay no longer subscribes to or reads CharacterDisciplineAbilitySelection. ActiveActionBarResolver reads exact MatchDisciplineActionBarAssignment rows, while the canonical Hub draft preserves explicit active assignments and passives separately.",
       "final_state": "active selection derives only from exact per-discipline slot assignments and passive selection derives only from explicit passive rows",
       "target_phases": [1, 2, 3, 4, 5, 7],
       "status": "open",
@@ -250,6 +277,7 @@
         "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Tables/CombatDisciplineCatalog.g.cs",
         "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs"
       ],
+      "phase_5_resolution": "The live Unity Hub summary, showcase, equipment path, switch inputs, and HUD use only the five exact weapon-discipline IDs. The disabled old Disciplines screen cannot present school rows as selectable disciplines; physical legacy assets remain open for Phase 6/7.",
       "final_state": "combat discipline catalog contains exactly the five weapon IDs and the six Staff schools live in a separate spell-school catalog",
       "target_phases": [1, 2, 5, 7],
       "status": "open",
@@ -277,6 +305,7 @@
         "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs"
       ],
       "phase_4_resolution": "The frozen runtime path recognizes only the five canonical weapon disciplines. Staff schools are validated only as MatchStaffSchoolSelection configuration metadata; discipline_uses_staff and school-as-discipline weapon branching were removed. Legacy catalog labels and current Unity editing remain classified for Phases 5 and 7.",
+      "phase_5_resolution": "HubCombatBuildDraft stores StaffSchoolIds only inside the Staff discipline configuration. Unity action-bar and equipment resolution contains no school-as-discipline weapon or profile fallback.",
       "final_state": "Staff configuration owns one-to-three school IDs; no school participates in discipline selection or weapon/profile fallback",
       "target_phases": [1, 2, 4, 5, 7],
       "status": "open",
@@ -311,6 +340,7 @@
         "Assets/Arena/Resources/UI/Toolkit/Disciplines.uxml"
       ],
       "phase_4_resolution": "Frozen match activation, authorization, weapon legality, and action-bar projection use canonical weapon discipline IDs directly. Bidirectional legacy discipline/profile mapping remains reachable only in the explicitly classified local-direct compatibility path and current client surfaces, which remain open for Phases 5 and 7.",
+      "phase_5_resolution": "All non-generated Unity combat-build identity and switching code uses exactly DAGGERS, TWO_HANDED_SWORD, SWORD_AND_SHIELD, ARCHER_BOW, and STAFF. Legacy catalog-key translation is isolated under CBL-008 and remains open for Phase 7.",
       "final_state": "select and persist only DAGGERS, TWO_HANDED_SWORD, SWORD_AND_SHIELD, ARCHER_BOW, and STAFF; legacy IDs survive only in archived history or one approved offline conversion fixture",
       "target_phases": [1, 2, 3, 4, 5, 7],
       "status": "open",
@@ -346,6 +376,7 @@
         "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/SpacetimeDBClient.g.cs"
       ],
       "phase_4_resolution": "Frozen activation writes the same canonical weapon discipline ID to discipline_id and the temporary combat_profile_id compatibility field; no separate profile choice or resolver can override it for a provisioned player. Physical profile schema and current Unity profile consumers remain open for Phases 5 and 7.",
+      "phase_5_resolution": "Unity no longer uses CombatProfileCatalog or a profile selection to decide available actions, equipment, or bar ownership. CombatProfileResolver is limited to derived mechanics/presentation from ActiveCombatDiscipline; generated/public profile schema remains Phase 7 residue.",
       "final_state": "delete public profile catalog/state/selection; any remaining CombatProfile type is private and purely derived from canonical discipline for animation/runtime mechanics",
       "target_phases": [1, 3, 4, 5, 7],
       "status": "open",
@@ -375,6 +406,7 @@
         "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Tables/HubWeaponDefinition.g.cs",
         "Assets/Arena/Runtime/UI/Toolkit/EquipmentScreen.cs"
       ],
+      "phase_5_resolution": "Equipment saves the selected canonical discipline configuration atomically. The generated Hub weapon catalog still exposes PrimaryDisciplineId, isolated behind WeaponCatalogDisciplineId for listing only; its schema/catalog rename remains explicitly open for Phase 7.",
       "final_state": "key weapon legality by canonical combat_discipline_id and validate each discipline configuration independently",
       "target_phases": [1, 2, 5, 7],
       "status": "open",
@@ -406,6 +438,7 @@
         "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/HubPlayerLoadout.g.cs",
         "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/MyHubLoadout.g.cs"
       ],
+      "phase_5_resolution": "The Unity SaveWeaponLoadout path and event were removed. Equipment updates one preserved per-discipline configuration with HubCombatBuildDraft.WithWeapon and submits the complete draft through SaveCombatBuild.",
       "final_state": "store weapon/color pairs in per-discipline durable configurations and update them only through the atomic combat-build save contract",
       "target_phases": [2, 5, 7],
       "status": "open",
@@ -457,6 +490,7 @@
         "Assets/Arena/Runtime/Input/ActionBarInputDispatcher.cs"
       ],
       "phase_4_resolution": "Frozen action-bar projection deletes non-global legacy projections and emits each exact assignment only under its owning canonical discipline. No profile-neutral ability is copied to multiple frozen bars. Local-direct profile bars and current Unity global/profile resolution remain open for Phases 5 and 7.",
+      "phase_5_resolution": "ActiveActionBarResolver reads only the current discipline's exact frozen assignment. Dodge/parry and other fixed controls remain on the explicit intrinsic input path; Unity has no profile-neutral bar replication or multi-bar copy fallback.",
       "final_state": "resolve exact assignments only on the owning discipline bar; true universal actions use one explicit intrinsic-action path outside the selectable budget",
       "target_phases": [1, 4, 5, 7],
       "status": "open",
@@ -547,6 +581,7 @@
         "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Tables/ItemSpell.g.cs"
       ],
       "phase_4_resolution": "Server player cast authorization no longer calls player_knows_spell, PlayerKnownSpell, equipped spellbook contents, or spell-slot capacity. Learned and ItemSpell rows remain collection/schema-only and the live probe proves that adding NOVA to learned rows and BOLT to the equipped spellbook does not grant either cast. Current Unity collection fallbacks and eventual physical schema disposition remain open for Phases 5 and 7.",
+      "phase_5_resolution": "PlayerKnownSpell and ItemSpell were removed from Unity HUD/input action resolution and from the disposable PvP initial subscription. Remaining uses are collection/inventory presentation only and cannot grant an action-bar slot or provisioned-player cast.",
       "final_state": "remove these paths from player bar and cast authorization; any retained collection/item purpose must be separately designed and cannot grant combat availability",
       "target_phases": [4, 5, 7],
       "status": "open",
@@ -608,6 +643,7 @@
         "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Types/MyHubLoadout.g.cs",
         "Assets/Arena/Runtime/Generated/HubSpacetimeDB/Tables/MyHubLoadout.g.cs"
       ],
+      "phase_5_resolution": "HubNetworkManager now consumes generated MyCombatBuild through HubCombatBuildDraft and exposes one revision-checked SaveCombatBuild writer. Legacy combat-build save methods/events and DTO fields were removed; MyHubLoadout is retained only behind an armor-only snapshot until Phase 7 schema deletion.",
       "final_state": "consume a generated canonical combat-build model and one revision-checked atomic save; no legacy writer or DTO remains",
       "target_phases": [2, 5, 7],
       "status": "open",
@@ -636,6 +672,7 @@
         "Assets/Arena/Resources/UI/Toolkit/Disciplines.uss",
         "Assets/Arena/Tests/Editor/DisciplineLoadoutRulesTests.cs"
       ],
+      "phase_5_resolution": "DisciplinesScreen is a disabled shell that warns and closes immediately. It does not load the old model or invoke any reducer. Its UXML/USS remain unreachable for the explicitly future Phase 6 replacement/Phase 7 deletion decision.",
       "final_state": "disable the writer during backend cutover and remove it when the future replacement UI lands; it may not write or reconstruct a legacy shape",
       "target_phases": [5, 6, 7],
       "status": "open",
@@ -666,6 +703,7 @@
         "Assets/Arena/Resources/UI/Toolkit/Disciplines.uss",
         "Assets/Arena/Tests/Editor/DisciplineLoadoutRulesTests.cs"
       ],
+      "phase_5_resolution": "The session-only stat allocator and DisciplineLoadoutRules implementation were deleted with the disabled writer. No replacement stat schema, service, or UI path was invented; labels in unreachable legacy assets remain Phase 6/7 physical residue.",
       "final_state": "remove from the combat-build screen without inventing a replacement stat progression system in this migration",
       "target_phases": [5, 6, 7],
       "status": "open",
@@ -691,6 +729,7 @@
         "Assets/Arena/Runtime/UI/Toolkit/HubScreen.cs",
         "Assets/Arena/Runtime/UI/HubController.cs"
       ],
+      "phase_5_resolution": "HubScreen renders three ordered equal combat-discipline slots, and HubController resolves the configured starting discipline or deterministic first-selected fallback for the showcase. Primary/secondary labels and selection logic are gone.",
       "final_state": "render the ordered canonical discipline collection and selected starting discipline without assigning primary/secondary semantics",
       "target_phases": [5, 7],
       "status": "open",
@@ -714,6 +753,7 @@
         "Assets/Arena/Runtime/Network/HubNetworkManager.cs",
         "Assets/Arena/Tests/Editor/UiInputContractTests.cs"
       ],
+      "phase_5_resolution": "EquipmentScreen edits the starting/first selected canonical discipline through HubCombatBuildDraft.WithWeapon and the same atomic SaveCombatBuild call, preserving every other selected and dormant configuration field.",
       "final_state": "edit the selected canonical discipline configuration through the same atomic combat-build draft or disable weapon editing until it can do so",
       "target_phases": [5, 7],
       "status": "open",
@@ -744,6 +784,7 @@
         "Assets/Arena/Tests/Editor/UiInputContractTests.cs"
       ],
       "phase_4_resolution": "The authoritative server path is exact-current-discipline only, and the compatibility projection contains exact per-discipline rows plus canonical global switch actions. Client ActiveActionBarResolver, profile/global matching, and spellbook fallbacks were not changed in this no-UI Phase 4 slice and remain explicitly open for Phase 5.",
+      "phase_5_resolution": "ActiveActionBarResolver and ActionBarInputDispatcher now resolve only MatchDisciplineActionBarAssignment rows for ActiveCombatDiscipline plus explicit intrinsic inputs. Combat-profile, global replicated assignment, selection, learned-spell, and spellbook fallbacks were removed.",
       "final_state": "resolve only the current discipline's exact assignments plus explicit intrinsic actions; no profile/global/spellbook player fallback",
       "target_phases": [4, 5, 7],
       "status": "open",
@@ -779,6 +820,7 @@
         "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Reducers/AssignCombatDisciplineWeaponLoadout.g.cs"
       ],
       "phase_4_resolution": "set_combat_discipline now routes frozen players through one atomic activation that validates selection, equips the materialized configuration, writes the same canonical discipline/profile ID, clears discipline-specific transient state, synchronizes mode, and projects exact bars. The independent weapon-loadout reducer rejects frozen-build mutation. Legacy local-direct behavior and generated/client surfaces remain open for Phases 5 and 7.",
+      "phase_5_resolution": "Unity's F1/F2/F3 switch inputs resolve exact ordered IDs from MatchCombatBuildDiscipline and call only SetCombatDiscipline. HUD labels read the same frozen order; Unity has no independent profile or weapon-loadout switch request.",
       "final_state": "one atomic switch selects a discipline from the frozen build and projects that same configuration's weapon, mode, and bar; no independent profile or weapon-loadout request",
       "target_phases": [3, 4, 5, 7],
       "status": "open",
@@ -809,6 +851,7 @@
         "Assets/Arena/Runtime/Generated/MatchSpacetimeDB/Tables/CharacterActionBarAssignment.g.cs"
       ],
       "phase_4_resolution": "The canonical match_discipline_action_bar_assignment rows remain the authorization truth. CharacterActionBarAssignment is now only an exact read-only compatibility projection for frozen players, scoped by the canonical discipline ID despite its legacy field name; all three edit reducers reject frozen-build mutation. Physical projection schema remains open for Phase 7.",
+      "phase_5_resolution": "Unity gameplay subscriptions and resolution no longer consume CharacterActionBarAssignment. The legacy action-bar editor and drag/drop writer are disabled/removed; generated rows and reducers remain physical Phase 7 schema residue only.",
       "final_state": "durable exact assignments are owned by canonical combat discipline in Hub; match rows are frozen projections and cannot create alternate durable truth",
       "target_phases": [1, 2, 3, 4, 7],
       "status": "open",
@@ -863,6 +906,7 @@
         "Assets/Arena/Runtime/Generated/SpacetimeDB/**"
       ],
       "phase_3_resolution": "Hub and match bindings were regenerated from their schemas. Canonical match tables and compact bootstrap/reservation shapes are present, and SaveCharacterDisciplineLoadout bindings are absent. Other legacy runtime/client types plus the data-preserving MatchPlayerLoadoutSnapshot tombstone remain ledgered for later phases.",
+      "phase_5_resolution": "Canonical Hub and match generated bindings are consumed directly and were regenerated through ops/setup-local-multiplayer.sh with no hand edits. Generated compatibility reducers, tables, and metadata remain classified for final Phase 7 schema regeneration/removal.",
       "final_state": "regenerate from the final schemas; never hand-edit generated compatibility fields",
       "target_phases": [2, 3, 5, 7],
       "status": "open",
@@ -891,6 +935,7 @@
         "docs/ui-prototypes/disciplines/disciplines.js",
         "docs/ui-prototypes/disciplines/disciplines.css"
       ],
+      "phase_5_resolution": "The current Toolkit screen is disabled and cannot load or write the school-as-discipline model. Its UXML/USS and archived prototype remain unreachable provenance pending the separately approved Phase 6 replacement and Phase 7 final audit.",
       "final_state": "legacy Toolkit writer is disabled/removed and prototype remains only as explicitly archived provenance until the future UI replaces it",
       "target_phases": [5, 6, 7],
       "status": "open",

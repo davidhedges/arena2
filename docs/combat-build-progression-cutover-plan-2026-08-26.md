@@ -2,11 +2,11 @@
 
 Date: 2026-08-26
 
-Status: **PHASE 4 COMPLETE — the canonical catalog, persistent Hub aggregate,
-frozen match handoff, exact per-discipline runtime bars, atomic weapon switch,
-build-only active authorization, and selected-passive authorization are live
-locally. Phase 5 and later implementation have not started; each requires
-explicit approval.**
+Status: **PHASE 5 COMPLETE — the canonical combat build now drives the Unity
+Hub draft, equipment save, gameplay subscriptions, exact HUD/action-bar reads,
+and three-discipline switching. Legacy Unity writers are disabled or removed.
+The replacement UI and destructive final schema cleanup have not started;
+Phases 6 and 7 each require explicit approval.**
 
 ## 1. Goal
 
@@ -542,8 +542,7 @@ A live Daggers/Bow/Staff probe passed exact-bar, switch, frozen-mutation,
 positive-cast, collection-only denial, instrumented denial-reason, persistent
 Hub-data, and allocation-cleanup gates. Detailed evidence and the residual
 legacy classification are in
-`docs/combat-build-progression-phase-4-evidence-2026-08-26.md`. Phase 5 was not
-started.
+`docs/combat-build-progression-phase-4-evidence-2026-08-26.md`.
 
 ### Phase 5 — Unity plumbing for the future editor (no new screen)
 
@@ -563,6 +562,22 @@ remain able to write a legacy shape.
 Exit gate: ordinary Unity compilation and edit-mode tests pass, and the
 existing gameplay HUD can switch/read the three frozen bars. Per repository
 policy, Unity batch mode is not used without specific current-chat approval.
+
+Completion record (2026-08-26): **PASS.** Unity consumes `my_combat_build`
+through one canonical client draft and saves weapon edits only through the
+revision-checked whole-build reducer. Gameplay subscriptions and HUD/input read
+the six frozen build tables; no profile, global action-bar, learned-spell, or
+spellbook fallback remains in that path. The legacy Disciplines and action-bar
+editors are disabled and cannot write compatibility rows. The Unity compile
+gate passed, all 19 Phase 5 EditMode cases passed in the explicitly authorized
+batch run, and the live Daggers/Bow/Staff probe switched and read all three
+exact frozen bars. The post-fix repository-wide EditMode run recorded 606/642,
+with zero Phase 5 failures; the remaining 36 failures are outside this phase's
+changed assertions and implementation scope. Those failures are preserved as
+baseline evidence rather than mislabeled as a repository-wide pass. Persistent
+Hub preservation verified all 60 pre-existing rows unchanged. Detailed
+evidence and the classified Phase 6/7 residue are in
+`docs/combat-build-progression-phase-5-evidence-2026-08-26.md`.
 
 ### Phase 6 — replacement UI (future session)
 

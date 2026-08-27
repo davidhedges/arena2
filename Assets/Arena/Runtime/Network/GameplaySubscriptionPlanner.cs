@@ -95,7 +95,6 @@ namespace Arena.Network
             {
                 qb.From.PlayerWorld().Where(c => c.Identity.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PlayerOpenWorldScene().Where(c => c.Identity.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.CharacterActionBarAssignment().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.CharacterAppearance().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.PlayerKnownSpell().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.GlobalCooldown().Where(c => c.Caster.Eq(localIdentity)).ToSql(),
@@ -106,9 +105,12 @@ namespace Arena.Network
                 new QueryBuilder().From.ActiveDiceRoll().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.FixedActionChargeState().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.ActiveCombatDiscipline().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.CharacterDisciplineLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.CharacterDisciplineAbilitySelection().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.CharacterCombatDisciplineWeaponLoadout().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.MatchCombatBuild().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.MatchCombatBuildDiscipline().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.MatchDisciplineConfiguration().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.MatchStaffSchoolSelection().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.MatchDisciplineActionBarAssignment().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.MatchDisciplinePassiveSelection().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.ActiveCombatMode().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 // Local swing scheduling (netcode design review S6): the
                 // client schedules its own auto-attack presentation at
@@ -171,13 +173,7 @@ namespace Arena.Network
                         new QueryBuilder().From.ArenaInstance(),
                         (world, arena) => world.InstanceScopeId.Eq(arena.Id))
                     .ToSql(),
-                new QueryBuilder().From.CharacterActionBarAssignment()
-                    .Where(c => c.Owner.Eq(localIdentity))
-                    .ToSql(),
                 new QueryBuilder().From.CharacterAppearance()
-                    .Where(c => c.Owner.Eq(localIdentity))
-                    .ToSql(),
-                new QueryBuilder().From.PlayerKnownSpell()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
                 new QueryBuilder().From.GlobalCooldown()
@@ -198,13 +194,22 @@ namespace Arena.Network
                 new QueryBuilder().From.ActiveCombatDiscipline()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
-                new QueryBuilder().From.CharacterDisciplineLoadout()
+                new QueryBuilder().From.MatchCombatBuild()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
-                new QueryBuilder().From.CharacterDisciplineAbilitySelection()
+                new QueryBuilder().From.MatchCombatBuildDiscipline()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
-                new QueryBuilder().From.CharacterCombatDisciplineWeaponLoadout()
+                new QueryBuilder().From.MatchDisciplineConfiguration()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.MatchStaffSchoolSelection()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.MatchDisciplineActionBarAssignment()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.MatchDisciplinePassiveSelection()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
                 new QueryBuilder().From.ActiveCombatMode()

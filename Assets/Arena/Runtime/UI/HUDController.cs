@@ -204,13 +204,6 @@ namespace Arena.UI
         private readonly TooltipTarget[] _abilityGridTooltips = new TooltipTarget[ActionBarLayout.CellCount];
         private readonly ActionBarClickTarget[] _abilityGridClicks = new ActionBarClickTarget[ActionBarLayout.CellCount];
         private readonly ActionBarSlotState[] _abilityGridStates = new ActionBarSlotState[ActionBarLayout.CellCount];
-        private readonly Image[] _spellbookGridIcons = new Image[ActionBarLayout.Columns];
-        private readonly Image[] _spellbookGridCd = new Image[ActionBarLayout.Columns];
-        private readonly Text[] _spellbookGridText = new Text[ActionBarLayout.Columns];
-        private readonly Text[] _spellbookGridChargeText = new Text[ActionBarLayout.Columns];
-        private readonly TooltipTarget[] _spellbookGridTooltips = new TooltipTarget[ActionBarLayout.Columns];
-        private readonly ActionBarClickTarget[] _spellbookGridClicks = new ActionBarClickTarget[ActionBarLayout.Columns];
-        private readonly ActionBarSlotState[] _spellbookGridStates = new ActionBarSlotState[ActionBarLayout.Columns];
         private readonly Image[] _disciplineBarIcons = new Image[ActionBarSlotIds.DisciplineColumns];
         private readonly Image[] _disciplineBarCd = new Image[ActionBarSlotIds.DisciplineColumns];
         private readonly Text[] _disciplineBarText = new Text[ActionBarSlotIds.DisciplineColumns];
@@ -220,8 +213,6 @@ namespace Arena.UI
         private readonly ActionBarSlotState[] _disciplineBarStates = new ActionBarSlotState[ActionBarSlotIds.DisciplineColumns];
         private readonly Image[] _abilityGridFlash = new Image[ActionBarLayout.CellCount];
         private readonly double[] _abilityGridFlashUntil = new double[ActionBarLayout.CellCount];
-        private readonly Image[] _spellbookGridFlash = new Image[ActionBarLayout.Columns];
-        private readonly double[] _spellbookGridFlashUntil = new double[ActionBarLayout.Columns];
         private readonly Image[] _disciplineBarFlash = new Image[ActionBarSlotIds.DisciplineColumns];
         private readonly double[] _disciplineBarFlashUntil = new double[ActionBarSlotIds.DisciplineColumns];
         private double _anySlotFlashActiveUntil;
@@ -615,23 +606,6 @@ namespace Arena.UI
             var grid = SlotGrid(box.transform, "AbilityGrid",
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 gridSize, Vector2.zero);
-
-            for (int col = 0; col < ActionBarLayout.Columns; col++)
-            {
-                BuildSlot(
-                    grid.transform,
-                    SpellbookKeymap.KeyLabelForIndex(col),
-                    null,
-                    out _spellbookGridIcons[col],
-                    out _spellbookGridCd[col],
-                    out _spellbookGridText[col],
-                    out _spellbookGridChargeText[col],
-                    out _spellbookGridTooltips[col],
-                    out _spellbookGridClicks[col],
-                    out _,
-                    out _,
-                    out _spellbookGridFlash[col]);
-            }
 
             for (int row = 0; row < ActionBarLayout.VisibleActionRows; row++)
             {
@@ -1612,7 +1586,6 @@ namespace Arena.UI
                 return false;
 
             bool any = StampSlotRejectionFlash(_abilityGridStates, _abilityGridFlashUntil, actionId, until);
-            any |= StampSlotRejectionFlash(_spellbookGridStates, _spellbookGridFlashUntil, actionId, until);
             any |= StampSlotRejectionFlash(_disciplineBarStates, _disciplineBarFlashUntil, actionId, until);
             if (any)
                 _anySlotFlashActiveUntil = Math.Max(_anySlotFlashActiveUntil, until);
@@ -1648,7 +1621,6 @@ namespace Arena.UI
                 return;
 
             RenderSlotRejectionFlash(_abilityGridFlash, _abilityGridFlashUntil, now);
-            RenderSlotRejectionFlash(_spellbookGridFlash, _spellbookGridFlashUntil, now);
             RenderSlotRejectionFlash(_disciplineBarFlash, _disciplineBarFlashUntil, now);
         }
 
@@ -1678,7 +1650,6 @@ namespace Arena.UI
             var conn = NetworkManager.Instance?.Conn;
             var owner = conn?.Identity;
 
-            RefreshSpellbookStaticState(conn, owner);
             RefreshDisciplineBarStaticState(conn, owner);
 
             for (int row = 0; row < ActionBarLayout.VisibleActionRows; row++)
@@ -1773,7 +1744,7 @@ namespace Arena.UI
                 if (index >= ActionBarSlotIds.DisciplineColumns)
                     break;
 
-                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveGlobalActionBarAction(
+                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveCombatDisciplineSwitchAction(
                     conn,
                     owner,
                     binding.SlotId);
@@ -1812,78 +1783,6 @@ namespace Arena.UI
                     ActionTooltipResolver.ResolveForActionRef(conn, owner, resolved),
                     pollHover: true);
                 index++;
-            }
-        }
-
-        private void RefreshSpellbookStaticState(DbConnection? conn, SpacetimeDB.Identity? owner)
-        {
-            List<ItemSpell> spells = ReadEquippedSpellbookSpells(conn, owner);
-
-            for (int col = 0; col < ActionBarLayout.Columns; col++)
-            {
-                string keyLabel = SpellbookKeymap.KeyLabelForIndex(col);
-                _spellbookGridStates[col] = ActionBarSlotState.Empty(keyLabel);
-                SetActionBarSlotPresentation(_spellbookGridCd[col], _spellbookGridIcons[col], _spellbookGridStates[col], SlotBg, null);
-                _spellbookGridTooltips[col].Configure(_canvas, default);
-                _spellbookGridClicks[col].Configure(null);
-                SetFillIfChanged(_spellbookGridCd[col], 0f);
-                SetColorIfChanged(_spellbookGridCd[col], CdOverlay);
-                SetTextIfChanged(_spellbookGridText[col], string.Empty);
-                SetTextIfChanged(_spellbookGridChargeText[col], string.Empty);
-            }
-
-            if (conn == null || !owner.HasValue)
-                return;
-
-            for (int col = 0; col < ActionBarLayout.Columns; col++)
-            {
-                ItemSpell? itemSpell = FindSpellbookSlot(spells, col);
-                if (itemSpell == null)
-                    continue;
-
-                string spellId = WireIdentifier.Normalize(itemSpell.SpellId);
-                if (string.IsNullOrWhiteSpace(spellId))
-                    continue;
-
-                AbilityCatalog? ability = FindAbilityForSpell(conn, spellId);
-                bool capacitorCharged = CapacitorPresentation.IsCapacitorAbility(
-                        ability?.AbilityId ?? string.Empty,
-                        spellId)
-                    && CapacitorPresentation.IsCharged(conn, owner);
-                string displayName = ActionPresentation.ResolveDisplayName(conn, owner.Value, spellId, spellId);
-                Sprite? iconSprite = ability == null
-                    ? ActionIconResolver.Resolve(ActionKinds.Ability, spellId)
-                    : ActionIconResolver.Resolve(
-                        ActionKinds.Ability,
-                        ActionIconResolver.ResolvePresentationId(conn, owner, ability.AbilityId, spellId));
-                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveEquippedSpellbookAction(conn, owner.Value, (uint)col);
-                bool canTrigger = resolved.HasAssignedAction;
-                string keyLabel = SpellbookKeymap.KeyLabelForIndex(col);
-
-                _spellbookGridStates[col] = new ActionBarSlotState(
-                    keyLabel,
-                    iconSprite == null ? displayName : string.Empty,
-                    true,
-                    false,
-                    spellId,
-                    resolved.AbilityId,
-                    UsesGlobalCooldown(spellId, string.Empty),
-                    ResolveSpellRequiresTargetLos(conn, spellId),
-                    capacitorCharged,
-                    ResolveCooldownActionId(conn, owner, resolved.AbilityId, spellId));
-                SetActionBarSlotPresentation(
-                    _spellbookGridCd[col],
-                    _spellbookGridIcons[col],
-                    _spellbookGridStates[col],
-                    ResolveActionBarColor(conn, ability?.AbilityId ?? spellId, true),
-                    iconSprite);
-                _spellbookGridClicks[col].Configure(canTrigger ? () => TriggerActionRef(conn, resolved) : null);
-                _spellbookGridTooltips[col].Configure(
-                    _canvas,
-                    ability == null
-                        ? new TooltipData(displayName, "Spellbook", SpellbookSpellMetadata(conn, spellId))
-                        : ActionTooltipResolver.ResolveForAbility(conn, owner, ability),
-                    pollHover: true);
             }
         }
 
@@ -1932,103 +1831,12 @@ namespace Arena.UI
             return spell is { RequiresTarget: true, RequiresTargetLos: true };
         }
 
-        private static List<ItemSpell> ReadEquippedSpellbookSpells(DbConnection? conn, SpacetimeDB.Identity? owner)
-        {
-            List<ItemSpell> spells = new();
-            if (conn == null || !owner.HasValue)
-                return spells;
-
-            EquipmentLoadout? loadout = conn.Db.EquipmentLoadout.Owner.Find(owner.Value);
-            if (loadout == null || string.IsNullOrWhiteSpace(loadout.SpellbookItemId))
-                return spells;
-
-            foreach (ItemSpell spell in conn.Db.ItemSpell.ItemInstanceId.Filter(loadout.SpellbookItemId))
-                spells.Add(spell);
-
-            spells.Sort((left, right) =>
-            {
-                int sort = left.SlotIndex.CompareTo(right.SlotIndex);
-                return sort != 0
-                    ? sort
-                    : string.Compare(left.Key, right.Key, StringComparison.Ordinal);
-            });
-            return spells;
-        }
-
-        private static ItemSpell? FindSpellbookSlot(List<ItemSpell> spells, int slotIndex)
-        {
-            foreach (ItemSpell spell in spells)
-            {
-                if (spell.SlotIndex == (uint)slotIndex)
-                    return spell;
-            }
-
-            return null;
-        }
-
-        private static AbilityCatalog? FindAbilityForSpell(DbConnection? conn, string spellId)
-        {
-            if (conn == null)
-                return null;
-
-            string normalizedSpellId = WireIdentifier.Normalize(spellId);
-            foreach (AbilityCatalog ability in conn.Db.AbilityCatalog.Iter())
-            {
-                if (!string.Equals(WireIdentifier.Normalize(ability.AbilityKind), AbilityKinds.Spell, StringComparison.Ordinal))
-                    continue;
-                if (string.Equals(WireIdentifier.Normalize(ability.ActionId), normalizedSpellId, StringComparison.Ordinal))
-                    return ability;
-            }
-
-            return null;
-        }
-
-        private static string SpellbookSpellMetadata(DbConnection? conn, string spellId)
-        {
-            SpellDefinition? spell = conn?.Db.SpellDefinition.Kind.Find(WireIdentifier.Normalize(spellId));
-            if (spell == null)
-                return string.Empty;
-
-            AbilityCatalog? ability = FindAbilityForSpell(conn, spellId);
-            List<string> parts = new();
-            if (spell.PrimaryResourceCost > 0.0001f)
-                parts.Add(FormatSpellResourceCost(conn, ability, spell));
-            if (spell.CooldownMs > 0)
-                parts.Add($"{spell.CooldownMs / 1000f:0.#}s");
-            if (!string.IsNullOrWhiteSpace(spell.Targeting))
-                parts.Add(WireIdentifier.Normalize(spell.Targeting));
-
-            return string.Join(" - ", parts);
-        }
-
-        private static string FormatSpellResourceCost(DbConnection? conn, AbilityCatalog? ability, SpellDefinition spell)
-        {
-            string resource = ResolveResourceDisplayName(conn, ability?.ResourceKind);
-            string suffix = SpellDefinitionContracts.UsesPerSecondResourceCost(spell)
-                ? "/s"
-                : string.Empty;
-            return $"{spell.PrimaryResourceCost:0.#} {resource}{suffix}";
-        }
-
-        private static string ResolveResourceDisplayName(DbConnection? conn, string? resourceKind)
-        {
-            string normalized = WireIdentifier.Normalize(resourceKind);
-            if (string.IsNullOrWhiteSpace(normalized))
-                normalized = "MANA";
-
-            ResourceCatalog? resource = conn?.Db.ResourceCatalog.ResourceKind.Find(normalized);
-            return string.IsNullOrWhiteSpace(resource?.DisplayName)
-                ? normalized
-                : resource.DisplayName;
-        }
-
         private void UpdateActionBarCooldownPresentation(long nowMs, float gcdFrac, LocalCombatState combat)
         {
             bool targetLosBlocked = AdvisoryTargetLineOfSight.IsSelectedTargetBlockedCached();
             (bool hasTarget, float horizontalDistance, float radius) targetRange =
                 ResolveSelectedTargetRange();
             UpdateSlotCooldownPresentation(_disciplineBarStates, _disciplineBarCd, _disciplineBarText, _disciplineBarChargeText, nowMs, gcdFrac, combat, targetLosBlocked, targetRange);
-            UpdateSlotCooldownPresentation(_spellbookGridStates, _spellbookGridCd, _spellbookGridText, _spellbookGridChargeText, nowMs, gcdFrac, combat, targetLosBlocked, targetRange);
             UpdateSlotCooldownPresentation(_abilityGridStates, _abilityGridCd, _abilityGridText, _abilityGridChargeText, nowMs, gcdFrac, combat, targetLosBlocked, targetRange);
         }
 

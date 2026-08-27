@@ -191,7 +191,7 @@ namespace Arena.UI
         private string _activeSetId = string.Empty;
         private string _pendingSetId = string.Empty;
         private string _lastPreviewSetId = string.Empty;
-        private string _primaryDisciplineId = string.Empty;
+        private string _weaponDisciplineId = string.Empty;
         private string _selectedMainHandId = string.Empty;
         private string _selectedOffHandId = string.Empty;
         private string _selectedMainHandColorId = string.Empty;
@@ -413,7 +413,7 @@ namespace Arena.UI
             if (_hubNetwork != null)
             {
                 _hubNetwork.ArmorSetSaveCompleted -= OnArmorSetSaved;
-                _hubNetwork.WeaponLoadoutSaveCompleted -= OnWeaponLoadoutSaved;
+                _hubNetwork.CombatBuildSaveCompleted -= OnCombatBuildSaved;
             }
 
             _hubNetwork = hub;
@@ -427,7 +427,7 @@ namespace Arena.UI
             if (_hubNetwork != null)
             {
                 _hubNetwork.ArmorSetSaveCompleted += OnArmorSetSaved;
-                _hubNetwork.WeaponLoadoutSaveCompleted += OnWeaponLoadoutSaved;
+                _hubNetwork.CombatBuildSaveCompleted += OnCombatBuildSaved;
             }
         }
 
@@ -449,12 +449,19 @@ namespace Arena.UI
                 .OrderBy(row => row.SortOrder)
                 .ThenBy(row => row.ItemDefId, StringComparer.Ordinal));
 
-            _activeSetId = WireIdentifier.Normalize(hub.Loadout?.ArmorSetId);
-            _primaryDisciplineId = WireIdentifier.Normalize(hub.Loadout?.PrimaryDisciplineId);
-            _activeMainHandId = WireIdentifier.Normalize(hub.Loadout?.MainHandItemDefId);
-            _activeOffHandId = WireIdentifier.Normalize(hub.Loadout?.OffHandItemDefId);
-            _activeMainHandColorId = WireIdentifier.Normalize(hub.Loadout?.MainHandColorId);
-            _activeOffHandColorId = WireIdentifier.Normalize(hub.Loadout?.OffHandColorId);
+            _activeSetId = WireIdentifier.Normalize(hub.ArmorLoadout?.ArmorSetId);
+            HubCombatBuildDraft? build = hub.CombatBuild;
+            _weaponDisciplineId = ResolveEditedDisciplineId(build);
+            HubCombatBuildDisciplineConfiguration? configuration =
+                build?.FindConfiguration(_weaponDisciplineId);
+            _activeMainHandId = WireIdentifier.Normalize(
+                configuration?.Weapon.MainHandItemDefId);
+            _activeOffHandId = WireIdentifier.Normalize(
+                configuration?.Weapon.OffHandItemDefId);
+            _activeMainHandColorId = WireIdentifier.Normalize(
+                configuration?.Weapon.MainHandColorId);
+            _activeOffHandColorId = WireIdentifier.Normalize(
+                configuration?.Weapon.OffHandColorId);
 
             if (_sets.Count == 0)
             {
@@ -555,7 +562,7 @@ namespace Arena.UI
             SetText(
                 _pageSubtitle,
                 weapons
-                    ? "Your primary discipline determines the weapons available to equip."
+                    ? "Your combat discipline determines the weapons available to equip."
                     : "Balance protection and mobility. Armor is equipped as a complete set.");
         }
 
@@ -767,7 +774,7 @@ namespace Arena.UI
                 _selectedOffHandId = WireIdentifier.Normalize(_selectedOffHandId);
             }
 
-            if (!string.Equals(_primaryDisciplineId, "ZEAL", StringComparison.Ordinal))
+            if (!string.Equals(_weaponDisciplineId, "SWORD_AND_SHIELD", StringComparison.Ordinal))
             {
                 _selectedOffHandId = string.Empty;
                 _selectedOffHandColorId = string.Empty;
@@ -778,7 +785,7 @@ namespace Arena.UI
                 _selectedMainHandColorId,
                 _selectedMainHandId == _activeMainHandId ? _activeMainHandColorId : string.Empty,
                 forceSelectionFromActive);
-            if (string.Equals(_primaryDisciplineId, "ZEAL", StringComparison.Ordinal))
+            if (string.Equals(_weaponDisciplineId, "SWORD_AND_SHIELD", StringComparison.Ordinal))
             {
                 _selectedOffHandColorId = NormalizeSelectedColor(
                     _selectedOffHandId,
@@ -825,25 +832,38 @@ namespace Arena.UI
         private List<HubWeaponSnapshot> WeaponsForSlot(string slotId)
         {
             return _weapons.Where(row =>
-                    WeaponSupportsPrimaryDiscipline(row)
+                    WeaponSupportsCombatDiscipline(row)
                     && WireIdentifier.Normalize(row.EquipSlot) == slotId)
                 .ToList();
         }
 
-        private bool WeaponSupportsPrimaryDiscipline(HubWeaponSnapshot weapon)
+        private bool WeaponSupportsCombatDiscipline(HubWeaponSnapshot weapon)
         {
-            if (WireIdentifier.Normalize(weapon.PrimaryDisciplineId) == _primaryDisciplineId)
-                return true;
-
-            return PrimaryDisciplineUsesStaff()
-                && WireIdentifier.Normalize(weapon.WeaponKind) == "STAFF";
+            return string.Equals(
+                WireIdentifier.Normalize(weapon.LegacyWeaponDisciplineId),
+                WeaponCatalogDisciplineId(_weaponDisciplineId),
+                StringComparison.Ordinal);
         }
 
-        private bool PrimaryDisciplineUsesStaff()
+        private bool CombatDisciplineUsesStaff()
         {
-            HubDisciplineSnapshot? discipline = _hubNetwork?.Disciplines.FirstOrDefault(row =>
-                WireIdentifier.Normalize(row.Id) == _primaryDisciplineId);
-            return WireIdentifier.Normalize(discipline?.CombatProfileId) == "STAFF";
+            return string.Equals(
+                _weaponDisciplineId,
+                "STAFF",
+                StringComparison.Ordinal);
+        }
+
+        private static string WeaponCatalogDisciplineId(string combatDisciplineId)
+        {
+            return WireIdentifier.Normalize(combatDisciplineId) switch
+            {
+                "DAGGERS" => "SUBTLETY",
+                "TWO_HANDED_SWORD" => "WAR",
+                "SWORD_AND_SHIELD" => "ZEAL",
+                "ARCHER_BOW" => "PRECISION",
+                "STAFF" => "ARCANA",
+                _ => string.Empty,
+            };
         }
 
         private HubWeaponSnapshot? FindWeapon(string? itemDefId)
@@ -857,14 +877,14 @@ namespace Arena.UI
         {
             List<HubWeaponSnapshot> mains = WeaponsForSlot("MAIN_HAND");
             List<HubWeaponSnapshot> offHands = WeaponsForSlot("OFF_HAND");
-            bool requiresOffHand = string.Equals(_primaryDisciplineId, "ZEAL", StringComparison.Ordinal);
+            bool requiresOffHand = string.Equals(_weaponDisciplineId, "SWORD_AND_SHIELD", StringComparison.Ordinal);
             _offHandSection?.EnableInClassList("equipment-panel-hidden", !requiresOffHand);
             _weaponOffRow?.EnableInClassList("equipment-panel-hidden", !requiresOffHand);
 
             string disciplineName = DisciplineDisplayName();
-            SetText(_weaponDisciplineName, string.IsNullOrWhiteSpace(disciplineName) ? "NO PRIMARY DISCIPLINE" : disciplineName.ToUpperInvariant());
+            SetText(_weaponDisciplineName, string.IsNullOrWhiteSpace(disciplineName) ? "NO COMBAT DISCIPLINE" : disciplineName.ToUpperInvariant());
             SetText(_weaponCount, $"{mains.Count + offHands.Count} AVAILABLE");
-            SetText(_weaponRuleNote, RuleForPrimaryDiscipline());
+            SetText(_weaponRuleNote, RuleForCombatDiscipline());
 
             PopulateWeaponList(_mainWeaponList, mains, _selectedMainHandId, SelectMainWeapon);
             PopulateWeaponList(_offHandWeaponList, offHands, _selectedOffHandId, SelectOffHandWeapon);
@@ -953,7 +973,7 @@ namespace Arena.UI
         {
             HubWeaponSnapshot? main = FindWeapon(_selectedMainHandId);
             HubWeaponSnapshot? offHand = FindWeapon(_selectedOffHandId);
-            bool requiresOffHand = string.Equals(_primaryDisciplineId, "ZEAL", StringComparison.Ordinal);
+            bool requiresOffHand = string.Equals(_weaponDisciplineId, "SWORD_AND_SHIELD", StringComparison.Ordinal);
             bool valid = main != null
                 && !string.IsNullOrWhiteSpace(_selectedMainHandColorId)
                 && (!requiresOffHand
@@ -968,9 +988,9 @@ namespace Arena.UI
             SetText(
                 _weaponDetailsFlavor,
                 main == null
-                    ? "Choose a primary discipline with an authored weapon profile to unlock its arsenal."
+                    ? "Choose a combat discipline with an authored weapon profile to unlock its arsenal."
                     : $"A curated {FriendlyWeaponKind(main.WeaponKind).ToLowerInvariant()} loadout with complete Arena animation and attachment support.");
-            SetText(_weaponDetailsDiscipline, $"{DisciplineDisplayName().ToUpperInvariant()} PRIMARY");
+            SetText(_weaponDetailsDiscipline, $"{DisciplineDisplayName().ToUpperInvariant()} DISCIPLINE");
             SetText(_weaponDetailsKind, main == null ? "NO WEAPON TYPE" : FriendlyWeaponKind(main.WeaponKind).ToUpperInvariant());
             SetText(
                 _weaponMainName,
@@ -978,7 +998,7 @@ namespace Arena.UI
             SetText(
                 _weaponOffName,
                 offHand == null ? "None selected" : $"{WeaponDisplayName(offHand)} · {ColorDisplayName(offHand.ItemDefId, _selectedOffHandColorId)}");
-            SetText(_weaponDetailsRule, RuleForPrimaryDiscipline());
+            SetText(_weaponDetailsRule, RuleForCombatDiscipline());
             _weaponEquippedChip?.EnableInClassList("is-hidden", !equipped);
             SetWeaponIcon(_weaponDetailsIcon, main?.IconId ?? string.Empty);
             PopulateColorSelector(
@@ -1058,23 +1078,34 @@ namespace Arena.UI
         private string DisciplineDisplayName()
         {
             HubDisciplineSnapshot? discipline = _hubNetwork?.Disciplines.FirstOrDefault(row =>
-                WireIdentifier.Normalize(row.Id) == _primaryDisciplineId);
+                WireIdentifier.Normalize(row.Id) == _weaponDisciplineId);
             return discipline?.Name?.Trim()
-                ?? _primaryDisciplineId.Replace('_', ' ');
+                ?? _weaponDisciplineId.Replace('_', ' ');
         }
 
-        private string RuleForPrimaryDiscipline()
+        private static string ResolveEditedDisciplineId(HubCombatBuildDraft? build)
         {
-            if (PrimaryDisciplineUsesStaff())
-                return $"{DisciplineDisplayName()} equips staves.";
+            if (build == null)
+                return string.Empty;
+            if (!string.IsNullOrWhiteSpace(build.StartingDisciplineId))
+                return WireIdentifier.Normalize(build.StartingDisciplineId);
 
-            return _primaryDisciplineId switch
+            return build.SelectedDisciplines
+                .OrderBy(selected => selected.SlotIndex)
+                .Select(selected => WireIdentifier.Normalize(selected.CombatDisciplineId))
+                .FirstOrDefault() ?? string.Empty;
+        }
+
+        private string RuleForCombatDiscipline()
+        {
+            return _weaponDisciplineId switch
             {
-                "SUBTLETY" => "Subtlety equips paired daggers.",
-                "WAR" => "War equips two-handed swords, axes, hammers, and polearms; staves and bows are excluded.",
-                "ZEAL" => "Zeal equips a one-handed sword, axe, hammer, or fist weapon with a shield.",
-                "PRECISION" => "Precision equips bows.",
-                _ => "Choose a supported primary discipline to select weapons.",
+                "DAGGERS" => "Daggers equip paired daggers.",
+                "TWO_HANDED_SWORD" => "Two-Handed Sword equips two-handed swords, axes, hammers, and polearms.",
+                "SWORD_AND_SHIELD" => "Sword & Shield equips a one-handed weapon with a shield.",
+                "ARCHER_BOW" => "Bow equips bows.",
+                "STAFF" => "Staff equips staves.",
+                _ => "Select a combat discipline in the combat-build editor.",
             };
         }
 
@@ -1172,11 +1203,14 @@ namespace Arena.UI
         private void EquipSelectedWeapons()
         {
             HubWeaponSnapshot? main = FindWeapon(_selectedMainHandId);
-            bool requiresOffHand = string.Equals(_primaryDisciplineId, "ZEAL", StringComparison.Ordinal);
+            bool requiresOffHand = string.Equals(
+                _weaponDisciplineId,
+                "SWORD_AND_SHIELD",
+                StringComparison.Ordinal);
             HubWeaponSnapshot? offHand = FindWeapon(_selectedOffHandId);
             if (main == null || (requiresOffHand && offHand == null))
             {
-                ShowToast("Choose a complete weapon loadout first.");
+                ShowToast("Choose a complete weapon configuration first.");
                 return;
             }
 
@@ -1185,14 +1219,19 @@ namespace Arena.UI
                 && _selectedMainHandColorId == _activeMainHandColorId
                 && _selectedOffHandColorId == _activeOffHandColorId)
             {
-                ShowToast("That weapon loadout is already equipped.");
+                ShowToast("That weapon configuration is already saved.");
                 return;
             }
 
             HubNetworkManager? hub = _hubNetwork;
-            if (hub == null || !hub.IsReady || _weaponEquipPending)
+            HubCombatBuildDraft? build = hub?.CombatBuild;
+            if (hub == null
+                || !hub.IsReady
+                || build == null
+                || build.FindConfiguration(_weaponDisciplineId) == null
+                || _weaponEquipPending)
             {
-                ShowToast("Connect to equip this weapon loadout.");
+                ShowToast("Connect to save this discipline's weapon configuration.");
                 return;
             }
 
@@ -1202,11 +1241,15 @@ namespace Arena.UI
             _pendingOffHandColorId = requiresOffHand ? _selectedOffHandColorId : string.Empty;
             _weaponEquipPending = true;
             RenderWeaponDetails();
-            if (!hub.SaveWeaponLoadout(
+
+            HubCombatBuildDraft updated = build.WithWeapon(
+                _weaponDisciplineId,
+                new HubCombatBuildWeapon(
                     _pendingMainHandId,
                     _pendingMainHandColorId,
                     _pendingOffHandId,
-                    _pendingOffHandColorId))
+                    _pendingOffHandColorId));
+            if (!hub.SaveCombatBuild(updated))
             {
                 _weaponEquipPending = false;
                 _pendingMainHandId = string.Empty;
@@ -1214,11 +1257,11 @@ namespace Arena.UI
                 _pendingMainHandColorId = string.Empty;
                 _pendingOffHandColorId = string.Empty;
                 RenderWeaponDetails();
-                ShowToast("Connect to equip this weapon loadout.");
+                ShowToast("Connect to save this discipline's weapon configuration.");
             }
         }
 
-        private void OnWeaponLoadoutSaved(bool success, string reason)
+        private void OnCombatBuildSaved(bool success, string reason)
         {
             if (!_weaponEquipPending)
                 return;
@@ -1240,13 +1283,13 @@ namespace Arena.UI
                 _activeOffHandColorId = offHandColorId;
                 _nextCatalogRefresh = 0f;
                 RenderAll();
-                ShowToast("Weapon loadout equipped.");
+                ShowToast("Weapon configuration equipped.");
                 return;
             }
 
-            Debug.LogError($"[{nameof(EquipmentScreen)}] Equipping weapon loadout failed: {reason}");
+            Debug.LogError($"[{nameof(EquipmentScreen)}] Equipping weapon configuration failed: {reason}");
             RenderWeaponDetails();
-            ShowToast($"Could not equip weapon loadout: {reason}");
+            ShowToast($"Could not equip weapon configuration: {reason}");
         }
 
         private void ApplyShowcasePreview()

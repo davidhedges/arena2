@@ -1347,11 +1347,11 @@ namespace Arena.Entity
                 return true;
             }
 
-            foreach (CharacterCombatDisciplineWeaponLoadout loadout in
-                     conn.Db.CharacterCombatDisciplineWeaponLoadout.Owner.Filter(owner.Value))
+            foreach (MatchDisciplineConfiguration configuration in
+                     conn.Db.MatchDisciplineConfiguration.Owner.Filter(owner.Value))
             {
-                if (ItemInstanceIdsMatch(loadout.MainHandItemId, normalizedItemInstanceId)
-                    || ItemInstanceIdsMatch(loadout.OffHandItemId, normalizedItemInstanceId))
+                if (ItemInstanceIdsMatch(configuration.MainHandItemId, normalizedItemInstanceId)
+                    || ItemInstanceIdsMatch(configuration.OffHandItemId, normalizedItemInstanceId))
                 {
                     return true;
                 }

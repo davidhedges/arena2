@@ -50,36 +50,36 @@
                 <ui:VisualElement class="section-rule" picking-mode="Ignore" />
 
                 <ui:VisualElement name="LoadoutList" class="loadout-list">
-                    <ui:VisualElement name="LoadoutPrimaryRow" class="loadout-row">
-                        <ui:VisualElement name="LoadoutPrimaryIcon" class="loadout-icon" picking-mode="Ignore">
-                            <ui:VisualElement name="LoadoutPrimaryArt" class="loadout-art" />
-                            <ui:Label name="LoadoutPrimaryGlyph" class="loadout-glyph" text="W" />
+                    <ui:VisualElement name="LoadoutSlot0Row" class="loadout-row">
+                        <ui:VisualElement name="LoadoutSlot0Icon" class="loadout-icon" picking-mode="Ignore">
+                            <ui:VisualElement name="LoadoutSlot0Art" class="loadout-art" />
+                            <ui:Label name="LoadoutSlot0Glyph" class="loadout-glyph" text="D" />
                         </ui:VisualElement>
                         <ui:VisualElement class="loadout-copy">
-                            <ui:Label class="loadout-type" text="PRIMARY DISCIPLINE" />
-                            <ui:Label name="LoadoutPrimaryName" class="loadout-name" text="SWORD &amp; SHIELD" />
+                            <ui:Label class="loadout-type" text="COMBAT DISCIPLINE · SLOT 1" />
+                            <ui:Label name="LoadoutSlot0Name" class="loadout-name" text="DAGGERS" />
                         </ui:VisualElement>
                         <ui:Label class="loadout-index" text="01" />
                     </ui:VisualElement>
-                    <ui:VisualElement name="LoadoutSecondary1Row" class="loadout-row">
-                        <ui:VisualElement name="LoadoutSecondary1Icon" class="loadout-icon" picking-mode="Ignore">
-                            <ui:VisualElement name="LoadoutSecondary1Art" class="loadout-art" />
-                            <ui:Label name="LoadoutSecondary1Glyph" class="loadout-glyph" text="F" />
+                    <ui:VisualElement name="LoadoutSlot1Row" class="loadout-row">
+                        <ui:VisualElement name="LoadoutSlot1Icon" class="loadout-icon" picking-mode="Ignore">
+                            <ui:VisualElement name="LoadoutSlot1Art" class="loadout-art" />
+                            <ui:Label name="LoadoutSlot1Glyph" class="loadout-glyph" text="B" />
                         </ui:VisualElement>
                         <ui:VisualElement class="loadout-copy">
-                            <ui:Label class="loadout-type" text="SECONDARY DISCIPLINE" />
-                            <ui:Label name="LoadoutSecondary1Name" class="loadout-name" text="FIRE" />
+                            <ui:Label class="loadout-type" text="COMBAT DISCIPLINE · SLOT 2" />
+                            <ui:Label name="LoadoutSlot1Name" class="loadout-name" text="BOW" />
                         </ui:VisualElement>
                         <ui:Label class="loadout-index" text="02" />
                     </ui:VisualElement>
-                    <ui:VisualElement name="LoadoutSecondary2Row" class="loadout-row">
-                        <ui:VisualElement name="LoadoutSecondary2Icon" class="loadout-icon" picking-mode="Ignore">
-                            <ui:VisualElement name="LoadoutSecondary2Art" class="loadout-art" />
-                            <ui:Label name="LoadoutSecondary2Glyph" class="loadout-glyph" text="C" />
+                    <ui:VisualElement name="LoadoutSlot2Row" class="loadout-row">
+                        <ui:VisualElement name="LoadoutSlot2Icon" class="loadout-icon" picking-mode="Ignore">
+                            <ui:VisualElement name="LoadoutSlot2Art" class="loadout-art" />
+                            <ui:Label name="LoadoutSlot2Glyph" class="loadout-glyph" text="S" />
                         </ui:VisualElement>
                         <ui:VisualElement class="loadout-copy">
-                            <ui:Label class="loadout-type" text="SECONDARY DISCIPLINE" />
-                            <ui:Label name="LoadoutSecondary2Name" class="loadout-name" text="FROST" />
+                            <ui:Label class="loadout-type" text="COMBAT DISCIPLINE · SLOT 3" />
+                            <ui:Label name="LoadoutSlot2Name" class="loadout-name" text="STAFF" />
                         </ui:VisualElement>
                         <ui:Label class="loadout-index" text="03" />
                     </ui:VisualElement>

@@ -15,6 +15,7 @@ using HubSubscriptionHandle = Arena.HubDb.SubscriptionHandle;
 using HubPlayerRow = Arena.HubDb.MyHubPlayer;
 using HubMatchStatusRow = Arena.HubDb.MyMatchStatus;
 using HubLoadoutRow = Arena.HubDb.MyHubLoadout;
+using HubCombatBuildRow = Arena.HubDb.MyCombatBuild;
 using HubDisciplineRow = Arena.HubDb.HubCombatDisciplineDefinition;
 using HubAbilityRow = Arena.HubDb.HubAbilityDefinition;
 using HubArmorSetRow = Arena.HubDb.HubArmorSetDefinition;
@@ -215,7 +216,7 @@ namespace Arena.Network
             string weaponKind,
             string handRequirement,
             string equipSlot,
-            string primaryDisciplineId,
+            string legacyWeaponDisciplineId,
             uint sortOrder)
         {
             ItemDefId = itemDefId;
@@ -224,7 +225,7 @@ namespace Arena.Network
             WeaponKind = weaponKind;
             HandRequirement = handRequirement;
             EquipSlot = equipSlot;
-            PrimaryDisciplineId = primaryDisciplineId;
+            LegacyWeaponDisciplineId = legacyWeaponDisciplineId;
             SortOrder = sortOrder;
         }
 
@@ -234,7 +235,7 @@ namespace Arena.Network
         internal string WeaponKind { get; }
         internal string HandRequirement { get; }
         internal string EquipSlot { get; }
-        internal string PrimaryDisciplineId { get; }
+        internal string LegacyWeaponDisciplineId { get; }
         internal uint SortOrder { get; }
     }
 
@@ -261,41 +262,15 @@ namespace Arena.Network
         internal uint SortOrder { get; }
     }
 
-    internal readonly struct HubLoadoutSnapshot
+    internal readonly struct HubArmorLoadoutSnapshot
     {
-        internal HubLoadoutSnapshot(
-            string primaryDisciplineId,
-            string secondaryDisciplineId1,
-            string secondaryDisciplineId2,
-            IReadOnlyList<string> selectedAbilityIds,
-            string armorSetId,
-            string mainHandItemDefId,
-            string offHandItemDefId,
-            string mainHandColorId,
-            string offHandColorId,
-            ulong revision)
+        internal HubArmorLoadoutSnapshot(string armorSetId, ulong revision)
         {
-            PrimaryDisciplineId = primaryDisciplineId;
-            SecondaryDisciplineId1 = secondaryDisciplineId1;
-            SecondaryDisciplineId2 = secondaryDisciplineId2;
-            SelectedAbilityIds = selectedAbilityIds;
             ArmorSetId = armorSetId;
-            MainHandItemDefId = mainHandItemDefId;
-            OffHandItemDefId = offHandItemDefId;
-            MainHandColorId = mainHandColorId;
-            OffHandColorId = offHandColorId;
             Revision = revision;
         }
 
-        internal string PrimaryDisciplineId { get; }
-        internal string SecondaryDisciplineId1 { get; }
-        internal string SecondaryDisciplineId2 { get; }
-        internal IReadOnlyList<string> SelectedAbilityIds { get; }
         internal string ArmorSetId { get; }
-        internal string MainHandItemDefId { get; }
-        internal string OffHandItemDefId { get; }
-        internal string MainHandColorId { get; }
-        internal string OffHandColorId { get; }
         internal ulong Revision { get; }
     }
 
@@ -313,9 +288,8 @@ namespace Arena.Network
         internal event Action? Changed;
         internal event Action? Ready;
         internal event Action<string>? UnexpectedDisconnect;
-        internal event Action<bool, string>? DisciplineLoadoutSaveCompleted;
+        internal event Action<bool, string>? CombatBuildSaveCompleted;
         internal event Action<bool, string>? ArmorSetSaveCompleted;
-        internal event Action<bool, string>? WeaponLoadoutSaveCompleted;
 
         private HubConnection? _conn;
         private HubSubscriptionHandle? _subscription;
@@ -332,7 +306,8 @@ namespace Arena.Network
         private bool _requestAwaitingConfirmation;
         private HubPlayerSnapshot? _player;
         private HubMatchStatusSnapshot? _matchStatus;
-        private HubLoadoutSnapshot? _loadout;
+        private HubArmorLoadoutSnapshot? _armorLoadout;
+        private HubCombatBuildDraft? _combatBuild;
         private IReadOnlyList<HubDisciplineSnapshot> _disciplines = Array.Empty<HubDisciplineSnapshot>();
         private IReadOnlyList<HubAbilitySnapshot> _abilities = Array.Empty<HubAbilitySnapshot>();
         private IReadOnlyList<HubArmorSetSnapshot> _armorSets = Array.Empty<HubArmorSetSnapshot>();
@@ -346,7 +321,8 @@ namespace Arena.Network
         internal NetworkEnvironmentEndpoint ActiveEndpoint => _activeEndpoint;
         internal HubPlayerSnapshot? Player => _player;
         internal HubMatchStatusSnapshot? MatchStatus => _matchStatus;
-        internal HubLoadoutSnapshot? Loadout => _loadout;
+        internal HubArmorLoadoutSnapshot? ArmorLoadout => _armorLoadout;
+        internal HubCombatBuildDraft? CombatBuild => _combatBuild;
         internal IReadOnlyList<HubDisciplineSnapshot> Disciplines => _disciplines;
         internal IReadOnlyList<HubAbilitySnapshot> Abilities => _abilities;
         internal IReadOnlyList<HubArmorSetSnapshot> ArmorSets => _armorSets;
@@ -452,21 +428,6 @@ namespace Arena.Network
             return clientRequestId;
         }
 
-        internal bool SaveDisciplineLoadout(
-            string primaryDisciplineId,
-            string secondaryDisciplineId1,
-            string secondaryDisciplineId2,
-            List<string> selectedAbilityIds)
-        {
-            const string message =
-                "The legacy discipline editor can no longer save combat builds. "
-                + "Use the canonical combat-build editor.";
-            LastError = message;
-            DisciplineLoadoutSaveCompleted?.Invoke(false, message);
-            NotifyChanged();
-            return false;
-        }
-
         internal bool SaveArmorSet(string armorSetId)
         {
             if (!IsReady || _conn == null)
@@ -476,19 +437,13 @@ namespace Arena.Network
             return true;
         }
 
-        internal bool SaveWeaponLoadout(
-            string mainHandItemDefId,
-            string mainHandColorId,
-            string offHandItemDefId,
-            string offHandColorId)
+        internal bool SaveCombatBuild(HubCombatBuildDraft draft)
         {
-            const string message =
-                "The legacy weapon editor can no longer save combat builds. "
-                + "Use the canonical combat-build editor.";
-            LastError = message;
-            WeaponLoadoutSaveCompleted?.Invoke(false, message);
-            NotifyChanged();
-            return false;
+            if (!IsReady || _conn == null)
+                return false;
+
+            _conn.Reducers.SaveCombatBuild(draft.ToReducerInput());
+            return true;
         }
 
         internal void CancelCurrentTicket()
@@ -552,6 +507,7 @@ namespace Arena.Network
             conn.Reducers.OnRequestUnranked2V2BotMatch += OnRequestMatchResult;
             conn.Reducers.OnRequestOpenWorldInstance += OnRequestOpenWorldInstanceResult;
             conn.Reducers.OnSaveHubArmorSet += OnSaveArmorSetResult;
+            conn.Reducers.OnSaveCombatBuild += OnSaveCombatBuildResult;
             State = HubConnectionState.Subscribing;
             NotifyChanged();
             _subscription = conn
@@ -653,6 +609,9 @@ namespace Arena.Network
             conn.Db.MyHubLoadout.OnInsert += OnLoadoutInsert;
             conn.Db.MyHubLoadout.OnUpdate += OnLoadoutUpdate;
             conn.Db.MyHubLoadout.OnDelete += OnLoadoutDelete;
+            conn.Db.MyCombatBuild.OnInsert += OnCombatBuildInsert;
+            conn.Db.MyCombatBuild.OnUpdate += OnCombatBuildUpdate;
+            conn.Db.MyCombatBuild.OnDelete += OnCombatBuildDelete;
             conn.Db.HubCombatDisciplineDefinition.OnInsert += OnDisciplineInsert;
             conn.Db.HubCombatDisciplineDefinition.OnUpdate += OnDisciplineUpdate;
             conn.Db.HubCombatDisciplineDefinition.OnDelete += OnDisciplineDelete;
@@ -681,6 +640,9 @@ namespace Arena.Network
             conn.Db.MyHubLoadout.OnInsert -= OnLoadoutInsert;
             conn.Db.MyHubLoadout.OnUpdate -= OnLoadoutUpdate;
             conn.Db.MyHubLoadout.OnDelete -= OnLoadoutDelete;
+            conn.Db.MyCombatBuild.OnInsert -= OnCombatBuildInsert;
+            conn.Db.MyCombatBuild.OnUpdate -= OnCombatBuildUpdate;
+            conn.Db.MyCombatBuild.OnDelete -= OnCombatBuildDelete;
             conn.Db.HubCombatDisciplineDefinition.OnInsert -= OnDisciplineInsert;
             conn.Db.HubCombatDisciplineDefinition.OnUpdate -= OnDisciplineUpdate;
             conn.Db.HubCombatDisciplineDefinition.OnDelete -= OnDisciplineDelete;
@@ -699,6 +661,7 @@ namespace Arena.Network
             conn.Reducers.OnRequestUnranked2V2BotMatch -= OnRequestMatchResult;
             conn.Reducers.OnRequestOpenWorldInstance -= OnRequestOpenWorldInstanceResult;
             conn.Reducers.OnSaveHubArmorSet -= OnSaveArmorSetResult;
+            conn.Reducers.OnSaveCombatBuild -= OnSaveCombatBuildResult;
         }
 
         private void OnHubPlayerInsert(HubEventContext _, HubPlayerRow row) => ApplyPlayer(row);
@@ -738,7 +701,22 @@ namespace Arena.Network
                 return;
             }
 
-            _loadout = null;
+            _armorLoadout = null;
+            NotifyChanged();
+        }
+
+        private void OnCombatBuildInsert(HubEventContext _, HubCombatBuildRow row) => ApplyCombatBuild(row);
+        private void OnCombatBuildUpdate(HubEventContext _, HubCombatBuildRow __, HubCombatBuildRow row) => ApplyCombatBuild(row);
+
+        private void OnCombatBuildDelete(HubEventContext context, HubCombatBuildRow __)
+        {
+            foreach (HubCombatBuildRow row in context.Db.MyCombatBuild.Iter())
+            {
+                ApplyCombatBuild(row);
+                return;
+            }
+
+            _combatBuild = null;
             NotifyChanged();
         }
 
@@ -790,17 +768,15 @@ namespace Arena.Network
 
         private void ApplyLoadout(HubLoadoutRow row)
         {
-            _loadout = new HubLoadoutSnapshot(
-                row.PrimaryDisciplineId,
-                row.SecondaryDisciplineId1,
-                row.SecondaryDisciplineId2,
-                row.SelectedAbilityIds.ToArray(),
+            _armorLoadout = new HubArmorLoadoutSnapshot(
                 row.ArmorSetId,
-                row.MainHandItemDefId,
-                row.OffHandItemDefId,
-                row.MainHandColorId,
-                row.OffHandColorId,
                 row.Revision);
+            NotifyChanged();
+        }
+
+        private void ApplyCombatBuild(HubCombatBuildRow row)
+        {
+            _combatBuild = HubCombatBuildDraft.FromRow(row);
             NotifyChanged();
         }
 
@@ -906,20 +882,19 @@ namespace Arena.Network
                 break;
             }
 
-            _loadout = null;
+            _armorLoadout = null;
             foreach (HubLoadoutRow row in conn.Db.MyHubLoadout.Iter())
             {
-                _loadout = new HubLoadoutSnapshot(
-                    row.PrimaryDisciplineId,
-                    row.SecondaryDisciplineId1,
-                    row.SecondaryDisciplineId2,
-                    row.SelectedAbilityIds.ToArray(),
+                _armorLoadout = new HubArmorLoadoutSnapshot(
                     row.ArmorSetId,
-                    row.MainHandItemDefId,
-                    row.OffHandItemDefId,
-                    row.MainHandColorId,
-                    row.OffHandColorId,
                     row.Revision);
+                break;
+            }
+
+            _combatBuild = null;
+            foreach (HubCombatBuildRow row in conn.Db.MyCombatBuild.Iter())
+            {
+                _combatBuild = HubCombatBuildDraft.FromRow(row);
                 break;
             }
             RefreshCatalogSnapshots();
@@ -970,6 +945,19 @@ namespace Arena.Network
                 ReducerFailureMessage(context.Event.Status, "The Hub did not save the armor set."));
         }
 
+        private void OnSaveCombatBuildResult(
+            HubReducerEventContext context,
+            Arena.HubDb.CombatBuildDraftInput _)
+        {
+            if (!_hasIdentity || context.Event.CallerIdentity != _identity)
+                return;
+
+            bool committed = context.Event.Status is Status.Committed;
+            CombatBuildSaveCompleted?.Invoke(
+                committed,
+                ReducerFailureMessage(context.Event.Status, "The Hub did not save the combat build."));
+        }
+
         private static string ReducerFailureMessage(Status status, string fallback)
         {
             return status switch
@@ -1016,7 +1004,8 @@ namespace Arena.Network
 
         private void ClearLoadoutSnapshots()
         {
-            _loadout = null;
+            _armorLoadout = null;
+            _combatBuild = null;
             _disciplines = Array.Empty<HubDisciplineSnapshot>();
             _abilities = Array.Empty<HubAbilitySnapshot>();
             _armorSets = Array.Empty<HubArmorSetSnapshot>();
