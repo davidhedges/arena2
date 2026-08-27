@@ -65,9 +65,11 @@ use only `frozen_active_ability_for_request`, which requires:
 - canonical player `ACTIVE` metadata owned by that discipline; and
 - for Staff, the ability's exact school in `match_staff_school_selection`.
 
-A non-dummy player without the required frozen build fails closed. The
-remaining non-frozen branch serves explicit local-direct compatibility and NPC
-actors; it cannot be reached as a fallback by a provisioned player.
+A non-dummy player without the required frozen build fails closed. Local-direct
+admission constructs the same canonical default draft as the Hub, validates it
+through `CombatBuildCatalog`, and materializes it as a frozen match build before
+player progression initializes. The remaining non-frozen branch serves NPC
+actors; it cannot be reached as a fallback by any player.
 
 Denials emit `[COMBAT_BUILD_AUTH]` with one stable reason:
 `NO_FROZEN_BUILD`, `NO_ACTIVE_DISCIPLINE`,

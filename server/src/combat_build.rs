@@ -86,6 +86,35 @@ pub(crate) struct ValidatedCombatBuild {
     pub passive_count: usize,
 }
 
+/// Canonical first-use build shared by the persistent Hub and the explicit
+/// local-direct compatibility path. Both environments must pass this draft
+/// through `CombatBuildCatalog`; the default is data, not a validation bypass.
+pub(crate) fn default_combat_build_draft() -> CombatBuildDraft {
+    CombatBuildDraft {
+        revision: 0,
+        starting_discipline_id: None,
+        selected_disciplines: vec![SelectedCombatDiscipline {
+            slot_index: 0,
+            combat_discipline_id: "DAGGERS".to_string(),
+        }],
+        discipline_configurations: vec![DisciplineConfiguration {
+            combat_discipline_id: "DAGGERS".to_string(),
+            weapon: DisciplineWeaponConfiguration {
+                main_hand_item_def_id: "TRAINING_DAGGER_PAIR".to_string(),
+                main_hand_color_id: String::new(),
+                off_hand_item_def_id: String::new(),
+                off_hand_color_id: String::new(),
+            },
+            staff_school_ids: Vec::new(),
+            active_assignments: vec![DisciplineActionBarAssignment {
+                action_slot: "slot_0_0".to_string(),
+                ability_id: "DAGGER_QUICK_CUT".to_string(),
+            }],
+            passive_ability_ids: Vec::new(),
+        }],
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CombatBuildErrorCode {
     UnsupportedSchemaVersion,
@@ -1265,6 +1294,29 @@ mod tests {
 
     fn catalog() -> CombatBuildCatalog {
         CombatBuildCatalog::from_shared_catalogs().expect("canonical combat-build catalog")
+    }
+
+    #[test]
+    fn canonical_default_is_validator_owned_and_runtime_ready() {
+        let draft = default_combat_build_draft();
+        let validated = catalog()
+            .validate_draft(&draft, 0)
+            .expect("canonical default must pass the production validator");
+
+        assert_eq!(validated.active_count, 1);
+        assert_eq!(validated.passive_count, 0);
+        assert_eq!(validated.snapshot.starting_discipline_id, "DAGGERS");
+        assert_eq!(validated.snapshot.selected_disciplines.len(), 1);
+        assert_eq!(
+            validated.snapshot.discipline_configurations[0]
+                .weapon
+                .main_hand_item_def_id,
+            "TRAINING_DAGGER_PAIR"
+        );
+        assert_eq!(
+            validated.snapshot.discipline_configurations[0].active_assignments[0].ability_id,
+            "DAGGER_QUICK_CUT"
+        );
     }
 
     fn fixtures() -> FixtureFile {

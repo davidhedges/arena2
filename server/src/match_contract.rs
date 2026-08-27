@@ -20,7 +20,9 @@ use crate::arena::arena_instance as _;
 use crate::arena_maps::require_arena_map_id;
 #[allow(unused_imports)]
 use crate::bot_matches::arena_match as _;
-use crate::combat_build::{CombatBuildCatalog, CombatBuildSnapshot, ValidatedCombatBuild};
+use crate::combat_build::{
+    default_combat_build_draft, CombatBuildCatalog, CombatBuildSnapshot, ValidatedCombatBuild,
+};
 #[allow(unused_imports)]
 use crate::match_contract::match_bootstrap_config as _;
 #[allow(unused_imports)]
@@ -567,6 +569,27 @@ fn materialize_validated_combat_build(
     }
 }
 
+/// Local-direct is a compatibility admission mode, not an alternate combat
+/// authority. Give each direct player the same validated canonical default the
+/// Hub creates on first use, materialized into the ordinary frozen match rows.
+pub(crate) fn ensure_local_direct_player_combat_build(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Result<(), String> {
+    if ctx.db.match_combat_build().owner().find(owner).is_some() {
+        return Ok(());
+    }
+
+    let catalog = CombatBuildCatalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_CATALOG_INVALID: {error}"))?;
+    let draft = default_combat_build_draft();
+    let validated = catalog
+        .validate_draft(&draft, 0)
+        .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
+    materialize_validated_combat_build(ctx, owner, &validated);
+    Ok(())
+}
+
 fn match_combat_build_key(owner: Identity, parts: &[&str]) -> String {
     let mut key = owner.to_hex().to_string();
     for part in parts {
@@ -764,6 +787,71 @@ pub fn bootstrap_open_world_instance(
 /// match-local item instances after the ordinary player lifecycle has seeded
 /// inventory. Only the configured starting discipline is projected into the
 /// currently equipped weapon slots.
+fn materialize_player_combat_build_weapons_and_activate(
+    ctx: &ReducerContext,
+    build: &MatchCombatBuild,
+) -> Result<(), String> {
+    let mut selected_disciplines: Vec<_> = ctx
+        .db
+        .match_combat_build_discipline()
+        .owner()
+        .filter(build.owner)
+        .collect();
+    selected_disciplines.sort_by_key(|row| row.slot_index);
+    for selected in selected_disciplines {
+        let key = match_combat_build_key(build.owner, &[selected.combat_discipline_id.as_str()]);
+        let mut configuration = ctx
+            .db
+            .match_discipline_configuration()
+            .key()
+            .find(key)
+            .ok_or_else(|| {
+                format!(
+                    "Selected combat discipline '{}' has no match configuration",
+                    selected.combat_discipline_id
+                )
+            })?;
+        let (main_hand_item_id, off_hand_item_id) =
+            crate::inventory::materialize_combat_build_weapon_configuration(
+                ctx,
+                build.owner,
+                configuration.combat_discipline_id.as_str(),
+                configuration.main_hand_item_def_id.as_str(),
+                configuration.main_hand_color_id.as_str(),
+                configuration.off_hand_item_def_id.as_str(),
+                configuration.off_hand_color_id.as_str(),
+            )?;
+        configuration.main_hand_item_id = Some(main_hand_item_id);
+        configuration.off_hand_item_id = off_hand_item_id;
+        configuration.materialized_at = ctx.timestamp;
+        ctx.db
+            .match_discipline_configuration()
+            .key()
+            .update(configuration);
+    }
+
+    crate::progression::activate_frozen_combat_discipline(
+        ctx,
+        build.owner,
+        build.starting_discipline_id.as_str(),
+    )?;
+
+    Ok(())
+}
+
+pub(crate) fn apply_local_direct_player_combat_build(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Result<(), String> {
+    let build = ctx
+        .db
+        .match_combat_build()
+        .owner()
+        .find(owner)
+        .ok_or_else(|| "Local-direct canonical combat build is missing".to_string())?;
+    materialize_player_combat_build_weapons_and_activate(ctx, &build)
+}
+
 pub(crate) fn apply_reserved_player_combat_build(
     ctx: &ReducerContext,
     reservation: &MatchReservation,
@@ -782,53 +870,7 @@ pub(crate) fn apply_reserved_player_combat_build(
         );
     }
 
-    let mut selected_disciplines: Vec<_> = ctx
-        .db
-        .match_combat_build_discipline()
-        .owner()
-        .filter(reservation.player_identity)
-        .collect();
-    selected_disciplines.sort_by_key(|row| row.slot_index);
-    for selected in selected_disciplines {
-        let key = match_combat_build_key(
-            reservation.player_identity,
-            &[selected.combat_discipline_id.as_str()],
-        );
-        let mut configuration = ctx
-            .db
-            .match_discipline_configuration()
-            .key()
-            .find(key)
-            .ok_or_else(|| {
-                format!(
-                    "Selected combat discipline '{}' has no match configuration",
-                    selected.combat_discipline_id
-                )
-            })?;
-        let (main_hand_item_id, off_hand_item_id) =
-            crate::inventory::materialize_combat_build_weapon_configuration(
-                ctx,
-                reservation.player_identity,
-                configuration.combat_discipline_id.as_str(),
-                configuration.main_hand_item_def_id.as_str(),
-                configuration.main_hand_color_id.as_str(),
-                configuration.off_hand_item_def_id.as_str(),
-                configuration.off_hand_color_id.as_str(),
-            )?;
-        configuration.main_hand_item_id = Some(main_hand_item_id);
-        configuration.off_hand_item_id = off_hand_item_id;
-        configuration.materialized_at = ctx.timestamp;
-        ctx.db
-            .match_discipline_configuration()
-            .key()
-            .update(configuration);
-    }
-
-    crate::progression::activate_frozen_combat_discipline(
-        ctx,
-        reservation.player_identity,
-        build.starting_discipline_id.as_str(),
-    )?;
+    materialize_player_combat_build_weapons_and_activate(ctx, &build)?;
 
     crate::inventory::equip_armor_set_for_owner(
         ctx,

@@ -56,6 +56,10 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     let identity = ctx.sender();
     let now = ctx.timestamp;
     let admission = crate::match_contract::admit_connection(ctx, identity)?;
+    let is_local_direct = matches!(
+        &admission,
+        crate::match_contract::ConnectionAdmission::LocalDirect
+    );
     if matches!(
         &admission,
         crate::match_contract::ConnectionAdmission::Service
@@ -76,10 +80,7 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
         .as_ref()
         .map(|reserved| reserved.display_name.clone());
     let is_reserved_match_player = reservation.is_some();
-    if matches!(
-        &admission,
-        crate::match_contract::ConnectionAdmission::LocalDirect
-    ) {
+    if is_local_direct {
         crate::game_loop::ensure_game_loop_schedule(ctx);
         crate::game_loop::ensure_game_loop_watchdog_schedule(ctx);
     }
@@ -91,6 +92,9 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     crate::progression::sync_progression_catalogs(ctx);
     crate::spells::sync_spell_definitions(ctx);
     crate::npcs::sync_npc_catalog(ctx);
+    if is_local_direct {
+        crate::match_contract::ensure_local_direct_player_combat_build(ctx, identity)?;
+    }
 
     if ctx.db.player().identity().find(identity).is_some() {
         // Stale transient rows (mid-flight casts, scheduled melee impacts,
@@ -111,6 +115,8 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
         ensure_player_inventory_for_identity(ctx, identity);
         if let Some(reservation) = reservation.as_ref() {
             crate::match_contract::apply_reserved_player_combat_build(ctx, reservation)?;
+        } else if is_local_direct {
+            crate::match_contract::apply_local_direct_player_combat_build(ctx, identity)?;
         }
         sync_primary_resource_for_player(ctx, identity, now);
         log::info!(
@@ -153,6 +159,8 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     ensure_player_inventory_for_identity(ctx, identity);
     if let Some(reservation) = reservation.as_ref() {
         crate::match_contract::apply_reserved_player_combat_build(ctx, reservation)?;
+    } else if is_local_direct {
+        crate::match_contract::apply_local_direct_player_combat_build(ctx, identity)?;
     }
     sync_primary_resource_for_player(ctx, identity, now);
 
@@ -234,6 +242,11 @@ mod tests {
     use super::{DEFAULT_COMBAT_PROFILE, TWO_HANDED_SWORD_COMBAT_PROFILE};
     use std::{fs, path::Path};
 
+    fn player_source() -> String {
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(file!()))
+            .expect("player.rs should be readable")
+    }
+
     #[test]
     fn combat_profile_constants_remain_stable() {
         assert_eq!(DEFAULT_COMBAT_PROFILE, "SWORD_AND_SHIELD");
@@ -242,9 +255,7 @@ mod tests {
 
     #[test]
     fn hot_module_reconnect_refreshes_authored_spell_catalogs() {
-        let source =
-            fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/player.rs"))
-                .expect("player.rs should be readable");
+        let source = player_source();
         let connect_start = source
             .find("pub fn client_connected")
             .expect("client_connected should exist");
@@ -261,6 +272,37 @@ mod tests {
         assert!(
             connect_body.contains("crate::spells::sync_spell_definitions(ctx)"),
             "hot module reconnects must refresh SpellDefinition alongside AbilityCatalog"
+        );
+    }
+
+    #[test]
+    fn local_direct_connect_materializes_and_applies_the_canonical_default() {
+        let source = player_source();
+        let connect_start = source
+            .find("pub fn client_connected")
+            .expect("client_connected should exist");
+        let disconnect_start = source[connect_start..]
+            .find("pub fn client_disconnected")
+            .map(|offset| connect_start + offset)
+            .expect("client_disconnected should exist");
+        let connect_body = &source[connect_start..disconnect_start];
+
+        let ensure_build = connect_body
+            .find("ensure_local_direct_player_combat_build")
+            .expect("local-direct admission must materialize a validated default build");
+        let ensure_progression = connect_body
+            .find("ensure_default_progression_for_identity")
+            .expect("player progression must initialize");
+        assert!(
+            ensure_build < ensure_progression,
+            "the frozen local-direct build must exist before the non-dummy progression gate"
+        );
+        assert_eq!(
+            connect_body
+                .matches("apply_local_direct_player_combat_build")
+                .count(),
+            2,
+            "new and reconnecting local-direct players must both materialize weapons and activate the build"
         );
     }
 }

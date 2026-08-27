@@ -18,7 +18,7 @@ use spacetimedb::{
 mod combat_build_contract;
 
 use combat_build_contract::{
-    CombatBuildCatalog, CombatBuildDraft,
+    default_combat_build_draft, CombatBuildCatalog, CombatBuildDraft,
     DisciplineActionBarAssignment as ContractActionAssignment,
     DisciplineConfiguration as ContractDisciplineConfiguration,
     DisciplineWeaponConfiguration as ContractWeaponConfiguration,
@@ -2274,32 +2274,6 @@ fn contract_draft_from_input(draft: CombatBuildDraftInput) -> CombatBuildDraft {
                 passive_ability_ids: configuration.passive_ability_ids,
             })
             .collect(),
-    }
-}
-
-fn default_combat_build_draft() -> CombatBuildDraft {
-    CombatBuildDraft {
-        revision: 0,
-        starting_discipline_id: None,
-        selected_disciplines: vec![ContractSelectedDiscipline {
-            slot_index: 0,
-            combat_discipline_id: "DAGGERS".to_string(),
-        }],
-        discipline_configurations: vec![ContractDisciplineConfiguration {
-            combat_discipline_id: "DAGGERS".to_string(),
-            weapon: ContractWeaponConfiguration {
-                main_hand_item_def_id: "TRAINING_DAGGER_PAIR".to_string(),
-                main_hand_color_id: String::new(),
-                off_hand_item_def_id: String::new(),
-                off_hand_color_id: String::new(),
-            },
-            staff_school_ids: Vec::new(),
-            active_assignments: vec![ContractActionAssignment {
-                action_slot: "slot_0_0".to_string(),
-                ability_id: "DAGGER_QUICK_CUT".to_string(),
-            }],
-            passive_ability_ids: Vec::new(),
-        }],
     }
 }
 
