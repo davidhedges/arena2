@@ -6,6 +6,12 @@ Result: **PASS — Phase 7 is complete. Phase 8 was not started.**
 
 Authority: `docs/combat-build-progression-cutover-plan-2026-08-26.md`
 
+Post-review correction (2026-08-29): the Phase 7 deletion of nine local-direct
+acceptance probes was not required by the production-authority cutover. Their
+current, validator-backed recovery and rerun evidence is recorded in
+`docs/combat-build-probe-recovery-evidence-2026-08-29.md`; it supersedes any
+Phase 7 wording that characterized those harnesses as intentionally retired.
+
 ## Boundary and data disposition
 
 Phase 7 removed the destructive legacy schema and every remaining production

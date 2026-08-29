@@ -20,6 +20,8 @@ use crate::arena::arena_instance as _;
 use crate::arena_maps::require_arena_map_id;
 #[allow(unused_imports)]
 use crate::bot_matches::arena_match as _;
+#[cfg(feature = "projectile_load_harness")]
+use crate::combat_build::CombatBuildDraft;
 use crate::combat_build::{
     default_combat_build_draft, CombatBuildCatalog, CombatBuildSnapshot, ValidatedCombatBuild,
 };
@@ -850,6 +852,138 @@ pub(crate) fn apply_local_direct_player_combat_build(
         .find(owner)
         .ok_or_else(|| "Local-direct canonical combat build is missing".to_string())?;
     materialize_player_combat_build_weapons_and_activate(ctx, &build)
+}
+
+/// Feature-gated setup for the repository's local acceptance probes. The
+/// probes need arbitrary authored abilities, but must not revive learned-spell
+/// or mutable match-side action-bar authority. This endpoint is therefore
+/// available only in the existing harness build, only in local-direct mode,
+/// and still runs the production combat-build validator before replacing the
+/// caller's automatically materialized default with ordinary frozen rows.
+#[cfg(feature = "projectile_load_harness")]
+#[reducer]
+pub fn configure_local_direct_probe_combat_build(
+    ctx: &ReducerContext,
+    draft_json: String,
+) -> Result<(), String> {
+    let owner = ctx.sender();
+    let deployment = ctx
+        .db
+        .match_module_owner()
+        .singleton_id()
+        .find(SINGLETON_ID)
+        .ok_or_else(|| "Probe combat-build setup requires a configured module owner".to_string())?;
+    if deployment.deployment_mode != MODE_LOCAL_DIRECT {
+        return Err("Probe combat-build setup is restricted to local-direct mode".to_string());
+    }
+    if ctx.db.player().identity().find(owner).is_none() {
+        return Err("Probe combat-build setup requires a connected player".to_string());
+    }
+    if ctx
+        .db
+        .match_reservation()
+        .player_identity()
+        .find(owner)
+        .is_some()
+    {
+        return Err("Probe combat-build setup cannot replace a reservation snapshot".to_string());
+    }
+    if draft_json.is_empty() || draft_json.len() > MAX_COMBAT_BUILD_SNAPSHOT_BYTES {
+        return Err(format!(
+            "COMBAT_BUILD_DRAFT_SIZE: draft must contain 1..={MAX_COMBAT_BUILD_SNAPSHOT_BYTES} bytes"
+        ));
+    }
+
+    let draft: CombatBuildDraft = serde_json::from_str(draft_json.as_str())
+        .map_err(|error| format!("COMBAT_BUILD_DRAFT_INVALID_JSON: {error}"))?;
+    let catalog = CombatBuildCatalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_CATALOG_INVALID: {error}"))?;
+    let validated = catalog
+        .validate_draft(&draft, 0)
+        .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
+
+    clear_materialized_combat_build_rows(ctx, owner);
+    materialize_validated_combat_build(ctx, owner, &validated);
+    let build = ctx
+        .db
+        .match_combat_build()
+        .owner()
+        .find(owner)
+        .expect("validated probe build was just materialized");
+    materialize_player_combat_build_weapons_and_activate(ctx, &build)?;
+    log::info!(
+        "[COMBAT_BUILD_PROBE] Materialized validated local-direct build for {} with {} actives and {} passives",
+        &owner.to_hex()[..8],
+        validated.active_count,
+        validated.passive_count,
+    );
+    Ok(())
+}
+
+#[cfg(feature = "projectile_load_harness")]
+fn clear_materialized_combat_build_rows(ctx: &ReducerContext, owner: Identity) {
+    let discipline_keys: Vec<_> = ctx
+        .db
+        .match_combat_build_discipline()
+        .owner()
+        .filter(owner)
+        .map(|row| row.key)
+        .collect();
+    for key in discipline_keys {
+        ctx.db.match_combat_build_discipline().key().delete(key);
+    }
+
+    let configuration_keys: Vec<_> = ctx
+        .db
+        .match_discipline_configuration()
+        .owner()
+        .filter(owner)
+        .map(|row| row.key)
+        .collect();
+    for key in configuration_keys {
+        ctx.db.match_discipline_configuration().key().delete(key);
+    }
+
+    let school_keys: Vec<_> = ctx
+        .db
+        .match_staff_school_selection()
+        .owner()
+        .filter(owner)
+        .map(|row| row.key)
+        .collect();
+    for key in school_keys {
+        ctx.db.match_staff_school_selection().key().delete(key);
+    }
+
+    let assignment_keys: Vec<_> = ctx
+        .db
+        .match_discipline_action_bar_assignment()
+        .owner()
+        .filter(owner)
+        .map(|row| row.key)
+        .collect();
+    for key in assignment_keys {
+        ctx.db
+            .match_discipline_action_bar_assignment()
+            .key()
+            .delete(key);
+    }
+
+    let passive_keys: Vec<_> = ctx
+        .db
+        .match_discipline_passive_selection()
+        .owner()
+        .filter(owner)
+        .map(|row| row.key)
+        .collect();
+    for key in passive_keys {
+        ctx.db
+            .match_discipline_passive_selection()
+            .key()
+            .delete(key);
+    }
+
+    ctx.db.match_combat_build().owner().delete(owner);
 }
 
 pub(crate) fn apply_reserved_player_combat_build(

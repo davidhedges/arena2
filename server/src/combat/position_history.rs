@@ -182,9 +182,10 @@ pub(crate) fn lag_comp_auto_swing_enabled(ctx: &ReducerContext) -> bool {
 /// S10 gate (G5): per-victim sweep-membership rewind activates only when this
 /// AND the master `enabled` flag are on. **Default ON since 2026-07-05** — owner
 /// call to ship it live now on the strength of the historical server-half live
-/// probe PASS; that pre-cutover harness was retired during the combat-build
-/// cutover. The shaped +40/+40 A/B is deferred as an
-/// optional spot-check rather than a gate (see `docs/netcode-open-items.md`).
+/// PASS from `ops/s10-sweep-rewind-probe.py`. The probe now configures an exact
+/// validated frozen build through the feature-gated local harness. The shaped
+/// +40/+40 A/B is deferred as an optional spot-check rather than a gate (see
+/// `docs/netcode-open-items.md`).
 /// `set_lag_comp_config(true, 250, true, false)` disables S10 alone; the S8
 /// master kill switch (`false, …`) is unchanged.
 pub(crate) fn lag_comp_sweep_rewind_enabled(ctx: &ReducerContext) -> bool {

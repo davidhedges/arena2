@@ -2217,8 +2217,8 @@ them is clear.
    export.
 3. **Live**, not post hoc — and this is the leg that tests §7.2's hypothesis, so
    it must assert all four behaviours, not just the fall. A headless player probe
-   (modelled on the committed `retired pre-cutover S4 LOS harness` …
-   `retired pre-cutover S9 auto-rewind harness` family) that:
+   (modelled on the committed `ops/s4-los-probe.py` …
+   `ops/s9-auto-rewind-probe.py` family) that:
    - walks a player off the aperture and confirms the server lands them on the
      **chamber surface**, not the abyss;
    - walks the return stair back to the upper layer;

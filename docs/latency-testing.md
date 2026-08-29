@@ -99,7 +99,7 @@ gate verdict. Requires the measurement republish
 
 ## S8 lag compensation (attacker-view rewind) evidence
 
-Server truth is fully automated: `retired pre-cutover S8 lag-compensation harness` (recipe in its
+Server truth is fully automated: `ops/s8-lag-comp-probe.py` (recipe in its
 docstring — two throwaway publishes: `ARENA_NPC_NO_ATTACK=1` for the rewind
 legs, `ARENA_NPC_HARMLESS=1` for the defense-grace leg, both with
 `ARENA_NPC_AGGRO_RADIUS=100`). It prints PASS/FAIL per check: config
@@ -121,9 +121,10 @@ on-screen A/B needs no republish.
 
 ## S9 auto-attack tick rewind (standing signal) evidence
 
-Server truth is fully automated: `retired pre-cutover S9 auto-rewind harness` (recipe in
-its docstring — one throwaway publish, `ARENA_NPC_HARMLESS=1
-ARENA_NPC_AGGRO_RADIUS=100`). It prints PASS/FAIL per check: the shipped
+Server truth is fully automated: `ops/s9-auto-rewind-probe.py` (recipe in
+its docstring — a no-attack/tanky throwaway publish for moving rewind geometry,
+then a harmless/tanky publish for the defense-late rider; both use
+`ARENA_NPC_AGGRO_RADIUS=100`). It prints PASS/FAIL per check: the shipped
 default (auto_swing OFF), standing-row write/clamp/zero-delete, the OFF/ON
 yank-cycle flip legs (a due swing holding present-time vs firing on the
 standing rewound pose, with the E3 one-timeline `signal=standing` chain +

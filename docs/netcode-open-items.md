@@ -12,9 +12,9 @@ review's slice table). Everything still open is below.
 ### S10 — per-victim rewind for cone/radius sweeps
 - **State:** implemented + committed (`909c00ef`, default OFF) then **flipped to
   default ON 2026-07-05 by owner call** ("flip the default to ON for now") on the
-  strength of the historical server-half **live probe PASS** (the pre-cutover
-  harness was retired during the combat-build cutover; OFF logged would-be
-  flips and ON put the rewound verdict in control,
+  strength of the historical server-half **live probe PASS** from
+  `ops/s10-sweep-rewind-probe.py` (now ported to the canonical frozen-build
+  setup; OFF logged would-be flips and ON put the rewound verdict in control,
   source=history, degrade-to-present). Kill switch: `set_lag_comp_config true 250
   true false` (4th arg = S10; `false, …` = the S8 master kill).
 - **Design:** `docs/sweep-projectile-rewind-design-2026-07-05.md` (rulings

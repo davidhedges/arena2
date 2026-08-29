@@ -86,7 +86,7 @@ The original imported-package rollout was implemented in coherent slices through
 - `dotnet build Assembly-CSharp.csproj`: succeeds with 0 errors and existing warnings in third-party/current Unity code.
 - `dotnet build Assembly-CSharp-Editor.csproj`: succeeds with 0 errors and existing warnings after a full rebuild.
 - All 27 Fab profile manifests pass idempotent generator dry runs. Static validation proves one-to-one coverage across 125 new profiles, their deterministic profile/prefab GUID references, every template melee action mapping, the 329-row Unity catalog, and the server's 329 visual IDs.
-- The historical pre-cutover NPC support-decision probe passed against fresh isolated database `npcinterruptprobe`. That harness was retired during the combat-build cutover. At full health the Lich applied Bone Ward to a 125/125 Kobold; after one real player auto-attack reduced it to 103/125, Lich Mend raised it to 121/125. The Skeleton Wizard then applied Frostbite's shared slow and selected Ice Lock only during an authoritative player Icicle cast; Ice Lock's shared stun impact caused the existing crowd-control lifecycle to emit the Icicle `COMBAT_FIZZLE`.
+- The historical `ops/npc-support-decision-probe.py` run passed against fresh isolated database `npcinterruptprobe`; the probe is now ported to canonical frozen-build setup. At full health the Lich applied Bone Ward to a 125/125 Kobold; after one real player auto-attack reduced it to 103/125, Lich Mend raised it to 121/125. The Skeleton Wizard then applied Frostbite's shared slow and selected Ice Lock only during an authoritative player Icicle cast; Ice Lock's shared stun impact caused the existing crowd-control lifecycle to emit the Icicle `COMBAT_FIZZLE`.
 - Static catalog and planner coverage pins Frostbite's `SLOW` payload, Ice Lock's `STUN` payload, deterministic Wizard action order, and the inspector's `TARGET_CASTING` rejection.
 - Shared Kobold telegraph parity remains covered through the actor-generic pending-melee path; the legacy single-attack kobold abilities were replaced in active kits by the complete stance-specific authored sets.
 - Two-client mixed-exemplar acceptance: passed after the shared melee migration against isolated database `npcmixedprobe`. The observer materialized four NPCs owned by the separate websocket client; Kobold entered `Combat_1H_Attack`, Archer entered `attack`, Wizard entered `SpellCast`, and Lich entered `SpellA`. All four emitted CAST/IMPACT, Archer and Wizard emitted RELEASE plus projectile RELEASE/IMPACT, three shared projectile visuals started, four shared VFX instances spawned, and no projectile/VFX template was missing.
@@ -527,7 +527,7 @@ Before threat selection lands:
 
 - add explicit harness control that can pin a fixture NPC's target or seed exact threat
 - expose the development decision/threat summary needed for SQL verification
-- migrate `ops/s7-lap-probe.py`, `retired pre-cutover S8 lag-compensation harness`, and `retired pre-cutover S9 auto-rewind harness`
+- migrate `ops/s7-lap-probe.py`, `ops/s8-lag-comp-probe.py`, and `ops/s9-auto-rewind-probe.py`
 - keep the existing attack-stop-range behavior available through authored movement/action range, not through a legacy production AI branch
 
 S4–S6 do not need a blanket NPC-AI migration: their core fixtures use player-like playground targets. Probe dependencies should be updated individually rather than preserving nearest-wins globally.

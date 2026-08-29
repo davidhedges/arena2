@@ -35,7 +35,7 @@ only when its status and purpose are unambiguous.
 | `docs/npc-system-design-2026-07-11.md` | Player authorization is the exact frozen build assignment; NPC authoring remains separate. |
 | `docs/open-world-disposable-instances-2026-08-18.md` | Names the durable canonical build and `freeze_player_combat_build_for_ticket`; no legacy Hub row is presented as current. |
 | `docs/survival-mode-design-2026-08-03.md` | Item snapshot examples use only current inventory children and do not claim a removed spell-list table exists. |
-| Netcode, latency, rewind, and projectile design documents touched by Phase 7 | Deleted direct-match probes are identified as retired pre-cutover harnesses rather than runnable current operations. |
+| Netcode, latency, rewind, and projectile design documents touched by Phase 7 | Local-direct probes use feature-gated canonical frozen-build setup; historical PASS statements retain their dates and link to the current runnable paths. |
 
 ## Explicitly archived conflicts
 

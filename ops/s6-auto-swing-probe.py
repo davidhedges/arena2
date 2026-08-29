@@ -3,7 +3,7 @@
 
 Server-data half of the S6 acceptance (local auto-attack swing scheduling):
 a headless websocket player (client_connected spawns a live player; reducers
-ride the same socket — retired pre-cutover S4 LOS harness mechanics) subscribes to
+ride the same socket — the mechanics used by `ops/s4-los-probe.py`) subscribes to
 auto_attack_state exactly like the Unity client does and verifies the data
 contract the client scheduler relies on:
 
@@ -18,7 +18,7 @@ contract the client scheduler relies on:
               walking back releases the swing at an arbitrary later time
               (>> next_swing_at), which is why the client never predicts a
               held swing. (The behind-cover hold is the same mark_pending_due
-              path, verified live by retired pre-cutover S4 LOS harness.)
+              path, verified live by `ops/s4-los-probe.py`.)
 
 Run against a throwaway DB — one-shot `spacetime call` cannot leave
 per-identity state, and disconnect cleanup wipes the player:

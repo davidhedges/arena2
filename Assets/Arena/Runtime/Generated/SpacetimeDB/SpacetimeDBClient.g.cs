@@ -890,6 +890,7 @@ namespace SpacetimeDB.Types
                 Reducer.CastRequest args => Reducers.InvokeCastRequest(eventContext, args),
                 Reducer.CleanupProjectileLoadHarness args => Reducers.InvokeCleanupProjectileLoadHarness(eventContext, args),
                 Reducer.ClearAutoAttackTarget args => Reducers.InvokeClearAutoAttackTarget(eventContext, args),
+                Reducer.ConfigureLocalDirectProbeCombatBuild args => Reducers.InvokeConfigureLocalDirectProbeCombatBuild(eventContext, args),
                 Reducer.ConsumeItem args => Reducers.InvokeConsumeItem(eventContext, args),
                 Reducer.CreateInstance args => Reducers.InvokeCreateInstance(eventContext, args),
                 Reducer.CreateOrUpdateCharacter args => Reducers.InvokeCreateOrUpdateCharacter(eventContext, args),
