@@ -359,7 +359,14 @@ namespace Arena.UI
                 $"{configuration.ActiveAssignments.Count} ASSIGNED"));
             VisualElement grid = new();
             grid.AddToClassList("active-slot-grid");
-            foreach (string slotId in contract.ActionSlotIds)
+            bool canAddActive = _model != null
+                && _model.ActiveCount < contract.MaximumActiveAbilities
+                && _model.CombinedAbilityCount < contract.CombinedAbilityBudget;
+            IReadOnlyList<string> visibleSlotIds = SelectVisibleActiveSlotIds(
+                contract.ActionSlotIds,
+                configuration.ActiveAssignments.Select(assignment => assignment.ActionSlot),
+                canAddActive);
+            foreach (string slotId in visibleSlotIds)
             {
                 HubCombatBuildActionAssignment assignment = configuration.ActiveAssignments
                     .FirstOrDefault(candidate => string.Equals(
@@ -381,6 +388,21 @@ namespace Arena.UI
             }
             section.Add(grid);
             return section;
+        }
+
+        internal static IReadOnlyList<string> SelectVisibleActiveSlotIds(
+            IEnumerable<string> actionSlotIds,
+            IEnumerable<string> assignedSlotIds,
+            bool includeAvailableSlot)
+        {
+            HashSet<string> assigned = new(assignedSlotIds, StringComparer.Ordinal);
+            string? available = includeAvailableSlot
+                ? actionSlotIds.FirstOrDefault(slotId => !assigned.Contains(slotId))
+                : null;
+            return actionSlotIds
+                .Where(slotId => assigned.Contains(slotId)
+                    || string.Equals(slotId, available, StringComparison.Ordinal))
+                .ToArray();
         }
 
         private VisualElement BuildPassiveBar(

@@ -138,6 +138,34 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void EditorActiveBar_ShowsAssignedSlotsAndOnlyTheNextAvailableSlot()
+        {
+            MethodInfo selectVisibleSlots = RuntimeType("Arena.UI.DisciplinesScreen")
+                .GetMethod("SelectVisibleActiveSlotIds", StaticMembers)!;
+            string[] domain = { "slot_0_0", "slot_0_1", "slot_0_2", "slot_1_0" };
+
+            string[] visible = ((IEnumerable)selectVisibleSlots.Invoke(
+                    null,
+                    new object[] { domain, new[] { "slot_0_1", "slot_1_0" }, true })!)
+                .Cast<string>()
+                .ToArray();
+            Assert.That(
+                visible,
+                Is.EqualTo(new[] { "slot_0_0", "slot_0_1", "slot_1_0" }),
+                "Assigned cells stay in canonical order and only the first gap is exposed.");
+
+            visible = ((IEnumerable)selectVisibleSlots.Invoke(
+                    null,
+                    new object[] { domain, new[] { "slot_0_1", "slot_1_0" }, false })!)
+                .Cast<string>()
+                .ToArray();
+            Assert.That(
+                visible,
+                Is.EqualTo(new[] { "slot_0_1", "slot_1_0" }),
+                "At either global budget cap, only occupied cells remain editable.");
+        }
+
+        [Test]
         public void EditorDisplaysServerValidationCodesVerbatimWithoutOwningACodeMap()
         {
             string server = File.ReadAllText("server/src/combat_build.rs");
