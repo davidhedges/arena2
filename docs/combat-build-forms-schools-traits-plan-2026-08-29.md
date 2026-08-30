@@ -223,15 +223,13 @@ The owner has resolved the product-level structure:
 7. **Staff basic attack.** Staff retains its ordinary autoattack but owns no
    selectable or intrinsic Technique.
 
-Two concrete authoring values remain to be locked in Phase 0:
-
-- the exact `MASTERY` damage bonus percentage; and
-- the input/access scheme that makes as many as 18 selected active features
-  reachable across the simultaneous Spell and current-Discipline Technique
-  bars without imposing a second selection cap.
-
-No production schema phase begins until those two values and the seeded Form
-catalog/classification ledger are recorded and reviewed.
+Phase 0 locks `MASTERY` at a 10% outgoing-damage bonus and assigns 18 stable,
+direct input identities to the single global active-feature order. The default
+keyboard bindings reuse the existing unshifted combat keys (`1`–`0`, `E`, `R`,
+`T`, `F`, `G`, `Z`, `X`, `C`). The Spell and current-parent Technique bars are
+two projections of that global order, so all 18 legal selected actives remain
+directly reachable without a second cap. The complete reviewed contract is in
+`docs/combat-build-v2-phase-0-contract-2026-08-29.json`.
 
 ## 6. Target catalog contract
 
@@ -417,10 +415,11 @@ Ordering scopes are:
   Discipline; and
 - Perk/Trait: no bar order.
 
-The exact keyboard/controller access scheme remains a Phase 0 authoring value.
-It may use additional bindings, modifiers, paging, or another reviewed UI
-pattern, but it cannot make a selected active feature unreachable or introduce
-a hidden selection cap below 18.
+The Phase 0 input contract defines stable `COMBAT_ACTION_00` through
+`COMBAT_ACTION_17` identities. Keyboard defaults use the 18 existing unshifted
+combat keys; controller and user-rebinding presentation may map those same
+identities without changing authority, ordering, or capacity. No selected
+active may become unreachable or encounter a hidden cap below 18.
 
 ## 8. Authoritative validation invariants
 
