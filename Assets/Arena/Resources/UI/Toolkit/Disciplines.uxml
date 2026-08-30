@@ -1,11 +1,13 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
-    <!-- Canonical Phase 6 combat-build editor. Cards and picker contents are
-         populated from Hub projections; this tree owns layout only. -->
+    <!-- Canonical combat-build v2 editor. Hub projections populate all slots,
+         features, and Traits; the concept informs hierarchy only and does not
+         introduce progression gates or per-Specialization feature limits. -->
     <Style src="Disciplines.uss" />
 
     <ui:VisualElement name="DisciplinesScreen" class="disciplines-screen">
         <ui:VisualElement class="screen-background" picking-mode="Ignore" />
         <ui:VisualElement class="screen-veil" picking-mode="Ignore" />
+        <ui:VisualElement class="screen-vignette" picking-mode="Ignore" />
 
         <ui:VisualElement name="TopBar" class="topbar">
             <ui:Button name="NavPlay" class="brand-block">
@@ -37,9 +39,9 @@
 
         <ui:VisualElement class="build-heading">
             <ui:VisualElement class="build-heading-copy" picking-mode="Ignore">
-                <ui:Label class="heading-kicker" text="COMBAT BUILD" />
-                <ui:Label class="page-title" text="BUILD YOUR COMBAT LOADOUT" />
-                <ui:Label class="page-subtitle" text="Choose up to three Forms or Schools, then select Techniques, Spells, Perks, and Traits." />
+                <ui:Label class="heading-kicker" text="COMBAT LOADOUT" />
+                <ui:Label class="page-title" text="YOUR ENTIRE BUILD AT A GLANCE" />
+                <ui:Label class="page-subtitle" text="Choose Forms or Schools, then shape each one with Techniques, Spells, and Perks." />
             </ui:VisualElement>
             <ui:VisualElement class="allocation-panel">
                 <ui:VisualElement class="allocation-item"><ui:Label name="ActiveAllocation" class="allocation-value allocation-value--active" text="—" /><ui:Label class="allocation-label" text="ACTIVE FEATURES" /></ui:VisualElement>
@@ -50,13 +52,39 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
-        <ui:ScrollView name="DisciplineCards" class="discipline-cards" mode="Horizontal" horizontal-scroller-visibility="Auto" vertical-scroller-visibility="Hidden" />
+        <ui:VisualElement class="loadout-overview panel-surface">
+            <ui:VisualElement class="overview-heading" picking-mode="Ignore">
+                <ui:VisualElement>
+                    <ui:Label class="section-kicker" text="SELECTED FORMS · SCHOOLS" />
+                    <ui:Label class="overview-title" text="COMBAT LOADOUT" />
+                </ui:VisualElement>
+                <ui:Label class="overview-help" text="SELECT A SLOT TO CONFIGURE" />
+            </ui:VisualElement>
+            <ui:VisualElement name="DisciplineCards" class="discipline-cards" />
+        </ui:VisualElement>
 
-        <ui:VisualElement class="build-footer">
-            <ui:Label name="SaveStatus" class="save-status" text="Waiting for your combat build." />
-            <ui:VisualElement class="footer-actions">
-                <ui:Button name="BackButton" class="back-button" text="BACK TO HUB" />
-                <ui:Button name="SaveBuild" class="save-button" text="◆  SAVE COMBAT BUILD  ◆" />
+        <ui:VisualElement class="trait-strip panel-surface">
+            <ui:VisualElement class="trait-heading" picking-mode="Ignore">
+                <ui:Label class="section-kicker" text="BUILD-WIDE BONUSES" />
+                <ui:Label class="trait-title" text="TRAITS" />
+            </ui:VisualElement>
+            <ui:VisualElement name="TraitOptions" class="trait-options" />
+        </ui:VisualElement>
+
+        <ui:VisualElement class="configuration-shell">
+            <ui:ScrollView name="SpecializationEditor" class="specialization-editor panel-surface" horizontal-scroller-visibility="Hidden" vertical-scroller-visibility="Auto" />
+
+            <ui:VisualElement class="build-footer panel-surface">
+                <ui:VisualElement class="save-heading" picking-mode="Ignore">
+                    <ui:Label class="section-kicker" text="CURRENT CONFIGURATION" />
+                    <ui:Label class="save-title" text="LOADOUT SUMMARY" />
+                </ui:VisualElement>
+                <ui:VisualElement name="SaveSummary" class="save-summary" />
+                <ui:Label name="SaveStatus" class="save-status" text="Waiting for your combat build." />
+                <ui:VisualElement class="footer-actions">
+                    <ui:Button name="SaveBuild" class="save-button" text="◆  SAVE COMBAT BUILD  ◆" />
+                    <ui:Button name="BackButton" class="back-button" text="BACK TO HUB" />
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
 

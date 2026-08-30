@@ -24,7 +24,10 @@ namespace Arena.UI
 
         private PanelSettings? _panelSettings;
         private VisualElement? _root;
-        private ScrollView? _cards;
+        private VisualElement? _cards;
+        private VisualElement? _traitOptions;
+        private ScrollView? _editor;
+        private VisualElement? _saveSummary;
         private VisualElement? _picker;
         private ScrollView? _pickerOptions;
         private Label? _pickerTitle;
@@ -41,6 +44,7 @@ namespace Arena.UI
         private bool _open;
         private bool _dirty;
         private bool _savePending;
+        private string _focusedSpecializationId = string.Empty;
 
         public event Action? Closed;
         public event Action? EquipmentRequested;
@@ -123,7 +127,10 @@ namespace Arena.UI
             if (_root == null)
                 return;
 
-            _cards = _root.Q<ScrollView>("DisciplineCards");
+            _cards = _root.Q<VisualElement>("DisciplineCards");
+            _traitOptions = _root.Q<VisualElement>("TraitOptions");
+            _editor = _root.Q<ScrollView>("SpecializationEditor");
+            _saveSummary = _root.Q<VisualElement>("SaveSummary");
             _picker = _root.Q<VisualElement>("PickerOverlay");
             _pickerOptions = _root.Q<ScrollView>("PickerOptions");
             _pickerTitle = _root.Q<Label>("PickerTitle");
@@ -209,17 +216,24 @@ namespace Arena.UI
             _dirty = false;
             _savePending = false;
             _lastServerFailure = string.Empty;
+            _focusedSpecializationId = _model.SelectedSpecializationIds.FirstOrDefault()
+                ?? string.Empty;
             Render();
         }
 
         private void Render()
         {
-            if (_cards == null)
+            if (_cards == null || _traitOptions == null || _editor == null || _saveSummary == null)
                 return;
             _cards.Clear();
+            _traitOptions.Clear();
+            _editor.Clear();
+            _saveSummary.Clear();
             if (_model == null || _hub?.CombatBuildContract == null || _hub.CombatBuildCatalog == null)
             {
                 SetAllocation("—", "—", "—");
+                _cards.Add(BuildWaitingState("WAITING FOR LOADOUT"));
+                _editor.Add(BuildWaitingState("COMBAT BUILD DATA IS NOT AVAILABLE YET"));
                 SetStatus("Waiting for the Combat Build v2 catalog and your saved build.");
                 _saveButton?.SetEnabled(false);
                 return;
@@ -232,19 +246,145 @@ namespace Arena.UI
                 _model.FeatureCapacityText,
                 $"{_model.SelectedSpecializationIds.Count} / {contract.MaximumSelectedSpecializations} FORMS · SCHOOLS");
 
-            foreach (string specializationId in _model.SelectedSpecializationIds)
+            if (!_model.SelectedSpecializationIds.Contains(
+                    _focusedSpecializationId,
+                    StringComparer.Ordinal))
             {
+                _focusedSpecializationId = _model.SelectedSpecializationIds.FirstOrDefault()
+                    ?? string.Empty;
+            }
+
+            for (int index = 0; index < _model.SelectedSpecializationIds.Count; index++)
+            {
+                string specializationId = _model.SelectedSpecializationIds[index];
                 CombatSpecializationDefinitionV2Model? definition =
                     catalog.FindSpecialization(specializationId);
                 if (definition != null)
-                    _cards.Add(BuildSpecializationCard(definition));
+                    _cards.Add(BuildSpecializationSummary(definition, index));
             }
-            _cards.Add(BuildTraitCard(catalog));
-            if (_model.SelectedSpecializationIds.Count < contract.MaximumSelectedSpecializations)
-                _cards.Add(BuildAddSpecializationCard());
+            for (int index = _model.SelectedSpecializationIds.Count;
+                 index < contract.MaximumSelectedSpecializations;
+                 index++)
+            {
+                _cards.Add(BuildAddSpecializationCard(index));
+            }
+            MarkLastChild(_cards);
+
+            BuildTraitOptions(catalog);
+
+            CombatSpecializationDefinitionV2Model? focused =
+                catalog.FindSpecialization(_focusedSpecializationId);
+            if (focused != null)
+                _editor.Add(BuildSpecializationCard(focused));
+            else
+                _editor.Add(BuildEmptyEditor());
+
+            BuildSaveSummary(catalog, contract);
 
             _saveButton?.SetEnabled(_hub.IsReady && !_savePending && _model.CanSubmit);
             SetStatus(BuildStatus());
+        }
+
+        private Button BuildSpecializationSummary(
+            CombatSpecializationDefinitionV2Model definition,
+            int slotIndex)
+        {
+            bool focused = string.Equals(
+                _focusedSpecializationId,
+                definition.SpecializationId,
+                StringComparison.Ordinal);
+            bool starts = string.Equals(
+                _model!.StartingDisciplineId,
+                definition.CombatDisciplineId,
+                StringComparison.Ordinal);
+            Color accent = DisciplineColor(definition.CombatDisciplineId);
+            Button card = new(() => FocusSpecialization(definition.SpecializationId))
+            {
+                tooltip = $"Configure {definition.DisplayName}",
+            };
+            card.AddToClassList("discipline-summary-card");
+            card.EnableInClassList(SelectedClass, focused);
+            card.style.borderTopColor = accent;
+
+            VisualElement identity = new() { pickingMode = PickingMode.Ignore };
+            identity.AddToClassList("summary-identity");
+            VisualElement slot = new();
+            slot.AddToClassList("summary-slot");
+            ApplyBorderColor(slot, accent);
+            Label slotNumber = new((slotIndex + 1).ToString());
+            slotNumber.AddToClassList("summary-slot-number");
+            slot.Add(slotNumber);
+            identity.Add(slot);
+
+            VisualElement icon = new();
+            icon.AddToClassList("summary-discipline-icon");
+            ApplyIcon(icon, ResolveDisciplineIcon(definition.CombatDisciplineId));
+            identity.Add(icon);
+
+            VisualElement copy = new();
+            copy.AddToClassList("summary-copy");
+            Label parent = new(DisciplineDisplayName(definition.CombatDisciplineId));
+            parent.AddToClassList("summary-discipline-name");
+            copy.Add(parent);
+            string kind = definition.SpecializationKind == CombatSpecializationKindV2.School
+                ? "SCHOOL"
+                : "FORM";
+            Label specialization = new($"{kind} · {definition.DisplayName.ToUpperInvariant()}");
+            specialization.AddToClassList("summary-specialization-name");
+            specialization.style.color = accent;
+            copy.Add(specialization);
+            identity.Add(copy);
+            if (starts)
+            {
+                Label starting = new("◆ STARTING");
+                starting.AddToClassList("starting-chip");
+                identity.Add(starting);
+            }
+            card.Add(identity);
+
+            IReadOnlyList<CombatFeatureDefinitionV2Model> features =
+                _model.FeaturePickerOptions(definition.SpecializationId);
+            CombatFeatureDefinitionV2Model[] selected = features
+                .Where(row => _model.IsFeatureSelected(row.AbilityId))
+                .ToArray();
+            VisualElement featureHeading = new() { pickingMode = PickingMode.Ignore };
+            featureHeading.AddToClassList("summary-feature-heading");
+            Label heading = new("SELECTED FEATURES");
+            heading.AddToClassList("summary-feature-label");
+            Label count = new(selected.Length.ToString());
+            count.AddToClassList("summary-feature-count");
+            featureHeading.Add(heading);
+            featureHeading.Add(count);
+            card.Add(featureHeading);
+
+            VisualElement featureRow = new() { pickingMode = PickingMode.Ignore };
+            featureRow.AddToClassList("summary-feature-row");
+            if (selected.Length == 0)
+            {
+                Label empty = new("No features selected");
+                empty.AddToClassList("summary-feature-empty");
+                featureRow.Add(empty);
+            }
+            else
+            {
+                const int visibleLimit = 10;
+                foreach (CombatFeatureDefinitionV2Model feature in selected.Take(visibleLimit))
+                {
+                    VisualElement featureIcon = new();
+                    featureIcon.AddToClassList("summary-feature-icon");
+                    featureIcon.tooltip = feature.DisplayName;
+                    ApplyIcon(featureIcon, ActionIconResolver.Resolve(ActionKinds.Ability, feature.AbilityId));
+                    featureRow.Add(featureIcon);
+                }
+                if (selected.Length > visibleLimit)
+                {
+                    Label overflow = new($"+{selected.Length - visibleLimit}");
+                    overflow.AddToClassList("summary-feature-overflow");
+                    featureRow.Add(overflow);
+                }
+            }
+            card.Add(featureRow);
+            return card;
         }
 
         private VisualElement BuildSpecializationCard(
@@ -252,22 +392,31 @@ namespace Arena.UI
         {
             VisualElement card = new() { name = $"SpecializationCard_{definition.SpecializationId}" };
             card.AddToClassList("discipline-card");
-            card.style.borderTopColor = DisciplineColor(definition.CombatDisciplineId);
+            Color accent = DisciplineColor(definition.CombatDisciplineId);
 
             VisualElement heading = new();
             heading.AddToClassList("discipline-card-heading");
+            VisualElement identity = new();
+            identity.AddToClassList("discipline-identity");
+            VisualElement icon = new();
+            icon.AddToClassList("discipline-emblem");
+            ApplyIcon(icon, ResolveDisciplineIcon(definition.CombatDisciplineId));
+            ApplyBorderColor(icon, accent);
+            identity.Add(icon);
             VisualElement copy = new();
             copy.AddToClassList("discipline-copy");
             string kind = definition.SpecializationKind == CombatSpecializationKindV2.School
                 ? "SPELLCASTING SCHOOL"
                 : "WEAPON FORM";
-            Label kicker = new($"{kind} · {definition.CombatDisciplineId}");
+            Label kicker = new($"{kind} · {DisciplineDisplayName(definition.CombatDisciplineId)}");
             kicker.AddToClassList("card-kicker");
             Label name = new(definition.DisplayName.ToUpperInvariant());
             name.AddToClassList("discipline-name");
+            name.style.color = accent;
             copy.Add(kicker);
             copy.Add(name);
-            heading.Add(copy);
+            identity.Add(copy);
+            heading.Add(identity);
 
             VisualElement controls = new();
             controls.AddToClassList("discipline-controls");
@@ -298,6 +447,9 @@ namespace Arena.UI
 
             IReadOnlyList<CombatFeatureDefinitionV2Model> features =
                 _model.FeaturePickerOptions(definition.SpecializationId);
+            Label help = new("Select any mix for this Form or School. Only the global Feature capacity limits the build.");
+            help.AddToClassList("feature-help");
+            card.Add(help);
             card.Add(SectionHeading(
                 "TECHNIQUES · SPELLS · PERKS",
                 $"{features.Count(row => _model.IsFeatureSelected(row.AbilityId))} SELECTED"));
@@ -323,12 +475,19 @@ namespace Arena.UI
                     int targetIndex = index;
                     string abilityId = selectedActive[index];
                     VisualElement orderRow = new();
-                    orderRow.AddToClassList("school-row");
-                    orderRow.Add(new Label(
-                        _hub!.CombatBuildCatalog!.FindFeature(abilityId)?.DisplayName ?? abilityId));
+                    orderRow.AddToClassList("order-row");
+                    Label orderNumber = new((index + 1).ToString());
+                    orderNumber.AddToClassList("order-number");
+                    orderRow.Add(orderNumber);
+                    Label orderName = new(
+                        _hub!.CombatBuildCatalog!.FindFeature(abilityId)?.DisplayName ?? abilityId);
+                    orderName.AddToClassList("order-name");
+                    orderRow.Add(orderName);
                     Button up = new(() => MoveActive(abilityId, targetIndex - 1)) { text = "↑" };
+                    up.AddToClassList("order-control");
                     up.SetEnabled(index > 0);
                     Button down = new(() => MoveActive(abilityId, targetIndex + 1)) { text = "↓" };
+                    down.AddToClassList("order-control");
                     down.SetEnabled(index + 1 < selectedActive.Length);
                     orderRow.Add(up);
                     orderRow.Add(down);
@@ -344,7 +503,6 @@ namespace Arena.UI
             string kind = feature.LoadoutKind.ToString().ToUpperInvariant();
             Button button = new(() => ToggleFeature(feature))
             {
-                text = feature.DisplayName.ToUpperInvariant(),
                 tooltip = string.IsNullOrWhiteSpace(feature.ResourceKind) || feature.ResourceCost <= 0f
                     ? kind
                     : $"{kind} · {feature.ResourceCost:0.#} {feature.ResourceKind}",
@@ -352,17 +510,24 @@ namespace Arena.UI
             button.AddToClassList("ability-cell");
             button.EnableInClassList(SelectedClass, selected);
             button.EnableInClassList("is-filled", selected);
-            ApplyIcon(button, ActionIconResolver.Resolve(ActionKinds.Ability, feature.AbilityId));
+            VisualElement icon = new() { pickingMode = PickingMode.Ignore };
+            icon.AddToClassList("ability-icon");
+            ApplyIcon(icon, ActionIconResolver.Resolve(ActionKinds.Ability, feature.AbilityId));
+            button.Add(icon);
+            Label kindLabel = new(kind) { pickingMode = PickingMode.Ignore };
+            kindLabel.AddToClassList("ability-kind");
+            button.Add(kindLabel);
+            Label name = new(feature.DisplayName.ToUpperInvariant()) { pickingMode = PickingMode.Ignore };
+            name.AddToClassList("ability-name");
+            button.Add(name);
+            Label state = new(selected ? "◆ EQUIPPED" : "SELECT") { pickingMode = PickingMode.Ignore };
+            state.AddToClassList("ability-state");
+            button.Add(state);
             return button;
         }
 
-        private VisualElement BuildTraitCard(CombatBuildV2CatalogModel catalog)
+        private void BuildTraitOptions(CombatBuildV2CatalogModel catalog)
         {
-            VisualElement card = new();
-            card.AddToClassList("discipline-card");
-            card.Add(SectionHeading("CHARACTER TRAITS", _model!.TraitCapacityText));
-            VisualElement row = new();
-            row.AddToClassList("school-row");
             foreach (CombatTraitDefinitionV2Model trait in catalog.Traits
                          .OrderBy(value => value.SortOrder))
             {
@@ -371,30 +536,64 @@ namespace Arena.UI
                     StringComparer.Ordinal);
                 Button button = new(() => ToggleTrait(trait))
                 {
-                    text = trait.DisplayName.ToUpperInvariant(),
                     tooltip = trait.AbilityId == "MASTERY"
                         ? "10% bonus outgoing damage while the build uses one parent Discipline."
                         : trait.AbilityId,
                 };
-                button.AddToClassList("school-button");
+                button.AddToClassList("trait-button");
                 button.EnableInClassList(SelectedClass, selected);
-                row.Add(button);
+                VisualElement sigil = new() { pickingMode = PickingMode.Ignore };
+                sigil.AddToClassList("trait-sigil");
+                Label glyph = new("✦");
+                glyph.AddToClassList("trait-sigil-glyph");
+                sigil.Add(glyph);
+                button.Add(sigil);
+                VisualElement copy = new() { pickingMode = PickingMode.Ignore };
+                copy.AddToClassList("trait-copy");
+                Label name = new(trait.DisplayName.ToUpperInvariant());
+                name.AddToClassList("trait-name");
+                copy.Add(name);
+                Label description = new(trait.AbilityId == "MASTERY"
+                    ? "10% outgoing damage with one parent Discipline"
+                    : trait.AbilityId);
+                description.AddToClassList("trait-description");
+                copy.Add(description);
+                button.Add(copy);
+                Label state = new(selected ? "EQUIPPED" : "AVAILABLE")
+                {
+                    pickingMode = PickingMode.Ignore,
+                };
+                state.AddToClassList("trait-state");
+                button.Add(state);
+                _traitOptions!.Add(button);
             }
-            card.Add(row);
-            return card;
+            Label capacity = new(_model!.TraitCapacityText) { pickingMode = PickingMode.Ignore };
+            capacity.AddToClassList("trait-capacity");
+            _traitOptions!.Add(capacity);
         }
 
-        private VisualElement BuildAddSpecializationCard()
+        private Button BuildAddSpecializationCard(int slotIndex)
         {
-            Button add = new(OpenSpecializationPicker) { text = "+" };
+            Button add = new(OpenSpecializationPicker);
             add.AddToClassList("add-discipline-card");
+            VisualElement slot = new() { pickingMode = PickingMode.Ignore };
+            slot.AddToClassList("empty-slot");
+            Label slotNumber = new((slotIndex + 1).ToString());
+            slotNumber.AddToClassList("empty-slot-number");
+            slot.Add(slotNumber);
+            add.Add(slot);
+            Label plus = new("+") { pickingMode = PickingMode.Ignore };
+            plus.AddToClassList("add-discipline-plus");
+            add.Add(plus);
             Label title = new("ADD FORM OR SCHOOL") { pickingMode = PickingMode.Ignore };
             title.AddToClassList("add-discipline-title");
             add.Add(title);
-            add.Add(new Label("Up to three top-level choices; repeated parent weapons share one bar.")
+            Label copy = new("Choose another top-level combat path.")
             {
                 pickingMode = PickingMode.Ignore,
-            });
+            };
+            copy.AddToClassList("add-discipline-copy");
+            add.Add(copy);
             return add;
         }
 
@@ -417,6 +616,7 @@ namespace Arena.UI
                     if (_model.AddSpecialization(option.SpecializationId))
                     {
                         EnsureWeaponConfiguration(option.CombatDisciplineId);
+                        _focusedSpecializationId = option.SpecializationId;
                         MarkDirtyAndRender();
                     }
                     ClosePicker();
@@ -492,7 +692,29 @@ namespace Arena.UI
         private void RemoveSpecialization(string specializationId)
         {
             if (_model?.RemoveSpecialization(specializationId) == true)
+            {
+                if (string.Equals(
+                        _focusedSpecializationId,
+                        specializationId,
+                        StringComparison.Ordinal))
+                {
+                    _focusedSpecializationId = string.Empty;
+                }
                 MarkDirtyAndRender();
+            }
+        }
+
+        private void FocusSpecialization(string specializationId)
+        {
+            if (string.Equals(
+                    _focusedSpecializationId,
+                    specializationId,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+            _focusedSpecializationId = specializationId;
+            Render();
         }
 
         private void SaveDraft()
@@ -575,6 +797,94 @@ namespace Arena.UI
             return heading;
         }
 
+        private VisualElement BuildEmptyEditor()
+        {
+            VisualElement empty = new();
+            empty.AddToClassList("empty-editor");
+            Label glyph = new("◇");
+            glyph.AddToClassList("empty-editor-glyph");
+            empty.Add(glyph);
+            Label title = new("CHOOSE A FORM OR SCHOOL");
+            title.AddToClassList("empty-editor-title");
+            empty.Add(title);
+            Label copy = new("Your selected path will appear here for configuration.");
+            copy.AddToClassList("empty-editor-copy");
+            empty.Add(copy);
+            Button add = new(OpenSpecializationPicker) { text = "+  ADD TO LOADOUT" };
+            add.AddToClassList("empty-editor-action");
+            empty.Add(add);
+            return empty;
+        }
+
+        private static VisualElement BuildWaitingState(string message)
+        {
+            Label waiting = new(message);
+            waiting.AddToClassList("waiting-state");
+            return waiting;
+        }
+
+        private void BuildSaveSummary(
+            CombatBuildV2CatalogModel catalog,
+            CombatBuildV2ContractModel contract)
+        {
+            for (int index = 0; index < _model!.SelectedSpecializationIds.Count; index++)
+            {
+                string specializationId = _model.SelectedSpecializationIds[index];
+                CombatSpecializationDefinitionV2Model? definition =
+                    catalog.FindSpecialization(specializationId);
+                if (definition == null)
+                    continue;
+                int selectedCount = _model.FeaturePickerOptions(specializationId)
+                    .Count(row => _model.IsFeatureSelected(row.AbilityId));
+                VisualElement row = new();
+                row.AddToClassList("save-summary-row");
+                Label slot = new((index + 1).ToString());
+                slot.AddToClassList("save-summary-slot");
+                row.Add(slot);
+                VisualElement copy = new();
+                copy.AddToClassList("save-summary-copy");
+                Label name = new(definition.DisplayName.ToUpperInvariant());
+                name.AddToClassList("save-summary-name");
+                copy.Add(name);
+                Label parent = new(DisciplineDisplayName(definition.CombatDisciplineId));
+                parent.AddToClassList("save-summary-parent");
+                copy.Add(parent);
+                row.Add(copy);
+                Label features = new($"{selectedCount} FEATURES");
+                features.AddToClassList("save-summary-count");
+                row.Add(features);
+                _saveSummary!.Add(row);
+            }
+
+            VisualElement totals = new();
+            totals.AddToClassList("save-summary-totals");
+            totals.Add(SummaryMetric(
+                "FORMS · SCHOOLS",
+                $"{_model.SelectedSpecializationIds.Count} / {contract.MaximumSelectedSpecializations}"));
+            totals.Add(SummaryMetric("FEATURES", _model.FeatureCapacityText));
+            totals.Add(SummaryMetric("TRAITS", _model.TraitCapacityText));
+            _saveSummary!.Add(totals);
+        }
+
+        private static VisualElement SummaryMetric(string label, string value)
+        {
+            VisualElement metric = new();
+            metric.AddToClassList("save-metric");
+            Label metricLabel = new(label);
+            metricLabel.AddToClassList("save-metric-label");
+            metric.Add(metricLabel);
+            Label metricValue = new(value);
+            metricValue.AddToClassList("save-metric-value");
+            metric.Add(metricValue);
+            return metric;
+        }
+
+        private static void MarkLastChild(VisualElement parent)
+        {
+            if (parent.childCount > 0)
+                parent[parent.childCount - 1].AddToClassList("is-last");
+        }
+
         private static Button BuildPickerOption(string title, string meta, Sprite? icon)
         {
             Button option = new();
@@ -613,6 +923,25 @@ namespace Arena.UI
                 ? StyleKeyword.None
                 : new StyleBackground(sprite);
         }
+
+        private static void ApplyBorderColor(VisualElement element, Color color)
+        {
+            element.style.borderTopColor = color;
+            element.style.borderRightColor = color;
+            element.style.borderBottomColor = color;
+            element.style.borderLeftColor = color;
+        }
+
+        private static string DisciplineDisplayName(string disciplineId)
+            => WireIdentifier.Normalize(disciplineId) switch
+            {
+                "DAGGERS" => "DAGGERS",
+                "TWO_HANDED_SWORD" => "GREATSWORD",
+                "SWORD_AND_SHIELD" => "SHIELD",
+                "ARCHER_BOW" => "BOW",
+                "STAFF" => "SPELLCASTING",
+                string normalized => normalized.Replace('_', ' '),
+            };
 
         internal static Sprite? ResolveDisciplineIcon(string disciplineId)
             => ActionIconResolver.Resolve(

@@ -41,16 +41,23 @@ namespace Arena.Tests.Editor
             Assert.That(uxml, Does.Contain("name=\"ActiveAllocation\""));
             Assert.That(uxml, Does.Contain("name=\"TotalAllocation\""));
             Assert.That(uxml, Does.Contain("name=\"DisciplineAllocation\""));
+            Assert.That(uxml, Does.Contain("name=\"TraitOptions\""));
+            Assert.That(uxml, Does.Contain("name=\"SpecializationEditor\""));
+            Assert.That(uxml, Does.Contain("name=\"SaveSummary\""));
             Assert.That(uxml, Does.Contain("name=\"PickerOptions\""));
             Assert.That(uxml, Does.Contain("name=\"SaveBuild\""));
 
+            Assert.That(screen, Does.Contain("BuildSpecializationSummary"));
             Assert.That(screen, Does.Contain("BuildSpecializationCard"));
             Assert.That(screen, Does.Contain("TECHNIQUES · SPELLS · PERKS"));
-            Assert.That(screen, Does.Contain("CHARACTER TRAITS"));
+            Assert.That(screen, Does.Contain("BuildTraitOptions"));
+            Assert.That(screen, Does.Contain("BuildSaveSummary"));
             Assert.That(screen, Does.Contain("ADD FORM OR SCHOOL"));
             Assert.That(screen, Does.Contain("FeatureCapacityText"));
             Assert.That(screen, Does.Contain("TraitCapacityText"));
             Assert.That(screen, Does.Contain("_hub.SaveCombatBuild(_model.ToDraft())"));
+            Assert.That(uxml + screen, Does.Not.Contain("Requires Rank"));
+            Assert.That(uxml + screen, Does.Not.Contain("Requires Level"));
             Assert.That(screen, Does.Not.Contain("BuildStaffSchools"));
             Assert.That(screen, Does.Not.Contain("SaveWeaponLoadout"));
         }

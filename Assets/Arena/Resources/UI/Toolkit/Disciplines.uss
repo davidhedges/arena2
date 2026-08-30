@@ -45,6 +45,22 @@
     background-color: rgba(3, 5, 7, 0.76);
 }
 
+.screen-vignette {
+    position: absolute;
+    top: 96px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-top-width: 1px;
+    border-top-color: rgba(229, 185, 99, 0.10);
+    border-right-width: 34px;
+    border-right-color: rgba(2, 3, 4, 0.24);
+    border-bottom-width: 24px;
+    border-bottom-color: rgba(2, 3, 4, 0.32);
+    border-left-width: 34px;
+    border-left-color: rgba(2, 3, 4, 0.24);
+}
+
 /* Shared Hub chrome ----------------------------------------------------- */
 
 .topbar {
@@ -603,6 +619,699 @@
 
 .save-button:hover { background-color: #D39A34; }
 .save-button:disabled { opacity: 0.45; }
+
+/* Concept-inspired loadout overview and focused editor ---------------- */
+
+.build-heading {
+    top: 106px;
+    left: 34px;
+    right: 34px;
+    height: 78px;
+}
+
+.allocation-panel {
+    height: 64px;
+    min-width: 570px;
+}
+
+.allocation-item { width: 176px; }
+.allocation-divider { height: 38px; }
+.allocation-value { font-size: 19px; }
+
+.loadout-overview {
+    position: absolute;
+    top: 190px;
+    left: 34px;
+    right: 34px;
+    height: 232px;
+    padding-top: 12px;
+    padding-right: 14px;
+    padding-bottom: 14px;
+    padding-left: 14px;
+}
+
+.overview-heading {
+    height: 42px;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.overview-title,
+.trait-title,
+.save-title {
+    margin-top: 1px;
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 14px;
+    letter-spacing: 1.8px;
+}
+
+.overview-help {
+    padding-top: 10px;
+    color: var(--arena-text-dim);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 8px;
+    letter-spacing: 1.2px;
+}
+
+.discipline-cards {
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    flex-grow: 1;
+    flex-direction: row;
+    align-items: stretch;
+}
+
+.discipline-summary-card,
+.add-discipline-card {
+    position: relative;
+    width: auto;
+    min-width: 0;
+    height: 160px;
+    margin-right: 12px;
+    flex-basis: 0;
+    flex-grow: 1;
+    flex-shrink: 1;
+    background-color: rgba(7, 10, 12, 0.90);
+    border-width: 1px;
+    border-color: rgba(194, 151, 80, 0.26);
+}
+
+.discipline-summary-card {
+    padding-top: 10px;
+    padding-right: 13px;
+    padding-bottom: 9px;
+    padding-left: 13px;
+    align-items: stretch;
+    justify-content: flex-start;
+    border-top-width: 2px;
+}
+
+.discipline-summary-card.is-last,
+.add-discipline-card.is-last { margin-right: 0; }
+
+.discipline-summary-card:hover {
+    background-color: rgba(20, 20, 18, 0.96);
+    border-right-color: rgba(218, 182, 108, 0.44);
+    border-bottom-color: rgba(218, 182, 108, 0.44);
+    border-left-color: rgba(218, 182, 108, 0.44);
+}
+
+.discipline-summary-card.is-selected {
+    background-color: rgba(47, 35, 18, 0.72);
+    border-right-color: rgba(228, 179, 74, 0.74);
+    border-bottom-color: rgba(228, 179, 74, 0.74);
+    border-left-color: rgba(228, 179, 74, 0.74);
+}
+
+.summary-identity {
+    height: 62px;
+    flex-direction: row;
+    align-items: center;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(218, 182, 108, 0.18);
+}
+
+.summary-slot {
+    width: 36px;
+    height: 36px;
+    margin-right: 12px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    rotate: 45deg;
+    background-color: rgba(2, 4, 5, 0.92);
+    border-width: 1px;
+}
+
+.summary-slot-number {
+    rotate: -45deg;
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 17px;
+}
+
+.summary-discipline-icon {
+    width: 43px;
+    height: 43px;
+    margin-right: 11px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.summary-copy {
+    min-width: 0;
+    flex-grow: 1;
+    align-items: flex-start;
+}
+
+.summary-discipline-name {
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 15px;
+    letter-spacing: 1.4px;
+}
+
+.summary-specialization-name {
+    margin-top: 3px;
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 9px;
+    letter-spacing: 1.1px;
+}
+
+.starting-chip {
+    padding-top: 4px;
+    padding-right: 7px;
+    padding-bottom: 4px;
+    padding-left: 7px;
+    color: var(--arena-gold-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 7px;
+    letter-spacing: 0.8px;
+    background-color: rgba(197, 143, 42, 0.10);
+    border-width: 1px;
+    border-color: rgba(218, 182, 108, 0.30);
+}
+
+.summary-feature-heading {
+    height: 29px;
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+}
+
+.summary-feature-label,
+.summary-feature-count {
+    color: var(--arena-text-dim);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 8px;
+    letter-spacing: 1.1px;
+}
+
+.summary-feature-count { color: var(--arena-gold-text); }
+
+.summary-feature-row {
+    height: 50px;
+    flex-direction: row;
+    align-items: center;
+}
+
+.summary-feature-icon,
+.summary-feature-overflow {
+    width: 35px;
+    height: 35px;
+    margin-right: 6px;
+    flex-shrink: 0;
+    background-color: rgba(1, 3, 4, 0.90);
+    border-width: 1px;
+    border-color: rgba(218, 182, 108, 0.34);
+}
+
+.summary-feature-icon { -unity-background-scale-mode: scale-to-fit; }
+
+.summary-feature-overflow {
+    align-items: center;
+    justify-content: center;
+    color: var(--arena-gold-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 10px;
+}
+
+.summary-feature-empty { color: var(--arena-text-dim); font-size: 11px; }
+
+.add-discipline-card {
+    align-items: center;
+    justify-content: center;
+    color: rgba(218, 182, 108, 0.58);
+    font-size: 12px;
+    border-color: rgba(194, 151, 80, 0.22);
+}
+
+.add-discipline-card:hover {
+    color: var(--arena-gold-text);
+    background-color: rgba(197, 143, 42, 0.07);
+    border-color: rgba(218, 182, 108, 0.62);
+}
+
+.empty-slot {
+    position: absolute;
+    top: 14px;
+    left: 18px;
+    width: 30px;
+    height: 30px;
+    align-items: center;
+    justify-content: center;
+    rotate: 45deg;
+    border-width: 1px;
+    border-color: rgba(218, 182, 108, 0.26);
+}
+
+.empty-slot-number {
+    rotate: -45deg;
+    color: var(--arena-text-dim);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 12px;
+}
+
+.add-discipline-plus {
+    height: 40px;
+    color: rgba(218, 182, 108, 0.60);
+    font-size: 35px;
+}
+
+.add-discipline-title {
+    margin-top: 2px;
+    color: var(--arena-gold-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 12px;
+    letter-spacing: 1.7px;
+}
+
+.add-discipline-copy {
+    width: auto;
+    margin-top: 4px;
+    color: var(--arena-text-dim);
+    font-size: 11px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.trait-strip {
+    position: absolute;
+    top: 434px;
+    left: 34px;
+    right: 34px;
+    height: 94px;
+    padding-top: 12px;
+    padding-right: 16px;
+    padding-bottom: 12px;
+    padding-left: 18px;
+    flex-direction: row;
+    align-items: center;
+}
+
+.trait-heading {
+    width: 188px;
+    flex-shrink: 0;
+    justify-content: center;
+}
+
+.trait-options {
+    height: 68px;
+    flex-grow: 1;
+    flex-direction: row;
+    align-items: stretch;
+}
+
+.trait-button {
+    min-width: 390px;
+    height: 68px;
+    margin-right: 12px;
+    padding-right: 14px;
+    padding-left: 14px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    background-color: rgba(255, 255, 255, 0.022);
+    border-width: 1px;
+    border-color: rgba(231, 225, 211, 0.12);
+}
+
+.trait-button:hover,
+.trait-button.is-selected {
+    background-color: rgba(99, 67, 29, 0.34);
+    border-color: rgba(218, 182, 108, 0.54);
+}
+
+.trait-sigil {
+    width: 40px;
+    height: 40px;
+    margin-right: 14px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    rotate: 45deg;
+    color: var(--arena-gold-text);
+    border-width: 1px;
+    border-color: rgba(218, 182, 108, 0.54);
+}
+
+.trait-sigil-glyph { rotate: -45deg; font-size: 17px; }
+.trait-copy { min-width: 0; flex-grow: 1; align-items: flex-start; }
+
+.trait-name {
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 12px;
+    letter-spacing: 1.2px;
+}
+
+.trait-description { margin-top: 3px; color: var(--arena-text-muted); font-size: 11px; }
+
+.trait-state,
+.trait-capacity {
+    color: var(--arena-text-dim);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 8px;
+    letter-spacing: 1px;
+}
+
+.trait-button.is-selected .trait-state { color: #93C777; }
+
+.trait-capacity {
+    min-width: 150px;
+    flex-grow: 1;
+    align-self: center;
+    -unity-text-align: middle-right;
+}
+
+.configuration-shell {
+    position: absolute;
+    top: 540px;
+    left: 34px;
+    right: 34px;
+    bottom: 24px;
+    flex-direction: row;
+}
+
+.specialization-editor {
+    min-width: 0;
+    margin-right: 14px;
+    flex-grow: 1;
+}
+
+.specialization-editor .unity-scroll-view__content-viewport { overflow: hidden; }
+.specialization-editor .unity-scroll-view__content-container { flex-direction: column; }
+
+.discipline-card {
+    width: auto;
+    min-width: 0;
+    min-height: 100%;
+    margin-right: 0;
+    padding-top: 16px;
+    padding-right: 20px;
+    padding-bottom: 22px;
+    padding-left: 20px;
+    background-color: rgba(7, 9, 11, 0.94);
+    border-width: 0;
+}
+
+.discipline-card-heading { height: 70px; }
+
+.discipline-emblem {
+    width: 52px;
+    height: 52px;
+    margin-right: 14px;
+    -unity-background-scale-mode: scale-to-fit;
+    background-color: rgba(1, 3, 4, 0.70);
+    border-width: 1px;
+}
+
+.discipline-name { font-size: 20px; }
+
+.card-control {
+    height: 32px;
+    padding-left: 11px;
+    padding-right: 11px;
+}
+
+.feature-help {
+    margin-top: 12px;
+    color: var(--arena-text-muted);
+    font-size: 12px;
+}
+
+.ability-section-heading { min-height: 36px; }
+.ability-section-title { font-size: 11px; }
+.ability-section-counter { font-size: 9px; }
+
+.ability-cell {
+    width: 116px;
+    height: 132px;
+    margin-right: 10px;
+    margin-bottom: 10px;
+    padding-top: 8px;
+    padding-right: 7px;
+    padding-bottom: 7px;
+    padding-left: 7px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    background-color: rgba(255, 255, 255, 0.025);
+    color: var(--arena-text-muted);
+    border-width: 1px;
+    border-color: rgba(231, 225, 211, 0.12);
+}
+
+.ability-cell:hover {
+    background-color: rgba(197, 143, 42, 0.10);
+    border-color: rgba(233, 188, 100, 0.58);
+}
+
+.ability-cell.is-filled {
+    color: var(--arena-text);
+    border-color: rgba(228, 179, 74, 0.80);
+    background-color: rgba(61, 43, 20, 0.58);
+}
+
+.ability-icon {
+    width: 55px;
+    height: 55px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.ability-kind {
+    margin-top: 4px;
+    color: var(--arena-text-dim);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 7px;
+    letter-spacing: 0.9px;
+}
+
+.ability-name {
+    width: 100px;
+    height: 27px;
+    margin-top: 2px;
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 8px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.ability-state {
+    color: var(--arena-text-dim);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 7px;
+    letter-spacing: 0.7px;
+}
+
+.ability-cell.is-filled .ability-state { color: #91C86C; }
+
+.order-row {
+    width: 430px;
+    height: 36px;
+    margin-bottom: 5px;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.022);
+    border-width: 1px;
+    border-color: rgba(231, 225, 211, 0.10);
+}
+
+.order-number {
+    width: 34px;
+    color: var(--arena-gold-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    -unity-text-align: middle-center;
+    font-size: 10px;
+}
+
+.order-name {
+    min-width: 0;
+    flex-grow: 1;
+    color: var(--arena-text-muted);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 9px;
+    letter-spacing: 0.8px;
+}
+
+.order-control {
+    width: 36px;
+    height: 34px;
+    background-color: rgba(255, 255, 255, 0.02);
+    color: var(--arena-text-dim);
+    border-width: 0;
+    border-left-width: 1px;
+    border-left-color: rgba(231, 225, 211, 0.10);
+}
+
+.order-control:hover { color: var(--arena-gold-text); background-color: rgba(197, 143, 42, 0.10); }
+.order-control:disabled { opacity: 0.24; }
+
+.empty-editor,
+.waiting-state {
+    min-height: 470px;
+    align-items: center;
+    justify-content: center;
+}
+
+.empty-editor-glyph { color: var(--arena-gold-text); font-size: 44px; }
+
+.empty-editor-title {
+    margin-top: 10px;
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 16px;
+    letter-spacing: 2px;
+}
+
+.empty-editor-copy { margin-top: 6px; color: var(--arena-text-muted); font-size: 12px; }
+
+.empty-editor-action {
+    width: 230px;
+    height: 38px;
+    margin-top: 18px;
+    background-color: rgba(197, 143, 42, 0.12);
+    color: var(--arena-gold-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 9px;
+    letter-spacing: 1px;
+    border-width: 1px;
+    border-color: rgba(218, 182, 108, 0.45);
+}
+
+.waiting-state {
+    flex-grow: 1;
+    color: var(--arena-text-dim);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    -unity-text-align: middle-center;
+    font-size: 11px;
+    letter-spacing: 1.2px;
+}
+
+.build-footer {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    width: 336px;
+    height: auto;
+    flex-shrink: 0;
+    padding-top: 18px;
+    padding-right: 18px;
+    padding-bottom: 14px;
+    padding-left: 18px;
+    align-items: stretch;
+    justify-content: flex-start;
+    background-color: rgba(7, 9, 11, 0.94);
+    border-top-width: 1px;
+    border-top-color: rgba(194, 151, 80, 0.52);
+}
+
+.save-heading {
+    height: 48px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(218, 182, 108, 0.18);
+}
+
+.save-summary { margin-top: 8px; }
+
+.save-summary-row {
+    height: 50px;
+    flex-direction: row;
+    align-items: center;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(231, 225, 211, 0.08);
+}
+
+.save-summary-slot {
+    width: 27px;
+    height: 27px;
+    margin-right: 10px;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(2, 4, 5, 0.82);
+    color: var(--arena-gold-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 9px;
+    border-width: 1px;
+    border-color: rgba(218, 182, 108, 0.34);
+}
+
+.save-summary-copy { min-width: 0; flex-grow: 1; align-items: flex-start; }
+
+.save-summary-name {
+    color: var(--arena-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 9px;
+    letter-spacing: 0.9px;
+}
+
+.save-summary-parent { margin-top: 2px; color: var(--arena-text-dim); font-size: 9px; }
+
+.save-summary-count {
+    color: var(--arena-gold-text);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 7px;
+    letter-spacing: 0.7px;
+}
+
+.save-summary-totals {
+    margin-top: 9px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+    background-color: rgba(255, 255, 255, 0.018);
+}
+
+.save-metric {
+    height: 22px;
+    padding-right: 8px;
+    padding-left: 8px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.save-metric-label,
+.save-metric-value {
+    color: var(--arena-text-dim);
+    -unity-font-definition: url("/Assets/Arena/Content/UI/Fonts/Cinzel.ttf");
+    font-size: 7px;
+    letter-spacing: 0.7px;
+}
+
+.save-metric-value { color: var(--arena-gold-text); }
+
+.save-status {
+    min-height: 36px;
+    margin-top: 8px;
+    padding-left: 0;
+    flex-grow: 1;
+    color: var(--arena-text-muted);
+    font-size: 10px;
+    white-space: normal;
+    -unity-text-align: middle-left;
+}
+
+.footer-actions {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.build-footer .back-button {
+    height: 34px;
+    min-width: 0;
+    margin-top: 6px;
+    margin-right: 0;
+}
+
+.build-footer .save-button { width: 100%; height: 40px; }
 
 /* Discipline and ability picker --------------------------------------- */
 
