@@ -70,6 +70,20 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void EditorTerminatesCommittedSaveWithSuccessAndRestoresControls()
+        {
+            string screen = File.ReadAllText(
+                "Assets/Arena/Runtime/UI/Toolkit/DisciplinesScreen.cs");
+
+            Assert.That(screen, Does.Contain("SetStatus(\"Build saved.\")"));
+            Assert.That(screen, Does.Not.Contain("Build committed. Waiting for the new revision"));
+            Assert.That(
+                screen,
+                Does.Match(
+                    @"if \(committed\)[\s\S]*?_lastServerFailure = string\.Empty;[\s\S]*?Render\(\);[\s\S]*?SetStatus\(""Build saved\.""\);"));
+        }
+
+        [Test]
         public void EditorDisplaysServerValidationCodesVerbatimWithoutOwningACodeMap()
         {
             string server = File.ReadAllText("server/src/combat_build_v2.rs");

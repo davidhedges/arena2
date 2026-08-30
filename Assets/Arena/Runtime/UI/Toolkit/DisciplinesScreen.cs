@@ -514,7 +514,12 @@ namespace Arena.UI
             {
                 _dirty = false;
                 _lastServerFailure = string.Empty;
-                SetStatus("Build committed. Waiting for the new revision…");
+                // The reducer commit is the authoritative save result. The
+                // projected revision can arrive before or after this callback,
+                // so always re-render to restore the controls and report the
+                // completed save instead of leaving the UI in a waiting state.
+                Render();
+                SetStatus("Build saved.");
             }
             else
             {
