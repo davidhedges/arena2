@@ -10,7 +10,6 @@
 //! selected-only combat-build materialization is public gameplay state and
 //! contains no provisioner credentials.
 
-use std::collections::HashMap;
 use std::time::Duration;
 
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
@@ -21,9 +20,10 @@ use crate::arena_maps::require_arena_map_id;
 #[allow(unused_imports)]
 use crate::bot_matches::arena_match as _;
 #[cfg(feature = "projectile_load_harness")]
-use crate::combat_build::CombatBuildDraft;
-use crate::combat_build::{
-    default_combat_build_draft, CombatBuildCatalog, CombatBuildSnapshot, ValidatedCombatBuild,
+use crate::combat_build_v2::CombatBuildV2Draft;
+use crate::combat_build_v2::{
+    CombatBuildV2Catalog, CombatBuildV2Snapshot, CombatFeatureLoadoutKind,
+    MaterializedCombatFeatureV2, ValidatedCombatBuildV2,
 };
 #[allow(unused_imports)]
 use crate::match_contract::match_bootstrap_config as _;
@@ -183,6 +183,91 @@ pub struct MatchDisciplinePassiveSelection {
     #[index(btree)]
     pub owner: Identity,
     pub combat_discipline_id: String,
+    pub ability_id: String,
+}
+
+/// Canonical selected-only Combat Build v2 runtime state. The v1 tables above
+/// remain inert until their Phase 8 schema deletion.
+#[table(accessor = match_combat_build_v2, public)]
+pub struct MatchCombatBuildV2 {
+    #[primary_key]
+    pub owner: Identity,
+    pub contract_schema_version: u32,
+    pub revision: u64,
+    pub starting_discipline_id: String,
+    pub mastery_active: bool,
+    pub materialized_at: Timestamp,
+}
+
+#[table(accessor = match_selected_specialization_v2, public)]
+pub struct MatchSelectedSpecializationV2 {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub slot_index: u8,
+    pub specialization_id: String,
+    pub combat_discipline_id: String,
+    pub specialization_kind: String,
+}
+
+#[table(accessor = match_discipline_configuration_v2, public)]
+pub struct MatchDisciplineConfigurationV2 {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub combat_discipline_id: String,
+    pub main_hand_item_def_id: String,
+    pub main_hand_color_id: String,
+    pub off_hand_item_def_id: String,
+    pub off_hand_color_id: String,
+    pub main_hand_item_id: Option<String>,
+    pub off_hand_item_id: Option<String>,
+    pub materialized_at: Timestamp,
+}
+
+#[table(accessor = match_technique_selection_v2, public)]
+pub struct MatchTechniqueSelectionV2 {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub specialization_id: String,
+    pub combat_discipline_id: String,
+    pub ability_id: String,
+    pub bar_order: u8,
+}
+
+#[table(accessor = match_spell_selection_v2, public)]
+pub struct MatchSpellSelectionV2 {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub specialization_id: String,
+    pub combat_discipline_id: String,
+    pub ability_id: String,
+    pub bar_order: u8,
+}
+
+#[table(accessor = match_perk_selection_v2, public)]
+pub struct MatchPerkSelectionV2 {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub specialization_id: String,
+    pub combat_discipline_id: String,
+    pub ability_id: String,
+}
+
+#[table(accessor = match_trait_selection_v2, public)]
+pub struct MatchTraitSelectionV2 {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
     pub ability_id: String,
 }
 
@@ -465,24 +550,19 @@ struct ProvisionedBootstrap {
 
 fn validate_combat_build_snapshot_json(
     snapshot_json: String,
-) -> Result<(String, ValidatedCombatBuild), String> {
+) -> Result<(String, ValidatedCombatBuildV2), String> {
     if snapshot_json.is_empty() || snapshot_json.len() > MAX_COMBAT_BUILD_SNAPSHOT_BYTES {
         return Err(format!(
-            "COMBAT_BUILD_SNAPSHOT_SIZE: snapshot must contain 1..={MAX_COMBAT_BUILD_SNAPSHOT_BYTES} bytes"
+            "COMBAT_BUILD_V2_SNAPSHOT_SIZE: snapshot must contain 1..={MAX_COMBAT_BUILD_SNAPSHOT_BYTES} bytes"
         ));
     }
-    let snapshot: CombatBuildSnapshot = serde_json::from_str(snapshot_json.as_str())
-        .map_err(|error| format!("COMBAT_BUILD_SNAPSHOT_INVALID_JSON: {error}"))?;
-    let catalog = CombatBuildCatalog::from_shared_catalogs()
-        .map_err(|error| format!("COMBAT_BUILD_CATALOG_INVALID: {error}"))?;
-    let validated = catalog
-        .validate_snapshot(&snapshot)
-        .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
-    let canonical_json = serde_json::to_string(&validated.snapshot)
-        .map_err(|error| format!("COMBAT_BUILD_SNAPSHOT_SERIALIZATION_FAILED: {error}"))?;
+    let catalog = CombatBuildV2Catalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_V2_CATALOG_INVALID: {error}"))?;
+    let validated = catalog.validate_canonical_snapshot_json(snapshot_json.as_str())?;
+    let canonical_json = catalog.serialize_canonical_snapshot(&validated.snapshot)?;
     if snapshot_json != canonical_json {
         return Err(
-            "COMBAT_BUILD_SNAPSHOT_NOT_CANONICAL: payload differs from validated serialization"
+            "COMBAT_BUILD_V2_SNAPSHOT_NOT_CANONICAL: payload differs from validated serialization"
                 .to_string(),
         );
     }
@@ -492,83 +572,116 @@ fn validate_combat_build_snapshot_json(
 fn materialize_validated_combat_build(
     ctx: &ReducerContext,
     owner: Identity,
-    validated: &ValidatedCombatBuild,
-) {
-    let snapshot = &validated.snapshot;
-    ctx.db.match_combat_build().insert(MatchCombatBuild {
+    validated: &ValidatedCombatBuildV2,
+) -> Result<(), String> {
+    let catalog = CombatBuildV2Catalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_V2_CATALOG_INVALID: {error}"))?;
+    let plan = catalog.materialization_plan(validated)?;
+    ctx.db.match_combat_build_v2().insert(MatchCombatBuildV2 {
         owner,
-        contract_schema_version: snapshot.contract_schema_version,
-        revision: snapshot.revision,
-        starting_discipline_id: snapshot.starting_discipline_id.clone(),
+        contract_schema_version: plan.schema_version,
+        revision: plan.revision,
+        starting_discipline_id: plan.starting_discipline_id.clone(),
+        mastery_active: plan.mastery_active,
         materialized_at: ctx.timestamp,
     });
 
-    let configurations: HashMap<_, _> = snapshot
-        .discipline_configurations
-        .iter()
-        .map(|configuration| (configuration.combat_discipline_id.as_str(), configuration))
-        .collect();
-    for selected in &snapshot.selected_disciplines {
-        let discipline_id = selected.combat_discipline_id.as_str();
-        let configuration = configurations
-            .get(discipline_id)
-            .expect("validated selected discipline must have a configuration");
+    for selected in &plan.selected_specializations {
         ctx.db
-            .match_combat_build_discipline()
-            .insert(MatchCombatBuildDiscipline {
+            .match_selected_specialization_v2()
+            .insert(MatchSelectedSpecializationV2 {
                 key: match_combat_build_key(owner, &[selected.slot_index.to_string().as_str()]),
                 owner,
                 slot_index: selected.slot_index,
+                specialization_id: selected.specialization_id.clone(),
                 combat_discipline_id: selected.combat_discipline_id.clone(),
+                specialization_kind: match selected.specialization_kind {
+                    crate::combat_build_v2::CombatSpecializationKind::Form => "FORM",
+                    crate::combat_build_v2::CombatSpecializationKind::School => "SCHOOL",
+                }
+                .to_string(),
             });
+    }
+    for configuration in &plan.discipline_configurations {
+        let discipline_id = configuration.combat_discipline_id.as_str();
         ctx.db
-            .match_discipline_configuration()
-            .insert(MatchDisciplineConfiguration {
+            .match_discipline_configuration_v2()
+            .insert(MatchDisciplineConfigurationV2 {
                 key: match_combat_build_key(owner, &[discipline_id]),
                 owner,
-                combat_discipline_id: selected.combat_discipline_id.clone(),
-                main_hand_item_def_id: configuration.weapon.main_hand_item_def_id.clone(),
-                main_hand_color_id: configuration.weapon.main_hand_color_id.clone(),
-                off_hand_item_def_id: configuration.weapon.off_hand_item_def_id.clone(),
-                off_hand_color_id: configuration.weapon.off_hand_color_id.clone(),
+                combat_discipline_id: configuration.combat_discipline_id.clone(),
+                main_hand_item_def_id: configuration.main_hand_item_def_id.clone(),
+                main_hand_color_id: configuration.main_hand_color_id.clone(),
+                off_hand_item_def_id: configuration.off_hand_item_def_id.clone(),
+                off_hand_color_id: configuration.off_hand_color_id.clone(),
                 main_hand_item_id: None,
                 off_hand_item_id: None,
                 materialized_at: ctx.timestamp,
             });
-        for school_id in &configuration.staff_school_ids {
-            ctx.db
-                .match_staff_school_selection()
-                .insert(MatchStaffSchoolSelection {
-                    key: match_combat_build_key(owner, &[school_id.as_str()]),
-                    owner,
-                    spell_school_id: school_id.clone(),
-                });
-        }
-        for assignment in &configuration.active_assignments {
-            ctx.db.match_discipline_action_bar_assignment().insert(
-                MatchDisciplineActionBarAssignment {
-                    key: match_combat_build_key(
-                        owner,
-                        &[discipline_id, assignment.action_slot.as_str()],
-                    ),
-                    owner,
-                    combat_discipline_id: selected.combat_discipline_id.clone(),
-                    action_slot: assignment.action_slot.clone(),
-                    ability_id: assignment.ability_id.clone(),
-                },
-            );
-        }
-        for ability_id in &configuration.passive_ability_ids {
-            ctx.db
-                .match_discipline_passive_selection()
-                .insert(MatchDisciplinePassiveSelection {
-                    key: match_combat_build_key(owner, &[discipline_id, ability_id.as_str()]),
-                    owner,
-                    combat_discipline_id: selected.combat_discipline_id.clone(),
-                    ability_id: ability_id.clone(),
-                });
-        }
     }
+    for feature in &plan.techniques {
+        insert_v2_technique(ctx, owner, feature);
+    }
+    for feature in &plan.spells {
+        insert_v2_spell(ctx, owner, feature);
+    }
+    for feature in &plan.perks {
+        ctx.db
+            .match_perk_selection_v2()
+            .insert(MatchPerkSelectionV2 {
+                key: match_combat_build_key(owner, &[feature.ability_id.as_str()]),
+                owner,
+                specialization_id: feature.specialization_id.clone(),
+                combat_discipline_id: feature.combat_discipline_id.clone(),
+                ability_id: feature.ability_id.clone(),
+            });
+    }
+    for ability_id in &plan.traits {
+        ctx.db
+            .match_trait_selection_v2()
+            .insert(MatchTraitSelectionV2 {
+                key: match_combat_build_key(owner, &[ability_id.as_str()]),
+                owner,
+                ability_id: ability_id.clone(),
+            });
+    }
+    Ok(())
+}
+
+fn insert_v2_technique(
+    ctx: &ReducerContext,
+    owner: Identity,
+    feature: &MaterializedCombatFeatureV2,
+) {
+    debug_assert_eq!(feature.loadout_kind, CombatFeatureLoadoutKind::Technique);
+    ctx.db
+        .match_technique_selection_v2()
+        .insert(MatchTechniqueSelectionV2 {
+            key: match_combat_build_key(owner, &[feature.ability_id.as_str()]),
+            owner,
+            specialization_id: feature.specialization_id.clone(),
+            combat_discipline_id: feature.combat_discipline_id.clone(),
+            ability_id: feature.ability_id.clone(),
+            bar_order: feature
+                .bar_order
+                .expect("materialized Technique must have bar order"),
+        });
+}
+
+fn insert_v2_spell(ctx: &ReducerContext, owner: Identity, feature: &MaterializedCombatFeatureV2) {
+    debug_assert_eq!(feature.loadout_kind, CombatFeatureLoadoutKind::Spell);
+    ctx.db
+        .match_spell_selection_v2()
+        .insert(MatchSpellSelectionV2 {
+            key: match_combat_build_key(owner, &[feature.ability_id.as_str()]),
+            owner,
+            specialization_id: feature.specialization_id.clone(),
+            combat_discipline_id: feature.combat_discipline_id.clone(),
+            ability_id: feature.ability_id.clone(),
+            bar_order: feature
+                .bar_order
+                .expect("materialized Spell must have bar order"),
+        });
 }
 
 /// Local-direct is a compatibility admission mode, not an alternate combat
@@ -578,18 +691,17 @@ pub(crate) fn ensure_local_direct_player_combat_build(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> Result<(), String> {
-    if ctx.db.match_combat_build().owner().find(owner).is_some() {
+    if ctx.db.match_combat_build_v2().owner().find(owner).is_some() {
         return Ok(());
     }
 
-    let catalog = CombatBuildCatalog::from_shared_catalogs()
-        .map_err(|error| format!("COMBAT_BUILD_CATALOG_INVALID: {error}"))?;
-    let draft = default_combat_build_draft();
+    let catalog = CombatBuildV2Catalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_V2_CATALOG_INVALID: {error}"))?;
+    let draft = catalog.default_draft();
     let validated = catalog
         .validate_draft(&draft, 0)
         .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
-    materialize_validated_combat_build(ctx, owner, &validated);
-    Ok(())
+    materialize_validated_combat_build(ctx, owner, &validated)
 }
 
 fn match_combat_build_key(owner: Identity, parts: &[&str]) -> String {
@@ -673,13 +785,13 @@ fn claim_provisioned_database(
         team_id: 0,
         team_slot: 0,
         display_name: reserved_display_name,
-        contract_schema_version: validated_build.snapshot.contract_schema_version,
+        contract_schema_version: validated_build.snapshot.schema_version,
         combat_build_revision: validated_build.snapshot.revision,
         combat_build_snapshot_json,
         armor_set_id,
         reserved_at: ctx.timestamp,
     });
-    materialize_validated_combat_build(ctx, request.reserved_player_identity, &validated_build);
+    materialize_validated_combat_build(ctx, request.reserved_player_identity, &validated_build)?;
     Ok(())
 }
 
@@ -791,28 +903,17 @@ pub fn bootstrap_open_world_instance(
 /// currently equipped weapon slots.
 fn materialize_player_combat_build_weapons_and_activate(
     ctx: &ReducerContext,
-    build: &MatchCombatBuild,
+    build: &MatchCombatBuildV2,
 ) -> Result<(), String> {
-    let mut selected_disciplines: Vec<_> = ctx
+    let mut configurations: Vec<_> = ctx
         .db
-        .match_combat_build_discipline()
+        .match_discipline_configuration_v2()
         .owner()
         .filter(build.owner)
         .collect();
-    selected_disciplines.sort_by_key(|row| row.slot_index);
-    for selected in selected_disciplines {
-        let key = match_combat_build_key(build.owner, &[selected.combat_discipline_id.as_str()]);
-        let mut configuration = ctx
-            .db
-            .match_discipline_configuration()
-            .key()
-            .find(key)
-            .ok_or_else(|| {
-                format!(
-                    "Selected combat discipline '{}' has no match configuration",
-                    selected.combat_discipline_id
-                )
-            })?;
+    configurations
+        .sort_by(|left, right| left.combat_discipline_id.cmp(&right.combat_discipline_id));
+    for mut configuration in configurations {
         let (main_hand_item_id, off_hand_item_id) =
             crate::inventory::materialize_combat_build_weapon_configuration(
                 ctx,
@@ -827,7 +928,7 @@ fn materialize_player_combat_build_weapons_and_activate(
         configuration.off_hand_item_id = off_hand_item_id;
         configuration.materialized_at = ctx.timestamp;
         ctx.db
-            .match_discipline_configuration()
+            .match_discipline_configuration_v2()
             .key()
             .update(configuration);
     }
@@ -847,10 +948,10 @@ pub(crate) fn apply_local_direct_player_combat_build(
 ) -> Result<(), String> {
     let build = ctx
         .db
-        .match_combat_build()
+        .match_combat_build_v2()
         .owner()
         .find(owner)
-        .ok_or_else(|| "Local-direct canonical combat build is missing".to_string())?;
+        .ok_or_else(|| "Local-direct canonical Combat Build v2 is missing".to_string())?;
     materialize_player_combat_build_weapons_and_activate(ctx, &build)
 }
 
@@ -894,96 +995,101 @@ pub fn configure_local_direct_probe_combat_build(
         ));
     }
 
-    let draft: CombatBuildDraft = serde_json::from_str(draft_json.as_str())
-        .map_err(|error| format!("COMBAT_BUILD_DRAFT_INVALID_JSON: {error}"))?;
-    let catalog = CombatBuildCatalog::from_shared_catalogs()
-        .map_err(|error| format!("COMBAT_BUILD_CATALOG_INVALID: {error}"))?;
+    let draft: CombatBuildV2Draft = serde_json::from_str(draft_json.as_str())
+        .map_err(|error| format!("COMBAT_BUILD_V2_DRAFT_INVALID_JSON: {error}"))?;
+    let catalog = CombatBuildV2Catalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_V2_CATALOG_INVALID: {error}"))?;
     let validated = catalog
-        .validate_draft(&draft, 0)
+        .validate_draft(&draft, draft.revision)
         .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
 
     clear_materialized_combat_build_rows(ctx, owner);
-    materialize_validated_combat_build(ctx, owner, &validated);
+    materialize_validated_combat_build(ctx, owner, &validated)?;
     let build = ctx
         .db
-        .match_combat_build()
+        .match_combat_build_v2()
         .owner()
         .find(owner)
         .expect("validated probe build was just materialized");
     materialize_player_combat_build_weapons_and_activate(ctx, &build)?;
     log::info!(
-        "[COMBAT_BUILD_PROBE] Materialized validated local-direct build for {} with {} actives and {} passives",
+        "[COMBAT_BUILD_V2_PROBE] Materialized validated local-direct build for {} with {} features and {} Traits",
         &owner.to_hex()[..8],
-        validated.active_count,
-        validated.passive_count,
+        validated.selected_feature_count(),
+        validated.trait_count,
     );
     Ok(())
 }
 
 #[cfg(feature = "projectile_load_harness")]
 fn clear_materialized_combat_build_rows(ctx: &ReducerContext, owner: Identity) {
-    let discipline_keys: Vec<_> = ctx
+    let specialization_keys: Vec<_> = ctx
         .db
-        .match_combat_build_discipline()
+        .match_selected_specialization_v2()
         .owner()
         .filter(owner)
         .map(|row| row.key)
         .collect();
-    for key in discipline_keys {
-        ctx.db.match_combat_build_discipline().key().delete(key);
+    for key in specialization_keys {
+        ctx.db.match_selected_specialization_v2().key().delete(key);
     }
 
     let configuration_keys: Vec<_> = ctx
         .db
-        .match_discipline_configuration()
+        .match_discipline_configuration_v2()
         .owner()
         .filter(owner)
         .map(|row| row.key)
         .collect();
     for key in configuration_keys {
-        ctx.db.match_discipline_configuration().key().delete(key);
+        ctx.db.match_discipline_configuration_v2().key().delete(key);
     }
 
-    let school_keys: Vec<_> = ctx
+    let technique_keys: Vec<_> = ctx
         .db
-        .match_staff_school_selection()
+        .match_technique_selection_v2()
         .owner()
         .filter(owner)
         .map(|row| row.key)
         .collect();
-    for key in school_keys {
-        ctx.db.match_staff_school_selection().key().delete(key);
+    for key in technique_keys {
+        ctx.db.match_technique_selection_v2().key().delete(key);
     }
 
-    let assignment_keys: Vec<_> = ctx
+    let spell_keys: Vec<_> = ctx
         .db
-        .match_discipline_action_bar_assignment()
+        .match_spell_selection_v2()
         .owner()
         .filter(owner)
         .map(|row| row.key)
         .collect();
-    for key in assignment_keys {
-        ctx.db
-            .match_discipline_action_bar_assignment()
-            .key()
-            .delete(key);
+    for key in spell_keys {
+        ctx.db.match_spell_selection_v2().key().delete(key);
     }
 
-    let passive_keys: Vec<_> = ctx
+    let perk_keys: Vec<_> = ctx
         .db
-        .match_discipline_passive_selection()
+        .match_perk_selection_v2()
         .owner()
         .filter(owner)
         .map(|row| row.key)
         .collect();
-    for key in passive_keys {
-        ctx.db
-            .match_discipline_passive_selection()
-            .key()
-            .delete(key);
+    for key in perk_keys {
+        ctx.db.match_perk_selection_v2().key().delete(key);
     }
 
-    ctx.db.match_combat_build().owner().delete(owner);
+    let trait_keys: Vec<_> = ctx
+        .db
+        .match_trait_selection_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| row.key)
+        .collect();
+    for key in trait_keys {
+        ctx.db.match_trait_selection_v2().key().delete(key);
+    }
+
+    ctx.db.match_combat_build_v2().owner().delete(owner);
 }
 
 pub(crate) fn apply_reserved_player_combat_build(
@@ -992,10 +1098,10 @@ pub(crate) fn apply_reserved_player_combat_build(
 ) -> Result<(), String> {
     let build = ctx
         .db
-        .match_combat_build()
+        .match_combat_build_v2()
         .owner()
         .find(reservation.player_identity)
-        .ok_or_else(|| "Reserved canonical combat build is missing".to_string())?;
+        .ok_or_else(|| "Reserved canonical Combat Build v2 is missing".to_string())?;
     if build.contract_schema_version != reservation.contract_schema_version
         || build.revision != reservation.combat_build_revision
     {
@@ -1012,11 +1118,11 @@ pub(crate) fn apply_reserved_player_combat_build(
         reservation.armor_set_id.clone(),
     )?;
 
-    let validated_snapshot: CombatBuildSnapshot =
+    let validated_snapshot: CombatBuildV2Snapshot =
         serde_json::from_str(reservation.combat_build_snapshot_json.as_str())
-            .map_err(|error| format!("Reserved combat-build snapshot is unreadable: {error}"))?;
+            .map_err(|error| format!("Reserved Combat Build v2 snapshot is unreadable: {error}"))?;
     if validated_snapshot.revision != build.revision
-        || validated_snapshot.contract_schema_version != build.contract_schema_version
+        || validated_snapshot.schema_version != build.contract_schema_version
         || validated_snapshot.starting_discipline_id != build.starting_discipline_id
     {
         return Err("Reserved snapshot and canonical match root diverged".to_string());
@@ -1172,36 +1278,15 @@ fn validate_provisioned_gameplay_admission(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::combat_build::{
-        DisciplineActionBarAssignment, DisciplineConfiguration, DisciplineWeaponConfiguration,
-        SelectedCombatDiscipline,
-    };
 
-    fn canonical_snapshot() -> CombatBuildSnapshot {
-        CombatBuildSnapshot {
-            contract_schema_version: 1,
-            revision: 7,
-            starting_discipline_id: "DAGGERS".to_string(),
-            selected_disciplines: vec![SelectedCombatDiscipline {
-                slot_index: 0,
-                combat_discipline_id: "DAGGERS".to_string(),
-            }],
-            discipline_configurations: vec![DisciplineConfiguration {
-                combat_discipline_id: "DAGGERS".to_string(),
-                weapon: DisciplineWeaponConfiguration {
-                    main_hand_item_def_id: "TRAINING_DAGGER_PAIR".to_string(),
-                    main_hand_color_id: String::new(),
-                    off_hand_item_def_id: String::new(),
-                    off_hand_color_id: String::new(),
-                },
-                staff_school_ids: Vec::new(),
-                active_assignments: vec![DisciplineActionBarAssignment {
-                    action_slot: "slot_0_0".to_string(),
-                    ability_id: "DAGGER_QUICK_CUT".to_string(),
-                }],
-                passive_ability_ids: Vec::new(),
-            }],
-        }
+    fn canonical_snapshot() -> CombatBuildV2Snapshot {
+        let catalog = CombatBuildV2Catalog::from_shared_catalogs().expect("load v2 catalog");
+        let mut draft = catalog.default_draft();
+        draft.revision = 7;
+        catalog
+            .validate_draft(&draft, draft.revision)
+            .expect("validate canonical v2 draft")
+            .snapshot
     }
 
     #[test]
@@ -1252,12 +1337,12 @@ mod tests {
         assert_eq!(validated.snapshot, snapshot);
 
         let mut wrong_schema = canonical_snapshot();
-        wrong_schema.contract_schema_version = 2;
+        wrong_schema.schema_version = 1;
         let wrong_schema_json =
             serde_json::to_string(&wrong_schema).expect("serialize wrong-schema snapshot");
         assert!(validate_combat_build_snapshot_json(wrong_schema_json)
             .unwrap_err()
-            .starts_with("COMBAT_BUILD_UNSUPPORTED_SCHEMA_VERSION"));
+            .starts_with("COMBAT_BUILD_V2_UNSUPPORTED_SCHEMA_VERSION"));
         assert!(validate_combat_build_snapshot_json("{}".to_string()).is_err());
         assert!(validate_combat_build_snapshot_json("x".repeat(65 * 1024)).is_err());
     }

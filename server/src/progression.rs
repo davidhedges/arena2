@@ -11,6 +11,7 @@ use crate::combat::{
     AuthoredStatusPayload, DamageType, StackPolicy, StatusApplication, StatusDispelType,
     StatusEffectKind, StatusPolarity, StatusStackGroupDefault,
 };
+use crate::combat_build_v2::{MASTERY_DAMAGE_BONUS, MASTERY_TRAIT_ID};
 use crate::inventory::{
     equipment_combat_discipline_id_for_owner, equipment_modifier_totals_for_owner,
 };
@@ -19,17 +20,19 @@ use crate::relations::TARGET_AUDIENCE_HOSTILE;
 use crate::spells::{is_on_named_cooldown, stamp_named_cooldown_for_duration};
 
 #[allow(unused_imports)]
-use crate::match_contract::match_combat_build as _;
+use crate::match_contract::match_combat_build_v2 as _;
 #[allow(unused_imports)]
-use crate::match_contract::match_combat_build_discipline as _;
+use crate::match_contract::match_discipline_configuration_v2 as _;
 #[allow(unused_imports)]
-use crate::match_contract::match_discipline_action_bar_assignment as _;
+use crate::match_contract::match_perk_selection_v2 as _;
 #[allow(unused_imports)]
-use crate::match_contract::match_discipline_configuration as _;
+use crate::match_contract::match_selected_specialization_v2 as _;
 #[allow(unused_imports)]
-use crate::match_contract::match_discipline_passive_selection as _;
+use crate::match_contract::match_spell_selection_v2 as _;
 #[allow(unused_imports)]
-use crate::match_contract::match_staff_school_selection as _;
+use crate::match_contract::match_technique_selection_v2 as _;
+#[allow(unused_imports)]
+use crate::match_contract::match_trait_selection_v2 as _;
 #[allow(unused_imports)]
 use crate::player::player as _;
 #[allow(unused_imports)]
@@ -1806,7 +1809,7 @@ pub fn activate_combat_build_discipline(
 }
 
 fn frozen_combat_build_exists(ctx: &ReducerContext, owner: Identity) -> bool {
-    ctx.db.match_combat_build().owner().find(owner).is_some()
+    ctx.db.match_combat_build_v2().owner().find(owner).is_some()
 }
 
 fn owner_requires_frozen_combat_build(ctx: &ReducerContext, owner: Identity) -> bool {
@@ -1826,62 +1829,10 @@ fn frozen_build_contains_discipline(
 ) -> bool {
     let combat_discipline_id = normalize_identifier(combat_discipline_id);
     ctx.db
-        .match_combat_build_discipline()
+        .match_selected_specialization_v2()
         .owner()
         .filter(owner)
         .any(|selected| selected.combat_discipline_id == combat_discipline_id)
-}
-
-fn frozen_staff_school_is_selected(
-    ctx: &ReducerContext,
-    owner: Identity,
-    spell_school_id: &str,
-) -> bool {
-    let spell_school_id = normalize_identifier(spell_school_id);
-    !spell_school_id.is_empty()
-        && ctx
-            .db
-            .match_staff_school_selection()
-            .owner()
-            .filter(owner)
-            .any(|selected| selected.spell_school_id == spell_school_id)
-}
-
-fn frozen_ability_metadata_is_valid(
-    ctx: &ReducerContext,
-    owner: Identity,
-    combat_discipline_id: &str,
-    ability_id: &str,
-    expected_selection_kind: &str,
-) -> bool {
-    let combat_discipline_id = normalize_identifier(combat_discipline_id);
-    let Some(definition) = ability_definition(ability_id) else {
-        return false;
-    };
-    if normalize_identifier(definition.actor_scope.as_str()) != "PLAYER"
-        || normalize_identifier(definition.selection_kind.as_str())
-            != normalize_identifier(expected_selection_kind)
-        || definition
-            .combat_discipline_id
-            .as_deref()
-            .map(normalize_identifier)
-            .as_deref()
-            != Some(combat_discipline_id.as_str())
-    {
-        return false;
-    }
-
-    match definition
-        .spell_school_id
-        .as_deref()
-        .map(normalize_identifier)
-    {
-        Some(spell_school_id) if combat_discipline_id == COMBAT_PROFILE_STAFF => {
-            frozen_staff_school_is_selected(ctx, owner, spell_school_id.as_str())
-        }
-        None if combat_discipline_id != COMBAT_PROFILE_STAFF => true,
-        _ => false,
-    }
 }
 
 pub(crate) fn activate_frozen_combat_discipline(
@@ -1900,7 +1851,7 @@ pub(crate) fn activate_frozen_combat_discipline(
     }
     let configuration = ctx
         .db
-        .match_discipline_configuration()
+        .match_discipline_configuration_v2()
         .owner()
         .filter(owner)
         .find(|row| row.combat_discipline_id == combat_discipline_id)
@@ -1910,6 +1861,21 @@ pub(crate) fn activate_frozen_combat_discipline(
     let main_hand_item_id = configuration.main_hand_item_id.as_deref().ok_or_else(|| {
         format!("combat discipline '{combat_discipline_id}' has no materialized main-hand weapon")
     })?;
+
+    let changed_discipline = ctx
+        .db
+        .active_combat_build_discipline()
+        .owner()
+        .find(owner)
+        .is_none_or(|active| active.combat_discipline_id != combat_discipline_id);
+    if !changed_discipline {
+        return Ok(());
+    }
+
+    crate::spells::fizzle_active_cast_for_interrupt(ctx, owner, ctx.timestamp);
+    crate::auto_attack::clear_auto_attack_for_owner(ctx, owner);
+    crate::melee::clear_queued_melee_followup(ctx, owner);
+    crate::combat::clear_potential_state_for_owner(ctx, owner);
 
     crate::inventory::equip_materialized_combat_build_weapon_configuration(
         ctx,
@@ -1931,7 +1897,6 @@ pub(crate) fn activate_frozen_combat_discipline(
             updated_at: ctx.timestamp,
         },
     );
-    crate::combat::clear_potential_state_for_owner(ctx, owner);
     sync_active_combat_mode_for_owner(ctx, owner, ctx.timestamp);
     Ok(())
 }
@@ -2200,20 +2165,46 @@ pub(crate) fn player_has_selected_passive_ability(
     }
     let ability_id = normalize_identifier(ability_id);
     ctx.db
-        .match_discipline_passive_selection()
+        .match_perk_selection_v2()
         .owner()
         .filter(owner)
         .find(|selection| selection.ability_id == ability_id)
         .is_some_and(|selection| {
-            frozen_build_contains_discipline(ctx, owner, selection.combat_discipline_id.as_str())
-                && frozen_ability_metadata_is_valid(
-                    ctx,
-                    owner,
-                    selection.combat_discipline_id.as_str(),
-                    selection.ability_id.as_str(),
-                    "PASSIVE",
-                )
+            frozen_specialization_is_selected(ctx, owner, selection.specialization_id.as_str())
         })
+}
+
+fn frozen_specialization_is_selected(
+    ctx: &ReducerContext,
+    owner: Identity,
+    specialization_id: &str,
+) -> bool {
+    let specialization_id = normalize_identifier(specialization_id);
+    ctx.db
+        .match_selected_specialization_v2()
+        .owner()
+        .filter(owner)
+        .any(|selected| selected.specialization_id == specialization_id)
+}
+
+pub(crate) fn mastery_outgoing_damage_multiplier(ctx: &ReducerContext, owner: Identity) -> f32 {
+    let mastery_is_projected = ctx
+        .db
+        .match_combat_build_v2()
+        .owner()
+        .find(owner)
+        .is_some_and(|build| build.mastery_active);
+    let mastery_is_selected = ctx
+        .db
+        .match_trait_selection_v2()
+        .owner()
+        .filter(owner)
+        .any(|selection| selection.ability_id == MASTERY_TRAIT_ID);
+    if mastery_is_projected && mastery_is_selected {
+        1.0 + MASTERY_DAMAGE_BONUS
+    } else {
+        1.0
+    }
 }
 
 /// Tests durable ownership of an active inside the frozen build without
@@ -2230,20 +2221,30 @@ pub(crate) fn player_build_contains_active_ability(
     }
     let ability_id = normalize_identifier(ability_id);
     ctx.db
-        .match_discipline_action_bar_assignment()
+        .match_technique_selection_v2()
         .owner()
         .filter(owner)
-        .find(|assignment| assignment.ability_id == ability_id)
-        .is_some_and(|assignment| {
-            frozen_build_contains_discipline(ctx, owner, assignment.combat_discipline_id.as_str())
-                && frozen_ability_metadata_is_valid(
+        .any(|selection| {
+            selection.ability_id == ability_id
+                && frozen_specialization_is_selected(
                     ctx,
                     owner,
-                    assignment.combat_discipline_id.as_str(),
-                    assignment.ability_id.as_str(),
-                    "ACTIVE",
+                    selection.specialization_id.as_str(),
                 )
         })
+        || ctx
+            .db
+            .match_spell_selection_v2()
+            .owner()
+            .filter(owner)
+            .any(|selection| {
+                selection.ability_id == ability_id
+                    && frozen_specialization_is_selected(
+                        ctx,
+                        owner,
+                        selection.specialization_id.as_str(),
+                    )
+            })
 }
 
 pub(crate) fn action_id_is_selectable_action_bar_action(
@@ -2283,10 +2284,8 @@ enum FrozenActiveAuthorizationDenial {
     NoFrozenBuild,
     NoActiveDiscipline,
     ActiveDisciplineNotSelected,
-    DormantDiscipline,
-    WrongActionBar,
-    WrongStaffSchool,
-    Unassigned,
+    WrongWeapon,
+    UnselectedFeature,
     InvalidCatalogMetadata,
 }
 
@@ -2296,33 +2295,24 @@ impl FrozenActiveAuthorizationDenial {
             Self::NoFrozenBuild => "NO_FROZEN_BUILD",
             Self::NoActiveDiscipline => "NO_ACTIVE_DISCIPLINE",
             Self::ActiveDisciplineNotSelected => "ACTIVE_DISCIPLINE_NOT_SELECTED",
-            Self::DormantDiscipline => "DORMANT_DISCIPLINE",
-            Self::WrongActionBar => "WRONG_ACTION_BAR",
-            Self::WrongStaffSchool => "WRONG_STAFF_SCHOOL",
-            Self::Unassigned => "UNASSIGNED",
+            Self::WrongWeapon => "WRONG_WEAPON",
+            Self::UnselectedFeature => "UNSELECTED_FEATURE",
             Self::InvalidCatalogMetadata => "INVALID_CATALOG_METADATA",
         }
     }
 }
 
-fn classify_unresolved_frozen_active_request(
-    selection_is_active: bool,
-    owning_discipline_is_known: bool,
-    owning_discipline_is_selected: bool,
-    staff_school_is_selected: bool,
-    assigned_on_any_selected_bar: bool,
-    owning_discipline_is_current: bool,
-) -> FrozenActiveAuthorizationDenial {
-    if !selection_is_active || !owning_discipline_is_known {
-        FrozenActiveAuthorizationDenial::InvalidCatalogMetadata
-    } else if !owning_discipline_is_selected {
-        FrozenActiveAuthorizationDenial::DormantDiscipline
-    } else if !staff_school_is_selected {
-        FrozenActiveAuthorizationDenial::WrongStaffSchool
-    } else if assigned_on_any_selected_bar && !owning_discipline_is_current {
-        FrozenActiveAuthorizationDenial::WrongActionBar
+fn authorize_v2_active_selection(
+    spell_is_selected: bool,
+    technique_is_selected: bool,
+    technique_weapon_is_equipped: bool,
+) -> Result<(), FrozenActiveAuthorizationDenial> {
+    if spell_is_selected || (technique_is_selected && technique_weapon_is_equipped) {
+        Ok(())
+    } else if technique_is_selected {
+        Err(FrozenActiveAuthorizationDenial::WrongWeapon)
     } else {
-        FrozenActiveAuthorizationDenial::Unassigned
+        Err(FrozenActiveAuthorizationDenial::UnselectedFeature)
     }
 }
 
@@ -2356,61 +2346,41 @@ fn frozen_active_ability_for_request(
         return Err(FrozenActiveAuthorizationDenial::InvalidCatalogMetadata);
     }
 
-    let assignments: Vec<_> = ctx
-        .db
-        .match_discipline_action_bar_assignment()
-        .owner()
-        .filter(owner)
-        .collect();
     for ability in &requested_abilities {
-        if assignments.iter().any(|assignment| {
-            assignment.combat_discipline_id == active_discipline_id
-                && assignment.ability_id == ability.ability_id
-        }) && frozen_ability_metadata_is_valid(
-            ctx,
-            owner,
-            active_discipline_id.as_str(),
-            ability.ability_id.as_str(),
-            "ACTIVE",
+        let selected_spell = ctx
+            .db
+            .match_spell_selection_v2()
+            .owner()
+            .filter(owner)
+            .find(|selection| selection.ability_id == ability.ability_id)
+            .filter(|selection| {
+                frozen_specialization_is_selected(ctx, owner, selection.specialization_id.as_str())
+            });
+        let selected_technique = ctx
+            .db
+            .match_technique_selection_v2()
+            .owner()
+            .filter(owner)
+            .find(|selection| selection.ability_id == ability.ability_id)
+            .filter(|selection| {
+                frozen_specialization_is_selected(ctx, owner, selection.specialization_id.as_str())
+            });
+        match authorize_v2_active_selection(
+            selected_spell.is_some(),
+            selected_technique.is_some(),
+            selected_technique
+                .as_ref()
+                .is_some_and(|selection| selection.combat_discipline_id == active_discipline_id),
         ) {
-            return Ok(ability.clone());
+            Ok(()) => return Ok(ability.clone()),
+            Err(FrozenActiveAuthorizationDenial::WrongWeapon) => {
+                return Err(FrozenActiveAuthorizationDenial::WrongWeapon)
+            }
+            Err(_) => {}
         }
     }
 
-    let metadata = requested_abilities.iter().find_map(|ability| {
-        ability_definition(ability.ability_id.as_str()).map(|definition| {
-            (
-                ability,
-                definition
-                    .combat_discipline_id
-                    .as_deref()
-                    .map(normalize_identifier)
-                    .unwrap_or_default(),
-                definition
-                    .spell_school_id
-                    .as_deref()
-                    .map(normalize_identifier),
-                normalize_identifier(definition.selection_kind.as_str()),
-            )
-        })
-    });
-    let Some((ability, owning_discipline_id, spell_school_id, selection_kind)) = metadata else {
-        return Err(FrozenActiveAuthorizationDenial::InvalidCatalogMetadata);
-    };
-    let staff_school_is_selected = owning_discipline_id != COMBAT_PROFILE_STAFF
-        || spell_school_id
-            .as_deref()
-            .is_some_and(|school_id| frozen_staff_school_is_selected(ctx, owner, school_id));
-    Err(classify_unresolved_frozen_active_request(
-        selection_kind == "ACTIVE",
-        !owning_discipline_id.is_empty(),
-        frozen_build_contains_discipline(ctx, owner, owning_discipline_id.as_str()),
-        staff_school_is_selected,
-        assignments
-            .iter()
-            .any(|assignment| assignment.ability_id == ability.ability_id),
-        owning_discipline_id == active_discipline_id,
-    ))
+    Err(FrozenActiveAuthorizationDenial::UnselectedFeature)
 }
 
 fn log_frozen_active_denial(
@@ -2505,20 +2475,31 @@ pub(crate) fn active_action_bar_assignment_debug_summary(
     ctx: &ReducerContext,
     owner: Identity,
 ) -> String {
-    let assignments: Vec<String> = ctx
+    let techniques: Vec<String> = ctx
         .db
-        .match_discipline_action_bar_assignment()
+        .match_technique_selection_v2()
         .owner()
         .filter(owner)
-        .map(|assignment| {
+        .map(|selection| {
             format!(
                 "{}:{}:{}",
-                assignment.combat_discipline_id, assignment.action_slot, assignment.ability_id
+                selection.combat_discipline_id, selection.bar_order, selection.ability_id
             )
         })
         .collect();
+    let spells: Vec<String> = ctx
+        .db
+        .match_spell_selection_v2()
+        .owner()
+        .filter(owner)
+        .map(|selection| format!("{}:{}", selection.bar_order, selection.ability_id))
+        .collect();
 
-    format!("match_discipline_action_bar=[{}]", assignments.join(","))
+    format!(
+        "match_technique_bar=[{}] match_spell_bar=[{}]",
+        techniques.join(","),
+        spells.join(",")
+    )
 }
 
 pub(crate) fn primary_resource_gain_on_action_accept(ability_id: &str) -> f32 {
@@ -6133,8 +6114,8 @@ mod tests {
 
     use super::{
         ability_gameplay_kind, action_id_is_movement_ability, action_presentation_key,
-        authored_status_presentation_ids, canonical_action_bar_slot_id,
-        classify_unresolved_frozen_active_request, combat_rule_value, combat_vfx_cue_key,
+        authored_status_presentation_ids, authorize_v2_active_selection,
+        canonical_action_bar_slot_id, combat_rule_value, combat_vfx_cue_key,
         derived_spell_action_presentation_rows, encode_tags, melee_channel_for_ability_id,
         melee_evasive_leap_for_ability_id, melee_impact_effects_for_ability_id,
         normalize_identifier, normalize_optional_target_audience,
@@ -6162,26 +6143,16 @@ mod tests {
         include_str!("../../Assets/Arena/Resources/SpellCastAnimationMap.asset");
 
     #[test]
-    fn frozen_active_denials_distinguish_dormant_wrong_bar_wrong_school_and_unassigned() {
+    fn frozen_active_authorization_keeps_spells_global_and_techniques_weapon_gated() {
+        assert_eq!(authorize_v2_active_selection(true, false, false), Ok(()));
+        assert_eq!(authorize_v2_active_selection(false, true, true), Ok(()));
         assert_eq!(
-            classify_unresolved_frozen_active_request(false, true, true, true, false, true),
-            FrozenActiveAuthorizationDenial::InvalidCatalogMetadata
+            authorize_v2_active_selection(false, true, false),
+            Err(FrozenActiveAuthorizationDenial::WrongWeapon)
         );
         assert_eq!(
-            classify_unresolved_frozen_active_request(true, true, false, true, false, false),
-            FrozenActiveAuthorizationDenial::DormantDiscipline
-        );
-        assert_eq!(
-            classify_unresolved_frozen_active_request(true, true, true, false, false, true),
-            FrozenActiveAuthorizationDenial::WrongStaffSchool
-        );
-        assert_eq!(
-            classify_unresolved_frozen_active_request(true, true, true, true, true, false),
-            FrozenActiveAuthorizationDenial::WrongActionBar
-        );
-        assert_eq!(
-            classify_unresolved_frozen_active_request(true, true, true, true, false, true),
-            FrozenActiveAuthorizationDenial::Unassigned
+            authorize_v2_active_selection(false, false, false),
+            Err(FrozenActiveAuthorizationDenial::UnselectedFeature)
         );
         assert_eq!(
             FrozenActiveAuthorizationDenial::NoFrozenBuild.as_str(),

@@ -2973,7 +2973,7 @@ fn upsert_queued_melee_followup(
     }
 }
 
-fn clear_queued_melee_followup(ctx: &ReducerContext, caster: Identity) {
+pub(crate) fn clear_queued_melee_followup(ctx: &ReducerContext, caster: Identity) {
     if ctx
         .db
         .queued_melee_followup()

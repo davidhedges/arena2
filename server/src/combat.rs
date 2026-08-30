@@ -6590,6 +6590,7 @@ fn resolve_damage_amount(
             delivery,
             DamageType::from_wire(hit.damage_type.as_str()),
         ) * source_stats.damage_multiplier
+            * crate::progression::mastery_outgoing_damage_multiplier(ctx, hit.source)
             * equipment_damage_multiplier_for_hit(hit, source_equipment)
             * resistance_multiplier
             * temporary_modifiers.damage_taken_multiplier_from_source_for(&hit.target, &hit.source)

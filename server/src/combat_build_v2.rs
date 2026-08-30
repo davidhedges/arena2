@@ -1,8 +1,8 @@
 //! Pure Combat Build v2 catalog, normalization, and validation.
 //!
-//! Phase 1 intentionally leaves every v1 persistence and runtime consumer on
-//! `combat_build.rs`. Hub, ticket, and match phases adopt this module only at
-//! their coordinated boundaries.
+//! The Hub validates and freezes this schema, while disposable gameplay
+//! databases materialize its selected-only projection for runtime authority.
+//! Legacy v1 types remain isolated in `combat_build.rs` until schema cleanup.
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 pub(crate) const COMBAT_BUILD_V2_SCHEMA_VERSION: u32 = 2;
 pub(crate) const STAFF_DISCIPLINE_ID: &str = "STAFF";
 pub(crate) const MASTERY_TRAIT_ID: &str = "MASTERY";
+pub(crate) const MASTERY_DAMAGE_BONUS: f32 = 0.10;
 pub(crate) const MAX_COMBAT_BUILD_V2_SNAPSHOT_BYTES: usize = 64 * 1024;
 
 #[cfg(not(feature = "pvp_match"))]
@@ -1215,7 +1216,7 @@ fn validate_traits(traits: &[TraitSource]) -> Result<(), String> {
         || trait_row.sort_order == 0
         || trait_row.effect_kind != "SINGLE_PARENT_OUTGOING_DAMAGE_MULTIPLIER"
         || !trait_row.modifier_scalar.is_finite()
-        || (trait_row.modifier_scalar - 0.10).abs() > f32::EPSILON
+        || (trait_row.modifier_scalar - MASTERY_DAMAGE_BONUS).abs() > f32::EPSILON
         || trait_row.condition != "EXACTLY_ONE_DISTINCT_PARENT_DISCIPLINE"
         || trait_row.damage_scope != "NORMAL_PLAYER_AUTHORED_OUTGOING_DAMAGE"
         || trait_row.excludes != ["SYSTEM", "SELF_INFLICTED_FINAL", "COPIED_FINAL"]
