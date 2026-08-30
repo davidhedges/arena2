@@ -758,6 +758,13 @@ Exit gate: the live rehearsal proves atomic save/reload, stale-write rejection,
 rollback, ownership filtering, Staff-Technique rejection, and dormant restore;
 the canonical v1 Hub and its saved state are unchanged.
 
+Completion record (2026-08-29): PASS. A separate rehearsal module implements
+the revisioned aggregate, caller-filtered view, catalog projections, default,
+validation, atomic replacement, and dormant persistence. Its anonymous live
+probe passed all six save/reload/rejection checks, proved canonical v1 row
+counts unchanged, and retired the disposable database. See
+`docs/combat-build-forms-schools-traits-phase-2-evidence-2026-08-29.md`.
+
 ### Phase 3 — v2 snapshot and materialization in an isolated rehearsal path
 
 Deliverables:

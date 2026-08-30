@@ -255,6 +255,7 @@ struct CatalogSpecialization {
     specialization_id: String,
     combat_discipline_id: String,
     specialization_kind: CombatSpecializationKind,
+    display_name: String,
     sort_order: u32,
 }
 
@@ -264,13 +265,47 @@ struct CatalogFeature {
     specialization_id: String,
     loadout_kind: CombatFeatureLoadoutKind,
     sort_order: u32,
+    display_name: String,
+    resource_kind: String,
+    resource_cost: f32,
 }
 
 #[derive(Clone, Debug)]
 struct CatalogTrait {
     ability_id: String,
+    display_name: String,
     sort_order: u32,
     modifier_scalar: f32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct CombatSpecializationCatalogEntry {
+    pub specialization_id: String,
+    pub combat_discipline_id: String,
+    pub specialization_kind: CombatSpecializationKind,
+    pub display_name: String,
+    pub sort_order: u32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CombatFeatureCatalogEntry {
+    pub ability_id: String,
+    pub specialization_id: String,
+    pub combat_discipline_id: String,
+    pub loadout_kind: CombatFeatureLoadoutKind,
+    pub display_name: String,
+    pub resource_kind: String,
+    pub resource_cost: f32,
+    pub sort_order: u32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CombatTraitCatalogEntry {
+    pub ability_id: String,
+    pub display_name: String,
+    pub loadout_kind: CombatFeatureLoadoutKind,
+    pub sort_order: u32,
+    pub modifier_scalar: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -370,6 +405,14 @@ struct ProgressionAbilitySource {
     ability_id: String,
     actor_scope: String,
     selection_kind: String,
+    #[serde(default)]
+    display_name: String,
+    #[serde(default)]
+    resource_kind: String,
+    #[serde(default)]
+    resource_cost: f32,
+    #[serde(default)]
+    sort_order: u32,
     gameplay: ProgressionGameplaySource,
 }
 
@@ -427,6 +470,7 @@ impl CombatBuildV2Catalog {
                     specialization_id: row.specialization_id.clone(),
                     combat_discipline_id: row.combat_discipline_id.clone(),
                     specialization_kind: row.specialization_kind,
+                    display_name: row.display_name.clone(),
                     sort_order: row.sort_order,
                 },
             );
@@ -438,14 +482,22 @@ impl CombatBuildV2Catalog {
                 (CombatFeatureLoadoutKind::Spell, &row.spell_ability_ids),
                 (CombatFeatureLoadoutKind::Perk, &row.perk_ability_ids),
             ] {
-                for (index, ability_id) in ability_ids.iter().enumerate() {
+                for ability_id in ability_ids {
+                    let ability = progression
+                        .abilities
+                        .iter()
+                        .find(|row| row.ability_id == *ability_id)
+                        .expect("catalog validation checked feature mechanics");
                     features.insert(
                         ability_id.clone(),
                         CatalogFeature {
                             ability_id: ability_id.clone(),
                             specialization_id: row.specialization_id.clone(),
                             loadout_kind,
-                            sort_order: index as u32,
+                            sort_order: ability.sort_order,
+                            display_name: ability.display_name.clone(),
+                            resource_kind: ability.resource_kind.clone(),
+                            resource_cost: ability.resource_cost,
                         },
                     );
                 }
@@ -459,6 +511,7 @@ impl CombatBuildV2Catalog {
                     row.ability_id.clone(),
                     CatalogTrait {
                         ability_id: row.ability_id.clone(),
+                        display_name: row.display_name.clone(),
                         sort_order: row.sort_order,
                         modifier_scalar: row.modifier_scalar,
                     },
@@ -518,6 +571,84 @@ impl CombatBuildV2Catalog {
 
     pub(crate) fn rules(&self) -> &CombatBuildV2Rules {
         &self.rules
+    }
+
+    pub(crate) fn specialization_definitions(&self) -> Vec<CombatSpecializationCatalogEntry> {
+        let mut rows: Vec<_> = self
+            .specializations
+            .values()
+            .map(|row| CombatSpecializationCatalogEntry {
+                specialization_id: row.specialization_id.clone(),
+                combat_discipline_id: row.combat_discipline_id.clone(),
+                specialization_kind: row.specialization_kind,
+                display_name: row.display_name.clone(),
+                sort_order: row.sort_order,
+            })
+            .collect();
+        rows.sort_by(|left, right| {
+            (
+                left.combat_discipline_id.as_str(),
+                left.sort_order,
+                left.specialization_id.as_str(),
+            )
+                .cmp(&(
+                    right.combat_discipline_id.as_str(),
+                    right.sort_order,
+                    right.specialization_id.as_str(),
+                ))
+        });
+        rows
+    }
+
+    pub(crate) fn feature_definitions(&self) -> Vec<CombatFeatureCatalogEntry> {
+        let mut rows: Vec<_> = self
+            .features
+            .values()
+            .map(|row| CombatFeatureCatalogEntry {
+                ability_id: row.ability_id.clone(),
+                specialization_id: row.specialization_id.clone(),
+                combat_discipline_id: self.specializations[&row.specialization_id]
+                    .combat_discipline_id
+                    .clone(),
+                loadout_kind: row.loadout_kind,
+                display_name: row.display_name.clone(),
+                resource_kind: row.resource_kind.clone(),
+                resource_cost: row.resource_cost,
+                sort_order: row.sort_order,
+            })
+            .collect();
+        rows.sort_by(|left, right| {
+            (
+                left.specialization_id.as_str(),
+                left.sort_order,
+                left.ability_id.as_str(),
+            )
+                .cmp(&(
+                    right.specialization_id.as_str(),
+                    right.sort_order,
+                    right.ability_id.as_str(),
+                ))
+        });
+        rows
+    }
+
+    pub(crate) fn trait_definitions(&self) -> Vec<CombatTraitCatalogEntry> {
+        let mut rows: Vec<_> = self
+            .traits
+            .values()
+            .map(|row| CombatTraitCatalogEntry {
+                ability_id: row.ability_id.clone(),
+                display_name: row.display_name.clone(),
+                loadout_kind: CombatFeatureLoadoutKind::Trait,
+                sort_order: row.sort_order,
+                modifier_scalar: row.modifier_scalar,
+            })
+            .collect();
+        rows.sort_by(|left, right| {
+            (left.sort_order, left.ability_id.as_str())
+                .cmp(&(right.sort_order, right.ability_id.as_str()))
+        });
+        rows
     }
 
     pub(crate) fn default_draft(&self) -> CombatBuildV2Draft {
@@ -2020,6 +2151,7 @@ mod tests {
                     expanded.traits.insert(
                         ability_id.clone(),
                         CatalogTrait {
+                            display_name: ability_id.clone(),
                             ability_id,
                             sort_order: 10 + index,
                             modifier_scalar: 0.0,
