@@ -678,10 +678,10 @@ namespace Arena.UI
 
         private void RefreshCombatBuild(HubNetworkManager? hub)
         {
-            HubCombatBuildDraft? build = hub?.CombatBuild;
-            HubCombatBuildSelectedDiscipline? slot0 = FindSelectedDiscipline(build, 0);
-            HubCombatBuildSelectedDiscipline? slot1 = FindSelectedDiscipline(build, 1);
-            HubCombatBuildSelectedDiscipline? slot2 = FindSelectedDiscipline(build, 2);
+            CombatBuildV2DraftModel? build = hub?.CombatBuild;
+            CombatBuildV2SelectedSpecializationModel? slot0 = FindSelectedSpecialization(build, 0);
+            CombatBuildV2SelectedSpecializationModel? slot1 = FindSelectedSpecialization(build, 1);
+            CombatBuildV2SelectedSpecializationModel? slot2 = FindSelectedSpecialization(build, 2);
 
             BindDisciplineRow(
                 hub,
@@ -690,7 +690,7 @@ namespace Arena.UI
                 _loadoutSlot0Icon,
                 _loadoutSlot0Art,
                 _loadoutSlot0Glyph,
-                slot0?.CombatDisciplineId,
+                slot0?.SpecializationId,
                 visibleWhenEmpty: true);
             BindDisciplineRow(
                 hub,
@@ -699,7 +699,7 @@ namespace Arena.UI
                 _loadoutSlot1Icon,
                 _loadoutSlot1Art,
                 _loadoutSlot1Glyph,
-                slot1?.CombatDisciplineId,
+                slot1?.SpecializationId,
                 visibleWhenEmpty: false);
             BindDisciplineRow(
                 hub,
@@ -708,18 +708,18 @@ namespace Arena.UI
                 _loadoutSlot2Icon,
                 _loadoutSlot2Art,
                 _loadoutSlot2Glyph,
-                slot2?.CombatDisciplineId,
+                slot2?.SpecializationId,
                 visibleWhenEmpty: false);
         }
 
-        private static HubCombatBuildSelectedDiscipline? FindSelectedDiscipline(
-            HubCombatBuildDraft? build,
+        private static CombatBuildV2SelectedSpecializationModel? FindSelectedSpecialization(
+            CombatBuildV2DraftModel? build,
             byte slotIndex)
         {
             if (build == null)
                 return null;
 
-            foreach (HubCombatBuildSelectedDiscipline selected in build.SelectedDisciplines)
+            foreach (CombatBuildV2SelectedSpecializationModel selected in build.SelectedSpecializations)
             {
                 if (selected.SlotIndex == slotIndex)
                     return selected;
@@ -735,11 +735,14 @@ namespace Arena.UI
             VisualElement? icon,
             VisualElement? art,
             Label? glyph,
-            string? disciplineId,
+            string? specializationId,
             bool visibleWhenEmpty)
         {
-            string normalizedId = WireIdentifier.Normalize(disciplineId);
-            bool hasDiscipline = !string.IsNullOrWhiteSpace(normalizedId);
+            string normalizedSpecializationId = WireIdentifier.Normalize(specializationId);
+            CombatSpecializationDefinitionV2Model? specialization =
+                hub?.CombatBuildCatalog?.FindSpecialization(normalizedSpecializationId);
+            string normalizedId = WireIdentifier.Normalize(specialization?.CombatDisciplineId);
+            bool hasDiscipline = !string.IsNullOrWhiteSpace(normalizedSpecializationId);
             SetRowVisible(row, hasDiscipline || visibleWhenEmpty);
             if (!hasDiscipline)
             {
@@ -753,11 +756,9 @@ namespace Arena.UI
                 return;
             }
 
-            HubDisciplineSnapshot? discipline = hub?.Disciplines.FirstOrDefault(candidate =>
-                string.Equals(WireIdentifier.Normalize(candidate.Id), normalizedId, System.StringComparison.Ordinal));
-            string displayName = !string.IsNullOrWhiteSpace(discipline?.Name)
-                ? discipline.Name.Trim().ToUpperInvariant()
-                : normalizedId.Replace('_', ' ');
+            string displayName = !string.IsNullOrWhiteSpace(specialization?.DisplayName)
+                ? specialization.DisplayName.Trim().ToUpperInvariant()
+                : normalizedSpecializationId.Replace('_', ' ');
             if (name != null)
                 name.text = displayName;
             Sprite? sprite = DisciplinesScreen.ResolveDisciplineIcon(normalizedId);

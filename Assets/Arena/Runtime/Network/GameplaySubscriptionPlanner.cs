@@ -100,12 +100,13 @@ namespace Arena.Network
                 new QueryBuilder().From.ActiveDiceRoll().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.FixedActionChargeState().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.ActiveCombatBuildDiscipline().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.MatchCombatBuild().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.MatchCombatBuildDiscipline().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.MatchDisciplineConfiguration().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.MatchStaffSchoolSelection().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.MatchDisciplineActionBarAssignment().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
-                new QueryBuilder().From.MatchDisciplinePassiveSelection().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.MatchCombatBuildV2().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.MatchSelectedSpecializationV2().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.MatchDisciplineConfigurationV2().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.MatchTechniqueSelectionV2().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.MatchSpellSelectionV2().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.MatchPerkSelectionV2().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
+                new QueryBuilder().From.MatchTraitSelectionV2().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 new QueryBuilder().From.ActiveCombatMode().Where(c => c.Owner.Eq(localIdentity)).ToSql(),
                 // Local swing scheduling (netcode design review S6): the
                 // client schedules its own auto-attack presentation at
@@ -183,22 +184,25 @@ namespace Arena.Network
                 new QueryBuilder().From.ActiveCombatBuildDiscipline()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
-                new QueryBuilder().From.MatchCombatBuild()
+                new QueryBuilder().From.MatchCombatBuildV2()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
-                new QueryBuilder().From.MatchCombatBuildDiscipline()
+                new QueryBuilder().From.MatchSelectedSpecializationV2()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
-                new QueryBuilder().From.MatchDisciplineConfiguration()
+                new QueryBuilder().From.MatchDisciplineConfigurationV2()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
-                new QueryBuilder().From.MatchStaffSchoolSelection()
+                new QueryBuilder().From.MatchTechniqueSelectionV2()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
-                new QueryBuilder().From.MatchDisciplineActionBarAssignment()
+                new QueryBuilder().From.MatchSpellSelectionV2()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
-                new QueryBuilder().From.MatchDisciplinePassiveSelection()
+                new QueryBuilder().From.MatchPerkSelectionV2()
+                    .Where(c => c.Owner.Eq(localIdentity))
+                    .ToSql(),
+                new QueryBuilder().From.MatchTraitSelectionV2()
                     .Where(c => c.Owner.Eq(localIdentity))
                     .ToSql(),
                 new QueryBuilder().From.ActiveCombatMode()

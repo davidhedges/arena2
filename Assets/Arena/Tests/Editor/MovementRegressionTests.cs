@@ -1532,13 +1532,14 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void ActionBarKeymap_AllowsShiftedAndUnshiftedNumberRows()
+        public void ActionBarKeymap_ExposesOnlyTheReviewedEighteenDirectInputs()
         {
             Type keymapType = RequireType("Arena.Combat.ActionBarKeymap");
             Type bindingType = RequireType("Arena.Combat.ActionBarSlotBinding");
             Type slotIdsType = RequireType("Arena.Combat.ActionBarSlotIds");
 
             object?[] row0Args = { 0, 2, null! };
+            object?[] row1Args = { 1, 8, null! };
             object?[] row2Args = { 2, 2, null! };
             bool foundRow0 = (bool)RequireMethod(
                     keymapType,
@@ -1547,6 +1548,13 @@ namespace Arena.Tests.Editor
                     typeof(int),
                     bindingType.MakeByRefType())
                 .Invoke(null, row0Args)!;
+            bool foundRow1 = (bool)RequireMethod(
+                    keymapType,
+                    "TryGetBindingForCell",
+                    typeof(int),
+                    typeof(int),
+                    bindingType.MakeByRefType())
+                .Invoke(null, row1Args)!;
             bool foundRow2 = (bool)RequireMethod(
                     keymapType,
                     "TryGetBindingForCell",
@@ -1556,11 +1564,12 @@ namespace Arena.Tests.Editor
                 .Invoke(null, row2Args)!;
 
             Assert.That(foundRow0, Is.True);
-            Assert.That(foundRow2, Is.True);
+            Assert.That(foundRow1, Is.True);
+            Assert.That(foundRow2, Is.False);
             Assert.That((string)bindingType.GetField("SlotId")!.GetValue(row0Args[2])!, Is.EqualTo(slotIdsType.GetField("Slot02")!.GetValue(null)));
             Assert.That((bool)bindingType.GetField("RequiresShift")!.GetValue(row0Args[2])!, Is.False);
-            Assert.That((string)bindingType.GetField("SlotId")!.GetValue(row2Args[2])!, Is.EqualTo(slotIdsType.GetField("Slot22")!.GetValue(null)));
-            Assert.That((bool)bindingType.GetField("RequiresShift")!.GetValue(row2Args[2])!, Is.True);
+            Assert.That((string)bindingType.GetField("SlotId")!.GetValue(row1Args[2])!, Is.EqualTo(slotIdsType.GetField("Slot18")!.GetValue(null)));
+            Assert.That((bool)bindingType.GetField("RequiresShift")!.GetValue(row1Args[2])!, Is.False);
         }
 
         [Test]

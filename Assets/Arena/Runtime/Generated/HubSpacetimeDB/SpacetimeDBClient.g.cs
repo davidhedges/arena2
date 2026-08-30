@@ -28,6 +28,10 @@ namespace Arena.HubDb
     {
         public RemoteTables(DbConnection conn)
         {
+            AddTable(CombatBuildV2ContractDefinition = new(conn));
+            AddTable(CombatFeatureDefinitionV2 = new(conn));
+            AddTable(CombatSpecializationDefinitionV2 = new(conn));
+            AddTable(CombatTraitDefinitionV2 = new(conn));
             AddTable(HubArmorSetDefinition = new(conn));
             AddTable(HubCombatBuildAbilityDefinition = new(conn));
             AddTable(HubCombatBuildContractDefinition = new(conn));
@@ -35,7 +39,7 @@ namespace Arena.HubDb
             AddTable(HubSpellSchoolDefinition = new(conn));
             AddTable(HubWeaponColorDefinition = new(conn));
             AddTable(HubWeaponDefinition = new(conn));
-            AddTable(MyCombatBuild = new(conn));
+            AddTable(MyCombatBuildV2 = new(conn));
             AddTable(MyHubArmorSelection = new(conn));
             AddTable(MyHubPlayer = new(conn));
             AddTable(MyMatchStatus = new(conn));
@@ -536,6 +540,10 @@ namespace Arena.HubDb
 
         internal static string[] AllTablesSqlQueries() => new string[]
         {
+            new QueryBuilder().From.CombatBuildV2ContractDefinition().ToSql(),
+            new QueryBuilder().From.CombatFeatureDefinitionV2().ToSql(),
+            new QueryBuilder().From.CombatSpecializationDefinitionV2().ToSql(),
+            new QueryBuilder().From.CombatTraitDefinitionV2().ToSql(),
             new QueryBuilder().From.HubArmorSetDefinition().ToSql(),
             new QueryBuilder().From.HubCombatBuildAbilityDefinition().ToSql(),
             new QueryBuilder().From.HubCombatBuildContractDefinition().ToSql(),
@@ -543,7 +551,7 @@ namespace Arena.HubDb
             new QueryBuilder().From.HubSpellSchoolDefinition().ToSql(),
             new QueryBuilder().From.HubWeaponColorDefinition().ToSql(),
             new QueryBuilder().From.HubWeaponDefinition().ToSql(),
-            new QueryBuilder().From.MyCombatBuild().ToSql(),
+            new QueryBuilder().From.MyCombatBuildV2().ToSql(),
             new QueryBuilder().From.MyHubArmorSelection().ToSql(),
             new QueryBuilder().From.MyHubPlayer().ToSql(),
             new QueryBuilder().From.MyMatchStatus().ToSql(),
@@ -554,6 +562,10 @@ namespace Arena.HubDb
 
     public sealed class From
     {
+        public global::SpacetimeDB.Table<CombatBuildV2ContractDefinition, CombatBuildV2ContractDefinitionCols, CombatBuildV2ContractDefinitionIxCols> CombatBuildV2ContractDefinition() => new("combat_build_v_2_contract_definition", new CombatBuildV2ContractDefinitionCols("combat_build_v_2_contract_definition"), new CombatBuildV2ContractDefinitionIxCols("combat_build_v_2_contract_definition"));
+        public global::SpacetimeDB.Table<CombatFeatureDefinitionV2, CombatFeatureDefinitionV2Cols, CombatFeatureDefinitionV2IxCols> CombatFeatureDefinitionV2() => new("combat_feature_definition_v_2", new CombatFeatureDefinitionV2Cols("combat_feature_definition_v_2"), new CombatFeatureDefinitionV2IxCols("combat_feature_definition_v_2"));
+        public global::SpacetimeDB.Table<CombatSpecializationDefinitionV2, CombatSpecializationDefinitionV2Cols, CombatSpecializationDefinitionV2IxCols> CombatSpecializationDefinitionV2() => new("combat_specialization_definition_v_2", new CombatSpecializationDefinitionV2Cols("combat_specialization_definition_v_2"), new CombatSpecializationDefinitionV2IxCols("combat_specialization_definition_v_2"));
+        public global::SpacetimeDB.Table<CombatTraitDefinitionV2, CombatTraitDefinitionV2Cols, CombatTraitDefinitionV2IxCols> CombatTraitDefinitionV2() => new("combat_trait_definition_v_2", new CombatTraitDefinitionV2Cols("combat_trait_definition_v_2"), new CombatTraitDefinitionV2IxCols("combat_trait_definition_v_2"));
         public global::SpacetimeDB.Table<HubArmorSetDefinition, HubArmorSetDefinitionCols, HubArmorSetDefinitionIxCols> HubArmorSetDefinition() => new("hub_armor_set_definition", new HubArmorSetDefinitionCols("hub_armor_set_definition"), new HubArmorSetDefinitionIxCols("hub_armor_set_definition"));
         public global::SpacetimeDB.Table<HubCombatBuildAbilityDefinition, HubCombatBuildAbilityDefinitionCols, HubCombatBuildAbilityDefinitionIxCols> HubCombatBuildAbilityDefinition() => new("hub_combat_build_ability_definition", new HubCombatBuildAbilityDefinitionCols("hub_combat_build_ability_definition"), new HubCombatBuildAbilityDefinitionIxCols("hub_combat_build_ability_definition"));
         public global::SpacetimeDB.Table<HubCombatBuildContractDefinition, HubCombatBuildContractDefinitionCols, HubCombatBuildContractDefinitionIxCols> HubCombatBuildContractDefinition() => new("hub_combat_build_contract_definition", new HubCombatBuildContractDefinitionCols("hub_combat_build_contract_definition"), new HubCombatBuildContractDefinitionIxCols("hub_combat_build_contract_definition"));
@@ -561,7 +573,7 @@ namespace Arena.HubDb
         public global::SpacetimeDB.Table<HubSpellSchoolDefinition, HubSpellSchoolDefinitionCols, HubSpellSchoolDefinitionIxCols> HubSpellSchoolDefinition() => new("hub_spell_school_definition", new HubSpellSchoolDefinitionCols("hub_spell_school_definition"), new HubSpellSchoolDefinitionIxCols("hub_spell_school_definition"));
         public global::SpacetimeDB.Table<HubWeaponColorDefinition, HubWeaponColorDefinitionCols, HubWeaponColorDefinitionIxCols> HubWeaponColorDefinition() => new("hub_weapon_color_definition", new HubWeaponColorDefinitionCols("hub_weapon_color_definition"), new HubWeaponColorDefinitionIxCols("hub_weapon_color_definition"));
         public global::SpacetimeDB.Table<HubWeaponDefinition, HubWeaponDefinitionCols, HubWeaponDefinitionIxCols> HubWeaponDefinition() => new("hub_weapon_definition", new HubWeaponDefinitionCols("hub_weapon_definition"), new HubWeaponDefinitionIxCols("hub_weapon_definition"));
-        public global::SpacetimeDB.Table<MyCombatBuild, MyCombatBuildCols, MyCombatBuildIxCols> MyCombatBuild() => new("my_combat_build", new MyCombatBuildCols("my_combat_build"), new MyCombatBuildIxCols("my_combat_build"));
+        public global::SpacetimeDB.Table<MyCombatBuildV2, MyCombatBuildV2Cols, MyCombatBuildV2IxCols> MyCombatBuildV2() => new("my_combat_build_v_2", new MyCombatBuildV2Cols("my_combat_build_v_2"), new MyCombatBuildV2IxCols("my_combat_build_v_2"));
         public global::SpacetimeDB.Table<MyHubArmorSelection, MyHubArmorSelectionCols, MyHubArmorSelectionIxCols> MyHubArmorSelection() => new("my_hub_armor_selection", new MyHubArmorSelectionCols("my_hub_armor_selection"), new MyHubArmorSelectionIxCols("my_hub_armor_selection"));
         public global::SpacetimeDB.Table<MyHubPlayer, MyHubPlayerCols, MyHubPlayerIxCols> MyHubPlayer() => new("my_hub_player", new MyHubPlayerCols("my_hub_player"), new MyHubPlayerIxCols("my_hub_player"));
         public global::SpacetimeDB.Table<MyMatchStatus, MyMatchStatusCols, MyMatchStatusIxCols> MyMatchStatus() => new("my_match_status", new MyMatchStatusCols("my_match_status"), new MyMatchStatusIxCols("my_match_status"));
@@ -648,9 +660,10 @@ namespace Arena.HubDb
             return reducer switch
             {
                 Reducer.CancelMatchTicket args => Reducers.InvokeCancelMatchTicket(eventContext, args),
+                Reducer.ExecuteCombatBuildV2CutoverReset args => Reducers.InvokeExecuteCombatBuildV2CutoverReset(eventContext, args),
                 Reducer.RequestOpenWorldInstance args => Reducers.InvokeRequestOpenWorldInstance(eventContext, args),
                 Reducer.RequestUnranked2V2BotMatch args => Reducers.InvokeRequestUnranked2V2BotMatch(eventContext, args),
-                Reducer.SaveCombatBuild args => Reducers.InvokeSaveCombatBuild(eventContext, args),
+                Reducer.SaveCombatBuildV2 args => Reducers.InvokeSaveCombatBuildV2(eventContext, args),
                 Reducer.SaveHubArmorSet args => Reducers.InvokeSaveHubArmorSet(eventContext, args),
                 Reducer.ServiceClaimTicket args => Reducers.InvokeServiceClaimTicket(eventContext, args),
                 Reducer.ServiceCloseTicket args => Reducers.InvokeServiceCloseTicket(eventContext, args),

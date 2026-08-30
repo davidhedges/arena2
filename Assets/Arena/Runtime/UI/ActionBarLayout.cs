@@ -6,9 +6,11 @@ namespace Arena.UI
 {
     internal static class ActionBarLayout
     {
-        public const int Rows = 3;
+        public const int RowsPerBar = 2;
+        public const int BarCount = 2;
+        public const int Rows = RowsPerBar * BarCount;
         public const int VisibleActionRows = Rows;
-        public const int DisplayRows = 3;
+        public const int DisplayRows = Rows;
         public const int FirstActionDisplayRow = 0;
         public const int Columns = 9;
         public const int CellCount = Rows * Columns;

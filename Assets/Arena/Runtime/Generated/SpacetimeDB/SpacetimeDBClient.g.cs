@@ -70,12 +70,19 @@ namespace SpacetimeDB.Types
             AddTable(LingeringShadeState = new(conn));
             AddTable(MatchCombatBuild = new(conn));
             AddTable(MatchCombatBuildDiscipline = new(conn));
+            AddTable(MatchCombatBuildV2 = new(conn));
             AddTable(MatchDisciplineActionBarAssignment = new(conn));
             AddTable(MatchDisciplineConfiguration = new(conn));
+            AddTable(MatchDisciplineConfigurationV2 = new(conn));
             AddTable(MatchDisciplinePassiveSelection = new(conn));
             AddTable(MatchParticipant = new(conn));
             AddTable(MatchParticipantStats = new(conn));
+            AddTable(MatchPerkSelectionV2 = new(conn));
+            AddTable(MatchSelectedSpecializationV2 = new(conn));
+            AddTable(MatchSpellSelectionV2 = new(conn));
             AddTable(MatchStaffSchoolSelection = new(conn));
+            AddTable(MatchTechniqueSelectionV2 = new(conn));
+            AddTable(MatchTraitSelectionV2 = new(conn));
             AddTable(MeleeAbilityCatalog = new(conn));
             AddTable(MeleeAttackModifierCatalog = new(conn));
             AddTable(MeleeDefinition = new(conn));
@@ -655,12 +662,19 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.LingeringShadeState().ToSql(),
             new QueryBuilder().From.MatchCombatBuild().ToSql(),
             new QueryBuilder().From.MatchCombatBuildDiscipline().ToSql(),
+            new QueryBuilder().From.MatchCombatBuildV2().ToSql(),
             new QueryBuilder().From.MatchDisciplineActionBarAssignment().ToSql(),
             new QueryBuilder().From.MatchDisciplineConfiguration().ToSql(),
+            new QueryBuilder().From.MatchDisciplineConfigurationV2().ToSql(),
             new QueryBuilder().From.MatchDisciplinePassiveSelection().ToSql(),
             new QueryBuilder().From.MatchParticipant().ToSql(),
             new QueryBuilder().From.MatchParticipantStats().ToSql(),
+            new QueryBuilder().From.MatchPerkSelectionV2().ToSql(),
+            new QueryBuilder().From.MatchSelectedSpecializationV2().ToSql(),
+            new QueryBuilder().From.MatchSpellSelectionV2().ToSql(),
             new QueryBuilder().From.MatchStaffSchoolSelection().ToSql(),
+            new QueryBuilder().From.MatchTechniqueSelectionV2().ToSql(),
+            new QueryBuilder().From.MatchTraitSelectionV2().ToSql(),
             new QueryBuilder().From.MeleeAbilityCatalog().ToSql(),
             new QueryBuilder().From.MeleeAttackModifierCatalog().ToSql(),
             new QueryBuilder().From.MeleeDefinition().ToSql(),
@@ -750,12 +764,19 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<LingeringShadeState, LingeringShadeStateCols, LingeringShadeStateIxCols> LingeringShadeState() => new("lingering_shade_state", new LingeringShadeStateCols("lingering_shade_state"), new LingeringShadeStateIxCols("lingering_shade_state"));
         public global::SpacetimeDB.Table<MatchCombatBuild, MatchCombatBuildCols, MatchCombatBuildIxCols> MatchCombatBuild() => new("match_combat_build", new MatchCombatBuildCols("match_combat_build"), new MatchCombatBuildIxCols("match_combat_build"));
         public global::SpacetimeDB.Table<MatchCombatBuildDiscipline, MatchCombatBuildDisciplineCols, MatchCombatBuildDisciplineIxCols> MatchCombatBuildDiscipline() => new("match_combat_build_discipline", new MatchCombatBuildDisciplineCols("match_combat_build_discipline"), new MatchCombatBuildDisciplineIxCols("match_combat_build_discipline"));
+        public global::SpacetimeDB.Table<MatchCombatBuildV2, MatchCombatBuildV2Cols, MatchCombatBuildV2IxCols> MatchCombatBuildV2() => new("match_combat_build_v_2", new MatchCombatBuildV2Cols("match_combat_build_v_2"), new MatchCombatBuildV2IxCols("match_combat_build_v_2"));
         public global::SpacetimeDB.Table<MatchDisciplineActionBarAssignment, MatchDisciplineActionBarAssignmentCols, MatchDisciplineActionBarAssignmentIxCols> MatchDisciplineActionBarAssignment() => new("match_discipline_action_bar_assignment", new MatchDisciplineActionBarAssignmentCols("match_discipline_action_bar_assignment"), new MatchDisciplineActionBarAssignmentIxCols("match_discipline_action_bar_assignment"));
         public global::SpacetimeDB.Table<MatchDisciplineConfiguration, MatchDisciplineConfigurationCols, MatchDisciplineConfigurationIxCols> MatchDisciplineConfiguration() => new("match_discipline_configuration", new MatchDisciplineConfigurationCols("match_discipline_configuration"), new MatchDisciplineConfigurationIxCols("match_discipline_configuration"));
+        public global::SpacetimeDB.Table<MatchDisciplineConfigurationV2, MatchDisciplineConfigurationV2Cols, MatchDisciplineConfigurationV2IxCols> MatchDisciplineConfigurationV2() => new("match_discipline_configuration_v_2", new MatchDisciplineConfigurationV2Cols("match_discipline_configuration_v_2"), new MatchDisciplineConfigurationV2IxCols("match_discipline_configuration_v_2"));
         public global::SpacetimeDB.Table<MatchDisciplinePassiveSelection, MatchDisciplinePassiveSelectionCols, MatchDisciplinePassiveSelectionIxCols> MatchDisciplinePassiveSelection() => new("match_discipline_passive_selection", new MatchDisciplinePassiveSelectionCols("match_discipline_passive_selection"), new MatchDisciplinePassiveSelectionIxCols("match_discipline_passive_selection"));
         public global::SpacetimeDB.Table<MatchParticipant, MatchParticipantCols, MatchParticipantIxCols> MatchParticipant() => new("match_participant", new MatchParticipantCols("match_participant"), new MatchParticipantIxCols("match_participant"));
         public global::SpacetimeDB.Table<MatchParticipantStats, MatchParticipantStatsCols, MatchParticipantStatsIxCols> MatchParticipantStats() => new("match_participant_stats", new MatchParticipantStatsCols("match_participant_stats"), new MatchParticipantStatsIxCols("match_participant_stats"));
+        public global::SpacetimeDB.Table<MatchPerkSelectionV2, MatchPerkSelectionV2Cols, MatchPerkSelectionV2IxCols> MatchPerkSelectionV2() => new("match_perk_selection_v_2", new MatchPerkSelectionV2Cols("match_perk_selection_v_2"), new MatchPerkSelectionV2IxCols("match_perk_selection_v_2"));
+        public global::SpacetimeDB.Table<MatchSelectedSpecializationV2, MatchSelectedSpecializationV2Cols, MatchSelectedSpecializationV2IxCols> MatchSelectedSpecializationV2() => new("match_selected_specialization_v_2", new MatchSelectedSpecializationV2Cols("match_selected_specialization_v_2"), new MatchSelectedSpecializationV2IxCols("match_selected_specialization_v_2"));
+        public global::SpacetimeDB.Table<MatchSpellSelectionV2, MatchSpellSelectionV2Cols, MatchSpellSelectionV2IxCols> MatchSpellSelectionV2() => new("match_spell_selection_v_2", new MatchSpellSelectionV2Cols("match_spell_selection_v_2"), new MatchSpellSelectionV2IxCols("match_spell_selection_v_2"));
         public global::SpacetimeDB.Table<MatchStaffSchoolSelection, MatchStaffSchoolSelectionCols, MatchStaffSchoolSelectionIxCols> MatchStaffSchoolSelection() => new("match_staff_school_selection", new MatchStaffSchoolSelectionCols("match_staff_school_selection"), new MatchStaffSchoolSelectionIxCols("match_staff_school_selection"));
+        public global::SpacetimeDB.Table<MatchTechniqueSelectionV2, MatchTechniqueSelectionV2Cols, MatchTechniqueSelectionV2IxCols> MatchTechniqueSelectionV2() => new("match_technique_selection_v_2", new MatchTechniqueSelectionV2Cols("match_technique_selection_v_2"), new MatchTechniqueSelectionV2IxCols("match_technique_selection_v_2"));
+        public global::SpacetimeDB.Table<MatchTraitSelectionV2, MatchTraitSelectionV2Cols, MatchTraitSelectionV2IxCols> MatchTraitSelectionV2() => new("match_trait_selection_v_2", new MatchTraitSelectionV2Cols("match_trait_selection_v_2"), new MatchTraitSelectionV2IxCols("match_trait_selection_v_2"));
         public global::SpacetimeDB.Table<MeleeAbilityCatalog, MeleeAbilityCatalogCols, MeleeAbilityCatalogIxCols> MeleeAbilityCatalog() => new("melee_ability_catalog", new MeleeAbilityCatalogCols("melee_ability_catalog"), new MeleeAbilityCatalogIxCols("melee_ability_catalog"));
         public global::SpacetimeDB.Table<MeleeAttackModifierCatalog, MeleeAttackModifierCatalogCols, MeleeAttackModifierCatalogIxCols> MeleeAttackModifierCatalog() => new("melee_attack_modifier_catalog", new MeleeAttackModifierCatalogCols("melee_attack_modifier_catalog"), new MeleeAttackModifierCatalogIxCols("melee_attack_modifier_catalog"));
         public global::SpacetimeDB.Table<MeleeDefinition, MeleeDefinitionCols, MeleeDefinitionIxCols> MeleeDefinition() => new("melee_definition", new MeleeDefinitionCols("melee_definition"), new MeleeDefinitionIxCols("melee_definition"));

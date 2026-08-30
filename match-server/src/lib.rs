@@ -29,6 +29,8 @@ mod bot_matches;
 mod combat;
 #[path = "../../server/src/combat_build.rs"]
 mod combat_build;
+#[path = "../../server/src/combat_build_v2.rs"]
+mod combat_build_v2;
 #[path = "../../server/src/confusion.rs"]
 mod confusion;
 #[path = "../../server/src/contract_version.rs"]

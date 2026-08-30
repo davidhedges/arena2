@@ -111,6 +111,46 @@ namespace Arena.Network
         internal IReadOnlyList<CombatBuildV2DisciplineConfigurationModel> DisciplineConfigurations { get; }
         internal IReadOnlyList<CombatBuildV2FeatureSelectionModel> SelectedFeatures { get; }
         internal IReadOnlyList<string> SelectedTraits { get; }
+
+        internal CombatBuildV2DisciplineConfigurationModel? FindDisciplineConfiguration(
+            string? combatDisciplineId)
+        {
+            if (string.IsNullOrWhiteSpace(combatDisciplineId))
+                return null;
+
+            return DisciplineConfigurations.FirstOrDefault(row => string.Equals(
+                row.CombatDisciplineId,
+                combatDisciplineId,
+                StringComparison.Ordinal));
+        }
+
+        internal CombatBuildV2DraftModel WithDisciplineConfiguration(
+            CombatBuildV2DisciplineConfigurationModel replacement)
+        {
+            bool replaced = DisciplineConfigurations.Any(row => string.Equals(
+                row.CombatDisciplineId,
+                replacement.CombatDisciplineId,
+                StringComparison.Ordinal));
+            IEnumerable<CombatBuildV2DisciplineConfigurationModel> configurations =
+                DisciplineConfigurations.Select(row => string.Equals(
+                    row.CombatDisciplineId,
+                    replacement.CombatDisciplineId,
+                    StringComparison.Ordinal)
+                    ? replacement
+                    : row);
+            if (!replaced)
+                configurations = configurations.Append(replacement);
+
+            return new CombatBuildV2DraftModel(
+                SchemaVersion,
+                Revision,
+                StartingDisciplineId,
+                SelectedSpecializations,
+                DormantSpecializations,
+                configurations,
+                SelectedFeatures,
+                SelectedTraits);
+        }
     }
 
     internal sealed class CombatBuildV2ContractModel
@@ -319,5 +359,11 @@ namespace Arena.Network
         internal static CombatBuildV2SaveResult Accepted() => new(true, string.Empty);
         internal static CombatBuildV2SaveResult Rejected(string serverError)
             => new(false, serverError ?? string.Empty);
+    }
+
+    internal static class HubCombatBuildSaveStatus
+    {
+        internal static string Rejected(string reducerFailure)
+            => $"SAVE REJECTED — {reducerFailure}";
     }
 }

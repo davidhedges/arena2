@@ -397,13 +397,12 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void ActionBarSlotIds_UseGridCoordinates()
+        public void ActionBarSlotIds_UseReviewedV2DirectInputIdentities()
         {
             string contracts = File.ReadAllText(GameplayContractsPath);
-            Assert.That(contracts, Does.Contain("slot_0_0"));
-            Assert.That(contracts, Does.Contain("slot_0_7"));
-            Assert.That(contracts, Does.Not.Contain("Bottom01"));
-            Assert.That(contracts, Does.Not.Contain("BottomRowOrdered"));
+            Assert.That(contracts, Does.Contain("COMBAT_ACTION_00"));
+            Assert.That(contracts, Does.Contain("COMBAT_ACTION_17"));
+            Assert.That(contracts, Does.Not.Contain("slot_0_0"));
         }
 
         [Test]
@@ -446,7 +445,8 @@ namespace Arena.Tests.Editor
             Assert.That(spellInput, Does.Not.Contain("ActionBarKeymap.SelectableBindings"));
 
             string contracts = File.ReadAllText(GameplayContractsPath);
-            Assert.That(contracts, Does.Contain("MatchDisciplineActionBarAssignment"));
+            Assert.That(contracts, Does.Contain("MatchSpellSelectionV2"));
+            Assert.That(contracts, Does.Contain("MatchTechniqueSelectionV2"));
         }
 
         [Test]
@@ -486,14 +486,16 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void ActiveActionBarResolver_ReadsExactFrozenDisciplineAssignments()
+        public void ActiveActionBarResolver_ReadsFrozenV2SpellAndTechniqueSelections()
         {
             string contracts = File.ReadAllText(GameplayContractsPath);
-            Assert.That(contracts, Does.Contain("conn.Db.MatchDisciplineActionBarAssignment.Owner.Filter(owner.Value)"));
+            Assert.That(contracts, Does.Contain("MatchSpellSelectionV2.Owner.Filter(owner)"));
+            Assert.That(contracts, Does.Contain("MatchTechniqueSelectionV2.Owner.Filter(owner)"));
+            Assert.That(contracts, Does.Contain("MatchSelectedSpecializationV2.Owner.Filter(owner)"));
             Assert.That(contracts, Does.Contain("ResolveActiveDisciplineId(conn, owner.Value)"));
-            Assert.That(contracts, Does.Contain("assignment.CombatDisciplineId"));
-            Assert.That(contracts, Does.Contain("assignment.ActionSlot"));
-            Assert.That(contracts, Does.Contain("assignment.AbilityId"));
+            Assert.That(contracts, Does.Contain("selection.CombatDisciplineId"));
+            Assert.That(contracts, Does.Contain("selection.AbilityId"));
+            Assert.That(contracts, Does.Contain("selection.IsSpell"));
         }
 
         [Test]
@@ -567,18 +569,21 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void ThirdRowSelectableSlots_KeepTheirSharedKeymap()
+        public void DirectInputs_UseTheReviewedEighteenUnshiftedKeys()
         {
             string contracts = File.ReadAllText(GameplayContractsPath);
-            Assert.That(contracts, Does.Contain("new(\"S+3\", KeyCode.Alpha3, true, ActionBarSlotIds.Slot22"));
-            Assert.That(contracts, Does.Contain("new(\"S+9\", KeyCode.Alpha9, true, ActionBarSlotIds.Slot28"));
             Assert.That(contracts, Does.Contain("new(\"0\", KeyCode.Alpha0, false, ActionBarSlotIds.Slot10"));
+            Assert.That(contracts, Does.Contain("new(\"E\", KeyCode.E, false, ActionBarSlotIds.Slot11"));
+            Assert.That(contracts, Does.Contain("new(\"C\", KeyCode.C, false, ActionBarSlotIds.Slot18"));
+            Assert.That(contracts, Does.Not.Contain("S+1"));
             Assert.That(contracts, Does.Contain("DodgeKeyLabel = \"Q\""));
             Assert.That(contracts, Does.Contain("DodgeKeyCode = KeyCode.Q"));
             Assert.That(contracts, Does.Not.Contain("new(\"Q\", KeyCode.Q, false"));
 
             string hud = File.ReadAllText(HudControllerPath);
-            Assert.That(hud, Does.Contain("ActionBarKeymap.KeyLabelForCell"));
+            Assert.That(hud, Does.Contain("ActionBarKeymap.TryGetBindingForSlotId"));
+            Assert.That(hud, Does.Contain("ResolveSpellBarActions"));
+            Assert.That(hud, Does.Contain("ResolveTechniqueBarActions"));
         }
 
         [Test]
@@ -694,15 +699,15 @@ namespace Arena.Tests.Editor
             Assert.That(screen, Does.Contain("CompleteArmorPieces"));
             Assert.That(hubNetwork, Does.Contain("From.HubArmorSetDefinition().ToSql()"));
             Assert.That(hubNetwork, Does.Contain("From.HubWeaponDefinition().ToSql()"));
-            Assert.That(hubNetwork, Does.Contain("From.MyCombatBuild().ToSql()"));
+            Assert.That(hubNetwork, Does.Contain("From.MyCombatBuildV2().ToSql()"));
             Assert.That(uxml, Does.Contain("name=\"TierLight\""));
             Assert.That(uxml, Does.Contain("name=\"PlayerShowcase\""));
             Assert.That(uxml, Does.Contain("name=\"WeaponsMode\""));
-            Assert.That(planner, Does.Contain("From.MatchDisciplineConfiguration()"));
+            Assert.That(planner, Does.Contain("From.MatchDisciplineConfigurationV2()"));
             Assert.That(planner, Does.Contain("From.ActiveArmorSet()"));
             Assert.That(hub, Does.Contain("ResolveLocalArmorAppearance"));
             Assert.That(hub, Does.Contain("ResolveShowcaseWeaponVisuals"));
-            Assert.That(hub, Does.Contain("HubCombatBuildDisciplineConfiguration"));
+            Assert.That(hub, Does.Contain("CombatBuildV2DisciplineConfigurationModel"));
             Assert.That(hubScreen, Does.Contain("_hubController?.RefreshShowcaseLoadout()"));
             Assert.That(hub, Does.Contain("ShowcaseCameraFacingYaw = 180f"));
             Assert.That(hubBuilder, Does.Contain("ShowcaseDefaultYaw = 180f"));

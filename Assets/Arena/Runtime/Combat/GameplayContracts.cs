@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Arena.Entity;
 using Arena.Input;
 using Arena.Presentation;
@@ -147,37 +148,28 @@ namespace Arena.Combat
 
     public static class ActionBarSlotIds
     {
-        public const int GridRows = 3;
+        public const int GridRows = 2;
         public const int GridColumns = 9;
         public const int DisciplineColumns = 3;
 
-        public const string Slot00 = "slot_0_0";
-        public const string Slot01 = "slot_0_1";
-        public const string Slot02 = "slot_0_2";
-        public const string Slot03 = "slot_0_3";
-        public const string Slot04 = "slot_0_4";
-        public const string Slot05 = "slot_0_5";
-        public const string Slot06 = "slot_0_6";
-        public const string Slot07 = "slot_0_7";
-        public const string Slot08 = "slot_0_8";
-        public const string Slot10 = "slot_1_0";
-        public const string Slot11 = "slot_1_1";
-        public const string Slot12 = "slot_1_2";
-        public const string Slot13 = "slot_1_3";
-        public const string Slot14 = "slot_1_4";
-        public const string Slot15 = "slot_1_5";
-        public const string Slot16 = "slot_1_6";
-        public const string Slot17 = "slot_1_7";
-        public const string Slot18 = "slot_1_8";
-        public const string Slot20 = "slot_2_0";
-        public const string Slot21 = "slot_2_1";
-        public const string Slot22 = "slot_2_2";
-        public const string Slot23 = "slot_2_3";
-        public const string Slot24 = "slot_2_4";
-        public const string Slot25 = "slot_2_5";
-        public const string Slot26 = "slot_2_6";
-        public const string Slot27 = "slot_2_7";
-        public const string Slot28 = "slot_2_8";
+        public const string Slot00 = "COMBAT_ACTION_00";
+        public const string Slot01 = "COMBAT_ACTION_01";
+        public const string Slot02 = "COMBAT_ACTION_02";
+        public const string Slot03 = "COMBAT_ACTION_03";
+        public const string Slot04 = "COMBAT_ACTION_04";
+        public const string Slot05 = "COMBAT_ACTION_05";
+        public const string Slot06 = "COMBAT_ACTION_06";
+        public const string Slot07 = "COMBAT_ACTION_07";
+        public const string Slot08 = "COMBAT_ACTION_08";
+        public const string Slot10 = "COMBAT_ACTION_09";
+        public const string Slot11 = "COMBAT_ACTION_10";
+        public const string Slot12 = "COMBAT_ACTION_11";
+        public const string Slot13 = "COMBAT_ACTION_12";
+        public const string Slot14 = "COMBAT_ACTION_13";
+        public const string Slot15 = "COMBAT_ACTION_14";
+        public const string Slot16 = "COMBAT_ACTION_15";
+        public const string Slot17 = "COMBAT_ACTION_16";
+        public const string Slot18 = "COMBAT_ACTION_17";
         public const string Discipline0 = "discipline_0";
         public const string Discipline1 = "discipline_1";
         public const string Discipline2 = "discipline_2";
@@ -202,15 +194,6 @@ namespace Arena.Combat
             Slot16,
             Slot17,
             Slot18,
-            Slot20,
-            Slot21,
-            Slot22,
-            Slot23,
-            Slot24,
-            Slot25,
-            Slot26,
-            Slot27,
-            Slot28,
         };
 
         private static readonly string[] OrderedDisciplines =
@@ -230,7 +213,7 @@ namespace Arena.Combat
             if (col < 0 || col >= GridColumns)
                 throw new ArgumentOutOfRangeException(nameof(col), col, "Action-bar grid column is out of range.");
 
-            return $"slot_{row}_{col}";
+            return OrderedGrid[row * GridColumns + col];
         }
     }
 
@@ -323,15 +306,6 @@ namespace Arena.Combat
             new("Z", KeyCode.Z, false, ActionBarSlotIds.Slot16, 1, 6),
             new("X", KeyCode.X, false, ActionBarSlotIds.Slot17, 1, 7),
             new("C", KeyCode.C, false, ActionBarSlotIds.Slot18, 1, 8),
-            new("S+1", KeyCode.Alpha1, true, ActionBarSlotIds.Slot20, 2, 0),
-            new("S+2", KeyCode.Alpha2, true, ActionBarSlotIds.Slot21, 2, 1),
-            new("S+3", KeyCode.Alpha3, true, ActionBarSlotIds.Slot22, 2, 2),
-            new("S+4", KeyCode.Alpha4, true, ActionBarSlotIds.Slot23, 2, 3),
-            new("S+5", KeyCode.Alpha5, true, ActionBarSlotIds.Slot24, 2, 4),
-            new("S+6", KeyCode.Alpha6, true, ActionBarSlotIds.Slot25, 2, 5),
-            new("S+7", KeyCode.Alpha7, true, ActionBarSlotIds.Slot26, 2, 6),
-            new("S+8", KeyCode.Alpha8, true, ActionBarSlotIds.Slot27, 2, 7),
-            new("S+9", KeyCode.Alpha9, true, ActionBarSlotIds.Slot28, 2, 8),
         };
 
         public static IReadOnlyList<ActionBarSlotBinding> SelectableBindings => Bindings;
@@ -353,6 +327,29 @@ namespace Arena.Combat
             {
                 if (candidate.Row != row || candidate.Col != col)
                     continue;
+
+                binding = candidate;
+                return true;
+            }
+
+            binding = default;
+            return false;
+        }
+
+        public static bool TryGetBindingForSlotId(
+            string? slotId,
+            out ActionBarSlotBinding binding)
+        {
+            string normalized = WireIdentifier.Normalize(slotId);
+            foreach (ActionBarSlotBinding candidate in Bindings)
+            {
+                if (!string.Equals(
+                        WireIdentifier.Normalize(candidate.SlotId),
+                        normalized,
+                        StringComparison.Ordinal))
+                {
+                    continue;
+                }
 
                 binding = candidate;
                 return true;
@@ -503,6 +500,38 @@ namespace Arena.Combat
 
     public static class ActiveActionBarResolver
     {
+        private sealed class BoundActiveSelection
+        {
+            internal BoundActiveSelection(
+                string slotId,
+                string abilityId,
+                string specializationId,
+                string combatDisciplineId,
+                bool isSpell,
+                byte barOrder,
+                int specializationSlot,
+                uint catalogSortOrder)
+            {
+                SlotId = slotId;
+                AbilityId = abilityId;
+                SpecializationId = specializationId;
+                CombatDisciplineId = combatDisciplineId;
+                IsSpell = isSpell;
+                BarOrder = barOrder;
+                SpecializationSlot = specializationSlot;
+                CatalogSortOrder = catalogSortOrder;
+            }
+
+            internal string SlotId { get; set; }
+            internal string AbilityId { get; }
+            internal string SpecializationId { get; }
+            internal string CombatDisciplineId { get; }
+            internal bool IsSpell { get; }
+            internal byte BarOrder { get; }
+            internal int SpecializationSlot { get; }
+            internal uint CatalogSortOrder { get; }
+        }
+
         public static ActiveActionBarAction ResolveCombatDisciplineSwitchAction(
             DbConnection? conn,
             SpacetimeDB.Identity? owner,
@@ -512,18 +541,19 @@ namespace Arena.Combat
                 return Empty(slotId);
 
             string normalizedSlotId = WireIdentifier.Normalize(slotId);
-            foreach (MatchCombatBuildDiscipline selected in
-                     conn.Db.MatchCombatBuildDiscipline.Owner.Filter(owner.Value))
+            var seenParents = new HashSet<string>(StringComparer.Ordinal);
+            int parentSlot = 0;
+            foreach (MatchSelectedSpecializationV2 selected in conn.Db
+                         .MatchSelectedSpecializationV2.Owner.Filter(owner.Value)
+                         .OrderBy(row => row.SlotIndex))
             {
-                string selectedSlotId = WireIdentifier.Normalize(
-                    $"discipline_{selected.SlotIndex}");
-                if (!string.Equals(selectedSlotId, normalizedSlotId, StringComparison.Ordinal))
+                string parent = WireIdentifier.Normalize(selected.CombatDisciplineId);
+                if (string.IsNullOrWhiteSpace(parent) || !seenParents.Add(parent))
                     continue;
-
-                return ResolveCombatDisciplineSwitch(
-                    conn,
-                    slotId,
-                    selected.CombatDisciplineId);
+                string selectedSlotId = WireIdentifier.Normalize(
+                    $"discipline_{parentSlot++}");
+                if (string.Equals(selectedSlotId, normalizedSlotId, StringComparison.Ordinal))
+                    return ResolveCombatDisciplineSwitch(conn, slotId, parent);
             }
 
             return Empty(slotId);
@@ -537,35 +567,41 @@ namespace Arena.Combat
             if (conn == null || !owner.HasValue || string.IsNullOrWhiteSpace(slotId))
                 return Empty(slotId);
 
-            string activeDisciplineId = ResolveActiveDisciplineId(conn, owner.Value);
-            if (string.IsNullOrWhiteSpace(activeDisciplineId))
+            string normalizedSlotId = WireIdentifier.Normalize(slotId);
+            BoundActiveSelection? selection = BuildBoundActiveSelections(conn, owner.Value)
+                .FirstOrDefault(row => string.Equals(
+                    WireIdentifier.Normalize(row.SlotId),
+                    normalizedSlotId,
+                    StringComparison.Ordinal));
+            if (selection == null)
                 return Empty(slotId);
 
-            string normalizedSlotId = WireIdentifier.Normalize(slotId);
-            foreach (MatchDisciplineActionBarAssignment assignment in
-                     conn.Db.MatchDisciplineActionBarAssignment.Owner.Filter(owner.Value))
-            {
-                if (!string.Equals(
-                        WireIdentifier.Normalize(assignment.CombatDisciplineId),
+            string activeDisciplineId = ResolveActiveDisciplineId(conn, owner.Value);
+            bool isApplicable = selection.IsSpell
+                || (!string.Equals(activeDisciplineId, "STAFF", StringComparison.Ordinal)
+                    && string.Equals(
+                        selection.CombatDisciplineId,
                         activeDisciplineId,
-                        StringComparison.Ordinal)
-                    || !string.Equals(
-                        WireIdentifier.Normalize(assignment.ActionSlot),
-                        normalizedSlotId,
-                        StringComparison.Ordinal))
-                {
-                    continue;
-                }
+                        StringComparison.Ordinal));
+            if (!isApplicable)
+                return Empty(slotId);
 
-                return ResolveExactAbilityAssignment(
-                    conn,
-                    owner.Value,
-                    slotId,
-                    assignment.AbilityId);
-            }
-
-            return Empty(slotId);
+            return ResolveExactAbilityAssignment(
+                conn,
+                owner.Value,
+                selection.SlotId,
+                selection.AbilityId);
         }
+
+        public static IReadOnlyList<ActiveActionBarAction> ResolveSpellBarActions(
+            DbConnection? conn,
+            SpacetimeDB.Identity? owner)
+            => ResolveVisibleBarActions(conn, owner, spells: true);
+
+        public static IReadOnlyList<ActiveActionBarAction> ResolveTechniqueBarActions(
+            DbConnection? conn,
+            SpacetimeDB.Identity? owner)
+            => ResolveVisibleBarActions(conn, owner, spells: false);
 
         public static ActiveActionBarAction ResolveActiveSelectableActionForAction(
             DbConnection? conn,
@@ -627,8 +663,8 @@ namespace Arena.Combat
             if (string.IsNullOrWhiteSpace(activeDisciplineId))
                 return string.Empty;
 
-            foreach (MatchCombatBuildDiscipline selected in
-                     conn.Db.MatchCombatBuildDiscipline.Owner.Filter(owner.Value))
+            foreach (MatchSelectedSpecializationV2 selected in conn.Db
+                         .MatchSelectedSpecializationV2.Owner.Filter(owner.Value))
             {
                 if (string.Equals(
                         WireIdentifier.Normalize(selected.CombatDisciplineId),
@@ -640,6 +676,104 @@ namespace Arena.Combat
             }
 
             return string.Empty;
+        }
+
+        private static IReadOnlyList<ActiveActionBarAction> ResolveVisibleBarActions(
+            DbConnection? conn,
+            SpacetimeDB.Identity? owner,
+            bool spells)
+        {
+            if (conn == null || !owner.HasValue)
+                return Array.Empty<ActiveActionBarAction>();
+
+            string activeDisciplineId = ResolveActiveDisciplineId(conn, owner.Value);
+            if (!spells && (string.IsNullOrWhiteSpace(activeDisciplineId)
+                            || string.Equals(activeDisciplineId, "STAFF", StringComparison.Ordinal)))
+            {
+                return Array.Empty<ActiveActionBarAction>();
+            }
+
+            return BuildBoundActiveSelections(conn, owner.Value)
+                .Where(row => row.IsSpell == spells)
+                .Where(row => spells || string.Equals(
+                    row.CombatDisciplineId,
+                    activeDisciplineId,
+                    StringComparison.Ordinal))
+                .Select(row => ResolveExactAbilityAssignment(
+                    conn,
+                    owner.Value,
+                    row.SlotId,
+                    row.AbilityId))
+                .Where(row => row.HasAssignedAction)
+                .ToArray();
+        }
+
+        private static IReadOnlyList<BoundActiveSelection> BuildBoundActiveSelections(
+            DbConnection conn,
+            SpacetimeDB.Identity owner)
+        {
+            Dictionary<string, int> specializationSlots = conn.Db
+                .MatchSelectedSpecializationV2.Owner.Filter(owner)
+                .GroupBy(row => WireIdentifier.Normalize(row.SpecializationId), StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Min(row => (int)row.SlotIndex),
+                    StringComparer.Ordinal);
+            var rows = new List<BoundActiveSelection>();
+
+            foreach (MatchSpellSelectionV2 selection in conn.Db
+                         .MatchSpellSelectionV2.Owner.Filter(owner))
+            {
+                AddBoundSelection(rows, conn, specializationSlots, selection.AbilityId,
+                    selection.SpecializationId, selection.CombatDisciplineId,
+                    isSpell: true, barOrder: selection.BarOrder);
+            }
+            foreach (MatchTechniqueSelectionV2 selection in conn.Db
+                         .MatchTechniqueSelectionV2.Owner.Filter(owner))
+            {
+                AddBoundSelection(rows, conn, specializationSlots, selection.AbilityId,
+                    selection.SpecializationId, selection.CombatDisciplineId,
+                    isSpell: false, barOrder: selection.BarOrder);
+            }
+
+            BoundActiveSelection[] ordered = rows
+                .OrderBy(row => row.BarOrder)
+                .ThenBy(row => row.SpecializationSlot)
+                .ThenBy(row => row.IsSpell ? 0 : 1)
+                .ThenBy(row => row.CatalogSortOrder)
+                .ThenBy(row => row.AbilityId, StringComparer.Ordinal)
+                .Take(ActionBarSlotIds.GridOrdered.Count)
+                .ToArray();
+            for (int index = 0; index < ordered.Length; index++)
+                ordered[index].SlotId = ActionBarSlotIds.GridOrdered[index];
+            return ordered;
+        }
+
+        private static void AddBoundSelection(
+            ICollection<BoundActiveSelection> rows,
+            DbConnection conn,
+            IReadOnlyDictionary<string, int> specializationSlots,
+            string abilityId,
+            string specializationId,
+            string combatDisciplineId,
+            bool isSpell,
+            byte barOrder)
+        {
+            string normalizedSpecializationId = WireIdentifier.Normalize(specializationId);
+            if (!specializationSlots.TryGetValue(normalizedSpecializationId, out int slot))
+                return;
+            string normalizedAbilityId = WireIdentifier.Normalize(abilityId);
+            uint sortOrder = conn.Db.AbilityCatalog.AbilityId.Find(normalizedAbilityId)?.SortOrder
+                ?? uint.MaxValue;
+            rows.Add(new BoundActiveSelection(
+                string.Empty,
+                normalizedAbilityId,
+                normalizedSpecializationId,
+                WireIdentifier.Normalize(combatDisciplineId),
+                isSpell,
+                barOrder,
+                slot,
+                sortOrder));
         }
 
         private static ActiveActionBarAction ResolveExactAbilityAssignment(

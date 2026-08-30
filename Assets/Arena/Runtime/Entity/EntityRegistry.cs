@@ -1347,8 +1347,8 @@ namespace Arena.Entity
                 return true;
             }
 
-            foreach (MatchDisciplineConfiguration configuration in
-                     conn.Db.MatchDisciplineConfiguration.Owner.Filter(owner.Value))
+            foreach (MatchDisciplineConfigurationV2 configuration in
+                     conn.Db.MatchDisciplineConfigurationV2.Owner.Filter(owner.Value))
             {
                 if (ItemInstanceIdsMatch(configuration.MainHandItemId, normalizedItemInstanceId)
                     || ItemInstanceIdsMatch(configuration.OffHandItemId, normalizedItemInstanceId))

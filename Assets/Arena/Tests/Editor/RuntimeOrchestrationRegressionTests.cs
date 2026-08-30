@@ -844,7 +844,7 @@ namespace Arena.Tests.Editor
             Assert.That(staticSqlText, Does.Not.Contain("\"fixed_action_binding_catalog\""));
             Assert.That(staticSqlText, Does.Not.Contain("\"class_catalog\""));
 
-            Assert.That(localSql, Has.Length.EqualTo(30));
+            Assert.That(localSql, Has.Length.EqualTo(31));
             Assert.That(localSql[0], Does.Contain("\"player_world\""));
             Assert.That(localSql[0], Does.Contain(localIdentityKey));
             Assert.That(localSqlText, Does.Contain("\"player_open_world_scene\""));
@@ -855,12 +855,13 @@ namespace Arena.Tests.Editor
             Assert.That(localSqlText, Does.Contain("\"predicted_action_result\""));
             Assert.That(localSqlText, Does.Contain("\"fixed_action_charge_state\""));
             Assert.That(localSqlText, Does.Contain("\"active_combat_build_discipline\""));
-            Assert.That(localSqlText, Does.Contain("\"match_combat_build\""));
-            Assert.That(localSqlText, Does.Contain("\"match_combat_build_discipline\""));
-            Assert.That(localSqlText, Does.Contain("\"match_discipline_configuration\""));
-            Assert.That(localSqlText, Does.Contain("\"match_staff_school_selection\""));
-            Assert.That(localSqlText, Does.Contain("\"match_discipline_action_bar_assignment\""));
-            Assert.That(localSqlText, Does.Contain("\"match_discipline_passive_selection\""));
+            Assert.That(localSqlText, Does.Contain("\"match_combat_build_v_2\""));
+            Assert.That(localSqlText, Does.Contain("\"match_selected_specialization_v_2\""));
+            Assert.That(localSqlText, Does.Contain("\"match_discipline_configuration_v_2\""));
+            Assert.That(localSqlText, Does.Contain("\"match_technique_selection_v_2\""));
+            Assert.That(localSqlText, Does.Contain("\"match_spell_selection_v_2\""));
+            Assert.That(localSqlText, Does.Contain("\"match_perk_selection_v_2\""));
+            Assert.That(localSqlText, Does.Contain("\"match_trait_selection_v_2\""));
             Assert.That(localSqlText, Does.Contain("\"active_combat_mode\""));
             Assert.That(localSqlText, Does.Contain("\"auto_attack_state\""));
             Assert.That(localSqlText, Does.Contain("\"party_invite\""));
@@ -908,7 +909,7 @@ namespace Arena.Tests.Editor
 
             string sql = string.Join("\n", initialSql.Concat(scopedSql));
             string initialSqlText = string.Join("\n", initialSql);
-            Assert.That(initialSql, Has.Length.EqualTo(46));
+            Assert.That(initialSql, Has.Length.EqualTo(47));
             foreach (string unavailableTable in new[]
                      {
                          "party",
@@ -940,12 +941,13 @@ namespace Arena.Tests.Editor
             Assert.That(sql, Does.Contain("\"active_world_obstacle\""));
             Assert.That(sql, Does.Contain("\"contract_version\""));
             Assert.That(sql, Does.Contain("\"arena_instance\""));
-            Assert.That(sql, Does.Contain("\"match_combat_build\""));
-            Assert.That(sql, Does.Contain("\"match_combat_build_discipline\""));
-            Assert.That(sql, Does.Contain("\"match_discipline_configuration\""));
-            Assert.That(sql, Does.Contain("\"match_staff_school_selection\""));
-            Assert.That(sql, Does.Contain("\"match_discipline_action_bar_assignment\""));
-            Assert.That(sql, Does.Contain("\"match_discipline_passive_selection\""));
+            Assert.That(sql, Does.Contain("\"match_combat_build_v_2\""));
+            Assert.That(sql, Does.Contain("\"match_selected_specialization_v_2\""));
+            Assert.That(sql, Does.Contain("\"match_discipline_configuration_v_2\""));
+            Assert.That(sql, Does.Contain("\"match_technique_selection_v_2\""));
+            Assert.That(sql, Does.Contain("\"match_spell_selection_v_2\""));
+            Assert.That(sql, Does.Contain("\"match_perk_selection_v_2\""));
+            Assert.That(sql, Does.Contain("\"match_trait_selection_v_2\""));
             Assert.That(sql, Does.Contain("\"equipment_loadout\""));
             Assert.That(sql, Does.Contain("\"item_instance\""));
             Assert.That(sql, Does.Contain("\"item_affix_instance\""));

@@ -38,15 +38,15 @@
         <ui:VisualElement class="build-heading">
             <ui:VisualElement class="build-heading-copy" picking-mode="Ignore">
                 <ui:Label class="heading-kicker" text="COMBAT BUILD" />
-                <ui:Label class="page-title" text="CHOOSE YOUR DISCIPLINES" />
-                <ui:Label class="page-subtitle" text="Choose up to three combat disciplines, then assign active and passive abilities to each." />
+                <ui:Label class="page-title" text="BUILD YOUR COMBAT LOADOUT" />
+                <ui:Label class="page-subtitle" text="Choose up to three Forms or Schools, then select Techniques, Spells, Perks, and Traits." />
             </ui:VisualElement>
             <ui:VisualElement class="allocation-panel">
-                <ui:VisualElement class="allocation-item"><ui:Label name="ActiveAllocation" class="allocation-value allocation-value--active" text="—" /><ui:Label class="allocation-label" text="ACTIVE ABILITIES" /></ui:VisualElement>
+                <ui:VisualElement class="allocation-item"><ui:Label name="ActiveAllocation" class="allocation-value allocation-value--active" text="—" /><ui:Label class="allocation-label" text="ACTIVE FEATURES" /></ui:VisualElement>
                 <ui:VisualElement class="allocation-divider" />
-                <ui:VisualElement class="allocation-item"><ui:Label name="TotalAllocation" class="allocation-value" text="—" /><ui:Label class="allocation-label" text="TOTAL ABILITIES" /></ui:VisualElement>
+                <ui:VisualElement class="allocation-item"><ui:Label name="TotalAllocation" class="allocation-value" text="—" /><ui:Label class="allocation-label" text="FEATURES" /></ui:VisualElement>
                 <ui:VisualElement class="allocation-divider" />
-                <ui:VisualElement class="allocation-item"><ui:Label name="DisciplineAllocation" class="allocation-value allocation-value--disciplines" text="—" /><ui:Label class="allocation-label" text="DISCIPLINES" /></ui:VisualElement>
+                <ui:VisualElement class="allocation-item"><ui:Label name="DisciplineAllocation" class="allocation-value allocation-value--disciplines" text="—" /><ui:Label class="allocation-label" text="FORMS · SCHOOLS" /></ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
 

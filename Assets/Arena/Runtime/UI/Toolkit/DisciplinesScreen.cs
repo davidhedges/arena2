@@ -12,8 +12,8 @@ using UnityEngine.UIElements;
 namespace Arena.UI
 {
     /// <summary>
-    /// Canonical combat-build editor. The screen edits the replicated DTO and
-    /// submits one whole draft; the Hub reducer remains the validation authority.
+    /// Canonical Form/School + Feature + Trait editor. It edits one
+    /// transport-neutral v2 aggregate and submits one revision-checked save.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class DisciplinesScreen : MonoBehaviour, IEscapeCloseable
@@ -35,7 +35,7 @@ namespace Arena.UI
         private Label? _saveStatus;
         private Button? _saveButton;
         private HubNetworkManager? _hub;
-        private HubCombatBuildEditorModel? _model;
+        private CombatBuildV2EditorModel? _model;
         private ulong _loadedRevision;
         private string _lastServerFailure = string.Empty;
         private bool _open;
@@ -56,7 +56,6 @@ namespace Arena.UI
                 .FirstOrDefault(candidate => candidate.gameObject.scene == parent.gameObject.scene);
             if (screen != null && screen.transform.parent == null)
                 return screen;
-
             if (screen != null)
                 Destroy(screen.gameObject);
 
@@ -73,7 +72,6 @@ namespace Arena.UI
         }
 
         private void OnEnable() => RuntimeUiEscapeRouter.Register(this);
-
         private void OnDisable() => RuntimeUiEscapeRouter.Unregister(this);
 
         private void OnDestroy()
@@ -87,7 +85,6 @@ namespace Arena.UI
         {
             if (_root == null)
                 return;
-
             _open = true;
             if (_panelSettings != null)
                 _panelSettings.sortingOrder = RuntimeUiLayer.NextSortingOrder();
@@ -99,7 +96,6 @@ namespace Arena.UI
         {
             if (!_open)
                 return;
-
             ClosePicker();
             _open = false;
             _root?.RemoveFromClassList(OpenClass);
@@ -110,12 +106,11 @@ namespace Arena.UI
         {
             if (!_open)
                 return false;
-            if (IsPickerOpen())
+            if (_picker?.ClassListContains(OpenClass) == true)
             {
                 ClosePicker();
                 return true;
             }
-
             Close();
             return true;
         }
@@ -126,10 +121,7 @@ namespace Arena.UI
             _panelSettings = document.panelSettings;
             _root = document.rootVisualElement.Q<VisualElement>("DisciplinesScreen");
             if (_root == null)
-            {
-                Debug.LogError("DisciplinesScreen: Disciplines.uxml is missing DisciplinesScreen.");
                 return;
-            }
 
             _cards = _root.Q<ScrollView>("DisciplineCards");
             _picker = _root.Q<VisualElement>("PickerOverlay");
@@ -176,7 +168,6 @@ namespace Arena.UI
                 _hub.Changed -= OnHubChanged;
                 _hub.CombatBuildSaveCompleted -= OnCombatBuildSaved;
             }
-
             _hub = hub;
             if (_hub != null)
             {
@@ -189,8 +180,7 @@ namespace Arena.UI
         {
             if (!_open)
                 return;
-
-            HubCombatBuildDraft? build = _hub?.CombatBuild;
+            CombatBuildV2DraftModel? build = _hub?.CombatBuild;
             if (build != null && build.Revision != _loadedRevision)
                 ReloadFromHub(force: true);
             else if (_model == null)
@@ -201,8 +191,10 @@ namespace Arena.UI
 
         private void ReloadFromHub(bool force)
         {
-            HubCombatBuildDraft? build = _hub?.CombatBuild;
-            if (build == null || _hub?.CombatBuildContract == null)
+            CombatBuildV2DraftModel? build = _hub?.CombatBuild;
+            CombatBuildV2ContractModel? contract = _hub?.CombatBuildContract;
+            CombatBuildV2CatalogModel? catalog = _hub?.CombatBuildCatalog;
+            if (build == null || contract == null || catalog == null)
             {
                 if (force)
                     _model = null;
@@ -212,7 +204,7 @@ namespace Arena.UI
             if (!force && _model != null)
                 return;
 
-            _model = new HubCombatBuildEditorModel(build);
+            _model = new CombatBuildV2EditorModel(build, catalog, contract);
             _loadedRevision = build.Revision;
             _dirty = false;
             _savePending = false;
@@ -224,237 +216,346 @@ namespace Arena.UI
         {
             if (_cards == null)
                 return;
-
             _cards.Clear();
-            HubCombatBuildEditorModel? model = _model;
-            HubCombatBuildContractSnapshot? contract = _hub?.CombatBuildContract;
-            if (model == null || contract == null || _hub == null)
+            if (_model == null || _hub?.CombatBuildContract == null || _hub.CombatBuildCatalog == null)
             {
                 SetAllocation("—", "—", "—");
-                SetStatus("Waiting for the canonical combat-build catalog and your saved build.");
-                if (_saveButton != null)
-                    _saveButton.SetEnabled(false);
+                SetStatus("Waiting for the Combat Build v2 catalog and your saved build.");
+                _saveButton?.SetEnabled(false);
                 return;
             }
 
+            CombatBuildV2ContractModel contract = _hub.CombatBuildContract;
+            CombatBuildV2CatalogModel catalog = _hub.CombatBuildCatalog;
             SetAllocation(
-                $"{model.ActiveCount} / {contract.MaximumActiveAbilities}",
-                $"{model.CombinedAbilityCount} / {contract.CombinedAbilityBudget}",
-                $"{model.SelectedDisciplineIds.Count} / {contract.MaximumSelectedDisciplines}");
+                $"{_model.SelectedActiveCount} ACTIVE",
+                _model.FeatureCapacityText,
+                $"{_model.SelectedSpecializationIds.Count} / {contract.MaximumSelectedSpecializations} FORMS · SCHOOLS");
 
-            foreach (string disciplineId in model.SelectedDisciplineIds)
+            foreach (string specializationId in _model.SelectedSpecializationIds)
             {
-                HubDisciplineSnapshot? discipline = _hub.Disciplines.FirstOrDefault(candidate =>
-                    string.Equals(candidate.Id, disciplineId, StringComparison.Ordinal));
-                EditableDisciplineConfiguration? configuration = model.FindConfiguration(disciplineId);
-                if (discipline != null && configuration != null)
-                    _cards.Add(BuildDisciplineCard(discipline, configuration, contract));
+                CombatSpecializationDefinitionV2Model? definition =
+                    catalog.FindSpecialization(specializationId);
+                if (definition != null)
+                    _cards.Add(BuildSpecializationCard(definition));
             }
+            _cards.Add(BuildTraitCard(catalog));
+            if (_model.SelectedSpecializationIds.Count < contract.MaximumSelectedSpecializations)
+                _cards.Add(BuildAddSpecializationCard());
 
-            if (model.SelectedDisciplineIds.Count < contract.MaximumSelectedDisciplines)
-                _cards.Add(BuildAddDisciplineCard());
-
-            if (_saveButton != null)
-                _saveButton.SetEnabled(_hub.IsReady && !_savePending);
-            SetStatus(BuildStatus(contract));
+            _saveButton?.SetEnabled(_hub.IsReady && !_savePending && _model.CanSubmit);
+            SetStatus(BuildStatus());
         }
 
-        private VisualElement BuildDisciplineCard(
-            HubDisciplineSnapshot discipline,
-            EditableDisciplineConfiguration configuration,
-            HubCombatBuildContractSnapshot contract)
+        private VisualElement BuildSpecializationCard(
+            CombatSpecializationDefinitionV2Model definition)
         {
-            Color accent = DisciplineColor(discipline.Id);
-            VisualElement card = new() { name = $"DisciplineCard_{discipline.Id}" };
+            VisualElement card = new() { name = $"SpecializationCard_{definition.SpecializationId}" };
             card.AddToClassList("discipline-card");
-            card.style.borderTopColor = accent;
+            card.style.borderTopColor = DisciplineColor(definition.CombatDisciplineId);
 
             VisualElement heading = new();
             heading.AddToClassList("discipline-card-heading");
-            VisualElement identity = new();
-            identity.AddToClassList("discipline-identity");
-            VisualElement emblem = new();
-            emblem.AddToClassList("discipline-emblem");
-            ApplyIcon(emblem, ResolveDisciplineIcon(discipline.Id));
-            identity.Add(emblem);
             VisualElement copy = new();
             copy.AddToClassList("discipline-copy");
-            Label kicker = new(discipline.Id == "STAFF" ? "MAGICAL DISCIPLINE" : "COMBAT DISCIPLINE");
+            string kind = definition.SpecializationKind == CombatSpecializationKindV2.School
+                ? "SPELLCASTING SCHOOL"
+                : "WEAPON FORM";
+            Label kicker = new($"{kind} · {definition.CombatDisciplineId}");
             kicker.AddToClassList("card-kicker");
-            Label name = new(discipline.Name.ToUpperInvariant());
+            Label name = new(definition.DisplayName.ToUpperInvariant());
             name.AddToClassList("discipline-name");
             copy.Add(kicker);
             copy.Add(name);
-            identity.Add(copy);
-            heading.Add(identity);
+            heading.Add(copy);
 
             VisualElement controls = new();
             controls.AddToClassList("discipline-controls");
             bool starts = string.Equals(
-                _model?.StartingDisciplineId,
-                discipline.Id,
+                _model!.StartingDisciplineId,
+                definition.CombatDisciplineId,
                 StringComparison.Ordinal);
-            Button start = new(() => ToggleStartingDiscipline(discipline.Id))
+            Button start = new(() => ToggleStartingDiscipline(definition.CombatDisciplineId))
             {
                 text = starts ? "◆ STARTING" : "SET STARTING",
-                tooltip = starts
-                    ? "Clear the optional starting discipline."
-                    : "Use this discipline when combat begins.",
             };
             start.AddToClassList("card-control");
             start.EnableInClassList(SelectedClass, starts);
             controls.Add(start);
-            Button remove = new(() => RemoveDiscipline(discipline.Id)) { text = "REMOVE" };
+            Button equipment = new(RequestEquipment) { text = "EDIT WEAPON" };
+            equipment.AddToClassList("card-control");
+            controls.Add(equipment);
+            Button remove = new(() => RemoveSpecialization(definition.SpecializationId))
+            {
+                text = "REMOVE",
+            };
             remove.AddToClassList("card-control");
             remove.AddToClassList("remove-control");
-            remove.SetEnabled((_model?.SelectedDisciplineIds.Count ?? 0) > contract.MinimumSelectedDisciplines);
+            remove.SetEnabled(_model.SelectedSpecializationIds.Count > 1);
             controls.Add(remove);
             heading.Add(controls);
             card.Add(heading);
 
-            if (string.Equals(discipline.Id, "STAFF", StringComparison.Ordinal))
-                card.Add(BuildStaffSchools(configuration, contract));
+            IReadOnlyList<CombatFeatureDefinitionV2Model> features =
+                _model.FeaturePickerOptions(definition.SpecializationId);
+            card.Add(SectionHeading(
+                "TECHNIQUES · SPELLS · PERKS",
+                $"{features.Count(row => _model.IsFeatureSelected(row.AbilityId))} SELECTED"));
+            VisualElement featureGrid = new();
+            featureGrid.AddToClassList("active-slot-grid");
+            foreach (CombatFeatureDefinitionV2Model feature in features)
+                featureGrid.Add(BuildFeatureButton(feature));
+            card.Add(featureGrid);
 
-            card.Add(BuildActiveBar(discipline, configuration, contract));
-            card.Add(BuildPassiveBar(discipline, configuration, contract));
+            CombatBuildV2DraftModel orderedDraft = _model.ToDraft();
+            string[] selectedActive = features
+                .Where(row => row.IsActive && _model.IsFeatureSelected(row.AbilityId))
+                .OrderBy(row => orderedDraft.SelectedFeatures
+                    .First(selection => selection.AbilityId == row.AbilityId)
+                    .PreferredBarOrder ?? byte.MaxValue)
+                .Select(row => row.AbilityId)
+                .ToArray();
+            if (selectedActive.Length > 1)
+            {
+                card.Add(SectionHeading("BAR ORDER", "GLOBAL SPELL · MERGED TECHNIQUE"));
+                for (int index = 0; index < selectedActive.Length; index++)
+                {
+                    int targetIndex = index;
+                    string abilityId = selectedActive[index];
+                    VisualElement orderRow = new();
+                    orderRow.AddToClassList("school-row");
+                    orderRow.Add(new Label(
+                        _hub!.CombatBuildCatalog!.FindFeature(abilityId)?.DisplayName ?? abilityId));
+                    Button up = new(() => MoveActive(abilityId, targetIndex - 1)) { text = "↑" };
+                    up.SetEnabled(index > 0);
+                    Button down = new(() => MoveActive(abilityId, targetIndex + 1)) { text = "↓" };
+                    down.SetEnabled(index + 1 < selectedActive.Length);
+                    orderRow.Add(up);
+                    orderRow.Add(down);
+                    card.Add(orderRow);
+                }
+            }
             return card;
         }
 
-        private VisualElement BuildStaffSchools(
-            EditableDisciplineConfiguration configuration,
-            HubCombatBuildContractSnapshot contract)
+        private Button BuildFeatureButton(CombatFeatureDefinitionV2Model feature)
         {
-            VisualElement section = new();
-            section.AddToClassList("school-section");
-            section.Add(SectionHeading(
-                "SPELL SCHOOLS",
-                $"{configuration.StaffSchoolIds.Count} / {contract.MaximumStaffSchoolsWhenSelected}"));
+            bool selected = _model!.IsFeatureSelected(feature.AbilityId);
+            string kind = feature.LoadoutKind.ToString().ToUpperInvariant();
+            Button button = new(() => ToggleFeature(feature))
+            {
+                text = feature.DisplayName.ToUpperInvariant(),
+                tooltip = string.IsNullOrWhiteSpace(feature.ResourceKind) || feature.ResourceCost <= 0f
+                    ? kind
+                    : $"{kind} · {feature.ResourceCost:0.#} {feature.ResourceKind}",
+            };
+            button.AddToClassList("ability-cell");
+            button.EnableInClassList(SelectedClass, selected);
+            button.EnableInClassList("is-filled", selected);
+            ApplyIcon(button, ActionIconResolver.Resolve(ActionKinds.Ability, feature.AbilityId));
+            return button;
+        }
+
+        private VisualElement BuildTraitCard(CombatBuildV2CatalogModel catalog)
+        {
+            VisualElement card = new();
+            card.AddToClassList("discipline-card");
+            card.Add(SectionHeading("CHARACTER TRAITS", _model!.TraitCapacityText));
             VisualElement row = new();
             row.AddToClassList("school-row");
-            foreach (HubSpellSchoolSnapshot school in _hub!.StaffSchools)
+            foreach (CombatTraitDefinitionV2Model trait in catalog.Traits
+                         .OrderBy(value => value.SortOrder))
             {
-                bool selected = configuration.StaffSchoolIds.Contains(school.Id, StringComparer.Ordinal);
-                Button button = new(() => ToggleStaffSchool(school))
+                bool selected = _model.SelectedTraitIds.Contains(
+                    trait.AbilityId,
+                    StringComparer.Ordinal);
+                Button button = new(() => ToggleTrait(trait))
                 {
-                    text = school.Name.ToUpperInvariant(),
-                    tooltip = selected ? $"Remove {school.Name}." : $"Add {school.Name}.",
+                    text = trait.DisplayName.ToUpperInvariant(),
+                    tooltip = trait.AbilityId == "MASTERY"
+                        ? "10% bonus outgoing damage while the build uses one parent Discipline."
+                        : trait.AbilityId,
                 };
                 button.AddToClassList("school-button");
                 button.EnableInClassList(SelectedClass, selected);
                 row.Add(button);
             }
-            section.Add(row);
-            return section;
+            card.Add(row);
+            return card;
         }
 
-        private VisualElement BuildActiveBar(
-            HubDisciplineSnapshot discipline,
-            EditableDisciplineConfiguration configuration,
-            HubCombatBuildContractSnapshot contract)
+        private VisualElement BuildAddSpecializationCard()
         {
-            VisualElement section = new();
-            section.AddToClassList("ability-section");
-            section.Add(SectionHeading(
-                "ACTIVE ABILITY ACTION BAR",
-                $"{configuration.ActiveAssignments.Count} ASSIGNED"));
-            VisualElement grid = new();
-            grid.AddToClassList("active-slot-grid");
-            bool canAddActive = _model != null
-                && _model.ActiveCount < contract.MaximumActiveAbilities
-                && _model.CombinedAbilityCount < contract.CombinedAbilityBudget;
-            IReadOnlyList<string> visibleSlotIds = SelectVisibleActiveSlotIds(
-                contract.ActionSlotIds,
-                configuration.ActiveAssignments.Select(assignment => assignment.ActionSlot),
-                canAddActive);
-            foreach (string slotId in visibleSlotIds)
-            {
-                HubCombatBuildActionAssignment assignment = configuration.ActiveAssignments
-                    .FirstOrDefault(candidate => string.Equals(
-                    candidate.ActionSlot,
-                    slotId,
-                    StringComparison.Ordinal));
-                string? abilityId = string.IsNullOrWhiteSpace(assignment.AbilityId)
-                    ? null
-                    : assignment.AbilityId;
-                Button cell = BuildAbilityCell(abilityId, slotId);
-                cell.clicked += () => OpenAbilityPicker(
-                    discipline,
-                    configuration,
-                    "ACTIVE",
-                    slotId,
-                    passiveIndex: -1,
-                    abilityId);
-                grid.Add(cell);
-            }
-            section.Add(grid);
-            return section;
-        }
-
-        internal static IReadOnlyList<string> SelectVisibleActiveSlotIds(
-            IEnumerable<string> actionSlotIds,
-            IEnumerable<string> assignedSlotIds,
-            bool includeAvailableSlot)
-        {
-            HashSet<string> assigned = new(assignedSlotIds, StringComparer.Ordinal);
-            string? available = includeAvailableSlot
-                ? actionSlotIds.FirstOrDefault(slotId => !assigned.Contains(slotId))
-                : null;
-            return actionSlotIds
-                .Where(slotId => assigned.Contains(slotId)
-                    || string.Equals(slotId, available, StringComparison.Ordinal))
-                .ToArray();
-        }
-
-        private VisualElement BuildPassiveBar(
-            HubDisciplineSnapshot discipline,
-            EditableDisciplineConfiguration configuration,
-            HubCombatBuildContractSnapshot contract)
-        {
-            VisualElement section = new();
-            section.AddToClassList("ability-section");
-            section.Add(SectionHeading(
-                "PASSIVE ABILITY ACTION BAR",
-                $"{configuration.PassiveAbilityIds.Count} SELECTED"));
-            VisualElement row = new();
-            row.AddToClassList("passive-slot-row");
-            int visibleCells = Math.Min(
-                contract.CombinedAbilityBudget,
-                Math.Max(4, configuration.PassiveAbilityIds.Count + 1));
-            for (int index = 0; index < visibleCells; index++)
-            {
-                int passiveIndex = index;
-                string? abilityId = index < configuration.PassiveAbilityIds.Count
-                    ? configuration.PassiveAbilityIds[index]
-                    : null;
-                Button cell = BuildAbilityCell(abilityId, $"PASSIVE {index + 1}");
-                cell.clicked += () => OpenAbilityPicker(
-                    discipline,
-                    configuration,
-                    "PASSIVE",
-                    actionSlot: null,
-                    passiveIndex,
-                    abilityId);
-                row.Add(cell);
-            }
-            section.Add(row);
-            return section;
-        }
-
-        private VisualElement BuildAddDisciplineCard()
-        {
-            Button add = new(OpenDisciplinePicker) { name = "AddDiscipline", text = "+" };
+            Button add = new(OpenSpecializationPicker) { text = "+" };
             add.AddToClassList("add-discipline-card");
-            Label title = new("ADD DISCIPLINE") { pickingMode = PickingMode.Ignore };
+            Label title = new("ADD FORM OR SCHOOL") { pickingMode = PickingMode.Ignore };
             title.AddToClassList("add-discipline-title");
-            Label copy = new("Choose another combat discipline for this build.")
+            add.Add(title);
+            add.Add(new Label("Up to three top-level choices; repeated parent weapons share one bar.")
             {
                 pickingMode = PickingMode.Ignore,
-            };
-            copy.AddToClassList("add-discipline-copy");
-            add.Add(title);
-            add.Add(copy);
+            });
             return add;
         }
+
+        private void OpenSpecializationPicker()
+        {
+            if (_model == null || _pickerOptions == null)
+                return;
+            OpenPicker("ADD A FORM OR SCHOOL", "Each selection consumes one of the three top-level slots.");
+            foreach (CombatSpecializationDefinitionV2Model option in _model.SpecializationPickerOptions())
+            {
+                string meta = option.SpecializationKind == CombatSpecializationKindV2.School
+                    ? $"SCHOOL · {option.CombatDisciplineId}"
+                    : $"FORM · {option.CombatDisciplineId}";
+                Button button = BuildPickerOption(
+                    option.DisplayName,
+                    meta,
+                    ResolveDisciplineIcon(option.CombatDisciplineId));
+                button.clicked += () =>
+                {
+                    if (_model.AddSpecialization(option.SpecializationId))
+                    {
+                        EnsureWeaponConfiguration(option.CombatDisciplineId);
+                        MarkDirtyAndRender();
+                    }
+                    ClosePicker();
+                };
+                _pickerOptions.Add(button);
+            }
+        }
+
+        private void EnsureWeaponConfiguration(string parentId)
+        {
+            if (_model == null || _hub == null
+                || _model.FindDisciplineConfiguration(parentId) != null)
+            {
+                return;
+            }
+            HubWeaponSnapshot? main = _hub.Weapons
+                .Where(row => string.Equals(row.CombatDisciplineId, parentId, StringComparison.Ordinal))
+                .Where(row => string.Equals(row.EquipSlot, "MAIN_HAND", StringComparison.Ordinal))
+                .OrderBy(row => row.SortOrder)
+                .FirstOrDefault();
+            HubWeaponSnapshot? off = _hub.Weapons
+                .Where(row => string.Equals(row.CombatDisciplineId, parentId, StringComparison.Ordinal))
+                .Where(row => string.Equals(row.EquipSlot, "OFF_HAND", StringComparison.Ordinal))
+                .OrderBy(row => row.SortOrder)
+                .FirstOrDefault();
+            if (main == null)
+                return;
+            _model.SetDisciplineConfiguration(new CombatBuildV2DisciplineConfigurationModel(
+                parentId,
+                main.ItemDefId,
+                string.Empty,
+                off?.ItemDefId ?? string.Empty,
+                string.Empty));
+        }
+
+        private void ToggleFeature(CombatFeatureDefinitionV2Model feature)
+        {
+            bool selected = _model?.IsFeatureSelected(feature.AbilityId) == true;
+            if (_model?.SetFeatureSelected(feature.AbilityId, !selected) == true)
+                MarkDirtyAndRender();
+            else if (!selected)
+                SetStatus("The global 18-Feature capacity is full.");
+        }
+
+        private void ToggleTrait(CombatTraitDefinitionV2Model trait)
+        {
+            bool selected = _model?.SelectedTraitIds.Contains(
+                trait.AbilityId,
+                StringComparer.Ordinal) == true;
+            if (_model?.SetTraitSelected(trait.AbilityId, !selected) == true)
+                MarkDirtyAndRender();
+            else if (!selected)
+                SetStatus("The three-Trait capacity is full.");
+        }
+
+        private void MoveActive(string abilityId, int destinationIndex)
+        {
+            if (_model?.MoveActiveFeature(abilityId, destinationIndex) == true)
+                MarkDirtyAndRender();
+        }
+
+        private void ToggleStartingDiscipline(string parentId)
+        {
+            if (_model == null)
+                return;
+            _model.SetStartingDiscipline(string.Equals(
+                _model.StartingDisciplineId,
+                parentId,
+                StringComparison.Ordinal) ? null : parentId);
+            MarkDirtyAndRender();
+        }
+
+        private void RemoveSpecialization(string specializationId)
+        {
+            if (_model?.RemoveSpecialization(specializationId) == true)
+                MarkDirtyAndRender();
+        }
+
+        private void SaveDraft()
+        {
+            if (_hub == null || _model == null || _savePending || !_model.CanSubmit)
+                return;
+            _lastServerFailure = string.Empty;
+            _savePending = _hub.SaveCombatBuild(_model.ToDraft());
+            SetStatus(_savePending
+                ? "Saving the complete Combat Build v2 draft…"
+                : "The Hub is not ready to save this build.");
+            _saveButton?.SetEnabled(false);
+        }
+
+        private void OnCombatBuildSaved(bool committed, string reason)
+        {
+            _savePending = false;
+            if (committed)
+            {
+                _dirty = false;
+                _lastServerFailure = string.Empty;
+                SetStatus("Build committed. Waiting for the new revision…");
+            }
+            else
+            {
+                _lastServerFailure = reason;
+                Render();
+            }
+        }
+
+        private string BuildStatus()
+        {
+            if (!string.IsNullOrWhiteSpace(_lastServerFailure))
+                return HubCombatBuildSaveStatus.Rejected(_lastServerFailure);
+            if (_savePending)
+                return "Saving the complete Combat Build v2 draft…";
+            IReadOnlyList<string> issues = _model?.LocalSubmissionIssues()
+                ?? Array.Empty<string>();
+            if (issues.Count > 0)
+                return string.Join("  ", issues);
+            return _dirty ? "Unsaved changes." : "Saved Combat Build v2.";
+        }
+
+        private void MarkDirtyAndRender()
+        {
+            _dirty = true;
+            _lastServerFailure = string.Empty;
+            Render();
+        }
+
+        private void OpenPicker(string title, string subtitle)
+        {
+            if (_picker == null || _pickerOptions == null)
+                return;
+            if (_pickerTitle != null)
+                _pickerTitle.text = title;
+            if (_pickerSubtitle != null)
+                _pickerSubtitle.text = subtitle;
+            _pickerOptions.Clear();
+            _picker.AddToClassList(OpenClass);
+        }
+
+        private void ClosePicker() => _picker?.RemoveFromClassList(OpenClass);
 
         private static VisualElement SectionHeading(string title, string counter)
         {
@@ -469,267 +570,6 @@ namespace Arena.UI
             return heading;
         }
 
-        private Button BuildAbilityCell(string? abilityId, string slotLabel)
-        {
-            HubAbilitySnapshot? ability = FindAbility(abilityId);
-            Button cell = new()
-            {
-                text = ability == null ? "+" : string.Empty,
-                tooltip = ability == null
-                    ? $"Assign {slotLabel}."
-                    : $"{ability.Name}\n{ability.Description}\n{slotLabel}",
-            };
-            cell.AddToClassList("ability-cell");
-            cell.EnableInClassList("is-filled", ability != null);
-            if (ability != null)
-                ApplyIcon(cell, ActionIconResolver.Resolve(ActionKinds.Ability, ability.Id));
-            return cell;
-        }
-
-        private void OpenDisciplinePicker()
-        {
-            if (_model == null || _hub == null || _pickerOptions == null)
-                return;
-
-            OpenPicker("ADD A DISCIPLINE", "Dormant configurations restore their weapons, schools, and assigned abilities.");
-            foreach (HubDisciplineSnapshot discipline in _hub.Disciplines.Where(candidate =>
-                         !_model.IsSelected(candidate.Id)))
-            {
-                Button option = BuildPickerOption(
-                    discipline.Name,
-                    discipline.Id == "STAFF" ? "Choose 1–3 schools after adding." : "Weapon discipline",
-                    ResolveDisciplineIcon(discipline.Id));
-                option.clicked += () =>
-                {
-                    _model.AddDiscipline(discipline);
-                    MarkDirtyAndRender();
-                    ClosePicker();
-                };
-                _pickerOptions.Add(option);
-            }
-        }
-
-        private void OpenAbilityPicker(
-            HubDisciplineSnapshot discipline,
-            EditableDisciplineConfiguration configuration,
-            string selectionKind,
-            string? actionSlot,
-            int passiveIndex,
-            string? currentAbilityId)
-        {
-            if (_hub == null || _model == null || _pickerOptions == null)
-                return;
-
-            string destination = selectionKind == "ACTIVE"
-                ? actionSlot ?? "active slot"
-                : $"passive position {passiveIndex + 1}";
-            OpenPicker(
-                $"{discipline.Name.ToUpperInvariant()} · {selectionKind}",
-                $"Choose an ability for {destination}. The Hub validates the complete draft when saved.");
-
-            if (!string.IsNullOrWhiteSpace(currentAbilityId))
-            {
-                Button clear = BuildPickerOption("Clear slot", destination, null);
-                clear.AddToClassList("picker-option--clear");
-                clear.clicked += () =>
-                {
-                    AssignAbility(discipline.Id, selectionKind, actionSlot, passiveIndex, null);
-                    ClosePicker();
-                };
-                _pickerOptions.Add(clear);
-            }
-
-            HashSet<string> selectedSchools = new(configuration.StaffSchoolIds, StringComparer.Ordinal);
-            IEnumerable<HubAbilitySnapshot> choices = _hub.Abilities.Where(ability =>
-                string.Equals(ability.CombatDisciplineId, discipline.Id, StringComparison.Ordinal)
-                && string.Equals(ability.SelectionKind, selectionKind, StringComparison.Ordinal)
-                && (discipline.Id != "STAFF"
-                    || ability.SpellSchoolId == null
-                    || selectedSchools.Contains(ability.SpellSchoolId))
-                && (!_model.ContainsAbility(ability.Id, currentAbilityId)
-                    || string.Equals(ability.Id, currentAbilityId, StringComparison.Ordinal)));
-
-            foreach (HubAbilitySnapshot ability in choices)
-            {
-                string meta = ability.SpellSchoolId == null
-                    ? AbilityMeta(ability)
-                    : $"{SchoolName(ability.SpellSchoolId)} · {AbilityMeta(ability)}";
-                Button option = BuildPickerOption(
-                    ability.Name,
-                    meta,
-                    ActionIconResolver.Resolve(ActionKinds.Ability, ability.Id));
-                option.tooltip = ability.Description;
-                option.EnableInClassList(SelectedClass, string.Equals(
-                    ability.Id,
-                    currentAbilityId,
-                    StringComparison.Ordinal));
-                option.clicked += () =>
-                {
-                    AssignAbility(discipline.Id, selectionKind, actionSlot, passiveIndex, ability.Id);
-                    ClosePicker();
-                };
-                _pickerOptions.Add(option);
-            }
-
-            if (!_pickerOptions.Children().Any())
-            {
-                Label empty = new("No eligible abilities are available. For Staff, select a spell school first.");
-                empty.AddToClassList("picker-empty");
-                _pickerOptions.Add(empty);
-            }
-        }
-
-        private void AssignAbility(
-            string disciplineId,
-            string selectionKind,
-            string? actionSlot,
-            int passiveIndex,
-            string? abilityId)
-        {
-            if (_model == null)
-                return;
-            if (selectionKind == "ACTIVE" && actionSlot != null)
-                _model.AssignActiveAbility(disciplineId, actionSlot, abilityId);
-            else if (selectionKind == "PASSIVE")
-                _model.AssignPassiveAbility(disciplineId, passiveIndex, abilityId);
-            MarkDirtyAndRender();
-        }
-
-        private void ToggleStartingDiscipline(string disciplineId)
-        {
-            if (_model == null)
-                return;
-            _model.SetStartingDiscipline(string.Equals(
-                _model.StartingDisciplineId,
-                disciplineId,
-                StringComparison.Ordinal)
-                ? null
-                : disciplineId);
-            MarkDirtyAndRender();
-        }
-
-        private void RemoveDiscipline(string disciplineId)
-        {
-            if (_model?.RemoveDiscipline(disciplineId) != true)
-                return;
-            MarkDirtyAndRender();
-        }
-
-        private void ToggleStaffSchool(HubSpellSchoolSnapshot school)
-        {
-            HubCombatBuildContractSnapshot? contract = _hub?.CombatBuildContract;
-            EditableDisciplineConfiguration? staff = _model?.FindConfiguration("STAFF");
-            if (_model == null || contract == null || staff == null)
-                return;
-
-            bool selected = staff.StaffSchoolIds.Contains(school.Id, StringComparer.Ordinal);
-            if (!selected && staff.StaffSchoolIds.Count >= contract.MaximumStaffSchoolsWhenSelected)
-            {
-                SetStatus($"Select at most {contract.MaximumStaffSchoolsWhenSelected} Staff schools.");
-                return;
-            }
-            if (selected && StaffSchoolHasAssignedAbility(staff, school.Id))
-            {
-                SetStatus($"Clear assigned {school.Name} abilities before removing that school.");
-                return;
-            }
-
-            _model.SetStaffSchoolSelected(school.Id, !selected);
-            MarkDirtyAndRender();
-        }
-
-        private bool StaffSchoolHasAssignedAbility(
-            EditableDisciplineConfiguration staff,
-            string schoolId)
-        {
-            HashSet<string> assigned = new(
-                staff.ActiveAssignments.Select(value => value.AbilityId)
-                    .Concat(staff.PassiveAbilityIds),
-                StringComparer.Ordinal);
-            return _hub!.Abilities.Any(ability =>
-                assigned.Contains(ability.Id)
-                && string.Equals(ability.SpellSchoolId, schoolId, StringComparison.Ordinal));
-        }
-
-        private void SaveDraft()
-        {
-            if (_hub == null || _model == null || _savePending)
-                return;
-
-            _lastServerFailure = string.Empty;
-            _savePending = _hub.SaveCombatBuild(_model.ToDraft());
-            if (!_savePending)
-                SetStatus("The Hub is not ready to save this build.");
-            else
-            {
-                SetStatus("Saving the complete combat build…");
-                _saveButton?.SetEnabled(false);
-            }
-        }
-
-        private void OnCombatBuildSaved(bool committed, string reason)
-        {
-            _savePending = false;
-            if (committed)
-            {
-                _dirty = false;
-                _lastServerFailure = string.Empty;
-                SetStatus("Build committed. Waiting for the new revision…");
-            }
-            else
-            {
-                // Preserve the reducer failure verbatim, including its stable
-                // COMBAT_BUILD_* code. This screen never translates validation.
-                _lastServerFailure = reason;
-                Render();
-            }
-        }
-
-        private string BuildStatus(HubCombatBuildContractSnapshot contract)
-        {
-            if (!string.IsNullOrWhiteSpace(_lastServerFailure))
-                return HubCombatBuildSaveStatus.Rejected(_lastServerFailure);
-            if (_savePending)
-                return "Saving the complete combat build…";
-            if (_model == null)
-                return "Waiting for your combat build.";
-
-            bool selectedCountsReady = _model.SelectedDisciplineIds.All(disciplineId =>
-            {
-                EditableDisciplineConfiguration? configuration = _model.FindConfiguration(disciplineId);
-                return configuration != null
-                       && configuration.ActiveAssignments.Count + configuration.PassiveAbilityIds.Count
-                       >= contract.MinimumCountedAbilitiesPerSelectedDiscipline;
-            });
-            bool staffReady = !_model.IsSelected("STAFF")
-                              || (_model.FindConfiguration("STAFF")?.StaffSchoolIds.Count ?? 0)
-                              >= contract.MinimumStaffSchoolsWhenSelected;
-            if (!selectedCountsReady || !staffReady)
-                return "Draft incomplete — save to receive the Hub's authoritative validation result.";
-            return _dirty ? "Unsaved changes. The Hub will validate the whole draft." : "Saved combat build.";
-        }
-
-        private void MarkDirtyAndRender()
-        {
-            _dirty = true;
-            _lastServerFailure = string.Empty;
-            Render();
-        }
-
-        private void OpenPicker(string title, string subtitle)
-        {
-            if (_picker == null || _pickerOptions == null)
-                return;
-            _pickerTitle!.text = title;
-            _pickerSubtitle!.text = subtitle;
-            _pickerOptions.Clear();
-            _picker.AddToClassList(OpenClass);
-        }
-
-        private void ClosePicker() => _picker?.RemoveFromClassList(OpenClass);
-
-        private bool IsPickerOpen() => _picker?.ClassListContains(OpenClass) == true;
-
         private static Button BuildPickerOption(string title, string meta, Sprite? icon)
         {
             Button option = new();
@@ -740,37 +580,10 @@ namespace Arena.UI
             option.Add(iconElement);
             VisualElement copy = new() { pickingMode = PickingMode.Ignore };
             copy.AddToClassList("picker-option-copy");
-            Label titleLabel = new(title.ToUpperInvariant());
-            titleLabel.AddToClassList("picker-option-title");
-            Label metaLabel = new(meta);
-            metaLabel.AddToClassList("picker-option-meta");
-            copy.Add(titleLabel);
-            copy.Add(metaLabel);
+            copy.Add(new Label(title.ToUpperInvariant()));
+            copy.Add(new Label(meta));
             option.Add(copy);
             return option;
-        }
-
-        private HubAbilitySnapshot? FindAbility(string? abilityId)
-        {
-            if (string.IsNullOrWhiteSpace(abilityId))
-                return null;
-            return _hub?.Abilities.FirstOrDefault(ability => string.Equals(
-                ability.Id,
-                abilityId,
-                StringComparison.Ordinal));
-        }
-
-        private string SchoolName(string schoolId)
-            => _hub?.StaffSchools.FirstOrDefault(school => string.Equals(
-                school.Id,
-                schoolId,
-                StringComparison.Ordinal))?.Name ?? schoolId;
-
-        private static string AbilityMeta(HubAbilitySnapshot ability)
-        {
-            if (string.IsNullOrWhiteSpace(ability.Resource) || ability.Cost <= 0f)
-                return ability.SelectionKind;
-            return $"{ability.SelectionKind} · {ability.Cost:0.#} {ability.Resource}";
         }
 
         private void SetAllocation(string active, string total, string disciplines)
@@ -797,15 +610,12 @@ namespace Arena.UI
         }
 
         internal static Sprite? ResolveDisciplineIcon(string disciplineId)
-        {
-            return ActionIconResolver.Resolve(
+            => ActionIconResolver.Resolve(
                 ActionKinds.CombatDisciplineSwitch,
                 WireIdentifier.Normalize(disciplineId));
-        }
 
         internal static Color DisciplineColor(string disciplineId)
-        {
-            return WireIdentifier.Normalize(disciplineId) switch
+            => WireIdentifier.Normalize(disciplineId) switch
             {
                 "DAGGERS" => new Color32(159, 120, 194, 255),
                 "TWO_HANDED_SWORD" => new Color32(213, 161, 72, 255),
@@ -814,6 +624,5 @@ namespace Arena.UI
                 "STAFF" => new Color32(111, 131, 196, 255),
                 _ => new Color32(217, 181, 106, 255),
             };
-        }
     }
 }

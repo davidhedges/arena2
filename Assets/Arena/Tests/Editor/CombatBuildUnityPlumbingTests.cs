@@ -32,25 +32,26 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void HubNetwork_ConsumesAndSavesCanonicalCombatBuild()
+        public void HubNetwork_ConsumesAndSavesCanonicalCombatBuildV2()
         {
             string network = File.ReadAllText(
                 "Assets/Arena/Runtime/Network/HubNetworkManager.cs");
-            string draft = File.ReadAllText(
-                "Assets/Arena/Runtime/Network/HubCombatBuildDraft.cs");
+            string transport = File.ReadAllText(
+                "Assets/Arena/Runtime/Network/HubCombatBuildV2Transport.cs");
+            string model = File.ReadAllText(
+                "Assets/Arena/Runtime/Network/CombatBuildV2Models.cs");
 
-            Assert.That(network, Does.Contain("From.MyCombatBuild().ToSql()"));
-            Assert.That(network, Does.Contain("conn.Db.MyCombatBuild.OnInsert"));
-            Assert.That(network, Does.Contain("_conn.Reducers.SaveCombatBuild"));
+            Assert.That(network, Does.Contain("From.MyCombatBuildV2().ToSql()"));
+            Assert.That(network, Does.Contain("conn.Db.MyCombatBuildV2.OnInsert"));
+            Assert.That(network, Does.Contain("_conn.Reducers.SaveCombatBuildV2"));
             Assert.That(network, Does.Not.Contain("SaveWeaponLoadout"));
-            Assert.That(draft, Does.Contain("CombatBuildDraftInput ToReducerInput()"));
-            Assert.That(draft, Does.Contain("SelectedDisciplines"));
-            Assert.That(draft, Does.Contain("DisciplineConfigurations"));
-            Assert.That(draft, Does.Contain("StaffSchoolIds"));
-            Assert.That(draft, Does.Contain("ActiveAssignments"));
-            Assert.That(draft, Does.Contain("PassiveAbilityIds"));
-            Assert.That(draft, Does.Not.Contain("MaxActive"));
-            Assert.That(draft, Does.Not.Contain("AbilityBudget"));
+            Assert.That(transport, Does.Contain("CombatBuildV2DraftInput ToGenerated"));
+            Assert.That(model, Does.Contain("SelectedSpecializations"));
+            Assert.That(model, Does.Contain("DormantSpecializations"));
+            Assert.That(model, Does.Contain("DisciplineConfigurations"));
+            Assert.That(model, Does.Contain("SelectedFeatures"));
+            Assert.That(model, Does.Contain("SelectedTraits"));
+            Assert.That(model, Does.Not.Contain("StaffSchoolIds"));
         }
 
         [Test]
@@ -66,7 +67,8 @@ namespace Arena.Tests.Editor
                 "Assets/Arena/Runtime/UI/Toolkit/EquipmentScreen.cs");
 
             Assert.That(disciplines, Does.Contain("_hub.SaveCombatBuild(_model.ToDraft())"));
-            Assert.That(disciplines, Does.Contain("contract.ActionSlotIds"));
+            Assert.That(disciplines, Does.Contain("FeatureCapacityText"));
+            Assert.That(disciplines, Does.Contain("TraitCapacityText"));
             Assert.That(disciplines, Does.Not.Contain("PRIMARY"));
             Assert.That(disciplines, Does.Not.Contain("SECONDARY"));
             Assert.That(actionBar, Does.Contain("enabled = false"));
@@ -79,16 +81,16 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void HubSummary_UsesThreeOrderedCombatDisciplineSlots()
+        public void HubSummary_UsesThreeOrderedFormOrSchoolSlots()
         {
             string screen = File.ReadAllText(
                 "Assets/Arena/Runtime/UI/Toolkit/HubScreen.cs");
             string uxml = File.ReadAllText(
                 "Assets/Arena/Resources/UI/Toolkit/Hub.uxml");
 
-            Assert.That(screen, Does.Contain("FindSelectedDiscipline(build, 0)"));
-            Assert.That(screen, Does.Contain("FindSelectedDiscipline(build, 1)"));
-            Assert.That(screen, Does.Contain("FindSelectedDiscipline(build, 2)"));
+            Assert.That(screen, Does.Contain("FindSelectedSpecialization(build, 0)"));
+            Assert.That(screen, Does.Contain("FindSelectedSpecialization(build, 1)"));
+            Assert.That(screen, Does.Contain("FindSelectedSpecialization(build, 2)"));
             Assert.That(uxml, Does.Contain("name=\"LoadoutSlot0Name\""));
             Assert.That(uxml, Does.Contain("name=\"LoadoutSlot1Name\""));
             Assert.That(uxml, Does.Contain("name=\"LoadoutSlot2Name\""));

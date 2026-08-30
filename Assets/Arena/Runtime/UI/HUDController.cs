@@ -612,7 +612,7 @@ namespace Arena.UI
                 for (int col = 0; col < ActionBarLayout.Columns; col++)
                 {
                     int index = GridIndex(row, col);
-                    string key = (col + 1).ToString();
+                    string key = string.Empty;
                     BuildSlot(
                         grid.transform,
                         key,
@@ -1657,7 +1657,7 @@ namespace Arena.UI
                 for (int col = 0; col < ActionBarLayout.Columns; col++)
                 {
                     int index = GridIndex(row, col);
-                    _abilityGridStates[index] = ActionBarSlotState.Empty(KeyLabelForCell(row, col));
+                    _abilityGridStates[index] = ActionBarSlotState.Empty(string.Empty);
                     SetActionBarSlotPresentation(_abilityGridCd[index], _abilityGridIcons[index], _abilityGridStates[index], SlotBg, null);
                     _abilityGridTooltips[index].Configure(_canvas, default);
                     _abilityGridClicks[index].Configure(null);
@@ -1668,50 +1668,82 @@ namespace Arena.UI
                 }
             }
 
-            foreach (ActionBarSlotBinding binding in ActionBarKeymap.SelectableBindings)
+            IReadOnlyList<ActiveActionBarAction> spells =
+                ActiveActionBarResolver.ResolveSpellBarActions(conn, owner);
+            IReadOnlyList<ActiveActionBarAction> techniques =
+                ActiveActionBarResolver.ResolveTechniqueBarActions(conn, owner);
+            RefreshProjectedActionBar(conn, owner, spells, firstRow: 0, alwaysVisible: true);
+            bool techniqueVisible = !string.Equals(
+                ActiveActionBarResolver.ResolveActiveDisciplineId(conn, owner),
+                "STAFF",
+                StringComparison.Ordinal);
+            RefreshProjectedActionBar(
+                conn,
+                owner,
+                techniques,
+                firstRow: ActionBarLayout.RowsPerBar,
+                alwaysVisible: techniqueVisible);
+        }
+
+        private void RefreshProjectedActionBar(
+            DbConnection? conn,
+            SpacetimeDB.Identity? owner,
+            IReadOnlyList<ActiveActionBarAction> actions,
+            int firstRow,
+            bool alwaysVisible)
+        {
+            int barCapacity = ActionBarLayout.RowsPerBar * ActionBarLayout.Columns;
+            int visibleCells = !alwaysVisible
+                ? 0
+                : actions.Count > ActionBarLayout.Columns
+                    ? barCapacity
+                    : ActionBarLayout.Columns;
+            for (int displayIndex = 0; displayIndex < barCapacity; displayIndex++)
             {
-                if (binding.Row >= ActionBarLayout.VisibleActionRows)
+                int row = firstRow + displayIndex / ActionBarLayout.Columns;
+                int col = displayIndex % ActionBarLayout.Columns;
+                int gridIndex = GridIndex(row, col);
+                SetActiveIfChanged(
+                    _abilityGridCd[gridIndex].transform.parent.gameObject,
+                    displayIndex < visibleCells);
+                if (displayIndex >= actions.Count)
                     continue;
 
-                ActiveActionBarAction resolved = ActiveActionBarResolver.ResolveActiveSelectableAction(
-                    conn,
-                    owner,
-                    binding.SlotId);
-
+                ActiveActionBarAction resolved = actions[displayIndex];
                 bool isVisible = resolved.HasAssignedAction;
                 string label = isVisible ? resolved.DisplayName : string.Empty;
                 bool capacitorCharged = isVisible
                     && CapacitorPresentation.IsCapacitorAction(resolved)
                     && CapacitorPresentation.IsCharged(conn, owner);
-                Sprite? iconSprite = isVisible ? ActionIconResolver.ResolveForAction(conn, owner, resolved) : null;
-                Color slotColor = resolved.IsFixed
-                    ? (FixedActionDispatcher.IsEnabled(resolved.ActionId, conn)
-                        ? FixedActionColor(resolved.ActionId)
-                        : DisabledFixedActionColor(resolved.ActionId))
-                    : ResolveActionBarColor(conn, resolved.AbilityId, isVisible);
-                int index = GridIndex(binding.Row, binding.Col);
-                bool usesHoldInput = resolved.IsFixed
-                    && string.Equals(
-                        WireIdentifier.Normalize(resolved.ActionId),
-                        FixedActionIds.Parry,
-                        StringComparison.Ordinal);
-                _abilityGridStates[index] = new ActionBarSlotState(
-                    binding.KeyLabel,
+                Sprite? iconSprite = isVisible
+                    ? ActionIconResolver.ResolveForAction(conn, owner, resolved)
+                    : null;
+                Color slotColor = ResolveActionBarColor(conn, resolved.AbilityId, isVisible);
+                string keyLabel = ActionBarKeymap.TryGetBindingForSlotId(
+                    resolved.SlotId,
+                    out ActionBarSlotBinding binding)
+                    ? binding.KeyLabel
+                    : string.Empty;
+                _abilityGridStates[gridIndex] = new ActionBarSlotState(
+                    keyLabel,
                     iconSprite == null ? label : string.Empty,
                     isVisible,
-                    resolved.IsFixed,
+                    false,
                     resolved.ActionId,
                     resolved.AbilityId,
                     !resolved.IsCombatModeToggleAbility && UsesGlobalCooldown(resolved.ActionId, string.Empty),
                     ResolveRequiresTargetLos(conn, resolved),
                     capacitorCharged,
                     ResolveCooldownActionId(conn, owner, resolved.AbilityId, resolved.ActionId));
-                SetActionBarSlotPresentation(_abilityGridCd[index], _abilityGridIcons[index], _abilityGridStates[index], slotColor, iconSprite);
-                _abilityGridClicks[index].Configure(
-                    isVisible ? () => TriggerActionRef(conn, resolved) : null,
-                    isVisible && usesHoldInput ? () => ReleaseActionRef(conn, resolved) : null,
-                    usesHoldInput);
-                _abilityGridTooltips[index].Configure(
+                SetActionBarSlotPresentation(
+                    _abilityGridCd[gridIndex],
+                    _abilityGridIcons[gridIndex],
+                    _abilityGridStates[gridIndex],
+                    slotColor,
+                    iconSprite);
+                _abilityGridClicks[gridIndex].Configure(
+                    isVisible ? () => TriggerActionRef(conn, resolved) : null);
+                _abilityGridTooltips[gridIndex].Configure(
                     _canvas,
                     ActionTooltipResolver.ResolveForActionRef(conn, owner, resolved),
                     pollHover: true);

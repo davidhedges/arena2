@@ -450,18 +450,18 @@ namespace Arena.UI
                 .ThenBy(row => row.ItemDefId, StringComparer.Ordinal));
 
             _activeSetId = WireIdentifier.Normalize(hub.ArmorLoadout?.ArmorSetId);
-            HubCombatBuildDraft? build = hub.CombatBuild;
-            _weaponDisciplineId = ResolveEditedDisciplineId(build);
-            HubCombatBuildDisciplineConfiguration? configuration =
-                build?.FindConfiguration(_weaponDisciplineId);
+            CombatBuildV2DraftModel? build = hub.CombatBuild;
+            _weaponDisciplineId = ResolveEditedDisciplineId(build, hub.CombatBuildCatalog);
+            CombatBuildV2DisciplineConfigurationModel? configuration =
+                build?.FindDisciplineConfiguration(_weaponDisciplineId);
             _activeMainHandId = WireIdentifier.Normalize(
-                configuration?.Weapon.MainHandItemDefId);
+                configuration?.MainHandItemDefId);
             _activeOffHandId = WireIdentifier.Normalize(
-                configuration?.Weapon.OffHandItemDefId);
+                configuration?.OffHandItemDefId);
             _activeMainHandColorId = WireIdentifier.Normalize(
-                configuration?.Weapon.MainHandColorId);
+                configuration?.MainHandColorId);
             _activeOffHandColorId = WireIdentifier.Normalize(
-                configuration?.Weapon.OffHandColorId);
+                configuration?.OffHandColorId);
 
             if (_sets.Count == 0)
             {
@@ -1070,16 +1070,19 @@ namespace Arena.UI
                 ?? _weaponDisciplineId.Replace('_', ' ');
         }
 
-        private static string ResolveEditedDisciplineId(HubCombatBuildDraft? build)
+        private static string ResolveEditedDisciplineId(
+            CombatBuildV2DraftModel? build,
+            CombatBuildV2CatalogModel? catalog)
         {
             if (build == null)
                 return string.Empty;
             if (!string.IsNullOrWhiteSpace(build.StartingDisciplineId))
                 return WireIdentifier.Normalize(build.StartingDisciplineId);
 
-            return build.SelectedDisciplines
+            return build.SelectedSpecializations
                 .OrderBy(selected => selected.SlotIndex)
-                .Select(selected => WireIdentifier.Normalize(selected.CombatDisciplineId))
+                .Select(selected => catalog?.FindSpecialization(selected.SpecializationId)?.CombatDisciplineId)
+                .Select(WireIdentifier.Normalize)
                 .FirstOrDefault() ?? string.Empty;
         }
 
@@ -1211,11 +1214,11 @@ namespace Arena.UI
             }
 
             HubNetworkManager? hub = _hubNetwork;
-            HubCombatBuildDraft? build = hub?.CombatBuild;
+            CombatBuildV2DraftModel? build = hub?.CombatBuild;
             if (hub == null
                 || !hub.IsReady
                 || build == null
-                || build.FindConfiguration(_weaponDisciplineId) == null
+                || build.FindDisciplineConfiguration(_weaponDisciplineId) == null
                 || _weaponEquipPending)
             {
                 ShowToast("Connect to save this discipline's weapon configuration.");
@@ -1229,9 +1232,9 @@ namespace Arena.UI
             _weaponEquipPending = true;
             RenderWeaponDetails();
 
-            HubCombatBuildDraft updated = build.WithWeapon(
-                _weaponDisciplineId,
-                new HubCombatBuildWeapon(
+            CombatBuildV2DraftModel updated = build.WithDisciplineConfiguration(
+                new CombatBuildV2DisciplineConfigurationModel(
+                    _weaponDisciplineId,
                     _pendingMainHandId,
                     _pendingMainHandColorId,
                     _pendingOffHandId,

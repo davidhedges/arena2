@@ -513,10 +513,10 @@ namespace Arena.UI
             if (Application.isPlaying)
             {
                 HubNetworkManager? hub = HubNetworkManager.Instance;
-                HubCombatBuildDraft? build = hub?.CombatBuild;
+                CombatBuildV2DraftModel? build = hub?.CombatBuild;
                 if (hub != null && build != null)
                 {
-                    string disciplineId = ResolveShowcaseDisciplineId(build);
+                    string disciplineId = ResolveShowcaseDisciplineId(build, hub.CombatBuildCatalog);
                     HubDisciplineSnapshot? discipline = hub.Disciplines.FirstOrDefault(candidate =>
                         string.Equals(
                             WireIdentifier.Normalize(candidate.Id),
@@ -576,12 +576,13 @@ namespace Arena.UI
 
         private ShowcaseWeaponSelection ResolveShowcaseWeaponSelection()
         {
-            HubCombatBuildDraft? build = HubNetworkManager.Instance?.CombatBuild;
+            HubNetworkManager? hub = HubNetworkManager.Instance;
+            CombatBuildV2DraftModel? build = hub?.CombatBuild;
             string disciplineId = build == null
                 ? string.Empty
-                : ResolveShowcaseDisciplineId(build);
-            HubCombatBuildDisciplineConfiguration? configuration =
-                build?.FindConfiguration(disciplineId);
+                : ResolveShowcaseDisciplineId(build, hub?.CombatBuildCatalog);
+            CombatBuildV2DisciplineConfigurationModel? configuration =
+                build?.FindDisciplineConfiguration(disciplineId);
             return _hasShowcaseWeaponPreview
                 ? new ShowcaseWeaponSelection(
                     _showcaseMainHandPreviewId,
@@ -589,20 +590,23 @@ namespace Arena.UI
                     _showcaseOffHandPreviewId,
                     _showcaseOffHandPreviewColorId)
                 : new ShowcaseWeaponSelection(
-                    configuration?.Weapon.MainHandItemDefId,
-                    configuration?.Weapon.MainHandColorId,
-                    configuration?.Weapon.OffHandItemDefId,
-                    configuration?.Weapon.OffHandColorId);
+                    configuration?.MainHandItemDefId,
+                    configuration?.MainHandColorId,
+                    configuration?.OffHandItemDefId,
+                    configuration?.OffHandColorId);
         }
 
-        private static string ResolveShowcaseDisciplineId(HubCombatBuildDraft build)
+        private static string ResolveShowcaseDisciplineId(
+            CombatBuildV2DraftModel build,
+            CombatBuildV2CatalogModel? catalog)
         {
             if (!string.IsNullOrWhiteSpace(build.StartingDisciplineId))
                 return WireIdentifier.Normalize(build.StartingDisciplineId);
 
-            return build.SelectedDisciplines
+            return build.SelectedSpecializations
                 .OrderBy(selected => selected.SlotIndex)
-                .Select(selected => WireIdentifier.Normalize(selected.CombatDisciplineId))
+                .Select(selected => catalog?.FindSpecialization(selected.SpecializationId)?.CombatDisciplineId)
+                .Select(WireIdentifier.Normalize)
                 .FirstOrDefault() ?? string.Empty;
         }
 
