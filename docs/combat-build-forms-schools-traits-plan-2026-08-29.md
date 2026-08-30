@@ -786,6 +786,15 @@ canonical snapshot -> provisioner payload -> disposable match state with exact
 semantic equality, including three Schools and zero Staff Techniques; the
 canonical live path remains v1.
 
+Completion record (2026-08-29): PASS. The shared v2 contract now owns bounded
+canonical snapshot bytes and a selected-only materialization plan. Disposable
+PvP, open-world, and local-direct identities received the exact frozen Hub
+bytes and each materialized three Schools, one Staff parent, zero Techniques,
+three Spells, one Perk, one Trait, and Mastery. Schema v1 failed without
+mutation, provisioner v2 pass-through/equality fixtures passed, canonical v1
+counts stayed fixed, and all rehearsal identities were retired. See
+`docs/combat-build-forms-schools-traits-phase-3-evidence-2026-08-29.md`.
+
 ### Phase 4 — v2 runtime authorization in a disposable match
 
 Deliverables:

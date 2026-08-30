@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 pub(crate) const COMBAT_BUILD_V2_SCHEMA_VERSION: u32 = 2;
 pub(crate) const STAFF_DISCIPLINE_ID: &str = "STAFF";
 pub(crate) const MASTERY_TRAIT_ID: &str = "MASTERY";
+pub(crate) const MAX_COMBAT_BUILD_V2_SNAPSHOT_BYTES: usize = 64 * 1024;
 
 #[cfg(not(feature = "pvp_match"))]
 const COMBAT_BUILD_V2_CATALOG_JSON: &str = include_str!("combat_build_v2_catalog.shared.json");
@@ -149,6 +150,44 @@ impl ValidatedCombatBuildV2 {
     pub(crate) fn selected_feature_count(&self) -> usize {
         self.technique_count + self.spell_count + self.perk_count
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MaterializedCombatSpecializationV2 {
+    pub slot_index: u8,
+    pub specialization_id: String,
+    pub combat_discipline_id: String,
+    pub specialization_kind: CombatSpecializationKind,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MaterializedCombatFeatureV2 {
+    pub specialization_id: String,
+    pub combat_discipline_id: String,
+    pub ability_id: String,
+    pub loadout_kind: CombatFeatureLoadoutKind,
+    pub bar_order: Option<u8>,
+}
+
+/// Queue-independent, selected-only state written into a disposable gameplay
+/// database. PvP, open-world, and local-direct admission all consume this same
+/// plan so dormant preferences can never leak into runtime authorization.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CombatBuildV2MaterializationPlan {
+    pub schema_version: u32,
+    pub revision: u64,
+    pub starting_discipline_id: String,
+    pub selected_specializations: Vec<MaterializedCombatSpecializationV2>,
+    pub parent_discipline_ids: Vec<String>,
+    pub discipline_configurations: Vec<CombatBuildV2DisciplineConfiguration>,
+    pub techniques: Vec<MaterializedCombatFeatureV2>,
+    pub spells: Vec<MaterializedCombatFeatureV2>,
+    pub perks: Vec<MaterializedCombatFeatureV2>,
+    pub traits: Vec<String>,
+    pub mastery_active: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -696,6 +735,177 @@ impl CombatBuildV2Catalog {
             .get(MASTERY_TRAIT_ID)
             .map(|row| row.modifier_scalar)
             .unwrap_or(0.0)
+    }
+
+    pub(crate) fn serialize_canonical_snapshot(
+        &self,
+        snapshot: &CombatBuildV2Snapshot,
+    ) -> Result<String, String> {
+        let validated = self
+            .validate_snapshot(snapshot)
+            .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
+        if validated.snapshot != *snapshot {
+            return Err(
+                "COMBAT_BUILD_V2_SNAPSHOT_NOT_CANONICAL: typed snapshot requires normalization"
+                    .to_string(),
+            );
+        }
+        serde_json::to_string(snapshot)
+            .map_err(|error| format!("COMBAT_BUILD_V2_SNAPSHOT_SERIALIZATION_FAILED: {error}"))
+    }
+
+    pub(crate) fn validate_canonical_snapshot_json(
+        &self,
+        snapshot_json: &str,
+    ) -> Result<ValidatedCombatBuildV2, String> {
+        if snapshot_json.is_empty() || snapshot_json.len() > MAX_COMBAT_BUILD_V2_SNAPSHOT_BYTES {
+            return Err(format!(
+                "COMBAT_BUILD_V2_SNAPSHOT_SIZE: snapshot must contain 1..={MAX_COMBAT_BUILD_V2_SNAPSHOT_BYTES} bytes"
+            ));
+        }
+        let snapshot: CombatBuildV2Snapshot = serde_json::from_str(snapshot_json)
+            .map_err(|error| format!("COMBAT_BUILD_V2_SNAPSHOT_INVALID_JSON: {error}"))?;
+        let validated = self
+            .validate_snapshot(&snapshot)
+            .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
+        if validated.snapshot != snapshot {
+            return Err(
+                "COMBAT_BUILD_V2_SNAPSHOT_NOT_CANONICAL: payload requires normalization"
+                    .to_string(),
+            );
+        }
+        let canonical_json = serde_json::to_string(&validated.snapshot)
+            .map_err(|error| format!("COMBAT_BUILD_V2_SNAPSHOT_SERIALIZATION_FAILED: {error}"))?;
+        if canonical_json != snapshot_json {
+            return Err(
+                "COMBAT_BUILD_V2_SNAPSHOT_NOT_CANONICAL: payload differs from canonical bytes"
+                    .to_string(),
+            );
+        }
+        Ok(validated)
+    }
+
+    pub(crate) fn materialization_plan(
+        &self,
+        validated: &ValidatedCombatBuildV2,
+    ) -> Result<CombatBuildV2MaterializationPlan, String> {
+        let revalidated = self
+            .validate_snapshot(&validated.snapshot)
+            .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
+        if revalidated != *validated {
+            return Err(
+                "COMBAT_BUILD_V2_MATERIALIZATION_INPUT_DIVERGED: validated projection does not match snapshot"
+                    .to_string(),
+            );
+        }
+
+        let selected_specializations = validated
+            .snapshot
+            .selected_specializations
+            .iter()
+            .map(|selected| {
+                let specialization = self
+                    .specializations
+                    .get(&selected.specialization_id)
+                    .expect("validated Specialization must exist");
+                MaterializedCombatSpecializationV2 {
+                    slot_index: selected.slot_index,
+                    specialization_id: selected.specialization_id.clone(),
+                    combat_discipline_id: specialization.combat_discipline_id.clone(),
+                    specialization_kind: specialization.specialization_kind,
+                }
+            })
+            .collect();
+
+        let discipline_configurations = validated
+            .projection
+            .parent_discipline_ids
+            .iter()
+            .map(|discipline_id| {
+                validated
+                    .snapshot
+                    .discipline_configurations
+                    .iter()
+                    .find(|row| row.combat_discipline_id == *discipline_id)
+                    .expect("validated selected parent must have a configuration")
+                    .clone()
+            })
+            .collect();
+
+        let techniques = validated
+            .projection
+            .technique_bars
+            .iter()
+            .flat_map(|bar| {
+                bar.ability_ids
+                    .iter()
+                    .enumerate()
+                    .map(|(order, ability_id)| {
+                        self.materialized_feature(
+                            &validated.snapshot,
+                            ability_id,
+                            Some(order as u8),
+                        )
+                    })
+            })
+            .collect();
+        let spells = validated
+            .projection
+            .spell_ability_ids
+            .iter()
+            .enumerate()
+            .map(|(order, ability_id)| {
+                self.materialized_feature(&validated.snapshot, ability_id, Some(order as u8))
+            })
+            .collect();
+        let perks = validated
+            .projection
+            .perk_ability_ids
+            .iter()
+            .map(|ability_id| self.materialized_feature(&validated.snapshot, ability_id, None))
+            .collect();
+
+        Ok(CombatBuildV2MaterializationPlan {
+            schema_version: validated.snapshot.schema_version,
+            revision: validated.snapshot.revision,
+            starting_discipline_id: validated.snapshot.starting_discipline_id.clone(),
+            selected_specializations,
+            parent_discipline_ids: validated.projection.parent_discipline_ids.clone(),
+            discipline_configurations,
+            techniques,
+            spells,
+            perks,
+            traits: validated.projection.trait_ability_ids.clone(),
+            mastery_active: validated.projection.mastery_active,
+        })
+    }
+
+    fn materialized_feature(
+        &self,
+        snapshot: &CombatBuildV2Snapshot,
+        ability_id: &str,
+        bar_order: Option<u8>,
+    ) -> MaterializedCombatFeatureV2 {
+        let selection = snapshot
+            .selected_features
+            .iter()
+            .find(|row| row.ability_id == ability_id)
+            .expect("validated projected feature must have a selection");
+        let feature = self
+            .features
+            .get(ability_id)
+            .expect("validated projected feature must exist");
+        let specialization = self
+            .specializations
+            .get(&feature.specialization_id)
+            .expect("validated feature owner must exist");
+        MaterializedCombatFeatureV2 {
+            specialization_id: selection.specialization_id.clone(),
+            combat_discipline_id: specialization.combat_discipline_id.clone(),
+            ability_id: ability_id.to_string(),
+            loadout_kind: feature.loadout_kind,
+            bar_order,
+        }
     }
 }
 
@@ -2377,6 +2587,105 @@ mod tests {
             .validate_snapshot(&old)
             .expect_err("old snapshot must fail");
         assert_eq!(error.code, CombatBuildV2ErrorCode::UnsupportedSchemaVersion);
+    }
+
+    #[test]
+    fn snapshot_wire_bytes_are_canonical_bounded_and_version_rejecting() {
+        let catalog = catalog();
+        let draft = catalog.default_draft();
+        let validated = catalog
+            .validate_draft(&draft, draft.revision)
+            .expect("default snapshot");
+        let encoded = catalog
+            .serialize_canonical_snapshot(&validated.snapshot)
+            .expect("canonical serialization");
+        assert_eq!(
+            encoded,
+            "{\"schema_version\":2,\"revision\":0,\"starting_discipline_id\":\"DAGGERS\",\"selected_specializations\":[{\"slot_index\":0,\"specialization_id\":\"DAGGERS_BLADEDANCER\"}],\"dormant_specializations\":[],\"discipline_configurations\":[{\"combat_discipline_id\":\"DAGGERS\",\"main_hand_item_def_id\":\"TRAINING_DAGGER_PAIR\",\"main_hand_color_id\":\"\",\"off_hand_item_def_id\":\"\",\"off_hand_color_id\":\"\"}],\"selected_features\":[{\"specialization_id\":\"DAGGERS_BLADEDANCER\",\"ability_id\":\"DAGGER_QUICK_CUT\",\"preferred_bar_order\":0}],\"selected_traits\":[]}"
+        );
+        assert_eq!(
+            catalog
+                .validate_canonical_snapshot_json(encoded.as_str())
+                .expect("canonical bytes"),
+            validated
+        );
+
+        let pretty = serde_json::to_string_pretty(&validated.snapshot).unwrap();
+        assert!(catalog
+            .validate_canonical_snapshot_json(pretty.as_str())
+            .is_err_and(|error| error.starts_with("COMBAT_BUILD_V2_SNAPSHOT_NOT_CANONICAL")));
+        assert!(catalog
+            .validate_canonical_snapshot_json("")
+            .is_err_and(|error| error.starts_with("COMBAT_BUILD_V2_SNAPSHOT_SIZE")));
+        assert!(catalog
+            .validate_canonical_snapshot_json(
+                "x".repeat(MAX_COMBAT_BUILD_V2_SNAPSHOT_BYTES + 1).as_str()
+            )
+            .is_err_and(|error| error.starts_with("COMBAT_BUILD_V2_SNAPSHOT_SIZE")));
+
+        let mut old = validated.snapshot;
+        old.schema_version = 1;
+        let old_json = serde_json::to_string(&old).unwrap();
+        assert!(catalog
+            .validate_canonical_snapshot_json(old_json.as_str())
+            .is_err_and(|error| error
+                .starts_with(CombatBuildV2ErrorCode::UnsupportedSchemaVersion.as_str())));
+    }
+
+    #[test]
+    fn materialization_is_selected_only_queue_independent_and_has_no_staff_techniques() {
+        let catalog = catalog();
+        let draft = draft_for(
+            &["BLIGHT", "MORTALITY", "RUIN"],
+            &["DAGGERS_EXECUTIONER"],
+            vec![
+                selection("BLIGHT", "SPELL_ICICLE", Some(4)),
+                selection("BLIGHT", "BLIGHT_TOXIC_WEAPON", None),
+                selection("MORTALITY", "SPELL_VAMPIRIC_ORB", Some(2)),
+                selection("RUIN", "SPELL_FIREBALL", Some(0)),
+                selection("DAGGERS_EXECUTIONER", "DAGGER_GUT_RIPPER", Some(0)),
+            ],
+            &[MASTERY_TRAIT_ID],
+        );
+        let validated = catalog.validate_draft(&draft, 7).expect("three Schools");
+        let pvp_plan = catalog
+            .materialization_plan(&validated)
+            .expect("PvP materialization plan");
+        let open_world_plan = catalog
+            .materialization_plan(&validated)
+            .expect("open-world materialization plan");
+
+        assert_eq!(pvp_plan, open_world_plan);
+        assert_eq!(pvp_plan.parent_discipline_ids, [STAFF_DISCIPLINE_ID]);
+        assert_eq!(pvp_plan.selected_specializations.len(), 3);
+        assert_eq!(pvp_plan.discipline_configurations.len(), 1);
+        assert!(pvp_plan.techniques.is_empty());
+        assert_eq!(
+            pvp_plan
+                .spells
+                .iter()
+                .map(|row| row.ability_id.as_str())
+                .collect::<Vec<_>>(),
+            ["SPELL_FIREBALL", "SPELL_VAMPIRIC_ORB", "SPELL_ICICLE"]
+        );
+        assert_eq!(
+            pvp_plan
+                .perks
+                .iter()
+                .map(|row| row.ability_id.as_str())
+                .collect::<Vec<_>>(),
+            ["BLIGHT_TOXIC_WEAPON"]
+        );
+        assert_eq!(pvp_plan.traits, [MASTERY_TRAIT_ID]);
+        assert!(pvp_plan.mastery_active);
+        assert!(pvp_plan
+            .selected_specializations
+            .iter()
+            .all(|row| row.specialization_id != "DAGGERS_EXECUTIONER"));
+        assert!(pvp_plan
+            .discipline_configurations
+            .iter()
+            .all(|row| row.combat_discipline_id != "DAGGERS"));
     }
 
     #[test]

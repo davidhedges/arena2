@@ -71,6 +71,55 @@ def combat_build_snapshot_json(revision: int = 4) -> str:
     )
 
 
+def combat_build_v2_snapshot_json(revision: int = 12) -> str:
+    return json.dumps(
+        {
+            "schema_version": 2,
+            "revision": revision,
+            "starting_discipline_id": "STAFF",
+            "selected_specializations": [
+                {"slot_index": 0, "specialization_id": "BLIGHT"},
+                {"slot_index": 1, "specialization_id": "MORTALITY"},
+                {"slot_index": 2, "specialization_id": "RUIN"},
+            ],
+            "dormant_specializations": [],
+            "discipline_configurations": [
+                {
+                    "combat_discipline_id": "STAFF",
+                    "main_hand_item_def_id": "NEWBIE_STAFF_01",
+                    "main_hand_color_id": "",
+                    "off_hand_item_def_id": "",
+                    "off_hand_color_id": "",
+                }
+            ],
+            "selected_features": [
+                {
+                    "specialization_id": "BLIGHT",
+                    "ability_id": "BLIGHT_TOXIC_WEAPON",
+                    "preferred_bar_order": None,
+                },
+                {
+                    "specialization_id": "BLIGHT",
+                    "ability_id": "SPELL_ICICLE",
+                    "preferred_bar_order": 2,
+                },
+                {
+                    "specialization_id": "MORTALITY",
+                    "ability_id": "SPELL_VAMPIRIC_ORB",
+                    "preferred_bar_order": 1,
+                },
+                {
+                    "specialization_id": "RUIN",
+                    "ability_id": "SPELL_FIREBALL",
+                    "preferred_bar_order": 0,
+                },
+            ],
+            "selected_traits": ["MASTERY"],
+        },
+        separators=(",", ":"),
+    )
+
+
 class FakeApi:
     def __init__(self):
         self.hub_database = "arena-hub-local"
@@ -90,7 +139,16 @@ class FakeApi:
         self.delete_failures = 0
         self.close_ticket_failures = 0
 
-    def add_ticket(self, ticket_id: str, player_identity: str, created_at: int = 1_000) -> None:
+    def add_ticket(
+        self,
+        ticket_id: str,
+        player_identity: str,
+        created_at: int = 1_000,
+        *,
+        snapshot_json: str | None = None,
+        contract_schema_version: int = 1,
+        combat_build_revision: int = 4,
+    ) -> None:
         self.tickets[ticket_id] = {
             "ticket_id": ticket_id,
             "player_identity": identity_arg(player_identity),
@@ -114,9 +172,11 @@ class FakeApi:
         self.combat_build_snapshots[ticket_id] = {
             "ticket_id": ticket_id,
             "player_identity": identity_arg(player_identity),
-            "contract_schema_version": 1,
-            "combat_build_revision": 4,
-            "combat_build_snapshot_json": combat_build_snapshot_json(),
+            "contract_schema_version": contract_schema_version,
+            "combat_build_revision": combat_build_revision,
+            "combat_build_snapshot_json": snapshot_json
+            if snapshot_json is not None
+            else combat_build_snapshot_json(),
             "armor_set_id": "IRON",
             "captured_at": timestamp_arg(created_at),
         }
@@ -230,9 +290,9 @@ class FakeApi:
                 {
                     "player_identity": arguments[5],
                     "display_name": str(arguments[6]),
-                    "contract_schema_version": combat_build[
-                        "contract_schema_version"
-                    ],
+                    "contract_schema_version": combat_build.get(
+                        "contract_schema_version", combat_build.get("schema_version")
+                    ),
                     "combat_build_revision": combat_build["revision"],
                     "combat_build_snapshot_json": str(arguments[7]),
                     "armor_set_id": str(arguments[8]),
@@ -428,6 +488,50 @@ class ProvisionerTests(unittest.TestCase):
         self.assertEqual(len(bootstrap_args), 9)
         self.assertEqual(bootstrap_args[7], frozen["combat_build_snapshot_json"])
         self.assertEqual(bootstrap_args[8], frozen["armor_set_id"])
+
+    def test_v2_snapshot_bytes_pass_through_opaquely_to_bootstrap(self) -> None:
+        frozen_json = combat_build_v2_snapshot_json()
+        self.api.add_ticket(
+            "ticket-v2",
+            PLAYER_ONE,
+            snapshot_json=frozen_json,
+            contract_schema_version=2,
+            combat_build_revision=12,
+        )
+
+        self.run_quietly()
+
+        bootstrap_call = next(
+            call for call in self.api.calls if call[1].startswith("bootstrap_")
+        )
+        self.assertEqual(bootstrap_call[2][7], frozen_json)
+        allocation = self.store.get("ticket-v2")
+        reservation = self.api.databases[allocation.database_identity]["reservations"][0]
+        self.assertEqual(reservation["contract_schema_version"], 2)
+        self.assertEqual(reservation["combat_build_revision"], 12)
+        self.assertEqual(reservation["combat_build_snapshot_json"], frozen_json)
+        self.assertEqual(json.loads(frozen_json)["selected_traits"], ["MASTERY"])
+
+    def test_v2_reservation_byte_drift_is_quarantined(self) -> None:
+        frozen_json = combat_build_v2_snapshot_json()
+        self.api.add_ticket(
+            "ticket-v2",
+            PLAYER_ONE,
+            snapshot_json=frozen_json,
+            contract_schema_version=2,
+            combat_build_revision=12,
+        )
+        provisioner = self.provisioner()
+        self.run_quietly(provisioner)
+        allocation = self.store.get("ticket-v2")
+        reservation = self.api.databases[allocation.database_identity]["reservations"][0]
+        reservation["combat_build_snapshot_json"] = f"{frozen_json} "
+
+        self.run_quietly(provisioner)
+
+        self.assertEqual(self.store.get("ticket-v2").state, "ORPHANED")
+        self.assertEqual(self.api.tickets["ticket-v2"]["status"], "CLOSED")
+        self.assertIn(allocation.database_identity, self.api.databases)
 
     def test_stale_sources_fail_the_ticket_without_publishing(self) -> None:
         provisioner = self.provisioner()

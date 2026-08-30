@@ -153,6 +153,42 @@ pub struct Phase2ProbeResult {
     pub completed_at: Timestamp,
 }
 
+/// Phase-owned equivalent of the canonical v1 frozen-ticket row. The JSON is
+/// represented as hex only so the shell rehearsal can transport exact bytes
+/// between disposable identities without terminal quoting changing them.
+#[table(accessor = match_player_combat_build_snapshot_v2, public)]
+#[derive(Clone)]
+pub struct MatchPlayerCombatBuildSnapshotV2 {
+    #[primary_key]
+    pub ticket_id: String,
+    #[index(btree)]
+    pub player_identity: Identity,
+    pub contract_schema_version: u32,
+    pub combat_build_revision: u64,
+    pub combat_build_snapshot_json_hex: String,
+    pub armor_set_id: String,
+    pub captured_at: Timestamp,
+}
+
+#[table(accessor = phase3_handoff_result, public)]
+#[derive(Clone)]
+pub struct Phase3HandoffResult {
+    #[primary_key]
+    pub owner: Identity,
+    pub ticket_id: String,
+    pub contract_schema_version: u32,
+    pub combat_build_revision: u64,
+    pub snapshot_json_hex: String,
+    pub selected_specialization_count: u32,
+    pub parent_discipline_count: u32,
+    pub technique_count: u32,
+    pub spell_count: u32,
+    pub perk_count: u32,
+    pub trait_count: u32,
+    pub mastery_active: bool,
+    pub completed_at: Timestamp,
+}
+
 #[derive(Clone, SpacetimeType)]
 pub struct SelectedSpecializationV2Input {
     pub slot_index: u8,
@@ -340,6 +376,100 @@ pub fn run_phase2_live_probe(ctx: &ReducerContext) -> Result<(), String> {
         ctx.db.phase2_probe_result().owner().update(row);
     } else {
         ctx.db.phase2_probe_result().insert(row);
+    }
+    Ok(())
+}
+
+/// Freezes a three-School aggregate into exact canonical v2 snapshot bytes.
+/// This is a rehearsal-only ticket seam and is never copied into the
+/// canonical Hub before the coordinated cutover.
+#[reducer]
+pub fn prepare_phase3_three_school_handoff(ctx: &ReducerContext) -> Result<(), String> {
+    let owner = ctx.sender();
+    ensure_default_combat_build_v2(ctx, owner)?;
+    let draft = CombatBuildV2Draft {
+        schema_version: COMBAT_BUILD_V2_SCHEMA_VERSION,
+        revision: current_revision(ctx, owner)?,
+        starting_discipline_id: Some("STAFF".to_string()),
+        selected_specializations: selected(&["BLIGHT", "MORTALITY", "RUIN"]),
+        dormant_specializations: Vec::new(),
+        discipline_configurations: vec![staff_configuration()],
+        selected_features: vec![
+            feature("BLIGHT", "SPELL_ICICLE", 2),
+            CombatFeatureSelection {
+                specialization_id: "BLIGHT".to_string(),
+                ability_id: "BLIGHT_TOXIC_WEAPON".to_string(),
+                preferred_bar_order: None,
+            },
+            feature("MORTALITY", "SPELL_VAMPIRIC_ORB", 1),
+            feature("RUIN", "SPELL_FIREBALL", 0),
+        ],
+        selected_traits: vec![MASTERY_TRAIT_ID.to_string()],
+    };
+    save_for_owner(ctx, owner, draft)?;
+
+    let catalog = CombatBuildV2Catalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_V2_CATALOG_INVALID: {error}"))?;
+    let validated = validated_for_owner(ctx, owner)?;
+    let snapshot_json = catalog.serialize_canonical_snapshot(&validated.snapshot)?;
+    let plan = catalog.materialization_plan(&validated)?;
+    if plan.parent_discipline_ids != ["STAFF"]
+        || !plan.techniques.is_empty()
+        || plan.spells.len() != 3
+        || plan.perks.len() != 1
+        || plan.traits != [MASTERY_TRAIT_ID]
+        || !plan.mastery_active
+    {
+        return Err("PHASE3_HUB_HANDOFF_INVALID: materialization plan diverged".to_string());
+    }
+
+    let ticket_id = format!("phase3-{}", &owner.to_hex()[..16]);
+    let snapshot_json_hex = hex_encode(snapshot_json.as_bytes());
+    let frozen = MatchPlayerCombatBuildSnapshotV2 {
+        ticket_id: ticket_id.clone(),
+        player_identity: owner,
+        contract_schema_version: validated.snapshot.schema_version,
+        combat_build_revision: validated.snapshot.revision,
+        combat_build_snapshot_json_hex: snapshot_json_hex.clone(),
+        armor_set_id: "IRON".to_string(),
+        captured_at: ctx.timestamp,
+    };
+    if ctx
+        .db
+        .match_player_combat_build_snapshot_v2()
+        .ticket_id()
+        .find(ticket_id.clone())
+        .is_some()
+    {
+        ctx.db
+            .match_player_combat_build_snapshot_v2()
+            .ticket_id()
+            .update(frozen);
+    } else {
+        ctx.db
+            .match_player_combat_build_snapshot_v2()
+            .insert(frozen);
+    }
+
+    let result = Phase3HandoffResult {
+        owner,
+        ticket_id,
+        contract_schema_version: validated.snapshot.schema_version,
+        combat_build_revision: validated.snapshot.revision,
+        snapshot_json_hex,
+        selected_specialization_count: plan.selected_specializations.len() as u32,
+        parent_discipline_count: plan.parent_discipline_ids.len() as u32,
+        technique_count: plan.techniques.len() as u32,
+        spell_count: plan.spells.len() as u32,
+        perk_count: plan.perks.len() as u32,
+        trait_count: plan.traits.len() as u32,
+        mastery_active: plan.mastery_active,
+        completed_at: ctx.timestamp,
+    };
+    if ctx.db.phase3_handoff_result().owner().find(owner).is_some() {
+        ctx.db.phase3_handoff_result().owner().update(result);
+    } else {
+        ctx.db.phase3_handoff_result().insert(result);
     }
     Ok(())
 }
@@ -803,6 +933,16 @@ fn aggregate_key(owner: Identity, parts: &[&str]) -> String {
         key.push_str(part);
     }
     key
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        encoded.push(HEX[(byte >> 4) as usize] as char);
+        encoded.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    encoded
 }
 
 fn sync_catalog_definitions(ctx: &ReducerContext) -> Result<(), String> {
