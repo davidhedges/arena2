@@ -819,6 +819,15 @@ authorization, and dormant/unselected features and unselected Traits fail
 closed; `MASTERY` modifies all reviewed outgoing-damage paths only for a
 one-parent build, and the call-site inventory is exhaustive.
 
+Completion record (2026-08-29): PASS. The disposable match now reconstructs a
+fail-closed normalized v2 view with distinct Technique, Spell, Perk, Trait,
+persistent-membership, and Mastery predicates. All eight anonymous live checks
+passed across Dagger, Staff, and Two-Handed Sword parents. The generated
+inventory classifies all 42 centralized active/passive calls and proves all 19
+direct frozen-table accesses remain confined to materialization or central
+authorization. Canonical v1 authorization remains untouched. See
+`docs/combat-build-forms-schools-traits-phase-4-evidence-2026-08-29.md`.
+
 ### Phase 5 — weapon switching, cast interruption, and animation compatibility
 
 Deliverables:

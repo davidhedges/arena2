@@ -1,0 +1,611 @@
+{
+  "api_call_counts": {
+    "active_selectable_ability_for_ability_id": 3,
+    "active_selectable_ability_for_authored_action": 10,
+    "player_build_contains_active_ability": 3,
+    "player_has_selected_passive_ability": 26
+  },
+  "direct_table_access_policy": {
+    "allowed_files": [
+      "server/src/match_contract.rs",
+      "server/src/progression.rs"
+    ],
+    "rule": "Frozen v1 table access is confined to materialization and the centralized authorization module; leaf gameplay code must use inventoried APIs"
+  },
+  "direct_table_accesses": [
+    {
+      "accessor": "match_combat_build_discipline",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "materialize_validated_combat_build",
+      "line": 517,
+      "path": "server/src/match_contract.rs",
+      "snippet": ".match_combat_build_discipline()"
+    },
+    {
+      "accessor": "match_staff_school_selection",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "materialize_validated_combat_build",
+      "line": 540,
+      "path": "server/src/match_contract.rs",
+      "snippet": ".match_staff_school_selection()"
+    },
+    {
+      "accessor": "match_discipline_action_bar_assignment",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "materialize_validated_combat_build",
+      "line": 548,
+      "path": "server/src/match_contract.rs",
+      "snippet": "ctx.db.match_discipline_action_bar_assignment().insert("
+    },
+    {
+      "accessor": "match_discipline_passive_selection",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "materialize_validated_combat_build",
+      "line": 563,
+      "path": "server/src/match_contract.rs",
+      "snippet": ".match_discipline_passive_selection()"
+    },
+    {
+      "accessor": "match_combat_build_discipline",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "materialize_player_combat_build_weapons_and_activate",
+      "line": 798,
+      "path": "server/src/match_contract.rs",
+      "snippet": ".match_combat_build_discipline()"
+    },
+    {
+      "accessor": "match_combat_build_discipline",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "clear_materialized_combat_build_rows",
+      "line": 927,
+      "path": "server/src/match_contract.rs",
+      "snippet": ".match_combat_build_discipline()"
+    },
+    {
+      "accessor": "match_combat_build_discipline",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "clear_materialized_combat_build_rows",
+      "line": 933,
+      "path": "server/src/match_contract.rs",
+      "snippet": "ctx.db.match_combat_build_discipline().key().delete(key);"
+    },
+    {
+      "accessor": "match_staff_school_selection",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "clear_materialized_combat_build_rows",
+      "line": 949,
+      "path": "server/src/match_contract.rs",
+      "snippet": ".match_staff_school_selection()"
+    },
+    {
+      "accessor": "match_staff_school_selection",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "clear_materialized_combat_build_rows",
+      "line": 955,
+      "path": "server/src/match_contract.rs",
+      "snippet": "ctx.db.match_staff_school_selection().key().delete(key);"
+    },
+    {
+      "accessor": "match_discipline_action_bar_assignment",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "clear_materialized_combat_build_rows",
+      "line": 960,
+      "path": "server/src/match_contract.rs",
+      "snippet": ".match_discipline_action_bar_assignment()"
+    },
+    {
+      "accessor": "match_discipline_action_bar_assignment",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "clear_materialized_combat_build_rows",
+      "line": 967,
+      "path": "server/src/match_contract.rs",
+      "snippet": ".match_discipline_action_bar_assignment()"
+    },
+    {
+      "accessor": "match_discipline_passive_selection",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "clear_materialized_combat_build_rows",
+      "line": 974,
+      "path": "server/src/match_contract.rs",
+      "snippet": ".match_discipline_passive_selection()"
+    },
+    {
+      "accessor": "match_discipline_passive_selection",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "clear_materialized_combat_build_rows",
+      "line": 981,
+      "path": "server/src/match_contract.rs",
+      "snippet": ".match_discipline_passive_selection()"
+    },
+    {
+      "accessor": "match_combat_build_discipline",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "frozen_build_contains_discipline",
+      "line": 1829,
+      "path": "server/src/progression.rs",
+      "snippet": ".match_combat_build_discipline()"
+    },
+    {
+      "accessor": "match_staff_school_selection",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "frozen_staff_school_is_selected",
+      "line": 1844,
+      "path": "server/src/progression.rs",
+      "snippet": ".match_staff_school_selection()"
+    },
+    {
+      "accessor": "match_discipline_passive_selection",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "player_has_selected_passive_ability",
+      "line": 2203,
+      "path": "server/src/progression.rs",
+      "snippet": ".match_discipline_passive_selection()"
+    },
+    {
+      "accessor": "match_discipline_action_bar_assignment",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "player_build_contains_active_ability",
+      "line": 2233,
+      "path": "server/src/progression.rs",
+      "snippet": ".match_discipline_action_bar_assignment()"
+    },
+    {
+      "accessor": "match_discipline_action_bar_assignment",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "frozen_active_ability_for_request",
+      "line": 2361,
+      "path": "server/src/progression.rs",
+      "snippet": ".match_discipline_action_bar_assignment()"
+    },
+    {
+      "accessor": "match_discipline_action_bar_assignment",
+      "disposition": "MATERIALIZATION_OR_CENTRAL_AUTHORITY_ONLY; no leaf gameplay consumer",
+      "enclosing_function": "active_action_bar_assignment_debug_summary",
+      "line": 2510,
+      "path": "server/src/progression.rs",
+      "snippet": ".match_discipline_action_bar_assignment()"
+    }
+  ],
+  "mastery_damage_insertion": {
+    "excluded_source_kinds": [
+      "SYSTEM",
+      "SELF_INFLICTED_FINAL",
+      "COPIED_FINAL"
+    ],
+    "function": "resolve_damage_amount",
+    "future_cutover_location": "non-system non_crit_multiplier",
+    "normal_player_authored_paths": [
+      "AUTO_ATTACK",
+      "TECHNIQUE",
+      "SPELL",
+      "OWNED_PERIODIC"
+    ],
+    "path": "server/src/combat.rs",
+    "reason": "Player and NPC targets both call resolve_damage_amount; self-inflicted, redirected/reckoning/assist-cost final amounts and Fulmination copied final damage branch before the normal outgoing multiplier chain"
+  },
+  "runtime_calls": [
+    {
+      "api": "active_selectable_ability_for_ability_id",
+      "classification": "ACTIVE_INVOCATION",
+      "cutover_target": "TECHNIQUE uses selected Technique plus active parent Discipline; SPELL uses the global selected Spell set under any selected active parent",
+      "enclosing_function": "arm_auto_attack_replacement",
+      "line": 96,
+      "path": "server/src/auto_attack.rs",
+      "phase4_disposition": "ROUTE_BY_V2_LOADOUT_KIND",
+      "snippet": "let Some(ability) = active_selectable_ability_for_ability_id(ctx, owner, ability_id.as_str())"
+    },
+    {
+      "api": "active_selectable_ability_for_ability_id",
+      "classification": "ACTIVE_INVOCATION",
+      "cutover_target": "TECHNIQUE uses selected Technique plus active parent Discipline; SPELL uses the global selected Spell set under any selected active parent",
+      "enclosing_function": "attempt_auto_attack_replacement",
+      "line": 1029,
+      "path": "server/src/auto_attack.rs",
+      "phase4_disposition": "ROUTE_BY_V2_LOADOUT_KIND",
+      "snippet": "active_selectable_ability_for_ability_id(ctx, row.owner, &pending.ability_id)"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "bloodlust_is_selected",
+      "line": 1468,
+      "path": "server/src/combat.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "player_has_selected_passive_ability(ctx, owner, spec.passive_id)"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "combat_stacking_passive_is_selected",
+      "line": 2526,
+      "path": "server/src/combat.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "player_has_selected_passive_ability(ctx, owner, spec.passive_id)"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "active_fracture_freezes_for_melee_attack",
+      "line": 6823,
+      "path": "server/src/combat.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "&& player_has_selected_passive_ability(ctx, effect.source, FRACTURE_PASSIVE_ID)"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "opportunist_passive_damage_multiplier",
+      "line": 7312,
+      "path": "server/src/combat.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "player_has_selected_passive_ability(ctx, hit.source, OPPORTUNIST_PASSIVE_ID);"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "tactical_advantage_passive_damage_multiplier",
+      "line": 7336,
+      "path": "server/src/combat.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "player_has_selected_passive_ability(ctx, hit.source, TACTICAL_ADVANTAGE_PASSIVE_ID);"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "queue_surprise_attack_stun_if_applicable",
+      "line": 7623,
+      "path": "server/src/combat.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "|| !player_has_selected_passive_ability(ctx, hit.source, \"SUBTLETY_SURPRISE_ATTACKS\")"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "arm_lingering_shade_for_voluntary_movement",
+      "line": 80,
+      "path": "server/src/lingering_shade.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "|| !player_has_selected_passive_ability(ctx, owner, LINGERING_SHADE_PASSIVE_ID)"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "return_to_lingering_shade",
+      "line": 223,
+      "path": "server/src/lingering_shade.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, LINGERING_SHADE_PASSIVE_ID)"
+    },
+    {
+      "api": "active_selectable_ability_for_authored_action",
+      "classification": "ACTIVE_INVOCATION",
+      "cutover_target": "TECHNIQUE uses selected Technique plus active parent Discipline; SPELL uses the global selected Spell set under any selected active parent",
+      "enclosing_function": "active_melee_gameplay_for_resolved_action",
+      "line": 2019,
+      "path": "server/src/melee.rs",
+      "phase4_disposition": "ROUTE_BY_V2_LOADOUT_KIND",
+      "snippet": "active_selectable_ability_for_authored_action(ctx, owner, &resolved.authored_id)"
+    },
+    {
+      "api": "active_selectable_ability_for_authored_action",
+      "classification": "ACTIVE_INVOCATION",
+      "cutover_target": "TECHNIQUE uses selected Technique plus active parent Discipline; SPELL uses the global selected Spell set under any selected active parent",
+      "enclosing_function": "active_melee_gameplay_for_resolved_action",
+      "line": 2043,
+      "path": "server/src/melee.rs",
+      "phase4_disposition": "ROUTE_BY_V2_LOADOUT_KIND",
+      "snippet": "active_selectable_ability_for_authored_action(ctx, owner, &root_authored_action_id)"
+    },
+    {
+      "api": "active_selectable_ability_for_authored_action",
+      "classification": "ACTIVE_INVOCATION",
+      "cutover_target": "TECHNIQUE uses selected Technique plus active parent Discipline; SPELL uses the global selected Spell set under any selected active parent",
+      "enclosing_function": "resolved_melee_action_resource_cost",
+      "line": 3425,
+      "path": "server/src/melee.rs",
+      "phase4_disposition": "ROUTE_BY_V2_LOADOUT_KIND",
+      "snippet": "let ability = active_selectable_ability_for_authored_action(ctx, owner, &resolved.authored_id)"
+    },
+    {
+      "api": "active_selectable_ability_for_authored_action",
+      "classification": "ACTIVE_INVOCATION",
+      "cutover_target": "TECHNIQUE uses selected Technique plus active parent Discipline; SPELL uses the global selected Spell set under any selected active parent",
+      "enclosing_function": "resolved_melee_action_resource_cost",
+      "line": 3427,
+      "path": "server/src/melee.rs",
+      "phase4_disposition": "ROUTE_BY_V2_LOADOUT_KIND",
+      "snippet": "active_selectable_ability_for_authored_action(ctx, owner, &root_authored_action_id)"
+    },
+    {
+      "api": "active_selectable_ability_for_authored_action",
+      "classification": "ACTIVE_INVOCATION",
+      "cutover_target": "TECHNIQUE uses selected Technique plus active parent Discipline; SPELL uses the global selected Spell set under any selected active parent",
+      "enclosing_function": "commit_projectile_release_channel_cost",
+      "line": 5027,
+      "path": "server/src/melee.rs",
+      "phase4_disposition": "ROUTE_BY_V2_LOADOUT_KIND",
+      "snippet": "let Some(ability) = active_selectable_ability_for_authored_action("
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "fixed_action_charge_config_for_owner",
+      "line": 967,
+      "path": "server/src/movement_actions.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "&& player_has_selected_passive_ability(ctx, owner, FLEET_FOOTED_PASSIVE_ID)"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "arm_surprise_attacks_from_shroud",
+      "line": 1692,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "|| !player_has_selected_passive_ability(ctx, owner, SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID)"
+    },
+    {
+      "api": "active_selectable_ability_for_ability_id",
+      "classification": "ACTIVE_INVOCATION",
+      "cutover_target": "TECHNIQUE uses selected Technique plus active parent Discipline; SPELL uses the global selected Spell set under any selected active parent",
+      "enclosing_function": "set_combat_mode",
+      "line": 1765,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "ROUTE_BY_V2_LOADOUT_KIND",
+      "snippet": "if active_selectable_ability_for_ability_id(ctx, owner, shroud.ability_id.as_str())"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "precision_maverick_for_owner",
+      "line": 5616,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, ARCHER_MAVERICK_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "precision_point_blank_for_owner",
+      "line": 5637,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, ARCHER_POINT_BLANK_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "precision_careful_aim_for_owner",
+      "line": 5664,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, ARCHER_CAREFUL_AIM_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "precision_perforation_for_owner",
+      "line": 5705,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "player_has_selected_passive_ability(ctx, owner, ARCHER_PERFORATION_ABILITY_ID)"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "ruin_flaming_weapon_on_hit_for_owner",
+      "line": 5756,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, RUIN_FLAMING_WEAPON_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "blight_toxic_weapon_on_hit_for_owner",
+      "line": 5784,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, BLIGHT_TOXIC_WEAPON_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "ruin_wildfire_ignite_for_owner",
+      "line": 5812,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, RUIN_WILDFIRE_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "ruin_furnace_mana_restore_ratio_for_owner",
+      "line": 5856,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, RUIN_FURNACE_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "divinity_faith_mana_regen_bonus_for_owner",
+      "line": 5876,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, DIVINITY_FAITH_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "primal_adaptation_for_owner",
+      "line": 5896,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, PRIMAL_ADAPTATION_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "primal_photosynthesis_for_owner",
+      "line": 5919,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, PRIMAL_PHOTOSYNTHESIS_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "primal_slipstream_cooldown_reduction_for_owner",
+      "line": 5952,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, PRIMAL_SLIPSTREAM_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "ruin_acceleration_cooldown_reduction_for_owner",
+      "line": 5970,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, RUIN_ACCELERATION_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "ruin_quickening_for_owner",
+      "line": 5990,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, RUIN_QUICKENING_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "ruin_chain_reaction_spell_for_owner",
+      "line": 6012,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, RUIN_CHAIN_REACTION_ABILITY_ID) {"
+    },
+    {
+      "api": "player_has_selected_passive_ability",
+      "classification": "SPECIALIZATION_PASSIVE_EFFECT",
+      "cutover_target": "selected Perk row whose source Specialization is selected; existing passive call sites do not become character-wide Traits",
+      "enclosing_function": "ruin_potential_crit_chance_per_stack_for_owner",
+      "line": 6032,
+      "path": "server/src/progression.rs",
+      "phase4_disposition": "SELECTED_PERK_SOURCE_PREDICATE",
+      "snippet": "if !player_has_selected_passive_ability(ctx, owner, RUIN_POTENTIAL_ABILITY_ID) {"
+    },
+    {
+      "api": "active_selectable_ability_for_authored_action",
+      "classification": "ACTIVE_INVOCATION",
+      "cutover_target": "TECHNIQUE uses selected Technique plus active parent Discipline; SPELL uses the global selected Spell set under any selected active parent",
+      "enclosing_function": "resolved_primary_resource_cost_for_amount",
+      "line": 283,
+      "path": "server/src/spells/casting.rs",
+      "phase4_disposition": "ROUTE_BY_V2_LOADOUT_KIND",
+      "snippet": "let ability = active_selectable_ability_for_authored_action("
+    },
+    {
+      "api": "active_selectable_ability_for_authored_action",
+      "classification": "ACTIVE_INVOCATION",
+      "cutover_target": "TECHNIQUE uses selected Technique plus active parent Discipline; SPELL uses the global selected Spell set under any selected active parent",
+      "enclosing_function": "ability_id_for_spell",
+      "line": 2438,
+      "path": "server/src/spells/casting.rs",
+      "phase4_disposition": "ROUTE_BY_V2_LOADOUT_KIND",
+      "snippet": "active_selectable_ability_for_authored_action(ctx, caster, &authored_action_id)"
+    },
+    {
+      "api": "active_selectable_ability_for_authored_action",
+      "classification": "ACTIVE_INVOCATION",
+      "cutover_target": "TECHNIQUE uses selected Technique plus active parent Discipline; SPELL uses the global selected Spell set under any selected active parent",
+      "enclosing_function": "charge_capacitor",
+      "line": 386,
+      "path": "server/src/spells/mod.rs",
+      "phase4_disposition": "ROUTE_BY_V2_LOADOUT_KIND",
+      "snippet": "if active_selectable_ability_for_authored_action("
+    },
+    {
+      "api": "active_selectable_ability_for_authored_action",
+      "classification": "ACTIVE_INVOCATION",
+      "cutover_target": "TECHNIQUE uses selected Technique plus active parent Discipline; SPELL uses the global selected Spell set under any selected active parent",
+      "enclosing_function": "cast_request",
+      "line": 491,
+      "path": "server/src/spells/mod.rs",
+      "phase4_disposition": "ROUTE_BY_V2_LOADOUT_KIND",
+      "snippet": "active_selectable_ability_for_authored_action(ctx, ctx.sender(), &authored_action_id)"
+    },
+    {
+      "api": "active_selectable_ability_for_authored_action",
+      "classification": "ACTIVE_INVOCATION",
+      "cutover_target": "TECHNIQUE uses selected Technique plus active parent Discipline; SPELL uses the global selected Spell set under any selected active parent",
+      "enclosing_function": "cast_request",
+      "line": 523,
+      "path": "server/src/spells/mod.rs",
+      "phase4_disposition": "ROUTE_BY_V2_LOADOUT_KIND",
+      "snippet": "&& active_selectable_ability_for_authored_action(ctx, ctx.sender(), &authored_action_id)"
+    },
+    {
+      "api": "player_build_contains_active_ability",
+      "classification": "PERSISTENT_ACTIVE_RECONCILIATION",
+      "cutover_target": "selected Technique-or-Spell membership independent of current parent; dormant and unselected features fail closed",
+      "enclosing_function": "reconcile_all",
+      "line": 35,
+      "path": "server/src/verdant_spirits.rs",
+      "phase4_disposition": "SELECTED_ACTIVE_MEMBERSHIP",
+      "snippet": "&& player_build_contains_active_ability(ctx, state.player_id, ABILITY_ID)"
+    },
+    {
+      "api": "player_build_contains_active_ability",
+      "classification": "PERSISTENT_ACTIVE_RECONCILIATION",
+      "cutover_target": "selected Technique-or-Spell membership independent of current parent; dormant and unselected features fail closed",
+      "enclosing_function": "bestow",
+      "line": 74,
+      "path": "server/src/verdant_spirits.rs",
+      "phase4_disposition": "SELECTED_ACTIVE_MEMBERSHIP",
+      "snippet": "|| !player_build_contains_active_ability(ctx, origin, ABILITY_ID)"
+    },
+    {
+      "api": "player_build_contains_active_ability",
+      "classification": "PERSISTENT_ACTIVE_RECONCILIATION",
+      "cutover_target": "selected Technique-or-Spell membership independent of current parent; dormant and unselected features fail closed",
+      "enclosing_function": "origin_is_active",
+      "line": 140,
+      "path": "server/src/verdant_spirits.rs",
+      "phase4_disposition": "SELECTED_ACTIVE_MEMBERSHIP",
+      "snippet": "&& player_build_contains_active_ability(ctx, origin, ABILITY_ID)"
+    }
+  ],
+  "schema_version": 1,
+  "scope": "SERVER_PLAYER_ACTIVE_PASSIVE_AUTHORIZATION_CALL_SITES",
+  "source_root": "server/src"
+}

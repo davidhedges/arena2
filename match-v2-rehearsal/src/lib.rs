@@ -6,13 +6,21 @@
 
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
+mod authorization;
+
 #[path = "../../server/src/combat_build_v2.rs"]
 #[allow(dead_code)]
 mod combat_build_v2_contract;
 
+use authorization::{
+    NormalizedFeatureGrantV2, NormalizedMatchBuildV2, OutgoingDamageScope,
+    REVIEWED_NORMAL_OUTGOING_DAMAGE_PATHS,
+};
 use combat_build_v2_contract::{
-    CombatBuildV2Catalog, CombatBuildV2MaterializationPlan, MaterializedCombatFeatureV2,
-    ValidatedCombatBuildV2,
+    CombatBuildV2Catalog, CombatBuildV2DisciplineConfiguration, CombatBuildV2Draft,
+    CombatBuildV2MaterializationPlan, CombatFeatureSelection, MaterializedCombatFeatureV2,
+    SelectedCombatSpecialization, ValidatedCombatBuildV2, COMBAT_BUILD_V2_SCHEMA_VERSION,
+    MASTERY_TRAIT_ID,
 };
 
 const QUEUE_UNRANKED: &str = "UNRANKED";
@@ -42,6 +50,14 @@ pub struct MatchCombatBuildV2 {
     pub starting_discipline_id: String,
     pub mastery_active: bool,
     pub materialized_at: Timestamp,
+}
+
+#[table(accessor = active_combat_build_discipline_v2, public)]
+pub struct ActiveCombatBuildDisciplineV2 {
+    #[primary_key]
+    pub owner: Identity,
+    pub combat_discipline_id: String,
+    pub updated_at: Timestamp,
 }
 
 #[table(accessor = match_selected_specialization_v2, public)]
@@ -130,6 +146,22 @@ pub struct Phase3MatchProbeResult {
     pub perk_count: u32,
     pub trait_count: u32,
     pub mastery_active: bool,
+    pub completed_at: Timestamp,
+}
+
+#[table(accessor = phase4_authorization_probe_result, public)]
+#[derive(Clone)]
+pub struct Phase4AuthorizationProbeResult {
+    #[primary_key]
+    pub owner: Identity,
+    pub spell_all_disciplines_passed: bool,
+    pub wrong_weapon_technique_passed: bool,
+    pub staff_no_technique_passed: bool,
+    pub perk_scope_passed: bool,
+    pub trait_scope_passed: bool,
+    pub dormant_unselected_fail_closed: bool,
+    pub persistent_active_membership_passed: bool,
+    pub mastery_damage_paths_passed: bool,
     pub completed_at: Timestamp,
 }
 
@@ -242,6 +274,251 @@ fn admit_snapshot(
     Ok(())
 }
 
+/// Anonymous disposable-match probe for the Phase 4 authorization contract.
+/// No canonical gameplay reducer calls this path.
+#[reducer]
+pub fn run_phase4_authorization_probe(ctx: &ReducerContext) -> Result<(), String> {
+    let owner = ctx.sender();
+    if ctx.db.match_combat_build_v2().owner().find(owner).is_some() {
+        return Err("PHASE4_PROBE_REQUIRES_FRESH_DATABASE: build already exists".to_string());
+    }
+    let catalog = CombatBuildV2Catalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_V2_CATALOG_INVALID: {error}"))?;
+    let mixed = mixed_authorization_draft();
+    let validated = catalog
+        .validate_draft(&mixed, mixed.revision)
+        .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
+    let plan = catalog.materialization_plan(&validated)?;
+    materialize_plan(ctx, owner, "AUTHORIZATION_PROBE".to_string(), &plan);
+
+    let mut spell_all_disciplines_passed = true;
+    for discipline_id in ["DAGGERS", "STAFF", "TWO_HANDED_SWORD"] {
+        set_active_discipline(ctx, owner, discipline_id);
+        let build = normalized_match_build_for_owner(ctx, owner)?;
+        spell_all_disciplines_passed &= build.authorize_spell("SPELL_FIREBALL").is_ok();
+    }
+
+    set_active_discipline(ctx, owner, "DAGGERS");
+    let daggers_active = normalized_match_build_for_owner(ctx, owner)?;
+    let dagger_own_technique = daggers_active
+        .authorize_technique("DAGGER_QUICK_CUT")
+        .is_ok();
+    let sword_wrong_under_daggers = daggers_active
+        .authorize_technique("WARRIOR_GROUND_TO_AIR_PLACEHOLDER")
+        .is_err_and(|denial| denial.as_str() == "WRONG_WEAPON");
+
+    set_active_discipline(ctx, owner, "TWO_HANDED_SWORD");
+    let sword_active = normalized_match_build_for_owner(ctx, owner)?;
+    let sword_own_technique = sword_active
+        .authorize_technique("WARRIOR_GROUND_TO_AIR_PLACEHOLDER")
+        .is_ok();
+    let dagger_wrong_under_sword = sword_active
+        .authorize_technique("DAGGER_QUICK_CUT")
+        .is_err_and(|denial| denial.as_str() == "WRONG_WEAPON");
+    let wrong_weapon_technique_passed = dagger_own_technique
+        && sword_wrong_under_daggers
+        && sword_own_technique
+        && dagger_wrong_under_sword;
+
+    set_active_discipline(ctx, owner, "STAFF");
+    let staff_active = normalized_match_build_for_owner(ctx, owner)?;
+    let staff_no_technique_passed = !ctx
+        .db
+        .match_technique_selection_v2()
+        .owner()
+        .filter(owner)
+        .any(|row| row.combat_discipline_id == "STAFF")
+        && staff_active
+            .authorize_technique("STAFF_STRIKE")
+            .is_err_and(|denial| denial.as_str() == "UNSELECTED_FEATURE")
+        && staff_active
+            .authorize_technique("DAGGER_QUICK_CUT")
+            .is_err_and(|denial| denial.as_str() == "WRONG_WEAPON");
+
+    let perk_scope_passed = staff_active.perk_is_active("RUIN_FLAMING_WEAPON")
+        && !staff_active.perk_is_active("BLIGHT_TOXIC_WEAPON")
+        && !staff_active.perk_is_active("SUBTLETY_SURPRISE_ATTACKS");
+    let trait_scope_passed =
+        staff_active.trait_is_selected(MASTERY_TRAIT_ID) && !staff_active.mastery_is_active();
+
+    set_active_discipline(ctx, owner, "DAGGERS");
+    let daggers_active = normalized_match_build_for_owner(ctx, owner)?;
+    let dormant_unselected_fail_closed = !daggers_active
+        .build_contains_selected_active("DAGGER_GUT_RIPPER")
+        && daggers_active
+            .authorize_technique("DAGGER_GUT_RIPPER")
+            .is_err_and(|denial| denial.as_str() == "UNSELECTED_FEATURE")
+        && daggers_active
+            .authorize_spell("SPELL_ICICLE")
+            .is_err_and(|denial| denial.as_str() == "UNSELECTED_FEATURE")
+        && !daggers_active.perk_is_active("SUBTLETY_SURPRISE_ATTACKS");
+    let persistent_active_membership_passed = daggers_active
+        .build_contains_selected_active("DAGGER_QUICK_CUT")
+        && daggers_active.build_contains_selected_active("SPELL_FIREBALL")
+        && daggers_active.build_contains_selected_active("WARRIOR_GROUND_TO_AIR_PLACEHOLDER")
+        && !daggers_active.build_contains_selected_active("DAGGER_GUT_RIPPER");
+
+    let mastery_scalar = catalog.mastery_modifier_scalar();
+    let one_parent_mastery = normalized_single_parent_fixture(&catalog, true)?;
+    let one_parent_without_mastery = normalized_single_parent_fixture(&catalog, false)?;
+    let mastery_damage_paths_passed = (mastery_scalar - 0.10).abs() < f32::EPSILON
+        && REVIEWED_NORMAL_OUTGOING_DAMAGE_PATHS.iter().all(|path| {
+            one_parent_mastery.apply_mastery_outgoing_damage(
+                100,
+                OutgoingDamageScope::PlayerAuthored(*path),
+                mastery_scalar,
+            ) == 110
+        })
+        && [
+            OutgoingDamageScope::System,
+            OutgoingDamageScope::SelfInflictedFinal,
+            OutgoingDamageScope::CopiedFinal,
+        ]
+        .iter()
+        .all(|scope| {
+            one_parent_mastery.apply_mastery_outgoing_damage(100, *scope, mastery_scalar) == 100
+        })
+        && REVIEWED_NORMAL_OUTGOING_DAMAGE_PATHS.iter().all(|path| {
+            daggers_active.apply_mastery_outgoing_damage(
+                100,
+                OutgoingDamageScope::PlayerAuthored(*path),
+                mastery_scalar,
+            ) == 100
+                && one_parent_without_mastery.apply_mastery_outgoing_damage(
+                    100,
+                    OutgoingDamageScope::PlayerAuthored(*path),
+                    mastery_scalar,
+                ) == 100
+        });
+
+    if !(spell_all_disciplines_passed
+        && wrong_weapon_technique_passed
+        && staff_no_technique_passed
+        && perk_scope_passed
+        && trait_scope_passed
+        && dormant_unselected_fail_closed
+        && persistent_active_membership_passed
+        && mastery_damage_paths_passed)
+    {
+        return Err("PHASE4_AUTHORIZATION_PROBE_FAILED: one or more checks failed".to_string());
+    }
+
+    ctx.db
+        .phase4_authorization_probe_result()
+        .insert(Phase4AuthorizationProbeResult {
+            owner,
+            spell_all_disciplines_passed,
+            wrong_weapon_technique_passed,
+            staff_no_technique_passed,
+            perk_scope_passed,
+            trait_scope_passed,
+            dormant_unselected_fail_closed,
+            persistent_active_membership_passed,
+            mastery_damage_paths_passed,
+            completed_at: ctx.timestamp,
+        });
+    Ok(())
+}
+
+fn mixed_authorization_draft() -> CombatBuildV2Draft {
+    CombatBuildV2Draft {
+        schema_version: COMBAT_BUILD_V2_SCHEMA_VERSION,
+        revision: 41,
+        starting_discipline_id: Some("DAGGERS".to_string()),
+        selected_specializations: selected_specializations(&[
+            "DAGGERS_BLADEDANCER",
+            "RUIN",
+            "TWO_HANDED_SWORD_VANGUARD",
+        ]),
+        dormant_specializations: vec!["DAGGERS_EXECUTIONER".to_string()],
+        discipline_configurations: vec![
+            discipline_configuration("DAGGERS"),
+            discipline_configuration("STAFF"),
+            discipline_configuration("TWO_HANDED_SWORD"),
+        ],
+        selected_features: vec![
+            draft_feature("DAGGERS_BLADEDANCER", "DAGGER_QUICK_CUT", Some(0)),
+            draft_feature("DAGGERS_EXECUTIONER", "DAGGER_GUT_RIPPER", Some(0)),
+            draft_feature("RUIN", "SPELL_FIREBALL", Some(0)),
+            draft_feature("RUIN", "RUIN_FLAMING_WEAPON", None),
+            draft_feature(
+                "TWO_HANDED_SWORD_VANGUARD",
+                "WARRIOR_GROUND_TO_AIR_PLACEHOLDER",
+                Some(0),
+            ),
+        ],
+        selected_traits: vec![MASTERY_TRAIT_ID.to_string()],
+    }
+}
+
+fn normalized_single_parent_fixture(
+    catalog: &CombatBuildV2Catalog,
+    mastery_selected: bool,
+) -> Result<NormalizedMatchBuildV2, String> {
+    let draft = CombatBuildV2Draft {
+        schema_version: COMBAT_BUILD_V2_SCHEMA_VERSION,
+        revision: 1,
+        starting_discipline_id: Some("DAGGERS".to_string()),
+        selected_specializations: selected_specializations(&["DAGGERS_BLADEDANCER"]),
+        dormant_specializations: Vec::new(),
+        discipline_configurations: vec![discipline_configuration("DAGGERS")],
+        selected_features: vec![draft_feature(
+            "DAGGERS_BLADEDANCER",
+            "DAGGER_QUICK_CUT",
+            Some(0),
+        )],
+        selected_traits: mastery_selected
+            .then(|| MASTERY_TRAIT_ID.to_string())
+            .into_iter()
+            .collect(),
+    };
+    let validated = catalog
+        .validate_draft(&draft, draft.revision)
+        .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
+    let plan = catalog.materialization_plan(&validated)?;
+    NormalizedMatchBuildV2::from_plan(&plan, Some("DAGGERS".to_string()))
+}
+
+fn selected_specializations(ids: &[&str]) -> Vec<SelectedCombatSpecialization> {
+    ids.iter()
+        .enumerate()
+        .map(
+            |(slot_index, specialization_id)| SelectedCombatSpecialization {
+                slot_index: slot_index as u8,
+                specialization_id: (*specialization_id).to_string(),
+            },
+        )
+        .collect()
+}
+
+fn draft_feature(
+    specialization_id: &str,
+    ability_id: &str,
+    preferred_bar_order: Option<u8>,
+) -> CombatFeatureSelection {
+    CombatFeatureSelection {
+        specialization_id: specialization_id.to_string(),
+        ability_id: ability_id.to_string(),
+        preferred_bar_order,
+    }
+}
+
+fn discipline_configuration(combat_discipline_id: &str) -> CombatBuildV2DisciplineConfiguration {
+    let (main_hand_item_def_id, off_hand_item_def_id) = match combat_discipline_id {
+        "DAGGERS" => ("TRAINING_DAGGER_PAIR", ""),
+        "STAFF" => ("NEWBIE_STAFF_01", ""),
+        "TWO_HANDED_SWORD" => ("TRAINING_TWO_HAND_SWORD", ""),
+        _ => panic!("unsupported authorization fixture Discipline '{combat_discipline_id}'"),
+    };
+    CombatBuildV2DisciplineConfiguration {
+        combat_discipline_id: combat_discipline_id.to_string(),
+        main_hand_item_def_id: main_hand_item_def_id.to_string(),
+        main_hand_color_id: String::new(),
+        off_hand_item_def_id: off_hand_item_def_id.to_string(),
+        off_hand_color_id: String::new(),
+    }
+}
+
 fn validated_payload(
     snapshot_json_hex: &str,
 ) -> Result<
@@ -340,6 +617,111 @@ fn materialize_plan(
                 ability_id: ability_id.clone(),
             });
     }
+}
+
+fn set_active_discipline(ctx: &ReducerContext, owner: Identity, combat_discipline_id: &str) {
+    let row = ActiveCombatBuildDisciplineV2 {
+        owner,
+        combat_discipline_id: combat_discipline_id.to_string(),
+        updated_at: ctx.timestamp,
+    };
+    if ctx
+        .db
+        .active_combat_build_discipline_v2()
+        .owner()
+        .find(owner)
+        .is_some()
+    {
+        ctx.db
+            .active_combat_build_discipline_v2()
+            .owner()
+            .update(row);
+    } else {
+        ctx.db.active_combat_build_discipline_v2().insert(row);
+    }
+}
+
+fn normalized_match_build_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Result<NormalizedMatchBuildV2, String> {
+    let root = ctx
+        .db
+        .match_combat_build_v2()
+        .owner()
+        .find(owner)
+        .ok_or_else(|| "COMBAT_BUILD_V2_RUNTIME_MISSING: owner has no build root".to_string())?;
+    let active_discipline_id = ctx
+        .db
+        .active_combat_build_discipline_v2()
+        .owner()
+        .find(owner)
+        .map(|row| row.combat_discipline_id);
+    let selected_specializations = ctx
+        .db
+        .match_selected_specialization_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| (row.specialization_id, row.combat_discipline_id))
+        .collect();
+    let parent_discipline_ids = ctx
+        .db
+        .match_discipline_configuration_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| row.combat_discipline_id)
+        .collect();
+    let techniques = ctx
+        .db
+        .match_technique_selection_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| NormalizedFeatureGrantV2 {
+            specialization_id: row.specialization_id,
+            combat_discipline_id: row.combat_discipline_id,
+            ability_id: row.ability_id,
+        })
+        .collect();
+    let spells = ctx
+        .db
+        .match_spell_selection_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| NormalizedFeatureGrantV2 {
+            specialization_id: row.specialization_id,
+            combat_discipline_id: row.combat_discipline_id,
+            ability_id: row.ability_id,
+        })
+        .collect();
+    let perks = ctx
+        .db
+        .match_perk_selection_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| NormalizedFeatureGrantV2 {
+            specialization_id: row.specialization_id,
+            combat_discipline_id: row.combat_discipline_id,
+            ability_id: row.ability_id,
+        })
+        .collect();
+    let traits = ctx
+        .db
+        .match_trait_selection_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| row.ability_id)
+        .collect();
+
+    NormalizedMatchBuildV2::new(
+        active_discipline_id,
+        selected_specializations,
+        parent_discipline_ids,
+        techniques,
+        spells,
+        perks,
+        traits,
+        root.mastery_active,
+    )
 }
 
 fn insert_technique(ctx: &ReducerContext, owner: Identity, feature: &MaterializedCombatFeatureV2) {
@@ -526,5 +908,86 @@ mod tests {
         assert_eq!(hex_encode(decoded.as_slice()), encoded);
         assert!(hex_decode("ABC0").is_err());
         assert!(hex_decode("0").is_err());
+    }
+
+    #[test]
+    fn normalized_authorization_separates_global_spells_from_weapon_techniques() {
+        let catalog = CombatBuildV2Catalog::from_shared_catalogs().unwrap();
+        let draft = mixed_authorization_draft();
+        let validated = catalog.validate_draft(&draft, draft.revision).unwrap();
+        let plan = catalog.materialization_plan(&validated).unwrap();
+        let no_active = NormalizedMatchBuildV2::from_plan(&plan, None).unwrap();
+        assert!(no_active
+            .authorize_spell("SPELL_FIREBALL")
+            .is_err_and(|denial| denial.as_str() == "NO_ACTIVE_DISCIPLINE"));
+
+        let daggers = no_active.with_active_discipline("DAGGERS").unwrap();
+        assert!(daggers.authorize_spell("SPELL_FIREBALL").is_ok());
+        assert!(daggers.authorize_technique("DAGGER_QUICK_CUT").is_ok());
+        assert!(daggers
+            .authorize_technique("WARRIOR_GROUND_TO_AIR_PLACEHOLDER")
+            .is_err_and(|denial| denial.as_str() == "WRONG_WEAPON"));
+
+        let staff = no_active.with_active_discipline("STAFF").unwrap();
+        assert!(staff.authorize_spell("SPELL_FIREBALL").is_ok());
+        assert!(staff
+            .authorize_technique("STAFF_STRIKE")
+            .is_err_and(|denial| denial.as_str() == "UNSELECTED_FEATURE"));
+        assert!(staff.perk_is_active("RUIN_FLAMING_WEAPON"));
+        assert!(!staff.perk_is_active("BLIGHT_TOXIC_WEAPON"));
+        assert!(staff.trait_is_selected(MASTERY_TRAIT_ID));
+        assert!(!staff.mastery_is_active());
+        assert!(!staff.build_contains_selected_active("DAGGER_GUT_RIPPER"));
+    }
+
+    #[test]
+    fn mastery_applies_only_to_reviewed_normal_paths_for_one_parent() {
+        let catalog = CombatBuildV2Catalog::from_shared_catalogs().unwrap();
+        let with_mastery = normalized_single_parent_fixture(&catalog, true).unwrap();
+        let without_mastery = normalized_single_parent_fixture(&catalog, false).unwrap();
+        let scalar = catalog.mastery_modifier_scalar();
+        for path in REVIEWED_NORMAL_OUTGOING_DAMAGE_PATHS {
+            let scope = OutgoingDamageScope::PlayerAuthored(path);
+            assert_eq!(
+                with_mastery.apply_mastery_outgoing_damage(100, scope, scalar),
+                110
+            );
+            assert_eq!(
+                without_mastery.apply_mastery_outgoing_damage(100, scope, scalar),
+                100
+            );
+        }
+        for scope in [
+            OutgoingDamageScope::System,
+            OutgoingDamageScope::SelfInflictedFinal,
+            OutgoingDamageScope::CopiedFinal,
+        ] {
+            assert_eq!(
+                with_mastery.apply_mastery_outgoing_damage(100, scope, scalar),
+                100
+            );
+        }
+    }
+
+    #[test]
+    fn normalized_runtime_rows_fail_closed_on_source_parent_divergence() {
+        let invalid = NormalizedMatchBuildV2::new(
+            Some("DAGGERS".to_string()),
+            vec![
+                ("DAGGERS_BLADEDANCER".to_string(), "DAGGERS".to_string()),
+                ("RUIN".to_string(), "STAFF".to_string()),
+            ],
+            vec!["DAGGERS".to_string(), "STAFF".to_string()],
+            Vec::new(),
+            vec![NormalizedFeatureGrantV2 {
+                specialization_id: "RUIN".to_string(),
+                combat_discipline_id: "DAGGERS".to_string(),
+                ability_id: "SPELL_FIREBALL".to_string(),
+            }],
+            Vec::new(),
+            Vec::new(),
+            false,
+        );
+        assert!(invalid.is_err_and(|error| error.contains("unselected source")));
     }
 }

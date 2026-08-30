@@ -8,3 +8,9 @@ fixtures.
 It must never be published over a canonical match or open-world identity. The
 Phase 3 runner gives every publication a unique `arena-cbv2-p3-*` name and
 deletes it on exit.
+
+Phase 4 adds a normalized, fail-closed authorization view only inside this
+rehearsal module. Its anonymous probe verifies global Spells, weapon-gated
+Techniques, selected-source Perks, character-wide Traits, dormant exclusion,
+persistent active membership, and Mastery damage scope before deleting its
+`arena-cbv2-p4-*` identity.
