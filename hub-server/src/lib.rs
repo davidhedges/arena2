@@ -16,6 +16,8 @@ use spacetimedb::{
 #[path = "../../server/src/combat_build.rs"]
 #[allow(dead_code)]
 mod combat_build_contract;
+#[path = "../../server/src/combat_build_v2.rs"]
+mod combat_build_v2_contract;
 
 use combat_build_contract::{
     default_combat_build_draft, CombatBuildCatalog, CombatBuildDraft,
@@ -23,6 +25,12 @@ use combat_build_contract::{
     DisciplineConfiguration as ContractDisciplineConfiguration,
     DisciplineWeaponConfiguration as ContractWeaponConfiguration,
     SelectedCombatDiscipline as ContractSelectedDiscipline, ValidatedCombatBuild,
+};
+use combat_build_v2_contract::{
+    CombatBuildV2Catalog, CombatBuildV2DisciplineConfiguration as ContractV2Configuration,
+    CombatBuildV2Draft as ContractV2Draft, CombatFeatureSelection as ContractV2Feature,
+    CombatSpecializationKind, SelectedCombatSpecialization as ContractV2Specialization,
+    ValidatedCombatBuildV2, COMBAT_BUILD_V2_SCHEMA_VERSION,
 };
 
 const SERVICE_CONFIG_ID: u8 = 0;
@@ -119,8 +127,11 @@ const WEAPON_APPEARANCE_CATALOG_HASH: u64 = extend_catalog_hash(
 );
 const HUB_CATALOG_PROJECTION_HASH: u64 = extend_catalog_hash(
     WEAPON_APPEARANCE_CATALOG_HASH,
-    b"combat-build-editor-projection-v1",
+    b"combat-build-editor-projection-v2",
 );
+
+const COMBAT_BUILD_V2_RESET_SNAPSHOT_SHA256: &str =
+    "9c9b6864142859c5b305c96e8270f72341508dc85a9c6cc63bc88a57ceaa3af5";
 
 #[table(accessor = hub_player)]
 pub struct HubPlayer {
@@ -214,6 +225,91 @@ pub struct DisciplinePassiveSelection {
     pub ability_id: String,
 }
 
+/// Canonical Combat Build v2 aggregate. The v1 tables above remain only long
+/// enough for the approved reset ledger and Phase 8 schema removal; they are
+/// no longer exposed through a view or reducer.
+#[table(accessor = combat_build_v2)]
+#[derive(Clone, PartialEq)]
+pub struct CombatBuildV2 {
+    #[primary_key]
+    pub owner: Identity,
+    pub starting_discipline_id: Option<String>,
+    pub revision: u64,
+    pub updated_at: Timestamp,
+}
+
+#[table(accessor = selected_specialization_v2)]
+#[derive(Clone, PartialEq)]
+pub struct SelectedSpecializationV2 {
+    #[primary_key]
+    pub owner_slot_key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub slot_index: u8,
+    pub specialization_id: String,
+}
+
+#[table(accessor = dormant_specialization_v2)]
+#[derive(Clone, PartialEq)]
+pub struct DormantSpecializationV2 {
+    #[primary_key]
+    pub owner_specialization_key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub specialization_id: String,
+}
+
+#[table(accessor = discipline_configuration_v2)]
+#[derive(Clone, PartialEq)]
+pub struct DisciplineConfigurationV2 {
+    #[primary_key]
+    pub owner_discipline_key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub combat_discipline_id: String,
+    pub main_hand_item_def_id: String,
+    pub main_hand_color_id: String,
+    pub off_hand_item_def_id: String,
+    pub off_hand_color_id: String,
+}
+
+#[table(accessor = specialization_feature_selection_v2)]
+#[derive(Clone, PartialEq)]
+pub struct SpecializationFeatureSelectionV2 {
+    #[primary_key]
+    pub owner_ability_key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub specialization_id: String,
+    pub ability_id: String,
+    pub preferred_bar_order: Option<u8>,
+}
+
+#[table(accessor = trait_selection_v2)]
+#[derive(Clone, PartialEq)]
+pub struct TraitSelectionV2 {
+    #[primary_key]
+    pub owner_trait_key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub ability_id: String,
+}
+
+/// Durable proof that the one approved combat-build-only reset ran against
+/// the exact Phase 0 snapshot/count contract.
+#[table(accessor = combat_build_v2_cutover_audit)]
+pub struct CombatBuildV2CutoverAudit {
+    #[primary_key]
+    pub singleton_id: u8,
+    pub snapshot_sha256: String,
+    pub v1_root_rows_before: u32,
+    pub v1_child_rows_before: u32,
+    pub hub_player_rows_preserved: u32,
+    pub armor_rows_preserved: u32,
+    pub v2_root_rows_after: u32,
+    pub executed_at: Timestamp,
+}
+
 /// Prevents every Hub connection from reparsing and rescanning the authored
 /// catalogs. The revision is derived from the embedded JSON and armor specs.
 #[table(accessor = hub_catalog_state)]
@@ -291,6 +387,57 @@ pub struct HubCombatBuildAbilityDefinition {
     pub resource_kind: String,
     pub resource_cost: f32,
     pub description: String,
+    pub sort_order: u32,
+}
+
+#[table(accessor = combat_build_v2_contract_definition, public)]
+#[derive(Clone, PartialEq)]
+pub struct CombatBuildV2ContractDefinition {
+    #[primary_key]
+    pub singleton_id: u8,
+    pub schema_version: u32,
+    pub minimum_selected_specializations: u32,
+    pub maximum_selected_specializations: u32,
+    pub global_feature_capacity: u32,
+    pub trait_capacity: u32,
+    pub direct_action_input_ids: Vec<String>,
+}
+
+#[table(accessor = combat_specialization_definition_v2, public)]
+#[derive(Clone, PartialEq)]
+pub struct CombatSpecializationDefinitionV2 {
+    #[primary_key]
+    pub specialization_id: String,
+    #[index(btree)]
+    pub combat_discipline_id: String,
+    pub specialization_kind: String,
+    pub display_name: String,
+    pub sort_order: u32,
+}
+
+#[table(accessor = combat_feature_definition_v2, public)]
+#[derive(Clone, PartialEq)]
+pub struct CombatFeatureDefinitionV2 {
+    #[primary_key]
+    pub ability_id: String,
+    #[index(btree)]
+    pub specialization_id: String,
+    pub combat_discipline_id: String,
+    pub loadout_kind: String,
+    pub display_name: String,
+    pub resource_kind: String,
+    pub resource_cost: f32,
+    pub sort_order: u32,
+}
+
+#[table(accessor = combat_trait_definition_v2, public)]
+#[derive(Clone, PartialEq)]
+pub struct CombatTraitDefinitionV2 {
+    #[primary_key]
+    pub ability_id: String,
+    pub loadout_kind: String,
+    pub display_name: String,
+    pub modifier_scalar: f32,
     pub sort_order: u32,
 }
 
@@ -468,6 +615,54 @@ pub struct MyCombatBuild {
     pub updated_at: Timestamp,
 }
 
+#[derive(Clone, SpacetimeType)]
+pub struct SelectedSpecializationV2Input {
+    pub slot_index: u8,
+    pub specialization_id: String,
+}
+
+#[derive(Clone, SpacetimeType)]
+pub struct DisciplineConfigurationV2Input {
+    pub combat_discipline_id: String,
+    pub main_hand_item_def_id: String,
+    pub main_hand_color_id: String,
+    pub off_hand_item_def_id: String,
+    pub off_hand_color_id: String,
+}
+
+#[derive(Clone, SpacetimeType)]
+pub struct CombatFeatureSelectionV2Input {
+    pub specialization_id: String,
+    pub ability_id: String,
+    pub preferred_bar_order: Option<u8>,
+}
+
+#[derive(Clone, SpacetimeType)]
+pub struct CombatBuildV2DraftInput {
+    pub schema_version: u32,
+    pub revision: u64,
+    pub starting_discipline_id: Option<String>,
+    pub selected_specializations: Vec<SelectedSpecializationV2Input>,
+    pub dormant_specializations: Vec<String>,
+    pub discipline_configurations: Vec<DisciplineConfigurationV2Input>,
+    pub selected_features: Vec<CombatFeatureSelectionV2Input>,
+    pub selected_traits: Vec<String>,
+}
+
+#[derive(SpacetimeType)]
+pub struct MyCombatBuildV2 {
+    pub owner: Identity,
+    pub schema_version: u32,
+    pub revision: u64,
+    pub starting_discipline_id: Option<String>,
+    pub selected_specializations: Vec<SelectedSpecializationV2Input>,
+    pub dormant_specializations: Vec<String>,
+    pub discipline_configurations: Vec<DisciplineConfigurationV2Input>,
+    pub selected_features: Vec<CombatFeatureSelectionV2Input>,
+    pub selected_traits: Vec<String>,
+    pub updated_at: Timestamp,
+}
+
 /// Carries no ticket/player data; changing `sequence` only wakes the service.
 #[derive(SpacetimeType)]
 pub struct ProvisionerWakeup {
@@ -522,7 +717,9 @@ pub fn my_hub_armor_selection(ctx: &ViewContext) -> Option<MyHubArmorSelection> 
         })
 }
 
-#[view(accessor = my_combat_build, public)]
+// Legacy read adapter retained only until Phase 8 source deletion. It is no
+// longer a SpacetimeDB view and therefore cannot be subscribed by clients.
+#[allow(dead_code)]
 pub fn my_combat_build(ctx: &ViewContext) -> Option<MyCombatBuild> {
     let build = ctx.db.combat_build().owner().find(ctx.sender())?;
 
@@ -624,6 +821,11 @@ pub fn my_combat_build(ctx: &ViewContext) -> Option<MyCombatBuild> {
     })
 }
 
+#[view(accessor = my_combat_build_v2, public)]
+pub fn my_combat_build_v2(ctx: &ViewContext) -> Option<MyCombatBuildV2> {
+    read_my_combat_build_v2(ctx, ctx.sender())
+}
+
 #[view(accessor = my_match_status, public)]
 pub fn my_match_status(ctx: &ViewContext) -> Option<MyMatchStatus> {
     let ticket = ctx.db.match_ticket().player_identity().find(ctx.sender())?;
@@ -705,11 +907,13 @@ pub fn client_connected(ctx: &ReducerContext) -> Result<(), String> {
     // whose existing databases do not rerun init.
     ensure_hub_loadout_catalogs(ctx)?;
     ensure_default_hub_player_armor_selection(ctx, ctx.sender())?;
-    ensure_default_combat_build(ctx, ctx.sender())?;
+    ensure_default_combat_build_v2(ctx, ctx.sender())?;
     Ok(())
 }
 
-#[reducer]
+// Legacy writer retained only until Phase 8 source deletion. Without the
+// reducer attribute it is not remotely callable and cannot compete with v2.
+#[allow(dead_code)]
 pub fn save_combat_build(ctx: &ReducerContext, draft: CombatBuildDraftInput) -> Result<(), String> {
     ensure_hub_player(ctx, ctx.sender());
     let expected_revision = ctx
@@ -729,6 +933,33 @@ pub fn save_combat_build(ctx: &ReducerContext, draft: CombatBuildDraftInput) -> 
         .validate_draft(&contract_draft, expected_revision)
         .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
     replace_combat_build(ctx, ctx.sender(), starting_discipline_id, validated);
+    Ok(())
+}
+
+#[reducer]
+pub fn save_combat_build_v2(
+    ctx: &ReducerContext,
+    draft: CombatBuildV2DraftInput,
+) -> Result<(), String> {
+    ensure_hub_player(ctx, ctx.sender());
+    ensure_default_combat_build_v2(ctx, ctx.sender())?;
+    let expected_revision = ctx
+        .db
+        .combat_build_v2()
+        .owner()
+        .find(ctx.sender())
+        .ok_or_else(|| {
+            "COMBAT_BUILD_V2_NOT_INITIALIZED: caller has no canonical v2 build".to_string()
+        })?
+        .revision;
+    let starting_discipline_id = draft.starting_discipline_id.clone();
+    let contract_draft = contract_v2_draft_from_input(draft);
+    let catalog = CombatBuildV2Catalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_V2_CATALOG_INVALID: {error}"))?;
+    let validated = catalog
+        .validate_draft(&contract_draft, expected_revision)
+        .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
+    replace_combat_build_v2(ctx, ctx.sender(), starting_discipline_id, validated);
     Ok(())
 }
 
@@ -774,7 +1005,7 @@ pub fn request_unranked_2v2_bot_match(
     ensure_hub_player(ctx, player_identity);
     ensure_hub_loadout_catalogs(ctx)?;
     ensure_default_hub_player_armor_selection(ctx, player_identity)?;
-    ensure_default_combat_build(ctx, player_identity)?;
+    ensure_default_combat_build_v2(ctx, player_identity)?;
 
     if let Some(existing) = ctx
         .db
@@ -840,7 +1071,7 @@ pub fn request_open_world_instance(
     ensure_hub_player(ctx, player_identity);
     ensure_hub_loadout_catalogs(ctx)?;
     ensure_default_hub_player_armor_selection(ctx, player_identity)?;
-    ensure_default_combat_build(ctx, player_identity)?;
+    ensure_default_combat_build_v2(ctx, player_identity)?;
 
     if let Some(existing) = ctx
         .db
@@ -1535,6 +1766,7 @@ fn sync_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
         .collect();
 
     sync_canonical_combat_build_catalogs(ctx, &authored, &weapon_catalog, &descriptions)?;
+    sync_combat_build_v2_catalogs(ctx)?;
 
     let armor_rows: Vec<HubArmorSetDefinition> = HUB_ARMOR_SET_SPECS
         .iter()
@@ -1903,6 +2135,186 @@ fn sync_canonical_combat_build_catalogs(
     Ok(())
 }
 
+fn sync_combat_build_v2_catalogs(ctx: &ReducerContext) -> Result<(), String> {
+    let catalog = CombatBuildV2Catalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_V2_CATALOG_INVALID: {error}"))?;
+    let rules = catalog.rules();
+    let contract = CombatBuildV2ContractDefinition {
+        singleton_id: 0,
+        schema_version: COMBAT_BUILD_V2_SCHEMA_VERSION,
+        minimum_selected_specializations: rules.minimum_selected_specializations as u32,
+        maximum_selected_specializations: rules.maximum_selected_specializations as u32,
+        global_feature_capacity: rules.global_feature_capacity as u32,
+        trait_capacity: rules.trait_capacity as u32,
+        direct_action_input_ids: rules.direct_action_input_ids.clone(),
+    };
+    match ctx
+        .db
+        .combat_build_v2_contract_definition()
+        .singleton_id()
+        .find(0)
+    {
+        Some(existing) if existing == contract => {}
+        Some(_) => {
+            ctx.db
+                .combat_build_v2_contract_definition()
+                .singleton_id()
+                .update(contract);
+        }
+        None => {
+            ctx.db
+                .combat_build_v2_contract_definition()
+                .insert(contract);
+        }
+    }
+
+    let specialization_rows: Vec<_> = catalog
+        .specialization_definitions()
+        .into_iter()
+        .map(|row| CombatSpecializationDefinitionV2 {
+            specialization_id: row.specialization_id,
+            combat_discipline_id: row.combat_discipline_id,
+            specialization_kind: match row.specialization_kind {
+                CombatSpecializationKind::Form => "FORM",
+                CombatSpecializationKind::School => "SCHOOL",
+            }
+            .to_string(),
+            display_name: row.display_name,
+            sort_order: row.sort_order,
+        })
+        .collect();
+    let specialization_ids: HashSet<_> = specialization_rows
+        .iter()
+        .map(|row| row.specialization_id.clone())
+        .collect();
+    for row in specialization_rows {
+        match ctx
+            .db
+            .combat_specialization_definition_v2()
+            .specialization_id()
+            .find(row.specialization_id.clone())
+        {
+            Some(existing) if existing == row => {}
+            Some(_) => {
+                ctx.db
+                    .combat_specialization_definition_v2()
+                    .specialization_id()
+                    .update(row);
+            }
+            None => {
+                ctx.db.combat_specialization_definition_v2().insert(row);
+            }
+        }
+    }
+    let stale_specialization_ids: Vec<_> = ctx
+        .db
+        .combat_specialization_definition_v2()
+        .iter()
+        .map(|row| row.specialization_id)
+        .filter(|id| !specialization_ids.contains(id))
+        .collect();
+    for id in stale_specialization_ids {
+        ctx.db
+            .combat_specialization_definition_v2()
+            .specialization_id()
+            .delete(id);
+    }
+
+    let feature_rows: Vec<_> = catalog
+        .feature_definitions()
+        .into_iter()
+        .map(|row| CombatFeatureDefinitionV2 {
+            ability_id: row.ability_id,
+            specialization_id: row.specialization_id,
+            combat_discipline_id: row.combat_discipline_id,
+            loadout_kind: row.loadout_kind.as_str().to_string(),
+            display_name: row.display_name,
+            resource_kind: row.resource_kind,
+            resource_cost: row.resource_cost,
+            sort_order: row.sort_order,
+        })
+        .collect();
+    let feature_ids: HashSet<_> = feature_rows
+        .iter()
+        .map(|row| row.ability_id.clone())
+        .collect();
+    for row in feature_rows {
+        match ctx
+            .db
+            .combat_feature_definition_v2()
+            .ability_id()
+            .find(row.ability_id.clone())
+        {
+            Some(existing) if existing == row => {}
+            Some(_) => {
+                ctx.db
+                    .combat_feature_definition_v2()
+                    .ability_id()
+                    .update(row);
+            }
+            None => {
+                ctx.db.combat_feature_definition_v2().insert(row);
+            }
+        }
+    }
+    let stale_feature_ids: Vec<_> = ctx
+        .db
+        .combat_feature_definition_v2()
+        .iter()
+        .map(|row| row.ability_id)
+        .filter(|id| !feature_ids.contains(id))
+        .collect();
+    for id in stale_feature_ids {
+        ctx.db
+            .combat_feature_definition_v2()
+            .ability_id()
+            .delete(id);
+    }
+
+    let trait_rows: Vec<_> = catalog
+        .trait_definitions()
+        .into_iter()
+        .map(|row| CombatTraitDefinitionV2 {
+            ability_id: row.ability_id,
+            loadout_kind: row.loadout_kind.as_str().to_string(),
+            display_name: row.display_name,
+            modifier_scalar: row.modifier_scalar,
+            sort_order: row.sort_order,
+        })
+        .collect();
+    let trait_ids: HashSet<_> = trait_rows
+        .iter()
+        .map(|row| row.ability_id.clone())
+        .collect();
+    for row in trait_rows {
+        match ctx
+            .db
+            .combat_trait_definition_v2()
+            .ability_id()
+            .find(row.ability_id.clone())
+        {
+            Some(existing) if existing == row => {}
+            Some(_) => {
+                ctx.db.combat_trait_definition_v2().ability_id().update(row);
+            }
+            None => {
+                ctx.db.combat_trait_definition_v2().insert(row);
+            }
+        }
+    }
+    let stale_trait_ids: Vec<_> = ctx
+        .db
+        .combat_trait_definition_v2()
+        .iter()
+        .map(|row| row.ability_id)
+        .filter(|id| !trait_ids.contains(id))
+        .collect();
+    for id in stale_trait_ids {
+        ctx.db.combat_trait_definition_v2().ability_id().delete(id);
+    }
+    Ok(())
+}
+
 fn starter_weapon_projection(
     weapon_catalog: &HubWeaponAppearanceCatalogFile,
     combat_discipline_id: &str,
@@ -2077,9 +2489,10 @@ fn freeze_player_combat_build_for_ticket(
     ticket_id: String,
     player_identity: Identity,
 ) -> Result<(), String> {
-    let validated = validated_combat_build_for_owner(ctx, player_identity)?;
-    let combat_build_snapshot_json = serde_json::to_string(&validated.snapshot)
-        .map_err(|error| format!("COMBAT_BUILD_SNAPSHOT_SERIALIZATION_FAILED: {error}"))?;
+    let validated = validated_combat_build_v2_for_owner(ctx, player_identity)?;
+    let catalog = CombatBuildV2Catalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_V2_CATALOG_INVALID: {error}"))?;
+    let combat_build_snapshot_json = catalog.serialize_canonical_snapshot(&validated.snapshot)?;
     let armor_set_id = ctx
         .db
         .hub_player_armor_selection()
@@ -2094,7 +2507,7 @@ fn freeze_player_combat_build_for_ticket(
         .insert(MatchPlayerCombatBuildSnapshot {
             ticket_id,
             player_identity,
-            contract_schema_version: validated.snapshot.contract_schema_version,
+            contract_schema_version: validated.snapshot.schema_version,
             combat_build_revision: validated.snapshot.revision,
             combat_build_snapshot_json,
             armor_set_id,
@@ -2459,6 +2872,473 @@ fn combat_build_key(owner: Identity, parts: &[&str]) -> String {
         key.push_str(part);
     }
     key
+}
+
+fn contract_v2_draft_from_input(draft: CombatBuildV2DraftInput) -> ContractV2Draft {
+    ContractV2Draft {
+        schema_version: draft.schema_version,
+        revision: draft.revision,
+        starting_discipline_id: draft.starting_discipline_id,
+        selected_specializations: draft
+            .selected_specializations
+            .into_iter()
+            .map(|row| ContractV2Specialization {
+                slot_index: row.slot_index,
+                specialization_id: row.specialization_id,
+            })
+            .collect(),
+        dormant_specializations: draft.dormant_specializations,
+        discipline_configurations: draft
+            .discipline_configurations
+            .into_iter()
+            .map(|row| ContractV2Configuration {
+                combat_discipline_id: row.combat_discipline_id,
+                main_hand_item_def_id: row.main_hand_item_def_id,
+                main_hand_color_id: row.main_hand_color_id,
+                off_hand_item_def_id: row.off_hand_item_def_id,
+                off_hand_color_id: row.off_hand_color_id,
+            })
+            .collect(),
+        selected_features: draft
+            .selected_features
+            .into_iter()
+            .map(|row| ContractV2Feature {
+                specialization_id: row.specialization_id,
+                ability_id: row.ability_id,
+                preferred_bar_order: row.preferred_bar_order,
+            })
+            .collect(),
+        selected_traits: draft.selected_traits,
+    }
+}
+
+fn ensure_default_combat_build_v2(ctx: &ReducerContext, owner: Identity) -> Result<(), String> {
+    if ctx.db.combat_build_v2().owner().find(owner).is_some() {
+        return Ok(());
+    }
+    let catalog = CombatBuildV2Catalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_V2_CATALOG_INVALID: {error}"))?;
+    let draft = catalog.default_draft();
+    let starting_discipline_id = draft.starting_discipline_id.clone();
+    let validated = catalog
+        .validate_draft(&draft, 0)
+        .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
+    replace_combat_build_v2(ctx, owner, starting_discipline_id, validated);
+    Ok(())
+}
+
+fn validated_combat_build_v2_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Result<ValidatedCombatBuildV2, String> {
+    let draft = combat_build_v2_draft_for_owner(ctx, owner)?;
+    CombatBuildV2Catalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_V2_CATALOG_INVALID: {error}"))?
+        .validate_draft(&draft, draft.revision)
+        .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))
+}
+
+fn combat_build_v2_draft_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Result<ContractV2Draft, String> {
+    let root = ctx
+        .db
+        .combat_build_v2()
+        .owner()
+        .find(owner)
+        .ok_or_else(|| {
+            "COMBAT_BUILD_V2_NOT_INITIALIZED: owner has no canonical v2 build".to_string()
+        })?;
+    let mut selected_specializations: Vec<_> = ctx
+        .db
+        .selected_specialization_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| ContractV2Specialization {
+            slot_index: row.slot_index,
+            specialization_id: row.specialization_id,
+        })
+        .collect();
+    selected_specializations.sort_by_key(|row| row.slot_index);
+    let mut dormant_specializations: Vec<_> = ctx
+        .db
+        .dormant_specialization_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| row.specialization_id)
+        .collect();
+    dormant_specializations.sort();
+    let mut discipline_configurations: Vec<_> = ctx
+        .db
+        .discipline_configuration_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| ContractV2Configuration {
+            combat_discipline_id: row.combat_discipline_id,
+            main_hand_item_def_id: row.main_hand_item_def_id,
+            main_hand_color_id: row.main_hand_color_id,
+            off_hand_item_def_id: row.off_hand_item_def_id,
+            off_hand_color_id: row.off_hand_color_id,
+        })
+        .collect();
+    discipline_configurations
+        .sort_by(|left, right| left.combat_discipline_id.cmp(&right.combat_discipline_id));
+    let mut selected_features: Vec<_> = ctx
+        .db
+        .specialization_feature_selection_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| ContractV2Feature {
+            specialization_id: row.specialization_id,
+            ability_id: row.ability_id,
+            preferred_bar_order: row.preferred_bar_order,
+        })
+        .collect();
+    selected_features.sort_by(|left, right| {
+        (left.specialization_id.as_str(), left.ability_id.as_str())
+            .cmp(&(right.specialization_id.as_str(), right.ability_id.as_str()))
+    });
+    let mut selected_traits: Vec<_> = ctx
+        .db
+        .trait_selection_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| row.ability_id)
+        .collect();
+    selected_traits.sort();
+    Ok(ContractV2Draft {
+        schema_version: COMBAT_BUILD_V2_SCHEMA_VERSION,
+        revision: root.revision,
+        starting_discipline_id: root.starting_discipline_id,
+        selected_specializations,
+        dormant_specializations,
+        discipline_configurations,
+        selected_features,
+        selected_traits,
+    })
+}
+
+fn read_my_combat_build_v2(ctx: &ViewContext, owner: Identity) -> Option<MyCombatBuildV2> {
+    let root = ctx.db.combat_build_v2().owner().find(owner)?;
+    let mut selected_specializations: Vec<_> = ctx
+        .db
+        .selected_specialization_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| SelectedSpecializationV2Input {
+            slot_index: row.slot_index,
+            specialization_id: row.specialization_id,
+        })
+        .collect();
+    selected_specializations.sort_by_key(|row| row.slot_index);
+    let mut dormant_specializations: Vec<_> = ctx
+        .db
+        .dormant_specialization_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| row.specialization_id)
+        .collect();
+    dormant_specializations.sort();
+    let mut discipline_configurations: Vec<_> = ctx
+        .db
+        .discipline_configuration_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| DisciplineConfigurationV2Input {
+            combat_discipline_id: row.combat_discipline_id,
+            main_hand_item_def_id: row.main_hand_item_def_id,
+            main_hand_color_id: row.main_hand_color_id,
+            off_hand_item_def_id: row.off_hand_item_def_id,
+            off_hand_color_id: row.off_hand_color_id,
+        })
+        .collect();
+    discipline_configurations
+        .sort_by(|left, right| left.combat_discipline_id.cmp(&right.combat_discipline_id));
+    let mut selected_features: Vec<_> = ctx
+        .db
+        .specialization_feature_selection_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| CombatFeatureSelectionV2Input {
+            specialization_id: row.specialization_id,
+            ability_id: row.ability_id,
+            preferred_bar_order: row.preferred_bar_order,
+        })
+        .collect();
+    selected_features.sort_by(|left, right| {
+        (left.specialization_id.as_str(), left.ability_id.as_str())
+            .cmp(&(right.specialization_id.as_str(), right.ability_id.as_str()))
+    });
+    let mut selected_traits: Vec<_> = ctx
+        .db
+        .trait_selection_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| row.ability_id)
+        .collect();
+    selected_traits.sort();
+    Some(MyCombatBuildV2 {
+        owner,
+        schema_version: COMBAT_BUILD_V2_SCHEMA_VERSION,
+        revision: root.revision,
+        starting_discipline_id: root.starting_discipline_id,
+        selected_specializations,
+        dormant_specializations,
+        discipline_configurations,
+        selected_features,
+        selected_traits,
+        updated_at: root.updated_at,
+    })
+}
+
+fn replace_combat_build_v2(
+    ctx: &ReducerContext,
+    owner: Identity,
+    starting_discipline_id: Option<String>,
+    validated: ValidatedCombatBuildV2,
+) {
+    delete_combat_build_v2_children(ctx, owner);
+    let revision = validated.snapshot.revision.saturating_add(1);
+    let root = CombatBuildV2 {
+        owner,
+        starting_discipline_id,
+        revision,
+        updated_at: ctx.timestamp,
+    };
+    if ctx.db.combat_build_v2().owner().find(owner).is_some() {
+        ctx.db.combat_build_v2().owner().update(root);
+    } else {
+        ctx.db.combat_build_v2().insert(root);
+    }
+
+    for selected in validated.snapshot.selected_specializations {
+        ctx.db
+            .selected_specialization_v2()
+            .insert(SelectedSpecializationV2 {
+                owner_slot_key: combat_build_key(
+                    owner,
+                    &[selected.slot_index.to_string().as_str()],
+                ),
+                owner,
+                slot_index: selected.slot_index,
+                specialization_id: selected.specialization_id,
+            });
+    }
+    for specialization_id in validated.snapshot.dormant_specializations {
+        ctx.db
+            .dormant_specialization_v2()
+            .insert(DormantSpecializationV2 {
+                owner_specialization_key: combat_build_key(owner, &[specialization_id.as_str()]),
+                owner,
+                specialization_id,
+            });
+    }
+    for row in validated.snapshot.discipline_configurations {
+        ctx.db
+            .discipline_configuration_v2()
+            .insert(DisciplineConfigurationV2 {
+                owner_discipline_key: combat_build_key(owner, &[row.combat_discipline_id.as_str()]),
+                owner,
+                combat_discipline_id: row.combat_discipline_id,
+                main_hand_item_def_id: row.main_hand_item_def_id,
+                main_hand_color_id: row.main_hand_color_id,
+                off_hand_item_def_id: row.off_hand_item_def_id,
+                off_hand_color_id: row.off_hand_color_id,
+            });
+    }
+    for row in validated.snapshot.selected_features {
+        ctx.db
+            .specialization_feature_selection_v2()
+            .insert(SpecializationFeatureSelectionV2 {
+                owner_ability_key: combat_build_key(owner, &[row.ability_id.as_str()]),
+                owner,
+                specialization_id: row.specialization_id,
+                ability_id: row.ability_id,
+                preferred_bar_order: row.preferred_bar_order,
+            });
+    }
+    for ability_id in validated.snapshot.selected_traits {
+        ctx.db.trait_selection_v2().insert(TraitSelectionV2 {
+            owner_trait_key: combat_build_key(owner, &[ability_id.as_str()]),
+            owner,
+            ability_id,
+        });
+    }
+}
+
+fn delete_combat_build_v2_children(ctx: &ReducerContext, owner: Identity) {
+    let selected_keys: Vec<_> = ctx
+        .db
+        .selected_specialization_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| row.owner_slot_key)
+        .collect();
+    for key in selected_keys {
+        ctx.db
+            .selected_specialization_v2()
+            .owner_slot_key()
+            .delete(key);
+    }
+    let dormant_keys: Vec<_> = ctx
+        .db
+        .dormant_specialization_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| row.owner_specialization_key)
+        .collect();
+    for key in dormant_keys {
+        ctx.db
+            .dormant_specialization_v2()
+            .owner_specialization_key()
+            .delete(key);
+    }
+    let configuration_keys: Vec<_> = ctx
+        .db
+        .discipline_configuration_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| row.owner_discipline_key)
+        .collect();
+    for key in configuration_keys {
+        ctx.db
+            .discipline_configuration_v2()
+            .owner_discipline_key()
+            .delete(key);
+    }
+    let feature_keys: Vec<_> = ctx
+        .db
+        .specialization_feature_selection_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| row.owner_ability_key)
+        .collect();
+    for key in feature_keys {
+        ctx.db
+            .specialization_feature_selection_v2()
+            .owner_ability_key()
+            .delete(key);
+    }
+    let trait_keys: Vec<_> = ctx
+        .db
+        .trait_selection_v2()
+        .owner()
+        .filter(owner)
+        .map(|row| row.owner_trait_key)
+        .collect();
+    for key in trait_keys {
+        ctx.db.trait_selection_v2().owner_trait_key().delete(key);
+    }
+}
+
+#[reducer]
+pub fn execute_combat_build_v2_cutover_reset(
+    ctx: &ReducerContext,
+    snapshot_sha256: String,
+) -> Result<(), String> {
+    let service = ctx
+        .db
+        .hub_service_config()
+        .singleton_id()
+        .find(SERVICE_CONFIG_ID)
+        .ok_or_else(|| "COMBAT_BUILD_V2_RESET_DENIED: service config missing".to_string())?;
+    if ctx.sender() != service.module_owner {
+        return Err("COMBAT_BUILD_V2_RESET_DENIED: module owner required".to_string());
+    }
+    if snapshot_sha256 != COMBAT_BUILD_V2_RESET_SNAPSHOT_SHA256 {
+        return Err("COMBAT_BUILD_V2_RESET_SNAPSHOT_MISMATCH: unexpected SHA-256".to_string());
+    }
+    if let Some(existing) = ctx
+        .db
+        .combat_build_v2_cutover_audit()
+        .singleton_id()
+        .find(0)
+    {
+        let hub_players = ctx.db.hub_player().iter().count() as u32;
+        let v2_roots = ctx.db.combat_build_v2().iter().count() as u32;
+        if existing.snapshot_sha256 == snapshot_sha256
+            && v1_combat_build_row_counts(ctx) == [0, 0, 0, 0, 0, 0]
+            && hub_players == v2_roots
+        {
+            return Ok(());
+        }
+        return Err("COMBAT_BUILD_V2_RESET_ALREADY_EXECUTED: audit/state diverged".to_string());
+    }
+
+    let v1_counts = v1_combat_build_row_counts(ctx);
+    if v1_counts != [8, 12, 12, 4, 14, 2] {
+        return Err(format!(
+            "COMBAT_BUILD_V2_RESET_COUNT_MISMATCH: expected [8,12,12,4,14,2], got {v1_counts:?}"
+        ));
+    }
+    let hub_player_rows = ctx.db.hub_player().iter().count() as u32;
+    let armor_rows = ctx.db.hub_player_armor_selection().iter().count() as u32;
+    if hub_player_rows != 8 || armor_rows != 8 {
+        return Err(format!(
+            "COMBAT_BUILD_V2_RESET_PRESERVE_COUNT_MISMATCH: expected hub/armor 8/8, got {hub_player_rows}/{armor_rows}"
+        ));
+    }
+
+    let legacy_owners: Vec<_> = ctx.db.combat_build().iter().map(|row| row.owner).collect();
+    for owner in legacy_owners {
+        delete_combat_build_children(ctx, owner);
+        ctx.db.combat_build().owner().delete(owner);
+    }
+    if v1_combat_build_row_counts(ctx) != [0, 0, 0, 0, 0, 0] {
+        return Err("COMBAT_BUILD_V2_RESET_INCOMPLETE: legacy rows remain".to_string());
+    }
+
+    let existing_v2_owners: Vec<_> = ctx
+        .db
+        .combat_build_v2()
+        .iter()
+        .map(|row| row.owner)
+        .collect();
+    for owner in existing_v2_owners {
+        delete_combat_build_v2_children(ctx, owner);
+        ctx.db.combat_build_v2().owner().delete(owner);
+    }
+    let player_owners: Vec<_> = ctx.db.hub_player().iter().map(|row| row.identity).collect();
+    for owner in player_owners {
+        ensure_default_combat_build_v2(ctx, owner)?;
+        validated_combat_build_v2_for_owner(ctx, owner)?;
+    }
+
+    let v2_root_rows = ctx.db.combat_build_v2().iter().count() as u32;
+    if ctx.db.hub_player().iter().count() as u32 != hub_player_rows
+        || ctx.db.hub_player_armor_selection().iter().count() as u32 != armor_rows
+        || v2_root_rows != hub_player_rows
+    {
+        return Err(
+            "COMBAT_BUILD_V2_RESET_PRESERVATION_FAILED: unrelated counts or v2 defaults diverged"
+                .to_string(),
+        );
+    }
+    ctx.db
+        .combat_build_v2_cutover_audit()
+        .insert(CombatBuildV2CutoverAudit {
+            singleton_id: 0,
+            snapshot_sha256,
+            v1_root_rows_before: v1_counts[0],
+            v1_child_rows_before: v1_counts[1..].iter().sum(),
+            hub_player_rows_preserved: hub_player_rows,
+            armor_rows_preserved: armor_rows,
+            v2_root_rows_after: v2_root_rows,
+            executed_at: ctx.timestamp,
+        });
+    Ok(())
+}
+
+fn v1_combat_build_row_counts(ctx: &ReducerContext) -> [u32; 6] {
+    [
+        ctx.db.combat_build().iter().count() as u32,
+        ctx.db.combat_build_discipline().iter().count() as u32,
+        ctx.db.discipline_configuration().iter().count() as u32,
+        ctx.db.staff_school_selection().iter().count() as u32,
+        ctx.db.discipline_action_bar_assignment().iter().count() as u32,
+        ctx.db.discipline_passive_selection().iter().count() as u32,
+    ]
 }
 
 fn ensure_default_hub_player_armor_selection(
