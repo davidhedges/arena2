@@ -38,40 +38,7 @@ PLAYER_TWO = "33" * 32
 OTHER_OWNER = "44" * 32
 
 
-def combat_build_snapshot_json(revision: int = 4) -> str:
-    return json.dumps(
-        {
-            "contract_schema_version": 1,
-            "revision": revision,
-            "starting_discipline_id": "DAGGERS",
-            "selected_disciplines": [
-                {"slot_index": 0, "combat_discipline_id": "DAGGERS"}
-            ],
-            "discipline_configurations": [
-                {
-                    "combat_discipline_id": "DAGGERS",
-                    "weapon": {
-                        "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
-                        "main_hand_color_id": "",
-                        "off_hand_item_def_id": "",
-                        "off_hand_color_id": "",
-                    },
-                    "staff_school_ids": [],
-                    "active_assignments": [
-                        {
-                            "action_slot": "slot_0_0",
-                            "ability_id": "DAGGER_QUICK_CUT",
-                        }
-                    ],
-                    "passive_ability_ids": [],
-                }
-            ],
-        },
-        separators=(",", ":"),
-    )
-
-
-def combat_build_v2_snapshot_json(revision: int = 12) -> str:
+def combat_build_snapshot_json(revision: int = 12) -> str:
     return json.dumps(
         {
             "schema_version": 2,
@@ -146,8 +113,8 @@ class FakeApi:
         created_at: int = 1_000,
         *,
         snapshot_json: str | None = None,
-        contract_schema_version: int = 1,
-        combat_build_revision: int = 4,
+        contract_schema_version: int = 2,
+        combat_build_revision: int = 12,
     ) -> None:
         self.tickets[ticket_id] = {
             "ticket_id": ticket_id,
@@ -490,7 +457,7 @@ class ProvisionerTests(unittest.TestCase):
         self.assertEqual(bootstrap_args[8], frozen["armor_set_id"])
 
     def test_v2_snapshot_bytes_pass_through_opaquely_to_bootstrap(self) -> None:
-        frozen_json = combat_build_v2_snapshot_json()
+        frozen_json = combat_build_snapshot_json()
         self.api.add_ticket(
             "ticket-v2",
             PLAYER_ONE,
@@ -512,8 +479,27 @@ class ProvisionerTests(unittest.TestCase):
         self.assertEqual(reservation["combat_build_snapshot_json"], frozen_json)
         self.assertEqual(json.loads(frozen_json)["selected_traits"], ["MASTERY"])
 
+    def test_open_world_passes_the_same_v2_snapshot_bytes_to_bootstrap(self) -> None:
+        self.config = dataclasses.replace(
+            self.config,
+            openworld_wasm_path=self.wasm_path,
+            openworld_artifact_manifest_path=self.manifest_path,
+        )
+        frozen_json = combat_build_snapshot_json()
+        self.api.add_ticket("ticket-open-world", PLAYER_ONE, snapshot_json=frozen_json)
+        self.api.tickets["ticket-open-world"]["queue_kind"] = "OPEN_WORLD"
+        self.api.tickets["ticket-open-world"]["format"] = "OPEN_WORLD_01"
+
+        self.run_quietly()
+
+        bootstrap_call = next(
+            call for call in self.api.calls if call[1] == "bootstrap_open_world_instance"
+        )
+        self.assertEqual(bootstrap_call[2][2], "OPEN_WORLD_01")
+        self.assertEqual(bootstrap_call[2][7], frozen_json)
+
     def test_v2_reservation_byte_drift_is_quarantined(self) -> None:
-        frozen_json = combat_build_v2_snapshot_json()
+        frozen_json = combat_build_snapshot_json()
         self.api.add_ticket(
             "ticket-v2",
             PLAYER_ONE,
@@ -669,8 +655,8 @@ class ProvisionerTests(unittest.TestCase):
             "reservations": [
                 {
                     "player_identity": identity_arg(PLAYER_ONE),
-                    "contract_schema_version": 1,
-                    "combat_build_revision": 4,
+                    "contract_schema_version": 2,
+                    "combat_build_revision": 12,
                     "combat_build_snapshot_json": combat_build_snapshot_json(),
                     "armor_set_id": "IRON",
                 }
@@ -711,7 +697,7 @@ class ProvisionerTests(unittest.TestCase):
         allocation = self.store.get("ticket-one")
         database = self.api.databases[allocation.database_identity]
         database["reservations"][0]["combat_build_snapshot_json"] = (
-            combat_build_snapshot_json(revision=5)
+            combat_build_snapshot_json(revision=13)
         )
 
         self.run_quietly(provisioner)
