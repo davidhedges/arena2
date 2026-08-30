@@ -852,6 +852,18 @@ Exit gate: the interrupt matrix passes with no stuck holds/props, same-weapon
 Forms do not duplicate switch state, the Staff has no selectable/intrinsic
 Technique action, and no animation architecture expansion was required.
 
+Completion record (2026-08-29): PASS. The disposable match now derives switch
+targets from distinct selected parents, merges repeated-parent Technique bars,
+resets auto-attack/combo/potential/weapon transients on a real parent switch,
+and routes all fourteen accepted interrupt families through one modeled
+fizzle/Cancel policy. The anonymous live probe passed all eleven checks,
+including Staff ordinary auto-attack with no Technique and Blessed Shield prop
+cleanup. The generated compatibility audit covers all 104 semantic Spells
+under all five equipped animation profiles and all 23 spell-executor
+Techniques under their parent profile without changing the animation
+architecture. Canonical v1 rows remain untouched. See
+`docs/combat-build-forms-schools-traits-phase-5-evidence-2026-08-29.md`.
+
 ### Phase 6 — Unity v2 models and views against the rehearsal contract
 
 Deliverables:

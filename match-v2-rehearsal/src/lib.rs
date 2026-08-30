@@ -7,6 +7,7 @@
 use spacetimedb::{reducer, table, Identity, ReducerContext, Table, Timestamp};
 
 mod authorization;
+mod switching;
 
 #[path = "../../server/src/combat_build_v2.rs"]
 #[allow(dead_code)]
@@ -22,6 +23,7 @@ use combat_build_v2_contract::{
     SelectedCombatSpecialization, ValidatedCombatBuildV2, COMBAT_BUILD_V2_SCHEMA_VERSION,
     MASTERY_TRAIT_ID,
 };
+use switching::{AcceptedInterruptV2, SwitchRuntimeV2};
 
 const QUEUE_UNRANKED: &str = "UNRANKED";
 const QUEUE_OPEN_WORLD: &str = "OPEN_WORLD";
@@ -162,6 +164,35 @@ pub struct Phase4AuthorizationProbeResult {
     pub dormant_unselected_fail_closed: bool,
     pub persistent_active_membership_passed: bool,
     pub mastery_damage_paths_passed: bool,
+    pub completed_at: Timestamp,
+}
+
+#[table(accessor = phase5_switch_target_v2, public)]
+pub struct Phase5SwitchTargetV2 {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub switch_order: u8,
+    pub combat_discipline_id: String,
+}
+
+#[table(accessor = phase5_interrupt_probe_result, public)]
+#[derive(Clone)]
+pub struct Phase5InterruptProbeResult {
+    #[primary_key]
+    pub owner: Identity,
+    pub distinct_parent_targets_passed: bool,
+    pub repeated_parent_deduplicated: bool,
+    pub switch_reset_passed: bool,
+    pub switch_cancel_passed: bool,
+    pub interrupt_matrix_passed: bool,
+    pub immediate_cancel_phase_passed: bool,
+    pub spell_all_disciplines_passed: bool,
+    pub staff_no_technique_passed: bool,
+    pub staff_auto_attack_passed: bool,
+    pub spell_bar_stable: bool,
+    pub blessed_shield_disposition_passed: bool,
     pub completed_at: Timestamp,
 }
 
@@ -420,6 +451,136 @@ pub fn run_phase4_authorization_probe(ctx: &ReducerContext) -> Result<(), String
     Ok(())
 }
 
+/// Anonymous disposable-match probe for the Phase 5 switching and
+/// interruption contract. Canonical v1 reducers and tables are untouched.
+#[reducer]
+pub fn run_phase5_switch_interrupt_probe(ctx: &ReducerContext) -> Result<(), String> {
+    let owner = ctx.sender();
+    if ctx.db.match_combat_build_v2().owner().find(owner).is_some() {
+        return Err("PHASE5_PROBE_REQUIRES_FRESH_DATABASE: build already exists".to_string());
+    }
+
+    let catalog = CombatBuildV2Catalog::from_shared_catalogs()
+        .map_err(|error| format!("COMBAT_BUILD_V2_CATALOG_INVALID: {error}"))?;
+    let draft = mixed_switching_draft();
+    let validated = catalog
+        .validate_draft(&draft, draft.revision)
+        .map_err(|error| format!("{}: {}", error.code.as_str(), error.detail))?;
+    let plan = catalog.materialization_plan(&validated)?;
+    materialize_plan(ctx, owner, "SWITCH_INTERRUPT_PROBE".to_string(), &plan);
+    set_active_discipline(ctx, owner, plan.starting_discipline_id.as_str());
+
+    let mut runtime = SwitchRuntimeV2::from_plan(&plan)?;
+    for (switch_order, combat_discipline_id) in runtime.switch_targets().iter().enumerate() {
+        ctx.db
+            .phase5_switch_target_v2()
+            .insert(Phase5SwitchTargetV2 {
+                key: match_key(owner, &[combat_discipline_id.as_str()]),
+                owner,
+                switch_order: switch_order as u8,
+                combat_discipline_id: combat_discipline_id.clone(),
+            });
+    }
+
+    let distinct_parent_targets_passed = runtime.switch_targets() == ["DAGGERS", "STAFF"];
+    let initial_epoch = runtime.auto_attack_timing_epoch();
+    let same_parent = runtime.switch_discipline("DAGGERS")?;
+    let repeated_parent_deduplicated = runtime.switch_targets().len() == 2
+        && !same_parent.switched
+        && runtime.auto_attack_timing_epoch() == initial_epoch
+        && runtime.visible_technique_bar() == ["DAGGER_QUICK_CUT", "DAGGER_GUT_RIPPER"];
+
+    let spell_bar_before_switch = runtime.spell_bar().to_vec();
+    runtime.arm_transient_weapon_state_for_probe();
+    runtime.begin_cast_for_probe("SPELL_FIREBALL", false);
+    let switch_outcome = runtime.switch_discipline("STAFF")?;
+    set_active_discipline(ctx, owner, "STAFF");
+    let switch_reset_passed = switch_outcome.switched
+        && runtime.weapon_transients_are_clear()
+        && runtime.auto_attack_timing_epoch() == initial_epoch + 1;
+    let switch_cancel_passed =
+        switch_outcome.cast_cancel.fully_canceled() && !runtime.has_active_cast_or_presentation();
+    let immediate_cancel_phase_passed = switch_outcome.cast_cancel.client_cancel_phase_emitted;
+    let spell_bar_stable = runtime.spell_bar() == spell_bar_before_switch;
+
+    let staff_build = normalized_match_build_for_owner(ctx, owner)?;
+    let staff_no_technique_passed = runtime.active_discipline_id() == "STAFF"
+        && runtime.visible_technique_bar().is_empty()
+        && ctx
+            .db
+            .match_technique_selection_v2()
+            .owner()
+            .filter(owner)
+            .all(|row| row.combat_discipline_id != "STAFF")
+        && staff_build
+            .authorize_technique("DAGGER_QUICK_CUT")
+            .is_err_and(|denial| denial.as_str() == "WRONG_WEAPON");
+    let staff_auto_attack_passed = runtime.ordinary_auto_attack_available();
+
+    let mut spell_all_disciplines_passed = true;
+    for discipline_id in runtime.switch_targets() {
+        set_active_discipline(ctx, owner, discipline_id.as_str());
+        spell_all_disciplines_passed &= normalized_match_build_for_owner(ctx, owner)?
+            .authorize_spell("SPELL_FIREBALL")
+            .is_ok();
+    }
+
+    let interrupt_matrix_passed = AcceptedInterruptV2::ALL.iter().all(|source| {
+        let _source_id = source.as_str();
+        let Ok(mut candidate) = SwitchRuntimeV2::from_plan(&plan) else {
+            return false;
+        };
+        candidate.begin_cast_for_probe("SPELL_FIREBALL", false);
+        candidate.interrupt_active_cast(*source).fully_canceled()
+            && !candidate.has_active_cast_or_presentation()
+    });
+    let blessed_shield_disposition_passed = AcceptedInterruptV2::ALL.iter().all(|source| {
+        let _source_id = source.as_str();
+        let Ok(mut candidate) = SwitchRuntimeV2::from_plan(&plan) else {
+            return false;
+        };
+        candidate.begin_cast_for_probe("PALADIN_BLESSED_SHIELD", true);
+        let outcome = candidate.interrupt_active_cast(*source);
+        outcome.fully_canceled()
+            && outcome.temporary_prop_cleared
+            && !candidate.has_active_cast_or_presentation()
+    });
+
+    if !(distinct_parent_targets_passed
+        && repeated_parent_deduplicated
+        && switch_reset_passed
+        && switch_cancel_passed
+        && interrupt_matrix_passed
+        && immediate_cancel_phase_passed
+        && spell_all_disciplines_passed
+        && staff_no_technique_passed
+        && staff_auto_attack_passed
+        && spell_bar_stable
+        && blessed_shield_disposition_passed)
+    {
+        return Err("PHASE5_SWITCH_INTERRUPT_PROBE_FAILED: one or more checks failed".to_string());
+    }
+
+    ctx.db
+        .phase5_interrupt_probe_result()
+        .insert(Phase5InterruptProbeResult {
+            owner,
+            distinct_parent_targets_passed,
+            repeated_parent_deduplicated,
+            switch_reset_passed,
+            switch_cancel_passed,
+            interrupt_matrix_passed,
+            immediate_cancel_phase_passed,
+            spell_all_disciplines_passed,
+            staff_no_technique_passed,
+            staff_auto_attack_passed,
+            spell_bar_stable,
+            blessed_shield_disposition_passed,
+            completed_at: ctx.timestamp,
+        });
+    Ok(())
+}
+
 fn mixed_authorization_draft() -> CombatBuildV2Draft {
     CombatBuildV2Draft {
         schema_version: COMBAT_BUILD_V2_SCHEMA_VERSION,
@@ -448,6 +609,30 @@ fn mixed_authorization_draft() -> CombatBuildV2Draft {
             ),
         ],
         selected_traits: vec![MASTERY_TRAIT_ID.to_string()],
+    }
+}
+
+fn mixed_switching_draft() -> CombatBuildV2Draft {
+    CombatBuildV2Draft {
+        schema_version: COMBAT_BUILD_V2_SCHEMA_VERSION,
+        revision: 51,
+        starting_discipline_id: Some("DAGGERS".to_string()),
+        selected_specializations: selected_specializations(&[
+            "DAGGERS_BLADEDANCER",
+            "DAGGERS_EXECUTIONER",
+            "RUIN",
+        ]),
+        dormant_specializations: Vec::new(),
+        discipline_configurations: vec![
+            discipline_configuration("DAGGERS"),
+            discipline_configuration("STAFF"),
+        ],
+        selected_features: vec![
+            draft_feature("DAGGERS_BLADEDANCER", "DAGGER_QUICK_CUT", Some(0)),
+            draft_feature("DAGGERS_EXECUTIONER", "DAGGER_GUT_RIPPER", Some(1)),
+            draft_feature("RUIN", "SPELL_FIREBALL", Some(0)),
+        ],
+        selected_traits: Vec::new(),
     }
 }
 

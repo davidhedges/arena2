@@ -1,0 +1,2143 @@
+{
+  "architecture_boundary": {
+    "form_or_school_override": false,
+    "global_map": "Assets/Arena/Resources/SpellCastAnimationMap.asset",
+    "new_animator_controller_or_topology": false,
+    "override_scope": "CURRENT_EQUIPPED_COMBAT_ANIMATION_SET",
+    "result": "NO_ANIMATION_ARCHITECTURE_EXPANSION_REQUIRED",
+    "shared_recipe_catalog": "Assets/Arena/Runtime/Presentation/Animation/SpellCastAnimationCatalog.cs"
+  },
+  "blessed_shield": {
+    "ability_id": "PALADIN_BLESSED_SHIELD",
+    "action_id": "BLESSED_SHIELD",
+    "classification": "WEAPON_GATED_TECHNIQUE_USING_SPELL_EXECUTOR",
+    "required_equipped_discipline": "SWORD_AND_SHIELD",
+    "temporary_prop_policy": "The existing CombatSpellAnimationPhase.Cancel path releases the action-owned temporary shield before the new equipped Discipline presentation is applied.",
+    "weapon_independent_spell_conversion": false
+  },
+  "combat_animation_profiles": [
+    "DAGGERS",
+    "TWO_HANDED_SWORD",
+    "SWORD_AND_SHIELD",
+    "ARCHER_BOW",
+    "STAFF"
+  ],
+  "compatibility_rows": [
+    {
+      "ability_id": "ARCHER_RAIN_OF_ARROWS",
+      "action_id": "RAIN_OF_ARROWS",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "ARCHER_BOW"
+      ]
+    },
+    {
+      "ability_id": "DAGGER_BLADE_TWISTING",
+      "action_id": "BLADE_TWISTING",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS"
+      ]
+    },
+    {
+      "ability_id": "DAGGER_DARKNESS",
+      "action_id": "DARKNESS",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "DAGGER_DISARM",
+      "action_id": "DISARM",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS"
+      ]
+    },
+    {
+      "ability_id": "DAGGER_FIND_WEAKNESS",
+      "action_id": "FIND_WEAKNESS",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS"
+      ]
+    },
+    {
+      "ability_id": "DAGGER_GOUGE",
+      "action_id": "GOUGE",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS"
+      ]
+    },
+    {
+      "ability_id": "DAGGER_LIGHTNING_REFLEXES",
+      "action_id": "LIGHTNING_REFLEXES",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS"
+      ]
+    },
+    {
+      "ability_id": "DAGGER_SHADOWREND",
+      "action_id": "SHADOWREND",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "DAGGER_STALK",
+      "action_id": "STALK",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "DAGGER_TEMPLE_STRIKE",
+      "action_id": "TEMPLE_STRIKE",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_ABSOLUTION",
+      "action_id": "ABSOLUTION",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_AURA_OF_VENGEANCE",
+      "action_id": "AURA_OF_VENGEANCE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_BLADE_BARRIER",
+      "action_id": "BLADE_BARRIER",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_BLESSED_SHIELD",
+      "action_id": "BLESSED_SHIELD",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "SWORD_AND_SHIELD"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_CLEANSING_TOUCH",
+      "action_id": "CLEANSING_TOUCH",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_CONSECRATE",
+      "action_id": "CONSECRATE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_FERVOR",
+      "action_id": "FERVOR",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_MANA_FONT",
+      "action_id": "MANA_FONT",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_RADIANT_BURST",
+      "action_id": "RADIANT_BURST",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_SACRED_FLAME",
+      "action_id": "SACRED_FLAME",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_SERRATED_BLADES",
+      "action_id": "SERRATED_BLADES",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "SWORD_AND_SHIELD"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_STAMINA_FONT",
+      "action_id": "STAMINA_FONT",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_THORNS_AURA",
+      "action_id": "THORNS_AURA",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "PALADIN_WARDING_AURA",
+      "action_id": "WARDING_AURA",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "RUIN_RIME",
+      "action_id": "RIME",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_AURA_OF_RENEWAL",
+      "action_id": "AURA_OF_RENEWAL",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_BENEDICTION",
+      "action_id": "BENEDICTION",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_BLINDING_LIGHT",
+      "action_id": "BLINDING_LIGHT",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_BLIZZARD",
+      "action_id": "BLIZZARD",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_BLOOD_OFFERING",
+      "action_id": "BLOOD_OFFERING",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_BOLT",
+      "action_id": "BOLT",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_BUFFET",
+      "action_id": "BUFFET",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_BURDEN",
+      "action_id": "BURDEN",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_CAPACITOR",
+      "action_id": "CAPACITOR",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_CAUTERIZE",
+      "action_id": "CAUTERIZE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_CELESTIAL_MANTLE",
+      "action_id": "CELESTIAL_MANTLE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_CLOUDBURST",
+      "action_id": "CLOUDBURST",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_COLLAPSE",
+      "action_id": "COLLAPSE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_COMBUSTION",
+      "action_id": "COMBUSTION",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_CONTAGION",
+      "action_id": "CONTAGION",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_DEEPENING_COLD",
+      "action_id": "DEEPENING_COLD",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_DEFILED_GROUND",
+      "action_id": "DEFILED_GROUND",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_DISPEL_MAGIC",
+      "action_id": "DISPEL_MAGIC",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_DIVINE_MEND",
+      "action_id": "DIVINE_MEND",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_EARTHQUAKE",
+      "action_id": "EARTHQUAKE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_EARTH_BLAST",
+      "action_id": "EARTH_BLAST",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_ELECTROCUTE",
+      "action_id": "ELECTROCUTE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_ERUPTION",
+      "action_id": "ERUPTION",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FIERY_ORBS",
+      "action_id": "FIERY_ORBS",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FIREBALL",
+      "action_id": "FIREBALL",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FISSURE",
+      "action_id": "FISSURE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FLAMETHROWER",
+      "action_id": "FLAMETHROWER",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FLAMING_ORB",
+      "action_id": "FLAMING_ORB",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FLASHFIRE",
+      "action_id": "FLASHFIRE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FLASH_FREEZE",
+      "action_id": "FLASH_FREEZE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FLASH_OF_GRACE",
+      "action_id": "FLASH_OF_GRACE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FLURRY",
+      "action_id": "FLURRY",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FROST_NEEDLE",
+      "action_id": "FROST_NEEDLE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FROST_NOVA",
+      "action_id": "FROST_NOVA",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FROZEN_GRASP",
+      "action_id": "FROZEN_GRASP",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FROZEN_SPLINTERS",
+      "action_id": "FROZEN_SPLINTERS",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_FULMINATION",
+      "action_id": "FULMINATION",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_GIGANTISM",
+      "action_id": "GIGANTISM",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_GLACIAL_ADVANCE",
+      "action_id": "GLACIAL_ADVANCE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_GLACIAL_SPIKE",
+      "action_id": "GLACIAL_SPIKE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_GRAVEBURST",
+      "action_id": "GRAVEBURST",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_GRAVEWAKE",
+      "action_id": "GRAVEWAKE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_GRIM_WHEEL",
+      "action_id": "GRIM_WHEEL",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_GUST_OF_WIND",
+      "action_id": "GUST_OF_WIND",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_HOLY_SHIELD",
+      "action_id": "HOLY_SHIELD",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_ICE_SPIKES",
+      "action_id": "ICE_SPIKES",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_ICICLE",
+      "action_id": "ICICLE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_IMMOLATION",
+      "action_id": "IMMOLATION",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_INSTANT_BEAM",
+      "action_id": "INSTANT_BEAM",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_LAVA_BLAST",
+      "action_id": "LAVA_BLAST",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_LIGHTNING",
+      "action_id": "LIGHTNING",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_MAGIC_MISSILE",
+      "action_id": "MAGIC_MISSILE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_MANA_SHIELD",
+      "action_id": "MANA_SHIELD",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_MARTYR",
+      "action_id": "MARTYR",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_METEOR",
+      "action_id": "METEOR",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_MIASMA",
+      "action_id": "MIASMA",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_MIRROR_IMAGE",
+      "action_id": "MIRROR_IMAGE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_MOULT",
+      "action_id": "MOULT",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_NECROTIC_AURA",
+      "action_id": "NECROTIC_AURA",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_NECRO_PRISON",
+      "action_id": "NECRO_PRISON",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_NEGATE",
+      "action_id": "NEGATE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_NOVA",
+      "action_id": "NOVA",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_ORBITING_BLADES",
+      "action_id": "ORBITING_BLADES",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_OVERGROWTH",
+      "action_id": "OVERGROWTH",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_PENANCE",
+      "action_id": "PENANCE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_PLAGUEBOLT",
+      "action_id": "PLAGUEBOLT",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_PROTECTION",
+      "action_id": "PROTECTION",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_REAP",
+      "action_id": "REAP",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_REBUKE",
+      "action_id": "REBUKE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_RECALL",
+      "action_id": "RECALL",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_RECKONING",
+      "action_id": "RECKONING",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_RESTORATION",
+      "action_id": "RESTORATION",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_SANCTUARY",
+      "action_id": "SANCTUARY",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_SHIMMER",
+      "action_id": "SHIMMER",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_SILENCE",
+      "action_id": "SILENCE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_SMITE",
+      "action_id": "SMITE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_SOULSTEALER",
+      "action_id": "SOULSTEALER",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_STONE_CARAPACE",
+      "action_id": "STONE_CARAPACE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_TAILWIND",
+      "action_id": "TAILWIND",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_TELEPORT",
+      "action_id": "TELEPORT",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_TIDAL_BLAST",
+      "action_id": "TIDAL_BLAST",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_TRANSPOSE",
+      "action_id": "TRANSPOSE",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_UPHEAVAL",
+      "action_id": "UPHEAVAL",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_VAMPIRIC_ORB",
+      "action_id": "VAMPIRIC_ORB",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_VERDANT_SPIRITS",
+      "action_id": "VERDANT_SPIRITS",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_WELLSPRING",
+      "action_id": "WELLSPRING",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_WIND_BLAST",
+      "action_id": "WIND_BLAST",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "SPELL_WITHERING_ORB",
+      "action_id": "WITHERING_ORB",
+      "compatibility_requirement": "ALL_EQUIPPABLE_DISCIPLINES",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": true,
+      "loadout_kind": "SPELL",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        "STAFF"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_BATTLE_CRY",
+      "action_id": "BATTLE_CRY",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_BATTLE_TRANCE",
+      "action_id": "BATTLE_TRANCE",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_BERSERKING",
+      "action_id": "BERSERKING",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_DEFIANCE",
+      "action_id": "DEFIANCE",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_ENRAGE",
+      "action_id": "ENRAGE",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_FEAST",
+      "action_id": "FEAST",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_FORTIFY",
+      "action_id": "FORTIFY",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_FRENZY",
+      "action_id": "FRENZY",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_GROUND_SLASH",
+      "action_id": "GROUND_SLASH",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_INTIMIDATE",
+      "action_id": "INTIMIDATE",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_IRON_WILL",
+      "action_id": "IRON_WILL",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_MOMENTUM",
+      "action_id": "MOMENTUM",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_SECOND_WIND",
+      "action_id": "SECOND_WIND",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    },
+    {
+      "ability_id": "WARRIOR_SHOCKWAVE",
+      "action_id": "SHOCKWAVE",
+      "compatibility_requirement": "ONE_PARENT_DISCIPLINE",
+      "gameplay_kind": "SPELL",
+      "hold_release_cancel_required": false,
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "required_profiles": [
+        "TWO_HANDED_SWORD"
+      ]
+    }
+  ],
+  "compatibility_scope_source": "loadout_kind",
+  "cutover_note": "Phase 5 proves the normalized policy in the disposable match. Phase 7 connects the inventoried canonical action entry points to this one policy atomically.",
+  "interrupt_matrix": [
+    {
+      "accepted_action": "MOVEMENT",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    },
+    {
+      "accepted_action": "JUMP",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    },
+    {
+      "accepted_action": "DISCIPLINE_SWITCH",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    },
+    {
+      "accepted_action": "TECHNIQUE",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    },
+    {
+      "accepted_action": "SPELL",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    },
+    {
+      "accepted_action": "DODGE",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    },
+    {
+      "accepted_action": "BLOCK",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    },
+    {
+      "accepted_action": "PARRY",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    },
+    {
+      "accepted_action": "INTERACT",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    },
+    {
+      "accepted_action": "FIXED_COMBAT_ACTION",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    },
+    {
+      "accepted_action": "AUTO_ATTACK_START",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    },
+    {
+      "accepted_action": "STAGGER",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    },
+    {
+      "accepted_action": "KNOCKBACK",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    },
+    {
+      "accepted_action": "DEATH",
+      "authoritative_result": "ACTIVE_CAST_FIZZLE",
+      "client_result": "COMBAT_SPELL_ANIMATION_CANCEL",
+      "postcondition": "NO_ACTIVE_HOLD_OR_TEMPORARY_PROP"
+    }
+  ],
+  "presentation_discovery_source": "gameplay.kind",
+  "schema_version": 1,
+  "scope": "COMBAT_BUILD_V2_SWITCH_INTERRUPT_PRESENTATION_COMPATIBILITY",
+  "semantic_spell_count": 104,
+  "source_anchors": [
+    {
+      "anchor_id": "SERVER_PRESENTATION_DISCOVERY_BY_EXECUTOR",
+      "line": 3679,
+      "needle": ".filter(|ability| ability_gameplay_kind(ability) == \"SPELL\")",
+      "path": "server/src/progression.rs",
+      "source_sha256": "312c1ec7db3b88c217029c19dd84954646a8cc226cc1205b0573d021cfc9fbe8"
+    },
+    {
+      "anchor_id": "GLOBAL_SPELL_MAP_FIRST",
+      "line": 71,
+      "needle": "if (!TryGetMapEntry(normalizedSpellId, out SpellCastAnimationMap.Entry mapEntry))",
+      "path": "Assets/Arena/Runtime/Presentation/Animation/SpellCastAnimationResolver.cs",
+      "source_sha256": "31a9978426c838c691e0db301ea9cb401f1cb458ab78dd512ca44aa204fe49bb"
+    },
+    {
+      "anchor_id": "EQUIPPED_DISCIPLINE_OVERRIDE",
+      "line": 91,
+      "needle": "ApplyCombatSetOverride(set, normalizedSpellId, ref entry);",
+      "path": "Assets/Arena/Runtime/Presentation/Animation/SpellCastAnimationResolver.cs",
+      "source_sha256": "31a9978426c838c691e0db301ea9cb401f1cb458ab78dd512ca44aa204fe49bb"
+    },
+    {
+      "anchor_id": "AUTHORITATIVE_CAST_FIZZLE",
+      "line": 4985,
+      "needle": "pub(crate) fn fizzle_active_cast_for_interrupt(",
+      "path": "server/src/spells/casting.rs",
+      "source_sha256": "b6d25ea2c8f392e520b6e10cca81e33b7d1617ad3b283b024e6c3fd4ef9955ae"
+    },
+    {
+      "anchor_id": "AUTO_ATTACK_CLEAR_PRIMITIVE",
+      "line": 356,
+      "needle": "pub(crate) fn clear_auto_attack_for_owner(",
+      "path": "server/src/auto_attack.rs",
+      "source_sha256": "615cc13fad31bcca6e2cfd36130b6bd956c94f4694f7b1042d3cd9a4a6cbb125"
+    },
+    {
+      "anchor_id": "LOCAL_MOVEMENT_CANCEL_REQUEST",
+      "line": 293,
+      "needle": "conn.Reducers.CancelActiveCastRequest(",
+      "path": "Assets/Arena/Runtime/Input/LocalPlayerMotor.cs",
+      "source_sha256": "d3c79b345d4f3c7559155ac825bcfb058d02757faae2cff57a459dd4eb9f0239"
+    },
+    {
+      "anchor_id": "IMMEDIATE_CLIENT_CANCEL_PHASE",
+      "line": 329,
+      "needle": "CombatSpellAnimationPhase.Cancel,",
+      "path": "Assets/Arena/Runtime/Presentation/SpellCastPresentationController.cs",
+      "source_sha256": "cabe649421713909b97a25814f9838fbb2376bd723f2ba9fa73fe9b23efd56de"
+    },
+    {
+      "anchor_id": "CANCEL_CLEARS_TEMPORARY_PROP",
+      "line": 1755,
+      "needle": "_weaponAttachments?.ReleaseTemporaryAnimatedProp(request.ActionId);",
+      "path": "Assets/Arena/Runtime/Presentation/PlayerAnimator.cs",
+      "source_sha256": "53852134094a2e3588fccb7de883a995b3b24665fb6ce894c25ffedd4d5cc4fd"
+    },
+    {
+      "anchor_id": "REHEARSAL_DISTINCT_PARENT_SWITCH_TARGETS",
+      "line": 128,
+      "needle": "seen.insert(selected.combat_discipline_id.as_str())",
+      "path": "match-v2-rehearsal/src/switching.rs",
+      "source_sha256": "a449d349409a505f4e15726a6eb6c7d8ae53486445859992e945ea574ebfdc58"
+    },
+    {
+      "anchor_id": "REHEARSAL_INTERRUPT_MATRIX",
+      "line": 26,
+      "needle": "pub(crate) const ALL: [Self; 14]",
+      "path": "match-v2-rehearsal/src/switching.rs",
+      "source_sha256": "a449d349409a505f4e15726a6eb6c7d8ae53486445859992e945ea574ebfdc58"
+    }
+  ],
+  "spell_executor_technique_count": 23,
+  "staff": {
+    "ordinary_auto_attack": "RETAINED",
+    "private_presentation_exception": "STAFF_STRIKE_2 clip/action data only; grants no feature authorization",
+    "removed_player_ability_ids": [
+      "STAFF_STRIKE",
+      "STAFF_STRIKE_2",
+      "STAFF_SWEEP",
+      "STAFF_THRUST"
+    ],
+    "selectable_or_intrinsic_technique_count": 0
+  }
+}
