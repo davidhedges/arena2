@@ -936,6 +936,16 @@ verification, and the required scenarios in section 14 pass in a real local
 match. Unity batch mode is not used without specific current-chat
 authorization.
 
+Completion record (2026-08-29): PASS. The canonical Hub, ticket, provisioner,
+PvP/open-world modules, generated bindings, Unity client models, runtime
+authorization, switching, and dual-bar projection now consume Combat Build v2.
+The guarded combat-build-only reset removed exactly the locked 8 roots and 44
+children, preserved all eight player and armor rows, and seeded eight legal v2
+defaults. Canonical generated-client save/reload, the v2-aware anonymous
+benchmark, mixed cross-weapon/interrupt runtime probe, three-School 18-Spell
+probe, and three-Dagger-Form probe all passed with disposable cleanup. See
+`docs/combat-build-forms-schools-traits-phase-7-evidence-2026-08-29.md`.
+
 ### Phase 8 — legacy removal, documentation, and final proof
 
 Deliverables:

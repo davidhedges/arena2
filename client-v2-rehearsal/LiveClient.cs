@@ -6,7 +6,7 @@ using System.Threading;
 using Arena.Network;
 using Arena.UI;
 using SpacetimeDB;
-using Db = Arena.RehearsalHubV2Db;
+using Db = Arena.HubDb;
 
 internal static class CombatBuildV2LiveClient
 {
@@ -16,8 +16,8 @@ internal static class CombatBuildV2LiveClient
     {
         if (!Uri.TryCreate(serverUri, UriKind.Absolute, out Uri? uri) || !uri.IsLoopback)
             throw new InvalidOperationException("live rehearsal requires a loopback server URI");
-        if (!databaseName.StartsWith("arena-cbv2-p6-", StringComparison.Ordinal))
-            throw new InvalidOperationException("live rehearsal requires an arena-cbv2-p6 database");
+        if (!string.Equals(databaseName, "arena-hub-local", StringComparison.Ordinal))
+            throw new InvalidOperationException("live cutover probe requires arena-hub-local");
 
         Db.DbConnection? connection = null;
         Db.SubscriptionHandle? subscription = null;
@@ -117,7 +117,7 @@ internal static class CombatBuildV2LiveClient
                 "selected Perk was not active across live weapon projections");
 
             Console.WriteLine(
-                $"PHASE6_LIVE_CLIENT_PASS revision={reloaded.Revision} "
+                $"PHASE7_LIVE_CLIENT_PASS revision={reloaded.Revision} "
                 + $"specializations={reloaded.SelectedSpecializations.Count} "
                 + $"features={reloaded.SelectedFeatures.Count}");
         }

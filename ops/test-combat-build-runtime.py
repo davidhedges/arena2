@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Exercise the frozen combat-build runtime against a live local match.
+"""Exercise Combat Build v2 against a provisioned live local match.
 
-The probe creates a fresh anonymous Hub identity, saves a three-discipline
-build, launches an unranked 2v2 bot match, and verifies the Phase 4 runtime
-boundary. It intentionally tests both accepted and denied reducer calls, then
-cancels the ticket and waits for exact-identity provisioner cleanup.
+The probe creates a fresh anonymous Hub identity, saves two Dagger Forms plus
+one School, launches an unranked 2v2 bot match, and verifies exact snapshot
+materialization, cross-weapon Spells, weapon-gated Techniques, cast interruption,
+Staff Technique absence, switching, Perk/Trait state, and cleanup.
 
 The canonical local stack must already be running:
 
@@ -30,30 +30,38 @@ PROTOCOL = "v1.json.spacetimedb"
 DatabaseRow = list[Any] | dict[str, Any]
 HUB_QUERIES = [
     'SELECT * FROM "my_hub_armor_selection"',
-    'SELECT * FROM "my_combat_build"',
+    'SELECT * FROM "my_combat_build_v_2"',
     'SELECT * FROM "my_match_status"',
 ]
 MATCH_OWNER_TABLES = (
-    "match_combat_build",
-    "match_combat_build_discipline",
-    "match_discipline_configuration",
-    "match_staff_school_selection",
-    "match_discipline_action_bar_assignment",
-    "match_discipline_passive_selection",
+    "match_combat_build_v_2",
+    "match_selected_specialization_v_2",
+    "match_discipline_configuration_v_2",
+    "match_technique_selection_v_2",
+    "match_spell_selection_v_2",
+    "match_perk_selection_v_2",
+    "match_trait_selection_v_2",
     "active_combat_build_discipline",
     "player_equipment_presentation",
     "equipment_loadout",
 )
-EXPECTED_SELECTED = ["DAGGERS", "ARCHER_BOW", "STAFF"]
-EXPECTED_ASSIGNMENTS = {
-    ("DAGGERS", "slot_0_0", "DAGGER_QUICK_CUT"),
-    ("ARCHER_BOW", "slot_0_0", "ARCHER_POWER_SHOT"),
-    ("STAFF", "slot_0_0", "SPELL_FIREBALL"),
-    ("STAFF", "slot_0_1", "SPELL_MANA_SHIELD"),
+EXPECTED_SPECIALIZATIONS = [
+    (0, "DAGGERS_BLADEDANCER", "DAGGERS", "FORM"),
+    (1, "DAGGERS_SHADOW", "DAGGERS", "FORM"),
+    (2, "RUIN", "STAFF", "SCHOOL"),
+]
+EXPECTED_TECHNIQUES = {
+    ("DAGGERS_BLADEDANCER", "DAGGERS", "DAGGER_LIGHTNING_REFLEXES", 0),
+}
+EXPECTED_SPELLS = {
+    ("DAGGERS_SHADOW", "DAGGERS", "DAGGER_DARKNESS", 0),
+    ("RUIN", "STAFF", "SPELL_METEOR", 1),
+}
+EXPECTED_PERKS = {
+    ("RUIN", "STAFF", "RUIN_FLAMING_WEAPON"),
 }
 EXPECTED_WEAPONS = {
     "DAGGERS": "TRAINING_DAGGER_PAIR",
-    "ARCHER_BOW": "TRAINING_BOW",
     "STAFF": "NEWBIE_STAFF_01",
 }
 
@@ -303,6 +311,7 @@ def wait_for_hub_status(connection: Connection, expected: str) -> dict[str, str]
 
 def weapon(main_hand_item_def_id: str, color_id: str = "") -> dict[str, str]:
     return {
+        "combat_discipline_id": "",
         "main_hand_item_def_id": main_hand_item_def_id,
         "main_hand_color_id": color_id,
         "off_hand_item_def_id": "",
@@ -311,52 +320,43 @@ def weapon(main_hand_item_def_id: str, color_id: str = "") -> dict[str, str]:
 
 
 def runtime_draft(revision: int) -> dict[str, Any]:
+    daggers = weapon("TRAINING_DAGGER_PAIR")
+    daggers["combat_discipline_id"] = "DAGGERS"
+    staff = weapon("NEWBIE_STAFF_01")
+    staff["combat_discipline_id"] = "STAFF"
     return {
+        "schema_version": 2,
         "revision": revision,
-        "starting_discipline_id": None,
-        "selected_disciplines": [
-            {"slot_index": index, "combat_discipline_id": discipline_id}
-            for index, discipline_id in enumerate(EXPECTED_SELECTED)
+        "starting_discipline_id": [0, "DAGGERS"],
+        "selected_specializations": [
+            {"slot_index": slot, "specialization_id": specialization_id}
+            for slot, specialization_id, _, _ in EXPECTED_SPECIALIZATIONS
         ],
-        "discipline_configurations": [
+        "dormant_specializations": [],
+        "discipline_configurations": [daggers, staff],
+        "selected_features": [
             {
-                "combat_discipline_id": "DAGGERS",
-                "weapon": weapon("TRAINING_DAGGER_PAIR"),
-                "staff_school_ids": [],
-                "active_assignments": [
-                    {
-                        "action_slot": "slot_0_0",
-                        "ability_id": "DAGGER_QUICK_CUT",
-                    }
-                ],
-                "passive_ability_ids": [],
+                "specialization_id": "DAGGERS_BLADEDANCER",
+                "ability_id": "DAGGER_LIGHTNING_REFLEXES",
+                "preferred_bar_order": [0, 0],
             },
             {
-                "combat_discipline_id": "ARCHER_BOW",
-                "weapon": weapon("TRAINING_BOW", "DEFAULT"),
-                "staff_school_ids": [],
-                "active_assignments": [
-                    {
-                        "action_slot": "slot_0_0",
-                        "ability_id": "ARCHER_POWER_SHOT",
-                    }
-                ],
-                "passive_ability_ids": [],
+                "specialization_id": "DAGGERS_SHADOW",
+                "ability_id": "DAGGER_DARKNESS",
+                "preferred_bar_order": [0, 0],
             },
             {
-                "combat_discipline_id": "STAFF",
-                "weapon": weapon("NEWBIE_STAFF_01", "DEFAULT"),
-                "staff_school_ids": ["RUIN", "ARCANA"],
-                "active_assignments": [
-                    {"action_slot": "slot_0_0", "ability_id": "SPELL_FIREBALL"},
-                    {
-                        "action_slot": "slot_0_1",
-                        "ability_id": "SPELL_MANA_SHIELD",
-                    },
-                ],
-                "passive_ability_ids": ["RUIN_FLAMING_WEAPON"],
+                "specialization_id": "RUIN",
+                "ability_id": "SPELL_METEOR",
+                "preferred_bar_order": [0, 1],
+            },
+            {
+                "specialization_id": "RUIN",
+                "ability_id": "RUIN_FLAMING_WEAPON",
+                "preferred_bar_order": [1, {}],
             },
         ],
+        "selected_traits": ["MASTERY"],
     }
 
 
@@ -368,10 +368,13 @@ def match_queries(identity: str) -> list[str]:
     ]
     queries.extend(
         [
-            'SELECT * FROM "player_physics" '
-            f'WHERE ("player_physics"."identity" = {identity_literal})',
+            'SELECT * FROM "player_physics"',
+            'SELECT * FROM "player_world"',
+            'SELECT * FROM "match_participant"',
             'SELECT * FROM "status_effect" '
             f'WHERE ("status_effect"."target" = {identity_literal})',
+            'SELECT * FROM "active_cast" '
+            f'WHERE ("active_cast"."caster" = {identity_literal})',
         ]
     )
     return queries
@@ -386,7 +389,14 @@ def snapshot(
     update = connection.subscribe(match_queries(identity))
     return {
         table_name: inserted_rows(update, table_name)
-        for table_name in (*MATCH_OWNER_TABLES, "player_physics", "status_effect")
+        for table_name in (
+            *MATCH_OWNER_TABLES,
+            "player_physics",
+            "player_world",
+            "match_participant",
+            "status_effect",
+            "active_cast",
+        )
     }
 
 
@@ -397,53 +407,72 @@ def assert_frozen_snapshot(
     selected = sorted(
         (
             int(row_value(row, 2, "slot_index")),
-            str(row_value(row, 3, "combat_discipline_id")),
+            str(row_value(row, 3, "specialization_id")),
+            str(row_value(row, 4, "combat_discipline_id")),
+            str(row_value(row, 5, "specialization_kind")),
         )
-        for row in rows["match_combat_build_discipline"]
+        for row in rows["match_selected_specialization_v_2"]
     )
-    if [discipline for _, discipline in selected] != EXPECTED_SELECTED:
-        raise RuntimeError(f"frozen selected disciplines differ: {selected}")
+    if selected != EXPECTED_SPECIALIZATIONS:
+        raise RuntimeError(f"frozen selected Specializations differ: {selected}")
 
     configurations = {
         str(row_value(row, 2, "combat_discipline_id")): str(
             row_value(row, 3, "main_hand_item_def_id")
         )
-        for row in rows["match_discipline_configuration"]
+        for row in rows["match_discipline_configuration_v_2"]
     }
     if configurations != EXPECTED_WEAPONS:
         raise RuntimeError(f"frozen weapon configurations differ: {configurations}")
     if any(
         not str(option_value(row_value(row, 7, "main_hand_item_id")) or "")
-        for row in rows["match_discipline_configuration"]
+        for row in rows["match_discipline_configuration_v_2"]
     ):
         raise RuntimeError("a selected discipline weapon was not materialized")
 
-    schools = sorted(
-        str(row_value(row, 2, "spell_school_id"))
-        for row in rows["match_staff_school_selection"]
-    )
-    if schools != ["ARCANA", "RUIN"]:
-        raise RuntimeError(f"Staff schools differ: {schools}")
-
-    assignments = {
+    techniques = {
         (
-            str(row_value(row, 2, "combat_discipline_id")),
-            str(row_value(row, 3, "action_slot")),
+            str(row_value(row, 2, "specialization_id")),
+            str(row_value(row, 3, "combat_discipline_id")),
+            str(row_value(row, 4, "ability_id")),
+            int(row_value(row, 5, "bar_order")),
+        )
+        for row in rows["match_technique_selection_v_2"]
+    }
+    if techniques != EXPECTED_TECHNIQUES:
+        raise RuntimeError(f"frozen Technique selections differ: {techniques}")
+    if any(parent == "STAFF" for _, parent, _, _ in techniques):
+        raise RuntimeError("Staff materialized a Technique")
+    spells = {
+        (
+            str(row_value(row, 2, "specialization_id")),
+            str(row_value(row, 3, "combat_discipline_id")),
+            str(row_value(row, 4, "ability_id")),
+            int(row_value(row, 5, "bar_order")),
+        )
+        for row in rows["match_spell_selection_v_2"]
+    }
+    if spells != EXPECTED_SPELLS:
+        raise RuntimeError(f"frozen Spell selections differ: {spells}")
+    perks = {
+        (
+            str(row_value(row, 2, "specialization_id")),
+            str(row_value(row, 3, "combat_discipline_id")),
             str(row_value(row, 4, "ability_id")),
         )
-        for row in rows["match_discipline_action_bar_assignment"]
+        for row in rows["match_perk_selection_v_2"]
     }
-    if assignments != EXPECTED_ASSIGNMENTS:
-        raise RuntimeError(f"frozen active assignments differ: {assignments}")
-    passives = {
-        (
-            str(row_value(row, 2, "combat_discipline_id")),
-            str(row_value(row, 3, "ability_id")),
-        )
-        for row in rows["match_discipline_passive_selection"]
+    if perks != EXPECTED_PERKS:
+        raise RuntimeError(f"frozen Perk selections differ: {perks}")
+    traits = {
+        str(row_value(row, 2, "ability_id"))
+        for row in rows["match_trait_selection_v_2"]
     }
-    if passives != {("STAFF", "RUIN_FLAMING_WEAPON")}:
-        raise RuntimeError(f"frozen passive selections differ: {passives}")
+    if traits != {"MASTERY"}:
+        raise RuntimeError(f"frozen Trait selections differ: {traits}")
+    build_rows = rows["match_combat_build_v_2"]
+    if len(build_rows) != 1 or bool(row_value(build_rows[0], 4, "mastery_active")):
+        raise RuntimeError("mixed-parent build did not materialize inactive Mastery")
 
     if len(rows["active_combat_build_discipline"]) != 1:
         raise RuntimeError("active combat discipline row is missing or duplicated")
@@ -467,15 +496,28 @@ def assert_frozen_snapshot(
     return {
         "active_discipline": active_discipline,
         "main_hand_item_def_id": main_hand_item_def_id,
-        "active_assignments": sorted(assignments),
-        "passives": sorted(passives),
+        "techniques": sorted(techniques),
+        "spells": sorted(spells),
+        "perks": sorted(perks),
+        "mastery_active": False,
     }
 
 
-def caster_position(rows: dict[str, list[DatabaseRow]]) -> tuple[float, float, float, float]:
-    if len(rows["player_physics"]) != 1:
-        raise RuntimeError("player physics row is missing or duplicated")
-    row = rows["player_physics"][0]
+def physics_row(rows: dict[str, list[DatabaseRow]], identity: str) -> DatabaseRow:
+    matches = [
+        row
+        for row in rows["player_physics"]
+        if normalize_identity(row_value(row, 0, "identity")) == identity
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(f"player physics row is missing or duplicated for {identity[:12]}")
+    return matches[0]
+
+
+def caster_position(
+    rows: dict[str, list[DatabaseRow]], identity: str
+) -> tuple[float, float, float, float]:
+    row = physics_row(rows, identity)
     return (
         float(row_value(row, 1, "pos_x")),
         float(row_value(row, 2, "pos_y")),
@@ -484,14 +526,25 @@ def caster_position(rows: dict[str, list[DatabaseRow]]) -> tuple[float, float, f
     )
 
 
-def cast_args(action_id: str, rows: dict[str, list[DatabaseRow]]) -> list[Any]:
-    pos_x, pos_y, pos_z, yaw = caster_position(rows)
+def cast_args(
+    action_id: str,
+    rows: dict[str, list[DatabaseRow]],
+    identity: str,
+    target_identity: str = "",
+) -> list[Any]:
+    pos_x, pos_y, pos_z, yaw = caster_position(rows, identity)
+    aim_x, aim_y, aim_z = pos_x, pos_y, pos_z
+    if target_identity:
+        target = physics_row(rows, target_identity)
+        aim_x = float(row_value(target, 1, "pos_x"))
+        aim_y = float(row_value(target, 2, "pos_y"))
+        aim_z = float(row_value(target, 3, "pos_z"))
     return [
         action_id,
-        "",
-        pos_x,
-        pos_y,
-        pos_z,
+        target_identity,
+        aim_x,
+        aim_y,
+        aim_z,
         0,
         pos_x,
         pos_y,
@@ -501,6 +554,37 @@ def cast_args(action_id: str, rows: dict[str, list[DatabaseRow]]) -> list[Any]:
         0,
         0,
     ]
+
+
+def other_player_identity(rows: dict[str, list[DatabaseRow]], identity: str) -> str:
+    participants = rows["match_participant"]
+    own_rows = [
+        row
+        for row in participants
+        if normalize_identity(row_value(row, 0, "identity")) == identity
+    ]
+    if len(own_rows) != 1:
+        raise RuntimeError("the provisioned match omitted the caller participant")
+    own_team = int(row_value(own_rows[0], 2, "team_id"))
+    candidates = sorted(
+        normalize_identity(row_value(row, 0, "identity"))
+        for row in participants
+        if int(row_value(row, 2, "team_id")) != own_team
+    )
+    if not candidates:
+        raise RuntimeError("the provisioned 2v2 match exposed no target player")
+    return min(
+        candidates,
+        key=lambda candidate: _horizontal_distance(
+            physics_row(rows, identity), physics_row(rows, candidate)
+        ),
+    )
+
+
+def _horizontal_distance(first: DatabaseRow, second: DatabaseRow) -> float:
+    dx = float(row_value(first, 1, "pos_x")) - float(row_value(second, 1, "pos_x"))
+    dz = float(row_value(first, 3, "pos_z")) - float(row_value(second, 3, "pos_z"))
+    return dx * dx + dz * dz
 
 
 def wait_for_status(
@@ -528,6 +612,25 @@ def wait_for_status(
     )
 
 
+def wait_for_active_cast(
+    connection: Connection,
+    identity: str,
+    expected_present: bool,
+    timeout_seconds: float = 5.0,
+) -> dict[str, list[DatabaseRow]]:
+    deadline = time.monotonic() + timeout_seconds
+    last_rows: dict[str, list[DatabaseRow]] | None = None
+    while time.monotonic() < deadline:
+        last_rows = snapshot(connection, identity)
+        if bool(last_rows["active_cast"]) == expected_present:
+            return last_rows
+        time.sleep(0.05)
+    observed = 0 if last_rows is None else len(last_rows["active_cast"])
+    raise RuntimeError(
+        f"timed out waiting for active_cast present={expected_present}; observed={observed}"
+    )
+
+
 def capture_authorization_logs(database_identity: str) -> list[str]:
     result = subprocess.run(
         [
@@ -547,10 +650,8 @@ def capture_authorization_logs(database_identity: str) -> list[str]:
         raise RuntimeError(f"spacetime logs failed: {result.stderr.strip()}")
     lines = [line for line in result.stdout.splitlines() if "[COMBAT_BUILD_AUTH]" in line]
     expected_reasons = {
-        "reason=WRONG_ACTION_BAR",
-        "reason=WRONG_STAFF_SCHOOL",
-        "reason=DORMANT_DISCIPLINE",
-        "reason=UNASSIGNED",
+        "reason=WRONG_WEAPON",
+        "reason=UNSELECTED_FEATURE",
     }
     missing = sorted(
         reason for reason in expected_reasons if not any(reason in line for line in lines)
@@ -605,16 +706,18 @@ def main() -> int:
     denial_details: dict[str, str] = {}
     switch_sequence: list[dict[str, Any]] = []
     auth_logs: list[str] = []
+    interruption_passed = False
+    cross_weapon_spells: list[str] = []
     try:
         initial = hub.subscribe(HUB_QUERIES)
-        build_rows = inserted_rows(initial, "my_combat_build")
+        build_rows = inserted_rows(initial, "my_combat_build_v_2")
         if len(build_rows) != 1:
             raise RuntimeError(
                 f"expected one default Hub combat build, received {len(build_rows)}"
             )
         revision = int(row_value(build_rows[0], 2, "revision"))
         require_status(
-            hub.call("save_combat_build", [runtime_draft(revision)]), "committed"
+            hub.call("save_combat_build_v_2", [runtime_draft(revision)]), "committed"
         )
 
         request_id = f"combat-build-runtime-{uuid.uuid4().hex}"
@@ -645,31 +748,57 @@ def main() -> int:
 
         rows = snapshot(match, hub.identity)
         switch_sequence.append(assert_frozen_snapshot(rows, "DAGGERS"))
+        target_identity = other_player_identity(rows, hub.identity)
 
-        require_status(match.call("activate_combat_build_discipline", ["ARCHER_BOW"]), "committed")
-        rows = snapshot(match, hub.identity)
-        switch_sequence.append(assert_frozen_snapshot(rows, "ARCHER_BOW"))
-        denial_details["wrong_action_bar"] = require_status(
-            match.call("cast_request", cast_args("MANA_SHIELD", rows)), "failed"
+        require_status(
+            match.call(
+                "cast_request",
+                cast_args("LIGHTNING_REFLEXES", rows, hub.identity),
+            ),
+            "committed",
         )
+        rows = wait_for_status(match, hub.identity, "LIGHTNING_REFLEXES")
+        time.sleep(1.6)
+
+        require_status(
+            match.call("cast_request", cast_args("METEOR", rows, hub.identity)),
+            "committed",
+        )
+        cross_weapon_spells.append("SCHOOL:METEOR@DAGGERS")
+        rows = wait_for_active_cast(match, hub.identity, True)
+        yaw = caster_position(rows, hub.identity)[3]
+        require_status(
+            match.call("send_movement_intent", [1.0, 0.0, yaw, False, 1]),
+            "committed",
+        )
+        rows = wait_for_active_cast(match, hub.identity, False)
+        interruption_passed = True
 
         require_status(match.call("activate_combat_build_discipline", ["STAFF"]), "committed")
         rows = snapshot(match, hub.identity)
         switch_sequence.append(assert_frozen_snapshot(rows, "STAFF"))
 
-        for label, action_id in (
-            ("unassigned", "NOVA"),
-            ("wrong_staff_school", "GIGANTISM"),
-            ("dormant_discipline", "FRENZY"),
-        ):
-            denial_details[label] = require_status(
-                match.call("cast_request", cast_args(action_id, rows)), "failed"
-            )
-
-        require_status(
-            match.call("cast_request", cast_args("MANA_SHIELD", rows)), "committed"
+        denial_details["wrong_weapon_technique"] = require_status(
+            match.call(
+                "cast_request",
+                cast_args("LIGHTNING_REFLEXES", rows, hub.identity),
+            ),
+            "failed",
         )
-        rows = wait_for_status(match, hub.identity, "MANA_SHIELD")
+        denial_details["unselected_feature"] = require_status(
+            match.call("cast_request", cast_args("NOVA", rows, hub.identity)),
+            "failed",
+        )
+
+        time.sleep(1.6)
+        require_status(
+            match.call(
+                "cast_request",
+                cast_args("DARKNESS", rows, hub.identity, target_identity),
+            ),
+            "committed",
+        )
+        cross_weapon_spells.append("FORM:DARKNESS@STAFF")
 
         require_status(match.call("activate_combat_build_discipline", ["DAGGERS"]), "committed")
         rows = snapshot(match, hub.identity)
@@ -693,16 +822,18 @@ def main() -> int:
     print(
         json.dumps(
             {
-                "event": "combat_build_runtime_phase_4_pass",
+                "event": "combat_build_v2_runtime_phase_7_pass",
                 "identity": hub.identity[:12],
                 "database": hashlib.sha256(
                     assignment["database_identity"].encode()
                 ).hexdigest()[:12],
                 "ticket": ticket_log_id,
-                "selected_disciplines": EXPECTED_SELECTED,
-                "staff_schools": ["ARCANA", "RUIN"],
-                "combined_ability_count": 5,
-                "active_ability_count": 4,
+                "selected_specializations": [
+                    specialization_id
+                    for _, specialization_id, _, _ in EXPECTED_SPECIALIZATIONS
+                ],
+                "derived_disciplines": sorted(EXPECTED_WEAPONS),
+                "feature_count": 4,
                 "switch_sequence": switch_sequence,
                 "denials": sorted(denial_details),
                 "authorization_log_reasons": sorted(
@@ -712,7 +843,10 @@ def main() -> int:
                         if "reason=" in line
                     }
                 ),
-                "positive_cast": "MANA_SHIELD",
+                "cross_weapon_spells": cross_weapon_spells,
+                "movement_interrupt": interruption_passed,
+                "staff_techniques": 0,
+                "mastery_active": False,
                 "alternate_authority_schema": "ABSENT",
                 "cleanup": "CLEANED",
             },

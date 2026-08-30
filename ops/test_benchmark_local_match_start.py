@@ -49,36 +49,36 @@ class BenchmarkRowDecodingTests(unittest.TestCase):
         self.assertEqual(inserted_rows(update, "my_view"), [["value", 1]])
         self.assertEqual(inserted_rows(update, "ordinary_table"), [{"key": "value"}])
 
-    def test_hub_combat_build_decodes_selected_configuration(self) -> None:
+    def test_hub_combat_build_decodes_v2_selected_configuration(self) -> None:
         parse_hub = BENCHMARK["parse_hub_combat_build"]
         owner = {"__identity__": "0xabc"}
         build = parse_hub(
             {
                 "owner": owner,
-                "starting_discipline_id": [1, {}],
+                "schema_version": 2,
                 "revision": 4,
-                "selected_disciplines": [
-                    {"slot_index": 0, "combat_discipline_id": "DAGGERS"}
+                "starting_discipline_id": [1, {}],
+                "selected_specializations": [
+                    {"slot_index": 0, "specialization_id": "DAGGERS_BLADEDANCER"}
                 ],
+                "dormant_specializations": [],
                 "discipline_configurations": [
                     {
                         "combat_discipline_id": "DAGGERS",
-                        "weapon": {
-                            "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
-                            "main_hand_color_id": "",
-                            "off_hand_item_def_id": "",
-                            "off_hand_color_id": "",
-                        },
-                        "staff_school_ids": [],
-                        "active_assignments": [
-                            {
-                                "action_slot": "slot_0_0",
-                                "ability_id": "DAGGER_QUICK_CUT",
-                            }
-                        ],
-                        "passive_ability_ids": [],
+                        "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+                        "main_hand_color_id": "",
+                        "off_hand_item_def_id": "",
+                        "off_hand_color_id": "",
                     }
                 ],
+                "selected_features": [
+                    {
+                        "specialization_id": "DAGGERS_BLADEDANCER",
+                        "ability_id": "DAGGER_QUICK_CUT",
+                        "preferred_bar_order": [0, 0],
+                    }
+                ],
+                "selected_traits": ["MASTERY"],
             }
         )
 
@@ -86,37 +86,41 @@ class BenchmarkRowDecodingTests(unittest.TestCase):
         self.assertEqual(build["starting_discipline_id"], "DAGGERS")
         self.assertEqual(build["revision"], 4)
         self.assertEqual(
-            build["active_assignments"],
+            build["selected_features"],
             [
                 {
-                    "combat_discipline_id": "DAGGERS",
-                    "action_slot": "slot_0_0",
+                    "specialization_id": "DAGGERS_BLADEDANCER",
                     "ability_id": "DAGGER_QUICK_CUT",
+                    "preferred_bar_order": 0,
                 }
             ],
         )
+        self.assertEqual(build["selected_traits"], ["MASTERY"])
 
     def test_applied_match_combat_build_decodes_object_rows(self) -> None:
         parse_applied = BENCHMARK["parse_applied_match_combat_build"]
         owner = {"__identity__": "0xabc"}
         rows: dict[str, list[dict[str, Any]]] = {
-            "match_combat_build": [
+            "match_combat_build_v_2": [
                 {
                     "owner": owner,
-                    "contract_schema_version": 1,
+                    "contract_schema_version": 2,
                     "revision": 4,
                     "starting_discipline_id": "DAGGERS",
+                    "mastery_active": True,
                 }
             ],
-            "match_combat_build_discipline": [
+            "match_selected_specialization_v_2": [
                 {
                     "key": "abc:0",
                     "owner": owner,
                     "slot_index": 0,
+                    "specialization_id": "DAGGERS_BLADEDANCER",
                     "combat_discipline_id": "DAGGERS",
+                    "specialization_kind": "FORM",
                 }
             ],
-            "match_discipline_configuration": [
+            "match_discipline_configuration_v_2": [
                 {
                     "key": "abc:DAGGERS",
                     "owner": owner,
@@ -129,17 +133,21 @@ class BenchmarkRowDecodingTests(unittest.TestCase):
                     "off_hand_item_id": [1, {}],
                 }
             ],
-            "match_staff_school_selection": [],
-            "match_discipline_action_bar_assignment": [
+            "match_technique_selection_v_2": [
                 {
-                    "key": "abc:DAGGERS:slot_0_0",
+                    "key": "abc:DAGGER_QUICK_CUT",
                     "owner": owner,
+                    "specialization_id": "DAGGERS_BLADEDANCER",
                     "combat_discipline_id": "DAGGERS",
-                    "action_slot": "slot_0_0",
                     "ability_id": "DAGGER_QUICK_CUT",
+                    "bar_order": 0,
                 }
             ],
-            "match_discipline_passive_selection": [],
+            "match_spell_selection_v_2": [],
+            "match_perk_selection_v_2": [],
+            "match_trait_selection_v_2": [
+                {"key": "abc:MASTERY", "owner": owner, "ability_id": "MASTERY"}
+            ],
             "active_armor_set": [{"owner": owner, "armor_set_id": "PEASANT"}],
             "player_equipment_presentation": [
                 {
@@ -161,15 +169,17 @@ class BenchmarkRowDecodingTests(unittest.TestCase):
         )
         self.assertEqual(applied["equipped_off_hand_item_def_id"], "")
         self.assertEqual(
-            applied["active_assignments"],
+            applied["selected_features"],
             [
                 {
-                    "combat_discipline_id": "DAGGERS",
-                    "action_slot": "slot_0_0",
+                    "specialization_id": "DAGGERS_BLADEDANCER",
                     "ability_id": "DAGGER_QUICK_CUT",
+                    "preferred_bar_order": 0,
                 }
             ],
         )
+        self.assertTrue(applied["mastery_active"])
+        self.assertEqual(applied["selected_traits"], ["MASTERY"])
 
 
 if __name__ == "__main__":

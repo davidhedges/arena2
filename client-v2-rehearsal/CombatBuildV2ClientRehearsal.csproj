@@ -15,7 +15,7 @@
     <Compile Include="../Assets/Arena/Runtime/Network/CombatBuildV2Models.cs" Link="CombatBuildV2Models.cs" />
     <Compile Include="../Assets/Arena/Runtime/Network/CombatBuildV2EditorModel.cs" Link="CombatBuildV2EditorModel.cs" />
     <Compile Include="../Assets/Arena/Runtime/UI/CombatBuildV2ViewModels.cs" Link="CombatBuildV2ViewModels.cs" />
-    <Compile Include="../Assets/Arena/Runtime/Generated/RehearsalHubV2SpacetimeDB/**/*.cs" LinkBase="Generated/RehearsalHubV2SpacetimeDB" />
+    <Compile Include="../Assets/Arena/Runtime/Generated/HubSpacetimeDB/**/*.cs" LinkBase="Generated/HubSpacetimeDB" />
     <Compile Include="../Library/PackageCache/com.clockworklabs.spacetimedbsdk@507b6d2d2593/src/**/*.cs"
              Exclude="../Library/PackageCache/com.clockworklabs.spacetimedbsdk@507b6d2d2593/src/SpacetimeDBNetworkManager.cs;../Library/PackageCache/com.clockworklabs.spacetimedbsdk@507b6d2d2593/src/UnityDebugLogger.cs"
              LinkBase="SpacetimeDBClientSDK" />

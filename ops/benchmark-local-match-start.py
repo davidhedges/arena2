@@ -40,7 +40,7 @@ HUB_QUERIES = [
     'SELECT * FROM "my_hub_player"',
     'SELECT * FROM "my_hub_armor_selection"',
     'SELECT * FROM "my_match_status"',
-    'SELECT * FROM "my_combat_build"',
+    'SELECT * FROM "my_combat_build_v_2"',
 ]
 PVP_STATIC_TABLES = [
     "ability_catalog",
@@ -76,12 +76,13 @@ PVP_LOCAL_FILTERS = [
     ("active_armor_set", "owner"),
 ]
 MATCH_COMBAT_BUILD_TABLES = (
-    "match_combat_build",
-    "match_combat_build_discipline",
-    "match_discipline_configuration",
-    "match_staff_school_selection",
-    "match_discipline_action_bar_assignment",
-    "match_discipline_passive_selection",
+    "match_combat_build_v_2",
+    "match_selected_specialization_v_2",
+    "match_discipline_configuration_v_2",
+    "match_technique_selection_v_2",
+    "match_spell_selection_v_2",
+    "match_perk_selection_v_2",
+    "match_trait_selection_v_2",
 )
 WEAPON_APPEARANCE_CATALOG_PATH = (
     pathlib.Path(__file__).resolve().parents[1]
@@ -211,96 +212,75 @@ def parse_hub_armor(row: DatabaseRow) -> dict[str, Any]:
 
 
 def parse_hub_combat_build(row: DatabaseRow) -> dict[str, Any]:
-    selected_rows = row_value(row, 3, "selected_disciplines")
-    configuration_rows = row_value(row, 4, "discipline_configurations")
-    if not isinstance(selected_rows, list) or not isinstance(configuration_rows, list):
+    selected_rows = row_value(row, 4, "selected_specializations")
+    configuration_rows = row_value(row, 6, "discipline_configurations")
+    feature_rows = row_value(row, 7, "selected_features")
+    trait_rows = row_value(row, 8, "selected_traits")
+    if not all(
+        isinstance(values, list)
+        for values in (selected_rows, configuration_rows, feature_rows, trait_rows)
+    ):
         raise RuntimeError("Hub combat build contains malformed nested rows")
     selected = [
         {
             "slot_index": int(row_value(selected_row, 0, "slot_index")),
-            "combat_discipline_id": str(
-                row_value(selected_row, 1, "combat_discipline_id")
-            ),
+            "specialization_id": str(row_value(selected_row, 1, "specialization_id")),
         }
         for selected_row in selected_rows
     ]
     selected.sort(key=lambda value: value["slot_index"])
     if not selected:
-        raise RuntimeError("Hub combat build has no selected disciplines")
+        raise RuntimeError("Hub combat build has no selected Specializations")
 
-    selected_ids = {value["combat_discipline_id"] for value in selected}
-    configurations = []
-    schools = []
-    assignments = []
-    passives = []
-    for configuration_row in configuration_rows:
-        discipline_id = str(
-            row_value(configuration_row, 0, "combat_discipline_id")
-        )
-        if discipline_id not in selected_ids:
-            continue
-        weapon = row_value(configuration_row, 1, "weapon")
-        configurations.append(
-            {
-                "combat_discipline_id": discipline_id,
-                "main_hand_item_def_id": str(
-                    row_value(weapon, 0, "main_hand_item_def_id")
-                ),
-                "main_hand_color_id": str(
-                    row_value(weapon, 1, "main_hand_color_id")
-                ),
-                "off_hand_item_def_id": str(
-                    row_value(weapon, 2, "off_hand_item_def_id")
-                ),
-                "off_hand_color_id": str(
-                    row_value(weapon, 3, "off_hand_color_id")
-                ),
-            }
-        )
-        staff_school_ids = row_value(configuration_row, 2, "staff_school_ids")
-        active_assignments = row_value(configuration_row, 3, "active_assignments")
-        passive_ability_ids = row_value(configuration_row, 4, "passive_ability_ids")
-        if not all(
-            isinstance(values, list)
-            for values in (staff_school_ids, active_assignments, passive_ability_ids)
-        ):
-            raise RuntimeError("Hub combat-build configuration contains malformed arrays")
-        schools.extend(str(value) for value in staff_school_ids)
-        assignments.extend(
-            {
-                "combat_discipline_id": discipline_id,
-                "action_slot": str(row_value(value, 0, "action_slot")),
-                "ability_id": str(row_value(value, 1, "ability_id")),
-            }
-            for value in active_assignments
-        )
-        passives.extend(
-            {"combat_discipline_id": discipline_id, "ability_id": str(value)}
-            for value in passive_ability_ids
-        )
+    configurations = [
+        {
+            "combat_discipline_id": str(
+                row_value(configuration, 0, "combat_discipline_id")
+            ),
+            "main_hand_item_def_id": str(
+                row_value(configuration, 1, "main_hand_item_def_id")
+            ),
+            "main_hand_color_id": str(
+                row_value(configuration, 2, "main_hand_color_id")
+            ),
+            "off_hand_item_def_id": str(
+                row_value(configuration, 3, "off_hand_item_def_id")
+            ),
+            "off_hand_color_id": str(
+                row_value(configuration, 4, "off_hand_color_id")
+            ),
+        }
+        for configuration in configuration_rows
+    ]
+    features = [
+        {
+            "specialization_id": str(row_value(feature, 0, "specialization_id")),
+            "ability_id": str(row_value(feature, 1, "ability_id")),
+            "preferred_bar_order": option_value(
+                row_value(feature, 2, "preferred_bar_order")
+            ),
+        }
+        for feature in feature_rows
+    ]
 
     starting_discipline_id = str(
-        option_value(row_value(row, 1, "starting_discipline_id"))
-        or selected[0]["combat_discipline_id"]
+        option_value(row_value(row, 3, "starting_discipline_id"))
+        or configurations[0]["combat_discipline_id"]
     )
     configurations.sort(key=lambda value: value["combat_discipline_id"])
-    schools.sort()
-    assignments.sort(
-        key=lambda value: (value["combat_discipline_id"], value["action_slot"])
-    )
-    passives.sort(
-        key=lambda value: (value["combat_discipline_id"], value["ability_id"])
-    )
+    features.sort(key=lambda value: (value["specialization_id"], value["ability_id"]))
     return {
         "owner": normalize_identity(row_value(row, 0, "owner")),
-        "contract_schema_version": 1,
+        "contract_schema_version": int(row_value(row, 1, "schema_version")),
         "revision": int(row_value(row, 2, "revision")),
         "starting_discipline_id": starting_discipline_id,
-        "selected_disciplines": selected,
+        "selected_specializations": selected,
+        "dormant_specializations": sorted(
+            str(value) for value in row_value(row, 5, "dormant_specializations")
+        ),
         "discipline_configurations": configurations,
-        "staff_school_ids": schools,
-        "active_assignments": assignments,
-        "passive_selections": passives,
+        "selected_features": features,
+        "selected_traits": sorted(str(value) for value in trait_rows),
     }
 
 
@@ -320,28 +300,28 @@ def parse_applied_match_combat_build(
     rows_by_table: dict[str, list[DatabaseRow]],
 ) -> dict[str, Any] | None:
     singular_tables = (
-        "match_combat_build",
+        "match_combat_build_v_2",
         "active_armor_set",
         "player_equipment_presentation",
     )
     if any(len(rows_by_table.get(table_name, [])) != 1 for table_name in singular_tables):
         return None
-    selected_rows = rows_by_table.get("match_combat_build_discipline", [])
-    configuration_rows = rows_by_table.get("match_discipline_configuration", [])
-    if not selected_rows or len(configuration_rows) != len(selected_rows):
+    selected_rows = rows_by_table.get("match_selected_specialization_v_2", [])
+    configuration_rows = rows_by_table.get("match_discipline_configuration_v_2", [])
+    if not selected_rows or not configuration_rows:
         return None
 
-    build = rows_by_table["match_combat_build"][0]
+    build = rows_by_table["match_combat_build_v_2"][0]
     armor = rows_by_table["active_armor_set"][0]
     equipment = rows_by_table["player_equipment_presentation"][0]
-    selected_disciplines = [
+    selected_specializations = [
         {
             "slot_index": int(row_value(row, 2, "slot_index")),
-            "combat_discipline_id": str(row_value(row, 3, "combat_discipline_id")),
+            "specialization_id": str(row_value(row, 3, "specialization_id")),
         }
         for row in selected_rows
     ]
-    selected_disciplines.sort(key=lambda value: value["slot_index"])
+    selected_specializations.sort(key=lambda value: value["slot_index"])
     configurations = [
         {
             "combat_discipline_id": str(row_value(row, 2, "combat_discipline_id")),
@@ -355,36 +335,28 @@ def parse_applied_match_combat_build(
         for row in configuration_rows
     ]
     configurations.sort(key=lambda value: value["combat_discipline_id"])
-    schools = sorted(
-        str(row_value(row, 2, "spell_school_id"))
-        for row in rows_by_table.get("match_staff_school_selection", [])
-    )
-    assignments = sorted(
-        (
+    features = []
+    for table_name in ("match_technique_selection_v_2", "match_spell_selection_v_2"):
+        features.extend(
             {
-                "combat_discipline_id": str(
-                    row_value(row, 2, "combat_discipline_id")
-                ),
-                "action_slot": str(row_value(row, 3, "action_slot")),
+                "specialization_id": str(row_value(row, 2, "specialization_id")),
                 "ability_id": str(row_value(row, 4, "ability_id")),
+                "preferred_bar_order": int(row_value(row, 5, "bar_order")),
             }
-            for row in rows_by_table.get(
-                "match_discipline_action_bar_assignment", []
-            )
-        ),
-        key=lambda value: (value["combat_discipline_id"], value["action_slot"]),
+            for row in rows_by_table.get(table_name, [])
+        )
+    features.extend(
+        {
+            "specialization_id": str(row_value(row, 2, "specialization_id")),
+            "ability_id": str(row_value(row, 4, "ability_id")),
+            "preferred_bar_order": None,
+        }
+        for row in rows_by_table.get("match_perk_selection_v_2", [])
     )
-    passives = sorted(
-        (
-            {
-                "combat_discipline_id": str(
-                    row_value(row, 2, "combat_discipline_id")
-                ),
-                "ability_id": str(row_value(row, 3, "ability_id")),
-            }
-            for row in rows_by_table.get("match_discipline_passive_selection", [])
-        ),
-        key=lambda value: (value["combat_discipline_id"], value["ability_id"]),
+    features.sort(key=lambda value: (value["specialization_id"], value["ability_id"]))
+    traits = sorted(
+        str(row_value(row, 2, "ability_id"))
+        for row in rows_by_table.get("match_trait_selection_v_2", [])
     )
     canonical_owners = {normalize_identity(row_value(build, 0, "owner"))}
     for table_name in MATCH_COMBAT_BUILD_TABLES[1:]:
@@ -402,11 +374,11 @@ def parse_applied_match_combat_build(
         "starting_discipline_id": str(
             row_value(build, 3, "starting_discipline_id")
         ),
-        "selected_disciplines": selected_disciplines,
+        "mastery_active": bool(row_value(build, 4, "mastery_active")),
+        "selected_specializations": selected_specializations,
         "discipline_configurations": configurations,
-        "staff_school_ids": schools,
-        "active_assignments": assignments,
-        "passive_selections": passives,
+        "selected_features": features,
+        "selected_traits": traits,
         "armor_owner": normalize_identity(row_value(armor, 0, "owner")),
         "armor_set_id": str(row_value(armor, 1, "armor_set_id")),
         "equipment_owner": normalize_identity(row_value(equipment, 0, "owner")),
@@ -624,7 +596,7 @@ class Benchmark:
             )
         )
         self.hub_combat_build = parse_hub_combat_build(
-            require_single_inserted_row(update, "my_combat_build")
+            require_single_inserted_row(update, "my_combat_build_v_2")
         )
         if {
             self.hub_armor["owner"],
@@ -635,10 +607,8 @@ class Benchmark:
             raise RuntimeError("Hub armor selection is empty")
         if self.hub_combat_build["revision"] < 1:
             raise RuntimeError("Hub combat-build revision was not initialized")
-        if len(self.hub_combat_build["selected_disciplines"]) != len(
-            self.hub_combat_build["discipline_configurations"]
-        ):
-            raise RuntimeError("Hub combat build lacks a selected-discipline configuration")
+        if not self.hub_combat_build["discipline_configurations"]:
+            raise RuntimeError("Hub combat build lacks a derived parent configuration")
 
     def wait_for_hub_status(self, expected: str) -> dict[str, str]:
         def select(frame: dict[str, Any]) -> dict[str, str] | None:
@@ -733,15 +703,26 @@ class Benchmark:
                 "contract_schema_version",
                 "revision",
                 "starting_discipline_id",
-                "selected_disciplines",
-                "staff_school_ids",
-                "active_assignments",
-                "passive_selections",
+                "selected_specializations",
+                "selected_features",
+                "selected_traits",
             ):
                 if applied[field] != self.hub_combat_build[field]:
                     raise RuntimeError(
                         f"match combat-build {field} differs from the frozen Hub value"
                     )
+            expected_mastery = (
+                "MASTERY" in self.hub_combat_build["selected_traits"]
+                and len(
+                    {
+                        row_value(row, 4, "combat_discipline_id")
+                        for row in observed["match_selected_specialization_v_2"]
+                    }
+                )
+                == 1
+            )
+            if applied["mastery_active"] != expected_mastery:
+                raise RuntimeError("match Mastery predicate differs from the frozen v2 build")
             applied_configuration_contract = [
                 {
                     key: value
@@ -806,9 +787,9 @@ class Benchmark:
                 "starting_discipline_id": self.hub_combat_build[
                     "starting_discipline_id"
                 ],
-                "selected_disciplines": [
-                    value["combat_discipline_id"]
-                    for value in self.hub_combat_build["selected_disciplines"]
+                "selected_specializations": [
+                    value["specialization_id"]
+                    for value in self.hub_combat_build["selected_specializations"]
                 ],
                 "armor_set_id": self.hub_armor["armor_set_id"],
                 "request_to_ready_ms": round((ready_at - request_started) * 1000.0, 3),
