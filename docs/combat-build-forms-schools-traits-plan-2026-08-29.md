@@ -892,6 +892,17 @@ pass, and a developer rehearsal demonstrates save/reload plus the required bar
 transitions, while the canonical v1 screen, HUD, and saved state remain
 coherent.
 
+Completion record (2026-08-29): PASS. Transport-neutral whole-draft editor and
+dual-bar HUD models now cover the three-slot composition, global 18-point
+feature capacity, separate three-Trait capacity, per-parent equipment,
+dormant restoration/reflow, exact reducer errors, one direct input per active,
+always-visible Spells, parent-gated Techniques, Staff hiding, and always-active
+selected Perks. A generated-binding C# client subscribed to a disposable Hub
+view, saved and reloaded a mixed Dagger/Staff draft at revision 2, and verified
+the live bar transition. The loopback/prefix-gated adapter has no bootstrap or
+canonical Hub reference; v1 rows remained unchanged. See
+`docs/combat-build-forms-schools-traits-phase-6-evidence-2026-08-29.md`.
+
 ### Phase 7 — coordinated full-stack v2 cutover
 
 Deliverables:
