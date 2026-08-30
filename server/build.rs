@@ -10,6 +10,10 @@ const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 /// ship in release modules.
 const COMPACT_RUNTIME_CATALOGS: &[(&str, &str)] = &[
     (
+        "combat_build_v2_catalog.shared.json",
+        "combat_build_v2_catalog.shared.json",
+    ),
+    (
         "progression_catalog.shared.json",
         "progression_catalog.shared.json",
     ),

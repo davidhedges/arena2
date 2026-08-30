@@ -26,6 +26,10 @@ mod combat;
 // reducer, persistence, bootstrap, or runtime authorization consumer yet.
 #[allow(dead_code)]
 mod combat_build;
+// Phase 1 compiles and exhaustively validates v2 in parallel. Production
+// persistence/runtime consumers stay on v1 until their approved cutover phase.
+#[allow(dead_code)]
+mod combat_build_v2;
 mod confusion;
 mod contract_version;
 mod defense;

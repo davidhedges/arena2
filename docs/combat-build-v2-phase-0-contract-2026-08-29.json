@@ -4791,7 +4791,7 @@
     },
     {
       "expected_error": null,
-      "fixture_id": "VALID_EIGHTEEN_TECHNIQUES_ONE_FORM",
+      "fixture_id": "VALID_EIGHTEEN_TECHNIQUES_ONE_PARENT",
       "valid": true
     },
     {

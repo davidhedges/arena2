@@ -728,6 +728,12 @@ player ability maps nowhere, Staff/School Technique fixtures fail validation,
 all other v2 fixtures pass, and the v1 production path remains internally
 consistent until the coordinated cutover.
 
+Completion record (2026-08-29): PASS. The v2 catalog and pure validator are
+implemented in parallel with the unchanged v1 production contract. All 32
+locked fixtures execute, exhaustive catalog projection checks pass, and the
+full server and Hub regression suites remain green. See
+`docs/combat-build-forms-schools-traits-phase-1-evidence-2026-08-29.md`.
+
 ### Phase 2 — Hub v2 persistence in an isolated rehearsal database
 
 Deliverables:

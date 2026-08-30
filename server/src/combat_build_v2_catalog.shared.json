@@ -1,0 +1,567 @@
+{
+  "default_build": {
+    "discipline_configurations": [
+      {
+        "combat_discipline_id": "DAGGERS",
+        "main_hand_color_id": "",
+        "main_hand_item_def_id": "TRAINING_DAGGER_PAIR",
+        "off_hand_color_id": "",
+        "off_hand_item_def_id": ""
+      }
+    ],
+    "dormant_specializations": [],
+    "revision": 0,
+    "schema_version": 2,
+    "selected_features": [
+      {
+        "ability_id": "DAGGER_QUICK_CUT",
+        "preferred_bar_order": 0,
+        "specialization_id": "DAGGERS_BLADEDANCER"
+      }
+    ],
+    "selected_specializations": [
+      {
+        "slot_index": 0,
+        "specialization_id": "DAGGERS_BLADEDANCER"
+      }
+    ],
+    "selected_traits": [],
+    "starting_discipline_id": "DAGGERS"
+  },
+  "intrinsic_abilities": [
+    {
+      "ability_id": "DAGGER_STALK_SHADOWSTEP",
+      "counts_toward_capacity": false,
+      "disposition": "Retain only as the private continuation of the DAGGERS_SHADOW Spell DAGGER_STALK.",
+      "loadout_kind": "INTRINSIC",
+      "selectable": false
+    },
+    {
+      "ability_id": "DAGGER_TRIP",
+      "counts_toward_capacity": false,
+      "disposition": "Retain only as a private DAGGERS combo follow-up.",
+      "loadout_kind": "INTRINSIC",
+      "selectable": false
+    },
+    {
+      "ability_id": "WARRIOR_AIR_TO_GROUND_PLACEHOLDER",
+      "counts_toward_capacity": false,
+      "disposition": "Retain only as a private TWO_HANDED_SWORD combo follow-up.",
+      "loadout_kind": "INTRINSIC",
+      "selectable": false
+    },
+    {
+      "ability_id": "WARRIOR_HEW_2",
+      "counts_toward_capacity": false,
+      "disposition": "Retain only as a private TWO_HANDED_SWORD combo follow-up.",
+      "loadout_kind": "INTRINSIC",
+      "selectable": false
+    },
+    {
+      "ability_id": "WARRIOR_SKYFALL_4",
+      "counts_toward_capacity": false,
+      "disposition": "Retain only as a private TWO_HANDED_SWORD combo follow-up.",
+      "loadout_kind": "INTRINSIC",
+      "selectable": false
+    }
+  ],
+  "removed_player_abilities": [
+    {
+      "ability_id": "STAFF_STRIKE",
+      "current_gameplay_kind": "MELEE",
+      "current_selection_kind": "ACTIVE",
+      "disposition": "Remove selectable Staff melee Technique.",
+      "may_retain_private_presentation_data": false
+    },
+    {
+      "ability_id": "STAFF_STRIKE_2",
+      "current_gameplay_kind": "MELEE",
+      "current_selection_kind": "INTRINSIC",
+      "disposition": "Remove intrinsic Staff melee combo follow-up; retain only private clip/action data needed by ordinary Staff autoattack presentation.",
+      "may_retain_private_presentation_data": true
+    },
+    {
+      "ability_id": "STAFF_SWEEP",
+      "current_gameplay_kind": "MELEE",
+      "current_selection_kind": "ACTIVE",
+      "disposition": "Remove selectable Staff melee Technique.",
+      "may_retain_private_presentation_data": false
+    },
+    {
+      "ability_id": "STAFF_THRUST",
+      "current_gameplay_kind": "MELEE",
+      "current_selection_kind": "ACTIVE",
+      "disposition": "Remove selectable Staff melee Technique.",
+      "may_retain_private_presentation_data": false
+    }
+  ],
+  "rules": {
+    "default_starting_discipline": "selected_specializations[0].parent_discipline",
+    "direct_action_input_ids": [
+      "COMBAT_ACTION_00",
+      "COMBAT_ACTION_01",
+      "COMBAT_ACTION_02",
+      "COMBAT_ACTION_03",
+      "COMBAT_ACTION_04",
+      "COMBAT_ACTION_05",
+      "COMBAT_ACTION_06",
+      "COMBAT_ACTION_07",
+      "COMBAT_ACTION_08",
+      "COMBAT_ACTION_09",
+      "COMBAT_ACTION_10",
+      "COMBAT_ACTION_11",
+      "COMBAT_ACTION_12",
+      "COMBAT_ACTION_13",
+      "COMBAT_ACTION_14",
+      "COMBAT_ACTION_15",
+      "COMBAT_ACTION_16",
+      "COMBAT_ACTION_17"
+    ],
+    "global_feature_capacity": 18,
+    "maximum_selected_specializations": 3,
+    "minimum_selected_specializations": 1,
+    "trait_capacity": 3
+  },
+  "schema_version": 2,
+  "source_contract": "docs/combat-build-v2-phase-0-contract-2026-08-29.json",
+  "source_contract_sha256": "ff728ac147767b3befa97bd444fff51cece96057294b27507be72192db52796a",
+  "specializations": [
+    {
+      "combat_discipline_id": "DAGGERS",
+      "display_name": "Bladedancer",
+      "perk_ability_ids": [
+        "SUBTLETY_FLEET_FOOTED"
+      ],
+      "sort_order": 10,
+      "specialization_id": "DAGGERS_BLADEDANCER",
+      "specialization_kind": "FORM",
+      "spell_ability_ids": [],
+      "technique_ability_ids": [
+        "DAGGER_QUICK_CUT",
+        "DAGGER_SLICE",
+        "DAGGER_DASHING_CUT",
+        "DAGGER_ROUNDHOUSE",
+        "DAGGER_SPINNING_SLASH",
+        "DAGGER_BLADE_FLURRY",
+        "DAGGER_DEADLY_FLOURISH",
+        "DAGGER_PURSUE",
+        "DAGGER_DOWNWARD_SLASH",
+        "DAGGER_DIVING_STRIKE",
+        "DAGGER_LIGHTNING_REFLEXES"
+      ]
+    },
+    {
+      "combat_discipline_id": "DAGGERS",
+      "display_name": "Executioner",
+      "perk_ability_ids": [
+        "SUBTLETY_SURPRISE_ATTACKS"
+      ],
+      "sort_order": 20,
+      "specialization_id": "DAGGERS_EXECUTIONER",
+      "specialization_kind": "FORM",
+      "spell_ability_ids": [],
+      "technique_ability_ids": [
+        "DAGGER_GUT_RIPPER",
+        "DAGGER_NERVE_STRIKE",
+        "DAGGER_COUP_DE_GRACE",
+        "DAGGER_PRECISION_STRIKE",
+        "DAGGER_EVISCERATE",
+        "DAGGER_VITAL_STRIKE",
+        "DAGGER_DEATH_CROSS",
+        "DAGGER_DISEMBOWEL",
+        "DAGGER_FLAY",
+        "DAGGER_BLADE_TWISTING"
+      ]
+    },
+    {
+      "combat_discipline_id": "DAGGERS",
+      "display_name": "Shadow",
+      "perk_ability_ids": [
+        "SUBTLETY_OPPORTUNIST",
+        "SUBTLETY_TACTICAL_ADVANTAGE",
+        "SUBTLETY_LINGERING_SHADE"
+      ],
+      "sort_order": 30,
+      "specialization_id": "DAGGERS_SHADOW",
+      "specialization_kind": "FORM",
+      "spell_ability_ids": [
+        "DAGGER_DARKNESS",
+        "DAGGER_STALK",
+        "DAGGER_SHADOWREND"
+      ],
+      "technique_ability_ids": [
+        "DAGGER_STEALTH",
+        "DAGGER_FIND_WEAKNESS",
+        "DAGGER_DISARM",
+        "DAGGER_GOUGE",
+        "DAGGER_TEMPLE_STRIKE"
+      ]
+    },
+    {
+      "combat_discipline_id": "TWO_HANDED_SWORD",
+      "display_name": "Vanguard",
+      "perk_ability_ids": [],
+      "sort_order": 10,
+      "specialization_id": "TWO_HANDED_SWORD_VANGUARD",
+      "specialization_kind": "FORM",
+      "spell_ability_ids": [],
+      "technique_ability_ids": [
+        "WARRIOR_GROUND_TO_AIR_PLACEHOLDER",
+        "WARRIOR_HEW",
+        "WARRIOR_MAIM",
+        "WARRIOR_CRUSHING_BLOW",
+        "WARRIOR_SUNDER",
+        "WARRIOR_CARVE",
+        "WARRIOR_FORTIFY",
+        "WARRIOR_IRON_WILL",
+        "WARRIOR_CHARGE",
+        "WARRIOR_IMPALE",
+        "WARRIOR_DISENGAGE_STRIKE",
+        "WARRIOR_GROUND_SLASH"
+      ]
+    },
+    {
+      "combat_discipline_id": "TWO_HANDED_SWORD",
+      "display_name": "Reaver",
+      "perk_ability_ids": [],
+      "sort_order": 20,
+      "specialization_id": "TWO_HANDED_SWORD_REAVER",
+      "specialization_kind": "FORM",
+      "spell_ability_ids": [],
+      "technique_ability_ids": [
+        "WARRIOR_CATACLYSM",
+        "WARRIOR_BUZZSAW",
+        "WARRIOR_WHIRLWIND",
+        "WARRIOR_CLEAVE",
+        "WARRIOR_BUTCHER",
+        "WARRIOR_TENDERIZE",
+        "WARRIOR_DREAD_STRIKE",
+        "WARRIOR_EARTHSHATTER",
+        "WARRIOR_SHOCKWAVE",
+        "WARRIOR_INTIMIDATE"
+      ]
+    },
+    {
+      "combat_discipline_id": "TWO_HANDED_SWORD",
+      "display_name": "Berserker",
+      "perk_ability_ids": [
+        "WARRIOR_BLOODLUST",
+        "WARRIOR_RESTLESS"
+      ],
+      "sort_order": 30,
+      "specialization_id": "TWO_HANDED_SWORD_BERSERKER",
+      "specialization_kind": "FORM",
+      "spell_ability_ids": [],
+      "technique_ability_ids": [
+        "WARRIOR_MOMENTUM",
+        "WARRIOR_BATTLE_CRY",
+        "WARRIOR_DEFIANCE",
+        "WARRIOR_FRENZY",
+        "WARRIOR_ENRAGE",
+        "WARRIOR_SECOND_WIND",
+        "WARRIOR_BERSERKING",
+        "WARRIOR_BATTLE_TRANCE",
+        "WARRIOR_FEAST"
+      ]
+    },
+    {
+      "combat_discipline_id": "SWORD_AND_SHIELD",
+      "display_name": "Guardian",
+      "perk_ability_ids": [],
+      "sort_order": 10,
+      "specialization_id": "SWORD_AND_SHIELD_GUARDIAN",
+      "specialization_kind": "FORM",
+      "spell_ability_ids": [
+        "PALADIN_THORNS_AURA",
+        "PALADIN_WARDING_AURA"
+      ],
+      "technique_ability_ids": [
+        "PALADIN_SHIELD_PUMMEL",
+        "PALADIN_GUARDIAN_RUSH",
+        "PALADIN_RETRIBUTION",
+        "PALADIN_CHARGE",
+        "PALADIN_AVENGE",
+        "PALADIN_BLESSED_SHIELD",
+        "PALADIN_AIR_TO_GROUND_3"
+      ]
+    },
+    {
+      "combat_discipline_id": "SWORD_AND_SHIELD",
+      "display_name": "Vindicator",
+      "perk_ability_ids": [],
+      "sort_order": 20,
+      "specialization_id": "SWORD_AND_SHIELD_VINDICATOR",
+      "specialization_kind": "FORM",
+      "spell_ability_ids": [
+        "PALADIN_CONSECRATE",
+        "PALADIN_SACRED_FLAME",
+        "PALADIN_AURA_OF_VENGEANCE",
+        "PALADIN_RADIANT_BURST"
+      ],
+      "technique_ability_ids": [
+        "PALADIN_VINDICATOR_SLASH",
+        "PALADIN_REBUKE",
+        "PALADIN_HALLOWED_THRUST",
+        "PALADIN_SACRED_THRUST",
+        "PALADIN_SERRATED_BLADES",
+        "PALADIN_AIR_TO_GROUND_1"
+      ]
+    },
+    {
+      "combat_discipline_id": "SWORD_AND_SHIELD",
+      "display_name": "Templar",
+      "perk_ability_ids": [],
+      "sort_order": 30,
+      "specialization_id": "SWORD_AND_SHIELD_TEMPLAR",
+      "specialization_kind": "FORM",
+      "spell_ability_ids": [
+        "PALADIN_CLEANSING_TOUCH",
+        "PALADIN_ABSOLUTION",
+        "PALADIN_FERVOR",
+        "PALADIN_MANA_FONT",
+        "PALADIN_STAMINA_FONT",
+        "PALADIN_BLADE_BARRIER"
+      ],
+      "technique_ability_ids": []
+    },
+    {
+      "combat_discipline_id": "ARCHER_BOW",
+      "display_name": "Marksman",
+      "perk_ability_ids": [
+        "ARCHER_CAREFUL_AIM"
+      ],
+      "sort_order": 10,
+      "specialization_id": "ARCHER_BOW_MARKSMAN",
+      "specialization_kind": "FORM",
+      "spell_ability_ids": [],
+      "technique_ability_ids": [
+        "ARCHER_POWER_SHOT",
+        "ARCHER_HEARTSEEKER",
+        "ARCHER_DRAW_MODE_TOGGLE"
+      ]
+    },
+    {
+      "combat_discipline_id": "ARCHER_BOW",
+      "display_name": "Skirmisher",
+      "perk_ability_ids": [
+        "ARCHER_MAVERICK",
+        "ARCHER_POINT_BLANK"
+      ],
+      "sort_order": 20,
+      "specialization_id": "ARCHER_BOW_SKIRMISHER",
+      "specialization_kind": "FORM",
+      "spell_ability_ids": [],
+      "technique_ability_ids": [
+        "ARCHER_BACKSTEP",
+        "ARCHER_DISENGAGE",
+        "ARCHER_EVASIVE_SHOT"
+      ]
+    },
+    {
+      "combat_discipline_id": "ARCHER_BOW",
+      "display_name": "Volley",
+      "perk_ability_ids": [
+        "ARCHER_PERFORATION"
+      ],
+      "sort_order": 30,
+      "specialization_id": "ARCHER_BOW_VOLLEY",
+      "specialization_kind": "FORM",
+      "spell_ability_ids": [],
+      "technique_ability_ids": [
+        "ARCHER_TRIPLE_SHOT",
+        "ARCHER_DOUBLE_SHOT",
+        "ARCHER_RAIN_OF_ARROWS",
+        "ARCHER_RAPID_FIRE"
+      ]
+    },
+    {
+      "combat_discipline_id": "STAFF",
+      "display_name": "Blight",
+      "perk_ability_ids": [
+        "RUIN_FRACTURE",
+        "BLIGHT_TOXIC_WEAPON"
+      ],
+      "sort_order": 10,
+      "specialization_id": "BLIGHT",
+      "specialization_kind": "SCHOOL",
+      "spell_ability_ids": [
+        "SPELL_ICICLE",
+        "SPELL_FROZEN_SPLINTERS",
+        "SPELL_BLIZZARD",
+        "SPELL_FROST_NEEDLE",
+        "SPELL_ICE_SPIKES",
+        "SPELL_FROST_NOVA",
+        "SPELL_GLACIAL_SPIKE",
+        "SPELL_FROZEN_GRASP",
+        "RUIN_RIME",
+        "SPELL_FLASH_FREEZE",
+        "SPELL_DEEPENING_COLD",
+        "SPELL_GLACIAL_ADVANCE",
+        "SPELL_MIASMA",
+        "SPELL_PLAGUEBOLT",
+        "SPELL_CONTAGION"
+      ],
+      "technique_ability_ids": []
+    },
+    {
+      "combat_discipline_id": "STAFF",
+      "display_name": "Mortality",
+      "perk_ability_ids": [],
+      "sort_order": 20,
+      "specialization_id": "MORTALITY",
+      "specialization_kind": "SCHOOL",
+      "spell_ability_ids": [
+        "SPELL_VAMPIRIC_ORB",
+        "SPELL_WITHERING_ORB",
+        "SPELL_SOULSTEALER",
+        "SPELL_NECROTIC_AURA",
+        "SPELL_DEFILED_GROUND",
+        "SPELL_REAP",
+        "SPELL_GRIM_WHEEL",
+        "SPELL_GRAVEBURST",
+        "SPELL_GRAVEWAKE",
+        "SPELL_NECRO_PRISON",
+        "SPELL_BLOOD_OFFERING"
+      ],
+      "technique_ability_ids": []
+    },
+    {
+      "combat_discipline_id": "STAFF",
+      "display_name": "Ruin",
+      "perk_ability_ids": [
+        "RUIN_FLAMING_WEAPON",
+        "RUIN_FURNACE",
+        "RUIN_ACCELERATION",
+        "RUIN_QUICKENING",
+        "RUIN_CHAIN_REACTION",
+        "RUIN_POTENTIAL",
+        "RUIN_WILDFIRE"
+      ],
+      "sort_order": 30,
+      "specialization_id": "RUIN",
+      "specialization_kind": "SCHOOL",
+      "spell_ability_ids": [
+        "SPELL_FIREBALL",
+        "SPELL_ORBITING_BLADES",
+        "SPELL_METEOR",
+        "SPELL_ELECTROCUTE",
+        "SPELL_LIGHTNING",
+        "SPELL_CAPACITOR",
+        "SPELL_ERUPTION",
+        "SPELL_FLAMETHROWER",
+        "SPELL_FLAMING_ORB",
+        "SPELL_BOLT",
+        "SPELL_FIERY_ORBS",
+        "SPELL_CAUTERIZE",
+        "SPELL_FLASHFIRE",
+        "SPELL_IMMOLATION",
+        "SPELL_COMBUSTION",
+        "SPELL_FULMINATION"
+      ],
+      "technique_ability_ids": []
+    },
+    {
+      "combat_discipline_id": "STAFF",
+      "display_name": "Divinity",
+      "perk_ability_ids": [
+        "DIVINITY_FAITH"
+      ],
+      "sort_order": 40,
+      "specialization_id": "DIVINITY",
+      "specialization_kind": "SCHOOL",
+      "spell_ability_ids": [
+        "SPELL_BLINDING_LIGHT",
+        "SPELL_RESTORATION",
+        "SPELL_PROTECTION",
+        "SPELL_CELESTIAL_MANTLE",
+        "SPELL_SANCTUARY",
+        "SPELL_BENEDICTION",
+        "SPELL_DIVINE_MEND",
+        "SPELL_FLASH_OF_GRACE",
+        "SPELL_AURA_OF_RENEWAL",
+        "SPELL_HOLY_SHIELD",
+        "SPELL_REBUKE",
+        "SPELL_SMITE",
+        "SPELL_PENANCE",
+        "SPELL_RECKONING",
+        "SPELL_MARTYR",
+        "SPELL_BURDEN"
+      ],
+      "technique_ability_ids": []
+    },
+    {
+      "combat_discipline_id": "STAFF",
+      "display_name": "Arcana",
+      "perk_ability_ids": [],
+      "sort_order": 50,
+      "specialization_id": "ARCANA",
+      "specialization_kind": "SCHOOL",
+      "spell_ability_ids": [
+        "SPELL_INSTANT_BEAM",
+        "SPELL_MAGIC_MISSILE",
+        "SPELL_NEGATE",
+        "SPELL_NOVA",
+        "SPELL_COLLAPSE",
+        "SPELL_DISPEL_MAGIC",
+        "SPELL_TELEPORT",
+        "SPELL_SILENCE",
+        "SPELL_MANA_SHIELD",
+        "SPELL_SHIMMER",
+        "SPELL_RECALL",
+        "SPELL_TRANSPOSE",
+        "SPELL_MIRROR_IMAGE"
+      ],
+      "technique_ability_ids": []
+    },
+    {
+      "combat_discipline_id": "STAFF",
+      "display_name": "Primal",
+      "perk_ability_ids": [
+        "PRIMAL_ADAPTATION",
+        "PRIMAL_PHOTOSYNTHESIS",
+        "PRIMAL_SLIPSTREAM"
+      ],
+      "sort_order": 60,
+      "specialization_id": "PRIMAL",
+      "specialization_kind": "SCHOOL",
+      "spell_ability_ids": [
+        "SPELL_UPHEAVAL",
+        "SPELL_GIGANTISM",
+        "SPELL_FLURRY",
+        "SPELL_GUST_OF_WIND",
+        "SPELL_BUFFET",
+        "SPELL_EARTH_BLAST",
+        "SPELL_TIDAL_BLAST",
+        "SPELL_LAVA_BLAST",
+        "SPELL_WIND_BLAST",
+        "SPELL_VERDANT_SPIRITS",
+        "SPELL_OVERGROWTH",
+        "SPELL_TAILWIND",
+        "SPELL_WELLSPRING",
+        "SPELL_STONE_CARAPACE",
+        "SPELL_MOULT",
+        "SPELL_CLOUDBURST",
+        "SPELL_FISSURE",
+        "SPELL_EARTHQUAKE"
+      ],
+      "technique_ability_ids": []
+    }
+  ],
+  "traits": [
+    {
+      "ability_id": "MASTERY",
+      "condition": "EXACTLY_ONE_DISTINCT_PARENT_DISCIPLINE",
+      "damage_scope": "NORMAL_PLAYER_AUTHORED_OUTGOING_DAMAGE",
+      "display_name": "Mastery",
+      "effect_kind": "SINGLE_PARENT_OUTGOING_DAMAGE_MULTIPLIER",
+      "excludes": [
+        "SYSTEM",
+        "SELF_INFLICTED_FINAL",
+        "COPIED_FINAL"
+      ],
+      "loadout_kind": "TRAIT",
+      "modifier_scalar": 0.1,
+      "sort_order": 10
+    }
+  ]
+}
