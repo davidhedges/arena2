@@ -78,8 +78,8 @@ SOUTH_ROUTE = [
     (26.5, -89.5),
 ]
 
-MELEE_ABILITY = "STAFF_THRUST"  # plain targeted Staff strike, range 4.0
-MELEE_STRIKE = "COMBO_ATTACK_4_4_LUNGING_SLASH"
+MELEE_ABILITY = "PALADIN_SACRED_THRUST"  # retained targeted Technique, range 5.0
+MELEE_STRIKE = "SWORD_AND_SHIELD_ALT_LIGHT_3"
 CHARGE_ABILITY = "WARRIOR_CHARGE"  # LINEAR gap-close, range 5..18
 CHARGE_STRIKE = "WARRIOR_CHARGE"
 
@@ -330,7 +330,7 @@ def main():
     configure_probe_combat_build(
         probe,
         [MELEE_ABILITY, CHARGE_ABILITY],
-        starting_discipline_id="STAFF",
+        starting_discipline_id="SWORD_AND_SHIELD",
     )
 
     print("\n== control: open ground south of the skeleton")

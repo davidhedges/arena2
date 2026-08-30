@@ -28,21 +28,9 @@ use crate::combat_build_v2::{
 #[allow(unused_imports)]
 use crate::match_contract::match_bootstrap_config as _;
 #[allow(unused_imports)]
-use crate::match_contract::match_combat_build as _;
-#[allow(unused_imports)]
-use crate::match_contract::match_combat_build_discipline as _;
-#[allow(unused_imports)]
-use crate::match_contract::match_discipline_action_bar_assignment as _;
-#[allow(unused_imports)]
-use crate::match_contract::match_discipline_configuration as _;
-#[allow(unused_imports)]
-use crate::match_contract::match_discipline_passive_selection as _;
-#[allow(unused_imports)]
 use crate::match_contract::match_module_owner as _;
 #[allow(unused_imports)]
 use crate::match_contract::match_reservation as _;
-#[allow(unused_imports)]
-use crate::match_contract::match_staff_school_selection as _;
 #[allow(unused_imports)]
 use crate::player::player as _;
 
@@ -117,77 +105,7 @@ pub struct MatchReservation {
     pub reserved_at: Timestamp,
 }
 
-/// Selected-only canonical build root materialized from the immutable Hub
-/// snapshot. Phase 4 consumes these rows for runtime authorization and switch
-/// behavior; no match reducer can edit them.
-#[table(accessor = match_combat_build, public)]
-pub struct MatchCombatBuild {
-    #[primary_key]
-    pub owner: Identity,
-    pub contract_schema_version: u32,
-    pub revision: u64,
-    pub starting_discipline_id: String,
-    pub materialized_at: Timestamp,
-}
-
-#[table(accessor = match_combat_build_discipline, public)]
-pub struct MatchCombatBuildDiscipline {
-    #[primary_key]
-    pub key: String,
-    #[index(btree)]
-    pub owner: Identity,
-    pub slot_index: u8,
-    pub combat_discipline_id: String,
-}
-
-#[table(accessor = match_discipline_configuration, public)]
-pub struct MatchDisciplineConfiguration {
-    #[primary_key]
-    pub key: String,
-    #[index(btree)]
-    pub owner: Identity,
-    pub combat_discipline_id: String,
-    pub main_hand_item_def_id: String,
-    pub main_hand_color_id: String,
-    pub off_hand_item_def_id: String,
-    pub off_hand_color_id: String,
-    pub main_hand_item_id: Option<String>,
-    pub off_hand_item_id: Option<String>,
-    pub materialized_at: Timestamp,
-}
-
-#[table(accessor = match_staff_school_selection, public)]
-pub struct MatchStaffSchoolSelection {
-    #[primary_key]
-    pub key: String,
-    #[index(btree)]
-    pub owner: Identity,
-    pub spell_school_id: String,
-}
-
-#[table(accessor = match_discipline_action_bar_assignment, public)]
-pub struct MatchDisciplineActionBarAssignment {
-    #[primary_key]
-    pub key: String,
-    #[index(btree)]
-    pub owner: Identity,
-    pub combat_discipline_id: String,
-    pub action_slot: String,
-    pub ability_id: String,
-}
-
-#[table(accessor = match_discipline_passive_selection, public)]
-pub struct MatchDisciplinePassiveSelection {
-    #[primary_key]
-    pub key: String,
-    #[index(btree)]
-    pub owner: Identity,
-    pub combat_discipline_id: String,
-    pub ability_id: String,
-}
-
-/// Canonical selected-only Combat Build v2 runtime state. The v1 tables above
-/// remain inert until their Phase 8 schema deletion.
+/// Canonical selected-only combat-build runtime state.
 #[table(accessor = match_combat_build_v2, public)]
 pub struct MatchCombatBuildV2 {
     #[primary_key]

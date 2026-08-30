@@ -2,12 +2,10 @@
 
 Date: 2026-08-26
 
-Status: **PHASE 7 COMPLETE — the legacy persistence, authorization, generated
-schema, UI, operations, and current-documentation paths are removed. The local
-Hub reset was explicitly approved; 64 obsolete local legacy current-state rows
-were discarded without import. The final canonical schema, ownership audits,
-live Hub-to-match probes, preservation check, and deletion ledger pass. Phase 8
-has not begun.**
+Status: **SUPERSEDED 2026-08-29.** This implemented v1 cutover is retained as
+migration history. The canonical current contract is
+`docs/combat-build-forms-schools-traits-plan-2026-08-29.md`; do not use the
+schema, budgets, or Staff-school nesting below for new work.
 
 ## 1. Goal
 

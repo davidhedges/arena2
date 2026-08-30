@@ -2,10 +2,8 @@
 
 Date: 2026-08-29
 
-Status: **DRAFT FOR OWNER REVIEW.** This document proposes a new combat-build
-contract; it does not authorize implementation of any phase. Until a phase is
-explicitly approved and its exit gate passes, the completed v1 combat-build
-contract remains authoritative.
+Status: **IMPLEMENTED.** The owner approved all phases; Phases 1–8 completed on
+2026-08-29. This is the canonical combat-build contract.
 
 Baseline:
 
@@ -962,6 +960,16 @@ Deliverables:
 
 Exit gate: no unresolved legacy authority, no alternate authorization path,
 no stale generated contract, and all release gates pass.
+
+Completion record (2026-08-29): PASS. The v1 Hub/match schema, validators,
+materializers, generated bindings, Staff Techniques, adapters, fallbacks, and
+obsolete rehearsal surfaces are removed. The owner-approved local Hub reset
+discarded 14 disposable profiles/builds and preserved only the exact Phase 7
+cutover audit. Full canonical server/Hub tests, focused PvP contract tests,
+normal non-batch C# compilation, ownership audits, source-matched artifact
+provenance, three-School/three-Dagger compositions, mixed runtime
+authorization, snapshot isolation, and disposable cleanup pass. See
+`docs/combat-build-forms-schools-traits-phase-8-evidence-2026-08-29.md`.
 
 ## 14. Required behavior scenarios
 

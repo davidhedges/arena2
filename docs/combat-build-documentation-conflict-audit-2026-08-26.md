@@ -4,9 +4,10 @@ Date: 2026-08-26
 
 Final reconciliation: 2026-08-27
 
-Status: **COMPLETE — current documentation describes only the canonical
-combat-build authority. Conflicting designs remain only as explicitly archived
-history.**
+Status: **SUPERSEDED 2026-08-29.** This records the v1 cutover audit. The
+current Forms/Schools/Combat Features contract and authoring rules live in
+`docs/combat-build-forms-schools-traits-plan-2026-08-29.md` and
+`docs/combat-authoring-contract.md`.
 
 Authority: `docs/combat-build-progression-cutover-plan-2026-08-26.md`
 

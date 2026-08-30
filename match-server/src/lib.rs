@@ -27,8 +27,6 @@ mod auto_attack;
 mod bot_matches;
 #[path = "../../server/src/combat.rs"]
 mod combat;
-#[path = "../../server/src/combat_build.rs"]
-mod combat_build;
 #[path = "../../server/src/combat_build_v2.rs"]
 mod combat_build_v2;
 #[path = "../../server/src/confusion.rs"]

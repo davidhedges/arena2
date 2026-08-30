@@ -7103,7 +7103,7 @@ mod tests {
     }
 
     #[test]
-    fn combo_successor_strikes_reachable_from_melee_roots_have_gameplay_rows() {
+    fn combo_successor_strikes_reachable_from_non_staff_techniques_have_gameplay_rows() {
         let catalog: Value =
             serde_json::from_str(PROGRESSION_CATALOG_JSON).expect("catalog json must parse");
         let abilities = catalog
@@ -7161,6 +7161,21 @@ mod tests {
         }
 
         for profile in &melee_manifest().profiles {
+            if profile.combat_profile == "STAFF" {
+                assert!(
+                    action_bar_roots_by_profile
+                        .get(&profile.combat_profile)
+                        .is_none_or(HashSet::is_empty),
+                    "Staff must not retain an action-bar melee Technique"
+                );
+                assert!(
+                    melee_actions_by_profile
+                        .get(&profile.combat_profile)
+                        .is_none_or(HashSet::is_empty),
+                    "Staff melee gameplay must remain auto-attack-only"
+                );
+                continue;
+            }
             let action_bar_roots = action_bar_roots_by_profile
                 .get(&profile.combat_profile)
                 .unwrap_or_else(|| {

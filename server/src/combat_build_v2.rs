@@ -2,7 +2,7 @@
 //!
 //! The Hub validates and freezes this schema, while disposable gameplay
 //! databases materialize its selected-only projection for runtime authority.
-//! Legacy v1 types remain isolated in `combat_build.rs` until schema cleanup.
+//! This is the only combat-build validation and materialization contract.
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -420,24 +420,7 @@ struct RemovedAbilitySource {
 
 #[derive(Deserialize)]
 struct ProgressionCatalogSource {
-    combat_build_contract: LegacyCombatBuildContractSource,
     abilities: Vec<ProgressionAbilitySource>,
-}
-
-#[derive(Deserialize)]
-struct LegacyCombatBuildContractSource {
-    combat_disciplines: Vec<LegacyDisciplineSource>,
-    spell_schools: Vec<LegacySchoolSource>,
-}
-
-#[derive(Deserialize)]
-struct LegacyDisciplineSource {
-    combat_discipline_id: String,
-}
-
-#[derive(Deserialize)]
-struct LegacySchoolSource {
-    spell_school_id: String,
 }
 
 #[derive(Deserialize)]
@@ -936,18 +919,25 @@ fn validate_catalog_source(
     }
     validate_v2_rules(&source.rules)?;
 
-    let discipline_ids: HashSet<_> = progression
-        .combat_build_contract
-        .combat_disciplines
-        .iter()
-        .map(|row| row.combat_discipline_id.as_str())
-        .collect();
-    let legacy_school_ids: HashSet<_> = progression
-        .combat_build_contract
-        .spell_schools
-        .iter()
-        .map(|row| row.spell_school_id.as_str())
-        .collect();
+    let discipline_ids: HashSet<_> = [
+        "DAGGERS",
+        "TWO_HANDED_SWORD",
+        "SWORD_AND_SHIELD",
+        "ARCHER_BOW",
+        STAFF_DISCIPLINE_ID,
+    ]
+    .into_iter()
+    .collect();
+    let expected_school_ids: HashSet<_> = [
+        "BLIGHT",
+        "MORTALITY",
+        "RUIN",
+        "DIVINITY",
+        "ARCANA",
+        "PRIMAL",
+    ]
+    .into_iter()
+    .collect();
     let progression_abilities: HashMap<_, _> = progression
         .abilities
         .iter()
@@ -1030,8 +1020,8 @@ fn validate_catalog_source(
     if parent_ids_with_specializations != discipline_ids {
         return Err("every Discipline must own at least one v2 Specialization".to_string());
     }
-    if school_ids != legacy_school_ids {
-        return Err("v2 Schools must exactly project the six existing School IDs".to_string());
+    if school_ids != expected_school_ids {
+        return Err("v2 Schools must contain exactly the six canonical School IDs".to_string());
     }
 
     let mut removed_ids = HashSet::new();
@@ -1060,6 +1050,15 @@ fn validate_catalog_source(
     if removed_ids != expected_removed {
         return Err("the v2 Staff-melee removal ledger must contain exactly four IDs".to_string());
     }
+    if progression
+        .abilities
+        .iter()
+        .any(|row| removed_ids.contains(row.ability_id.as_str()))
+    {
+        return Err(
+            "removed Staff-melee ability IDs must not remain in progression authoring".to_string(),
+        );
+    }
     let staff_strike_2 = source
         .removed_player_abilities
         .iter()
@@ -1079,7 +1078,6 @@ fn validate_catalog_source(
         .filter(|row| {
             row.actor_scope == "PLAYER"
                 && matches!(row.selection_kind.as_str(), "ACTIVE" | "PASSIVE")
-                && !removed_ids.contains(row.ability_id.as_str())
         })
         .map(|row| row.ability_id.as_str())
         .collect();
@@ -1158,17 +1156,12 @@ fn validate_catalog_source(
     }
 
     for removed_id in &removed_ids {
-        let Some(ability) = progression_abilities.get(removed_id) else {
-            return Err(format!(
-                "removed player ability '{removed_id}' is absent from v1"
-            ));
-        };
-        if ability.actor_scope != "PLAYER"
+        if progression_abilities.contains_key(removed_id)
             || projected_features.contains_key(removed_id)
             || intrinsic_ids.contains(removed_id)
         {
             return Err(format!(
-                "removed player ability '{removed_id}' leaked into v2"
+                "removed player ability '{removed_id}' remains authored or leaked into v2"
             ));
         }
     }

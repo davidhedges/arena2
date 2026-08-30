@@ -1193,11 +1193,10 @@ namespace Arena.Editor
                 return;
             }
 
-            _knownSpellSchoolIds.AddRange(_catalog.combat_build_contract.spell_schools
-                .OrderBy(school => school.sort_order)
-                .ThenBy(school => Normalize(school.spell_school_id), StringComparer.Ordinal)
-                .Select(school => Normalize(school.spell_school_id))
-                .Where(id => !string.IsNullOrWhiteSpace(id)));
+            _knownSpellSchoolIds.AddRange(
+                SpellPresentationEditorData.LoadSpellSchoolIds(out string schoolWarning));
+            if (!string.IsNullOrWhiteSpace(schoolWarning))
+                _loadErrors.Add(schoolWarning);
 
             _spellAbilities.AddRange(_catalog.abilities
                 .Where(ability => string.Equals(Normalize(ability.gameplay.kind), "SPELL", StringComparison.Ordinal))
@@ -1228,22 +1227,8 @@ namespace Arena.Editor
         [Serializable]
         private sealed class ProgressionCatalogDocument
         {
-            public CombatBuildContractDefinition combat_build_contract = new();
             public List<AbilityDefinition> abilities = new();
             public List<CombatVfxCueDefinition> combat_vfx_cues = new();
-        }
-
-        [Serializable]
-        private sealed class CombatBuildContractDefinition
-        {
-            public List<SpellSchoolDefinition> spell_schools = new();
-        }
-
-        [Serializable]
-        private sealed class SpellSchoolDefinition
-        {
-            public string spell_school_id = string.Empty;
-            public int sort_order = 0;
         }
 
         [Serializable]

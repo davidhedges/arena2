@@ -5,7 +5,7 @@
 > school. `FIRE`, `COLD`, `LIGHTNING`, `HOLY`, `SHADOW`, and similar values are
 > damage/presentation types. The player-facing Staff schools are `BLIGHT`,
 > `MORTALITY`, `RUIN`, `DIVINITY`, `ARCANA`, and `PRIMAL`; see
-> `docs/combat-build-progression-cutover-plan-2026-08-26.md`.
+> `docs/combat-authoring-contract.md`.
 
 **What:** classifies every SPELL ability by how its authored `combat_vfx_cues` compare to what the
 generator (`SpellVfxGenerator`) would produce, so we can migrate the corpus in a data-driven order.

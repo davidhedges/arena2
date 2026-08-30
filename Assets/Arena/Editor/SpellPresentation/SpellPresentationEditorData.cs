@@ -53,9 +53,14 @@ namespace Arena.Editor
     internal static class SpellPresentationEditorData
     {
         public const string ProgressionCatalogPath = "server/src/progression_catalog.shared.json";
+        public const string CombatBuildV2CatalogPath =
+            "server/src/combat_build_v2_catalog.shared.json";
 
         public static string AbsoluteProgressionCatalogPath =>
             Path.Combine(Directory.GetCurrentDirectory(), ProgressionCatalogPath);
+
+        public static string AbsoluteCombatBuildV2CatalogPath =>
+            Path.Combine(Directory.GetCurrentDirectory(), CombatBuildV2CatalogPath);
 
         public static T? FindFirstAsset<T>() where T : UnityEngine.Object
         {
@@ -71,6 +76,38 @@ namespace Arena.Editor
             Resources.LoadAll<CombatAnimationSet>("CombatAnimationSets")
                 .OrderBy(set => set.name, StringComparer.Ordinal)
                 .ToArray();
+
+        public static List<string> LoadSpellSchoolIds(out string warning)
+        {
+            warning = string.Empty;
+            string path = AbsoluteCombatBuildV2CatalogPath;
+            if (!File.Exists(path))
+            {
+                warning = $"Combat Build v2 catalog not found at '{CombatBuildV2CatalogPath}'.";
+                return new List<string>();
+            }
+
+            try
+            {
+                CombatBuildV2CatalogDocument? catalog =
+                    JsonUtility.FromJson<CombatBuildV2CatalogDocument>(File.ReadAllText(path));
+                return catalog?.specializations?
+                    .Where(row => string.Equals(
+                        WireIdentifier.Normalize(row.specialization_kind),
+                        "SCHOOL",
+                        StringComparison.Ordinal))
+                    .OrderBy(row => row.sort_order)
+                    .ThenBy(row => WireIdentifier.Normalize(row.specialization_id), StringComparer.Ordinal)
+                    .Select(row => WireIdentifier.Normalize(row.specialization_id))
+                    .Where(id => id.Length > 0)
+                    .ToList() ?? new List<string>();
+            }
+            catch (Exception ex)
+            {
+                warning = $"Combat Build v2 catalog parse failed: {ex.Message}";
+                return new List<string>();
+            }
+        }
 
         public static Dictionary<string, SpellGameplayAuthoringFacts> LoadSpellGameplayByActionId(
             out string warning)
@@ -123,30 +160,32 @@ namespace Arena.Editor
                 warning = $"Progression catalog not found at '{ProgressionCatalogPath}'.";
                 return result;
             }
+            string buildPath = AbsoluteCombatBuildV2CatalogPath;
+            if (!File.Exists(buildPath))
+            {
+                warning = $"Combat Build v2 catalog not found at '{CombatBuildV2CatalogPath}'.";
+                return result;
+            }
 
             try
             {
                 CatalogDocument? catalog = JsonUtility.FromJson<CatalogDocument>(File.ReadAllText(path));
-                if (catalog == null)
+                CombatBuildV2CatalogDocument? buildCatalog =
+                    JsonUtility.FromJson<CombatBuildV2CatalogDocument>(File.ReadAllText(buildPath));
+                if (catalog == null || buildCatalog?.specializations == null)
                     return result;
 
                 var disciplineById = new Dictionary<string, CombatDisciplineAuthoringFacts>(StringComparer.Ordinal);
-                if (catalog.combat_build_contract?.combat_disciplines != null)
+                foreach (CombatSpecializationRow row in buildCatalog.specializations)
                 {
-                    foreach (CombatDisciplineRow row in catalog.combat_build_contract.combat_disciplines)
-                    {
-                        string disciplineId = WireIdentifier.Normalize(row.combat_discipline_id);
-                        if (disciplineId.Length == 0)
-                            continue;
+                    string disciplineId = WireIdentifier.Normalize(row.combat_discipline_id);
+                    if (disciplineId.Length == 0 || disciplineById.ContainsKey(disciplineId))
+                        continue;
 
-                        string displayName = string.IsNullOrWhiteSpace(row.display_name)
-                            ? disciplineId
-                            : row.display_name.Trim();
-                        disciplineById[disciplineId] = new CombatDisciplineAuthoringFacts(
-                            disciplineId,
-                            displayName,
-                            row.sort_order);
-                    }
+                    disciplineById[disciplineId] = new CombatDisciplineAuthoringFacts(
+                        disciplineId,
+                        CombatDisciplineDisplayName(disciplineId),
+                        CombatDisciplineSortOrder(disciplineId));
                 }
 
                 disciplines.AddRange(disciplineById.Values
@@ -228,7 +267,7 @@ namespace Arena.Editor
             }
             catch (Exception ex)
             {
-                warning = $"Progression catalog parse failed: {ex.Message}";
+                warning = $"Combat catalog parse failed: {ex.Message}";
             }
 
             return result;
@@ -241,18 +280,37 @@ namespace Arena.Editor
                 disciplineIds.Add(normalized);
         }
 
+        private static string CombatDisciplineDisplayName(string disciplineId) => disciplineId switch
+        {
+            "DAGGERS" => "Daggers",
+            "TWO_HANDED_SWORD" => "Two-Handed Sword",
+            "SWORD_AND_SHIELD" => "Sword & Shield",
+            "ARCHER_BOW" => "Bow",
+            "STAFF" => "Staff",
+            _ => disciplineId,
+        };
+
+        private static int CombatDisciplineSortOrder(string disciplineId) => disciplineId switch
+        {
+            "DAGGERS" => 10,
+            "TWO_HANDED_SWORD" => 20,
+            "SWORD_AND_SHIELD" => 30,
+            "ARCHER_BOW" => 40,
+            "STAFF" => 50,
+            _ => int.MaxValue,
+        };
+
         [Serializable]
         private sealed class CatalogDocument
         {
             public List<AbilityRow>? abilities;
-            public CombatBuildContractRow? combat_build_contract;
             public List<CombatVfxCueRow>? combat_vfx_cues;
         }
 
         [Serializable]
-        private sealed class CombatBuildContractRow
+        private sealed class CombatBuildV2CatalogDocument
         {
-            public List<CombatDisciplineRow>? combat_disciplines;
+            public List<CombatSpecializationRow>? specializations;
         }
 
         [Serializable]
@@ -265,10 +323,11 @@ namespace Arena.Editor
         }
 
         [Serializable]
-        private sealed class CombatDisciplineRow
+        private sealed class CombatSpecializationRow
         {
+            public string specialization_id = string.Empty;
+            public string specialization_kind = string.Empty;
             public string combat_discipline_id = string.Empty;
-            public string display_name = string.Empty;
             public int sort_order;
         }
 

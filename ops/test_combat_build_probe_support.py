@@ -22,26 +22,35 @@ class FakeProbe:
 
     def sql(self, query):
         owner = f"0x{self.identity}"
-        if "FROM match_combat_build" in query:
+        if "FROM match_combat_build_v_2" in query:
             return [[owner, self.draft["starting_discipline_id"]]]
-        if "FROM match_discipline_action_bar_assignment" in query:
+        if "FROM match_selected_specialization_v_2" in query:
+            return [
+                [owner, row["slot_index"], row["specialization_id"]]
+                for row in self.draft["selected_specializations"]
+            ]
+        if "FROM match_technique_selection_v_2" in query:
             return [
                 [
                     owner,
-                    configuration["combat_discipline_id"],
-                    assignment["action_slot"],
-                    assignment["ability_id"],
+                    row["specialization_id"],
+                    "TWO_HANDED_SWORD",
+                    row["ability_id"],
+                    row["preferred_bar_order"],
                 ]
-                for configuration in self.draft["discipline_configurations"]
-                for assignment in configuration["active_assignments"]
+                for row in self.draft["selected_features"]
             ]
+        if "FROM match_spell_selection_v_2" in query:
+            return []
+        if "FROM match_perk_selection_v_2" in query:
+            return []
         if "FROM active_combat_build_discipline" in query:
             return [[owner, self.draft["starting_discipline_id"]]]
         raise AssertionError(query)
 
 
 class CombatBuildProbeSupportTests(unittest.TestCase):
-    def test_mixed_probe_build_uses_canonical_ownership_weapons_and_slots(self):
+    def test_mixed_probe_build_uses_specialization_ownership_and_weapons(self):
         draft = build_probe_combat_draft(
             ["WARRIOR_MAIM", "WARRIOR_CHARGE", "SPELL_SMITE"],
             starting_discipline_id="TWO_HANDED_SWORD",
@@ -49,36 +58,35 @@ class CombatBuildProbeSupportTests(unittest.TestCase):
 
         self.assertEqual(
             [
-                row["combat_discipline_id"]
-                for row in draft["selected_disciplines"]
+                row["specialization_id"]
+                for row in draft["selected_specializations"]
             ],
-            ["TWO_HANDED_SWORD", "STAFF"],
+            ["TWO_HANDED_SWORD_VANGUARD", "DIVINITY"],
         )
         warrior, staff = draft["discipline_configurations"]
         self.assertEqual(
-            warrior["weapon"]["main_hand_item_def_id"],
+            warrior["main_hand_item_def_id"],
             "TRAINING_TWO_HAND_SWORD",
         )
         self.assertEqual(
-            [row["action_slot"] for row in warrior["active_assignments"]],
-            ["slot_0_0", "slot_0_1"],
+            [row["preferred_bar_order"] for row in draft["selected_features"]],
+            [0, 1, 0],
         )
-        self.assertEqual(staff["staff_school_ids"], ["DIVINITY"])
+        self.assertEqual(staff["combat_discipline_id"], "STAFF")
 
     def test_staff_probe_build_derives_distinct_authored_schools(self):
         draft = build_probe_combat_draft(
             ["SPELL_SMITE", "SPELL_FROST_NOVA", "SPELL_NECROTIC_AURA"]
         )
 
-        configuration = draft["discipline_configurations"][0]
         self.assertEqual(draft["starting_discipline_id"], "STAFF")
         self.assertEqual(
-            configuration["staff_school_ids"],
+            [row["specialization_id"] for row in draft["selected_specializations"]],
             ["DIVINITY", "BLIGHT", "MORTALITY"],
         )
 
     def test_probe_build_rejects_intrinsic_as_an_active(self):
-        with self.assertRaisesRegex(ValueError, "INTRINSIC, not ACTIVE"):
+        with self.assertRaisesRegex(ValueError, "not a selectable v2 Combat Feature"):
             build_probe_combat_draft(["DAGGER_STALK_SHADOWSTEP"])
 
     def test_configure_waits_for_exact_frozen_assignments_and_active_discipline(self):

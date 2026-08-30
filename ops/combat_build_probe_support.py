@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Canonical frozen-build setup shared by local combat acceptance probes.
+"""Canonical Combat Build v2 setup shared by local acceptance probes.
 
-The helper deliberately knows nothing about legacy learned-spell or mutable
-match action-bar state. It derives discipline and Staff-school ownership from
-the authored catalog, submits one complete draft to the feature-gated local
-probe reducer, and waits until the ordinary frozen runtime rows are visible.
+The helper derives Form/School ownership from the checked-in v2 catalog,
+submits one complete draft to the feature-gated local probe reducer, and waits
+until the ordinary selected-only v2 runtime rows are visible.
 """
 
 from __future__ import annotations
@@ -17,6 +16,7 @@ from typing import Any, Iterable
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CATALOG_PATH = ROOT / "server/src/progression_catalog.shared.json"
+V2_CATALOG_PATH = ROOT / "server/src/combat_build_v2_catalog.shared.json"
 
 WEAPONS = {
     "DAGGERS": {
@@ -60,8 +60,29 @@ def normalize_identity(value: Any) -> str:
     return str(value or "").removeprefix("0x").lower()
 
 
-def _catalog() -> dict[str, Any]:
-    return json.loads(CATALOG_PATH.read_text())
+def _catalogs() -> tuple[dict[str, Any], dict[str, Any]]:
+    return json.loads(CATALOG_PATH.read_text()), json.loads(V2_CATALOG_PATH.read_text())
+
+
+def _feature_index(v2_catalog: dict[str, Any]) -> dict[str, dict[str, str]]:
+    features: dict[str, dict[str, str]] = {}
+    for specialization in v2_catalog["specializations"]:
+        specialization_id = specialization["specialization_id"]
+        parent_id = specialization["combat_discipline_id"]
+        for field, loadout_kind in (
+            ("technique_ability_ids", "TECHNIQUE"),
+            ("spell_ability_ids", "SPELL"),
+            ("perk_ability_ids", "PERK"),
+        ):
+            for ability_id in specialization[field]:
+                if ability_id in features:
+                    raise ValueError(f"duplicate v2 feature mapping for {ability_id!r}")
+                features[ability_id] = {
+                    "specialization_id": specialization_id,
+                    "combat_discipline_id": parent_id,
+                    "loadout_kind": loadout_kind,
+                }
+    return features
 
 
 def build_probe_combat_draft(
@@ -81,77 +102,89 @@ def build_probe_combat_draft(
     if len(set(requested_ids)) != len(requested_ids):
         raise ValueError("probe combat build cannot select a duplicate ability")
 
-    source = _catalog()
-    rules = source["combat_build_contract"]["rules"]
+    source, v2_catalog = _catalogs()
+    rules = v2_catalog["rules"]
     ability_rows = {row["ability_id"]: row for row in source["abilities"]}
+    feature_rows = _feature_index(v2_catalog)
     configurations: dict[str, dict[str, Any]] = {}
-    selected_disciplines: list[str] = []
+    selected_specializations: list[str] = []
+    selected_features: list[dict[str, Any]] = []
+    technique_orders: dict[str, int] = {}
+    spell_order = 0
 
-    for expected_kind, ability_ids in (("ACTIVE", active_ids), ("PASSIVE", passive_ids)):
+    for expected_kinds, ability_ids in (
+        (("TECHNIQUE", "SPELL"), active_ids),
+        (("PERK",), passive_ids),
+    ):
         for ability_id in ability_ids:
             row = ability_rows.get(ability_id)
             if row is None or row.get("actor_scope") != "PLAYER":
                 raise ValueError(f"unknown player ability {ability_id!r}")
-            if row.get("selection_kind") != expected_kind:
+            feature = feature_rows.get(ability_id)
+            if feature is None:
                 raise ValueError(
-                    f"ability {ability_id!r} is {row.get('selection_kind')}, not {expected_kind}"
+                    f"ability {ability_id!r} is not a selectable v2 Combat Feature"
                 )
-            discipline_id = str(row.get("combat_discipline_id") or "")
+            loadout_kind = feature["loadout_kind"]
+            if loadout_kind not in expected_kinds:
+                raise ValueError(
+                    f"ability {ability_id!r} is {loadout_kind}, not one of {expected_kinds}"
+                )
+            discipline_id = feature["combat_discipline_id"]
+            specialization_id = feature["specialization_id"]
             if discipline_id not in WEAPONS:
                 raise ValueError(
                     f"ability {ability_id!r} has no canonical probe discipline"
                 )
+            if specialization_id not in selected_specializations:
+                selected_specializations.append(specialization_id)
             if discipline_id not in configurations:
-                selected_disciplines.append(discipline_id)
                 configurations[discipline_id] = {
                     "combat_discipline_id": discipline_id,
-                    "weapon": dict(WEAPONS[discipline_id]),
-                    "staff_school_ids": [],
-                    "active_assignments": [],
-                    "passive_ability_ids": [],
+                    **WEAPONS[discipline_id],
                 }
-            configuration = configurations[discipline_id]
-            school_id = row.get("spell_school_id")
-            if school_id and school_id not in configuration["staff_school_ids"]:
-                configuration["staff_school_ids"].append(school_id)
-            if expected_kind == "ACTIVE":
-                action_slot_ids = rules["action_slot_ids"]
-                assignment_index = len(configuration["active_assignments"])
-                if assignment_index >= len(action_slot_ids):
-                    raise ValueError(f"discipline {discipline_id!r} exhausted action slots")
-                configuration["active_assignments"].append(
-                    {
-                        "action_slot": action_slot_ids[assignment_index],
-                        "ability_id": ability_id,
-                    }
-                )
+            if loadout_kind == "TECHNIQUE":
+                preferred_bar_order = technique_orders.get(discipline_id, 0)
+                technique_orders[discipline_id] = preferred_bar_order + 1
+            elif loadout_kind == "SPELL":
+                preferred_bar_order = spell_order
+                spell_order += 1
             else:
-                configuration["passive_ability_ids"].append(ability_id)
+                preferred_bar_order = None
+            selected_features.append(
+                {
+                    "specialization_id": specialization_id,
+                    "ability_id": ability_id,
+                    "preferred_bar_order": preferred_bar_order,
+                }
+            )
 
-    maximum_disciplines = int(rules["maximum_selected_disciplines"])
-    if len(selected_disciplines) > maximum_disciplines:
+    maximum_specializations = int(rules["maximum_selected_specializations"])
+    if len(selected_specializations) > maximum_specializations:
         raise ValueError(
-            f"probe build selects {len(selected_disciplines)} disciplines; maximum is {maximum_disciplines}"
+            f"probe build selects {len(selected_specializations)} specializations; "
+            f"maximum is {maximum_specializations}"
         )
-    if len(active_ids) > int(rules["maximum_active_abilities"]):
-        raise ValueError("probe build exceeds the canonical active-ability budget")
-    if len(requested_ids) > int(rules["combined_ability_budget"]):
-        raise ValueError("probe build exceeds the canonical combined-ability budget")
+    if len(requested_ids) > int(rules["global_feature_capacity"]):
+        raise ValueError("probe build exceeds the global Combat Feature capacity")
 
+    selected_disciplines = list(configurations)
     starting = (starting_discipline_id or selected_disciplines[0]).strip().upper()
     if starting not in configurations:
         raise ValueError(f"starting discipline {starting!r} is not selected")
 
     return {
+        "schema_version": int(v2_catalog["schema_version"]),
         "revision": 0,
         "starting_discipline_id": starting,
-        "selected_disciplines": [
-            {"slot_index": index, "combat_discipline_id": discipline_id}
-            for index, discipline_id in enumerate(selected_disciplines)
+        "selected_specializations": [
+            {"slot_index": index, "specialization_id": specialization_id}
+            for index, specialization_id in enumerate(selected_specializations)
         ],
-        "discipline_configurations": [
-            configurations[discipline_id] for discipline_id in selected_disciplines
-        ],
+        "dormant_specializations": [],
+        "discipline_configurations": list(configurations.values()),
+        "selected_features": selected_features,
+        "selected_traits": [],
     }
 
 
@@ -168,15 +201,23 @@ def configure_probe_combat_build(
         passive_ability_ids,
         starting_discipline_id=starting_discipline_id,
     )
-    expected_assignments = {
-        (
-            configuration["combat_discipline_id"],
-            assignment["action_slot"],
-            assignment["ability_id"],
-        )
-        for configuration in draft["discipline_configurations"]
-        for assignment in configuration["active_assignments"]
+    _, v2_catalog = _catalogs()
+    feature_rows = _feature_index(v2_catalog)
+    expected_specializations = {
+        (row["slot_index"], row["specialization_id"])
+        for row in draft["selected_specializations"]
     }
+    expected_features = {"TECHNIQUE": set(), "SPELL": set(), "PERK": set()}
+    for row in draft["selected_features"]:
+        feature = feature_rows[row["ability_id"]]
+        expected_features[feature["loadout_kind"]].add(
+            (
+                row["specialization_id"],
+                feature["combat_discipline_id"],
+                row["ability_id"],
+                row["preferred_bar_order"],
+            )
+        )
     expected_start = draft["starting_discipline_id"]
     identity = normalize_identity(probe.identity)
     probe.call(
@@ -187,11 +228,23 @@ def configure_probe_combat_build(
     deadline = time.time() + timeout
     while time.time() < deadline:
         root_rows = probe.sql(
-            "SELECT owner, starting_discipline_id FROM match_combat_build"
+            "SELECT owner, starting_discipline_id FROM match_combat_build_v_2"
         )
-        assignment_rows = probe.sql(
-            "SELECT owner, combat_discipline_id, action_slot, ability_id "
-            "FROM match_discipline_action_bar_assignment"
+        specialization_rows = probe.sql(
+            "SELECT owner, slot_index, specialization_id "
+            "FROM match_selected_specialization_v_2"
+        )
+        technique_rows = probe.sql(
+            "SELECT owner, specialization_id, combat_discipline_id, ability_id, bar_order "
+            "FROM match_technique_selection_v_2"
+        )
+        spell_rows = probe.sql(
+            "SELECT owner, specialization_id, combat_discipline_id, ability_id, bar_order "
+            "FROM match_spell_selection_v_2"
+        )
+        perk_rows = probe.sql(
+            "SELECT owner, specialization_id, combat_discipline_id, ability_id "
+            "FROM match_perk_selection_v_2"
         )
         active_rows = probe.sql(
             "SELECT owner, combat_discipline_id FROM active_combat_build_discipline"
@@ -201,20 +254,43 @@ def configure_probe_combat_build(
             for owner, start in root_rows
             if normalize_identity(owner) == identity
         ]
-        assignments = {
-            (str(discipline), str(slot), str(ability))
-            for owner, discipline, slot, ability in assignment_rows
+        specializations = {
+            (int(slot), str(specialization))
+            for owner, slot, specialization in specialization_rows
             if normalize_identity(owner) == identity
+        }
+        features = {
+            "TECHNIQUE": {
+                (str(specialization), str(discipline), str(ability), int(order))
+                for owner, specialization, discipline, ability, order in technique_rows
+                if normalize_identity(owner) == identity
+            },
+            "SPELL": {
+                (str(specialization), str(discipline), str(ability), int(order))
+                for owner, specialization, discipline, ability, order in spell_rows
+                if normalize_identity(owner) == identity
+            },
+            "PERK": {
+                (str(specialization), str(discipline), str(ability), None)
+                for owner, specialization, discipline, ability in perk_rows
+                if normalize_identity(owner) == identity
+            },
         }
         active = [
             str(discipline)
             for owner, discipline in active_rows
             if normalize_identity(owner) == identity
         ]
-        if roots == [expected_start] and assignments == expected_assignments and active == [expected_start]:
+        if (
+            roots == [expected_start]
+            and specializations == expected_specializations
+            and features == expected_features
+            and active == [expected_start]
+        ):
             print(
                 f"  [BUILD] {getattr(probe, 'name', identity[:8])}: "
-                f"{expected_start}, {len(expected_assignments)} active assignments"
+                f"{expected_start}, {len(expected_specializations)} specializations, "
+                f"{len(draft['selected_features'])} features"
             )
             return draft
         time.sleep(0.05)

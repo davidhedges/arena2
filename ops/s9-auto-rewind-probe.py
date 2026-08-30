@@ -73,8 +73,8 @@ import websocket
 
 from combat_build_probe_support import configure_probe_combat_build
 
-ARM_ABILITY = "STAFF_THRUST"  # plain targeted strike; the press arms the auto
-ARM_STRIKE = "COMBO_ATTACK_4_4_LUNGING_SLASH"
+ARM_ABILITY = "PALADIN_SACRED_THRUST"  # retained Technique; the press arms the auto
+ARM_STRIKE = "SWORD_AND_SHIELD_ALT_LIGHT_3"
 KOBOLD_TEMPLATE = "KOBOLD_WARRIOR_RD_SWORD_SHIELD"
 KOBOLD_VISUAL = "KOBOLD_WARRIOR_RD"
 

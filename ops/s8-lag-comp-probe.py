@@ -61,8 +61,8 @@ import websocket
 
 from combat_build_probe_support import configure_probe_combat_build
 
-SANITY_ABILITY = "STAFF_THRUST"      # plain targeted strike, range 4.0
-SANITY_STRIKE = "COMBO_ATTACK_4_4_LUNGING_SLASH"
+SANITY_ABILITY = "PALADIN_SACRED_THRUST"  # retained targeted Technique, range 5.0
+SANITY_STRIKE = "SWORD_AND_SHIELD_ALT_LIGHT_3"
 CHARGE_ABILITY = "WARRIOR_CHARGE"    # LINEAR gap-close, range 5..18
 KOBOLD_TEMPLATE = "KOBOLD_WARRIOR_RD_SWORD_SHIELD"
 KOBOLD_VISUAL = "KOBOLD_WARRIOR_RD"
@@ -536,7 +536,7 @@ def main():
     configure_probe_combat_build(
         attacker,
         [SANITY_ABILITY, CHARGE_ABILITY],
-        starting_discipline_id="STAFF",
+        starting_discipline_id="SWORD_AND_SHIELD",
     )
 
     # Work inside the S7 lap probe's verified clear disc: Desert_Day, circle
