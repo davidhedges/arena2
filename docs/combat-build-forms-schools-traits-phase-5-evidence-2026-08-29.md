@@ -17,7 +17,7 @@ anonymous rehearsal reducer, verifies rows/results, and deletes the database.
 
 `SwitchRuntimeV2` derives switch targets in selected Specialization slot order
 and deduplicates them by parent Discipline. Its Phase 5 fixture selects
-Bladedancer, Executioner, and Ruin, producing exactly two targets:
+Bladedancer, Heartseeker, and Ruin, producing exactly two targets:
 
 1. `DAGGERS`
 2. `STAFF`

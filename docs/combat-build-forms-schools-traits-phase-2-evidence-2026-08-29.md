@@ -65,7 +65,7 @@ The live sequence proved:
 - three selected Schools reload as one Staff parent with three global Spells,
   no Technique bar, and active Mastery;
 - two same-parent Dagger Forms reload as one Dagger Technique bar;
-- a dormant Executioner selection retains preferred order and reflows behind
+- a dormant Heartseeker selection retains preferred order and reflows behind
   the already-active Bladedancer selection when restored;
 - a stale revision is rejected;
 - the removed `STAFF_STRIKE` feature is rejected and the prior aggregate is

@@ -50,8 +50,8 @@ use crate::spells::{
     bake_linear_special_movement, begin_special_movement_with_facing_policy,
     fizzle_active_cast_for_interrupt, horizontal_movement_duration_ms,
     is_externally_imposed_movement_kind, resolved_primary_resource_cost_for_amount,
-    spell_definition_by_str, ImmolationSecondaryTunables, SpellBehavior, SpellVec3,
-    KNOCKBACK_MOVEMENT_KIND, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
+    spell_definition_by_str, stamp_named_cooldown_for_duration, ImmolationSecondaryTunables,
+    SpellBehavior, SpellVec3, KNOCKBACK_MOVEMENT_KIND, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
     SPECIAL_MOVEMENT_FACING_FACE_START, STAGGER_SHOVE_MOVEMENT_KIND,
 };
 use crate::world_collision::{
@@ -95,6 +95,10 @@ use crate::combat::combat_event as _;
 use crate::combat::combat_projectile_definition as _;
 #[allow(unused_imports)]
 use crate::combat::combat_stacking_passive_runtime as _;
+#[allow(unused_imports)]
+use crate::combat::crescendo_counter_state as _;
+#[allow(unused_imports)]
+use crate::combat::crescendo_empowered_action as _;
 #[allow(unused_imports)]
 use crate::combat::match_participant_stats as _;
 #[allow(unused_imports)]
@@ -184,6 +188,10 @@ const HOLY_SHIELD_STATUS_GROUP: &str = "HOLY_SHIELD";
 const MIRROR_IMAGE_STATUS_GROUP: &str = "MIRROR_IMAGE";
 const LIGHTNING_REFLEXES_SPELL_ID: &str = "LIGHTNING_REFLEXES";
 const LIGHTNING_REFLEXES_STATUS_GROUP: &str = "LIGHTNING_REFLEXES";
+pub(crate) const COUNTERSTRIKE_ACTION_ID: &str = "COUNTERSTRIKE";
+pub(crate) const COUNTERSTRIKE_STATUS_GROUP: &str = "COUNTERSTRIKE";
+pub(crate) const COUNTERSTRIKE_COOLDOWN: Duration = Duration::from_secs(24);
+const COUNTERSTRIKE_MELEE_STUN_DURATION: Duration = Duration::from_secs(3);
 const OFF_BALANCE_STATUS_GROUP: &str = "OFF_BALANCE";
 const RULE_OFF_BALANCE_DURATION_MS: &str = "OFF_BALANCE_DURATION_MS";
 const RULE_SHADOWREND_MELEE_ADVANCE_TICKS: &str = "SHADOWREND_MELEE_ADVANCE_TICKS";
@@ -212,6 +220,10 @@ const BLOODLUST_PASSIVE_ID: &str = "WARRIOR_BLOODLUST";
 const FRACTURE_PASSIVE_ID: &str = "RUIN_FRACTURE";
 const OPPORTUNIST_PASSIVE_ID: &str = "SUBTLETY_OPPORTUNIST";
 const TACTICAL_ADVANTAGE_PASSIVE_ID: &str = "SUBTLETY_TACTICAL_ADVANTAGE";
+const CRESCENDO_PASSIVE_ID: &str = "DAGGER_CRESCENDO";
+const CRESCENDO_ACTIONS_PER_PROC: u32 = 5;
+const CRESCENDO_DAMAGE_BONUS: f32 = 0.30;
+const CRESCENDO_ACTION_MARKER_DURATION: Duration = Duration::from_secs(60);
 const PASSIVE_STATUS_REFRESH_DURATION: Duration = Duration::from_secs(60 * 60);
 const AURA_STACK_GROUP_PREFIX: &str = "AURA:";
 const PALADIN_AURA_OF_VENGEANCE_MARK_SPELL_ID: &str = "PALADIN_AURA_OF_VENGEANCE_MARK";
@@ -350,6 +362,7 @@ pub fn clear_player_combat_state(ctx: &ReducerContext, identity: Identity) {
     clear_combat_stacking_passive_runtime_for_identity(ctx, identity);
     clear_potential_state_for_owner(ctx, identity);
     clear_blight_empowered_action_runtime(ctx, identity);
+    clear_crescendo_runtime(ctx, identity);
 }
 
 pub fn new_player_state(player_id: Identity, now: Timestamp) -> PlayerState {
@@ -627,6 +640,26 @@ pub struct BlightEmpoweredActionRuntime {
     #[primary_key]
     pub owner: Identity,
     pub action_instance_id: String,
+}
+
+#[table(accessor = crescendo_counter_state)]
+#[derive(Clone)]
+pub struct CrescendoCounterState {
+    #[primary_key]
+    pub owner: Identity,
+    pub action_count: u32,
+    pub last_counted_action_instance_id: String,
+}
+
+#[table(accessor = crescendo_empowered_action)]
+#[derive(Clone)]
+pub struct CrescendoEmpoweredAction {
+    #[primary_key]
+    pub key: String,
+    #[index(btree)]
+    pub owner: Identity,
+    pub action_instance_id: String,
+    pub expires_at: Timestamp,
 }
 
 #[table(accessor = potential_state)]
@@ -2646,6 +2679,109 @@ fn clear_blight_empowered_action_runtime(ctx: &ReducerContext, owner: Identity) 
         .blight_empowered_action_runtime()
         .owner()
         .delete(owner);
+}
+
+fn clear_crescendo_runtime(ctx: &ReducerContext, owner: Identity) {
+    ctx.db.crescendo_counter_state().owner().delete(owner);
+    let keys: Vec<String> = ctx
+        .db
+        .crescendo_empowered_action()
+        .owner()
+        .filter(owner)
+        .map(|row| row.key)
+        .collect();
+    for key in keys {
+        ctx.db.crescendo_empowered_action().key().delete(key);
+    }
+}
+
+pub(crate) fn advance_crescendo_for_action(
+    ctx: &ReducerContext,
+    owner: Identity,
+    action_instance_id: &str,
+    ability_id: &str,
+    now: Timestamp,
+) -> bool {
+    let action_instance_id = action_instance_id.trim();
+    if action_instance_id.is_empty() || ability_id.trim().is_empty() {
+        return false;
+    }
+    if !player_has_selected_passive_ability(ctx, owner, CRESCENDO_PASSIVE_ID) {
+        clear_crescendo_runtime(ctx, owner);
+        return false;
+    }
+
+    let stale_keys: Vec<String> = ctx
+        .db
+        .crescendo_empowered_action()
+        .owner()
+        .filter(owner)
+        .filter(|row| now >= row.expires_at)
+        .map(|row| row.key)
+        .collect();
+    for key in stale_keys {
+        ctx.db.crescendo_empowered_action().key().delete(key);
+    }
+
+    let mut state = ctx
+        .db
+        .crescendo_counter_state()
+        .owner()
+        .find(owner)
+        .unwrap_or(CrescendoCounterState {
+            owner,
+            action_count: 0,
+            last_counted_action_instance_id: String::new(),
+        });
+    if state.last_counted_action_instance_id == action_instance_id {
+        return false;
+    }
+
+    let (next_count, empowered) = next_crescendo_count(state.action_count);
+    state.action_count = next_count;
+    state.last_counted_action_instance_id = action_instance_id.to_string();
+    if ctx
+        .db
+        .crescendo_counter_state()
+        .owner()
+        .find(owner)
+        .is_some()
+    {
+        ctx.db.crescendo_counter_state().owner().update(state);
+    } else {
+        ctx.db.crescendo_counter_state().insert(state);
+    }
+
+    if empowered {
+        let key = format!("{}:{}", owner.to_hex(), action_instance_id);
+        let marker = CrescendoEmpoweredAction {
+            key: key.clone(),
+            owner,
+            action_instance_id: action_instance_id.to_string(),
+            expires_at: now + CRESCENDO_ACTION_MARKER_DURATION,
+        };
+        if ctx
+            .db
+            .crescendo_empowered_action()
+            .key()
+            .find(key)
+            .is_some()
+        {
+            ctx.db.crescendo_empowered_action().key().update(marker);
+        } else {
+            ctx.db.crescendo_empowered_action().insert(marker);
+        }
+    }
+    empowered
+}
+
+fn next_crescendo_count(current_count: u32) -> (u32, bool) {
+    let next = current_count.min(CRESCENDO_ACTIONS_PER_PROC - 1) + 1;
+    if next >= CRESCENDO_ACTIONS_PER_PROC {
+        (0, true)
+    } else {
+        (next, false)
+    }
 }
 
 fn upsert_combat_stacking_passive_runtime(
@@ -6598,6 +6734,7 @@ fn resolve_damage_amount(
             * tactical_advantage_passive_damage_multiplier(ctx, hit)
             * precision_passive_damage_multiplier(ctx, hit)
             * blight_empowered_damage_multiplier(ctx, hit)
+            * crescendo_damage_multiplier(ctx, hit)
             * fracture_melee_damage_multiplier(
                 !fracture_freezes.is_empty(),
                 blight_fracture_melee_damage_bonus(),
@@ -6725,6 +6862,40 @@ fn blight_empowered_damage_multiplier(ctx: &ReducerContext, hit: &PendingHit) ->
     }
 
     1.0 + soulstealer_empowered_damage_bonus()
+}
+
+fn crescendo_damage_multiplier(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
+    if hit.source == Identity::ZERO
+        || !player_has_selected_passive_ability(ctx, hit.source, CRESCENDO_PASSIVE_ID)
+    {
+        return 1.0;
+    }
+    let action_key = if hit.direct_action_key.trim().is_empty() {
+        hit.spell_id.trim()
+    } else {
+        hit.direct_action_key.trim()
+    };
+    if action_key.is_empty() {
+        return 1.0;
+    }
+    let empowered = ctx
+        .db
+        .crescendo_empowered_action()
+        .owner()
+        .filter(hit.source)
+        .any(|marker| {
+            ctx.timestamp < marker.expires_at
+                && action_key_matches_instance(action_key, marker.action_instance_id.as_str())
+        });
+    crescendo_damage_multiplier_for_action(true, empowered)
+}
+
+fn crescendo_damage_multiplier_for_action(perk_selected: bool, empowered: bool) -> f32 {
+    if perk_selected && empowered {
+        1.0 + CRESCENDO_DAMAGE_BONUS
+    } else {
+        1.0
+    }
 }
 
 fn blight_empowered_hit_is_eligible(hit: &PendingHit) -> bool {
@@ -7828,6 +7999,11 @@ enum HolyShieldEndReason {
 
 fn finish_expired_status_effect(ctx: &ReducerContext, effect: &StatusEffect, now: Timestamp) {
     emit_holy_shield_end_event(ctx, effect, false, now);
+    if effect.effect_kind == StatusEffectKind::AllAbilityAvoidance.as_str()
+        && effect.stack_group == COUNTERSTRIKE_STATUS_GROUP
+    {
+        stamp_counterstrike_cooldown(ctx, effect.target, now);
+    }
     if effect.effect_kind == StatusEffectKind::Confusion.as_str() {
         crate::confusion::clear_confusion_wander(ctx, effect.target);
     }
@@ -9953,6 +10129,19 @@ impl StatusRuntimeView {
         })
     }
 
+    fn has_status_except_group(
+        &self,
+        target: Identity,
+        kind: StatusEffectKind,
+        excluded_stack_group: &str,
+    ) -> bool {
+        self.effects_by_target.get(&target).is_some_and(|effects| {
+            effects
+                .iter()
+                .any(|effect| effect.kind == kind && effect.stack_group != excluded_stack_group)
+        })
+    }
+
     pub fn has_disabling_status(&self, target: Identity) -> bool {
         self.effects_by_target.get(&target).is_some_and(|effects| {
             let stun_immune = effects
@@ -10099,7 +10288,9 @@ impl StatusRuntimeView {
                             .attack_speed_multiplier_by_target
                             .entry(*target)
                             .or_insert(1.0);
-                        *entry *= attack_speed_scalar_to_multiplier(effect.modifier_scalar);
+                        *entry *= attack_speed_scalar_to_multiplier(
+                            effect.modifier_scalar * effect.stacks.max(1) as f32,
+                        );
                     }
                     StatusEffectKind::CastSpeed => {
                         let entry = modifiers.cast_speed_by_target.entry(*target).or_insert(0.0);
@@ -10995,19 +11186,20 @@ mod tests {
         advance_expired_escalating_dot, apply_status_update, attack_speed_scalar_to_multiplier,
         attacker_is_behind_target, battle_trance_hp_after_damage, behind_target_damage_multiplier,
         blight_empowered_hit_is_eligible, bloodlust_passive_spec, burden_damage_split,
-        damage_breaks_confusion, damage_breaks_shroud, damage_comes_from_casted_ability,
-        damage_source_grants_outgoing_rewards, damaging_area_consumes_mirror_images,
-        deterministic_fulmination_candidate_index, disabled_target_damage_multiplier,
-        dot_tick_damage, due_interval_count, escalating_dot_base_total_after_application,
-        escalating_dot_decay_interval, event_prune_cutoff_micros,
-        fire_spell_hit_can_trigger_wildfire, fracture_melee_damage_multiplier,
-        fulmination_arc_damage, fulmination_uses_any_target_audience, furnace_mana_restore_amount,
+        crescendo_damage_multiplier_for_action, damage_breaks_confusion, damage_breaks_shroud,
+        damage_comes_from_casted_ability, damage_source_grants_outgoing_rewards,
+        damaging_area_consumes_mirror_images, deterministic_fulmination_candidate_index,
+        disabled_target_damage_multiplier, dot_tick_damage, due_interval_count,
+        escalating_dot_base_total_after_application, escalating_dot_decay_interval,
+        event_prune_cutoff_micros, fire_spell_hit_can_trigger_wildfire,
+        fracture_melee_damage_multiplier, fulmination_arc_damage,
+        fulmination_uses_any_target_audience, furnace_mana_restore_amount,
         heartseeker_should_auto_crit, hit_is_direct_melee_attack, holy_shield_end_reason,
         immolation_damage_for_stacks, immolation_remaining_tick_count, initial_status_stacks,
         isolated_damage_multiplier, knockback_stagger_duration, melee_attack_can_trigger_fracture,
         mirror_image_intercept_chance, mirror_image_stacks_after_intercept,
-        mirror_images_intercept, new_status_effect, point_blank_damage_multiplier,
-        point_within_radius, potential_stacks_after_spell_strike,
+        mirror_images_intercept, new_status_effect, next_crescendo_count,
+        point_blank_damage_multiplier, point_within_radius, potential_stacks_after_spell_strike,
         proportional_tick_amount_after_stack_loss, quickening_cast_speed_multiplier,
         resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
         resolve_temporary_hitpoint_absorb, resolved_shove_tunables, restless_passive_spec,
@@ -11040,6 +11232,25 @@ mod tests {
         assert_eq!(burden_damage_split(30, 0.25), (22, 8));
         assert_eq!(burden_damage_split(1, 0.25), (1, 0));
         assert_eq!(burden_damage_split(100, f32::NAN), (100, 0));
+    }
+
+    #[test]
+    fn crescendo_empowers_each_fifth_non_auto_action() {
+        let mut count = 0;
+        for expected in [false, false, false, false, true, false] {
+            let (next, empowered) = next_crescendo_count(count);
+            assert_eq!(empowered, expected);
+            count = next;
+        }
+        assert_eq!(count, 1);
+        assert_eq!(crescendo_damage_multiplier_for_action(true, true), 1.30);
+        assert_eq!(crescendo_damage_multiplier_for_action(true, false), 1.0);
+        assert_eq!(crescendo_damage_multiplier_for_action(false, true), 1.0);
+    }
+
+    #[test]
+    fn quickening_strike_three_stacks_are_an_additive_thirty_percent_speed_bonus() {
+        assert!((attack_speed_scalar_to_multiplier(0.10 * 3.0) - 1.30).abs() < 0.0001);
     }
 
     #[test]
@@ -13544,6 +13755,27 @@ mod tests {
     }
 
     #[test]
+    fn counterstrike_avoidance_is_reserved_for_melee_and_projectile_interception() {
+        let now = Timestamp::UNIX_EPOCH + Duration::from_secs(10);
+        let target = test_identity_number(1);
+        let mut counterstrike = test_status_effect(
+            target,
+            StatusPayload::AllAbilityAvoidance,
+            now,
+            now + Duration::from_secs(2),
+        );
+        counterstrike.stack_group = super::COUNTERSTRIKE_STATUS_GROUP.to_string();
+        let view = status_runtime_view(vec![counterstrike], &[target], now);
+
+        assert!(view.has_status(target, StatusEffectKind::AllAbilityAvoidance));
+        assert!(!view.has_status_except_group(
+            target,
+            StatusEffectKind::AllAbilityAvoidance,
+            super::COUNTERSTRIKE_STATUS_GROUP,
+        ));
+    }
+
+    #[test]
     fn status_runtime_view_temporary_combat_modifiers_match_existing_stacking_semantics() {
         let now = Timestamp::UNIX_EPOCH + Duration::from_secs(10);
         let target = test_identity_number(1);
@@ -13795,14 +14027,21 @@ pub(crate) fn hostile_targeted_ability_misses(
     // (Blinding Light), ALL_ABILITY_AVOIDANCE also turns aside volumes they are
     // merely standing in (Lightning Reflexes). Widening an ability is an authored
     // one-word change, not a code change.
+    let statuses = StatusRuntimeView::collect(ctx, now);
     let avoids = match aim {
         AttackAim::Targeted => {
-            has_active_status(ctx, target, StatusEffectKind::TargetedAbilityAvoidance, now)
-                || has_active_status(ctx, target, StatusEffectKind::AllAbilityAvoidance, now)
+            statuses.has_status(target, StatusEffectKind::TargetedAbilityAvoidance)
+                || statuses.has_status_except_group(
+                    target,
+                    StatusEffectKind::AllAbilityAvoidance,
+                    COUNTERSTRIKE_STATUS_GROUP,
+                )
         }
-        AttackAim::Volume => {
-            has_active_status(ctx, target, StatusEffectKind::AllAbilityAvoidance, now)
-        }
+        AttackAim::Volume => statuses.has_status_except_group(
+            target,
+            StatusEffectKind::AllAbilityAvoidance,
+            COUNTERSTRIKE_STATUS_GROUP,
+        ),
     };
     if avoids {
         // Lightning Reflexes is the one avoidance source that answers back: whoever
@@ -13814,12 +14053,10 @@ pub(crate) fn hostile_targeted_ability_misses(
         // counter -- its caster aimed at the floor and never overcommitted, and a
         // pulsing ground effect would otherwise re-mark them on every tick.
         if aim == AttackAim::Targeted
-            && has_active_status_group(
-                ctx,
+            && statuses.has_status_group(
                 target,
                 StatusEffectKind::AllAbilityAvoidance,
                 LIGHTNING_REFLEXES_STATUS_GROUP,
-                now,
             )
         {
             apply_off_balance_mark(ctx, target, source, now);
@@ -13853,6 +14090,89 @@ pub(crate) fn hostile_targeted_ability_misses(
                 .delete(mirror_images.status_id);
         }
     }
+    true
+}
+
+fn active_counterstrike_status(
+    ctx: &ReducerContext,
+    target: Identity,
+    now: Timestamp,
+) -> Option<StatusEffect> {
+    ctx.db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::AllAbilityAvoidance.as_str()
+                && effect.stack_group == COUNTERSTRIKE_STATUS_GROUP
+                && now < effect.expires_at
+        })
+        .max_by_key(|effect| effect.status_id)
+}
+
+pub(crate) fn has_active_counterstrike(
+    ctx: &ReducerContext,
+    target: Identity,
+    now: Timestamp,
+) -> bool {
+    active_counterstrike_status(ctx, target, now).is_some()
+}
+
+fn stamp_counterstrike_cooldown(ctx: &ReducerContext, owner: Identity, now: Timestamp) {
+    stamp_named_cooldown_for_duration(
+        ctx,
+        owner,
+        COUNTERSTRIKE_ACTION_ID,
+        COUNTERSTRIKE_COOLDOWN,
+        now,
+    );
+}
+
+pub(crate) fn consume_counterstrike(
+    ctx: &ReducerContext,
+    target: Identity,
+    now: Timestamp,
+) -> bool {
+    let Some(effect) = active_counterstrike_status(ctx, target, now) else {
+        return false;
+    };
+    ctx.db.status_effect().status_id().delete(effect.status_id);
+    stamp_counterstrike_cooldown(ctx, target, now);
+    true
+}
+
+pub(crate) fn try_counterstrike_melee(
+    ctx: &ReducerContext,
+    attacker: Identity,
+    defender: Identity,
+    now: Timestamp,
+) -> bool {
+    if attacker == Identity::ZERO
+        || defender == Identity::ZERO
+        || attacker == defender
+        || !can_harm(ctx, attacker, defender)
+        || !consume_counterstrike(ctx, defender, now)
+    {
+        return false;
+    }
+
+    queue_effect_at(
+        ctx,
+        EffectPacket::ApplyStatus {
+            source: defender,
+            target: attacker,
+            spell_id: COUNTERSTRIKE_ACTION_ID.to_string(),
+            payload: StatusPayload::Stun,
+            polarity: StatusPolarity::Debuff,
+            target_audience: TargetAudience::Hostile,
+            duration: COUNTERSTRIKE_MELEE_STUN_DURATION,
+            stack_group: COUNTERSTRIKE_STATUS_GROUP.to_string(),
+            max_stacks: 1,
+            stack_policy: StackPolicy::Refresh,
+            dispel_types: Vec::new(),
+        },
+        now,
+    );
     true
 }
 

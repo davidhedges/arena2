@@ -1,8 +1,13 @@
 use spacetimedb::{table, Identity, ReducerContext, Table, Timestamp};
 
+use crate::action_ids::AuthoredActionId;
 use crate::combat::{is_in_combat, temporary_combat_modifiers, TemporaryCombatModifiers};
 use crate::inventory::{equipment_modifier_totals_for_owner, EquipmentModifierTotals};
-use crate::progression::{effective_resource_kind_for_ability, AbilityCatalog};
+use crate::melee::{auto_attack_gameplay_for_profile_mode_action, scaled_auto_attack_cadence_ms};
+use crate::progression::{
+    derived_combat_discipline_id_for_owner, effective_resource_kind_for_ability,
+    player_has_selected_passive_ability, resolved_auto_attack_mode_for_owner, AbilityCatalog,
+};
 
 #[allow(unused_imports)]
 use crate::player_state::player_state as _;
@@ -27,6 +32,8 @@ pub struct PlayerResource {
 
 pub(crate) const RESOURCE_KIND_STAMINA: &str = "STAMINA";
 pub(crate) const RESOURCE_KIND_MANA: &str = "MANA";
+const FIGHTING_SPIRIT_ABILITY_ID: &str = "DAGGER_FIGHTING_SPIRIT";
+const FIGHTING_SPIRIT_STAMINA_PER_SECOND_OF_CADENCE: f32 = 4.0;
 const STANDARD_RESOURCE_KINDS: [&str; 2] = [RESOURCE_KIND_STAMINA, RESOURCE_KIND_MANA];
 
 #[derive(Clone, Debug)]
@@ -418,12 +425,16 @@ pub(crate) fn grant_primary_resource_amount_for_kind(
     restored
 }
 
-#[allow(dead_code)]
-pub(crate) fn grant_primary_resource_for_melee_hit(
+pub(crate) fn grant_primary_resource_for_auto_attack_hit(
     ctx: &ReducerContext,
     owner: Identity,
     now: Timestamp,
 ) {
+    grant_primary_resource_for_melee_hit(ctx, owner, now);
+    grant_fighting_spirit_stamina_for_auto_attack_hit(ctx, owner, now);
+}
+
+fn grant_primary_resource_for_melee_hit(ctx: &ReducerContext, owner: Identity, now: Timestamp) {
     let Some(spec) = resolve_resource_spec_for_owner_and_kind(ctx, owner, RESOURCE_KIND_STAMINA)
     else {
         return;
@@ -443,6 +454,44 @@ pub(crate) fn grant_primary_resource_for_melee_hit(
     resource.updated_at = now;
     record_resource_write();
     ctx.db.player_resource().key().update(resource);
+}
+
+fn grant_fighting_spirit_stamina_for_auto_attack_hit(
+    ctx: &ReducerContext,
+    owner: Identity,
+    now: Timestamp,
+) {
+    if !player_has_selected_passive_ability(ctx, owner, FIGHTING_SPIRIT_ABILITY_ID) {
+        return;
+    }
+    let Some(combat_discipline_id) = derived_combat_discipline_id_for_owner(ctx, owner) else {
+        return;
+    };
+    let mode_id = resolved_auto_attack_mode_for_owner(ctx, owner, combat_discipline_id.as_str());
+    let action_id = AuthoredActionId::new("AUTO_ATTACK_1");
+    let Some(gameplay) = auto_attack_gameplay_for_profile_mode_action(
+        ctx,
+        combat_discipline_id.as_str(),
+        mode_id.as_str(),
+        &action_id,
+    ) else {
+        return;
+    };
+    let attack_speed_multiplier =
+        temporary_combat_modifiers(ctx, now).attack_speed_multiplier_for(&owner);
+    let cadence_ms =
+        scaled_auto_attack_cadence_ms(gameplay.cooldown_ms.max(1), attack_speed_multiplier);
+    grant_primary_resource_amount_for_kind(
+        ctx,
+        owner,
+        RESOURCE_KIND_STAMINA,
+        fighting_spirit_stamina_for_cadence_ms(cadence_ms),
+        now,
+    );
+}
+
+fn fighting_spirit_stamina_for_cadence_ms(cadence_ms: u64) -> f32 {
+    cadence_ms.max(1) as f32 / 1000.0 * FIGHTING_SPIRIT_STAMINA_PER_SECOND_OF_CADENCE
 }
 
 #[allow(dead_code)]
@@ -745,7 +794,10 @@ fn standard_resource_kind(kind: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{primary_resource_decay_per_second, ResolvedResourceSpec};
+    use super::{
+        fighting_spirit_stamina_for_cadence_ms, primary_resource_decay_per_second,
+        ResolvedResourceSpec,
+    };
 
     fn resource_spec(
         flat_decay_per_second: f32,
@@ -781,5 +833,12 @@ mod tests {
 
         assert_eq!(primary_resource_decay_per_second(&spec, 40.0, false), 2.0);
         assert_eq!(primary_resource_decay_per_second(&spec, 40.0, true), 4.0);
+    }
+
+    #[test]
+    fn fighting_spirit_restore_is_proportional_to_swing_cadence() {
+        assert_eq!(fighting_spirit_stamina_for_cadence_ms(1_500), 6.0);
+        assert_eq!(fighting_spirit_stamina_for_cadence_ms(2_000), 8.0);
+        assert_eq!(fighting_spirit_stamina_for_cadence_ms(3_500), 14.0);
     }
 }

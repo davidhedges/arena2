@@ -7946,6 +7946,183 @@
       }
     },
     {
+      "ability_id": "DAGGER_COUNTERSTRIKE",
+      "actor_scope": "PLAYER",
+      "selection_kind": "ACTIVE",
+      "combat_discipline_id": "DAGGERS",
+      "spell_school_id": null,
+      "action_id": "COUNTERSTRIKE",
+      "display_name": "Counterstrike",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 72,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 24000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 2000,
+          "damage_type": "PHYSICAL",
+          "status_stack_group": "COUNTERSTRIKE",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "ALL_ABILITY_AVOIDANCE",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_SWEEPING_TRIP",
+      "actor_scope": "PLAYER",
+      "selection_kind": "ACTIVE",
+      "combat_discipline_id": "DAGGERS",
+      "spell_school_id": null,
+      "action_id": "SWEEPING_TRIP",
+      "display_name": "Trip",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 73,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 15000,
+        "uses_global_cooldown": false,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "AREA",
+          "damage": 0,
+          "damage_type": "PHYSICAL",
+          "radius": 4,
+          "block_behavior": "UNBLOCKABLE",
+          "impact_effects": [
+            {
+              "kind": "STUN",
+              "duration_ms": 2000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_FIGHTING_SPIRIT",
+      "actor_scope": "PLAYER",
+      "selection_kind": "PASSIVE",
+      "combat_discipline_id": "DAGGERS",
+      "spell_school_id": null,
+      "action_id": "FIGHTING_SPIRIT",
+      "display_name": "Fighting Spirit",
+      "resource_kind": "STAMINA",
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 74,
+      "gameplay": {
+        "kind": "PASSIVE"
+      }
+    },
+    {
+      "ability_id": "DAGGER_CRESCENDO",
+      "actor_scope": "PLAYER",
+      "selection_kind": "PASSIVE",
+      "combat_discipline_id": "DAGGERS",
+      "spell_school_id": null,
+      "action_id": "CRESCENDO",
+      "display_name": "Crescendo",
+      "resource_kind": "STAMINA",
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 75,
+      "gameplay": {
+        "kind": "PASSIVE"
+      }
+    },
+    {
+      "ability_id": "DAGGER_QUICKENING_STRIKE",
+      "actor_scope": "PLAYER",
+      "selection_kind": "ACTIVE",
+      "combat_discipline_id": "DAGGERS",
+      "spell_school_id": null,
+      "action_id": "DAGGER_QUICKENING_STRIKE",
+      "display_name": "Quickening Strike",
+      "resource_kind": "STAMINA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 76,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 24,
+        "applies_stagger": false,
+        "range": 1.8,
+        "cooldown_ms": 650,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET"
+      }
+    },
+    {
+      "ability_id": "DAGGER_BREAKAWAY",
+      "actor_scope": "PLAYER",
+      "selection_kind": "ACTIVE",
+      "combat_discipline_id": "DAGGERS",
+      "spell_school_id": null,
+      "action_id": "DAGGER_BREAKAWAY",
+      "display_name": "Breakaway",
+      "resource_kind": "STAMINA",
+      "resource_cost": 30,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 77,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 28,
+        "applies_stagger": false,
+        "range": 1.8,
+        "cooldown_ms": 1600,
+        "uses_global_cooldown": true,
+        "global_cooldown_ms": 650,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_timed_movement": {
+          "kind": "BACKSTEP",
+          "start_delay_ms": 620,
+          "direction": "BACKWARD",
+          "distance": 7,
+          "speed": 18,
+          "collision_policy": "STOP_AT_BLOCK",
+          "facing_policy": "FACE_START"
+        }
+      }
+    },
+    {
       "ability_id": "DAGGER_LIGHTNING_REFLEXES",
       "actor_scope": "PLAYER",
       "selection_kind": "ACTIVE",
@@ -14796,6 +14973,48 @@
       "display_name": "Lingering Shade",
       "description": "Passive: using Dodge, a gap closer, or a teleport leaves a shade at your starting location for 3 seconds. Recast that ability at no cost to return. Only one shade can exist at a time.",
       "sort_order": 250
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_COUNTERSTRIKE",
+      "display_name": "Counterstrike",
+      "description": "For 2 seconds, counter the next melee strike or hostile projectile that would hit you. A melee attacker is stunned for 3 seconds; a projectile is reflected to its caster. The countered hit deals no damage. The 24 second cooldown begins when the window ends or the counter is spent.",
+      "sort_order": 250
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_SWEEPING_TRIP",
+      "display_name": "Trip",
+      "description": "Sweep every enemy within 4 meters off their feet, stunning them for 2 seconds. Trip is off the global cooldown and has its own 15 second cooldown.",
+      "sort_order": 251
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_FIGHTING_SPIRIT",
+      "display_name": "Fighting Spirit",
+      "description": "Passive: auto attacks restore stamina, and only auto attacks can trigger this perk. Restore 4 stamina per second of the attack's current swing cadence, so slower attacks restore more.",
+      "sort_order": 252
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_CRESCENDO",
+      "display_name": "Crescendo",
+      "description": "Passive: every fifth attack or spellcast deals 30% bonus damage. Auto attacks do not advance the count and cannot receive the bonus.",
+      "sort_order": 253
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_QUICKENING_STRIKE",
+      "display_name": "Quickening Strike",
+      "description": "Strike for 24 physical damage and gain 10% attack speed for 10 seconds. Successful hits add a stack and refresh the duration, up to 3 stacks (30%). Costs 20 stamina.",
+      "sort_order": 254
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_BREAKAWAY",
+      "display_name": "Breakaway",
+      "description": "Cut the target for 28 physical damage, then spring 7 meters backward to reset spacing. Costs 30 stamina.",
+      "sort_order": 255
     },
     {
       "presentation_kind": "ABILITY",

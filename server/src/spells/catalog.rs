@@ -4462,8 +4462,7 @@ mod tests {
         assert_eq!(miasma_area.pulse_interval, Duration::from_secs(1));
         assert_eq!(miasma_area.effect_target_audience, TargetAudience::Hostile);
 
-        let plaguebolt =
-            spell_definition_by_str("PLAGUEBOLT").expect("PLAGUEBOLT should exist");
+        let plaguebolt = spell_definition_by_str("PLAGUEBOLT").expect("PLAGUEBOLT should exist");
         assert_eq!(plaguebolt.behavior, SpellBehavior::Projectile);
         assert_eq!(plaguebolt.damage_type, DamageType::Poison);
         assert_eq!(plaguebolt.damage, 10);
@@ -5156,6 +5155,60 @@ mod tests {
         assert_eq!(status.kind, StatusEffectKind::StunImmunity);
         assert_eq!(status.max_stacks, 1);
         assert_eq!(status.stack_policy, StackPolicy::Refresh);
+    }
+
+    #[test]
+    fn counterstrike_authors_two_second_avoidance_and_delayed_cooldown_tuning() {
+        let definition = spell_definition_by_str("COUNTERSTRIKE")
+            .expect("COUNTERSTRIKE should derive from the shared catalog");
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("COUNTERSTRIKE should apply its defensive window");
+
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Self_);
+        assert_eq!(definition.target_audience, TargetAudience::SelfOnly);
+        assert!(!definition.requires_target);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cooldown, Duration::from_secs(24));
+        assert_eq!(definition.duration, 2.0);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert_eq!(
+            definition.status_stack_group.as_deref(),
+            Some("COUNTERSTRIKE")
+        );
+        assert_eq!(status.kind, StatusEffectKind::AllAbilityAvoidance);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+    }
+
+    #[test]
+    fn sweeping_trip_authors_off_gcd_four_meter_two_second_stun() {
+        let definition = spell_definition_by_str("SWEEPING_TRIP")
+            .expect("SWEEPING_TRIP should derive from the shared catalog");
+        let area = definition
+            .secondary
+            .area
+            .as_ref()
+            .expect("SWEEPING_TRIP should expose area tunables");
+        let stun = area
+            .impact_effects
+            .first()
+            .and_then(ImpactEffect::as_status)
+            .expect("SWEEPING_TRIP should apply stun");
+
+        assert_eq!(definition.behavior, SpellBehavior::Area);
+        assert_eq!(definition.targeting, SpellTargeting::Self_);
+        assert!(!definition.requires_target);
+        assert!(!definition.uses_global_cooldown);
+        assert_eq!(definition.cooldown, Duration::from_secs(15));
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.radius, 4.0);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert_eq!(stun.payload(), StatusPayload::Stun);
+        assert_eq!(stun.duration(), Duration::from_secs(2));
     }
 
     #[test]

@@ -176,7 +176,7 @@ stack:
 
 - three Schools (`RUIN`, `ARCANA`, `BLIGHT`) derived only `STAFF`, materialized
   18 Spells, zero Techniques, and active Mastery;
-- three Dagger Forms (`BLADEDANCER`, `EXECUTIONER`, `SHADOW`) derived one
+- three Dagger Forms (`BLADEDANCER`, `HEARTSEEKER`, `SHADOW`) derived one
   `DAGGERS` Discipline, one merged weapon configuration/bar, two Techniques,
   one Spell, and active Mastery;
 - a nineteenth feature was rejected at the global capacity; and

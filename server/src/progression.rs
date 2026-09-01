@@ -112,7 +112,7 @@ const DIVINITY_FAITH_ABILITY_ID: &str = "DIVINITY_FAITH";
 const PRIMAL_ADAPTATION_ABILITY_ID: &str = "PRIMAL_ADAPTATION";
 const PRIMAL_PHOTOSYNTHESIS_ABILITY_ID: &str = "PRIMAL_PHOTOSYNTHESIS";
 const PRIMAL_SLIPSTREAM_ABILITY_ID: &str = "PRIMAL_SLIPSTREAM";
-const PLAYER_PASSIVE_RUNTIME_INVENTORY: [&str; 24] = [
+const PLAYER_PASSIVE_RUNTIME_INVENTORY: [&str; 26] = [
     PRIMAL_ADAPTATION_ABILITY_ID,
     PRIMAL_PHOTOSYNTHESIS_ABILITY_ID,
     PRIMAL_SLIPSTREAM_ABILITY_ID,
@@ -137,6 +137,8 @@ const PLAYER_PASSIVE_RUNTIME_INVENTORY: [&str; 24] = [
     SUBTLETY_TACTICAL_ADVANTAGE_ABILITY_ID,
     SUBTLETY_FLEET_FOOTED_ABILITY_ID,
     SUBTLETY_LINGERING_SHADE_ABILITY_ID,
+    "DAGGER_FIGHTING_SPIRIT",
+    "DAGGER_CRESCENDO",
 ];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -6180,7 +6182,7 @@ mod tests {
 
         assert_eq!(inventoried.len(), PLAYER_PASSIVE_RUNTIME_INVENTORY.len());
         assert_eq!(authored, inventoried);
-        assert_eq!(authored.len(), 24);
+        assert_eq!(authored.len(), 26);
     }
 
     #[test]
@@ -8966,6 +8968,8 @@ mod tests {
             ("DAGGER_DIVING_STRIKE", "DAGGER_DIVING_STRIKE"),
             ("DAGGER_DISEMBOWEL", "DAGGER_DISEMBOWEL"),
             ("DAGGER_FLAY", "DAGGER_FLAY"),
+            ("DAGGER_QUICKENING_STRIKE", "DAGGER_QUICKENING_STRIKE"),
+            ("DAGGER_BREAKAWAY", "DAGGER_BREAKAWAY"),
         ] {
             let ability = catalog
                 .abilities
@@ -9821,6 +9825,40 @@ mod tests {
         assert_eq!(ability.gameplay.cooldown_ms, Some(1600));
         assert_eq!(ability.gameplay.uses_global_cooldown, Some(true));
         assert_eq!(ability.gameplay.global_cooldown_ms, Some(650));
+    }
+
+    #[test]
+    fn dagger_breakaway_authors_clip_aligned_timed_backstep() {
+        let movement = melee_timed_movement_for_ability_id("DAGGER_BREAKAWAY")
+            .expect("Breakaway should author timed movement");
+
+        assert_eq!(movement.ability_id, "DAGGER_BREAKAWAY");
+        assert_eq!(movement.kind, "BACKSTEP");
+        assert_eq!(movement.start_delay_ms, 620);
+        assert_eq!(movement.direction, "BACKWARD");
+        assert_eq!(movement.distance, 7.0);
+        assert_eq!(movement.speed, 18.0);
+        assert_eq!(movement.collision_policy, "STOP_AT_BLOCK");
+        assert_eq!(movement.facing_policy, "FACE_START");
+
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_BREAKAWAY")
+            .expect("Breakaway ability should exist");
+        assert_eq!(
+            normalize_identifier(ability.resource_kind.as_str()),
+            "STAMINA"
+        );
+        assert_eq!(ability.resource_cost, 30.0);
+        assert_eq!(ability.gameplay.base_damage, Some(28));
+        assert_eq!(ability.gameplay.cooldown_ms, Some(1600));
+        assert_eq!(ability.gameplay.uses_global_cooldown, Some(true));
+        assert_eq!(ability.gameplay.global_cooldown_ms, Some(650));
+        assert!(profile_supports_action_reference(
+            COMBAT_PROFILE_DAGGERS,
+            &AuthoredActionId::new("DAGGER_BREAKAWAY")
+        ));
     }
 
     #[test]

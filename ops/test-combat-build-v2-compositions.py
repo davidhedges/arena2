@@ -66,9 +66,11 @@ DAGGER_SPECIALIZATIONS = [
     "DAGGERS_SHADOW",
 ]
 DAGGER_FEATURES = [
-    ("DAGGERS_BLADEDANCER", "DAGGER_LIGHTNING_REFLEXES"),
-    ("DAGGERS_EXECUTIONER", "DAGGER_GUT_RIPPER"),
-    ("DAGGERS_SHADOW", "DAGGER_DARKNESS"),
+    ("DAGGERS_BLADEDANCER", "DAGGER_DISARM"),
+    ("DAGGERS_EXECUTIONER", "DAGGER_FIND_WEAKNESS"),
+    ("DAGGERS_EXECUTIONER", "DAGGER_GOUGE"),
+    ("DAGGERS_EXECUTIONER", "DAGGER_TEMPLE_STRIKE"),
+    ("DAGGERS_SHADOW", "DAGGER_COUP_DE_GRACE"),
 ]
 REMOVED_STAFF_TECHNIQUES = {
     "STAFF_STRIKE",
@@ -155,7 +157,6 @@ def close_match(
     require_status(
         hub.call("cancel_match_ticket", [assignment["ticket_id"]]), "committed"
     )
-    wait_for_hub_status(hub, "CLOSED")
     return wait_for_cleanup(
         ledger, assignment["ticket_id"], cleanup_timeout_seconds
     )
@@ -234,8 +235,18 @@ def validate_three_dagger_forms(rows: dict[str, list[Any]]) -> dict[str, Any]:
         raise RuntimeError("three Dagger Forms duplicated equipment presentation")
     techniques = rows["match_technique_selection_v_2"]
     spells = rows["match_spell_selection_v_2"]
-    if len(techniques) != 2 or len(spells) != 1:
-        raise RuntimeError("three Dagger Forms did not preserve their Technique/Spell split")
+    expected_features = set(DAGGER_FEATURES)
+    observed_features = {
+        (
+            str(row_value(row, 2, "specialization_id")),
+            str(row_value(row, 4, "ability_id")),
+        )
+        for row in techniques
+    }
+    if observed_features != expected_features or spells:
+        raise RuntimeError(
+            "three Dagger Forms did not preserve the requested moved-ability ownership"
+        )
     require_mastery(rows)
     return {
         "specializations": DAGGER_SPECIALIZATIONS,
@@ -314,6 +325,19 @@ def main() -> int:
             args.cleanup_timeout_seconds,
         )
         open_matches.clear()
+
+        hub_identity = hub.identity
+        hub_token = hub.token
+        hub.close()
+        hub = Connection(
+            args.server_uri,
+            args.hub_database,
+            20.0,
+            token=hub_token,
+        )
+        if hub.identity != hub_identity:
+            raise RuntimeError("Hub identity changed while reconnecting between matches")
+        build_row(hub)
 
         dagger_assignment, dagger_match = start_match(hub)
         open_matches.append((dagger_assignment, dagger_match))

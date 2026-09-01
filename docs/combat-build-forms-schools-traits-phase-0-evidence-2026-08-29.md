@@ -52,7 +52,7 @@ All six existing Staff Schools retain their stable IDs: `BLIGHT`, `MORTALITY`,
 | Parent Discipline | Form | Retained features |
 | --- | --- | ---: |
 | Daggers | Bladedancer | 12 |
-| Daggers | Executioner | 11 |
+| Daggers | Heartseeker | 11 |
 | Daggers | Shadow | 11 |
 | Two-Handed Sword | Vanguard | 12 |
 | Two-Handed Sword | Reaver | 10 |

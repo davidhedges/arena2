@@ -104,6 +104,8 @@ const HAND_REQUIREMENT_OFF_HAND: &str = "OFF_HAND";
 
 const PROGRESSION_CATALOG_JSON: &str =
     include_str!("../../server/src/progression_catalog.shared.json");
+const COMBAT_BUILD_V2_CATALOG_JSON: &str =
+    include_str!("../../server/src/combat_build_v2_catalog.shared.json");
 const WEAPON_APPEARANCE_CATALOG_JSON: &str =
     include_str!("../../Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json");
 const HUB_CATALOG_HASH_OFFSET: u64 = 0xcbf29ce484222325;
@@ -115,8 +117,13 @@ const WEAPON_APPEARANCE_CATALOG_HASH: u64 = extend_catalog_hash(
     PROGRESSION_CATALOG_HASH,
     WEAPON_APPEARANCE_CATALOG_JSON.as_bytes(),
 );
-const HUB_CATALOG_PROJECTION_HASH: u64 = extend_catalog_hash(
+#[allow(long_running_const_eval)]
+const COMBAT_BUILD_V2_CATALOG_HASH: u64 = extend_catalog_hash(
     WEAPON_APPEARANCE_CATALOG_HASH,
+    COMBAT_BUILD_V2_CATALOG_JSON.as_bytes(),
+);
+const HUB_CATALOG_PROJECTION_HASH: u64 = extend_catalog_hash(
+    COMBAT_BUILD_V2_CATALOG_HASH,
     b"combat-build-editor-projection-v2",
 );
 #[table(accessor = hub_player)]
@@ -2636,9 +2643,16 @@ mod tests {
     }
 
     #[test]
-    fn hub_catalog_revision_is_stable_and_nonzero() {
+    fn hub_catalog_revision_is_stable_nonzero_and_covers_combat_build_catalog() {
         assert_ne!(hub_catalog_revision(), 0);
         assert_eq!(hub_catalog_revision(), hub_catalog_revision());
+        assert_eq!(
+            COMBAT_BUILD_V2_CATALOG_HASH,
+            extend_catalog_hash(
+                WEAPON_APPEARANCE_CATALOG_HASH,
+                COMBAT_BUILD_V2_CATALOG_JSON.as_bytes()
+            )
+        );
     }
 
     #[test]

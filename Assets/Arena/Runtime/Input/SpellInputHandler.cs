@@ -44,6 +44,7 @@ namespace Arena.Input
         private const long PendingInstantSpellPredictionTtlMs = 5000L;
         private const long PendingLocalSpellEventHoldMs = 250L;
         private const string RecallSpellId = "RECALL";
+        private const string CounterstrikeSpellId = "DAGGER_COUNTERSTRIKE";
         private const float NecroPrisonIndicatorYawOffset = Mathf.PI;
 
         // --- Aim mode state ---
@@ -774,10 +775,13 @@ namespace Arena.Input
                 : "MANA";
             bool togglingOff = localPlayer != null
                 && IsActiveRadialToggleOff(conn, localPlayer.Identity, spellId, spellDef);
+            long predictedCooldownMs = CooldownStartsOnCastAcceptance(spellId)
+                ? (long)spellDef.CooldownMs
+                : 0L;
             PredictedActionLedger ledger = LocalCombatState.Instance.PredictActionStart(
                 localPlayer,
                 spellId,
-                (long)spellDef.CooldownMs,
+                predictedCooldownMs,
                 spellDef.UsesGlobalCooldown,
                 GameplayTuning.ResolveDefaultGlobalCooldownDurationMs(conn),
                 resourceKind,
@@ -791,6 +795,12 @@ namespace Arena.Input
 
         private static bool ShouldReserveResourceAtCastStart(SpacetimeDB.Types.SpellDefinition spellDef)
             => spellDef.CastTimeMs == 0UL;
+
+        private static bool CooldownStartsOnCastAcceptance(string spellId)
+            => !string.Equals(
+                WireIdentifier.Normalize(spellId),
+                CounterstrikeSpellId,
+                System.StringComparison.Ordinal);
 
         private static bool IsActiveRadialToggleOff(
             SpacetimeDB.Types.DbConnection conn,

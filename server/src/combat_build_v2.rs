@@ -1850,6 +1850,39 @@ mod tests {
         CombatBuildV2Catalog::from_shared_catalogs().expect("canonical v2 catalogs")
     }
 
+    #[test]
+    fn dagger_form_rename_and_ownership_moves_are_canonical() {
+        let catalog = catalog();
+        let specializations = catalog.specialization_definitions();
+        let heartseeker = specializations
+            .iter()
+            .find(|row| row.specialization_id == "DAGGERS_EXECUTIONER")
+            .expect("DAGGERS_EXECUTIONER specialization should exist");
+
+        assert_eq!(heartseeker.display_name, "Heartseeker");
+        assert!(
+            specializations
+                .iter()
+                .all(|row| row.display_name != "Executioner"),
+            "the retired Executioner display name must not remain in the catalog"
+        );
+
+        let expected_owners = [
+            ("DAGGER_COUP_DE_GRACE", "DAGGERS_SHADOW"),
+            ("DAGGER_FIND_WEAKNESS", "DAGGERS_EXECUTIONER"),
+            ("DAGGER_DISARM", "DAGGERS_BLADEDANCER"),
+            ("DAGGER_TEMPLE_STRIKE", "DAGGERS_EXECUTIONER"),
+            ("DAGGER_GOUGE", "DAGGERS_EXECUTIONER"),
+        ];
+        for (ability_id, specialization_id) in expected_owners {
+            assert_eq!(
+                catalog.feature_specialization(ability_id),
+                Some(specialization_id),
+                "{ability_id} should belong to {specialization_id}"
+            );
+        }
+    }
+
     fn config(parent: &str) -> CombatBuildV2DisciplineConfiguration {
         let (main, off) = match parent {
             "DAGGERS" => ("TRAINING_DAGGER_PAIR", ""),
@@ -2516,7 +2549,7 @@ mod tests {
     fn canonical_catalog_is_exhaustive_and_staff_has_no_techniques() {
         let catalog = catalog();
         assert_eq!(catalog.specializations.len(), 18);
-        assert_eq!(catalog.features.len(), 208);
+        assert_eq!(catalog.features.len(), 214);
         assert_eq!(catalog.intrinsic_ability_ids.len(), 5);
         assert_eq!(catalog.removed_player_ability_ids.len(), 4);
         assert_eq!(catalog.traits.len(), 1);
@@ -2526,7 +2559,7 @@ mod tests {
                 .values()
                 .filter(|row| row.loadout_kind == CombatFeatureLoadoutKind::Technique)
                 .count(),
-            80
+            84
         );
         assert!(catalog.features.values().all(|feature| {
             if feature.loadout_kind != CombatFeatureLoadoutKind::Technique {

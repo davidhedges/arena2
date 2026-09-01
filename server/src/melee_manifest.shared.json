@@ -1098,6 +1098,21 @@
                     "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
+                    "id": "DAGGER_QUICKENING_STRIKE",
+                    "slot_id": "dagger_quickening_strike_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 408
+                        }
+                    ],
+                    "recovery_ms": 250,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
                     "id": "DAGGER_COMBO_ATTACK_01_03",
                     "slot_id": "dagger_combo_attack_01_03_slot",
                     "hit_windows": [
@@ -1179,6 +1194,21 @@
                         {
                             "impact_delay_ms": 589
                         },
+                        {
+                            "impact_delay_ms": 589
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
+                    "id": "DAGGER_BREAKAWAY",
+                    "slot_id": "dagger_breakaway_slot",
+                    "hit_windows": [
                         {
                             "impact_delay_ms": 589
                         }

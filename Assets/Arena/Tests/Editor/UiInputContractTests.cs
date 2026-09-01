@@ -930,6 +930,17 @@ namespace Arena.Tests.Editor
             Assert.That(registry, Does.Contain("guid: 257b0b8c164454f4ebe7b7b4b6c045db"));
         }
 
+        [Test]
+        public void Counterstrike_DoesNotPredictItsCooldownBeforeTheCounterWindowEnds()
+        {
+            string source = File.ReadAllText(SpellInputHandlerPath);
+
+            Assert.That(source, Does.Contain("CounterstrikeSpellId = \"DAGGER_COUNTERSTRIKE\""));
+            Assert.That(source, Does.Contain("CooldownStartsOnCastAcceptance(spellId)"));
+            Assert.That(source, Does.Contain("long predictedCooldownMs"));
+            Assert.That(source, Does.Contain("CounterstrikeSpellId,\n                System.StringComparison.Ordinal"));
+        }
+
         private static IEnumerable<string> FindFilesContaining(IEnumerable<string> paths, string needle)
         {
             foreach (string path in paths)

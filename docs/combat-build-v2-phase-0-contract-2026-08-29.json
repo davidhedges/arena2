@@ -394,7 +394,7 @@
       "loadout_kind": "TECHNIQUE",
       "presentation_discovery": "EXECUTOR_NATIVE",
       "proposed_parent_discipline_id": "DAGGERS",
-      "proposed_specialization_id": "DAGGERS_EXECUTIONER",
+      "proposed_specialization_id": "DAGGERS_SHADOW",
       "proposed_specialization_kind": "FORM",
       "requires_equipped_parent_weapon": true,
       "review_status": "LOCKED_PHASE_0"
@@ -503,7 +503,7 @@
       "loadout_kind": "TECHNIQUE",
       "presentation_discovery": "SPELL_EXECUTOR",
       "proposed_parent_discipline_id": "DAGGERS",
-      "proposed_specialization_id": "DAGGERS_SHADOW",
+      "proposed_specialization_id": "DAGGERS_BLADEDANCER",
       "proposed_specialization_kind": "FORM",
       "requires_equipped_parent_weapon": true,
       "review_status": "LOCKED_PHASE_0"
@@ -608,7 +608,7 @@
       "loadout_kind": "TECHNIQUE",
       "presentation_discovery": "SPELL_EXECUTOR",
       "proposed_parent_discipline_id": "DAGGERS",
-      "proposed_specialization_id": "DAGGERS_SHADOW",
+      "proposed_specialization_id": "DAGGERS_EXECUTIONER",
       "proposed_specialization_kind": "FORM",
       "requires_equipped_parent_weapon": true,
       "review_status": "LOCKED_PHASE_0"
@@ -650,7 +650,7 @@
       "loadout_kind": "TECHNIQUE",
       "presentation_discovery": "SPELL_EXECUTOR",
       "proposed_parent_discipline_id": "DAGGERS",
-      "proposed_specialization_id": "DAGGERS_SHADOW",
+      "proposed_specialization_id": "DAGGERS_EXECUTIONER",
       "proposed_specialization_kind": "FORM",
       "requires_equipped_parent_weapon": true,
       "review_status": "LOCKED_PHASE_0"
@@ -675,6 +675,128 @@
       "proposed_specialization_kind": "FORM",
       "requires_equipped_parent_weapon": true,
       "review_status": "LOCKED_PHASE_0"
+    },
+    {
+      "ability_id": "DAGGER_COUNTERSTRIKE",
+      "action_id": "COUNTERSTRIKE",
+      "animation_compatibility_profiles": [
+        "DAGGERS"
+      ],
+      "bar_domain": "PARENT_TECHNIQUE",
+      "current_combat_discipline_id": "DAGGERS",
+      "current_selection_kind": "ACTIVE",
+      "current_spell_school_id": null,
+      "cutover_disposition": "RESET_AND_RESEED",
+      "display_name": "Counterstrike",
+      "gameplay_kind": "SPELL",
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "proposed_parent_discipline_id": "DAGGERS",
+      "proposed_specialization_id": "DAGGERS_BLADEDANCER",
+      "proposed_specialization_kind": "FORM",
+      "requires_equipped_parent_weapon": true,
+      "review_status": "AUTHORED_POST_PHASE_0"
+    },
+    {
+      "ability_id": "DAGGER_SWEEPING_TRIP",
+      "action_id": "SWEEPING_TRIP",
+      "animation_compatibility_profiles": [
+        "DAGGERS"
+      ],
+      "bar_domain": "PARENT_TECHNIQUE",
+      "current_combat_discipline_id": "DAGGERS",
+      "current_selection_kind": "ACTIVE",
+      "current_spell_school_id": null,
+      "cutover_disposition": "RESET_AND_RESEED",
+      "display_name": "Trip",
+      "gameplay_kind": "SPELL",
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "SPELL_EXECUTOR",
+      "proposed_parent_discipline_id": "DAGGERS",
+      "proposed_specialization_id": "DAGGERS_BLADEDANCER",
+      "proposed_specialization_kind": "FORM",
+      "requires_equipped_parent_weapon": true,
+      "review_status": "AUTHORED_POST_PHASE_0"
+    },
+    {
+      "ability_id": "DAGGER_FIGHTING_SPIRIT",
+      "action_id": "FIGHTING_SPIRIT",
+      "animation_compatibility_profiles": [],
+      "bar_domain": "NONE",
+      "current_combat_discipline_id": "DAGGERS",
+      "current_selection_kind": "PASSIVE",
+      "current_spell_school_id": null,
+      "cutover_disposition": "RESET_AND_RESEED",
+      "display_name": "Fighting Spirit",
+      "gameplay_kind": "PASSIVE",
+      "loadout_kind": "PERK",
+      "presentation_discovery": "EXECUTOR_NATIVE",
+      "proposed_parent_discipline_id": "DAGGERS",
+      "proposed_specialization_id": "DAGGERS_BLADEDANCER",
+      "proposed_specialization_kind": "FORM",
+      "requires_equipped_parent_weapon": false,
+      "review_status": "AUTHORED_POST_PHASE_0"
+    },
+    {
+      "ability_id": "DAGGER_CRESCENDO",
+      "action_id": "CRESCENDO",
+      "animation_compatibility_profiles": [],
+      "bar_domain": "NONE",
+      "current_combat_discipline_id": "DAGGERS",
+      "current_selection_kind": "PASSIVE",
+      "current_spell_school_id": null,
+      "cutover_disposition": "RESET_AND_RESEED",
+      "display_name": "Crescendo",
+      "gameplay_kind": "PASSIVE",
+      "loadout_kind": "PERK",
+      "presentation_discovery": "EXECUTOR_NATIVE",
+      "proposed_parent_discipline_id": "DAGGERS",
+      "proposed_specialization_id": "DAGGERS_BLADEDANCER",
+      "proposed_specialization_kind": "FORM",
+      "requires_equipped_parent_weapon": false,
+      "review_status": "AUTHORED_POST_PHASE_0"
+    },
+    {
+      "ability_id": "DAGGER_QUICKENING_STRIKE",
+      "action_id": "DAGGER_QUICKENING_STRIKE",
+      "animation_compatibility_profiles": [
+        "DAGGERS"
+      ],
+      "bar_domain": "PARENT_TECHNIQUE",
+      "current_combat_discipline_id": "DAGGERS",
+      "current_selection_kind": "ACTIVE",
+      "current_spell_school_id": null,
+      "cutover_disposition": "RESET_AND_RESEED",
+      "display_name": "Quickening Strike",
+      "gameplay_kind": "MELEE",
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "EXECUTOR_NATIVE",
+      "proposed_parent_discipline_id": "DAGGERS",
+      "proposed_specialization_id": "DAGGERS_BLADEDANCER",
+      "proposed_specialization_kind": "FORM",
+      "requires_equipped_parent_weapon": true,
+      "review_status": "AUTHORED_POST_PHASE_0"
+    },
+    {
+      "ability_id": "DAGGER_BREAKAWAY",
+      "action_id": "DAGGER_BREAKAWAY",
+      "animation_compatibility_profiles": [
+        "DAGGERS"
+      ],
+      "bar_domain": "PARENT_TECHNIQUE",
+      "current_combat_discipline_id": "DAGGERS",
+      "current_selection_kind": "ACTIVE",
+      "current_spell_school_id": null,
+      "cutover_disposition": "RESET_AND_RESEED",
+      "display_name": "Breakaway",
+      "gameplay_kind": "MELEE",
+      "loadout_kind": "TECHNIQUE",
+      "presentation_discovery": "EXECUTOR_NATIVE",
+      "proposed_parent_discipline_id": "DAGGERS",
+      "proposed_specialization_id": "DAGGERS_BLADEDANCER",
+      "proposed_specialization_kind": "FORM",
+      "requires_equipped_parent_weapon": true,
+      "review_status": "AUTHORED_POST_PHASE_0"
     },
     {
       "ability_id": "DAGGER_LIGHTNING_REFLEXES",
@@ -931,7 +1053,7 @@
       "loadout_kind": "TECHNIQUE",
       "presentation_discovery": "SPELL_EXECUTOR",
       "proposed_parent_discipline_id": "DAGGERS",
-      "proposed_specialization_id": "DAGGERS_SHADOW",
+      "proposed_specialization_id": "DAGGERS_EXECUTIONER",
       "proposed_specialization_kind": "FORM",
       "requires_equipped_parent_weapon": true,
       "review_status": "LOCKED_PHASE_0"
@@ -5205,7 +5327,7 @@
     },
     {
       "combat_discipline_id": "DAGGERS",
-      "display_name": "Executioner",
+      "display_name": "Heartseeker",
       "sort_order": 20,
       "specialization_id": "DAGGERS_EXECUTIONER",
       "specialization_kind": "FORM"

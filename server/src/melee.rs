@@ -35,12 +35,13 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect as _;
 use crate::combat::{
-    advance_slipstream_after_movement_ability, arm_quickening_after_movement_ability,
-    combat_projectile_definition_for_id, has_active_disabling_status, has_active_status,
-    has_active_status_group, has_due_pending_effects, hostile_targeted_ability_misses,
-    mark_harmful_combat_action, queue_effects, remove_active_status_group, resolve_pending_effects,
-    status_matches_removal_filter, ActiveCombatProjectile, AttackAim, CombatEvent,
-    CombatProjectileDefinition, DamageDelivery, DamageType, EffectPacket,
+    advance_crescendo_for_action, advance_slipstream_after_movement_ability,
+    arm_quickening_after_movement_ability, combat_projectile_definition_for_id,
+    has_active_disabling_status, has_active_status, has_active_status_group,
+    has_due_pending_effects, hostile_targeted_ability_misses, mark_harmful_combat_action,
+    queue_effects, remove_active_status_group, resolve_pending_effects,
+    status_matches_removal_filter, try_counterstrike_melee, ActiveCombatProjectile, AttackAim,
+    CombatEvent, CombatProjectileDefinition, DamageDelivery, DamageType, EffectPacket,
     ProjectilePresentationEvent, StackPolicy, StatusDispelType, StatusEffectKind, StatusPayload,
     StatusPolarity, COMBAT_EVENT_AREA_IMPACT, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST,
     COMBAT_EVENT_EVADE, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_MISS,
@@ -68,7 +69,7 @@ use crate::progression::{
 use crate::relations::{can_harm, combat_relation, target_audience_allows, TargetAudience};
 use crate::resources::{
     can_pay_action_resource_cost, grant_primary_resource_amount,
-    grant_primary_resource_amount_for_kind, grant_primary_resource_for_melee_hit,
+    grant_primary_resource_amount_for_kind, grant_primary_resource_for_auto_attack_hit,
     pay_action_resource_cost, resolve_ability_action_resource_cost,
     resolve_ability_action_resource_cost_amount, ResolvedActionResourceCost, RESOURCE_KIND_MANA,
 };
@@ -149,6 +150,10 @@ const PALADIN_BRANDED_STATUS_GROUP: &str = "PALADIN_BRANDED";
 const PALADIN_HALLOWED_THRUST_ABILITY_ID: &str = "PALADIN_HALLOWED_THRUST";
 const PALADIN_HALLOWED_THRUST_MANA_GAIN: f32 = 20.0;
 const DAGGER_COUP_DE_GRACE_ABILITY_ID: &str = "DAGGER_COUP_DE_GRACE";
+const DAGGER_QUICKENING_STRIKE_ABILITY_ID: &str = "DAGGER_QUICKENING_STRIKE";
+const QUICKENING_STRIKE_STATUS_GROUP: &str = "QUICKENING_STRIKE";
+const QUICKENING_STRIKE_DURATION: Duration = Duration::from_secs(10);
+const QUICKENING_STRIKE_ATTACK_SPEED_PER_STACK: f32 = 0.10;
 const GAP_CLOSE_KIND_LINEAR: &str = "LINEAR";
 const GAP_CLOSE_KIND_LEAP: &str = "LEAP";
 const GAP_CLOSE_KIND_TELEPORT: &str = "TELEPORT";
@@ -3600,7 +3605,7 @@ fn grant_primary_resource_for_melee_event_hit(
     now: Timestamp,
 ) {
     if grants_primary_resource_on_hit {
-        grant_primary_resource_for_melee_hit(ctx, owner, now);
+        grant_primary_resource_for_auto_attack_hit(ctx, owner, now);
     }
 }
 
@@ -4458,6 +4463,16 @@ fn perform_melee_attack_for_internal(
             holdable: channel.holdable,
             ends_at_micros: timestamp_to_micros(ends_at),
         });
+    }
+
+    if policy.event_source == MeleeEventSource::PlayerInput {
+        advance_crescendo_for_action(
+            ctx,
+            caster,
+            spell_id.as_str(),
+            gameplay.ability_id.as_deref().unwrap_or_default(),
+            now,
+        );
     }
 
     ctx.db.combat_event().insert(CombatEvent {
@@ -5662,14 +5677,16 @@ fn resolve_pending_melee_target_impact(
     } else {
         AttackAim::Targeted
     };
-    if hostile_targeted_ability_misses(
-        ctx,
-        row.source,
-        row.target,
-        row.spell_id.as_str(),
-        attack_aim,
-        now,
-    ) {
+    if try_counterstrike_melee(ctx, row.source, row.target, now)
+        || hostile_targeted_ability_misses(
+            ctx,
+            row.source,
+            row.target,
+            row.spell_id.as_str(),
+            attack_aim,
+            now,
+        )
+    {
         mark_harmful_combat_action(ctx, row.source, row.target, now, row.kind.as_str());
         log::info!(
             "[MELEE_IMPACT] owner={} source={} strike={} target={} result=miss damage={} spell_id={}",
@@ -5890,6 +5907,7 @@ fn resolve_pending_melee_target_impact(
         )
     };
     push_melee_impact_effects(ctx, &mut effects, row, knockback_dir_x, knockback_dir_z);
+    push_quickening_strike_buff(&mut effects, row);
     let attack_modifiers = resolve_melee_attack_modifiers(ctx, row.source, now);
     push_melee_attack_modifier_bleed_effects(&mut effects, row, damage, &attack_modifiers);
     push_melee_impact_area_effects(
@@ -5912,6 +5930,31 @@ fn resolve_pending_melee_target_impact(
         now,
     );
     grant_hallowed_thrust_branded_mana(ctx, row, damage, now);
+}
+
+fn push_quickening_strike_buff(effects: &mut Vec<EffectPacket>, row: &PendingMeleeImpact) {
+    if !quickening_strike_applies_buff(row.ability_id.as_str()) {
+        return;
+    }
+    effects.push(EffectPacket::ApplyStatus {
+        source: row.source,
+        target: row.source,
+        spell_id: row.spell_id.clone(),
+        payload: StatusPayload::AttackSpeed {
+            modifier_scalar: QUICKENING_STRIKE_ATTACK_SPEED_PER_STACK,
+        },
+        polarity: StatusPolarity::Buff,
+        target_audience: TargetAudience::SelfOnly,
+        duration: QUICKENING_STRIKE_DURATION,
+        stack_group: QUICKENING_STRIKE_STATUS_GROUP.to_string(),
+        max_stacks: 3,
+        stack_policy: StackPolicy::AddStackRefresh,
+        dispel_types: Vec::new(),
+    });
+}
+
+fn quickening_strike_applies_buff(ability_id: &str) -> bool {
+    ability_id.eq_ignore_ascii_case(DAGGER_QUICKENING_STRIKE_ABILITY_ID)
 }
 
 fn melee_target_impact_point_y(target: &CombatActorSnapshot) -> f32 {
@@ -6730,13 +6773,13 @@ mod tests {
         pending_melee_impact_range, positive_projectile_override,
         projectile_max_distance_for_policy, push_flaming_weapon_effects,
         push_melee_impact_status_effects, push_stagger_effect_with_duration_if_applicable,
-        push_toxic_weapon_effects, resolve_gap_close_destination, resolve_melee_action_reference,
-        resolve_melee_action_reference_in_strikes, resolved_hit_window_damages,
-        scaled_auto_attack_cadence_ms, scaled_impact_area_damage, scheduled_melee_impact_at,
-        strike_total_duration_ms, targeted_melee_requires_current_facing,
-        timed_melee_movement_destination, toxic_weapon_proc_succeeds, AerialExecutionMode,
-        AirborneTargetingMode, ComboInputDecision, GapCloseActorSnapshot,
-        GapClosePreCommitDecision, MeleeAuthorization, PendingMeleeImpact,
+        push_toxic_weapon_effects, quickening_strike_applies_buff, resolve_gap_close_destination,
+        resolve_melee_action_reference, resolve_melee_action_reference_in_strikes,
+        resolved_hit_window_damages, scaled_auto_attack_cadence_ms, scaled_impact_area_damage,
+        scheduled_melee_impact_at, strike_total_duration_ms,
+        targeted_melee_requires_current_facing, timed_melee_movement_destination,
+        toxic_weapon_proc_succeeds, AerialExecutionMode, AirborneTargetingMode, ComboInputDecision,
+        GapCloseActorSnapshot, GapClosePreCommitDecision, MeleeAuthorization, PendingMeleeImpact,
         ResolvedMeleeAttackModifiers, ResolvedMeleeGapClose, ResolvedMeleeTargeting, SpellVec3,
         StaggerDirection, StrikeData, StrikeHitWindowData, StrikePhasedGapCloseTimingData,
         DAGGER_COUP_DE_GRACE_ABILITY_ID, GAP_CLOSE_COLLISION_REQUIRE_CLEAR_PATH,
@@ -6760,6 +6803,13 @@ mod tests {
     };
 
     const TEST_GAP_CLOSE_DESTINATION_EPSILON_METERS: f32 = 0.10;
+
+    #[test]
+    fn quickening_strike_is_the_only_melee_action_that_applies_its_speed_buff() {
+        assert!(quickening_strike_applies_buff("DAGGER_QUICKENING_STRIKE"));
+        assert!(!quickening_strike_applies_buff("DAGGER_QUICK_CUT"));
+        assert!(!quickening_strike_applies_buff("AUTO_ATTACK_1"));
+    }
 
     fn test_actor_snapshot(identity: Identity, pos_x: f32, pos_z: f32) -> CombatActorSnapshot {
         CombatActorSnapshot {

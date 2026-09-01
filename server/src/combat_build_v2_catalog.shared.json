@@ -124,13 +124,15 @@
   },
   "schema_version": 2,
   "source_contract": "docs/combat-build-v2-phase-0-contract-2026-08-29.json",
-  "source_contract_sha256": "ff728ac147767b3befa97bd444fff51cece96057294b27507be72192db52796a",
+  "source_contract_sha256": "81f208dda906387c250055e96f616332b92f921432ad541a1f2d3ffa9cc24f0e",
   "specializations": [
     {
       "combat_discipline_id": "DAGGERS",
       "display_name": "Bladedancer",
       "perk_ability_ids": [
-        "SUBTLETY_FLEET_FOOTED"
+        "SUBTLETY_FLEET_FOOTED",
+        "DAGGER_FIGHTING_SPIRIT",
+        "DAGGER_CRESCENDO"
       ],
       "sort_order": 10,
       "specialization_id": "DAGGERS_BLADEDANCER",
@@ -147,12 +149,17 @@
         "DAGGER_PURSUE",
         "DAGGER_DOWNWARD_SLASH",
         "DAGGER_DIVING_STRIKE",
-        "DAGGER_LIGHTNING_REFLEXES"
+        "DAGGER_DISARM",
+        "DAGGER_LIGHTNING_REFLEXES",
+        "DAGGER_COUNTERSTRIKE",
+        "DAGGER_SWEEPING_TRIP",
+        "DAGGER_QUICKENING_STRIKE",
+        "DAGGER_BREAKAWAY"
       ]
     },
     {
       "combat_discipline_id": "DAGGERS",
-      "display_name": "Executioner",
+      "display_name": "Heartseeker",
       "perk_ability_ids": [
         "SUBTLETY_SURPRISE_ATTACKS"
       ],
@@ -163,14 +170,16 @@
       "technique_ability_ids": [
         "DAGGER_GUT_RIPPER",
         "DAGGER_NERVE_STRIKE",
-        "DAGGER_COUP_DE_GRACE",
         "DAGGER_PRECISION_STRIKE",
         "DAGGER_EVISCERATE",
         "DAGGER_VITAL_STRIKE",
         "DAGGER_DEATH_CROSS",
         "DAGGER_DISEMBOWEL",
         "DAGGER_FLAY",
-        "DAGGER_BLADE_TWISTING"
+        "DAGGER_FIND_WEAKNESS",
+        "DAGGER_BLADE_TWISTING",
+        "DAGGER_GOUGE",
+        "DAGGER_TEMPLE_STRIKE"
       ]
     },
     {
@@ -190,11 +199,8 @@
         "DAGGER_SHADOWREND"
       ],
       "technique_ability_ids": [
-        "DAGGER_STEALTH",
-        "DAGGER_FIND_WEAKNESS",
-        "DAGGER_DISARM",
-        "DAGGER_GOUGE",
-        "DAGGER_TEMPLE_STRIKE"
+        "DAGGER_COUP_DE_GRACE",
+        "DAGGER_STEALTH"
       ]
     },
     {

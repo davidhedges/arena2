@@ -91,7 +91,7 @@ No leaf gameplay module bypasses the centralized APIs.
 `run_phase_4_authorization_probe` anonymously.
 
 The fixture selected Bladedancer, Ruin, and Vanguard across Dagger, Staff, and
-Two-Handed Sword parents; remembered Executioner as dormant; selected one
+Two-Handed Sword parents; remembered Heartseeker as dormant; selected one
 Technique for each weapon Form, one Ruin Spell, one Ruin Perk, and Mastery.
 
 All eight live checks were true:

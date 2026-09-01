@@ -784,8 +784,15 @@ class Benchmark:
                     "contract_schema_version"
                 ],
                 "combat_build_revision": self.hub_combat_build["revision"],
+                "hub_loadout_revision": self.hub_combat_build["revision"],
                 "starting_discipline_id": self.hub_combat_build[
                     "starting_discipline_id"
+                ],
+                "primary_discipline_id": self.hub_combat_build[
+                    "starting_discipline_id"
+                ],
+                "main_hand_item_def_id": starting_configuration[
+                    "main_hand_item_def_id"
                 ],
                 "selected_specializations": [
                     value["specialization_id"]

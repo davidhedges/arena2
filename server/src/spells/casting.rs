@@ -34,20 +34,20 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect;
 use crate::combat::{
-    active_emanation_for_owner, active_stalk_mark_target,
+    active_emanation_for_owner, active_stalk_mark_target, advance_crescendo_for_action,
     advance_slipstream_after_movement_ability, arm_quickening_after_movement_ability,
     clear_stalk_mark, consume_active_immolation_damage, consume_quickening_for_cast,
-    has_active_disabling_status, has_active_status, hostile_targeted_ability_misses,
-    mark_harmful_combat_action, queue_delayed_status_effect, queue_effects,
-    quickening_cast_speed_multiplier_for_owner, register_projectile_return_heal,
+    has_active_counterstrike, has_active_disabling_status, has_active_status,
+    hostile_targeted_ability_misses, mark_harmful_combat_action, queue_delayed_status_effect,
+    queue_effects, quickening_cast_speed_multiplier_for_owner, register_projectile_return_heal,
     remove_active_status_group, rephase_accumulated_orbit_projectiles, set_active_aura,
     status_matches_removal_filter, status_removal_is_blocked_by_rime, temporary_combat_modifiers,
     timestamp_to_micros, toggle_active_emanation, toggle_active_immolation, ActiveCombatProjectile,
     AttackAim, CombatEvent, DamageDelivery, DamageType, EffectPacket, ProjectilePresentationEvent,
     StackPolicy, StatusApplication, StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity,
     StatusStackGroupDefault, COMBAT_EVENT_MISS, COMBAT_METADATA_NONE, COMBAT_SCALAR_NONE,
-    COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_ASSIST_COST, DAMAGE_SOURCE_KIND_SELF_INFLICTED,
-    DAMAGE_SOURCE_KIND_SPELL,
+    COMBAT_SEQUENCE_NONE, COUNTERSTRIKE_ACTION_ID, DAMAGE_SOURCE_KIND_ASSIST_COST,
+    DAMAGE_SOURCE_KIND_SELF_INFLICTED, DAMAGE_SOURCE_KIND_SPELL,
 };
 use crate::defense::{
     clear_interruptible_defense_for_owner, resolve_defensible_combat_hit, CombatHitDeliveryKind,
@@ -689,7 +689,9 @@ pub(crate) fn queue_pending_cast_request(
         );
         return Ok(());
     }
-    if is_on_cooldown(ctx, caster, spell_kind, ctx.timestamp) {
+    if is_on_cooldown(ctx, caster, spell_kind, ctx.timestamp)
+        || counterstrike_window_blocks_recast(ctx, caster, spell_kind, ctx.timestamp)
+    {
         record_spell_prediction_result(
             ctx,
             caster,
@@ -1057,7 +1059,9 @@ fn execute_cast_intent(
     }
     // Cooldown rejection is silent by design; v1 emits no rejection events.
     // UI derives cooldown state from COMBAT_CAST events on the client.
-    if is_on_cooldown(ctx, caster_state.player_id, spell_kind, now) {
+    if is_on_cooldown(ctx, caster_state.player_id, spell_kind, now)
+        || counterstrike_window_blocks_recast(ctx, caster_state.player_id, spell_kind, now)
+    {
         record_spell_prediction_result(
             ctx,
             caster,
@@ -1210,7 +1214,7 @@ fn execute_cast_intent(
         if uses_global_cooldown {
             stamp_global_cooldown_for_duration(ctx, caster, definition.global_cooldown, now);
         }
-        stamp_cooldown(ctx, caster, spell_kind, now);
+        stamp_accepted_spell_cooldown(ctx, caster, spell_kind, now);
         return Ok(());
     }
 
@@ -1429,13 +1433,37 @@ fn execute_cast_intent(
         stamp_global_cooldown_for_duration(ctx, caster, definition.global_cooldown, now);
     }
     if !is_recall_spell(spell_kind) {
-        stamp_cooldown(ctx, caster, spell_kind, now);
+        stamp_accepted_spell_cooldown(ctx, caster, spell_kind, now);
     }
     Ok(())
 }
 
 fn quickening_applies_to_cast_time(cast_time: Duration) -> bool {
     cast_time > Duration::ZERO
+}
+
+fn counterstrike_window_blocks_recast(
+    ctx: &ReducerContext,
+    caster: Identity,
+    spell_kind: &SpellId,
+    now: Timestamp,
+) -> bool {
+    spell_kind.as_str() == COUNTERSTRIKE_ACTION_ID && has_active_counterstrike(ctx, caster, now)
+}
+
+fn stamp_accepted_spell_cooldown(
+    ctx: &ReducerContext,
+    caster: Identity,
+    spell_kind: &SpellId,
+    now: Timestamp,
+) {
+    if spell_cooldown_starts_on_accept(spell_kind) {
+        stamp_cooldown(ctx, caster, spell_kind, now);
+    }
+}
+
+fn spell_cooldown_starts_on_accept(spell_kind: &SpellId) -> bool {
+    spell_kind.as_str() != COUNTERSTRIKE_ACTION_ID
 }
 
 fn commit_primary_resource_for_spell(
@@ -3492,6 +3520,7 @@ fn emit_spell_cast_accepted_event(
     ability_id: &str,
     now: Timestamp,
 ) {
+    advance_crescendo_for_action(ctx, caster, action_instance_id, ability_id, now);
     if super::catalog::spell_definition(spell_kind)
         .is_some_and(|definition| definition.target_audience == TargetAudience::Hostile)
     {
@@ -4876,7 +4905,7 @@ fn finish_active_cast(
             charge_pct,
             now,
         );
-        stamp_cooldown(ctx, active_cast.caster, kind, now);
+        stamp_accepted_spell_cooldown(ctx, active_cast.caster, kind, now);
         clear_active_cast(ctx, active_cast.caster);
     } else {
         apply_active_cast_terminal_outcome(
@@ -10487,10 +10516,11 @@ mod tests {
         projectile_release_uses_live_facing, quickening_applies_to_cast_time,
         recall_capture_is_eligible, recall_replay_defaults_to_self, recall_slot_has_stored_spell,
         remaining_dot_damage_from_schedule, resolve_generic_area_center,
-        resolve_special_movement_y, spell_primary_resource_cost_for_action,
-        status_is_transferable_debuff_values, successful_interrupt_damage,
-        targeted_ability_is_blocked, targeted_traveling_area_spawn_forward,
-        valid_cast_action_token, violates_active_cast_lifetime_mobility_requirement_for_tick,
+        resolve_special_movement_y, spell_cooldown_starts_on_accept,
+        spell_primary_resource_cost_for_action, status_is_transferable_debuff_values,
+        successful_interrupt_damage, targeted_ability_is_blocked,
+        targeted_traveling_area_spawn_forward, valid_cast_action_token,
+        violates_active_cast_lifetime_mobility_requirement_for_tick,
         violates_cast_mobility_requirement, ActiveCastTerminalOutcome, CastExecutionMode,
         CombatActorSnapshot, CombatAreaShape, CurvedTargetProjectileTunables, ImpactEffect,
         SpellBehavior, SpellId, Vec3, FACING_DOT_EPSILON, SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK,
@@ -10502,6 +10532,16 @@ mod tests {
     use crate::spells::{ActiveCast, RecallSlot};
     use core::time::Duration;
     use spacetimedb::{Identity, Timestamp};
+
+    #[test]
+    fn counterstrike_defers_its_cooldown_until_the_window_ends() {
+        assert!(!spell_cooldown_starts_on_accept(
+            &SpellId::new("COUNTERSTRIKE").unwrap()
+        ));
+        assert!(spell_cooldown_starts_on_accept(
+            &SpellId::new("LIGHTNING_REFLEXES").unwrap()
+        ));
+    }
 
     #[test]
     fn relation_aware_direct_target_heals_only_non_hostile_targets() {

@@ -91,7 +91,7 @@ in a provisioned match:
 1. Ruin + Arcana + Blight derived only Staff, materialized exactly 18 ordered
    Spells and zero Techniques, and activated Mastery. A nineteenth feature was
    rejected with `COMBAT_BUILD_V2_FEATURE_CAPACITY` without advancing state.
-2. Bladedancer + Executioner + Shadow derived one Dagger configuration and one
+2. Bladedancer + Heartseeker + Shadow derived one Dagger configuration and one
    active switch target, materialized two Techniques plus one Form-owned Spell,
    and activated Mastery.
 

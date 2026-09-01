@@ -4,17 +4,19 @@ use std::time::Duration;
 use spacetimedb::{Identity, ReducerContext, Table, Timestamp};
 
 use crate::arena::players_share_world_context;
-use crate::combat::actor_snapshot::{CombatActorSnapshot, CombatActorSnapshotSet};
+use crate::combat::actor_snapshot::{
+    actor_snapshot_for, CombatActorSnapshot, CombatActorSnapshotSet,
+};
 use crate::combat::scene_query::{
     first_hit_on_segment_candidates_with_world_stats, first_player_hit_on_segment_candidates,
     first_world_hit_on_segment_with_stats, raycast_capsule_with_padding,
     terrain_surface_y_for_caster, SceneHit, SceneHitKind,
 };
 use crate::combat::{
-    clear_projectile_return_heal, hostile_targeted_ability_misses, AttackAim,
+    clear_projectile_return_heal, consume_counterstrike, hostile_targeted_ability_misses,
     mark_projectile_returned_for_heal, queue_effects, timestamp_to_micros, ActiveCombatProjectile,
-    ActiveCombatProjectileTargetState, CombatEvent, CombatProjectileTickMetrics, DamageDelivery,
-    EffectPacket, ProjectilePresentationEvent, StatusPolarity, COMBAT_EVENT_BLOCK,
+    ActiveCombatProjectileTargetState, AttackAim, CombatEvent, CombatProjectileTickMetrics,
+    DamageDelivery, EffectPacket, ProjectilePresentationEvent, StatusPolarity, COMBAT_EVENT_BLOCK,
     COMBAT_EVENT_CONTACT, COMBAT_EVENT_EVADE, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT,
     COMBAT_EVENT_MISS, COMBAT_EVENT_PARRY, COMBAT_EVENT_UPDATE, COMBAT_METADATA_NONE,
     COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_PROJECTILE,
@@ -24,7 +26,7 @@ use crate::defense::{
 };
 use crate::progression::precision_perforation_for_owner;
 use crate::relations::{can_harm, target_audience_allows};
-use crate::resources::grant_primary_resource_for_melee_hit;
+use crate::resources::grant_primary_resource_for_auto_attack_hit;
 use crate::spells::{
     first_hostile_sanctuary_projectile_hit, spell_definition_by_str, ImpactEffect, SpellBehavior,
     SpellId, SpellRuntimeDefinition,
@@ -317,6 +319,18 @@ fn tick_projectile_instance(
                 fizzle_projectile_and_finish(ctx, now, &projectile, metrics);
                 return;
             };
+            if try_reflect_counterstrike_projectile(
+                ctx,
+                &mut projectile,
+                target,
+                advance.end_x,
+                advance.end_y,
+                advance.end_z,
+                now,
+                metrics,
+            ) {
+                return;
+            }
             if projectile_targeted_hit_misses(ctx, &projectile, target, now) {
                 emit_projectile_event(
                     ctx,
@@ -1015,17 +1029,20 @@ fn tick_boomerang_projectile_instance(
         remaining_dt -= outbound_dt;
         if projectile.traveled >= projectile.boomerang_outbound_distance - 0.001 {
             projectile.speed = 0.0;
+            let apex_x = projectile.pos_x;
+            let apex_y = projectile.pos_y;
+            let apex_z = projectile.pos_z;
             if resolve_boomerang_enemy_contacts_on_segment(
                 ctx,
                 now,
-                &projectile,
+                &mut projectile,
                 definition,
                 actor_snapshots,
                 players,
                 candidate_indices,
-                projectile.pos_x,
-                projectile.pos_y,
-                projectile.pos_z,
+                apex_x,
+                apex_y,
+                apex_z,
                 0.0,
                 metrics,
             ) {
@@ -1793,7 +1810,7 @@ fn advance_boomerang_segment(
 fn resolve_boomerang_enemy_contacts_on_segment(
     ctx: &ReducerContext,
     now: Timestamp,
-    projectile: &ActiveCombatProjectile,
+    projectile: &mut ActiveCombatProjectile,
     definition: &SpellRuntimeDefinition,
     actor_snapshots: &CombatActorSnapshotSet,
     players: &[CombatActorSnapshot],
@@ -1900,6 +1917,18 @@ fn resolve_boomerang_enemy_contacts_on_segment(
         let hit_x = start_x + projectile.dir_x * t;
         let hit_y = start_y + projectile.dir_y * t;
         let hit_z = start_z + projectile.dir_z * t;
+        if try_reflect_counterstrike_projectile(
+            ctx,
+            projectile,
+            target.player_id,
+            hit_x,
+            hit_y,
+            hit_z,
+            now,
+            metrics,
+        ) {
+            return true;
+        }
         if projectile_targeted_hit_misses(ctx, projectile, target.player_id, now) {
             emit_projectile_event_with_metadata(
                 ctx,
@@ -2279,6 +2308,24 @@ fn advance_perforating_weapon_projectile(
         );
 
         metrics.contacts_resolved = metrics.contacts_resolved.saturating_add(1);
+        if try_reflect_counterstrike_projectile(
+            ctx,
+            projectile,
+            target.player_id,
+            point_x,
+            point_y,
+            point_z,
+            now,
+            metrics,
+        ) {
+            return ProjectileAdvance {
+                impacted: false,
+                end_x: projectile.pos_x,
+                end_y: projectile.pos_y,
+                end_z: projectile.pos_z,
+                impact_target: None,
+            };
+        }
         if projectile_targeted_hit_misses(ctx, projectile, target.player_id, now) {
             emit_projectile_event_with_metadata(
                 ctx,
@@ -2735,6 +2782,106 @@ fn projectile_targeted_hit_misses(
         )
 }
 
+#[allow(clippy::too_many_arguments)]
+fn try_reflect_counterstrike_projectile(
+    ctx: &ReducerContext,
+    projectile: &mut ActiveCombatProjectile,
+    defender: Identity,
+    point_x: f32,
+    point_y: f32,
+    point_z: f32,
+    now: Timestamp,
+    metrics: &mut ProjectileTickMetricsFrame,
+) -> bool {
+    if projectile.caster == Identity::ZERO
+        || projectile.caster == defender
+        || !can_harm(ctx, projectile.caster, defender)
+    {
+        return false;
+    }
+    let original_caster = projectile.caster;
+    if !consume_counterstrike(ctx, defender, now) {
+        return false;
+    }
+    let Some(return_target) = actor_snapshot_for(ctx, original_caster).filter(|actor| actor.alive)
+    else {
+        finish_projectile_without_event(ctx, projectile);
+        return true;
+    };
+
+    let target_y = return_target.pos_y + return_target.hit_height.max(0.0) * 0.5;
+    let Some((dir_x, dir_y, dir_z)) = normalize_vec3(
+        return_target.pos_x - point_x,
+        target_y - point_y,
+        return_target.pos_z - point_z,
+    ) else {
+        finish_projectile_without_event(ctx, projectile);
+        return true;
+    };
+
+    projectile.caster = defender;
+    projectile.intended_target = original_caster;
+    projectile.motion_kind = "LINEAR".to_string();
+    projectile.origin_x = point_x;
+    projectile.origin_y = point_y;
+    projectile.origin_z = point_z;
+    projectile.pos_x = point_x;
+    projectile.pos_y = point_y;
+    projectile.pos_z = point_z;
+    projectile.dir_x = dir_x;
+    projectile.dir_y = dir_y;
+    projectile.dir_z = dir_z;
+    projectile.speed = projectile
+        .speed
+        .max(projectile.boomerang_return_speed)
+        .max(0.01);
+    projectile.traveled = 0.0;
+    projectile.age = 0.0;
+    projectile.update_accum = 0.0;
+    projectile.boomerang_returning = false;
+    projectile.grants_primary_resource_on_hit = false;
+    projectile.curve_control_x = 0.0;
+    projectile.curve_control_y = 0.0;
+    projectile.curve_control_z = 0.0;
+    projectile.curve_end_x = 0.0;
+    projectile.curve_end_y = 0.0;
+    projectile.curve_end_z = 0.0;
+    projectile.created_at = now;
+
+    let state_keys: Vec<String> = ctx
+        .db
+        .active_combat_projectile_target_state()
+        .projectile_instance_id()
+        .filter(&projectile.projectile_instance_id)
+        .map(|state| state.key)
+        .collect();
+    for key in state_keys {
+        ctx.db
+            .active_combat_projectile_target_state()
+            .key()
+            .delete(key);
+    }
+
+    ctx.db
+        .active_combat_projectile()
+        .projectile_instance_id()
+        .update(projectile.clone());
+    metrics.rows_updated = metrics.rows_updated.saturating_add(1);
+    emit_projectile_event(
+        ctx,
+        projectile,
+        COMBAT_EVENT_UPDATE,
+        None,
+        point_x,
+        point_y,
+        point_z,
+        0,
+        now,
+        metrics,
+    );
+    true
+}
+
 fn queue_spell_projectile_hit_effects(
     ctx: &ReducerContext,
     projectile: &ActiveCombatProjectile,
@@ -2879,7 +3026,7 @@ fn queue_weapon_projectile_hit_effects(
     }
 
     if projectile.grants_primary_resource_on_hit {
-        grant_primary_resource_for_melee_hit(ctx, projectile.caster, now);
+        grant_primary_resource_for_auto_attack_hit(ctx, projectile.caster, now);
     }
 }
 
