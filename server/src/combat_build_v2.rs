@@ -1851,9 +1851,20 @@ mod tests {
     }
 
     #[test]
-    fn dagger_form_rename_and_ownership_moves_are_canonical() {
+    fn dagger_form_renames_and_ownership_moves_are_canonical() {
         let catalog = catalog();
         let specializations = catalog.specialization_definitions();
+        let duelist = specializations
+            .iter()
+            .find(|row| row.specialization_id == "DAGGERS_BLADEDANCER")
+            .expect("DAGGERS_BLADEDANCER specialization should exist");
+        assert_eq!(duelist.display_name, "Duelist");
+        assert!(
+            specializations
+                .iter()
+                .all(|row| row.display_name != "Bladedancer"),
+            "the retired Bladedancer display name must not remain in the catalog"
+        );
         let heartseeker = specializations
             .iter()
             .find(|row| row.specialization_id == "DAGGERS_EXECUTIONER")
@@ -1866,11 +1877,24 @@ mod tests {
                 .all(|row| row.display_name != "Executioner"),
             "the retired Executioner display name must not remain in the catalog"
         );
+        let dreadfang = specializations
+            .iter()
+            .find(|row| row.specialization_id == "DAGGERS_SHADOW")
+            .expect("DAGGERS_SHADOW specialization should exist");
+        assert_eq!(dreadfang.display_name, "Dreadfang");
+        assert!(
+            specializations
+                .iter()
+                .all(|row| row.display_name != "Shadow"),
+            "the retired Shadow form display name must not remain in the catalog"
+        );
 
         let expected_owners = [
             ("DAGGER_COUP_DE_GRACE", "DAGGERS_SHADOW"),
             ("DAGGER_FIND_WEAKNESS", "DAGGERS_EXECUTIONER"),
             ("DAGGER_DISARM", "DAGGERS_BLADEDANCER"),
+            ("DAGGER_RESTLESS_BLADES", "DAGGERS_BLADEDANCER"),
+            ("PALADIN_BLADE_BARRIER", "DAGGERS_BLADEDANCER"),
             ("DAGGER_TEMPLE_STRIKE", "DAGGERS_EXECUTIONER"),
             ("DAGGER_GOUGE", "DAGGERS_EXECUTIONER"),
         ];
@@ -2549,7 +2573,7 @@ mod tests {
     fn canonical_catalog_is_exhaustive_and_staff_has_no_techniques() {
         let catalog = catalog();
         assert_eq!(catalog.specializations.len(), 18);
-        assert_eq!(catalog.features.len(), 214);
+        assert_eq!(catalog.features.len(), 215);
         assert_eq!(catalog.intrinsic_ability_ids.len(), 5);
         assert_eq!(catalog.removed_player_ability_ids.len(), 4);
         assert_eq!(catalog.traits.len(), 1);
@@ -2560,6 +2584,14 @@ mod tests {
                 .filter(|row| row.loadout_kind == CombatFeatureLoadoutKind::Technique)
                 .count(),
             84
+        );
+        assert_eq!(
+            catalog
+                .features
+                .values()
+                .filter(|row| row.loadout_kind == CombatFeatureLoadoutKind::Perk)
+                .count(),
+            27
         );
         assert!(catalog.features.values().all(|feature| {
             if feature.loadout_kind != CombatFeatureLoadoutKind::Technique {

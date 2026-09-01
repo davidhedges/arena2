@@ -13,10 +13,11 @@ use crate::combat::scene_query::{
     terrain_surface_y_for_caster, SceneHit, SceneHitKind,
 };
 use crate::combat::{
-    clear_projectile_return_heal, consume_counterstrike, hostile_targeted_ability_misses,
-    mark_projectile_returned_for_heal, queue_effects, timestamp_to_micros, ActiveCombatProjectile,
-    ActiveCombatProjectileTargetState, AttackAim, CombatEvent, CombatProjectileTickMetrics,
-    DamageDelivery, EffectPacket, ProjectilePresentationEvent, StatusPolarity, COMBAT_EVENT_BLOCK,
+    clear_projectile_return_heal, consume_counterstrike, has_active_status,
+    hostile_targeted_ability_misses, mark_projectile_returned_for_heal, queue_effects,
+    timestamp_to_micros, ActiveCombatProjectile, ActiveCombatProjectileTargetState, AttackAim,
+    CombatEvent, CombatProjectileTickMetrics, DamageDelivery, EffectPacket,
+    ProjectilePresentationEvent, StatusEffectKind, StatusPolarity, COMBAT_EVENT_BLOCK,
     COMBAT_EVENT_CONTACT, COMBAT_EVENT_EVADE, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT,
     COMBAT_EVENT_MISS, COMBAT_EVENT_PARRY, COMBAT_EVENT_UPDATE, COMBAT_METADATA_NONE,
     COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_PROJECTILE,
@@ -309,6 +310,15 @@ fn tick_projectile_instance(
             metrics,
         )
     };
+    if ctx
+        .db
+        .active_combat_projectile()
+        .projectile_instance_id()
+        .find(projectile.projectile_instance_id.clone())
+        .is_none()
+    {
+        return;
+    }
     if advance.impacted {
         if let Some(target) = advance.impact_target {
             let Some(target_state) = players
@@ -319,6 +329,18 @@ fn tick_projectile_instance(
                 fizzle_projectile_and_finish(ctx, now, &projectile, metrics);
                 return;
             };
+            if blade_barrier_blocks_projectile(
+                ctx,
+                &projectile,
+                target,
+                advance.end_x,
+                advance.end_y,
+                advance.end_z,
+                now,
+                metrics,
+            ) {
+                return;
+            }
             if try_reflect_counterstrike_projectile(
                 ctx,
                 &mut projectile,
@@ -831,6 +853,20 @@ fn resolve_orbit_projectile_contacts(
             state.is_overlapping = true;
             upsert_projectile_target_state(ctx, state);
             continue;
+        }
+
+        if blade_barrier_blocks_projectile(
+            ctx,
+            projectile,
+            target.player_id,
+            projectile.pos_x,
+            projectile.pos_y,
+            projectile.pos_z,
+            now,
+            metrics,
+        ) {
+            metrics.contacts_resolved = metrics.contacts_resolved.saturating_add(1);
+            return true;
         }
 
         if projectile_targeted_hit_misses(ctx, projectile, target.player_id, now) {
@@ -1917,6 +1953,19 @@ fn resolve_boomerang_enemy_contacts_on_segment(
         let hit_x = start_x + projectile.dir_x * t;
         let hit_y = start_y + projectile.dir_y * t;
         let hit_z = start_z + projectile.dir_z * t;
+        if blade_barrier_blocks_projectile(
+            ctx,
+            projectile,
+            target.player_id,
+            hit_x,
+            hit_y,
+            hit_z,
+            now,
+            metrics,
+        ) {
+            metrics.contacts_resolved = metrics.contacts_resolved.saturating_add(1);
+            return true;
+        }
         if try_reflect_counterstrike_projectile(
             ctx,
             projectile,
@@ -2308,6 +2357,24 @@ fn advance_perforating_weapon_projectile(
         );
 
         metrics.contacts_resolved = metrics.contacts_resolved.saturating_add(1);
+        if blade_barrier_blocks_projectile(
+            ctx,
+            projectile,
+            target.player_id,
+            point_x,
+            point_y,
+            point_z,
+            now,
+            metrics,
+        ) {
+            return ProjectileAdvance {
+                impacted: false,
+                end_x: point_x,
+                end_y: point_y,
+                end_z: point_z,
+                impact_target: None,
+            };
+        }
         if try_reflect_counterstrike_projectile(
             ctx,
             projectile,
@@ -2780,6 +2847,48 @@ fn projectile_targeted_hit_misses(
             AttackAim::Targeted,
             now,
         )
+}
+
+fn blade_barrier_blocks_projectile(
+    ctx: &ReducerContext,
+    projectile: &ActiveCombatProjectile,
+    target: Identity,
+    point_x: f32,
+    point_y: f32,
+    point_z: f32,
+    now: Timestamp,
+    metrics: &mut ProjectileTickMetricsFrame,
+) -> bool {
+    let barrier_active = projectile.caster != Identity::ZERO
+        && target != Identity::ZERO
+        && projectile.caster != target
+        && can_harm(ctx, projectile.caster, target)
+        && has_active_status(ctx, target, StatusEffectKind::ProjectileBarrier, now);
+    if !blade_barrier_intercepts_active_projectile(projectile, barrier_active) {
+        return false;
+    }
+
+    emit_projectile_event(
+        ctx,
+        projectile,
+        COMBAT_EVENT_BLOCK,
+        Some(target),
+        point_x,
+        point_y,
+        point_z,
+        0,
+        now,
+        metrics,
+    );
+    finish_projectile_without_event(ctx, projectile);
+    true
+}
+
+fn blade_barrier_intercepts_active_projectile(
+    projectile: &ActiveCombatProjectile,
+    barrier_active: bool,
+) -> bool {
+    barrier_active && projectile.motion_kind != PROJECTILE_MOTION_TRAVELING_AREA
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3852,6 +3961,27 @@ mod tests {
         let electrocute = spell_definition_by_str("ELECTROCUTE").expect("Electrocute should exist");
         assert_eq!(electrocute.behavior, SpellBehavior::Channel);
         assert!(!spell_definition_drives_active_projectile(electrocute));
+    }
+
+    #[test]
+    fn blade_barrier_intercepts_projectiles_but_not_traveling_area_spells() {
+        let caster_id = test_identity(1);
+        let mut projectile = test_projectile(caster_id);
+
+        assert!(!blade_barrier_intercepts_active_projectile(
+            &projectile,
+            false
+        ));
+        assert!(blade_barrier_intercepts_active_projectile(
+            &projectile,
+            true
+        ));
+
+        projectile.motion_kind = PROJECTILE_MOTION_TRAVELING_AREA.to_string();
+        assert!(!blade_barrier_intercepts_active_projectile(
+            &projectile,
+            true
+        ));
     }
 
     #[test]

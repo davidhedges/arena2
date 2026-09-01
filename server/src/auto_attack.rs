@@ -19,13 +19,14 @@ use crate::melee::{
     get_melee_definition_for_authored, melee_range_bonus, perform_intrinsic_auto_attack_for,
     perform_intrinsic_auto_attack_replacement_for,
     perform_intrinsic_auto_attack_sequence_strike_for, perform_intrinsic_flurry_auto_attack_for,
-    scaled_auto_attack_cadence_ms, MeleeAttackDispatch,
+    perform_melee_ability_proc_for, scaled_auto_attack_cadence_ms, MeleeAttackDispatch,
 };
 use crate::movement_actions::MovementActionKind;
 use crate::player::DEFAULT_COMBAT_PROFILE;
 use crate::progression::{
     active_selectable_ability_for_ability_id, derived_combat_discipline_id_for_owner,
-    movement_delivery_for_action_id, resolved_auto_attack_mode_for_owner, AutoAttackCatalog,
+    movement_delivery_for_action_id, resolved_auto_attack_mode_for_owner,
+    restless_blades_auto_attack_proc_for_owner, AutoAttackCatalog,
     AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
 };
 use crate::relations::{can_harm, combat_relation};
@@ -787,6 +788,16 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
                     now,
                 );
                 if starts_authored_sequence {
+                    trigger_restless_blades_proc(
+                        ctx,
+                        &row,
+                        target_id.as_str(),
+                        caster_phys.pos_x,
+                        caster_phys.pos_y,
+                        caster_phys.pos_z,
+                        caster_phys.yaw,
+                        now,
+                    );
                     if let Err(error) = schedule_auto_attack_sequence_step(ctx, row.owner, 1, now) {
                         log::info!(
                             "[AUTO_ATTACK] owner={} target={} clear reason=invalid_sequence strike={} error={}",
@@ -819,6 +830,73 @@ pub(crate) fn tick_auto_attacks(ctx: &ReducerContext, now: Timestamp) {
                 );
                 clear_auto_attack_for_owner(ctx, row.owner);
             }
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn trigger_restless_blades_proc(
+    ctx: &ReducerContext,
+    row: &AutoAttackState,
+    target_id: &str,
+    cast_pos_x: f32,
+    cast_pos_y: f32,
+    cast_pos_z: f32,
+    cast_yaw: f32,
+    now: Timestamp,
+) {
+    let Some(proc_runtime) = restless_blades_auto_attack_proc_for_owner(ctx, row.owner) else {
+        return;
+    };
+    if !row
+        .combat_discipline_id
+        .eq_ignore_ascii_case(proc_runtime.combat_discipline_id.as_str())
+    {
+        return;
+    }
+
+    let roll = stable_restless_blades_roll(row.owner, row.target, now);
+    if !auto_attack_proc_roll_succeeds(proc_runtime.proc_chance, roll) {
+        return;
+    }
+
+    match perform_melee_ability_proc_for(
+        ctx,
+        row.owner,
+        proc_runtime.combat_discipline_id.as_str(),
+        proc_runtime.action_id.as_str(),
+        target_id,
+        cast_pos_x,
+        cast_pos_y,
+        cast_pos_z,
+        cast_yaw,
+    ) {
+        Ok(MeleeAttackDispatch::Started) => {
+            log::info!(
+                "[RESTLESS_BLADES] owner={} target={} action={} chance={:.4} roll={:.4} result=started",
+                short_identity(row.owner),
+                short_identity(row.target),
+                proc_runtime.action_id,
+                proc_runtime.proc_chance,
+                roll
+            );
+        }
+        Ok(MeleeAttackDispatch::Queued | MeleeAttackDispatch::Rejected(_)) => {
+            log::info!(
+                "[RESTLESS_BLADES] owner={} target={} action={} result=rejected",
+                short_identity(row.owner),
+                short_identity(row.target),
+                proc_runtime.action_id
+            );
+        }
+        Err(error) => {
+            log::info!(
+                "[RESTLESS_BLADES] owner={} target={} action={} result=error error={}",
+                short_identity(row.owner),
+                short_identity(row.target),
+                proc_runtime.action_id,
+                error
+            );
         }
     }
 }
@@ -920,6 +998,22 @@ fn flurry_roll_succeeds(proc_chance: f32, roll: f32) -> bool {
     proc_chance.is_finite()
         && roll.is_finite()
         && roll.clamp(0.0, 1.0) < proc_chance.clamp(0.0, FLURRY_MAX_PROC_CHANCE)
+}
+
+fn auto_attack_proc_roll_succeeds(proc_chance: f32, roll: f32) -> bool {
+    proc_chance.is_finite()
+        && roll.is_finite()
+        && roll.clamp(0.0, 1.0) < proc_chance.clamp(0.0, 1.0)
+}
+
+fn stable_restless_blades_roll(owner: Identity, target: Identity, trigger_at: Timestamp) -> f32 {
+    let mut hash = 0xcbf29ce484222325_u64;
+    hash = flurry_hash_update(hash, b"RESTLESS_BLADES_PROC");
+    hash = flurry_hash_update(hash, &owner.to_byte_array());
+    hash = flurry_hash_update(hash, &target.to_byte_array());
+    hash = flurry_hash_update(hash, &trigger_at.to_micros_since_unix_epoch().to_le_bytes());
+    let bucket = (hash & 0x00ff_ffff) as f32;
+    bucket / 0x0100_0000_u32 as f32
 }
 
 fn stable_flurry_roll(
@@ -1396,9 +1490,9 @@ fn existing_auto_attack_matches_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        existing_auto_attack_matches_request, flurry_proc_chance, flurry_roll_succeeds,
-        preserved_cadence_readiness, should_reset_cadence_for_voluntary_move, AutoAttackState,
-        ResolvedAutoAttackRuntime,
+        auto_attack_proc_roll_succeeds, existing_auto_attack_matches_request, flurry_proc_chance,
+        flurry_roll_succeeds, preserved_cadence_readiness, should_reset_cadence_for_voluntary_move,
+        stable_restless_blades_roll, AutoAttackState, ResolvedAutoAttackRuntime,
     };
     use crate::progression::{
         AUTO_ATTACK_MOVEMENT_ALLOW_MOVING, AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
@@ -1462,6 +1556,30 @@ mod tests {
             .count();
 
         assert_eq!(proc_count, 2);
+    }
+
+    #[test]
+    fn restless_blades_uses_a_flat_ten_percent_proc_boundary() {
+        assert!(auto_attack_proc_roll_succeeds(0.10, 0.099_999));
+        assert!(!auto_attack_proc_roll_succeeds(0.10, 0.10));
+        assert!(!auto_attack_proc_roll_succeeds(0.10, 0.90));
+        assert!(!auto_attack_proc_roll_succeeds(f32::NAN, 0.01));
+    }
+
+    #[test]
+    fn restless_blades_roll_is_deterministic_for_one_auto_attack() {
+        let owner = test_identity(1);
+        let target = test_identity(2);
+        let trigger_at = Timestamp::UNIX_EPOCH + Duration::from_millis(2_000);
+
+        assert_eq!(
+            stable_restless_blades_roll(owner, target, trigger_at),
+            stable_restless_blades_roll(owner, target, trigger_at)
+        );
+        assert_ne!(
+            stable_restless_blades_roll(owner, target, trigger_at),
+            stable_restless_blades_roll(owner, target, trigger_at + Duration::from_millis(2_000))
+        );
     }
 
     #[test]

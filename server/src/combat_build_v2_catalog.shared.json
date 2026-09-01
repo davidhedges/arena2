@@ -124,20 +124,23 @@
   },
   "schema_version": 2,
   "source_contract": "docs/combat-build-v2-phase-0-contract-2026-08-29.json",
-  "source_contract_sha256": "81f208dda906387c250055e96f616332b92f921432ad541a1f2d3ffa9cc24f0e",
+  "source_contract_sha256": "64da878df6b3d783c4933aae21ea6064c74cc04307e129935a351e9f44eb753d",
   "specializations": [
     {
       "combat_discipline_id": "DAGGERS",
-      "display_name": "Bladedancer",
+      "display_name": "Duelist",
       "perk_ability_ids": [
         "SUBTLETY_FLEET_FOOTED",
         "DAGGER_FIGHTING_SPIRIT",
-        "DAGGER_CRESCENDO"
+        "DAGGER_CRESCENDO",
+        "DAGGER_RESTLESS_BLADES"
       ],
       "sort_order": 10,
       "specialization_id": "DAGGERS_BLADEDANCER",
       "specialization_kind": "FORM",
-      "spell_ability_ids": [],
+      "spell_ability_ids": [
+        "PALADIN_BLADE_BARRIER"
+      ],
       "technique_ability_ids": [
         "DAGGER_QUICK_CUT",
         "DAGGER_SLICE",
@@ -184,7 +187,7 @@
     },
     {
       "combat_discipline_id": "DAGGERS",
-      "display_name": "Shadow",
+      "display_name": "Dreadfang",
       "perk_ability_ids": [
         "SUBTLETY_OPPORTUNIST",
         "SUBTLETY_TACTICAL_ADVANTAGE",
@@ -325,8 +328,7 @@
         "PALADIN_ABSOLUTION",
         "PALADIN_FERVOR",
         "PALADIN_MANA_FONT",
-        "PALADIN_STAMINA_FONT",
-        "PALADIN_BLADE_BARRIER"
+        "PALADIN_STAMINA_FONT"
       ],
       "technique_ability_ids": []
     },

@@ -437,6 +437,7 @@ namespace Arena.Editor
                 || slot == SpellVfxSlot.CharacterFx
                 || slot == SpellVfxSlot.SelfFlash
                 || slot == SpellVfxSlot.TargetAttachment
+                || slot == SpellVfxSlot.StatusAttachment
                 || (archetype == SpellVfxArchetype.Emanation
                     && (slot == SpellVfxSlot.PersistentField
                         || slot == SpellVfxSlot.PersistentCharacterFx))
@@ -825,6 +826,7 @@ namespace Arena.Editor
                 SpellVfxSlot.CharacterFx => "character_fx",
                 SpellVfxSlot.PersistentField => "persistent_field",
                 SpellVfxSlot.TargetAttachment => "target_attachment",
+                SpellVfxSlot.StatusAttachment => "status_attachment",
                 SpellVfxSlot.PersistentCharacterFx => "persistent_character_fx",
                 SpellVfxSlot.MaxStackCharacterFx => "max_stack_character_fx",
                 _ => slot.ToString().ToLowerInvariant(),
@@ -923,6 +925,7 @@ namespace Arena.Editor
                 case "character_fx": slot = SpellVfxSlot.CharacterFx; return true;
                 case "persistent_field": slot = SpellVfxSlot.PersistentField; return true;
                 case "target_attachment": slot = SpellVfxSlot.TargetAttachment; return true;
+                case "status_attachment": slot = SpellVfxSlot.StatusAttachment; return true;
                 case "persistent_character_fx": slot = SpellVfxSlot.PersistentCharacterFx; return true;
                 case "max_stack_character_fx": slot = SpellVfxSlot.MaxStackCharacterFx; return true;
                 default:
@@ -954,6 +957,14 @@ namespace Arena.Editor
             AnchorClass anchorClass = ClassifyAnchor(Normalize(cue.anchor));
             bool attached = string.Equals(role, SpellVfxGenerator.RoleAttached, System.StringComparison.Ordinal);
             bool oneShot = string.Equals(role, SpellVfxGenerator.RoleOneShot, System.StringComparison.Ordinal);
+
+            if (attached
+                && string.Equals(Normalize(cue.anchor), SpellVfxGenerator.AnchorTarget, System.StringComparison.Ordinal)
+                && string.Equals(trigger, SpellVfxGenerator.TriggerStatusActive, System.StringComparison.Ordinal))
+            {
+                slot = SpellVfxSlot.StatusAttachment;
+                return true;
+            }
 
             if (attached
                 && string.Equals(Normalize(cue.anchor), SpellVfxGenerator.AnchorTargetBack, System.StringComparison.Ordinal)

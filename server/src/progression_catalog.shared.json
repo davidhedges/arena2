@@ -6507,7 +6507,7 @@
       "ability_id": "PALADIN_BLADE_BARRIER",
       "actor_scope": "PLAYER",
       "selection_kind": "ACTIVE",
-      "combat_discipline_id": "SWORD_AND_SHIELD",
+      "combat_discipline_id": "DAGGERS",
       "spell_school_id": null,
       "action_id": "BLADE_BARRIER",
       "display_name": "Blade Barrier",
@@ -6523,22 +6523,24 @@
         "cast_time_ms": 0,
         "cast_mobility": "MOBILE",
         "targeting": "TARGET",
-        "target_audience": "ANY",
+        "target_audience": "PARTY_OR_SELF",
         "requires_target": true,
         "requires_target_los": true,
         "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
         "delivery": {
-          "kind": "PERSISTENT_AREA",
-          "max_distance": 18,
-          "radius": 2,
-          "pulse_interval_ms": 1000,
+          "kind": "APPLY_STATUS",
           "duration_ms": 7500,
-          "damage": 18,
-          "damage_type": "HOLY",
-          "effect_target_audience": "HOSTILE",
-          "block_behavior": "UNBLOCKABLE",
-          "impact_effects": []
+          "max_distance": 18,
+          "damage_type": "PHYSICAL",
+          "status_stack_group": "BLADE_BARRIER",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "PROJECTILE_BARRIER",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
         }
       }
     },
@@ -8049,8 +8051,8 @@
       "selection_kind": "PASSIVE",
       "combat_discipline_id": "DAGGERS",
       "spell_school_id": null,
-      "action_id": "CRESCENDO",
-      "display_name": "Crescendo",
+      "action_id": "CADENCE",
+      "display_name": "Cadence",
       "resource_kind": "STAMINA",
       "ability_tags": [
         "PASSIVE"
@@ -8058,6 +8060,25 @@
       "sort_order": 75,
       "gameplay": {
         "kind": "PASSIVE"
+      }
+    },
+    {
+      "ability_id": "DAGGER_RESTLESS_BLADES",
+      "actor_scope": "PLAYER",
+      "selection_kind": "PASSIVE",
+      "combat_discipline_id": "DAGGERS",
+      "spell_school_id": null,
+      "action_id": "RESTLESS_BLADES",
+      "display_name": "Restless Blades",
+      "resource_kind": "STAMINA",
+      "ability_tags": [
+        "PASSIVE"
+      ],
+      "sort_order": 76,
+      "gameplay": {
+        "kind": "PASSIVE",
+        "auto_attack_proc_action_id": "DAGGER_QUICK_CUT",
+        "auto_attack_proc_chance": 0.1
       }
     },
     {
@@ -14649,7 +14670,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "PALADIN_BLADE_BARRIER",
       "display_name": "Blade Barrier",
-      "description": "Surrounds a target with holy blades that damage nearby enemies for 7.5 seconds.",
+      "description": "Surround an allied player with blades for 7.5 seconds, blocking incoming projectiles. Does not block melee attacks, beams, or area effects.",
       "sort_order": 166
     },
     {
@@ -14998,16 +15019,23 @@
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_CRESCENDO",
-      "display_name": "Crescendo",
+      "display_name": "Cadence",
       "description": "Passive: every fifth attack or spellcast deals 30% bonus damage. Auto attacks do not advance the count and cannot receive the bonus.",
       "sort_order": 253
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_RESTLESS_BLADES",
+      "display_name": "Restless Blades",
+      "description": "Passive: Dagger auto attacks have a 10% chance to trigger a free Quick Cut that ignores resource and cooldown costs. The triggered Quick Cut advances Cadence.",
+      "sort_order": 254
     },
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_QUICKENING_STRIKE",
       "display_name": "Quickening Strike",
       "description": "Strike for 24 physical damage and gain 10% attack speed for 10 seconds. Successful hits add a stack and refresh the duration, up to 3 stacks (30%). Costs 20 stamina.",
-      "sort_order": 254
+      "sort_order": 255
     },
     {
       "presentation_kind": "ABILITY",
@@ -15567,14 +15595,14 @@
     {
       "owner_kind": "ABILITY",
       "owner_id": "PALADIN_BLADE_BARRIER",
-      "slot": "persistent_field",
-      "trigger": "SPELL_IMPACT",
+      "slot": "status_attachment",
+      "trigger": "STATUS_ACTIVE",
       "anchor": "TARGET",
       "vfx_id": "VFX_BLADE_BARRIER_AREA_01",
       "attach_mode": "FOLLOW_ANCHOR",
       "vfx_role": "ATTACHED",
-      "lifecycle": "DURATION",
-      "duration_ms": 7500,
+      "lifecycle": "UNTIL_STATUS_END",
+      "duration_ms": 0,
       "sort_order": 16
     },
     {

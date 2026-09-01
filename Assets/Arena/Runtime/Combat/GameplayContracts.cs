@@ -61,6 +61,7 @@ namespace Arena.Combat
         public const string PlayerInput = "player_input";
         public const string QueuedFollowup = "queued_followup";
         public const string AutoAttack = "auto_attack";
+        public const string Proc = "proc";
         public const string Practice = "practice";
         public const string NpcMelee = "NPC_MELEE";
 
@@ -84,6 +85,7 @@ namespace Arena.Combat
         public const string None = "";
         public const string ConsumedMeleeModifier = "CONSUMED_MELEE_MODIFIER";
         public const string FlurryProc = "FLURRY_PROC";
+        public const string RestlessBladesProc = "RESTLESS_BLADES_PROC";
     }
 
     public static class CombatModeIds

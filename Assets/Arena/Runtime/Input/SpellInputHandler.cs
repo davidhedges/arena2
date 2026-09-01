@@ -606,6 +606,13 @@ namespace Arena.Input
         {
             ICombatTargetEntity? resolvedTarget = TargetSelector.Instance?.SelectedTarget;
             string targetId = resolvedTarget?.TargetIdentity.ToString() ?? "";
+            if (WireIdentifier.Normalize(spellId) == "BLADE_BARRIER"
+                && resolvedTarget is not PlayerEntity)
+            {
+                resolvedTarget = null;
+                targetId = "";
+                ActionBarTrace.Trace("spell dispatch ignored non-player Blade Barrier target");
+            }
             if (targetingDef.RequiresTarget
                 && PartyRelationship.TargetAudienceAllowsSelf(targetingDef.TargetAudience)
                 && (resolvedTarget == null

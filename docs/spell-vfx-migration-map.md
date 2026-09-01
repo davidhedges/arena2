@@ -23,7 +23,7 @@ does **not** mean the *visuals* are right (a drifted spell can be wiring-clean).
 | bucket | count | what it needs |
 |---|---|---|
 | **Clean — zero-diff-ready** | 8 | palette-structure decision (which `vfx_id`s are theme-generic vs per-spell signature); then the 1:1 writer (done) materializes them |
-| **Generator adds a slot** | 8 | **✅ all writable (2026-07-08):** write gate relaxed to insert generator-only slots + signatures/palette encoded for all 8. Blade Barrier was subsequently reauthored as a `TargetField` with a persistent target-attached slot (2026-07-20). |
+| **Generator adds a slot** | 8 | **✅ all writable (2026-07-08):** write gate relaxed to insert generator-only slots + signatures/palette encoded for all 8. Blade Barrier now uses a reconstructible status-attached visual for its projectile shield. |
 | **Catalog-only slot** | 6 | a slot-inference / archetype nuance (deferred SelfNova burst vs impact) to resolve |
 | **Wiring diff** | 7 | a real finding to adjudicate (generator rule vs authoring) — some are known/expected |
 | **No cues authored** | 18 | palette + prefab + writer insertion (mostly auras/buffs) |
@@ -61,11 +61,11 @@ materializes slots that resolve. The **one** required slot is `projectile_body` 
 | `SPELL_VAMPIRIC_ORB` | — | **✅ writable (`6cd6bbcd`):** body+hit signatures; no SHADOW cast-glow prefab → pure slot-stamp (no new effect, no republish). |
 | `SPELL_WITHERING_ORB` | — | **✅ writable (`6cd6bbcd`):** as BOOMERANG — slot-stamp only. |
 | `PALADIN_BLESSED_SHIELD` | Impact | **✅ writable (2026-07-08, commit `6ca4f329`):** HOLY palette (`impact=VFX_HOLY_HIT_01`) + body signature encoded; LEFT-hand matches the generator default → body matches, impact inserts via the relaxed gate. cast_glow deferred (no holy hand-glow prefab). Needs `VFX_HOLY_HIT_01` registered → the Orb08 holy hit + republish. |
-| `PALADIN_BLADE_BARRIER` | PersistentField | **✅ replaced (2026-07-20):** `PERSISTENT_AREA` derives the `TargetField` archetype. Its `persistent_field` fires on `SPELL_IMPACT`, follows `TARGET`, and uses `VFX_BLADE_BARRIER_AREA_01` for 7500 ms. The old orbiting projectile body and cast-hand exception are removed. |
+| `PALADIN_BLADE_BARRIER` | StatusAttachment | **✅ retained after the Duelist projectile-shield reauthoring (2026-09-01):** the explicit override now uses `status_attachment` on `STATUS_ACTIVE`, follows the allied `TARGET`, and keeps `VFX_BLADE_BARRIER_AREA_01` alive `UNTIL_STATUS_END`. The spell no longer derives a damaging `PERSISTENT_AREA`, and reconnecting clients reconstruct the visual from the authoritative status row. |
 
 These are the concrete justification for the **writer insertion path**: the 1:1 update writer can't add a
 row that has no authored counterpart. **HOLY VFX theme encoded (commit `6ca4f329`):** generic `impact` +
-BLESSED_SHIELD body signature and Blade Barrier's target-field signature; `cast_glow` omitted until a holy hand-glow prefab exists (so
+BLESSED_SHIELD body signature and Blade Barrier's status-attachment signature; `cast_glow` omitted until a holy hand-glow prefab exists (so
 these "add Impact" now, not CastGlow). The remaining CastGlow-adders (METEOR/FROZEN_SPLINTERS/INSTANT_BEAM/
 VAMPIRIC_ORB/WITHERING_ORB) need their VFX theme's `cast_glow` (FIRE/COLD have one; SHADOW does not yet).
 

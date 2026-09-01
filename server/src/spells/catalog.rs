@@ -4098,6 +4098,7 @@ fn validate_apply_status_kind_for_self(
         | StatusEffectKind::BattleTrance
         | StatusEffectKind::TargetedAbilityAvoidance
         | StatusEffectKind::AllAbilityAvoidance
+        | StatusEffectKind::ProjectileBarrier
         | StatusEffectKind::MirrorImage
         | StatusEffectKind::Gigantism
         | StatusEffectKind::Flurry
@@ -5241,6 +5242,37 @@ mod tests {
         assert_eq!(status.max_stacks, 1);
         assert_eq!(status.stack_policy, StackPolicy::Refresh);
         assert_eq!(status.dispel_types, vec![StatusDispelType::Magic]);
+    }
+
+    #[test]
+    fn blade_barrier_authors_allied_player_projectile_protection() {
+        let definition = spell_definition_by_str("BLADE_BARRIER")
+            .expect("BLADE_BARRIER should derive from the shared catalog");
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("BLADE_BARRIER should apply its projectile barrier status");
+
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::PartyOrSelf);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cooldown, Duration::from_millis(7_500));
+        assert_eq!(definition.duration, 7.5);
+        assert_eq!(definition.max_distance, 18.0);
+        assert_eq!(definition.damage, 0);
+        assert_eq!(definition.damage_type, DamageType::Physical);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert_eq!(
+            definition.status_stack_group.as_deref(),
+            Some("BLADE_BARRIER")
+        );
+        assert_eq!(status.kind, StatusEffectKind::ProjectileBarrier);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+        assert!(definition.secondary.persistent_area.is_none());
     }
 
     #[test]

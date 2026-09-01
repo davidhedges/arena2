@@ -739,14 +739,33 @@
     },
     {
       "ability_id": "DAGGER_CRESCENDO",
-      "action_id": "CRESCENDO",
+      "action_id": "CADENCE",
       "animation_compatibility_profiles": [],
       "bar_domain": "NONE",
       "current_combat_discipline_id": "DAGGERS",
       "current_selection_kind": "PASSIVE",
       "current_spell_school_id": null,
       "cutover_disposition": "RESET_AND_RESEED",
-      "display_name": "Crescendo",
+      "display_name": "Cadence",
+      "gameplay_kind": "PASSIVE",
+      "loadout_kind": "PERK",
+      "presentation_discovery": "EXECUTOR_NATIVE",
+      "proposed_parent_discipline_id": "DAGGERS",
+      "proposed_specialization_id": "DAGGERS_BLADEDANCER",
+      "proposed_specialization_kind": "FORM",
+      "requires_equipped_parent_weapon": false,
+      "review_status": "AUTHORED_POST_PHASE_0"
+    },
+    {
+      "ability_id": "DAGGER_RESTLESS_BLADES",
+      "action_id": "RESTLESS_BLADES",
+      "animation_compatibility_profiles": [],
+      "bar_domain": "NONE",
+      "current_combat_discipline_id": "DAGGERS",
+      "current_selection_kind": "PASSIVE",
+      "current_spell_school_id": null,
+      "cutover_disposition": "RESET_AND_RESEED",
+      "display_name": "Restless Blades",
       "gameplay_kind": "PASSIVE",
       "loadout_kind": "PERK",
       "presentation_discovery": "EXECUTOR_NATIVE",
@@ -1222,7 +1241,7 @@
         "STAFF"
       ],
       "bar_domain": "GLOBAL_SPELL",
-      "current_combat_discipline_id": "SWORD_AND_SHIELD",
+      "current_combat_discipline_id": "DAGGERS",
       "current_selection_kind": "ACTIVE",
       "current_spell_school_id": null,
       "cutover_disposition": "RESET_AND_RESEED",
@@ -1230,8 +1249,8 @@
       "gameplay_kind": "SPELL",
       "loadout_kind": "SPELL",
       "presentation_discovery": "SPELL_EXECUTOR",
-      "proposed_parent_discipline_id": "SWORD_AND_SHIELD",
-      "proposed_specialization_id": "SWORD_AND_SHIELD_TEMPLAR",
+      "proposed_parent_discipline_id": "DAGGERS",
+      "proposed_specialization_id": "DAGGERS_BLADEDANCER",
       "proposed_specialization_kind": "FORM",
       "requires_equipped_parent_weapon": false,
       "review_status": "LOCKED_PHASE_0"
@@ -5320,7 +5339,7 @@
   "specializations": [
     {
       "combat_discipline_id": "DAGGERS",
-      "display_name": "Bladedancer",
+      "display_name": "Duelist",
       "sort_order": 10,
       "specialization_id": "DAGGERS_BLADEDANCER",
       "specialization_kind": "FORM"
@@ -5334,7 +5353,7 @@
     },
     {
       "combat_discipline_id": "DAGGERS",
-      "display_name": "Shadow",
+      "display_name": "Dreadfang",
       "sort_order": 30,
       "specialization_id": "DAGGERS_SHADOW",
       "specialization_kind": "FORM"
@@ -5447,26 +5466,26 @@
   ],
   "status": "LOCKED",
   "summary": {
-    "classified_feature_count": 208,
+    "classified_feature_count": 215,
     "form_count": 12,
     "form_feature_counts": {
       "ARCHER_BOW_MARKSMAN": 4,
       "ARCHER_BOW_SKIRMISHER": 5,
       "ARCHER_BOW_VOLLEY": 5,
-      "DAGGERS_BLADEDANCER": 12,
-      "DAGGERS_EXECUTIONER": 11,
-      "DAGGERS_SHADOW": 11,
+      "DAGGERS_BLADEDANCER": 21,
+      "DAGGERS_EXECUTIONER": 13,
+      "DAGGERS_SHADOW": 8,
       "SWORD_AND_SHIELD_GUARDIAN": 9,
-      "SWORD_AND_SHIELD_TEMPLAR": 6,
+      "SWORD_AND_SHIELD_TEMPLAR": 5,
       "SWORD_AND_SHIELD_VINDICATOR": 10,
       "TWO_HANDED_SWORD_BERSERKER": 11,
       "TWO_HANDED_SWORD_REAVER": 10,
       "TWO_HANDED_SWORD_VANGUARD": 12
     },
     "loadout_kind_counts": {
-      "PERK": 24,
+      "PERK": 27,
       "SPELL": 104,
-      "TECHNIQUE": 80
+      "TECHNIQUE": 84
     },
     "removed_player_ability_count": 4,
     "retained_private_intrinsic_count": 5,

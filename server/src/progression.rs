@@ -112,7 +112,10 @@ const DIVINITY_FAITH_ABILITY_ID: &str = "DIVINITY_FAITH";
 const PRIMAL_ADAPTATION_ABILITY_ID: &str = "PRIMAL_ADAPTATION";
 const PRIMAL_PHOTOSYNTHESIS_ABILITY_ID: &str = "PRIMAL_PHOTOSYNTHESIS";
 const PRIMAL_SLIPSTREAM_ABILITY_ID: &str = "PRIMAL_SLIPSTREAM";
-const PLAYER_PASSIVE_RUNTIME_INVENTORY: [&str; 26] = [
+// Keep the original wire ID stable so existing perk selections survive the rename.
+const DAGGER_CADENCE_ABILITY_ID: &str = "DAGGER_CRESCENDO";
+const DAGGER_RESTLESS_BLADES_ABILITY_ID: &str = "DAGGER_RESTLESS_BLADES";
+const PLAYER_PASSIVE_RUNTIME_INVENTORY: [&str; 27] = [
     PRIMAL_ADAPTATION_ABILITY_ID,
     PRIMAL_PHOTOSYNTHESIS_ABILITY_ID,
     PRIMAL_SLIPSTREAM_ABILITY_ID,
@@ -138,7 +141,8 @@ const PLAYER_PASSIVE_RUNTIME_INVENTORY: [&str; 26] = [
     SUBTLETY_FLEET_FOOTED_ABILITY_ID,
     SUBTLETY_LINGERING_SHADE_ABILITY_ID,
     "DAGGER_FIGHTING_SPIRIT",
-    "DAGGER_CRESCENDO",
+    DAGGER_CADENCE_ABILITY_ID,
+    DAGGER_RESTLESS_BLADES_ABILITY_ID,
 ];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -314,6 +318,10 @@ struct AbilityGameplayDefinition {
     movement_spell_cast_time_buff_duration_ms: u64,
     #[serde(default)]
     critical_spell_proc_action_id: String,
+    #[serde(default)]
+    auto_attack_proc_action_id: String,
+    #[serde(default)]
+    auto_attack_proc_chance: f32,
     #[serde(default)]
     frozen_melee_first_hit_damage_bonus: f32,
     #[serde(default)]
@@ -870,6 +878,13 @@ pub(crate) struct MeleePoisonOnHitRuntime {
     pub poison_max_stacks: u32,
     pub poison_status_stack_group: String,
     pub poison_dispel_types: Vec<StatusDispelType>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct AutoAttackMeleeProcRuntime {
+    pub action_id: String,
+    pub combat_discipline_id: String,
+    pub proc_chance: f32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -3896,6 +3911,9 @@ fn validate_ability_catalog() {
             ability.gameplay.movement_spell_cast_time_buff_duration_ms;
         let critical_spell_proc_action_id =
             normalize_identifier(ability.gameplay.critical_spell_proc_action_id.as_str());
+        let auto_attack_proc_action_id =
+            normalize_identifier(ability.gameplay.auto_attack_proc_action_id.as_str());
+        let auto_attack_proc_chance = ability.gameplay.auto_attack_proc_chance;
         let frozen_melee_first_hit_damage_bonus =
             ability.gameplay.frozen_melee_first_hit_damage_bonus;
         let noncritical_lightning_spell_crit_chance_bonus = ability
@@ -4415,6 +4433,60 @@ fn validate_ability_catalog() {
                         && ability_gameplay_kind(candidate) == "SPELL"
                 }),
                 "ability '{ability_id}' critical_spell_proc_action_id must reference an authored spell action"
+            );
+        }
+        assert!(
+            auto_attack_proc_chance.is_finite() && (0.0..=1.0).contains(&auto_attack_proc_chance),
+            "ability '{ability_id}' must author auto_attack_proc_chance between 0 and 1"
+        );
+        if !auto_attack_proc_action_id.is_empty() || auto_attack_proc_chance > 0.0 {
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "ability '{ability_id}' may only author auto-attack proc tuning for PASSIVE gameplay"
+            );
+            assert!(
+                !auto_attack_proc_action_id.is_empty() && auto_attack_proc_chance > 0.0,
+                "ability '{ability_id}' must author both auto_attack_proc_action_id and a positive auto_attack_proc_chance"
+            );
+            assert!(
+                progression_catalog().abilities.iter().any(|candidate| {
+                    normalize_identifier(candidate.action_id.as_str())
+                        == auto_attack_proc_action_id
+                        && ability_gameplay_kind(candidate) == "MELEE"
+                        && candidate
+                            .combat_discipline_id
+                            .as_deref()
+                            .map(normalize_identifier)
+                            .is_some_and(|candidate_discipline| {
+                                candidate_discipline == combat_discipline_id
+                            })
+                }),
+                "ability '{ability_id}' auto_attack_proc_action_id must reference an authored melee action in the same combat discipline"
+            );
+        }
+        if ability_id == DAGGER_RESTLESS_BLADES_ABILITY_ID {
+            assert_eq!(
+                combat_discipline_id, COMBAT_PROFILE_DAGGERS,
+                "Restless Blades must remain a Daggers passive"
+            );
+            assert_eq!(
+                ability_kind, "PASSIVE",
+                "Restless Blades must remain passive"
+            );
+            assert!(
+                ability
+                    .ability_tags
+                    .iter()
+                    .any(|tag| normalize_identifier(tag.as_str()) == "PASSIVE"),
+                "Restless Blades must carry the PASSIVE ability tag"
+            );
+            assert_eq!(
+                auto_attack_proc_action_id, "DAGGER_QUICK_CUT",
+                "Restless Blades must proc the authored Quick Cut technique"
+            );
+            assert!(
+                (auto_attack_proc_chance - 0.10).abs() < 0.0001,
+                "Restless Blades must have a 10% proc chance"
             );
         }
         if ability_id == RUIN_CHAIN_REACTION_ABILITY_ID {
@@ -6008,6 +6080,41 @@ pub(crate) fn ruin_chain_reaction_spell_for_owner(
         .filter(|action_id| !action_id.is_empty())
 }
 
+pub(crate) fn restless_blades_auto_attack_proc_for_owner(
+    ctx: &ReducerContext,
+    owner: Identity,
+) -> Option<AutoAttackMeleeProcRuntime> {
+    if !player_has_selected_passive_ability(ctx, owner, DAGGER_RESTLESS_BLADES_ABILITY_ID) {
+        return None;
+    }
+
+    progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == DAGGER_RESTLESS_BLADES_ABILITY_ID
+        })
+        .and_then(|ability| {
+            let action_id =
+                normalize_identifier(ability.gameplay.auto_attack_proc_action_id.as_str());
+            let combat_discipline_id = ability
+                .combat_discipline_id
+                .as_deref()
+                .map(normalize_identifier)
+                .unwrap_or_default();
+            let proc_chance = ability.gameplay.auto_attack_proc_chance;
+            (!action_id.is_empty()
+                && !combat_discipline_id.is_empty()
+                && proc_chance.is_finite()
+                && proc_chance > 0.0)
+                .then_some(AutoAttackMeleeProcRuntime {
+                    action_id,
+                    combat_discipline_id,
+                    proc_chance: proc_chance.clamp(0.0, 1.0),
+                })
+        })
+}
+
 pub(crate) fn ruin_potential_crit_chance_per_stack_for_owner(
     ctx: &ReducerContext,
     owner: Identity,
@@ -6182,7 +6289,25 @@ mod tests {
 
         assert_eq!(inventoried.len(), PLAYER_PASSIVE_RUNTIME_INVENTORY.len());
         assert_eq!(authored, inventoried);
-        assert_eq!(authored.len(), 26);
+        assert_eq!(authored.len(), 27);
+    }
+
+    #[test]
+    fn restless_blades_authors_a_ten_percent_quick_cut_proc() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| {
+                normalize_identifier(ability.ability_id.as_str())
+                    == super::DAGGER_RESTLESS_BLADES_ABILITY_ID
+            })
+            .expect("Restless Blades must be authored");
+
+        assert_eq!(
+            ability.gameplay.auto_attack_proc_action_id,
+            "DAGGER_QUICK_CUT"
+        );
+        assert!((ability.gameplay.auto_attack_proc_chance - 0.10).abs() < 0.0001);
     }
 
     #[test]

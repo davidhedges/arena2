@@ -262,7 +262,7 @@ namespace Arena.Tests.Editor
             Assert.That(DeriveArchetype(Facts("AURA", "SELF")), Is.EqualTo("Aura")); // PALADIN_FERVOR
             Assert.That(DeriveArchetype(Facts("EMANATION", "SELF")), Is.EqualTo("Emanation")); // NECROTIC_AURA
             Assert.That(DeriveArchetype(Facts("IMMOLATION", "SELF")), Is.EqualTo("Emanation"));
-            Assert.That(DeriveArchetype(Facts("PERSISTENT_AREA", "TARGET")), Is.EqualTo("TargetField")); // BLADE_BARRIER
+            Assert.That(DeriveArchetype(Facts("PERSISTENT_AREA", "TARGET")), Is.EqualTo("TargetField"));
             Assert.That(DeriveArchetype(Facts("PERSISTENT_AREA", "POINT")), Is.EqualTo("GroundField")); // DEFILED_GROUND
         }
 
@@ -408,6 +408,20 @@ namespace Arena.Tests.Editor
             Assert.That(WireStr(attachment, "VfxRole"), Is.EqualTo("ATTACHED"));
             Assert.That(WireStr(attachment, "Lifecycle"), Is.EqualTo("DURATION"));
             Assert.That(WireStr(attachment, "Duration"), Is.EqualTo("PalettePositive"));
+        }
+
+        [Test]
+        public void StatusAttachment_ReconstructsAndEndsWithTheAuthoritativeStatus()
+        {
+            Assert.That(RequestedSlotNames("TargetHit"), Does.Contain("StatusAttachment"));
+
+            object attachment = Wire("TargetHit", "StatusAttachment", "Instant", false, false);
+            Assert.That(WireStr(attachment, "Trigger"), Is.EqualTo("STATUS_ACTIVE"));
+            Assert.That(WireStr(attachment, "Anchor"), Is.EqualTo("Target"));
+            Assert.That(WireStr(attachment, "AttachMode"), Is.EqualTo("FOLLOW_ANCHOR"));
+            Assert.That(WireStr(attachment, "VfxRole"), Is.EqualTo("ATTACHED"));
+            Assert.That(WireStr(attachment, "Lifecycle"), Is.EqualTo("UNTIL_STATUS_END"));
+            Assert.That(WireStr(attachment, "Duration"), Is.EqualTo("Zero"));
         }
 
         [Test]

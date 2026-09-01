@@ -35,7 +35,7 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect as _;
 use crate::combat::{
-    advance_crescendo_for_action, advance_slipstream_after_movement_ability,
+    advance_cadence_for_action, advance_slipstream_after_movement_ability,
     arm_quickening_after_movement_ability, combat_projectile_definition_for_id,
     has_active_disabling_status, has_active_status, has_active_status_group,
     has_due_pending_effects, hostile_targeted_ability_misses, mark_harmful_combat_action,
@@ -46,8 +46,9 @@ use crate::combat::{
     StatusPolarity, COMBAT_EVENT_AREA_IMPACT, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST,
     COMBAT_EVENT_EVADE, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_MISS,
     COMBAT_EVENT_PARRY, COMBAT_EVENT_RELEASE, COMBAT_METADATA_CONSUMED_MELEE_MODIFIER,
-    COMBAT_METADATA_FLURRY_PROC, COMBAT_METADATA_NONE, COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS,
-    COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE, DAMAGE_SOURCE_KIND_MELEE,
+    COMBAT_METADATA_FLURRY_PROC, COMBAT_METADATA_NONE, COMBAT_METADATA_RESTLESS_BLADES_PROC,
+    COMBAT_SCALAR_MELEE_RELEASE_DELAY_SECONDS, COMBAT_SCALAR_NONE, COMBAT_SEQUENCE_NONE,
+    DAMAGE_SOURCE_KIND_MELEE,
 };
 use crate::defense::{
     begin_evasion_window, clear_interruptible_defense_for_owner, resolve_defensible_combat_hit,
@@ -301,6 +302,7 @@ pub(crate) enum MeleeAttackDispatch {
 enum MeleeAuthorization {
     ActionBar,
     IntrinsicAutoAttack,
+    ProcAbility,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -308,6 +310,7 @@ enum MeleeEventSource {
     PlayerInput,
     QueuedFollowup,
     AutoAttack,
+    Proc,
     Practice,
 }
 
@@ -317,6 +320,7 @@ impl MeleeEventSource {
             Self::PlayerInput => "player_input",
             Self::QueuedFollowup => "queued_followup",
             Self::AutoAttack => "auto_attack",
+            Self::Proc => "proc",
             Self::Practice => "practice",
         }
     }
@@ -330,6 +334,7 @@ struct MeleeExecutionPolicy {
     schedules_auto_attack_on_started_swing: bool,
     uses_shared_cooldowns: bool,
     grants_primary_resource_on_hit: bool,
+    advances_cadence: bool,
 }
 
 impl MeleeExecutionPolicy {
@@ -340,6 +345,7 @@ impl MeleeExecutionPolicy {
         schedules_auto_attack_on_started_swing: true,
         uses_shared_cooldowns: true,
         grants_primary_resource_on_hit: false,
+        advances_cadence: true,
     };
 
     const QUEUED_FOLLOWUP: Self = Self {
@@ -349,6 +355,7 @@ impl MeleeExecutionPolicy {
         schedules_auto_attack_on_started_swing: true,
         uses_shared_cooldowns: true,
         grants_primary_resource_on_hit: false,
+        advances_cadence: false,
     };
 
     const PRACTICE: Self = Self {
@@ -358,6 +365,7 @@ impl MeleeExecutionPolicy {
         schedules_auto_attack_on_started_swing: false,
         uses_shared_cooldowns: true,
         grants_primary_resource_on_hit: false,
+        advances_cadence: false,
     };
 
     const INTRINSIC_AUTO_ATTACK: Self = Self {
@@ -367,6 +375,7 @@ impl MeleeExecutionPolicy {
         schedules_auto_attack_on_started_swing: false,
         uses_shared_cooldowns: false,
         grants_primary_resource_on_hit: true,
+        advances_cadence: false,
     };
 
     const INTRINSIC_FLURRY_AUTO_ATTACK: Self = Self {
@@ -376,6 +385,7 @@ impl MeleeExecutionPolicy {
         schedules_auto_attack_on_started_swing: false,
         uses_shared_cooldowns: false,
         grants_primary_resource_on_hit: true,
+        advances_cadence: false,
     };
 
     const INTRINSIC_AUTO_ATTACK_REPLACEMENT: Self = Self {
@@ -385,6 +395,17 @@ impl MeleeExecutionPolicy {
         schedules_auto_attack_on_started_swing: false,
         uses_shared_cooldowns: true,
         grants_primary_resource_on_hit: false,
+        advances_cadence: false,
+    };
+
+    const PROC_ABILITY: Self = Self {
+        authorization: MeleeAuthorization::ProcAbility,
+        event_source: MeleeEventSource::Proc,
+        presentation_metadata_kind: COMBAT_METADATA_RESTLESS_BLADES_PROC,
+        schedules_auto_attack_on_started_swing: false,
+        uses_shared_cooldowns: false,
+        grants_primary_resource_on_hit: false,
+        advances_cadence: true,
     };
 
     fn source_label(self) -> &'static str {
@@ -3299,6 +3320,55 @@ pub(crate) fn perform_intrinsic_flurry_auto_attack_for(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn perform_melee_ability_proc_for(
+    ctx: &ReducerContext,
+    caster: Identity,
+    combat_profile: &str,
+    action_id: &str,
+    target_id: &str,
+    cast_pos_x: f32,
+    cast_pos_y: f32,
+    cast_pos_z: f32,
+    cast_yaw: f32,
+) -> Result<MeleeAttackDispatch, String> {
+    let authored_action_id = AuthoredActionId::new(action_id);
+    let resolved =
+        resolve_melee_authored_action(combat_profile, &authored_action_id).ok_or_else(|| {
+            format!(
+                "Unknown proc melee strike: {}:{}",
+                combat_profile,
+                authored_action_id.as_str()
+            )
+        })?;
+    let gameplay = authored_melee_gameplay_for_profile(ctx, combat_profile, &authored_action_id)
+        .ok_or_else(|| {
+            format!(
+                "proc melee strike '{}' has no gameplay row for combat profile '{}'",
+                authored_action_id.as_str(),
+                combat_profile
+            )
+        })?;
+
+    perform_melee_attack_for_internal(
+        ctx,
+        caster,
+        combat_profile.to_string(),
+        resolved,
+        target_id,
+        cast_pos_x,
+        cast_pos_y,
+        cast_pos_z,
+        cast_yaw,
+        false,
+        MeleeExecutionPolicy::PROC_ABILITY,
+        None,
+        Some(gameplay),
+        None,
+        None,
+    )
+}
+
 fn perform_intrinsic_auto_attack_with_policy(
     ctx: &ReducerContext,
     caster: Identity,
@@ -3759,6 +3829,12 @@ fn perform_melee_attack_for_internal(
                         combat_profile
                     )
                 })?
+            }
+            MeleeAuthorization::ProcAbility => {
+                return Err(format!(
+                    "proc melee strike '{}' requires an authored gameplay override",
+                    authored_action_id.as_str()
+                ));
             }
         }
     };
@@ -4465,8 +4541,8 @@ fn perform_melee_attack_for_internal(
         });
     }
 
-    if policy.event_source == MeleeEventSource::PlayerInput {
-        advance_crescendo_for_action(
+    if policy.advances_cadence {
+        advance_cadence_for_action(
             ctx,
             caster,
             spell_id.as_str(),
@@ -8395,6 +8471,7 @@ mod tests {
         assert!(!super::MeleeExecutionPolicy::PLAYER_INPUT.grants_primary_resource_on_hit);
         assert!(!super::MeleeExecutionPolicy::QUEUED_FOLLOWUP.grants_primary_resource_on_hit);
         assert!(!super::MeleeExecutionPolicy::PRACTICE.grants_primary_resource_on_hit);
+        assert!(!super::MeleeExecutionPolicy::PROC_ABILITY.grants_primary_resource_on_hit);
     }
 
     #[test]
@@ -8406,6 +8483,18 @@ mod tests {
         assert!(super::MeleeExecutionPolicy::INTRINSIC_AUTO_ATTACK
             .presentation_metadata_kind
             .is_empty());
+    }
+
+    #[test]
+    fn proc_abilities_are_free_off_cooldown_and_advance_cadence() {
+        let policy = super::MeleeExecutionPolicy::PROC_ABILITY;
+
+        assert_eq!(policy.source_label(), "proc");
+        assert_eq!(policy.presentation_metadata_kind, "RESTLESS_BLADES_PROC");
+        assert!(!policy.uses_shared_cooldowns);
+        assert!(!policy.grants_primary_resource_on_hit);
+        assert!(!policy.schedules_auto_attack_on_started_swing);
+        assert!(policy.advances_cadence);
     }
 
     #[test]

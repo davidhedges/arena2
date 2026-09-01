@@ -12,7 +12,7 @@ namespace Arena.MatchDb
 {
     [SpacetimeDB.Type]
     [DataContract]
-    public sealed partial class CrescendoEmpoweredAction
+    public sealed partial class CadenceEmpoweredAction
     {
         [DataMember(Name = "key")]
         public string Key;
@@ -23,7 +23,7 @@ namespace Arena.MatchDb
         [DataMember(Name = "expires_at")]
         public SpacetimeDB.Timestamp ExpiresAt;
 
-        public CrescendoEmpoweredAction(
+        public CadenceEmpoweredAction(
             string Key,
             SpacetimeDB.Identity Owner,
             string ActionInstanceId,
@@ -36,7 +36,7 @@ namespace Arena.MatchDb
             this.ExpiresAt = ExpiresAt;
         }
 
-        public CrescendoEmpoweredAction()
+        public CadenceEmpoweredAction()
         {
             this.Key = "";
             this.ActionInstanceId = "";

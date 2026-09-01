@@ -34,7 +34,7 @@ use crate::combat::scene_query::{
 };
 use crate::combat::status_effect;
 use crate::combat::{
-    active_emanation_for_owner, active_stalk_mark_target, advance_crescendo_for_action,
+    active_emanation_for_owner, active_stalk_mark_target, advance_cadence_for_action,
     advance_slipstream_after_movement_ability, arm_quickening_after_movement_ability,
     clear_stalk_mark, consume_active_immolation_damage, consume_quickening_for_cast,
     has_active_counterstrike, has_active_disabling_status, has_active_status,
@@ -3520,7 +3520,7 @@ fn emit_spell_cast_accepted_event(
     ability_id: &str,
     now: Timestamp,
 ) {
-    advance_crescendo_for_action(ctx, caster, action_instance_id, ability_id, now);
+    advance_cadence_for_action(ctx, caster, action_instance_id, ability_id, now);
     if super::catalog::spell_definition(spell_kind)
         .is_some_and(|definition| definition.target_audience == TargetAudience::Hostile)
     {
@@ -8734,7 +8734,9 @@ fn cast_apply_status(
             let Some(target) = resolve_target(ctx, caster, target_id) else {
                 return Ok(false);
             };
-            if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience) {
+            if !target_audience_allows(ctx, caster, target.player_id, definition.target_audience)
+                || !blade_barrier_target_is_player(ctx, kind, target.player_id)
+            {
                 return Ok(false);
             }
             let check_target = overlay_press_rewound_target_pose(ctx, caster, target);
@@ -8763,6 +8765,14 @@ fn cast_apply_status(
         }
         super::manifest::SpellTargeting::Point => Ok(false),
     }
+}
+
+fn blade_barrier_target_is_player(ctx: &ReducerContext, kind: &SpellId, target: Identity) -> bool {
+    apply_status_target_actor_is_allowed(kind, ctx.db.npc_state().identity().find(target).is_some())
+}
+
+fn apply_status_target_actor_is_allowed(kind: &SpellId, target_is_npc: bool) -> bool {
+    kind.as_str() != "BLADE_BARRIER" || !target_is_npc
 }
 
 fn apply_status_to_self(
@@ -10505,13 +10515,14 @@ mod tests {
 
     use super::{
         active_cast_cancel_receive_window_allows, active_cast_interrupt_terminal_policy,
-        approach_line_contact_point_xz, area_contact_direction, area_shape_for,
-        can_pay_nonlethal_health_cost, capacitor_discharge_damage, channel_area_shape_for,
-        consume_status_heal_amount_from_stacks, contact_distance_from_radii,
-        curved_target_control_point, defiance_damage_taken_reduction_for_health,
-        direct_target_is_heal, fixed_y_terrain_blocks_special_movement,
-        has_arrived_at_contact_distance, has_movement_intent, has_voluntary_movement_after_cast,
-        horizontal_movement_duration_ms, is_generic_area_spell, is_target_within_facing_arc,
+        apply_status_target_actor_is_allowed, approach_line_contact_point_xz,
+        area_contact_direction, area_shape_for, can_pay_nonlethal_health_cost,
+        capacitor_discharge_damage, channel_area_shape_for, consume_status_heal_amount_from_stacks,
+        contact_distance_from_radii, curved_target_control_point,
+        defiance_damage_taken_reduction_for_health, direct_target_is_heal,
+        fixed_y_terrain_blocks_special_movement, has_arrived_at_contact_distance,
+        has_movement_intent, has_voluntary_movement_after_cast, horizontal_movement_duration_ms,
+        is_generic_area_spell, is_target_within_facing_arc,
         normal_cast_time_spell_refunds_gcd_on_self_cancel, orbit_cast_fits_capacity,
         projectile_release_uses_live_facing, quickening_applies_to_cast_time,
         recall_capture_is_eligible, recall_replay_defaults_to_self, recall_slot_has_stored_spell,
@@ -10541,6 +10552,16 @@ mod tests {
         assert!(spell_cooldown_starts_on_accept(
             &SpellId::new("LIGHTNING_REFLEXES").unwrap()
         ));
+    }
+
+    #[test]
+    fn blade_barrier_rejects_npc_targets_while_other_status_spells_keep_their_contract() {
+        let blade_barrier = SpellId::new("BLADE_BARRIER").unwrap();
+        let holy_shield = SpellId::new("HOLY_SHIELD").unwrap();
+
+        assert!(apply_status_target_actor_is_allowed(&blade_barrier, false));
+        assert!(!apply_status_target_actor_is_allowed(&blade_barrier, true));
+        assert!(apply_status_target_actor_is_allowed(&holy_shield, true));
     }
 
     #[test]

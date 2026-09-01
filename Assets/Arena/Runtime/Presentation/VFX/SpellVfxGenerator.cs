@@ -102,6 +102,8 @@ namespace Arena.Presentation
         /// spell-owned status is at its authored maximum stack count.
         /// </summary>
         MaxStackCharacterFx = 14,
+        /// <summary>Persistent target visual reconstructed from an authoritative status row.</summary>
+        StatusAttachment = 15,
     }
 
     /// <summary>
@@ -428,6 +430,7 @@ namespace Arena.Presentation
                         SpellVfxSlot.CharacterFx,
                         SpellVfxSlot.Impact,
                         SpellVfxSlot.TargetAttachment,
+                        SpellVfxSlot.StatusAttachment,
                     };
                 case SpellVfxArchetype.SelfFx:
                     return new[] { SpellVfxSlot.CastGlow, SpellVfxSlot.CharacterFx, SpellVfxSlot.SelfFlash };
@@ -699,6 +702,16 @@ namespace Arena.Presentation
                         vfxRole: RoleAttached,
                         lifecycle: LifecycleDuration,
                         duration: CueDurationPolicy.PalettePositive,
+                        projectileSequenceIndex: null);
+
+                case SpellVfxSlot.StatusAttachment:
+                    return new CueWiring(
+                        trigger: TriggerStatusActive,
+                        anchor: CueAnchor.Target,
+                        attachMode: AttachFollowAnchor,
+                        vfxRole: RoleAttached,
+                        lifecycle: LifecycleUntilStatusEnd,
+                        duration: CueDurationPolicy.Zero,
                         projectileSequenceIndex: null);
 
                 default:

@@ -12,7 +12,7 @@ namespace Arena.MatchDb
 {
     [SpacetimeDB.Type]
     [DataContract]
-    public sealed partial class CrescendoCounterState
+    public sealed partial class CadenceCounterState
     {
         [DataMember(Name = "owner")]
         public SpacetimeDB.Identity Owner;
@@ -21,7 +21,7 @@ namespace Arena.MatchDb
         [DataMember(Name = "last_counted_action_instance_id")]
         public string LastCountedActionInstanceId;
 
-        public CrescendoCounterState(
+        public CadenceCounterState(
             SpacetimeDB.Identity Owner,
             uint ActionCount,
             string LastCountedActionInstanceId
@@ -32,7 +32,7 @@ namespace Arena.MatchDb
             this.LastCountedActionInstanceId = LastCountedActionInstanceId;
         }
 
-        public CrescendoCounterState()
+        public CadenceCounterState()
         {
             this.LastCountedActionInstanceId = "";
         }

@@ -86,6 +86,10 @@ use crate::combat::active_combat_projectile as _;
 #[allow(unused_imports)]
 use crate::combat::active_radial_effect as _;
 #[allow(unused_imports)]
+use crate::combat::cadence_counter_state as _;
+#[allow(unused_imports)]
+use crate::combat::cadence_empowered_action as _;
+#[allow(unused_imports)]
 use crate::combat::combat_effect_event as _;
 #[allow(unused_imports)]
 use crate::combat::combat_engagement as _;
@@ -95,10 +99,6 @@ use crate::combat::combat_event as _;
 use crate::combat::combat_projectile_definition as _;
 #[allow(unused_imports)]
 use crate::combat::combat_stacking_passive_runtime as _;
-#[allow(unused_imports)]
-use crate::combat::crescendo_counter_state as _;
-#[allow(unused_imports)]
-use crate::combat::crescendo_empowered_action as _;
 #[allow(unused_imports)]
 use crate::combat::match_participant_stats as _;
 #[allow(unused_imports)]
@@ -220,10 +220,11 @@ const BLOODLUST_PASSIVE_ID: &str = "WARRIOR_BLOODLUST";
 const FRACTURE_PASSIVE_ID: &str = "RUIN_FRACTURE";
 const OPPORTUNIST_PASSIVE_ID: &str = "SUBTLETY_OPPORTUNIST";
 const TACTICAL_ADVANTAGE_PASSIVE_ID: &str = "SUBTLETY_TACTICAL_ADVANTAGE";
-const CRESCENDO_PASSIVE_ID: &str = "DAGGER_CRESCENDO";
-const CRESCENDO_ACTIONS_PER_PROC: u32 = 5;
-const CRESCENDO_DAMAGE_BONUS: f32 = 0.30;
-const CRESCENDO_ACTION_MARKER_DURATION: Duration = Duration::from_secs(60);
+// The legacy wire ID is stable so existing saved perk selections survive the rename.
+const CADENCE_PASSIVE_ID: &str = "DAGGER_CRESCENDO";
+const CADENCE_ACTIONS_PER_PROC: u32 = 5;
+const CADENCE_DAMAGE_BONUS: f32 = 0.30;
+const CADENCE_ACTION_MARKER_DURATION: Duration = Duration::from_secs(60);
 const PASSIVE_STATUS_REFRESH_DURATION: Duration = Duration::from_secs(60 * 60);
 const AURA_STACK_GROUP_PREFIX: &str = "AURA:";
 const PALADIN_AURA_OF_VENGEANCE_MARK_SPELL_ID: &str = "PALADIN_AURA_OF_VENGEANCE_MARK";
@@ -261,6 +262,7 @@ pub(crate) const COMBAT_SEQUENCE_BEAM: &str = "BEAM";
 pub(crate) const COMBAT_METADATA_NONE: &str = "";
 pub(crate) const COMBAT_METADATA_CONSUMED_MELEE_MODIFIER: &str = "CONSUMED_MELEE_MODIFIER";
 pub(crate) const COMBAT_METADATA_FLURRY_PROC: &str = "FLURRY_PROC";
+pub(crate) const COMBAT_METADATA_RESTLESS_BLADES_PROC: &str = "RESTLESS_BLADES_PROC";
 const MIN_SLOW_PCT: f32 = f32::EPSILON;
 const MAX_MOVE_SPEED_MULTIPLIER: f32 = 3.0;
 const MIN_ATTACK_SPEED_MULTIPLIER: f32 = 0.05;
@@ -362,7 +364,7 @@ pub fn clear_player_combat_state(ctx: &ReducerContext, identity: Identity) {
     clear_combat_stacking_passive_runtime_for_identity(ctx, identity);
     clear_potential_state_for_owner(ctx, identity);
     clear_blight_empowered_action_runtime(ctx, identity);
-    clear_crescendo_runtime(ctx, identity);
+    clear_cadence_runtime(ctx, identity);
 }
 
 pub fn new_player_state(player_id: Identity, now: Timestamp) -> PlayerState {
@@ -642,18 +644,18 @@ pub struct BlightEmpoweredActionRuntime {
     pub action_instance_id: String,
 }
 
-#[table(accessor = crescendo_counter_state)]
+#[table(accessor = cadence_counter_state)]
 #[derive(Clone)]
-pub struct CrescendoCounterState {
+pub struct CadenceCounterState {
     #[primary_key]
     pub owner: Identity,
     pub action_count: u32,
     pub last_counted_action_instance_id: String,
 }
 
-#[table(accessor = crescendo_empowered_action)]
+#[table(accessor = cadence_empowered_action)]
 #[derive(Clone)]
-pub struct CrescendoEmpoweredAction {
+pub struct CadenceEmpoweredAction {
     #[primary_key]
     pub key: String,
     #[index(btree)]
@@ -2681,21 +2683,21 @@ fn clear_blight_empowered_action_runtime(ctx: &ReducerContext, owner: Identity) 
         .delete(owner);
 }
 
-fn clear_crescendo_runtime(ctx: &ReducerContext, owner: Identity) {
-    ctx.db.crescendo_counter_state().owner().delete(owner);
+fn clear_cadence_runtime(ctx: &ReducerContext, owner: Identity) {
+    ctx.db.cadence_counter_state().owner().delete(owner);
     let keys: Vec<String> = ctx
         .db
-        .crescendo_empowered_action()
+        .cadence_empowered_action()
         .owner()
         .filter(owner)
         .map(|row| row.key)
         .collect();
     for key in keys {
-        ctx.db.crescendo_empowered_action().key().delete(key);
+        ctx.db.cadence_empowered_action().key().delete(key);
     }
 }
 
-pub(crate) fn advance_crescendo_for_action(
+pub(crate) fn advance_cadence_for_action(
     ctx: &ReducerContext,
     owner: Identity,
     action_instance_id: &str,
@@ -2706,29 +2708,29 @@ pub(crate) fn advance_crescendo_for_action(
     if action_instance_id.is_empty() || ability_id.trim().is_empty() {
         return false;
     }
-    if !player_has_selected_passive_ability(ctx, owner, CRESCENDO_PASSIVE_ID) {
-        clear_crescendo_runtime(ctx, owner);
+    if !player_has_selected_passive_ability(ctx, owner, CADENCE_PASSIVE_ID) {
+        clear_cadence_runtime(ctx, owner);
         return false;
     }
 
     let stale_keys: Vec<String> = ctx
         .db
-        .crescendo_empowered_action()
+        .cadence_empowered_action()
         .owner()
         .filter(owner)
         .filter(|row| now >= row.expires_at)
         .map(|row| row.key)
         .collect();
     for key in stale_keys {
-        ctx.db.crescendo_empowered_action().key().delete(key);
+        ctx.db.cadence_empowered_action().key().delete(key);
     }
 
     let mut state = ctx
         .db
-        .crescendo_counter_state()
+        .cadence_counter_state()
         .owner()
         .find(owner)
-        .unwrap_or(CrescendoCounterState {
+        .unwrap_or(CadenceCounterState {
             owner,
             action_count: 0,
             last_counted_action_instance_id: String::new(),
@@ -2737,47 +2739,35 @@ pub(crate) fn advance_crescendo_for_action(
         return false;
     }
 
-    let (next_count, empowered) = next_crescendo_count(state.action_count);
+    let (next_count, empowered) = next_cadence_count(state.action_count);
     state.action_count = next_count;
     state.last_counted_action_instance_id = action_instance_id.to_string();
-    if ctx
-        .db
-        .crescendo_counter_state()
-        .owner()
-        .find(owner)
-        .is_some()
-    {
-        ctx.db.crescendo_counter_state().owner().update(state);
+    if ctx.db.cadence_counter_state().owner().find(owner).is_some() {
+        ctx.db.cadence_counter_state().owner().update(state);
     } else {
-        ctx.db.crescendo_counter_state().insert(state);
+        ctx.db.cadence_counter_state().insert(state);
     }
 
     if empowered {
         let key = format!("{}:{}", owner.to_hex(), action_instance_id);
-        let marker = CrescendoEmpoweredAction {
+        let marker = CadenceEmpoweredAction {
             key: key.clone(),
             owner,
             action_instance_id: action_instance_id.to_string(),
-            expires_at: now + CRESCENDO_ACTION_MARKER_DURATION,
+            expires_at: now + CADENCE_ACTION_MARKER_DURATION,
         };
-        if ctx
-            .db
-            .crescendo_empowered_action()
-            .key()
-            .find(key)
-            .is_some()
-        {
-            ctx.db.crescendo_empowered_action().key().update(marker);
+        if ctx.db.cadence_empowered_action().key().find(key).is_some() {
+            ctx.db.cadence_empowered_action().key().update(marker);
         } else {
-            ctx.db.crescendo_empowered_action().insert(marker);
+            ctx.db.cadence_empowered_action().insert(marker);
         }
     }
     empowered
 }
 
-fn next_crescendo_count(current_count: u32) -> (u32, bool) {
-    let next = current_count.min(CRESCENDO_ACTIONS_PER_PROC - 1) + 1;
-    if next >= CRESCENDO_ACTIONS_PER_PROC {
+fn next_cadence_count(current_count: u32) -> (u32, bool) {
+    let next = current_count.min(CADENCE_ACTIONS_PER_PROC - 1) + 1;
+    if next >= CADENCE_ACTIONS_PER_PROC {
         (0, true)
     } else {
         (next, false)
@@ -3143,6 +3133,7 @@ pub enum StatusEffectKind {
     BladeTwisting,
     OffBalance,
     AllAbilityAvoidance,
+    ProjectileBarrier,
     Disarm,
     Gouge,
     Stalked,
@@ -3207,6 +3198,7 @@ impl StatusEffectKind {
             Self::BladeTwisting => "BLADE_TWISTING",
             Self::OffBalance => "OFF_BALANCE",
             Self::AllAbilityAvoidance => "ALL_ABILITY_AVOIDANCE",
+            Self::ProjectileBarrier => "PROJECTILE_BARRIER",
             Self::Disarm => "DISARM",
             Self::Gouge => "GOUGE",
             Self::Stalked => "STALKED",
@@ -3271,6 +3263,7 @@ impl StatusEffectKind {
             "BLADE_TWISTING" => Some(Self::BladeTwisting),
             "OFF_BALANCE" => Some(Self::OffBalance),
             "ALL_ABILITY_AVOIDANCE" => Some(Self::AllAbilityAvoidance),
+            "PROJECTILE_BARRIER" => Some(Self::ProjectileBarrier),
             "DISARM" => Some(Self::Disarm),
             "GOUGE" => Some(Self::Gouge),
             "STALKED" => Some(Self::Stalked),
@@ -3398,6 +3391,7 @@ pub enum StatusPayload {
     BladeTwisting,
     OffBalance,
     AllAbilityAvoidance,
+    ProjectileBarrier,
     Disarm,
     Gouge,
     Stalked,
@@ -3578,6 +3572,7 @@ impl AuthoredStatusPayload {
             StatusEffectKind::BladeTwisting => StatusPayload::BladeTwisting,
             StatusEffectKind::OffBalance => StatusPayload::OffBalance,
             StatusEffectKind::AllAbilityAvoidance => StatusPayload::AllAbilityAvoidance,
+            StatusEffectKind::ProjectileBarrier => StatusPayload::ProjectileBarrier,
             StatusEffectKind::Disarm => StatusPayload::Disarm,
             StatusEffectKind::Gouge => StatusPayload::Gouge,
             StatusEffectKind::Stalked => StatusPayload::Stalked,
@@ -3723,6 +3718,7 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::BladeTwisting
             | StatusEffectKind::OffBalance
             | StatusEffectKind::AllAbilityAvoidance
+            | StatusEffectKind::ProjectileBarrier
             | StatusEffectKind::Disarm
             | StatusEffectKind::Gouge
             | StatusEffectKind::Stalked
@@ -3848,6 +3844,7 @@ impl StatusPayload {
             Self::BladeTwisting => StatusEffectKind::BladeTwisting,
             Self::OffBalance => StatusEffectKind::OffBalance,
             Self::AllAbilityAvoidance => StatusEffectKind::AllAbilityAvoidance,
+            Self::ProjectileBarrier => StatusEffectKind::ProjectileBarrier,
             Self::Disarm => StatusEffectKind::Disarm,
             Self::Gouge => StatusEffectKind::Gouge,
             Self::Stalked => StatusEffectKind::Stalked,
@@ -3886,6 +3883,7 @@ impl StatusPayload {
             | Self::BladeTwisting
             | Self::OffBalance
             | Self::AllAbilityAvoidance
+            | Self::ProjectileBarrier
             | Self::Disarm
             | Self::Gouge
             | Self::Stalked
@@ -4183,6 +4181,7 @@ impl StatusPayload {
             StatusEffectKind::BladeTwisting => Self::BladeTwisting,
             StatusEffectKind::OffBalance => Self::OffBalance,
             StatusEffectKind::AllAbilityAvoidance => Self::AllAbilityAvoidance,
+            StatusEffectKind::ProjectileBarrier => Self::ProjectileBarrier,
             StatusEffectKind::Disarm => Self::Disarm,
             StatusEffectKind::Gouge => Self::Gouge,
             StatusEffectKind::Stalked => Self::Stalked,
@@ -4223,6 +4222,7 @@ impl StatusPayload {
             | Self::BladeTwisting
             | Self::OffBalance
             | Self::AllAbilityAvoidance
+            | Self::ProjectileBarrier
             | Self::Disarm
             | Self::Gouge
             | Self::Stalked
@@ -4335,6 +4335,7 @@ impl StatusPayload {
             | Self::BladeTwisting
             | Self::OffBalance
             | Self::AllAbilityAvoidance
+            | Self::ProjectileBarrier
             | Self::Disarm
             | Self::Gouge
             | Self::Stalked
@@ -4538,6 +4539,7 @@ impl StatusPayload {
             | Self::BladeTwisting
             | Self::OffBalance
             | Self::AllAbilityAvoidance
+            | Self::ProjectileBarrier
             | Self::Disarm
             | Self::Gouge
             | Self::Stalked
@@ -6734,7 +6736,7 @@ fn resolve_damage_amount(
             * tactical_advantage_passive_damage_multiplier(ctx, hit)
             * precision_passive_damage_multiplier(ctx, hit)
             * blight_empowered_damage_multiplier(ctx, hit)
-            * crescendo_damage_multiplier(ctx, hit)
+            * cadence_damage_multiplier(ctx, hit)
             * fracture_melee_damage_multiplier(
                 !fracture_freezes.is_empty(),
                 blight_fracture_melee_damage_bonus(),
@@ -6864,9 +6866,9 @@ fn blight_empowered_damage_multiplier(ctx: &ReducerContext, hit: &PendingHit) ->
     1.0 + soulstealer_empowered_damage_bonus()
 }
 
-fn crescendo_damage_multiplier(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
+fn cadence_damage_multiplier(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
     if hit.source == Identity::ZERO
-        || !player_has_selected_passive_ability(ctx, hit.source, CRESCENDO_PASSIVE_ID)
+        || !player_has_selected_passive_ability(ctx, hit.source, CADENCE_PASSIVE_ID)
     {
         return 1.0;
     }
@@ -6880,19 +6882,19 @@ fn crescendo_damage_multiplier(ctx: &ReducerContext, hit: &PendingHit) -> f32 {
     }
     let empowered = ctx
         .db
-        .crescendo_empowered_action()
+        .cadence_empowered_action()
         .owner()
         .filter(hit.source)
         .any(|marker| {
             ctx.timestamp < marker.expires_at
                 && action_key_matches_instance(action_key, marker.action_instance_id.as_str())
         });
-    crescendo_damage_multiplier_for_action(true, empowered)
+    cadence_damage_multiplier_for_action(true, empowered)
 }
 
-fn crescendo_damage_multiplier_for_action(perk_selected: bool, empowered: bool) -> f32 {
+fn cadence_damage_multiplier_for_action(perk_selected: bool, empowered: bool) -> f32 {
     if perk_selected && empowered {
-        1.0 + CRESCENDO_DAMAGE_BONUS
+        1.0 + CADENCE_DAMAGE_BONUS
     } else {
         1.0
     }
@@ -10414,6 +10416,7 @@ impl StatusRuntimeView {
                     | StatusEffectKind::BladeTwisting
                     | StatusEffectKind::OffBalance
                     | StatusEffectKind::AllAbilityAvoidance
+                    | StatusEffectKind::ProjectileBarrier
                     | StatusEffectKind::Disarm
                     | StatusEffectKind::Gouge
                     | StatusEffectKind::Stalked
@@ -11186,7 +11189,7 @@ mod tests {
         advance_expired_escalating_dot, apply_status_update, attack_speed_scalar_to_multiplier,
         attacker_is_behind_target, battle_trance_hp_after_damage, behind_target_damage_multiplier,
         blight_empowered_hit_is_eligible, bloodlust_passive_spec, burden_damage_split,
-        crescendo_damage_multiplier_for_action, damage_breaks_confusion, damage_breaks_shroud,
+        cadence_damage_multiplier_for_action, damage_breaks_confusion, damage_breaks_shroud,
         damage_comes_from_casted_ability, damage_source_grants_outgoing_rewards,
         damaging_area_consumes_mirror_images, deterministic_fulmination_candidate_index,
         disabled_target_damage_multiplier, dot_tick_damage, due_interval_count,
@@ -11198,7 +11201,7 @@ mod tests {
         immolation_damage_for_stacks, immolation_remaining_tick_count, initial_status_stacks,
         isolated_damage_multiplier, knockback_stagger_duration, melee_attack_can_trigger_fracture,
         mirror_image_intercept_chance, mirror_image_stacks_after_intercept,
-        mirror_images_intercept, new_status_effect, next_crescendo_count,
+        mirror_images_intercept, new_status_effect, next_cadence_count,
         point_blank_damage_multiplier, point_within_radius, potential_stacks_after_spell_strike,
         proportional_tick_amount_after_stack_loss, quickening_cast_speed_multiplier,
         resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
@@ -11235,17 +11238,17 @@ mod tests {
     }
 
     #[test]
-    fn crescendo_empowers_each_fifth_non_auto_action() {
+    fn cadence_empowers_each_fifth_non_auto_action() {
         let mut count = 0;
         for expected in [false, false, false, false, true, false] {
-            let (next, empowered) = next_crescendo_count(count);
+            let (next, empowered) = next_cadence_count(count);
             assert_eq!(empowered, expected);
             count = next;
         }
         assert_eq!(count, 1);
-        assert_eq!(crescendo_damage_multiplier_for_action(true, true), 1.30);
-        assert_eq!(crescendo_damage_multiplier_for_action(true, false), 1.0);
-        assert_eq!(crescendo_damage_multiplier_for_action(false, true), 1.0);
+        assert_eq!(cadence_damage_multiplier_for_action(true, true), 1.30);
+        assert_eq!(cadence_damage_multiplier_for_action(true, false), 1.0);
+        assert_eq!(cadence_damage_multiplier_for_action(false, true), 1.0);
     }
 
     #[test]
@@ -13200,6 +13203,11 @@ mod tests {
                 StatusPayload::TargetedAbilityAvoidance,
                 StatusEffectKind::TargetedAbilityAvoidance,
                 StatusPayload::TargetedAbilityAvoidance,
+            ),
+            (
+                StatusPayload::ProjectileBarrier,
+                StatusEffectKind::ProjectileBarrier,
+                StatusPayload::ProjectileBarrier,
             ),
             (
                 StatusPayload::Berserking,
