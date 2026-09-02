@@ -16795,8 +16795,8 @@
       "vfx_id": "VFX_DEFILED_GROUND_AREA_01",
       "attach_mode": "SPAWN_WORLD",
       "vfx_role": "ATTACHED",
-      "lifecycle": "DURATION",
-      "duration_ms": 10000,
+      "lifecycle": "UNTIL_RADIAL_EFFECT_END",
+      "duration_ms": 0,
       "sort_order": 327
     },
     {

@@ -534,7 +534,7 @@ namespace Arena.Presentation
                 if (!string.Equals(entry.Lifecycle, lifecycle, System.StringComparison.Ordinal))
                     continue;
 
-                DestroyInstance(entry.Instance);
+                EndOrDestroyInstance(entry.Instance);
                 _removeList.Add(key);
             }
 
@@ -634,6 +634,24 @@ namespace Arena.Presentation
         {
             if (instance != null)
                 Object.Destroy(instance);
+        }
+
+        private static void EndOrDestroyInstance(GameObject? instance)
+        {
+            if (instance == null)
+                return;
+
+            MonoBehaviour[] components = instance.GetComponentsInChildren<MonoBehaviour>(true);
+            foreach (MonoBehaviour component in components)
+            {
+                if (component is ICombatVFXGracefulEnd gracefulEnd
+                    && gracefulEnd.BeginGracefulEnd())
+                {
+                    return;
+                }
+            }
+
+            Object.Destroy(instance);
         }
 
         internal static Vector3 ResolveGroundFollowPosition(
