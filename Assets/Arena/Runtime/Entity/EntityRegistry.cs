@@ -2057,7 +2057,50 @@ namespace Arena.Entity
                 return;
 
             if (string.Equals(row.Kind, "DODGE", System.StringComparison.OrdinalIgnoreCase))
+            {
                 entity.TriggerDodge(row);
+                return;
+            }
+
+            if (TryBuildMovementAbilityAnimationRequest(
+                    row.Kind,
+                    row.ResolvedActionId,
+                    row.AbilityId,
+                    row.StartedAt.MicrosecondsSinceUnixEpoch / 1000L,
+                    out CombatAnimationRequest request))
+            {
+                entity.RequestCombatAnimation(request);
+            }
+        }
+
+        private static bool TryBuildMovementAbilityAnimationRequest(
+            string movementKind,
+            string resolvedActionId,
+            string abilityId,
+            long startedAtMs,
+            out CombatAnimationRequest request)
+        {
+            request = default;
+            if (!string.Equals(
+                    movementKind,
+                    "BACKSTEP",
+                    System.StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string actionId = string.IsNullOrWhiteSpace(resolvedActionId)
+                ? abilityId?.Trim() ?? string.Empty
+                : resolvedActionId.Trim();
+            if (actionId.Length == 0)
+                return false;
+
+            request = CombatAnimationRequest.AuthoritativeSpell(
+                actionId,
+                startedAtMs,
+                CombatSpellAnimationPhase.Release,
+                AbilityKinds.Movement);
+            return true;
         }
 
         private void ClearAllPlayers()

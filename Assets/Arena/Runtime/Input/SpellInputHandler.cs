@@ -472,13 +472,14 @@ namespace Arena.Input
             if (!localPlayer.IsInCombat)
                 localPlayer.EnterCombatImmediate();
 
+            // Whether a movement delivery needs a target is a property of the
+            // delivery kind, and no movement catalog is published to the client.
+            // Self-directed kinds (a disengage steers off the caster's own
+            // facing) have no target at all, so the server owns the rule:
+            // DASH_TO_TARGET still rejects an empty target in
+            // validate_movement_delivery_target.
             string targetId = TargetSelector.Instance?.SelectedTargetId ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(targetId))
-            {
-                ActionBarTrace.Trace($"movement dispatch rejected: no selected target for {action.ActionId}");
-                return false;
-            }
-            ActionBarTrace.Trace($"movement dispatch sending CastRequest for {action.ActionId} target={targetId}");
+            ActionBarTrace.Trace($"movement dispatch sending CastRequest for {action.ActionId} target='{targetId}'");
             CastActionToken token = LocalCombatState.Instance.CreateCastActionToken(action.ActionId);
             SendCastRequest(conn, action.ActionId, targetId, 0f, 0f, 0f, token);
             return true;

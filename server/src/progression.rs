@@ -467,12 +467,22 @@ struct MovementDeliveryDefinition {
     block_behavior: String,
     #[serde(default)]
     parry_behavior: String,
+    /// Self-directed kinds steer off the caster's own facing instead of a
+    /// target, so they author the same movement vocabulary the timed-movement
+    /// block already uses. Unused by DASH_TO_TARGET.
+    #[serde(default)]
+    direction: String,
+    #[serde(default)]
+    collision_policy: String,
+    #[serde(default)]
+    facing_policy: String,
+    #[serde(default)]
     arrival: MovementDeliveryArrivalDefinition,
     #[serde(default)]
     impact_effects: Vec<MovementDeliveryImpactEffectDefinition>,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct MovementDeliveryArrivalDefinition {
     buffer: f32,
@@ -796,6 +806,9 @@ pub(crate) struct MovementDeliveryRuntime {
     pub radius: f32,
     pub block_behavior: String,
     pub parry_behavior: String,
+    pub direction: String,
+    pub collision_policy: String,
+    pub facing_policy: String,
     pub arrival_buffer: f32,
     pub arrival_epsilon: f32,
     pub impact_effects: Vec<MovementDeliveryImpactEffectRuntime>,
@@ -2691,6 +2704,9 @@ fn movement_delivery_runtime_from_definition(
         radius: movement.radius,
         block_behavior: normalize_identifier(movement.block_behavior.as_str()),
         parry_behavior: normalize_identifier(movement.parry_behavior.as_str()),
+        direction: normalize_identifier(movement.direction.as_str()),
+        collision_policy: normalize_identifier(movement.collision_policy.as_str()),
+        facing_policy: normalize_identifier(movement.facing_policy.as_str()),
         arrival_buffer: movement.arrival.buffer,
         arrival_epsilon: movement.arrival.epsilon,
         impact_effects: movement
@@ -5401,10 +5417,91 @@ fn validate_authored_global_cooldown_ms(
     );
 }
 
-fn validate_movement_delivery(ability_id: &str, movement: &MovementDeliveryDefinition) {
+/// A self-directed movement delivery steers off the caster's own facing and
+/// lands nothing: no target, no damage, no impact. It exists so a disengage can
+/// be an ability in its own right instead of borrowing a melee strike's hit
+/// window to carry its movement.
+fn validate_self_directed_movement_delivery(
+    ability_id: &str,
+    movement: &MovementDeliveryDefinition,
+) {
     assert_eq!(
-        normalize_identifier(movement.kind.as_str()),
-        "DASH_TO_TARGET",
+        movement.cast_time_ms, 0,
+        "self-directed movement ability '{ability_id}' must be instant"
+    );
+    assert_eq!(
+        normalize_identifier(movement.cast_mobility.as_str()),
+        "MOBILE",
+        "self-directed movement ability '{ability_id}' must use MOBILE cast_mobility"
+    );
+    assert_eq!(
+        normalize_identifier(movement.targeting.as_str()),
+        "SELF",
+        "self-directed movement ability '{ability_id}' must use SELF targeting"
+    );
+    assert!(
+        !movement.requires_target,
+        "self-directed movement ability '{ability_id}' must not require a target"
+    );
+    assert!(
+        !movement.arms_auto_attack_on_cast,
+        "self-directed movement ability '{ability_id}' must not arm auto attack"
+    );
+    assert!(
+        movement.resource_cost.is_finite() && movement.resource_cost >= 0.0,
+        "self-directed movement ability '{ability_id}' must define a non-negative finite resource_cost"
+    );
+    assert!(
+        movement.speed.is_finite() && movement.speed > 0.0,
+        "self-directed movement ability '{ability_id}' must define positive finite speed"
+    );
+    assert!(
+        movement.max_distance.is_finite() && movement.max_distance > 0.0,
+        "self-directed movement ability '{ability_id}' must define positive finite max_distance"
+    );
+    assert_eq!(
+        movement.damage, 0,
+        "self-directed movement ability '{ability_id}' must not author damage"
+    );
+    assert_eq!(
+        movement.radius, 0.0,
+        "self-directed movement ability '{ability_id}' must not author an impact radius"
+    );
+    assert!(
+        movement.impact_effects.is_empty(),
+        "self-directed movement ability '{ability_id}' must not author impact effects"
+    );
+    assert_eq!(
+        normalize_identifier(movement.direction.as_str()),
+        "BACKWARD",
+        "self-directed movement ability '{ability_id}' supports only BACKWARD direction"
+    );
+    assert_eq!(
+        normalize_identifier(movement.collision_policy.as_str()),
+        "STOP_AT_BLOCK",
+        "self-directed movement ability '{ability_id}' must use STOP_AT_BLOCK collision_policy"
+    );
+    assert_eq!(
+        normalize_identifier(movement.facing_policy.as_str()),
+        "FACE_START",
+        "self-directed movement ability '{ability_id}' must use FACE_START facing_policy"
+    );
+    assert_eq!(
+        normalize_identifier(movement.block_behavior.as_str()),
+        "UNBLOCKABLE",
+        "self-directed movement ability '{ability_id}' lands nothing and must be UNBLOCKABLE"
+    );
+    assert_eq!(
+        normalize_identifier(movement.parry_behavior.as_str()),
+        "UNPARRYABLE",
+        "self-directed movement ability '{ability_id}' lands nothing and must be UNPARRYABLE"
+    );
+}
+
+fn validate_movement_delivery(ability_id: &str, movement: &MovementDeliveryDefinition) {
+    let kind = normalize_identifier(movement.kind.as_str());
+    assert!(
+        kind == "DASH_TO_TARGET" || kind == "BACKSTEP",
         "movement ability '{ability_id}' has unsupported gameplay.delivery.kind '{}'",
         movement.kind
     );
@@ -5421,6 +5518,11 @@ fn validate_movement_delivery(ability_id: &str, movement: &MovementDeliveryDefin
         Some(movement.uses_global_cooldown),
         movement.global_cooldown_ms,
     );
+
+    if kind == "BACKSTEP" {
+        validate_self_directed_movement_delivery(ability_id, movement);
+        return;
+    }
     assert!(
         movement.cast_time_ms > 0,
         "movement ability '{ability_id}' must define positive cast_time_ms"
@@ -5455,6 +5557,7 @@ fn validate_movement_delivery(ability_id: &str, movement: &MovementDeliveryDefin
         movement.max_distance.is_finite() && movement.max_distance > 0.0,
         "movement ability '{ability_id}' must define positive finite max_distance"
     );
+
     assert!(
         movement.damage >= 0,
         "movement ability '{ability_id}' must define non-negative damage"
@@ -9094,7 +9197,6 @@ mod tests {
             ("DAGGER_DISEMBOWEL", "DAGGER_DISEMBOWEL"),
             ("DAGGER_FLAY", "DAGGER_FLAY"),
             ("DAGGER_QUICKENING_STRIKE", "DAGGER_QUICKENING_STRIKE"),
-            ("DAGGER_BREAKAWAY", "DAGGER_BREAKAWAY"),
         ] {
             let ability = catalog
                 .abilities
@@ -9953,37 +10055,39 @@ mod tests {
     }
 
     #[test]
-    fn dagger_breakaway_authors_clip_aligned_timed_backstep() {
-        let movement = melee_timed_movement_for_ability_id("DAGGER_BREAKAWAY")
-            .expect("Breakaway should author timed movement");
-
-        assert_eq!(movement.ability_id, "DAGGER_BREAKAWAY");
-        assert_eq!(movement.kind, "BACKSTEP");
-        assert_eq!(movement.start_delay_ms, 620);
-        assert_eq!(movement.direction, "BACKWARD");
-        assert_eq!(movement.distance, 7.0);
-        assert_eq!(movement.speed, 18.0);
-        assert_eq!(movement.collision_policy, "STOP_AT_BLOCK");
-        assert_eq!(movement.facing_policy, "FACE_START");
-
+    fn dagger_breakaway_is_a_self_directed_movement_ability() {
         let ability = progression_catalog()
             .abilities
             .iter()
             .find(|ability| ability.ability_id == "DAGGER_BREAKAWAY")
             .expect("Breakaway ability should exist");
-        assert_eq!(
-            normalize_identifier(ability.resource_kind.as_str()),
-            "STAMINA"
+        assert_eq!(ability_gameplay_kind(ability), "MOVEMENT");
+        assert!(
+            melee_timed_movement_for_ability_id("DAGGER_BREAKAWAY").is_none(),
+            "a disengage must not borrow a melee strike to carry its movement"
         );
-        assert_eq!(ability.resource_cost, 30.0);
-        assert_eq!(ability.gameplay.base_damage, Some(28));
-        assert_eq!(ability.gameplay.cooldown_ms, Some(1600));
-        assert_eq!(ability.gameplay.uses_global_cooldown, Some(true));
-        assert_eq!(ability.gameplay.global_cooldown_ms, Some(650));
-        assert!(profile_supports_action_reference(
-            COMBAT_PROFILE_DAGGERS,
-            &AuthoredActionId::new("DAGGER_BREAKAWAY")
-        ));
+
+        let delivery = super::movement_delivery_for_ability_id("DAGGER_BREAKAWAY")
+            .expect("Breakaway should author a movement delivery");
+        assert_eq!(delivery.kind, "BACKSTEP");
+        assert_eq!(delivery.direction, "BACKWARD");
+        assert_eq!(delivery.facing_policy, "FACE_START");
+        assert!(!delivery.requires_target);
+        assert_eq!(delivery.damage, 0);
+
+        let animation =
+            spell_cast_animation_mapping(SPELL_CAST_ANIMATION_MAP_ASSET, "DAGGER_BREAKAWAY");
+        assert_eq!(
+            (animation.0, animation.1),
+            (1, 0),
+            "Breakaway must retain its fixed hand-authored action animation"
+        );
+        assert!(
+            SPELL_CAST_ANIMATION_MAP_ASSET.contains(
+                "clip: {fileID: 7400000, guid: 5bee978605c5016384b406221b04c3db, type: 2}"
+            ),
+            "Breakaway must retain its original Combo_Attack_02_03 clip"
+        );
     }
 
     #[test]

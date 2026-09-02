@@ -457,6 +457,19 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
+        public void Breakaway_UsesItsHandAuthoredDaggerClipAsAFullBodyAction()
+        {
+            UnityEngine.Object daggers = LoadSet("Daggers");
+            Assert.That(AssignmentFor("DAGGER_BREAKAWAY"), Is.EqualTo("Fixed"));
+            Assert.That(Resolve(daggers, "DAGGER_BREAKAWAY", "Instant", out object entry), Is.True);
+            Assert.That(Clip(entry)?.name, Is.EqualTo("Combo_Attack_02_03"));
+
+            Type entryType = T("WeaponSpellAnimationEntry");
+            Assert.That(entryType.GetField("requiresCombatStance")!.GetValue(entry), Is.EqualTo(true));
+            Assert.That(entryType.GetField("playbackLayer")!.GetValue(entry)!.ToString(), Is.EqualTo("FullBody"));
+        }
+
+        [Test]
         public void Nova_UsesSpecialFamily()
         {
             UnityEngine.Object set = LoadSet("TwoHandedSword");

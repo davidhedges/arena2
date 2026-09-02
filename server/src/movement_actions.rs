@@ -50,6 +50,7 @@ use crate::spells::special_movement_runtime as _;
 
 const ACTION_KIND_DODGE: &str = "DODGE";
 const ACTION_KIND_DASH_TO_TARGET: &str = "DASH_TO_TARGET";
+const ACTION_KIND_BACKSTEP: &str = "BACKSTEP";
 const DODGE_MAX_CHARGES: u32 = 10;
 const DODGE_RECHARGE_MS: u64 = 10_000;
 const FLEET_FOOTED_PASSIVE_ID: &str = "SUBTLETY_FLEET_FOOTED";
@@ -110,6 +111,7 @@ pub struct FixedActionChargeRecovery {
 pub(crate) enum MovementActionKind {
     Dodge,
     DashToTarget,
+    Backstep,
 }
 
 impl MovementActionKind {
@@ -117,6 +119,7 @@ impl MovementActionKind {
         match value {
             ACTION_KIND_DODGE => Some(Self::Dodge),
             ACTION_KIND_DASH_TO_TARGET => Some(Self::DashToTarget),
+            ACTION_KIND_BACKSTEP => Some(Self::Backstep),
             _ => None,
         }
     }
@@ -473,17 +476,31 @@ pub(crate) fn start_movement_delivery_request(
         last_processed_tick: snapshot.last_processed_tick,
         ..authoritative
     };
-    let launched = launch_movement_delivery(
-        ctx,
-        owner,
-        ability,
-        delivery,
-        movement_action_kind_for_delivery(delivery),
-        &action_id,
-        target_id.as_str(),
-        cast_state,
-        now,
-    )?;
+    let movement_kind = movement_action_kind_for_delivery(delivery);
+    let launched = if movement_kind == ACTION_KIND_BACKSTEP {
+        launch_self_directed_movement_delivery(
+            ctx,
+            owner,
+            ability,
+            delivery,
+            movement_kind,
+            &action_id,
+            cast_state,
+            now,
+        )?
+    } else {
+        launch_movement_delivery(
+            ctx,
+            owner,
+            ability,
+            delivery,
+            movement_kind,
+            &action_id,
+            target_id.as_str(),
+            cast_state,
+            now,
+        )?
+    };
     if !launched {
         return Ok(());
     }
@@ -505,9 +522,137 @@ pub(crate) fn start_movement_delivery_request(
 
 fn movement_action_kind_for_delivery(delivery: &MovementDeliveryRuntime) -> &'static str {
     match delivery.kind.as_str() {
+        "BACKSTEP" => ACTION_KIND_BACKSTEP,
         "DASH_TO_TARGET" => ACTION_KIND_DASH_TO_TARGET,
         _ => ACTION_KIND_DASH_TO_TARGET,
     }
+}
+
+/// A self-directed movement delivery: the destination comes from the caster's
+/// own facing, so there is no target to validate, nothing lands, and no active
+/// cast is opened. Deliberately does NOT mark a harmful combat action.
+fn launch_self_directed_movement_delivery(
+    ctx: &ReducerContext,
+    owner: Identity,
+    ability: &AbilityCatalog,
+    delivery: &MovementDeliveryRuntime,
+    movement_kind: &str,
+    action_id: &SpellId,
+    cast_state: crate::combat::actor_snapshot::CombatActorSnapshot,
+    now: Timestamp,
+) -> Result<bool, String> {
+    let Some(authoritative) = crate::combat::actor_snapshot::actor_snapshot_for(ctx, owner) else {
+        log::info!(
+            "[MOVEMENT_DELIVERY] caster={} action={} rejected reason=missing_authoritative_snapshot entry=launch_self_directed",
+            &owner.to_hex()[..8],
+            action_id.as_str()
+        );
+        return Ok(false);
+    };
+    if reject_or_clear_stale_action(ctx, owner, now) {
+        log::info!(
+            "[MOVEMENT_DELIVERY] caster={} action={} rejected reason=movement_action_recovery entry=launch_self_directed",
+            &owner.to_hex()[..8],
+            action_id.as_str()
+        );
+        return Ok(false);
+    }
+
+    let movement_start = SpellVec3::new(cast_state.pos_x, cast_state.pos_y, cast_state.pos_z);
+    // Only BACKWARD is authored today; the validator enforces it.
+    let dir_x = -cast_state.facing_yaw.sin();
+    let dir_z = -cast_state.facing_yaw.cos();
+    let distance = delivery.max_distance.max(0.0);
+    let intended_end = SpellVec3::new(
+        movement_start.x + dir_x * distance,
+        movement_start.y,
+        movement_start.z + dir_z * distance,
+    );
+    let use_air_path =
+        crate::spells::special_movement_uses_air_path(ctx, owner, &authoritative, &cast_state);
+    let collision_policy = if use_air_path {
+        crate::spells::SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK_FIXED_Y
+    } else {
+        crate::spells::SPECIAL_MOVEMENT_COLLISION_STOP_AT_BLOCK
+    };
+    let baked = crate::spells::bake_linear_special_movement(
+        ctx,
+        owner,
+        movement_start,
+        intended_end,
+        authoritative.hit_radius,
+        authoritative.hit_height,
+        collision_policy,
+    );
+    let duration_ms = crate::spells::horizontal_movement_duration_ms(
+        movement_start.x,
+        movement_start.z,
+        baked.end.x,
+        baked.end.z,
+        delivery.speed,
+        FIXED_TICK_MILLIS as u64,
+    );
+    let active_ticks = duration_ticks(duration_ms);
+    let active_until = now + Duration::from_millis(duration_ms);
+
+    clear_interruptible_defense_for_owner(ctx, owner);
+    arm_lingering_shade_for_voluntary_movement(
+        ctx,
+        owner,
+        action_id.as_str(),
+        ability.ability_id.as_str(),
+        movement_start,
+        baked.end,
+        cast_state.facing_yaw,
+        now,
+    );
+    crate::spells::begin_special_movement_with_facing_policy(
+        ctx,
+        owner,
+        action_id.as_str(),
+        now,
+        duration_ms,
+        movement_start,
+        baked.end,
+        cast_state.facing_yaw,
+        crate::spells::SPECIAL_MOVEMENT_FACING_FACE_START,
+        collision_policy,
+    );
+    arm_quickening_after_movement_ability(ctx, owner, now);
+    advance_slipstream_after_movement_ability(ctx, owner, action_id.as_str(), now);
+    grant_primary_resource_amount(
+        ctx,
+        owner,
+        primary_resource_gain_on_action_accept(ability.ability_id.as_str()),
+        now,
+    );
+    upsert_movement_action(
+        ctx,
+        MovementActionState {
+            owner,
+            action_id: build_action_id(owner, movement_kind, now),
+            kind: movement_kind.to_string(),
+            ability_id: ability.ability_id.clone(),
+            resolved_action_id: action_id.as_str().to_string(),
+            started_at: now,
+            effective_from_input_tick: cast_state.last_processed_tick,
+            active_until_input_tick: cast_state.last_processed_tick.saturating_add(active_ticks),
+            recovery_until_input_tick: cast_state.last_processed_tick.saturating_add(active_ticks),
+            active_until,
+            recovery_until: active_until,
+            dir_x,
+            dir_z,
+            facing_yaw_start: cast_state.facing_yaw,
+        },
+    );
+    crate::spells::stamp_named_cooldown_for_duration(
+        ctx,
+        owner,
+        action_id.as_str(),
+        Duration::from_millis(delivery.cooldown_ms.max(1)),
+        now,
+    );
+    Ok(true)
 }
 
 pub(crate) fn launch_movement_delivery(
@@ -1123,6 +1268,11 @@ pub(crate) fn tick_movement_actions(ctx: &ReducerContext, now: Timestamp) {
             }
             MovementActionKind::DashToTarget => {
                 if ctx.db.active_cast().caster().find(action.owner).is_none() {
+                    clear_movement_action_for_owner(ctx, action.owner);
+                }
+            }
+            MovementActionKind::Backstep => {
+                if now >= action.recovery_until {
                     clear_movement_action_for_owner(ctx, action.owner);
                 }
             }

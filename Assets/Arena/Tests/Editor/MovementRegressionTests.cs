@@ -12,6 +12,33 @@ namespace Arena.Tests.Editor
 {
     public sealed class MovementRegressionTests
     {
+        [Test]
+        public void BackstepPresentation_RoutesToAuthoredAbilityAnimationInsteadOfDodge()
+        {
+            Type requestType = RequireType("Arena.Presentation.CombatAnimationRequest");
+            MethodInfo buildRequest = RequireType("Arena.Entity.EntityRegistry").GetMethod(
+                "TryBuildMovementAbilityAnimationRequest",
+                BindingFlags.Static | BindingFlags.NonPublic)!;
+            object?[] args =
+            {
+                "BACKSTEP",
+                "DAGGER_BREAKAWAY",
+                "DAGGER_BREAKAWAY",
+                1234L,
+                Activator.CreateInstance(requestType),
+            };
+
+            Assert.That((bool)buildRequest.Invoke(null, args)!, Is.True);
+            object request = args[4]!;
+            Assert.That(requestType.GetField("ActionId")!.GetValue(request), Is.EqualTo("DAGGER_BREAKAWAY"));
+            Assert.That(requestType.GetField("Category")!.GetValue(request)!.ToString(), Is.EqualTo("Spell"));
+            Assert.That(requestType.GetField("Source")!.GetValue(request), Is.EqualTo("MOVEMENT"));
+
+            args[0] = "DODGE";
+            args[4] = Activator.CreateInstance(requestType);
+            Assert.That((bool)buildRequest.Invoke(null, args)!, Is.False);
+        }
+
         private const float PositionTolerance = 0.0001f;
         private const float PlayerRadius = 0.28f;
         private const float PlayerHeight = 1.8f;
