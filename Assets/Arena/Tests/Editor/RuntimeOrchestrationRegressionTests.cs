@@ -522,7 +522,7 @@ namespace Arena.Tests.Editor
         }
 
         [Test]
-        public void GraphicsMenu_DefaultsToLaptopSafeValuesAndExposesGlobalControls()
+        public void GraphicsMenu_DefaultsToThermalSafeValuesAndExposesGlobalControls()
         {
             Type graphicsSettings = RequireRuntimeType("Arena.Graphics.ArenaGraphicsSettings");
             Assert.That(
@@ -530,7 +530,7 @@ namespace Arena.Tests.Editor
                         "DefaultFrameLimit",
                         BindingFlags.Static | BindingFlags.NonPublic)!
                     .GetRawConstantValue(),
-                Is.EqualTo(60));
+                Is.EqualTo(30));
             Assert.That(
                 graphicsSettings.GetField(
                         "LaptopTextureMipmapLimit",
@@ -552,6 +552,21 @@ namespace Arena.Tests.Editor
             Assert.That(
                 settingsSource,
                 Does.Contain("QualitySettings.globalTextureMipmapLimit"));
+
+            Type editorDefaults = AppDomain.CurrentDomain
+                .Load("Assembly-CSharp-Editor")
+                .GetType("Arena.Editor.ArenaEditorThermalDefaults", throwOnError: true)!;
+            Assert.That(
+                editorDefaults.GetField(
+                        "LowResolutionGameViewByDefault",
+                        BindingFlags.Static | BindingFlags.NonPublic)!
+                    .GetRawConstantValue(),
+                Is.EqualTo(true));
+
+            string editorDefaultsSource = File.ReadAllText(
+                "Assets/Arena/Editor/ArenaEditorThermalDefaults.cs");
+            Assert.That(editorDefaultsSource, Does.Contain("lowResolutionForAspectRatios"));
+            Assert.That(editorDefaultsSource, Does.Contain("EditorApplication.delayCall"));
 
             string menu = File.ReadAllText("Assets/Arena/Resources/UI/Toolkit/SystemMenu.uxml");
             foreach (string control in new[]

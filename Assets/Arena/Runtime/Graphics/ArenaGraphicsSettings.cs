@@ -34,7 +34,7 @@ namespace Arena.Graphics
         private const string EffectsQualityPrefKey = "arena.settings.graphics.effectsQuality";
         private const string LightShadowQualityPrefKey = "arena.settings.graphics.lightShadows";
 
-        internal const int DefaultFrameLimit = 60;
+        internal const int DefaultFrameLimit = 30;
         internal const int LaptopTextureMipmapLimit = 1;
         internal const float LowEffectsAnimationUpdatesPerSecond = 15f;
         internal const float HighEffectsAnimationUpdatesPerSecond = 60f;
