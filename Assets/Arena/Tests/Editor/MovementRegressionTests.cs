@@ -395,6 +395,7 @@ namespace Arena.Tests.Editor
 
                 object export = InvokeInstanceMethod(set, "BuildMeleeExport");
                 object strike = FindExportedStrike(GetExportedStrikes(export), "MELEE_ATTACK_1");
+                Assert.That(GetStartupTrimMs(strike), Is.EqualTo(530));
                 Assert.That(GetFirstImpactDelayMs(strike), Is.EqualTo(200));
             }
             finally
@@ -438,7 +439,16 @@ namespace Arena.Tests.Editor
 
                 object export = InvokeInstanceMethod(set, "BuildMeleeExport");
                 object strike = FindExportedStrike(GetExportedStrikes(export), "MELEE_ATTACK_1");
+                Assert.That(GetStartupTrimMs(strike), Is.EqualTo(400));
                 Assert.That(GetFirstImpactDelayMs(strike), Is.Zero);
+
+                Type editorType = AppDomain.CurrentDomain.Load("Assembly-CSharp-Editor")
+                    .GetType("Arena.Editor.CombatAnimationSetEditor", throwOnError: true)!;
+                MethodInfo serialize = editorType.GetMethod(
+                    "SerializeMeleeManifestDocument",
+                    BindingFlags.Static | BindingFlags.NonPublic)!;
+                string json = (string)serialize.Invoke(null, new[] { export })!;
+                Assert.That(json, Does.Contain("\"startup_trim_ms\": 400"));
             }
             finally
             {
@@ -2193,6 +2203,9 @@ namespace Arena.Tests.Editor
             Assert.That(impactDelayMs.Length, Is.GreaterThan(0));
             return impactDelayMs[0];
         }
+
+        private static int GetStartupTrimMs(object strike)
+            => (int)strike.GetType().GetField("startup_trim_ms")!.GetValue(strike)!;
 
         private static int[] GetImpactDelayMs(object strike)
         {

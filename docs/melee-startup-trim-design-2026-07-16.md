@@ -15,6 +15,7 @@ The effective gameplay timeline subtracts the resolved startup trim:
 ```text
 effective_event_seconds = max(0, authored_event_seconds - startup_trim_seconds)
 playback_start_normalized = startup_trim_seconds / clip_length_seconds
+effective_timed_movement_start_ms = max(0, authored_timed_movement_start_ms - startup_trim_ms)
 ```
 
 The resolved trim is clamped to the first `OnStrikeHit` event. Authoring beyond
@@ -27,6 +28,8 @@ produces a zero-delay hit.
   presentation it modifies.
 - The Event Stamper continues to own the physical `OnStrikeHit` marker.
 - Hit-window mirroring and melee-manifest export consume effective event times.
+- The melee manifest retains the resolved startup trim so server-authoritative
+  timed movement uses the same trimmed source timeline as playback and hits.
 - Local playback, remote catch-up, and predicted contact cues consume the same
   resolved trim/effective first-hit time.
 - Recovery remains independently authored gameplay timing and is not reduced by

@@ -69,6 +69,7 @@ namespace Arena.Combat
     {
         public string id = "";
         public string slot_id = "";
+        public int startup_trim_ms;
         public MeleeManifestHitWindow[] hit_windows = Array.Empty<MeleeManifestHitWindow>();
         public int recovery_ms;
         public bool is_gap_closer;

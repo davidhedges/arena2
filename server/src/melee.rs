@@ -592,6 +592,8 @@ struct StrikeData {
     #[serde(default)]
     slot_id: String,
     #[serde(default)]
+    startup_trim_ms: u64,
+    #[serde(default)]
     hit_windows: Vec<StrikeHitWindowData>,
     recovery_ms: u64,
     is_gap_closer: bool,
@@ -2657,10 +2659,15 @@ fn schedule_melee_timed_movement(
     action_instance_id: &str,
     action_kind: &str,
     movement: &MeleeTimedMovementRuntime,
+    startup_trim_ms: u64,
     yaw_start: f32,
     now: Timestamp,
 ) {
-    let start_at = now + Duration::from_millis(movement.start_delay_ms);
+    let start_at = now
+        + Duration::from_millis(effective_melee_timed_movement_start_delay_ms(
+            movement,
+            startup_trim_ms,
+        ));
     ctx.db
         .pending_melee_timed_movement()
         .insert(PendingMeleeTimedMovement {
@@ -2679,6 +2686,13 @@ fn schedule_melee_timed_movement(
             start_at,
             start_at_micros: timestamp_to_micros(start_at),
         });
+}
+
+fn effective_melee_timed_movement_start_delay_ms(
+    movement: &MeleeTimedMovementRuntime,
+    startup_trim_ms: u64,
+) -> u64 {
+    movement.start_delay_ms.saturating_sub(startup_trim_ms)
 }
 
 fn gap_close_pre_commit_decision(
@@ -4502,6 +4516,7 @@ fn perform_melee_attack_for_internal(
             spell_id.as_str(),
             strike.id.as_str(),
             movement,
+            strike.startup_trim_ms,
             caster_phys.yaw,
             now,
         );
@@ -6839,9 +6854,9 @@ mod tests {
         auto_attack_catalog_resolution_keys, auto_attack_reference_for_profile,
         auto_attack_sequence_step_for_profile, canonical_slot_id, combo_input_decision,
         default_aerial_execution_mode, distance_scaled_gap_close_impact_delay_ms,
-        find_combo_root_for_authorization, gap_close_activation_satisfied, gap_close_arc_height,
-        gap_close_destination_within_epsilon, gap_close_has_horizontal_travel,
-        gap_close_movement_facing, gap_close_pre_commit_decision,
+        effective_melee_timed_movement_start_delay_ms, find_combo_root_for_authorization,
+        gap_close_activation_satisfied, gap_close_arc_height, gap_close_destination_within_epsilon,
+        gap_close_has_horizontal_travel, gap_close_movement_facing, gap_close_pre_commit_decision,
         gap_close_target_facing_satisfied, inactive_conditional_gap_close_range,
         melee_channel_movement_canceled, melee_channel_tick_delays,
         melee_hit_volume_contains_player, melee_impact_delays, melee_manifest,
@@ -6885,6 +6900,27 @@ mod tests {
         assert!(quickening_strike_applies_buff("DAGGER_QUICKENING_STRIKE"));
         assert!(!quickening_strike_applies_buff("DAGGER_QUICK_CUT"));
         assert!(!quickening_strike_applies_buff("AUTO_ATTACK_1"));
+    }
+
+    #[test]
+    fn timed_movement_start_delay_consumes_startup_trim() {
+        let movement =
+            crate::progression::melee_timed_movement_for_ability_id("WARRIOR_DISENGAGE_STRIKE")
+                .expect("Warrior Disengage Strike must author timed movement");
+
+        // A trimmed clip plays ahead of the authored source timeline, so the
+        // movement marker has to travel with it, and can never go negative.
+        assert_eq!(
+            effective_melee_timed_movement_start_delay_ms(&movement, 0),
+            movement.start_delay_ms
+        );
+        assert_eq!(
+            effective_melee_timed_movement_start_delay_ms(
+                &movement,
+                movement.start_delay_ms + 100
+            ),
+            0
+        );
     }
 
     fn test_actor_snapshot(identity: Identity, pos_x: f32, pos_z: f32) -> CombatActorSnapshot {
@@ -8100,6 +8136,7 @@ mod tests {
         let strike = StrikeData {
             id: "TEST_MULTI_HIT".to_string(),
             slot_id: "utility_1".to_string(),
+            startup_trim_ms: 0,
             hit_windows: vec![
                 StrikeHitWindowData {
                     impact_delay_ms: 100,
@@ -8163,6 +8200,7 @@ mod tests {
         let strike = StrikeData {
             id: "TEST_AUTHORED_SEQUENCE".to_string(),
             slot_id: "utility_1".to_string(),
+            startup_trim_ms: 0,
             hit_windows: vec![
                 StrikeHitWindowData {
                     impact_delay_ms: 320,
@@ -8294,6 +8332,7 @@ mod tests {
                     StrikeData {
                         id: "UTILITY_1".to_string(),
                         slot_id: "authored_slot".to_string(),
+                        startup_trim_ms: 0,
                         hit_windows: vec![StrikeHitWindowData {
                             impact_delay_ms: 100,
                             impact_phase: String::new(),
@@ -8311,6 +8350,7 @@ mod tests {
                     StrikeData {
                         id: "OTHER_STRIKE".to_string(),
                         slot_id: "utility_1".to_string(),
+                        startup_trim_ms: 0,
                         hit_windows: vec![StrikeHitWindowData {
                             impact_delay_ms: 100,
                             impact_phase: String::new(),
@@ -8695,6 +8735,7 @@ mod tests {
         let strike = StrikeData {
             id: "TEST_ADAPTIVE_GAP_CLOSE".to_string(),
             slot_id: "utility_1".to_string(),
+            startup_trim_ms: 0,
             hit_windows: vec![StrikeHitWindowData {
                 impact_delay_ms: 680,
                 impact_phase: "END".to_string(),

@@ -2523,6 +2523,9 @@ namespace Arena.Presentation
             {
                 id = strike.AuthoredStrikeIdOrDefault,
                 slot_id = strike.RuntimeSlotIdOrDefault,
+                startup_trim_ms = Mathf.Max(
+                    0,
+                    Mathf.RoundToInt(attack.ResolveStartupTrimSeconds() * 1000f)),
                 hit_windows = BuildExportHitWindows(timingReferenceLengthSeconds, attack),
                 recovery_ms = strike.RecoveryMsInt,
                 is_gap_closer = false,

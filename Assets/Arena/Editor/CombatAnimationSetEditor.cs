@@ -2930,6 +2930,15 @@ namespace Arena.Editor
             builder.Append("{\n");
             AppendJsonProperty(builder, indent + 1, "id", strike.id, trailingComma: true);
             AppendJsonProperty(builder, indent + 1, "slot_id", strike.slot_id, trailingComma: true);
+            if (strike.startup_trim_ms > 0)
+            {
+                AppendJsonProperty(
+                    builder,
+                    indent + 1,
+                    "startup_trim_ms",
+                    strike.startup_trim_ms,
+                    trailingComma: true);
+            }
             AppendIndent(builder, indent + 1);
             builder.Append("\"hit_windows\": [\n");
             for (int hitIndex = 0; hitIndex < strike.hit_windows.Length; hitIndex++)
@@ -3585,7 +3594,9 @@ namespace Arena.Editor
                 imported[hitIndex] = new WeaponStrikeHitWindowAuthoring
                 {
                     timeNormalized = clipLengthMs > 0.001f
-                        ? Mathf.Clamp01(hitWindow.impact_delay_ms / clipLengthMs)
+                        ? Mathf.Clamp01(
+                            (hitWindow.impact_delay_ms + manifestStrike.startup_trim_ms)
+                            / clipLengthMs)
                         : 0f,
                 };
             }
