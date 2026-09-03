@@ -25,15 +25,15 @@ use crate::player_state::PlayerState;
 use crate::practice::resolve_respawn_pose;
 use crate::progression::{
     ability_belongs_to_build_selection, blight_fracture_melee_damage_bonus, combat_rule_value,
-    player_has_selected_passive_ability, precision_careful_aim_for_owner,
-    precision_heartseeker_stationary_rule, precision_maverick_for_owner,
-    precision_point_blank_for_owner, primal_adaptation_for_owner, primal_photosynthesis_for_owner,
-    primal_slipstream_cooldown_reduction_for_owner, ruin_acceleration_cooldown_reduction_for_owner,
-    ruin_chain_reaction_spell_for_owner, ruin_furnace_mana_restore_ratio_for_owner,
-    ruin_potential_crit_chance_per_stack_for_owner, ruin_quickening_for_owner,
-    ruin_wildfire_ignite_for_owner, soulstealer_empowered_damage_bonus,
+    consume_target_status_rule_for_ability_id, player_has_selected_passive_ability,
+    precision_careful_aim_for_owner, precision_heartseeker_stationary_rule,
+    precision_maverick_for_owner, precision_point_blank_for_owner, primal_adaptation_for_owner,
+    primal_photosynthesis_for_owner, primal_slipstream_cooldown_reduction_for_owner,
+    ruin_acceleration_cooldown_reduction_for_owner, ruin_chain_reaction_spell_for_owner,
+    ruin_furnace_mana_restore_ratio_for_owner, ruin_potential_crit_chance_per_stack_for_owner,
+    ruin_quickening_for_owner, ruin_wildfire_ignite_for_owner, soulstealer_empowered_damage_bonus,
     subtlety_behind_target_damage_bonus, subtlety_disabled_target_damage_bonus,
-    ARCHER_HEARTSEEKER_ABILITY_ID,
+    ConsumeTargetStatusFrequency, ConsumeTargetStatusSourceScope, ARCHER_HEARTSEEKER_ABILITY_ID,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, combat_relation, target_audience_allows, CombatRelation,
@@ -253,6 +253,7 @@ pub(crate) const COMBAT_EVENT_BLOCK: &str = "COMBAT_BLOCK";
 pub(crate) const COMBAT_EVENT_PARRY: &str = "COMBAT_PARRY";
 pub(crate) const COMBAT_EVENT_EVADE: &str = "COMBAT_EVADE";
 pub(crate) const COMBAT_EVENT_STATUS_END: &str = "COMBAT_STATUS_END";
+pub(crate) const COMBAT_EVENT_STATUS_CONSUMED: &str = "COMBAT_STATUS_CONSUMED";
 pub(crate) const COMBAT_SCALAR_NONE: &str = "";
 pub(crate) const COMBAT_SCALAR_TRAVEL_DURATION_SECONDS: &str = "TRAVEL_DURATION_SECONDS";
 pub(crate) const COMBAT_SCALAR_BEAM_CHARGE_PCT: &str = "BEAM_CHARGE_PCT";
@@ -261,6 +262,7 @@ pub(crate) const COMBAT_SEQUENCE_NONE: &str = "";
 pub(crate) const COMBAT_SEQUENCE_BEAM: &str = "BEAM";
 pub(crate) const COMBAT_METADATA_NONE: &str = "";
 pub(crate) const COMBAT_METADATA_CONSUMED_MELEE_MODIFIER: &str = "CONSUMED_MELEE_MODIFIER";
+pub(crate) const COMBAT_METADATA_CONSUMED_TARGET_STATUS: &str = "CONSUMED_TARGET_STATUS";
 pub(crate) const COMBAT_METADATA_FLURRY_PROC: &str = "FLURRY_PROC";
 pub(crate) const COMBAT_METADATA_RESTLESS_BLADES_PROC: &str = "RESTLESS_BLADES_PROC";
 const MIN_SLOW_PCT: f32 = f32::EPSILON;
@@ -3130,6 +3132,7 @@ pub enum StatusEffectKind {
     Gigantism,
     Flurry,
     FindWeakness,
+    Vulnerable,
     BladeTwisting,
     OffBalance,
     AllAbilityAvoidance,
@@ -3195,6 +3198,7 @@ impl StatusEffectKind {
             Self::Gigantism => "GIGANTISM",
             Self::Flurry => "FLURRY",
             Self::FindWeakness => "FIND_WEAKNESS",
+            Self::Vulnerable => "VULNERABLE",
             Self::BladeTwisting => "BLADE_TWISTING",
             Self::OffBalance => "OFF_BALANCE",
             Self::AllAbilityAvoidance => "ALL_ABILITY_AVOIDANCE",
@@ -3260,6 +3264,7 @@ impl StatusEffectKind {
             "GIGANTISM" => Some(Self::Gigantism),
             "FLURRY" => Some(Self::Flurry),
             "FIND_WEAKNESS" => Some(Self::FindWeakness),
+            "VULNERABLE" => Some(Self::Vulnerable),
             "BLADE_TWISTING" => Some(Self::BladeTwisting),
             "OFF_BALANCE" => Some(Self::OffBalance),
             "ALL_ABILITY_AVOIDANCE" => Some(Self::AllAbilityAvoidance),
@@ -3388,6 +3393,7 @@ pub enum StatusPayload {
         modifier_scalar: f32,
     },
     FindWeakness,
+    Vulnerable,
     BladeTwisting,
     OffBalance,
     AllAbilityAvoidance,
@@ -3569,6 +3575,7 @@ impl AuthoredStatusPayload {
                 modifier_scalar: self.modifier_scalar,
             },
             StatusEffectKind::FindWeakness => StatusPayload::FindWeakness,
+            StatusEffectKind::Vulnerable => StatusPayload::Vulnerable,
             StatusEffectKind::BladeTwisting => StatusPayload::BladeTwisting,
             StatusEffectKind::OffBalance => StatusPayload::OffBalance,
             StatusEffectKind::AllAbilityAvoidance => StatusPayload::AllAbilityAvoidance,
@@ -3715,6 +3722,7 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::TargetedAbilityAvoidance
             | StatusEffectKind::MirrorImage
             | StatusEffectKind::FindWeakness
+            | StatusEffectKind::Vulnerable
             | StatusEffectKind::BladeTwisting
             | StatusEffectKind::OffBalance
             | StatusEffectKind::AllAbilityAvoidance
@@ -3841,6 +3849,7 @@ impl StatusPayload {
             Self::Gigantism { .. } => StatusEffectKind::Gigantism,
             Self::Flurry { .. } => StatusEffectKind::Flurry,
             Self::FindWeakness => StatusEffectKind::FindWeakness,
+            Self::Vulnerable => StatusEffectKind::Vulnerable,
             Self::BladeTwisting => StatusEffectKind::BladeTwisting,
             Self::OffBalance => StatusEffectKind::OffBalance,
             Self::AllAbilityAvoidance => StatusEffectKind::AllAbilityAvoidance,
@@ -3880,6 +3889,7 @@ impl StatusPayload {
             | Self::TargetedAbilityAvoidance
             | Self::MirrorImage
             | Self::FindWeakness
+            | Self::Vulnerable
             | Self::BladeTwisting
             | Self::OffBalance
             | Self::AllAbilityAvoidance
@@ -4178,6 +4188,7 @@ impl StatusPayload {
                 modifier_scalar: columns.modifier_scalar.clamp(0.0, 1.0),
             },
             StatusEffectKind::FindWeakness => Self::FindWeakness,
+            StatusEffectKind::Vulnerable => Self::Vulnerable,
             StatusEffectKind::BladeTwisting => Self::BladeTwisting,
             StatusEffectKind::OffBalance => Self::OffBalance,
             StatusEffectKind::AllAbilityAvoidance => Self::AllAbilityAvoidance,
@@ -4219,6 +4230,7 @@ impl StatusPayload {
             | Self::TargetedAbilityAvoidance
             | Self::MirrorImage
             | Self::FindWeakness
+            | Self::Vulnerable
             | Self::BladeTwisting
             | Self::OffBalance
             | Self::AllAbilityAvoidance
@@ -4332,6 +4344,7 @@ impl StatusPayload {
             | Self::TargetedAbilityAvoidance
             | Self::MirrorImage
             | Self::FindWeakness
+            | Self::Vulnerable
             | Self::BladeTwisting
             | Self::OffBalance
             | Self::AllAbilityAvoidance
@@ -4536,6 +4549,7 @@ impl StatusPayload {
             | Self::TargetedAbilityAvoidance
             | Self::MirrorImage
             | Self::FindWeakness
+            | Self::Vulnerable
             | Self::BladeTwisting
             | Self::OffBalance
             | Self::AllAbilityAvoidance
@@ -6685,6 +6699,10 @@ fn resolve_damage_amount(
             combat_rule_value(RULE_CRIT_DAMAGE_MULTIPLIER),
         );
     }
+    // The receipt is intentionally inert in this infrastructure slice. Future
+    // typed empowerments can use it while consumption remains centralized and
+    // atomic at the landed direct-hit boundary.
+    let _consumed_target_status = consume_target_status_for_hit(ctx, hit);
     let casted_ability_hit = damage_comes_from_casted_ability(hit);
     let find_weakness = casted_ability_hit
         .then(|| {
@@ -7743,7 +7761,17 @@ fn heartseeker_stationary_crit_override(ctx: &ReducerContext, hit: &PendingHit) 
     .then_some(1.0)
 }
 
-fn ability_id_for_pending_hit(ctx: &ReducerContext, hit: &PendingHit) -> Option<String> {
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PendingHitAbilityContext {
+    ability_id: String,
+    action_instance_id: String,
+    action_kind: String,
+}
+
+fn ability_context_for_pending_hit(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+) -> Option<PendingHitAbilityContext> {
     let action_key = if hit.direct_action_key.trim().is_empty() {
         hit.spell_id.trim()
     } else {
@@ -7756,9 +7784,181 @@ fn ability_id_for_pending_hit(ctx: &ReducerContext, hit: &PendingHit) -> Option<
         .combat_event()
         .caster()
         .filter(hit.source)
-        .filter(|event| action_key_matches_instance(action_key, event.action_instance_id.as_str()))
+        .filter(|event| {
+            event.event_type != COMBAT_EVENT_STATUS_CONSUMED
+                && action_key_matches_instance(action_key, event.action_instance_id.as_str())
+        })
         .max_by_key(|event| event.event_id)
-        .map(|event| event.ability_id)
+        .map(|event| PendingHitAbilityContext {
+            ability_id: event.ability_id,
+            action_instance_id: event.action_instance_id,
+            action_kind: event.action_kind,
+        })
+}
+
+fn ability_id_for_pending_hit(ctx: &ReducerContext, hit: &PendingHit) -> Option<String> {
+    ability_context_for_pending_hit(ctx, hit).map(|context| context.ability_id)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ConsumedTargetStatus {
+    pub status_kind: StatusEffectKind,
+    pub stack_group: String,
+    pub stacks_consumed: u32,
+    pub original_applier: Identity,
+}
+
+fn hit_can_consume_target_status(hit: &PendingHit) -> bool {
+    hit.source != Identity::ZERO
+        && hit.amount > 0
+        && DamageDelivery::from_wire(hit.damage_delivery.as_str()) == DamageDelivery::Direct
+        && matches!(
+            hit.damage_source_kind.as_str(),
+            DAMAGE_SOURCE_KIND_MELEE | DAMAGE_SOURCE_KIND_SPELL | DAMAGE_SOURCE_KIND_PROJECTILE
+        )
+        && !hit.direct_action_key.trim().is_empty()
+        && !hit.direct_action_key.contains("melee:auto_attack:")
+}
+
+fn consumable_status_stack_group_matches(
+    authored_stack_group: &str,
+    effect: &StatusEffect,
+) -> bool {
+    authored_stack_group.replace("{SOURCE}", effect.source.to_hex().as_str()) == effect.stack_group
+}
+
+fn consumable_status_source_scope_allows(
+    scope: ConsumeTargetStatusSourceScope,
+    applier_to_consumer_relation: CombatRelation,
+) -> bool {
+    match scope {
+        ConsumeTargetStatusSourceScope::ApplierOnly => {
+            applier_to_consumer_relation == CombatRelation::Self_
+        }
+        ConsumeTargetStatusSourceScope::ApplierTeam => matches!(
+            applier_to_consumer_relation,
+            CombatRelation::Self_ | CombatRelation::PartyAlly
+        ),
+    }
+}
+
+fn target_status_already_consumed_for_action(
+    ctx: &ReducerContext,
+    consumer: Identity,
+    target: Identity,
+    action_instance_id: &str,
+    status_kind: StatusEffectKind,
+) -> bool {
+    ctx.db
+        .combat_event()
+        .caster()
+        .filter(consumer)
+        .any(|event| {
+            event.event_type == COMBAT_EVENT_STATUS_CONSUMED
+                && event.action_instance_id == action_instance_id
+                && event.hit == target
+                && event.metadata_kind == COMBAT_METADATA_CONSUMED_TARGET_STATUS
+                && event.metadata_key == status_kind.as_str()
+        })
+}
+
+fn emit_target_status_consumed_event(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    ability_context: &PendingHitAbilityContext,
+    consumed: &ConsumedTargetStatus,
+) {
+    ctx.db.combat_event().insert(CombatEvent {
+        event_id: 0,
+        action_instance_id: ability_context.action_instance_id.clone(),
+        action_kind: ability_context.action_kind.clone(),
+        ability_id: ability_context.ability_id.clone(),
+        hit_index: -1,
+        event_type: COMBAT_EVENT_STATUS_CONSUMED.to_string(),
+        source_kind: hit.damage_source_kind.clone(),
+        caster: hit.source,
+        hit: hit.target,
+        origin_x: 0.0,
+        origin_y: 0.0,
+        origin_z: 0.0,
+        dir_x: 0.0,
+        dir_y: 0.0,
+        dir_z: 0.0,
+        speed: 0.0,
+        max_distance: 0.0,
+        scalar_kind: COMBAT_SCALAR_NONE.to_string(),
+        scalar_value: 0.0,
+        sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
+        sequence_index: 0,
+        sequence_count: consumed.stacks_consumed,
+        point_x: 0.0,
+        point_y: 0.0,
+        point_z: 0.0,
+        created_at: ctx.timestamp,
+        created_at_micros: timestamp_to_micros(ctx.timestamp),
+        damage: 0,
+        metadata_kind: COMBAT_METADATA_CONSUMED_TARGET_STATUS.to_string(),
+        metadata_key: consumed.status_kind.as_str().to_string(),
+        metadata_value: consumed.stack_group.clone(),
+    });
+}
+
+fn consume_target_status_for_hit(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+) -> Option<ConsumedTargetStatus> {
+    if !hit_can_consume_target_status(hit) {
+        return None;
+    }
+    let ability_context = ability_context_for_pending_hit(ctx, hit)?;
+    let rule = consume_target_status_rule_for_ability_id(ability_context.ability_id.as_str())?;
+    if matches!(
+        rule.frequency,
+        ConsumeTargetStatusFrequency::OncePerActionPerTarget
+    ) && target_status_already_consumed_for_action(
+        ctx,
+        hit.source,
+        hit.target,
+        ability_context.action_instance_id.as_str(),
+        rule.status_kind,
+    ) {
+        return None;
+    }
+
+    let mut effect = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(hit.target)
+        .filter(|effect| {
+            effect.effect_kind == rule.status_kind.as_str()
+                && effect.polarity == StatusPolarity::Debuff.as_str()
+                && ctx.timestamp < effect.expires_at
+                && consumable_status_stack_group_matches(rule.status_stack_group.as_str(), effect)
+                && consumable_status_source_scope_allows(
+                    rule.source_scope,
+                    combat_relation(ctx, effect.source, hit.source),
+                )
+                && !status_is_projected_by_active_radial_effect(ctx, effect)
+        })
+        .min_by_key(|effect| effect.status_id)?;
+
+    let stacks_consumed = rule.stacks.min(effect.stacks.max(1));
+    let consumed = ConsumedTargetStatus {
+        status_kind: rule.status_kind,
+        stack_group: effect.stack_group.clone(),
+        stacks_consumed,
+        original_applier: effect.source,
+    };
+    if effect.stacks > stacks_consumed {
+        effect.stacks = effect.stacks.saturating_sub(stacks_consumed);
+        ctx.db.status_effect().status_id().update(effect);
+    } else {
+        clear_rime_protection_for_status(ctx, hit.target, effect.status_id);
+        ctx.db.status_effect().status_id().delete(effect.status_id);
+    }
+    emit_target_status_consumed_event(ctx, hit, &ability_context, &consumed);
+    Some(consumed)
 }
 
 fn heartseeker_should_auto_crit(ability_id: &str, target_is_stationary: bool) -> bool {
@@ -10413,6 +10613,7 @@ impl StatusRuntimeView {
                     | StatusEffectKind::TargetedAbilityAvoidance
                     | StatusEffectKind::MirrorImage
                     | StatusEffectKind::FindWeakness
+                    | StatusEffectKind::Vulnerable
                     | StatusEffectKind::BladeTwisting
                     | StatusEffectKind::OffBalance
                     | StatusEffectKind::AllAbilityAvoidance
@@ -11189,7 +11390,8 @@ mod tests {
         advance_expired_escalating_dot, apply_status_update, attack_speed_scalar_to_multiplier,
         attacker_is_behind_target, battle_trance_hp_after_damage, behind_target_damage_multiplier,
         blight_empowered_hit_is_eligible, bloodlust_passive_spec, burden_damage_split,
-        cadence_damage_multiplier_for_action, damage_breaks_confusion, damage_breaks_shroud,
+        cadence_damage_multiplier_for_action, consumable_status_source_scope_allows,
+        consumable_status_stack_group_matches, damage_breaks_confusion, damage_breaks_shroud,
         damage_comes_from_casted_ability, damage_source_grants_outgoing_rewards,
         damaging_area_consumes_mirror_images, deterministic_fulmination_candidate_index,
         disabled_target_damage_multiplier, dot_tick_damage, due_interval_count,
@@ -11197,32 +11399,33 @@ mod tests {
         event_prune_cutoff_micros, fire_spell_hit_can_trigger_wildfire,
         fracture_melee_damage_multiplier, fulmination_arc_damage,
         fulmination_uses_any_target_audience, furnace_mana_restore_amount,
-        heartseeker_should_auto_crit, hit_is_direct_melee_attack, holy_shield_end_reason,
-        immolation_damage_for_stacks, immolation_remaining_tick_count, initial_status_stacks,
-        isolated_damage_multiplier, knockback_stagger_duration, melee_attack_can_trigger_fracture,
-        mirror_image_intercept_chance, mirror_image_stacks_after_intercept,
-        mirror_images_intercept, new_status_effect, next_cadence_count,
-        point_blank_damage_multiplier, point_within_radius, potential_stacks_after_spell_strike,
-        proportional_tick_amount_after_stack_loss, quickening_cast_speed_multiplier,
-        resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
-        resolve_temporary_hitpoint_absorb, resolved_shove_tunables, restless_passive_spec,
-        rime_protected_status_id, rime_protection_stack_group, spell_critical_can_charge_capacitor,
-        spell_critical_can_trigger_chain_reaction, stacked_slow_pct, stagger_shove_tunables,
-        stationary_target_damage_multiplier, stationary_target_from_poses,
-        status_application_is_blocked_by_immunity, status_can_spread_from_contagious_target,
-        status_dot_tick_damage, status_has_dispel_type, status_kind_is_intrinsically_undispellable,
-        status_matches_removal_filter_values, status_stacks_after_removal, AuthoredStatusPayload,
-        DamageDelivery, DamageType, EffectPacket, HolyShieldEndReason, MovementModifiers,
-        PendingHit, StackPolicy, StatusApplication, StatusDispelType, StatusEffect,
-        StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
-        StatusStackGroupDefault, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
-        COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_BURDEN_REDIRECT,
+        heartseeker_should_auto_crit, hit_can_consume_target_status, hit_is_direct_melee_attack,
+        holy_shield_end_reason, immolation_damage_for_stacks, immolation_remaining_tick_count,
+        initial_status_stacks, isolated_damage_multiplier, knockback_stagger_duration,
+        melee_attack_can_trigger_fracture, mirror_image_intercept_chance,
+        mirror_image_stacks_after_intercept, mirror_images_intercept, new_status_effect,
+        next_cadence_count, point_blank_damage_multiplier, point_within_radius,
+        potential_stacks_after_spell_strike, proportional_tick_amount_after_stack_loss,
+        quickening_cast_speed_multiplier, resolve_effect_amount_from_roll,
+        resolve_mana_shield_absorb, resolve_temporary_hitpoint_absorb, resolved_shove_tunables,
+        restless_passive_spec, rime_protected_status_id, rime_protection_stack_group,
+        spell_critical_can_charge_capacitor, spell_critical_can_trigger_chain_reaction,
+        stacked_slow_pct, stagger_shove_tunables, stationary_target_damage_multiplier,
+        stationary_target_from_poses, status_application_is_blocked_by_immunity,
+        status_can_spread_from_contagious_target, status_dot_tick_damage, status_has_dispel_type,
+        status_kind_is_intrinsically_undispellable, status_matches_removal_filter_values,
+        status_stacks_after_removal, AuthoredStatusPayload, DamageDelivery, DamageType,
+        EffectPacket, HolyShieldEndReason, MovementModifiers, PendingHit, StackPolicy,
+        StatusApplication, StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload,
+        StatusPolarity, StatusRuntimeView, StatusStackGroupDefault, TemporaryCombatModifiers,
+        BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_BURDEN_REDIRECT,
         DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PERIODIC, DAMAGE_SOURCE_KIND_PROJECTILE,
         DAMAGE_SOURCE_KIND_SELF_INFLICTED, DAMAGE_SOURCE_KIND_SPELL, HOLY_SHIELD_SPELL_ID,
         HOLY_SHIELD_STATUS_GROUP, PLAYER_EVENT_RETENTION, RESTLESS_PASSIVE_ID,
     };
     use crate::movement::FIXED_TICK_MILLIS;
-    use crate::relations::TargetAudience;
+    use crate::progression::ConsumeTargetStatusSourceScope;
+    use crate::relations::{CombatRelation, TargetAudience};
     use spacetimedb::{Identity, Timestamp};
     use std::{collections::HashSet, time::Duration};
 
@@ -11774,6 +11977,129 @@ mod tests {
             DamageDelivery::Periodic,
             "PERIODIC",
         )));
+    }
+
+    #[test]
+    fn consumable_target_status_accepts_only_positive_direct_authored_attack_hits() {
+        let source = test_identity_number(1);
+        let target = test_identity_number(2);
+        let hit =
+            |direct_action_key: &str, amount: i32, delivery: DamageDelivery, source_kind: &str| {
+                PendingHit {
+                    hit_id: 0,
+                    source,
+                    target,
+                    spell_id: direct_action_key.to_string(),
+                    amount,
+                    is_heal: false,
+                    damage_type: "PHYSICAL".to_string(),
+                    target_audience: "HOSTILE".to_string(),
+                    damage_delivery: delivery.as_str().to_string(),
+                    damage_source_kind: source_kind.to_string(),
+                    direct_action_key: direct_action_key.to_string(),
+                    is_area: false,
+                    queued_at: Timestamp::UNIX_EPOCH,
+                    queued_at_micros: 0,
+                    queued_order: 0,
+                }
+            };
+
+        for source_kind in [
+            DAMAGE_SOURCE_KIND_MELEE,
+            DAMAGE_SOURCE_KIND_SPELL,
+            DAMAGE_SOURCE_KIND_PROJECTILE,
+        ] {
+            assert!(hit_can_consume_target_status(&hit(
+                "authored-action:hit:0",
+                10,
+                DamageDelivery::Direct,
+                source_kind,
+            )));
+        }
+        assert!(!hit_can_consume_target_status(&hit(
+            "authored-action:tick:0",
+            10,
+            DamageDelivery::Periodic,
+            DAMAGE_SOURCE_KIND_PERIODIC,
+        )));
+        assert!(!hit_can_consume_target_status(&hit(
+            "authored-action:hit:0",
+            0,
+            DamageDelivery::Direct,
+            DAMAGE_SOURCE_KIND_SPELL,
+        )));
+        assert!(!hit_can_consume_target_status(&hit(
+            "melee:auto_attack:abc:hit:0",
+            10,
+            DamageDelivery::Direct,
+            DAMAGE_SOURCE_KIND_MELEE,
+        )));
+        assert!(!hit_can_consume_target_status(&hit(
+            "proc:hit:0",
+            10,
+            DamageDelivery::Direct,
+            "PROC",
+        )));
+        assert!(!hit_can_consume_target_status(&hit(
+            "",
+            10,
+            DamageDelivery::Direct,
+            DAMAGE_SOURCE_KIND_SPELL,
+        )));
+
+        let mut system_hit = hit(
+            "authored-action:hit:0",
+            10,
+            DamageDelivery::Direct,
+            DAMAGE_SOURCE_KIND_SPELL,
+        );
+        system_hit.source = Identity::ZERO;
+        assert!(!hit_can_consume_target_status(&system_hit));
+    }
+
+    #[test]
+    fn consumable_status_group_and_source_scope_are_explicit() {
+        let applier = test_identity_number(1);
+        let target = test_identity_number(2);
+        let now = Timestamp::UNIX_EPOCH;
+        let mut vulnerable = test_status_effect(
+            target,
+            StatusPayload::Vulnerable,
+            now,
+            now + Duration::from_secs(5),
+        );
+        vulnerable.source = applier;
+        vulnerable.stack_group = format!("VULNERABLE:{}", applier.to_hex());
+
+        assert!(consumable_status_stack_group_matches(
+            "VULNERABLE:{SOURCE}",
+            &vulnerable,
+        ));
+        assert!(!consumable_status_stack_group_matches(
+            "VULNERABLE:OTHER",
+            &vulnerable,
+        ));
+
+        assert!(consumable_status_source_scope_allows(
+            ConsumeTargetStatusSourceScope::ApplierOnly,
+            CombatRelation::Self_,
+        ));
+        assert!(!consumable_status_source_scope_allows(
+            ConsumeTargetStatusSourceScope::ApplierOnly,
+            CombatRelation::PartyAlly,
+        ));
+        assert!(consumable_status_source_scope_allows(
+            ConsumeTargetStatusSourceScope::ApplierTeam,
+            CombatRelation::Self_,
+        ));
+        assert!(consumable_status_source_scope_allows(
+            ConsumeTargetStatusSourceScope::ApplierTeam,
+            CombatRelation::PartyAlly,
+        ));
+        assert!(!consumable_status_source_scope_allows(
+            ConsumeTargetStatusSourceScope::ApplierTeam,
+            CombatRelation::Hostile,
+        ));
     }
 
     #[test]
@@ -13220,6 +13546,11 @@ mod tests {
                 StatusPayload::BattleTrance,
             ),
             (
+                StatusPayload::Vulnerable,
+                StatusEffectKind::Vulnerable,
+                StatusPayload::Vulnerable,
+            ),
+            (
                 StatusPayload::Fulmination,
                 StatusEffectKind::Fulmination,
                 StatusPayload::Fulmination,
@@ -13282,6 +13613,11 @@ mod tests {
                     absorb_amount: 30,
                     absorb_cap: 60,
                 }),
+            ),
+            (
+                "valid vulnerable marker",
+                AuthoredStatusPayload::new(StatusEffectKind::Vulnerable, 0.0, 0, 0, 0, 0.0),
+                Some(StatusPayload::Vulnerable),
             ),
             (
                 "stun with irrelevant scalar",

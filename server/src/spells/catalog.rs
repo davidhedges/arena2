@@ -4131,6 +4131,7 @@ fn validate_apply_status_kind_for_target(
         | StatusEffectKind::Dot
         | StatusEffectKind::Silence
         | StatusEffectKind::FindWeakness
+        | StatusEffectKind::Vulnerable
         | StatusEffectKind::Disarm
         | StatusEffectKind::Gouge
         | StatusEffectKind::Stalked

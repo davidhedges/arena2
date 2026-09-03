@@ -53,6 +53,7 @@ namespace Arena.Combat
         public const string Parry = "COMBAT_PARRY";
         public const string Evade = "COMBAT_EVADE";
         public const string StatusEnd = "COMBAT_STATUS_END";
+        public const string StatusConsumed = "COMBAT_STATUS_CONSUMED";
     }
 
     public static class CombatEventSources
@@ -84,6 +85,7 @@ namespace Arena.Combat
     {
         public const string None = "";
         public const string ConsumedMeleeModifier = "CONSUMED_MELEE_MODIFIER";
+        public const string ConsumedTargetStatus = "CONSUMED_TARGET_STATUS";
         public const string FlurryProc = "FLURRY_PROC";
         public const string RestlessBladesProc = "RESTLESS_BLADES_PROC";
     }

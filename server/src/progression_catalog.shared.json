@@ -15467,6 +15467,13 @@
       "display_name": "Poisoned",
       "description": "Takes 2 poison damage each second per stack. Stacks up to 5 times.",
       "sort_order": 10140
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "VULNERABLE",
+      "display_name": "Vulnerable",
+      "description": "Can be consumed by certain attacks to empower that attack.",
+      "sort_order": 10150
     }
   ],
   "combat_vfx_cues": [

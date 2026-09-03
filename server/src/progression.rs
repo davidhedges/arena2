@@ -307,6 +307,8 @@ struct AbilityGameplayDefinition {
     #[serde(default)]
     fire_spell_ignite: Option<FireSpellIgniteDefinition>,
     #[serde(default)]
+    consume_target_status: Option<ConsumeTargetStatusRule>,
+    #[serde(default)]
     soulstealer_empowered_damage_bonus: f32,
     #[serde(default)]
     fire_damage_taken_mana_restore_ratio: f32,
@@ -386,6 +388,55 @@ struct AbilityGameplayDefinition {
     arms_auto_attack_on_cast: bool,
     #[serde(default)]
     delivery: Option<serde_json::Value>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub(crate) enum ConsumeTargetStatusSourceScope {
+    ApplierOnly,
+    ApplierTeam,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub(crate) enum ConsumeTargetStatusFrequency {
+    OncePerActionPerTarget,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ConsumeTargetStatusRule {
+    pub status_kind: StatusEffectKind,
+    pub status_stack_group: String,
+    pub stacks: u32,
+    pub source_scope: ConsumeTargetStatusSourceScope,
+    pub frequency: ConsumeTargetStatusFrequency,
+}
+
+impl ConsumeTargetStatusRule {
+    fn validate(&self, ability_id: &str, ability_kind: &str) -> Result<(), String> {
+        if !matches!(ability_kind, "MELEE" | "SPELL") {
+            return Err(format!(
+                "ability '{ability_id}' consume_target_status is only supported for MELEE or SPELL gameplay"
+            ));
+        }
+        if self.status_kind != StatusEffectKind::Vulnerable {
+            return Err(format!(
+                "ability '{ability_id}' consume_target_status.status_kind must be VULNERABLE"
+            ));
+        }
+        if self.status_stack_group.trim().is_empty() {
+            return Err(format!(
+                "ability '{ability_id}' consume_target_status.status_stack_group must not be empty"
+            ));
+        }
+        if self.stacks != 1 {
+            return Err(format!(
+                "ability '{ability_id}' consume_target_status.stacks must be exactly 1 in v1"
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Deserialize)]
@@ -1379,6 +1430,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::TargetedAbilityAvoidance,
         StatusEffectKind::AllAbilityAvoidance,
         StatusEffectKind::MirrorImage,
+        StatusEffectKind::Vulnerable,
         StatusEffectKind::Fulmination,
         StatusEffectKind::Quickening,
         StatusEffectKind::Rime,
@@ -3675,6 +3727,15 @@ fn ability_definition(ability_id: &str) -> Option<&'static AbilityDefinition> {
         .find(|definition| normalize_identifier(definition.ability_id.as_str()) == ability_id)
 }
 
+pub(crate) fn consume_target_status_rule_for_ability_id(
+    ability_id: &str,
+) -> Option<ConsumeTargetStatusRule> {
+    ability_definition(ability_id)?
+        .gameplay
+        .consume_target_status
+        .clone()
+}
+
 pub(crate) fn authored_ability_actor_scope(ability_id: &str) -> Option<&'static str> {
     ability_definition(ability_id).map(|definition| definition.actor_scope.as_str())
 }
@@ -3896,6 +3957,10 @@ fn validate_ability_catalog() {
         }
 
         let ability_kind = ability_gameplay_kind(ability);
+        if let Some(rule) = ability.gameplay.consume_target_status.as_ref() {
+            rule.validate(ability_id.as_str(), ability_kind.as_str())
+                .unwrap_or_else(|err| panic!("{err}"));
+        }
         let disabled_target_damage_bonus = ability.gameplay.disabled_target_damage_bonus;
         let behind_target_damage_bonus = ability.gameplay.behind_target_damage_bonus;
         let isolated_damage_bonus = ability.gameplay.isolated_damage_bonus;
@@ -6335,7 +6400,8 @@ mod tests {
         projectile_body_vfx_id_for_spell, resolved_combat_discipline_id_for_ability_definition,
         resolved_melee_targeting_for_catalog, shroud_has_expired, validate_auto_attack_catalog,
         validate_combat_mode_catalog, validate_progression_catalog_authoring_contract,
-        AbilityDefinition, CombatVfxPresentationManifest, FrozenActiveAuthorizationDenial,
+        AbilityDefinition, CombatVfxPresentationManifest, ConsumeTargetStatusFrequency,
+        ConsumeTargetStatusRule, ConsumeTargetStatusSourceScope, FrozenActiveAuthorizationDenial,
         MeleeChannelRuntime, MeleeImpactEffectRuntime, ABILITY_KIND_COMBAT_MODE_TOGGLE,
         ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID, AUTO_ATTACK_MOVEMENT_ALLOW_MOVING,
         AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE, BLIGHT_TOXIC_WEAPON_ABILITY_ID,
@@ -6374,6 +6440,75 @@ mod tests {
             FrozenActiveAuthorizationDenial::NoActiveDiscipline.as_str(),
             "NO_ACTIVE_DISCIPLINE"
         );
+    }
+
+    #[test]
+    fn consumable_target_status_rule_has_a_narrow_vulnerable_v1_contract() {
+        let rule: ConsumeTargetStatusRule = serde_json::from_str(
+            r#"{
+                "status_kind": "VULNERABLE",
+                "status_stack_group": "VULNERABLE:{SOURCE}",
+                "stacks": 1,
+                "source_scope": "APPLIER_TEAM",
+                "frequency": "ONCE_PER_ACTION_PER_TARGET"
+            }"#,
+        )
+        .expect("the canonical consumable status rule should deserialize");
+
+        assert_eq!(rule.status_kind, StatusEffectKind::Vulnerable);
+        assert_eq!(
+            rule.source_scope,
+            ConsumeTargetStatusSourceScope::ApplierTeam
+        );
+        assert_eq!(
+            rule.frequency,
+            ConsumeTargetStatusFrequency::OncePerActionPerTarget
+        );
+        assert_eq!(rule.validate("TEST", "MELEE"), Ok(()));
+        assert_eq!(rule.validate("TEST", "SPELL"), Ok(()));
+        assert!(rule.validate("TEST", "PASSIVE").is_err());
+
+        let mut invalid = rule.clone();
+        invalid.status_kind = StatusEffectKind::FindWeakness;
+        assert!(invalid.validate("TEST", "MELEE").is_err());
+
+        let mut invalid = rule.clone();
+        invalid.status_stack_group.clear();
+        assert!(invalid.validate("TEST", "MELEE").is_err());
+
+        let mut invalid = rule;
+        invalid.stacks = 2;
+        assert!(invalid.validate("TEST", "MELEE").is_err());
+    }
+
+    #[test]
+    fn vulnerable_infrastructure_is_present_but_no_ability_consumes_it_yet() {
+        let catalog = progression_catalog();
+
+        assert!(catalog
+            .abilities
+            .iter()
+            .all(|ability| ability.gameplay.consume_target_status.is_none()));
+        assert!(catalog.abilities.iter().all(|ability| {
+            ability
+                .gameplay
+                .delivery
+                .as_ref()
+                .is_none_or(|delivery| !delivery.to_string().contains("VULNERABLE"))
+                && ability.gameplay.melee_impact_effects.iter().all(|effect| {
+                    !matches!(
+                        effect,
+                        super::MeleeImpactEffectDefinition::ApplyStatus { status }
+                            if normalize_identifier(status.kind.as_str()) == "VULNERABLE"
+                    )
+                })
+        }));
+        assert!(authored_status_presentation_ids(catalog).contains("VULNERABLE"));
+        assert!(catalog.action_presentations.iter().any(|presentation| {
+            presentation.presentation_kind == "STATUS"
+                && presentation.presentation_id == "VULNERABLE"
+                && presentation.display_name == "Vulnerable"
+        }));
     }
 
     #[test]
