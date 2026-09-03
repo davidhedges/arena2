@@ -1892,6 +1892,8 @@ mod tests {
         let expected_owners = [
             ("DAGGER_COUP_DE_GRACE", "DAGGERS_SHADOW"),
             ("DAGGER_FIND_WEAKNESS", "DAGGERS_EXECUTIONER"),
+            ("DAGGER_CRUELTY", "DAGGERS_EXECUTIONER"),
+            ("DAGGER_EXPOSE_WEAKNESS", "DAGGERS_EXECUTIONER"),
             ("DAGGER_DISARM", "DAGGERS_BLADEDANCER"),
             ("DAGGER_RESTLESS_BLADES", "DAGGERS_BLADEDANCER"),
             ("PALADIN_BLADE_BARRIER", "DAGGERS_BLADEDANCER"),
@@ -2575,7 +2577,7 @@ mod tests {
     fn canonical_catalog_is_exhaustive_and_staff_has_no_techniques() {
         let catalog = catalog();
         assert_eq!(catalog.specializations.len(), 18);
-        assert_eq!(catalog.features.len(), 215);
+        assert_eq!(catalog.features.len(), 217);
         assert_eq!(catalog.intrinsic_ability_ids.len(), 5);
         assert_eq!(catalog.removed_player_ability_ids.len(), 4);
         assert_eq!(catalog.traits.len(), 1);
@@ -2585,7 +2587,7 @@ mod tests {
                 .values()
                 .filter(|row| row.loadout_kind == CombatFeatureLoadoutKind::Technique)
                 .count(),
-            84
+            86
         );
         assert_eq!(
             catalog

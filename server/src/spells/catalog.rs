@@ -4102,6 +4102,7 @@ fn validate_apply_status_kind_for_self(
         | StatusEffectKind::MirrorImage
         | StatusEffectKind::Gigantism
         | StatusEffectKind::Flurry
+        | StatusEffectKind::Cruelty
         | StatusEffectKind::BladeTwisting
         | StatusEffectKind::Rime
         | StatusEffectKind::SoulStolen
@@ -5183,6 +5184,55 @@ mod tests {
         assert_eq!(status.kind, StatusEffectKind::AllAbilityAvoidance);
         assert_eq!(status.max_stacks, 1);
         assert_eq!(status.stack_policy, StackPolicy::Refresh);
+    }
+
+    #[test]
+    fn cruelty_authors_a_one_minute_self_empowerment() {
+        let definition =
+            spell_definition_by_str("CRUELTY").expect("CRUELTY should derive from the catalog");
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("CRUELTY should apply its armed status");
+
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Self_);
+        assert_eq!(definition.target_audience, TargetAudience::SelfOnly);
+        assert!(!definition.requires_target);
+        assert!(!definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cooldown, Duration::from_secs(60));
+        assert_eq!(definition.duration, 86_400.0);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert_eq!(definition.status_stack_group.as_deref(), Some("CRUELTY"));
+        assert_eq!(status.kind, StatusEffectKind::Cruelty);
+        assert_eq!(status.max_stacks, 1);
+        assert_eq!(status.stack_policy, StackPolicy::Refresh);
+    }
+
+    #[test]
+    fn expose_weakness_sets_the_target_wide_vulnerability_maximum() {
+        let definition = spell_definition_by_str("EXPOSE_WEAKNESS")
+            .expect("EXPOSE_WEAKNESS should derive from the catalog");
+        let status = definition
+            .apply_status
+            .as_ref()
+            .expect("EXPOSE_WEAKNESS should apply Vulnerable");
+
+        assert_eq!(definition.behavior, SpellBehavior::ApplyStatus);
+        assert_eq!(definition.targeting, SpellTargeting::Target);
+        assert_eq!(definition.target_audience, TargetAudience::Hostile);
+        assert!(definition.requires_target);
+        assert!(definition.requires_target_los);
+        assert_eq!(definition.cast_time, Duration::ZERO);
+        assert_eq!(definition.cooldown, Duration::from_secs(120));
+        assert_eq!(definition.duration, 86_400.0);
+        assert_eq!(definition.max_distance, 12.0);
+        assert_eq!(definition.primary_resource_cost, 0.0);
+        assert_eq!(definition.status_stack_group.as_deref(), Some("VULNERABLE"));
+        assert_eq!(status.kind, StatusEffectKind::Vulnerable);
+        assert_eq!(status.max_stacks, 3);
+        assert_eq!(status.stack_policy, StackPolicy::SetMaxRefresh);
     }
 
     #[test]

@@ -3133,6 +3133,7 @@ pub enum StatusEffectKind {
     Flurry,
     FindWeakness,
     Vulnerable,
+    Cruelty,
     BladeTwisting,
     OffBalance,
     AllAbilityAvoidance,
@@ -3199,6 +3200,7 @@ impl StatusEffectKind {
             Self::Flurry => "FLURRY",
             Self::FindWeakness => "FIND_WEAKNESS",
             Self::Vulnerable => "VULNERABLE",
+            Self::Cruelty => "CRUELTY",
             Self::BladeTwisting => "BLADE_TWISTING",
             Self::OffBalance => "OFF_BALANCE",
             Self::AllAbilityAvoidance => "ALL_ABILITY_AVOIDANCE",
@@ -3265,6 +3267,7 @@ impl StatusEffectKind {
             "FLURRY" => Some(Self::Flurry),
             "FIND_WEAKNESS" => Some(Self::FindWeakness),
             "VULNERABLE" => Some(Self::Vulnerable),
+            "CRUELTY" => Some(Self::Cruelty),
             "BLADE_TWISTING" => Some(Self::BladeTwisting),
             "OFF_BALANCE" => Some(Self::OffBalance),
             "ALL_ABILITY_AVOIDANCE" => Some(Self::AllAbilityAvoidance),
@@ -3394,6 +3397,7 @@ pub enum StatusPayload {
     },
     FindWeakness,
     Vulnerable,
+    Cruelty,
     BladeTwisting,
     OffBalance,
     AllAbilityAvoidance,
@@ -3576,6 +3580,7 @@ impl AuthoredStatusPayload {
             },
             StatusEffectKind::FindWeakness => StatusPayload::FindWeakness,
             StatusEffectKind::Vulnerable => StatusPayload::Vulnerable,
+            StatusEffectKind::Cruelty => StatusPayload::Cruelty,
             StatusEffectKind::BladeTwisting => StatusPayload::BladeTwisting,
             StatusEffectKind::OffBalance => StatusPayload::OffBalance,
             StatusEffectKind::AllAbilityAvoidance => StatusPayload::AllAbilityAvoidance,
@@ -3723,6 +3728,7 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::MirrorImage
             | StatusEffectKind::FindWeakness
             | StatusEffectKind::Vulnerable
+            | StatusEffectKind::Cruelty
             | StatusEffectKind::BladeTwisting
             | StatusEffectKind::OffBalance
             | StatusEffectKind::AllAbilityAvoidance
@@ -3850,6 +3856,7 @@ impl StatusPayload {
             Self::Flurry { .. } => StatusEffectKind::Flurry,
             Self::FindWeakness => StatusEffectKind::FindWeakness,
             Self::Vulnerable => StatusEffectKind::Vulnerable,
+            Self::Cruelty => StatusEffectKind::Cruelty,
             Self::BladeTwisting => StatusEffectKind::BladeTwisting,
             Self::OffBalance => StatusEffectKind::OffBalance,
             Self::AllAbilityAvoidance => StatusEffectKind::AllAbilityAvoidance,
@@ -3890,6 +3897,7 @@ impl StatusPayload {
             | Self::MirrorImage
             | Self::FindWeakness
             | Self::Vulnerable
+            | Self::Cruelty
             | Self::BladeTwisting
             | Self::OffBalance
             | Self::AllAbilityAvoidance
@@ -4189,6 +4197,7 @@ impl StatusPayload {
             },
             StatusEffectKind::FindWeakness => Self::FindWeakness,
             StatusEffectKind::Vulnerable => Self::Vulnerable,
+            StatusEffectKind::Cruelty => Self::Cruelty,
             StatusEffectKind::BladeTwisting => Self::BladeTwisting,
             StatusEffectKind::OffBalance => Self::OffBalance,
             StatusEffectKind::AllAbilityAvoidance => Self::AllAbilityAvoidance,
@@ -4231,6 +4240,7 @@ impl StatusPayload {
             | Self::MirrorImage
             | Self::FindWeakness
             | Self::Vulnerable
+            | Self::Cruelty
             | Self::BladeTwisting
             | Self::OffBalance
             | Self::AllAbilityAvoidance
@@ -4345,6 +4355,7 @@ impl StatusPayload {
             | Self::MirrorImage
             | Self::FindWeakness
             | Self::Vulnerable
+            | Self::Cruelty
             | Self::BladeTwisting
             | Self::OffBalance
             | Self::AllAbilityAvoidance
@@ -4550,6 +4561,7 @@ impl StatusPayload {
             | Self::MirrorImage
             | Self::FindWeakness
             | Self::Vulnerable
+            | Self::Cruelty
             | Self::BladeTwisting
             | Self::OffBalance
             | Self::AllAbilityAvoidance
@@ -4763,6 +4775,7 @@ fn status_matches_removal_filter_values(
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StackPolicy {
     Refresh,
+    SetMaxRefresh,
     AddStackRefresh,
     AddStackEscalatingDecay,
     ReplaceIfStronger,
@@ -4773,6 +4786,7 @@ impl StackPolicy {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Refresh => "REFRESH",
+            Self::SetMaxRefresh => "SET_MAX_REFRESH",
             Self::AddStackRefresh => "ADD_STACK_REFRESH",
             Self::AddStackEscalatingDecay => "ADD_STACK_ESCALATING_DECAY",
             Self::ReplaceIfStronger => "REPLACE_IF_STRONGER",
@@ -4783,6 +4797,7 @@ impl StackPolicy {
     fn from_wire(value: &str) -> Option<Self> {
         match value {
             "REFRESH" => Some(Self::Refresh),
+            "SET_MAX_REFRESH" => Some(Self::SetMaxRefresh),
             "ADD_STACK_REFRESH" => Some(Self::AddStackRefresh),
             "ADD_STACK_ESCALATING_DECAY" => Some(Self::AddStackEscalatingDecay),
             "REPLACE_IF_STRONGER" => Some(Self::ReplaceIfStronger),
@@ -6699,10 +6714,7 @@ fn resolve_damage_amount(
             combat_rule_value(RULE_CRIT_DAMAGE_MULTIPLIER),
         );
     }
-    // The receipt is intentionally inert in this infrastructure slice. Future
-    // typed empowerments can use it while consumption remains centralized and
-    // atomic at the landed direct-hit boundary.
-    let _consumed_target_status = consume_target_status_for_hit(ctx, hit);
+    let consumed_target_status = consume_target_status_for_hit(ctx, hit);
     let casted_ability_hit = damage_comes_from_casted_ability(hit);
     let find_weakness = casted_ability_hit
         .then(|| {
@@ -6736,7 +6748,7 @@ fn resolve_damage_amount(
         let derived = derived_combat_stats_from_allocations(equipment.allocated_stat_totals());
         Some((equipment, derived))
     };
-    let non_crit_multiplier = if hit.source == Identity::ZERO {
+    let base_non_crit_multiplier = if hit.source == Identity::ZERO {
         resistance_multiplier * temporary_modifiers.damage_taken_multiplier_for(&hit.target)
     } else {
         let (source_equipment, source_stats) =
@@ -6760,6 +6772,11 @@ fn resolve_damage_amount(
                 blight_fracture_melee_damage_bonus(),
             )
     };
+    let non_crit_multiplier = base_non_crit_multiplier
+        * consumed_target_status
+            .as_ref()
+            .map(consumed_target_status_damage_multiplier)
+            .unwrap_or(1.0);
     let source_crit_chance = source_equipment_and_stats.map(|(_, stats)| stats.crit_chance);
     let additive_crit_chance = source_equipment_and_stats
         .map(|(equipment, _)| equipment_crit_chance_bonus(hit, equipment))
@@ -7800,12 +7817,27 @@ fn ability_id_for_pending_hit(ctx: &ReducerContext, hit: &PendingHit) -> Option<
     ability_context_for_pending_hit(ctx, hit).map(|context| context.ability_id)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ConsumedTargetStatus {
-    pub status_kind: StatusEffectKind,
-    pub stack_group: String,
+#[derive(Clone, Debug, PartialEq)]
+struct ConsumedTargetStatus {
     pub stacks_consumed: u32,
-    pub original_applier: Identity,
+    pub damage_bonus_per_stack: f32,
+}
+
+fn consumed_target_status_damage_multiplier(consumed: &ConsumedTargetStatus) -> f32 {
+    1.0 + consumed.damage_bonus_per_stack * consumed.stacks_consumed as f32
+}
+
+const CRUELTY_STACK_GROUP: &str = "CRUELTY";
+
+fn target_status_consumption_limit(
+    authored_limit: Option<u32>,
+    cruelty_is_armed: bool,
+) -> Option<u32> {
+    if cruelty_is_armed {
+        None
+    } else {
+        authored_limit
+    }
 }
 
 fn hit_can_consume_target_status(hit: &PendingHit) -> bool {
@@ -7842,23 +7874,26 @@ fn consumable_status_source_scope_allows(
     }
 }
 
-fn target_status_already_consumed_for_action(
+fn target_status_stacks_consumed_for_action(
     ctx: &ReducerContext,
     consumer: Identity,
     target: Identity,
     action_instance_id: &str,
     status_kind: StatusEffectKind,
-) -> bool {
+) -> u32 {
     ctx.db
         .combat_event()
         .caster()
         .filter(consumer)
-        .any(|event| {
+        .filter(|event| {
             event.event_type == COMBAT_EVENT_STATUS_CONSUMED
                 && event.action_instance_id == action_instance_id
                 && event.hit == target
                 && event.metadata_kind == COMBAT_METADATA_CONSUMED_TARGET_STATUS
                 && event.metadata_key == status_kind.as_str()
+        })
+        .fold(0u32, |total, event| {
+            total.saturating_add(event.sequence_count)
         })
 }
 
@@ -7866,7 +7901,9 @@ fn emit_target_status_consumed_event(
     ctx: &ReducerContext,
     hit: &PendingHit,
     ability_context: &PendingHitAbilityContext,
-    consumed: &ConsumedTargetStatus,
+    status_kind: StatusEffectKind,
+    stack_group: &str,
+    stacks_consumed: u32,
 ) {
     ctx.db.combat_event().insert(CombatEvent {
         event_id: 0,
@@ -7890,7 +7927,7 @@ fn emit_target_status_consumed_event(
         scalar_value: 0.0,
         sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
         sequence_index: 0,
-        sequence_count: consumed.stacks_consumed,
+        sequence_count: stacks_consumed,
         point_x: 0.0,
         point_y: 0.0,
         point_z: 0.0,
@@ -7898,8 +7935,8 @@ fn emit_target_status_consumed_event(
         created_at_micros: timestamp_to_micros(ctx.timestamp),
         damage: 0,
         metadata_kind: COMBAT_METADATA_CONSUMED_TARGET_STATUS.to_string(),
-        metadata_key: consumed.status_kind.as_str().to_string(),
-        metadata_value: consumed.stack_group.clone(),
+        metadata_key: status_kind.as_str().to_string(),
+        metadata_value: stack_group.to_string(),
     });
 }
 
@@ -7915,17 +7952,23 @@ fn consume_target_status_for_hit(
     if matches!(
         rule.frequency,
         ConsumeTargetStatusFrequency::OncePerActionPerTarget
-    ) && target_status_already_consumed_for_action(
-        ctx,
-        hit.source,
-        hit.target,
-        ability_context.action_instance_id.as_str(),
-        rule.status_kind,
     ) {
-        return None;
+        let prior_stacks = target_status_stacks_consumed_for_action(
+            ctx,
+            hit.source,
+            hit.target,
+            ability_context.action_instance_id.as_str(),
+            rule.status_kind,
+        );
+        if prior_stacks > 0 {
+            return Some(ConsumedTargetStatus {
+                stacks_consumed: prior_stacks,
+                damage_bonus_per_stack: rule.damage_bonus_per_stack,
+            });
+        }
     }
 
-    let mut effect = ctx
+    let mut effects: Vec<_> = ctx
         .db
         .status_effect()
         .target()
@@ -7941,24 +7984,62 @@ fn consume_target_status_for_hit(
                 )
                 && !status_is_projected_by_active_radial_effect(ctx, effect)
         })
-        .min_by_key(|effect| effect.status_id)?;
+        .collect();
+    effects.sort_by_key(|effect| effect.status_id);
 
-    let stacks_consumed = rule.stacks.min(effect.stacks.max(1));
-    let consumed = ConsumedTargetStatus {
-        status_kind: rule.status_kind,
-        stack_group: effect.stack_group.clone(),
-        stacks_consumed,
-        original_applier: effect.source,
-    };
-    if effect.stacks > stacks_consumed {
-        effect.stacks = effect.stacks.saturating_sub(stacks_consumed);
-        ctx.db.status_effect().status_id().update(effect);
-    } else {
-        clear_rime_protection_for_status(ctx, hit.target, effect.status_id);
-        ctx.db.status_effect().status_id().delete(effect.status_id);
+    let cruelty_is_armed = has_active_status_group(
+        ctx,
+        hit.source,
+        StatusEffectKind::Cruelty,
+        CRUELTY_STACK_GROUP,
+        ctx.timestamp,
+    );
+    let mut remaining =
+        target_status_consumption_limit(rule.stack_mode.maximum_stacks(), cruelty_is_armed);
+    let mut total_stacks_consumed = 0u32;
+    for mut effect in effects {
+        if remaining == Some(0) {
+            break;
+        }
+        let available_stacks = effect.stacks.max(1);
+        let stacks_consumed = remaining
+            .map(|remaining_stacks| remaining_stacks.min(available_stacks))
+            .unwrap_or(available_stacks);
+        if let Some(remaining_stacks) = remaining.as_mut() {
+            *remaining_stacks = remaining_stacks.saturating_sub(stacks_consumed);
+        }
+        total_stacks_consumed = total_stacks_consumed.saturating_add(stacks_consumed);
+        let stack_group = effect.stack_group.clone();
+        if let Some(remaining_stacks) =
+            status_stacks_after_removal(available_stacks, stacks_consumed)
+        {
+            effect.stacks = remaining_stacks;
+            ctx.db.status_effect().status_id().update(effect);
+        } else {
+            clear_rime_protection_for_status(ctx, hit.target, effect.status_id);
+            ctx.db.status_effect().status_id().delete(effect.status_id);
+        }
+        emit_target_status_consumed_event(
+            ctx,
+            hit,
+            &ability_context,
+            rule.status_kind,
+            stack_group.as_str(),
+            stacks_consumed,
+        );
     }
-    emit_target_status_consumed_event(ctx, hit, &ability_context, &consumed);
-    Some(consumed)
+    if total_stacks_consumed > 0 && cruelty_is_armed {
+        remove_status_group(
+            ctx,
+            hit.source,
+            StatusEffectKind::Cruelty,
+            CRUELTY_STACK_GROUP,
+        );
+    }
+    (total_stacks_consumed > 0).then_some(ConsumedTargetStatus {
+        stacks_consumed: total_stacks_consumed,
+        damage_bonus_per_stack: rule.damage_bonus_per_stack,
+    })
 }
 
 fn heartseeker_should_auto_crit(ability_id: &str, target_is_stationary: bool) -> bool {
@@ -8789,9 +8870,10 @@ fn apply_status_internal(
 
     let expires_at = now + duration;
     match stack_policy {
-        StackPolicy::Refresh => {
+        StackPolicy::Refresh | StackPolicy::SetMaxRefresh => {
             if let Some(mut existing) = matches.into_iter().next() {
                 clear_rime_protection_for_status(ctx, target, existing.status_id);
+                let stacks = initial_status_stacks(kind, max_stacks, stack_policy);
                 apply_status_update(
                     &mut existing,
                     source,
@@ -8802,7 +8884,7 @@ fn apply_status_internal(
                     now,
                     expires_at,
                     max_stacks.max(1),
-                    Some(initial_status_stacks(kind, max_stacks)),
+                    Some(stacks),
                     encode_status_dispel_types(&dispel_types),
                 );
                 apply_rime_protection_to_status(ctx, &existing, now);
@@ -10614,6 +10696,7 @@ impl StatusRuntimeView {
                     | StatusEffectKind::MirrorImage
                     | StatusEffectKind::FindWeakness
                     | StatusEffectKind::Vulnerable
+                    | StatusEffectKind::Cruelty
                     | StatusEffectKind::BladeTwisting
                     | StatusEffectKind::OffBalance
                     | StatusEffectKind::AllAbilityAvoidance
@@ -11391,14 +11474,14 @@ mod tests {
         attacker_is_behind_target, battle_trance_hp_after_damage, behind_target_damage_multiplier,
         blight_empowered_hit_is_eligible, bloodlust_passive_spec, burden_damage_split,
         cadence_damage_multiplier_for_action, consumable_status_source_scope_allows,
-        consumable_status_stack_group_matches, damage_breaks_confusion, damage_breaks_shroud,
-        damage_comes_from_casted_ability, damage_source_grants_outgoing_rewards,
-        damaging_area_consumes_mirror_images, deterministic_fulmination_candidate_index,
-        disabled_target_damage_multiplier, dot_tick_damage, due_interval_count,
-        escalating_dot_base_total_after_application, escalating_dot_decay_interval,
-        event_prune_cutoff_micros, fire_spell_hit_can_trigger_wildfire,
-        fracture_melee_damage_multiplier, fulmination_arc_damage,
-        fulmination_uses_any_target_audience, furnace_mana_restore_amount,
+        consumable_status_stack_group_matches, consumed_target_status_damage_multiplier,
+        damage_breaks_confusion, damage_breaks_shroud, damage_comes_from_casted_ability,
+        damage_source_grants_outgoing_rewards, damaging_area_consumes_mirror_images,
+        deterministic_fulmination_candidate_index, disabled_target_damage_multiplier,
+        dot_tick_damage, due_interval_count, escalating_dot_base_total_after_application,
+        escalating_dot_decay_interval, event_prune_cutoff_micros,
+        fire_spell_hit_can_trigger_wildfire, fracture_melee_damage_multiplier,
+        fulmination_arc_damage, fulmination_uses_any_target_audience, furnace_mana_restore_amount,
         heartseeker_should_auto_crit, hit_can_consume_target_status, hit_is_direct_melee_attack,
         holy_shield_end_reason, immolation_damage_for_stacks, immolation_remaining_tick_count,
         initial_status_stacks, isolated_damage_multiplier, knockback_stagger_duration,
@@ -11414,11 +11497,12 @@ mod tests {
         stationary_target_from_poses, status_application_is_blocked_by_immunity,
         status_can_spread_from_contagious_target, status_dot_tick_damage, status_has_dispel_type,
         status_kind_is_intrinsically_undispellable, status_matches_removal_filter_values,
-        status_stacks_after_removal, AuthoredStatusPayload, DamageDelivery, DamageType,
-        EffectPacket, HolyShieldEndReason, MovementModifiers, PendingHit, StackPolicy,
-        StatusApplication, StatusDispelType, StatusEffect, StatusEffectKind, StatusPayload,
-        StatusPolarity, StatusRuntimeView, StatusStackGroupDefault, TemporaryCombatModifiers,
-        BLOODLUST_PASSIVE_ID, COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_BURDEN_REDIRECT,
+        status_stacks_after_removal, target_status_consumption_limit, AuthoredStatusPayload,
+        ConsumedTargetStatus, DamageDelivery, DamageType, EffectPacket, HolyShieldEndReason,
+        MovementModifiers, PendingHit, StackPolicy, StatusApplication, StatusDispelType,
+        StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
+        StatusStackGroupDefault, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
+        COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_BURDEN_REDIRECT,
         DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PERIODIC, DAMAGE_SOURCE_KIND_PROJECTILE,
         DAMAGE_SOURCE_KIND_SELF_INFLICTED, DAMAGE_SOURCE_KIND_SPELL, HOLY_SHIELD_SPELL_ID,
         HOLY_SHIELD_STATUS_GROUP, PLAYER_EVENT_RETENTION, RESTLESS_PASSIVE_ID,
@@ -11513,10 +11597,21 @@ mod tests {
 
     #[test]
     fn mirror_image_starts_with_three_authored_charges() {
-        assert_eq!(initial_status_stacks(StatusEffectKind::MirrorImage, 3), 3);
         assert_eq!(
-            initial_status_stacks(StatusEffectKind::TargetedAbilityAvoidance, 3),
+            initial_status_stacks(StatusEffectKind::MirrorImage, 3, StackPolicy::Refresh),
+            3
+        );
+        assert_eq!(
+            initial_status_stacks(
+                StatusEffectKind::TargetedAbilityAvoidance,
+                3,
+                StackPolicy::Refresh,
+            ),
             1
+        );
+        assert_eq!(
+            initial_status_stacks(StatusEffectKind::Vulnerable, 3, StackPolicy::SetMaxRefresh,),
+            3
         );
     }
 
@@ -12100,6 +12195,26 @@ mod tests {
             ConsumeTargetStatusSourceScope::ApplierTeam,
             CombatRelation::Hostile,
         ));
+    }
+
+    #[test]
+    fn consumed_vulnerabilities_add_fifty_percent_damage_each() {
+        for (stacks_consumed, expected_multiplier) in [(0, 1.0), (1, 1.5), (2, 2.0), (5, 3.5)] {
+            assert_eq!(
+                consumed_target_status_damage_multiplier(&ConsumedTargetStatus {
+                    stacks_consumed,
+                    damage_bonus_per_stack: 0.5,
+                }),
+                expected_multiplier,
+            );
+        }
+    }
+
+    #[test]
+    fn cruelty_overrides_a_single_stack_consumption_limit() {
+        assert_eq!(target_status_consumption_limit(Some(1), false), Some(1));
+        assert_eq!(target_status_consumption_limit(Some(1), true), None);
+        assert_eq!(target_status_consumption_limit(None, true), None);
     }
 
     #[test]
@@ -14672,7 +14787,7 @@ fn new_status_effect(
         effect_kind: kind.as_str().to_string(),
         polarity: polarity.as_str().to_string(),
         stack_group: stack_group.to_string(),
-        stacks: initial_status_stacks(kind, max_stacks),
+        stacks: initial_status_stacks(kind, max_stacks, stack_policy),
         max_stacks,
         stack_policy: stack_policy.as_str().to_string(),
         applied_at: now,
@@ -14699,8 +14814,12 @@ fn new_status_effect(
     effect
 }
 
-fn initial_status_stacks(kind: StatusEffectKind, max_stacks: u32) -> u32 {
-    if kind == StatusEffectKind::MirrorImage {
+fn initial_status_stacks(
+    kind: StatusEffectKind,
+    max_stacks: u32,
+    stack_policy: StackPolicy,
+) -> u32 {
+    if kind == StatusEffectKind::MirrorImage || stack_policy == StackPolicy::SetMaxRefresh {
         max_stacks.max(1)
     } else {
         1

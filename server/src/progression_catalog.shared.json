@@ -7484,7 +7484,15 @@
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
         "block_behavior": "BLOCKABLE",
-        "airborne_targeting_mode": "ANY_TARGET"
+        "airborne_targeting_mode": "ANY_TARGET",
+        "consume_target_status": {
+          "status_kind": "VULNERABLE",
+          "status_stack_group": "VULNERABLE",
+          "stack_mode": "ONE",
+          "source_scope": "APPLIER_TEAM",
+          "frequency": "ONCE_PER_ACTION_PER_TARGET",
+          "damage_bonus_per_stack": 0.5
+        }
       }
     },
     {
@@ -7618,6 +7626,89 @@
           "first_tick_delay_ms": 44,
           "tick_interval_ms": 333,
           "cancel_on_movement": true
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_CRUELTY",
+      "actor_scope": "PLAYER",
+      "selection_kind": "ACTIVE",
+      "combat_discipline_id": "DAGGERS",
+      "spell_school_id": null,
+      "action_id": "CRUELTY",
+      "display_name": "Cruelty",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 51,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 60000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "SELF",
+        "target_audience": "SELF_ONLY",
+        "requires_target": false,
+        "requires_target_los": false,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 86400000,
+          "damage_type": "PHYSICAL",
+          "status_stack_group": "CRUELTY",
+          "polarity": "BUFF",
+          "status": {
+            "kind": "CRUELTY",
+            "modifier_scalar": 0,
+            "max_stacks": 1,
+            "stack_policy": "REFRESH"
+          }
+        }
+      }
+    },
+    {
+      "ability_id": "DAGGER_EXPOSE_WEAKNESS",
+      "actor_scope": "PLAYER",
+      "selection_kind": "ACTIVE",
+      "combat_discipline_id": "DAGGERS",
+      "spell_school_id": null,
+      "action_id": "EXPOSE_WEAKNESS",
+      "display_name": "Expose Weakness",
+      "resource_kind": "MANA",
+      "resource_cost": 0,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 52,
+      "gameplay": {
+        "kind": "SPELL",
+        "cooldown_ms": 120000,
+        "uses_global_cooldown": true,
+        "cast_time_ms": 0,
+        "cast_mobility": "MOBILE",
+        "targeting": "TARGET",
+        "target_audience": "HOSTILE",
+        "requires_target": true,
+        "requires_target_los": true,
+        "resource_cost": 0,
+        "arms_auto_attack_on_cast": false,
+        "delivery": {
+          "kind": "APPLY_STATUS",
+          "duration_ms": 86400000,
+          "max_distance": 12,
+          "damage_type": "PHYSICAL",
+          "status_stack_group": "VULNERABLE",
+          "polarity": "DEBUFF",
+          "status": {
+            "kind": "VULNERABLE",
+            "modifier_scalar": 0,
+            "max_stacks": 3,
+            "stack_policy": "SET_MAX_REFRESH"
+          }
         }
       }
     },
@@ -14891,8 +14982,22 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_VITAL_STRIKE",
       "display_name": "Vital Strike",
-      "description": "Unleashes a relentless execution sequence against a vital point.",
+      "description": "Consumes 1 Vulnerable stack on the target, increasing this attack's damage by 50%.",
       "sort_order": 234
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_CRUELTY",
+      "display_name": "Cruelty",
+      "description": "Your next attack that consumes Vulnerable consumes all available stacks instead. Each stack grants that attack's authored bonus; Vital Strike gains 50% damage per stack. 60 second cooldown.",
+      "sort_order": 235
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_EXPOSE_WEAKNESS",
+      "display_name": "Expose Weakness",
+      "description": "Instantly set a hostile target to 3 Vulnerable stacks, the maximum. 120 second cooldown.",
+      "sort_order": 236
     },
     {
       "presentation_kind": "ABILITY",
@@ -15470,6 +15575,13 @@
     },
     {
       "presentation_kind": "STATUS",
+      "presentation_id": "CRUELTY",
+      "display_name": "Cruelty",
+      "description": "Your next attack that consumes Vulnerable consumes all available stacks.",
+      "sort_order": 10149
+    },
+    {
+      "presentation_kind": "STATUS",
       "presentation_id": "VULNERABLE",
       "display_name": "Vulnerable",
       "description": "Can be consumed by certain attacks to empower that attack.",
@@ -15502,6 +15614,32 @@
       "lifecycle": "PARTICLE_SYSTEM",
       "duration_ms": 0,
       "sort_order": 9
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "DAGGER_CRUELTY",
+      "slot": "self_flash",
+      "trigger": "SPELL_RELEASE",
+      "anchor": "CASTER",
+      "vfx_id": "VFX_DARK_BURST_01_ARENA2",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "PARTICLE_SYSTEM",
+      "duration_ms": 0,
+      "sort_order": 10
+    },
+    {
+      "owner_kind": "ABILITY",
+      "owner_id": "DAGGER_EXPOSE_WEAKNESS",
+      "slot": "impact",
+      "trigger": "SPELL_IMPACT",
+      "anchor": "IMPACT_POINT",
+      "vfx_id": "VFX_ARCANE_HIT_01",
+      "attach_mode": "SPAWN_WORLD",
+      "vfx_role": "ONE_SHOT",
+      "lifecycle": "DURATION",
+      "duration_ms": 700,
+      "sort_order": 11
     },
     {
       "owner_kind": "ABILITY",

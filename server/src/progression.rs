@@ -403,14 +403,32 @@ pub(crate) enum ConsumeTargetStatusFrequency {
     OncePerActionPerTarget,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub(crate) enum ConsumeTargetStatusStackMode {
+    One,
+    All,
+}
+
+impl ConsumeTargetStatusStackMode {
+    pub(crate) fn maximum_stacks(self) -> Option<u32> {
+        match self {
+            Self::One => Some(1),
+            Self::All => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ConsumeTargetStatusRule {
     pub status_kind: StatusEffectKind,
     pub status_stack_group: String,
-    pub stacks: u32,
+    pub stack_mode: ConsumeTargetStatusStackMode,
     pub source_scope: ConsumeTargetStatusSourceScope,
     pub frequency: ConsumeTargetStatusFrequency,
+    #[serde(deserialize_with = "deserialize_authored_f32")]
+    pub damage_bonus_per_stack: f32,
 }
 
 impl ConsumeTargetStatusRule {
@@ -430,9 +448,9 @@ impl ConsumeTargetStatusRule {
                 "ability '{ability_id}' consume_target_status.status_stack_group must not be empty"
             ));
         }
-        if self.stacks != 1 {
+        if !self.damage_bonus_per_stack.is_finite() || self.damage_bonus_per_stack <= 0.0 {
             return Err(format!(
-                "ability '{ability_id}' consume_target_status.stacks must be exactly 1 in v1"
+                "ability '{ability_id}' consume_target_status.damage_bonus_per_stack must be finite and positive"
             ));
         }
         Ok(())
@@ -1431,6 +1449,7 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::AllAbilityAvoidance,
         StatusEffectKind::MirrorImage,
         StatusEffectKind::Vulnerable,
+        StatusEffectKind::Cruelty,
         StatusEffectKind::Fulmination,
         StatusEffectKind::Quickening,
         StatusEffectKind::Rime,
@@ -6401,13 +6420,14 @@ mod tests {
         resolved_melee_targeting_for_catalog, shroud_has_expired, validate_auto_attack_catalog,
         validate_combat_mode_catalog, validate_progression_catalog_authoring_contract,
         AbilityDefinition, CombatVfxPresentationManifest, ConsumeTargetStatusFrequency,
-        ConsumeTargetStatusRule, ConsumeTargetStatusSourceScope, FrozenActiveAuthorizationDenial,
-        MeleeChannelRuntime, MeleeImpactEffectRuntime, ABILITY_KIND_COMBAT_MODE_TOGGLE,
-        ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID, AUTO_ATTACK_MOVEMENT_ALLOW_MOVING,
-        AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE, BLIGHT_TOXIC_WEAPON_ABILITY_ID,
-        COMBAT_MODE_FULL_DRAW, COMBAT_MODE_READY, COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED,
-        COMBAT_PROFILE_ARCHER_BOW, COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_STAFF,
-        COMBAT_PROFILE_SWORD_AND_SHIELD, COMBAT_PROFILE_TWO_HANDED_SWORD, DAGGER_SHROUD_ABILITY_ID,
+        ConsumeTargetStatusRule, ConsumeTargetStatusSourceScope, ConsumeTargetStatusStackMode,
+        FrozenActiveAuthorizationDenial, MeleeChannelRuntime, MeleeImpactEffectRuntime,
+        ABILITY_KIND_COMBAT_MODE_TOGGLE, ARCHER_DRAW_MODE_TOGGLE_ABILITY_ID,
+        AUTO_ATTACK_MOVEMENT_ALLOW_MOVING, AUTO_ATTACK_MOVEMENT_RESET_ON_VOLUNTARY_MOVE,
+        BLIGHT_TOXIC_WEAPON_ABILITY_ID, COMBAT_MODE_FULL_DRAW, COMBAT_MODE_READY,
+        COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED, COMBAT_PROFILE_ARCHER_BOW,
+        COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_STAFF, COMBAT_PROFILE_SWORD_AND_SHIELD,
+        COMBAT_PROFILE_TWO_HANDED_SWORD, DAGGER_SHROUD_ABILITY_ID,
         PLAYER_PASSIVE_RUNTIME_INVENTORY, PRIMAL_ADAPTATION_ABILITY_ID,
         PRIMAL_PHOTOSYNTHESIS_ABILITY_ID, PRIMAL_SLIPSTREAM_ABILITY_ID, RESOURCE_KIND_STAMINA,
         SUBTLETY_FLEET_FOOTED_ABILITY_ID, SUBTLETY_LINGERING_SHADE_ABILITY_ID,
@@ -6443,14 +6463,15 @@ mod tests {
     }
 
     #[test]
-    fn consumable_target_status_rule_has_a_narrow_vulnerable_v1_contract() {
+    fn consumable_target_status_rule_supports_one_or_all_vulnerable_stacks() {
         let rule: ConsumeTargetStatusRule = serde_json::from_str(
             r#"{
                 "status_kind": "VULNERABLE",
                 "status_stack_group": "VULNERABLE:{SOURCE}",
-                "stacks": 1,
+                "stack_mode": "ONE",
                 "source_scope": "APPLIER_TEAM",
-                "frequency": "ONCE_PER_ACTION_PER_TARGET"
+                "frequency": "ONCE_PER_ACTION_PER_TARGET",
+                "damage_bonus_per_stack": 0.5
             }"#,
         )
         .expect("the canonical consumable status rule should deserialize");
@@ -6464,6 +6485,9 @@ mod tests {
             rule.frequency,
             ConsumeTargetStatusFrequency::OncePerActionPerTarget
         );
+        assert_eq!(rule.stack_mode, ConsumeTargetStatusStackMode::One);
+        assert_eq!(rule.stack_mode.maximum_stacks(), Some(1));
+        assert!((rule.damage_bonus_per_stack - 0.5).abs() < f32::EPSILON);
         assert_eq!(rule.validate("TEST", "MELEE"), Ok(()));
         assert_eq!(rule.validate("TEST", "SPELL"), Ok(()));
         assert!(rule.validate("TEST", "PASSIVE").is_err());
@@ -6477,38 +6501,110 @@ mod tests {
         assert!(invalid.validate("TEST", "MELEE").is_err());
 
         let mut invalid = rule;
-        invalid.stacks = 2;
+        invalid.damage_bonus_per_stack = 0.0;
         assert!(invalid.validate("TEST", "MELEE").is_err());
     }
 
     #[test]
-    fn vulnerable_infrastructure_is_present_but_no_ability_consumes_it_yet() {
+    fn heartseeker_vulnerability_techniques_have_the_authored_contract() {
         let catalog = progression_catalog();
 
-        assert!(catalog
+        let consumers: Vec<_> = catalog
             .abilities
             .iter()
-            .all(|ability| ability.gameplay.consume_target_status.is_none()));
-        assert!(catalog.abilities.iter().all(|ability| {
-            ability
-                .gameplay
-                .delivery
-                .as_ref()
-                .is_none_or(|delivery| !delivery.to_string().contains("VULNERABLE"))
-                && ability.gameplay.melee_impact_effects.iter().all(|effect| {
-                    !matches!(
-                        effect,
-                        super::MeleeImpactEffectDefinition::ApplyStatus { status }
-                            if normalize_identifier(status.kind.as_str()) == "VULNERABLE"
-                    )
-                })
-        }));
+            .filter(|ability| ability.gameplay.consume_target_status.is_some())
+            .map(|ability| normalize_identifier(ability.ability_id.as_str()))
+            .collect();
+        assert_eq!(consumers, vec!["DAGGER_VITAL_STRIKE"]);
+
+        let vital_strike = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_VITAL_STRIKE")
+            .expect("Vital Strike should be authored");
+        let consume = vital_strike
+            .gameplay
+            .consume_target_status
+            .as_ref()
+            .expect("Vital Strike should consume Vulnerable");
+        assert_eq!(consume.status_kind, StatusEffectKind::Vulnerable);
+        assert_eq!(consume.status_stack_group, "VULNERABLE");
+        assert_eq!(consume.stack_mode, ConsumeTargetStatusStackMode::One);
+        assert_eq!(consume.stack_mode.maximum_stacks(), Some(1));
+        assert_eq!(
+            consume.source_scope,
+            ConsumeTargetStatusSourceScope::ApplierTeam
+        );
+        assert_eq!(
+            consume.frequency,
+            ConsumeTargetStatusFrequency::OncePerActionPerTarget
+        );
+        assert!((consume.damage_bonus_per_stack - 0.5).abs() < f32::EPSILON);
+
+        let vulnerable_producers: Vec<_> = catalog
+            .abilities
+            .iter()
+            .filter(|ability| {
+                ability
+                    .gameplay
+                    .delivery
+                    .as_ref()
+                    .and_then(|delivery| delivery.get("status"))
+                    .and_then(|status| status.get("kind"))
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|kind| normalize_identifier(kind) == "VULNERABLE")
+                    || ability.gameplay.melee_impact_effects.iter().any(|effect| {
+                        matches!(
+                            effect,
+                            super::MeleeImpactEffectDefinition::ApplyStatus { status }
+                                if normalize_identifier(status.kind.as_str()) == "VULNERABLE"
+                        )
+                    })
+            })
+            .map(|ability| normalize_identifier(ability.ability_id.as_str()))
+            .collect();
+        assert_eq!(vulnerable_producers, vec!["DAGGER_EXPOSE_WEAKNESS"]);
+
+        let cruelty = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_CRUELTY")
+            .expect("Cruelty should be authored");
+        assert_eq!(cruelty.action_id, "CRUELTY");
+        assert_eq!(cruelty.gameplay.cooldown_ms, Some(60_000));
+
+        let expose_weakness = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_EXPOSE_WEAKNESS")
+            .expect("Expose Weakness should be authored");
+        assert_eq!(expose_weakness.action_id, "EXPOSE_WEAKNESS");
+        assert_eq!(expose_weakness.gameplay.cooldown_ms, Some(120_000));
+
         assert!(authored_status_presentation_ids(catalog).contains("VULNERABLE"));
+        assert!(authored_status_presentation_ids(catalog).contains("CRUELTY"));
         assert!(catalog.action_presentations.iter().any(|presentation| {
             presentation.presentation_kind == "STATUS"
                 && presentation.presentation_id == "VULNERABLE"
                 && presentation.display_name == "Vulnerable"
         }));
+        assert!(catalog.action_presentations.iter().any(|presentation| {
+            presentation.presentation_kind == "ABILITY"
+                && presentation.presentation_id == "DAGGER_VITAL_STRIKE"
+                && presentation.description.contains("50%")
+        }));
+        for (ability_id, cooldown_description) in [
+            ("DAGGER_CRUELTY", "60 second cooldown"),
+            ("DAGGER_EXPOSE_WEAKNESS", "120 second cooldown"),
+        ] {
+            assert!(catalog.action_presentations.iter().any(|presentation| {
+                presentation.presentation_kind == "ABILITY"
+                    && presentation.presentation_id == ability_id
+                    && presentation.description.contains(cooldown_description)
+            }));
+        }
+        assert!(SPELL_CAST_ANIMATION_MAP_ASSET.contains("- spellId: CRUELTY"));
+        assert!(SPELL_CAST_ANIMATION_MAP_ASSET.contains("- spellId: EXPOSE_WEAKNESS"));
     }
 
     #[test]

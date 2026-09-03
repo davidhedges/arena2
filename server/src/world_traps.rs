@@ -699,6 +699,7 @@ fn obb_overlaps_actor(obb: TrapObb, actor: &CombatActorSnapshot) -> bool {
 
 fn stack_policy_from_wire(value: &str) -> StackPolicy {
     match value {
+        "SET_MAX_REFRESH" => StackPolicy::SetMaxRefresh,
         "ADD_STACK_REFRESH" => StackPolicy::AddStackRefresh,
         "ADD_STACK_ESCALATING_DECAY" => StackPolicy::AddStackEscalatingDecay,
         "REPLACE_IF_STRONGER" => StackPolicy::ReplaceIfStronger,
@@ -1143,6 +1144,10 @@ mod tests {
         assert_eq!(
             stack_policy_from_wire("ADD_STACK_REFRESH"),
             StackPolicy::AddStackRefresh
+        );
+        assert_eq!(
+            stack_policy_from_wire("SET_MAX_REFRESH"),
+            StackPolicy::SetMaxRefresh
         );
         assert_eq!(
             stack_policy_from_wire("ADD_STACK_ESCALATING_DECAY"),
