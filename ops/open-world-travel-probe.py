@@ -146,6 +146,13 @@ def wait_for_ticket(hub: str, identity: str, deadline: float) -> tuple[str, str]
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--destination", default="Giant_Skeleton")
+    parser.add_argument(
+        "--bot-match",
+        action="store_true",
+        help="request an unranked 2v2 bot match instead of an open world. Same "
+             "hub ticket -> provisioner -> instance -> dispose path, different "
+             "request reducer and seating expectation.",
+    )
     parser.add_argument("--hub-database", default="arena-hub-local")
     parser.add_argument("--host", default="127.0.0.1:3000")
     parser.add_argument("--ready-timeout", type=float, default=180.0)
@@ -156,11 +163,15 @@ def main() -> int:
     hub = Connection(args.hub_database, args.host)
     print(f"Hub identity {hub.identity}")
 
-    hub.call(
-        "request_open_world_instance",
-        [uuid.uuid4().hex, args.destination],
-    )
-    print(f"Requested {args.destination}")
+    if args.bot_match:
+        hub.call("request_unranked_2_v_2_bot_match", [uuid.uuid4().hex])
+        print("Requested unranked 2v2 bot match")
+    else:
+        hub.call(
+            "request_open_world_instance",
+            [uuid.uuid4().hex, args.destination],
+        )
+        print(f"Requested {args.destination}")
 
     database_identity, map_id = wait_for_ticket(
         args.hub_database, hub.identity, started + args.ready_timeout
@@ -168,7 +179,7 @@ def main() -> int:
     ready_seconds = time.time() - started
     print(f"  assignment map_id={map_id} database={database_identity[:16]}…")
     print(f"  ready in {ready_seconds:.1f}s")
-    if map_id != args.destination:
+    if not args.bot_match and map_id != args.destination:
         raise RuntimeError(f"assignment targets {map_id}, not {args.destination}")
     if not database_exists(database_identity):
         raise RuntimeError("assigned database does not exist")
@@ -196,7 +207,7 @@ def main() -> int:
             print(f"    reducer: {entry}")
         raise RuntimeError("the reserved player never got a player_world row")
     print(f"  player_world kind={seated[0]} scene={seated[1]}")
-    if seated != ("OPEN", args.destination):
+    if not args.bot_match and seated != ("OPEN", args.destination):
         raise RuntimeError(f"player was seated in {seated}, not OPEN/{args.destination}")
 
     phase = sql(database_identity, "SELECT phase, queue_kind FROM match_bootstrap_config")
