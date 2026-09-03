@@ -1895,8 +1895,10 @@ mod tests {
             ("DAGGER_DISARM", "DAGGERS_BLADEDANCER"),
             ("DAGGER_RESTLESS_BLADES", "DAGGERS_BLADEDANCER"),
             ("PALADIN_BLADE_BARRIER", "DAGGERS_BLADEDANCER"),
+            ("PALADIN_SERRATED_BLADES", "DAGGERS_EXECUTIONER"),
             ("DAGGER_TEMPLE_STRIKE", "DAGGERS_EXECUTIONER"),
             ("DAGGER_GOUGE", "DAGGERS_EXECUTIONER"),
+            ("SUBTLETY_SURPRISE_ATTACKS", "DAGGERS_SHADOW"),
         ];
         for (ability_id, specialization_id) in expected_owners {
             assert_eq!(

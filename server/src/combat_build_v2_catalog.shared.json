@@ -124,7 +124,7 @@
   },
   "schema_version": 2,
   "source_contract": "docs/combat-build-v2-phase-0-contract-2026-08-29.json",
-  "source_contract_sha256": "64da878df6b3d783c4933aae21ea6064c74cc04307e129935a351e9f44eb753d",
+  "source_contract_sha256": "78da9e79d9fc39e9412dc0f4438fc2eacd44306df177f6b107b8a8a92f48796c",
   "specializations": [
     {
       "combat_discipline_id": "DAGGERS",
@@ -163,9 +163,7 @@
     {
       "combat_discipline_id": "DAGGERS",
       "display_name": "Heartseeker",
-      "perk_ability_ids": [
-        "SUBTLETY_SURPRISE_ATTACKS"
-      ],
+      "perk_ability_ids": [],
       "sort_order": 20,
       "specialization_id": "DAGGERS_EXECUTIONER",
       "specialization_kind": "FORM",
@@ -179,6 +177,7 @@
         "DAGGER_DEATH_CROSS",
         "DAGGER_DISEMBOWEL",
         "DAGGER_FLAY",
+        "PALADIN_SERRATED_BLADES",
         "DAGGER_FIND_WEAKNESS",
         "DAGGER_BLADE_TWISTING",
         "DAGGER_GOUGE",
@@ -190,6 +189,7 @@
       "display_name": "Dreadfang",
       "perk_ability_ids": [
         "SUBTLETY_OPPORTUNIST",
+        "SUBTLETY_SURPRISE_ATTACKS",
         "SUBTLETY_TACTICAL_ADVANTAGE",
         "SUBTLETY_LINGERING_SHADE"
       ],
@@ -312,7 +312,6 @@
         "PALADIN_REBUKE",
         "PALADIN_HALLOWED_THRUST",
         "PALADIN_SACRED_THRUST",
-        "PALADIN_SERRATED_BLADES",
         "PALADIN_AIR_TO_GROUND_1"
       ]
     },

@@ -1556,7 +1556,7 @@
       "ability_id": "PALADIN_SERRATED_BLADES",
       "action_id": "SERRATED_BLADES",
       "animation_compatibility_profiles": [
-        "SWORD_AND_SHIELD"
+        "DAGGERS"
       ],
       "bar_domain": "PARENT_TECHNIQUE",
       "current_combat_discipline_id": "SWORD_AND_SHIELD",
@@ -1567,8 +1567,8 @@
       "gameplay_kind": "SPELL",
       "loadout_kind": "TECHNIQUE",
       "presentation_discovery": "SPELL_EXECUTOR",
-      "proposed_parent_discipline_id": "SWORD_AND_SHIELD",
-      "proposed_specialization_id": "SWORD_AND_SHIELD_VINDICATOR",
+      "proposed_parent_discipline_id": "DAGGERS",
+      "proposed_specialization_id": "DAGGERS_EXECUTIONER",
       "proposed_specialization_kind": "FORM",
       "requires_equipped_parent_weapon": true,
       "review_status": "LOCKED_PHASE_0"
@@ -4195,7 +4195,7 @@
       "loadout_kind": "PERK",
       "presentation_discovery": "EXECUTOR_NATIVE",
       "proposed_parent_discipline_id": "DAGGERS",
-      "proposed_specialization_id": "DAGGERS_EXECUTIONER",
+      "proposed_specialization_id": "DAGGERS_SHADOW",
       "proposed_specialization_kind": "FORM",
       "requires_equipped_parent_weapon": false,
       "review_status": "LOCKED_PHASE_0"
