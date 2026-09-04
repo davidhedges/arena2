@@ -327,7 +327,12 @@ def newest_history_sample(probe, npc_hex):
 
 def set_lag_comp(probe, enabled):
     # 4th arg (S10 sweep_rewind_enabled) off — S8 probe exercises melee only.
-    probe.call("set_lag_comp_config", [enabled, 250, False, False])
+    # Configuration is administrative; gameplay stays on the anonymous socket.
+    subprocess.run(
+        ["spacetime", "call", "--server", f"http://{probe.host}", probe.database,
+         "set_lag_comp_config", json.dumps(enabled), "250", "false", "false"],
+        check=True, capture_output=True, text=True,
+    )
     time.sleep(0.6)
     rows = probe.sql("SELECT config_id, enabled, max_rewind_ms FROM combat_lag_comp_config")
     if not rows or rows[0][1].lower() != str(enabled).lower():

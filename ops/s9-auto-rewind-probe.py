@@ -348,7 +348,12 @@ def newest_history_sample(probe, npc_hex):
 
 def set_lag_comp(probe, enabled, auto_swing):
     # 4th arg (S10 sweep_rewind_enabled) off — S9 probe exercises auto swings only.
-    probe.call("set_lag_comp_config", [enabled, 250, auto_swing, False])
+    # Configuration is administrative; gameplay stays on the anonymous socket.
+    subprocess.run(
+        ["spacetime", "call", "--server", f"http://{probe.host}", probe.database,
+         "set_lag_comp_config", json.dumps(enabled), "250", json.dumps(auto_swing), "false"],
+        check=True, capture_output=True, text=True,
+    )
     time.sleep(0.6)
     rows = probe.sql(
         "SELECT config_id, enabled, max_rewind_ms, auto_swing_enabled FROM combat_lag_comp_config"

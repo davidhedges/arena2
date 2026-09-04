@@ -1081,6 +1081,17 @@ pub fn abort_match(ctx: &ReducerContext, reason: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Administrative reducers use the publishing owner's recorded identity,
+/// which is distinct from the database identity used by scheduled execution.
+pub(crate) fn require_administrative_sender(ctx: &ReducerContext) -> Result<(), String> {
+    let owner = require_module_owner(ctx)?;
+    require_identity(
+        ctx.sender(),
+        owner.identity,
+        "Only the module owner may run administrative reducers",
+    )
+}
+
 fn require_module_owner(ctx: &ReducerContext) -> Result<MatchModuleOwner, String> {
     ctx.db
         .match_module_owner()

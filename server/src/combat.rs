@@ -15396,6 +15396,7 @@ const HARNESS_TARGET_HEX: &str = "0000000000000000000000000000000000000000000000
 
 #[reducer]
 pub fn run_status_runtime_harness(ctx: &ReducerContext) -> Result<(), String> {
+    crate::match_contract::require_administrative_sender(ctx)?;
     let now = ctx.timestamp;
     let target = Identity::from_hex(HARNESS_TARGET_HEX)
         .map_err(|err| format!("invalid harness target identity: {err}"))?;

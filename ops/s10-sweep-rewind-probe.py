@@ -375,7 +375,12 @@ def set_lag_comp(probe, enabled, sweep_rewind):
     """4-arg config. arg4 (S10 sweep_rewind_enabled) is the switch under test;
     auto_swing (arg3) stays off — S10 exercises sweeps only. Verifies the row
     reads back the intended master + sweep state before returning."""
-    probe.call("set_lag_comp_config", [enabled, 250, False, sweep_rewind])
+    # Configuration is administrative; gameplay stays on the anonymous socket.
+    subprocess.run(
+        ["spacetime", "call", "--server", f"http://{probe.host}", probe.database,
+         "set_lag_comp_config", json.dumps(enabled), "250", "false", json.dumps(sweep_rewind)],
+        check=True, capture_output=True, text=True,
+    )
     time.sleep(0.6)
     rows = probe.sql(
         "SELECT config_id, enabled, max_rewind_ms, auto_swing_enabled, sweep_rewind_enabled "

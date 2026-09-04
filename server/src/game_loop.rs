@@ -801,6 +801,9 @@ pub fn game_loop_watchdog_tick(
     ctx: &ReducerContext,
     _timer: GameLoopWatchdog,
 ) -> Result<(), String> {
+    if ctx.sender() != ctx.identity() {
+        return Err("Only the database scheduler may invoke scheduled reducers".to_string());
+    }
     if !crate::match_contract::simulation_should_run(ctx) {
         stop_game_loop_schedule(ctx);
         return Ok(());
@@ -2265,6 +2268,9 @@ fn tick_player(
 /// - helpers may structure the logic, but they execute only inside this reducer
 #[reducer]
 pub fn game_tick(ctx: &ReducerContext, timer: GameLoopTimer) -> Result<(), String> {
+    if ctx.sender() != ctx.identity() {
+        return Err("Only the database scheduler may invoke scheduled reducers".to_string());
+    }
     if !crate::match_contract::simulation_should_run(ctx) {
         stop_game_loop_schedule(ctx);
         return Ok(());

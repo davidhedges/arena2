@@ -127,6 +127,7 @@ pub fn set_lag_comp_config(
     auto_swing_enabled: bool,
     sweep_rewind_enabled: bool,
 ) -> Result<(), String> {
+    crate::match_contract::require_administrative_sender(ctx)?;
     let row = CombatLagCompConfig {
         config_id: 0,
         enabled,
