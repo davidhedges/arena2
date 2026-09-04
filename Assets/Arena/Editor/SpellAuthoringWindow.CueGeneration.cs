@@ -744,8 +744,7 @@ namespace Arena.Editor
                 EditorGUILayout.HelpBox(
                     $"Writes the generated cues into progression_catalog.shared.json — {disposition}, "
                     + "assigning inserted rows a fresh sort_order and leaving every other byte identical. "
-                    + "Republish the module (spacetime publish -p server) to apply — the catalog JSON is "
-                    + "include_str!'d.",
+                    + LocalSpacetimeDbSharedDataPublisher.HubMatchRefreshGuidance,
                     MessageType.None);
             }
         }
@@ -774,7 +773,8 @@ namespace Arena.Editor
                     "Write generated cues",
                     $"{detail} for {abilityId} in {SpellPresentationEditorData.ProgressionCatalogPath}?\n\n"
                     + "Author-time slot keys are inserted and inserted rows get a fresh sort_order; every "
-                    + "other byte is preserved. Republish the module afterwards to apply.",
+                    + "other byte is preserved. "
+                    + LocalSpacetimeDbSharedDataPublisher.HubMatchRefreshGuidance,
                     "Write",
                     "Cancel"))
             {
@@ -790,7 +790,7 @@ namespace Arena.Editor
                     EditorUtility.DisplayDialog(
                         "Cues written",
                         $"Wrote {rows.Count} generated cue(s) for {abilityId} into {SpellPresentationEditorData.ProgressionCatalogPath}.\n\n"
-                        + "Republish the module (spacetime publish -p server) to apply.",
+                        + LocalSpacetimeDbSharedDataPublisher.HubMatchRefreshGuidance,
                         "OK");
                     Load();
                 }

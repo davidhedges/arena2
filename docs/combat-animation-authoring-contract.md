@@ -106,7 +106,7 @@ Progression owns player-facing gameplay data and action exposure. It does not ow
 
 File: `server/src/melee_manifest.shared.json`
 
-This is an exported bridge from `CombatAnimationSet` assets and their assigned clip events to the server. Do not hand-edit it to fix animation timing. Author `OnStrikeHit` in the Event Stamper; the stamper synchronizes the affected strike automatically. Republish the server module before expecting exported timing changes to be live.
+This is an exported bridge from `CombatAnimationSet` assets and their assigned clip events to the server. Do not hand-edit it to fix animation timing. Author `OnStrikeHit` in the Event Stamper; the stamper synchronizes the affected strike automatically. To apply exported timing changes in new local Hub-created matches or open-world instances, run `ops/setup-local-multiplayer.sh setup` from the repository root. Editor auto-publish updates only its direct-local database; see [the local publication workflow](project-structure.md#generated-code).
 
 ## Timing Semantics
 

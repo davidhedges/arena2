@@ -185,8 +185,8 @@ cargo test --manifest-path match-server/Cargo.toml \
   -- --exact
 ```
 
-After a schema, progression, or server-authority change, use the canonical
-local synchronization command:
+After changing server code or baked shared data (including progression, melee
+timing, or collision), use the canonical local synchronization command:
 
 ```bash
 ops/setup-local-multiplayer.sh setup
@@ -198,3 +198,9 @@ the managed provisioner. Regenerate the open-world/harness binding namespace
 with the documented command in `docs/project-structure.md` when its public
 schema changes. Never hand-edit generated bindings to preserve a removed row
 or reducer.
+
+Start a new Hub-created match or open-world instance to use the rebuilt
+artifacts. Editor shared-data auto-publish updates only its direct-local
+database; its success does not refresh the Hub or these cached artifacts. See
+[the local publication workflow](project-structure.md#generated-code) for the
+targets and scope of each command.

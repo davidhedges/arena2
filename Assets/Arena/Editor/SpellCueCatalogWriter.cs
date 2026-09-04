@@ -78,9 +78,11 @@ namespace Arena.Editor
     /// <para>
     /// The new author-time <c>slot</c> key is written to the JSON but is <b>not</b> synced to the
     /// runtime <c>CombatVfxCueCatalog</c> table (<c>sync_combat_vfx_cue_catalog</c> ignores it) — no
-    /// runtime schema or wire change (design doc §3.4a). JSON is <c>include_str!</c>'d, so a write is
-    /// not live until <c>spacetime publish -p server</c> (or a data-preserving
-    /// <c>publish_progression_catalogs</c> resync).
+    /// runtime schema or wire change (design doc §3.4a). Runtime catalog changes require a module
+    /// rebuilt from the edited JSON. For new local Hub-created matches or open-world instances,
+    /// run <c>ops/setup-local-multiplayer.sh setup</c>. Direct-local publishing updates one database;
+    /// see <c>docs/project-structure.md</c>. Calling <c>publish_progression_catalogs</c> against an
+    /// older module only resyncs the catalog already embedded in that module.
     /// </para>
     /// </summary>
     public static class SpellCueCatalogWriter

@@ -1085,7 +1085,8 @@ namespace Arena.Editor
             EditorGUILayout.Space(6f);
             EditorGUILayout.LabelField("Automatic synchronization", EditorStyles.miniBoldLabel);
             EditorGUILayout.HelpBox(
-                "Setting startup trim saves the CombatAnimationSet and updates its hit-window mirror and the shared server manifest immediately. Republish the server module when you want the new gameplay timing live.",
+                "Setting startup trim saves the CombatAnimationSet and updates its hit-window mirror and the shared server manifest immediately. "
+                + LocalSpacetimeDbSharedDataPublisher.HubMatchRefreshGuidance,
                 MessageType.None);
             if (GUILayout.Button("Synchronize This Clip Now", GUILayout.Height(22)))
                 SynchronizeHitWindows();

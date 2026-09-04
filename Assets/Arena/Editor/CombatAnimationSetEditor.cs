@@ -702,7 +702,8 @@ namespace Arena.Editor
 
             InternalEditorUtility.RepaintAllViews();
             summary = manifestChanged
-                ? $"Synchronized {affectedStrikeCount} melee strike(s) from '{clip.name}' and updated the shared server manifest. Republish the server to make the timing live."
+                ? $"Synchronized {affectedStrikeCount} melee strike(s) from '{clip.name}' and updated the shared server manifest. "
+                    + LocalSpacetimeDbSharedDataPublisher.HubMatchRefreshGuidance
                 : $"Synchronized {affectedStrikeCount} melee strike(s) from '{clip.name}'; the shared server manifest already matched.";
             return true;
         }
@@ -765,7 +766,7 @@ namespace Arena.Editor
                         $"\n\nKept {legacyFallbackIds.Count} attack(s) on their existing serialized fallback because no {CombatAnimationEvents.OnStrikeHit} event is authored:\n- "
                         + string.Join("\n- ", legacyFallbackIds);
                 }
-                summary += "\n\nRepublish the server module to make these timings live.";
+                summary += "\n\n" + LocalSpacetimeDbSharedDataPublisher.HubMatchRefreshGuidance;
                 return true;
             }
             catch (Exception ex) when (ex is IOException
@@ -1089,7 +1090,8 @@ namespace Arena.Editor
                             0f,
                             firstHitSeconds);
                         EditorGUILayout.HelpBox(
-                            $"Playback begins at {resolvedTrim:0.000}s. First contact is {Mathf.Max(0f, firstHitSeconds - resolvedTrim):0.000}s after input. Hit windows and the server manifest synchronize automatically after editing stops; republishing remains explicit.",
+                            $"Playback begins at {resolvedTrim:0.000}s. First contact is {Mathf.Max(0f, firstHitSeconds - resolvedTrim):0.000}s after input. Hit windows and the server manifest synchronize automatically after editing stops. "
+                            + LocalSpacetimeDbSharedDataPublisher.HubMatchRefreshGuidance,
                             MessageType.None);
                     }
                 }

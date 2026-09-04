@@ -73,7 +73,9 @@ the paired server/client files. The editor command
 scene after a stale revision is detected. Movement and query files stay
 separate so a future map can use cheap movement hulls and richer line-of-sight
 geometry without changing the runtime contract. The local Play gate checks the
-revision and repairs/republishes it before entering Play when needed.
+revision and repairs/publishes to the direct-local database before entering Play
+when needed. It does not refresh the Hub or cached disposable-match artifacts;
+use the local multiplayer setup workflow below for Hub-created sessions.
 
 UI Toolkit runtime assets (UXML/USS/theme, loaded via `Resources.Load`) live in
 `Assets/Arena/Resources/UI/Toolkit/`; web prototype specs live in
@@ -145,8 +147,9 @@ Hub-party, random-dungeon interaction/trap schemas, and embedded open-world
 collision payloads. Its private
 `match_contract.rs` state captures the module owner, one-shot provisioned 2v2
 configuration, and the reserved player identity. A freshly published match
-database stays inert until its owner bootstraps it. The existing direct local
-workflow is a temporary explicit compatibility mode:
+database stays inert until its owner bootstraps it. The existing direct-local
+workflow publishes the full `server/` module to one database (`arena` by default,
+overridden by `ARENA_DATABASE`) with a temporary explicit compatibility mode:
 
 ```bash
 # Existing local direct-connect workflow (the script default).
@@ -156,7 +159,16 @@ ops/republish-local-clear.sh
 ARENA_ENABLE_LOCAL_DIRECT_MODE=0 ops/republish-local-clear.sh
 ```
 
-The compatibility switch is refused for non-local servers.
+The compatibility switch is refused for non-local servers. The bare script
+defaults to clearing the target database; set `ARENA_DELETE_DATA=never` for a
+data-preserving manual publish.
+
+The editor's `LocalSpacetimeDbSharedDataPublisher` calls this same direct-local
+script when shared-data JSON is imported. It forces `ARENA_SERVER=local` and
+`ARENA_DELETE_DATA=never`, honors `ARENA_DATABASE` (default `arena`), and skips
+binding generation and .NET verification. Its `PASS` verifies shared-data
+contracts for that database only. It does not publish `hub-server/` or rebuild
+the optimized PvP/open-world artifacts used by the provisioner.
 
 `match_provisioner/` is the external, local-only control-plane worker. It
 subscribes to a provisioner-only Hub wakeup view, queries private tickets after
@@ -172,11 +184,18 @@ The canonical local multiplayer entry point—intended for developers and LLM
 agents—is:
 
 ```bash
-ops/setup-local-multiplayer.sh
+ops/setup-local-multiplayer.sh setup
 ```
 
-It performs the local Hub publish, cached match build, and background
-provisioner startup in the required order. Its `status` and `stop` subcommands
+It publishes the local Hub with data preservation by default, rebuilds both
+cached PvP and open-world artifacts with their provenance, and restarts the
+managed provisioner in the required order. Run it after changing server code or
+baked shared data to make those changes available to newly created Hub matches
+and open-world instances. Existing instances retain their published module;
+start a new session to exercise the rebuilt artifacts. Editor auto-publish
+success does not establish freshness of these artifacts.
+
+Its `status` and `stop` subcommands
 manage the same ignored PID/log state under `Library/ArenaLocalMultiplayer/`.
 Prefer it over reproducing the lower-level commands manually.
 

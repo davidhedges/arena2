@@ -13,13 +13,18 @@ using Debug = UnityEngine.Debug;
 namespace Arena.Editor
 {
     /// <summary>
-    /// Keeps the local SpacetimeDB module in step with Unity-authored shared
-    /// data. Exporters write both client and server copies, then AssetDatabase
-    /// imports the client copy; that import is the durable publish trigger.
+    /// Publishes Unity-authored shared data to one direct-local database via
+    /// republish-local-clear.sh. Exporters write both client and server copies;
+    /// importing the client copy triggers publication. Hub and cached match
+    /// artifacts are refreshed separately by setup-local-multiplayer.sh setup.
     /// </summary>
     [InitializeOnLoad]
     internal sealed class LocalSpacetimeDbSharedDataPublisher : AssetPostprocessor
     {
+        internal const string HubMatchRefreshGuidance =
+            "To apply changes in new local Hub-created matches or open-world instances, " +
+            "run ops/setup-local-multiplayer.sh setup.";
+
         private const string SharedDataPrefix = "Assets/Arena/Resources/SharedData/";
         private const string RandomDungeonStagingDataPrefix =
             "Assets/Arena/Resources/SharedData/Worlds/random_dungeon_staging.";
@@ -101,7 +106,7 @@ namespace Arena.Editor
             EditorApplication.update += Tick;
             Debug.Log(
                 "[SpacetimeDB Auto Publish] Shared data changed; queued one " +
-                "data-preserving local republish.");
+                "data-preserving direct-local database publish.");
         }
 
         private static bool ContainsSharedData(IEnumerable<string> paths)
@@ -135,7 +140,7 @@ namespace Arena.Editor
                 Debug.LogWarning(
                     "[SpacetimeDB Auto Publish] Holding Play because RandomDungeon " +
                     $"collision is stale: {collisionRevisionFailure} Repairing and " +
-                    "republishing automatically.");
+                    "publishing to the direct-local database automatically.");
                 EditorApplication.delayCall += () =>
                 {
                     if (!DungeonLab.Editor.RandomDungeonSceneBuilder.TryRepairCollisionFromSavedScene())
@@ -152,7 +157,7 @@ namespace Arena.Editor
                 Debug.LogWarning(
                     "[SpacetimeDB Auto Publish] Holding Play because Arena_Map_01 " +
                     $"collision is stale: {arenaCollisionRevisionFailure} Repairing and " +
-                    "republishing automatically.");
+                    "publishing to the direct-local database automatically.");
                 EditorApplication.delayCall += () =>
                 {
                     if (!Maps.ArenaMap01SceneBuilder.TryRepairCollisionFromSavedScene())
@@ -167,8 +172,8 @@ namespace Arena.Editor
             enterPlayWhenReady = true;
             EditorApplication.isPlaying = false;
             Debug.Log(
-                "[SpacetimeDB Auto Publish] Holding Play until the queued shared-data " +
-                "publish passes its live contract gate; Play will resume automatically.");
+                "[SpacetimeDB Auto Publish] Holding Play until the queued direct-local " +
+                "database publish passes its shared-data contract gate; Play will resume automatically.");
         }
 
         private static void Tick()
@@ -243,8 +248,8 @@ namespace Arena.Editor
                 process.BeginErrorReadLine();
                 activeRun = run;
                 Debug.Log(
-                    "[SpacetimeDB Auto Publish] Rebuilding and publishing local 'arena' " +
-                    "with data preservation.");
+                    "[SpacetimeDB Auto Publish] Rebuilding and publishing direct-local database " +
+                    $"'{PublishDatabaseName(startInfo)}' on 'local' with data preservation.");
             }
             catch (Exception error)
             {
@@ -275,6 +280,7 @@ namespace Arena.Editor
         {
             run.Process.WaitForExit();
             int exitCode = run.Process.ExitCode;
+            string database = PublishDatabaseName(run.Process.StartInfo);
             string output = Tail(run.Output(), 80);
             string error = Tail(run.Error(), 40);
             run.Process.Dispose();
@@ -285,14 +291,24 @@ namespace Arena.Editor
             if (exitCode == 0)
             {
                 Debug.Log(
-                    "[SpacetimeDB Auto Publish] PASS: local 'arena' is live and " +
-                    $"shared-data contracts verified.\n{detail}");
+                    $"[SpacetimeDB Auto Publish] PASS: direct-local database '{database}' on 'local' " +
+                    "is live and its shared-data contracts are verified. " +
+                    "This publish does not refresh the Hub or cached PvP/open-world artifacts. " +
+                    $"{HubMatchRefreshGuidance}\n{detail}");
                 return true;
             }
 
             Debug.LogError(
-                $"[SpacetimeDB Auto Publish] FAILED (exit {exitCode}).\n{detail}");
+                $"[SpacetimeDB Auto Publish] FAILED: direct-local database '{database}' on 'local' " +
+                $"(exit {exitCode}).\n{detail}");
             return false;
+        }
+
+        private static string PublishDatabaseName(ProcessStartInfo startInfo)
+        {
+            // Match the script's ${ARENA_DATABASE:-arena} fallback for unset or empty values.
+            string? database = startInfo.EnvironmentVariables["ARENA_DATABASE"];
+            return string.IsNullOrEmpty(database) ? "arena" : database;
         }
 
         private static void ResumePlayIfRequested()
@@ -305,7 +321,7 @@ namespace Arena.Editor
             {
                 if (activeRun == null && !publishRequested && !EditorApplication.isPlaying)
                 {
-                    Debug.Log("[SpacetimeDB Auto Publish] Contracts are live; entering Play.");
+                    Debug.Log("[SpacetimeDB Auto Publish] Direct-local database contracts are verified; entering Play.");
                     EditorApplication.isPlaying = true;
                 }
             };
