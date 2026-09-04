@@ -332,9 +332,6 @@ pub(crate) fn despawn_actor_bundle(
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::path::Path;
-
     /// Per-identity transient tables (or the helpers that own their deletion)
     /// that the unified teardown must cover. Add every new transient table's
     /// accessor here AND to `clear_transient_actor_state`.
@@ -370,10 +367,8 @@ mod tests {
     ];
 
     fn clear_transient_actor_state_body() -> String {
-        let source = fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("src/actor_lifecycle.rs"),
-        )
-        .expect("actor_lifecycle.rs should be readable");
+        // Anchor source guards to this shared module, not the compiling crate.
+        let source = include_str!("actor_lifecycle.rs");
 
         let start = source
             .find("pub(crate) fn clear_transient_actor_state")
@@ -407,10 +402,7 @@ mod tests {
 
     #[test]
     fn transient_actor_teardown_is_called_from_despawn_and_reconnect() {
-        let lifecycle_source = fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("src/actor_lifecycle.rs"),
-        )
-        .expect("actor_lifecycle.rs should be readable");
+        let lifecycle_source = include_str!("actor_lifecycle.rs");
         let despawn_start = lifecycle_source
             .find("pub(crate) fn despawn_actor_bundle")
             .expect("despawn_actor_bundle should exist");
@@ -420,9 +412,7 @@ mod tests {
             "despawn_actor_bundle must call clear_transient_actor_state"
         );
 
-        let player_source =
-            fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/player.rs"))
-                .expect("player.rs should be readable");
+        let player_source = include_str!("player.rs");
         assert!(
             player_source.contains("clear_transient_actor_state(ctx, identity)"),
             "the client_connected reconnect branch must call clear_transient_actor_state"

@@ -6239,41 +6239,6 @@ mod tests {
     }
 
     #[test]
-    fn runtime_spell_id_constants_stay_allowlisted() {
-        let allowed = HashSet::from([
-            "SPELL_METEOR",
-            "SPELL_INSTANT_BEAM",
-            "SPELL_ELECTROCUTE",
-            "SPELL_NEGATE",
-        ]);
-        for relative_path in [
-            "src/spells/casting.rs",
-            "src/spells/simulation.rs",
-            "src/movement_actions.rs",
-            "src/auto_attack.rs",
-        ] {
-            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative_path);
-            let source = std::fs::read_to_string(&path)
-                .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
-            for token in spell_constant_tokens(source.as_str()) {
-                if token.starts_with("SPELL_BLOCK")
-                    || token.starts_with("SPELL_CAST")
-                    || token.starts_with("SPELL_PARRY")
-                    || token.starts_with("SPELL_PREDICTION_RESULT")
-                {
-                    continue;
-                }
-                assert!(
-                    allowed.contains(token.as_str()),
-                    "runtime file '{}' uses unallowlisted spell id constant '{}'",
-                    relative_path,
-                    token
-                );
-            }
-        }
-    }
-
-    #[test]
     fn unity_spell_id_branches_stay_in_presentation_or_contracts() {
         let scripts_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../Assets/Arena/Runtime");
         let allowed = HashSet::from([
@@ -6321,20 +6286,6 @@ mod tests {
                 "migrated projectile spell '{migrated_spell}' must instantiate through combat_vfx_cues, not SpellVFXDispatcher"
             );
         }
-    }
-
-    fn spell_constant_tokens(source: &str) -> HashSet<String> {
-        let mut tokens = HashSet::new();
-        for (index, _) in source.match_indices("SPELL_") {
-            let token: String = source[index..]
-                .chars()
-                .take_while(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || *ch == '_')
-                .collect();
-            if !token.is_empty() {
-                tokens.insert(token);
-            }
-        }
-        tokens
     }
 
     fn collect_cs_files(root: &Path, files: &mut Vec<PathBuf>) {

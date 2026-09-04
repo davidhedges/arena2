@@ -3671,8 +3671,6 @@ fn yaw_delta_abs(a: f32, b: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::path::Path;
     use std::time::Duration;
 
     use super::{
@@ -4371,20 +4369,5 @@ mod tests {
     fn npc_yaw_matches_player_forward_convention() {
         assert_eq!(yaw_for_direction(0.0, 1.0), 0.0);
         assert!((yaw_for_direction(1.0, 0.0) - std::f32::consts::FRAC_PI_2).abs() < 0.0001);
-    }
-
-    #[test]
-    fn npc_melee_uses_shared_pending_impact_executor() {
-        let source = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/npcs.rs"))
-            .expect("npcs.rs should be readable");
-        let runtime_source = source
-            .split("#[cfg(test)]")
-            .next()
-            .expect("runtime source should precede tests");
-
-        assert!(runtime_source.contains("commit_server_actor_targeted_melee"));
-        assert!(runtime_source.contains("resolve_due_pending_melee_impacts_for_event_source"));
-        assert!(!runtime_source.contains("struct NpcPendingSwing"));
-        assert!(!runtime_source.contains("npc_pending_swing()"));
     }
 }

@@ -74,10 +74,11 @@ mod tests {
     use super::*;
 
     /// Every shared JSON compiled anywhere into the module must be stamped.
-    /// Native-only: walks the crate source tree, which wasm cannot do.
+    /// Native-only: walks the authoritative source tree, which wasm cannot do.
     #[test]
     fn shared_files_list_is_complete() {
-        let src_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        // Both server and match-server compile shared content from server/src.
+        let src_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../server/src");
         let mut on_disk = Vec::new();
         collect_shared_json(&src_root, &src_root, &mut on_disk);
         // build.rs also compiles this Unity-owned shared catalog from outside

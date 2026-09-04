@@ -6722,9 +6722,7 @@ mod tests {
 
     #[test]
     fn item_catalog_reconciliation_is_idempotent_and_lifecycle_only() {
-        let source =
-            fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/inventory.rs"))
-                .expect("inventory.rs should be readable");
+        let source = include_str!("inventory.rs");
 
         for signature in [
             "pub fn open_loot_npc",
@@ -6737,41 +6735,41 @@ mod tests {
             "pub(crate) fn create_corpse_loot_for_npc",
         ] {
             assert!(
-                !source_function(&source, signature).contains("sync_item_definitions(ctx)"),
+                !source_function(source, signature).contains("sync_item_definitions(ctx)"),
                 "{signature} must not reconcile authored catalogs during gameplay"
             );
         }
 
         assert!(
-            source_function(&source, "pub fn publish_item_definitions")
+            source_function(source, "pub fn publish_item_definitions")
                 .contains("sync_item_definitions(ctx)"),
             "the explicit item publication reducer must reconcile the catalog"
         );
         assert!(
             source_function(
-                &source,
+                source,
                 "pub(crate) fn ensure_player_inventory_for_identity"
             )
             .contains("sync_item_definitions(ctx)"),
             "player inventory initialization must reconcile definitions before seeding items"
         );
         assert!(
-            source_function(&source, "pub(crate) fn sync_item_definitions")
+            source_function(source, "pub(crate) fn sync_item_definitions")
                 .contains("upsert_item_definition(ctx, row)"),
             "item publication must route every definition through the idempotent upsert"
         );
         assert!(
-            source_function(&source, "fn upsert_item_definition")
+            source_function(source, "fn upsert_item_definition")
                 .contains("Some(existing) if existing == row => {}"),
             "unchanged item definitions must not be rewritten"
         );
         assert!(
-            source_function(&source, "pub(crate) fn sync_item_definitions")
+            source_function(source, "pub(crate) fn sync_item_definitions")
                 .contains("reconcile_weapon_inventory_slot_footprints(ctx)"),
             "item publication must update existing weapon slot footprints"
         );
         assert!(
-            source_function(&source, "pub(crate) fn sync_item_affix_definitions")
+            source_function(source, "pub(crate) fn sync_item_affix_definitions")
                 .contains("Some(existing) if existing == row => {}"),
             "unchanged affix definitions must not be rewritten"
         );
@@ -7773,12 +7771,12 @@ mod tests {
         assert_eq!(restored.revision, 42);
     }
 
+    // Survival inventory is not compiled into the disposable PvP module.
+    #[cfg(not(feature = "pvp_match"))]
     #[test]
     fn survival_run_reapplies_the_selected_armor_set_and_tracks_all_temporary_items() {
-        let source =
-            fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/inventory.rs"))
-                .expect("inventory.rs should be readable");
-        let body = source_function(&source, "pub(crate) fn begin_survival_inventory");
+        let source = include_str!("inventory.rs");
+        let body = source_function(source, "pub(crate) fn begin_survival_inventory");
         let capture_selected_set = body.find("armor_set_for_equipment").unwrap();
         let clear_equipment = body.find("clear_equipment_loadout").unwrap();
         let reapply_selected_set = body.find("apply_armor_set_to_equipment").unwrap();
@@ -7793,12 +7791,11 @@ mod tests {
         assert!(body.contains("starter_item_ids.dedup()"));
     }
 
+    #[cfg(not(feature = "pvp_match"))]
     #[test]
     fn survival_restore_source_preserves_the_required_order() {
-        let source =
-            fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/inventory.rs"))
-                .expect("inventory.rs should be readable");
-        let body = source_function(&source, "pub(crate) fn restore_survival_inventory");
+        let source = include_str!("inventory.rs");
+        let body = source_function(source, "pub(crate) fn restore_survival_inventory");
         let clear_equipment = body.find("clear_equipment_loadout").unwrap();
         let delete_run_items = body.find("delete_item_aggregate").unwrap();
         let restore_items = body.find("restore_item_aggregate").unwrap();
