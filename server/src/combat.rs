@@ -171,6 +171,7 @@ pub(crate) const DAMAGE_SOURCE_KIND_PROJECTILE: &str = "PROJECTILE";
 pub(crate) const DAMAGE_SOURCE_KIND_PERIODIC: &str = "PERIODIC";
 pub(crate) const DAMAGE_SOURCE_KIND_TRAP: &str = "TRAP";
 pub(crate) const DAMAGE_SOURCE_KIND_SELF_INFLICTED: &str = "SELF_INFLICTED";
+pub(crate) const DAMAGE_SOURCE_KIND_HEMORRHAGE: &str = "HEMORRHAGE";
 /// Damage an assisting ability charges to the actor it helps, such as Cauterize
 /// searing the wound it seals. It is a cost, not an attack: it reaches a target
 /// the caster cannot harm, but never flags combat, breaks stealth, grants credit,
@@ -3120,6 +3121,9 @@ pub enum StatusEffectKind {
     VengeanceAura,
     DamageTakenFromSourceAmp,
     DamageTakenAmp,
+    Hemorrhage,
+    /// Deprecated compatibility kind for persisted Gut Ripper statuses. New
+    /// authoring uses `HEMORRHAGE` and stamina-spend damage instead.
     Hemorrhaging,
     MeleeAttackModifier,
     AttackSpeed,
@@ -3187,6 +3191,7 @@ impl StatusEffectKind {
             Self::VengeanceAura => "VENGEANCE_AURA",
             Self::DamageTakenFromSourceAmp => "DAMAGE_TAKEN_FROM_SOURCE_AMP",
             Self::DamageTakenAmp => "DAMAGE_TAKEN_AMP",
+            Self::Hemorrhage => "HEMORRHAGE",
             Self::Hemorrhaging => "HEMORRHAGING",
             Self::MeleeAttackModifier => "MELEE_ATTACK_MODIFIER",
             Self::AttackSpeed => "ATTACK_SPEED",
@@ -3254,6 +3259,7 @@ impl StatusEffectKind {
             "VENGEANCE_AURA" => Some(Self::VengeanceAura),
             "DAMAGE_TAKEN_FROM_SOURCE_AMP" => Some(Self::DamageTakenFromSourceAmp),
             "DAMAGE_TAKEN_AMP" => Some(Self::DamageTakenAmp),
+            "HEMORRHAGE" => Some(Self::Hemorrhage),
             "HEMORRHAGING" => Some(Self::Hemorrhaging),
             "MELEE_ATTACK_MODIFIER" => Some(Self::MeleeAttackModifier),
             "ATTACK_SPEED" => Some(Self::AttackSpeed),
@@ -3369,8 +3375,13 @@ pub enum StatusPayload {
     DamageTakenAmp {
         modifier_scalar: f32,
     },
+    /// Damage dealt per stamina spent by the affected target.
+    Hemorrhage {
+        modifier_scalar: f32,
+    },
     /// Movement advances the target's bleed clock. `modifier_scalar` is seconds
-    /// of bleed progress bought per meter travelled.
+    /// of bleed progress bought per meter travelled. Deprecated compatibility
+    /// payload for already-persisted Gut Ripper statuses.
     Hemorrhaging {
         modifier_scalar: f32,
     },
@@ -3554,6 +3565,9 @@ impl AuthoredStatusPayload {
             StatusEffectKind::DamageTakenAmp => StatusPayload::DamageTakenAmp {
                 modifier_scalar: self.modifier_scalar,
             },
+            StatusEffectKind::Hemorrhage => StatusPayload::Hemorrhage {
+                modifier_scalar: self.modifier_scalar,
+            },
             StatusEffectKind::Hemorrhaging => StatusPayload::Hemorrhaging {
                 modifier_scalar: self.modifier_scalar,
             },
@@ -3664,6 +3678,7 @@ impl AuthoredStatusPayload {
             | StatusEffectKind::KnockbackResistance
             | StatusEffectKind::DamageTakenFromSourceAmp
             | StatusEffectKind::DamageTakenAmp
+            | StatusEffectKind::Hemorrhage
             | StatusEffectKind::Hemorrhaging
             | StatusEffectKind::DamageRedirect
             | StatusEffectKind::Gigantism
@@ -3843,6 +3858,7 @@ impl StatusPayload {
             Self::VengeanceAura => StatusEffectKind::VengeanceAura,
             Self::DamageTakenFromSourceAmp { .. } => StatusEffectKind::DamageTakenFromSourceAmp,
             Self::DamageTakenAmp { .. } => StatusEffectKind::DamageTakenAmp,
+            Self::Hemorrhage { .. } => StatusEffectKind::Hemorrhage,
             Self::Hemorrhaging { .. } => StatusEffectKind::Hemorrhaging,
             Self::MeleeAttackModifier => StatusEffectKind::MeleeAttackModifier,
             Self::AttackSpeed { .. } => StatusEffectKind::AttackSpeed,
@@ -3971,6 +3987,7 @@ impl StatusPayload {
             | Self::MaxHealth { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
             | Self::DamageTakenAmp { modifier_scalar }
+            | Self::Hemorrhage { modifier_scalar }
             | Self::Hemorrhaging { modifier_scalar }
             | Self::DamageRedirect { modifier_scalar }
             | Self::PhysicalDamageReduction { modifier_scalar }
@@ -4171,6 +4188,9 @@ impl StatusPayload {
             StatusEffectKind::DamageTakenAmp => Self::DamageTakenAmp {
                 modifier_scalar: columns.modifier_scalar.max(0.0),
             },
+            StatusEffectKind::Hemorrhage => Self::Hemorrhage {
+                modifier_scalar: columns.modifier_scalar.max(0.0),
+            },
             StatusEffectKind::Hemorrhaging => Self::Hemorrhaging {
                 modifier_scalar: columns.modifier_scalar.max(0.0),
             },
@@ -4276,6 +4296,7 @@ impl StatusPayload {
             | Self::MaxHealth { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
             | Self::DamageTakenAmp { modifier_scalar }
+            | Self::Hemorrhage { modifier_scalar }
             | Self::Hemorrhaging { modifier_scalar }
             | Self::DamageRedirect { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
@@ -4413,6 +4434,7 @@ impl StatusPayload {
             | Self::MaxHealth { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
             | Self::DamageTakenAmp { modifier_scalar }
+            | Self::Hemorrhage { modifier_scalar }
             | Self::Hemorrhaging { modifier_scalar }
             | Self::DamageRedirect { modifier_scalar }
             | Self::CastSpeed { modifier_scalar } => {
@@ -4591,6 +4613,7 @@ impl StatusPayload {
             | Self::MaxHealth { modifier_scalar }
             | Self::DamageTakenFromSourceAmp { modifier_scalar }
             | Self::DamageTakenAmp { modifier_scalar }
+            | Self::Hemorrhage { modifier_scalar }
             | Self::Hemorrhaging { modifier_scalar }
             | Self::DamageRedirect { modifier_scalar }
             | Self::PhysicalDamageReduction { modifier_scalar }
@@ -9689,6 +9712,48 @@ fn apply_status_update(
     }
 }
 
+fn refreshed_status_duration(effect: &StatusEffect) -> Option<Duration> {
+    let base_duration = Duration::from_millis(effect.base_duration_ms);
+    if base_duration.is_zero() {
+        return None;
+    }
+    if status_uses_escalating_dot_decay(effect) {
+        Some(escalating_dot_decay_interval(
+            base_duration,
+            effect.stacks.max(1),
+        ))
+    } else {
+        Some(base_duration)
+    }
+}
+
+fn refresh_status_effect_timing(effect: &mut StatusEffect, now: Timestamp) -> bool {
+    let Some(duration) = refreshed_status_duration(effect) else {
+        return false;
+    };
+    effect.applied_at = now;
+    set_status_expires_at(effect, now + duration);
+    true
+}
+
+pub(crate) fn refresh_status_effect_duration(
+    ctx: &ReducerContext,
+    status_id: u64,
+    now: Timestamp,
+) -> bool {
+    let Some(mut effect) = ctx.db.status_effect().status_id().find(status_id) else {
+        return false;
+    };
+    if now >= effect.expires_at {
+        return false;
+    }
+    if !refresh_status_effect_timing(&mut effect, now) {
+        return false;
+    }
+    ctx.db.status_effect().status_id().update(effect);
+    true
+}
+
 fn remove_status_group(
     ctx: &ReducerContext,
     target: Identity,
@@ -10656,8 +10721,11 @@ impl StatusRuntimeView {
                         *entry = (*entry)
                             .max(effect.modifier_scalar.max(0.0) * effect.stacks.max(1) as f32);
                     }
-                    // Read by tick_hemorrhage against live movement, not folded into
-                    // the per-tick modifier snapshot.
+                    // Read at stamina spend, not folded into the per-tick
+                    // modifier snapshot.
+                    StatusEffectKind::Hemorrhage => {}
+                    // Legacy status read by tick_legacy_hemorrhaging against
+                    // live movement, not folded into this snapshot.
                     StatusEffectKind::Hemorrhaging => {}
                     StatusEffectKind::DamageTakenAmp => {
                         let entry = modifiers
@@ -11023,12 +11091,77 @@ fn upsert_hemorrhage_advance(
     }
 }
 
+fn hemorrhage_damage_for_stamina_spend(stamina_spent: f32, damage_per_stamina: f32) -> i32 {
+    if !stamina_spent.is_finite()
+        || !damage_per_stamina.is_finite()
+        || stamina_spent <= 0.0
+        || damage_per_stamina <= 0.0
+    {
+        return 0;
+    }
+    (stamina_spent * damage_per_stamina)
+        .round()
+        .clamp(0.0, i32::MAX as f32) as i32
+}
+
+pub(crate) fn queue_hemorrhage_stamina_spend_damage(
+    ctx: &ReducerContext,
+    target: Identity,
+    stamina_spent: f32,
+    now: Timestamp,
+) -> bool {
+    let hemorrhage = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(target)
+        .filter(|effect| {
+            effect.effect_kind == StatusEffectKind::Hemorrhage.as_str()
+                && now < effect.expires_at
+                && effect.modifier_scalar.is_finite()
+                && effect.modifier_scalar > 0.0
+        })
+        .max_by(|left, right| {
+            left.modifier_scalar
+                .total_cmp(&right.modifier_scalar)
+                .then_with(|| left.status_id.cmp(&right.status_id))
+        });
+    let Some(hemorrhage) = hemorrhage else {
+        return false;
+    };
+    let damage =
+        hemorrhage_damage_for_stamina_spend(stamina_spent, hemorrhage.modifier_scalar.max(0.0));
+    if damage <= 0 {
+        return false;
+    }
+
+    queue_effects(
+        ctx,
+        vec![EffectPacket::Damage {
+            amount: damage,
+            damage_type: DamageType::Physical,
+            source: hemorrhage.source,
+            target,
+            spell_id: format!(
+                "{}:stamina_spend:{}",
+                hemorrhage.spell_id,
+                timestamp_to_micros(now)
+            ),
+            delivery: DamageDelivery::Periodic,
+            source_kind: DAMAGE_SOURCE_KIND_HEMORRHAGE.to_string(),
+            direct_action_key: String::new(),
+            is_area: false,
+        }],
+    );
+    true
+}
+
 /// Hemorrhaging: moving advances the target's bleeds instead of letting them
 /// run on wall-clock time. The bleed's authored total damage is conserved --
 /// movement front-loads it by consuming remaining duration, it does not add
 /// damage on top. Standing still is the only way to make a bleed take its full
 /// authored time, so the target chooses between bleeding slowly and repositioning.
-pub fn tick_hemorrhage(ctx: &ReducerContext, now: Timestamp, dt: f32) -> usize {
+pub fn tick_legacy_hemorrhaging(ctx: &ReducerContext, now: Timestamp, dt: f32) -> usize {
     if !dt.is_finite() || dt <= 0.0 {
         return 0;
     }
@@ -11482,25 +11615,26 @@ mod tests {
         escalating_dot_decay_interval, event_prune_cutoff_micros,
         fire_spell_hit_can_trigger_wildfire, fracture_melee_damage_multiplier,
         fulmination_arc_damage, fulmination_uses_any_target_audience, furnace_mana_restore_amount,
-        heartseeker_should_auto_crit, hit_can_consume_target_status, hit_is_direct_melee_attack,
-        holy_shield_end_reason, immolation_damage_for_stacks, immolation_remaining_tick_count,
-        initial_status_stacks, isolated_damage_multiplier, knockback_stagger_duration,
-        melee_attack_can_trigger_fracture, mirror_image_intercept_chance,
-        mirror_image_stacks_after_intercept, mirror_images_intercept, new_status_effect,
-        next_cadence_count, point_blank_damage_multiplier, point_within_radius,
-        potential_stacks_after_spell_strike, proportional_tick_amount_after_stack_loss,
-        quickening_cast_speed_multiplier, resolve_effect_amount_from_roll,
-        resolve_mana_shield_absorb, resolve_temporary_hitpoint_absorb, resolved_shove_tunables,
-        restless_passive_spec, rime_protected_status_id, rime_protection_stack_group,
-        spell_critical_can_charge_capacitor, spell_critical_can_trigger_chain_reaction,
-        stacked_slow_pct, stagger_shove_tunables, stationary_target_damage_multiplier,
-        stationary_target_from_poses, status_application_is_blocked_by_immunity,
-        status_can_spread_from_contagious_target, status_dot_tick_damage, status_has_dispel_type,
-        status_kind_is_intrinsically_undispellable, status_matches_removal_filter_values,
-        status_stacks_after_removal, target_status_consumption_limit, AuthoredStatusPayload,
-        ConsumedTargetStatus, DamageDelivery, DamageType, EffectPacket, HolyShieldEndReason,
-        MovementModifiers, PendingHit, StackPolicy, StatusApplication, StatusDispelType,
-        StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
+        heartseeker_should_auto_crit, hemorrhage_damage_for_stamina_spend,
+        hit_can_consume_target_status, hit_is_direct_melee_attack, holy_shield_end_reason,
+        immolation_damage_for_stacks, immolation_remaining_tick_count, initial_status_stacks,
+        isolated_damage_multiplier, knockback_stagger_duration, melee_attack_can_trigger_fracture,
+        mirror_image_intercept_chance, mirror_image_stacks_after_intercept,
+        mirror_images_intercept, new_status_effect, next_cadence_count,
+        point_blank_damage_multiplier, point_within_radius, potential_stacks_after_spell_strike,
+        proportional_tick_amount_after_stack_loss, quickening_cast_speed_multiplier,
+        refresh_status_effect_timing, resolve_effect_amount_from_roll, resolve_mana_shield_absorb,
+        resolve_temporary_hitpoint_absorb, resolved_shove_tunables, restless_passive_spec,
+        rime_protected_status_id, rime_protection_stack_group, spell_critical_can_charge_capacitor,
+        spell_critical_can_trigger_chain_reaction, stacked_slow_pct, stagger_shove_tunables,
+        stationary_target_damage_multiplier, stationary_target_from_poses,
+        status_application_is_blocked_by_immunity, status_can_spread_from_contagious_target,
+        status_dot_tick_damage, status_has_dispel_type, status_kind_is_intrinsically_undispellable,
+        status_matches_removal_filter_values, status_stacks_after_removal,
+        target_status_consumption_limit, AuthoredStatusPayload, ConsumedTargetStatus,
+        DamageDelivery, DamageType, EffectPacket, HolyShieldEndReason, MovementModifiers,
+        PendingHit, StackPolicy, StatusApplication, StatusDispelType, StatusEffect,
+        StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
         StatusStackGroupDefault, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
         COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_BURDEN_REDIRECT,
         DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PERIODIC, DAMAGE_SOURCE_KIND_PROJECTILE,
@@ -11720,6 +11854,51 @@ mod tests {
             escalating_dot_decay_interval(base, 10),
             Duration::from_micros(1_445_783)
         );
+    }
+
+    #[test]
+    fn status_refresh_resets_expiry_without_delaying_the_next_tick() {
+        let now = Timestamp::UNIX_EPOCH;
+        let mut bleed = test_status_effect(
+            test_identity(),
+            StatusPayload::Dot {
+                tick_damage: 3,
+                damage_type: DamageType::Physical,
+                tick_interval: Duration::from_secs(1),
+            },
+            now,
+            now + Duration::from_secs(6),
+        );
+        bleed.base_duration_ms = 6_000;
+        bleed.stacks = 2;
+        let original_next_tick_at = bleed.next_tick_at;
+        let refreshed_at = now + Duration::from_millis(500);
+
+        bleed.stack_policy = StackPolicy::AddStackRefresh.as_str().to_string();
+        assert!(refresh_status_effect_timing(&mut bleed, refreshed_at));
+        assert_eq!(bleed.applied_at, refreshed_at);
+        assert_eq!(bleed.expires_at, refreshed_at + Duration::from_secs(6));
+        assert_eq!(bleed.next_tick_at, original_next_tick_at);
+
+        bleed.stack_policy = StackPolicy::AddStackEscalatingDecay.as_str().to_string();
+        assert!(refresh_status_effect_timing(&mut bleed, refreshed_at));
+        assert_eq!(
+            bleed.expires_at,
+            refreshed_at + escalating_dot_decay_interval(Duration::from_secs(6), 2)
+        );
+        assert_eq!(bleed.next_tick_at, original_next_tick_at);
+
+        bleed.base_duration_ms = 0;
+        assert!(!refresh_status_effect_timing(&mut bleed, refreshed_at));
+    }
+
+    #[test]
+    fn hemorrhage_damage_is_one_for_one_with_stamina_spent() {
+        assert_eq!(hemorrhage_damage_for_stamina_spend(25.0, 1.0), 25);
+        assert_eq!(hemorrhage_damage_for_stamina_spend(12.5, 1.0), 13);
+        assert_eq!(hemorrhage_damage_for_stamina_spend(25.0, 0.5), 13);
+        assert_eq!(hemorrhage_damage_for_stamina_spend(0.0, 1.0), 0);
+        assert_eq!(hemorrhage_damage_for_stamina_spend(25.0, 0.0), 0);
     }
 
     #[test]

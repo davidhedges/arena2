@@ -42,8 +42,8 @@ preserved, run:
   HUB_DELETE_DATA=always ops/setup-local-multiplayer.sh setup
 
 Runtime PID/log files live under ignored Library/ArenaLocalMultiplayer/.
-On macOS, the provisioner is owned by launchd so it survives the shell or
-Codex command which performed setup.
+On macOS, the local SpacetimeDB server and provisioner are owned by launchd so
+they survive the shell or Codex command which performed setup.
 EOF
 }
 

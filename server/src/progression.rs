@@ -607,6 +607,10 @@ enum MeleeImpactEffectDefinition {
     ApplyStatus {
         status: MeleeImpactStatusDefinition,
     },
+    ApplyStatusOnHit {
+        hit_index: u32,
+        status: MeleeImpactStatusDefinition,
+    },
     RemoveStatus {
         #[serde(default)]
         polarity: Option<StatusPolarity>,
@@ -614,6 +618,13 @@ enum MeleeImpactEffectDefinition {
         dispel_types: Vec<StatusDispelType>,
         #[serde(default = "default_one_status_stack")]
         max_count: u32,
+    },
+    RefreshRandomStatus {
+        hit_index: u32,
+        #[serde(default)]
+        polarity: Option<StatusPolarity>,
+        #[serde(default)]
+        dispel_types: Vec<StatusDispelType>,
     },
 }
 
@@ -896,10 +907,19 @@ pub(crate) enum MeleeImpactEffectRuntime {
     ApplyStatus {
         status: StatusApplication,
     },
+    ApplyStatusOnHit {
+        hit_index: u32,
+        status: StatusApplication,
+    },
     RemoveStatus {
         polarity: Option<StatusPolarity>,
         dispel_types: Vec<StatusDispelType>,
         max_count: u32,
+    },
+    RefreshRandomStatus {
+        hit_index: u32,
+        polarity: Option<StatusPolarity>,
+        dispel_types: Vec<StatusDispelType>,
     },
 }
 
@@ -1374,13 +1394,15 @@ fn authored_status_presentation_ids(catalog: &ProgressionCatalogFile) -> HashSet
         for effect in &ability.gameplay.melee_impact_effects {
             match effect {
                 MeleeImpactEffectDefinition::Knockback { .. } => {}
-                MeleeImpactEffectDefinition::ApplyStatus { status } => {
+                MeleeImpactEffectDefinition::ApplyStatus { status }
+                | MeleeImpactEffectDefinition::ApplyStatusOnHit { status, .. } => {
                     collect_optional_status_stack_group(
                         status.status_stack_group.as_deref(),
                         &mut ids,
                     );
                 }
                 MeleeImpactEffectDefinition::RemoveStatus { .. } => {}
+                MeleeImpactEffectDefinition::RefreshRandomStatus { .. } => {}
             }
         }
         if let Some(melee_fire_on_hit) = ability.gameplay.melee_fire_on_hit.as_ref() {
@@ -1439,6 +1461,8 @@ fn known_status_kind_ids() -> HashSet<String> {
         StatusEffectKind::Thorns,
         StatusEffectKind::VengeanceAura,
         StatusEffectKind::DamageTakenFromSourceAmp,
+        StatusEffectKind::Hemorrhage,
+        StatusEffectKind::Hemorrhaging,
         StatusEffectKind::MeleeAttackModifier,
         StatusEffectKind::AttackSpeed,
         StatusEffectKind::CastSpeed,
@@ -2643,6 +2667,15 @@ pub(crate) fn melee_impact_effects_for_ability_id(
                             ),
                         }
                     }
+                    MeleeImpactEffectDefinition::ApplyStatusOnHit { hit_index, status } => {
+                        MeleeImpactEffectRuntime::ApplyStatusOnHit {
+                            hit_index: *hit_index,
+                            status: status_application_from_definition(
+                                status,
+                                authored_status_stack_group_default(status.kind.as_str()),
+                            ),
+                        }
+                    }
                     MeleeImpactEffectDefinition::RemoveStatus {
                         polarity,
                         dispel_types,
@@ -2651,6 +2684,15 @@ pub(crate) fn melee_impact_effects_for_ability_id(
                         polarity: *polarity,
                         dispel_types: dispel_types.clone(),
                         max_count: *max_count,
+                    },
+                    MeleeImpactEffectDefinition::RefreshRandomStatus {
+                        hit_index,
+                        polarity,
+                        dispel_types,
+                    } => MeleeImpactEffectRuntime::RefreshRandomStatus {
+                        hit_index: *hit_index,
+                        polarity: *polarity,
+                        dispel_types: dispel_types.clone(),
                     },
                 })
                 .collect()
@@ -5181,7 +5223,8 @@ fn validate_melee_impact_effects(ability_id: &str, effects: &[MeleeImpactEffectD
                     "melee ability '{ability_id}' KNOCKBACK impact effect distance_meters must be positive"
                 );
             }
-            MeleeImpactEffectDefinition::ApplyStatus { status } => {
+            MeleeImpactEffectDefinition::ApplyStatus { status }
+            | MeleeImpactEffectDefinition::ApplyStatusOnHit { status, .. } => {
                 validate_status_application_definition(
                     ability_id,
                     "melee_impact_effects[].status",
@@ -5214,6 +5257,16 @@ fn validate_melee_impact_effects(ability_id: &str, effects: &[MeleeImpactEffectD
                 assert!(
                     *max_count > 0,
                     "melee ability '{ability_id}' REMOVE_STATUS impact effect max_count must be at least 1"
+                );
+            }
+            MeleeImpactEffectDefinition::RefreshRandomStatus {
+                polarity,
+                dispel_types,
+                ..
+            } => {
+                assert!(
+                    polarity.is_some() || !dispel_types.is_empty(),
+                    "melee ability '{ability_id}' REFRESH_RANDOM_STATUS impact effect must define polarity or dispel_types"
                 );
             }
         }
@@ -6545,25 +6598,65 @@ mod tests {
             .abilities
             .iter()
             .filter(|ability| {
-                ability
-                    .gameplay
-                    .delivery
-                    .as_ref()
-                    .and_then(|delivery| delivery.get("status"))
-                    .and_then(|status| status.get("kind"))
-                    .and_then(serde_json::Value::as_str)
-                    .is_some_and(|kind| normalize_identifier(kind) == "VULNERABLE")
-                    || ability.gameplay.melee_impact_effects.iter().any(|effect| {
-                        matches!(
-                            effect,
-                            super::MeleeImpactEffectDefinition::ApplyStatus { status }
-                                if normalize_identifier(status.kind.as_str()) == "VULNERABLE"
-                        )
-                    })
+                ability.gameplay.delivery.as_ref().is_some_and(|delivery| {
+                    delivery
+                        .pointer("/status/kind")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|kind| normalize_identifier(kind) == "VULNERABLE")
+                        || delivery
+                            .get("additional_applications")
+                            .and_then(serde_json::Value::as_array)
+                            .is_some_and(|applications| {
+                                applications.iter().any(|application| {
+                                    application
+                                        .pointer("/status/kind")
+                                        .and_then(serde_json::Value::as_str)
+                                        .is_some_and(|kind| {
+                                            normalize_identifier(kind) == "VULNERABLE"
+                                        })
+                                })
+                            })
+                }) || ability.gameplay.melee_impact_effects.iter().any(|effect| {
+                    matches!(
+                        effect,
+                        super::MeleeImpactEffectDefinition::ApplyStatus { status }
+                            | super::MeleeImpactEffectDefinition::ApplyStatusOnHit { status, .. }
+                            if normalize_identifier(status.kind.as_str()) == "VULNERABLE"
+                    )
+                })
             })
             .map(|ability| normalize_identifier(ability.ability_id.as_str()))
             .collect();
-        assert_eq!(vulnerable_producers, vec!["DAGGER_EXPOSE_WEAKNESS"]);
+        assert_eq!(
+            vulnerable_producers,
+            vec![
+                "DAGGER_PRECISION_STRIKE",
+                "DAGGER_EXPOSE_WEAKNESS",
+                "DAGGER_GOUGE"
+            ]
+        );
+
+        let precision_strike = catalog
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_PRECISION_STRIKE")
+            .expect("Precision Strike should be authored");
+        assert_eq!(
+            melee_impact_effects_for_ability_id("DAGGER_PRECISION_STRIKE"),
+            vec![MeleeImpactEffectRuntime::ApplyStatusOnHit {
+                hit_index: 0,
+                status: StatusApplication::new(
+                    StatusPayload::Vulnerable,
+                    Duration::from_secs(86_400),
+                    Some("VULNERABLE".to_string()),
+                    StatusStackGroupDefault::EffectKind,
+                    3,
+                    StackPolicy::AddStackRefresh,
+                )
+                .with_dispel_types(vec![StatusDispelType::Physical]),
+            }]
+        );
+        assert_eq!(precision_strike.gameplay.melee_impact_effects.len(), 1);
 
         let cruelty = catalog
             .abilities
@@ -9413,6 +9506,9 @@ mod tests {
             ("DAGGER_DASHING_CUT", "DAGGER_DASHING_CUT"),
             ("DAGGER_ROUNDHOUSE", "DAGGER_ROUNDHOUSE"),
             ("DAGGER_GUT_RIPPER", "DAGGER_COMBO_ATTACK_04_01"),
+            ("DAGGER_SEVER", "DAGGER_COMBO_ATTACK_03_03"),
+            ("DAGGER_DEEP_CUT", "DAGGER_COMBO_ATTACK_04_04"),
+            ("DAGGER_HEMORRHAGE", "DAGGER_COMBO_ATTACK_01_03"),
             ("DAGGER_SPINNING_SLASH", "DAGGER_COMBO_ATTACK_03_01"),
             ("DAGGER_BLADE_FLURRY", "DAGGER_COMBO_ATTACK_02_02"),
             ("DAGGER_DEADLY_FLOURISH", "DAGGER_DEADLY_FLOURISH"),
@@ -9801,27 +9897,111 @@ mod tests {
 
         assert_eq!(ability.action_id, "DAGGER_COMBO_ATTACK_04_01");
         assert_eq!(ability.gameplay.applies_stagger, Some(false));
-        // Containment, not equality: Gut Ripper also carries the hemorrhage
-        // marker, and pinning the whole effect list just re-copies the catalog.
-        assert!(
-            melee_impact_effects_for_ability_id("DAGGER_GUT_RIPPER").contains(
-                &MeleeImpactEffectRuntime::ApplyStatus {
-                    status: StatusApplication::new(
-                        StatusPayload::Dot {
-                            tick_damage: 3,
-                            damage_type: crate::combat::DamageType::Physical,
-                            tick_interval: Duration::from_secs(1),
-                        },
-                        Duration::from_millis(6000),
-                        Some("BLEED:{SOURCE}".to_string()),
-                        StatusStackGroupDefault::InstanceScopedActionSuffix("DOT"),
-                        10,
-                        StackPolicy::AddStackEscalatingDecay,
-                    )
-                    .with_dispel_types(vec![StatusDispelType::Bleed]),
-                }
-            )
+        assert_eq!(
+            melee_impact_effects_for_ability_id("DAGGER_GUT_RIPPER"),
+            vec![MeleeImpactEffectRuntime::ApplyStatus {
+                status: StatusApplication::new(
+                    StatusPayload::Dot {
+                        tick_damage: 3,
+                        damage_type: crate::combat::DamageType::Physical,
+                        tick_interval: Duration::from_secs(1),
+                    },
+                    Duration::from_millis(6000),
+                    Some("BLEED:{SOURCE}".to_string()),
+                    StatusStackGroupDefault::InstanceScopedActionSuffix("DOT"),
+                    10,
+                    StackPolicy::AddStackEscalatingDecay,
+                )
+                .with_dispel_types(vec![StatusDispelType::Bleed]),
+            }]
         );
+    }
+
+    #[test]
+    fn dagger_sever_stacks_one_shared_slow_duration() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_SEVER")
+            .expect("DAGGER_SEVER must exist");
+
+        assert_eq!(ability.action_id, "DAGGER_COMBO_ATTACK_03_03");
+        assert_eq!(ability.resource_cost, 20.0);
+        assert_eq!(ability.gameplay.base_damage, Some(24));
+        assert_eq!(ability.gameplay.cooldown_ms, Some(650));
+        assert_eq!(
+            melee_impact_effects_for_ability_id("DAGGER_SEVER"),
+            vec![MeleeImpactEffectRuntime::ApplyStatus {
+                status: StatusApplication::new(
+                    StatusPayload::Slow { slow_pct: 0.25 },
+                    Duration::from_secs(6),
+                    Some("SEVER".to_string()),
+                    StatusStackGroupDefault::ActionSuffix("SLOW"),
+                    2,
+                    StackPolicy::AddStackRefresh,
+                )
+                .with_dispel_types(vec![StatusDispelType::Physical]),
+            }]
+        );
+    }
+
+    #[test]
+    fn dagger_deep_cut_is_a_low_cost_random_bleed_refresh_attack() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_DEEP_CUT")
+            .expect("DAGGER_DEEP_CUT must exist");
+
+        assert_eq!(ability.action_id, "DAGGER_COMBO_ATTACK_04_04");
+        assert_eq!(ability.resource_cost, 10.0);
+        assert_eq!(ability.gameplay.base_damage, Some(12));
+        assert_eq!(ability.gameplay.cooldown_ms, Some(650));
+        assert_eq!(
+            melee_impact_effects_for_ability_id("DAGGER_DEEP_CUT"),
+            vec![MeleeImpactEffectRuntime::RefreshRandomStatus {
+                hit_index: 0,
+                polarity: Some(StatusPolarity::Debuff),
+                dispel_types: vec![StatusDispelType::Bleed],
+            }]
+        );
+    }
+
+    #[test]
+    fn dagger_hemorrhage_replaces_the_legacy_gut_ripper_debuff_contract() {
+        let ability = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == "DAGGER_HEMORRHAGE")
+            .expect("DAGGER_HEMORRHAGE must exist");
+
+        assert_eq!(ability.action_id, "DAGGER_COMBO_ATTACK_01_03");
+        assert_eq!(ability.resource_cost, 20.0);
+        assert_eq!(ability.gameplay.base_damage, Some(20));
+        assert_eq!(ability.gameplay.cooldown_ms, Some(900));
+        assert_eq!(
+            melee_impact_effects_for_ability_id("DAGGER_HEMORRHAGE"),
+            vec![MeleeImpactEffectRuntime::ApplyStatusOnHit {
+                hit_index: 0,
+                status: StatusApplication::new(
+                    StatusPayload::Hemorrhage {
+                        modifier_scalar: 1.0,
+                    },
+                    Duration::from_secs(8),
+                    Some("HEMORRHAGE".to_string()),
+                    StatusStackGroupDefault::EffectKind,
+                    1,
+                    StackPolicy::Refresh,
+                )
+                .with_dispel_types(vec![StatusDispelType::Bleed]),
+            }]
+        );
+        assert_eq!(
+            StatusEffectKind::from_wire("HEMORRHAGING"),
+            Some(StatusEffectKind::Hemorrhaging),
+            "legacy persisted Hemorrhaging rows must remain readable"
+        );
+        assert!(authored_status_presentation_ids(progression_catalog()).contains("HEMORRHAGING"));
     }
 
     #[test]
@@ -11021,6 +11201,29 @@ mod tests {
                 Some(status_kind)
             );
         }
+
+        let gouge = spell_definition_by_str("GOUGE").expect("Gouge runtime definition");
+        let gouge_additional = &gouge
+            .secondary
+            .apply_status
+            .as_ref()
+            .expect("Gouge apply-status tunables")
+            .additional_applications;
+        assert_eq!(gouge_additional.len(), 1);
+        assert_eq!(gouge_additional[0].duration, Duration::from_secs(86_400));
+        assert_eq!(
+            gouge_additional[0].status_stack_group.as_deref(),
+            Some("VULNERABLE")
+        );
+        assert_eq!(
+            gouge_additional[0].status.kind,
+            StatusEffectKind::Vulnerable
+        );
+        assert_eq!(gouge_additional[0].status.max_stacks, 3);
+        assert_eq!(
+            gouge_additional[0].status.stack_policy,
+            StackPolicy::AddStackRefresh
+        );
 
         let animation_ids = spell_ids_for_combat_profile(COMBAT_PROFILE_DAGGERS);
         for spell_id in ["FIND_WEAKNESS", "BLADE_TWISTING", "GOUGE", "TEMPLE_STRIKE"] {

@@ -7172,14 +7172,121 @@
                 "BLEED"
               ]
             }
-          },
+          }
+        ]
+      }
+    },
+    {
+      "ability_id": "DAGGER_SEVER",
+      "actor_scope": "PLAYER",
+      "selection_kind": "ACTIVE",
+      "combat_discipline_id": "DAGGERS",
+      "spell_school_id": null,
+      "action_id": "DAGGER_COMBO_ATTACK_03_03",
+      "display_name": "Sever",
+      "resource_kind": "STAMINA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 37,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 24,
+        "applies_stagger": false,
+        "range": 1.8,
+        "cooldown_ms": 650,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_impact_effects": [
           {
             "kind": "APPLY_STATUS",
             "status": {
-              "kind": "HEMORRHAGING",
+              "kind": "SLOW",
+              "duration_ms": 6000,
+              "status_stack_group": "SEVER",
+              "slow_pct": 0.25,
+              "max_stacks": 2,
+              "stack_policy": "ADD_STACK_REFRESH",
+              "dispel_types": [
+                "PHYSICAL"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "ability_id": "DAGGER_DEEP_CUT",
+      "actor_scope": "PLAYER",
+      "selection_kind": "ACTIVE",
+      "combat_discipline_id": "DAGGERS",
+      "spell_school_id": null,
+      "action_id": "DAGGER_COMBO_ATTACK_04_04",
+      "display_name": "Deep Cut",
+      "resource_kind": "STAMINA",
+      "resource_cost": 10,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 38,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 12,
+        "applies_stagger": false,
+        "range": 1.8,
+        "cooldown_ms": 650,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_impact_effects": [
+          {
+            "kind": "REFRESH_RANDOM_STATUS",
+            "hit_index": 0,
+            "polarity": "DEBUFF",
+            "dispel_types": [
+              "BLEED"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "ability_id": "DAGGER_HEMORRHAGE",
+      "actor_scope": "PLAYER",
+      "selection_kind": "ACTIVE",
+      "combat_discipline_id": "DAGGERS",
+      "spell_school_id": null,
+      "action_id": "DAGGER_COMBO_ATTACK_01_03",
+      "display_name": "Hemorrhage",
+      "resource_kind": "STAMINA",
+      "resource_cost": 20,
+      "ability_tags": [
+        "ACTION_BAR_ACTION"
+      ],
+      "sort_order": 39,
+      "gameplay": {
+        "kind": "MELEE",
+        "base_damage": 20,
+        "applies_stagger": false,
+        "range": 1.8,
+        "cooldown_ms": 900,
+        "uses_global_cooldown": true,
+        "parry_behavior": "PARRYABLE",
+        "block_behavior": "BLOCKABLE",
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS_ON_HIT",
+            "hit_index": 0,
+            "status": {
+              "kind": "HEMORRHAGE",
               "duration_ms": 8000,
-              "status_stack_group": "DAGGER_GUT_RIPPER_HEMORRHAGE",
-              "modifier_scalar": 3,
+              "status_stack_group": "HEMORRHAGE",
+              "modifier_scalar": 1,
               "max_stacks": 1,
               "stack_policy": "REFRESH",
               "dispel_types": [
@@ -7432,7 +7539,24 @@
         "uses_global_cooldown": true,
         "parry_behavior": "PARRYABLE",
         "block_behavior": "BLOCKABLE",
-        "airborne_targeting_mode": "ANY_TARGET"
+        "airborne_targeting_mode": "ANY_TARGET",
+        "melee_impact_effects": [
+          {
+            "kind": "APPLY_STATUS_ON_HIT",
+            "hit_index": 0,
+            "status": {
+              "kind": "VULNERABLE",
+              "duration_ms": 86400000,
+              "status_stack_group": "VULNERABLE",
+              "modifier_scalar": 0,
+              "max_stacks": 3,
+              "stack_policy": "ADD_STACK_REFRESH",
+              "dispel_types": [
+                "PHYSICAL"
+              ]
+            }
+          }
+        ]
       }
     },
     {
@@ -7933,7 +8057,22 @@
             "modifier_scalar": 0,
             "max_stacks": 1,
             "stack_policy": "REFRESH"
-          }
+          },
+          "additional_applications": [
+            {
+              "duration_ms": 86400000,
+              "status_stack_group": "VULNERABLE",
+              "status": {
+                "kind": "VULNERABLE",
+                "modifier_scalar": 0,
+                "max_stacks": 3,
+                "stack_policy": "ADD_STACK_REFRESH",
+                "dispel_types": [
+                  "PHYSICAL"
+                ]
+              }
+            }
+          ]
         }
       }
     },
@@ -7944,7 +8083,7 @@
       "combat_discipline_id": "DAGGERS",
       "spell_school_id": null,
       "action_id": "TEMPLE_STRIKE",
-      "display_name": "Temple Strike",
+      "display_name": "Dreadspike",
       "resource_kind": "MANA",
       "resource_cost": 0,
       "ability_tags": [
@@ -13736,7 +13875,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "WARRIOR_CARVE",
       "display_name": "Carve",
-      "description": "A low-to-high greatsword cut that adds a Bleed stack. Bleed damage escalates with stacks, but high stacks decay faster.",
+      "description": "A low-to-high dagger cut that adds a Bleed stack. Bleed damage escalates with stacks, but high stacks decay faster.",
       "sort_order": 74
     },
     {
@@ -14912,8 +15051,29 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_GUT_RIPPER",
       "display_name": "Gut Ripper",
-      "description": "Rips the target with crossed daggers, adding a Bleed stack and hemorrhaging them. A hemorrhaging target advances its bleeds by 3 seconds for every meter it moves, so running spends the wound early instead of waiting it out.",
+      "description": "Rips the target with crossed daggers, adding a Bleed stack whose damage escalates at higher stacks.",
       "sort_order": 224
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_SEVER",
+      "display_name": "Sever",
+      "description": "Strike for 24 physical damage and slow the target by 25% per stack for 6 seconds, stacking up to 2 times. All stacks share one duration; applying Sever at 2 stacks refreshes that duration.",
+      "sort_order": 225
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_DEEP_CUT",
+      "display_name": "Deep Cut",
+      "description": "A low-cost paired cut that deals 12 physical damage and refreshes the authored duration of one random active Bleed debuff on the target without adding a stack or delaying its next tick. Costs 10 stamina.",
+      "sort_order": 226
+    },
+    {
+      "presentation_kind": "ABILITY",
+      "presentation_id": "DAGGER_HEMORRHAGE",
+      "display_name": "Hemorrhage",
+      "description": "Strike for 20 physical damage and make the target take 1 physical damage per stamina spent for 8 seconds. Costs 20 stamina.",
+      "sort_order": 227
     },
     {
       "presentation_kind": "ABILITY",
@@ -14968,7 +15128,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_PRECISION_STRIKE",
       "display_name": "Precision Strike",
-      "description": "Places two measured dagger cuts at the target's defenses.",
+      "description": "Places two measured dagger cuts at the target's defenses and applies 1 Vulnerable stack.",
       "sort_order": 232
     },
     {
@@ -15073,13 +15233,13 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_GOUGE",
       "display_name": "Gouge",
-      "description": "Prevent a hostile target from using targeted abilities for 4 seconds. Area effects and self-casts remain available.",
+      "description": "Prevent a hostile target from using targeted abilities for 4 seconds and apply 1 Vulnerable stack. Area effects and self-casts remain available.",
       "sort_order": 246
     },
     {
       "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_TEMPLE_STRIKE",
-      "display_name": "Temple Strike",
+      "display_name": "Dreadspike",
       "description": "Confuse a hostile target for 5 seconds, taking away their control and making them wander unpredictably in a small area. Any damage ends Confusion.",
       "sort_order": 247
     },
@@ -15572,6 +15732,27 @@
       "display_name": "Poisoned",
       "description": "Takes 2 poison damage each second per stack. Stacks up to 5 times.",
       "sort_order": 10140
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "SEVER",
+      "display_name": "Sever",
+      "description": "Movement speed is reduced by 25% per stack. Stacks up to 2 times; all stacks share one refreshed 6-second duration.",
+      "sort_order": 10148
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "HEMORRHAGE",
+      "display_name": "Hemorrhage",
+      "description": "Spending stamina deals physical damage to you at a 1:1 stamina-to-damage ratio.",
+      "sort_order": 10149
+    },
+    {
+      "presentation_kind": "STATUS",
+      "presentation_id": "HEMORRHAGING",
+      "display_name": "Hemorrhaging (Legacy)",
+      "description": "Deprecated persisted effect: movement advances active Bleed timers. No current technique applies this status.",
+      "sort_order": 10150
     },
     {
       "presentation_kind": "STATUS",

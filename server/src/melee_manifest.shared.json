@@ -1266,6 +1266,21 @@
                     "aerial_execution_mode": "GROUNDED_ONLY"
                 },
                 {
+                    "id": "WARRIOR_CARVE",
+                    "slot_id": "warrior_carve_dagger_slot",
+                    "hit_windows": [
+                        {
+                            "impact_delay_ms": 220
+                        }
+                    ],
+                    "recovery_ms": 300,
+                    "is_gap_closer": false,
+                    "combo_from": "",
+                    "combo_open_ms": 0,
+                    "combo_grace_ms": 0,
+                    "aerial_execution_mode": "GROUNDED_ONLY"
+                },
+                {
                     "id": "DAGGER_COMBO_ATTACK_04_01",
                     "slot_id": "dagger_combo_attack_04_01_slot",
                     "hit_windows": [

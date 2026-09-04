@@ -739,7 +739,15 @@ pub(crate) struct InstantBeamChargeScaling {
 pub(crate) struct ApplyStatusSecondaryTunables {
     pub apply_to_caster: bool,
     pub parry_behavior: SpellParryBehavior,
+    pub additional_applications: Vec<ImmediateStatusApplicationTunables>,
     pub staged_applications: Vec<StagedStatusApplicationTunables>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ImmediateStatusApplicationTunables {
+    pub duration: Duration,
+    pub status_stack_group: Option<String>,
+    pub status: ApplyStatusDefinition,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1511,7 +1519,7 @@ mod tests {
     }
 
     #[test]
-    fn temple_strike_catalog_matches_five_second_mental_confusion_contract() {
+    fn dreadspike_catalog_matches_five_second_mental_confusion_contract() {
         let definition = definition("TEMPLE_STRIKE");
 
         assert_eq!(definition.cooldown, Duration::from_secs(12));
@@ -1535,7 +1543,7 @@ mod tests {
         let status = definition
             .apply_status
             .as_ref()
-            .expect("Temple Strike should define Confusion");
+            .expect("Dreadspike should define Confusion");
         assert_eq!(status.payload(), StatusPayload::Confusion);
         assert_eq!(status.max_stacks, 1);
         assert_eq!(status.stack_policy, StackPolicy::Refresh);

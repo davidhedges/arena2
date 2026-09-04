@@ -12,6 +12,15 @@ pub(crate) const STAFF_DISCIPLINE_ID: &str = "STAFF";
 pub(crate) const MASTERY_TRAIT_ID: &str = "MASTERY";
 pub(crate) const MASTERY_DAMAGE_BONUS: f32 = 0.10;
 pub(crate) const MAX_COMBAT_BUILD_V2_SNAPSHOT_BYTES: usize = 64 * 1024;
+const DREADSPIKE_ABILITY_ID: &str = "DAGGER_TEMPLE_STRIKE";
+const DREADSPIKE_SPECIALIZATION_ID: &str = "DAGGERS_SHADOW";
+const DREADSPIKE_LEGACY_SPECIALIZATION_ID: &str = "DAGGERS_EXECUTIONER";
+const SLICE_ABILITY_ID: &str = "DAGGER_SLICE";
+const SLICE_SPECIALIZATION_ID: &str = "DAGGERS_EXECUTIONER";
+const SLICE_LEGACY_SPECIALIZATION_ID: &str = "DAGGERS_BLADEDANCER";
+const CARVE_ABILITY_ID: &str = "WARRIOR_CARVE";
+const CARVE_SPECIALIZATION_ID: &str = "DAGGERS_EXECUTIONER";
+const CARVE_LEGACY_SPECIALIZATION_ID: &str = "TWO_HANDED_SWORD_VANGUARD";
 
 #[cfg(not(feature = "pvp_match"))]
 const COMBAT_BUILD_V2_CATALOG_JSON: &str = include_str!("combat_build_v2_catalog.shared.json");
@@ -879,9 +888,18 @@ impl CombatBuildV2Catalog {
             .features
             .get(ability_id)
             .expect("validated projected feature must exist");
+        let materialized_specialization_id = if is_legacy_moved_feature_owner(
+            ability_id,
+            feature.specialization_id.as_str(),
+            selection.specialization_id.as_str(),
+        ) {
+            selection.specialization_id.as_str()
+        } else {
+            feature.specialization_id.as_str()
+        };
         let specialization = self
             .specializations
-            .get(&feature.specialization_id)
+            .get(materialized_specialization_id)
             .expect("validated feature owner must exist");
         MaterializedCombatFeatureV2 {
             specialization_id: selection.specialization_id.clone(),
@@ -891,6 +909,24 @@ impl CombatBuildV2Catalog {
             bar_order,
         }
     }
+}
+
+fn is_legacy_moved_feature_owner(
+    ability_id: &str,
+    catalog_specialization_id: &str,
+    selected_specialization_id: &str,
+) -> bool {
+    // Preserve durable builds saved before a technique ownership move. New
+    // catalog selections still author the technique's canonical form owner.
+    (ability_id == DREADSPIKE_ABILITY_ID
+        && catalog_specialization_id == DREADSPIKE_SPECIALIZATION_ID
+        && selected_specialization_id == DREADSPIKE_LEGACY_SPECIALIZATION_ID)
+        || (ability_id == SLICE_ABILITY_ID
+            && catalog_specialization_id == SLICE_SPECIALIZATION_ID
+            && selected_specialization_id == SLICE_LEGACY_SPECIALIZATION_ID)
+        || (ability_id == CARVE_ABILITY_ID
+            && catalog_specialization_id == CARVE_SPECIALIZATION_ID
+            && selected_specialization_id == CARVE_LEGACY_SPECIALIZATION_ID)
 }
 
 fn exact_id(value: &str) -> bool {
@@ -1461,7 +1497,13 @@ impl CombatBuildV2Catalog {
                     format!("unknown or removed feature '{}'", selection.ability_id),
                 ));
             };
-            if feature.specialization_id != selection.specialization_id {
+            if feature.specialization_id != selection.specialization_id
+                && !is_legacy_moved_feature_owner(
+                    selection.ability_id.as_str(),
+                    feature.specialization_id.as_str(),
+                    selection.specialization_id.as_str(),
+                )
+            {
                 return Err(CombatBuildV2ValidationError::new(
                     CombatBuildV2ErrorCode::FeatureOwner,
                     format!(
@@ -1894,11 +1936,16 @@ mod tests {
             ("DAGGER_FIND_WEAKNESS", "DAGGERS_EXECUTIONER"),
             ("DAGGER_CRUELTY", "DAGGERS_EXECUTIONER"),
             ("DAGGER_EXPOSE_WEAKNESS", "DAGGERS_EXECUTIONER"),
+            ("DAGGER_SEVER", "DAGGERS_EXECUTIONER"),
+            ("DAGGER_DEEP_CUT", "DAGGERS_EXECUTIONER"),
+            ("DAGGER_HEMORRHAGE", "DAGGERS_EXECUTIONER"),
+            ("WARRIOR_CARVE", "DAGGERS_EXECUTIONER"),
             ("DAGGER_DISARM", "DAGGERS_BLADEDANCER"),
             ("DAGGER_RESTLESS_BLADES", "DAGGERS_BLADEDANCER"),
             ("PALADIN_BLADE_BARRIER", "DAGGERS_BLADEDANCER"),
             ("PALADIN_SERRATED_BLADES", "DAGGERS_EXECUTIONER"),
-            ("DAGGER_TEMPLE_STRIKE", "DAGGERS_EXECUTIONER"),
+            ("DAGGER_SLICE", "DAGGERS_EXECUTIONER"),
+            ("DAGGER_TEMPLE_STRIKE", "DAGGERS_SHADOW"),
             ("DAGGER_GOUGE", "DAGGERS_EXECUTIONER"),
             ("SUBTLETY_SURPRISE_ATTACKS", "DAGGERS_SHADOW"),
         ];
@@ -1909,6 +1956,12 @@ mod tests {
                 "{ability_id} should belong to {specialization_id}"
             );
         }
+        let dreadspike = catalog
+            .feature_definitions()
+            .into_iter()
+            .find(|row| row.ability_id == DREADSPIKE_ABILITY_ID)
+            .expect("Dreadspike should remain in the feature catalog");
+        assert_eq!(dreadspike.display_name, "Dreadspike");
     }
 
     fn config(parent: &str) -> CombatBuildV2DisciplineConfiguration {
@@ -1981,6 +2034,59 @@ mod tests {
             discipline_configurations: parent_ids.into_iter().map(config).collect(),
             selected_features: features,
             selected_traits: traits.iter().map(|id| (*id).to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn moved_techniques_accept_and_materialize_legacy_and_canonical_owners() {
+        let catalog = catalog();
+        for (ability_id, legacy_specialization_id, canonical_specialization_id) in [
+            (
+                DREADSPIKE_ABILITY_ID,
+                DREADSPIKE_LEGACY_SPECIALIZATION_ID,
+                DREADSPIKE_SPECIALIZATION_ID,
+            ),
+            (
+                SLICE_ABILITY_ID,
+                SLICE_LEGACY_SPECIALIZATION_ID,
+                SLICE_SPECIALIZATION_ID,
+            ),
+            (
+                CARVE_ABILITY_ID,
+                CARVE_LEGACY_SPECIALIZATION_ID,
+                CARVE_SPECIALIZATION_ID,
+            ),
+        ] {
+            for specialization_id in [legacy_specialization_id, canonical_specialization_id] {
+                let draft = draft_for(
+                    &[specialization_id],
+                    &[],
+                    vec![selection(specialization_id, ability_id, Some(0))],
+                    &[],
+                );
+                let validated = catalog
+                    .validate_draft(&draft, draft.revision)
+                    .unwrap_or_else(|error| {
+                        panic!(
+                            "{ability_id} selection under {specialization_id} should remain valid: {}",
+                            error.detail
+                        )
+                    });
+                assert_eq!(
+                    validated.snapshot.selected_features[0].specialization_id,
+                    specialization_id
+                );
+                let plan = catalog
+                    .materialization_plan(&validated)
+                    .expect("moved technique materialization");
+                assert_eq!(plan.techniques[0].specialization_id, specialization_id);
+                assert_eq!(
+                    plan.techniques[0].combat_discipline_id,
+                    catalog
+                        .specialization_parent(specialization_id)
+                        .expect("moved technique owner parent")
+                );
+            }
         }
     }
 
@@ -2577,7 +2683,7 @@ mod tests {
     fn canonical_catalog_is_exhaustive_and_staff_has_no_techniques() {
         let catalog = catalog();
         assert_eq!(catalog.specializations.len(), 18);
-        assert_eq!(catalog.features.len(), 217);
+        assert_eq!(catalog.features.len(), 220);
         assert_eq!(catalog.intrinsic_ability_ids.len(), 5);
         assert_eq!(catalog.removed_player_ability_ids.len(), 4);
         assert_eq!(catalog.traits.len(), 1);
@@ -2587,7 +2693,7 @@ mod tests {
                 .values()
                 .filter(|row| row.loadout_kind == CombatFeatureLoadoutKind::Technique)
                 .count(),
-            86
+            89
         );
         assert_eq!(
             catalog

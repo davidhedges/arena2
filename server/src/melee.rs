@@ -37,11 +37,12 @@ use crate::combat::status_effect as _;
 use crate::combat::{
     advance_cadence_for_action, advance_slipstream_after_movement_ability,
     arm_quickening_after_movement_ability, combat_projectile_definition_for_id,
-    has_active_disabling_status, has_active_status, has_active_status_group,
-    has_due_pending_effects, hostile_targeted_ability_misses, mark_harmful_combat_action,
-    queue_effects, remove_active_status_group, resolve_pending_effects,
-    status_matches_removal_filter, try_counterstrike_melee, ActiveCombatProjectile, AttackAim,
-    CombatEvent, CombatProjectileDefinition, DamageDelivery, DamageType, EffectPacket,
+    decode_status_dispel_types, has_active_disabling_status, has_active_status,
+    has_active_status_group, has_due_pending_effects, hostile_targeted_ability_misses,
+    mark_harmful_combat_action, queue_effects, refresh_status_effect_duration,
+    remove_active_status_group, resolve_pending_effects, status_matches_removal_filter,
+    try_counterstrike_melee, ActiveCombatProjectile, AttackAim, CombatEvent,
+    CombatProjectileDefinition, DamageDelivery, DamageType, EffectPacket,
     ProjectilePresentationEvent, StackPolicy, StatusDispelType, StatusEffectKind, StatusPayload,
     StatusPolarity, COMBAT_EVENT_AREA_IMPACT, COMBAT_EVENT_BLOCK, COMBAT_EVENT_CAST,
     COMBAT_EVENT_EVADE, COMBAT_EVENT_FIZZLE, COMBAT_EVENT_IMPACT, COMBAT_EVENT_MISS,
@@ -6334,6 +6335,14 @@ fn push_melee_impact_effects(
             crate::progression::MeleeImpactEffectRuntime::ApplyStatus { status } => {
                 push_melee_impact_status_effect(effects, row, &status);
             }
+            crate::progression::MeleeImpactEffectRuntime::ApplyStatusOnHit {
+                hit_index,
+                status,
+            } => {
+                if row.hit_index == hit_index {
+                    push_melee_impact_status_effect(effects, row, &status);
+                }
+            }
             crate::progression::MeleeImpactEffectRuntime::RemoveStatus {
                 polarity,
                 dispel_types,
@@ -6348,6 +6357,13 @@ fn push_melee_impact_effects(
                     max_count,
                 );
             }
+            crate::progression::MeleeImpactEffectRuntime::RefreshRandomStatus {
+                hit_index,
+                polarity,
+                dispel_types,
+            } => {
+                refresh_random_melee_status(ctx, row, hit_index, polarity, dispel_types.as_slice());
+            }
         }
     }
 }
@@ -6359,8 +6375,17 @@ fn push_melee_impact_status_effects(effects: &mut Vec<EffectPacket>, row: &Pendi
     }
 
     for effect in melee_impact_effects_for_ability_id(row.ability_id.as_str()) {
-        if let crate::progression::MeleeImpactEffectRuntime::ApplyStatus { status } = effect {
-            push_melee_impact_status_effect(effects, row, &status);
+        match effect {
+            crate::progression::MeleeImpactEffectRuntime::ApplyStatus { status } => {
+                push_melee_impact_status_effect(effects, row, &status);
+            }
+            crate::progression::MeleeImpactEffectRuntime::ApplyStatusOnHit {
+                hit_index,
+                status,
+            } if row.hit_index == hit_index => {
+                push_melee_impact_status_effect(effects, row, &status);
+            }
+            _ => {}
         }
     }
 }
@@ -6511,6 +6536,64 @@ fn push_melee_remove_status_effects(
             remove_stacks: 0,
         });
     }
+}
+
+fn refresh_random_melee_status(
+    ctx: &ReducerContext,
+    row: &PendingMeleeImpact,
+    authored_hit_index: u32,
+    polarity: Option<StatusPolarity>,
+    dispel_types: &[StatusDispelType],
+) {
+    if row.hit_index != authored_hit_index || (polarity.is_none() && dispel_types.is_empty()) {
+        return;
+    }
+
+    let mut matches: Vec<_> = ctx
+        .db
+        .status_effect()
+        .target()
+        .filter(row.target)
+        .filter(|effect| {
+            ctx.timestamp < effect.expires_at
+                && effect.base_duration_ms > 0
+                && polarity.is_none_or(|expected| effect.polarity == expected.as_str())
+                && (dispel_types.is_empty()
+                    || decode_status_dispel_types(effect.dispel_types.as_str())
+                        .iter()
+                        .any(|effect_type| dispel_types.contains(effect_type)))
+        })
+        .collect();
+    matches.sort_by_key(|effect| effect.status_id);
+    let Some(index) = deterministic_status_refresh_candidate_index(row, matches.len()) else {
+        return;
+    };
+    let _ = refresh_status_effect_duration(ctx, matches[index].status_id, ctx.timestamp);
+}
+
+fn deterministic_status_refresh_candidate_index(
+    row: &PendingMeleeImpact,
+    candidate_count: usize,
+) -> Option<usize> {
+    if candidate_count == 0 {
+        return None;
+    }
+
+    fn update_hash(mut hash: u64, bytes: &[u8]) -> u64 {
+        for byte in bytes {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        hash
+    }
+
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    hash = update_hash(hash, b"REFRESH_RANDOM_STATUS");
+    hash = update_hash(hash, &row.source.to_byte_array());
+    hash = update_hash(hash, &row.target.to_byte_array());
+    hash = update_hash(hash, row.spell_id.as_bytes());
+    hash = update_hash(hash, &row.hit_index.to_le_bytes());
+    Some((hash % candidate_count as u64) as usize)
 }
 
 fn scaled_impact_area_damage(primary_damage: i32, damage_multiplier: f32) -> i32 {
@@ -6853,10 +6936,11 @@ mod tests {
     use super::{
         auto_attack_catalog_resolution_keys, auto_attack_reference_for_profile,
         auto_attack_sequence_step_for_profile, canonical_slot_id, combo_input_decision,
-        default_aerial_execution_mode, distance_scaled_gap_close_impact_delay_ms,
-        effective_melee_timed_movement_start_delay_ms, find_combo_root_for_authorization,
-        gap_close_activation_satisfied, gap_close_arc_height, gap_close_destination_within_epsilon,
-        gap_close_has_horizontal_travel, gap_close_movement_facing, gap_close_pre_commit_decision,
+        default_aerial_execution_mode, deterministic_status_refresh_candidate_index,
+        distance_scaled_gap_close_impact_delay_ms, effective_melee_timed_movement_start_delay_ms,
+        find_combo_root_for_authorization, gap_close_activation_satisfied, gap_close_arc_height,
+        gap_close_destination_within_epsilon, gap_close_has_horizontal_travel,
+        gap_close_movement_facing, gap_close_pre_commit_decision,
         gap_close_target_facing_satisfied, inactive_conditional_gap_close_range,
         melee_channel_movement_canceled, melee_channel_tick_delays,
         melee_hit_volume_contains_player, melee_impact_delays, melee_manifest,
@@ -6900,6 +6984,22 @@ mod tests {
         assert!(quickening_strike_applies_buff("DAGGER_QUICKENING_STRIKE"));
         assert!(!quickening_strike_applies_buff("DAGGER_QUICK_CUT"));
         assert!(!quickening_strike_applies_buff("AUTO_ATTACK_1"));
+    }
+
+    #[test]
+    fn random_status_refresh_selection_is_stable_and_bounded() {
+        let mut row = test_targetless_impact_row("TARGET", 1.8, 0.0, 0.0);
+        row.target = test_identity_with_byte(2);
+        row.spell_id = "deep-cut:sample".to_string();
+
+        assert_eq!(deterministic_status_refresh_candidate_index(&row, 0), None);
+        let selected = deterministic_status_refresh_candidate_index(&row, 4)
+            .expect("four candidates should select one");
+        assert!(selected < 4);
+        assert_eq!(
+            deterministic_status_refresh_candidate_index(&row, 4),
+            Some(selected)
+        );
     }
 
     #[test]
@@ -7813,6 +7913,76 @@ mod tests {
         assert_eq!(*duration, Duration::from_millis(2000));
         assert_eq!(stack_group, "WARRIOR_CATACLYSM_STUN");
         assert_eq!(*max_stacks, 1);
+    }
+
+    #[test]
+    fn precision_strike_applies_one_vulnerable_stack_on_only_its_first_hit() {
+        let source = test_identity_with_byte(1);
+        let target = test_identity_with_byte(2);
+        let now = Timestamp::UNIX_EPOCH;
+        let mut row = PendingMeleeImpact {
+            impact_id: 0,
+            source,
+            event_source: "test".to_string(),
+            target,
+            spell_id: "test:precision_strike".to_string(),
+            kind: "DAGGER_PRECISION_STRIKE".to_string(),
+            ability_id: "DAGGER_PRECISION_STRIKE".to_string(),
+            hit_index: 0,
+            damage: 19,
+            damage_type: crate::combat::DamageType::Physical.as_str().to_string(),
+            target_health_damage_scaling_min_multiplier: 1.0,
+            target_health_damage_scaling_max_multiplier: 1.0,
+            range: 1.8,
+            impact_at: now,
+            active_until: now,
+            recovery_until: now,
+            parry_behavior: "PARRYABLE".to_string(),
+            block_behavior: "BLOCKABLE".to_string(),
+            airborne_targeting_mode: "ANY_TARGET".to_string(),
+            targeting_kind: "TARGET".to_string(),
+            targeting_radius: 0.0,
+            targeting_angle_degrees: 0.0,
+            applies_stagger: false,
+            grants_primary_resource_on_hit: false,
+            impact_area_radius: 0.0,
+            impact_area_damage: 0,
+            impact_area_include_primary_target: false,
+            target_audience: String::new(),
+            requires_present_time_facing: false,
+            present_time_facing_arc_radians: 0.0,
+            requires_present_time_los: false,
+            impact_event_max_distance: 0.0,
+            direct_action_key: String::new(),
+            view_delay_micros: 0,
+            resolve_at_micros: 0,
+            targeting_width: 0.0,
+        };
+
+        let mut first_hit_effects = Vec::new();
+        push_melee_impact_status_effects(&mut first_hit_effects, &row);
+        assert_eq!(first_hit_effects.len(), 1);
+        let EffectPacket::ApplyStatus {
+            payload,
+            duration,
+            stack_group,
+            max_stacks,
+            stack_policy,
+            ..
+        } = &first_hit_effects[0]
+        else {
+            panic!("expected Precision Strike Vulnerable application");
+        };
+        assert_eq!(*payload, StatusPayload::Vulnerable);
+        assert_eq!(*duration, Duration::from_secs(86_400));
+        assert_eq!(stack_group, "VULNERABLE");
+        assert_eq!(*max_stacks, 3);
+        assert_eq!(*stack_policy, StackPolicy::AddStackRefresh);
+
+        row.hit_index = 1;
+        let mut second_hit_effects = Vec::new();
+        push_melee_impact_status_effects(&mut second_hit_effects, &row);
+        assert!(second_hit_effects.is_empty());
     }
 
     #[test]

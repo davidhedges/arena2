@@ -9107,6 +9107,25 @@ fn apply_status_to_target(
         application_audience,
         definition.kind.as_str(),
     ));
+    for additional in apply_status_tunables.additional_applications {
+        let application = apply_status_application_for_caster(
+            ctx,
+            caster,
+            kind,
+            additional.status,
+            additional.duration,
+            additional.status_stack_group,
+            StatusStackGroupDefault::EffectKind,
+        );
+        effects.push(application.to_effect_packet_for_audience(
+            caster,
+            application_target,
+            spell_id.as_str(),
+            polarity,
+            application_audience,
+            definition.kind.as_str(),
+        ));
+    }
     queue_effects(ctx, effects);
 
     for staged in apply_status_tunables.staged_applications {

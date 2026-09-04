@@ -1,7 +1,10 @@
 use spacetimedb::{table, Identity, ReducerContext, Table, Timestamp};
 
 use crate::action_ids::AuthoredActionId;
-use crate::combat::{is_in_combat, temporary_combat_modifiers, TemporaryCombatModifiers};
+use crate::combat::{
+    is_in_combat, queue_hemorrhage_stamina_spend_damage, temporary_combat_modifiers,
+    TemporaryCombatModifiers,
+};
 use crate::inventory::{equipment_modifier_totals_for_owner, EquipmentModifierTotals};
 use crate::melee::{auto_attack_gameplay_for_profile_mode_action, scaled_auto_attack_cadence_ms};
 use crate::progression::{
@@ -635,11 +638,15 @@ fn spend_resource(
     }
 
     let next = (resource.current - cost).clamp(0.0, resource.max.max(0.0));
+    let spent = (resource.current - next).max(0.0);
     if (next - resource.current).abs() > 0.0001 {
         resource.current = next;
         resource.updated_at = now;
         record_resource_write();
         ctx.db.player_resource().key().update(resource);
+        if normalize_resource_kind(resource_kind) == RESOURCE_KIND_STAMINA {
+            let _ = queue_hemorrhage_stamina_spend_damage(ctx, owner, spent, now);
+        }
     }
     true
 }

@@ -143,7 +143,6 @@
       ],
       "technique_ability_ids": [
         "DAGGER_QUICK_CUT",
-        "DAGGER_SLICE",
         "DAGGER_DASHING_CUT",
         "DAGGER_ROUNDHOUSE",
         "DAGGER_SPINNING_SLASH",
@@ -169,7 +168,12 @@
       "specialization_kind": "FORM",
       "spell_ability_ids": [],
       "technique_ability_ids": [
+        "DAGGER_SLICE",
         "DAGGER_GUT_RIPPER",
+        "DAGGER_SEVER",
+        "DAGGER_DEEP_CUT",
+        "DAGGER_HEMORRHAGE",
+        "WARRIOR_CARVE",
         "DAGGER_NERVE_STRIKE",
         "DAGGER_PRECISION_STRIKE",
         "DAGGER_EVISCERATE",
@@ -182,8 +186,7 @@
         "PALADIN_SERRATED_BLADES",
         "DAGGER_FIND_WEAKNESS",
         "DAGGER_BLADE_TWISTING",
-        "DAGGER_GOUGE",
-        "DAGGER_TEMPLE_STRIKE"
+        "DAGGER_GOUGE"
       ]
     },
     {
@@ -205,7 +208,8 @@
       ],
       "technique_ability_ids": [
         "DAGGER_COUP_DE_GRACE",
-        "DAGGER_STEALTH"
+        "DAGGER_STEALTH",
+        "DAGGER_TEMPLE_STRIKE"
       ]
     },
     {
@@ -222,7 +226,6 @@
         "WARRIOR_MAIM",
         "WARRIOR_CRUSHING_BLOW",
         "WARRIOR_SUNDER",
-        "WARRIOR_CARVE",
         "WARRIOR_FORTIFY",
         "WARRIOR_IRON_WILL",
         "WARRIOR_CHARGE",

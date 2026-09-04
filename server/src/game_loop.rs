@@ -46,7 +46,7 @@ use crate::combat::{
     prune_combat_events, prune_surprise_attack_runtimes, resolve_pending_effects, respawn_player,
     sync_combat_projectile_definitions, sync_player_state_derived_stats, tick_auras,
     tick_combat_projectiles_with_snapshots, tick_combat_stacking_passives, tick_emanations,
-    tick_hemorrhage, tick_immolations, MovementModifiers, StatusRuntimeView,
+    tick_immolations, tick_legacy_hemorrhaging, MovementModifiers, StatusRuntimeView,
     TemporaryCombatModifiers,
 };
 use crate::defense::prune_defense_states;
@@ -1077,7 +1077,7 @@ fn run_pre_tick_housekeeping_phase(
         &mut subphase_micros[PRE_SUB_PERIODIC_EFFECTS],
         || {
             (
-                process_periodic_status_ticks(ctx, now) + tick_hemorrhage(ctx, now, dt),
+                process_periodic_status_ticks(ctx, now) + tick_legacy_hemorrhaging(ctx, now, dt),
                 tick_equipment_periodic_effects(ctx, now, dt, contexts),
             )
         },

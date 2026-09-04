@@ -17,14 +17,14 @@ use super::manifest::{
     AuraSecondaryTunables, BespokeRuntimeSpell, BlockBehavior, BoomerangCasterProjectileTunables,
     ChannelAreaSecondaryTunables, ChannelSecondaryTunables, ConsumeStatusSecondaryTunables,
     CurvedTargetProjectileTunables, DirectTargetSecondaryTunables, EmanationSecondaryTunables,
-    ImmolationSecondaryTunables, ImpactEffect, InstantBeamChargeScaling,
-    InstantBeamSecondaryTunables, MeteorSkyOrigin, NecroPrisonSecondaryTunables,
-    OrbitCasterProjectileTunables, PersistentAreaSecondaryTunables, ProjectileMotionTunables,
-    ProjectileSecondaryTunables, RecallSecondaryTunables, RemoveStatusDefinition,
-    RemoveStatusSecondaryTunables, SanctuarySecondaryTunables, SpellBehavior, SpellCastMobility,
-    SpellDefinition, SpellId, SpellParryBehavior, SpellSecondaryTunables, SpellTargeting,
-    StagedStatusApplicationTunables, TravelingAreaProjectileTunables,
-    WorldObstacleSecondaryTunables, SPELL_METEOR,
+    ImmediateStatusApplicationTunables, ImmolationSecondaryTunables, ImpactEffect,
+    InstantBeamChargeScaling, InstantBeamSecondaryTunables, MeteorSkyOrigin,
+    NecroPrisonSecondaryTunables, OrbitCasterProjectileTunables, PersistentAreaSecondaryTunables,
+    ProjectileMotionTunables, ProjectileSecondaryTunables, RecallSecondaryTunables,
+    RemoveStatusDefinition, RemoveStatusSecondaryTunables, SanctuarySecondaryTunables,
+    SpellBehavior, SpellCastMobility, SpellDefinition, SpellId, SpellParryBehavior,
+    SpellSecondaryTunables, SpellTargeting, StagedStatusApplicationTunables,
+    TravelingAreaProjectileTunables, WorldObstacleSecondaryTunables, SPELL_METEOR,
 };
 
 const PROGRESSION_CATALOG_JSON: &str =
@@ -85,6 +85,15 @@ struct WorldObstacleColliderRow {
 #[serde(deny_unknown_fields)]
 struct StagedStatusApplicationRow {
     delay_ms: u64,
+    duration_ms: u64,
+    #[serde(default)]
+    status_stack_group: Option<String>,
+    status: ApplyStatusDefinition,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ImmediateStatusApplicationRow {
     duration_ms: u64,
     #[serde(default)]
     status_stack_group: Option<String>,
@@ -215,6 +224,8 @@ enum SpellCatalogDelivery {
         #[serde(default)]
         parry_behavior: Option<SpellParryBehavior>,
         status: ApplyStatusDefinition,
+        #[serde(default)]
+        additional_applications: Vec<ImmediateStatusApplicationRow>,
         #[serde(default)]
         staged_applications: Vec<StagedStatusApplicationRow>,
     },
@@ -1413,6 +1424,7 @@ impl SpellCatalogRow {
                 block_behavior,
                 parry_behavior,
                 status,
+                additional_applications,
                 staged_applications,
             } => {
                 definition.behavior = SpellBehavior::ApplyStatus;
@@ -1427,6 +1439,14 @@ impl SpellCatalogRow {
                 definition.secondary.apply_status = Some(ApplyStatusSecondaryTunables {
                     apply_to_caster,
                     parry_behavior: parry_behavior.unwrap_or(SpellParryBehavior::Unparryable),
+                    additional_applications: additional_applications
+                        .into_iter()
+                        .map(|application| ImmediateStatusApplicationTunables {
+                            duration: Duration::from_millis(application.duration_ms),
+                            status_stack_group: application.status_stack_group,
+                            status: application.status,
+                        })
+                        .collect(),
                     staged_applications: staged_applications
                         .into_iter()
                         .map(|application| StagedStatusApplicationTunables {
@@ -2951,6 +2971,29 @@ fn validate_secondary_tunables(def: &SpellDefinition) -> Result<(), String> {
                 "delivery.duration_ms",
                 Duration::from_secs_f32(def.duration),
             )?;
+            for (index, additional) in apply_status.additional_applications.iter().enumerate() {
+                ensure_positive_duration(
+                    def.kind.as_str(),
+                    format!("delivery.additional_applications[{index}].duration_ms").as_str(),
+                    additional.duration,
+                )?;
+                if additional
+                    .status_stack_group
+                    .as_deref()
+                    .is_some_and(|group| group.trim().is_empty())
+                {
+                    return Err(format!(
+                        "{} delivery.additional_applications[{index}].status_stack_group must not be empty",
+                        def.kind.as_str()
+                    ));
+                }
+                validate_apply_status(
+                    def,
+                    additional.status.clone(),
+                    def.apply_status_polarity
+                        .expect("validated APPLY_STATUS spell must define polarity"),
+                )?;
+            }
             if !apply_status.staged_applications.is_empty()
                 && def.targeting != SpellTargeting::Target
             {
