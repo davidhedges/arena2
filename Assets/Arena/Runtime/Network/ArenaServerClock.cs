@@ -36,11 +36,15 @@ namespace Arena.Network
 
         public static bool HasEstimate => _hasEstimate;
         public static bool HasPreciseSample => _hasPreciseSample;
-        public static long ServerNowMs => ClientNowMs + (long)Math.Round(_serverMinusClientMs);
+        public static long ServerNowMs => ToServerTimeMs(ClientNowMs);
         public static double EstimatedServerMinusClientMs => _serverMinusClientMs;
         public static long LastRoundTripMs { get; private set; }
 
         private static long ClientNowMs => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        /// <summary>Convert a client UTC timestamp using the current server-clock estimate.</summary>
+        public static long ToServerTimeMs(long clientTimeMs)
+            => clientTimeMs + (long)Math.Round(_serverMinusClientMs);
 
         public static void Reset()
         {

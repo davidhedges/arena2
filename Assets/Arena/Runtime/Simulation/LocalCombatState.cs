@@ -194,10 +194,8 @@ namespace Arena.Simulation
     /// Simulation-layer cache of the local player's combat state:
     /// GCD, per-spell cooldowns, authoritative active cast, and cast-bar prediction.
     ///
-    /// Populated by NetworkManager via table event callbacks.
-    /// Read by HUDController (presentation layer) — no table access needed there.
-    ///
-    /// INVARIANT: Only written by table event callbacks. Only read by presentation.
+    /// Populated by NetworkManager table callbacks and local action predictions.
+    /// Read by input gates and HUD presentation.
     /// </summary>
     public class LocalCombatState : ITimedActionPresentationSource
     {
@@ -209,6 +207,7 @@ namespace Arena.Simulation
         private const long PredictedResourceSpendTimeoutMs = 1250L;
         private readonly Dictionary<string, (long lastCastMs, long durationMs)> _spellCds = new();
         private readonly Dictionary<string, FixedActionChargeSnapshot> _fixedActionCharges = new();
+        // Both replicated and predicted per-action cooldowns use server UTC milliseconds.
         public IReadOnlyDictionary<string, (long lastCastMs, long durationMs)> SpellCooldowns => _spellCds;
         public IReadOnlyDictionary<string, FixedActionChargeSnapshot> FixedActionCharges => _fixedActionCharges;
 
@@ -354,6 +353,16 @@ namespace Arena.Simulation
                 _spellCds.Remove(row.Kind);
         }
 
+        /// <summary>Remaining per-action cooldown at a client UTC timestamp; zero means available.</summary>
+        public long GetSpellCooldownRemainingMs(string kind, long clientNowMs)
+        {
+            if (!_spellCds.TryGetValue(kind, out var cooldown))
+                return 0L;
+
+            return Math.Max(0L, cooldown.lastCastMs + cooldown.durationMs - ArenaServerClock.ToServerTimeMs(clientNowMs));
+        }
+
+        /// <summary>Predict a per-action cooldown using a server UTC timestamp.</summary>
         public void PredictSpellCooldown(string kind, long lastCastMs, long durationMs)
         {
             if (string.IsNullOrWhiteSpace(kind) || durationMs <= 0L)
@@ -428,9 +437,10 @@ namespace Arena.Simulation
 
             bool hadPriorCooldown = _spellCds.TryGetValue(actionKind, out var priorCooldown);
             bool cooldownPredicted = false;
+            long cooldownStartServerMs = ArenaServerClock.ToServerTimeMs(nowMs);
             if (cooldownDurationMs > 0L)
             {
-                PredictSpellCooldown(actionKind, nowMs, cooldownDurationMs);
+                PredictSpellCooldown(actionKind, cooldownStartServerMs, cooldownDurationMs);
                 cooldownPredicted = _spellCds.TryGetValue(actionKind, out var applied)
                     && (!hadPriorCooldown || applied != priorCooldown);
             }
@@ -450,7 +460,7 @@ namespace Arena.Simulation
                 hadPriorCooldown,
                 priorCooldown.lastCastMs,
                 priorCooldown.durationMs,
-                nowMs,
+                cooldownStartServerMs,
                 cooldownDurationMs,
                 resourceKind,
                 reservedCost);

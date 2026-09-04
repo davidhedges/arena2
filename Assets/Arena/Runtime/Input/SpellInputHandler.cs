@@ -299,15 +299,11 @@ namespace Arena.Input
 
             // Check per-spell cooldown
             var combat = LocalCombatState.Instance;
-            if (combat.SpellCooldowns.TryGetValue(spellId, out var cd))
+            if (combat.GetSpellCooldownRemainingMs(spellId, System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) > 0L)
             {
-                long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                if (nowMs < cd.lastCastMs + cd.durationMs)
-                {
-                    FinishAimMode();
-                    RestoreCursorState();
-                    return;
-                }
+                FinishAimMode();
+                RestoreCursorState();
+                return;
             }
 
             // Send cast with aim point
@@ -453,14 +449,10 @@ namespace Arena.Input
             }
 
             var combat = LocalCombatState.Instance;
-            if (combat.SpellCooldowns.TryGetValue(action.ActionId, out var cd))
+            if (combat.GetSpellCooldownRemainingMs(action.ActionId, System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) > 0L)
             {
-                long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                if (nowMs < cd.lastCastMs + cd.durationMs)
-                {
-                    ActionBarTrace.Trace($"movement dispatch rejected by cooldown for {action.ActionId}");
-                    return false;
-                }
+                ActionBarTrace.Trace($"movement dispatch rejected by cooldown for {action.ActionId}");
+                return false;
             }
 
             PlayerEntity? localPlayer = EntityRegistry.Instance?.LocalPlayerEntity;
@@ -560,14 +552,10 @@ namespace Arena.Input
 
             // TS: per-spell cooldown check via cooldowns.isUsable(kind)
             var combat = LocalCombatState.Instance;
-            if (combat.SpellCooldowns.TryGetValue(spellId, out var cd))
+            if (combat.GetSpellCooldownRemainingMs(spellId, System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) > 0L)
             {
-                long nowMs = System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                if (nowMs < cd.lastCastMs + cd.durationMs)
-                {
-                    ActionBarTrace.Trace($"spell dispatch rejected by cooldown for {spellId}");
-                    return false;
-                }
+                ActionBarTrace.Trace($"spell dispatch rejected by cooldown for {spellId}");
+                return false;
             }
 
             if (!HasResourceForSpell(conn, localPlayer, spellId, spellDef))

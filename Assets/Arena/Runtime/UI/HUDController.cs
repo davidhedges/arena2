@@ -1964,7 +1964,7 @@ namespace Arena.UI
 
                 if (combat.SpellCooldowns.TryGetValue(state.CooldownActionId, out var cd) && cd.durationMs > 0)
                 {
-                    float rem = Mathf.Max(0f, cd.lastCastMs + cd.durationMs - nowMs);
+                    float rem = combat.GetSpellCooldownRemainingMs(state.CooldownActionId, nowMs);
                     float spellFrac = rem / cd.durationMs;
                     if (spellFrac > frac)
                     {
@@ -2088,7 +2088,7 @@ namespace Arena.UI
 
             if (combat.SpellCooldowns.TryGetValue(normalizedFixedActionId, out var cd) && cd.durationMs > 0)
             {
-                float rem = Mathf.Max(0f, cd.lastCastMs + cd.durationMs - nowMs);
+                float rem = combat.GetSpellCooldownRemainingMs(normalizedFixedActionId, nowMs);
                 cooldownFraction = Mathf.Clamp01(rem / cd.durationMs);
                 remainingSeconds = rem / 1000f;
             }

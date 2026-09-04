@@ -255,16 +255,13 @@ namespace Arena.Input
 
             // Per-strike cooldown check (melee cooldowns share the SpellCooldown table,
             // now keyed by canonical combat-style slot id.
-            if (combat.SpellCooldowns.TryGetValue(slotId, out var cd))
+            if (combat.GetSpellCooldownRemainingMs(slotId, nowMs) > 0L)
             {
-                if (nowMs < cd.lastCastMs + cd.durationMs)
-                {
-                    return RejectLocalMeleeAction(
-                        slotId,
-                        pressedActionId,
-                        ActionRejectReason.OnCooldown,
-                        $"melee rejected: {slotId} blocked by cooldown");
-                }
+                return RejectLocalMeleeAction(
+                    slotId,
+                    pressedActionId,
+                    ActionRejectReason.OnCooldown,
+                    $"melee rejected: {slotId} blocked by cooldown");
             }
 
             // Range check — horizontal distance against the server-synced

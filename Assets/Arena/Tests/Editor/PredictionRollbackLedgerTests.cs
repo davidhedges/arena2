@@ -16,6 +16,7 @@ namespace Arena.EditModeTests
     public class PredictionRollbackLedgerTests
     {
         private const string CombatStateType = "Arena.Simulation.LocalCombatState";
+        private const string ClockType = "Arena.Network.ArenaServerClock";
         private static readonly Assembly RuntimeAssembly = AppDomain.CurrentDomain.Load("Assembly-CSharp");
 
         private object _combat = null!;
@@ -25,18 +26,68 @@ namespace Arena.EditModeTests
         {
             _combat = GetStaticProperty(CombatStateType, "Instance");
             InvokeInstance(_combat, "ResetForTests");
+            InvokeClock("Reset");
         }
 
         [TearDown]
         public void TearDown()
         {
             InvokeInstance(_combat, "ResetForTests");
+            InvokeClock("Reset");
         }
 
-        [Test]
-        public void Rollback_RemovesPhantomCooldownAndGcd()
+        [TestCase(-60_000L)]
+        [TestCase(0L)]
+        [TestCase(60_000L)]
+        public void Prediction_AfterExpiredAuthoritativeCooldown_UsesServerTimeline(long offsetMs)
         {
-            const long nowMs = 10_000L;
+            const long clientNowMs = 1_000_000L;
+            long serverNowMs = clientNowMs + offsetMs;
+            SetClockOffset(clientNowMs, offsetMs);
+            InsertAuthoritativeCooldown("FIREBALL", serverNowMs - 9_000L, 8_000L);
+
+            PredictActionStart("FIREBALL", 8_000L, false, 0L, clientNowMs);
+
+            var cooldown = GetSpellCooldown("FIREBALL");
+            Assert.That(cooldown.lastCastMs + cooldown.durationMs - serverNowMs, Is.EqualTo(8_000L),
+                "an available action must predict its full cooldown on the authoritative timeline");
+            Assert.That(RemainingCooldownMs("FIREBALL", clientNowMs), Is.EqualTo(8_000L));
+            Assert.That(RemainingCooldownMs("FIREBALL", clientNowMs + 7_999L), Is.EqualTo(1L));
+            Assert.That(RemainingCooldownMs("FIREBALL", clientNowMs + 8_000L), Is.Zero);
+            Assert.That(RemainingCooldownMs("FIREBALL", clientNowMs + 8_001L), Is.Zero);
+        }
+
+        [TestCase(-60_000L)]
+        [TestCase(0L)]
+        [TestCase(60_000L)]
+        public void AuthoritativeCooldown_InsertUpdateDelete_UsesServerTimeline(long offsetMs)
+        {
+            const long clientNowMs = 1_000_000L;
+            long serverNowMs = clientNowMs + offsetMs;
+            SetClockOffset(clientNowMs, offsetMs);
+            Assert.That(RemainingCooldownMs("FIREBALL", clientNowMs), Is.Zero);
+
+            object row = InsertAuthoritativeCooldown("FIREBALL", serverNowMs, 8_000L);
+            Assert.That(RemainingCooldownMs("FIREBALL", clientNowMs), Is.EqualTo(8_000L));
+            Assert.That(RemainingCooldownMs("FIREBALL", clientNowMs + 7_999L), Is.EqualTo(1L));
+            Assert.That(RemainingCooldownMs("FIREBALL", clientNowMs + 8_000L), Is.Zero);
+            Assert.That(RemainingCooldownMs("FIREBALL", clientNowMs + 8_001L), Is.Zero);
+
+            object updated = CreateAuthoritativeCooldown("FIREBALL", serverNowMs + 8_000L, 4_000L);
+            InvokeInstance(_combat, "OnSpellCooldownUpdate", null!, row, updated);
+            Assert.That(RemainingCooldownMs("FIREBALL", clientNowMs + 8_000L), Is.EqualTo(4_000L));
+
+            InvokeInstance(_combat, "OnSpellCooldownDelete", null!, updated);
+            Assert.That(RemainingCooldownMs("FIREBALL", clientNowMs + 8_000L), Is.Zero);
+        }
+
+        [TestCase(-60_000L)]
+        [TestCase(0L)]
+        [TestCase(60_000L)]
+        public void Rollback_RemovesPhantomCooldownAndGcd(long offsetMs)
+        {
+            const long nowMs = 1_000_000L;
+            SetClockOffset(nowMs, offsetMs);
             object ledger = PredictActionStart("FIREBALL", 8_000L, true, 1_500L, nowMs);
 
             Assert.That(SpellCooldownsContains("FIREBALL"), Is.True, "press should predict the cooldown");
@@ -50,37 +101,64 @@ namespace Arena.EditModeTests
                 "rejected action must not leave a phantom GCD");
         }
 
-        [Test]
-        public void Rollback_RestoresPriorCooldownEntry()
+        [TestCase(-60_000L)]
+        [TestCase(0L)]
+        [TestCase(60_000L)]
+        public void Rollback_RestoresPriorCooldownEntry_AfterClockCorrection(long offsetMs)
         {
-            const long nowMs = 10_000L;
-            // An earlier (authoritative or predicted) cooldown entry exists.
-            InvokeInstance(_combat, "PredictSpellCooldown", "FIREBALL", 4_000L, 3_000L);
+            const long nowMs = 1_000_000L;
+            SetClockOffset(nowMs, offsetMs);
+            long priorServerStartMs = nowMs + offsetMs - 6_000L;
+            InsertAuthoritativeCooldown("FIREBALL", priorServerStartMs, 3_000L);
 
             object ledger = PredictActionStart("FIREBALL", 8_000L, false, 0L, nowMs);
+            // A refined estimate must not change which entry the ledger owns.
+            InvokeClock("Reset");
+            SetClockOffset(nowMs, offsetMs + 200L);
             RollbackPrediction(ledger);
 
             (long lastCastMs, long durationMs) = GetSpellCooldown("FIREBALL");
-            Assert.That(lastCastMs, Is.EqualTo(4_000L), "rollback must restore the prior entry");
+            Assert.That(lastCastMs, Is.EqualTo(priorServerStartMs), "rollback must restore the prior entry");
             Assert.That(durationMs, Is.EqualTo(3_000L), "rollback must restore the prior entry");
         }
 
-        [Test]
-        public void Rollback_LeavesOverwrittenCooldownAlone()
+        [TestCase(-60_000L)]
+        [TestCase(0L)]
+        [TestCase(60_000L)]
+        public void Rollback_LeavesNewerPredictionAlone(long offsetMs)
         {
-            const long nowMs = 10_000L;
+            const long nowMs = 1_000_000L;
+            SetClockOffset(nowMs, offsetMs);
             object ledger = PredictActionStart("FIREBALL", 8_000L, false, 0L, nowMs);
 
-            // A later legitimate prediction (or authoritative row) replaces the
-            // entry before the rejection arrives.
-            InvokeInstance(_combat, "PredictSpellCooldown", "FIREBALL", nowMs + 5_000L, 8_000L);
+            // A later prediction replaces the entry before the rejection arrives.
+            PredictActionStart("FIREBALL", 8_000L, false, 0L, nowMs + 5_000L);
 
             RollbackPrediction(ledger);
 
             (long lastCastMs, long durationMs) = GetSpellCooldown("FIREBALL");
-            Assert.That(lastCastMs, Is.EqualTo(nowMs + 5_000L),
+            Assert.That(lastCastMs, Is.EqualTo(nowMs + offsetMs + 5_000L),
                 "rollback must not clear an entry it did not write");
             Assert.That(durationMs, Is.EqualTo(8_000L));
+            Assert.That(RemainingCooldownMs("FIREBALL", nowMs + 5_000L), Is.EqualTo(8_000L));
+        }
+
+        [TestCase(-60_000L)]
+        [TestCase(0L)]
+        [TestCase(60_000L)]
+        public void Rollback_LeavesAuthoritativeUpdateAlone(long offsetMs)
+        {
+            const long nowMs = 1_000_000L;
+            SetClockOffset(nowMs, offsetMs);
+            object prior = InsertAuthoritativeCooldown("FIREBALL", nowMs + offsetMs - 9_000L, 8_000L);
+            object ledger = PredictActionStart("FIREBALL", 8_000L, false, 0L, nowMs);
+            object updated = CreateAuthoritativeCooldown("FIREBALL", nowMs + offsetMs + 100L, 8_000L);
+            InvokeInstance(_combat, "OnSpellCooldownUpdate", null!, prior, updated);
+
+            RollbackPrediction(ledger);
+
+            Assert.That(RemainingCooldownMs("FIREBALL", nowMs + 100L), Is.EqualTo(8_000L),
+                "rejection must preserve a newer authoritative cooldown");
         }
 
         [Test]
@@ -140,6 +218,31 @@ namespace Arena.EditModeTests
         // ---------------------------------------------------------------
 
         private string? _lastPredictionRejectedKind;
+
+        private static void InvokeClock(string methodName, params object[] args)
+            => RequireType(ClockType).GetMethod(methodName)!.Invoke(null, args);
+
+        private static void SetClockOffset(long clientNowMs, long offsetMs)
+            => InvokeClock("RecordReducerSampleMs", clientNowMs - 100L, clientNowMs + offsetMs - 50L, clientNowMs);
+
+        private object InsertAuthoritativeCooldown(string kind, long serverLastCastMs, long durationMs)
+        {
+            object row = CreateAuthoritativeCooldown(kind, serverLastCastMs, durationMs);
+            InvokeInstance(_combat, "Bind", row.GetType().GetField("Caster")!.GetValue(row)!);
+            InvokeInstance(_combat, "OnSpellCooldownInsert", null!, row);
+            return row;
+        }
+
+        private static object CreateAuthoritativeCooldown(string kind, long serverLastCastMs, long durationMs)
+        {
+            Type rowType = RequireType("SpacetimeDB.Types.SpellCooldown");
+            object identity = Activator.CreateInstance(rowType.GetField("Caster")!.FieldType)!;
+            object timestamp = Activator.CreateInstance(rowType.GetField("LastCastAt")!.FieldType, serverLastCastMs * 1000L)!;
+            return Activator.CreateInstance(rowType, $"LOCAL:{kind}", identity, kind, timestamp, (ulong)durationMs)!;
+        }
+
+        private long RemainingCooldownMs(string kind, long clientNowMs)
+            => (long)InvokeInstance(_combat, "GetSpellCooldownRemainingMs", kind, clientNowMs)!;
 
         private Delegate CreatePredictionRejectedHandler(Type eventHandlerType)
         {

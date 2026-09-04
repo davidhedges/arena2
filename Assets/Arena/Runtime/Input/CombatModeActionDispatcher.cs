@@ -34,9 +34,8 @@ namespace Arena.Input
             if (string.IsNullOrWhiteSpace(nextMode))
                 return false;
             if (string.Equals(nextMode, CombatModeIds.Stealthed, StringComparison.Ordinal)
-                && LocalCombatState.Instance.SpellCooldowns.TryGetValue(action.ActionId, out var cooldown)
-                && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                    < cooldown.lastCastMs + cooldown.durationMs)
+                && LocalCombatState.Instance.GetSpellCooldownRemainingMs(
+                    action.ActionId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) > 0L)
             {
                 ActionBarTrace.Trace(
                     $"combat mode toggle rejected ability={action.AbilityId} profile={combatProfile} reason=cooldown");

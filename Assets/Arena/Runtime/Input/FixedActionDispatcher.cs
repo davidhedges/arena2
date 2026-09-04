@@ -77,7 +77,7 @@ namespace Arena.Input
 
             if (LocalCombatState.Instance.SpellCooldowns.TryGetValue(normalized, out var cooldown)
                 && cooldown.durationMs > 0
-                && nowMs < cooldown.lastCastMs + cooldown.durationMs)
+                && LocalCombatState.Instance.GetSpellCooldownRemainingMs(normalized, nowMs) > 0L)
                 return false;
 
             return true;
@@ -306,12 +306,13 @@ namespace Arena.Input
                 }
             }
 
+            long cooldownRemainingMs = LocalCombatState.Instance.GetSpellCooldownRemainingMs(normalized, nowMs);
             if (LocalCombatState.Instance.SpellCooldowns.TryGetValue(normalized, out var cooldown)
                 && cooldown.durationMs > 0
-                && nowMs < cooldown.lastCastMs + cooldown.durationMs)
+                && cooldownRemainingMs > 0L)
             {
                 ActionBarTrace.Trace(
-                    $"fixed action {normalized} rejected: cooldown ends in {cooldown.lastCastMs + cooldown.durationMs - nowMs}ms");
+                    $"fixed action {normalized} rejected: cooldown ends in {cooldownRemainingMs}ms");
                 return;
             }
 
