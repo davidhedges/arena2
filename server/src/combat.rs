@@ -24,16 +24,19 @@ use crate::open_world_scene::{OPEN_WORLD_SPAWN_X, OPEN_WORLD_SPAWN_YAW, OPEN_WOR
 use crate::player_state::PlayerState;
 use crate::practice::resolve_respawn_pose;
 use crate::progression::{
-    ability_belongs_to_build_selection, blight_fracture_melee_damage_bonus, combat_rule_value,
+    ability_belongs_to_build_selection, blade_twisting_bleed_runtime,
+    blight_fracture_melee_damage_bonus, combat_rule_value,
     consume_target_status_rule_for_ability_id, player_has_selected_passive_ability,
-    precision_careful_aim_for_owner, precision_heartseeker_stationary_rule,
-    precision_maverick_for_owner, precision_point_blank_for_owner, primal_adaptation_for_owner,
-    primal_photosynthesis_for_owner, primal_slipstream_cooldown_reduction_for_owner,
-    ruin_acceleration_cooldown_reduction_for_owner, ruin_chain_reaction_spell_for_owner,
-    ruin_furnace_mana_restore_ratio_for_owner, ruin_potential_crit_chance_per_stack_for_owner,
-    ruin_quickening_for_owner, ruin_wildfire_ignite_for_owner, soulstealer_empowered_damage_bonus,
+    player_has_selected_technique_ability, precision_careful_aim_for_owner,
+    precision_heartseeker_stationary_rule, precision_maverick_for_owner,
+    precision_point_blank_for_owner, primal_adaptation_for_owner, primal_photosynthesis_for_owner,
+    primal_slipstream_cooldown_reduction_for_owner, ruin_acceleration_cooldown_reduction_for_owner,
+    ruin_chain_reaction_spell_for_owner, ruin_furnace_mana_restore_ratio_for_owner,
+    ruin_potential_crit_chance_per_stack_for_owner, ruin_quickening_for_owner,
+    ruin_wildfire_ignite_for_owner, soulstealer_empowered_damage_bonus,
     subtlety_behind_target_damage_bonus, subtlety_disabled_target_damage_bonus,
-    ConsumeTargetStatusFrequency, ConsumeTargetStatusSourceScope, ARCHER_HEARTSEEKER_ABILITY_ID,
+    BladeTwistingBleedRuntime, ConsumeTargetStatusFrequency, ConsumeTargetStatusSourceScope,
+    ARCHER_HEARTSEEKER_ABILITY_ID, DAGGER_BLADE_TWISTING_ABILITY_ID,
 };
 use crate::relations::{
     can_apply_status_polarity, can_harm, combat_relation, target_audience_allows, CombatRelation,
@@ -170,6 +173,7 @@ pub(crate) const DAMAGE_SOURCE_KIND_SPELL: &str = "SPELL";
 pub(crate) const DAMAGE_SOURCE_KIND_PROJECTILE: &str = "PROJECTILE";
 pub(crate) const DAMAGE_SOURCE_KIND_PERIODIC: &str = "PERIODIC";
 pub(crate) const DAMAGE_SOURCE_KIND_TRAP: &str = "TRAP";
+pub(crate) const DAMAGE_SOURCE_KIND_BLADE_TWISTING_BLEED: &str = "BLADE_TWISTING_BLEED";
 pub(crate) const DAMAGE_SOURCE_KIND_SELF_INFLICTED: &str = "SELF_INFLICTED";
 pub(crate) const DAMAGE_SOURCE_KIND_HEMORRHAGE: &str = "HEMORRHAGE";
 /// Damage an assisting ability charges to the actor it helps, such as Cauterize
@@ -264,6 +268,7 @@ pub(crate) const COMBAT_SEQUENCE_BEAM: &str = "BEAM";
 pub(crate) const COMBAT_METADATA_NONE: &str = "";
 pub(crate) const COMBAT_METADATA_CONSUMED_MELEE_MODIFIER: &str = "CONSUMED_MELEE_MODIFIER";
 pub(crate) const COMBAT_METADATA_CONSUMED_TARGET_STATUS: &str = "CONSUMED_TARGET_STATUS";
+pub(crate) const COMBAT_METADATA_BLADE_TWISTING: &str = "BLADE_TWISTING";
 pub(crate) const COMBAT_METADATA_FLURRY_PROC: &str = "FLURRY_PROC";
 pub(crate) const COMBAT_METADATA_RESTLESS_BLADES_PROC: &str = "RESTLESS_BLADES_PROC";
 const MIN_SLOW_PCT: f32 = f32::EPSILON;
@@ -6225,6 +6230,7 @@ fn apply_damage_to_player_state(
     if grants_outgoing_rewards {
         record_projectile_return_heal_damage(ctx, hit, hp_damage);
         grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
+        queue_blade_twisting_bleed_if_applicable(ctx, hit, hp_damage);
         apply_equipment_melee_steal(ctx, hit, hp_damage);
         queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
         queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
@@ -6638,6 +6644,7 @@ fn apply_damage_to_npc_state(
     if grants_outgoing_rewards {
         record_projectile_return_heal_damage(ctx, hit, hp_damage);
         grant_primary_resource_for_damage_dealt(ctx, source, hp_damage, ctx.timestamp);
+        queue_blade_twisting_bleed_if_applicable(ctx, hit, hp_damage);
         apply_equipment_melee_steal(ctx, hit, hp_damage);
         queue_surprise_attack_stun_if_applicable(ctx, hit, hp_damage);
         queue_thorns_damage_if_applicable(ctx, hit, temporary_modifiers, hp_damage);
@@ -6704,6 +6711,7 @@ fn resolve_damage_amount(
             | DAMAGE_SOURCE_KIND_BURDEN_REDIRECT
             | DAMAGE_SOURCE_KIND_RECKONING
             | DAMAGE_SOURCE_KIND_ASSIST_COST
+            | DAMAGE_SOURCE_KIND_BLADE_TWISTING_BLEED
     ) {
         // These amounts are already final authored/copied damage. Do not let
         // source power, target resistance, critical strikes, or passive
@@ -6746,17 +6754,6 @@ fn resolve_damage_amount(
                 hit.target,
                 hit.source,
                 StatusEffectKind::FindWeakness,
-                ctx.timestamp,
-            )
-        })
-        .flatten();
-    let blade_twisting = casted_ability_hit
-        .then(|| {
-            active_consumable_status_from_source(
-                ctx,
-                hit.source,
-                hit.source,
-                StatusEffectKind::BladeTwisting,
                 ctx.timestamp,
             )
         })
@@ -6816,19 +6813,10 @@ fn resolve_damage_amount(
             .or_else(|| heartseeker_stationary_crit_override(ctx, hit))
             .or_else(|| temporary_modifiers.crit_chance_override_for(&hit.source)),
         source_crit_chance,
-        if blade_twisting.is_some() {
-            3.0
-        } else {
-            combat_rule_value(RULE_CRIT_DAMAGE_MULTIPLIER)
-        },
+        combat_rule_value(RULE_CRIT_DAMAGE_MULTIPLIER),
     );
     if let Some(effect) = find_weakness {
         if !status_removal_is_blocked_by_rime(ctx, &effect, ctx.timestamp) {
-            ctx.db.status_effect().status_id().delete(effect.status_id);
-        }
-    }
-    if resolved.was_critical {
-        if let Some(effect) = blade_twisting {
             ctx.db.status_effect().status_id().delete(effect.status_id);
         }
     }
@@ -7806,6 +7794,7 @@ struct PendingHitAbilityContext {
     ability_id: String,
     action_instance_id: String,
     action_kind: String,
+    source_kind: String,
 }
 
 fn ability_context_for_pending_hit(
@@ -7833,11 +7822,192 @@ fn ability_context_for_pending_hit(
             ability_id: event.ability_id,
             action_instance_id: event.action_instance_id,
             action_kind: event.action_kind,
+            source_kind: event.source_kind,
         })
 }
 
 fn ability_id_for_pending_hit(ctx: &ReducerContext, hit: &PendingHit) -> Option<String> {
     ability_context_for_pending_hit(ctx, hit).map(|context| context.ability_id)
+}
+
+const BLADE_TWISTING_STATUS_GROUP: &str = "BLADE_TWISTING";
+const BLADE_TWISTING_BLEED_STATUS_GROUP_PREFIX: &str = "DAGGER_BLADE_TWISTING";
+
+fn blade_twisting_hit_is_eligible(
+    hit: &PendingHit,
+    ability_context: &PendingHitAbilityContext,
+    technique_is_selected: bool,
+) -> bool {
+    technique_is_selected
+        && damage_comes_from_casted_ability(hit)
+        && ability_context.source_kind != "auto_attack"
+        && ability_context.source_kind != "proc"
+        && !hit.direct_action_key.contains(":flaming_weapon:")
+}
+
+fn blade_twisting_was_consumed_for_action(
+    ctx: &ReducerContext,
+    source: Identity,
+    action_instance_id: &str,
+) -> bool {
+    ctx.db.combat_event().caster().filter(source).any(|event| {
+        event.event_type == COMBAT_EVENT_STATUS_CONSUMED
+            && event.action_instance_id == action_instance_id
+            && event.metadata_kind == COMBAT_METADATA_BLADE_TWISTING
+    })
+}
+
+fn emit_blade_twisting_consumed_event(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    ability_context: &PendingHitAbilityContext,
+) {
+    ctx.db.combat_event().insert(CombatEvent {
+        event_id: 0,
+        action_instance_id: ability_context.action_instance_id.clone(),
+        action_kind: ability_context.action_kind.clone(),
+        ability_id: ability_context.ability_id.clone(),
+        hit_index: -1,
+        event_type: COMBAT_EVENT_STATUS_CONSUMED.to_string(),
+        source_kind: ability_context.source_kind.clone(),
+        caster: hit.source,
+        hit: hit.target,
+        origin_x: 0.0,
+        origin_y: 0.0,
+        origin_z: 0.0,
+        dir_x: 0.0,
+        dir_y: 0.0,
+        dir_z: 0.0,
+        speed: 0.0,
+        max_distance: 0.0,
+        scalar_kind: COMBAT_SCALAR_NONE.to_string(),
+        scalar_value: 0.0,
+        sequence_kind: COMBAT_SEQUENCE_NONE.to_string(),
+        sequence_index: 0,
+        sequence_count: 1,
+        point_x: 0.0,
+        point_y: 0.0,
+        point_z: 0.0,
+        created_at: ctx.timestamp,
+        created_at_micros: timestamp_to_micros(ctx.timestamp),
+        damage: 0,
+        metadata_kind: COMBAT_METADATA_BLADE_TWISTING.to_string(),
+        metadata_key: StatusEffectKind::BladeTwisting.as_str().to_string(),
+        metadata_value: BLADE_TWISTING_STATUS_GROUP.to_string(),
+    });
+}
+
+fn consume_blade_twisting_for_technique_hit(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+) -> Option<PendingHitAbilityContext> {
+    let ability_context = ability_context_for_pending_hit(ctx, hit)?;
+    let technique_is_selected =
+        player_has_selected_technique_ability(ctx, hit.source, ability_context.ability_id.as_str());
+    if !blade_twisting_hit_is_eligible(hit, &ability_context, technique_is_selected) {
+        return None;
+    }
+    if blade_twisting_was_consumed_for_action(
+        ctx,
+        hit.source,
+        ability_context.action_instance_id.as_str(),
+    ) {
+        return Some(ability_context);
+    }
+
+    let status = active_consumable_status_from_source(
+        ctx,
+        hit.source,
+        hit.source,
+        StatusEffectKind::BladeTwisting,
+        ctx.timestamp,
+    )?;
+    ctx.db.status_effect().status_id().delete(status.status_id);
+    emit_blade_twisting_consumed_event(ctx, hit, &ability_context);
+    Some(ability_context)
+}
+
+fn blade_twisting_bleed_tick_count(runtime: BladeTwistingBleedRuntime) -> u32 {
+    let duration_ms = runtime.duration.as_millis();
+    let interval_ms = runtime.tick_interval.as_millis();
+    if duration_ms == 0 || interval_ms == 0 {
+        return 0;
+    }
+    duration_ms.saturating_sub(1).div_euclid(interval_ms) as u32
+}
+
+fn blade_twisting_bleed_tick_damage(
+    confirmed_hp_damage: i32,
+    runtime: BladeTwistingBleedRuntime,
+) -> i32 {
+    let tick_count = blade_twisting_bleed_tick_count(runtime);
+    if confirmed_hp_damage <= 0 || tick_count == 0 || !runtime.damage_ratio.is_finite() {
+        return 0;
+    }
+    let total_damage = ((confirmed_hp_damage as f32) * runtime.damage_ratio.clamp(0.0, 1.0))
+        .round()
+        .clamp(0.0, i32::MAX as f32);
+    (total_damage / tick_count as f32)
+        .round()
+        .clamp(0.0, i32::MAX as f32) as i32
+}
+
+fn blade_twisting_bleed_stack_group(
+    hit: &PendingHit,
+    ability_context: &PendingHitAbilityContext,
+) -> String {
+    let mut hash = 0xcbf29ce484222325_u64;
+    hash = fnv1a_update(hash, &hit.source.to_byte_array());
+    hash = fnv1a_update(hash, &hit.target.to_byte_array());
+    hash = fnv1a_update(hash, ability_context.action_instance_id.as_bytes());
+    hash = fnv1a_update(hash, hit.direct_action_key.as_bytes());
+    hash = fnv1a_update(hash, &hit.queued_order.to_le_bytes());
+    format!("{BLADE_TWISTING_BLEED_STATUS_GROUP_PREFIX}:{hash:016x}")
+}
+
+fn blade_twisting_bleed_packet(
+    hit: &PendingHit,
+    ability_context: &PendingHitAbilityContext,
+    confirmed_hp_damage: i32,
+    runtime: BladeTwistingBleedRuntime,
+) -> Option<EffectPacket> {
+    let tick_damage = blade_twisting_bleed_tick_damage(confirmed_hp_damage, runtime);
+    (tick_damage > 0).then(|| EffectPacket::ApplyStatus {
+        source: hit.source,
+        target: hit.target,
+        spell_id: DAGGER_BLADE_TWISTING_ABILITY_ID.to_string(),
+        payload: StatusPayload::Dot {
+            tick_damage,
+            damage_type: DamageType::Physical,
+            tick_interval: runtime.tick_interval,
+        },
+        polarity: StatusPolarity::Debuff,
+        target_audience: TargetAudience::Hostile,
+        duration: runtime.duration,
+        stack_group: blade_twisting_bleed_stack_group(hit, ability_context),
+        max_stacks: 1,
+        stack_policy: StackPolicy::Refresh,
+        dispel_types: vec![StatusDispelType::Bleed],
+    })
+}
+
+fn queue_blade_twisting_bleed_if_applicable(
+    ctx: &ReducerContext,
+    hit: &PendingHit,
+    confirmed_hp_damage: i32,
+) {
+    let Some(runtime) = blade_twisting_bleed_runtime() else {
+        return;
+    };
+    let Some(ability_context) = consume_blade_twisting_for_technique_hit(ctx, hit) else {
+        return;
+    };
+    let Some(packet) =
+        blade_twisting_bleed_packet(hit, &ability_context, confirmed_hp_damage, runtime)
+    else {
+        return;
+    };
+    queue_effects(ctx, vec![packet]);
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -11512,6 +11682,11 @@ pub fn process_periodic_status_ticks(ctx: &ReducerContext, now: Timestamp) -> us
                 StatusEffectKind::Dot => {
                     let amount = status_dot_tick_damage(&effect);
                     if amount > 0 {
+                        let source_kind = if effect.spell_id == DAGGER_BLADE_TWISTING_ABILITY_ID {
+                            DAMAGE_SOURCE_KIND_BLADE_TWISTING_BLEED
+                        } else {
+                            DAMAGE_SOURCE_KIND_PERIODIC
+                        };
                         queued.push(EffectPacket::Damage {
                             amount,
                             damage_type: DamageType::from_wire(effect.damage_type.as_str()),
@@ -11519,7 +11694,7 @@ pub fn process_periodic_status_ticks(ctx: &ReducerContext, now: Timestamp) -> us
                             target: effect.target,
                             spell_id: effect.spell_id.clone(),
                             delivery: DamageDelivery::Periodic,
-                            source_kind: DAMAGE_SOURCE_KIND_PERIODIC.to_string(),
+                            source_kind: source_kind.to_string(),
                             direct_action_key: String::new(),
                             is_area: false,
                         });
@@ -11605,6 +11780,8 @@ mod tests {
         accumulated_reckoning_damage, action_key_matches_instance, actor_distance_sq,
         advance_expired_escalating_dot, apply_status_update, attack_speed_scalar_to_multiplier,
         attacker_is_behind_target, battle_trance_hp_after_damage, behind_target_damage_multiplier,
+        blade_twisting_bleed_packet, blade_twisting_bleed_tick_count,
+        blade_twisting_bleed_tick_damage, blade_twisting_hit_is_eligible,
         blight_empowered_hit_is_eligible, bloodlust_passive_spec, burden_damage_split,
         cadence_damage_multiplier_for_action, consumable_status_source_scope_allows,
         consumable_status_stack_group_matches, consumed_target_status_damage_multiplier,
@@ -11633,8 +11810,8 @@ mod tests {
         status_matches_removal_filter_values, status_stacks_after_removal,
         target_status_consumption_limit, AuthoredStatusPayload, ConsumedTargetStatus,
         DamageDelivery, DamageType, EffectPacket, HolyShieldEndReason, MovementModifiers,
-        PendingHit, StackPolicy, StatusApplication, StatusDispelType, StatusEffect,
-        StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
+        PendingHit, PendingHitAbilityContext, StackPolicy, StatusApplication, StatusDispelType,
+        StatusEffect, StatusEffectKind, StatusPayload, StatusPolarity, StatusRuntimeView,
         StatusStackGroupDefault, TemporaryCombatModifiers, BLOODLUST_PASSIVE_ID,
         COMBAT_PROJECTILE_DEFINITIONS, DAMAGE_SOURCE_KIND_BURDEN_REDIRECT,
         DAMAGE_SOURCE_KIND_MELEE, DAMAGE_SOURCE_KIND_PERIODIC, DAMAGE_SOURCE_KIND_PROJECTILE,
@@ -11642,7 +11819,7 @@ mod tests {
         HOLY_SHIELD_STATUS_GROUP, PLAYER_EVENT_RETENTION, RESTLESS_PASSIVE_ID,
     };
     use crate::movement::FIXED_TICK_MILLIS;
-    use crate::progression::ConsumeTargetStatusSourceScope;
+    use crate::progression::{BladeTwistingBleedRuntime, ConsumeTargetStatusSourceScope};
     use crate::relations::{CombatRelation, TargetAudience};
     use spacetimedb::{Identity, Timestamp};
     use std::{collections::HashSet, time::Duration};
@@ -12201,11 +12378,138 @@ mod tests {
     }
 
     #[test]
-    fn blade_twisting_critical_multiplier_deals_triple_damage() {
-        let resolved = resolve_effect_amount_from_roll(100, false, 1.0, 0.5, 1.0, 3.0);
+    fn blade_twisting_empowers_only_selected_direct_techniques() {
+        let source = test_identity_number(1);
+        let target = test_identity_number(2);
+        let hit = |direct_action_key: &str| PendingHit {
+            hit_id: 0,
+            source,
+            target,
+            spell_id: direct_action_key.to_string(),
+            amount: 80,
+            is_heal: false,
+            damage_type: "PHYSICAL".to_string(),
+            target_audience: "HOSTILE".to_string(),
+            damage_delivery: DamageDelivery::Direct.as_str().to_string(),
+            damage_source_kind: DAMAGE_SOURCE_KIND_MELEE.to_string(),
+            direct_action_key: direct_action_key.to_string(),
+            is_area: false,
+            queued_at: Timestamp::UNIX_EPOCH,
+            queued_at_micros: 0,
+            queued_order: 1,
+        };
+        let player_input = hit("melee:player_input:abc:hit:0");
+        let context = PendingHitAbilityContext {
+            ability_id: "DAGGER_QUICK_CUT".to_string(),
+            action_instance_id: "melee:player_input:abc".to_string(),
+            action_kind: "DAGGER_QUICK_CUT".to_string(),
+            source_kind: "player_input".to_string(),
+        };
 
-        assert!(resolved.was_critical);
-        assert_eq!(resolved.final_amount, 300);
+        assert!(blade_twisting_hit_is_eligible(
+            &player_input,
+            &context,
+            true
+        ));
+        assert!(!blade_twisting_hit_is_eligible(
+            &player_input,
+            &context,
+            false
+        ));
+
+        let auto_attack = hit("melee:auto_attack:abc:hit:0");
+        assert!(!blade_twisting_hit_is_eligible(
+            &auto_attack,
+            &context,
+            true
+        ));
+
+        let mut proc_context = context.clone();
+        proc_context.source_kind = "proc".to_string();
+        assert!(!blade_twisting_hit_is_eligible(
+            &player_input,
+            &proc_context,
+            true
+        ));
+
+        let passive_damage = hit("melee:player_input:abc:flaming_weapon:0:fire");
+        assert!(!blade_twisting_hit_is_eligible(
+            &passive_damage,
+            &context,
+            true
+        ));
+    }
+
+    #[test]
+    fn blade_twisting_builds_a_five_second_physical_bleed_for_half_damage() {
+        let runtime = BladeTwistingBleedRuntime {
+            damage_ratio: 0.5,
+            duration: Duration::from_secs(5),
+            tick_interval: Duration::from_secs(1),
+        };
+        assert_eq!(blade_twisting_bleed_tick_count(runtime), 4);
+        assert_eq!(blade_twisting_bleed_tick_damage(80, runtime), 10);
+
+        let hit = PendingHit {
+            hit_id: 0,
+            source: test_identity_number(1),
+            target: test_identity_number(2),
+            spell_id: "melee:player_input:abc:hit:0".to_string(),
+            amount: 80,
+            is_heal: false,
+            damage_type: "PHYSICAL".to_string(),
+            target_audience: "HOSTILE".to_string(),
+            damage_delivery: DamageDelivery::Direct.as_str().to_string(),
+            damage_source_kind: DAMAGE_SOURCE_KIND_MELEE.to_string(),
+            direct_action_key: "melee:player_input:abc:hit:0".to_string(),
+            is_area: false,
+            queued_at: Timestamp::UNIX_EPOCH,
+            queued_at_micros: 0,
+            queued_order: 1,
+        };
+        let context = PendingHitAbilityContext {
+            ability_id: "DAGGER_QUICK_CUT".to_string(),
+            action_instance_id: "melee:player_input:abc".to_string(),
+            action_kind: "DAGGER_QUICK_CUT".to_string(),
+            source_kind: "player_input".to_string(),
+        };
+        let packet = blade_twisting_bleed_packet(&hit, &context, 80, runtime)
+            .expect("positive confirmed damage should produce a Bleed packet");
+
+        let EffectPacket::ApplyStatus {
+            source,
+            target,
+            spell_id,
+            payload,
+            polarity,
+            target_audience,
+            duration,
+            stack_group,
+            max_stacks,
+            stack_policy,
+            dispel_types,
+        } = packet
+        else {
+            panic!("Blade Twisting must apply a status");
+        };
+        assert_eq!(source, hit.source);
+        assert_eq!(target, hit.target);
+        assert_eq!(spell_id, "DAGGER_BLADE_TWISTING");
+        assert_eq!(
+            payload,
+            StatusPayload::Dot {
+                tick_damage: 10,
+                damage_type: DamageType::Physical,
+                tick_interval: Duration::from_secs(1),
+            }
+        );
+        assert_eq!(polarity, StatusPolarity::Debuff);
+        assert_eq!(target_audience, TargetAudience::Hostile);
+        assert_eq!(duration, Duration::from_secs(5));
+        assert!(stack_group.starts_with("DAGGER_BLADE_TWISTING:"));
+        assert_eq!(max_stacks, 1);
+        assert_eq!(stack_policy, StackPolicy::Refresh);
+        assert_eq!(dispel_types, vec![StatusDispelType::Bleed]);
     }
 
     #[test]

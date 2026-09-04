@@ -7934,7 +7934,7 @@
       "sort_order": 63,
       "gameplay": {
         "kind": "SPELL",
-        "cooldown_ms": 12000,
+        "cooldown_ms": 30000,
         "uses_global_cooldown": true,
         "cast_time_ms": 0,
         "cast_mobility": "MOBILE",
@@ -7944,6 +7944,9 @@
         "requires_target_los": false,
         "resource_cost": 0,
         "arms_auto_attack_on_cast": false,
+        "blade_twisting_bleed_damage_ratio": 0.5,
+        "blade_twisting_bleed_duration_ms": 5000,
+        "blade_twisting_bleed_tick_interval_ms": 1000,
         "delivery": {
           "kind": "APPLY_STATUS",
           "duration_ms": 86400000,
@@ -15212,7 +15215,7 @@
       "presentation_kind": "ABILITY",
       "presentation_id": "DAGGER_BLADE_TWISTING",
       "display_name": "Blade Twisting",
-      "description": "Your next critical strike from a casted ability deals 3x damage instead of 2x; auto-attacks do not consume the effect.",
+      "description": "Your next damaging non-auto-attack Technique inflicts a Bleed for an additional 50% of its damage over 5 seconds.",
       "sort_order": 243
     },
     {

@@ -90,6 +90,7 @@ const ARCHER_POINT_BLANK_ABILITY_ID: &str = "ARCHER_POINT_BLANK";
 const ARCHER_CAREFUL_AIM_ABILITY_ID: &str = "ARCHER_CAREFUL_AIM";
 pub(crate) const ARCHER_HEARTSEEKER_ABILITY_ID: &str = "ARCHER_HEARTSEEKER";
 const ARCHER_PERFORATION_ABILITY_ID: &str = "ARCHER_PERFORATION";
+pub(crate) const DAGGER_BLADE_TWISTING_ABILITY_ID: &str = "DAGGER_BLADE_TWISTING";
 // Keep the original wire ID stable so existing action-bar assignments survive the rename.
 const DAGGER_SHROUD_ABILITY_ID: &str = "DAGGER_STEALTH";
 const SUBTLETY_FLEET_FOOTED_ABILITY_ID: &str = "SUBTLETY_FLEET_FOOTED";
@@ -310,6 +311,12 @@ struct AbilityGameplayDefinition {
     consume_target_status: Option<ConsumeTargetStatusRule>,
     #[serde(default)]
     soulstealer_empowered_damage_bonus: f32,
+    #[serde(default)]
+    blade_twisting_bleed_damage_ratio: f32,
+    #[serde(default)]
+    blade_twisting_bleed_duration_ms: u64,
+    #[serde(default)]
+    blade_twisting_bleed_tick_interval_ms: u64,
     #[serde(default)]
     fire_damage_taken_mana_restore_ratio: f32,
     #[serde(default)]
@@ -2299,6 +2306,25 @@ pub(crate) fn player_has_selected_passive_ability(
         })
 }
 
+pub(crate) fn player_has_selected_technique_ability(
+    ctx: &ReducerContext,
+    owner: Identity,
+    ability_id: &str,
+) -> bool {
+    if !frozen_combat_build_exists(ctx, owner) {
+        return false;
+    }
+    let ability_id = normalize_identifier(ability_id);
+    ctx.db
+        .match_technique_selection_v2()
+        .owner()
+        .filter(owner)
+        .find(|selection| selection.ability_id == ability_id)
+        .is_some_and(|selection| {
+            frozen_specialization_is_selected(ctx, owner, selection.specialization_id.as_str())
+        })
+}
+
 fn frozen_specialization_is_selected(
     ctx: &ReducerContext,
     owner: Identity,
@@ -4022,6 +4048,12 @@ fn validate_ability_catalog() {
             rule.validate(ability_id.as_str(), ability_kind.as_str())
                 .unwrap_or_else(|err| panic!("{err}"));
         }
+        validate_blade_twisting_tuning(
+            ability_id.as_str(),
+            ability_kind.as_str(),
+            combat_discipline_id.as_str(),
+            &ability.gameplay,
+        );
         let disabled_target_damage_bonus = ability.gameplay.disabled_target_damage_bonus;
         let behind_target_damage_bonus = ability.gameplay.behind_target_damage_bonus;
         let isolated_damage_bonus = ability.gameplay.isolated_damage_bonus;
@@ -5008,6 +5040,59 @@ fn validate_ability_catalog() {
         authored_player_passives, inventoried_player_passives,
         "every authored player passive must be present in the selected-passive runtime inventory"
     );
+}
+
+fn validate_blade_twisting_tuning(
+    ability_id: &str,
+    ability_kind: &str,
+    combat_discipline_id: &str,
+    gameplay: &AbilityGameplayDefinition,
+) {
+    let ratio = gameplay.blade_twisting_bleed_damage_ratio;
+    let duration_ms = gameplay.blade_twisting_bleed_duration_ms;
+    let tick_interval_ms = gameplay.blade_twisting_bleed_tick_interval_ms;
+    assert!(
+        ratio.is_finite() && (0.0..=1.0).contains(&ratio),
+        "ability '{ability_id}' must author blade_twisting_bleed_damage_ratio between 0 and 1"
+    );
+
+    if ability_id == DAGGER_BLADE_TWISTING_ABILITY_ID {
+        assert_eq!(ability_kind, "SPELL", "Blade Twisting must remain a spell");
+        assert_eq!(
+            combat_discipline_id, COMBAT_PROFILE_DAGGERS,
+            "Blade Twisting must remain a Dagger ability"
+        );
+        assert_eq!(
+            gameplay.cooldown_ms,
+            Some(30_000),
+            "Blade Twisting must have a 30 second cooldown"
+        );
+        assert!(
+            (ratio - 0.5).abs() < 0.0001,
+            "Blade Twisting must author a 50% Bleed damage ratio"
+        );
+        assert_eq!(
+            duration_ms, 5_000,
+            "Blade Twisting must author a 5 second Bleed"
+        );
+        assert_eq!(
+            tick_interval_ms, 1_000,
+            "Blade Twisting must author a 1 second Bleed tick interval"
+        );
+    } else {
+        assert_eq!(
+            ratio, 0.0,
+            "only Blade Twisting may author blade_twisting_bleed_damage_ratio"
+        );
+        assert_eq!(
+            duration_ms, 0,
+            "only Blade Twisting may author blade_twisting_bleed_duration_ms"
+        );
+        assert_eq!(
+            tick_interval_ms, 0,
+            "only Blade Twisting may author blade_twisting_bleed_tick_interval_ms"
+        );
+    }
 }
 
 fn validated_ability_actor_scope(ability_id: &str, actor_scope: &str) -> String {
@@ -6420,6 +6505,31 @@ pub(crate) fn soulstealer_empowered_damage_bonus() -> f32 {
         .clamp(0.0, 1.0)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct BladeTwistingBleedRuntime {
+    pub damage_ratio: f32,
+    pub duration: Duration,
+    pub tick_interval: Duration,
+}
+
+pub(crate) fn blade_twisting_bleed_runtime() -> Option<BladeTwistingBleedRuntime> {
+    let gameplay = &progression_catalog()
+        .abilities
+        .iter()
+        .find(|ability| {
+            normalize_identifier(ability.ability_id.as_str()) == DAGGER_BLADE_TWISTING_ABILITY_ID
+        })?
+        .gameplay;
+    (gameplay.blade_twisting_bleed_damage_ratio > 0.0
+        && gameplay.blade_twisting_bleed_duration_ms > 0
+        && gameplay.blade_twisting_bleed_tick_interval_ms > 0)
+        .then(|| BladeTwistingBleedRuntime {
+            damage_ratio: gameplay.blade_twisting_bleed_damage_ratio.clamp(0.0, 1.0),
+            duration: Duration::from_millis(gameplay.blade_twisting_bleed_duration_ms),
+            tick_interval: Duration::from_millis(gameplay.blade_twisting_bleed_tick_interval_ms),
+        })
+}
+
 fn canonical_action_bar_slot_id(value: &str) -> String {
     match normalize_identifier(value).as_str() {
         "BOTTOM_01" => "SLOT_0_0".to_string(),
@@ -6480,8 +6590,8 @@ mod tests {
         BLIGHT_TOXIC_WEAPON_ABILITY_ID, COMBAT_MODE_FULL_DRAW, COMBAT_MODE_READY,
         COMBAT_MODE_SHORT_DRAW, COMBAT_MODE_STEALTHED, COMBAT_PROFILE_ARCHER_BOW,
         COMBAT_PROFILE_DAGGERS, COMBAT_PROFILE_STAFF, COMBAT_PROFILE_SWORD_AND_SHIELD,
-        COMBAT_PROFILE_TWO_HANDED_SWORD, DAGGER_SHROUD_ABILITY_ID,
-        PLAYER_PASSIVE_RUNTIME_INVENTORY, PRIMAL_ADAPTATION_ABILITY_ID,
+        COMBAT_PROFILE_TWO_HANDED_SWORD, DAGGER_BLADE_TWISTING_ABILITY_ID,
+        DAGGER_SHROUD_ABILITY_ID, PLAYER_PASSIVE_RUNTIME_INVENTORY, PRIMAL_ADAPTATION_ABILITY_ID,
         PRIMAL_PHOTOSYNTHESIS_ABILITY_ID, PRIMAL_SLIPSTREAM_ABILITY_ID, RESOURCE_KIND_STAMINA,
         SUBTLETY_FLEET_FOOTED_ABILITY_ID, SUBTLETY_LINGERING_SHADE_ABILITY_ID,
         SUBTLETY_OPPORTUNIST_ABILITY_ID, SUBTLETY_SURPRISE_ATTACKS_ABILITY_ID,
@@ -11201,6 +11311,24 @@ mod tests {
                 Some(status_kind)
             );
         }
+
+        let blade_twisting = progression_catalog()
+            .abilities
+            .iter()
+            .find(|ability| ability.ability_id == DAGGER_BLADE_TWISTING_ABILITY_ID)
+            .expect("expected Blade Twisting");
+        assert_eq!(blade_twisting.gameplay.cooldown_ms, Some(30_000));
+        assert!((blade_twisting.gameplay.blade_twisting_bleed_damage_ratio - 0.5).abs() < 0.0001);
+        assert_eq!(
+            blade_twisting.gameplay.blade_twisting_bleed_duration_ms,
+            5_000
+        );
+        assert_eq!(
+            blade_twisting
+                .gameplay
+                .blade_twisting_bleed_tick_interval_ms,
+            1_000
+        );
 
         let gouge = spell_definition_by_str("GOUGE").expect("Gouge runtime definition");
         let gouge_additional = &gouge
