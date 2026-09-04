@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Compile-check the Arena runtime + editor + EditMode test assemblies WITHOUT Unity.
 #
-# Unity holds Temp/UnityLockfile whenever the editor is open, which blocks
-# batchmode. This script copies the Unity-generated csproj files, redirects
-# their intermediate/output paths out of Temp/ so the running editor is never
-# disturbed, builds them, and cleans up.
+# This script prepares temporary copies of all three Unity-generated csproj
+# files, redirects their intermediate/output paths out of Temp/ so the running
+# editor is never disturbed, builds them, and cleans up on exit.
 #
 # Assembly-CSharp (the runtime assembly) is patched too, and the editor/test
 # projects are repointed at the patched copy: it is referenced by both, and a
@@ -15,10 +14,35 @@
 # Exit:   0 = every assembly compiles, non-zero = errors printed above.
 
 set -uo pipefail
-cd "$(dirname "$0")/.."
+
+fail() {
+  echo "COMPILE GATE: FAIL — $*" >&2
+  exit 1
+}
+
+cd "$(dirname "$0")/.." || fail "Cannot enter the repository directory."
 ROOT="$(pwd)"
 OUT="${TMPDIR:-/tmp}/arena-compile-gate"
-mkdir -p "$OUT"
+projects=(Assembly-CSharp Assembly-CSharp-Editor Arena.EditModeTests)
+
+cleanup() {
+  local proj
+  for proj in "${projects[@]}"; do
+    rm -f "_compilegate_$proj.csproj"
+  done
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+mkdir -p "$OUT" || fail "Cannot create output directory: $OUT"
+
+# Check the complete input set before preparing or compiling any project.
+for proj in "${projects[@]}"; do
+  if [ ! -f "$proj.csproj" ]; then
+    fail "Missing $proj.csproj; open this project in Unity normally to generate project files."
+  fi
+done
 
 patch_project() {   # $1 = project name
   python3 - "$1" "_compilegate_$1.csproj" "$OUT" <<'PY'
@@ -55,17 +79,13 @@ open(gate, 'w', encoding='utf-8').write(src)
 PY
 }
 
-status=0
-projects=()
-for proj in Assembly-CSharp Assembly-CSharp-Editor Arena.EditModeTests; do
-  if [ ! -f "$proj.csproj" ]; then
-    echo "SKIP $proj (no csproj — open Unity once to generate it)"
-    continue
+for proj in "${projects[@]}"; do
+  if ! patch_project "$proj"; then
+    fail "Could not prepare $proj.csproj."
   fi
-  patch_project "$proj"
-  projects+=("$proj")
 done
 
+status=0
 for proj in "${projects[@]}"; do
   # Build ONCE and analyse the captured log. Building twice raced the first
   # build's file locks and produced spurious failures.
@@ -81,10 +101,6 @@ for proj in "${projects[@]}"; do
     echo "  0 errors"
   fi
 done
-
-rm -f _compilegate_Assembly-CSharp.csproj \
-      _compilegate_Assembly-CSharp-Editor.csproj \
-      _compilegate_Arena.EditModeTests.csproj
 
 if [ "$status" -eq 0 ]; then
   echo "COMPILE GATE: PASS"
