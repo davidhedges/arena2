@@ -169,6 +169,81 @@ Assets/ThirdParty/Unity/
 
 If first-party gameplay needs a vendor asset, prefer making a small authored prefab/material/profile under `Assets/Arena/Content` or `Assets/Arena/Resources` that references the vendor source by GUID.
 
+### Restoring external assets
+
+Verified against tracked files, local imports, C# dependencies and serialized
+GUID references on 2026-09-04. A Git checkout alone does not contain every asset
+the current client references. There are three separate sources:
+
+1. **Git and Git LFS:** [.gitattributes](../.gitattributes) assigns scenes,
+   prefabs, models, textures and other asset types to LFS. Download the content
+   for the checked-out revision with `git lfs pull` before opening the project.
+   A small text file beginning `version https://git-lfs.github.com/spec/v1` is
+   an LFS pointer, not a usable Unity asset.
+2. **Unity packages:** [Packages/manifest.json](../Packages/manifest.json) and
+   [packages-lock.json](../Packages/packages-lock.json) record the UPM
+   dependencies, including SpacetimeDB, URP, Cinemachine and Input System.
+   These are separate from locally imported Asset Store/Fab content. Use the
+   editor version in [ProjectVersion.txt](../ProjectSettings/ProjectVersion.txt).
+3. **Local imports:** [.gitignore](../.gitignore) excludes the packs below even
+   though checked-in code or content uses them. Restore the project's existing
+   imports, including their dependencies and `.meta` files, at the expected
+   paths. LFS and UPM will not restore these ignored files.
+
+| Local import / expected path | Verified dependency |
+| --- | --- |
+| `Assets/Heat - Complete Modern UI/` | Required for compilation: [HeatUiStyle](../Assets/Arena/Runtime/UI/HeatUiStyle.cs), [ArenaUiTheme](../Assets/Arena/Runtime/UI/Kit/ArenaUiTheme.cs) and [HubController](../Assets/Arena/Runtime/UI/HubController.cs) directly use `Michsky.UI.Heat` types. The Hub scene also references its `ButtonManager` script. Restore the package, including `Resources/Heat UI Manager.asset`; theme color fallbacks do not remove the C# dependency. This existing import path is an exception to the preferred `Assets/ThirdParty` layout. |
+| Local additions under `Assets/ThirdParty/AssetStore/Characters/StylizedCharacter/` | NHance scripts and part of this package are tracked; later additions are ignored. [EquipmentAppearanceCatalog.asset](../Assets/Arena/Resources/CharacterAppearance/EquipmentAppearanceCatalog.asset) references ignored equipment prefabs, including `Prefabs/Item/Equipment/Helmet/Hu_M_Helm_Wizard_Bl.prefab` for `APPRENTICE_HOOD`. Restore the additions for the configured equipment appearances; do not assume either that the whole package is absent or that the tracked subset is complete. |
+| NPC packs under `Assets/ThirdParty/AssetStore/Characters/` (listed below) | Required for their configured NPC appearances. Tracked [NpcVisualProfiles](../Assets/Arena/Resources/NpcVisualProfiles/) reference ignored prefabs and animations. [NpcVisualResourceCache](../Assets/Arena/Runtime/Entity/NpcVisualResourceCache.cs) loads profiles on demand and rejects a profile whose prefab is missing. |
+| `Assets/ThirdParty/AssetStore/Environments/StylizedMaterialsBundle/` | Tracked lava/poison materials and [DefiledGroundSkullSurface.prefab](../Assets/Arena/Resources/CombatVFX/Area/Shadow/DefiledGroundSkullSurface.prefab) reference local textures from this pack. These are content dependencies, not a C# namespace requirement. |
+| `Assets/ThirdParty/AssetStore/VFX/Piloto Studio/` | Tracked [CombatVFX](../Assets/Arena/Resources/CombatVFX/) prefabs/materials retain references to ignored materials, textures and other assets in this pack. A first-party wrapper does not make its vendor dependencies self-contained. |
+
+The currently referenced local NPC pack directories are:
+
+```text
+KoboldPack/
+StylizedFantasyEnemyNPCBundle/
+StylizedFantasyEnemyNPCBundle2/
+StylizedUndeadBundle/
+FireRevenant/
+DemonBoss/
+DemonMinions/
+StylizedDragonPack/
+StylizedMimic/
+OgreTrollPack/
+RatBrute/
+Succubus2/
+StylizedUndeadHound/
+```
+
+Preserve GUIDs when restoring imports. For example,
+[FIRE_REVENANT_RD.asset](../Assets/Arena/Resources/NpcVisualProfiles/FIRE_REVENANT_RD.asset)
+references `FireRevenant/Prefabs/FireRevenant_Rd.prefab` by GUID
+`62d943ffd9ce50a44b5a55059a80b9ed`. A same-named replacement with a new `.meta`
+GUID will not repair that reference. Exact paths also matter to editor policies
+such as [NpcModelImportPolicy](../Assets/Arena/Editor/NpcModelImportPolicy.cs).
+No versioned archive manifest for these local imports was found in this review.
+This list identifies observed requirements, not proof that an arbitrary newer
+package release can reproduce the existing content.
+
+Do not infer a manual import requirement from a package name alone. The tracked
+NHance scripts already supply the character code's `NHance.*` types. Existing
+Starter Assets content is tracked too; Arena treats its controller behaviors as
+optional prefab support and strips them via
+[StarterAssetsRuntimeStripper](../Assets/Arena/Runtime/Input/StarterAssetsRuntimeStripper.cs).
+It does not require a second Starter Assets import to provide movement authority.
+The [extracted animation clips](../Assets/Arena/Content/Animation/Extracted/)
+are also tracked. Original animation source packs may be needed for re-extraction
+or authoring tools; provenance paths alone do not establish a missing runtime
+dependency.
+
+A successful C# compile in an already populated workspace does not verify that
+these assets are available from Git, or that every configured appearance/effect
+renders correctly. This review did not import packages or run a fresh-machine
+Unity session. Restore missing dependencies before using scene/catalog rebuilds
+as a troubleshooting step, since rebuilding around missing art can change
+first-party content instead of restoring its references.
+
 ## Generated Code
 
 `Assets/Arena/Runtime/Generated/SpacetimeDB/` contains generated SpacetimeDB bindings. Do not hand-edit it unless a task explicitly calls out a known generated-code workaround. The canonical shape includes the `projectile_load_harness` feature surface (netcode audit R5): bindings are always generated from a harness-featured wasm so the two regen paths (manual and `ops/republish-local-clear.sh`) produce identical output. The extra harness reducers are unused-but-harmless against a default-features module. After server schema changes, regenerate from the repo root:

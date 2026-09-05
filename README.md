@@ -4,7 +4,9 @@ Arena is a Unity project backed by a SpacetimeDB module. First-party Unity code 
 
 ## Prerequisites
 
-- Unity Editor for this project version.
+- Unity Editor for the version in [ProjectVersion.txt](ProjectSettings/ProjectVersion.txt).
+- Git LFS, with the checkout's LFS content downloaded.
+- The [local asset imports required by the current project](docs/project-structure.md#restoring-external-assets), including Heat UI for C# compilation. Some referenced content is intentionally Git-ignored.
 - SpacetimeDB CLI available as `spacetime`.
 - Rust toolchain for the SpacetimeDB module.
 
