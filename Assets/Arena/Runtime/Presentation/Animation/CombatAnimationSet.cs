@@ -410,7 +410,9 @@ namespace Arena.Presentation
         public float projectileSpawnHeight;
         [Tooltip("Override target aim height as a fraction of target capsule height. 0 uses the projectile catalog value.")]
         public float projectileAimHeightScale;
-        [Tooltip("Require line of sight to the selected target before the release is accepted.")]
+        // Retained only for old serialized assets. Ability-level requires_target_los
+        // owns targeting; melee projectile export no longer reads this field.
+        [HideInInspector]
         public bool projectileRequiresInitialLineOfSight;
         [Tooltip("Override projectile update event interval in seconds. 0 uses the projectile catalog value.")]
         public float projectileUpdateIntervalSeconds;
@@ -2548,7 +2550,6 @@ namespace Arena.Presentation
                         spawn_forward = strike.ProjectileSpawnForwardExportValue,
                         spawn_height = strike.ProjectileSpawnHeightExportValue,
                         aim_height_scale = strike.ProjectileAimHeightScaleExportValue,
-                        requires_initial_line_of_sight = strike.projectileRequiresInitialLineOfSight,
                         update_interval_seconds = strike.ProjectileUpdateIntervalSecondsExportValue,
                     }
                     : null,

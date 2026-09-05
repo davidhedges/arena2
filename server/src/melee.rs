@@ -8668,6 +8668,20 @@ mod tests {
     }
 
     #[test]
+    fn retired_projectile_los_field_remains_optional_read_compatibility() {
+        for legacy_value in [None, Some(false), Some(true)] {
+            let mut json = serde_json::json!({"projectile_id": "ARROW_STANDARD", "speed": 12.0});
+            if let Some(value) = legacy_value {
+                json["requires_initial_line_of_sight"] = serde_json::json!(value);
+            }
+            let projectile: super::StrikeProjectileData = serde_json::from_value(json).unwrap();
+            assert_eq!(projectile.projectile_id, "ARROW_STANDARD");
+            assert_eq!(projectile.speed, Some(12.0));
+            assert_eq!(projectile.requires_initial_line_of_sight, legacy_value);
+        }
+    }
+
+    #[test]
     fn auto_attack_resource_gain_is_explicit_execution_policy() {
         assert!(super::MeleeExecutionPolicy::INTRINSIC_AUTO_ATTACK.grants_primary_resource_on_hit);
         assert!(

@@ -60,6 +60,8 @@ namespace Arena.Combat
         public float spawn_forward;
         public float spawn_height;
         public float aim_height_scale;
+        // Read compatibility for older manifests; the canonical writer omits this
+        // retired field. Gameplay uses the ability's requires_target_los instead.
         public bool requires_initial_line_of_sight = true;
         public float update_interval_seconds;
     }

@@ -120,6 +120,8 @@ Attacks without an `OnStrikeHit` event retain their serialized hit-window fallba
 
 Manifest import rebuilds an event-backed attack's hit-window mirror from its assigned animation events, including effective startup trim and phased timing. Only eventless attacks import manifest hit windows through the legacy conversion. Recovery and combo import behavior is unchanged.
 
+Projectile line of sight belongs to the ability's `requires_target_los` rule. The old melee `projectileRequiresInitialLineOfSight` asset field is hidden compatibility data, and the manifest writer omits `requires_initial_line_of_sight`. Readers accept old manifests; the retired field does not control gameplay.
+
 For direct melee, each hit window schedules a `PendingMeleeImpact` on the server. For projectile weapon attacks, each hit window may schedule a projectile release instead. Multi-hit damage is currently split across hit windows.
 
 Single-clip melee may author `startupTrimSeconds` on its existing `CombatAnimationSet` attack entry. The event stays on the physical contact pose, playback begins at the trim point, and hit-window mirroring/export uses `max(0, event time - startup trim)`. A trim equal to first contact intentionally produces a zero-delay hit. Startup trim is not supported for phased melee. See `docs/melee-startup-trim-design-2026-07-16.md` for the bounded contract and Unity workflow.

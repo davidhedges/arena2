@@ -3029,7 +3029,6 @@ namespace Arena.Editor
             AppendJsonProperty(builder, indent, "spawn_forward", projectile.spawn_forward, trailingComma: true);
             AppendJsonProperty(builder, indent, "spawn_height", projectile.spawn_height, trailingComma: true);
             AppendJsonProperty(builder, indent, "aim_height_scale", projectile.aim_height_scale, trailingComma: true);
-            AppendJsonProperty(builder, indent, "requires_initial_line_of_sight", projectile.requires_initial_line_of_sight, trailingComma: true);
             AppendJsonProperty(builder, indent, "update_interval_seconds", projectile.update_interval_seconds, trailingComma: false);
         }
 

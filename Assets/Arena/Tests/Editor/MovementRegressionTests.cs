@@ -1172,10 +1172,6 @@ namespace Arena.Tests.Editor
                     (string)projectile!.GetType().GetField("projectile_id")!.GetValue(projectile)!,
                     Is.EqualTo("ARROW_STANDARD"),
                     strikeId);
-                Assert.That(
-                    (bool)projectile.GetType().GetField("requires_initial_line_of_sight")!.GetValue(projectile)!,
-                    Is.True,
-                    strikeId);
 
                 string[] inheritedNumericFields =
                 {
@@ -1196,6 +1192,29 @@ namespace Arena.Tests.Editor
                 }
             }
 
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void CombatAnimationSetEditor_ReadsLegacyProjectileLosButDoesNotExportIt(bool legacyLos)
+        {
+            Type editorType = RequireType("Arena.Editor.CombatAnimationSetEditor");
+            MethodInfo deserialize = editorType.GetMethod(
+                "DeserializeMeleeManifestDocument", BindingFlags.Static | BindingFlags.NonPublic)!;
+            MethodInfo serialize = editorType.GetMethod(
+                "SerializeMeleeManifestDocument", BindingFlags.Static | BindingFlags.NonPublic)!;
+            string json = "{\"profiles\":[{\"combat_profile\":\"ARCHER_BOW\",\"strikes\":[{\"id\":\"ARROW\","
+                + "\"projectile\":{\"projectile_id\":\"ARROW_STANDARD\",\"requires_initial_line_of_sight\":"
+                + (legacyLos ? "true" : "false") + "}}]}]}";
+            object document = deserialize.Invoke(null, new object[] { json })!;
+            object strike = GetExportedStrikes(document).GetValue(0)!;
+            object projectile = strike.GetType().GetField("projectile")!.GetValue(strike)!;
+            Assert.That(
+                (bool)projectile.GetType().GetField("requires_initial_line_of_sight")!.GetValue(projectile)!,
+                Is.EqualTo(legacyLos));
+            string exported = (string)serialize.Invoke(null, new[] { document })!;
+            Assert.That(exported, Does.Contain("ARROW_STANDARD"));
+            Assert.That(exported, Does.Not.Contain("requires_initial_line_of_sight"));
         }
 
         [Test]
