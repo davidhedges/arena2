@@ -124,7 +124,7 @@
   },
   "schema_version": 2,
   "source_contract": "docs/combat-build-v2-phase-0-contract-2026-08-29.json",
-  "source_contract_sha256": "78da9e79d9fc39e9412dc0f4438fc2eacd44306df177f6b107b8a8a92f48796c",
+  "source_contract_sha256": "451f40f8f30dcd0c394e6b01829451a564492ebfc1fc9293960c30017492cbc0",
   "specializations": [
     {
       "combat_discipline_id": "DAGGERS",

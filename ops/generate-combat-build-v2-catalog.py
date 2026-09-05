@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the compact runtime Combat Build v2 catalog from the locked ledger."""
+"""Generate the compact runtime Combat Build v2 catalog from its reviewed ledger."""
 
 from __future__ import annotations
 
@@ -36,23 +36,49 @@ def make_catalog(contract_path: Path, progression_path: Path) -> dict[str, Any]:
     progression_abilities = {
         row["ability_id"]: row for row in progression["abilities"]
     }
+    if len(progression_abilities) != len(progression["abilities"]):
+        raise ValueError("progression contains duplicate ability ids")
 
     classified = contract["feature_classification"]
     grouped: dict[str, dict[str, list[str]]] = {}
     for specialization in contract["specializations"]:
-        grouped[specialization["specialization_id"]] = {
+        specialization_id = specialization["specialization_id"]
+        if specialization_id in grouped:
+            raise ValueError(f"duplicate specialization {specialization_id}")
+        grouped[specialization_id] = {
             "TECHNIQUE": [],
             "SPELL": [],
             "PERK": [],
         }
+    classified_ids: set[str] = set()
     for row in classified:
         ability_id = row["ability_id"]
         if ability_id not in progression_abilities:
             raise ValueError(f"classified ability {ability_id} is absent from progression")
-        grouped[row["proposed_specialization_id"]][row["loadout_kind"]].append(ability_id)
+        if ability_id in classified_ids:
+            raise ValueError(f"ability {ability_id} is classified more than once")
+        classified_ids.add(ability_id)
+        specialization_id = row["proposed_specialization_id"]
+        if specialization_id not in grouped:
+            raise ValueError(f"ability {ability_id} has unknown specialization {specialization_id}")
+        loadout_kind = row["loadout_kind"]
+        if loadout_kind not in grouped[specialization_id]:
+            raise ValueError(f"ability {ability_id} has unsupported loadout kind {loadout_kind}")
+        grouped[specialization_id][loadout_kind].append(ability_id)
 
-    def ability_sort(ability_id: str) -> tuple[int, str]:
-        return (int(progression_abilities[ability_id]["sort_order"]), ability_id)
+    selectable_ids = {
+        ability_id
+        for ability_id, row in progression_abilities.items()
+        if row["actor_scope"] == "PLAYER"
+        and row["selection_kind"] in {"ACTIVE", "PASSIVE"}
+    }
+    missing = sorted(selectable_ids - classified_ids)
+    unexpected = sorted(classified_ids - selectable_ids)
+    if missing or unexpected:
+        raise ValueError(
+            "classification must cover exactly the selectable player abilities: "
+            f"missing={missing}, unexpected={unexpected}"
+        )
 
     specializations = []
     for row in contract["specializations"]:
@@ -61,9 +87,12 @@ def make_catalog(contract_path: Path, progression_path: Path) -> dict[str, Any]:
         specializations.append(
             {
                 **row,
-                "technique_ability_ids": sorted(features["TECHNIQUE"], key=ability_sort),
-                "spell_ability_ids": sorted(features["SPELL"], key=ability_sort),
-                "perk_ability_ids": sorted(features["PERK"], key=ability_sort),
+                # The ledger owns membership and order within each feature kind.
+                # Progression sort_order is separate metadata and must not
+                # silently reorder a reviewed build catalog during regeneration.
+                "technique_ability_ids": features["TECHNIQUE"],
+                "spell_ability_ids": features["SPELL"],
+                "perk_ability_ids": features["PERK"],
             }
         )
 

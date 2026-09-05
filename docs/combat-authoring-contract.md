@@ -52,6 +52,16 @@ reviewed classification ledger in
 catalog. Change the reviewed ledger and regenerate; do not patch the compact
 catalog by hand.
 
+The ledger's `feature_classification` array is maintained with the implemented
+roster. Its order within each Specialization and feature kind determines the
+generated ability-array order; progression `sort_order` remains separate
+metadata. The generator requires every selectable player ability to be
+classified exactly once and rejects missing, duplicate, or non-player entries.
+The ledger retains its historical Phase 0 filename and fixture inventory;
+updating current classification must preserve those fixtures and existing
+saved-build compatibility. Earlier cutover annotations are historical context,
+not an instruction to reset current builds.
+
 The pure validator and materializer live in
 `server/src/combat_build_v2.rs`. Hub saves, Hub-to-match snapshots, PvP, and
 open-world matches all use that contract. There is no v1 build adapter or
@@ -176,6 +186,7 @@ Run, in proportion to the changed surfaces:
 
 ```bash
 python3 ops/generate-combat-build-v2-catalog.py --check
+python3 -m unittest discover -s ops -p test_combat_build_v2_catalog.py
 python3 ops/test-combat-build-v2-compositions.py
 cargo test --manifest-path server/Cargo.toml --lib --no-fail-fast
 cargo test --manifest-path hub-server/Cargo.toml --lib --no-fail-fast
