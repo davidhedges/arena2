@@ -42,6 +42,41 @@ phased clips, cast-motion bindings, and weapon presentation.
 `server/src/melee_manifest.shared.json` is exported from those animation sets;
 do not hand-edit it to repair identity drift.
 
+### VFX cue ownership
+
+`combat_vfx_cues` in progression is the runtime cue authority. School palettes
+and per-spell slot overrides supply editor generation inputs; editing those
+assets does not automatically replace runtime cue rows.
+
+| Concept | Owner and rule |
+| --- | --- |
+| Cue structure | `SpellVfxGenerator` derives triggers, roles, attachment, and lifetime policy from gameplay and animation facts. Rust `vfx_generation.rs` validates field relationships; it does not generate another catalog. |
+| Slot look | `SchoolVfxSet` supplies the school default; `SpellVfxOverrideCatalog` supplies explicit per-ability slot exceptions. VFX palette school is presentation metadata, separate from a selected build School. |
+| Cast hand | Resolved animation origin, mirroring, then gesture/clip inference. There is no separate VFX override; missing presentation retains the existing left-hand default. |
+| Prefab and scale | Runtime `CombatVFXRegistry` owns the live ID-to-prefab binding and scale. Palette prefab/scale fields document or validate that mapping. |
+| Authored runtime cue | Progression owns the effective cue fields until a reviewed editor write materializes the agreed generated rows. An explicit `slot` identifies a row; it is not a generated/manual ownership flag. |
+| Manual and legacy exceptions | Changed, catalog-only, or ambiguous slots require manual reconciliation. The generator's writer targets `ABILITY` owners only and preserves other owner kinds, even when their IDs match. |
+
+The generated-cue panel compares candidate output with the loaded catalog.
+Its write button permits matching rows and additional generated slots only
+when the existing inference/diff guards pass. Existing rows retain their
+`sort_order` and unrelated fields; unmatched authored rows are not deleted.
+The file writer rejects a catalog that changed since the preview was loaded.
+Reload and review the new comparison before writing again. This stale-preview
+check is not a general file locking mechanism.
+
+CharacterFx variants use the same normalized slot identity on generated and
+explicit keys: `Body Rings` becomes `character_fx/body_rings`. Multiple
+CharacterFx entries require distinct variant IDs. The current catalog has
+166 explicit slot keys among 179 cues; that count does not establish which
+rows are safe to regenerate automatically.
+
+The remaining `SPELL`-owned Ice Spikes cue is compatibility data. Its
+`ABILITY` counterpart suppresses it when ability identity is present, but
+an empty-ability fact still needs the fallback. Keep it until all relevant
+event and prediction paths are proven to carry the ability ID. Do not infer
+that the duplicate row renders the effect twice.
+
 ### Build taxonomy
 
 `server/src/combat_build_v2_catalog.shared.json` is the compact runtime build

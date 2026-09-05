@@ -230,6 +230,60 @@ namespace Arena.Tests.Editor
             AssertValidJson(output);
         }
 
+        [TestCase(true)]
+        [TestCase(false)]
+        public void Splice_TargetsAbilityOwnerWithoutRewritingSameIdLegacySpell(bool hasAbilityRow)
+        {
+            const string legacy = "{\"owner_kind\":\"SPELL\",\"owner_id\":\"SPELL_TEST\",\"trigger\":\"AREA_IMPACT\",\"vfx_id\":\"VFX_KEEP_LEGACY\",\"sort_order\":110}";
+            const string ability = "{\"owner_kind\":\"ABILITY\",\"owner_id\":\"SPELL_TEST\",\"trigger\":\"SPELL_RELEASE\",\"vfx_id\":\"VFX_OLD\",\"sort_order\":110}";
+            string catalog = "{\"combat_vfx_cues\":[" + legacy + (hasAbilityRow ? "," + ability : "") + "]}";
+            var rows = new List<object>
+            {
+                Row("projectile_body", "SPELL_RELEASE", "LEFT_HAND", "VFX_NEW", "SPAWN_WORLD", "PROJECTILE_BODY", "UNTIL_TERMINAL_EVENT", 0, 0, 110),
+            };
+
+            string output = Splice(catalog, "SPELL_TEST", rows);
+            Assert.That(output, Does.Contain(legacy), "legacy namespace must remain byte-identical");
+            Assert.That(output, Does.Contain("\"owner_kind\": \"ABILITY\""));
+            Assert.That(output, Does.Contain("\"vfx_id\": \"VFX_NEW\""));
+            Assert.That(output, Does.Not.Contain("VFX_OLD"));
+            AssertValidJson(output);
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void FileWrite_RequiresTheCatalogUsedByThePreview(bool unchangedSincePreview)
+        {
+            const string preview = "{\"combat_vfx_cues\":[{\"owner_kind\":\"ABILITY\",\"owner_id\":\"SPELL_TEST\",\"vfx_id\":\"VFX_OLD\",\"sort_order\":10}]}";
+            string manualEdit = preview.Replace("VFX_OLD", "VFX_MANUAL_EDIT");
+            string path = Path.Combine(Path.GetTempPath(), $"arena-cue-write-{Guid.NewGuid():N}.json");
+            try
+            {
+                File.WriteAllText(path, unchangedSincePreview ? preview : manualEdit);
+                Array rows = Array.CreateInstance(RowType, 1);
+                rows.SetValue(Row("impact", "SPELL_IMPACT", "IMPACT_POINT", "VFX_NEW", "SPAWN_WORLD",
+                    "ONE_SHOT", "DURATION", null, 500, 10), 0);
+                MethodInfo write = WriterType.GetMethod("WriteOwnerCues")!;
+                object[] arguments = { path, "SPELL_TEST", rows, preview };
+                if (unchangedSincePreview)
+                {
+                    Assert.That((bool)write.Invoke(null, arguments)!, Is.True);
+                    Assert.That(File.ReadAllText(path), Does.Contain("VFX_NEW"));
+                }
+                else
+                {
+                    var error = Assert.Throws<TargetInvocationException>(() => write.Invoke(null, arguments));
+                    Assert.That(error!.InnerException, Is.TypeOf<InvalidOperationException>());
+                    Assert.That(error.InnerException!.Message, Does.Contain("changed since this preview"));
+                    Assert.That(File.ReadAllText(path), Is.EqualTo(manualEdit));
+                }
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
         // The authoring window's sort_order-assignment policy for inserted (generator-only) slots. The
         // load-bearing property (the writer joins rows by sort_order) is that an inserted row never
         // collides with an authored row or another inserted row — so it is strictly past the owner's
@@ -291,6 +345,11 @@ namespace Arena.Tests.Editor
                 "CharacterFx", "Shoulder Flames", 2, out string second, out _), Is.True);
             Assert.That(second, Is.EqualTo("character_fx/shoulder_flames"));
             Assert.That(first, Is.Not.EqualTo(second));
+            MethodInfo normalize = EditorAssembly.GetType("Arena.Editor.SpellAuthoringWindow", true)!
+                .GetMethod("TryNormalizeExplicitSlotKey", BindingFlags.Static | BindingFlags.NonPublic)!;
+            object?[] arguments = { "character_fx/Body   Rings", null };
+            Assert.That((bool)normalize.Invoke(null, arguments)!, Is.True);
+            Assert.That(arguments[1], Is.EqualTo(first), "explicit and generated identities must agree");
 
             Assert.That(TryBuildGeneratedSlotKey(
                 "CharacterFx", "", 2, out _, out string error), Is.False);

@@ -116,12 +116,17 @@ namespace Arena.Editor
         private const int UnknownKeyOrderBase = 1000;
 
         /// <summary>
-        /// Reads <paramref name="catalogPath"/>, splices <paramref name="rows"/> into the owner's
-        /// rows, and writes the result back. Returns <c>true</c> if the file content changed.
+        /// Reads <paramref name="catalogPath"/>, splices <paramref name="rows"/> into the ABILITY
+        /// owner's rows, and writes the result back. Other owner kinds remain untouched even when
+        /// they share the same owner ID. Returns <c>true</c> if the file content changed.
         /// </summary>
-        public static bool WriteOwnerCues(string catalogPath, string ownerId, IReadOnlyList<SpellCueRow> rows)
+        public static bool WriteOwnerCues(
+            string catalogPath, string ownerId, IReadOnlyList<SpellCueRow> rows, string expectedCatalogJson)
         {
             string original = File.ReadAllText(catalogPath);
+            if (!string.Equals(original, expectedCatalogJson, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "The catalog changed since this preview was loaded. Reload the spell authoring window before writing generated cues.");
             string updated = SpliceOwnerCues(original, ownerId, rows);
             if (string.Equals(original, updated, StringComparison.Ordinal))
                 return false;
@@ -134,7 +139,7 @@ namespace Arena.Editor
         /// Returns <paramref name="catalogJson"/> with <paramref name="ownerId"/>'s
         /// <c>combat_vfx_cues</c> materialised from <paramref name="rows"/>. Pure and deterministic —
         /// every byte outside the owner's rows is preserved exactly. Correspondence is by
-        /// <c>sort_order</c>:
+        /// <c>sort_order</c> within the selected ABILITY owner:
         /// <list type="bullet">
         /// <item>a provided row whose <c>sort_order</c> matches an existing owner row <b>updates</b> it
         /// in place (generator-owned fields overwritten, <c>slot</c> inserted, everything else — incl.
@@ -173,12 +178,14 @@ namespace Arena.Editor
             // Which spans belong to this owner, in file order, with the sort_order each carries.
             var targets = new List<(int Start, int End, int SortOrder)>();
             var targetSortOrders = new HashSet<int>();
-            string ownerKind = "ABILITY"; // borrowed from an existing row; the default for a brand-new owner.
+            const string ownerKind = "ABILITY";
             foreach ((int start, int end) in objectSpans)
             {
                 string objText = body.Substring(start, end - start);
                 List<KeyValuePair<string, object>> fields = ParseFlatObject(objText, out _, out _);
-                if (!TryGetString(fields, "owner_id", out string owner)
+                if (!TryGetString(fields, "owner_kind", out string kind)
+                    || !string.Equals(NormalizeOwnerId(kind), ownerKind, StringComparison.Ordinal)
+                    || !TryGetString(fields, "owner_id", out string owner)
                     || !string.Equals(NormalizeOwnerId(owner), normalizedOwner, StringComparison.Ordinal))
                 {
                     continue;
@@ -190,8 +197,6 @@ namespace Arena.Editor
                 if (!targetSortOrders.Add(sortOrder))
                     throw new InvalidOperationException(
                         $"Owner '{ownerId}' has duplicate sort_order {sortOrder}; cannot match generated rows unambiguously.");
-                if (targets.Count == 0 && TryGetString(fields, "owner_kind", out string kind) && kind.Length > 0)
-                    ownerKind = kind;
                 targets.Add((start, end, sortOrder));
             }
 

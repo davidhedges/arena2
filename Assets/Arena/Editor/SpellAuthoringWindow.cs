@@ -32,6 +32,7 @@ namespace Arena.Editor
         private bool _knownTemplateIdsLoaded;
 
         private ProgressionCatalogDocument? _catalog;
+        private string _loadedCatalogJson = string.Empty;
         private SpellCastAnimationMap? _spellAnimationMap;
         private SpellCastAnimationCatalog? _spellAnimationCatalog;
         private CombatAnimationSet[] _animationSets = Array.Empty<CombatAnimationSet>();
@@ -1154,6 +1155,7 @@ namespace Arena.Editor
 
         private void Load()
         {
+            _loadedCatalogJson = string.Empty;
             DestroyCastAnimationPreview();
             InvalidateGeneratedCueCache();
             _loadErrors.Clear();
@@ -1178,7 +1180,8 @@ namespace Arena.Editor
 
             try
             {
-                _catalog = JsonUtility.FromJson<ProgressionCatalogDocument>(File.ReadAllText(absolutePath));
+                _loadedCatalogJson = File.ReadAllText(absolutePath);
+                _catalog = JsonUtility.FromJson<ProgressionCatalogDocument>(_loadedCatalogJson);
             }
             catch (Exception ex)
             {

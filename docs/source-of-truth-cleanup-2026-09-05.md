@@ -1,10 +1,12 @@
 # Source-of-truth cleanup handoff — 2026-09-05
 
-The approved six-item batch is complete. This document records its boundaries,
-validation, and remaining conflicts. The proposed migrations below are not
-approved implementation items; they require a separate scope decision.
+This document records the initial six-item cleanup and the subsequent approved
+five-item authoring batch. The second batch implemented four items and retained
+the Ice Spikes compatibility cue after demonstrating why its removal is unsafe
+for empty-ability facts. Further migrations listed below require a separate
+scope decision.
 
-## Completed batch
+## First batch: completed
 
 | Item | Result | Local commit |
 | --- | --- | --- |
@@ -26,7 +28,7 @@ This batch follows the earlier reproducible v2 generator/classification
 repair (`8536aeed`) and shared upfront-cost resolver (`3ebd6286`). Those fixes
 remain in place; this batch does not migrate the remaining cost fields.
 
-## Repeatable checks and evidence
+## First batch validation
 
 Run from the repository root:
 
@@ -86,108 +88,110 @@ are in `/private/tmp/arena2-truth-cleanup.zDkf7R`. These are temporary local
 evidence, not checked-in player data. CI wiring was validated locally; no
 remote workflow was triggered and nothing was pushed.
 
-## Remaining animation/VFX conflicts
+## Second approved batch
 
-### Melee event timing still has a writable compatibility path
+| Item | Result | Local commit |
+| --- | --- | --- |
+| Protect melee timing | Manifest import rebuilds event-backed mirrors from animation events, including startup trim and phased timing. Eventless import conversion, recovery, and combo behavior are unchanged. | `19be6834` |
+| Retire ignored melee LOS control | Hid the old serialized asset field, removed its exporter input and 11 ignored manifest fields, and retained old-manifest read compatibility. Ability targeting rules are unchanged. | `62be044a` |
+| Resolve Ice Spikes duplicate if safe | Retained the fallback. Four behavioral cases demonstrate that removing it loses the effect for an empty-ability fact. | `99dec9c1` |
+| Consolidate cast-hand ownership | Removed the unused per-spell option and 39 serialized `Auto` values. Resolved animation origin/mirroring and existing inference/default behavior remain authoritative. | `87680d19` |
+| Clarify VFX authoring | Documented field ownership, corrected preview guidance, restricted generated writes to ABILITY owners, rejected stale-preview writes, and aligned explicit/generated CharacterFx variant keys. | This update's commit |
 
-The [animation contract](combat-animation-authoring-contract.md#hit-windows)
-declares assigned `OnStrikeHit` clip events authoritative for migrated
-attacks. `WeaponStrikeCombatAuthoring.hitWindows` is their compatibility
-mirror, and the melee manifest is exported output. Attacks without events
-still use serialized hit windows; that fallback is intentional until each
-attack is migrated. Startup trim changes the effective event time, so a
-raw timestamp copy is not sufficient to prove equivalence.
+The current ownership rules are in the
+[VFX authoring contract](combat-authoring-contract.md#vfx-cue-ownership) and
+[animation contract](combat-animation-authoring-contract.md). This batch did
+not regenerate VFX cues, change clips, retime attacks, or edit prefab wiring.
+The progression catalog and generated network bindings are unchanged.
 
-In [CombatAnimationSetEditor.cs](../Assets/Arena/Editor/CombatAnimationSetEditor.cs),
-`CollectStrikeValidationMessages` resolves events first and warns about
-missing events or stale mirrors. However, `ImportCurrentManifest` still
-writes `authored.hitWindows = BuildImportedHitWindows(...)` from the exported
-manifest back into the asset. That creates a reverse writer for data the
-contract otherwise treats as derived.
+Second-batch evidence is in `/private/tmp/arena2-authoring-cleanup.7R38au`:
 
-Proposed bounded next step: guard the reverse import for event-backed
-attacks and keep eventless fallback handling explicit. First record the
-affected strikes and effective hit/recovery times through a normal Editor
-workflow, then prove those values remain unchanged. Migrating eventless
-attacks is a separate per-attack task; this batch neither counted those
-attacks through Unity nor stamped or retimed clips.
+- Baseline: 821 server tests and 25 Hub tests passed; all 62 current profiles
+  and associated v2 saved-build rows were snapshotted before editing.
+- Final catalog gate: 822 server tests, 25 Hub tests, 19 Python tests, and
+  8 Ruby tests / 14 assertions pass. Shared mirrors and 329 NPC references
+  still validate.
+- The editor and test assemblies compile with .NET against the installed
+  Unity references. Twenty-six selected managed regression cases run against
+  those compiled assemblies: four Ice Spikes cases, eight cast-hand cases,
+  and fourteen cue-writer cases. This starts no Unity process and does not
+  substitute for Editor import, native animation tests, or visual verification.
+- All eight cast-hand before/after resolver snapshots are identical. The
+  VFX override asset changed only by deleting 39 unused `castHand: 0` lines;
+  every slot look, duration, prefab reference, and GUID was preserved.
+- The melee manifest changed only by removing 11
+  `requires_initial_line_of_sight: true` entries. Every other parsed value,
+  including hit/recovery timings and projectile tuning, is identical.
+- Data-preserving local setup passed; all 62 original saved profiles/builds
+  and every Hub catalog row survived unchanged. The anonymous match probe
+  applied the nonempty Hub build and equipment under the same identity and
+  cleaned up successfully. It added one test profile.
+- Latest verified match build: `sha256-4baa709449388f554fad`.
+  Source fingerprint:
+  `22b1170b6ae57b070de4273a3a1d18b850bf253d832f2344fbcf8774a2cd7247`.
+  WASM SHA-256:
+  `4baa709449388f554fadd7d8aee78f80bab723cf927255bb353fd930674515d3`.
 
-### An exported melee line-of-sight setting no longer controls gameplay
+Validation limitations remain explicit:
 
-`CombatAnimationSet` still exposes
-`projectileRequiresInitialLineOfSight`, and its exporter writes
-`requires_initial_line_of_sight`. There are **11** such fields in the
-current melee manifest, all `true`. The C# manifest schema and an Editor
-regression assertion still retain the field.
+- Unity-dependent animation/import tests were added and compiled but were
+  not executed; the Editor was closed. Visual verification is still pending.
+- A broader managed run found
+  `PhotosynthesisVfx_ScalesOnlyTheAuthoredLeafFlecksWithStacks` failing a
+  source-text assertion about `main.maxParticles`. Both that test body and
+  the production file are identical to the batch baseline. It was left
+  unchanged because Photosynthesis behavior is outside this batch. A separate
+  existing CharacterFx whitespace-normalization failure was directly within
+  the cue identity work and is fixed and passing.
+- `rustfmt --check` reports the same wrapping-only difference in the existing
+  `effective_melee_timed_movement_start_delay_ms` assertion as the saved
+  pre-edit source. That unrelated formatting was preserved.
 
-In [server/src/melee.rs](../server/src/melee.rs), the deserialization field
-explicitly says it is superseded by ability-level `requires_target_los` and
-is never consulted. The runtime projectile path repeats that distinction.
-Thus the authoring switch suggests control it no longer has.
+## Remaining work
 
-Proposed migration: retire the ineffective melee authoring switch and stop
-emitting that melee-manifest field, while retaining compatibility parsing
-as needed. Verify the actual ability LOS/range rules and projectile behavior
-before and after. Do not remove the similarly named generated projectile
-table field across all systems as part of this narrow cleanup.
+### Ice Spikes identity prerequisite
 
-### VFX generation inputs and runtime cue rows are both editable
+The catalog still contains 178 `ABILITY` cues and one `SPELL` cue. For
+`SPELL_ICE_SPIKES`, the ABILITY row suppresses the equivalent legacy SPELL
+row. Without ability identity, the resolver uses the SPELL row; deleting it
+produces zero cues. The new tests execute that behavior using the real
+resolver, including both retained/removed and present/missing identity cases.
 
-School palettes under
-`Assets/Arena/Editor/SpellPresentation/SchoolVfxSets/`, the 39 entries in
-`SpellVfxOverrideCatalog.asset`, and gameplay/animation facts feed
-`SpellVfxGenerator`. Runtime effects consume the authored
-`combat_vfx_cues` in progression plus the prefab mappings in
-`Assets/Arena/Resources/CombatVFX/CombatVFXRegistry.asset`.
+`CombatVFXDispatcher.BuildFact` forwards `CombatEvent.AbilityId` without
+requiring a nonempty value. Its predicted area-impact path uses
+`ResolveLocalAbilityId`, which can return an empty selected-action lookup.
+The server's `ability_id_for_spell` also returns an empty string when neither
+player selection nor NPC lookup resolves. Normal area and delayed-area
+paths propagate the supplied identity, but this batch did not prove every
+producer can never supply an empty value.
 
-These layers can be a valid authoring-to-output pipeline, but ownership is
-not yet uniformly enforced. In
-[SpellAuthoringWindow.CueGeneration.cs](../Assets/Arena/Editor/SpellAuthoringWindow.CueGeneration.cs),
-`DrawGeneratedCuePreview` still describes a read-only preview, while
-`DrawWriteToCatalogButton` and `ConfirmAndWriteOwnerCues` provide a guarded
-catalog writer. The writer blocks ambiguous slots, changed matched rows,
-and catalog-only rows; it permits exact matches and added generated slots.
-Those safeguards should be preserved, rather than replaced with blanket
-regeneration. `server/src/vfx_generation.rs` is a validator of cue field
-relationships, not a second generator.
+Before removing the fallback, establish and test that invariant across
+prediction, authoritative events, and any trusted or compatibility cast
+paths. The batch deliberately preserved the cue instead of changing identity
+semantics to make its removal possible.
 
-Proposed migration: identify which existing cue slots are generated and
-which are intentional manual exceptions. Preserve each effective cue's
-prefab, trigger, anchor, attachment, lifetime, and ordering; make only the
-agreed generated slots derived output. Update the misleading preview help
-text together with that authoring workflow. Verify representative spells
-visually before widening the migration.
+### Remaining melee fallback migration
 
-### Ice Spikes has an active legacy cue fallback
+The reverse import path is now guarded by animation event authority.
+Eventless attacks still have serialized hit windows. Any migration of those
+attacks needs a normal Editor inventory and per-attack effective timing
+comparison, including startup trim and phased clips. No clip stamping or
+fallback removal was performed in this batch.
 
-The catalog currently has **178 `ABILITY` cues and one `SPELL` cue**.
-`SPELL_ICE_SPIKES` owns an `ABILITY` / `AREA_IMPACT` cue at sort order 30;
-`ICE_SPIKES` owns a `SPELL` / `AREA_IMPACT` cue at sort order 31. They specify
-the same effect, anchor, attachment, and 2500 ms duration.
+### VFX generation remains an explicit authoring operation
 
-[CombatVfxCueResolver.cs](../Assets/Arena/Runtime/Presentation/CombatVfxCueResolver.cs)
-adds ability cues first and suppresses matching spell cues by an override
-key. For an Ice Spikes fact carrying `SPELL_ICE_SPIKES`, the second row is
-therefore a shadowed fallback, not evidence that the effect renders twice.
-Facts without that ability identity may still use the legacy row.
+The writer now respects ABILITY owner boundaries and rejects stale catalog
+previews. It preserves manual/legacy rows and existing fields, but the catalog
+is not globally generated output. Its 166 explicit slot keys identify rows;
+they do not declare 166 automatically generated rows.
 
-Proposed migration: verify every Ice Spikes event/reconstruction path
-supplies the ability identity, cover the effective resolved output, then
-remove that one redundant row if it is no longer needed. Retiring the
-entire `SPELL` owner kind is a separate compatibility decision.
-
-### Cast hand retains an unused authoring fallback
-
-`ResolveCastHandAnchor` prefers the animation-owned cast origin, then the
-older per-spell VFX `castHand` override, then inferred animation/default
-hand. All **39 current overrides are `Auto`**; there is no explicit
-left/right override in the current asset. This is a remaining parallel
-authoring option, not an observed wrong-hand bug.
-
-Proposed migration: establish animation-owned origins for the relevant
-recipes, verify mirrored poses and projectile origins, then retire the
-unused per-spell hand override. Preserve the existing resolution until
-that evidence exists.
+A future migration must identify which cue slots are reproducible from
+palettes, overrides, gameplay, and animation metadata, and which remain
+intentional manual exceptions. Preserve effective prefab, trigger, anchor,
+attachment, lifetime, and ordering for each migrated slot and verify visuals
+before widening that scope. The registry's prefab/scale authority also remains
+separate from palette documentation fields. No blanket regeneration or
+registry migration was done.
 
 ## Other boundaries still worth tracking
 

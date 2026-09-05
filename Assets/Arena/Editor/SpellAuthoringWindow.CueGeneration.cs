@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Arena.Combat;
 using Arena.Presentation;
 using UnityEditor;
@@ -137,9 +138,11 @@ namespace Arena.Editor
             EditorGUILayout.LabelField("Generated Cues (SpellVfxGenerator)", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
                 "Archetype-derived cues from SpellVfxGenerator + SchoolVfxSet assets, diffed against "
-                + "the authored combat_vfx_cues rows above. A zero diff means the generator reproduces the "
-                + "authored cues exactly (only vfx_id/duration come from the palette). Read-only preview — it "
-                + "does not write progression_catalog.shared.json.",
+                + "the runtime combat_vfx_cues rows above. This comparison does not save changes. "
+                + "The Write Cues to Catalog button below can update matching ABILITY rows and add "
+                + "generated slots after confirmation. Changed, catalog-only, or ambiguous slots require "
+                + "manual reconciliation before writing. A slot key identifies a cue; it does not "
+                + "mark that cue as automatically generated.",
                 MessageType.Info);
 
             GeneratedCuePreview preview = GetOrBuildGeneratedCuePreview(
@@ -432,7 +435,8 @@ namespace Arena.Editor
                 return true;
             }
 
-            string variant = WireIdentifier.Normalize(variantId);
+            // Variant display names and their authored identifiers share one slot key.
+            string variant = NormalizeSlotVariant(variantId);
             if (variant.Length == 0)
             {
                 if (entryCount == 1)
@@ -759,7 +763,8 @@ namespace Arena.Editor
             string absolutePath = SpellPresentationEditorData.AbsoluteProgressionCatalogPath;
             try
             {
-                bool changed = SpellCueCatalogWriter.WriteOwnerCues(absolutePath, abilityId, rows);
+                bool changed = SpellCueCatalogWriter.WriteOwnerCues(
+                    absolutePath, abilityId, rows, _loadedCatalogJson);
                 if (changed)
                 {
                     EditorUtility.DisplayDialog(
@@ -858,7 +863,7 @@ namespace Arena.Editor
             string normalized = value.Trim().ToLowerInvariant();
             if (normalized.StartsWith("character_fx/", System.StringComparison.Ordinal))
             {
-                string variant = WireIdentifier.Normalize(normalized.Substring("character_fx/".Length));
+                string variant = NormalizeSlotVariant(normalized.Substring("character_fx/".Length));
                 if (variant.Length > 0)
                 {
                     slotKey = $"character_fx/{variant.ToLowerInvariant()}";
@@ -875,6 +880,9 @@ namespace Arena.Editor
             slotKey = string.Empty;
             return false;
         }
+
+        private static string NormalizeSlotVariant(string value)
+            => Regex.Replace(WireIdentifier.Normalize(value), @"\s+", "_");
 
         private static bool TryParseSlotKey(string slotKey, out SpellVfxSlot slot)
         {
