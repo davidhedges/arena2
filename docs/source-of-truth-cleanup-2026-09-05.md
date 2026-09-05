@@ -346,6 +346,16 @@ tables were snapshotted before editing.
   changed. Recovery, combo, delivery, all other manifest fields, and every
   authored asset are unchanged. All 84 server melee tests pass. Local runtime
   publication and final Unity checks belong to item 4.
+- **Item 2 complete:** the normal Editor refreshed exactly the 34 inventoried
+  mirrors, updating their `hitWindows` and first-hit `impactNormalized` copies.
+  Complete exports of all five profiles are identical before/after the mirror
+  refresh. Parsed asset comparisons prove every other field is unchanged;
+  unrelated default-field serialization from two older assets was removed.
+  The existing exporter/writer supplied the 12 missing positive
+  `startup_trim_ms` values. No other manifest field changed, and none of those
+  action IDs authors timed movement in progression. All 84 server melee tests
+  pass after this metadata update. The five eventless entries retain their
+  existing fallback values, and no Staff strike was added.
 
 ## Remaining work
 

@@ -106,6 +106,7 @@
                 {
                     "id": "SWORD_AND_SHIELD_ALT_LIGHT_3",
                     "slot_id": "alt_light_3",
+                    "startup_trim_ms": 181,
                     "hit_windows": [
                         {
                             "impact_delay_ms": 93
@@ -361,6 +362,7 @@
                 {
                     "id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",
                     "slot_id": "light_combo_1",
+                    "startup_trim_ms": 186,
                     "hit_windows": [
                         {
                             "impact_delay_ms": 76
@@ -376,6 +378,7 @@
                 {
                     "id": "WARRIOR_MAIM",
                     "slot_id": "maim",
+                    "startup_trim_ms": 186,
                     "hit_windows": [
                         {
                             "impact_delay_ms": 76
@@ -391,6 +394,7 @@
                 {
                     "id": "COMBO_ATTACK_1_2_LOW_TO_HIGH",
                     "slot_id": "light_combo_2",
+                    "startup_trim_ms": 151,
                     "hit_windows": [
                         {
                             "impact_delay_ms": 49
@@ -406,6 +410,7 @@
                 {
                     "id": "WARRIOR_CARVE",
                     "slot_id": "carve",
+                    "startup_trim_ms": 151,
                     "hit_windows": [
                         {
                             "impact_delay_ms": 49
@@ -421,6 +426,7 @@
                 {
                     "id": "COMBO_ATTACK_1_3_GROUND_TO_AIR",
                     "slot_id": "light_3",
+                    "startup_trim_ms": 123,
                     "hit_windows": [
                         {
                             "impact_delay_ms": 52
@@ -454,6 +460,7 @@
                 {
                     "id": "COMBO_ATTACK_2_1_SPIN",
                     "slot_id": "alt_light_1",
+                    "startup_trim_ms": 151,
                     "hit_windows": [
                         {
                             "impact_delay_ms": 149
@@ -469,6 +476,7 @@
                 {
                     "id": "COMBO_ATTACK_2_2_HIGH_TO_LOW",
                     "slot_id": "alt_light_2",
+                    "startup_trim_ms": 188,
                     "hit_windows": [
                         {
                             "impact_delay_ms": 190
@@ -499,6 +507,7 @@
                 {
                     "id": "COMBO_ATTACK_2_4_LUNGE",
                     "slot_id": "alt_heavy_gapclose",
+                    "startup_trim_ms": 134,
                     "hit_windows": [
                         {
                             "impact_delay_ms": 166
@@ -923,6 +932,7 @@
                 {
                     "id": "ARCHER_HEARTSEEKER",
                     "slot_id": "heartseeker_slot",
+                    "startup_trim_ms": 125,
                     "hit_windows": [
                         {
                             "impact_delay_ms": 210
@@ -1596,6 +1606,7 @@
                 {
                     "id": "COMBO_ATTACK_1_1_HIGH_TO_LOW",
                     "slot_id": "light_combo_1",
+                    "startup_trim_ms": 117,
                     "hit_windows": [
                         {
                             "impact_delay_ms": 35
@@ -1656,6 +1667,7 @@
                 {
                     "id": "WARRIOR_MAIM",
                     "slot_id": "maim",
+                    "startup_trim_ms": 117,
                     "hit_windows": [
                         {
                             "impact_delay_ms": 35
