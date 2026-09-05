@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use serde::{de, Deserialize, Deserializer, Serialize};
 
+use crate::ability_cost::authored_upfront_resource_cost;
 use crate::combat::scene_query::CombatAreaShape;
 use crate::combat::{
     AuthoredStatusPayload, DamageType, StackPolicy, StatusApplication, StatusDispelType,
@@ -1067,11 +1068,11 @@ fn spell_gameplay_spell_rows_from_value(
 
 impl SpellGameplayCatalogRow {
     fn into_spell_row(self, ability: SpellAbilityCatalogRow) -> Result<SpellCatalogRow, String> {
-        let authored_spell_resource_cost = if self.resource_cost > 0.0 {
-            self.resource_cost
-        } else {
-            ability.resource_cost
-        };
+        let authored_spell_resource_cost = authored_upfront_resource_cost(
+            &ability.gameplay.kind,
+            ability.resource_cost,
+            self.resource_cost,
+        );
         let resource_cost = match &self.delivery {
             SpellCatalogDelivery::Channel {
                 resource_cost_per_second,
@@ -4272,6 +4273,36 @@ mod tests {
             .collect();
 
         assert_eq!(derived, authored);
+    }
+
+    #[test]
+    fn selectable_feature_cost_metadata_matches_runtime_upfront_costs() {
+        let build_catalog = crate::combat_build_v2::CombatBuildV2Catalog::from_shared_catalogs()
+            .expect("build catalog");
+        let progression: serde_json::Value =
+            serde_json::from_str(PROGRESSION_CATALOG_JSON).expect("progression catalog");
+        let abilities = progression["abilities"].as_array().unwrap();
+        for feature in build_catalog.feature_definitions() {
+            let ability = abilities
+                .iter()
+                .find(|row| row["ability_id"].as_str() == Some(feature.ability_id.as_str()))
+                .expect("feature mechanics");
+            let expected_cost = if ability["gameplay"]["kind"].as_str() == Some("SPELL") {
+                let definition = spell_definition_by_str(ability["action_id"].as_str().unwrap())
+                    .expect("runtime spell definition");
+                match definition.behavior {
+                    SpellBehavior::Channel | SpellBehavior::Emanation => 0.0,
+                    _ => definition.primary_resource_cost,
+                }
+            } else {
+                ability["resource_cost"].as_f64().unwrap_or(0.0) as f32
+            };
+            assert_eq!(
+                feature.resource_cost, expected_cost,
+                "{}: Hub metadata must match authored upfront costs, excluding periodic rates",
+                feature.ability_id
+            );
+        }
     }
 
     #[test]

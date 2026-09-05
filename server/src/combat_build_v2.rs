@@ -7,6 +7,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+use crate::ability_cost::authored_upfront_resource_cost;
+
 pub(crate) const COMBAT_BUILD_V2_SCHEMA_VERSION: u32 = 2;
 pub(crate) const STAFF_DISCIPLINE_ID: &str = "STAFF";
 pub(crate) const MASTERY_TRAIT_ID: &str = "MASTERY";
@@ -451,6 +453,8 @@ struct ProgressionAbilitySource {
 #[derive(Deserialize)]
 struct ProgressionGameplaySource {
     kind: String,
+    #[serde(default)]
+    resource_cost: f32,
 }
 
 #[derive(Deserialize)]
@@ -529,7 +533,11 @@ impl CombatBuildV2Catalog {
                             sort_order: ability.sort_order,
                             display_name: ability.display_name.clone(),
                             resource_kind: ability.resource_kind.clone(),
-                            resource_cost: ability.resource_cost,
+                            resource_cost: authored_upfront_resource_cost(
+                                &ability.gameplay.kind,
+                                ability.resource_cost,
+                                ability.gameplay.resource_cost,
+                            ),
                         },
                     );
                 }
@@ -1890,6 +1898,74 @@ mod tests {
 
     fn catalog() -> CombatBuildV2Catalog {
         CombatBuildV2Catalog::from_shared_catalogs().expect("canonical v2 catalogs")
+    }
+
+    #[test]
+    fn feature_metadata_reports_authored_upfront_costs() {
+        let catalog = catalog();
+        for (ability_id, expected_cost) in [
+            ("SPELL_FLASH_FREEZE", 20.0),
+            ("WARRIOR_FORTIFY", 20.0),
+            ("ARCHER_RAIN_OF_ARROWS", 30.0),
+            ("DAGGER_SLICE", 20.0),
+            ("SPELL_FLAMETHROWER", 0.0),
+            ("SPELL_NECROTIC_AURA", 0.0),
+        ] {
+            assert_eq!(
+                catalog.features[ability_id].resource_cost, expected_cost,
+                "{ability_id}: spell executors include Techniques; periodic rates are separate"
+            );
+        }
+    }
+
+    #[test]
+    fn feature_metadata_preserves_spell_cost_fallback_and_non_spell_costs() {
+        for (top_level, gameplay, expected_spell_cost) in [
+            (Some(7.0), Some(13.0), 13.0),
+            (Some(7.0), Some(0.0), 7.0),
+            (Some(7.0), Some(-2.0), 7.0),
+            (Some(7.0), None, 7.0),
+            (None, Some(13.0), 13.0),
+            (None, None, 0.0),
+        ] {
+            let mut progression: serde_json::Value =
+                serde_json::from_str(PROGRESSION_CATALOG_JSON).expect("progression catalog");
+            for row in progression["abilities"].as_array_mut().unwrap() {
+                if !matches!(
+                    row["ability_id"].as_str(),
+                    Some("SPELL_FLASH_FREEZE" | "WARRIOR_FORTIFY" | "DAGGER_SLICE")
+                ) {
+                    continue;
+                }
+                let ability = row.as_object_mut().unwrap();
+                ability.remove("resource_cost");
+                if let Some(cost) = top_level {
+                    ability.insert("resource_cost".to_string(), serde_json::json!(cost));
+                }
+                let mechanics = ability["gameplay"].as_object_mut().unwrap();
+                mechanics.remove("resource_cost");
+                if let Some(cost) = gameplay {
+                    mechanics.insert("resource_cost".to_string(), serde_json::json!(cost));
+                }
+            }
+            let catalog = CombatBuildV2Catalog::from_json(
+                COMBAT_BUILD_V2_CATALOG_JSON,
+                &progression.to_string(),
+                WEAPON_APPEARANCE_CATALOG_JSON,
+            )
+            .expect("cost metadata must not change build validation");
+            for ability_id in ["SPELL_FLASH_FREEZE", "WARRIOR_FORTIFY"] {
+                assert_eq!(
+                    catalog.features[ability_id].resource_cost, expected_spell_cost,
+                    "{ability_id}: top-level {top_level:?}, gameplay {gameplay:?}"
+                );
+            }
+            assert_eq!(
+                catalog.features["DAGGER_SLICE"].resource_cost,
+                top_level.unwrap_or(0.0),
+                "non-spell mechanics must retain their top-level cost"
+            );
+        }
     }
 
     #[test]

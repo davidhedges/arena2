@@ -4,6 +4,8 @@
 //! is compiled from the authoritative server source tree, so movement, combat,
 //! and match lifecycle behavior cannot drift into a copied implementation.
 
+#[path = "../../server/src/ability_cost.rs"]
+mod ability_cost;
 #[path = "../../server/src/action_ids.rs"]
 mod action_ids;
 #[path = "../../server/src/action_prediction.rs"]

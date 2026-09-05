@@ -10,6 +10,7 @@
 //! 7. Landing check only runs after position integration
 
 // All modules - SpacetimeDB will find tables and reducers via the macros
+mod ability_cost;
 mod action_ids;
 mod action_prediction;
 mod action_snapshot;

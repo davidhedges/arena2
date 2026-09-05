@@ -28,6 +28,14 @@ actor scope, resource cost, gameplay behavior, combat tuning, action
 presentation, VFX cues, and intrinsic autoattacks. It does not own durable
 player choices or bar placement.
 
+For upfront resource costs, `server/src/ability_cost.rs` owns the resolution
+policy shared by runtime spell definitions and Hub feature metadata. Spell
+executors prefer a positive `gameplay.resource_cost`, then fall back to the
+top-level `resource_cost`; other executors use the top-level cost. This follows
+the gameplay executor even when the feature is classified as a Technique.
+Channel and Emanation per-second costs remain delivery-specific and are not
+projected as Hub upfront costs. Runtime spending and modifiers are separate.
+
 `Assets/Arena/Resources/CombatAnimationSets/*.asset` owns Unity combat
 presentation, authored melee strike IDs, hit windows, recovery, combos,
 phased clips, cast-motion bindings, and weapon presentation.

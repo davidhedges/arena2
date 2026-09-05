@@ -13,6 +13,8 @@ use spacetimedb::{
     ViewContext,
 };
 
+#[path = "../../server/src/ability_cost.rs"]
+mod ability_cost;
 #[path = "../../server/src/combat_build_v2.rs"]
 mod combat_build_v2_contract;
 
@@ -124,7 +126,8 @@ const COMBAT_BUILD_V2_CATALOG_HASH: u64 = extend_catalog_hash(
 );
 const HUB_CATALOG_PROJECTION_HASH: u64 = extend_catalog_hash(
     COMBAT_BUILD_V2_CATALOG_HASH,
-    b"combat-build-editor-projection-v2",
+    // Refresh existing Hub rows when projection logic changes without JSON edits.
+    b"combat-build-editor-projection-v3-upfront-cost",
 );
 #[table(accessor = hub_player)]
 pub struct HubPlayer {
