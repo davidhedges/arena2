@@ -163,6 +163,10 @@ ruby ops/generate-npc-family-profiles.rb --check-paths
 
 Remaining animation/VFX ownership conflicts and proposed migrations are
 recorded in [the cleanup handoff](source-of-truth-cleanup-2026-09-05.md).
+In the normal Unity Editor, `Arena/Animation/Verify Combat Authoring and Export
+Inventory` runs the targeted authoring regressions and writes a read-only
+melee/VFX comparison under `Logs/CombatAuthoringVerification`. It does not
+regenerate authored content or replace visual verification.
 
 ## Canonical concepts
 

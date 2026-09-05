@@ -1,8 +1,9 @@
 # Source-of-truth cleanup handoff — 2026-09-05
 
-This document records the initial six-item cleanup and the subsequent approved
-five-item authoring batch. The second batch implemented four items and retained
-the Ice Spikes compatibility cue after demonstrating why its removal is unsafe
+This document records the initial six-item cleanup, the subsequent approved
+five-item authoring batch, and the approved normal-Editor verification and
+read-only inventory. The second batch implemented four items and retained the
+Ice Spikes compatibility cue after demonstrating why its removal is unsafe
 for empty-ability facts. Further migrations listed below require a separate
 scope decision.
 
@@ -132,10 +133,11 @@ Second-batch evidence is in `/private/tmp/arena2-authoring-cleanup.7R38au`:
   WASM SHA-256:
   `4baa709449388f554fadd7d8aee78f80bab723cf927255bb353fd930674515d3`.
 
-Validation limitations remain explicit:
+Limitations at the end of the second batch:
 
 - Unity-dependent animation/import tests were added and compiled but were
-  not executed; the Editor was closed. Visual verification is still pending.
+  not executed; the Editor was closed. The native test gap is closed by the
+  verification pass below. Visual verification is still pending.
 - A broader managed run found
   `PhotosynthesisVfx_ScalesOnlyTheAuthoredLeafFlecksWithStacks` failing a
   source-text assertion about `main.maxParticles`. Both that test body and
@@ -146,6 +148,189 @@ Validation limitations remain explicit:
 - `rustfmt --check` reports the same wrapping-only difference in the existing
   `effective_melee_timed_movement_start_delay_ms` assertion as the saved
   pre-edit source. That unrelated formatting was preserved.
+
+## Approved verification and inventory pass
+
+The normal Unity Editor **6000.4.0f1** imported the changes and ran **40 native
+EditMode tests, all passing**: event-first import, eventless import, legacy LOS
+read/export compatibility, single/phased hit events, startup trim, Ice Spikes
+fallback behavior, cast-hand resolution, and the cue writer. No Unity batch-mode
+run was used. The verification Editor was stopped after the pass.
+
+`Arena/Animation/Verify Combat Authoring and Export Inventory` repeats these
+tests and exports a read-only report to `Logs/CombatAuthoringVerification`.
+The helper rejects batch mode and Play Mode. It reads the imported animation
+clips and uses the existing melee exporter, animation resolver, VFX generator,
+and editor cue comparison; it does not stamp events, export the manifest,
+write cues, or save authored assets. The melee inventory covers authored attack
+entries, not separately synthesized autoattack aliases. VFX comparisons cover
+the 151 abilities using the SPELL gameplay executor, including NPC abilities
+and Techniques implemented by that executor.
+
+Evidence for this run is in `/private/tmp/arena2-unity-verification.ysXsW2`:
+
+- `unity/tests.xml`: 40 passed, zero failed.
+- `unity/inventory.json`: 104 melee attacks across five weapon profiles and
+  906 VFX comparisons (151 abilities × five profiles plus GLOBAL); zero
+  inventory errors.
+- `baseline-gate.log`: 822 server tests, 25 Hub tests, 19 Python tests,
+  8 Ruby tests / 14 assertions, 38 mirrors, and 329 NPC references pass.
+- `hub.before.json`, `hub.after.json`, and `hub-comparison.txt`: all 12 captured
+  tables are exactly unchanged, including all 63 profiles, saved builds,
+  equipment choices, and four Hub catalogs. These snapshots remain local.
+
+Only the verification helper and documentation changed in this pass. No
+authored assets, shared JSON, gameplay code, or generated bindings changed.
+Automatic shared-data publication was disabled for the verification Editor
+process; no runtime publication or additional match probe was needed. Final
+canonical local status still reports the server, both artifacts, and provisioner
+ready.
+
+Direct visual inspection remains **unverified**: macOS denied UI inspection
+through System Events (`-1743`). Native tests and cue-field comparisons do not
+prove the appearance of a cast or attack in a running match. The unrelated
+Photosynthesis assertion and Rust formatting issue above were not changed or
+included in the 40-test native pass.
+
+### Melee inventory
+
+Five attack entries lack effective `OnStrikeHit` events. Their current export
+and committed manifest agree, and all are single-clip presentations with zero
+startup trim:
+
+| Profile | Strike | Hit / recovery (ms) | Current exposure |
+| --- | --- | --- | --- |
+| DAGGERS | `DAGGER_COMBO_ATTACK_03_03` | 220 / 300 | Selectable `DAGGER_SEVER` |
+| DAGGERS | `WARRIOR_CARVE` | 220 / 300 | Selectable `WARRIOR_CARVE`; shares the preceding row's clip |
+| SWORD_AND_SHIELD | `WEAPON_THROW_ORBIT` | 833 / 250 | No progression ability has this action ID |
+| SWORD_AND_SHIELD | `SHIELD_THROW_ORBIT` | 792 / 250 | No progression ability has this action ID |
+| TWO_HANDED_SWORD | `COMBO_ATTACK_4_4_LUNGING_SLASH` | 256 / 350 | Selectable `WARRIOR_SUNDER` |
+
+These five rows reference four distinct extracted clips. Lack of a progression
+action match is not proof that an asset has no other consumer. Any migration
+must consider every attack sharing the clip and distinguish contact from
+projectile release.
+
+The inventory also found **nine existing manifest rows with different hit
+delays** from a current event-based export. Recovery matches in all nine:
+
+| Profile | Strike | Committed → current export hit delays (ms) | Matching selectable ability in that profile |
+| --- | --- | --- | --- |
+| STAFF | `COMBO_ATTACK_3_1_LOW_TO_HIGH` | 935 → 762 | None; matching ability belongs to Two-Handed Sword |
+| STAFF | `COMBO_ATTACK_4_4_LUNGING_SLASH` | 350 → 515 | None; matching ability belongs to Two-Handed Sword |
+| SWORD_AND_SHIELD | `AIR_TO_GROUND_1` | 532 → 457 | `PALADIN_AIR_TO_GROUND_1` |
+| SWORD_AND_SHIELD | `AIR_TO_GROUND_2` | 388 → 343 | None |
+| SWORD_AND_SHIELD | `AIR_TO_GROUND_3` | 333 → 273 | `PALADIN_AIR_TO_GROUND_3` |
+| TWO_HANDED_SWORD | `COMBO_ATTACK_3_2_LOW_TO_HIGH` | 750 → 683 | None |
+| TWO_HANDED_SWORD | `CRUSHING_BLOW` | 602 → 527 | `WARRIOR_CRUSHING_BLOW` |
+| TWO_HANDED_SWORD | `CATACLYSM` | 417 → 342 | `WARRIOR_CATACLYSM` |
+| TWO_HANDED_SWORD | `BUZZSAW` | [341, 500] → [288, 447] | `WARRIOR_BUZZSAW` |
+
+These values are export comparisons, not approved timing changes. Five map
+directly to current selectable abilities in the affected weapon profile. The
+server consumes the committed hit delays; updating those rows would change
+gameplay timing and needs its own bounded migration and verification.
+
+**Twelve additional rows differ only in startup-trim metadata among the timing
+fields checked**: their committed trim is absent/default zero, while the current
+export has a positive trim. Their hit delays and recovery already agree:
+
+- ARCHER_BOW: `ARCHER_HEARTSEEKER` (125 ms).
+- STAFF: `COMBO_ATTACK_1_1_HIGH_TO_LOW`, `WARRIOR_MAIM` (117 ms each).
+- SWORD_AND_SHIELD: `SWORD_AND_SHIELD_ALT_LIGHT_3` (181 ms).
+- TWO_HANDED_SWORD: `COMBO_ATTACK_1_1_HIGH_TO_LOW`, `WARRIOR_MAIM` (186 ms);
+  `COMBO_ATTACK_1_2_LOW_TO_HIGH`, `WARRIOR_CARVE`, `COMBO_ATTACK_2_1_SPIN`
+  (151 ms); `COMBO_ATTACK_1_3_GROUND_TO_AIR` (123 ms);
+  `COMBO_ATTACK_2_2_HIGH_TO_LOW` (188 ms); `COMBO_ATTACK_2_4_LUNGE` (134 ms).
+
+The server uses `startup_trim_ms` to adjust timed melee movement. None of these
+12 action IDs overlaps the three current abilities authoring
+`melee_timed_movement` (`WARRIOR_DISENGAGE_STRIKE`, `ARCHER_BACKSTEP`, and
+`ARCHER_DISENGAGE`). Do not count these as another 12 demonstrated hit-delay
+bugs. `manifestTimingMatches` in the report includes trim, recovery, hit delays,
+and per-hit phase metadata; it is not a comparison of every manifest field.
+
+**Nine STAFF attack entries have no corresponding committed manifest strike**:
+`COMBO_ATTACK_1_4_AIR_TO_GROUND`, `COMBO_ATTACK_3_2_LOW_TO_HIGH`,
+`COMBO_ATTACK_3_4_AIR_TO_GROUND`, `CRUSHING_BLOW`, `CATACLYSM`, `BUZZSAW`,
+`WHIRLWIND`, `WARRIOR_CHARGE`, and `WARRIOR_IMPALE`. Staff currently owns no
+selectable or intrinsic Technique. A full profile export would add these rows;
+this inventory does not authorize that content expansion.
+
+**34 event-backed attack entries have stale serialized normalized hit-window
+mirrors**: Daggers 4, Staff 9, Sword and Shield 17, Two-Handed Sword 4. Current
+export already prioritizes events, so stale mirrors are not 34 additional
+demonstrated runtime timing errors. The new importer protects that authority;
+this pass did not rewrite existing mirrors. These categories overlap.
+
+### VFX inventory
+
+The catalog remains the runtime authority. Generator comparisons reveal both
+missing generation inputs and deliberate authored exceptions; they are not a
+bulk-regeneration checklist. Counts below are abilities with each condition,
+and conditions overlap:
+
+| Condition | GLOBAL, Archer, Daggers, Staff, Two-Handed Sword (each) | Sword and Shield |
+| --- | --- | --- |
+| Existing slot fields differ | 12 | 21 |
+| At least one generated-only slot | 29 | 29 |
+| At least one catalog-only slot | 53 | 53 |
+| Ambiguous slot identity | 1 | 1 |
+| At least one authored cue cannot be assigned a slot | 11 | 11 |
+
+For Staff, the existing comparison finds 65 matching generated slots and 14
+changed slots; Sword and Shield has 50 matching and 29 changed. Only 27 Staff
+cases and 19 Sword-and-Shield cases have a nonempty generated result with all
+generated slots matching and none of the conditions above. This does not prove
+visual equivalence or make those rows automatically generated ownership.
+
+The 12 baseline changed abilities are:
+
+- `NPC_DEMON_SUMMONER_SHADOW_BOLT`, `NPC_SKELETON_REAPER_SOUL_BOLT`:
+  generated impact duration 700 ms versus authored 1000 ms.
+- `NPC_FAB_DRAGON_BREATH`: generated Fire cast-glow ID versus authored Arcane.
+- `SPELL_DEEPENING_COLD`, `SPELL_FLASH_FREEZE`, `SPELL_GLACIAL_ADVANCE`:
+  generated Ice impact ID and fixed duration versus authored Glacial Spike ID
+  and particle-system lifetime.
+- `SPELL_DEFILED_GROUND`: fixed generated duration versus authored radial-effect
+  lifetime.
+- `SPELL_FLAMING_ORB`, `SPELL_GRAVEWAKE`, `SPELL_WITHERING_ORB`: anchor differences.
+- `SPELL_ORBITING_BLADES`: impact ID/duration differences.
+- `SPELL_PENANCE`: generic Holy impact versus authored Absolution impact.
+
+Sword-and-Shield animation resolution adds hand-anchor differences for
+`SPELL_BLIZZARD`, `SPELL_CAUTERIZE`, `SPELL_FIERY_ORBS`, `SPELL_FIREBALL`,
+`SPELL_FROZEN_SPLINTERS`, `SPELL_GRIM_WHEEL`, `SPELL_INSTANT_BEAM`,
+`SPELL_MAGIC_MISSILE`, and `SPELL_VAMPIRIC_ORB`; it also adds an anchor difference
+to the already changed `SPELL_ORBITING_BLADES`. Generated anchors are RIGHT_HAND
+where the catalog specifies LEFT_HAND. This is evidence that global cue
+generation needs an explicit policy for equipment-dependent presentation before
+it can safely become authoritative.
+
+The ambiguous slot is the retained Ice Spikes ABILITY/SPELL compatibility pair.
+The 11 abilities with unassigned authored cues are `SPELL_CLOUDBURST`,
+`SPELL_CONTAGION`, `SPELL_EARTH_BLAST`, `SPELL_FULMINATION`, `SPELL_HOLY_SHIELD`,
+`SPELL_LAVA_BLAST`, `SPELL_RECKONING`, `SPELL_TAILWIND`, `SPELL_TIDAL_BLAST`,
+`SPELL_TRANSPOSE`, and `SPELL_WIND_BLAST` (Transpose has two such cues).
+
+The 35 unresolved animation cases per equipped profile comprise **17 explicit
+NoAnimation assignments and 18 NPC abilities missing from the player animation
+map**. NPC presentation requires its own context; these are not 35 proven missing
+player animations. GLOBAL intentionally lacks an equipped animation set and
+therefore resolves fewer animations. The generator also reports 191 omitted-slot
+notes across 120 abilities per profile because neither the selected school
+palette nor a signature override supplies that slot's VFX ID. Missing generation
+inputs do not establish that the corresponding runtime visual is absent.
+
+### Recommended next scope (not yet approved)
+
+Reconcile only the **five selectable abilities with demonstrated hit-delay
+drift** above. Inspect their native phased presentation, confirm intended contact
+timing, update only those existing manifest strikes through the established
+export path, and prove unrelated rows and saved builds unchanged. Validate the
+server timing cases, refresh local artifacts, and check those attacks visually.
+Do not bundle the nine extra Staff rows, eventless clip stamping, or VFX
+regeneration into that migration.
 
 ## Remaining work
 
@@ -172,11 +357,11 @@ semantics to make its removal possible.
 
 ### Remaining melee fallback migration
 
-The reverse import path is now guarded by animation event authority.
-Eventless attacks still have serialized hit windows. Any migration of those
-attacks needs a normal Editor inventory and per-attack effective timing
-comparison, including startup trim and phased clips. No clip stamping or
-fallback removal was performed in this batch.
+The reverse import path is now guarded by animation event authority. The
+normal Editor inventory above identifies the five remaining eventless attack
+entries and their effective timings. Any migration still needs a per-clip
+contact/release decision and verification of every sharing attack. No clip
+stamping or fallback removal was performed.
 
 ### VFX generation remains an explicit authoring operation
 
