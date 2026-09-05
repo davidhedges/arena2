@@ -1,6 +1,10 @@
 #nullable enable
 
+using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using NUnit.Framework;
 
 namespace Arena.Tests.Editor
@@ -9,6 +13,59 @@ namespace Arena.Tests.Editor
     {
         private const string ResolverPath = "Assets/Arena/Runtime/Presentation/CombatVfxCueResolver.cs";
         private const string DispatcherPath = "Assets/Arena/Runtime/Presentation/CombatVFXDispatcher.cs";
+
+        [TestCase("SPELL_ICE_SPIKES", true, 1, "ABILITY")]
+        [TestCase("SPELL_ICE_SPIKES", false, 1, "ABILITY")]
+        [TestCase("", true, 1, "SPELL")]
+        [TestCase("", false, 0, "")]
+        public void IceSpikes_LegacyCueIsOnlyRedundantWhenAbilityIdentityIsPresent(
+            string abilityId, bool includeLegacyCue, int expectedCount, string expectedOwner)
+        {
+            Assembly runtime = AppDomain.CurrentDomain.Load("Assembly-CSharp");
+            Type cueType = runtime.GetType("SpacetimeDB.Types.CombatVfxCueCatalog", true)!;
+            Type factType = runtime.GetType("Arena.Presentation.CombatVfxResolutionFact", true)!;
+            Type indexType = runtime.GetType("Arena.Presentation.CombatVfxCueResolver+Index", true)!;
+            Type listType = typeof(List<>).MakeGenericType(cueType);
+            var cues = (IList)Activator.CreateInstance(listType)!;
+            var output = (IList)Activator.CreateInstance(listType)!;
+            cues.Add(Cue("ABILITY", "SPELL_ICE_SPIKES", 30));
+            if (includeLegacyCue)
+                cues.Add(Cue("SPELL", "ICE_SPIKES", 31));
+            object fact = Activator.CreateInstance(factType, new object[]
+            {
+                true, "AREA_IMPACT", "ICE_SPIKES", abilityId, string.Empty, -1,
+            })!;
+            object index = Activator.CreateInstance(indexType, nonPublic: true)!;
+            indexType.GetMethod("Resolve")!.Invoke(index, new[] { cues, fact, output });
+
+            Assert.That(output.Count, Is.EqualTo(expectedCount));
+            if (expectedCount > 0)
+            {
+                Assert.That(cueType.GetField("OwnerKind")!.GetValue(output[0]), Is.EqualTo(expectedOwner));
+                Assert.That(cueType.GetField("VfxId")!.GetValue(output[0]), Is.EqualTo("VFX_ICE_SPIKES_AREA_01"));
+                Assert.That(cueType.GetField("DurationMs")!.GetValue(output[0]), Is.EqualTo(2500UL));
+            }
+
+            object Cue(string owner, string ownerId, uint order)
+            {
+                object cue = Activator.CreateInstance(cueType)!;
+                Set("OwnerKind", owner);
+                Set("OwnerId", ownerId);
+                Set("Trigger", "AREA_IMPACT");
+                Set("HitIndex", -1);
+                Set("Anchor", "AREA_ORIGIN");
+                Set("VfxId", "VFX_ICE_SPIKES_AREA_01");
+                Set("AttachMode", "WORLD_ALIGNED_TO_FACING");
+                Set("VfxRole", "ONE_SHOT");
+                Set("Lifecycle", "DURATION");
+                Set("ProjectileSequenceIndex", -1);
+                Set("DurationMs", 2500UL);
+                Set("SortOrder", order);
+                return cue;
+
+                void Set(string field, object value) => cueType.GetField(field)!.SetValue(cue, value);
+            }
+        }
 
         [Test]
         public void CombatVfxResolver_UsesCachedLookupIndex()
