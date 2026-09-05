@@ -440,6 +440,8 @@ struct ProgressionAbilitySource {
     actor_scope: String,
     selection_kind: String,
     #[serde(default)]
+    combat_discipline_id: Option<String>,
+    #[serde(default)]
     display_name: String,
     #[serde(default)]
     resource_kind: String,
@@ -1133,6 +1135,19 @@ fn validate_catalog_source(
         let ability = progression_abilities
             .get(ability_id)
             .expect("exhaustive projection checked");
+        let specialization = source
+            .specializations
+            .iter()
+            .find(|row| row.specialization_id == *specialization_id)
+            .expect("specialization exists");
+        if ability.combat_discipline_id.as_deref()
+            != Some(specialization.combat_discipline_id.as_str())
+        {
+            return Err(format!(
+                "ability '{ability_id}' discipline {:?} disagrees with '{specialization_id}' parent '{}'",
+                ability.combat_discipline_id, specialization.combat_discipline_id
+            ));
+        }
         match kind {
             CombatFeatureLoadoutKind::Technique => {
                 if ability.selection_kind != "ACTIVE" {
@@ -1140,11 +1155,6 @@ fn validate_catalog_source(
                         "Technique '{ability_id}' must be structurally ACTIVE"
                     ));
                 }
-                let specialization = source
-                    .specializations
-                    .iter()
-                    .find(|row| row.specialization_id == *specialization_id)
-                    .expect("specialization exists");
                 if specialization.specialization_kind != CombatSpecializationKind::Form
                     || specialization.combat_discipline_id == STAFF_DISCIPLINE_ID
                 {
@@ -1898,6 +1908,32 @@ mod tests {
 
     fn catalog() -> CombatBuildV2Catalog {
         CombatBuildV2Catalog::from_shared_catalogs().expect("canonical v2 catalogs")
+    }
+
+    #[test]
+    fn selectable_ability_discipline_drift_is_rejected() {
+        for ability_id in ["DAGGER_DISARM", "DAGGER_DARKNESS", "DAGGER_RESTLESS_BLADES"] {
+            let mut progression: serde_json::Value =
+                serde_json::from_str(PROGRESSION_CATALOG_JSON).unwrap();
+            let ability = progression["abilities"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|row| row["ability_id"] == ability_id)
+                .unwrap();
+            ability["combat_discipline_id"] = serde_json::json!("STAFF");
+            let error = CombatBuildV2Catalog::from_json(
+                COMBAT_BUILD_V2_CATALOG_JSON,
+                &progression.to_string(),
+                WEAPON_APPEARANCE_CATALOG_JSON,
+            )
+            .err()
+            .expect("conflicting parent must reject");
+            assert!(
+                error.contains(ability_id) && error.contains("disagrees"),
+                "{error}"
+            );
+        }
     }
 
     #[test]

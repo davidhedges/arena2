@@ -4027,18 +4027,22 @@ fn validate_ability_catalog() {
                 ),
                 "player ability '{ability_id}' must declare a canonical selection kind"
             );
-            if combat_discipline_id == COMBAT_PROFILE_STAFF {
+            // A Form may own a Spell. Its school describes spell mechanics and
+            // presentation independently of its owning weapon discipline.
+            if combat_discipline_id == COMBAT_PROFILE_STAFF
+                || (!spell_school_id.is_empty() && ability_gameplay_kind(ability) == "SPELL")
+            {
                 assert!(
                     matches!(
                         spell_school_id.as_str(),
                         "BLIGHT" | "MORTALITY" | "RUIN" | "DIVINITY" | "ARCANA" | "PRIMAL"
                     ),
-                    "Staff ability '{ability_id}' must declare one canonical spell school"
+                    "ability '{ability_id}' must declare one canonical spell school"
                 );
             } else {
                 assert!(
                     spell_school_id.is_empty(),
-                    "non-Staff ability '{ability_id}' must not declare a spell school"
+                    "non-Staff non-spell ability '{ability_id}' must not declare a spell school"
                 );
             }
         }
@@ -11372,7 +11376,7 @@ mod tests {
             .expect("expected Disarm");
         assert_eq!(
             normalize_identifier(disarm.combat_discipline_id.as_deref().unwrap_or_default()),
-            COMBAT_PROFILE_TWO_HANDED_SWORD
+            COMBAT_PROFILE_DAGGERS
         );
         assert!(spell_ids_for_combat_profile(COMBAT_PROFILE_TWO_HANDED_SWORD).contains("DISARM"));
         assert!(
@@ -11394,7 +11398,11 @@ mod tests {
             assert_eq!(ability.spell_school_id.as_deref(), Some("MORTALITY"));
             assert_eq!(
                 ability.combat_discipline_id.as_deref(),
-                Some(COMBAT_PROFILE_STAFF)
+                Some(if ability_id == "DAGGER_STALK_SHADOWSTEP" {
+                    COMBAT_PROFILE_STAFF
+                } else {
+                    COMBAT_PROFILE_DAGGERS
+                })
             );
         }
     }

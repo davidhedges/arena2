@@ -84,6 +84,15 @@ def make_catalog(contract_path: Path, progression_path: Path) -> dict[str, Any]:
     for row in contract["specializations"]:
         specialization_id = row["specialization_id"]
         features = grouped[specialization_id]
+        for ability_ids in features.values():
+            for ability_id in ability_ids:
+                authored = progression_abilities[ability_id].get("combat_discipline_id")
+                expected = row["combat_discipline_id"]
+                if authored != expected:
+                    raise ValueError(
+                        f"ability {ability_id} discipline {authored!r} disagrees with "
+                        f"{specialization_id} parent {expected!r}"
+                    )
         specializations.append(
             {
                 **row,

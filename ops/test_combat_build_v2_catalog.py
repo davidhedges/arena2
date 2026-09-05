@@ -85,6 +85,15 @@ class CombatBuildV2CatalogTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "classified more than once"):
             self.generate()
 
+    def test_progression_discipline_must_match_classified_parent(self) -> None:
+        for value in ["STAFF", None]:
+            with self.subTest(discipline=value):
+                ability = next(row for row in self.progression["abilities"]
+                               if row["ability_id"] == "DAGGER_DISARM")
+                ability["combat_discipline_id"] = value
+                with self.assertRaisesRegex(ValueError, "DAGGER_DISARM.*disagrees"):
+                    self.generate()
+
     def test_duplicate_progression_identity_is_rejected(self) -> None:
         self.progression["abilities"].append(self.progression["abilities"][0].copy())
         with self.assertRaisesRegex(ValueError, "duplicate ability ids"):
