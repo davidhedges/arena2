@@ -402,6 +402,8 @@ plays no cast animation owns an explicit `NoAnimation` assignment. `CombatAnimat
 maps semantic motion to an animation family for the set's weapon pose. Do not add per-spell rows back
 to a combat set, and do not use an absent map entry to mean no animation.
 
+Generated VFX cast hand follows the resolved animation's effective cast origin, including mirroring, then its gesture/clip inference. A missing presentation retains the existing left-hand default. `SpellVfxOverrideCatalog` owns slot looks only; it no longer offers a separate cast-hand override.
+
 Direct casts are classified as `Direct1H` or `Direct2H` on the spell. Daggers and Staff currently
 bind `Direct2H` to `MagicAttackDirect2H02`; other sets intentionally omit that binding and resolve
 `Direct2H` through their `Direct1H` family plus `oneHandedCastHand`. Never bind

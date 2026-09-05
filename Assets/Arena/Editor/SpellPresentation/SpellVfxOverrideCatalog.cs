@@ -6,18 +6,10 @@ using UnityEngine;
 
 namespace Arena.Presentation
 {
-    public enum SpellVfxCastHandOverride
-    {
-        Auto = 0,
-        Left = 1,
-        Right = 2,
-    }
-
     [Serializable]
     public sealed class SpellVfxAbilityOverride
     {
         public string abilityId = string.Empty;
-        public SpellVfxCastHandOverride castHand;
         [SerializeField] private List<SchoolVfxSlotEntry> slots = new();
 
         public string AbilityIdOrEmpty => WireIdentifier.Normalize(abilityId);
@@ -40,8 +32,8 @@ namespace Arena.Presentation
     }
 
     /// <summary>
-    /// Editor-only per-spell exceptions to school-derived VFX. A spell may replace individual slot
-    /// looks and, when animation inference is insufficient, author its cast hand explicitly.
+    /// Editor-only per-spell exceptions to school-derived VFX slot looks.
+    /// Cast hand belongs to the resolved animation presentation.
     /// </summary>
     [CreateAssetMenu(menuName = "Arena/Spell VFX Override Catalog", fileName = "SpellVfxOverrideCatalog")]
     public sealed class SpellVfxOverrideCatalog : ScriptableObject

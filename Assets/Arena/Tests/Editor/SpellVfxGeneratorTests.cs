@@ -220,13 +220,11 @@ namespace Arena.Tests.Editor
             {
                 SerializedProperty row = entries.GetArrayElementAtIndex(i);
                 string abilityId = row.FindPropertyRelative("abilityId").stringValue.Trim().ToUpperInvariant();
-                int castHand = row.FindPropertyRelative("castHand").enumValueIndex;
                 SerializedProperty slots = row.FindPropertyRelative("slots");
 
                 Assert.That(abilityId, Is.Not.Empty);
                 Assert.That(abilityIds.Add(abilityId), Is.True, $"duplicate override for {abilityId}");
-                Assert.That(castHand, Is.InRange(0, 2));
-                Assert.That(slots.arraySize > 0 || castHand != 0, Is.True);
+                Assert.That(slots.arraySize, Is.GreaterThan(0));
 
                 AssertSlotEntriesValid(slots, abilityId);
             }
@@ -236,6 +234,32 @@ namespace Arena.Tests.Editor
                 "Assets/Arena/Editor/SpellAuthoringWindow.CueGeneration.cs"));
             Assert.That(generatorSource, Does.Not.Contain("SignatureOverrides"));
             Assert.That(generatorSource, Does.Not.Contain("CastHandOverrides"));
+        }
+
+        [TestCase(true, "LeftHand", false, "FullBody", "LEFT_HAND")]
+        [TestCase(true, "LeftHand", true, "FullBody", "RIGHT_HAND")]
+        [TestCase(true, "RightHand", false, "FullBody", "RIGHT_HAND")]
+        [TestCase(true, "RightHand", true, "FullBody", "LEFT_HAND")]
+        [TestCase(true, "UseVfxCue", false, "LeftGesture", "LEFT_HAND")]
+        [TestCase(true, "UseVfxCue", false, "RightGesture", "RIGHT_HAND")]
+        [TestCase(false, "RightHand", false, "FullBody", "LEFT_HAND")]
+        [TestCase(true, "UseVfxCue", false, "FullBody", "LEFT_HAND")]
+        public void GeneratedCastHand_FollowsAnimationOriginMirroringAndLegacyInference(
+            bool hasAnimation, string origin, bool mirrored, string layer, string expected)
+        {
+            Type entryType = T("Arena.Presentation.WeaponSpellAnimationEntry");
+            object entry = Activator.CreateInstance(entryType)!;
+            FieldInfo originField = entryType.GetField("castOrigin")!;
+            FieldInfo layerField = entryType.GetField("playbackLayer")!;
+            originField.SetValue(entry, Enum.Parse(originField.FieldType, origin));
+            layerField.SetValue(entry, Enum.Parse(layerField.FieldType, layer));
+            entryType.GetField("mirrorPresentation")!.SetValue(entry, mirrored);
+
+            Type window = AppDomain.CurrentDomain.Load("Assembly-CSharp-Editor")
+                .GetType("Arena.Editor.SpellAuthoringWindow", throwOnError: true)!;
+            MethodInfo resolve = window.GetMethod(
+                "ResolveCastHandAnchor", BindingFlags.NonPublic | BindingFlags.Static)!;
+            Assert.That(resolve.Invoke(null, new[] { (object)hasAnimation, entry }), Is.EqualTo(expected));
         }
 
         // ----- archetype derivation, grounded in the real spell list -----

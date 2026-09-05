@@ -203,7 +203,7 @@ namespace Arena.Editor
                 (ulong)Mathf.Max(0, selected.gameplay.cast_time_ms), deliveryKind);
             string school = ResolveSchool(selected.gameplay.delivery);
             string castHandAnchor = ResolveCastHandAnchor(
-                _cachedSpellOverrides, abilityId, hasResolvedAnimation, resolvedAnimation);
+                hasResolvedAnimation, resolvedAnimation);
 
             List<GeneratedCue> cues;
             List<string> notes;
@@ -292,36 +292,11 @@ namespace Arena.Editor
         }
 
         private static string ResolveCastHandAnchor(
-            SpellVfxOverrideCatalog? spellOverrides,
-            string abilityId,
             bool hasResolvedAnimation,
             WeaponSpellAnimationEntry resolvedAnimation)
         {
-            // Animation-owned origin is the primary source. It must travel with a mirrored
-            // CombatAnimationSet presentation so generated cast/projectile cues agree with runtime.
-            if (hasResolvedAnimation
-                && resolvedAnimation.HasAuthoredCastOrigin
-                && TryInferSpellPresentationHand(
-                    resolvedAnimation,
-                    out string authoredAnimationHand,
-                    out _))
-            {
-                return authoredAnimationHand;
-            }
-
-            // The older per-spell VFX override remains a migration fallback for recipes that have
-            // not yet declared an animation-owned origin.
-            if (spellOverrides != null && spellOverrides.TryGet(abilityId, out SpellVfxAbilityOverride spellOverride))
-            {
-                if (spellOverride.castHand == SpellVfxCastHandOverride.Left)
-                    return SpellVfxGenerator.AnchorLeftHand;
-                if (spellOverride.castHand == SpellVfxCastHandOverride.Right)
-                    return SpellVfxGenerator.AnchorRightHand;
-            }
-
-            // E7: otherwise infer the concrete cast hand from the resolved motion-family or fixed
-            // presentation. A profile-less spell has no preview CombatAnimationSet in this window, so
-            // fall back to the generator's LEFT_HAND default.
+            // The resolved animation owns origin and mirroring, with gesture/clip
+            // inference for legacy recipes. A profile-less spell retains LEFT_HAND.
             if (hasResolvedAnimation
                 && TryInferSpellPresentationHand(resolvedAnimation, out string handAnchor, out _))
             {
