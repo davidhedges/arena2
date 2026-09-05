@@ -15,6 +15,11 @@ use spacetimedb::{
 
 #[path = "../../server/src/ability_cost.rs"]
 mod ability_cost;
+#[allow(dead_code)]
+#[path = "../../server/src/armor_catalog.rs"]
+mod armor_catalog;
+use armor_catalog::armor_set_catalog;
+
 #[path = "../../server/src/combat_build_v2.rs"]
 mod combat_build_v2_contract;
 
@@ -127,7 +132,7 @@ const COMBAT_BUILD_V2_CATALOG_HASH: u64 = extend_catalog_hash(
 const HUB_CATALOG_PROJECTION_HASH: u64 = extend_catalog_hash(
     COMBAT_BUILD_V2_CATALOG_HASH,
     // Refresh existing Hub rows when projection logic changes without JSON edits.
-    b"combat-build-editor-projection-v3-upfront-cost",
+    b"combat-build-editor-projection-v4-shared-armor",
 );
 #[table(accessor = hub_player)]
 pub struct HubPlayer {
@@ -1163,189 +1168,6 @@ struct HubWeaponVariantAuthoring {
     color_id: String,
 }
 
-#[derive(Clone, Copy)]
-struct HubArmorSetSpec {
-    armor_set_id: &'static str,
-    display_name: &'static str,
-    armor_tier: &'static str,
-    piece_count: u32,
-    sort_order: u32,
-}
-
-const fn hub_armor_set(
-    armor_set_id: &'static str,
-    display_name: &'static str,
-    armor_tier: &'static str,
-    piece_count: u32,
-    sort_order: u32,
-) -> HubArmorSetSpec {
-    HubArmorSetSpec {
-        armor_set_id,
-        display_name,
-        armor_tier,
-        piece_count,
-        sort_order,
-    }
-}
-
-const HUB_ARMOR_SET_SPECS: &[HubArmorSetSpec] = &[
-    hub_armor_set("PEASANT", "Peasant Attire", "LIGHT", 4, 10),
-    hub_armor_set("APPRENTICE", "Apprentice Vestments", "LIGHT", 7, 20),
-    hub_armor_set("LEATHER", "Ranger Leathers", "MEDIUM", 7, 30),
-    hub_armor_set("IRON", "Iron Warplate", "HEAVY", 7, 40),
-    hub_armor_set("GILDED", "Gilded Warplate", "HEAVY", 7, 50),
-    hub_armor_set("PEASANT_BL", "Blue Peasant Attire", "LIGHT", 6, 60),
-    hub_armor_set("PEASANT_RD", "Red Peasant Attire", "LIGHT", 6, 61),
-    hub_armor_set("FMAGE_BL", "Blue Mage Vestments", "LIGHT", 7, 70),
-    hub_armor_set("FMAGE_GN", "Green Mage Vestments", "LIGHT", 7, 71),
-    hub_armor_set("FMAGE_RD", "Red Mage Vestments", "LIGHT", 7, 72),
-    hub_armor_set("WARLOCK_GN", "Green Warlock Vestments", "LIGHT", 7, 80),
-    hub_armor_set("WARLOCK_PE", "Purple Warlock Vestments", "LIGHT", 7, 81),
-    hub_armor_set("WARLOCK_VT", "Violet Warlock Vestments", "LIGHT", 7, 82),
-    hub_armor_set("WIZARD_BL", "Blue Wizard Vestments", "LIGHT", 7, 90),
-    hub_armor_set("WIZARD_PE", "Purple Wizard Vestments", "LIGHT", 7, 91),
-    hub_armor_set("WIZARD_VT", "Violet Wizard Vestments", "LIGHT", 7, 92),
-    hub_armor_set("CLERIC_BL", "Blue Cleric Vestments", "LIGHT", 7, 100),
-    hub_armor_set("CLERIC_GO", "Gold Cleric Vestments", "LIGHT", 7, 101),
-    hub_armor_set("CLERIC_WH", "White Cleric Vestments", "LIGHT", 7, 102),
-    hub_armor_set("NMAGE_BL", "Blue Northern Mage Vestments", "LIGHT", 7, 110),
-    hub_armor_set("NMAGE_GN", "Green Northern Mage Vestments", "LIGHT", 7, 111),
-    hub_armor_set("NMAGE_RD", "Red Northern Mage Vestments", "LIGHT", 7, 112),
-    hub_armor_set("NECR_BL", "Blue Necromancer Vestments", "LIGHT", 7, 120),
-    hub_armor_set("NECR_GR", "Gray Necromancer Vestments", "LIGHT", 7, 121),
-    hub_armor_set("NECR_PE", "Purple Necromancer Vestments", "LIGHT", 7, 122),
-    hub_armor_set("SKEEPER_BK", "Black Soul Keeper Vestments", "LIGHT", 7, 130),
-    hub_armor_set("SKEEPER_GN", "Green Soul Keeper Vestments", "LIGHT", 7, 131),
-    hub_armor_set(
-        "SKEEPER_PE",
-        "Purple Soul Keeper Vestments",
-        "LIGHT",
-        7,
-        132,
-    ),
-    hub_armor_set("SKEEPER_RD", "Red Soul Keeper Vestments", "LIGHT", 7, 133),
-    hub_armor_set("SMAGE_BL", "Blue Storm Mage Vestments", "LIGHT", 6, 140),
-    hub_armor_set("SMAGE_CN", "Cyan Storm Mage Vestments", "LIGHT", 6, 141),
-    hub_armor_set("SMAGE_RD", "Red Storm Mage Vestments", "LIGHT", 6, 142),
-    hub_armor_set("NARCHER_BL", "Blue Archer Leathers", "MEDIUM", 5, 180),
-    hub_armor_set("NARCHER_GN", "Green Archer Leathers", "MEDIUM", 5, 181),
-    hub_armor_set("NARCHER_RD", "Red Archer Leathers", "MEDIUM", 5, 182),
-    hub_armor_set(
-        "NARCHER_OLD_BL",
-        "Weathered Blue Archer Leathers",
-        "MEDIUM",
-        5,
-        183,
-    ),
-    hub_armor_set(
-        "NARCHER_OLD_GN",
-        "Weathered Green Archer Leathers",
-        "MEDIUM",
-        5,
-        184,
-    ),
-    hub_armor_set(
-        "NARCHER_OLD_PE",
-        "Weathered Purple Archer Leathers",
-        "MEDIUM",
-        5,
-        185,
-    ),
-    hub_armor_set(
-        "NARCHER_OLD_WH",
-        "Weathered White Archer Leathers",
-        "MEDIUM",
-        5,
-        186,
-    ),
-    hub_armor_set("BARBARIAN_BL", "Blue Barbarian Leathers", "MEDIUM", 7, 200),
-    hub_armor_set("BARBARIAN_GN", "Green Barbarian Leathers", "MEDIUM", 7, 201),
-    hub_armor_set("BARBARIAN_RD", "Red Barbarian Leathers", "MEDIUM", 7, 202),
-    hub_armor_set("HUNTER_BL", "Blue Hunter Leathers", "MEDIUM", 7, 210),
-    hub_armor_set("HUNTER_GN", "Green Hunter Leathers", "MEDIUM", 7, 211),
-    hub_armor_set("HUNTER_PE", "Purple Hunter Leathers", "MEDIUM", 7, 212),
-    hub_armor_set("HUNTER_RD", "Red Hunter Leathers", "MEDIUM", 7, 213),
-    hub_armor_set(
-        "NRANGER_BL",
-        "Blue Northern Ranger Leathers",
-        "MEDIUM",
-        7,
-        220,
-    ),
-    hub_armor_set(
-        "NRANGER_RD",
-        "Red Northern Ranger Leathers",
-        "MEDIUM",
-        7,
-        221,
-    ),
-    hub_armor_set("RANGER_GN", "Green Ranger Leathers", "MEDIUM", 7, 230),
-    hub_armor_set("RANGER_PE", "Purple Ranger Leathers", "MEDIUM", 7, 231),
-    hub_armor_set("RANGER_RD", "Red Ranger Leathers", "MEDIUM", 7, 232),
-    hub_armor_set("REAPER_BL", "Blue Reaper Leathers", "MEDIUM", 7, 240),
-    hub_armor_set("REAPER_CN", "Cyan Reaper Leathers", "MEDIUM", 7, 241),
-    hub_armor_set("REAPER_GN", "Green Reaper Leathers", "MEDIUM", 7, 242),
-    hub_armor_set("ROGUE_BL", "Blue Rogue Leathers", "MEDIUM", 7, 250),
-    hub_armor_set("ROGUE_GN", "Green Rogue Leathers", "MEDIUM", 7, 251),
-    hub_armor_set("ROGUE_RD", "Red Rogue Leathers", "MEDIUM", 7, 252),
-    hub_armor_set("DRUID_BL", "Blue Druid Leathers", "MEDIUM", 7, 260),
-    hub_armor_set("DRUID_RD", "Red Druid Leathers", "MEDIUM", 7, 261),
-    hub_armor_set("DRUID_YE", "Yellow Druid Leathers", "MEDIUM", 7, 262),
-    hub_armor_set("THIEF_BK", "Black Thief Leathers", "MEDIUM", 7, 270),
-    hub_armor_set("THIEF_BR", "Brown Thief Leathers", "MEDIUM", 7, 271),
-    hub_armor_set("THIEF_GN", "Green Thief Leathers", "MEDIUM", 7, 272),
-    hub_armor_set("THIEF_RD", "Red Thief Leathers", "MEDIUM", 7, 273),
-    hub_armor_set(
-        "TOMBSEEKER_GN",
-        "Green Tomb Seeker Leathers",
-        "MEDIUM",
-        7,
-        280,
-    ),
-    hub_armor_set(
-        "TOMBSEEKER_PE",
-        "Purple Tomb Seeker Leathers",
-        "MEDIUM",
-        7,
-        281,
-    ),
-    hub_armor_set(
-        "TOMBSEEKER_RD",
-        "Red Tomb Seeker Leathers",
-        "MEDIUM",
-        7,
-        282,
-    ),
-    hub_armor_set(
-        "TOMBSEEKER_WH",
-        "White Tomb Seeker Leathers",
-        "MEDIUM",
-        7,
-        283,
-    ),
-    hub_armor_set("DK_BL", "Blue Death Knight Plate", "HEAVY", 7, 400),
-    hub_armor_set("DK_GN", "Green Death Knight Plate", "HEAVY", 7, 401),
-    hub_armor_set("DK_RD", "Red Death Knight Plate", "HEAVY", 7, 402),
-    hub_armor_set("DUNGPLATE_BL", "Blue Dungeon Plate", "HEAVY", 7, 410),
-    hub_armor_set("DUNGPLATE_PE", "Purple Dungeon Plate", "HEAVY", 7, 411),
-    hub_armor_set("DUNGPLATE_RD", "Red Dungeon Plate", "HEAVY", 7, 412),
-    hub_armor_set("NWARRIOR_RD", "Red Northern Warplate", "HEAVY", 7, 420),
-    hub_armor_set("PALADIN_BL", "Blue Paladin Plate", "HEAVY", 7, 430),
-    hub_armor_set("PALADIN_GN", "Green Paladin Plate", "HEAVY", 7, 431),
-    hub_armor_set("PALADIN_GR", "Gray Paladin Plate", "HEAVY", 7, 432),
-    hub_armor_set("PALADIN_RD", "Red Paladin Plate", "HEAVY", 7, 433),
-    hub_armor_set("WARRIOR_GN", "Green Warrior Plate", "HEAVY", 7, 440),
-    hub_armor_set("WARRIOR_PE", "Purple Warrior Plate", "HEAVY", 7, 441),
-    hub_armor_set("WARRIOR_RD", "Red Warrior Plate", "HEAVY", 7, 442),
-    hub_armor_set("DBRINGER_BK", "Black Deathbringer Plate", "MEDIUM", 7, 450),
-    hub_armor_set("DBRINGER_BL", "Blue Deathbringer Plate", "MEDIUM", 7, 451),
-    hub_armor_set("DBRINGER_GN", "Green Deathbringer Plate", "MEDIUM", 7, 452),
-    hub_armor_set("DBRINGER_RD", "Red Deathbringer Plate", "MEDIUM", 7, 453),
-    hub_armor_set("FOOTMAN_BL", "Blue Footman Plate", "HEAVY", 7, 460),
-    hub_armor_set("FOOTMAN_GO", "Gold Footman Plate", "HEAVY", 7, 461),
-    hub_armor_set("FOOTMAN_GR", "Gray Footman Plate", "HEAVY", 7, 462),
-];
-
 fn ensure_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
     let revision = hub_catalog_revision();
     if ctx
@@ -1375,25 +1197,17 @@ fn sync_hub_loadout_catalogs(ctx: &ReducerContext) -> Result<(), String> {
     let weapon_catalog = parse_weapon_appearance_catalog()?;
     sync_combat_build_v2_catalogs(ctx)?;
 
-    let armor_rows: Vec<HubArmorSetDefinition> = HUB_ARMOR_SET_SPECS
-        .iter()
-        .map(|spec| {
-            let (resistance, move_speed_modifier, cast_speed_modifier) = match spec.armor_tier {
-                "MEDIUM" => (0.20, 0.0, 0.0),
-                "HEAVY" => (0.40, -0.10, -0.20),
-                _ => (0.0, 0.0, 0.0),
-            };
-            HubArmorSetDefinition {
-                armor_set_id: spec.armor_set_id.to_string(),
-                display_name: spec.display_name.to_string(),
-                armor_tier: spec.armor_tier.to_string(),
-                physical_resistance: resistance,
-                magical_resistance: resistance,
-                move_speed_modifier,
-                cast_speed_modifier,
-                piece_count: spec.piece_count,
-                sort_order: spec.sort_order,
-            }
+    let armor_rows: Vec<HubArmorSetDefinition> = armor_set_catalog()
+        .map(|spec| HubArmorSetDefinition {
+            armor_set_id: spec.armor_set_id().to_string(),
+            display_name: spec.display_name().to_string(),
+            armor_tier: spec.armor_tier().to_string(),
+            physical_resistance: spec.physical_resistance(),
+            magical_resistance: spec.magical_resistance(),
+            move_speed_modifier: spec.move_speed_modifier(),
+            cast_speed_modifier: spec.cast_speed_modifier(),
+            piece_count: spec.piece_count() as u32,
+            sort_order: spec.sort_order(),
         })
         .collect();
     let armor_ids: HashSet<String> = armor_rows
@@ -1725,15 +1539,20 @@ const fn extend_catalog_hash(mut hash: u64, bytes: &[u8]) -> u64 {
 }
 
 fn hub_catalog_revision() -> u64 {
-    let armor_hash = HUB_ARMOR_SET_SPECS
-        .iter()
-        .fold(HUB_CATALOG_PROJECTION_HASH, |hash, spec| {
-            let hash = extend_catalog_hash(hash, spec.armor_set_id.as_bytes());
-            let hash = extend_catalog_hash(hash, spec.display_name.as_bytes());
-            let hash = extend_catalog_hash(hash, spec.armor_tier.as_bytes());
-            hash ^ ((spec.piece_count as u64) << 32) ^ spec.sort_order as u64
-        });
-    armor_hash
+    armor_set_catalog().fold(HUB_CATALOG_PROJECTION_HASH, |hash, spec| {
+        let hash = extend_catalog_hash(hash, spec.armor_set_id().as_bytes());
+        let hash = extend_catalog_hash(hash, spec.display_name().as_bytes());
+        let mut hash = extend_catalog_hash(hash, spec.armor_tier().as_bytes());
+        for value in [
+            spec.physical_resistance(),
+            spec.magical_resistance(),
+            spec.move_speed_modifier(),
+            spec.cast_speed_modifier(),
+        ] {
+            hash = extend_catalog_hash(hash, &value.to_bits().to_le_bytes());
+        }
+        hash ^ ((spec.piece_count() as u64) << 32) ^ spec.sort_order() as u64
+    })
 }
 
 fn parse_weapon_appearance_catalog() -> Result<HubWeaponAppearanceCatalogFile, String> {
@@ -2523,51 +2342,44 @@ mod tests {
 
     #[test]
     fn default_hub_armor_selection_is_authored() {
-        assert!(HUB_ARMOR_SET_SPECS
-            .iter()
-            .any(|spec| spec.armor_set_id == DEFAULT_HUB_ARMOR_SET));
+        assert!(armor_set_catalog().any(|spec| spec.armor_set_id() == DEFAULT_HUB_ARMOR_SET));
     }
 
     #[test]
     fn hub_armor_catalog_ids_are_unique_and_have_supported_tiers() {
-        let ids: HashSet<&str> = HUB_ARMOR_SET_SPECS
-            .iter()
-            .map(|spec| spec.armor_set_id)
+        let ids: HashSet<&str> = armor_set_catalog()
+            .map(|spec| spec.armor_set_id())
             .collect();
-        assert_eq!(HUB_ARMOR_SET_SPECS.len(), 89);
-        assert_eq!(ids.len(), HUB_ARMOR_SET_SPECS.len());
+        assert_eq!(armor_set_catalog().count(), 89);
+        assert_eq!(ids.len(), armor_set_catalog().count());
         for armor_set_id in ["DBRINGER_BK", "DBRINGER_BL", "DBRINGER_GN", "DBRINGER_RD"] {
             assert_eq!(
-                HUB_ARMOR_SET_SPECS
-                    .iter()
-                    .find(|spec| spec.armor_set_id == armor_set_id)
-                    .map(|spec| spec.armor_tier),
+                armor_set_catalog()
+                    .find(|spec| spec.armor_set_id() == armor_set_id)
+                    .map(|spec| spec.armor_tier()),
                 Some("MEDIUM"),
                 "{armor_set_id} must remain Medium armor"
             );
         }
-        assert!(HUB_ARMOR_SET_SPECS.iter().all(|spec| {
-            matches!(spec.armor_tier, "LIGHT" | "MEDIUM" | "HEAVY")
-                && (4..=7).contains(&spec.piece_count)
+        assert!(armor_set_catalog().all(|spec| {
+            matches!(spec.armor_tier(), "LIGHT" | "MEDIUM" | "HEAVY")
+                && (4..=7).contains(&spec.piece_count())
         }));
         assert_eq!(
-            HUB_ARMOR_SET_SPECS
-                .iter()
-                .filter(|spec| spec.armor_tier == "LIGHT")
+            armor_set_catalog()
+                .filter(|spec| spec.armor_tier() == "LIGHT")
                 .count(),
             29
         );
         assert_eq!(
-            HUB_ARMOR_SET_SPECS
-                .iter()
-                .filter(|spec| spec.armor_tier == "MEDIUM")
+            armor_set_catalog()
+                .filter(|spec| spec.armor_tier() == "MEDIUM")
                 .count(),
             41
         );
         assert_eq!(
-            HUB_ARMOR_SET_SPECS
-                .iter()
-                .filter(|spec| spec.armor_tier == "HEAVY")
+            armor_set_catalog()
+                .filter(|spec| spec.armor_tier() == "HEAVY")
                 .count(),
             19
         );

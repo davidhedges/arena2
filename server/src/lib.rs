@@ -20,6 +20,7 @@ mod animation_set_test_utils;
 mod appearance;
 mod arena;
 mod arena_maps;
+mod armor_catalog;
 mod auto_attack;
 mod bot_matches;
 mod combat;

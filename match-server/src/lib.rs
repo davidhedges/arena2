@@ -23,6 +23,8 @@ mod appearance;
 mod arena;
 #[path = "../../server/src/arena_maps.rs"]
 mod arena_maps;
+#[path = "../../server/src/armor_catalog.rs"]
+mod armor_catalog;
 #[path = "../../server/src/auto_attack.rs"]
 mod auto_attack;
 #[path = "../../server/src/bot_matches.rs"]
