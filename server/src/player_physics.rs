@@ -1,10 +1,13 @@
 //! Player Physics Table
 //!
-//! OWNERSHIP RULE: This table is written ONLY by `game_tick`.
-//! No other reducer may write to position, velocity, or grounded.
+//! Existing rows are updated through `commit_player_physics`. `game_tick`
+//! drives ordinary locomotion, special movement, and respawn; arena travel
+//! and Transpose also commit explicit physics resets from other reducers.
+//! Actor lifecycle helpers create and remove rows. The feature-gated
+//! spellcasting terminal harness also creates and removes its fixture rows.
 //!
-//! This is the authoritative physics state. Clients render from this.
-//! The `send_movement_intent` reducer NEVER touches this table.
+//! This is authoritative server state used by client prediction and presentation.
+//! `send_movement_intent` reads the ack boundary but writes only queued input.
 
 use spacetimedb::{table, Identity, ReducerContext, Timestamp};
 
@@ -14,17 +17,11 @@ const POSITION_WRITE_EPSILON: f32 = 0.0001;
 
 /// Authoritative player physics state.
 ///
-/// ALL fields are owned exclusively by `game_tick`. No exceptions.
+/// Update existing rows through `commit_player_physics` using the write modes below.
 ///
-/// Movement model (WoW-style kinematic):
-/// - position += velocity * dt
-/// - No physics engine, no continuous collision
-/// - Two states: grounded or airborne
-/// - `grounded` is a STATE, not a query from position
-///
-/// INVARIANT: Only `game_tick` writes to this table.
-/// INVARIANT: `grounded` changes only via explicit jump/land transitions in `game_tick`.
-/// INVARIANT: Velocity changes only in `game_tick`.
+/// Ordinary locomotion integrates velocity and resolves world collision in
+/// `game_loop::simulate_non_dummy_player_kinematics`. Special movement and
+/// lifecycle/teleport resets can also assign position, velocity, and grounded state.
 #[table(accessor = player_physics, public)]
 pub struct PlayerPhysics {
     #[primary_key]
@@ -32,27 +29,26 @@ pub struct PlayerPhysics {
 
     // === Position (world space) ===
     pub pos_x: f32,
-    pub pos_y: f32, // Vertical axis. Ground is at y=0.
+    pub pos_y: f32, // Vertical axis. Walkable surface height depends on the world.
     pub pos_z: f32,
 
     // === Velocity (units per second) ===
-    // When grounded: computed from intent each tick
-    // When airborne: horizontal (x,z) is LOCKED (not overwritten), vertical (y) has gravity
+    // Ordinary locomotion computes grounded horizontal velocity from intent and
+    // retains it in the air, unless movement is blocked; gravity changes vel_y.
+    // Special movement and explicit resets also assign velocity.
     pub vel_x: f32,
     pub vel_y: f32,
     pub vel_z: f32,
 
     // === Rotation ===
-    // Yaw is copied from intent each tick (player can always rotate)
+    // Ordinary locomotion copies intent yaw; special movement and resets can impose facing.
     pub yaw: f32,
 
     // === Movement State ===
-    // This is a STATE, not a query. It changes ONLY via explicit transitions:
-    // - grounded -> airborne: when jump is processed (in game_tick)
-    // - airborne -> grounded: when landing condition met (in game_tick)
-    //
-    // LANDING CONDITION: pos_y <= GROUND_Y AND vel_y <= 0
-    // Both conditions must be true. This prevents landing while ascending.
+    // Ordinary locomotion becomes airborne on jump, a ledge, or missing support.
+    // Landing requires pos_y <= sampled walkable surface height AND vel_y <= 0.
+    // Special movement carries this state or forces airborne for fixed-Y/arc paths.
+    // Spawn, travel, respawn, Transpose, and stationary fixture settling also assign it.
     pub grounded: bool,
 
     /// Latest authoritative input tick incorporated into this physics state.
@@ -74,14 +70,19 @@ pub struct PlayerPhysics {
     pub updated_at: Timestamp,
 }
 
-// Note: There is NO `preserved_vel_x` or `preserved_vel_z` field.
-// Horizontal velocity is "preserved" during airtime by simply not overwriting it.
-// This is simpler and eliminates a class of bugs from the original design.
+// Ordinary airborne locomotion retains vel_x/vel_z directly; no separate
+// preserved-velocity fields are needed. Movement blocking and other write modes
+// can still replace those values.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PhysicsWriteMode {
+    /// Ordinary updates, including input acknowledgements. Active special movement
+    /// rejects position changes beyond POSITION_WRITE_EPSILON; other fields still commit.
     Normal,
+    /// Authoritative trajectory sampling by the game tick, including the final pose.
     SpecialMovementTick,
+    /// Explicit reset or teleport. Removes any active special-movement runtime;
+    /// callers own any input and action cleanup needed for the transition.
     Force,
 }
 

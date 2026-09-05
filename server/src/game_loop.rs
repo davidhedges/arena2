@@ -1,22 +1,17 @@
-//! Game Loop - The SOLE Authority on Physics State
+//! Game Loop - Scheduled Authoritative Simulation
 //!
-//! This module contains:
-//! - GameLoopTimer table (for scheduled reducer)
-//! - init reducer (starts the game loop)
-//! - game_tick reducer (THE physics simulation)
+//! `game_tick` orchestrates combat/effect phases, player simulation, and maintenance.
+//! During ordinary locomotion, `tick_player` consumes the next buffered command or
+//! retained `PlayerIntent`, integrates physics, and publishes the pose and input ack
+//! through `commit_player_physics`.
 //!
-//! CRITICAL OWNERSHIP RULE:
-//! `game_tick` is the ONLY reducer that writes to PlayerPhysics.
-//! All movement state changes happen HERE and NOWHERE else.
+//! Special-movement trajectories are sampled before per-player simulation. While
+//! a runtime remains active, the player's tick advances input acknowledgements
+//! without running ordinary locomotion. Completion applies an explicit input handoff.
 //!
-//! The game_tick reducer:
-//! 1. Reads PlayerIntent (what player wants)
-//! 2. Computes new physics state (what actually happens)
-//! 3. Writes PlayerPhysics (authoritative result)
-//! 4. Clears consumed intent flags (jump)
-//!
-//! Jump and landing transitions BOTH happen in this function.
-//! You can read this one function to understand the complete state machine.
+//! Travel and teleport reducers also update existing physics rows through the
+//! commit helper; actor lifecycle helpers create and remove rows. See
+//! `player_physics` for write modes and lifecycle exceptions.
 
 use spacetimedb::{reducer, table, Identity, ReducerContext, ScheduleAt, Table, Timestamp};
 use std::collections::HashMap;
@@ -1417,7 +1412,7 @@ fn simulate_non_dummy_player_kinematics(
         // Check for jump request
         if intent.jump && !movement_blocked {
             // === JUMP TRANSITION ===
-            // This is the ONLY place grounded becomes false
+            // Jump starts an airborne step with upward velocity.
             log::debug!(
                 "[JUMP] Player {} | pos_y={:.2} | vel=({:.2},{:.2},{:.2}) | grounded: true -> false",
                 &identity.to_hex()[..8],
@@ -1431,14 +1426,14 @@ fn simulate_non_dummy_player_kinematics(
             physics.vel_y = JUMP_VELOCITY;
 
             // Horizontal velocity is already set from intent above.
-            // It will be LOCKED (not overwritten) while airborne.
+            // The airborne branch retains it; movement blocking can still stop it.
             // No separate preserved_vel field needed.
         }
     } else {
         // --- AIRBORNE BRANCH ---
 
-        // Horizontal velocity is LOCKED - do not modify vel_x or vel_z
-        // This is the "preservation" - we simply don't touch them.
+        // Retain horizontal velocity in this branch. Movement blocking below
+        // can still stop it while airborne.
 
         // Apply gravity to vertical velocity
         physics.vel_y += GRAVITY * dt;
@@ -1530,7 +1525,7 @@ fn simulate_non_dummy_player_kinematics(
             ground_y.filter(|ground_y| physics.pos_y <= *ground_y && physics.vel_y <= 0.0)
         {
             // === LANDING TRANSITION ===
-            // This is the ONLY place grounded becomes true (after initial spawn)
+            // Ordinary locomotion lands on the sampled walkable surface.
             log::debug!(
                 "[LAND] Player {} | pos_y={:.2} | vel_y={:.2} | grounded: false -> true",
                 &identity.to_hex()[..8],
@@ -2256,16 +2251,15 @@ fn tick_player(
 
 /// The game tick - runs every 33ms.
 ///
-/// This is the SOLE AUTHORITY on physics state.
+/// Advances authoritative simulation and player input acknowledgements.
 ///
 /// The reducer is intentionally a phase orchestrator:
 /// 1. Pre-tick housekeeping (casts, practice, queued combat/effects)
 /// 2. Per-player authoritative simulation
 /// 3. Post-tick pruning/maintenance
 ///
-/// Physics ownership remains singular:
-/// - `game_tick` is the only reducer that writes `PlayerPhysics`
-/// - helpers may structure the logic, but they execute only inside this reducer
+/// Physics updates here use `commit_player_physics`. Travel and teleport reducers
+/// also use that helper; see `player_physics` for the shared write policy.
 #[reducer]
 pub fn game_tick(ctx: &ReducerContext, timer: GameLoopTimer) -> Result<(), String> {
     if ctx.sender() != ctx.identity() {
