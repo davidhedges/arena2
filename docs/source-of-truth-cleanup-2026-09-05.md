@@ -322,15 +322,30 @@ notes across 120 abilities per profile because neither the selected school
 palette nor a signature override supplies that slot's VFX ID. Missing generation
 inputs do not establish that the corresponding runtime visual is absent.
 
-### Recommended next scope (not yet approved)
+### Approved melee cleanup batch
 
-Reconcile only the **five selectable abilities with demonstrated hit-delay
-drift** above. Inspect their native phased presentation, confirm intended contact
-timing, update only those existing manifest strikes through the established
-export path, and prove unrelated rows and saved builds unchanged. Validate the
-server timing cases, refresh local artifacts, and check those attacks visually.
-Do not bundle the nine extra Staff rows, eventless clip stamping, or VFX
-regeneration into that migration.
+The user approved four sequential items: reconcile the five selectable timing
+mismatches; refresh the 34 stale mirrors and 12 startup-trim fields; add a
+catalog-derived normal-Editor drift check; and validate/rebuild the complete local
+path with saved-state preservation. Eventless clip migration, extra Staff
+strikes, VFX regeneration, and Ice Spikes fallback removal remain outside scope.
+Additional discrepancies are to be reported, not silently migrated. If macOS
+continues to block visual inspection, independent work proceeds and that gate
+remains explicitly unverified.
+
+Evidence is in `/private/tmp/arena2-melee-cleanup.k6cb8O`. Baseline source-of-truth
+checks pass (822 server, 25 Hub, 19 Python, 8 Ruby tests / 14 assertions), the
+canonical local stack is ready, and all 63 current profiles and v2 saved-build
+tables were snapshotted before editing.
+
+- **Item 1 complete:** a normal Unity Editor run generated the five selected
+  strikes' hit windows through `BuildMeleeExport` and the existing manifest
+  reader/writer. The actual event-derived delays are 457 ms, 273 ms, 527 ms,
+  342 ms, and [288, 447] ms in the table's selectable-ability order. A parsed
+  before/after comparison proves only those six `impact_delay_ms` values
+  changed. Recovery, combo, delivery, all other manifest fields, and every
+  authored asset are unchanged. All 84 server melee tests pass. Local runtime
+  publication and final Unity checks belong to item 4.
 
 ## Remaining work
 

@@ -291,7 +291,7 @@
                     "slot_id": "melee_attack_17",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 532
+                            "impact_delay_ms": 457
                         }
                     ],
                     "recovery_ms": 250,
@@ -321,7 +321,7 @@
                     "slot_id": "melee_attack_19",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 333
+                            "impact_delay_ms": 273
                         }
                     ],
                     "recovery_ms": 250,
@@ -606,7 +606,7 @@
                     "slot_id": "crushing_blow_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 602
+                            "impact_delay_ms": 527
                         }
                     ],
                     "recovery_ms": 250,
@@ -621,7 +621,7 @@
                     "slot_id": "cataclysm_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 417
+                            "impact_delay_ms": 342
                         }
                     ],
                     "recovery_ms": 250,
@@ -636,10 +636,10 @@
                     "slot_id": "buzzsaw_slot",
                     "hit_windows": [
                         {
-                            "impact_delay_ms": 341
+                            "impact_delay_ms": 288
                         },
                         {
-                            "impact_delay_ms": 500
+                            "impact_delay_ms": 447
                         }
                     ],
                     "recovery_ms": 250,
