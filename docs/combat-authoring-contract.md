@@ -1,6 +1,6 @@
 # Combat Authoring Contract
 
-Status: **Current for Combat Build v2 (2026-08-29).**
+Status: **Current for Combat Build v2; ownership guards updated 2026-09-05.**
 
 This is the entry point for adding or reviewing player combat actions. The
 canonical build hierarchy is:
@@ -70,10 +70,64 @@ updating current classification must preserve those fixtures and existing
 saved-build compatibility. Earlier cutover annotations are historical context,
 not an instruction to reset current builds.
 
+For every selectable player ability, progression's `combat_discipline_id` is
+a checked copy of its v2 Specialization's parent. Both the generator and the
+shared Rust validator reject disagreement. Spell school describes the spell's
+magic and remains independent of that parent: a Dagger Form may own a
+Mortality spell. NPC and intrinsic rows are outside this selectable-feature
+parity rule.
+
 The pure validator and materializer live in
 `server/src/combat_build_v2.rs`. Hub saves, Hub-to-match snapshots, PvP, and
 open-world matches all use that contract. There is no v1 build adapter or
 alternate match-side loadout writer.
+
+### Equipment catalogs
+
+`server/src/armor_catalog.rs` owns armor set IDs, names, pieces, tiers, and
+derived base stats. Gameplay inventory and the Hub project the same resolved
+catalog. Do not maintain a second Hub roster or armor stat formula.
+
+`Assets/Arena/Resources/SharedData/weapon_appearance_catalog.shared.json` is
+the single authored weapon catalog, included directly by Rust. Its shared
+Rust read schema is `server/src/weapon_catalog.rs`; inventory, Hub projection,
+and v2 build validation use that schema. Unity-only prefab and placement
+fields remain in the JSON. Consumer-specific legality checks remain at their
+existing boundaries; the read schema is not another writer.
+
+### Shared files and generated bindings
+
+Bundled map/world JSON under `Assets/Arena/Resources/SharedData` is a derived
+copy of the corresponding `server/src/map_data` or `server/src/world_data`
+export. `Maps/` contract keys use the `map_data/` prefix; `Worlds/` and
+`WorldInteractions/` use `world_data/`. The heightfield root mirror follows
+the same byte comparison. Weapon appearance is the single-copy exception
+above. Runtime-only catalogs need no Unity JSON mirror.
+
+`ops/verify-spacetimedb-contracts.py --offline` rejects divergent mirrors,
+missing sources or bundles, and ambiguous contract keys. It ignores carriage
+returns, matching Rust and Unity hashing. Without `--offline`, it also
+compares bundled hashes against a live module's `contract_version` table.
+
+Rust SpacetimeDB table/reducer definitions own the wire schema. Generated C#
+bindings are derived output, regenerated through the publication scripts
+below. A generated row type is not a place to add independent gameplay rules.
+
+### NPC authoring destinations
+
+The NPC catalog is `Assets/Arena/Content/NPC/NpcVisualCatalog.asset`.
+Profiles live at
+`Assets/Arena/Resources/NpcVisualProfiles/<VISUAL_ID>.asset`.
+`ops/npc_profile_paths.rb` resolves those paths for the family generator and
+preserves existing `.meta` contents and GUIDs. Check existing references
+without writing assets with:
+
+```bash
+ruby ops/generate-npc-family-profiles.rb --check-paths
+```
+
+Remaining animation/VFX ownership conflicts and proposed migrations are
+recorded in [the cleanup handoff](source-of-truth-cleanup-2026-09-05.md).
 
 ## Canonical concepts
 
@@ -190,14 +244,22 @@ the next intrinsic swing rather than creating a second autoattack authority.
 
 ## Validation and publication
 
-Run, in proportion to the changed surfaces:
+Run the repeatable catalog gate from the repository root:
 
 ```bash
-python3 ops/generate-combat-build-v2-catalog.py --check
-python3 -m unittest discover -s ops -p test_combat_build_v2_catalog.py
-python3 ops/test-combat-build-v2-compositions.py
-cargo test --manifest-path server/Cargo.toml --lib --no-fail-fast
-cargo test --manifest-path hub-server/Cargo.toml --lib --no-fail-fast
+ops/check-source-of-truth.sh
+```
+
+It checks v2 generation and ownership, shared JSON mirrors, NPC paths/GUIDs,
+and the full server and Hub Rust unit suites. It requires Python 3, Ruby with
+Minitest, and Rust dependencies; it does not start Unity, publish modules, or
+require a live database. The existing PvP validation workflow runs the same
+command when the relevant sources or authoring assets change. This is not
+Unity compilation, visual verification, or a binding regeneration check.
+
+For build/handoff changes, also run the relevant match tests:
+
+```bash
 cargo test --manifest-path match-server/Cargo.toml combat_build_v2::tests
 cargo test --manifest-path match-server/Cargo.toml \
   match_contract::tests::frozen_combat_build_is_typed_bounded_canonical_and_revalidated \
@@ -209,6 +271,9 @@ timing, or collision), use the canonical local synchronization command:
 
 ```bash
 ops/setup-local-multiplayer.sh setup
+ops/setup-local-multiplayer.sh status
+python3 ops/benchmark-local-match-start.py --samples 1
+python3 ops/test-combat-build-v2-compositions.py
 ```
 
 It republishes the Hub data-preservingly, rebuilds disposable PvP/open-world

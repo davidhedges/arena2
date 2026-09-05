@@ -8,12 +8,24 @@ on:
       - "hub-server/**"
       - "match_provisioner/**"
       - "server/**"
+      - "Assets/Arena/Resources/SharedData/**"
+      - "Assets/Arena/Resources/NpcVisualProfiles/**"
+      - "Assets/Arena/Content/NPC/NpcVisualCatalog.asset*"
       - "ops/build-match-spacetimedb.sh"
       - "ops/check-match-wasm-size.sh"
+      - "ops/check-source-of-truth.sh"
+      - "ops/generate-combat-build-v2-catalog.py"
+      - "ops/test_combat_build_v2_catalog.py"
+      - "ops/verify-spacetimedb-contracts.py"
+      - "ops/test_shared_data_contracts.py"
+      - "ops/generate-npc-family-profiles.rb"
+      - "ops/npc_profile_paths.rb"
+      - "ops/test_npc_profile_paths.rb"
       - "ops/run-local-match-provisioner.sh"
       - "ops/setup-local-multiplayer.sh"
       - "ops/test-setup-local-multiplayer.sh"
       - "docs/match-start-latency-optimization-plan-2026-08-11.md"
+      - "docs/combat-build-v2-phase-0-contract-2026-08-29.json"
   workflow_dispatch:
 
 jobs:
@@ -34,11 +46,11 @@ jobs:
           rustup default stable
           rustup target add wasm32-unknown-unknown
 
-      - name: Install Binaryen
+      - name: Install Binaryen and Ruby test dependencies
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y binaryen
+          sudo apt-get install -y binaryen ruby ruby-minitest
 
       - name: Install SpacetimeDB CLI
         run: |
@@ -54,6 +66,9 @@ jobs:
           wasm-opt --version
           spacetime --version
 
+      - name: Check catalog sources and derived data
+        run: ops/check-source-of-truth.sh
+
       - name: Test PvP lifecycle slices
         run: |
           set -euo pipefail
@@ -61,10 +76,9 @@ jobs:
           cargo test --manifest-path match-server/Cargo.toml match_contract::tests
           cargo test --manifest-path match-server/Cargo.toml arena_map_01_layout_is_flat_and_has_no_invisible_example_obstacles
 
-      - name: Test Hub and provisioner control plane
+      - name: Test provisioner control plane
         run: |
           set -euo pipefail
-          cargo test --manifest-path hub-server/Cargo.toml
           python3 -m unittest match_provisioner.test_worker
           ops/test-setup-local-multiplayer.sh
 
