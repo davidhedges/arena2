@@ -2689,7 +2689,8 @@ namespace Arena.Editor
                     : manifestStrike.id;
                 authored.slotId = CombatActionIds.NormalizeRuntimeActionReference(
                     string.IsNullOrWhiteSpace(manifestStrike.slot_id) ? authored.id : manifestStrike.slot_id);
-                authored.hitWindows = BuildImportedHitWindows(manifestStrike, clipLengthMs);
+                authored.hitWindows = BuildImportedHitWindows(
+                    set.meleeAttacks[strikeIndex - 1], manifestStrike, clipLengthMs);
                 authored.impactNormalized = authored.hitWindows.Length > 0
                     ? authored.hitWindows[0].timeNormalized
                     : 0f;
@@ -3583,9 +3584,17 @@ namespace Arena.Editor
         }
 
         private static WeaponStrikeHitWindowAuthoring[] BuildImportedHitWindows(
+            WeaponMeleeAttackAuthoring attack,
             MeleeManifestStrike manifestStrike,
             float clipLengthMs)
         {
+            // Manifest timing is derived output for event-backed attacks. Rebuild the
+            // compatibility mirror from the assigned presentation, including startup
+            // trim and phased timing, instead of importing stale exported timestamps.
+            if (attack.TryBuildHitWindowMirrorFromEvents(out var eventHitWindows))
+                return eventHitWindows;
+
+            // Eventless attacks retain the existing legacy import conversion.
             if (manifestStrike.hit_windows == null || manifestStrike.hit_windows.Length == 0)
                 return System.Array.Empty<WeaponStrikeHitWindowAuthoring>();
 

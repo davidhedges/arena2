@@ -1609,6 +1609,53 @@ namespace Arena.Tests.Editor
             Assert.That((bool)bindingType.GetField("RequiresShift")!.GetValue(row1Args[2])!, Is.False);
         }
 
+        [TestCase(true)]
+        [TestCase(false)]
+        public void CombatAnimationSetEditor_ManifestImportUsesEventsOrLegacyFallback(bool hasEvents)
+        {
+            Type attackType = RequireType("Arena.Presentation.WeaponMeleeAttackAuthoring");
+            Type strikeType = RequireType("Arena.Combat.MeleeManifestStrike");
+            Type hitWindowType = RequireType("Arena.Presentation.WeaponStrikeHitWindowAuthoring");
+            Type editorType = AppDomain.CurrentDomain.Load("Assembly-CSharp-Editor")
+                .GetType("Arena.Editor.CombatAnimationSetEditor", throwOnError: true)!;
+            AnimationClip clip = CreateClipWithLength(2f);
+            try
+            {
+                if (hasEvents)
+                {
+                    AnimationUtility.SetAnimationEvents(clip, new[]
+                    {
+                        new AnimationEvent { functionName = "OnStrikeHit", time = 0.75f },
+                        new AnimationEvent { functionName = "OnStrikeHit", time = 1.5f },
+                    });
+                }
+
+                object attack = Activator.CreateInstance(attackType)!;
+                attackType.GetField("clip")!.SetValue(attack, clip);
+                attackType.GetField("startupTrimSeconds")!.SetValue(attack, 0.5f);
+                // Deliberately stale manifest timings must not replace the event mirror.
+                object manifest = JsonUtility.FromJson(
+                    "{\"startup_trim_ms\":500,\"hit_windows\":[{\"impact_delay_ms\":800},{\"impact_delay_ms\":1100}]}",
+                    strikeType);
+                MethodInfo import = editorType.GetMethod(
+                    "BuildImportedHitWindows", BindingFlags.Static | BindingFlags.NonPublic)!;
+                Array windows = (Array)import.Invoke(null, new[] { attack, manifest, (object)2000f })!;
+
+                Assert.That(windows.Length, Is.EqualTo(2));
+                float[] expected = hasEvents ? new[] { 0.125f, 0.5f } : new[] { 0.65f, 0.8f };
+                for (int index = 0; index < expected.Length; index++)
+                {
+                    Assert.That(
+                        (float)hitWindowType.GetField("timeNormalized")!.GetValue(windows.GetValue(index))!,
+                        Is.EqualTo(expected[index]).Within(PositionTolerance));
+                }
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(clip);
+            }
+        }
+
         [Test]
         public void CombatAnimationSetEditor_ImportResolutionRequiresExactCombatProfile()
         {
