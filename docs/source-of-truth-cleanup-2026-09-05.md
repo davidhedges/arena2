@@ -7,6 +7,12 @@ Ice Spikes compatibility cue after demonstrating why its removal is unsafe
 for empty-ability facts. Further migrations listed below require a separate
 scope decision.
 
+Latest result: the approved melee cleanup below corrected five selectable
+timing mismatches, refreshed 34 mirrors and 12 trim fields, and added a check
+that now passes for all 58 selectable melee abilities. The rebuilt local match
+is `sha256-14a507e5ecb72384f8eb`; native Unity Hub-to-match-to-Hub validation
+passes. Earlier batch/inventory results are historical snapshots.
+
 ## First batch: completed
 
 | Item | Result | Local commit |
@@ -194,6 +200,9 @@ included in the 40-test native pass.
 
 ### Melee inventory
 
+This inventory predates the approved melee cleanup below; its five selectable
+timing mismatches, 34 stale mirrors, and 12 trim omissions are now resolved.
+
 Five attack entries lack effective `OnStrikeHit` events. Their current export
 and committed manifest agree, and all are single-clip presentations with zero
 startup trim:
@@ -370,6 +379,64 @@ tables were snapshotted before editing.
   and `item3-verification.ok` contain the evidence. The check deliberately covers
   direct selectable melee roots, not synthesized autoattack aliases or every
   combo successor.
+- **Item 4 complete:** the final source-of-truth gate passes (822 server, 25 Hub,
+  19 Python, 8 Ruby tests / 14 assertions; shared mirrors and NPC paths valid).
+  Canonical data-preserving local setup rebuilt both artifacts and restarted the
+  managed provisioner. The anonymous v2 Hub-to-match probe passed with nonempty
+  saved build/equipment and completed exact-identity cleanup. A normal Unity
+  Editor then compiled/imported the current code, connected to the local Hub,
+  applied the saved showcase, requested a new bot match, loaded `Arena_Map_01`,
+  verified the frozen build/equipment under the same identity, and returned to
+  the Hub. The final canonical status is ready; all verification Editor
+  processes are stopped and the temporary execution/probe scripts are removed.
+
+Implementation commits: `e5ac7383` (five strike timings), `fa21e277` (derived
+metadata), and `651e6842` (catalog-derived drift check). This handoff records the
+final local validation. No remote publication or push was performed.
+
+The Unity client evidence is `unity-client.json` and `client-unity.log` in the
+batch's temporary evidence directory. It verifies the existing identity's
+revision **10**, `DAGGERS_BLADEDANCER` and `DAGGERS_EXECUTIONER`, **18 active
+features**, traits, `HUNTER_RD` armor, and `NEWBIE_DAGGER_PAIR_02` equipment.
+The Hub showcase and match both instantiated two
+`Dagger_1H_Newbie_02_Cl` prefabs and 26 avatar renderers. Unity's own rendered
+captures, `hub-showcase.png` and `match-player.png`, were inspected. This closes
+the showcase and general client handoff verification gaps. The five corrected
+Sword-and-Shield/Two-Handed-Sword attacks were verified through native event
+exports and timing tests; they were **not individually exercised in live combat**.
+
+The first temporary client probe incorrectly compared all saved feature rows,
+including dormant Specialization choices, against the active match build. The
+probe was corrected to compare only active selections; production build code
+and saved choices were unchanged. Its recovery Editor also became unresponsive
+while destroying scene objects and required termination after the match had
+already reached `CLEANED`. The corrected run passed the active-build comparison
+and returned to the Hub. Both Unity test allocations and the anonymous probe
+allocation reached `CLEANED`. The final lingering Editor was stopped after its
+normal quit request; no authored scene or asset was saved by the client probe.
+
+`hub.before.json`, `hub.after-setup.json`, `hub.final.json`, and
+`final-hub-preservation.txt` prove that every saved row for the **63 original
+profiles** survived unchanged. All four Hub catalogs are exactly unchanged.
+The anonymous benchmark added one profile, bringing the total to 64; both Unity
+runs reused the existing identity. Generated C# bindings and the progression
+catalog are unchanged. All **906 VFX comparisons** are identical to the original
+inventory. The total manifest diff remains exactly five hit-window updates and
+12 startup-trim additions; no other parsed manifest field changed.
+
+Latest verified match build: `sha256-14a507e5ecb72384f8eb`.
+Source fingerprint:
+`acf2f1b65ab47e83b43b236f15611b86b5e4110f1a72d97111df79501f870e2a`.
+WASM SHA-256:
+`14a507e5ecb72384f8ebf2c069f8ef461d4a66679cdb9e9f7cc84f6306e862da`.
+Both artifact provenance manifests are copied into the evidence directory;
+`final-status.log`, `match-probe.jsonl`, and `unity-cleanup.json` record readiness
+and cleanup.
+
+The remaining inventory findings are the four existing hit-delay differences
+outside direct selectable roots, five eventless entries, nine unexported Staff
+strikes, and the VFX/identity decisions described below. None was expanded into
+this batch.
 
 ## Remaining work
 
